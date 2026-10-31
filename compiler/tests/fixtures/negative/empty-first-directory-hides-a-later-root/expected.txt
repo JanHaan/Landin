@@ -1,0 +1,6 @@
+error[L0532]: `device` is ../tests/fixtures/negative/empty-first-directory-hides-a-later-root/first/device, which holds no .ldn source, and the later root ../tests/fixtures/negative/empty-first-directory-hides-a-later-root/second holds the module: ../tests/fixtures/negative/empty-first-directory-hides-a-later-root/second/device
+  --> ../tests/fixtures/negative/empty-first-directory-hides-a-later-root/entry/main.ldn:3:1
+  |
+3 | import device
+  | ^^^^^^^^^^^^^
+  = note: D563: the first root holding an import's directory supplies its module, and an empty one there would hide this one; name --root=../tests/fixtures/negative/empty-first-directory-hides-a-later-root/second before --root=../tests/fixtures/negative/empty-first-directory-hides-a-later-root/first, or give the empty directory a source

@@ -2,8 +2,9 @@
 --
 --  Every code the compiler can raise has a row here, and this is the only
 --  place in `src/` where a code is written. A code with no row does not
---  compile: each column is an exhaustive case over Code_Name, so leaving one
---  out is a missing-case error rather than a warning.
+--  compile: the rows are one aggregate over Code_Name with no `others`, so
+--  leaving a code or one of its columns out is an error rather than a
+--  warning.
 --
 --  Prose is deliberately absent. `L0003` is raised with two sentences today
 --  -- a source that is missing and one that is unreadable -- because one
@@ -41,6 +42,32 @@
 --     L0300-L0399  types and definite assignment
 --     L0400-L0499  deliberately unassigned; see below
 --     L0500-L0599  the backend and its toolchain
+--
+--  Adding a code takes these steps, and the full `python3 check.py` names
+--  the one left out:
+--
+--  1. An enumeral in Code_Name, in its band's group, and its row in Table
+--     below.  Every column of a code is in that one row.
+--  2. A section headed by the code in `docs/diagnostics.md`, then
+--     `python3 check.py --catalogue`, which generates the explanation the
+--     compiler carries.  A code with no section does not compile.
+--  3. The raise.  A stage reports through its package --
+--     Landin.Diagnostics.Modules, Resolution, Syntactic or Checking --
+--     whose Failure is derived from Code_Name and so names the code
+--     already; the scanner maps a Landin.Tokens.Fault_Kind in
+--     Landin.Diagnostics.Lexical.Code_For, and `refine svd` a device fault
+--     in Landin.Commands.Devices.Code_For.  The driver and the backend build
+--     theirs from the row.  Each reporting package holds what it builds to
+--     the row.
+--  4. The evidence the row's Shown_By names: a negative fixture whose
+--     `codes:` lists the code, a driver or command case that writes the
+--     code, or the unit case at an implementation limit.  A code that
+--     admits a fix also needs a fixture whose `fixed:` applies one.
+--  5. `python3 check.py --generate`, which regenerates the reading copy and
+--     the diagnostic matrix; the matrix finds the code's emitters by its
+--     name anywhere in `src/`.
+--  6. A secondary-label interval wider than one count joins the six the
+--     catalogue suite's `rows are whole` names.
 
 --  `L0400`-`L0499` is the band the IR and its verifier would have taken and
 --  did not, and it stays empty on purpose.  Malformed IR cannot be caused by a
@@ -79,6 +106,9 @@ package Landin.Diagnostics.Catalogue is
       --  supplies instead.  A warning: the program is compiled as D275
       --  says, and the reader is told which `core` it was compiled with.
       Root_Holds_Library_Module,
+      --  D563: the first directory an import names holds no source, and a
+      --  later root's directory of the same path holds the module.
+      Empty_Module_Hides_Root,
       --  `refine fmt --check`: a source that parses and is not in the
       --  layout.  Whose rule is D252, not a language rule, and no program
       --  is refused for it.
@@ -238,745 +268,9 @@ package Landin.Diagnostics.Catalogue is
       Svd_Output_Refused);
 
    --  Live, or kept so its number is never reused. A code is retired when
-   --  the rule it names stops existing: `No_Frontend` retires when the
-   --  frontend is wired to the driver.
+   --  the rule it names stops existing: `No_Frontend` retired when the
+   --  frontend was wired to the driver.
    type Disposition is (Live, Retired);
-
-   function Code (Of_Code : Code_Name) return Code_String
-     is (case Of_Code is
-            when No_Frontend           => "L0001",
-            when Unknown_Option        => "L0002",
-            when Unreadable_Source     => "L0003",
-            when Unknown_Target        => "L0004",
-            when Unwritable_Output     => "L0005",
-            when Module_Not_Found      => "L0006",
-            when Module_Directory_Invalid => "L0007",
-            when Module_Unavailable_For_Target => "L0015",
-            when Root_Holds_Library_Module => "L0016",
-            when Not_Formatted         => "L0008",
-            when Unknown_Level         => "L0009",
-            when Construct_Not_Enabled => "L0010",
-            when Malformed_Integer     => "L0011",
-            when Unknown_Bytes         => "L0012",
-            when Unterminated_Comment  => "L0013",
-            when Unterminated_Literal  => "L0014",
-            when Name_Expected            => "L0100",
-            when Type_Expected            => "L0101",
-            when Expression_Expected      => "L0102",
-            when Token_Expected           => "L0103",
-            when Unclosed_Construct       => "L0104",
-            when Assignment_In_Expression => "L0105",
-            when Comparison_Chained       => "L0106",
-            when Return_Carries_Value     => "L0107",
-            when Public_On_Statement      => "L0108",
-            when End_Name_Mismatch        => "L0109",
-            when Stray_Token              => "L0110",
-            when Nesting_Too_Deep         => "L0111",
-            when Positional_After_Named   => "L0112",
-            when Duplicate_Declaration    => "L0200",
-            when Unresolved_Name          => "L0201",
-            when Inaccessible_Name        => "L0202",
-            when Reserved_Tool_Name       => "L0203",
-            when Literal_Out_Of_Range     => "L0300",
-            when Register_Reserved_Bits   => "L0398",
-            when Type_Mismatch            => "L0301",
-            when Not_Definitely_Assigned  => "L0302",
-            when Immutable_Target         => "L0303",
-            when Unsupported_Use          => "L0304",
-            when Not_Known_At_Compile_Time => "L0305",
-            when Impossible_Operand        => "L0306",
-            when Compile_Time_Assertion_Failed => "L0324",
-            when Cyclic_Type_Alias         => "L0307",
-            when Unresolved_Field          => "L0308",
-            when Field_Named_Twice         => "L0309",
-            when Field_Not_Given           => "L0310",
-            when Variant_Case_Named_Twice  => "L0311",
-            when Variant_Case_Not_Matched  => "L0312",
-            when Recursive_Nominal_Value   => "L0313",
-            when Reference_Escapes         => "L0314",
-            when Borrowed_Place            => "L0315",
-            when Return_Sources_Disagree   => "L0316",
-            when Conformance_Collision      => "L0317",
-            when Unsatisfied_Constraint     => "L0318",
-            when Compiler_Conformance_Reserved => "L0319",
-            when Malformed_Text_Literal         => "L0320",
-            when Malformed_Float_Literal        => "L0321",
-            when Malformed_Character_Literal    => "L0322",
-            when Malformed_Raw_Literal          => "L0323",
-            when Size_Limit_Exceeded            => "L0325",
-            when Invalid_Option_Declaration     => "L0390",
-            when Invalid_Tool_Directive         => "L0391",
-            when Mutable_Never_Written          => "L0326",
-            when Call_Argument_Match          => "L0327",
-            when Zero_Image_Unavailable         => "L0328",
-            when Error_Contract_Violated        => "L0329",
-            when Assembly_Block_Contract => "L0330",
-            when Result_Use => "L0331",
-            when Control_Value => "L0332",
-            when Match_Arm_Form => "L0333",
-            when Aggregate_Form => "L0334",
-            when Pointer_Union_Use => "L0335",
-            when Packed_Image => "L0336",
-            when Place_Required => "L0337",
-            when Type_Declaration_Form => "L0338",
-            when Signature_Form => "L0339",
-            when Generic_Deduction => "L0340",
-            when Conformance_Form => "L0341",
-            when Erased_Contract => "L0342",
-            when Noreturn_Contract => "L0343",
-            when Memory_Contract => "L0344",
-            when Machine_Entry_Contract => "L0345",
-            when Foreign_Boundary => "L0346",
-            when Linkage_Contract => "L0347",
-            when Traversal_Source => "L0348",
-            when Invalid_Description_Directive => "L0399",
-            when Description_Structure => "L0513",
-            when Description_Layout => "L0514",
-            when Description_Core_Mismatch => "L0515",
-            when Boot_Kind_Reserved => "L0516",
-            when Region_Placement => "L0517",
-            when No_Description => "L0518",
-            when Unused_Pure_Local              => "L0349",
-            when No_Toolchain              => "L0500",
-            when Toolchain_Failed          => "L0501",
-            when Entry_Point_Missing       => "L0502",
-            when Argument_Not_In_A_Register => "L0503",
-            when Frame_Not_Addressable      => "L0504",
-            when Image_Budget_Exceeded => "L0505",
-            when Panic_Contract_Invalid    => "L0506",
-            when Firmware_Frame_Exceeds_Stack => "L0507",
-            when Handler_Exceeds_Stack_Margin => "L0508",
-            when Library_Not_Found => "L0509",
-            when Linker_Script_Contract => "L0519",
-            when Svd_Malformed => "L0525",
-            when Svd_Policy_Invalid => "L0526",
-            when Svd_Input_Mismatch => "L0527",
-            when Svd_Form_Unsupported => "L0528",
-            when Svd_Device_Inconsistent => "L0529",
-            when Svd_Not_Found => "L0530",
-            when Svd_Output_Refused => "L0531");
-
-   function Level (Of_Code : Code_Name) return Severity
-     is (case Of_Code is
-            when No_Frontend           => Error,
-            when Unknown_Option        => Error,
-            when Unreadable_Source     => Error,
-            when Unknown_Target        => Error,
-            when Unwritable_Output     => Error,
-            when Module_Not_Found      => Error,
-            when Module_Directory_Invalid => Error,
-            when Module_Unavailable_For_Target => Error,
-            when Root_Holds_Library_Module => Warning,
-            when Not_Formatted         => Error,
-            when Unknown_Level         => Error,
-            when Construct_Not_Enabled => Error,
-            when Malformed_Integer     => Error,
-            when Unknown_Bytes         => Error,
-            when Unterminated_Comment  => Error,
-            when Unterminated_Literal  => Error,
-            when Name_Expected .. Positional_After_Named => Error,
-            when Duplicate_Declaration => Error,
-            when Unresolved_Name       => Error,
-            when Inaccessible_Name     => Error,
-            when Reserved_Tool_Name    => Error,
-            when Literal_Out_Of_Range
-               .. Invalid_Tool_Directive => Error,
-            when Call_Argument_Match .. No_Description => Error,
-            --  Stage warnings do not refuse; invocation policy is separate.
-            when Mutable_Never_Written | Unused_Pure_Local => Warning,
-            when No_Toolchain .. Linker_Script_Contract => Error,
-            when Svd_Malformed .. Svd_Output_Refused => Error);
-
-   --  Argument_Not_In_A_Register was retired by the internal scalar
-   --  convention, which places every argument after the sixth in an aligned
-   --  stack run.
-   function State (Of_Code : Code_Name) return Disposition
-     is (case Of_Code is
-            --  Retired when the frontend was wired to the
-            --  driver, so nothing raises this any more.  The row
-            --  stays so its number can never be handed to
-            --  another rule.
-            when No_Frontend           => Retired,
-            when Unknown_Option        => Live,
-            when Unreadable_Source     => Live,
-            when Unknown_Target        => Live,
-            when Unwritable_Output     => Live,
-            when Module_Not_Found      => Live,
-            when Module_Directory_Invalid => Live,
-            when Module_Unavailable_For_Target => Live,
-            when Root_Holds_Library_Module => Live,
-            when Not_Formatted         => Live,
-            when Unknown_Level         => Live,
-            when Construct_Not_Enabled => Live,
-            when Malformed_Integer     => Live,
-            when Unknown_Bytes         => Live,
-            when Unterminated_Comment  => Live,
-            when Unterminated_Literal  => Live,
-            when Name_Expected .. Positional_After_Named => Live,
-            when Duplicate_Declaration => Live,
-            when Unresolved_Name       => Live,
-            when Inaccessible_Name     => Live,
-            when Reserved_Tool_Name    => Live,
-            when Literal_Out_Of_Range
-               .. Mutable_Never_Written => Live,
-            when Call_Argument_Match .. No_Description
-               => Live,
-            when Unused_Pure_Local => Live,
-            when No_Toolchain .. Entry_Point_Missing => Live,
-            when Argument_Not_In_A_Register => Retired,
-            when Frame_Not_Addressable | Image_Budget_Exceeded
-               | Panic_Contract_Invalid | Firmware_Frame_Exceeds_Stack
-               | Handler_Exceeds_Stack_Margin | Library_Not_Found
-               | Linker_Script_Contract
-               => Live,
-            when Svd_Malformed .. Svd_Output_Refused => Live);
-
-   --  The rule the code enforces, in one line. Documentation, not prose a
-   --  user reads: the message at the raise site is what a user reads.
-   function Rule (Of_Code : Code_Name) return String
-     is (case Of_Code is
-            when No_Frontend           =>
-               "a source was read and no frontend is wired to the driver",
-            when Unknown_Option        =>
-               "an option or argument the driver does not define",
-            when Unreadable_Source     =>
-               "a source that is missing or cannot be read",
-            when Unknown_Target        =>
-               "a target no description names",
-            when Unwritable_Output     =>
-               "an output file that cannot be written",
-            when Module_Not_Found      =>
-               "[1420]: no ordered import root contains the requested module",
-            when Module_Directory_Invalid =>
-               "[1410], [1420]: a module directory is invalid or unreadable",
-            when Module_Unavailable_For_Target =>
-               "D267: an imported source namespace is unavailable"
-                 & " for the target",
-            when Root_Holds_Library_Module =>
-               "D275: a project root holds a module the compiler's"
-                 & " library supplies instead",
-            when Not_Formatted         =>
-               "D252: a source `refine fmt --check` finds out of the layout",
-            when Unknown_Level         =>
-               "D255: a CPU feature level the selected target does not have",
-            when Construct_Not_Enabled =>
-               "[1830]: the tour describes this and the kernel omits it",
-            when Malformed_Integer     =>
-               "[1770]: an integer with missing digits, misplaced " &
-               "underscores, an invalid base digit, or an adjacent name",
-            when Unknown_Bytes         =>
-               "[1750]/[1760]: a run of bytes no rule spells, or a word "
-               & "with a capital",
-            when Unterminated_Comment  =>
-               "[1780]: a block comment that is never closed",
-            when Unterminated_Literal  =>
-               "[0250]/[0260]/[0280]: a quoted or raw literal "
-               & "that is never closed",
-            when Name_Expected         =>
-               "[1760]: a name position holds something that is not a name",
-            when Type_Expected         =>
-               "[1790]: a type position holds no type the kernel enables",
-            when Expression_Expected   =>
-               "[1820]: an expression was required and none begins here",
-            when Token_Expected        =>
-               "[1810]: a terminal the production spells is absent",
-            when Unclosed_Construct    =>
-               "[1800]: a construct whose closing `end` never arrives",
-            when Assignment_In_Expression =>
-               "[0390]: assignment is a statement, never an expression",
-            when Comparison_Chained    =>
-               "[1820]: comparison takes at most one operator",
-            when Return_Carries_Value  =>
-               "[1810]: `return` carries no value; assign the named return",
-            when Public_On_Statement   =>
-               "[1740]: `public` rides on a declaration, not a statement",
-            when End_Name_Mismatch     =>
-               "[1800]: the name on `end` is not the name declared",
-            when Stray_Token           =>
-               "[1740]: a run of tokens beginning no declaration or"
-               & " statement",
-            when Positional_After_Named =>
-               "[0980]: a positional call argument precedes every named"
-               & " argument",
-            when Nesting_Too_Deep      =>
-               "an implementation limit on how deeply a construct nests",
-            when Duplicate_Declaration =>
-               "[1850]: one scope gives one name to one thing",
-            when Unresolved_Name       =>
-               "[1860]: a name used and declared in no visible scope",
-            when Reserved_Tool_Name    =>
-               "[1560]: a builtin tool namespace binding or use is"
-               & " unavailable",
-            when Inaccessible_Name     =>
-               "[1410]: a module-internal declaration used across modules",
-            when Literal_Out_Of_Range  =>
-               "a compile-time magnitude its context or target does not"
-               & " hold",
-            when Register_Reserved_Bits =>
-               "[0740]: a known register image violates its reserved-bit"
-               & " write policy",
-            when Type_Mismatch         =>
-               "[1890]: a value's type is not the one its context or"
-               & " operation requires",
-            when Not_Definitely_Assigned =>
-               "[1910], [0910], [0930]: a place unassigned at a read or exit",
-            when Immutable_Target      =>
-               "[1900]: a place that may not be written",
-            when Unsupported_Use       =>
-               "[1830]: a known form used where the language does not"
-               & " permit it",
-            when Not_Known_At_Compile_Time =>
-               "[1940]/D136/D202: a required static value or initial image"
-               & " that the compiler cannot establish before runtime",
-            when Impossible_Operand    =>
-               "[1950]: an operand the operation cannot take, where the"
-               & " compiler knows it",
-            when Compile_Time_Assertion_Failed =>
-               "[1510]: a compile-time assertion is false",
-            when Cyclic_Type_Alias     =>
-               "[1795]: a chain of aliases that reaches no type",
-            when Unresolved_Field      =>
-               "[0750]: a field a struct was not declared with",
-            when Field_Named_Twice     =>
-               "[0670]/[0710]/D74/D76: each field is named at most once"
-               & " in a struct declaration or literal, or a variant case"
-               & " declaration or construction",
-            when Field_Not_Given       =>
-               "[0710]/D76: every field in a struct literal or variant"
-               & " case construction is named or covered by `of`",
-            when Variant_Case_Named_Twice =>
-               "[1210]: a match names each variant case at most once",
-            when Variant_Case_Not_Matched =>
-               "[1210]: an exhaustive match names every variant case",
-            when Recursive_Nominal_Value =>
-               "D137: a nominal value layout cannot contain itself by value",
-            when Reference_Escapes =>
-               "[0770]/[0780]: retention requires live storage and"
-               & " permission from the reference's origin",
-            when Borrowed_Place =>
-               "[0800]/[0830]: a live derived view keeps its source still",
-            when Return_Sources_Disagree =>
-               "[0790]: a returned reference derives from exactly its"
-               & " declared source parameters",
-            when Conformance_Collision =>
-               "a whole-program conformance key has two declarations",
-            when Unsatisfied_Constraint =>
-               "a concrete type actual lacks the required concept conformance",
-            when Compiler_Conformance_Reserved =>
-               "a user attempts to declare the compiler-owned concept or one"
-               & " of its supplied conformances",
-            when Malformed_Text_Literal =>
-               "[0270] [1750]: a text literal contains a malformed escape"
-               & " or invalid source encoding",
-            when Malformed_Float_Literal =>
-               "[0210] [0220] [0230] [1770]: a float has a complete"
-               & " fraction and exponent when required, and ends before a"
-               & " name",
-            when Malformed_Character_Literal =>
-               "[0250] [0270]: a character literal spells exactly one"
-               & " Unicode scalar value",
-            when Malformed_Raw_Literal =>
-               "[0280] [1750]: raw content is UTF-8 and every nonblank"
-               & " line has the closing delimiter's indentation",
-            when Size_Limit_Exceeded =>
-               "D247: an implementation limit on declarations in a routine"
-               & " or fields in a struct body or variant case",
-            when Invalid_Option_Declaration =>
-               "[1530]/D202: an option must be unconditional, have an"
-               & " available name and use a supported scalar type",
-            when Invalid_Tool_Directive =>
-               "[1510]/[1590]/D202: a tool directive needs one argument;"
-               & " linker.library needs a quoted portable library name",
-            when Mutable_Never_Written =>
-               "D251: a local declared `mut` that nothing writes",
-            when Call_Argument_Match =>
-               "[1920]/D138: call arguments match the parameters and the"
-               & " callee's static formals",
-            when Zero_Image_Unavailable =>
-               "[0540]: zeroed or an implicit initializer has no complete"
-               & " zero image",
-            when Error_Contract_Violated =>
-               "[0940]/[0960]: failures obey the declared error set and"
-               & " call handling",
-            when Assembly_Block_Contract =>
-               "[1630]/[1990]: assembly operands, registers and template"
-               & " slots obey the block contract",
-            when Result_Use =>
-               "[1020]/[1930]/[0990]: a call's results are used,"
-               & " discarded or bound as the signature allows",
-            when Control_Value =>
-               "[1180]/[1190]/D124: a break carries a value exactly when"
-               & " its target needs one; value-producing fallthroughs"
-               & " supply one",
-            when Match_Arm_Form =>
-               "[1210]/[0480]/[0640]: each match arm names a case of"
-               & " its subject in an admitted form",
-            when Aggregate_Form =>
-               "[0700]/[0720]: struct, variant and array values are"
-               & " built and used in their admitted forms",
-            when Pointer_Union_Use =>
-               "[0480]: a pointer union is matched before its pointer"
-               & " is read",
-            when Packed_Image =>
-               "[0730]: a packed image is used through its fields and"
-               & " declared layout",
-            when Place_Required =>
-               "[0430]/[0900]/[0910]: an operation needing a distinct"
-               & " addressable place lacks one",
-            when Type_Declaration_Form =>
-               "[1795]/[1350]: a type position or declaration is not"
-               & " well formed",
-            when Signature_Form =>
-               "[0790]/[0980]/[0990]/D192: a written signature is not"
-               & " well formed",
-            when Generic_Deduction =>
-               "D138: a generic call deduces and instantiates one"
-               & " concrete routine",
-            when Conformance_Form =>
-               "[1230]-[1270]: a concept or conformance declaration is"
-               & " not well formed",
-            when Erased_Contract =>
-               "[1370]-[1390]/D145-D147: an `any` value or dispatch"
-               & " outside its erased contract",
-            when Noreturn_Contract =>
-               "[0890]: a noreturn routine is infallible and never"
-               & " returns",
-            when Memory_Contract =>
-               "[1620]/D227: a memory intrinsic outside its explicit"
-               & " contract",
-            when Machine_Entry_Contract =>
-               "[1570]: an interrupt or naked routine outside its"
-               & " machine-entry contract",
-            when Foreign_Boundary =>
-               "[1580]: a C boundary signature, layout or variadic"
-               & " call the C ABI cannot carry",
-            when Linkage_Contract =>
-               "[1610]/[1640]: a link symbol, helper import or"
-               & " placement outside its contract",
-            when Traversal_Source =>
-               "[1150]/D180: a for source is a range, a traversable"
-               & " value or one exact iterable conformance",
-            when Invalid_Description_Directive =>
-               "D542: a device description directive whose arguments are"
-               & " not the forms its row says",
-            when Description_Structure =>
-               "D542/D543: a description directive outside one"
-               & " description, a repeated or missing one, or a second"
-               & " description",
-            when Description_Layout =>
-               "D543: regions that overlap, or a placement, vector table"
-               & " or stack its regions cannot hold",
-            when Description_Core_Mismatch =>
-               "D543: a description whose core is not the request's"
-               & " target and level",
-            when Boot_Kind_Reserved =>
-               "D545: a reserved boot image kind refine does not build",
-            when Region_Placement =>
-               "D547: a link(region: ...) the selected description"
-               & " cannot hold",
-            when Unused_Pure_Local =>
-               "D251: an unused local with an effect-free literal initializer",
-            when No_Toolchain          =>
-               "[1550]: the requested output cannot be made with the"
-               & " target, settings or available toolchain",
-            when Toolchain_Failed      =>
-               "[1550]: assembler or linker refusal, or executable"
-               & " output lifecycle failure",
-            when Entry_Point_Missing   =>
-               "[1970] [1990]: a missing or invalid hosted main or"
-               & " explicitly selected firmware entry",
-            when Argument_Not_In_A_Register =>
-               "retired: the register-only internal calling limit",
-            when Frame_Not_Addressable =>
-               "a verified frame outside x86-64's signed displacement"
-               & " encoding",
-            when Image_Budget_Exceeded =>
-               "D537: static images exceed the image budget of the target"
-               & " or the firmware profile",
-            when Panic_Contract_Invalid =>
-               "[1670]: invalid panic handler or unrepresentable site space",
-            when Firmware_Frame_Exceeds_Stack =>
-               "[1990]: one Cortex-M0 firmware frame exceeds the selected"
-               & " stack reservation",
-            when Handler_Exceeds_Stack_Margin =>
-               "[1670]: a selected panic handler in a program that"
-               & " prepares a stack exceeds or cannot be measured against"
-               & " the target's stack margin",
-            when Library_Not_Found =>
-               "[1590]/D525: a failed link's library that no named"
-               & " directory and none of the C driver's own holds",
-            when No_Description =>
-               "D543: firmware or a placement that needs a profile, with no"
-               & " description reached and none in the library",
-            when Linker_Script_Contract =>
-               "D546: a linked firmware image that breaks a clause of the"
-               & " linker script contract",
-            when Svd_Malformed =>
-               "D555: an SVD that is not XML in the subset refine svd reads",
-            when Svd_Policy_Invalid =>
-               "D556: a selection policy refine svd cannot read",
-            when Svd_Input_Mismatch =>
-               "D556: an SVD that is not the one its policy was reviewed"
-               & " against",
-            when Svd_Form_Unsupported =>
-               "D557: an SVD form refine svd does not read, for a selected"
-               & " register",
-            when Svd_Device_Inconsistent =>
-               "D557: a selected register the SVD describes in a way that"
-               & " cannot be generated as it says",
-            when Svd_Not_Found =>
-               "D556: a policy that selects what its SVD does not have",
-            when Svd_Output_Refused =>
-               "D558: outputs refine svd will not replace");
-
-   ------------------------------------------------------------------
-   --  What every occurrence of a code must carry
-   --
-   --  The row states the shape; the fixture states where. Both are checked,
-   --  and neither is prose.
-   ------------------------------------------------------------------
-
-   --  Whether the diagnostic must name a source. File-independent driver
-   --  failures need none; source-attached failures do. Retired No_Frontend
-   --  retains its original source-attached shape and is no longer raised.
-   function Needs_Source (Of_Code : Code_Name) return Boolean
-     is (case Of_Code is
-            when No_Frontend           => True,
-            when Unknown_Option        => False,
-            when Unreadable_Source     => False,
-            when Unknown_Target        => False,
-            when Unwritable_Output     => False,
-            when Module_Not_Found      => True,
-            when Module_Directory_Invalid => False,
-            when Module_Unavailable_For_Target => True,
-            when Root_Holds_Library_Module => True,
-            when Not_Formatted         => True,
-            when Unknown_Level         => False,
-            when Construct_Not_Enabled => True,
-            when Malformed_Integer     => True,
-            when Unknown_Bytes         => True,
-            when Unterminated_Comment  => True,
-            when Unterminated_Literal  => True,
-            when Name_Expected .. Positional_After_Named => True,
-            when Duplicate_Declaration => True,
-            when Unresolved_Name       => True,
-            when Inaccessible_Name     => True,
-            when Reserved_Tool_Name    => True,
-            when Literal_Out_Of_Range
-               .. Mutable_Never_Written => True,
-            when Call_Argument_Match .. Region_Placement
-               => True,
-            --  D543: raised at a placement, or by the driver for a request.
-            when No_Description => False,
-            when Unused_Pure_Local => True,
-            --  Backend reports need not have a source. Missing entry uses
-            --  an entry-module anchor when available, but permits a point
-            --  in an empty file or a source-free fallback.
-            when No_Toolchain .. Handler_Exceeds_Stack_Margin => False,
-            --  D525: a library is asked for by its directive, always.
-            when Library_Not_Found => True,
-            --  D546: about a linked image.
-            when Linker_Script_Contract => False,
-            --  D558: the SVD or the policy is the source a fault is in;
-            --  an output in the way is in neither.
-            when Svd_Malformed .. Svd_Not_Found => True,
-            when Svd_Output_Refused => False);
-
-   --  Whether the primary span must cover at least one byte. An empty span
-   --  points between two bytes, which is right for a missing token and
-   --  wrong for a lexeme that is present and refused.
-   function Needs_Non_Empty_Span (Of_Code : Code_Name) return Boolean
-     is (case Of_Code is
-            when No_Frontend           => False,
-            when Unknown_Option        => False,
-            when Unreadable_Source     => False,
-            when Unknown_Target        => False,
-            when Unwritable_Output     => False,
-            when Module_Not_Found      => True,
-            when Module_Directory_Invalid => False,
-            when Module_Unavailable_For_Target => True,
-            when Root_Holds_Library_Module => True,
-            --  The first line out of the layout, which may be one whose
-            --  only fault is its missing line end, and so empty.
-            when Not_Formatted         => False,
-            when Unknown_Level         => False,
-            when Construct_Not_Enabled => True,
-            when Malformed_Integer     => True,
-            when Unknown_Bytes         => True,
-            when Unterminated_Comment  => False,
-            when Unterminated_Literal  => True,
-            when Name_Expected .. Unclosed_Construct => False,
-            when Assignment_In_Expression .. Positional_After_Named => True,
-            --  A name that is duplicated or unknown is written down: there
-            --  is a lexeme to point at, and it is the name itself.
-            when Duplicate_Declaration => True,
-            when Unresolved_Name       => True,
-            when Inaccessible_Name     => True,
-            when Reserved_Tool_Name    => True,
-            --  Every one of these points at something a program wrote.
-            when Literal_Out_Of_Range
-               .. Mutable_Never_Written =>
-               True,
-            when Unused_Pure_Local => True,
-            when Call_Argument_Match .. Region_Placement
-               => True,
-            when No_Description => False,
-            when No_Toolchain .. Handler_Exceeds_Stack_Margin => False,
-            when Library_Not_Found => True,
-            when Linker_Script_Contract => False,
-            --  A fault in an SVD or a policy points at the element or
-            --  byte it is at, or at the start when it is the whole file's.
-            when Svd_Malformed .. Svd_Output_Refused => False);
-
-   --  The admitted secondary-label interval. Every code except L0201, L0300,
-   --  L0304, L0305, L0306 and L0325 has one exact count. L0300 and L0306
-   --  point only at the direct defect when it is written there, but a
-   --  substitution-dependent occurrence is primary at the application and
-   --  may relate the template; the others say where below.
-   function Minimum_Secondaries (Of_Code : Code_Name) return Natural
-     is (case Of_Code is
-            when Unterminated_Comment  => 1,
-            when Unterminated_Literal  => 1,
-            --  Each of these is only readable next to a second place: the
-            --  opener that was never closed, the name that was declared,
-            --  the first comparison of a chain, the return it may not
-            --  carry a value for, the function the `public` is inside.
-            when Type_Expected         => 1,
-            when Expression_Expected   => 1,
-            when Token_Expected        => 1,
-            when Unclosed_Construct    => 1,
-            when Comparison_Chained    => 1,
-            when Return_Carries_Value  => 1,
-            when Public_On_Statement   => 1,
-            when End_Name_Mismatch     => 1,
-            when Nesting_Too_Deep      => 1,
-            --  The earlier declaration, which is the whole complaint and
-            --  may be in another file.  An unresolved name has no second
-            --  place by definition, which is why it asks for none.
-            when Duplicate_Declaration => 1,
-            when Unresolved_Name       => 0,
-            when Inaccessible_Name     => 1,
-            when Reserved_Tool_Name    => 0,
-            --  A mismatch is only readable next to the place that stated
-            --  the requirement, and an unwritable place next to its
-            --  declaration. A direct literal or fold out of range has no
-            --  second place: the type it did not fit is named in the
-            --  sentence, because a defaulted literal [0200] has no
-            --  annotation to point at. Maximum_Secondaries admits the
-            --  template expression for a substitution-dependent fold.
-            when Type_Mismatch         => 1,
-            when Call_Argument_Match | Zero_Image_Unavailable
-               | Error_Contract_Violated
-               | Assembly_Block_Contract
-               | Result_Use .. Traversal_Source => 1,
-            when Immutable_Target      => 1,
-            when Not_Definitely_Assigned => 1,
-            when Field_Named_Twice     => 1,
-            when Variant_Case_Named_Twice => 1,
-            when Recursive_Nominal_Value => 1,
-            when Reference_Escapes | Borrowed_Place
-               | Return_Sources_Disagree
-               | Conformance_Collision | Unsatisfied_Constraint => 1,
-            when Compiler_Conformance_Reserved => 0,
-            when Malformed_Text_Literal | Malformed_Float_Literal
-               | Malformed_Character_Literal => 0,
-            when Malformed_Raw_Literal => 0,
-            --  A routine over D247's bound is its name alone; a struct or
-            --  case over it points at its first unheld field and relates
-            --  the body that holds it.  Maximum_Secondaries admits both.
-            when Size_Limit_Exceeded   => 0,
-            when Literal_Out_Of_Range  => 0,
-            when Register_Reserved_Bits => 0,
-            when Unsupported_Use       => 0,
-            when Not_Known_At_Compile_Time => 0,
-            --  A direct operand is written down and is the only place to
-            --  point at: [1950] says the report names it and not the
-            --  operator. Maximum_Secondaries admits the template operand
-            --  when an application is the primary place.
-            when Impossible_Operand    => 0,
-            when others                => 0);
-
-   function Maximum_Secondaries (Of_Code : Code_Name) return Natural
-     is (case Of_Code is
-            when Literal_Out_Of_Range | Impossible_Operand
-               | Unsupported_Use => 1,
-            --  A module value of a range subtype has bounds to point at,
-            --  and an erased pair has the site that asked for the image.
-            when Not_Known_At_Compile_Time => 1,
-            when Size_Limit_Exceeded => 1,
-            --  D381: a qualified name whose prefix reached a local that
-            --  hides an import points at that local, the one second place
-            --  an unresolved name can have.
-            when Unresolved_Name => 1,
-            when others => Minimum_Secondaries (Of_Code));
-
-   --  How many notes. [1830] promises a diagnostic that names the construct
-   --  and says what it is, which is two facts and so two notes.
-   function Required_Notes (Of_Code : Code_Name) return Natural
-     is (case Of_Code is
-            when No_Frontend           => 1,
-            when Construct_Not_Enabled => 2,
-            when Malformed_Integer     => 1,
-            when Unknown_Bytes         => 1,
-            when Module_Not_Found | Module_Directory_Invalid
-               | Module_Unavailable_For_Target
-               | Root_Holds_Library_Module => 1,
-            --  What a reader runs to put the file right.
-            when Not_Formatted         => 1,
-            when Name_Expected .. Positional_After_Named => 1,
-            when Duplicate_Declaration => 1,
-            when Unresolved_Name       => 1,
-            when Inaccessible_Name     => 1,
-            when Reserved_Tool_Name    => 1,
-            when Literal_Out_Of_Range  => 1,
-            when Register_Reserved_Bits => 1,
-            when Type_Mismatch         => 1,
-            when Call_Argument_Match | Zero_Image_Unavailable
-               | Error_Contract_Violated
-               | Assembly_Block_Contract
-               | Result_Use .. Traversal_Source => 1,
-            when Not_Definitely_Assigned => 1,
-            when Immutable_Target      => 1,
-            --  [1830]'s two facts, the same two L0010 carries: which
-            --  construct this is, and what it is.
-            when Unsupported_Use       => 2,
-            when Not_Known_At_Compile_Time => 1,
-            when Impossible_Operand    => 1,
-            when Compile_Time_Assertion_Failed => 1,
-            when Cyclic_Type_Alias     => 1,
-            when Unresolved_Field      => 1,
-            when Field_Named_Twice     => 1,
-            when Field_Not_Given       => 1,
-            when Variant_Case_Named_Twice => 1,
-            when Variant_Case_Not_Matched => 1,
-            when Recursive_Nominal_Value => 1,
-            when Reference_Escapes | Borrowed_Place
-               | Return_Sources_Disagree
-               | Conformance_Collision | Unsatisfied_Constraint
-               | Compiler_Conformance_Reserved
-               | Malformed_Text_Literal | Malformed_Float_Literal
-               | Malformed_Character_Literal => 1,
-            when Malformed_Raw_Literal => 1,
-            when Size_Limit_Exceeded   => 1,
-            when Invalid_Option_Declaration | Invalid_Tool_Directive => 1,
-            --  D251: the judgement is the compiler's and not the language's,
-            --  and the note says so.
-            when Mutable_Never_Written | Unused_Pure_Local => 1,
-            --  The one diagnostic here a user is stuck on rather than
-            --  informed by, so it owes them the way out: which program
-            --  was looked for, and how to name another.
-            when No_Toolchain          => 1,
-            --  D525: how to name where the library is.
-            when Library_Not_Found     => 1,
-            --  D542-D547: what to write instead, and for a broken contract
-            --  the clause it states.
-            when Invalid_Description_Directive .. Region_Placement => 1,
-            when No_Description | Linker_Script_Contract => 1,
-            when others                => 0);
-
-   function Warning_Enabled_By_Default (Of_Code : Code_Name) return Boolean
-     is (Of_Code in Mutable_Never_Written | Unused_Pure_Local
-           | Root_Holds_Library_Module);
 
    --  Whether an occurrence may carry a fix, which the text renders as a
    --  `help` line and an editor offers as an action.  Must_Fix is a code
@@ -986,32 +280,935 @@ package Landin.Diagnostics.Catalogue is
    --  this row as it joins a compilation's report.
    type Fix_Admission is (No_Fix, May_Fix, Must_Fix);
 
+   --  What shows a live code is raised, which check.py holds the
+   --  diagnostic matrix to.  Negative_Fixture is a program the code
+   --  refuses, a negative fixture whose `codes:` names it.  Invocation is
+   --  a code no source is refused with -- a command line, a host, a link
+   --  or an SVD -- shown by a driver, command or end-to-end case.
+   --  Implementation_Limit is met only by a program too large to keep in
+   --  the corpus, shown by the unit case that generates one at and past
+   --  the limit.  A retired row keeps what showed it when it was live.
+   type Evidence is (Negative_Fixture, Invocation, Implementation_Limit);
+
+   type Rule_Text is not null access constant String;
+
+   --  One row per code, and every column of it in one place.
+   type Row is record
+      --  The stable identifier, unique to the row.
+      Code     : Code_String;
+      --  Stage warnings do not refuse; invocation policy is separate.  A
+      --  warning is enabled by default; one that is not would add a column.
+      Level    : Severity;
+      State    : Disposition;
+      --  Whether the diagnostic must name a source.  File-independent
+      --  driver failures need none; source-attached failures do.
+      Source   : Boolean;
+      --  Whether the primary span must cover at least one byte.  An empty
+      --  span points between two bytes, which is right for a missing token
+      --  and wrong for a lexeme that is present and refused.
+      Bytes    : Boolean;
+      --  The admitted secondary-label interval, Least .. Most.  Every code
+      --  except L0201, L0300, L0304, L0305, L0306 and L0325 has one exact
+      --  count, and the catalogue suite's `rows are whole` names those six:
+      --  a new code whose interval is wider joins its list.
+      Least    : Natural;
+      Most     : Natural;
+      --  How many notes every occurrence carries.
+      Notes    : Natural;
+      Fixes    : Fix_Admission;
+      Shown_By : Evidence;
+      --  The rule the code enforces, in one line.  Documentation, not prose
+      --  a user reads: the message at the raise site is what a user reads.
+      Rule     : Rule_Text;
+   end record;
+
+   function "+" (Text : String) return Rule_Text is (new String'(Text));
+
+   --  The catalogue.  A named aggregate with no `others`, so a code with
+   --  no row, or a row with a column left out, does not compile.  The
+   --  rows run in Code_Name's order.
+   Table : constant array (Code_Name) of Row :=
+     [
+      --  Retired when the frontend was wired to the driver, so nothing raises
+      --  this any more. It keeps its original source-attached shape, and the
+      --  row stays so its number can never be handed to another rule.
+      No_Frontend =>
+        (Code => "L0001", Level => Error, State => Retired,
+         Source => True, Bytes => False,
+         Least => 0, Most => 0, Notes => 1,
+         Fixes => No_Fix, Shown_By => Invocation,
+         Rule => +"a source was read and no frontend is wired to the driver"),
+      Unknown_Option =>
+        (Code => "L0002", Level => Error, State => Live,
+         Source => False, Bytes => False,
+         Least => 0, Most => 0, Notes => 0,
+         Fixes => No_Fix, Shown_By => Invocation,
+         Rule => +"an option or argument the driver does not define"),
+      Unreadable_Source =>
+        (Code => "L0003", Level => Error, State => Live,
+         Source => False, Bytes => False,
+         Least => 0, Most => 0, Notes => 0,
+         Fixes => No_Fix, Shown_By => Invocation,
+         Rule => +"a source that is missing or cannot be read"),
+      Unknown_Target =>
+        (Code => "L0004", Level => Error, State => Live,
+         Source => False, Bytes => False,
+         Least => 0, Most => 0, Notes => 0,
+         Fixes => No_Fix, Shown_By => Invocation,
+         Rule => +"a target no description names"),
+      Unwritable_Output =>
+        (Code => "L0005", Level => Error, State => Live,
+         Source => False, Bytes => False,
+         Least => 0, Most => 0, Notes => 0,
+         Fixes => No_Fix, Shown_By => Invocation,
+         Rule => +"an output file that cannot be written"),
+      --  [1420]'s import, offered the module directories it is near.
+      Module_Not_Found =>
+        (Code => "L0006", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 0, Most => 0, Notes => 1,
+         Fixes => May_Fix, Shown_By => Negative_Fixture,
+         Rule => +("[1420]: no ordered import root contains the requested"
+                   & " module")),
+      Module_Directory_Invalid =>
+        (Code => "L0007", Level => Error, State => Live,
+         Source => False, Bytes => False,
+         Least => 0, Most => 0, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("[1410], [1420]: a module directory is invalid or"
+                   & " unreadable")),
+      Module_Unavailable_For_Target =>
+        (Code => "L0015", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 0, Most => 0, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("D267: an imported source namespace is unavailable for"
+                   & " the target")),
+      Root_Holds_Library_Module =>
+        (Code => "L0016", Level => Warning, State => Live,
+         Source => True, Bytes => True,
+         Least => 0, Most => 0, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("D275: a project root holds a module the compiler's"
+                   & " library supplies instead")),
+      Empty_Module_Hides_Root =>
+        (Code => "L0532", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 0, Most => 0, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("D563: an import's first directory holds no source and a"
+                   & " later root holds its module")),
+      --  The first line out of the layout, which may be one whose only fault
+      --  is its missing line end, and so empty; the note is what a reader runs
+      --  to put the file right.
+      Not_Formatted =>
+        (Code => "L0008", Level => Error, State => Live,
+         Source => True, Bytes => False,
+         Least => 0, Most => 0, Notes => 1,
+         Fixes => No_Fix, Shown_By => Invocation,
+         Rule => +("D252: a source `refine fmt --check` finds out of the"
+                   & " layout")),
+      --  L0008 and L0009 refuse no program: their evidence is the driver cases
+      --  that check a file out of the layout and name a level another family
+      --  has.
+      Unknown_Level =>
+        (Code => "L0009", Level => Error, State => Live,
+         Source => False, Bytes => False,
+         Least => 0, Most => 0, Notes => 0,
+         Fixes => No_Fix, Shown_By => Invocation,
+         Rule => +("D255: a CPU feature level the selected target does not"
+                   & " have")),
+      --  [1830] promises a diagnostic that names the construct and says what
+      --  it is, which is two facts and so two notes.
+      Construct_Not_Enabled =>
+        (Code => "L0010", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 0, Most => 0, Notes => 2,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +"[1830]: the tour describes this and the kernel omits it"),
+      Malformed_Integer =>
+        (Code => "L0011", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 0, Most => 0, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("[1770]: an integer with missing digits, misplaced"
+                   & " underscores, an invalid base digit, or an adjacent"
+                   & " name")),
+      Unknown_Bytes =>
+        (Code => "L0012", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 0, Most => 0, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("[1750]/[1760]: a run of bytes no rule spells, or a word"
+                   & " with a capital")),
+      Unterminated_Comment =>
+        (Code => "L0013", Level => Error, State => Live,
+         Source => True, Bytes => False,
+         Least => 1, Most => 1, Notes => 0,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +"[1780]: a block comment that is never closed"),
+      Unterminated_Literal =>
+        (Code => "L0014", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 1, Most => 1, Notes => 0,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("[0250]/[0260]/[0280]: a quoted or raw literal that is"
+                   & " never closed")),
+      Name_Expected =>
+        (Code => "L0100", Level => Error, State => Live,
+         Source => True, Bytes => False,
+         Least => 0, Most => 0, Notes => 1,
+         Fixes => May_Fix, Shown_By => Negative_Fixture,
+         Rule => +("[1760]: a name position holds something that is not a"
+                   & " name")),
+      --  The parser's absences point between two bytes. Each of these is only
+      --  readable next to a second place: the opener that was never closed,
+      --  the name that was declared, the first comparison of a chain, the
+      --  return it may not carry a value for, the function the `public` is
+      --  inside. A keyword that was required and a name near it written, and
+      --  D261's smallest repair of a refused statement, are offered as fixes.
+      Type_Expected =>
+        (Code => "L0101", Level => Error, State => Live,
+         Source => True, Bytes => False,
+         Least => 1, Most => 1, Notes => 1,
+         Fixes => May_Fix, Shown_By => Negative_Fixture,
+         Rule => +"[1790]: a type position holds no type the kernel enables"),
+      Expression_Expected =>
+        (Code => "L0102", Level => Error, State => Live,
+         Source => True, Bytes => False,
+         Least => 1, Most => 1, Notes => 1,
+         Fixes => May_Fix, Shown_By => Negative_Fixture,
+         Rule => +"[1820]: an expression was required and none begins here"),
+      Token_Expected =>
+        (Code => "L0103", Level => Error, State => Live,
+         Source => True, Bytes => False,
+         Least => 1, Most => 1, Notes => 1,
+         Fixes => May_Fix, Shown_By => Negative_Fixture,
+         Rule => +"[1810]: a terminal the production spells is absent"),
+      Unclosed_Construct =>
+        (Code => "L0104", Level => Error, State => Live,
+         Source => True, Bytes => False,
+         Least => 1, Most => 1, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +"[1800]: a construct whose closing `end` never arrives"),
+      --  [0390]'s `=` inside an expression, offered `==`.
+      Assignment_In_Expression =>
+        (Code => "L0105", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 0, Most => 0, Notes => 1,
+         Fixes => May_Fix, Shown_By => Negative_Fixture,
+         Rule => +"[0390]: assignment is a statement, never an expression"),
+      Comparison_Chained =>
+        (Code => "L0106", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 1, Most => 1, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +"[1820]: comparison takes at most one operator"),
+      Return_Carries_Value =>
+        (Code => "L0107", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 1, Most => 1, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("[1810]: `return` carries no value; assign the named"
+                   & " return")),
+      Public_On_Statement =>
+        (Code => "L0108", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 1, Most => 1, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +"[1740]: `public` rides on a declaration, not a statement"),
+      --  [1800]'s closing name, which can only be the declared one.
+      End_Name_Mismatch =>
+        (Code => "L0109", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 1, Most => 1, Notes => 1,
+         Fixes => May_Fix, Shown_By => Negative_Fixture,
+         Rule => +"[1800]: the name on `end` is not the name declared"),
+      Stray_Token =>
+        (Code => "L0110", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 0, Most => 0, Notes => 1,
+         Fixes => May_Fix, Shown_By => Negative_Fixture,
+         Rule => +("[1740]: a run of tokens beginning no declaration or"
+                   & " statement")),
+      --  An implementation limit, met only by a program too large to keep in
+      --  the corpus, so its owner is the unit case that generates one at and
+      --  past the limit.
+      Nesting_Too_Deep =>
+        (Code => "L0111", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 1, Most => 1, Notes => 1,
+         Fixes => No_Fix, Shown_By => Implementation_Limit,
+         Rule => +"an implementation limit on how deeply a construct nests"),
+      Positional_After_Named =>
+        (Code => "L0112", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 0, Most => 0, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("[0980]: a positional call argument precedes every named"
+                   & " argument")),
+      --  A name that is duplicated or unknown is written down: there is a
+      --  lexeme to point at, and it is the name itself. The earlier
+      --  declaration is the whole complaint and may be in another file.
+      Duplicate_Declaration =>
+        (Code => "L0200", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 1, Most => 1, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +"[1850]: one scope gives one name to one thing"),
+      --  An unresolved name has no second place by definition, and [1860]'s
+      --  misspelling is offered the names it is near. D381: a qualified name
+      --  whose prefix reached a local that hides an import points at that
+      --  local, the one second place an unresolved name can have.
+      Unresolved_Name =>
+        (Code => "L0201", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 0, Most => 1, Notes => 1,
+         Fixes => May_Fix, Shown_By => Negative_Fixture,
+         Rule => +"[1860]: a name used and declared in no visible scope"),
+      Inaccessible_Name =>
+        (Code => "L0202", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 1, Most => 1, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("[1410]: a module-internal declaration used across"
+                   & " modules")),
+      Reserved_Tool_Name =>
+        (Code => "L0203", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 0, Most => 0, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("[1560]: a builtin tool namespace binding or use is"
+                   & " unavailable")),
+      --  Every checker row points at something a program wrote. A direct
+      --  literal or fold out of range has no second place: the type it did not
+      --  fit is named in the sentence, because a defaulted literal [0200] has
+      --  no annotation to point at. A substitution-dependent fold is primary
+      --  at the application and may relate the template expression.
+      Literal_Out_Of_Range =>
+        (Code => "L0300", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 0, Most => 1, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("a compile-time magnitude its context or target does not"
+                   & " hold")),
+      Register_Reserved_Bits =>
+        (Code => "L0398", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 0, Most => 0, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("[0740]: a known register image violates its reserved-bit"
+                   & " write policy")),
+      --  A mismatch is only readable next to the place that stated the
+      --  requirement.
+      Type_Mismatch =>
+        (Code => "L0301", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 1, Most => 1, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("[1890]: a value's type is not the one its context or"
+                   & " operation requires")),
+      Not_Definitely_Assigned =>
+        (Code => "L0302", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 1, Most => 1, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("[1910], [0910], [0930]: a place unassigned at a read or"
+                   & " exit")),
+      --  An unwritable place is only readable next to its declaration, and
+      --  [1900]'s written binding is offered `mut`.
+      Immutable_Target =>
+        (Code => "L0303", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 1, Most => 1, Notes => 1,
+         Fixes => May_Fix, Shown_By => Negative_Fixture,
+         Rule => +"[1900]: a place that may not be written"),
+      --  [1830]'s two facts, the same two L0010 carries: which construct this
+      --  is, and what it is. A substitution-dependent use may relate the
+      --  template.
+      Unsupported_Use =>
+        (Code => "L0304", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 0, Most => 1, Notes => 2,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("[1830]: a known form used where the language does not"
+                   & " permit it")),
+      --  A module value of a range subtype has bounds to point at, and an
+      --  erased pair has the site that asked for the image.
+      Not_Known_At_Compile_Time =>
+        (Code => "L0305", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 0, Most => 1, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("[1940]/D136/D202: a required static value or initial"
+                   & " image that the compiler cannot establish before"
+                   & " runtime")),
+      --  A direct operand is written down and is the only place to point at:
+      --  [1950] says the report names it and not the operator. The template
+      --  operand is admitted when an application is the primary place.
+      Impossible_Operand =>
+        (Code => "L0306", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 0, Most => 1, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("[1950]: an operand the operation cannot take, where the"
+                   & " compiler knows it")),
+      Compile_Time_Assertion_Failed =>
+        (Code => "L0324", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 0, Most => 0, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +"[1510]: a compile-time assertion is false"),
+      Cyclic_Type_Alias =>
+        (Code => "L0307", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 0, Most => 0, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +"[1795]: a chain of aliases that reaches no type"),
+      --  [0750]'s field by name, offered the fields it is near.
+      Unresolved_Field =>
+        (Code => "L0308", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 0, Most => 0, Notes => 1,
+         Fixes => May_Fix, Shown_By => Negative_Fixture,
+         Rule => +"[0750]: a field a struct was not declared with"),
+      Field_Named_Twice =>
+        (Code => "L0309", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 1, Most => 1, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("[0670]/[0710]/D74/D76: each field is named at most once"
+                   & " in a struct declaration or literal, or a variant case"
+                   & " declaration or construction")),
+      Field_Not_Given =>
+        (Code => "L0310", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 0, Most => 0, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("[0710]/D76: every field in a struct literal or variant"
+                   & " case construction is named or covered by `of`")),
+      Variant_Case_Named_Twice =>
+        (Code => "L0311", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 1, Most => 1, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +"[1210]: a match names each variant case at most once"),
+      Variant_Case_Not_Matched =>
+        (Code => "L0312", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 0, Most => 0, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +"[1210]: an exhaustive match names every variant case"),
+      Recursive_Nominal_Value =>
+        (Code => "L0313", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 1, Most => 1, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("D137: a nominal value layout cannot contain itself by"
+                   & " value")),
+      Reference_Escapes =>
+        (Code => "L0314", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 1, Most => 1, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("[0770]/[0780]: retention requires live storage and"
+                   & " permission from the reference's origin")),
+      Borrowed_Place =>
+        (Code => "L0315", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 1, Most => 1, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("[0800]/[0830]: a live derived view keeps its source"
+                   & " still")),
+      Return_Sources_Disagree =>
+        (Code => "L0316", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 1, Most => 1, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("[0790]: a returned reference derives from exactly its"
+                   & " declared source parameters")),
+      Conformance_Collision =>
+        (Code => "L0317", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 1, Most => 1, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +"a whole-program conformance key has two declarations"),
+      Unsatisfied_Constraint =>
+        (Code => "L0318", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 1, Most => 1, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("a concrete type actual lacks the required concept"
+                   & " conformance")),
+      Compiler_Conformance_Reserved =>
+        (Code => "L0319", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 0, Most => 0, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("a user attempts to declare the compiler-owned concept or"
+                   & " one of its supplied conformances")),
+      Malformed_Text_Literal =>
+        (Code => "L0320", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 0, Most => 0, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("[0270] [1750]: a text literal contains a malformed"
+                   & " escape or invalid source encoding")),
+      Malformed_Float_Literal =>
+        (Code => "L0321", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 0, Most => 0, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("[0210] [0220] [0230] [1770]: a float has a complete"
+                   & " fraction and exponent when required, and ends before"
+                   & " a name")),
+      Malformed_Character_Literal =>
+        (Code => "L0322", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 0, Most => 0, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("[0250] [0270]: a character literal spells exactly one"
+                   & " Unicode scalar value")),
+      Malformed_Raw_Literal =>
+        (Code => "L0323", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 0, Most => 0, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("[0280] [1750]: raw content is UTF-8 and every nonblank"
+                   & " line has the closing delimiter's indentation")),
+      --  An implementation limit (D247): a routine over the bound is its name
+      --  alone; a struct or case over it points at its first unheld field and
+      --  relates the body that holds it.
+      Size_Limit_Exceeded =>
+        (Code => "L0325", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 0, Most => 1, Notes => 1,
+         Fixes => No_Fix, Shown_By => Implementation_Limit,
+         Rule => +("D247: an implementation limit on declarations in a"
+                   & " routine or fields in a struct body or variant case")),
+      Invalid_Option_Declaration =>
+        (Code => "L0390", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 0, Most => 0, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("[1530]/D202: an option must be unconditional, have an"
+                   & " available name and use a supported scalar type")),
+      Invalid_Tool_Directive =>
+        (Code => "L0391", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 0, Most => 0, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("[1510]/[1590]/D202: a tool directive needs one argument;"
+                   & " linker.library needs a quoted portable library name")),
+      --  D251: the judgement is the compiler's and not the language's, and the
+      --  note says so; the observation is separate from a safe source edit.
+      Mutable_Never_Written =>
+        (Code => "L0326", Level => Warning, State => Live,
+         Source => True, Bytes => True,
+         Least => 0, Most => 0, Notes => 1,
+         Fixes => May_Fix, Shown_By => Negative_Fixture,
+         Rule => +"D251: a local declared `mut` that nothing writes"),
+      --  [0980]'s argument label, offered the parameters it is near. The row
+      --  admits a fix; only that one occurrence offers one.
+      Call_Argument_Match =>
+        (Code => "L0327", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 1, Most => 1, Notes => 1,
+         Fixes => May_Fix, Shown_By => Negative_Fixture,
+         Rule => +("[1920]/D138: call arguments match the parameters and the"
+                   & " callee's static formals")),
+      Zero_Image_Unavailable =>
+        (Code => "L0328", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 1, Most => 1, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("[0540]: zeroed or an implicit initializer has no"
+                   & " complete zero image")),
+      Error_Contract_Violated =>
+        (Code => "L0329", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 1, Most => 1, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("[0940]/[0960]: failures obey the declared error set and"
+                   & " call handling")),
+      Assembly_Block_Contract =>
+        (Code => "L0330", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 1, Most => 1, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("[1630]/[1990]: assembly operands, registers and template"
+                   & " slots obey the block contract")),
+      --  D376: a value after a `none` call's `else`, offered `none`.
+      Result_Use =>
+        (Code => "L0331", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 1, Most => 1, Notes => 1,
+         Fixes => May_Fix, Shown_By => Negative_Fixture,
+         Rule => +("[1020]/[1930]/[0990]: a call's results are used,"
+                   & " discarded or bound as the signature allows")),
+      Control_Value =>
+        (Code => "L0332", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 1, Most => 1, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("[1180]/[1190]/D124: a break carries a value exactly when"
+                   & " its target needs one; value-producing fallthroughs"
+                   & " supply one")),
+      Match_Arm_Form =>
+        (Code => "L0333", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 1, Most => 1, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("[1210]/[0480]/[0640]: each match arm names a case of its"
+                   & " subject in an admitted form")),
+      Aggregate_Form =>
+        (Code => "L0334", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 1, Most => 1, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("[0700]/[0720]: struct, variant and array values are"
+                   & " built and used in their admitted forms")),
+      Pointer_Union_Use =>
+        (Code => "L0335", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 1, Most => 1, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("[0480]: a pointer union is matched before its pointer is"
+                   & " read")),
+      Packed_Image =>
+        (Code => "L0336", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 1, Most => 1, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("[0730]: a packed image is used through its fields and"
+                   & " declared layout")),
+      Place_Required =>
+        (Code => "L0337", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 1, Most => 1, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("[0430]/[0900]/[0910]: an operation needing a distinct"
+                   & " addressable place lacks one")),
+      Type_Declaration_Form =>
+        (Code => "L0338", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 1, Most => 1, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("[1795]/[1350]: a type position or declaration is not"
+                   & " well formed")),
+      Signature_Form =>
+        (Code => "L0339", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 1, Most => 1, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("[0790]/[0980]/[0990]/D192: a written signature is not"
+                   & " well formed")),
+      Generic_Deduction =>
+        (Code => "L0340", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 1, Most => 1, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("D138: a generic call deduces and instantiates one"
+                   & " concrete routine")),
+      Conformance_Form =>
+        (Code => "L0341", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 1, Most => 1, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("[1230]-[1270]: a concept or conformance declaration is"
+                   & " not well formed")),
+      Erased_Contract =>
+        (Code => "L0342", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 1, Most => 1, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("[1370]-[1390]/D145-D147: an `any` value or dispatch"
+                   & " outside its erased contract")),
+      Noreturn_Contract =>
+        (Code => "L0343", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 1, Most => 1, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("[0890]: a noreturn routine is infallible and never"
+                   & " returns")),
+      Memory_Contract =>
+        (Code => "L0344", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 1, Most => 1, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("[1620]/D227: a memory intrinsic outside its explicit"
+                   & " contract")),
+      Machine_Entry_Contract =>
+        (Code => "L0345", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 1, Most => 1, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("[1570]: an interrupt or naked routine outside its"
+                   & " machine-entry contract")),
+      Foreign_Boundary =>
+        (Code => "L0346", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 1, Most => 1, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("[1580]: a C boundary signature, layout or variadic call"
+                   & " the C ABI cannot carry")),
+      Linkage_Contract =>
+        (Code => "L0347", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 1, Most => 1, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("[1610]/[1640]: a link symbol, helper import or placement"
+                   & " outside its contract")),
+      Traversal_Source =>
+        (Code => "L0348", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 1, Most => 1, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("[1150]/D180: a for source is a range, a traversable"
+                   & " value or one exact iterable conformance")),
+      --  D542-D547: a description and a placement in its regions. The note
+      --  says what to write instead, and for a broken contract the clause it
+      --  states.
+      Invalid_Description_Directive =>
+        (Code => "L0399", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 0, Most => 0, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("D542: a device description directive whose arguments are"
+                   & " not the forms its row says")),
+      Description_Structure =>
+        (Code => "L0513", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 0, Most => 0, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("D542/D543: a description directive outside one"
+                   & " description, a repeated or missing one, or a second"
+                   & " description")),
+      Description_Layout =>
+        (Code => "L0514", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 0, Most => 0, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("D543: regions that overlap, or a placement, vector table"
+                   & " or stack its regions cannot hold")),
+      Description_Core_Mismatch =>
+        (Code => "L0515", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 0, Most => 0, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("D543: a description whose core is not the request's"
+                   & " target and level")),
+      Boot_Kind_Reserved =>
+        (Code => "L0516", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 0, Most => 0, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +"D545: a reserved boot image kind refine does not build"),
+      Region_Placement =>
+        (Code => "L0517", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 0, Most => 0, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("D547: a link(region: ...) the selected description"
+                   & " cannot hold")),
+      --  D543: raised at a placement, or by the driver for a request, and only
+      --  where the library holds no reference description, which every corpus
+      --  run has; its evidence is the Cortex ABI cases and the descriptions
+      --  lane.
+      No_Description =>
+        (Code => "L0518", Level => Error, State => Live,
+         Source => False, Bytes => False,
+         Least => 0, Most => 0, Notes => 1,
+         Fixes => No_Fix, Shown_By => Invocation,
+         Rule => +("D543: firmware or a placement that needs a profile, with"
+                   & " no description reached and none in the library")),
+      --  D251, as for Mutable_Never_Written.
+      Unused_Pure_Local =>
+        (Code => "L0349", Level => Warning, State => Live,
+         Source => True, Bytes => True,
+         Least => 0, Most => 0, Notes => 1,
+         Fixes => May_Fix, Shown_By => Negative_Fixture,
+         Rule => +("D251: an unused local with an effect-free literal"
+                   & " initializer")),
+      --  The backend's reports need not have a source. A missing entry uses an
+      --  entry-module anchor when available, but permits a point in an empty
+      --  file or a source-free fallback. L0500 is the one diagnostic here a
+      --  user is stuck on rather than informed by, so it owes them the way
+      --  out: which program was looked for, and how to name another.
+      No_Toolchain =>
+        (Code => "L0500", Level => Error, State => Live,
+         Source => False, Bytes => False,
+         Least => 0, Most => 0, Notes => 1,
+         Fixes => No_Fix, Shown_By => Invocation,
+         Rule => +("[1550]: the requested output cannot be made with the"
+                   & " target, settings or available toolchain")),
+      Toolchain_Failed =>
+        (Code => "L0501", Level => Error, State => Live,
+         Source => False, Bytes => False,
+         Least => 0, Most => 0, Notes => 0,
+         Fixes => No_Fix, Shown_By => Invocation,
+         Rule => +("[1550]: assembler or linker refusal, or executable"
+                   & " output lifecycle failure")),
+      Entry_Point_Missing =>
+        (Code => "L0502", Level => Error, State => Live,
+         Source => False, Bytes => False,
+         Least => 0, Most => 0, Notes => 0,
+         Fixes => No_Fix, Shown_By => Invocation,
+         Rule => +("[1970] [1990]: a missing or invalid hosted main or"
+                   & " explicitly selected firmware entry")),
+      --  Retired by the internal scalar convention, which places every
+      --  argument after the sixth in an aligned stack run.
+      Argument_Not_In_A_Register =>
+        (Code => "L0503", Level => Error, State => Retired,
+         Source => False, Bytes => False,
+         Least => 0, Most => 0, Notes => 0,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +"retired: the register-only internal calling limit"),
+      Frame_Not_Addressable =>
+        (Code => "L0504", Level => Error, State => Live,
+         Source => False, Bytes => False,
+         Least => 0, Most => 0, Notes => 0,
+         Fixes => No_Fix, Shown_By => Invocation,
+         Rule => +("a verified frame outside x86-64's signed displacement"
+                   & " encoding")),
+      Image_Budget_Exceeded =>
+        (Code => "L0505", Level => Error, State => Live,
+         Source => False, Bytes => False,
+         Least => 0, Most => 0, Notes => 0,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("D537: static images exceed the image budget of the"
+                   & " target or the firmware profile")),
+      Panic_Contract_Invalid =>
+        (Code => "L0506", Level => Error, State => Live,
+         Source => False, Bytes => False,
+         Least => 0, Most => 0, Notes => 0,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("[1670]: invalid panic handler or unrepresentable site"
+                   & " space")),
+      Firmware_Frame_Exceeds_Stack =>
+        (Code => "L0507", Level => Error, State => Live,
+         Source => False, Bytes => False,
+         Least => 0, Most => 0, Notes => 0,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("[1990]: one Cortex-M0 firmware frame exceeds the"
+                   & " selected stack reservation")),
+      Handler_Exceeds_Stack_Margin =>
+        (Code => "L0508", Level => Error, State => Live,
+         Source => False, Bytes => False,
+         Least => 0, Most => 0, Notes => 0,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("[1670]: a selected panic handler in a program that"
+                   & " prepares a stack exceeds or cannot be measured"
+                   & " against the target's stack margin")),
+      --  D525: a library is asked for by its directive, always, and the note
+      --  says how to name where it is. Only a failed link raises it, so its
+      --  evidence is end-to-end/link-missing-library and the driver case.
+      Library_Not_Found =>
+        (Code => "L0509", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 0, Most => 0, Notes => 1,
+         Fixes => No_Fix, Shown_By => Invocation,
+         Rule => +("[1590]/D525: a failed link's library that no named"
+                   & " directory and none of the C driver's own holds")),
+      --  D546: about a linked image, raised by the descriptions lane.
+      Linker_Script_Contract =>
+        (Code => "L0519", Level => Error, State => Live,
+         Source => False, Bytes => False,
+         Least => 0, Most => 0, Notes => 1,
+         Fixes => No_Fix, Shown_By => Invocation,
+         Rule => +("D546: a linked firmware image that breaks a clause of"
+                   & " the linker script contract")),
+      --  D558: `refine svd` raises these for an SVD, its policy or its
+      --  outputs, and the devices suite owns them. The SVD or the policy is
+      --  the source a fault is in, and a fault points at the element or byte
+      --  it is at, or at the start when it is the whole file's; an output in
+      --  the way is in neither.
+      Svd_Malformed =>
+        (Code => "L0525", Level => Error, State => Live,
+         Source => True, Bytes => False,
+         Least => 0, Most => 0, Notes => 0,
+         Fixes => No_Fix, Shown_By => Invocation,
+         Rule => +("D555: an SVD that is not XML in the subset refine svd"
+                   & " reads")),
+      Svd_Policy_Invalid =>
+        (Code => "L0526", Level => Error, State => Live,
+         Source => True, Bytes => False,
+         Least => 0, Most => 0, Notes => 0,
+         Fixes => No_Fix, Shown_By => Invocation,
+         Rule => +"D556: a selection policy refine svd cannot read"),
+      Svd_Input_Mismatch =>
+        (Code => "L0527", Level => Error, State => Live,
+         Source => True, Bytes => False,
+         Least => 0, Most => 0, Notes => 0,
+         Fixes => No_Fix, Shown_By => Invocation,
+         Rule => +("D556: an SVD that is not the one its policy was reviewed"
+                   & " against")),
+      Svd_Form_Unsupported =>
+        (Code => "L0528", Level => Error, State => Live,
+         Source => True, Bytes => False,
+         Least => 0, Most => 0, Notes => 0,
+         Fixes => No_Fix, Shown_By => Invocation,
+         Rule => +("D557: an SVD form refine svd does not read, for a"
+                   & " selected register")),
+      Svd_Device_Inconsistent =>
+        (Code => "L0529", Level => Error, State => Live,
+         Source => True, Bytes => False,
+         Least => 0, Most => 0, Notes => 0,
+         Fixes => No_Fix, Shown_By => Invocation,
+         Rule => +("D557: a selected register the SVD describes in a way"
+                   & " that cannot be generated as it says")),
+      Svd_Not_Found =>
+        (Code => "L0530", Level => Error, State => Live,
+         Source => True, Bytes => False,
+         Least => 0, Most => 0, Notes => 0,
+         Fixes => No_Fix, Shown_By => Invocation,
+         Rule => +"D556: a policy that selects what its SVD does not have"),
+      Svd_Output_Refused =>
+        (Code => "L0531", Level => Error, State => Live,
+         Source => False, Bytes => False,
+         Least => 0, Most => 0, Notes => 0,
+         Fixes => No_Fix, Shown_By => Invocation,
+         Rule => +"D558: outputs refine svd will not replace")];
+
+   ------------------------------------------------------------------
+   --  The columns, read out of the table
+   --
+   --  The row states the shape; the fixture states where. Both are checked,
+   --  and neither is prose.
+   ------------------------------------------------------------------
+
+   function Code (Of_Code : Code_Name) return Code_String
+     is (Table (Of_Code).Code);
+
+   function Level (Of_Code : Code_Name) return Severity
+     is (Table (Of_Code).Level);
+
+   function State (Of_Code : Code_Name) return Disposition
+     is (Table (Of_Code).State);
+
+   function Rule (Of_Code : Code_Name) return String
+     is (Table (Of_Code).Rule.all);
+
+   function Needs_Source (Of_Code : Code_Name) return Boolean
+     is (Table (Of_Code).Source);
+
+   function Needs_Non_Empty_Span (Of_Code : Code_Name) return Boolean
+     is (Table (Of_Code).Bytes);
+
+   function Minimum_Secondaries (Of_Code : Code_Name) return Natural
+     is (Table (Of_Code).Least);
+
+   function Maximum_Secondaries (Of_Code : Code_Name) return Natural
+     is (Table (Of_Code).Most);
+
+   function Required_Notes (Of_Code : Code_Name) return Natural
+     is (Table (Of_Code).Notes);
+
+   function Warning_Enabled_By_Default (Of_Code : Code_Name) return Boolean
+     is (Table (Of_Code).Level = Warning);
+
    function Fixes (Of_Code : Code_Name) return Fix_Admission
-     is (case Of_Code is
-            --  [1420]'s import, offered the module directories it is near.
-            when Module_Not_Found => May_Fix,
-            --  [1860]'s misspelling, offered the names it is near.
-            when Unresolved_Name => May_Fix,
-            --  [0750]'s field by name, offered the fields it is near.
-            when Unresolved_Field => May_Fix,
-            --  [0980]'s argument label, offered the parameters it is near.
-            --  The row admits a fix; only that one occurrence offers one.
-            when Call_Argument_Match => May_Fix,
-            --  A keyword that was required and a name near it written,
-            --  and D261's smallest repair of a refused statement.
-            when Name_Expected | Type_Expected | Expression_Expected
-               | Token_Expected | Stray_Token => May_Fix,
-            --  [1800]'s closing name, which can only be the declared one.
-            when End_Name_Mismatch => May_Fix,
-            --  [1900]'s written binding, offered `mut`.
-            when Immutable_Target => May_Fix,
-            --  [0390]'s `=` inside an expression, offered `==`.
-            when Assignment_In_Expression => May_Fix,
-            --  D251 separates the observation from a safe source edit.
-            when Mutable_Never_Written | Unused_Pure_Local => May_Fix,
-            --  D376: a value after a `none` call's `else`, offered `none`.
-            when Result_Use => May_Fix,
-            when others => No_Fix);
+     is (Table (Of_Code).Fixes);
 
    function Count return Natural
      is (Code_Name'Pos (Code_Name'Last) - Code_Name'Pos (Code_Name'First) + 1);

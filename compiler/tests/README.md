@@ -697,8 +697,8 @@ fixture does. One parser rule is not the grammar's: `end` may repeat only the
 name it closes, which a context-free `"end" identifier?` cannot say, so a
 fixture refused for nothing but `L0109` is derivable and must derive.
 `check.py` reads which codes the frontend raises out of
-`Landin.Diagnostics.Lexical` and `Landin.Diagnostics.Syntactic` rather than out
-of the number, because the catalogue's own header forbids reading a stage off a
+`Landin.Diagnostics.Lexical`'s fault map and the failures the parser names
+through `Landin.Diagnostics.Syntactic`, rather than out of the number, because the catalogue's own header forbids reading a stage off a
 code — `L0010` began in lexical refusal and is now raised only by the parser.
 
 A warning is pinned exactly as an error is. An accepted program's report is
@@ -1137,12 +1137,14 @@ and several flags in one run each run.
 `diagnostics.matrix`. The compact catalogue comes from
 `Landin.Diagnostics.Catalogue`, which is the only place in the compiler where
 a code is written. The matrix crosses every row's source/span/label/note
-contract with its emitter and fixture or fake-host test owner. A live code with
-no emitter or owner, a retired code still emitted, and a source diagnostic with
-no negative-program owner are gate failures; L0111's parser nesting limit and
-L0325's routine and struct size limits have their implementation-side unit
-owners instead, because a program that meets either is too large to keep in the
-corpus.
+contract with its emitters, the source directories that name the code, and
+its fixture or fake-host test owner. A live code with no emitter or owner and
+a retired code still emitted are gate failures, and so is a code without the
+evidence its row's `Shown_By` names: a negative program for
+`Negative_Fixture`, a driver, command or end-to-end case for `Invocation`, and
+for `Implementation_Limit` — L0111's parser nesting limit and L0325's routine
+and struct size limits — an implementation-side unit owner, because a program
+that meets either is too large to keep in the corpus.
 
 `python3 check.py --coverage` writes `guarantees.matrix`,
 `conformances.matrix`, `prototypes.matrix` and `targets.matrix`. Their source

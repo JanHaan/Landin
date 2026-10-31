@@ -273,7 +273,9 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   `escaping into` (D445), `from` and consume checks.
 - **Modules.** Directory modules have file-local imports, aliases, selected
   imports, typed global options and ordered roots. Your own modules are
-  found under the roots given with `--root` [1480].
+  found under the roots given with `--root` [1480]; an import whose first
+  directory holds no source while a later root holds the module is refused
+  naming both (D563).
 - **Hardware.** D227's memory model supplies scalar atomics, volatile
   accesses and barriers, each atomic fenced only as its ordering asks on
   every backend (D499), and D228 packed register images with checked

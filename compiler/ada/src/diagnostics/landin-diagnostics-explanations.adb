@@ -120,6 +120,19 @@ package body Landin.Diagnostics.Explanations is
                & "places it. To compile against that copy instead, name it"
                & "s directory with `--library=DIR`; to silence the warning"
                & ", rename or remove the project's directory.",
+            when Catalogue.Empty_Module_Hides_Root =>
+               "An import named a directory under the first root that ho"
+               & "lds one, that directory holds no `.ldn` source, and a la"
+               & "ter root holds a directory of the same path that does (D"
+               & "563). Roots are searched in the order given and the firs"
+               & "t directory found is the module, so the empty one would "
+               & "hide the module that was meant: an `import rp2040` under"
+               & " `--root=devices/generated`, whose `rp2040/` holds only "
+               & "register-module directories, would select no device desc"
+               & "ription. The message names the empty directory and the l"
+               & "ater one. Name the root that holds the module first, or "
+               & "give the empty directory its source. An empty module no "
+               & "later root rivals is still legal.",
             when Catalogue.Not_Formatted =>
                "`refine fmt --check` found a line that is not in the lay"
                & "out D252 decides and `docs/format.md` shows. There is on"
@@ -1262,6 +1275,8 @@ package body Landin.Diagnostics.Explanations is
             when Catalogue.Module_Unavailable_For_Target =>
                "",
             when Catalogue.Root_Holds_Library_Module =>
+               "",
+            when Catalogue.Empty_Module_Hides_Root =>
                "",
             when Catalogue.Not_Formatted =>
                "",

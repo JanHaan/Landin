@@ -190,6 +190,18 @@ namespaces, so a project's copy of `core` never replaces it. To compile against
 that copy instead, name its directory with `--library=DIR`; to silence the
 warning, rename or remove the project's directory.
 
+### L0532
+
+An import named a directory under the first root that holds one, that
+directory holds no `.ldn` source, and a later root holds a directory of the
+same path that does (D563). Roots are searched in the order given and the
+first directory found is the module, so the empty one would hide the module
+that was meant: an `import rp2040` under `--root=devices/generated`, whose
+`rp2040/` holds only register-module directories, would select no device
+description. The message names the empty directory and the later one. Name
+the root that holds the module first, or give the empty directory its source.
+An empty module no later root rivals is still legal.
+
 ## Lexical, and what is not enabled
 
 ### L0010

@@ -16039,7 +16039,8 @@ The request supplies one entry directory, or the entry module's source files
 the bytewise-sorted direct regular `.ldn` children; other entries are ignored
 and an empty module is legal. Each import segment must match a listed directory
 entry exactly. Roots are tested in request order and the first complete
-directory wins without merging. Discovery visits the entry first, imports in
+directory wins without merging; D563 amends this for a first directory that
+holds no source while a later root's holds the module. Discovery visits the entry first, imports in
 source order and newly selected modules FIFO. A selected directory is loaded
 once, so cycles are legal. Symlink identity and root defaults are outside this
 guarantee. The explicit-file request remains a compatibility mode forming one
@@ -16635,6 +16636,45 @@ every target; and the negative fixtures `thread-storage-takes-no-value`,
 `thread-storage-is-mutable`, `thread-storage-takes-no-link-symbol`,
 `thread-storage-takes-no-section`, `thread-storage-places-no-routine` and
 `thread-storage-needs-a-zero-image`.
+
+### D563 — An empty first directory does not hide a later root's module
+
+**The tour said** that an import searches ordered roots [1420] and that the
+compiler receives roots rather than acquiring packages [1480]. D150 made a
+module a directory's direct `.ldn` sources, an empty module legal and the
+first complete directory the import's, so with `--root=a --root=b` an
+`import x` found `a/x` whenever that directory existed. When `a/x` held no
+source and `b/x` was the module meant, the program compiled against an
+empty module and said nothing: a device's register modules are
+directories beneath the device's own, so `import rp2040` with the
+generated register modules' root first selected no description and built
+for the constrained reference.
+
+**Chosen:** first-root precedence stands, and the directory the first root
+supplies is still the import's. When that directory holds no direct
+regular `.ldn` source and a root after it holds a directory of the same
+path that does, the import is refused as L0532, at the import, naming the
+empty directory, the later root and its directory, and saying to name that
+root first or give the empty directory a source. A later directory that is
+empty too is passed over for the next; an empty module that no later root
+rivals stays legal, and so does one rivalled only by empty directories. A
+first directory holding a source wins as before, whatever later roots
+hold. An import of the library searches the library alone (D275), so it
+has no rival. This amends D150's discovery paragraph.
+
+**The alternatives:** passing over an empty directory for the next root,
+which makes adding a source to one root silently change which module
+another program reads, and gives an empty directory a meaning no other
+place in discovery has; merging the two directories, which D150 declined;
+and leaving the import alone with a warning, which still builds the wrong
+firmware.
+
+**Pinned by** `negative/empty-first-directory-hides-a-later-root`, whose
+first root's `device` holds only a register module's directory, and the
+driver case `an empty first directory names a later root`, which holds the
+refusal, the next root's module beyond an empty second directory, and the
+empty module that stays legal with no rival, with an empty one, and when
+the first directory has a source.
 
 ## DECISIONS: THE TOOLCHAIN, C AND THE MACHINE
 

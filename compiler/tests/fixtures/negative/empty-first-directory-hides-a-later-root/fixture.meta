@@ -1,0 +1,7 @@
+class: negative
+summary: an import whose first directory holds no source while a later root holds the module is refused, naming both
+expect: expected.txt
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+args: --root=../tests/fixtures/negative/empty-first-directory-hides-a-later-root/first --root=../tests/fixtures/negative/empty-first-directory-hides-a-later-root/second ../tests/fixtures/negative/empty-first-directory-hides-a-later-root/entry
+codes: L0532
+status: 1

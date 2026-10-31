@@ -413,7 +413,8 @@ package body Landin.Driver.Loading is
         (Of_Tree : Landin.Syntax.Tree;
          Node    : Landin.Syntax.Node_Id;
          Root_At : out Natural;
-         Unlistable : out Unbounded.Unbounded_String) return String;
+         Unlistable : out Unbounded.Unbounded_String;
+         After_Root : Natural := 0) return String;
 
       --  The roots an import is searched under, as positions in Searched:
       --  the library's alone for an import of the library when there is
@@ -478,17 +479,23 @@ package body Landin.Driver.Loading is
       --  Check each path segment against the directory's listed spelling.
       --  This makes a case-insensitive host obey [1420]'s portable exact
       --  lowercase identity instead of accepting a differently cased entry.
+      --  After_Root, when it is not zero, searches only the roots after
+      --  that one, for D563's rival of an empty first directory.
       function Select_Module_Directory
         (Of_Tree : Landin.Syntax.Tree;
          Node    : Landin.Syntax.Node_Id;
          Root_At : out Natural;
-         Unlistable : out Unbounded.Unbounded_String) return String
+         Unlistable : out Unbounded.Unbounded_String;
+         After_Root : Natural := 0) return String
       is
          Logical : constant String := Import_Path (Of_Tree, Node);
       begin
          Root_At := 0;
          Unlistable := Unbounded.Null_Unbounded_String;
-         for Root_Index in First_Root (Logical) .. Last_Root (Logical) loop
+         for Root_Index in
+           Natural'Max (First_Root (Logical), After_Root + 1)
+             .. Last_Root (Logical)
+         loop
             declare
                Current : Unbounded.Unbounded_String :=
                  Unbounded.To_Unbounded_String
@@ -537,6 +544,81 @@ package body Landin.Driver.Loading is
          end loop;
          return "";
       end Select_Module_Directory;
+
+      --  Whether a directory holds a direct regular `.ldn` child, which
+      --  D150 makes a source of the module the directory is.  One that
+      --  cannot be listed holds none that can be read.
+      function Holds_Source (Directory : String) return Boolean;
+
+      function Holds_Source (Directory : String) return Boolean is
+         Entries : Landin.Platform.Path_List;
+         Status  : Landin.Platform.List_Status;
+      begin
+         Cached_Listing (Directory, Entries, Status);
+         if Status /= Landin.Platform.List_Ok then
+            return False;
+         end if;
+         for Child_Name of Entries loop
+            if Is_Source_Name (Child_Name)
+              and then not Host.Is_Directory
+                (Joined_Path (Directory, Child_Name))
+            then
+               return True;
+            end if;
+         end loop;
+         return False;
+      end Holds_Source;
+
+      --  D563: the directory of the same path under a root after
+      --  Selected that holds a source, or "", and that root.  A later
+      --  directory that is empty too is passed over, and one that cannot
+      --  be listed is no rival: an empty module with no rival stays legal.
+      function Rival_Of
+        (Of_Tree  : Landin.Syntax.Tree;
+         Node     : Landin.Syntax.Node_Id;
+         Selected : Natural;
+         Root_At  : out Natural) return String;
+
+      function Rival_Of
+        (Of_Tree  : Landin.Syntax.Tree;
+         Node     : Landin.Syntax.Node_Id;
+         Selected : Natural;
+         Root_At  : out Natural) return String
+      is
+         After : Natural := Selected;
+         Unlistable : Unbounded.Unbounded_String;
+      begin
+         loop
+            declare
+               Later : constant String :=
+                 Select_Module_Directory
+                   (Of_Tree, Node, Root_At, Unlistable, After);
+            begin
+               if Later = "" then
+                  Root_At := 0;
+                  return "";
+               elsif Holds_Source (Later) then
+                  return Later;
+               end if;
+               After := Root_At;
+            end;
+         end loop;
+      end Rival_Of;
+
+      function Rival_Of
+        (Of_Tree  : Landin.Syntax.Tree;
+         Node     : Landin.Syntax.Node_Id;
+         Selected : Natural) return String;
+
+      function Rival_Of
+        (Of_Tree  : Landin.Syntax.Tree;
+         Node     : Landin.Syntax.Node_Id;
+         Selected : Natural) return String
+      is
+         Ignored : Natural;
+      begin
+         return Rival_Of (Of_Tree, Node, Selected, Ignored);
+      end Rival_Of;
 
       --  [1420]: the import names no directory under any root, so its
       --  first segment that no root holds is a misspelling of a
@@ -888,8 +970,7 @@ package body Landin.Driver.Loading is
                else Landin.Stages.Source_Count (Context) + 1);
          begin
             if not Read_Already then
-               Remember_Dependency (Directory);
-               Host.List_Directory (Directory, Entries, Listed);
+               Cached_Listing (Directory, Entries, Listed);
             end if;
             if Listed /= Landin.Platform.List_Ok then
                declare
@@ -1188,6 +1269,49 @@ package body Landin.Driver.Loading is
                                       (Context,
                                        Landin.Diagnostics.Get
                                          (Found, 1));
+                                 end;
+                              elsif not Holds_Source (Directory_Path)
+                                and then Rival_Of
+                                  (Tree.all, Import_Node, Selected_Root) /= ""
+                              then
+                                 --  D563: the first directory holds no
+                                 --  source and a later root's does, so
+                                 --  the empty module would hide the one
+                                 --  meant.
+                                 declare
+                                    Rival_Root : Natural;
+                                    Rival : constant String :=
+                                      Rival_Of (Tree.all, Import_Node,
+                                                Selected_Root, Rival_Root);
+                                    Found : Landin.Diagnostics
+                                      .Diagnostic_List;
+                                 begin
+                                    Module_Diagnostics.Report
+                                      (Item    => Module_Diagnostics
+                                         .Empty_Module_Hides_Root,
+                                       Source  => Source_Id,
+                                       Where   => Landin.Syntax.Where
+                                         (Tree.all, Import_Node),
+                                       Message => "`" & Logical & "` is "
+                                         & Directory_Path & ", which holds"
+                                         & " no .ldn source, and the later"
+                                         & " root "
+                                         & Searched.Element (Rival_Root)
+                                         & " holds the module: " & Rival,
+                                       Note    => "D563: the first root"
+                                         & " holding an import's directory"
+                                         & " supplies its module, and an"
+                                         & " empty one there would hide"
+                                         & " this one; name --root="
+                                         & Searched.Element (Rival_Root)
+                                         & " before --root="
+                                         & Searched.Element (Selected_Root)
+                                         & ", or give the empty directory"
+                                         & " a source",
+                                       Into    => Found);
+                                    Landin.Stages.Report
+                                      (Context,
+                                       Landin.Diagnostics.Get (Found, 1));
                                  end;
                               else
                                  declare

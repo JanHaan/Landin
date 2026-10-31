@@ -1956,6 +1956,9 @@ package body Landin.Diagnostics.Citations is
             when 505 =>
                "A thread's instance lives as long as its thread, and is "
                & "tracked as module storage",
+            when 563 =>
+               "An empty first directory does not hide a later root's mo"
+               & "dule",
             when 267 =>
                "Library source namespaces declare target availability",
             when 12 =>
@@ -3130,6 +3133,8 @@ package body Landin.Diagnostics.Citations is
             when 496 =>
                "Decisions: Modules and compile time",
             when 505 =>
+               "Decisions: Modules and compile time",
+            when 563 =>
                "Decisions: Modules and compile time",
             when 267 =>
                "Decisions: The toolchain, C and the machine",
@@ -4463,6 +4468,9 @@ package body Landin.Diagnostics.Citations is
                "https://www.701.dev/spec.html#d505-a-thread-s-instance-l"
                & "ives-as-long-as-its-thread-and-is-tracked-as-module-stor"
                & "age",
+            when 563 =>
+               "https://www.701.dev/spec.html#d563-an-empty-first-direct"
+               & "ory-does-not-hide-a-later-root-s-module",
             when 267 =>
                "https://www.701.dev/spec.html#d267-library-source-namesp"
                & "aces-declare-target-availability",
