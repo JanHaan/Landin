@@ -17,6 +17,7 @@ shares with the RP2040's tool is [`../common.py`](../common.py) (D646).
 |---|---|---|
 | the board | a NUCLEO-H753ZI, powered from its ST-LINK's USB port, LD1 on PB0 | the STM32H753, its USART3 on PD8 and PD9 wired to the ST-LINK's virtual COM port |
 | probe-rs | one that reaches an ST-LINK V3, named by `--probe`, `0483:374e:SERIAL` by default with `--serial`'s serial | flashing, verifying and reading memory with `--chip STM32H753ZITx` |
+| the ST-LINK's firmware | one probe-rs supports, a V3 firmware whose JTAG API version is 3 or later, which ST's STLinkUpgrade (STSW-LINK007) installs | probe-rs refuses an older one when it opens the probe, with "The firmware on the probe is outdated" |
 | access | read and write on the ST-LINK's USB device node, which probe-rs opens, and on the tty of its virtual COM port, for example a udev rule for `0483:374e` that gives both to a group the session is in | without it probe-rs cannot open the ST-LINK, whose node a host without a rule leaves `root:root 0664` |
 | power | the ST-LINK's USB port on a hub with per-port power switching, and `uhubctl` with the right to switch it | a power cycle, so the run starts at power-on |
 | the compiler | refine and `arm-eabi-gcc` or `arm-none-eabi-gcc` (D532) with its `nm`, `objdump` and `readelf`, as `nix develop` gives them | the image and the checks of its instructions |

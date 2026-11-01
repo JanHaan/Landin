@@ -256,7 +256,10 @@ def build(run, args):
             'the vector table is not %d words at %#x' % (VECTOR_WORDS, VECTORS))
     words = struct.unpack_from('<%dI' % VECTOR_WORDS, data, offset)
     names = common.symbols(run, args.nm, elf)
-    require(words[1] == names['_landin_firmware_reset'] | 1, 'vector word 1 is not reset')
+    # D653: the reset word enters the description's supply stage, which
+    # enters compiler-owned reset once ACTVOSRDY says RAM may be written.
+    require(words[1] == names['_landin_firmware_reset_stage'] | 1,
+            'vector word 1 is not the supply stage that enters reset')
     require(words[DMA_SLOT] == names['dma_irq'] | 1, 'vector word 27 is not the DMA_STR0 handler')
     require(words[USART3_SLOT] == names['usart3_irq'] | 1,
             'vector word 55 is not the USART3 handler')
