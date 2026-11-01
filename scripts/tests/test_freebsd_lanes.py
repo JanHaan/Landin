@@ -203,6 +203,68 @@ class FreeBSDControls(unittest.TestCase):
         #  No `stdin:` key is an empty input, never the guest shell's own.
         self.assertIn('/tmp/landin-control/bundle/empty </dev/null >', script)
 
+    def test_every_outcome_gets_its_verdict_and_failures_are_listed_together(self):
+        #  One failing outcome once stopped the lane with a traceback, and
+        #  the outcomes after it had no verdict.
+        import io
+        import tarfile
+        with tempfile.TemporaryDirectory() as tmp:
+            lane = LANE.Lane.__new__(LANE.Lane)
+            lane.args = SimpleNamespace(arch='amd64')
+            lane.target = 'freebsd-x86-64'
+            lane.output = Path(tmp)
+            lane.bundle = Path(tmp) / 'bundle'
+            lane.bundle.mkdir()
+            lane.source_root = Path('/home/runner/work/Landin/Landin')
+            lane.remote_prefix = '/tmp/landin-control'
+            lane.remote_bundle = Path(lane.remote_prefix) / 'bundle'
+            results = [{'case': 'runtime/' + label, 'label': label, 'level': None,
+                        'base': tmp, 'meta': {'status': '42', 'stream': 'merged'}}
+                       for label in ('passes', 'wrong-status', 'never-ran', 'also-passes')]
+            buffer = io.BytesIO()
+            with tarfile.open(fileobj=buffer, mode='w:gz') as tar:
+                for label, status in (('passes', b'42\n'), ('wrong-status', b'2\n'),
+                                      ('also-passes', b'42\n')):
+                    for suffix, data in (('.status', status), ('.stdout', b'')):
+                        info = tarfile.TarInfo(label + suffix)
+                        info.size = len(data)
+                        tar.addfile(info, io.BytesIO(data))
+
+            def checked(command, **keywords):
+                return buffer.getvalue() if command.startswith('cat ') else b''
+            with patch('sys.stdout', io.StringIO()) as said, \
+                    self.assertRaises(LANE.OutcomeFailures) as failed:
+                lane.execute(SimpleNamespace(checked=checked), results)
+        self.assertEqual([r['status'] for r in results],
+                         ['passed', 'failed', 'failed', 'passed'])
+        self.assertEqual(len(failed.exception.failures), 2)
+        self.assertIn('wrong-status: guest status 2, expected 42', str(failed.exception))
+        self.assertIn('never-ran.status', str(failed.exception))
+        self.assertTrue(str(failed.exception).startswith('2 of 4 outcomes failed:'))
+        self.assertIn('freebsd-x86-64: 2 of 4 outcomes passed', said.getvalue())
+        self.assertFalse(any('meta' in r for r in results))
+
+    def test_every_lldb_session_runs_after_one_fails(self):
+        lane = LANE.Lane.__new__(LANE.Lane)
+        lane.target = 'freebsd-x86-64'
+        seen = []
+
+        def session(guest, result):
+            seen.append(result['label'])
+            if result['label'] == 'debug-none-off':
+                raise ValueError('debug-none-off: no source-line stop')
+            result['status'] = 'passed'
+        lane.source_session = session
+        lane.switch_session = session
+        results = [{'label': 'debug-none-off'}, {'label': 'switch-none-off',
+                                                  'switch_instructions': 9},
+                   {'label': 'debug-size-off'}]
+        with patch('sys.stdout', new_callable=lambda: __import__('io').StringIO()), \
+                self.assertRaises(LANE.OutcomeFailures) as failed:
+            lane.debugger(None, results)
+        self.assertEqual(seen, ['debug-none-off', 'switch-none-off', 'debug-size-off'])
+        self.assertEqual(failed.exception.failures, ['debug-none-off: no source-line stop'])
+
     def test_a_fixture_is_given_its_shared_objects_by_their_guest_paths(self):
         #  compiler/tests/README.md: `c-shared:` objects travel in the bundle
         #  and are the program's first arguments, before `run_args`.
