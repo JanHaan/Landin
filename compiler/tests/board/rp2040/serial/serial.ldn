@@ -1,0 +1,174 @@
+-- The prototype-1 receive contract on the Pico's RP2040: UART0 on GPIO0
+-- and GPIO1 received into a ring by DMA channel 0.  Its public interface
+-- and its atoms are the synthetic driver's (compiler/tests/driver), and
+-- its device protocol is the RP2040's own, which differs in two places.
+-- A snapshot does not pause the channel: on the RP2040 a paused channel
+-- reports no completion of its in-flight writes, and triggering it again
+-- reloads its count, so the count is read live.  The count drops when a
+-- transfer is issued, before its write lands; this driver's premise is
+-- that the write lands before the byte is copied out, a bus latency of a
+-- few cycles against the hundreds a snapshot and its copy take.  And stop
+-- aborts the channel, which RP2040-E13 says may raise a completion
+-- interrupt, so the interrupt is disabled first and cleared after BUSY
+-- falls.  Bytes received after the last snapshot before a stop are
+-- discarded with the epoch.
+import platform/cortex_m
+import rp2040/dma
+import rp2040/io_bank0
+import rp2040/uart0
+
+public busy: atom
+public bad_baud: atom
+public buffer_empty: atom
+public buffer_too_big: atom
+public bad_buffer: atom
+public overrun: atom
+public transfer_error: atom
+public exhausted: atom
+public stop_timeout: atom
+public receive_error: type = overrun | transfer_error | exhausted | stop_timeout
+
+public rx: type = struct
+    buf: []u8
+    consumed: u32
+    budget: u32
+    -- What the last snapshot counted, kept when the channel is aborted.
+    produced: u32
+    config: u32
+    active: bool
+    lost: bool
+    broken: bool
+end rx
+
+-- CTRL_TRIG: READ_ERROR 30, WRITE_ERROR 29, BUSY 24, EN 0.
+errors: u32 = 0x60000000
+busy_bit: u32 = 0x01000000
+
+public open: (rate: u32, budget: u32, escaping buf: []mut u8)
+             -> (r: rx from buf) ! busy | bad_baud | buffer_empty | buffer_too_big | bad_buffer =
+    size := lenof buf
+    fail buffer_empty when size == 0
+    fail buffer_too_big when size > 256
+    fail bad_buffer when size < 2 or (size & (size - 1)) <> 0
+    fail bad_buffer when (usize(addr buf[0]) & (size - 1)) <> 0
+    fail bad_buffer when budget < u32(size) or budget > 65535
+    fail bad_baud when rate <> 115200
+    status := dma.ch0_ctrl_trig_read(dma.base)
+    fail busy when (status & (errors | busy_bit | 1)) <> 0
+    -- FUNCSEL 2 is UART0 on both pins; the override bits are kept.
+    tx := io_bank0.gpio0_ctrl_read(io_bank0.base)
+    io_bank0.gpio0_ctrl_write(io_bank0.base, (tx & 0xffffffe0) | 2)
+    pin := io_bank0.gpio1_ctrl_read(io_bank0.base)
+    io_bank0.gpio1_ctrl_write(io_bank0.base, (pin & 0xffffffe0) | 2)
+    -- 12 MHz / (16 * 115200) = 6.51: IBRD 6, FBRD 33, as pico-sdk rounds
+    -- it.  LCR_H, written after both to latch them: WLEN 8 bits, FIFOs.
+    uart0.uartibrd_write(uart0.base, 6)
+    uart0.uartfbrd_write(uart0.base, 33)
+    uart0.uartlcr_h_write(uart0.base, 0x70)
+    -- CR: UARTEN 0, TXE 8, RXE 9.  DMACR: RXDMAE.
+    uart0.uartcr_write(uart0.base, 0x301)
+    uart0.uartdmacr_write(uart0.base, 1)
+    mut bits: u8 = 0
+    mut extent := size
+    while extent > 1 do
+        extent = extent >> 1
+        bits = bits +% 1
+    end while
+    -- Byte transfers, write increment in a ring of 2^bits bytes, chained
+    -- to itself (no chain), paced by DREQ 21, UART0_RX.
+    image: u32 = 0x000a8420 | (u32(bits) << 6)
+    dma.ch0_ctrl_trig_write(dma.base, image)
+    dma.ch0_read_addr_write(dma.base, u32(uart0.base))
+    dma.ch0_write_addr_write(dma.base, u32(usize(addr buf[0])))
+    dma.ch0_trans_count_write(dma.base, budget)
+    dma.intr_write(dma.base, 1)
+    dma.inte0_write(dma.base, 1)
+    cortex_m.device_barrier()
+    dma.ch0_ctrl_trig_write(dma.base, image | 1)
+    r = (buf: buf, consumed: 0, budget: budget, produced: 0, config: image,
+         active: true, lost: false, broken: false)
+end open
+
+-- Count never reloads in an epoch. Failure latches until an explicit
+-- restart; a stopped descriptor answers from what its last snapshot saw.
+snapshot: (inout r: rx) -> (count: usize) ! overrun | transfer_error | exhausted =
+    if r.active then
+        status := dma.ch0_ctrl_trig_read(dma.base)
+        remaining := dma.ch0_trans_count_read(dma.base)
+        cortex_m.device_barrier()
+        if (status & errors) <> 0 or remaining > r.budget then
+            r.broken = true
+        end if
+        fail transfer_error when r.broken
+        r.produced = r.budget -% remaining
+        if remaining == 0 then r.active = false end if
+    end if
+    if r.produced < r.consumed then r.broken = true end if
+    fail transfer_error when r.broken
+    have := r.produced -% r.consumed
+    capacity := lenof r.buf
+    if have > u32(capacity) then
+        r.lost = true
+        r.consumed = r.produced
+    end if
+    fail overrun when r.lost
+    fail exhausted when r.produced == r.budget and have == 0
+    count = usize(have)
+end snapshot
+
+public available: (inout r: rx) -> (count: usize) ! receive_error =
+    count = try snapshot(r)
+end available
+
+public read: (inout r: rx, out_buf: []mut u8) -> (count: usize) ! receive_error =
+    have := try snapshot(r)
+    count = have
+    if lenof out_buf < count then count = lenof out_buf end if
+    backing := r.buf
+    capacity := lenof backing
+    -- snapshot bounds count by both initialized extents; consumed <= 65535,
+    -- i < 256 and capacity is a nonzero power of two. No arithmetic wraps.
+    unchecked begin
+        for i in 0..<count do
+            out_buf[i] = backing[(usize(r.consumed) + i) & (capacity - 1)]
+        end for
+    end unchecked
+    r.consumed = r.consumed +% u32(count)
+end read
+
+-- After the abort BUSY falls once the transfers in flight complete, which
+-- the datasheet says generally takes a few cycles; 1000 polls bound it.
+public stop: (inout r: rx) -> none ! stop_timeout =
+    if r.active then
+        remaining := dma.ch0_trans_count_read(dma.base)
+        if remaining <= r.budget then r.produced = r.budget -% remaining end if
+    end if
+    r.active = false
+    dma.inte0_write(dma.base, 0)
+    dma.chan_abort_write(dma.base, 1)
+    mut attempts: u32 = 0
+    while (dma.ch0_ctrl_trig_read(dma.base) & busy_bit) <> 0 do
+        attempts += 1
+        fail stop_timeout when attempts == 1000
+    end while
+    dma.intr_write(dma.base, 1)
+    cortex_m.device_barrier()
+end stop
+
+-- Discards unread bytes deliberately; may be called after error or exhaustion.
+public restart: (inout r: rx) -> none ! stop_timeout | transfer_error =
+    try stop(r)
+    status := dma.ch0_ctrl_trig_read(dma.base)
+    fail transfer_error when (status & errors) <> 0
+    dma.ch0_write_addr_write(dma.base, u32(usize(addr r.buf[0])))
+    dma.ch0_trans_count_write(dma.base, r.budget)
+    dma.intr_write(dma.base, 1)
+    dma.inte0_write(dma.base, 1)
+    r.consumed = 0
+    r.produced = 0
+    r.lost = false
+    r.broken = false
+    r.active = true
+    cortex_m.device_barrier()
+    dma.ch0_ctrl_trig_write(dma.base, r.config | 1)
+end restart

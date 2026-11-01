@@ -1,0 +1,59 @@
+-- Bringing the Pico's RP2040 up from what its boot ROM and second stage
+-- leave: the system clock on the ring oscillator, every peripheral but the
+-- flash interface in reset, and the peripheral clock stopped.  This moves
+-- the reference and system clocks to the 12 MHz crystal, gives UART0 the
+-- system clock, divides the reference clock to the timer's 1 MHz tick, and
+-- takes UART0, DMA, the timer and bank 0's pins and pads out of reset.
+-- Values are the RP2040 datasheet's (build 3184e62-clean, 2025-02-20).
+import rp2040/clocks
+import rp2040/io_bank0
+import rp2040/pads_bank0
+import rp2040/resets
+import rp2040/sio
+import rp2040/watchdog
+import rp2040/xosc
+
+-- RESET bits: UART0 22, TIMER 21, PADS_BANK0 8, IO_BANK0 5, DMA 2.
+public taken: u32 = 0x00600124
+-- The indicator, GPIO2, which bank 0 gives to SIO as function 5.
+public indicator: u32 = 4
+
+public crystal: () -> none =
+    -- STARTUP.DELAY counts 256 cycles: (12 MHz / 1000 + 128) / 256 = 47,
+    -- one millisecond.  CTRL: ENABLE 0xfab, FREQ_RANGE 0xaa0 (1-15 MHz).
+    xosc.startup_write(xosc.base, 47)
+    xosc.ctrl_write(xosc.base, (0xfab << 12) | 0xaa0)
+    while (xosc.status_read(xosc.base) & 0x80000000) == 0 do
+        continue
+    end while
+    -- clk_ref's SRC 2 is the crystal; the switch is glitchless, so wait
+    -- until CLK_REF_SELECTED says source 2.
+    clocks.clk_ref_ctrl_write(clocks.base, 2)
+    while clocks.clk_ref_selected_read(clocks.base) <> 4 do
+        continue
+    end while
+    -- clk_sys's SRC 0 is clk_ref, as reset leaves it.
+    clocks.clk_sys_ctrl_write(clocks.base, 0)
+    while clocks.clk_sys_selected_read(clocks.base) <> 1 do
+        continue
+    end while
+    -- clk_peri: ENABLE, bit 11, with AUXSRC 0, clk_sys.
+    clocks.clk_peri_ctrl_write(clocks.base, 0x800)
+    -- TICK: ENABLE, bit 9, and 12 reference cycles a microsecond.
+    watchdog.tick_write(watchdog.base, 0x200 | 12)
+end crystal
+
+public peripherals: () -> none =
+    held := resets.reset_read(resets.base)
+    resets.reset_write(resets.base, held & ~taken)
+    while (resets.reset_done_read(resets.base) & taken) <> taken do
+        continue
+    end while
+    -- GPIO1 receives: input enabled, pulled up so an idle line reads high,
+    -- Schmitt trigger, 4 mA: IE 6, DRIVE 5:4 = 1, PUE 3, SCHMITT 1.
+    pads_bank0.gpio1_write(pads_bank0.base, 0x5a)
+    -- The indicator pin to SIO and driven.
+    pin := io_bank0.gpio2_ctrl_read(io_bank0.base)
+    io_bank0.gpio2_ctrl_write(io_bank0.base, (pin & 0xffffffe0) | 5)
+    sio.gpio_oe_set_write(sio.base, indicator)
+end peripherals

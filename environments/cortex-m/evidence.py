@@ -81,10 +81,11 @@ def selection_controls(run, elf):
         first_source.write_bytes(original)
     check()
     # Execute a stripped image with the separately verified symbol ELF.
+    entry=source_debug.app_stops(elf)['entry']
     firmware.execute(run,stripped,[
         'symbol-file '+str(elf), *source_debug.search(elf), *source_debug.PRELUDE,
-        'break source/app/main.ldn:61','continue','python',
-        'frame("start","source/app/main.ldn",61)',
+        'break source/app/main.ldn:%d' % entry,'continue','python',
+        'frame("start","source/app/main.ldn",%d)' % entry,
         'print("R6100_SEPARATE_SYMBOLS_PASS")','end'],'R6100_SEPARATE_SYMBOLS_PASS')
     (run.out/'selection-controls.json').write_text(json.dumps(dict(
         refused=passed,matching_separate_symbols='passed'),indent=2)+'\n')

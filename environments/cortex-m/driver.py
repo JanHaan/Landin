@@ -19,7 +19,7 @@ from setup import DEFAULT, installed_tools, inventory, sha, supported_host
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 SOURCE = ROOT / 'compiler/tests/driver'
-MODULES = ('drivers/uart', 'rp2040/io_bank0', 'rp2040/uart0', 'rp2040/dma',
+MODULES = ('commands', 'drivers/uart', 'rp2040/io_bank0', 'rp2040/uart0', 'rp2040/dma',
            'rp2040/sio', 'rp2040/timer', 'platform/cortex_m')
 
 
@@ -28,7 +28,7 @@ def build(run, refine, name, optimize, specialize, debug='none'):
     source.mkdir()
     shutil.copytree(SOURCE / name, source / 'app')
     for module in MODULES:
-        origin = (SOURCE if module.startswith('drivers/') else
+        origin = (SOURCE if module.startswith('drivers/') or module == 'commands' else
                   ROOT / 'devices/generated' if module.startswith('rp2040/') else ROOT)
         shutil.copytree(origin / module, source / module)
     #  A program that imports no device description is given the
@@ -161,8 +161,9 @@ def application(run,elf,s):
         'w32:334:00000001;r32:328:000003e8;w32:310:000007d0;'
         'w32:100c:000a8620;r32:100c:000a8620;r32:100c:000a8620;'
         'r32:1008:0000fffc;w32:100c:000a8621;'
-        'w32:114:00000001;w32:200:00000031;w32:200:00000041;'
-        'w32:118:00000001;w32:200:00000030')
+        'w32:114:00000001;r32:218:00000090;w32:200:00000031;'
+        'r32:218:00000090;w32:200:00000041;'
+        'w32:118:00000001;r32:218:00000090;w32:200:00000030')
     m, model = machine(run, elf, s, 'application')
     with m:
         u32 = m.u32

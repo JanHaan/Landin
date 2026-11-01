@@ -47,6 +47,20 @@ executes that application's MMIO and interrupt behavior against
 window. Neither synthetic map is QEMU's Nordic hardware or a faithful RP2040
 emulator.
 
+## The shared command loop and the board
+
+`commands/commands.ldn` is what the application does with the bytes it
+receives: each echoed, ASCII 1 setting the indicator and ASCII 0 clearing
+it, given its bases and its pin. The board port in
+`compiler/tests/board/rp2040` runs the same module at the RP2040's own
+bases with GPIO2 as its indicator, and keeps this driver's public receive
+contract over the RP2040's own protocol: a live count rather than the drain
+below, and an abort for stop (D593, D594). The echo and the indicator are
+the outcome the two compare, and [the board's run](../../../environments/boards/rp2040/README.md)
+says how the board's side is checked; everything below that depends on the
+synthetic drain stays the emulator's. The shared loop waits on UARTFR's TXFF before
+each byte, which the model answers as always having room.
+
 ## Public receive contract
 
 `open(rate, budget, escaping buf)` configures fixed GPIO0/1, UART0 RX and DMA

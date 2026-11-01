@@ -1,0 +1,77 @@
+# The first board: a Raspberry Pi Pico
+
+The prototype-1 board port, `compiler/tests/board/rp2040`, built by refine
+for the Pico's RP2040 through `devices/descriptions/rp2040`, flashed, and
+booted from power-on with nothing attached to its core. `board.py` builds
+the image, flashes it, switches the Pico's power and checks what the board
+writes on its UART against a physical oracle written from what the host
+sent and from the RP2040 datasheet (D595). It is a developer tool: no
+compiler feature runs it or needs it, and the gate does not run it, since
+no hosted runner has the board.
+
+## What it needs
+
+| What | Which | Why |
+|---|---|---|
+| the board | a Raspberry Pi Pico H, its SWD on the 3-pin debug connector, GPIO0 (UART0 TX) to the probe's UART RX and GPIO1 (UART0 RX) to its TX, powered from its USB port | the RP2040 and its 2 MiB W25Q16JV flash, as the description lays them out |
+| a probe | a [probehive](https://github.com/JanHaan/probehive) SWD slot and a checkout of it, whose `scripts/dap_bridge.py` serves the slot's UART as TCP port 4461 | SWD to flash and read back, and the UART the trace comes over |
+| probe-rs | one that reaches the slot as `--probe` names it: the CMSIS-DAP UDP transport the default `0000:0002:10.42.0.50/0` asks for is a pull request to probe-rs, and upstream's TCP transport reaches a bridge as `0000:0001:HOST:PORT` | flashing, verifying and reading memory |
+| power | the Pico's USB port on a hub with per-port power switching, and `uhubctl` with the right to switch it | a power cycle, so the run starts at power-on |
+| the compiler | refine and `arm-eabi-gcc` or `arm-none-eabi-gcc` (D532), as `nix develop` gives them | the image |
+
+`uhubctl` needs write access to the hub's port `disable` files; on a host
+where those belong to a group, run the tool in that group, for example
+`sg dialout -c '…'`. The tool switches only `--port` on `--hub`, and only
+after `uhubctl` shows `--guard-serial` on `--guard-port` of the same hub:
+on the maintainer's rig that is the probe's own Arty A7, whose bitstream is
+held only in SRAM and would be lost with its power.
+
+## Running it
+
+```sh
+python3 environments/boards/rp2040/board.py \
+    --refine compiler/ada/build/nix-x86_64-linux/debug/bin/refine \
+    --probehive ~/src/probehive --probe-rs PATH/TO/probe-rs --probe 0000:0002:10.42.0.50/0 \
+    --hub 7-2.3.3 --port 1 --guard-port 4 --guard-serial 210319B3E738 \
+    --output NEW_DIRECTORY
+```
+
+The output holds the image, its build report and every command's log, the
+bridge's log, `uart.bin` (every byte the board sent) and `sent.bin` (every
+byte the host sent), and `result.json`: the image's and the second stage's
+hashes, the stage's CRC, each verdict, every frame and the commands with
+their status and time. The run the item recorded is
+[`record.json`](record.json).
+
+## The trace
+
+The firmware writes frames between the echoed bytes: STX, a tag letter, a
+field per key, ` k=` and eight lowercase hex digits, then ETX and LF. The
+host never sends STX or ETX.
+
+| Tag | When | Fields |
+|---|---|---|
+| `b` | once, after the clocks, the resets and the receiver are set up | `r` CHIP_RESET as read first in `start`, `v` VTOR then, `k` CLK_REF_SELECTED |
+| `t` | after each 0x11 | `h` bytes handled, `c` ring restarts, `d` DMA completions, `m` timer interrupts, `u` USBCTRL_IRQ entries, `p` the exception number it ran in, `n` DMA channel 0's TRANS_COUNT, `e` bytes consumed in this epoch, `g` the indicator's pad read back, `s` the application's state |
+| `h` | when the application halts | `s` its status |
+
+Three bytes are commands after their echo: 0x05 sets IRQ5 pending in the
+NVIC (D596), 0x11 asks for a `t` frame, and 0x12 stops reading for 100 ms.
+
+## The oracle
+
+| Checked | Against |
+|---|---|
+| the ELF's `.boot2` | 256 bytes at 0x1000_0000, not empty, its last word the CRC-32 of the first 252 as the boot ROM computes it (datasheet 2.8.1.3.1) |
+| vector word 21 | the USBCTRL_IRQ handler's address, Thumb bit set |
+| flash after flashing | its first 256 bytes, read back over SWD, equal to the image's |
+| the boot frame | CHIP_RESET is HAD_POR alone, so the run began at power-on; VTOR is 0x1000_0100, which only the second stage writes, so the ROM entered the flashed stage and the stage entered compiler-owned reset; clk_ref is on the crystal |
+| the indicator | `g` is 4 after `1` and 0 after `0` |
+| IRQ5 | one entry, in exception 21 |
+| an overrun | after 0x12, a 300-byte burst into the 256-byte ring is discarded, never echoed, and the ring restarts once |
+| a stream | 12,000 bytes across two 4096-byte epochs: every byte echoed in order, one DMA completion and one restart for each epoch exhausted, and the timer advancing |
+| the counters | `handled`, `recoveries`, `dma_events`, `usb_events` and TRANS_COUNT, read over SWD without halting the core, equal the last frame's |
+
+What the emulator lane and the board share is
+`compiler/tests/driver/commands` (D593): the echo and the indicator. The
+board's receive protocol is the RP2040's (D594), not the synthetic drain.

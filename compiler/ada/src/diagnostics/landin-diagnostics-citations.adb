@@ -2199,6 +2199,17 @@ package body Landin.Diagnostics.Citations is
             when 562 =>
                "The STM32H753's description is cacheless and keeps DMA o"
                & "ut of the TCMs",
+            when 593 =>
+               "The first board shares prototype 1's receive contract an"
+               & "d command loop, not its device protocol",
+            when 594 =>
+               "On the RP2040 a receive snapshot reads the live count, a"
+               & "nd stop aborts",
+            when 595 =>
+               "The board's trace oracle starts at power-on and is writt"
+               & "en from what the host sent",
+            when 596 =>
+               "IRQ5 is delivered by setting it pending in the NVIC",
             when 530 =>
                "`refine explain` answers a construct and a decision",
             when 542 =>
@@ -3357,6 +3368,14 @@ package body Landin.Diagnostics.Citations is
             when 561 =>
                "Decisions: The toolchain, C and the machine",
             when 562 =>
+               "Decisions: The toolchain, C and the machine",
+            when 593 =>
+               "Decisions: The toolchain, C and the machine",
+            when 594 =>
+               "Decisions: The toolchain, C and the machine",
+            when 595 =>
+               "Decisions: The toolchain, C and the machine",
+            when 596 =>
                "Decisions: The toolchain, C and the machine",
             when 530 =>
                "Decisions: The toolchain, C and the machine",
@@ -4814,6 +4833,20 @@ package body Landin.Diagnostics.Citations is
             when 562 =>
                "https://www.701.dev/spec.html#d562-the-stm32h753-s-descr"
                & "iption-is-cacheless-and-keeps-dma-out-of-the-tcms",
+            when 593 =>
+               "https://www.701.dev/spec.html#d593-the-first-board-share"
+               & "s-prototype-1-s-receive-contract-and-command-loop-not-it"
+               & "s-device-protocol",
+            when 594 =>
+               "https://www.701.dev/spec.html#d594-on-the-rp2040-a-recei"
+               & "ve-snapshot-reads-the-live-count-and-stop-aborts",
+            when 595 =>
+               "https://www.701.dev/spec.html#d595-the-board-s-trace-ora"
+               & "cle-starts-at-power-on-and-is-written-from-what-the-host"
+               & "-sent",
+            when 596 =>
+               "https://www.701.dev/spec.html#d596-irq5-is-delivered-by-"
+               & "setting-it-pending-in-the-nvic",
             when 530 =>
                "https://www.701.dev/spec.html#d530-refine-explain-answer"
                & "s-a-construct-and-a-decision",

@@ -47,15 +47,35 @@ def checked(run, elf):
     return record
 
 
+# The driver application's stops, each by its statement in the staged copy.
+APP = 'source/app/main.ldn'
+COMMANDS = 'source/commands/commands.ldn'
+UART = 'source/drivers/uart/uart.ldn'
+
+
+def app_stops(elf):
+    def at(path, statement):
+        return anchored(elf.parent, path, statement)
+    return dict(
+        entry=at(APP, 'app_state = initialized +% cleared'),
+        opened=at(APP, 'mut receiver := uart.open(115200, 65535, rx_storage[0..<256])'
+                       ' else (problem)'),
+        open=at(UART, 'fail buffer_empty when size == 0'),
+        timer=at(APP, 'timer.intr_write(0x40070300, 1)'),
+        echo=at(COMMANDS, 'uart0.uartdr_write(p.uart_base, u32(byte))'),
+        halt=at(APP, 'loop do cortex_m.wait_for_interrupt() end loop'))
+
+
 def cpu(run, elf):
     checked(run, elf)
+    at = app_stops(elf)
     execute(run, elf, [*search(elf), *PRELUDE,
-        'break source/app/main.ldn:61', 'continue', 'python',
-        'frame("start","source/app/main.ldn",61)',
+        f'break {APP}:{at["entry"]}', 'continue', 'python',
+        f'frame("start",{APP!r},{at["entry"]})',
         'chain(["start","_landin_firmware_reset"])', 'end',
-        'step', 'python', 'frame("start","source/app/main.ldn",62)', 'end',
-        'break source/drivers/uart/uart.ldn:38', 'continue', 'python',
-        'frame("open","source/drivers/uart/uart.ldn",38)',
+        'step', 'python', f'frame("start",{APP!r},{at["opened"]})', 'end',
+        f'break {UART}:{at["open"]}', 'continue', 'python',
+        f'frame("open",{UART!r},{at["open"]})',
         'chain(["open","start","_landin_firmware_reset"])',
         'assert "No locals" in gdb.execute("info locals",to_string=True)',
         'assert "No arguments" in gdb.execute("info args",to_string=True)',
@@ -85,43 +105,50 @@ def relayed(run, elf, commands):
 
 
 def application(run, elf):
+    at = app_stops(elf)
     relayed(run, elf, [
-        'break source/drivers/uart/uart.ldn:38', 'continue', 'python',
-        'frame("open","source/drivers/uart/uart.ldn",38)',
+        f'break {UART}:{at["open"]}', 'continue', 'python',
+        f'frame("open",{UART!r},{at["open"]})',
         'chain(["open","start","_landin_firmware_reset"])', 'end',
         'delete breakpoints', 'break device_barrier', 'continue', 'python',
         'frame("device_barrier","source/platform/cortex_m/cortex_m.ldn")',
         'chain(["device_barrier","open","start"])', 'end',
         'delete breakpoints', 'break wait_for_interrupt', 'continue', 'python',
         'frame("wait_for_interrupt","source/platform/cortex_m/cortex_m.ldn")', 'end',
-        'delete breakpoints', 'break source/app/main.ldn:30',
+        'delete breakpoints', f'break {APP}:{at["timer"]}',
         'monitor feed 49', 'monitor feed 65',
         'monitor feed 48', 'monitor tick 1000',
         'continue', 'python',
-        'frame("timer_irq","source/app/main.ldn",30)',
+        f'frame("timer_irq",{APP!r},{at["timer"]})',
         'assert v("$xpsr") & 511 == 17',
         # Interrupt CFI ends at the handler; EXC_RETURN is not a call address.
         'assert gdb.newest_frame().older() is None', 'end', 'bt',
-        'delete breakpoints', 'break source/app/main.ldn:48', 'continue', 'python',
-        'frame("handle","source/app/main.ldn",48)',
+        'delete breakpoints', f'break {COMMANDS}:{at["echo"]}', 'continue', 'python',
+        f'frame("handle",{COMMANDS!r},{at["echo"]})',
         'assert 0x20000000 <= v("$pc") < 0x20003000',
         'chain(["handle","start","_landin_firmware_reset"])', 'end', 'bt',
         'delete breakpoints', 'break uartdr_write', 'continue', 'python',
         'frame("uartdr_write","source/rp2040/uart0/device.ldn")',
         'chain(["uartdr_write","handle","start"])', 'end', 'bt',
         'delete breakpoints', 'finish', 'python',
-        'frame("handle","source/app/main.ldn")', 'end',
+        f'frame("handle",{COMMANDS!r})', 'end',
         'break wait_for_interrupt','continue','delete breakpoints',
         'monitor delay_stop 20 -1','monitor feed 65',
-        'monitor tick 1000','break source/app/main.ldn:55',
-        'continue','python','frame("halt","source/app/main.ldn",55)',
+        'monitor tick 1000',f'break {APP}:{at["halt"]}',
+        'continue','python',f'frame("halt",{APP!r},{at["halt"]})',
         'chain(["halt","start","_landin_firmware_reset"])',
         'assert v("*(unsigned*)&app_state") == 3','end','bt'])
 
 
 def source_line(run, path, statement):
     """Locate an unambiguous executable anchor in the verified source copy."""
-    lines = (run.out / path).read_text().splitlines()
+    return anchored(run.out, path, statement)
+
+
+def anchored(root, path, statement):
+    """The one line of ROOT/PATH that is STATEMENT, so that a stop follows
+    its statement when the source around it moves."""
+    lines = (root / path).read_text().splitlines()
     matches = [number for number, text in enumerate(lines, 1)
                if text.strip() == statement]
     require(len(matches) == 1, 'missing or ambiguous source anchor: ' + path)

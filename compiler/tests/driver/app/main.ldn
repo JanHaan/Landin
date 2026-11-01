@@ -1,10 +1,9 @@
 -- Complete prototype-1 application: UART echo, GPIO commands and timer wakeups.
+import commands
 import drivers/uart
 import platform/cortex_m
 import rp2040/dma
-import rp2040/sio
 import rp2040/timer
-import rp2040/uart0
 
 link(align: 256)
 mut rx_storage: [256]u8 = zeroed
@@ -40,15 +39,8 @@ take_events: () -> none =
     notification = 0
 end take_events
 
-link(section: ".ramtext.handle")
-handle: (bytes: []u8) -> none =
-    for byte in bytes do
-        if byte == 49 then sio.gpio_out_set_write(0x40070100, 1) end if
-        if byte == 48 then sio.gpio_out_clr_write(0x40070100, 1) end if
-        uart0.uartdr_write(uart.uart_base, u32(byte))
-        handled = handled +% 1
-    end for
-end handle
+-- The synthetic indicator is SIO bit 0 at the model's base.
+port: commands.port = (sio_base: 0x40070100, indicator: 1, uart_base: uart.uart_base)
 
 halt: (status: u32) -> noreturn =
     app_state = status
@@ -84,7 +76,7 @@ start: () -> noreturn =
             end
             continue
         end
-        handle(scratch[0..<n])
+        handled = handled +% commands.handle(scratch[0..<n], port)
         -- Continue draining a short read without needing another DMA event.
         if n == 64 then continue end if
         saved := cortex_m.disable_interrupts()

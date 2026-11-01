@@ -1,0 +1,149 @@
+-- The prototype-1 application on a Raspberry Pi Pico: UART0 received by
+-- DMA and echoed, ASCII 1 and 0 driving GPIO2, timer wakeups, and a trace
+-- of what the board did, which environments/boards/rp2040/board.py checks
+-- against its physical oracle.  The echo and the indicator are the shared
+-- commands.handle, run by the synthetic application in the emulator too.
+--
+-- Three bytes are also commands, after their echo: 0x05 sets IRQ5,
+-- USBCTRL_IRQ, pending, which slot 21's handler counts; 0x11 asks for a
+-- telemetry frame; and 0x12 stops reading for 100 ms, so that a burst
+-- sent then overruns the ring.
+import bringup
+import commands
+import descriptions/rp2040
+import platform/cortex_m
+import report
+import rp2040/clocks
+import rp2040/dma
+import rp2040/ppb
+import rp2040/sio
+import rp2040/timer
+import rp2040/uart0
+import rp2040/vreg_and_chip_reset
+import serial
+
+link(align: 256)
+mut rx_storage: [256]u8 = zeroed
+mut notification: u32 = 0
+mut handled: u32 = 0
+mut recoveries: u32 = 0
+mut dma_events: u32 = 0
+mut timer_events: u32 = 0
+mut usb_events: u32 = 0
+mut usb_exception: u32 = 0
+mut app_state: u32 = 0
+
+-- Pico's indicator, GPIO2, and UART0 at the RP2040's own bases.
+port: commands.port = (sio_base: sio.base, indicator: bringup.indicator,
+                       uart_base: uart0.base)
+-- An epoch ends after 4096 bytes, so a long stream also exhausts and
+-- restarts the ring; the UART's 32-byte FIFO holds what arrives meanwhile.
+budget: u32 = 4096
+
+link(vector: 16)
+extern(interrupt) timer_irq: () -> none =
+    timer.intr_write(timer.base, 1)
+    timer_events = timer_events +% 1
+    notification = 1
+    cortex_m.completion_barrier()
+end timer_irq
+
+link(vector: 21)
+extern(interrupt) usb_irq: () -> none =
+    usb_events = usb_events +% 1
+    usb_exception = assembler.block("mrs {number}, ipsr", out number: u32 at general)
+    cortex_m.completion_barrier()
+end usb_irq
+
+link(vector: 27)
+extern(interrupt) dma_irq: () -> none =
+    pending := dma.intr_read(dma.base)
+    if (pending & 1) <> 0 then
+        notification = 1
+        dma_events = dma_events +% 1
+    end if
+    dma.intr_write(dma.base, pending & 1)
+    cortex_m.completion_barrier()
+end dma_irq
+
+take_events: () -> none =
+    saved := cortex_m.disable_interrupts()
+    defer cortex_m.restore_interrupts(saved)
+    notification = 0
+end take_events
+
+telemetry: (r: serial.rx) -> none =
+    report.open_frame(116)
+    report.field(104, handled)
+    report.field(99, recoveries)
+    report.field(100, dma_events)
+    report.field(109, timer_events)
+    report.field(117, usb_events)
+    report.field(112, usb_exception)
+    report.field(110, dma.ch0_trans_count_read(dma.base))
+    report.field(101, r.consumed)
+    report.field(103, sio.gpio_in_read(sio.base) & bringup.indicator)
+    report.field(115, app_state)
+    report.close_frame()
+end telemetry
+
+stall: () -> none =
+    began := timer.timerawl_read(timer.base)
+    while timer.timerawl_read(timer.base) -% began < 100_000 do
+        continue
+    end while
+end stall
+
+halt: (status: u32) -> noreturn =
+    app_state = status
+    report.open_frame(104)
+    report.field(115, status)
+    report.close_frame()
+    loop do cortex_m.wait_for_interrupt() end loop
+end halt
+
+start: () -> noreturn =
+    -- Read before anything resets it: which reset this was, and the table
+    -- the second stage pointed VTOR at before it entered reset.
+    reason := vreg_and_chip_reset.chip_reset_read(vreg_and_chip_reset.base)
+    table := ppb.vtor_read(ppb.base)
+    bringup.crystal()
+    bringup.peripherals()
+    mut receiver := serial.open(115200, budget, rx_storage[0..<256]) else (problem)
+        _ = problem
+        halt(1)
+    end
+    report.open_frame(98)
+    report.field(114, reason)
+    report.field(118, table)
+    report.field(107, clocks.clk_ref_selected_read(clocks.base))
+    report.close_frame()
+    mut scratch: [64]u8 = zeroed
+    -- NVIC: TIMER_IRQ_0 is IRQ0, USBCTRL_IRQ IRQ5 and DMA_IRQ_0 IRQ11.
+    ppb.nvic_iser_write(ppb.base, 0x821)
+    app_state = 2
+    loop do
+        now := timer.timerawl_read(timer.base)
+        timer.alarm0_write(timer.base, now +% 1000)
+        take_events()
+        n := serial.read(receiver, scratch[0..<64]) else (error)
+            if error == serial.stop_timeout then halt(3) end if
+            recoveries = recoveries +% 1
+            serial.restart(receiver) else (problem)
+                _ = problem
+                halt(3)
+            end
+            continue
+        end
+        handled = handled +% commands.handle(scratch[0..<n], port)
+        for byte in scratch[0..<n] do
+            if byte == 5 then ppb.nvic_ispr_write(ppb.base, 0x20) end if
+            if byte == 17 then telemetry(receiver) end if
+            if byte == 18 then stall() end if
+        end for
+        if n == 64 then continue end if
+        saved := cortex_m.disable_interrupts()
+        if notification == 0 then cortex_m.wait_for_interrupt() end if
+        cortex_m.restore_interrupts(saved)
+    end loop
+end start

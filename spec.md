@@ -20906,6 +20906,121 @@ capacity verdicts are those of `backend_corpus.py`'s `profiles`, measured
 from each limited image's sizes and frames, as RP2040's are, because the
 corpus links with the reference's probe map.
 
+### D593 — The first board shares prototype 1's receive contract and command loop, not its device protocol
+
+**The tour said** nothing of a board. The derived driver of prototype 1
+runs against a synthetic device whose drain and count protocol the RP2040
+does not have, at synthetic bases, with no clocks, resets or pads.
+
+**Chosen:** the Pico's port is a program of its own, in
+`compiler/tests/board/rp2040`: its `serial` module keeps the synthetic
+driver's public receive contract, `open`, `available`, `read`, `stop` and
+`restart` with the same atoms and the same order of checks, over the
+RP2040's own protocol (D594); its `bringup` module moves the reference and
+system clocks to the 12 MHz crystal, gives UART0 the system clock, divides
+the reference clock to the timer's 1 MHz tick, and takes UART0, DMA, the
+timer and bank 0's pins and pads out of reset; and its application adds a
+trace (D595) and three command bytes. What both programs run is
+`compiler/tests/driver/commands`: each received byte echoed, ASCII 1
+setting the indicator and ASCII 0 clearing it, given each program's bases
+and pin. That is the scenario whose outcome the emulator lane and the board
+compare: the same bytes in give the same echo and the same indicator
+changes. The synthetic driver's drain, its fault injection and repair, its
+stop timeout and its delayed drain stay the emulator's; the clocks, the
+resets, the reset reason, the second stage, IRQ5 and the power cycle are
+the board's.
+
+**The alternatives:** porting the synthetic driver in place, which would
+lose the emulator lane's drain and fault scenarios that no board can stage;
+sharing the whole application, whose interrupt sources, budget and halt
+policy differ; and sharing nothing, which leaves no outcome to compare.
+
+**Pinned by** `environments/cortex-m/driver.py`'s exact application trace,
+which now reads UARTFR before each echoed byte as the shared loop does, and
+`environments/boards/rp2040/board.py`'s echo and indicator verdicts.
+
+### D594 — On the RP2040 a receive snapshot reads the live count, and stop aborts
+
+**The tour said** nothing; the synthetic premise was that clearing EN
+drains the channel and BUSY clearing acknowledges it, which the RP2040
+datasheet (2.5.5.3) says it does not: clearing EN pauses the channel with
+BUSY still high, and triggering a paused channel again reloads its count.
+
+**Chosen:** a snapshot does not pause the channel. It reads CTRL_TRIG and
+TRANS_COUNT live; the count drops when a transfer is issued, before its
+write lands (2.5.3.2), and the driver's stated premise is that the write
+lands before the byte is copied out, a bus latency of a few cycles against
+the hundreds a snapshot and its copy take. The board's oracle checks every
+echoed byte against what was sent, which a stale read would fail. `stop`
+records what the count says, disables the channel's interrupt, writes
+CHAN_ABORT, waits at most 1000 polls for BUSY to fall, which 2.5.5.3 says
+takes a few cycles once the transfers in flight complete, and clears the
+completion interrupt RP2040-E13 says an abort may raise; bytes received
+after that last count are discarded with the epoch. A stopped descriptor
+answers from the count it kept. `restart` re-arms the channel only after
+BUSY has fallen.
+
+**The alternatives:** pausing with EN through the non-triggering CTRL
+alias and resuming the same way, which leaves the in-flight writes with no
+completion to observe; aborting for every snapshot, which ends the epoch
+each time; and the synthetic drain, which is not this chip's.
+
+**Pinned by** `environments/boards/rp2040/board.py`: an overrun burst
+discarded and restarted, two exhaustions of a 4096-byte epoch restarted
+with no byte lost, every echoed byte in order, and the DMA completion count
+read over SWD.
+
+### D595 — The board's trace oracle starts at power-on and is written from what the host sent
+
+**The tour said** nothing, and only emulators had run firmware.
+
+**Chosen:** the board run's oracle is `environments/boards/rp2040/board.py`,
+a developer tool that runs no compiler feature. It builds the image with
+refine and checks, from the ELF alone, the second stage's CRC-32 as the boot
+ROM computes it and vector word 21; flashes it with probe-rs through the
+probe's CMSIS-DAP TCP bridge and reads the first 256 bytes of flash back;
+detaches, cuts the Pico's USB power and restores it, refusing to switch a
+hub whose guarded port does not hold the device named; and reads the trace
+the firmware writes on UART0, frames of STX, a tag letter, fields of a key,
+`=` and eight hex digits, then ETX and LF, between the echoed bytes. Its
+expectations come from what the host sent and from the RP2040 datasheet,
+never from the firmware: CHIP_RESET reads HAD_POR alone, so the run began at
+power-on; VTOR reads 0x1000_0100, which only the second stage writes, so the
+ROM entered the flashed stage and the stage entered compiler-owned reset;
+clk_ref is on the crystal; the pad reads GPIO2 high after `1` and low after
+`0`; every byte sent is echoed in order but a burst sent during a stall,
+which overruns the ring once; each 4096 bytes received ends an epoch with
+one DMA completion and one restart; the timer advances; and the counters
+read over SWD, without halting the core, equal the last frame's.
+
+**The alternatives:** a probe-set program counter or a RAM-loaded image,
+which would not show the board starting from its flash; reading the trace through SWD alone, which leaves the
+UART's own line untested; and an oracle computed from the firmware's
+constants, which a wrong constant would satisfy.
+
+**Pinned by** `environments/boards/rp2040/record.json`, the recorded run, and
+`scripts/tests/test_board_rp2040.py`, which holds the oracle's CRC, framing
+and accounting to fixed inputs without a board.
+
+### D596 — IRQ5 is delivered by setting it pending in the NVIC
+
+**The tour said** nothing; D544 places a typed handler at slot 21,
+USBCTRL_IRQ, which the descriptions lane checked only in the linked image.
+
+**Chosen:** the board application sets IRQ5 pending through NVIC_ISPR when
+the host sends 0x05, with IRQ5 enabled in NVIC_ISER and the USB controller
+held in reset, so nothing else raises it; the slot-21 handler counts its
+entries and reads IPSR, and the oracle requires one entry in exception 21.
+Interrupt arrival from a peripheral is carried by DMA_IRQ_0 and TIMER_IRQ_0,
+which the RP2040's own DMA and timer raise.
+
+**The alternatives:** a USB bus reset from the host, which needs the USB
+PLL and controller and leaves the host retrying a device that never
+enumerates; and a debugger write to NVIC_ISPR, which keeps the probe
+attached through the run.
+
+**Pinned by** `environments/boards/rp2040/board.py`'s IRQ5 verdict.
+
 ### D530 — `refine explain` answers a construct and a decision
 
 **The tour said** nothing. Diagnostic notes cite paragraphs and decisions,
