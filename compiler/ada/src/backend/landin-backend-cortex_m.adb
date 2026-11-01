@@ -1411,6 +1411,21 @@ package body Landin.Backend.Cortex_M is
                Emit (".word _landin_firmware_unhandled");
             end if;
          end loop;
+         if Landin.Targets.Firmware.Takes_Image_Block (Profile.Boot) then
+            --  D637: the IMAGE_DEF block, directly after the table, which
+            --  the driver reads back from the object it assembles (D638).
+            Emit (".section .embedded_block,""a"",%progbits");
+            Emit (".balign 4");
+            Emit (".globl _landin_firmware_image_block");
+            Emit (".type _landin_firmware_image_block, %object");
+            Put ("_landin_firmware_image_block:");
+            for Word of Landin.Targets.Firmware.Image_Block loop
+               Emit (".word " & Landin.Backend.Firmware.Hex
+                 (Landin.Targets.Byte_Count (Word)));
+            end loop;
+            Emit (".size _landin_firmware_image_block, . - _landin_firmware_"
+              & "image_block");
+         end if;
       end Emit_Vectors;
 
       procedure Emit_Routine

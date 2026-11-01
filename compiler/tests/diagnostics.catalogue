@@ -115,6 +115,7 @@ L0508  Live     [1670]: a selected panic handler in a program that prepares a st
 L0509  Live     [1590]/D525: a failed link's library that no named directory and none of the C driver's own holds
 L0519  Live     D546: a linked firmware image that breaks a clause of the linker script contract
 L0538  Live     D588: an assembled boot stage that outgrows its slot or that a relocation reaches
+L0555  Live     D638: an assembled image block that is not the IMAGE_DEF block its boot kind gives, or that a relocation reaches
 L0525  Live     D555: an SVD that is not XML in the subset refine svd reads
 L0526  Live     D556: a selection policy refine svd cannot read
 L0527  Live     D556: an SVD that is not the one its policy was reviewed against

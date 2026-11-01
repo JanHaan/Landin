@@ -5,11 +5,13 @@
  * one refine writes for a firmware build of that profile (D545), so it
  * supplies what that script places and reads: a `.boot2` prefix for a boot
  * kind that has one, a vector table of the profile's length in
- * `.isr_vector`, its entry `_landin_firmware_reset`, and the
+ * `.isr_vector`, an `.embedded_block` of the length a boot kind places
+ * after it, its entry `_landin_firmware_reset`, and the
  * `_landin_firmware_*` data, RAM-code, BSS and stack symbols the script
  * defines.  backend.py assembles it with the profile's facts:
- * LANDIN_VECTOR_WORDS, the table's length, and LANDIN_BOOT_PREFIX, the
- * bytes the boot kind puts before it.  The harness's own fault and
+ * LANDIN_VECTOR_WORDS, the table's length, LANDIN_BOOT_PREFIX, the
+ * bytes the boot kind puts before it, and LANDIN_BOOT_SUFFIX, those it
+ * puts after it, zeros here: the harness's image is linked, never booted.  The harness's own fault and
  * unexpected entries stay in the `_landin` prefix the compiler keeps for
  * its own symbols, so a program's public routine, `arena.reset` among them,
  * cannot collide with them. */
@@ -25,6 +27,10 @@
 .rept LANDIN_VECTOR_WORDS - 4
 .word _landin_harness_unexpected
 .endr
+#if LANDIN_BOOT_SUFFIX
+.section .embedded_block,"a",%progbits
+.space LANDIN_BOOT_SUFFIX
+#endif
 .text
 .global _landin_firmware_reset
 .thumb_func

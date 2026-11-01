@@ -2170,7 +2170,9 @@ description counts, aligned to its length rounded up to a power of two and
 no less than 128 bytes, at its boot address (D545). An `rp2040-boot2` image
 begins instead with the description's second stage, the naked routine it
 marks `link(boot_stage)`, assembled into the 256 bytes before the table and
-sealed with the boot ROM's checksum in their last four (D587, D588). Its first two words are
+sealed with the boot ROM's checksum in their last four (D587, D588). An
+`rp2350-image-block` image's table is followed directly by the IMAGE_DEF
+block its boot ROM searches the first 4 KiB of flash for (D637, D638). Its first two words are
 the initial SP and compiler reset function. The slots a handler may take are
 the profile's (D544): its core's architectural exceptions and 16 + IRQ for
 each interrupt its description names; every other slot is zero, which in the
@@ -20738,7 +20740,7 @@ L0528 refuses, for a selected register, what is not read: `dim` arrays of
 peripherals, registers or fields, a register in a `cluster`, a register or
 field derived from another, derived enumerated values, an `alternateGroup`,
 a default enumerated value, a number with a multiplier or don't-care bits,
-another width, and a core other than the five D542 names. An enumerated
+another width, and a core other than the six D542 names. An enumerated
 value named otherwise than an identifier cannot be an atom: every selected
 field with one is named in one refusal, each with its first such name, and
 with the policy's `numeric_enums` as the way out, rather than one field a
@@ -21252,7 +21254,7 @@ whatever generates it, and a reviewer, can compare bytes:
    gives it, joined by ` and `; and one empty line.
 5. `compiler.device("ID")`, ID being `device/name` in lowercase;
    `compiler.core("CORE")`, from `cpu/name`, where `CM0`, `CM0PLUS`, `CM3`,
-   `CM4` and `CM7` are the five cores above; and `compiler.vectors(N)`, N being
+   `CM4`, `CM7` and `CM33` are the six cores above; and `compiler.vectors(N)`, N being
    16 plus the larger of `cpu/deviceNumInterrupts` and one more than the
    highest interrupt value, or plus the latter alone when the SVD has no
    `deviceNumInterrupts`.
@@ -21411,16 +21413,19 @@ A boot image kind is a fact of the target, not of a device. The closed set
 is `vector-table`, the plain table at the boot address; `rp2040-boot2`, a
 256-byte second stage at the start of the vectors' region, in a `.boot2`
 section, with the table after it at 256-byte alignment, as pico-sdk lays it
-out; and the reserved `rp2350-image-block` and `esp-app-image`, which a
-description may name and refine refuses as L0516 until it builds them. The
+out; `rp2350-image-block`, the plain table at the start of the vectors'
+region followed directly by one IMAGE_DEF block in an `.embedded_block`
+section (D637); and the reserved `esp-app-image`, which a description may
+name and refine refuses as L0516 until it builds it. The
 second stage's code is the description's, a `link(boot_stage)` naked
 routine (D587), and the slot, its 252-byte limit and its checksum are the
 boot kind's, which refine emits and seals (D588); until the first board it
 held 256 zero bytes, which the boot ROM's check refused. The firmware build
 report records the selected device, core, boot kind, vector address and
 length, regions and placements beside the capacities, which are the text
-region's length and the data region's less a stack it holds, and for
-`rp2040-boot2` the stage (D588).
+region's length and the data region's less a stack it holds, for
+`rp2040-boot2` the stage (D588), and for `rp2350-image-block` the block
+(D638).
 
 **The alternatives:** a script template the developer fills, which is a
 second configuration language; deriving the script from the program's
@@ -21447,9 +21452,11 @@ naming it, the executable is removed and the derived script is offered:
 
 1. the vector table: `_landin_firmware_vectors` at the profile's boot
    address, its whole length loaded there, its first words the initial
-   stack pointer and reset, and for `rp2040-boot2` the second stage at the
+   stack pointer and reset, for `rp2040-boot2` the second stage at the
    start of its region, its last word the CRC-32 of its first 252 bytes
-   (D588);
+   (D588), and for `rp2350-image-block` the image block refine checked,
+   its words as D637 gives them, ending in the first 4 KiB of the vectors'
+   region (D638);
 2. the startup symbols: every `_landin_firmware_*` symbol reset reads, the
    stack's two, and each used region's;
 3. the stack: in a writable region of the description, its top aligned to
@@ -21616,8 +21623,9 @@ no entry, no assembly and no link; a program that reaches no description
 writes the constrained reference's. `-o` defaults to `a.ld`. With
 `--build-report=FILE` the report's `firmware` gives the profile's facts and
 capacities, `flash_limit`, `static_ram_limit` and `stack_reserved`, the
-stack's top, and for `rp2040-boot2` the slot and the checksum's address,
-and none of the figures a linked image gives. Another target is refused
+stack's top, for `rp2040-boot2` the slot and the checksum's address, and
+for `rp2350-image-block` the block's address and length (D638), and none
+of the figures a linked image gives. Another target is refused
 naming `--target=cortex-m0`, and the options that describe machine code or
 an executable are refused by the command catalogue's requirements (D565),
 which the new value joins.
@@ -21633,6 +21641,158 @@ write.
 `environments/cortex-m/backend.py`, whose corpus derives each profile's
 script and limits this way and holds them to
 `environments/cortex-m/descriptions.json`.
+
+### D635 — RP2350 is learnt from pico-sdk's SVD for the first board's port
+
+**The tour said** nothing of a second Raspberry Pi chip. The first board's
+port (D593) runs on the RP2040's own registers; the RP2350 has the same
+peripherals at other addresses, some of them changed, and a Cortex-M33,
+whose SVD names it `CM33`, which the importer did not read.
+
+**Chosen:** the RP2350 is learnt by `refine svd` from pico-sdk's
+`src/rp2350/hardware_regs/RP2350.svd` at the commit RP2040's inputs use,
+pinned by URL and hash and fetched (D559), with the pico-sdk headers its
+oracle compares against. The importer reads `CM33` as `cortex-m33`, the
+sixth core D542 names, amending D542 and D557. The policy,
+`devices/policies/rp2350.json`, selects what the board port touches on the
+RP2350: CLOCKS' reference, system and peripheral clocks and the glitchless
+selections; XOSC; RESETS; bank 0's GPIO0, GPIO1 and GPIO3 controls and
+pads, whose isolation bit resets set and input enable clear, which
+bring-up must clear and set; UART0; DMA channel 0, its interrupt and the
+abort; TIMER0's alarm, count and interrupt, with TICKS' TIMER0 tick, which
+replaces RP2040's watchdog tick; SIO's input and output commands; POWMAN's
+CHIP_RESET, whose HAD_POR is bit 16; and the M33's VTOR and NVIC_ISER0,
+NVIC_ICPR0 and NVIC_ISPR0. Its access policies are RP2040's for the same
+registers, but DMA's control writer admits bits 0 to 25, RP2350's BUSY
+being bit 26, and POWMAN's register, which takes a password to write, has
+no writer. Its reset masks promise what pico-sdk's headers promise.
+
+Where the SVD and pico-sdk disagree, the RP2350 datasheet decides: release
+8, build 80d627281ed5, pinned by URL and hash like RM0433 and supplied by
+hand, since its URL serves whatever release is current. It says the SVD is
+wrong in one place: IRQs 40 and 41 are PROC0_IRQ_CTI and PROC1_IRQ_CTI, the
+cores' cross trigger interrupts (3.2, Table 95, p. 81), which the SVD omits
+and pico-sdk's `intctrl.h` defines, so the policy adds both, each with that
+source, in D560's form, and the description has 68 slots with all 52
+interrupts named.
+
+**The alternatives:** a copy of the SVD from a third party's collection, as
+D560 declined; leaving 40 and 41 out, which refuses a handler at the slots
+the chip raises; and selecting RP2040's whole surface again, the alarms and
+the second channel among them, which the port does not touch on this chip.
+
+**Pinned by** `devices/policies/rp2350.json`, the `devices` suite's `a
+device becomes modules`, which reads a CM33, and `devices/test.py`'s
+`Rp2350Oracles`, which compares every selected register and field with
+pico-sdk's headers, each base with `addressmap.h`, DMA's requests with the
+datasheet's Table 1254, the access policies and pad resets with literals
+reviewed from the datasheet, and the interrupts with `intctrl.h`, beside
+its regeneration of the files byte for byte and its `D542Form`.
+
+### D636 — RP2350's description is pico-sdk's map for a Pico 2, with no float unit
+
+**The tour said** nothing; D542 leaves the memory half to the developer.
+
+**Chosen:** `devices/descriptions/rp2350/memory.ldn` describes 4 MiB of
+flash from 0x1000_0000, the Pico 2's (pico-sdk's `boards/pico2.h`),
+512 KiB of RAM from 0x2000_0000 and the two 4 KiB scratch banks at
+0x2008_0000 and 0x2008_1000, as pico-sdk 2.2.0's `memmap_default.ld` for
+RP2350 lays them out; the stack takes the whole of SCRATCH_Y, as RP2040's
+does, and the boot kind is `rp2350-image-block` (D637). The vector table,
+68 words, is at the start of flash, where the boot ROM enters it in Secure
+state, as the image type says (D637). No float unit is
+described: the M33's single-precision FPU stays disabled, as reset leaves
+it, the profile is cacheless and its C ABI the base soft-float one. A
+program builds for it at `armv8-m.main`, `armv7-m` or `armv6-m` (D543).
+
+**The alternatives:** describing the FPU, which changes the C ABI and is
+the float unit's own work; placing the stack in RAM, which leaves the
+scratch banks pico-sdk keeps for the cores' stacks unused; and a
+non-secure profile, which needs the SAU programmed before the image runs.
+
+**Pinned by** the `cortex ABI` case `device descriptions select their
+profiles`, which selects RP2350 by its identity, and
+`environments/cortex-m/descriptions.py`, which links it at
+`--level=armv8-m.main` and compares its regions, its 68-word table at
+0x1000_0000, its reserved slots, a handler at PROC0_IRQ_CTI's slot 56 and a
+datum placed in SCRATCH_X with `descriptions.json`, recorded from those
+files.
+
+### D637 — An `rp2350-image-block` image is its vector table, then one IMAGE_DEF block linked to itself
+
+**The tour said** nothing; D545 reserved the boot kind's name.
+
+**Chosen:** the boot kind stops being reserved. Its vector table is at the
+start of the vectors' region, as `vector-table` lays it out, with no
+prefix. Directly after it, in a section of its own, `.embedded_block`, as
+pico-sdk names it, refine emits one IMAGE_DEF block, the five words
+0xffffded3, the start marker; 0x10210142, an IMAGE_TYPE item, type 0x42,
+of one word, whose value 0x1021 is an executable that runs in Secure state,
+for Arm, for RP2350; 0x000001ff, the LAST item, type 0xff, giving the other
+items' one word; 0x00000000, the link to the next block, which is itself;
+and 0xab123579, the end marker. This is the datasheet's minimum Arm
+IMAGE_DEF (release 8, 5.9.5.1, Table 503, pp. 389 and 390) in its block
+format (5.9.1, Table 487, p. 380; 5.9.3.1, Tables 492 and 493, pp. 383 and
+384), and pico-sdk's `embedded_start_block.inc.S` with its end block turned
+off: a block loop of one block. With no ENTRY_POINT or VECTOR_TABLE item
+the boot ROM enters through the table at the start of the image, its
+initial stack pointer and reset. The block has no hash and no signature, so
+it boots only an RP2350 whose secure boot is off. The derived linker script
+places `.embedded_block` after `.isr_vector` and asserts that it is 20
+bytes and ends in the first 4 KiB of the image, where the ROM searches for
+a block loop (5.1.5.2, p. 329; 5.9.5, p. 389), as pico-sdk's script asserts
+of its own.
+
+**The alternatives:** the block as description source, as the second
+stage is (D587), which would let a description write a block the boot ROM
+refuses and is data, not code a reader follows; pico-sdk's two-block loop,
+whose empty block at the end of the image leaves a partly written image's
+loop open (5.10.2, p. 392), which the derived script would have to place
+last of everything in flash and a board run to exercise; a VECTOR_TABLE or ENTRY_POINT
+item, which repeats what the table at the start already says; and a
+HASH_DEF block over the image, which the boot ROM does not require when
+secure boot is off.
+
+**Pinned by** the `cortex ABI` cases `device descriptions select their
+profiles`, which holds the block's emitted text after the table, and `an
+image block is read from its object`; and
+`environments/cortex-m/descriptions.py`, which links RP2350's description
+and requires the linked block's address, bytes and place to be those
+pico-sdk's `embedded_start_block.inc.S` gives when the pinned GCC
+assembles it with its end block off.
+
+### D638 — refine reads the assembled block back before linking, and the report records it
+
+**The tour said** nothing; D637 says what the block is.
+
+**Chosen:** once the firmware assembly succeeds, as D588 does for the
+second stage, the driver reads the object's `.embedded_block` and checks
+the block in it: its 20 bytes, its two markers, its first item's type and
+size, its image type, its LAST item and the size it gives, its link and
+that no relocation is in it. A block that is not the one D637 gives is
+L0555, naming the part that is not, before anything is linked. refine
+writes the words itself, so L0555 is a defect of refine or of the assembler
+it ran, not of the program; the check is what lets a build say the block in
+its object is the one the boot ROM reads. D546's first clause gains the
+block: a developer's script must keep the block refine checked, ending in
+the first 4 KiB of the vectors' region, and a linked image whose block is
+missing, late or changed is L0519 naming it. The firmware build report
+gives `image_block`: its address, its length and its words, as the linked
+image holds them; `--emit=linker-script`'s report gives its address and
+length (D589).
+
+**The alternatives:** trusting the assembler's output unread, which leaves
+a defect in the emitted words for the boot ROM to find on a board; checking
+the assembly text, which the assembler's bytes decide; and checking only
+after the link, which a developer's script or link would skip.
+
+**Pinned by** the `cortex ABI` case `an image block is read from its
+object`, which refuses each part of a synthetic object's block, a
+relocation in it and a missing section, and holds the driver to L0555
+before the link; and `environments/cortex-m/descriptions.py`, which reads
+the build report's block, links with a copy of the derived script and
+refuses scripts that move the block past 4 KiB or replace its words, each
+naming clause 1.
 
 ### D570 — The depth report closes a call through a table or a function value
 

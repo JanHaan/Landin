@@ -91,6 +91,63 @@ package body Landin.Targets.Firmware is
       return Result;
    end Stage_Checksum;
 
+   function Image_Block_Fault (Bytes : String) return String is
+      function Hex (Value : Block_Word; Width : Positive := 8) return String;
+      function Hex (Value : Block_Word; Width : Positive := 8) return String
+      is
+         Digits_Of : constant String := "0123456789abcdef";
+         Result : String (1 .. Width + 2) := [1 => '0', 2 => 'x',
+                                              others => '0'];
+         Rest : Block_Word := Value;
+      begin
+         for Index in reverse 3 .. Width + 2 loop
+            Result (Index) := Digits_Of (Natural (Rest mod 16) + 1);
+            Rest := Rest / 16;
+         end loop;
+         return Result;
+      end Hex;
+      function Byte (Offset : Natural) return Block_Word is
+        (Block_Word (Character'Pos (Bytes (Bytes'First + Offset))));
+      function Word (Index : Positive) return Block_Word is
+        (Byte (4 * (Index - 1)) + Byte (4 * (Index - 1) + 1) * 2 ** 8
+         + Byte (4 * (Index - 1) + 2) * 2 ** 16
+         + Byte (4 * (Index - 1) + 3) * 2 ** 24);
+      function Image (Value : Block_Word) return String is
+        (Ada.Strings.Fixed.Trim (Value'Image, Ada.Strings.Both));
+   begin
+      if Bytes'Length /= Image_Block_Bytes then
+         return "the image block is" & Natural'Image (Bytes'Length)
+           & " bytes, and an IMAGE_DEF block of one item is"
+           & Natural'Image (Image_Block_Bytes);
+      elsif Word (1) /= Image_Block (1) then
+         return "the image block begins with " & Hex (Word (1))
+           & ", not the start marker " & Hex (Image_Block (1));
+      elsif Byte (4) /= 16#42# or else Byte (5) /= 1 then
+         return "the image block's first item is type " & Hex (Byte (4), 2)
+           & " of" & Block_Word'Image (Byte (5)) & " words, not IMAGE_TYPE,"
+           & " 0x42, of one word";
+      elsif Word (2) / 2 ** 16 /= Image_Block (2) / 2 ** 16 then
+         return "the image block's image type is "
+           & Hex (Word (2) / 2 ** 16, 4) & ", not 0x1021: an executable that"
+           & " runs in Secure state, for Arm, for RP2350";
+      elsif Byte (8) /= 16#FF# then
+         return "the image block's last item is type " & Hex (Byte (8), 2)
+           & ", not LAST, 0xff";
+      elsif Word (3) /= Image_Block (3) then
+         return "the image block's LAST item gives its items "
+           & Image (Word (3) / 2 ** 8 mod 2 ** 16) & " words and a pad of "
+           & Hex (Word (3) / 2 ** 24, 2) & ", and its one item is one word,"
+           & " with a zero pad";
+      elsif Word (4) /= Image_Block (4) then
+         return "the image block links to offset " & Hex (Word (4))
+           & ", and a block loop of one block links to itself, at 0";
+      elsif Word (5) /= Image_Block (5) then
+         return "the image block ends with " & Hex (Word (5))
+           & ", not the end marker " & Hex (Image_Block (5));
+      end if;
+      return "";
+   end Image_Block_Fault;
+
    function Is_Section_Name (Word : String) return Boolean is
      (Word in "vectors" | "text" | "rodata" | "data" | "bss" | "stack");
 

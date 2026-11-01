@@ -2246,6 +2246,18 @@ package body Landin.Diagnostics.Citations is
             when 589 =>
                "`--emit=linker-script` writes a profile's derived script"
                & " without a program",
+            when 635 =>
+               "RP2350 is learnt from pico-sdk's SVD for the first board"
+               & "'s port",
+            when 636 =>
+               "RP2350's description is pico-sdk's map for a Pico 2, wit"
+               & "h no float unit",
+            when 637 =>
+               "An `rp2350-image-block` image is its vector table, then "
+               & "one IMAGE_DEF block linked to itself",
+            when 638 =>
+               "refine reads the assembled block back before linking, an"
+               & "d the report records it",
             when 570 =>
                "The depth report closes a call through a table or a func"
                & "tion value",
@@ -3419,6 +3431,14 @@ package body Landin.Diagnostics.Citations is
             when 588 =>
                "Decisions: The toolchain, C and the machine",
             when 589 =>
+               "Decisions: The toolchain, C and the machine",
+            when 635 =>
+               "Decisions: The toolchain, C and the machine",
+            when 636 =>
+               "Decisions: The toolchain, C and the machine",
+            when 637 =>
+               "Decisions: The toolchain, C and the machine",
+            when 638 =>
                "Decisions: The toolchain, C and the machine",
             when 570 =>
                "Decisions: The toolchain, C and the machine",
@@ -4918,6 +4938,20 @@ package body Landin.Diagnostics.Citations is
             when 589 =>
                "https://www.701.dev/spec.html#d589-emit-linker-script-wr"
                & "ites-a-profile-s-derived-script-without-a-program",
+            when 635 =>
+               "https://www.701.dev/spec.html#d635-rp2350-is-learnt-from"
+               & "-pico-sdk-s-svd-for-the-first-board-s-port",
+            when 636 =>
+               "https://www.701.dev/spec.html#d636-rp2350-s-description-"
+               & "is-pico-sdk-s-map-for-a-pico-2-with-no-float-unit",
+            when 637 =>
+               "https://www.701.dev/spec.html#d637-an-rp2350-image-block"
+               & "-image-is-its-vector-table-then-one-image-def-block-link"
+               & "ed-to-itself",
+            when 638 =>
+               "https://www.701.dev/spec.html#d638-refine-reads-the-asse"
+               & "mbled-block-back-before-linking-and-the-report-records-i"
+               & "t",
             when 570 =>
                "https://www.701.dev/spec.html#d570-the-depth-report-clos"
                & "es-a-call-through-a-table-or-a-function-value",

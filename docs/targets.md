@@ -918,7 +918,8 @@ imports none is given the library's `platform/cortex_m/reference`: 32 KiB
 flash and 16 KiB RAM, the top 4 KiB of RAM reserved for stacks, with
 eight-byte-aligned initial MSP `0x20004000`, so static images cannot overlap
 `0x20003000`. RP2040's is `devices/descriptions/rp2040`, imported as
-`descriptions/rp2040` under `--root=devices`.
+`descriptions/rp2040` under `--root=devices`, and RP2350's
+`devices/descriptions/rp2350`.
 The driver refuses a known compiler-framed routine larger than the selected
 stack reservation, counting its saved registers and reserved homes. This
 per-routine check does not bound stack use through calls or interrupt nesting.
@@ -926,7 +927,10 @@ The vector image has the description's word count at its boot address, the
 start of the region it places `vectors` in, after RP2040's 256-byte
 second-stage slot for `rp2040-boot2` (D545), which holds the description's
 `link(boot_stage)` routine and the checksum the driver writes into the
-assembled object (D587, D588). The slots a handler takes are its
+assembled object (D587, D588). An `rp2350-image-block` image's table is
+followed directly by its IMAGE_DEF block in `.embedded_block`, which the
+driver reads back from the assembled object and refuses as L0555 if it is
+not the block D637 gives (D638). The slots a handler takes are its
 core's exceptions and 16 + IRQ for each interrupt the description names, and
 every other slot is zero (D544). There is no VTOR relocation, FPU or
 exclusive-access implementation. D229 owns the typed handlers and
@@ -940,14 +944,15 @@ script is D229's, byte for byte. The driver retains `OUTPUT.s`, `OUTPUT.o`,
 `OUTPUT.ld`, `OUTPUT.map` and the ELF; `--emit=linker-script` writes the
 script alone, with no program to link (D589). `--linker-script=FILE` links with a
 developer's script instead, still writing `OUTPUT.ld`, and then holds the ELF
-to D546's four clauses: the vector table at the boot address, the startup
+to D546's four clauses: the vector table at the boot address, with the
+second stage or the image block its boot kind gives, the startup
 symbols, the stack in a writable region of its size, and each initialized
 image loaded from the text region; a broken one is L0519, naming it.
 With `--build-report=PATH`, a successful firmware executable also reports
 post-link occupied flash and static RAM extents, their limits and remaining
 capacity, the reserved stack size, the selected libgcc archive members, and
 the profile it was built for: device, core, boot kind, vector address and
-length, regions and placements.
+length, regions and placements, and the second stage or the image block.
 The sizes come from ELF load segments; the helper names come from the linker
 map. Assembly-only reports have no linked capacity measurement.
 The assembler uses Cortex-M0/Thumb/soft-float/AAPCS flags and fatal warnings.

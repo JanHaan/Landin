@@ -1051,9 +1051,9 @@ package body Landin.Diagnostics.Explanations is
                & " level.",
             when Catalogue.Boot_Kind_Reserved =>
                "A device description selects a boot image kind refine re"
-               & "serves but does not build yet (D545): `rp2350-image-bloc"
-               & "k` or `esp-app-image`. This compiler builds `vector-tabl"
-               & "e` and `rp2040-boot2` images.",
+               & "serves but does not build yet (D545): `esp-app-image`. T"
+               & "his compiler builds `vector-table`, `rp2040-boot2` and `"
+               & "rp2350-image-block` images.",
             when Catalogue.Region_Placement =>
                "A `link(region: ""NAME"")` placement cannot be met (D547):"
                & " the selected description has no region of that name, th"
@@ -1266,6 +1266,20 @@ package body Landin.Diagnostics.Explanations is
                & "names the relocation and its symbol. Make the stage shor"
                & "ter, or write it with no symbol outside itself and refer"
                & " to it from nowhere.",
+            when Catalogue.Image_Block_Object =>
+               "The assembled image block is not the IMAGE_DEF block an "
+               & "`rp2350-image-block` image carries (D638). refine emits "
+               & "the block directly after the vector table and reads the "
+               & "`.embedded_block` section of the object the assembler wr"
+               & "ote before linking it: the section must be the 20 bytes "
+               & "of one block linked to itself, its start and end markers"
+               & ", one IMAGE_TYPE item of one word saying an Arm executab"
+               & "le for RP2350 that runs in Secure state, and the LAST it"
+               & "em giving that word, with no relocation in it. The messa"
+               & "ge names the part that is not. refine writes these words"
+               & " itself, so this is a defect of refine or of the assembl"
+               & "er it ran rather than of the program; report it with the"
+               & " message.",
             when Catalogue.Svd_Malformed =>
                "`refine svd` read an SVD that is not XML in the subset i"
                & "t reads (D555). The message says what was met and the li"
@@ -1972,7 +1986,7 @@ package body Landin.Diagnostics.Explanations is
                & LF
                & "compiler.vectors(48)"
                & LF
-               & "compiler.boot(""rp2350-image-block"")"
+               & "compiler.boot(""esp-app-image"")"
                & LF
                & "linker.region(""FLASH"", 0x1000_0000, 2 * 1024 * 1024, ""rx"
                & """)"
@@ -2171,6 +2185,8 @@ package body Landin.Diagnostics.Explanations is
             when Catalogue.Linker_Script_Contract =>
                "",
             when Catalogue.Boot_Stage_Object =>
+               "",
+            when Catalogue.Image_Block_Object =>
                "",
             when Catalogue.Svd_Malformed =>
                "",

@@ -113,6 +113,7 @@ L0508  Live     error   no-fix   false empty-ok    0..0 0     driver            
 L0509  Live     error   no-fix   true  nonempty    0..0 1     driver                              test:landin-tests-driver_suite.adb
 L0519  Live     error   no-fix   false empty-ok    0..0 1     driver                              test:landin-tests-cortex_suite.adb
 L0538  Live     error   no-fix   false empty-ok    0..0 0     driver                              test:landin-tests-cortex_suite.adb
+L0555  Live     error   no-fix   false empty-ok    0..0 0     driver                              test:landin-tests-cortex_suite.adb
 L0525  Live     error   no-fix   true  empty-ok    0..0 0     driver                              test:landin-tests-devices_suite.adb
 L0526  Live     error   no-fix   true  empty-ok    0..0 0     driver                              test:landin-tests-devices_suite.adb
 L0527  Live     error   no-fix   true  empty-ok    0..0 0     driver                              test:landin-tests-devices_suite.adb

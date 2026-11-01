@@ -56,7 +56,10 @@ REFERENCE = 'constrained-reference'
 #  What each boot image kind (D545) puts before the vector table in its
 #  region, which the harness start supplies as zero bytes: the closed set
 #  refine builds.
-BOOT_PREFIX = {'vector-table': 0, 'rp2040-boot2': 256}
+BOOT_PREFIX = {'vector-table': 0, 'rp2040-boot2': 256, 'rp2350-image-block': 0}
+#  The bytes each boot image kind places directly after its vector table:
+#  RP2350's IMAGE_DEF block (D637).
+BOOT_SUFFIX = {'vector-table': 0, 'rp2040-boot2': 0, 'rp2350-image-block': 20}
 
 #  A profile's facts, as the firmware build report states them, with the
 #  stack top read from the linked image.
@@ -482,12 +485,13 @@ def describe_sizes(sizes):
 
 def harness_start(run, profile, level='armv6-m', name='input-0.o'):
     """backend-start.S assembled for PROFILE: its table's length and its
-    boot kind's prefix."""
+    boot kind's prefix and suffix."""
     obj = run.out / name
     run.command('assemble-start' if name == 'input-0.o' else 'assemble-' + Path(name).stem,
                 [run.arm / 'arm-eabi-gcc', *level_flags(level),
                  '-DLANDIN_VECTOR_WORDS=%d' % profile['vector_words'],
                  '-DLANDIN_BOOT_PREFIX=%d' % BOOT_PREFIX[profile['boot']],
+                 '-DLANDIN_BOOT_SUFFIX=%d' % BOOT_SUFFIX[profile['boot']],
                  '-c', HERE / 'probes/backend-start.S', '-o', obj])
     return obj
 

@@ -29,6 +29,7 @@ with Landin.Diagnostics.Text;
 with Landin.Driver.Assembler_Sites;
 with Landin.Driver.Boot_Stage;
 with Landin.Driver.Checking;
+with Landin.Driver.Image_Block;
 with Landin.Driver.Library;
 with Landin.Driver.Loading;
 with Landin.Formatting;
@@ -2399,6 +2400,38 @@ package body Landin.Driver is
                                  "cannot write: " & Product_Path & ".o");
                               return;
                            end if;
+                        end;
+                     end if;
+                     --  D638: the image block as the assembler wrote it,
+                     --  before anything links it.
+                     if Landin.Targets.Firmware.Takes_Image_Block
+                       (Landin.IR.Firmware_Profile
+                          (Landin.Stages.Code (Context).all).Boot)
+                     then
+                        declare
+                           Object : Unbounded.Unbounded_String;
+                           Read : Landin.Platform.Read_Status;
+                        begin
+                           Host.Read_File (Product_Path & ".o", Object, Read);
+                           if Read /= Landin.Platform.Read_Ok then
+                              Note_Failure
+                                (Code_Toolchain_Failed,
+                                 "cannot read the assembled object: "
+                                 & Product_Path & ".o");
+                              return;
+                           end if;
+                           declare
+                              Fault : constant String := Unbounded.To_String
+                                (Landin.Driver.Image_Block.Fault
+                                   (Unbounded.To_String (Object)));
+                           begin
+                              if Fault /= "" then
+                                 Note_Failure
+                                   (Rows.Code (Rows.Image_Block_Object),
+                                    Fault & " (D638)");
+                                 return;
+                              end if;
+                           end;
                         end;
                      end if;
                   end if;

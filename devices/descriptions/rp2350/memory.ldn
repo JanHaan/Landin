@@ -1,0 +1,22 @@
+-- The RP2350's memory as pico-sdk 2.2.0 lays it out for a Raspberry Pi
+-- Pico 2: 4 MiB of flash behind XIP from 0x1000_0000, 512 KiB of striped
+-- SRAM and the two 4 KiB scratch banks, the stack at the top of SCRATCH_Y.
+-- Written by hand; see devices/README.md for the sources it was checked
+-- against.  The boot ROM looks in the first 4 KiB of flash for an
+-- IMAGE_DEF block; refine emits one directly after the vector table, at
+-- the start of flash, and the ROM enters the table's reset (D637).
+--
+-- No float unit is described: the M33's single-precision FPU stays
+-- disabled, as reset leaves it, and the C ABI is the base soft-float one.
+
+linker.region("FLASH", 0x1000_0000, 4 * 1024 * 1024, "rx")
+linker.region("RAM", 0x2000_0000, 512 * 1024, "rwx")
+linker.region("SCRATCH_X", 0x2008_0000, 4 * 1024, "rwx")
+linker.region("SCRATCH_Y", 0x2008_1000, 4 * 1024, "rwx")
+compiler.boot("rp2350-image-block")
+linker.place("vectors", "FLASH")
+linker.place("text", "FLASH")
+linker.place("rodata", "FLASH")
+linker.place("data", "RAM")
+linker.place("bss", "RAM")
+linker.place("stack", "SCRATCH_Y", 4 * 1024)

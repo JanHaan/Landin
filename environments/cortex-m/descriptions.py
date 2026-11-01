@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Device descriptions select their profiles: link-only Cortex-M controls.
 
-Each device of descriptions.json is selected by its identity, RP2040 and
-the STM32H753 by importing devices/descriptions/rp2040 and
-devices/descriptions/stm32h753 and the constrained reference by importing
-none (D543), and every fact the linked image and its build report
+Each device of descriptions.json is selected by its identity, RP2040,
+RP2350 and the STM32H753 by importing devices/descriptions/rp2040,
+devices/descriptions/rp2350 and devices/descriptions/stm32h753 and the
+constrained reference by importing none (D543), and every fact the linked
+image and its build report
 carry is compared with the expectation recorded there, apart from the
 compiler and the description, so a wrong or absent fact fails.  The slot-21
 controls (D544), the region placement (D547) and the developer linker
@@ -18,6 +19,13 @@ branch it ends with, which must be what pico-sdk's boot2_generic_03h.S and
 its exit_from_boot2.S do, read from the fetched files and their headers'
 macros rather than from the port.  An oversize stage and one with a
 relocation are each refused naming the problem.
+
+RP2350's image block (D637, D638) is held to pico-sdk's own: the linked
+block's address, directly after the vector table and inside the first
+4 KiB of flash, and its bytes, which must be those the pinned GCC assembles
+from the fetched embedded_start_block.inc.S with its end block off; no
+relocation is in it, the build report gives it, and a developer's script
+that moves it past 4 KiB or changes its words is refused naming clause 1.
 
 Nothing here runs an image on a chip: RP2040 and the STM32H753 are chips,
 and emulators cover cores only, so their evidence is compile-and-link and a
@@ -48,6 +56,11 @@ EXPECTED = json.loads((HERE / 'descriptions.json').read_text())['devices']
 PROGRAMS = {
     'rp2040': ('import descriptions/rp2040\n'
                'link(vector: 21) extern(interrupt) usb: () -> none = end usb\n'
+               'link(region: "SCRATCH_X") mut scratch: u32 = 7\n'
+               'mut counted: u32 = 1\n'
+               'start: () -> none = counted += scratch end start\n'),
+    'rp2350': ('import descriptions/rp2350\n'
+               'link(vector: 56) extern(interrupt) cti: () -> none = end cti\n'
                'link(region: "SCRATCH_X") mut scratch: u32 = 7\n'
                'mut counted: u32 = 1\n'
                'start: () -> none = counted += scratch end start\n'),
@@ -146,6 +159,11 @@ def select(run, refine, device):
         boot_stage(run, image, report, want)
     else:
         require('_landin_firmware_boot2' not in image.symbols, device + ' has a second stage')
+    if 'image_block' in want:
+        image_block(run, image, report, want)
+    else:
+        require('_landin_firmware_image_block' not in image.symbols,
+                device + ' has an image block')
     if device == 'rp2040':
         scratch = next(r for r in want['regions'] if r['name'] == 'SCRATCH_X')
         require(scratch['origin'] <= image.symbols.get('scratch', -1)
@@ -370,6 +388,95 @@ def boot_stage(run, image, report, want):
             ' enter reset: %r' % entered)
 
 
+def pico_sdk_block(run):
+    """The bytes of pico-sdk 2.2.0's embedded_start_block.inc.S for an
+    RP2350 Arm image with its end block off, a block loop of one block,
+    as the pinned GCC assembles it with the fetched picobin.h: the oracle
+    the linked block is compared with, read from the files rather than
+    from refine or the datasheet."""
+    inputs = fetch_inputs.read_lock()
+    where = run.out / 'pico-sdk-block'
+    (where / 'boot').mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(fetch_inputs.fetch('rp2350/picobin.h', inputs), where / 'boot/picobin.h')
+    shutil.copyfile(fetch_inputs.fetch('rp2350/embedded_start_block.inc.S', inputs),
+                    where / 'embedded_start_block.inc.S')
+    (where / 'block.S').write_text('#include "boot/picobin.h"\n'
+                                   '#include "embedded_start_block.inc.S"\n')
+    run.command('assemble-pico-sdk-block', [
+        run.arm / 'arm-eabi-gcc', '-mcpu=cortex-m33', '-mthumb', '-DNO_PICO_PLATFORM=1',
+        '-DPICO_CRT0_INCLUDE_PICOBIN_END_BLOCK=0', '-I', where, '-c', where / 'block.S',
+        '-o', where / 'block.o'])
+    elf = Elf((where / 'block.o').read_bytes())
+    at = elf.index('.embedded_block')
+    require(not elf.reaching(at, into_only=True), 'pico-sdk\'s block is relocated')
+    header = elf.sections[at]
+    return elf.data[header[4]:header[4] + header[5]]
+
+
+def image_block(run, image, report, want):
+    """D637/D638: RP2350's image block in the linked image and its object."""
+    block = want['image_block']
+    at, size = block['address'], block['bytes']
+    flash = next(r for r in want['regions'] if r['name'] == want['placed']['vectors'])
+    require(image.symbols.get('_landin_firmware_image_block') == at,
+            'the image block is not at %#x' % at)
+    require(at == want['vector_address'] + 4 * want['vector_words'],
+            'the image block does not follow the vector table directly')
+    require(at + size <= flash['origin'] + block['window'],
+            'the image block does not end in the first %d bytes of %s'
+            % (block['window'], flash['name']))
+    expected = pico_sdk_block(run)
+    linked = image.read(at, size)
+    require(linked == expected, 'the linked image block is %s, and pico-sdk\'s is %s'
+            % (linked.hex(), expected.hex()))
+    elf, assembled = Elf(image.data), Elf((run.out / 'core.elf.o').read_bytes())
+    require('.embedded_block' in elf.names, 'the image block has no section of its own')
+    reached = assembled.reaching(assembled.index('.embedded_block'), into_only=True)
+    require(not reached, 'a relocation is in the object\'s image block: %r' % reached)
+    wanted = {'address': at, 'bytes': size,
+              'words': list(struct.unpack('<%dI' % (size // 4), expected))}
+    require(report['image_block'] == wanted, 'the build report says the image block is %r,'
+            ' not %r' % (report['image_block'], wanted))
+
+
+def block_contract(run, refine):
+    """D546/D638: a developer's script must keep the block refine checked
+    in the first 4 KiB; one that moves it or changes its words is refused
+    naming clause 1."""
+    level = ['--level=' + EXPECTED['rp2350']['level']]
+    compile_firmware(run, refine, PROGRAMS['rp2350'], level, name='derived.elf')
+    derived = (run.out / 'derived.elf.ld').read_text()
+    (run.out / 'copy.ld').write_text(derived)
+    compile_firmware(run, refine, PROGRAMS['rp2350'], level + ['--linker-script=copy.ld'],
+                     name='copy.elf')
+    placed = '  .embedded_block : { KEEP(*(.embedded_block)) } > FLASH\n'
+    window = ('ASSERT(ADDR(.embedded_block) + SIZEOF(.embedded_block) <= ORIGIN(FLASH) + 4096,\n'
+              '       "the image block must end in the first 4 KiB of the image")\n')
+    broken = {
+        'late': ([(placed, placed.replace(' : {', ' ORIGIN(FLASH) + 4096 : {')),
+                  (window, '')], 'ends past the first 4 KiB of FLASH'),
+        'words': ([(placed, '  .embedded_block : { _landin_firmware_image_block = .;'
+                    ' LONG(0xffffded3) LONG(0x10210142) LONG(0x1ff) LONG(4)'
+                    ' LONG(0xab123579) } > FLASH\n  /DISCARD/ : { *(.embedded_block) }\n')],
+                  'is not the one refine assembled: the image block links to offset'
+                  ' 0x00000004'),
+    }
+    for name, (edits, said) in broken.items():
+        text = derived
+        for old, new in edits:
+            require(old in text, 'the derived script lacks %r' % old)
+            text = text.replace(old, new)
+        (run.out / ('block-%s.ld' % name)).write_text(text)
+        refused = compile_firmware(run, refine, PROGRAMS['rp2350'],
+                                   level + ['--linker-script=block-%s.ld' % name],
+                                   name='block-%s.elf' % name, check=False)
+        require('error[L0519]' in refused and 'clause 1,' in refused and said in refused,
+                'a script whose image block is %s is not refused naming it: %s'
+                % (name, refused))
+        require(not (run.out / ('block-%s.elf' % name)).exists(),
+                'a refused image is left behind for the %s block' % name)
+
+
 def stage_refusals(run, refine):
     """D588: an oversize stage and a stage with a relocation are refused
     before the link, each naming its problem, and leave no image."""
@@ -470,6 +577,11 @@ def execute_suite(parent, refine):
     out.mkdir()
     contract(Run(out, parent.tools), refine)
     controls.append({'contract': 'four clauses, the stage\'s checksum and an unknown region',
+                     'status': 'passed'})
+    out = root / 'block-contract'
+    out.mkdir()
+    block_contract(Run(out, parent.tools), refine)
+    controls.append({'contract': 'the image block moved past 4 KiB and its words changed',
                      'status': 'passed'})
     out = root / 'stage-refusals'
     out.mkdir()
