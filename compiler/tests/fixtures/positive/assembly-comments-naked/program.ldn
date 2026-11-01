@@ -1,0 +1,17 @@
+--  D597: a naked body's text takes Cortex-M's `@` comment beside its
+--  labels and branches, as pico-sdk's second stage names each constant's
+--  macro beside the instruction that uses it.
+fixed if compiler.arch == cortex_m0 then
+    link(keep) extern(naked) count_to_eight: () -> none =
+        assembler.block("""
+            @ r0 counts; {count} in a comment is no slot
+            movs r0, #0
+            again:              @ a label keeps its comment
+            adds r0, #1
+            cmp r0, #8          @ EIGHT, the bound
+            bne again           @ r9 here is not named
+            bx lr
+            """)
+    end count_to_eight
+end if
+start: () -> none = end start

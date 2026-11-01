@@ -4592,11 +4592,19 @@ data and stacks:
 extern(naked) start: () -> none =
     assembler.block("""
         1:
-        wfi
-        b 1b
+        wfi             @ sleep until an interrupt
+        b 1b            @ then sleep again
         """)
 end start
 ```
+
+A line of the text may end in a comment, written as the target's own
+assembler writes one: `@` on Cortex-M, `//` on arm64, `#` on x86-64 and
+RV64. The compiler removes it before it reads the text, so a register or a
+`{name}` in a comment means nothing, and it never reaches the assembly the
+compiler writes. Any other form, `/* */` or another target's, is refused,
+and so is a number with a `_` in it: the text is the assembler's, and its
+numbers take no separator.
 
 ```sh
 refine compile main.ldn --target=cortex-m0 --firmware-entry=start --emit=exe

@@ -1,5 +1,5 @@
 class: negative
-summary: D248's uniform text rules on a hosted target refuse control transfer, labels and comments in an ordinary block
+summary: D248's uniform text rules on a hosted target refuse control transfer and labels in an ordinary block, and D597 a comment form that is not x86-64's own `#`
 program: program.ldn
 expect: expected.txt
 args: --target=linux-x86-64 ../tests/fixtures/negative/assembly-hosted-straight-line/program.ldn

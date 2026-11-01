@@ -463,6 +463,9 @@
     "runtime/assembly-block-at-its-level": {
       "mode": "execute"
     },
+    "runtime/assembly-comments": {
+      "mode": "execute"
+    },
     "runtime/assembly-every-general-register": {
       "mode": "execute"
     },

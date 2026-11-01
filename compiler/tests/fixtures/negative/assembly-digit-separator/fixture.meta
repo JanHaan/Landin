@@ -1,0 +1,9 @@
+class: negative
+summary: D597 keeps block text the assembler's syntax, so a number with a digit separator is refused naming the number to write, and one in a comment is not read
+program: program.ldn
+expect: expected.txt
+args: --target=cortex-m0 ../tests/fixtures/negative/assembly-digit-separator/program.ldn
+codes: L0330
+status: 1
+constructs: 1630, 1990
+targets: cortex-m0

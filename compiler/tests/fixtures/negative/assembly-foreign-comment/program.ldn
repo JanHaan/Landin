@@ -1,0 +1,5 @@
+f: () -> none =
+    assembler.block("nop // arm64's comment")
+    assembler.block("nop /* C's comment */")
+    assembler.block("# x86-64's comment\nnop")
+end f

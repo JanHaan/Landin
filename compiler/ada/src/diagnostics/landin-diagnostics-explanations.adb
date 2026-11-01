@@ -696,12 +696,17 @@ package body Landin.Diagnostics.Explanations is
                & "egister, named by its target-wide name or chosen with `g"
                & "eneral`, and never a stack, frame, link or reserved regi"
                & "ster. Every `{name}` in the template names one operand. "
-               & "A naked body is exactly one block. Change the operand, r"
-               & "egister or template as the note says, or move the operan"
-               & "ds into an assembly block. A pointer crosses as `usize(p"
-               & ")`, and the routine around the block takes the storage a"
-               & "s `ptr mut u8` or `[]mut u8`, the permission its callers"
-               & " are checked against (D440).",
+               & "A naked body is exactly one block. The text holds instru"
+               & "ctions, one a line, with no directive or statement separ"
+               & "ator, and a comment only in the target's own form: `@` o"
+               & "n Cortex-M, `//` on arm64, `#` on x86-64 and RV64 (D597)"
+               & ". Its numbers are the assembler's and take no digit sepa"
+               & "rator, so `0x1800_0000` is written `0x18000000`. Change "
+               & "the operand, register, template or text as the message s"
+               & "ays, or move the operands into an assembly block. A poin"
+               & "ter crosses as `usize(p)`, and the routine around the bl"
+               & "ock takes the storage as `ptr mut u8` or `[]mut u8`, the"
+               & " permission its callers are checked against (D440).",
             when Catalogue.Result_Use =>
                "A call's result is used in a way its signature does not "
                & "allow. A result that is handed back must be used or disc"

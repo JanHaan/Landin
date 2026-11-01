@@ -1,5 +1,6 @@
 with Ada.Characters.Handling;
 with Ada.Strings.Fixed;
+with Landin.Targets.Assembly;
 
 package body Landin.Targets.Firmware is
 
@@ -165,6 +166,7 @@ package body Landin.Targets.Firmware is
      (Text : String; Naked : Boolean;
       Level : Landin.Targets.Levels.Feature_Level) return String
    is
+      package Asm renames Landin.Targets.Assembly;
       Start : Integer := Text'First;
       Seen : Boolean := False;
       Thumb2 : constant Boolean := Landin.Targets.Levels.Has
@@ -202,13 +204,12 @@ package body Landin.Targets.Firmware is
             return "";
          end if;
          Seen := True;
-         if Clean (Clean'First) = '.'
-           or else Ada.Strings.Fixed.Index (Clean, ";") /= 0
-           or else Ada.Strings.Fixed.Index (Clean, "@") /= 0
-           or else Ada.Strings.Fixed.Index (Clean, "/*") /= 0
-           or else Ada.Strings.Fixed.Index (Clean, "//") /= 0
-         then
-            return "assembly directives and statement separators refuse";
+         if Clean (Clean'First) = '.' then
+            return "assembly text holds no directive";
+         elsif Asm.Foreign_Comment (Cortex_M0, Clean) /= "" then
+            return Asm.Foreign_Comment (Cortex_M0, Clean);
+         elsif Asm.Separated_Number (Clean) /= "" then
+            return Asm.Separator_Refusal (Asm.Separated_Number (Clean));
          end if;
          if Naked then
             declare
@@ -349,24 +350,35 @@ package body Landin.Targets.Firmware is
          if Text (Index) not in ASCII.HT | ASCII.LF | ' ' .. '~' then
             return "assembly text requires ASCII instructions and LF lines";
          end if;
-         if Text (Index) = ASCII.LF then
-            declare
-               Fault : constant String :=
-                 Check_Line (Text (Start .. Index - 1));
-            begin
-               if Fault /= "" then
-                  return Fault;
-               end if;
-            end;
-            Start := Index + 1;
-         end if;
       end loop;
       declare
-         Fault : constant String := Check_Line (Text (Start .. Text'Last));
+         --  D597: the comment goes first, so a `{name}` in one is no slot;
+         --  then each slot, always one of r0-r7, reads as r0.
+         Lines : constant String :=
+           Asm.Filled (Asm.Uncommented (Cortex_M0, Text), "r0");
       begin
-         if Fault /= "" then
-            return Fault;
-         end if;
+         Start := Lines'First;
+         for Index in Lines'Range loop
+            if Lines (Index) = ASCII.LF then
+               declare
+                  Fault : constant String :=
+                    Check_Line (Lines (Start .. Index - 1));
+               begin
+                  if Fault /= "" then
+                     return Fault;
+                  end if;
+               end;
+               Start := Index + 1;
+            end if;
+         end loop;
+         declare
+            Fault : constant String :=
+              Check_Line (Lines (Start .. Lines'Last));
+         begin
+            if Fault /= "" then
+               return Fault;
+            end if;
+         end;
       end;
       return (if Seen then "" else "assembly block must contain instructions");
    end Assembly_Error;

@@ -1,0 +1,38 @@
+--  D597: a block's text takes its target's own line comment, from the
+--  marker to the end of the line, as the platform's assembler reads it.
+--  The comment is gone before the admission reads the text, so the
+--  `{missing}` in one names no operand, the register it names is not the
+--  block's, and the branch it writes transfers nothing.
+fixed if compiler.arch == x86_64 then
+    add_seven: (value: u32) -> (r: u32) =
+        r = assembler.block("""
+            # jmp elsewhere: a line that is only a comment
+            addl $7, {r}    # {missing} is no slot, and %rbx is not written
+            """, inout r: u32 at general = value)
+    end add_seven
+elsif compiler.arch == arm64 then
+    add_seven: (value: u32) -> (r: u32) =
+        r = assembler.block("""
+            // b elsewhere: a line that is only a comment
+            add {r}, {r}, #7    // {missing} is no slot, and x19 is not written
+            """, inout r: u32 at general = value)
+    end add_seven
+elsif compiler.arch == rv64 then
+    add_seven: (value: u32) -> (r: u32) =
+        r = assembler.block("""
+            # j elsewhere: a line that is only a comment
+            addi {r}, {r}, 7    # {missing} is no slot, and s1 is not written
+            """, inout r: u32 at general = value)
+    end add_seven
+else
+    add_seven: (value: u32) -> (r: u32) =
+        r = assembler.block("""
+            @ b elsewhere: a line that is only a comment
+            adds {r}, #7    @ {missing} is no slot, and r9 is not written
+            """, inout r: u32 at general = value)
+    end add_seven
+end if
+
+public main: () -> (code: i32) =
+    code = i32(add_seven(35))
+end main

@@ -18,13 +18,13 @@ error[L0330]: ordinary assembly is straight-line and defines no label
 3 |     assembler.block("again: nop", in v: u64 at rax = value)
   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
   = note: [1630]: opaque assembly is a compiler memory boundary, not a hardware barrier
-error[L0330]: assembly directives, comments and statement separators refuse
+error[L0330]: `/*` begins no comment in x86-64 assembly text: a comment is `#` to the end of the line
   --> ../tests/fixtures/negative/assembly-hosted-straight-line/program.ldn:4:5
   |
-4 |     assembler.block("nop # quiet", in v: u64 at rax = value)
+4 |     assembler.block("nop /* quiet */", in v: u64 at rax = value)
   |     ^^^^^^^^^^^^^^^
   --> ../tests/fixtures/negative/assembly-hosted-straight-line/program.ldn:4:5
   |
-4 |     assembler.block("nop # quiet", in v: u64 at rax = value)
-  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
+4 |     assembler.block("nop /* quiet */", in v: u64 at rax = value)
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
   = note: [1630]: opaque assembly is a compiler memory boundary, not a hardware barrier

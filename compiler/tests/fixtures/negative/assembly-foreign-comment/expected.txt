@@ -1,0 +1,30 @@
+error[L0330]: `//` begins no comment in Cortex-M assembly text: a comment is `@` to the end of the line
+  --> ../tests/fixtures/negative/assembly-foreign-comment/program.ldn:2:5
+  |
+2 |     assembler.block("nop // arm64's comment")
+  |     ^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/assembly-foreign-comment/program.ldn:2:5
+  |
+2 |     assembler.block("nop // arm64's comment")
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
+  = note: [1630]: opaque assembly is a compiler memory boundary, not a hardware barrier
+error[L0330]: `/*` begins no comment in Cortex-M assembly text: a comment is `@` to the end of the line
+  --> ../tests/fixtures/negative/assembly-foreign-comment/program.ldn:3:5
+  |
+3 |     assembler.block("nop /* C's comment */")
+  |     ^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/assembly-foreign-comment/program.ldn:3:5
+  |
+3 |     assembler.block("nop /* C's comment */")
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
+  = note: [1630]: opaque assembly is a compiler memory boundary, not a hardware barrier
+error[L0330]: `#` begins no comment in Cortex-M assembly text: a comment is `@` to the end of the line
+  --> ../tests/fixtures/negative/assembly-foreign-comment/program.ldn:4:5
+  |
+4 |     assembler.block("# x86-64's comment\nnop")
+  |     ^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/assembly-foreign-comment/program.ldn:4:5
+  |
+4 |     assembler.block("# x86-64's comment\nnop")
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
+  = note: [1630]: opaque assembly is a compiler memory boundary, not a hardware barrier

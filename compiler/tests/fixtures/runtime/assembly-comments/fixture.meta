@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: D597's line comment, each target's own, is removed before the admission reads a block and from what it emits, so a `{name}`, a register and a branch in one are neither slot, use nor transfer
+constructs: 1630, 1990
+program: main.ldn
+status: 42
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0

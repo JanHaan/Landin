@@ -2309,7 +2309,17 @@ and establishes neither device completion nor cache coherence. D227's
 external-writer obligations remain.
 
 The text is at most 4096 decoded ASCII bytes, using LF, horizontal tabs and
-printable characters. Directives, comments, statement separators and labels
+printable characters. A line may end in the selected target's own line
+comment, from its marker to the end of the line: `@` on Cortex-M0, `//` on
+arm64 and `#` on x86-64 and RV64, the spelling that target's GNU or Apple
+assembler reads (D597). In an ordinary and a naked block alike the comment
+is removed before any other rule reads the text, so nothing in it is an
+instruction, a register, a label or a `{name}` slot, and the emitted assembly
+does not hold it. Every other comment form is refused, naming the target's
+own: `/*`, another target's marker, and on Cortex-M0 and arm64 a line that
+begins with `#`. A number is the assembler's syntax and takes no digit
+separator; the refusal names the number to write. Directives, statement
+separators and labels
 are refused in an ordinary block, which is straight-line: it cannot branch,
 call, return or change control mode, except that Cortex-M0 `svc` enters the
 SVC exception handler at vector 11. That handler decides whether execution
@@ -17759,7 +17769,8 @@ effects. D230's form is kept as the shorthand for `inout` at r0.
 | The operand form was specified and checked on every target before any lowered it, refused by one stated lowering limit until each did | Parsing alone would collapse every rule into one refusal; accepting before lowering exists would emit a program with a silent hole | the runtime `assembly-*` fixtures, `negative/assembly-synthetic-target` |
 
 The text rules that were Cortex-M0's are uniform where they can be: size,
-ASCII, lines, no directive, comment, separator or label, and straight-line
+ASCII, lines, no directive, separator or label, no comment but the target's
+own line comment (D597), and straight-line
 control in an ordinary block except for Cortex-M0's `svc` exception entry. The instruction allowlist is an `armv6-m`
 implementation limit; at higher M-profile levels and on hosted targets the
 checker refuses control transfer by mnemonic and leaves which instructions
@@ -17777,6 +17788,50 @@ above, `negative/assembly-operands-on-another-call`,
 fixtures, `backend/assembly blocks keep their registers`,
 `negative/assembly-operand-without-register` and
 `negative/assembly-output-with-value`.
+
+### D597 — Assembly text takes its target's own line comment
+
+**From** [1630], [1990], D248 and D587.
+
+**The tour said** that a block's text is the platform assembler's [1630],
+and [1990] refused every comment in it. A port of an assembly source could
+not keep the comment that names a constant's macro beside the instruction
+that uses it: RP2040's second stage, ported from pico-sdk's
+`boot2_generic_03h.S`, listed every macro in Landin comments above its
+block, away from the number each one is.
+
+**Chosen:** a line of block text may end in the target's own line comment,
+from its marker to the end of the line, in an ordinary and a naked block
+alike: `@` on Cortex-M0, which is Thumb's, `//` on arm64, which GNU and
+Apple's assemblers both read, and `#` on x86-64 and RV64. Each was checked
+against the assembler its target links with: GNU as 2.46 for Thumb and the
+cross binutils for arm64 and RV64, the pinned GCC's for x86-64, and LLVM's
+integrated assembler for Darwin and FreeBSD. The admission removes the
+comment, with the blanks before it, before it reads the line, so an
+instruction, register, label or `{name}` in a comment meets no check, and
+the IR holds the text without it, so emission writes none and does not
+depend on what a comment says. Every other form is refused at the block,
+naming the target's own: `/*`, another target's marker, `;` and arm64's
+`%%`, which separate statements, and on Cortex-M0 and arm64 a line that
+begins with `#`, which GNU as reads as a comment there but [1990] does not
+give the text. A digit separator stays refused, now by the admission rather
+than the assembler: block text is the assembler's syntax, so the refusal
+names the number without its separators. L0330 carries each refusal.
+
+| Choice | Alternative and reason for declining it | Executable pin |
+| --- | --- | --- |
+| Each target's own marker, the one its assembler reads | One marker on every target: `#` is an immediate on Arm, `//` is no comment in GNU as for x86-64, and `@` is a symbol modifier in x86-64's `foo@PLT` and Apple's `@PAGE`, so no character is a comment everywhere and nothing else at once | `runtime/assembly-comments` |
+| The comment is removed before the admission reads the line | Leaving it to the assembler would have the register, label and slot checks read the comment as instructions, so a register named in one would have to be declared and a `{name}` in one would be a slot | `targets/assembly comments are each target's own` |
+| The emitted assembly holds no comment | Keeping it makes emission and every hash of it depend on what a comment says, and the assembler-site placement match a line by its comment | `cortex ABI/assembly comments are not emitted` |
+| Other comment forms are refused, naming the target's own | Admitting `//` on Thumb, which GNU as 2.46 also reads, or `/* */` everywhere gives one target two spellings and a port a form some assembler a target links with may not read | `negative/assembly-foreign-comment`, `negative/assembly-hosted-straight-line` |
+| A digit separator stays refused, by the admission, naming the number to write | Admitting `_` and removing it would make block text a second syntax beside the assembler's, which a reader could no longer take to the assembler's manual | `negative/assembly-digit-separator` |
+
+**Pinned by** `runtime/assembly-comments`, `positive/assembly-comments-naked`,
+`negative/assembly-foreign-comment`, `negative/assembly-digit-separator`,
+`negative/assembly-hosted-straight-line`,
+`negative/assembly-arm64-statement-separator`, `targets/assembly comments
+are each target's own`, `cortex ABI/assembly comments are not emitted`, and
+RP2040's `boot2.ldn`, whose assembled stage keeps its bytes and checksum.
 
 ### D252 — A source has one layout, and the compiler lays it out
 

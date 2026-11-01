@@ -1,0 +1,7 @@
+link(keep) extern(naked) f: () -> none =
+    assembler.block("""
+        ldr r3, =0x18000000     @ 0x1800_0000, XIP_SSI_BASE
+        ldr r1, =0xe000_ed08
+        str r3, [r1]
+        """)
+end f

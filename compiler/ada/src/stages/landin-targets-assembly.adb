@@ -464,6 +464,136 @@ package body Landin.Targets.Assembly is
       return Ada.Strings.Unbounded.To_String (Result);
    end Substituted;
 
+   function Comment_Marker (On : Architecture) return String
+     is (case On is
+            when Cortex_M0 => "@",
+            when Arm64 => "//",
+            when X86_64 | RV64 => "#",
+            when Synthetic_32_Architecture => "");
+
+   function Uncommented (On : Architecture; Text : String) return String is
+      Marker : constant String := Comment_Marker (On);
+      Result : Ada.Strings.Unbounded.Unbounded_String;
+      Start : Integer := Text'First;
+
+      procedure Add (Line : String);
+
+      procedure Add (Line : String) is
+         Cut : constant Natural :=
+           (if Marker = "" then 0
+            else Ada.Strings.Fixed.Index (Line, Marker));
+      begin
+         if Cut = 0 then
+            Ada.Strings.Unbounded.Append (Result, Line);
+         else
+            Ada.Strings.Unbounded.Append
+              (Result, Ada.Strings.Fixed.Trim
+                 (Line (Line'First .. Cut - 1), Ada.Strings.Right));
+         end if;
+      end Add;
+   begin
+      for Index in Text'Range loop
+         if Text (Index) = ASCII.LF then
+            Add (Text (Start .. Index - 1));
+            Ada.Strings.Unbounded.Append (Result, ASCII.LF);
+            Start := Index + 1;
+         end if;
+      end loop;
+      Add (Text (Start .. Text'Last));
+      return Ada.Strings.Unbounded.To_String (Result);
+   end Uncommented;
+
+   function Separated_Number (Line : String) return String is
+      Position : Natural := Line'First;
+   begin
+      while Position <= Line'Last loop
+         if Line (Position) in 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '_'
+         then
+            declare
+               First : constant Natural := Position;
+            begin
+               while Position <= Line'Last
+                 and then Line (Position) in 'a' .. 'z' | 'A' .. 'Z'
+                   | '0' .. '9' | '_'
+               loop
+                  Position := Position + 1;
+               end loop;
+               if Line (First) in '0' .. '9'
+                 and then Ada.Strings.Fixed.Index
+                   (Line (First .. Position - 1), "_") /= 0
+               then
+                  return Line (First .. Position - 1);
+               end if;
+            end;
+         else
+            Position := Position + 1;
+         end if;
+      end loop;
+      return "";
+   end Separated_Number;
+
+   function Foreign_Comment (On : Architecture; Line : String)
+     return String
+   is
+      Marker : constant String := Comment_Marker (On);
+      Assembly : constant String :=
+        (case On is
+            when Cortex_M0 => "Cortex-M",
+            when Arm64 => "arm64",
+            when X86_64 => "x86-64",
+            when RV64 => "RV64",
+            when Synthetic_32_Architecture => "synthetic");
+      Clean : constant String := Ada.Strings.Fixed.Trim
+        (Line, Ada.Strings.Both);
+
+      function Not_A_Comment (Form : String) return String
+        is ("`" & Form & "` begins no comment in " & Assembly
+            & " assembly text: a comment is `" & Marker
+            & "` to the end of the line");
+
+      function Separator (Form : String) return String
+        is ("`" & Form & "` separates statements, and assembly text holds"
+            & " one instruction a line: a comment is `" & Marker
+            & "` to the end of the line");
+   begin
+      if Ada.Strings.Fixed.Index (Clean, "/*") /= 0 then
+         return Not_A_Comment ("/*");
+      elsif On /= Arm64 and then Ada.Strings.Fixed.Index (Clean, "//") /= 0
+      then
+         return Not_A_Comment ("//");
+      elsif On in Cortex_M0 | Arm64
+        and then Clean'Length > 0
+        and then Clean (Clean'First) = '#'
+      then
+         --  GNU as reads `#` that begins a line as a comment on both, a
+         --  form [1990] does not give the text: elsewhere `#` is an
+         --  immediate.
+         return Not_A_Comment ("#");
+      elsif Ada.Strings.Fixed.Index (Clean, ";") /= 0 then
+         return Separator (";");
+      --  Apple's arm64 assembler separates statements with `%%`.
+      elsif On = Arm64 and then Ada.Strings.Fixed.Index (Clean, "%%") /= 0
+      then
+         return Separator ("%%");
+      end if;
+      return "";
+   end Foreign_Comment;
+
+   function Separator_Refusal (Number : String) return String is
+      Written : String (1 .. Number'Length);
+      Last : Natural := 0;
+   begin
+      for C of Number loop
+         if C /= '_' then
+            Last := Last + 1;
+            Written (Last) := C;
+         end if;
+      end loop;
+      return "a number in assembly text is the assembler's and takes no"
+        & " digit separator: write `" & Written (1 .. Last) & "` for `"
+        & Number & "`";
+   end Separator_Refusal;
+
    function Text_Error
      (Facts : Target_Facts; Text : String; Naked : Boolean := False)
       return String
@@ -482,18 +612,12 @@ package body Landin.Targets.Assembly is
             return "";
          end if;
          Seen := True;
-         if Clean (Clean'First) = '.'
-           or else Ada.Strings.Fixed.Index (Clean, ";") /= 0
-           or else Ada.Strings.Fixed.Index (Clean, "/*") /= 0
-           or else Ada.Strings.Fixed.Index (Clean, "//") /= 0
-           or else (Architecture_Of (Facts) in X86_64 | RV64
-                    and then Ada.Strings.Fixed.Index (Clean, "#") /= 0)
-           --  Apple's arm64 assembler separates statements with `%%`.
-           or else (Architecture_Of (Facts) = Arm64
-                    and then Ada.Strings.Fixed.Index (Clean, "%%") /= 0)
-         then
-            return "assembly directives, comments and statement separators"
-              & " refuse";
+         if Clean (Clean'First) = '.' then
+            return "assembly text holds no directive";
+         elsif Foreign_Comment (Architecture_Of (Facts), Clean) /= "" then
+            return Foreign_Comment (Architecture_Of (Facts), Clean);
+         elsif Separated_Number (Clean) /= "" then
+            return Separator_Refusal (Separated_Number (Clean));
          end if;
          while Stop <= Clean'Last
            and then Clean (Stop) not in ' ' | ASCII.HT | ':'
@@ -551,24 +675,33 @@ package body Landin.Targets.Assembly is
          if Text (Index) not in ASCII.HT | ASCII.LF | ' ' .. '~' then
             return "assembly text requires ASCII instructions and LF lines";
          end if;
-         if Text (Index) = ASCII.LF then
-            declare
-               Fault : constant String :=
-                 Check_Line (Text (Start .. Index - 1));
-            begin
-               if Fault /= "" then
-                  return Fault;
-               end if;
-            end;
-            Start := Index + 1;
-         end if;
       end loop;
       declare
-         Fault : constant String := Check_Line (Text (Start .. Text'Last));
+         Lines : constant String :=
+           Uncommented (Architecture_Of (Facts), Text);
       begin
-         if Fault /= "" then
-            return Fault;
-         end if;
+         Start := Lines'First;
+         for Index in Lines'Range loop
+            if Lines (Index) = ASCII.LF then
+               declare
+                  Fault : constant String :=
+                    Check_Line (Lines (Start .. Index - 1));
+               begin
+                  if Fault /= "" then
+                     return Fault;
+                  end if;
+               end;
+               Start := Index + 1;
+            end if;
+         end loop;
+         declare
+            Fault : constant String :=
+              Check_Line (Lines (Start .. Lines'Last));
+         begin
+            if Fault /= "" then
+               return Fault;
+            end if;
+         end;
       end;
       return (if Seen then "" else "assembly block must contain instructions");
    end Text_Error;

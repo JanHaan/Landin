@@ -1,0 +1,10 @@
+error[L0330]: a number in assembly text is the assembler's and takes no digit separator: write `0xe000ed08` for `0xe000_ed08`
+  --> ../tests/fixtures/negative/assembly-digit-separator/program.ldn:2:5
+  |
+2 |     assembler.block("""
+  |     ^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/assembly-digit-separator/program.ldn:2:5
+  |
+2 |     assembler.block("""
+  |     ^^^^^^^^^^^^^^^^^^^ this assembly block
+  = note: [1630]: opaque assembly is a compiler memory boundary, not a hardware barrier

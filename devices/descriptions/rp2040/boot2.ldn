@@ -18,57 +18,64 @@
 -- stack pointer from the table and jumps to reset.  Called with lr
 -- nonzero, as pico-sdk's flash code calls a copy of it, it returns.
 --
--- Each constant is a number, here with the pico-sdk macro it is:
---
---   0x1800_0000  XIP_SSI_BASE (addressmap.h), the SSI's registers
---   #8           SSI_SSIENR_OFFSET (ssi.h)
---   #4           PICO_FLASH_SPI_CLKDIV, the divisor of clk_sys
---   #20          SSI_BAUDR_OFFSET, 0x14
---   0x001f_0300  CTRLR0_XIP: SSI_CTRLR0_SPI_FRF_VALUE_STD << 21, standard
---                serial frames; 31 << SSI_CTRLR0_DFS_32_LSB (16), 32 clocks
---                a data frame; SSI_CTRLR0_TMOD_VALUE_EEPROM_READ (3) <<
---                SSI_CTRLR0_TMOD_LSB (8), send instruction and address,
---                then receive
---   #0           SSI_CTRLR0_OFFSET
---   0x0300_0218  SPI_CTRLR0_XIP: CMD_READ (0x03) <<
---                SSI_SPI_CTRLR0_XIP_CMD_LSB (24); ADDR_L (6) <<
---                SSI_SPI_CTRLR0_ADDR_L_LSB (2); 2 << SSI_SPI_CTRLR0_INST_L_LSB
---                (8), an 8-bit instruction; SSI_SPI_CTRLR0_TRANS_TYPE_VALUE_1C1A
---                (0) << SSI_SPI_CTRLR0_TRANS_TYPE_LSB (0), instruction and
---                address both serial
---   0x1800_00f4  XIP_SSI_BASE + SSI_SPI_CTRLR0_OFFSET (0xf4)
---   #4           SSI_CTRLR1_OFFSET, NDF zero: one 32-bit read a frame
---   0x1000_0100  XIP_BASE + 0x100 (addressmap.h), the vector table
---   0xe000_ed08  PPB_BASE (addressmap.h) + M0PLUS_VTOR_OFFSET (m0plus.h)
---
--- r3 holds the SSI's base; r0 to r2 are scratch.  The assembler takes the
--- numbers without separators.
+-- Each constant is a number, and the pico-sdk macro it is stands in a
+-- comment beside the instruction that uses it, as pico-sdk's source writes
+-- it (D597).  r3 holds the SSI's base; r0 to r2 are scratch.
 
 link(boot_stage) extern(naked) boot2: () -> none =
     assembler.block("""
         push {lr}
-        ldr r3, =0x18000000
+        ldr r3, =0x18000000     @ XIP_SSI_BASE (addressmap.h)
+
+        @ Disable the SSI to allow further configuration.
         movs r1, #0
-        str r1, [r3, #8]
-        movs r1, #4
-        str r1, [r3, #20]
-        ldr r1, =0x001f0300
-        str r1, [r3, #0]
-        ldr r1, =0x03000218
-        ldr r0, =0x180000f4
+        str r1, [r3, #8]        @ SSI_SSIENR_OFFSET (ssi.h)
+
+        @ The flash interface runs at clk_sys / PICO_FLASH_SPI_CLKDIV.
+        movs r1, #4             @ PICO_FLASH_SPI_CLKDIV
+        str r1, [r3, #20]       @ SSI_BAUDR_OFFSET, 0x14
+
+        @ CTRLR0_XIP:
+        @   SSI_CTRLR0_SPI_FRF_VALUE_STD << SSI_CTRLR0_SPI_FRF_LSB (21),
+        @     standard 1-bit serial frames
+        @   | 31 << SSI_CTRLR0_DFS_32_LSB (16), 32 clocks a data frame
+        @   | SSI_CTRLR0_TMOD_VALUE_EEPROM_READ (3) << SSI_CTRLR0_TMOD_LSB
+        @     (8), send instruction and address, then receive data
+        ldr r1, =0x001f0300     @ CTRLR0_XIP
+        str r1, [r3, #0]        @ SSI_CTRLR0_OFFSET
+
+        @ SPI_CTRLR0_XIP:
+        @   CMD_READ (0x03) << SSI_SPI_CTRLR0_XIP_CMD_LSB (24), the
+        @     instruction prefix
+        @   | ADDR_L (6) << SSI_SPI_CTRLR0_ADDR_L_LSB (2), address and mode
+        @     bits divided by four
+        @   | 2 << SSI_SPI_CTRLR0_INST_L_LSB (8), an 8-bit instruction
+        @   | SSI_SPI_CTRLR0_TRANS_TYPE_VALUE_1C1A (0)
+        @     << SSI_SPI_CTRLR0_TRANS_TYPE_LSB (0), instruction and address
+        @     both serial
+        ldr r1, =0x03000218     @ SPI_CTRLR0_XIP
+        ldr r0, =0x180000f4     @ XIP_SSI_BASE + SSI_SPI_CTRLR0_OFFSET (0xf4)
         str r1, [r0]
+
+        @ NDF zero: one 32-bit read a frame.
         movs r1, #0
-        str r1, [r3, #4]
+        str r1, [r3, #4]        @ SSI_CTRLR1_OFFSET
+
+        @ Re-enable the SSI.
         movs r1, #1
-        str r1, [r3, #8]
+        str r1, [r3, #8]        @ SSI_SSIENR_OFFSET
+
+        @ exit_from_boot2.S: entered from the boot ROM, lr, pushed above,
+        @ is zero and the stage vectors through the table at the start of
+        @ the image; a regular call has a nonzero lr and returns.
         check_return:
         pop {r0}
         cmp r0, #0
         beq vector_into_flash
         bx r0
         vector_into_flash:
-        ldr r0, =0x10000100
-        ldr r1, =0xe000ed08
+        ldr r0, =0x10000100     @ XIP_BASE (addressmap.h) + 0x100
+        ldr r1, =0xe000ed08     @ PPB_BASE + M0PLUS_VTOR_OFFSET (m0plus.h)
         str r0, [r1]
         ldmia r0, {r0, r1}
         msr msp, r0

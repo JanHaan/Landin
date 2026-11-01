@@ -13,6 +13,7 @@ with Landin.Platform.Native;
 with Landin.Targets;
 with Landin.Targets.Assembly;
 with Landin.Targets.Capabilities;
+with Landin.Targets.Firmware;
 with Landin.Targets.Levels;
 with Landin.Targets.Selection;
 with Landin.Types;
@@ -1727,7 +1728,7 @@ package body Landin.Tests.Targets_Suite is
            and then Asm.Text_Error (Linux_RV64, "addi x5,x5,1") = ""
            and then Asm.Text_Error (Linux_RV64, "jalr x5") /= ""
            and then Asm.Text_Error (Linux_RV64, "c.beqz x5,label") /= ""
-           and then Asm.Text_Error (Linux_RV64, "addi x5,x5,1 #comment") /= "",
+           and then Asm.Text_Error (Linux_RV64, "addi x5,x5,1 #comment") = "",
          "RV64 width spelling and straight-line admission are stated");
       --  The system call returns to the next instruction on every hosted
       --  architecture, so each admits its own; RV64's breakpoint, like
@@ -1741,6 +1742,102 @@ package body Landin.Tests.Targets_Suite is
            and then Asm.Text_Error (Linux_RV64, "mret") /= "",
          "the system call has one standing on every hosted architecture");
    end Assembly_Registers;
+
+   --  D597: each target's own line comment is removed before the
+   --  admission reads a line, a `{name}` and a register in it with it; any
+   --  other comment form and a digit separator are refused, each naming
+   --  what to write instead.
+   procedure Assembly_Comments (Item : in out Landin.Testing.Context);
+
+   procedure Assembly_Comments (Item : in out Landin.Testing.Context) is
+      package Asm renames Landin.Targets.Assembly;
+      LF : constant Character := ASCII.LF;
+
+      function Cortex (Text : String; Naked : Boolean := False)
+        return String
+        is (Landin.Targets.Firmware.Assembly_Error
+              (Text, Naked, Landin.Targets.Levels.Default_Level (Cortex_M)));
+
+      function Holds (Text, Part : String) return Boolean
+        is (Ada.Strings.Fixed.Index (Text, Part) > 0);
+   begin
+      Landin.Testing.Check
+        (Item, Asm.Comment_Marker (Cortex_M0) = "@"
+           and then Asm.Comment_Marker (Arm64) = "//"
+           and then Asm.Comment_Marker (X86_64) = "#"
+           and then Asm.Comment_Marker (RV64) = "#"
+           and then Asm.Comment_Marker (Synthetic_32_Architecture) = "",
+         "each architecture's comment is its own assembler's");
+      Landin.Testing.Check
+        (Item, Asm.Uncommented (X86_64, "nop  # one {x}" & LF & "# two"
+                                         & LF & "pause")
+                 = "nop" & LF & LF & "pause"
+           and then Asm.Uncommented (Arm64, "mov x0, #1 // one")
+             = "mov x0, #1"
+           and then Asm.Uncommented (Cortex_M0, "movs r1, #4 @ CLKDIV")
+             = "movs r1, #4"
+           and then Asm.Uncommented (RV64, "addi x5, x5, 1") =
+             "addi x5, x5, 1",
+         "a comment and the blanks before it go, and every line stays");
+      Landin.Testing.Check
+        (Item, Asm.Text_Error (Linux_X86_64, "nop # {missing} %rsp") = ""
+           and then Asm.Text_Error (Linux_Arm64, "nop // ; b there") = ""
+           and then Asm.Text_Error (Darwin_Arm64, "nop // %% there:") = ""
+           and then Asm.Text_Error (Linux_RV64, "nop # j there") = ""
+           and then Cortex ("nop @ bx lr; {x} r9") = ""
+           and then Cortex ("nop @ comment" & LF & "1:" & LF
+                            & "b 1b @ again", Naked => True) = "",
+         "a comment meets no instruction, register, label or slot check");
+      Landin.Testing.Check
+        (Item, Asm.Text_Error (Linux_X86_64, "# only a comment")
+                 = "assembly block must contain instructions"
+           and then Cortex ("@ only a comment")
+             = "assembly block must contain instructions",
+         "a block of comments alone holds no instruction");
+      Landin.Testing.Check
+        (Item, Cortex ("nop // no")
+                 = "`//` begins no comment in Cortex-M assembly text: a"
+                   & " comment is `@` to the end of the line"
+           and then Cortex ("nop /* no */")
+             = "`/*` begins no comment in Cortex-M assembly text: a"
+               & " comment is `@` to the end of the line"
+           and then Cortex ("# no")
+             = "`#` begins no comment in Cortex-M assembly text: a"
+               & " comment is `@` to the end of the line"
+           and then Cortex ("nop ; nop")
+             = "`;` separates statements, and assembly text holds one"
+               & " instruction a line: a comment is `@` to the end of the"
+               & " line"
+           and then Holds (Asm.Text_Error (Linux_X86_64, "nop // no"),
+                           "comment is `#`")
+           and then Holds (Asm.Text_Error (Linux_RV64, "nop /* no */"),
+                           "RV64 assembly text")
+           and then Holds (Asm.Text_Error (Linux_Arm64, "# no"),
+                           "comment is `//`")
+           and then Holds (Asm.Text_Error (Darwin_Arm64, "nop %% nop"),
+                           "`%%` separates statements")
+           and then Asm.Text_Error (Linux_Arm64, "mov x0, #1") = ""
+           and then Asm.Text_Error (Linux_X86_64, "nop @ no") = "",
+         "another comment form is refused, naming the target's own");
+      Landin.Testing.Check
+        (Item, Cortex ("ldr r3, =0x1800_0000")
+                 = "a number in assembly text is the assembler's and takes"
+                   & " no digit separator: write `0x18000000` for"
+                   & " `0x1800_0000`"
+           and then Holds (Asm.Text_Error (Linux_X86_64, "movl $1_000, %eax"),
+                           "write `1000` for `1_000`")
+           and then Asm.Text_Error (Linux_X86_64, "nop # 1_000") = ""
+           and then Asm.Text_Error
+             (Linux_RV64, "addi {r_1}, {r_1}, 1") = ""
+           and then Asm.Separated_Number ("add x_1, 0x1f") = "",
+         "a digit separator is refused outside a comment and names the"
+         & " number to write");
+      Landin.Testing.Check
+        (Item, Cortex (".word 1") = "assembly text holds no directive"
+           and then Asm.Text_Error (Linux_X86_64, ".byte 1")
+             = "assembly text holds no directive",
+         "a directive is refused as before");
+   end Assembly_Comments;
 
    --  D255's table is stated three times: in spec.md, in the compiler's
    --  level model and in `platform/linux`, whose entry check restates each
@@ -2094,6 +2191,9 @@ package body Landin.Tests.Targets_Suite is
       Landin.Testing.Register
         (Into, "targets", "assembly registers are spelled and chosen",
          Assembly_Registers'Access);
+      Landin.Testing.Register
+        (Into, "targets", "assembly comments are each target's own",
+         Assembly_Comments'Access);
    end Register;
 
 end Landin.Tests.Targets_Suite;

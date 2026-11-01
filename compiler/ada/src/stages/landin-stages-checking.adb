@@ -7191,10 +7191,14 @@ package body Landin.Stages.Checking is
          Classes : Natural := 0;
          Outputs : Natural := 0;
          Faulted : Boolean := False;
+         --  D597: the text without its comments, so a `{name}` or a
+         --  register a comment writes is neither slot nor use.
          Text : constant String :=
-           Landin.Configuration.Fixed_Text
-             (Source (Context, Syn.Source_Of (Of_Tree)), Of_Tree,
-              Syn.Nth_Argument (Of_Tree, Node, 1));
+           Asm.Uncommented
+             (Landin.Targets.Architecture_Of (Facts),
+              Landin.Configuration.Fixed_Text
+                (Source (Context, Syn.Source_Of (Of_Tree)), Of_Tree,
+                 Syn.Nth_Argument (Of_Tree, Node, 1)));
 
          procedure Refuse_At
            (Where : Syn.Node_Id; Message : String; Note : String);
@@ -24540,15 +24544,12 @@ package body Landin.Stages.Checking is
                         elsif Landin.Targets.Architecture_Of (Facts)
                           = Landin.Targets.Cortex_M0
                         then
-                           --  A template slot is always one of r0-r7, so
-                           --  the allowlist reads it as one.
                            Fault := Ada.Strings.Unbounded.To_Unbounded_String
                              (Landin.Targets.Firmware.Assembly_Error
-                                (Landin.Targets.Assembly.Filled
-                                   (Landin.Configuration.Fixed_Text
-                                      (Source
-                                         (Context, Syn.Source_Of (Of_Tree)),
-                                       Of_Tree, Argument), "r0"), Naked,
+                                (Landin.Configuration.Fixed_Text
+                                   (Source
+                                      (Context, Syn.Source_Of (Of_Tree)),
+                                    Of_Tree, Argument), Naked,
                                  Level (Context)));
                         else
                            Fault := Ada.Strings.Unbounded.To_Unbounded_String
