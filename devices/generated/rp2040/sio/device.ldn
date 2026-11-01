@@ -113,3 +113,29 @@ public gpio_out_clr_write: (device_base: usize, raw: u32) -> none =
     compiler.register_write(port, raw, compiler.normal_write,
                             compiler.write_zero, 0x3fffffff)
 end gpio_out_clr_write
+
+public gpio_oe_set_offset: usize = 0x24
+public gpio_oe_set_address: usize = 0xd0000024
+public gpio_oe_set_named_mask: u32 = 0x3fffffff
+public gpio_oe_set_reset_mask: u32 = 0x3fffffff
+public gpio_oe_set_reset_value: u32 = 0x00000000
+public gpio_oe_set_image: type = layout(packed, u32) struct
+    f_gpio_oe_set: u30 at 0..29
+end gpio_oe_set_image
+
+public gpio_oe_set_decode: (raw: u32) -> (image: gpio_oe_set_image) =
+    image = zeroed
+    bits: ptr mut u32 = ptr(usize(addr image))
+    bits.val = raw
+end gpio_oe_set_decode
+
+public gpio_oe_set_encode: (image: gpio_oe_set_image) -> (raw: u32) =
+    bits: ptr u32 = ptr(usize(addr image))
+    raw = bits.val
+end gpio_oe_set_encode
+
+public gpio_oe_set_write: (device_base: usize, raw: u32) -> none =
+    port: ptr mut u32 = ptr(device_base + gpio_oe_set_offset)
+    compiler.register_write(port, raw, compiler.normal_write,
+                            compiler.write_zero, 0x3fffffff)
+end gpio_oe_set_write

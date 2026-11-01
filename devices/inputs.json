@@ -45,6 +45,10 @@
       "url": "https://raw.githubusercontent.com/raspberrypi/pico-sdk/a1438dff1d38bd9c65dbd693f0e5db4b9ae91779/src/rp2040/hardware_regs/include/hardware/regs/vreg_and_chip_reset.h",
       "sha256": "d1027b70f7b55a08e81fb28e2dc66c0ab03b211f9dfbc860426986b602c87725"
     },
+    "rp2040/watchdog.h": {
+      "url": "https://raw.githubusercontent.com/raspberrypi/pico-sdk/a1438dff1d38bd9c65dbd693f0e5db4b9ae91779/src/rp2040/hardware_regs/include/hardware/regs/watchdog.h",
+      "sha256": "005873145c1b36e18e6b3226d450b3cbb7ca39ce72b47761687a85d7286a088a"
+    },
     "rp2040/xosc.h": {
       "url": "https://raw.githubusercontent.com/raspberrypi/pico-sdk/a1438dff1d38bd9c65dbd693f0e5db4b9ae91779/src/rp2040/hardware_regs/include/hardware/regs/xosc.h",
       "sha256": "95e0d4c96bbafedf6c229eb9897c5c7c9b1a46d501ea8d579716c2716f1d5828"

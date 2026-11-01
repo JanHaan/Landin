@@ -300,8 +300,8 @@ class Regeneration(unittest.TestCase):
             missing['policies'] = dict(policy['policies'])
             missing['policies']['SIO.GPIO_NOWHERE'] = {
                 'read': 'normal', 'write': 'normal', 'reserved': 'zero'}
-            for key in ('SIO.GPIO_IN', 'SIO.GPIO_OUT', 'SIO.GPIO_OUT_SET',
-                        'SIO.GPIO_OUT_CLR'):
+            for key in [k for k in missing['policies'] if k.startswith('SIO.')
+                        and k != 'SIO.GPIO_NOWHERE']:
                 del missing['policies'][key]
             path = Path(root) / 'missing.json'
             path.write_text(json.dumps(missing))
@@ -402,7 +402,8 @@ class Rp2040Oracles(unittest.TestCase):
                  'UART1': 0x40038000, 'DMA': 0x50000000,
                  'RESETS': 0x4000c000, 'CLOCKS': 0x40008000,
                  'XOSC': 0x40024000, 'PADS_BANK0': 0x4001c000,
-                 'VREG_AND_CHIP_RESET': 0x40064000, 'PPB': 0xe0000000}
+                 'VREG_AND_CHIP_RESET': 0x40064000, 'PPB': 0xe0000000,
+                 'WATCHDOG': 0x40058000}
         for row in self.rows():
             peripheral, register = row['source'].split('.')
             # The SVD's PPB is the core's private bus, which pico-sdk's
@@ -470,7 +471,7 @@ class Rp2040Oracles(unittest.TestCase):
 
     def test_literal_contract(self):
         rows = {r['source']: r for r in self.rows()}
-        self.assertEqual(len(rows), 51)
+        self.assertEqual(len(rows), 53)
         self.assertEqual(rows['UART1.UARTFR']['derived_from'], 'UART0')
         self.assertEqual(rows['DMA.CH1_CTRL_TRIG']['offset']
                          - rows['DMA.CH0_CTRL_TRIG']['offset'], 64)
@@ -493,7 +494,7 @@ class Rp2040Oracles(unittest.TestCase):
         # construct the expected access surface or restricted write masks.
         for key, row in rows.items():
             read = ('refused' if key in {'SIO.GPIO_OUT_SET', 'SIO.GPIO_OUT_CLR',
-                    'UART0.UARTICR'} else 'modify' if key == 'UART0.UARTDR' else 'normal')
+                    'SIO.GPIO_OE_SET', 'UART0.UARTICR'} else 'modify' if key == 'UART0.UARTDR' else 'normal')
             write = ('refused' if key in {'SIO.GPIO_IN', 'TIMER.TIMERAWL',
                      'UART0.UARTRSR', 'UART0.UARTFR', 'UART1.UARTFR', 'DMA.CH0_AL1_CTRL',
                      'RESETS.RESET_DONE', 'CLOCKS.CLK_REF_SELECTED',

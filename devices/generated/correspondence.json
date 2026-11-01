@@ -683,6 +683,38 @@
     "width": 32
   },
   {
+    "address": 3489660964,
+    "alignment": 4,
+    "derived_from": null,
+    "fields": [
+      {
+        "access": "write-only",
+        "encodings": [],
+        "high": 29,
+        "low": 0,
+        "mask": 1073741823,
+        "modified_write": null,
+        "name": "GPIO_OE_SET",
+        "read_action": null,
+        "representation": "unsigned"
+      }
+    ],
+    "known_reset_mask": 1073741823,
+    "known_reset_value": 0,
+    "named_mask": 1073741823,
+    "offset": 36,
+    "policy": {
+      "read": "refused",
+      "reserved": "zero",
+      "write": "normal"
+    },
+    "register_access": "read-write",
+    "source": "SIO.GPIO_OE_SET",
+    "svd_reset_mask": 4294967295,
+    "svd_reset_value": 0,
+    "width": 32
+  },
+  {
     "address": 1074085904,
     "alignment": 4,
     "derived_from": null,
@@ -4465,6 +4497,71 @@
     "source": "PPB.VTOR",
     "svd_reset_mask": 4294967295,
     "svd_reset_value": 0,
+    "width": 32
+  },
+  {
+    "address": 1074102316,
+    "alignment": 4,
+    "derived_from": null,
+    "fields": [
+      {
+        "access": "read-only",
+        "encodings": [],
+        "high": 19,
+        "low": 11,
+        "mask": 1046528,
+        "modified_write": null,
+        "name": "COUNT",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-only",
+        "encodings": [],
+        "high": 10,
+        "low": 10,
+        "mask": 1024,
+        "modified_write": null,
+        "name": "RUNNING",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 9,
+        "low": 9,
+        "mask": 512,
+        "modified_write": null,
+        "name": "ENABLE",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 8,
+        "low": 0,
+        "mask": 511,
+        "modified_write": null,
+        "name": "CYCLES",
+        "read_action": null,
+        "representation": "unsigned"
+      }
+    ],
+    "known_reset_mask": 1023,
+    "known_reset_value": 512,
+    "named_mask": 1048575,
+    "offset": 44,
+    "policy": {
+      "read": "normal",
+      "reserved": "zero",
+      "write": "normal"
+    },
+    "register_access": "read-write",
+    "source": "WATCHDOG.TICK",
+    "svd_reset_mask": 4294967295,
+    "svd_reset_value": 512,
     "width": 32
   }
 ]

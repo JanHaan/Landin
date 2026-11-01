@@ -83,7 +83,7 @@ pinned Rev 9, the copy wanted is the maintainer's, and no job verifies it.
 | Input | Source | Licence |
 |---|---|---|
 | `rp2040/RP2040.svd` | official [pico-sdk 2.2.0](https://github.com/raspberrypi/pico-sdk/tree/2.2.0), commit `a1438dff1d38bd9c65dbd693f0e5db4b9ae91779`; device `RP2040`, version `0.1`, SVD schema `1.1` | BSD-3-Clause, Raspberry Pi Ltd 2024 |
-| `rp2040/{clocks,dma,io_bank0,m0plus,pads_bank0,resets,sio,timer,uart,vreg_and_chip_reset,xosc}.h` | the same commit's `hardware/regs` headers, used only by the oracle | BSD-3-Clause |
+| `rp2040/{clocks,dma,io_bank0,m0plus,pads_bank0,resets,sio,timer,uart,vreg_and_chip_reset,watchdog,xosc}.h` | the same commit's `hardware/regs` headers, used only by the oracle | BSD-3-Clause |
 | `stm32h753/STM32H753.svd` | Arm's [STM32H7xx_DFP](https://github.com/Open-CMSIS-Pack/STM32H7xx_DFP) tag `v4.1.3`, commit `4c77d2ffa6e885b6da9d6fe949c2d6070b21fe7d`, the device family pack Keil publishes; device `STM32H753`, version `2.0`, SVD schema `1.1` | Apache-2.0, STMicroelectronics 2024, stated in the file's own header |
 | `stm32h753/stm32h753xx.h` | ST's [cmsis-device-h7](https://github.com/STMicroelectronics/cmsis-device-h7), commit `81db1ec63cdc191fae1565b772da3ea5aa29a683`, used only by the oracle | Apache-2.0, per that repository's licence |
 
@@ -272,7 +272,7 @@ reviewed against.
 | Module under `generated/rp2040` | Selected vendor registers | Pressure and limits |
 |---|---|---|
 | `io_bank0` | GPIO0_CTRL, GPIO1_CTRL, GPIO2_CTRL | Pin function/override images, stride 8; different enumerated domains despite identical field names. No pad/electrical model. |
-| `sio` | GPIO_IN, GPIO_OUT, GPIO_OUT_SET, GPIO_OUT_CLR | Input/output and separate write commands; 30-bit masks, sparse offsets, no implicit RMW. |
+| `sio` | GPIO_IN, GPIO_OUT, GPIO_OUT_SET, GPIO_OUT_CLR, GPIO_OE_SET | Input/output and separate write commands; 30-bit masks, sparse offsets, no implicit RMW. |
 | `timer` | ALARM0–3, TIMERAWL, INTR | Four explicit alarm registers, stride 4, low counter word and one-clears interrupt image. No timekeeping driver or 64-bit counter protocol. |
 | `uart0` | UARTDR, UARTRSR, UARTFR, UARTIBRD, UARTFBRD, UARTLCR_H, UARTCR, UARTICR, UARTDMACR | FIFO read side effects, divisors, flags, the enables, clear commands and DMA enable. No serial timing or full UART driver. |
 | `uart1` | UARTFR | Peripheral `derivedFrom="UART0"` with a distinct base. No alias collapse. |
@@ -282,6 +282,7 @@ reviewed against.
 | `xosc` | CTRL, STATUS, STARTUP | The 12 MHz crystal's enable, its stability and its start-up delay; FREQ_RANGE is read as a number, its SVD names beginning with a digit. |
 | `pads_bank0` | GPIO0, GPIO1, GPIO2 | Pad input enable, drive and pulls of the UART and indicator pins; DRIVE is read as a number for the same reason. |
 | `vreg_and_chip_reset` | CHIP_RESET | Which reset the chip last had, power-on among them. |
+| `watchdog` | TICK | The reference clock's divider to the 1 MHz tick the timer counts. |
 | `ppb` | NVIC_ISER, NVIC_ICPR, NVIC_ISPR, VTOR | The core's interrupt enables and pending bits, and the vector table's address, read only. pico-sdk's header for them is `m0plus.h`. |
 
 Prototype 1's conceptual map combines 16-pin GPIO banks, a timer, UART and eight

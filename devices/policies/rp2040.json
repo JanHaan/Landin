@@ -23,7 +23,8 @@
       "GPIO_IN",
       "GPIO_OUT",
       "GPIO_OUT_SET",
-      "GPIO_OUT_CLR"
+      "GPIO_OUT_CLR",
+      "GPIO_OE_SET"
     ],
     "TIMER": [
       "ALARM0",
@@ -88,6 +89,9 @@
       "NVIC_ICPR",
       "NVIC_ISPR",
       "VTOR"
+    ],
+    "WATCHDOG": [
+      "TICK"
     ]
   },
   "policies": {
@@ -122,6 +126,11 @@
       "reserved": "zero"
     },
     "SIO.GPIO_OUT_CLR": {
+      "read": "refused",
+      "write": "normal",
+      "reserved": "zero"
+    },
+    "SIO.GPIO_OE_SET": {
       "read": "refused",
       "write": "normal",
       "reserved": "zero"
@@ -348,6 +357,11 @@
       "read": "normal",
       "write": "refused",
       "reserved": "zero"
+    },
+    "WATCHDOG.TICK": {
+      "read": "normal",
+      "write": "normal",
+      "reserved": "zero"
     }
   },
   "numeric_enums": [
@@ -367,7 +381,8 @@
     "CLOCKS.CLK_REF_CTRL": "0x60",
     "XOSC.CTRL": "0x0",
     "XOSC.STATUS": "0x81000000",
-    "XOSC.STARTUP": "0x0"
+    "XOSC.STARTUP": "0x0",
+    "WATCHDOG.TICK": "0x3ff"
   },
   "provenance": {
     "vendor": "Raspberry Pi",
