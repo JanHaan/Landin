@@ -1,0 +1,95 @@
+-- The float exercise (D651): f32 and f64 addition, subtraction,
+-- multiplication, division and the six comparisons over operands the host
+-- sends as bit patterns, so that every operation is compiled code over
+-- values no compiler could know.  Each result goes back as its bit
+-- pattern, which the host compares with IEEE 754 arithmetic of its own.
+--
+-- The square root is the hook the M7's float unit fills: a `vsqrt` in an
+-- assembly block with a float operand, under
+-- `fixed if compiler.feature.fp_dp`, once float register operands and the
+-- feature exist.  Until then `root` reports none, and the oracle says the
+-- square root is pending.
+
+-- One f32 exercise's results: the four operations' bit patterns, the
+-- comparisons, and the square root of the first operand when there is one.
+public results32: type = struct
+    sum: u32
+    difference: u32
+    product: u32
+    quotient: u32
+    order: u32
+    root: u32
+    rooted: bool
+end results32
+
+public results64: type = struct
+    sum: u64
+    difference: u64
+    product: u64
+    quotient: u64
+    order: u32
+    root: u64
+    rooted: bool
+end results64
+
+-- A value's bits and the value bits are, through the cell that holds them.
+float32: (bits: u32) -> (value: f32) =
+    cell := bits
+    at: ptr f32 = ptr(usize(addr cell))
+    value = at.val
+end float32
+
+bits32: (value: f32) -> (bits: u32) =
+    cell := value
+    at: ptr u32 = ptr(usize(addr cell))
+    bits = at.val
+end bits32
+
+float64: (bits: u64) -> (value: f64) =
+    cell := bits
+    at: ptr f64 = ptr(usize(addr cell))
+    value = at.val
+end float64
+
+bits64: (value: f64) -> (bits: u64) =
+    cell := value
+    at: ptr u64 = ptr(usize(addr cell))
+    bits = at.val
+end bits64
+
+-- The six comparisons of A with B, one bit each: less 1, less or equal 2,
+-- equal 4, unequal 8, greater or equal 16, greater 32.  An unordered NaN
+-- sets unequal alone.
+order32: (a: f32, b: f32) -> (bits: u32) =
+    bits = 0
+    if a < b then bits = bits | 1 end if
+    if a <= b then bits = bits | 2 end if
+    if a == b then bits = bits | 4 end if
+    if a <> b then bits = bits | 8 end if
+    if a >= b then bits = bits | 16 end if
+    if a > b then bits = bits | 32 end if
+end order32
+
+order64: (a: f64, b: f64) -> (bits: u32) =
+    bits = 0
+    if a < b then bits = bits | 1 end if
+    if a <= b then bits = bits | 2 end if
+    if a == b then bits = bits | 4 end if
+    if a <> b then bits = bits | 8 end if
+    if a >= b then bits = bits | 16 end if
+    if a > b then bits = bits | 32 end if
+end order64
+
+public exercise32: (x: u32, y: u32) -> (r: results32) =
+    a := float32(x)
+    b := float32(y)
+    r = (sum: bits32(a + b), difference: bits32(a - b), product: bits32(a * b),
+         quotient: bits32(a / b), order: order32(a, b), root: 0, rooted: false)
+end exercise32
+
+public exercise64: (x: u64, y: u64) -> (r: results64) =
+    a := float64(x)
+    b := float64(y)
+    r = (sum: bits64(a + b), difference: bits64(a - b), product: bits64(a * b),
+         quotient: bits64(a / b), order: order64(a, b), root: 0, rooted: false)
+end exercise64

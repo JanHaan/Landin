@@ -56,7 +56,9 @@ function values, so the module names no device (D645). The board port in
 `compiler/tests/board/rp2040` runs the same module at the RP2040's own
 bases with GPIO3 as its indicator, and keeps this driver's public receive
 contract over the RP2040's own protocol: a live count rather than the drain
-below, and an abort for stop (D593, D594). The echo and the indicator are
+below, and an abort for stop (D593, D594); the STM32H753 board in
+`compiler/tests/board/stm32h753` runs it with LD1 on PB0 and USART3, over
+that chip's stream taken in laps (D648). The echo and the indicator are
 the outcome the two compare, and [the board's run](../../../environments/boards/rp2040/README.md)
 says how the board's side is checked; everything below that depends on the
 synthetic drain stays the emulator's. The application's transmitter waits on UARTFR's

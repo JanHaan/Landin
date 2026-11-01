@@ -1,0 +1,63 @@
+-- The Cortex-M7's System Control Space, which the STM32H753's SVD does not
+-- describe: the vector table offset, the configuration and control and the
+-- coprocessor access registers, the NVIC's enables and SysTick, at the
+-- addresses and bits of the Armv7-M Architecture Reference Manual
+-- (DDI 0403E): B3.2.2's table of the System Control Block, B3.3's SysTick
+-- and B3.4's NVIC.  Each is a word read or written once.
+
+public vtor_address: usize = 0xe000ed08
+public ccr_address: usize = 0xe000ed14
+public cpacr_address: usize = 0xe000ed88
+-- CCR's IC, bit 17, and DC, bit 16, enable the instruction and the data
+-- cache (B3.2.8); reset leaves both clear.
+public ccr_caches: u32 = 0x00030000
+-- CPACR's CP10 and CP11, bits 23:20, both full access (B3.2.20).
+public cpacr_fpu: u32 = 0x00f00000
+-- NVIC_ISER0, one enable bit an interrupt, 32 to a word (B3.4.4).
+iser_address: usize = 0xe000e100
+-- SysTick's control and status, reload and current value (B3.3.3 to
+-- B3.3.5): ENABLE is bit 0, CLKSOURCE bit 2, the processor's clock, and
+-- COUNTFLAG bit 16, which a read clears.
+systick_csr: usize = 0xe000e010
+systick_rvr: usize = 0xe000e014
+systick_cvr: usize = 0xe000e018
+
+load: (address: usize) -> (value: u32) =
+    at: ptr u32 = ptr(address)
+    value = compiler.volatile_load(at)
+end load
+
+store: (address: usize, value: u32) -> none =
+    at: ptr mut u32 = ptr(address)
+    compiler.volatile_store(at, value)
+end store
+
+public vtor: () -> (value: u32) = value = load(vtor_address) end vtor
+
+public ccr: () -> (value: u32) = value = load(ccr_address) end ccr
+
+public cpacr: () -> (value: u32) = value = load(cpacr_address) end cpacr
+
+-- Enable external interrupt IRQ, its slot 16 + IRQ.
+public enable_interrupt: (irq: u32) -> none =
+    store(iser_address + 4 * usize(irq >> 5), u32(1) << (irq & 31))
+end enable_interrupt
+
+-- The exception the processor is in, from IPSR: 16 + IRQ in a handler.
+public exception_number: () -> (number: u32) =
+    number = assembler.block("mrs {number}, ipsr", out number: u32 at general)
+end exception_number
+
+-- Busy-wait MS milliseconds of a processor clock of CYCLES cycles a
+-- millisecond, counting SysTick's wraps; SysTick is left stopped.
+public wait_ms: (ms: u32, cycles: u32) -> none =
+    store(systick_csr, 0)
+    store(systick_rvr, cycles - 1)
+    store(systick_cvr, 0)
+    store(systick_csr, 5)
+    mut left := ms
+    while left > 0 do
+        if (load(systick_csr) & 0x00010000) <> 0 then left -= 1 end if
+    end while
+    store(systick_csr, 0)
+end wait_ms

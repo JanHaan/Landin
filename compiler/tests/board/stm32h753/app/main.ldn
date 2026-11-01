@@ -1,0 +1,231 @@
+-- The prototype-1 application on a NUCLEO-H753ZI: USART3 received by DMA
+-- and echoed, ASCII 1 and 0 driving LD1 on PB0, and a trace of what the
+-- board did, which environments/boards/stm32h753/board.py checks against
+-- its physical oracle (D650).  The echo and the indicator are the shared
+-- commands.handle, run by the synthetic application in the emulator and
+-- the RP2040 board too.
+--
+-- The ST-LINK's virtual COM port re-enumerates after a power cycle, so the
+-- boot frame waits for one byte from the host.  Five bytes are also
+-- commands, after their echo: 0x11 asks for a telemetry frame; 0x12 stops
+-- reading for 100 ms, so that a burst sent then overruns the ring; and
+-- 0x14 and 0x15 take the next 16 or 32 bytes as two f32 or two f64
+-- operands, four bits a byte, most significant first, each written 'a'
+-- to 'p' so that no operand byte is a command, and answer with the float
+-- exercise's frame (D651).
+import bringup
+import commands
+import descriptions/stm32h753
+import floats
+import platform/cortex_m
+import report
+import scs
+import serial
+import stm32h753/dma1
+import stm32h753/gpiob
+import stm32h753/pwr
+import stm32h753/rcc
+
+link(align: 256)
+mut rx_storage: [256]u8 = zeroed
+mut notification: u32 = 0
+mut handled: u32 = 0
+mut recoveries: u32 = 0
+mut dma_entries: u32 = 0
+mut usart_entries: u32 = 0
+mut usart_exception: u32 = 0
+mut app_state: u32 = 0
+-- The float operands still to come, the exercise they are for, 4 or 8
+-- bytes each, and the four words they fill, most significant first.
+mut operand_digits: u32 = 0
+mut operand_width: u32 = 0
+mut operands: [4]u32 = zeroed
+
+-- An epoch ends after 4096 bytes, sixteen laps of the ring, so a long
+-- stream also exhausts and restarts it.
+budget: u32 = 4096
+
+-- LD1 through GPIOB_BSRR: BS0 sets PB0 and BR0, bit 16, resets it
+-- (11.4.7, p. 544).
+indicate: (on: bool) -> none =
+    if on then
+        gpiob.bsrr_write(gpiob.base, bringup.indicator)
+    else
+        gpiob.bsrr_write(gpiob.base, bringup.indicator << 16)
+    end if
+end indicate
+
+transmit: (byte: u8) -> none = report.put(byte) end transmit
+
+port: commands.port = (indicate: indicate, transmit: transmit)
+
+-- DMA1 stream 0's interrupt, DMA_STR0, IRQ 11 (Table 147, p. 754).
+link(vector: 27)
+extern(interrupt) dma_irq: () -> none =
+    serial.completed()
+    dma_entries = dma_entries +% 1
+    notification = 1
+    cortex_m.completion_barrier()
+end dma_irq
+
+-- USART3's, IRQ 39 (Table 147, p. 755), raised by its IDLE flag one frame
+-- after the line falls quiet: the wakeup for a lap still in progress.
+link(vector: 55)
+extern(interrupt) usart3_irq: () -> none =
+    usart_entries = usart_entries +% 1
+    usart_exception = scs.exception_number()
+    if serial.idle() then notification = 1 end if
+    cortex_m.completion_barrier()
+end usart3_irq
+
+take_events: () -> none =
+    saved := cortex_m.disable_interrupts()
+    defer cortex_m.restore_interrupts(saved)
+    notification = 0
+end take_events
+
+-- Sleep until an interrupt has set the notification since it was taken.
+rest: () -> none =
+    saved := cortex_m.disable_interrupts()
+    if notification == 0 then cortex_m.wait_for_interrupt() end if
+    cortex_m.restore_interrupts(saved)
+end rest
+
+telemetry: (r: serial.rx) -> none =
+    report.open_frame(116)
+    report.field(104, handled)
+    report.field(99, recoveries)
+    report.field(100, serial.epochs())
+    report.field(119, serial.laps())
+    report.field(107, dma_entries)
+    report.field(117, usart_entries)
+    report.field(112, usart_exception)
+    report.field(110, dma1.s0ndtr_read(dma1.base))
+    report.field(101, r.consumed)
+    report.field(103, gpiob.idr_read(gpiob.base) & bringup.indicator)
+    report.field(115, app_state)
+    report.close_frame()
+end telemetry
+
+-- Take one operand byte, 'a' to 'p' for 0 to 15; the exercise runs when
+-- the last arrives.  Any other byte abandons the operands.
+operand: (byte: u8) -> none =
+    if byte < 97 or byte > 112 then
+        operand_digits = 0
+        return
+    end if
+    index := usize((operand_width * 4 - operand_digits) >> 3)
+    operands[index] = (operands[index] << 4) | u32(byte - 97)
+    operand_digits -= 1
+    if operand_digits > 0 then return end if
+    if operand_width == 4 then
+        r := floats.exercise32(operands[0], operands[1])
+        report.open_frame(102)
+        report.field(97, r.sum)
+        report.field(115, r.difference)
+        report.field(109, r.product)
+        report.field(100, r.quotient)
+        report.field(99, r.order)
+        if r.rooted then report.field(113, r.root) end if
+        report.close_frame()
+    else
+        a := (u64(operands[0]) << 32) | u64(operands[1])
+        b := (u64(operands[2]) << 32) | u64(operands[3])
+        r := floats.exercise64(a, b)
+        report.open_frame(70)
+        wide(97, r.sum)
+        wide(115, r.difference)
+        wide(109, r.product)
+        wide(100, r.quotient)
+        report.field(99, r.order)
+        if r.rooted then wide(113, r.root) end if
+        report.close_frame()
+    end if
+end operand
+
+-- A 64-bit result as two fields: KEY its high word and the next letter
+-- its low one.
+wide: (key: u8, value: u64) -> none =
+    report.field(key, u32(value >> 32))
+    report.field(key + 1, u32(value & 0xffff_ffff))
+end wide
+
+halt: (status: u32) -> noreturn =
+    app_state = status
+    report.open_frame(104)
+    report.field(115, status)
+    report.close_frame()
+    loop do cortex_m.wait_for_interrupt() end loop
+end halt
+
+start: () -> noreturn =
+    -- Read before anything changes them: the reset flags, which RCC_RSR
+    -- keeps until RMVF clears them (8.7.39, p. 451), the vector table's
+    -- address, the coprocessors' access and the caches' enables.
+    reason := rcc.rsr_read(rcc.base)
+    table := scs.vtor()
+    access := scs.cpacr()
+    control := scs.ccr()
+    before := bringup.supply()
+    after := pwr.csr1_read(pwr.base)
+    mut flags := rcc.rsr_decode(0)
+    flags.f_rmvf = 1
+    rcc.rsr_write(rcc.base, rcc.rsr_encode(flags))
+    rcc.rsr_write(rcc.base, 0)
+    bringup.peripherals()
+    mut receiver := serial.open(115200, budget, rx_storage[0..<256]) else (problem)
+        _ = problem
+        halt(1)
+    end
+    scs.enable_interrupt(11)
+    scs.enable_interrupt(39)
+    app_state = 2
+    mut waiting: usize = 0
+    loop do
+        take_events()
+        waiting = serial.available(receiver) else (error)
+            _ = error
+            halt(4)
+        end
+        break when waiting > 0
+        rest()
+    end loop
+    report.open_frame(98)
+    report.field(114, reason)
+    report.field(118, table)
+    report.field(97, access)
+    report.field(99, control)
+    report.field(113, before)
+    report.field(121, after)
+    report.field(119, u32(waiting))
+    report.close_frame()
+    mut scratch: [64]u8 = zeroed
+    loop do
+        take_events()
+        n := serial.read(receiver, scratch[0..<64]) else (error)
+            if error == serial.stop_timeout then halt(3) end if
+            recoveries = recoveries +% 1
+            serial.restart(receiver) else (problem)
+                _ = problem
+                halt(3)
+            end
+            continue
+        end
+        handled = handled +% commands.handle(scratch[0..<n], port)
+        for byte in scratch[0..<n] do
+            if operand_digits > 0 then
+                operand(byte)
+            elsif byte == 17 then
+                telemetry(receiver)
+            elsif byte == 18 then
+                scs.wait_ms(100, bringup.cycles_ms)
+            elsif byte == 20 or byte == 21 then
+                operand_width = if byte == 20 then 4 else 8 end if
+                operand_digits = operand_width * 4
+                operands = zeroed
+            end if
+        end for
+        if n == 64 then continue end if
+        rest()
+    end loop
+end start

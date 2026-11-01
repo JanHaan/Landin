@@ -1,0 +1,38 @@
+-- The board's trace, in the RP2040 board's form: frames on USART3 between
+-- the echoed bytes, each STX, a tag letter, fields of a key letter, '='
+-- and eight lowercase hex digits after a space, then ETX and LF.  The host
+-- never sends STX or ETX, so a frame is found wherever it falls in the echo.
+import stm32h753/usart3
+
+digits: [16]u8 = [48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 97, 98, 99, 100, 101, 102]
+
+-- USART_ISR's TXE, bit 7, is set while the transmit data register is
+-- empty (48.8.10, p. 2091); a byte written otherwise would be lost.  The
+-- echo goes out through this too.
+public put: (byte: u8) -> none =
+    while (usart3.isr_read(usart3.base) & 0x80) == 0 do
+        continue
+    end while
+    usart3.tdr_write(usart3.base, u32(byte))
+end put
+
+public open_frame: (tag: u8) -> none =
+    put(2)
+    put(tag)
+end open_frame
+
+public field: (key: u8, value: u32) -> none =
+    put(32)
+    put(key)
+    put(61)
+    mut shift: u32 = 32
+    while shift > 0 do
+        shift -= 4
+        put(digits[usize((value >> shift) & 15)])
+    end while
+end field
+
+public close_frame: () -> none =
+    put(3)
+    put(10)
+end close_frame
