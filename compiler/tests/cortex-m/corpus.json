@@ -2131,6 +2131,13 @@
       ],
       "mode": "refuse"
     },
+    "runtime/posix-errno-words": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse",
+      "reason": "Firmware has no POSIX layer; runtime/failure-words words the library's own failures on Cortex-M0."
+    },
     "runtime/posix-file-system": {
       "codes": [
         "L0015"

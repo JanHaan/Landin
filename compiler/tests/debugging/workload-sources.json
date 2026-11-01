@@ -74,6 +74,7 @@
     "core/arena/arena.ldn",
     "core/atomic/atomic.ldn",
     "core/cmp/cmp.ldn",
+    "core/failure/failure.ldn",
     "core/fault/fault.ldn",
     "core/io/buffered.ldn",
     "core/io/entropy.ldn",

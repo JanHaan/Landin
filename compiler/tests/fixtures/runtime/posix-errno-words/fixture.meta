@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: D582 posix.words gives every errno this system numbers a phrase of its own, in lower case but for a name's capitals and with no final stop, words enoent from a status of a missing path as strerror does, unlisted as an unknown error and ENOTSUP apart from EOPNOTSUPP, and passes a core library failure, io.not_found and net.refused, to failure.words
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0640, 1210, 1660
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

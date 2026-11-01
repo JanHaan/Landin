@@ -7,7 +7,6 @@
 --  routines after it first.  The code after the comment `Everything below`
 --  only builds a tree to copy, checks the copy and removes both.
 import core/cmp
-import core/failure
 import core/io
 import core/mem
 import core/sort
@@ -286,15 +285,15 @@ copy_named: (host: blocking.host, inout out: io.buffered_writer(blocking.host))
                   [any(addr done.skipped)])
 end copy_named
 
---- Say on standard error why the copy stopped.  `core/failure` words the
---- library's failures; `platform/posix`'s are not among them.
+--- Say on standard error why the copy stopped.  `posix.words` words an
+--- errno and, through `core/failure`, the library's own failures.
 complain: (host: blocking.host, problem: too_many | too_long | differs
-           | failure.reason | posix.errno) -> none =
+           | posix.reason) -> none =
     reason: []u8 = match problem
         too_many: "a directory holds more entries than the copy keeps"
         too_long: "a name is longer than the copy keeps"
         differs: "the copy differs from what was copied"
-        _: "a file or directory could not be read, made or changed"
+        _ (rest): posix.words(rest)
     end match
     io.write(host, io.err(host), "tree-copy: ") else none
     io.write(host, io.err(host), reason) else none

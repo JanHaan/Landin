@@ -1,0 +1,81 @@
+--  D582: words for every errno.  `posix.words` gives each errno atom a
+--  phrase, as `failure.words` gives the core library's failures, and
+--  passes those to it, so one call words whatever a program over the
+--  POSIX layer fails with.  Every errno this system numbers has a phrase
+--  of its own, in lower case but for a name's capitals and with no final
+--  stop; a status asked of a path that is not there fails `enoent`, worded
+--  as C's `strerror` words it; and a library failure is worded as
+--  `failure.words` words it.
+import core/cmp
+import core/io
+import core/net
+import core/text
+import platform/posix
+
+--  Whether `phrase` is what `wanted` says.
+says: (phrase: []u8, wanted: []u8) -> (yes: bool) =
+    yes = cmp.compare(phrase, wanted) == cmp.equal
+end says
+
+--  Whether a phrase reads after a colon: nonempty, its first letter lower
+--  case unless the first word is a name in capitals, and no final stop.
+well_formed: (phrase: []u8) -> (yes: bool) =
+    yes = lenof phrase > 1 and phrase[lenof phrase - 1] <> u8('.')
+    return when not yes
+    capital: bool = phrase[0] >= u8('A') and phrase[0] <= u8('Z')
+    named: bool = phrase[1] >= u8('A') and phrase[1] <= u8('Z')
+    yes = not capital or named
+end well_formed
+
+--  Every errno the system numbers: a well-formed phrase, none the same as
+--  another's.
+every_errno: () -> (yes: bool) =
+    yes = true
+    for value in i32(1)..<256 do
+        problem: posix.errno = posix.errno_of(value)
+        if problem <> posix.unlisted then
+            phrase: []u8 = posix.words(problem)
+            if not well_formed(phrase) then
+                yes = false
+                return
+            end if
+            for other in i32(1)..<value do
+                earlier: posix.errno = posix.errno_of(other)
+                if earlier <> posix.unlisted and earlier <> problem
+                  and says(posix.words(earlier), phrase) then
+                    yes = false
+                    return
+                end if
+            end for
+        end if
+    end for
+end every_errno
+
+--  A status of a path that is not there, worded.
+missing: () -> (yes: bool) =
+    yes = false
+    found: posix.status = posix.status_at(posix.working_directory,
+                                          text.host_over("no-such-entry/here"),
+                                          true) else (problem)
+        yes = problem == posix.enoent
+              and says(posix.words(problem), "no such file or directory")
+        return
+    end
+    _ = found
+end missing
+
+public main: () -> (code: i32) =
+    code = 1
+    return when not every_errno()
+    code = 2
+    return when not missing()
+    code = 3
+    return when not says(posix.words(posix.eacces), "permission denied")
+      or not says(posix.words(posix.econnrefused), "connection refused")
+      or not says(posix.words(posix.unlisted), "unknown error")
+      or not says(posix.words(posix.enotsup), "operation not supported")
+    code = 4
+    return when not says(posix.words(io.not_found), "not found")
+      or not says(posix.words(net.refused), "connection refused")
+    code = 42
+end main

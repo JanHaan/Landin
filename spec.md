@@ -25682,7 +25682,8 @@ rest on through D434's `_ (rest):` binding, which holds only the library's;
 the subject itself still does not widen, and that refusal is [0640]'s
 L0301. Atoms that are values rather than failures, a directory
 entry's kind or an order, have no words, and `platform/posix`'s errno
-detail stays with its provider (D207). A program that never calls `words`
+detail stays with its provider (D207); D582 gives its errnos words of
+their own beside these. A program that never calls `words`
 links none of it (D296); one that does carries every phrase, about 6 KB on
 Cortex-M0, which a `match` of thirty-two arms costs there.
 
@@ -25696,6 +25697,41 @@ after a colon; and a locale, which the library consults nowhere.
 on every target, Cortex-M0 among them, `runtime/failure-words-report` on
 every hosted target and `runtime/failure-words-own-atom`, a negative
 fixture until D434 gave the `_` arm its binding.
+
+### D582 — An errno has words in `platform/posix`, which passes the library's on
+
+**The tour said** nothing, and D388 left `platform/posix`'s errnos without
+words: `core/failure` is freestanding and cannot name a hosted layer's
+atoms, so a program failing through the POSIX layer, `runtime/tree-copy`
+among them, said why only in general terms.
+
+**Chosen:** `platform/posix` gains `reason`, the union of `errno` and
+`failure.reason`, which is what a program over that layer fails with, and
+`words(problem: reason)`. It gives every errno atom a fixed phrase of its
+own, distinct from every other errno's, in D388's form: lower case but for
+a name's capitals, with no final stop, static text the same on every
+system and in every locale. The phrase is C's `strerror` text as glibc
+gives it, the wording a reader has met before, and for the errnos only
+Darwin or FreeBSD define, their headers' own; ENOTSUP is "operation not
+supported" and EOPNOTSUPP "operation not supported on socket", Darwin's
+two texts, so the alias the other systems share stays apart where it is
+two numbers. `unlisted` is "unknown error". A library atom goes to
+`failure.words` through a `_ (rest):` arm (D434), so one call words
+anything such a program fails with. A program that never calls it links
+none of it (D296).
+
+**The alternatives:** the errnos in `failure.reason`, which puts a hosted
+layer into a freestanding module; a `strerror` over the system's own
+text, which differs between the three systems, follows the locale and on
+a static Linux program has no C library to ask; words for `errno` alone,
+which a set mixing errnos and library atoms, as tree-copy's does, could
+not pass to it, D388's reason for one `words`; and each system's own
+headers' wording, which words one errno three ways.
+
+**Pinned by** `runtime/posix-errno-words`, which holds every errno each
+hosted system numbers to a well-formed phrase none other has, words a
+missing path's `enoent` and a library atom, and `runtime/tree-copy`, whose
+`complain` now words its failures with it.
 
 ### D418 — The POSIX and Linux layers keep their routines' own names
 

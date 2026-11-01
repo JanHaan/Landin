@@ -118,6 +118,7 @@ Which module does what:
 | Read a file line by line | `io.open_read(host, path)`, `io.lines_over(host, file, buffer)`, then `io.read_line(lines)` until `item.finished`, and `io.close(host, file)` | [core/io](../core/io) |
 | Write straight to standard error | `io.write(host, io.err(host), bytes)` | [core/io](../core/io) |
 | Turn a failure into words for a person | `failure.words(problem)` | [core/failure](../core/failure) |
+| Turn an errno from `platform/posix` into words | `posix.words(problem)`, which words the library's failures too | [platform/posix](../platform/posix) |
 | Right-align a number in a column | `text.over(buffer)` makes a builder, `text.append_u64(line, value)` writes the number, `text.align_right(line, start, width, u8(' '))` pads it from `start`, and `io.put(out, text.used(line))` prints it | [core/text](../core/text) |
 | Print a float with two decimals | scale it to whole hundredths and print the integer parts, as [core/text](../core/text)'s program shows; floats are not formattable | [core/text](../core/text) |
 
@@ -1216,8 +1217,10 @@ never changes with a locale.
 
 A set that also holds an atom of the program's own does not widen to
 `failure.reason`, and a `match` arm of `_` does not narrow it, so such a
-program names each library atom it passes on. `platform/posix`'s errno
-detail stays with its provider.
+program names each library atom it passes on. `platform/posix`'s errnos
+have words of their own in `posix.words`, which passes the library's
+failures on to `failure.words`, so a program over that layer words
+either with one call.
 
 Nothing is linked into a program that never calls `words`. One that does
 carries every phrase, about 6 KB of code and text on Cortex-M0.
@@ -1988,6 +1991,12 @@ three systems define, named after its C macro in lower case, `enoent` and
 - `number` gives the number this system uses for an atom, and `errno_of`
   the atom for a number.
 - `unlisted` is a failure with no errno this module names.
+- `words` gives a phrase for a person for every errno, as `failure.words`
+  does for the library's atoms: C's `strerror` text as glibc gives it, the
+  BSDs' own for errnos only they define, in lower case with no final
+  stop, the same on every system. It takes `reason`, an errno or one of
+  `failure.reason`'s atoms, and words the latter as `failure.words` does,
+  `settings: no such file or directory` and `settings: not found` alike.
 - An interrupted call fails with `eintr` and is not retried here.
 - A short transfer is returned as it came.
 

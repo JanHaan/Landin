@@ -1827,8 +1827,8 @@ below`.
 - The copy does not keep the owner unless the process is root, the time a
   file last changed, extended attributes, or that two names are one file,
   and it skips anything that is not a file, a directory or a link.
-- `core/failure` has no words for `platform/posix`'s errno atoms, so
-  `complain` names a failure there only in general terms.
+- `complain` words a failure with `posix.words`, which has a phrase for
+  every errno and passes the library's own failures to `failure.words`.
 
 Fixture source: `compiler/tests/fixtures/runtime/tree-copy/main.ldn`.
 
@@ -1842,7 +1842,6 @@ Fixture source: `compiler/tests/fixtures/runtime/tree-copy/main.ldn`.
 --  routines after it first.  The code after the comment `Everything below`
 --  only builds a tree to copy, checks the copy and removes both.
 import core/cmp
-import core/failure
 import core/io
 import core/mem
 import core/sort
@@ -2121,15 +2120,15 @@ copy_named: (host: blocking.host, inout out: io.buffered_writer(blocking.host))
                   [any(addr done.skipped)])
 end copy_named
 
---- Say on standard error why the copy stopped.  `core/failure` words the
---- library's failures; `platform/posix`'s are not among them.
+--- Say on standard error why the copy stopped.  `posix.words` words an
+--- errno and, through `core/failure`, the library's own failures.
 complain: (host: blocking.host, problem: too_many | too_long | differs
-           | failure.reason | posix.errno) -> none =
+           | posix.reason) -> none =
     reason: []u8 = match problem
         too_many: "a directory holds more entries than the copy keeps"
         too_long: "a name is longer than the copy keeps"
         differs: "the copy differs from what was copied"
-        _: "a file or directory could not be read, made or changed"
+        _ (rest): posix.words(rest)
     end match
     io.write(host, io.err(host), "tree-copy: ") else none
     io.write(host, io.err(host), reason) else none

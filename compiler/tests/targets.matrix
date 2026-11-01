@@ -2268,6 +2268,7 @@ runtime/posix-broken-pipe | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86
 runtime/posix-broken-pipe-libc | linux-x86-64, linux-arm64, linux-rv64
 runtime/posix-directories | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/posix-errno | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/posix-errno-words | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/posix-file-system | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/posix-files | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/posix-libraries | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

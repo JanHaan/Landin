@@ -27585,10 +27585,29 @@ package body Landin.Diagnostics.Citations.Texts is
                & "nd that refusal is [0640]'s L0301. Atoms that are values"
                & " rather than failures, a directory entry's kind or an or"
                & "der, have no words, and `platform/posix`'s errno detail "
-               & "stays with its provider (D207). A program that never cal"
-               & "ls `words` links none of it (D296); one that does carrie"
-               & "s every phrase, about 6 KB on Cortex-M0, which a `match`"
-               & " of thirty-two arms costs there.",
+               & "stays with its provider (D207); D582 gives its errnos wo"
+               & "rds of their own beside these. A program that never call"
+               & "s `words` links none of it (D296); one that does carries"
+               & " every phrase, about 6 KB on Cortex-M0, which a `match` "
+               & "of thirty-two arms costs there.",
+            when 582 =>
+               "Chosen: `platform/posix` gains `reason`, the union of `e"
+               & "rrno` and `failure.reason`, which is what a program over"
+               & " that layer fails with, and `words(problem: reason)`. It"
+               & " gives every errno atom a fixed phrase of its own, disti"
+               & "nct from every other errno's, in D388's form: lower case"
+               & " but for a name's capitals, with no final stop, static t"
+               & "ext the same on every system and in every locale. The ph"
+               & "rase is C's `strerror` text as glibc gives it, the wordi"
+               & "ng a reader has met before, and for the errnos only Darw"
+               & "in or FreeBSD define, their headers' own; ENOTSUP is ""op"
+               & "eration not supported"" and EOPNOTSUPP ""operation not sup"
+               & "ported on socket"", Darwin's two texts, so the alias the "
+               & "other systems share stays apart where it is two numbers."
+               & " `unlisted` is ""unknown error"". A library atom goes to `"
+               & "failure.words` through a `_ (rest):` arm (D434), so one "
+               & "call words anything such a program fails with. A program"
+               & " that never calls it links none of it (D296).",
             when 418 =>
                "Chosen: under D415 a public routine is a local symbol, s"
                & "o it can replace nothing, and the prefixes are dropped: "
