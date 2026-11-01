@@ -959,17 +959,22 @@ python3 scripts/add_fixture.py CLASS/NAME
 ```
 
 It reads the metadata as the test program does and stops on any fault; gives
-a runtime or ABI fixture its row in `cortex-m/corpus.json`, `execute` for a
-runtime fixture unless `--refuse=CODES --reason=TEXT` says the Cortex-M0
-source check refuses it, and for an ABI fixture, whose C peer is hosted, a
-`restriction` with the `--reason` it is given; regenerates `targets.matrix`,
-`constructs.matrix` and `lexical.tokens` (`check.py --coverage`, `--matrix`
-and `--tokens`); and says what only a person can decide, a Linux x86-64
-runtime or ABI fixture that does not run on arm64 needing its record in
-`linux-arm64/parity.json`. Then run the fixture on its own lane,
-`./scripts/dev-test.sh --fixture=CLASS/NAME`, and `python3 check.py`. A
-Cortex-M row it guessed wrong is found by the Cortex-M corpus, whose
-refusal says which row to write.
+a runtime or ABI fixture its row in `cortex-m/corpus.json`; regenerates every
+file a fixture is read into (`check.py --generate`: `targets.matrix`,
+`constructs.matrix`, the diagnostic matrix and `lexical.tokens` among them);
+and says what only a person can decide, a Linux x86-64 runtime or ABI fixture
+that does not run on arm64 needing its record in `linux-arm64/parity.json`.
+A runtime fixture's row is what Cortex-M0 compilation does with it: the
+script compiles it with refine, the newest this checkout built or the one
+`--refine=PATH` names, and writes `execute` when it compiles and `refuse`
+with the distinct codes it refused with, sorted as the corpus compares them,
+when it does not. A refusal other than L0015 alone takes the `--reason` it
+is given, and an L0015 one needs none, since the corpus reads its refused
+modules from the refusal. An ABI fixture, whose C peer is hosted, is a
+`restriction` with the `--reason` it is given. Then run the fixture on its
+own lane, `./scripts/dev-test.sh --fixture=CLASS/NAME`, and `python3
+check.py`, which names a runtime or ABI fixture that has no row and the
+command that writes it.
 
 Discovery is strict. An unknown key, a repeated key, a missing required key,
 a class that disagrees with its directory, a line that is not a pair, a

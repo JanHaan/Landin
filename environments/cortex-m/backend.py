@@ -101,6 +101,14 @@ def probe_program(device):
     return selection + 'start: () -> none = end start\n'
 
 
+def said_why(error):
+    """A failed compiler command with the compiler's first diagnostic, so
+    the failure says why rather than only which log to read."""
+    first = next((line.strip() for line in Path(error.log).read_text(
+        errors='replace').splitlines() if line.startswith('error[')), '')
+    return CommandFailed(error.name, error.log, error.ended + (': ' + first if first else ''))
+
+
 def derived(run, refine, device=REFERENCE, where=None):
     """DEVICE's profile as refine derives it: the linker script a firmware
     build of a program selecting it writes (D545), and the limits its build
@@ -119,11 +127,14 @@ def derived(run, refine, device=REFERENCE, where=None):
         (out / 'app').mkdir(exist_ok=True)
         (out / 'app/main.ldn').write_text(probe_program(device))
         probe = Run(out, run.tools)
-        probe.command('derive-profile', [
-            refine, '--root=' + str(ROOT / 'devices'), '--target=cortex-m0',
-            '--firmware-entry=start', '--emit=exe',
-            '--toolchain=' + str(run.arm / 'arm-eabi-gcc'),
-            '--build-report=profile.json', 'app', '-o', 'profile.elf'], timeout=60)
+        try:
+            probe.command('derive-profile', [
+                refine, '--root=' + str(ROOT / 'devices'), '--target=cortex-m0',
+                '--firmware-entry=start', '--emit=exe',
+                '--toolchain=' + str(run.arm / 'arm-eabi-gcc'),
+                '--build-report=profile.json', 'app', '-o', 'profile.elf'], timeout=60)
+        except CommandFailed as error:
+            raise said_why(error) from None
         report = json.loads((out / 'profile.json').read_text())['firmware']
         symbols = probe.command('profile-symbols', [run.arm / 'arm-eabi-nm', out / 'profile.elf'])
         top = next(int(parts[0], 16) for line in symbols.splitlines()
@@ -626,9 +637,13 @@ def build(run, refine, inputs, optimize, specialize, extra=(), linker=None,
     flags = level_flags(level)
     selected = [] if level == 'armv6-m' else ['--level=' + level]
     assembly = run.out / 'program.s'
-    run.command('compile', [refine, *inputs, '--target=cortex-m0', *selected, '--emit=asm',
-                '--optimize=' + optimize, '--specialize=' + specialize,
-                '-o', assembly, '--build-report=' + str(run.out / 'build.json')], timeout=60)
+    try:
+        run.command('compile', [refine, *inputs, '--target=cortex-m0', *selected, '--emit=asm',
+                    '--optimize=' + optimize, '--specialize=' + specialize,
+                    '-o', assembly, '--build-report=' + str(run.out / 'build.json')],
+                    timeout=60)
+    except CommandFailed as error:
+        raise said_why(error) from None
     preflight(assembly)
     report = json.loads((run.out / 'build.json').read_text())['build']
     if any(r['frame_bytes'] > profile['stack_reserved'] for r in report['routines']):
