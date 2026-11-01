@@ -188,3 +188,37 @@ public intr_write: (device_base: usize, raw: u32) -> none =
     compiler.register_write(port, raw, compiler.one_clears,
                             compiler.write_zero, 0x0000000f)
 end intr_write
+
+public inte_offset: usize = 0x38
+public inte_address: usize = 0x40054038
+public inte_named_mask: u32 = 0x0000000f
+public inte_reset_mask: u32 = 0x0000000f
+public inte_reset_value: u32 = 0x00000000
+public inte_image: type = layout(packed, u32) struct
+    f_alarm_3: u1 at 3..3
+    f_alarm_2: u1 at 2..2
+    f_alarm_1: u1 at 1..1
+    f_alarm_0: u1 at 0..0
+end inte_image
+
+public inte_decode: (raw: u32) -> (image: inte_image) =
+    image = zeroed
+    bits: ptr mut u32 = ptr(usize(addr image))
+    bits.val = raw
+end inte_decode
+
+public inte_encode: (image: inte_image) -> (raw: u32) =
+    bits: ptr u32 = ptr(usize(addr image))
+    raw = bits.val
+end inte_encode
+
+public inte_read: (device_base: usize) -> (raw: u32) =
+    port: ptr u32 = ptr(device_base + inte_offset)
+    raw = compiler.register_read(port, compiler.normal_read)
+end inte_read
+
+public inte_write: (device_base: usize, raw: u32) -> none =
+    port: ptr mut u32 = ptr(device_base + inte_offset)
+    compiler.register_write(port, raw, compiler.normal_write,
+                            compiler.write_zero, 0x0000000f)
+end inte_write

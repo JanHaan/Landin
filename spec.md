@@ -20965,7 +20965,12 @@ takes a few cycles once the transfers in flight complete, and clears the
 completion interrupt RP2040-E13 says an abort may raise; bytes received
 after that last count are discarded with the epoch. A stopped descriptor
 answers from the count it kept. `restart` re-arms the channel only after
-BUSY has fallen.
+BUSY has fallen. While the channel is exhausted or stopped, UART0's
+32-byte FIFO holds what arrives and a byte past it is lost; the UART flags
+that in UARTRIS's OERIS, and a snapshot reports it as `overrun`, so no
+byte is lost unreported. A board run found the loss silent before: a
+4096-byte epoch exhausted while the application still echoed its ring
+lost 116 bytes in the 13 ms before its restart.
 
 **The alternatives:** pausing with EN through the non-triggering CTRL
 alias and resuming the same way, which leaves the in-flight writes with no
@@ -20973,9 +20978,10 @@ completion to observe; aborting for every snapshot, which ends the epoch
 each time; and the synthetic drain, which is not this chip's.
 
 **Pinned by** `environments/boards/rp2040/board.py`: an overrun burst
-discarded and restarted, two exhaustions of a 4096-byte epoch restarted
-with no byte lost, every echoed byte in order, and the DMA completion count
-read over SWD.
+discarded and restarted, a burst into an exhausted channel flagged by the
+UART and restarted with the FIFO's 32 bytes kept, an exhausted epoch
+restarted with no byte lost, every echoed byte in order, and the DMA
+completion count read over SWD.
 
 ### D595 — The board's trace oracle starts at power-on and is written from what the host sent
 
@@ -20994,10 +21000,12 @@ expectations come from what the host sent and from the RP2040 datasheet,
 never from the firmware: CHIP_RESET reads HAD_POR alone, so the run began at
 power-on; VTOR reads 0x1000_0100, which only the second stage writes, so the
 ROM entered the flashed stage and the stage entered compiler-owned reset;
-clk_ref is on the crystal; the pad reads GPIO2 high after `1` and low after
-`0`; every byte sent is echoed in order but a burst sent during a stall,
-which overruns the ring once; each 4096 bytes received ends an epoch with
-one DMA completion and one restart; the timer advances; and the counters
+clk_ref is on the crystal; `1`, `A` and `0`, the emulator lane's input,
+are echoed, the pad reading GPIO2 high after `1` and low after `0`; a
+burst during a stall overruns the ring once; an epoch ended by a stall and
+followed by a burst is flagged by the UART and keeps the FIFO's 32 bytes;
+an epoch filled exactly is exhausted and restarted with nothing lost;
+every other byte is echoed in order; the timer advances; and the counters
 read over SWD, without halting the core, equal the last frame's.
 
 **The alternatives:** a probe-set program counter or a RAM-loaded image,

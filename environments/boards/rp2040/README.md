@@ -24,7 +24,10 @@ where those belong to a group, run the tool in that group, for example
 `sg dialout -c '…'`. The tool switches only `--port` on `--hub`, and only
 after `uhubctl` shows `--guard-serial` on `--guard-port` of the same hub:
 on the maintainer's rig that is the probe's own Arty A7, whose bitstream is
-held only in SRAM and would be lost with its power.
+held only in SRAM and would be lost with its power. The port is switched off and on in one
+`uhubctl -a cycle`: switching it off re-enumerates the hub's inner hubs, and
+a second call can meet their new device nodes before udev has given them
+the group allowed to switch them.
 
 ## Running it
 
@@ -66,10 +69,12 @@ NVIC (D596), 0x11 asks for a `t` frame, and 0x12 stops reading for 100 ms.
 | vector word 21 | the USBCTRL_IRQ handler's address, Thumb bit set |
 | flash after flashing | its first 256 bytes, read back over SWD, equal to the image's |
 | the boot frame | CHIP_RESET is HAD_POR alone, so the run began at power-on; VTOR is 0x1000_0100, which only the second stage writes, so the ROM entered the flashed stage and the stage entered compiler-owned reset; clk_ref is on the crystal |
-| the indicator | `g` is 4 after `1` and 0 after `0` |
+| the shared scenario | `1`, `A` and `0`, the bytes the emulator lane's application is fed, echoed, with `g` 4 after `1` and 0 after `0` |
 | IRQ5 | one entry, in exception 21 |
 | an overrun | after 0x12, a 300-byte burst into the 256-byte ring is discarded, never echoed, and the ring restarts once |
-| a stream | 12,000 bytes across two 4096-byte epochs: every byte echoed in order, one DMA completion and one restart for each epoch exhausted, and the timer advancing |
+| an epoch ended by STALL | the 4096-byte epoch filled, its last byte STALL, then 100 bytes while the channel is exhausted and nothing reads: the UART's 32-byte FIFO holds the first 32, it flags the rest lost, the application restarts on that overrun, and only those 32 are echoed |
+| an epoch exhausted | the next epoch filled to its 4096 bytes: one DMA completion, one restart, nothing lost, and the byte that waited in the FIFO meanwhile the next epoch's first |
+| the stream | every byte sent echoed in order but those discarded above, `h` their count, and the timer advancing |
 | the counters | `handled`, `recoveries`, `dma_events`, `usb_events` and TRANS_COUNT, read over SWD without halting the core, equal the last frame's |
 
 What the emulator lane and the board share is

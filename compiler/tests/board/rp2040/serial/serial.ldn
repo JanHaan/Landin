@@ -11,7 +11,10 @@
 -- aborts the channel, which RP2040-E13 says may raise a completion
 -- interrupt, so the interrupt is disabled first and cleared after BUSY
 -- falls.  Bytes received after the last snapshot before a stop are
--- discarded with the epoch.
+-- discarded with the epoch.  While the channel is stopped or exhausted the
+-- UART's 32-byte FIFO holds what arrives; a byte past that is lost, which
+-- the UART flags as an overrun (UARTRIS's OERIS, bit 10) and a snapshot
+-- reports as one, so no byte is lost unreported.
 import platform/cortex_m
 import rp2040/dma
 import rp2040/io_bank0
@@ -43,6 +46,8 @@ end rx
 -- CTRL_TRIG: READ_ERROR 30, WRITE_ERROR 29, BUSY 24, EN 0.
 errors: u32 = 0x60000000
 busy_bit: u32 = 0x01000000
+-- UARTRIS and UARTICR: OERIS and OEIC, the receive FIFO's overrun.
+uart_overrun: u32 = 0x400
 
 public open: (rate: u32, budget: u32, escaping buf: []mut u8)
              -> (r: rx from buf) ! busy | bad_baud | buffer_empty | buffer_too_big | bad_buffer =
@@ -68,6 +73,7 @@ public open: (rate: u32, budget: u32, escaping buf: []mut u8)
     -- CR: UARTEN 0, TXE 8, RXE 9.  DMACR: RXDMAE.
     uart0.uartcr_write(uart0.base, 0x301)
     uart0.uartdmacr_write(uart0.base, 1)
+    uart0.uarticr_write(uart0.base, uart_overrun)
     mut bits: u8 = 0
     mut extent := size
     while extent > 1 do
@@ -107,6 +113,10 @@ snapshot: (inout r: rx) -> (count: usize) ! overrun | transfer_error | exhausted
     fail transfer_error when r.broken
     have := r.produced -% r.consumed
     capacity := lenof r.buf
+    if (uart0.uartris_read(uart0.base) & uart_overrun) <> 0 then
+        r.lost = true
+        r.consumed = r.produced
+    end if
     if have > u32(capacity) then
         r.lost = true
         r.consumed = r.produced
@@ -164,6 +174,7 @@ public restart: (inout r: rx) -> none ! stop_timeout | transfer_error =
     dma.ch0_trans_count_write(dma.base, r.budget)
     dma.intr_write(dma.base, 1)
     dma.inte0_write(dma.base, 1)
+    uart0.uarticr_write(uart0.base, uart_overrun)
     r.consumed = 0
     r.produced = 0
     r.lost = false

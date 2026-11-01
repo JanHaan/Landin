@@ -243,6 +243,41 @@ public uartcr_write: (device_base: usize, raw: u32) -> none =
                             compiler.write_zero, 0x0000ff87)
 end uartcr_write
 
+public uartris_offset: usize = 0x3c
+public uartris_address: usize = 0x4003403c
+public uartris_named_mask: u32 = 0x000007ff
+public uartris_reset_mask: u32 = 0x000007f0
+public uartris_reset_value: u32 = 0x00000000
+public uartris_image: type = layout(packed, u32) struct
+    f_oeris: u1 at 10..10
+    f_beris: u1 at 9..9
+    f_peris: u1 at 8..8
+    f_feris: u1 at 7..7
+    f_rtris: u1 at 6..6
+    f_txris: u1 at 5..5
+    f_rxris: u1 at 4..4
+    f_dsrrmis: u1 at 3..3
+    f_dcdrmis: u1 at 2..2
+    f_ctsrmis: u1 at 1..1
+    f_rirmis: u1 at 0..0
+end uartris_image
+
+public uartris_decode: (raw: u32) -> (image: uartris_image) =
+    image = zeroed
+    bits: ptr mut u32 = ptr(usize(addr image))
+    bits.val = raw
+end uartris_decode
+
+public uartris_encode: (image: uartris_image) -> (raw: u32) =
+    bits: ptr u32 = ptr(usize(addr image))
+    raw = bits.val
+end uartris_encode
+
+public uartris_read: (device_base: usize) -> (raw: u32) =
+    port: ptr u32 = ptr(device_base + uartris_offset)
+    raw = compiler.register_read(port, compiler.normal_read)
+end uartris_read
+
 public uarticr_offset: usize = 0x44
 public uarticr_address: usize = 0x40034044
 public uarticr_named_mask: u32 = 0x000007ff

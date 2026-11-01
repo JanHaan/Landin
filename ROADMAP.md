@@ -1239,7 +1239,7 @@ SR-551.
 
 ### R12.20 — The first board
 
-Status: planned
+Status: complete
 Depends on: R12.10, R12.12
 
 Raspberry Pi Pico, an RP2040 with the ARMv6-M the backend already emits: its
@@ -1263,6 +1263,28 @@ here. The synthetic driver and its own emulator oracle remain in the gate;
 compare shared scenario outcomes only where their contracts overlap. The
 board run also delivers IRQ5 and observes the typed handler whose absolute
 slot-21 placement is required by R12.10.
+
+Done: RP2040's description holds its second stage, a port of pico-sdk's
+generic 03h stage marked `link(boot_stage)`, which refine places at the
+start of flash, pads and seals with the boot ROM's CRC-32 in the object it
+assembles (D587, D588), and `--emit=linker-script` writes a profile's
+script and limits without a program (D589). The prototype-1 application
+runs on a Pico H at the RP2040's own addresses, clocks, resets and pads,
+keeping the synthetic driver's receive contract over the chip's own DMA
+protocol, a live count and an abort for stop, with the UART's own overrun
+reported (D593, D594); its echo and indicator are a module both lanes run.
+`environments/boards/rp2040/board.py` flashes the image through a probehive
+SWD slot, reads the second stage back, cycles the Pico's power and checks
+the UART trace against an oracle written from what the host sent and the
+datasheet (D595); IRQ5 is set pending in the NVIC and runs slot 21's
+handler in exception 21 (D596). The recorded run is
+`environments/boards/rp2040/record.json`: a power-on boot, CHIP_RESET
+HAD_POR alone, with no probe attached; VTOR 0x1000_0100, written only by the
+ROM-loaded stage, whose CRC is e5e96a65; the shared `1A0` echoed with GPIO2
+set and cleared as the emulator lane's application does; a ring overrun and
+a FIFO overflow each reported and restarted; an exhausted epoch restarted
+with nothing lost; 11,202 bytes echoed in order; and the counters read over
+SWD equal to the trace's. It left SR-556 to SR-559, SR-566 and SR-567.
 
 ### R12.30 — Thumb-2, Cortex-M33 and M7
 
@@ -3134,7 +3156,7 @@ scheduled on its other owners until they finish, then leaves the register.
 | R551-34 | Broader standard library | Library facilities beyond the prototypes' slices. Merged: R730-02, a reusable cache-maintenance interface for cached profiles (R12 requires platform providers before admission); R730-09, UART configuration beyond one baud rate; R730-21, the atomic wrapper type. | A concrete program needs an omitted facility. | Capability-passed allocation and I/O, constrained-target costs, complete consumers and failure oracles. R14.40 gave the atomic wrapper, `core/atomic` (D500). | scheduled R13.20 |
 | R551-35 | Language evolution | The stackful-fibre exploration. | A program needing two operations in flight. | A stackful-fibre tour amendment and register decision; stackless coroutines stay rejected. | retired: R14.20 specifies the switch (D450), makes fibres a group over a scheduler (D444) and teaches them at [1675]; stackless coroutines stay rejected |
 | R551-36 | Release readiness | Licensing and distribution, release and version designation, production and operational claims. | Explicit maintainer decisions. | Separate decisions, each with evidence. | open |
-| R730-01 | Release readiness | Only emulators have run firmware; nothing is claimed about physical timing, bus, electrical or interrupt-arrival behaviour. | Before any physical-device or production firmware claim. | A pinned board and smoke procedure checked against a device-specific physical oracle, with shared scenario outcomes compared where their premises hold; emulator lanes stay mandatory. | scheduled R12.20 |
+| R730-01 | Release readiness | Only emulators have run firmware; nothing is claimed about physical timing, bus, electrical or interrupt-arrival behaviour. | Before any physical-device or production firmware claim. | A pinned board and smoke procedure checked against a device-specific physical oracle, with shared scenario outcomes compared where their premises hold; emulator lanes stay mandatory. | retired: R12.20 ran the first pinned board against its physical oracle, with the shared scenario compared and the emulator lanes kept (D595); recurring board runs are R12.60's |
 | R730-03 | Release readiness | D227's ordering trials and bounded store-buffer models are evidence, not a formal proof; no wait-free or timing bound is claimed. | Before a claim beyond the bounded models, or any timing bound. | A stated proof or checked model agreeing with the native trials. | open |
 | R730-06 | Release readiness | Stack paint and SP observation are measurements, not worst-case bounds; 64 spare flash bytes is a fit, not a budget; reset assumes no NMI or fault in its window. | Before a production budget, worst-case stack or fault-tolerant reset claim. | A workload and interrupt model with a checked bound, and reset-window behaviour with executable evidence. | open |
 | R730-07 | Broader standard library | Cortex-M0 C source capabilities, `platform/c` and header generation are disabled; 33 shared programs are general-C restrictions there. | A freestanding program that must call or be called from C. | An ILP32 `platform/c`, Cortex-M0 C signatures, generated bindings from a pinned device C header under a checked Cortex-M0 ABI, and executable firmware fixtures using the generated declarations and adapters with failure oracles; the 33 restrictions re-decided. | scheduled R13.20 |

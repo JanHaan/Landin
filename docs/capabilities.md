@@ -42,14 +42,18 @@ entry that describes it, and put a new one where a reader would look for it.
   port of pico-sdk's generic one marked `link(boot_stage)` (D587), which
   refine emits at the start of flash and seals with the boot ROM's checksum
   in the object it assembles (D588); the stage's stores are held to
-  pico-sdk's own by reading the linked instructions, and no RP2040 image is
-  run. The derived linker script is written as `OUT.ld`, or alone with its
+  pico-sdk's own by reading the linked instructions. A Raspberry Pi Pico
+  boots such an image from power-on and runs prototype 1's UART, DMA,
+  timer, GPIO and interrupt port at the RP2040's own addresses, checked
+  against a physical oracle by a developer tool,
+  [`board.py`](../environments/boards/rp2040/README.md) (D593-D596); no job
+  runs it. The derived linker script is written as `OUT.ld`, or alone with its
   limits by `--emit=linker-script` (D589), a developer's own is linked with
   `--linker-script=FILE` and held to a contract (D546), and
   `link(region: ...)` places a declaration in a named region (D547).
   Firmware runs on the pinned QEMU
   [emulator](../environments/cortex-m/README.md), with synthetic devices
-  served through its debugger stub. Thirty RP2040 registers are checked in
+  served through its debugger stub. Fifty-five RP2040 registers are checked in
   as [generated device fixtures](../devices/README.md).
 - **Devices** are learnt from their CMSIS-SVD files: `refine svd` reads a
   vendor's SVD, fetched by its hash, and a reviewed selection policy, and

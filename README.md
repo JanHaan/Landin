@@ -235,7 +235,7 @@ buy, concurrency and optimization; a build tool, package acquisition,
 release versioning and self-hosting stay outside it.
 [`ROADMAP.md`](ROADMAP.md) is the sole authority for open work.
 
-**Next roadmap item: R12.20 — The first board (planned).**
+**Next roadmap item: R12.30 — Thumb-2, Cortex-M33 and M7 (planned).**
 
 ## Questions, bugs and ideas
 

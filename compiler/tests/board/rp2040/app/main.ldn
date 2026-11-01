@@ -119,13 +119,24 @@ start: () -> noreturn =
     report.field(107, clocks.clk_ref_selected_read(clocks.base))
     report.close_frame()
     mut scratch: [64]u8 = zeroed
-    -- NVIC: TIMER_IRQ_0 is IRQ0, USBCTRL_IRQ IRQ5 and DMA_IRQ_0 IRQ11.
+    -- The alarm raises TIMER_IRQ_0 only with its INTE bit set.  NVIC:
+    -- TIMER_IRQ_0 is IRQ0, USBCTRL_IRQ IRQ5 and DMA_IRQ_0 IRQ11.
+    timer.inte_write(timer.base, 1)
     ppb.nvic_iser_write(ppb.base, 0x821)
     app_state = 2
     loop do
-        now := timer.timerawl_read(timer.base)
-        timer.alarm0_write(timer.base, now +% 1000)
+        -- An alarm fires only when the counter equals it, so one armed for a
+        -- time already past waits for the 32-bit wrap, 71 minutes.  From
+        -- flash through the generic second stage, code not yet in the XIP
+        -- cache costs about 32 us a line, and the first pass from reading
+        -- the counter to this store took longer than the alarm's margin.
+        -- So the time is checked again after arming, as pico-sdk does.
+        target := timer.timerawl_read(timer.base) +% 1000
+        timer.alarm0_write(timer.base, target)
         take_events()
+        if timer.timerawl_read(timer.base) -% target < 0x8000_0000 then
+            notification = 1
+        end if
         n := serial.read(receiver, scratch[0..<64]) else (error)
             if error == serial.stop_timeout then halt(3) end if
             recoveries = recoveries +% 1

@@ -62,7 +62,7 @@ class Oracle(unittest.TestCase):
         self.assertEqual(hub.calls, ['hub-status'])
         hub = Hub(STATUS)
         BOARD.power_cycle(hub, args)
-        self.assertEqual(hub.calls, ['hub-status', 'power-off', 'power-on'])
+        self.assertEqual(hub.calls, ['hub-status', 'power-cycle'])
 
 
 if __name__ == '__main__':

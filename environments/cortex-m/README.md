@@ -795,7 +795,7 @@ manual corrections, regeneration, public interfaces and unsupported metadata.
 inherited profiles supply six QEMU sessions, 24 generated device runs and 168
 deterministic artifact comparisons; a separate C/assembly control adds one
 device run. Seven precise source refusals and independent vendor-header/literal
-oracles run without network or companion tooling. The 53 selected registers
+oracles run without network or companion tooling. The 55 selected registers
 are vendor data, not a faithful RP2040 model or a larger execution board.
 
 ```sh

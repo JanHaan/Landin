@@ -283,8 +283,8 @@ reviewed against.
 |---|---|---|
 | `io_bank0` | GPIO0_CTRL, GPIO1_CTRL, GPIO2_CTRL | Pin function/override images, stride 8; different enumerated domains despite identical field names. No pad/electrical model. |
 | `sio` | GPIO_IN, GPIO_OUT, GPIO_OUT_SET, GPIO_OUT_CLR, GPIO_OE_SET | Input/output and separate write commands; 30-bit masks, sparse offsets, no implicit RMW. |
-| `timer` | ALARM0–3, TIMERAWL, INTR | Four explicit alarm registers, stride 4, low counter word and one-clears interrupt image. No timekeeping driver or 64-bit counter protocol. |
-| `uart0` | UARTDR, UARTRSR, UARTFR, UARTIBRD, UARTFBRD, UARTLCR_H, UARTCR, UARTICR, UARTDMACR | FIFO read side effects, divisors, flags, the enables, clear commands and DMA enable. No serial timing or full UART driver. |
+| `timer` | ALARM0–3, TIMERAWL, INTR, INTE | Four explicit alarm registers, stride 4, low counter word and one-clears interrupt image. No timekeeping driver or 64-bit counter protocol. |
+| `uart0` | UARTDR, UARTRSR, UARTFR, UARTIBRD, UARTFBRD, UARTLCR_H, UARTCR, UARTRIS, UARTICR, UARTDMACR | FIFO read side effects, divisors, flags, the enables, the raw overrun status, clear commands and DMA enable. No serial timing or full UART driver. |
 | `uart1` | UARTFR | Peripheral `derivedFrom="UART0"` with a distinct base. No alias collapse. |
 | `dma` | CH0_READ_ADDR, CH0_WRITE_ADDR, CH0_TRANS_COUNT, CH0_CTRL_TRIG, CH1_READ_ADDR, CH1_CTRL_TRIG, CH0_AL1_CTRL, INTR, INTE0, CHAN_ABORT | Channel stride 64, alternate control view, encoded width/request selectors, sparse request values, mixed access bits, one-clears interrupt status and the abort command, which the header calls self-clearing and the SVD one-to-clear. No full channel driver. |
 | `resets` | RESET, RESET_DONE | The first board's peripherals taken out of reset and the wait for each. |

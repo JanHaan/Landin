@@ -24293,7 +24293,14 @@ package body Landin.Diagnostics.Citations.Texts is
                & "upt RP2040-E13 says an abort may raise; bytes received a"
                & "fter that last count are discarded with the epoch. A sto"
                & "pped descriptor answers from the count it kept. `restart"
-               & "` re-arms the channel only after BUSY has fallen.",
+               & "` re-arms the channel only after BUSY has fallen. While "
+               & "the channel is exhausted or stopped, UART0's 32-byte FIF"
+               & "O holds what arrives and a byte past it is lost; the UAR"
+               & "T flags that in UARTRIS's OERIS, and a snapshot reports "
+               & "it as `overrun`, so no byte is lost unreported. A board "
+               & "run found the loss silent before: a 4096-byte epoch exha"
+               & "usted while the application still echoed its ring lost 1"
+               & "16 bytes in the 13 ms before its restart.",
             when 595 =>
                "Chosen: the board run's oracle is `environments/boards/r"
                & "p2040/board.py`, a developer tool that runs no compiler "
@@ -24312,13 +24319,16 @@ package body Landin.Diagnostics.Citations.Texts is
                & "AD_POR alone, so the run began at power-on; VTOR reads 0"
                & "x1000_0100, which only the second stage writes, so the R"
                & "OM entered the flashed stage and the stage entered compi"
-               & "ler-owned reset; clk_ref is on the crystal; the pad read"
-               & "s GPIO2 high after `1` and low after `0`; every byte sen"
-               & "t is echoed in order but a burst sent during a stall, wh"
-               & "ich overruns the ring once; each 4096 bytes received end"
-               & "s an epoch with one DMA completion and one restart; the "
-               & "timer advances; and the counters read over SWD, without "
-               & "halting the core, equal the last frame's.",
+               & "ler-owned reset; clk_ref is on the crystal; `1`, `A` and"
+               & " `0`, the emulator lane's input, are echoed, the pad rea"
+               & "ding GPIO2 high after `1` and low after `0`; a burst dur"
+               & "ing a stall overruns the ring once; an epoch ended by a "
+               & "stall and followed by a burst is flagged by the UART and"
+               & " keeps the FIFO's 32 bytes; an epoch filled exactly is e"
+               & "xhausted and restarted with nothing lost; every other by"
+               & "te is echoed in order; the timer advances; and the count"
+               & "ers read over SWD, without halting the core, equal the l"
+               & "ast frame's.",
             when 596 =>
                "Chosen: the board application sets IRQ5 pending through "
                & "NVIC_ISPR when the host sends 0x05, with IRQ5 enabled in"

@@ -1,0 +1,80 @@
+{
+  "status": "passed",
+  "image_sha256": "cefa645a078367c24adb26dc76f4a112fde1be57fe2f4293af8cc39bf52d8d37",
+  "second_stage_crc32": "e5e96a65",
+  "second_stage_sha256": "bb2162f7be7e4aeb609c398074206139e53a83696702a404021297271f3cd140",
+  "flash_readback": "matches",
+  "verdicts": {
+    "boot": {
+      "chip_reset": 256,
+      "vtor": 268435712,
+      "clk_ref_selected": 4
+    },
+    "shared": {
+      "input": "1A0",
+      "echo": "1A0",
+      "indicator_after_1": 4,
+      "indicator_after_0": 0
+    },
+    "irq5": {
+      "entries": 1,
+      "exception": 21
+    },
+    "overrun": {
+      "burst": 300,
+      "recoveries": 1
+    },
+    "epochs": {
+      "flagged_burst": 100,
+      "held_by_fifo": 32,
+      "restarts": 3,
+      "dma_completions": 2,
+      "timer_events": 1114,
+      "echoed": 11202,
+      "sent": 11570
+    }
+  },
+  "swd": {
+    "handled": 11202,
+    "recoveries": 3,
+    "dma_events": 2,
+    "usb_events": 1,
+    "trans_count": 1094
+  },
+  "uart_sha256": "df47ded5d3e45be7705b64068092f151a527242a968ea8223fece2b57f2bf89b",
+  "sent_sha256": "d6bd26162b19de4f73019d0e0a88422e4237388c349c0767ff74fc65c643b3c3",
+  "frames": [
+    {
+      "tag": "b",
+      "r": "00000100",
+      "v": "10000100",
+      "k": "00000004"
+    },
+    {
+      "tag": "t",
+      "h": "00002bc2",
+      "c": "00000003",
+      "d": "00000002",
+      "m": "0000045a",
+      "u": "00000001",
+      "p": "00000015",
+      "n": "00000446",
+      "e": "00000bba",
+      "g": "00000000",
+      "s": "00000002"
+    }
+  ],
+  "commands": [
+    "compile",
+    "symbols",
+    "flash",
+    "flash-readback",
+    "hub-status",
+    "power-cycle",
+    "swd-handled",
+    "swd-recoveries",
+    "swd-dma_events",
+    "swd-usb_events",
+    "swd-trans-count"
+  ]
+}

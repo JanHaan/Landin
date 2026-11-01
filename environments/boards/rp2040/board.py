@@ -57,6 +57,8 @@ CHIP_RESET_HAD_POR = 0x100
 VECTORS = 0x10000100    # the second stage points VTOR past itself
 CLK_REF_XOSC = 4        # CLK_REF_SELECTED's bit for source 2, the crystal
 USBCTRL_SLOT = 21
+# What environments/cortex-m/driver.py feeds the synthetic application.
+SHARED = b'1A0'
 
 
 class Failed(Exception):
@@ -191,7 +193,8 @@ def probe_rs(args, *rest):
 
 def read_words(run, args, name, address, count):
     text = run.command(name, probe_rs(args, 'read', 'b32', hex(address), str(count)))
-    words = [int(w, 16) for w in text.split()]
+    # Each line begins with its address and a colon.
+    words = [int(w, 16) for w in text.split() if not w.endswith(':')]
     require(len(words) == count, '%s read %d words, not %d' % (name, len(words), count))
     return words
 
@@ -214,9 +217,11 @@ def power_cycle(run, args):
             'port %d of hub %s does not hold %s; refusing to switch this hub'
             % (args.guard_port, args.hub, args.guard_serial))
     require(args.port != args.guard_port, 'refusing to switch the guarded port')
-    hub(run, args, '-p', str(args.port), '-a', 'off', name='power-off')
-    time.sleep(args.off_seconds)
-    hub(run, args, '-p', str(args.port), '-a', 'on', name='power-on')
+    # One call: switching the port off re-enumerates the hub's inner hubs,
+    # and a second call can meet their new device nodes before udev has
+    # given them the group that may switch them.
+    hub(run, args, '-p', str(args.port), '-a', 'cycle', '-d', '%g' % args.off_seconds,
+        name='power-cycle')
 
 
 class Console:
@@ -303,14 +308,19 @@ def scenario(console, run, seed):
     require(boot['k'] == CLK_REF_XOSC, 'clk_ref is not on the crystal: %08x' % boot['k'])
     verdicts['boot'] = dict(chip_reset=boot['r'], vtor=boot['v'], clk_ref_selected=boot['k'])
     seen = 0
-    # The indicator: 1 sets GPIO2, 0 clears it; the pad's input reads it back.
-    console.send(b'x1')
+    # The shared scenario (D593), the bytes the emulator lane's application
+    # is fed, 1, A and 0: each echoed, 1 setting GPIO2 and 0 clearing it,
+    # which the pad's input reads back.
+    console.send(SHARED[:1])
     high = report(console, seen); seen += 1
-    console.send(b'y0')
+    console.send(SHARED[1:])
     low = report(console, seen); seen += 1
     require(high['g'] == 4 and low['g'] == 0,
             'GPIO2 read back %x after 1 and %x after 0' % (high['g'], low['g']))
-    verdicts['indicator'] = dict(after_1=high['g'], after_0=low['g'])
+    require(echo_of(console.received).startswith(SHARED[:1] + bytes([REPORT]) + SHARED[1:]),
+            'the shared scenario was not echoed')
+    verdicts['shared'] = dict(input=SHARED.decode(), echo=SHARED.decode(),
+                              indicator_after_1=high['g'], indicator_after_0=low['g'])
     # IRQ5, set pending in the NVIC: slot 21's handler runs once, in
     # exception 21.
     console.send(bytes([IRQ5]))
@@ -332,27 +342,53 @@ def scenario(console, run, seed):
     overrun = report(console, seen); seen += 1
     require(overrun['c'] == 1, 'the overrun made %d recoveries, not 1' % overrun['c'])
     verdicts['overrun'] = dict(burst=len(burst), recoveries=overrun['c'])
-    epoch = 1                   # REPORT, the restarted ring's first byte
-    # A stream across two exhaustions: every byte echoed, in order.
-    stream_bytes = bytes(rng.randrange(0x20, 0x7f) for _ in range(12000))
-    console.send(stream_bytes)
-    epoch += len(stream_bytes)
-    before = report(console, seen); seen += 1
-    epoch += 1
-    exhaustions = epoch // BUDGET
+    # The restarted ring's epoch holds that REPORT.  Each epoch is now filled
+    # to its 4096 bytes and no further, then the host waits: while a channel
+    # is exhausted the UART's 32-byte FIFO holds what arrives, and only that.
+    def fill(epoch, last=b''):
+        part = bytes(rng.randrange(0x20, 0x7f) for _ in range(BUDGET - epoch - len(last)))
+        console.send(part + last)
+        return part
+    # An epoch that ends in STALL: the channel is exhausted while the
+    # application stops reading, and a 100-byte burst then overflows the
+    # FIFO.  The UART flags the loss, the application restarts on it, and of
+    # the burst only the 32 bytes the FIFO held reach the new epoch.
+    fill(1, bytes([STALL]))
+    console.wait(lambda s: echo_of(s).count(STALL) == 2, 30, 'the second echo of STALL')
+    lost = bytes(rng.randrange(0x20, 0x7f) for _ in range(100))
+    console.send(lost, pace=100)
+    time.sleep(0.3)
+    flagged = report(console, seen); seen += 1
+    require(flagged['c'] == 2 and flagged['d'] == 1,
+            'after a burst into an exhausted channel: %d restarts and %d completions, not 2 and 1'
+            % (flagged['c'], flagged['d']))
+    # An epoch that ends with nothing behind it: exhausted, restarted, and
+    # the REPORT that waited in the FIFO meanwhile is the next epoch's.
+    fill(32 + 1)
+    after = report(console, seen); seen += 1
+    require(after['c'] == 3 and after['d'] == 2,
+            'after an exhausted epoch: %d restarts and %d completions, not 3 and 2'
+            % (after['c'], after['d']))
+    console.send(bytes(rng.randrange(0x20, 0x7f) for _ in range(3000)))
     final = report(console, seen); seen += 1
-    require(final['c'] == 1 + exhaustions, '%d recoveries, not %d' % (final['c'], 1 + exhaustions))
-    require(final['d'] == exhaustions, '%d DMA completions, not %d' % (final['d'], exhaustions))
-    require(final['m'] > before['m'] > high['m'], 'the timer did not advance')
+    require(final['c'] == 3 and final['d'] == 2, 'the last epoch restarted the ring')
+    require(final['m'] > after['m'] > high['m'], 'the timer did not advance')
     echo = echo_of(console.wait(lambda s: True, 1, 'the stream'))
-    start = bytes(console.sent).index(burst)
-    expected = bytes(console.sent[:start] + console.sent[start + len(burst):])
+    sent = bytes(console.sent)
+    discarded = [(sent.index(burst), len(burst)), (sent.index(lost) + 32, len(lost) - 32)]
+    expected, at = bytearray(), 0
+    for begin, length in discarded:
+        expected += sent[at:begin]
+        at = begin + length
+    expected += sent[at:]
+    expected = bytes(expected)
     require(echo == expected, 'the echo differs from what was sent, first at byte %d'
-            % next((i for i, (a, b) in enumerate(zip(echo, expected)) if a != b), min(len(echo), len(expected))))
+            % next((i for i, (a, b) in enumerate(zip(echo, expected)) if a != b),
+                   min(len(echo), len(expected))))
     require(final['h'] == len(expected), 'handled %d bytes, not %d' % (final['h'], len(expected)))
-    verdicts['stream'] = dict(bytes=len(stream_bytes), exhaustions=exhaustions,
-                              recoveries=final['c'], dma_completions=final['d'],
-                              timer_events=final['m'], echoed=len(echo))
+    verdicts['epochs'] = dict(flagged_burst=len(lost), held_by_fifo=32,
+                              restarts=final['c'], dma_completions=final['d'],
+                              timer_events=final['m'], echoed=len(echo), sent=len(sent))
     return verdicts, final
 
 
@@ -389,6 +425,8 @@ def main():
                         help='the serial the guarded port must show, or the hub is not switched')
     parser.add_argument('--off-seconds', type=float, default=1.0)
     parser.add_argument('--seed', type=int, default=1220)
+    parser.add_argument('--record', type=Path,
+                        help="also write a passed run's record here, as record.json is")
     args = parser.parse_args()
     require(args.probe_rs, 'no probe-rs: name one with --probe-rs')
     require(args.nm, 'no arm-eabi-nm or arm-none-eabi-nm on PATH: name one with --nm')
@@ -427,6 +465,14 @@ def main():
             bridge.close()
         result['commands'] = run.commands
         (args.output / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
+    if args.record and result['status'] == 'passed':
+        kept = ('status', 'image_sha256', 'second_stage_crc32', 'second_stage_sha256',
+                'flash_readback', 'verdicts', 'swd', 'uart_sha256')
+        record = {k: result[k] for k in kept}
+        record['sent_sha256'] = hashlib.sha256((args.output / 'sent.bin').read_bytes()).hexdigest()
+        record['frames'] = [f for f in result['frames'] if f['tag'] == 'b'] + result['frames'][-1:]
+        record['commands'] = [c['name'] for c in run.commands]
+        args.record.write_text(json.dumps(record, indent=2) + '\n')
     print('board %s: %s%s' % (result['status'], args.output,
                               '' if result['status'] == 'passed' else ': ' + result['failure']))
     return 0 if result['status'] == 'passed' else 1

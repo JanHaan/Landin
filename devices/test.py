@@ -492,7 +492,7 @@ class Rp2040Oracles(unittest.TestCase):
 
     def test_literal_contract(self):
         rows = {r['source']: r for r in self.rows()}
-        self.assertEqual(len(rows), 53)
+        self.assertEqual(len(rows), 55)
         self.assertEqual(rows['UART1.UARTFR']['derived_from'], 'UART0')
         self.assertEqual(rows['DMA.CH1_CTRL_TRIG']['offset']
                          - rows['DMA.CH0_CTRL_TRIG']['offset'], 64)
@@ -517,7 +517,7 @@ class Rp2040Oracles(unittest.TestCase):
             read = ('refused' if key in {'SIO.GPIO_OUT_SET', 'SIO.GPIO_OUT_CLR',
                     'SIO.GPIO_OE_SET', 'UART0.UARTICR'} else 'modify' if key == 'UART0.UARTDR' else 'normal')
             write = ('refused' if key in {'SIO.GPIO_IN', 'TIMER.TIMERAWL',
-                     'UART0.UARTRSR', 'UART0.UARTFR', 'UART1.UARTFR', 'DMA.CH0_AL1_CTRL',
+                     'UART0.UARTRSR', 'UART0.UARTFR', 'UART0.UARTRIS', 'UART1.UARTFR', 'DMA.CH0_AL1_CTRL',
                      'RESETS.RESET_DONE', 'CLOCKS.CLK_REF_SELECTED',
                      'CLOCKS.CLK_SYS_SELECTED', 'VREG_AND_CHIP_RESET.CHIP_RESET',
                      'PPB.VTOR'}

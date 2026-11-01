@@ -32,7 +32,8 @@
       "ALARM2",
       "ALARM3",
       "TIMERAWL",
-      "INTR"
+      "INTR",
+      "INTE"
     ],
     "UART0": [
       "UARTDR",
@@ -42,6 +43,7 @@
       "UARTFBRD",
       "UARTLCR_H",
       "UARTCR",
+      "UARTRIS",
       "UARTICR",
       "UARTDMACR"
     ],
@@ -165,6 +167,11 @@
       "write": "one_clears",
       "reserved": "zero"
     },
+    "TIMER.INTE": {
+      "read": "normal",
+      "write": "normal",
+      "reserved": "zero"
+    },
     "UART0.UARTDR": {
       "read": "modify",
       "write": "normal",
@@ -199,6 +206,11 @@
     "UART0.UARTCR": {
       "read": "normal",
       "write": "normal",
+      "reserved": "zero"
+    },
+    "UART0.UARTRIS": {
+      "read": "normal",
+      "write": "refused",
       "reserved": "zero"
     },
     "UART0.UARTICR": {
@@ -382,7 +394,8 @@
     "XOSC.CTRL": "0x0",
     "XOSC.STATUS": "0x81000000",
     "XOSC.STARTUP": "0x0",
-    "WATCHDOG.TICK": "0x3ff"
+    "WATCHDOG.TICK": "0x3ff",
+    "UART0.UARTRIS": "0x7f0"
   },
   "provenance": {
     "vendor": "Raspberry Pi",
