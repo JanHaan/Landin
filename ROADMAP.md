@@ -1281,10 +1281,11 @@ handler in exception 21 (D596). The recorded run is
 `environments/boards/rp2040/record.json`: a power-on boot, CHIP_RESET
 HAD_POR alone, with no probe attached; VTOR 0x1000_0100, written only by the
 ROM-loaded stage, whose CRC is e5e96a65; the shared `1A0` echoed with GPIO3
-set and cleared as the emulator lane's application does; a ring overrun and
+set and cleared as the emulator lane's application does, read back by its pad
+and on a wire by the probe; a ring overrun and
 a FIFO overflow each reported and restarted; an exhausted epoch restarted
 with nothing lost; 11,202 bytes echoed in order; and the counters read over
-SWD equal to the trace's. It left SR-556 to SR-558.
+SWD equal to the trace's. It left SR-556, SR-569 to SR-571 and SR-573.
 
 ### R12.30 — Thumb-2, Cortex-M33 and M7
 
