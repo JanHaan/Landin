@@ -625,7 +625,19 @@ package body Landin.Targets.Assembly is
             Stop := Stop + 1;
          end loop;
          if Stop <= Clean'Last and then Clean (Stop) = ':' then
-            return "ordinary assembly is straight-line and defines no label";
+            --  A naked body owns its control flow, so it may label a
+            --  target as it may branch to one (D598); the rest of the
+            --  line is an instruction like any other.
+            if not Naked then
+               return "ordinary assembly is straight-line and defines no"
+                 & " label; a naked routine's body may";
+            elsif Stop = Clean'First
+              or else (for some C of Clean (Clean'First .. Stop - 1) =>
+                         C not in 'a' .. 'z' | '0' .. '9' | '_')
+            then
+               return "a naked label requires an ASCII identifier";
+            end if;
+            return Check_Line (Clean (Stop + 1 .. Clean'Last));
          end if;
          declare
             Mnemonic : constant String := Clean (Clean'First .. Stop - 1);

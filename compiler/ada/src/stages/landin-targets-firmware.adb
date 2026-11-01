@@ -229,7 +229,8 @@ package body Landin.Targets.Firmware is
          end if;
          if not Naked and then Ada.Strings.Fixed.Index (Clean, ":") /= 0
          then
-            return "ordinary assembly is straight-line and defines no label";
+            return "ordinary assembly is straight-line and defines no"
+              & " label; a naked routine's body may";
          end if;
          while Stop <= Clean'Last and then Clean (Stop) not in ' ' | ASCII.HT
          loop

@@ -472,6 +472,13 @@
     "runtime/assembly-memory-boundary": {
       "mode": "execute"
     },
+    "runtime/assembly-naked-labels": {
+      "codes": [
+        "L0346"
+      ],
+      "mode": "refuse",
+      "reason": "Cortex-M0 keeps the general C surface disabled (L0346), and the fixture reaches its naked body through the C import of its symbol (D516); a Cortex-M0 naked body's labels are pinned by the firmware lane's naked entries."
+    },
     "runtime/assembly-operand-free": {
       "mode": "execute"
     },

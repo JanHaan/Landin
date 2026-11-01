@@ -1,0 +1,54 @@
+-- A naked body owns its control flow, so it may label what it branches to
+-- (D598): this one counts its argument down to zero in a loop and returns
+-- how many times it went round.  Ordinary code calls it through the C
+-- import of its symbol (D516).
+public extern(c) link(symbol: "landin_count_down") count_down: (n: u64) -> (rounds: u64)
+
+fixed if compiler.arch == x86_64 then
+    link(symbol: "landin_count_down")
+    extern(naked) count_down_text: () -> none =
+        assembler.block("""
+            xorl %eax, %eax
+            1:
+            testq %rdi, %rdi
+            jz 2f
+            incq %rax       # one more round
+            decq %rdi
+            jmp 1b
+            2: ret
+            """)
+    end count_down_text
+elsif compiler.arch == arm64 then
+    link(symbol: "landin_count_down")
+    extern(naked) count_down_text: () -> none =
+        assembler.block("""
+            mov x1, #0
+            1:
+            cbz x0, 2f
+            add x1, x1, #1  // one more round
+            sub x0, x0, #1
+            b 1b
+            2: mov x0, x1
+            ret
+            """)
+    end count_down_text
+elsif compiler.arch == rv64 then
+    link(symbol: "landin_count_down")
+    extern(naked) count_down_text: () -> none =
+        assembler.block("""
+            li t0, 0
+            1:
+            beqz a0, 2f
+            addi t0, t0, 1  # one more round
+            addi a0, a0, -1
+            j 1b
+            2: mv a0, t0
+            ret
+            """)
+    end count_down_text
+end if
+
+public main: () -> (code: i32) =
+    code = 1
+    if count_down(7) == 7 and count_down(0) == 0 then code = 42 end if
+end main

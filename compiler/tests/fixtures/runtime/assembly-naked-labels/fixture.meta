@@ -1,0 +1,7 @@
+class: runtime
+summary: a hosted naked body labels a loop and branches back to it, called through the C import of its symbol
+program: main.ldn
+constructs: 1570, 1630
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+profiles: standard
+status: 42

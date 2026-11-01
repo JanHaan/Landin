@@ -22401,9 +22401,9 @@ package body Landin.Diagnostics.Citations.Texts is
                & "nstructions exist to the assembler. Each hosted architec"
                & "ture's system call returns to the next instruction and i"
                & "s admitted (D281); a hosted naked body may transfer cont"
-               & "rol (D279). Implicit register effects and indirect write"
-               & "s into compiler storage remain programmer obligations th"
-               & "at no check can prove.",
+               & "rol (D279) and label its targets (D598). Implicit regist"
+               & "er effects and indirect writes into compiler storage rem"
+               & "ain programmer obligations that no check can prove.",
             when 597 =>
                "Chosen: a line of block text may end in the target's own"
                & " line comment, from its marker to the end of the line, i"
@@ -22467,6 +22467,18 @@ package body Landin.Diagnostics.Citations.Texts is
                & "would make block text a second syntax beside the assembl"
                & "er's, which a reader could no longer take to the assembl"
                & "er's manual | `negative/assembly-digit-separator` |",
+            when 598 =>
+               "Chosen: a naked body on every target may define labels, "
+               & "as Cortex-M's always could: a line may begin with an ide"
+               & "ntifier of ASCII letters, digits and underscores, numeri"
+               & "c local labels such as `1` among them, and a colon, and "
+               & "the rest of the line, if any, is an instruction checked "
+               & "as any other. An ordinary block still defines no label, "
+               & "and its refusal now says a naked routine's body may. A l"
+               & "abel that is not such an identifier is refused as ""a nak"
+               & "ed label requires an ASCII identifier"", on every target "
+               & "alike. The `clone` trampolines stay as they are; nothing"
+               & " requires them to branch.",
             when 252 =>
                "Chosen: one layout, decided by the compiler and not by t"
                & "he program: `refine fmt`. It decides space and nothing e"
@@ -23942,7 +23954,7 @@ package body Landin.Diagnostics.Citations.Texts is
                & "s no label: the creator and the new thread run the same "
                & "instructions after the call and each picks its next step"
                & " with a conditional move, or on RV64 a mask, since a hos"
-               & "ted body admits no label.",
+               & "ted body then admitted no label.",
             when 523 =>
                "Chosen: under `--link=libc`, which Darwin and FreeBSD al"
                & "ways use, each active `linker.library(""NAME"")` reaches t"
@@ -24413,14 +24425,15 @@ package body Landin.Diagnostics.Citations.Texts is
                & "OM entered the flashed stage and the stage entered compi"
                & "ler-owned reset; clk_ref is on the crystal; `1`, `A` and"
                & " `0`, the emulator lane's input, are echoed, the pad rea"
-               & "ding GPIO3 high after `1` and low after `0`; a burst dur"
-               & "ing a stall overruns the ring once; an epoch ended by a "
-               & "stall and followed by a burst is flagged by the UART and"
-               & " keeps the FIFO's 32 bytes; an epoch filled exactly is e"
-               & "xhausted and restarted with nothing lost; every other by"
-               & "te is echoed in order; the timer advances; and the count"
-               & "ers read over SWD, without halting the core, equal the l"
-               & "ast frame's.",
+               & "ding GPIO3 high after `1` and low after `0`, and the pro"
+               & "be's GPIO wired to it reading the same on the wire; a bu"
+               & "rst during a stall overruns the ring once; an epoch ende"
+               & "d by a stall and followed by a burst is flagged by the U"
+               & "ART and keeps the FIFO's 32 bytes; an epoch filled exact"
+               & "ly is exhausted and restarted with nothing lost; every o"
+               & "ther byte is echoed in order; the timer advances; and th"
+               & "e counters read over SWD, without halting the core, equa"
+               & "l the last frame's.",
             when 596 =>
                "Chosen: the board application sets IRQ5 pending through "
                & "NVIC_ISPR when the host sends 0x05, with IRQ5 enabled in"

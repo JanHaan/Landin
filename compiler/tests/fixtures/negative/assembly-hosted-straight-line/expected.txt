@@ -8,7 +8,7 @@ error[L0330]: ordinary assembly is straight-line and transfers no control
 2 |     assembler.block("jmp 1f", in v: u64 at rax = value)
   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
   = note: [1630]: opaque assembly is a compiler memory boundary, not a hardware barrier
-error[L0330]: ordinary assembly is straight-line and defines no label
+error[L0330]: ordinary assembly is straight-line and defines no label; a naked routine's body may
   --> ../tests/fixtures/negative/assembly-hosted-straight-line/program.ldn:3:5
   |
 3 |     assembler.block("again: nop", in v: u64 at rax = value)

@@ -1999,6 +1999,9 @@ package body Landin.Diagnostics.Citations is
                "Assembly operands name their registers",
             when 597 =>
                "Assembly text takes its target's own line comment",
+            when 598 =>
+               "A naked body on a hosted target may label what it branch"
+               & "es to",
             when 252 =>
                "A source has one layout, and the compiler lays it out",
             when 358 =>
@@ -3228,6 +3231,8 @@ package body Landin.Diagnostics.Citations is
             when 248 =>
                "Decisions: The toolchain, C and the machine",
             when 597 =>
+               "Decisions: The toolchain, C and the machine",
+            when 598 =>
                "Decisions: The toolchain, C and the machine",
             when 252 =>
                "Decisions: The toolchain, C and the machine",
@@ -4622,6 +4627,9 @@ package body Landin.Diagnostics.Citations is
             when 597 =>
                "https://www.701.dev/spec.html#d597-assembly-text-takes-i"
                & "ts-target-s-own-line-comment",
+            when 598 =>
+               "https://www.701.dev/spec.html#d598-a-naked-body-on-a-hos"
+               & "ted-target-may-label-what-it-branches-to",
             when 252 =>
                "https://www.701.dev/spec.html#d252-a-source-has-one-layo"
                & "ut-and-the-compiler-lays-it-out",

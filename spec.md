@@ -17776,7 +17776,7 @@ implementation limit; at higher M-profile levels and on hosted targets the
 checker refuses control transfer by mnemonic and leaves which instructions
 exist to the assembler. Each hosted architecture's system call returns to the
 next instruction and is admitted (D281); a hosted naked body may transfer
-control (D279).
+control (D279) and label its targets (D598).
 Implicit register effects and indirect writes into compiler storage remain
 programmer obligations that no check can prove.
 
@@ -17832,6 +17832,38 @@ names the number without its separators. L0330 carries each refusal.
 `negative/assembly-arm64-statement-separator`, `targets/assembly comments
 are each target's own`, `cortex ABI/assembly comments are not emitted`, and
 RP2040's `boot2.ldn`, whose assembled stage keeps its bytes and checksum.
+
+### D598 — A naked body on a hosted target may label what it branches to
+
+**The tour said** at [1630] that a naked body owns its control flow, so its
+block may use labels and branches, and [1990] says a naked body's text may
+contain labels. On Cortex-M a naked body's labels were admitted; on the
+hosted targets D279 let a naked body transfer control but L0330 refused its
+labels as "ordinary assembly is straight-line and defines no label", which
+called a naked body ordinary, and D516 declined labels because the `clone`
+trampoline was written branch-free without them.
+
+**Chosen:** a naked body on every target may define labels, as Cortex-M's
+always could: a line may begin with an identifier of ASCII letters, digits
+and underscores, numeric local labels such as `1` among them, and a colon,
+and the rest of the line, if any, is an instruction checked as any other.
+An ordinary block still defines no label, and its refusal now says a naked
+routine's body may. A label that is not such an identifier is refused as
+"a naked label requires an ASCII identifier", on every target alike. The
+`clone` trampolines stay as they are; nothing requires them to branch.
+
+**The alternatives:** keeping hosted naked bodies label-free and writing
+that rule into [1990] beside the tour's, which keeps two rules for one
+construct and leaves a backward branch to computed offsets; and admitting
+labels in ordinary blocks too, which [1630]'s straight-line contract for
+an ordinary block, and the compiler's knowledge of its control flow,
+exclude.
+
+**Pinned by** `runtime/assembly-naked-labels`, a counting loop with a
+forward exit, a backward branch and a label sharing its line with an
+instruction, called through the C import of its symbol on every hosted
+target, and `negative/assembly-hosted-straight-line`, an ordinary block's
+label refused naming the naked body that may have one.
 
 ### D252 — A source has one layout, and the compiler lays it out
 
@@ -20316,14 +20348,15 @@ import carries neither.
 `platform/linux`'s `clone_thread` is such an import, and its text has
 no label: the creator and the new thread run the same instructions
 after the call and each picks its next step with a conditional move, or
-on RV64 a mask, since a hosted body admits no label.
+on RV64 a mask, since a hosted body then admitted no label.
 
 **The alternatives:** a compiler builtin that starts a thread, which
 puts one system's call in the compiler; storing the naked function value
 and reading its bits as an address to make a C function value, which
 works only by evading the rule that nothing converts a function value to
 an address; and labels in a naked body, which the branch-free text does
-not need. All were declined.
+not need. All were declined; D598 later admitted labels in every naked
+body, which the trampoline still does without.
 
 **Pinned by** every static Linux fixture of `hosted/thread`, among them
 `runtime/thread-creation-and-join-order-writes`, on x86-64, arm64 and
