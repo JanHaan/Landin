@@ -504,6 +504,36 @@ class ProbeFailures(unittest.TestCase):
             finally:
                 backend_corpus.COUNTERPARTS = original
 
+    def test_a_refuse_row_executes_only_where_its_lane_says(self):
+        import backend_corpus
+        record = json.loads((HERE.parent.parent / 'compiler/tests/cortex-m/corpus.json').read_text())
+        name = 'runtime/assembly-float-square-root'
+        row = record['fixtures'][name]
+        self.assertEqual((row['mode'], row['lanes']['mps2-an500']['mode']), ('refuse', 'execute'))
+        self.assertTrue(backend_corpus.executes_on(row, 'mps2-an500'))
+        self.assertFalse(backend_corpus.executes_on(row, 'mps2-an505'))
+        self.assertFalse(backend_corpus.executes_on(row, None))
+        original = backend_corpus.COUNTERPARTS
+        with tempfile.TemporaryDirectory() as directory:
+            broken = Path(directory)
+            for one in ('counterparts.json', 'cases'):
+                source = original / one
+                target = broken / one
+                if source.is_dir():
+                    import shutil
+                    shutil.copytree(source, target)
+                else:
+                    target.write_text(source.read_text())
+            #  An execute entry carries no codes of its own.
+            row['lanes']['mps2-an500']['codes'] = ['L0304']
+            (broken / 'corpus.json').write_text(json.dumps(record))
+            backend_corpus.COUNTERPARTS = broken
+            try:
+                with self.assertRaisesRegex(RuntimeError, 'a "lanes" entry names a corpus lane'):
+                    backend_corpus.inventory()
+            finally:
+                backend_corpus.COUNTERPARTS = original
+
     def test_image_limit_does_not_hide_codegen_failure(self):
         from unittest.mock import patch
         from backend import recorded

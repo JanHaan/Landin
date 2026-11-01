@@ -2,9 +2,10 @@
 --  way to reach the instruction.  A float operand is placed at `float`,
 --  which chooses one of the registers every block overwrites, or at a
 --  fixed float register, and its type selects the spelling: x86-64's
---  `%xmmN` for both widths, arm64's `sN` or `dN`, RV64's `fN`.  `widened`
---  takes an integer through `general` and gives a float back through
---  `float`, the two classes counted apart.
+--  `%xmmN` for both widths, arm64's `sN` or `dN`, RV64's `fN`, and a
+--  Cortex-M7's `s(2n)` or `dn`.  `widened` takes an integer through
+--  `general` and gives a float back through `float`, the two classes
+--  counted apart.
 fixed if compiler.arch == x86_64 then
     root: (x: f64) -> (r: f64) =
         r = assembler.block("sqrtsd {x}, {r}", in x: f64 at float = x,
@@ -39,6 +40,22 @@ elsif compiler.arch == rv64 then
     end root32
     widened: (n: i64) -> (r: f64) =
         r = assembler.block("fcvt.d.l {r}, {n}", in n: i64 at general = n,
+                            out r: f64 at float)
+    end widened
+elsif compiler.feature.fp_dp then
+    --  A Cortex-M7's FPv5-D16 has d0-d15, an f32 spelled as the low
+    --  single of its d register: d4's is s8.  `widened` converts through
+    --  s15, d7's high half, which `float` then passes over.
+    root: (x: f64) -> (r: f64) =
+        r = assembler.block("vsqrt.f64 {r}, {x}", in x: f64 at float = x,
+                            out r: f64 at float)
+    end root
+    root32: (x: f32) -> (r: f32) =
+        r = assembler.block("vsqrt.f32 {x}, {x}", inout x: f32 at d4 = x)
+    end root32
+    widened: (n: i64) -> (r: f64) =
+        r = assembler.block("vmov s15, {n}\nvcvt.f64.s32 {r}, s15",
+                            in n: i32 at general = i32(n),
                             out r: f64 at float)
     end widened
 else

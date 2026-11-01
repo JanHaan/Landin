@@ -1,11 +1,11 @@
-error[L0304]: a float assembly operand needs a float register, and the cortex-m0 profile has none
+error[L0304]: a float assembly operand needs a float register, and the constrained reference profile has none
   --> ../tests/fixtures/negative/assembly-float-operand/program.ldn:2:34
   |
 2 |     assembler.block("nop", in v: f32 at r1 = value)
   |                                  ^^^
   = note: the tour describes it at [1630]
   = note: this is a recorded source-form boundary
-error[L0304]: a float assembly operand needs a float register, and the cortex-m0 profile has none
+error[L0304]: a float assembly operand needs a float register, and the constrained reference profile has none
   --> ../tests/fixtures/negative/assembly-float-operand/program.ldn:3:34
   |
 3 |     assembler.block("nop", in w: f64 at float = wide)

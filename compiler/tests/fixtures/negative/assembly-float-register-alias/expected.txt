@@ -1,0 +1,30 @@
+error[L0330]: `d1` is already this block's register for another operand
+  --> ../tests/fixtures/negative/assembly-float-register-alias/main.ldn:8:59
+  |
+8 |                     in a: f64 at d1 = value, in b: f32 at d1 = f32(value))
+  |                                                           ^^
+  --> ../tests/fixtures/negative/assembly-float-register-alias/main.ldn:7:5
+  |
+7 |     assembler.block("vadd.f64 {a}, {a}, {a}\nvmov.f32 {b}, {b}",
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
+  = note: [1630]: each operand has a register of its own; `inout` passes one value in and out
+error[L0330]: the text names `s17`, a register the routine preserves, and no operand declares it
+  --> ../tests/fixtures/negative/assembly-float-register-alias/main.ldn:9:21
+  |
+9 |     assembler.block("vmov.f32 s17, {v}", in v: f32 at float = f32(value))
+  |                     ^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/assembly-float-register-alias/main.ldn:9:5
+  |
+9 |     assembler.block("vmov.f32 s17, {v}", in v: f32 at float = f32(value))
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
+  = note: [1630]: declare it with `out _ at d8` so the routine saves it
+error[L0330]: this block asks `float` for 8 registers, and cortex-m0 has 7 left for it
+  --> ../tests/fixtures/negative/assembly-float-register-alias/main.ldn:13:5
+   |
+13 |     assembler.block("vadd.f64 {a}, {b}, {c}\nvadd.f64 {d}, {e}, {g}\nvadd.f64 {h}, {i}, {i}\nvmov.f32 s1, s1",
+   |     ^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/assembly-float-register-alias/main.ldn:13:5
+   |
+13 |     assembler.block("vadd.f64 {a}, {b}, {c}\nvadd.f64 {d}, {e}, {g}\nvadd.f64 {h}, {i}, {i}\nvmov.f32 s1, s1",
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
+  = note: [1990]: `float` chooses from the registers the block does not otherwise name

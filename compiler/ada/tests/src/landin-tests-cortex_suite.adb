@@ -3172,7 +3172,7 @@ package body Landin.Tests.Cortex_Suite is
         & "    r = f64(a * c) + b / 3.0 - f64(-c)" & LF_Text
         & "end mix" & LF_Text
         & "kept: (x: u32) -> (r: u32) =" & LF_Text
-        & "    r = assembler.block(""vmov s16, {x}\nvmov {r}, s16"","
+        & "    r = assembler.block(""vmov s0, {x}\nvmov {r}, s0"","
         & " out r: u32 at general, in x: u32 at general = x)" & LF_Text
         & "end kept" & LF_Text
         & "start: () -> none =" & LF_Text

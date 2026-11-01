@@ -1366,7 +1366,8 @@ package body Landin.Backend is
       end loop;
       Landin.Targets.Assembly.Choose
         (Facts, Landin.Source.Names.Spelling
-           (Names, Landin.IR.Assembly_Text (Of_Unit, Item, Value)), Result);
+           (Names, Landin.IR.Assembly_Text (Of_Unit, Item, Value)), Result,
+         Landin.IR.Firmware_Profile (Of_Unit).Float);
       return Result;
    end Assembly_Registers;
 
@@ -1379,7 +1380,8 @@ package body Landin.Backend is
      is (Landin.Targets.Assembly.Substituted
            (Facts, Landin.Source.Names.Spelling
               (Names, Landin.IR.Assembly_Text (Of_Unit, Item, Value)),
-            Assembly_Registers (Of_Unit, Item, Value, Names, Facts)));
+            Assembly_Registers (Of_Unit, Item, Value, Names, Facts),
+            Landin.IR.Firmware_Profile (Of_Unit).Float));
 
    procedure Count_Uses
      (Of_Unit : Landin.IR.Unit;

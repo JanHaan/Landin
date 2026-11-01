@@ -478,6 +478,8 @@ package body Landin.IR.Verifier is
          Inputs : Natural := 0;
          Classes : Natural := 0;
          Float_Classes : Natural := 0;
+         --  D630: a Cortex-M profile's float registers are its unit's.
+         Unit : constant Asm.Float_Unit := Firmware_Profile (Of_Unit).Float;
 
          function Operand (Index : Positive) return Assembly_Operand
            is (Nth_Assembly_Operand (Of_Unit, Item, Value, Index));
@@ -488,13 +490,14 @@ package body Landin.IR.Verifier is
          function Left (Float : Boolean) return Natural is
             Total : Natural := 0;
          begin
-            for Index in 1 .. (if Float then Asm.Float_Count (Facts)
+            for Index in 1 .. (if Float then Asm.Float_Count (Facts, Unit)
                                else Asm.General_Count (Facts))
             loop
                if not (for some Other in 1 .. Count =>
                          Register_Of (Operand (Other))
                            = (if Float
-                              then Asm.Float_Class_Register (Facts, Index)
+                              then Asm.Float_Class_Register
+                                (Facts, Index, Unit)
                               else Asm.General_Register (Facts, Index)))
                then
                   Total := Total + 1;
@@ -578,7 +581,7 @@ package body Landin.IR.Verifier is
                   --  other operand in the integer one; a discarded output
                   --  names a register of either.
                   if This.Kind in Landin.Types.Float_Name
-                    and then not Asm.Has_Float_Registers (Facts)
+                    and then not Asm.Has_Float_Registers (Facts, Unit)
                   then
                      return Assembly_Register_Refused;
                   elsif This.Width = 0 then
@@ -587,7 +590,8 @@ package body Landin.IR.Verifier is
                      else
                         Classes := Classes + 1;
                      end if;
-                  elsif (case Asm.Classify (Facts, Register_Of (This)) is
+                  elsif (case Asm.Classify
+                                (Facts, Register_Of (This), Unit) is
                            when Asm.Operand_Register =>
                               This.Kind in Landin.Types.Float_Name,
                            when Asm.Float_Register =>
@@ -603,7 +607,7 @@ package body Landin.IR.Verifier is
                      return Assembly_Register_Refused;
                   elsif This.Kind in Landin.Types.Float_Name
                     and then (if This.Kind = Landin.Types.F32 then 32
-                              else 64) > Asm.Float_Width (Facts)
+                              else 64) > Asm.Float_Width (Facts, Unit)
                   then
                      return Assembly_Register_Refused;
                   end if;

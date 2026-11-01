@@ -3,6 +3,8 @@ with Ada.Strings.Fixed;
 
 package body Landin.Targets.Assembly is
 
+   use type Landin.Targets.Firmware.Float_Unit;
+
    type View_Name is access constant String;
 
    Float_Views : constant array (1 .. 6) of View_Name :=
@@ -73,8 +75,9 @@ package body Landin.Targets.Assembly is
       return Natural'Last;
    end RV64_Float_Alias;
 
-   function Classify (Facts : Target_Facts; Name : String)
-     return Register_Kind is
+   function Classify
+     (Facts : Target_Facts; Name : String;
+      Unit : Float_Unit := No_Float_Unit) return Register_Kind is
    begin
       if Name = "general" and then Has_Registers (Facts) then
          return General_Class;
@@ -88,6 +91,10 @@ package body Landin.Targets.Assembly is
          when Cortex_M0 =>
             if Number_In (Name, "r", 0, 7) then
                return Operand_Register;
+            elsif Has_Float_Registers (Facts, Unit)
+              and then Number_In (Name, "d", 0, 15)
+            then
+               return Float_Register;
             elsif Names_Reserved (Facts, Name) then
                return Never_Named;
             end if;
@@ -128,10 +135,14 @@ package body Landin.Targets.Assembly is
    end Classify;
 
    --  D630: x86-64's SysV ABI preserves no XMM register, AAPCS64 the low
-   --  halves of v8-v15 and LP64D f8, f9 and f18-f27.
-   function Overwritten (Facts : Target_Facts; Name : String) return Boolean
+   --  halves of v8-v15, LP64D f8, f9 and f18-f27, and AAPCS32's VFP
+   --  variant d8-d15 (D616).
+   function Overwritten
+     (Facts : Target_Facts; Name : String;
+      Unit : Float_Unit := No_Float_Unit) return Boolean
      is (case Architecture_Of (Facts) is
-            when Cortex_M0 => True,
+            when Cortex_M0 => Unit = No_Float_Unit
+              or else not Number_In (Name, "d", 8, 15),
             when X86_64 => Name not in "rbx" | "r12" | "r13" | "r14" | "r15",
             when Arm64 => Number_In (Name, "x", 0, 17)
               or else Number_In (Name, "v", 0, 7)
@@ -203,23 +214,33 @@ package body Landin.Targets.Assembly is
    function Has_Registers (Facts : Target_Facts) return Boolean
      is (Architecture_Of (Facts) /= Synthetic_32_Architecture);
 
-   function Has_Float_Registers (Facts : Target_Facts) return Boolean
-     is (Architecture_Of (Facts) in X86_64 | Arm64 | RV64);
+   function Has_Float_Registers
+     (Facts : Target_Facts; Unit : Float_Unit := No_Float_Unit)
+      return Boolean
+     is (Architecture_Of (Facts) in X86_64 | Arm64 | RV64
+         or else (Architecture_Of (Facts) = Cortex_M0
+                  and then Unit /= No_Float_Unit));
 
-   function In_Float_Class (Facts : Target_Facts; Name : String)
-     return Boolean
-     is (Overwritten (Facts, Name));
+   function In_Float_Class
+     (Facts : Target_Facts; Name : String;
+      Unit : Float_Unit := No_Float_Unit) return Boolean
+     is (Overwritten (Facts, Name, Unit));
 
-   function Float_Count (Facts : Target_Facts) return Natural
+   function Float_Count
+     (Facts : Target_Facts; Unit : Float_Unit := No_Float_Unit)
+      return Natural
      is (case Architecture_Of (Facts) is
             when X86_64 => 16,
             when Arm64 => 24,
             when RV64 => 20,
-            when Cortex_M0 | Synthetic_32_Architecture => 0);
+            when Cortex_M0 => (if Unit = No_Float_Unit then 0 else 8),
+            when Synthetic_32_Architecture => 0);
 
-   function Float_Class_Register (Facts : Target_Facts; Index : Positive)
-     return String
+   function Float_Class_Register
+     (Facts : Target_Facts; Index : Positive;
+      Unit : Float_Unit := No_Float_Unit) return String
    is
+      pragma Unreferenced (Unit);
       --  The class in ascending order of its registers' numbers.
       Number : constant Natural :=
         (case Architecture_Of (Facts) is
@@ -228,7 +249,8 @@ package body Landin.Targets.Assembly is
             when RV64 => (if Index <= 8 then Index - 1
                           elsif Index <= 16 then Index + 1
                           else Index + 11),
-            when Cortex_M0 | Synthetic_32_Architecture =>
+            when Cortex_M0 => Index - 1,
+            when Synthetic_32_Architecture =>
               raise Program_Error with "the target has no float registers");
       Image : constant String := Natural'Image (Number);
       Digits_Of : constant String := Image (Image'First + 1 .. Image'Last);
@@ -236,22 +258,45 @@ package body Landin.Targets.Assembly is
       return (case Architecture_Of (Facts) is
                  when X86_64 => "xmm",
                  when Arm64 => "v",
+                 when Cortex_M0 => "d",
                  when others => "f") & Digits_Of;
    end Float_Class_Register;
 
-   --  Every float register of the hosted targets holds an f64.
-   function Float_Width (Facts : Target_Facts) return Bit_Width
+   --  Every float register of the hosted targets holds an f64, and so
+   --  does a double-precision unit's.
+   function Float_Width
+     (Facts : Target_Facts; Unit : Float_Unit := No_Float_Unit)
+      return Bit_Width
      is (case Architecture_Of (Facts) is
             when X86_64 | Arm64 | RV64 => 64,
-            when Cortex_M0 | Synthetic_32_Architecture =>
+            when Cortex_M0 =>
+              (if Landin.Targets.Firmware.Double_Precision (Unit) then 64
+               else 32),
+            when Synthetic_32_Architecture =>
               raise Program_Error with "the target has no float registers");
 
-   function Canonical (Facts : Target_Facts; Word : String) return String is
+   function Canonical
+     (Facts : Target_Facts; Word : String;
+      Unit : Float_Unit := No_Float_Unit) return String is
    begin
       case Architecture_Of (Facts) is
          when Cortex_M0 =>
             if Number_In (Word, "r", 0, 7) then
                return Word;
+            elsif Unit /= No_Float_Unit
+              and then Number_In (Word, "d", 0, 15)
+            then
+               return Word;
+            elsif Unit /= No_Float_Unit
+              and then Number_In (Word, "s", 0, 31)
+            then
+               --  s(2n) and s(2n+1) are d(n)'s halves.
+               declare
+                  Image : constant String := Natural'Image
+                    (Natural'Value (Word (Word'First + 1 .. Word'Last)) / 2);
+               begin
+                  return "d" & Image (Image'First + 1 .. Image'Last);
+               end;
             end if;
          when X86_64 =>
             --  Every width of the sixteen: `rax` `eax` `ax` `al` `ah`,
@@ -366,8 +411,8 @@ package body Landin.Targets.Assembly is
      is (Ada.Characters.Handling.To_Lower (Word));
 
    function Text_Names
-     (Facts : Target_Facts; Text : String; Register : String)
-      return Boolean
+     (Facts : Target_Facts; Text : String; Register : String;
+      Unit : Float_Unit := No_Float_Unit) return Boolean
    is
       Position : Natural := Text'First;
    begin
@@ -396,7 +441,7 @@ package body Landin.Targets.Assembly is
                end loop;
                if Text (First) not in '0' .. '9'
                  and then Canonical
-                   (Facts, Lowered (Text (First .. Position - 1)))
+                   (Facts, Lowered (Text (First .. Position - 1)), Unit)
                      = Register
                then
                   return True;
@@ -439,18 +484,31 @@ package body Landin.Targets.Assembly is
    end Filled;
 
    function Spelled
-     (Facts : Target_Facts; Register : String; Bits : Bit_Width)
-      return String is
+     (Facts : Target_Facts; Register : String; Bits : Bit_Width;
+      Unit : Float_Unit := No_Float_Unit) return String is
    begin
-      if Classify (Facts, Register) = Float_Register then
+      if Classify (Facts, Register, Unit) = Float_Register then
          --  D630: x86-64 and RV64 name a float register the same at both
-         --  widths; arm64 names v's low half by the float it holds.
-         return (case Architecture_Of (Facts) is
-                    when X86_64 => "%" & Register,
-                    when Arm64 =>
-                      (if Bits > 32 then "d" else "s")
-                      & Register (Register'First + 1 .. Register'Last),
-                    when others => Register);
+         --  widths; arm64 names v's low half by the float it holds, and a
+         --  Cortex-M unit d(n)'s by s(2n) for an f32.
+         declare
+            Number : constant String :=
+              Register (Register'First + 1 .. Register'Last);
+
+            function Single return String
+              is (Ada.Strings.Fixed.Trim
+                    (Natural'Image (2 * Natural'Value (Number)),
+                     Ada.Strings.Left));
+         begin
+            return (case Architecture_Of (Facts) is
+                       when X86_64 => "%" & Register,
+                       when Arm64 =>
+                         (if Bits > 32 then "d" else "s") & Number,
+                       when Cortex_M0 =>
+                         (if Bits > 32 then Register
+                          else "s" & Single),
+                       when others => Register);
+         end;
       end if;
       case Architecture_Of (Facts) is
          when Cortex_M0 | RV64 =>
@@ -495,7 +553,8 @@ package body Landin.Targets.Assembly is
 
    procedure Choose
      (Facts : Target_Facts; Text : String;
-      Operands : in out Operand_Register_Array)
+      Operands : in out Operand_Register_Array;
+      Unit : Float_Unit := No_Float_Unit)
    is
       use type Ada.Strings.Unbounded.Unbounded_String;
 
@@ -504,16 +563,18 @@ package body Landin.Targets.Assembly is
    begin
       for Operand of Operands loop
          if Ada.Strings.Unbounded.Length (Operand.Register) = 0 then
-            for Index in 1 .. (if Operand.Float then Float_Count (Facts)
+            for Index in 1 .. (if Operand.Float
+                               then Float_Count (Facts, Unit)
                                else General_Count (Facts))
             loop
                declare
                   Register : constant String :=
-                    (if Operand.Float then Float_Class_Register (Facts, Index)
+                    (if Operand.Float
+                     then Float_Class_Register (Facts, Index, Unit)
                      else General_Register (Facts, Index));
                begin
                   if not Held (Register)
-                    and then not Text_Names (Facts, Text, Register)
+                    and then not Text_Names (Facts, Text, Register, Unit)
                   then
                      Operand.Register :=
                        Ada.Strings.Unbounded.To_Unbounded_String (Register);
@@ -531,7 +592,8 @@ package body Landin.Targets.Assembly is
 
    function Substituted
      (Facts : Target_Facts; Text : String;
-      Operands : Operand_Register_Array) return String
+      Operands : Operand_Register_Array;
+      Unit : Float_Unit := No_Float_Unit) return String
    is
       Result : Ada.Strings.Unbounded.Unbounded_String;
       Position : Natural := Text'First;
@@ -559,7 +621,7 @@ package body Landin.Targets.Assembly is
                        (Result, Spelled
                           (Facts,
                            Ada.Strings.Unbounded.To_String (Operand.Register),
-                           Operand.Bits));
+                           Operand.Bits, Unit));
                      Found := True;
                      exit;
                   end if;

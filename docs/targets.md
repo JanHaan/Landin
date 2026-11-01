@@ -875,7 +875,12 @@ Each output is then stored through a low register no output still waiting
 holds; a block whose outputs hold all of r0-r7 moves its first aside into r12,
 which no block may name and every block may overwrite, and stores it last. A
 branch then skips the literal pool the text may have used. D230's shorthand is
-one `inout` operand at r0. The existing low-register/flag clobbers and full
+one `inout` operand at r0. With a float unit, d0-d15 are float operand
+registers and `float` chooses from d0-d7: a float input is loaded first by
+`vldr` through r6, before any integer input holds it, and a float output is
+stored by `vstr` through a free low register, as `s(2n)` for an `f32` and
+`d(n)` for an `f64`; a routine with a block already keeps d8-d15 (D617), so a
+declared one needs no save of its own (D630). The existing low-register/flag clobbers and full
 opaque effects remain; no high-register, frame or naked-body restriction is
 relaxed. `platform/cortex_m` uses MRS PRIMASK/CPSID I, MSR PRIMASK/ISB SY and DSB
 SY/WFI through `general` operands. CPU functions retain ordinary framed Landin calls in both thread and
