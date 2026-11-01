@@ -7,6 +7,7 @@
 --  program here, so neither can check a program differently from the
 --  other: what a server shows is what the build will say.
 
+with Landin.Optimization;
 with Landin.Panics;
 with Landin.Stages;
 
@@ -25,5 +26,22 @@ package Landin.Driver.Checking is
    procedure Run
      (Context : in out Landin.Stages.Compilation;
       Panic   : out Landin.Panics.Plan);
+
+   --  D572: whether a selected panic handler fits a prepared stack's
+   --  margin (D474), decided as `refine compile` decides it, from the
+   --  frames the target's backend emits for Options, so that a check and
+   --  a server refuse with L0508 what the build would.  The emission is
+   --  made in memory and kept nowhere, and only for a program that
+   --  prepares a stack and selects a handler, on a target with a backend.
+   --  Firmware names the entry a firmware request names, or "".  It runs
+   --  the optimization pipeline on Context's unit, as compiling does, so
+   --  it is the last thing a check asks of the unit.  A program that
+   --  compiling refuses before emission, for an image or a frame too
+   --  large or a vector with no firmware entry, is left to that refusal.
+   procedure Fit_Handler
+     (Context  : in out Landin.Stages.Compilation;
+      Panic    : Landin.Panics.Plan;
+      Options  : Landin.Optimization.Options;
+      Firmware : String);
 
 end Landin.Driver.Checking;

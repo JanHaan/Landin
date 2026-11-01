@@ -1,0 +1,9 @@
+class: negative
+summary: D572 refine check refuses a selected panic handler too large for a prepared stack's margin, as compiling does, from the frames the backend would emit
+program: main.ldn
+root: ../../../../..
+args: --target=linux-x86-64 --link=libc
+status: 1
+codes: L0508
+constructs: 1620, 1670
+targets: linux-x86-64

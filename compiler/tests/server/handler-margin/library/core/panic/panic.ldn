@@ -1,0 +1,7 @@
+--  A stand-in for the library's panic kinds, the only `core` module the session needs.
+public out_of_range: atom
+public overflow: atom
+public bad_conversion: atom
+public unreachable: atom
+public stack_exhausted: atom
+public panic_kind: type = out_of_range | overflow | bad_conversion | unreachable | stack_exhausted

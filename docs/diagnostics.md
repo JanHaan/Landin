@@ -1574,7 +1574,10 @@ smaller, call less from it, or call through nothing that opens its graph; a
 handler that only records the kind and switches away fits on every target.
 A program with no `compiler.stack_prepare`, and one that selects no
 handler, is not refused: the default report always fits. The rule is
-decided from emitted frames, so `refine check` does not raise it (D474).
+decided from the frames the backend emits at the profile being compiled
+(D474); `refine check` emits them in memory at its own profile, `none`
+unless `--optimize` says otherwise, and `refine lsp` at `none`, so both
+refuse what compiling at that profile refuses (D572).
 
 ### L0509
 

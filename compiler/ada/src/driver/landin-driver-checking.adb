@@ -1,13 +1,23 @@
 with Ada.Strings.Unbounded;
 
+with Landin.Backend.Dispatch;
+with Landin.Backend.Entry_Point;
+with Landin.Backend.Images;
+with Landin.Build_Reports;
+with Landin.Build_Reports.Stacks;
 with Landin.Diagnostics;
 with Landin.Diagnostics.Catalogue;
+with Landin.IR;
+with Landin.IR.Pipeline;
 with Landin.Source;
 with Landin.Stages.Checking;
 with Landin.Stages.Configuration;
 with Landin.Stages.Lowering;
 with Landin.Stages.Resolution;
 with Landin.Stages.Syntax;
+with Landin.Targets;
+with Landin.Targets.Capabilities;
+with Landin.Targets.Firmware;
 
 package body Landin.Driver.Checking is
 
@@ -75,5 +85,122 @@ package body Landin.Driver.Checking is
    begin
       Run (Context, Panic, Ignore'Access);
    end Run;
+
+   procedure Fit_Handler
+     (Context  : in out Landin.Stages.Compilation;
+      Panic    : Landin.Panics.Plan;
+      Options  : Landin.Optimization.Options;
+      Firmware : String)
+   is
+      use type Landin.IR.Item_Id;
+      use type Landin.IR.Item_Kind;
+      use type Landin.Targets.Capabilities.Backend_Kind;
+      use type Landin.Targets.Architecture;
+      use type Landin.Backend.Images.Excess;
+      Facts : constant Landin.Targets.Target_Facts :=
+        Landin.Stages.Target (Context);
+      Firmware_Entry : Landin.IR.Item_Id := Landin.IR.No_Item;
+      Hosted_Entry : Landin.IR.Item_Id;
+      Problem : Unbounded.Unbounded_String;
+      Emitted : Unbounded.Unbounded_String;
+      Evidence : Landin.Build_Reports.Report;
+      Measured : aliased Landin.Panics.Plan;
+   begin
+      if Landin.Stages.Failed (Context)
+        or else Landin.Panics.Handler (Panic) = Landin.IR.No_Item
+        or else Landin.Targets.Capabilities.Backend_For (Facts)
+          = Landin.Targets.Capabilities.No_Backend
+        or else not Landin.Backend.Dispatch.Prepares_Stacks
+          (Landin.Stages.Code (Context).all)
+      then
+         return;
+      end if;
+      declare
+         Unit : Landin.IR.Unit renames Landin.Stages.Code (Context).all;
+      begin
+         if Firmware /= ""
+           and then Landin.Targets.Architecture_Of (Facts)
+             = Landin.Targets.Cortex_M0
+         then
+            Firmware_Entry := Landin.Backend.Entry_Point.Firmware_Start
+              (Unit, Landin.Stages.Meanings (Context).all,
+               Landin.Stages.Modules (Context).all,
+               Landin.Stages.Identities (Context).all, Firmware);
+            if Firmware_Entry = Landin.IR.No_Item then
+               return;
+            end if;
+         end if;
+         --  What compiling refuses before it emits is its own refusal,
+         --  which a check does not raise; the handler is not judged on a
+         --  program that does not reach emission.
+         if Landin.Backend.Images.Exceeded
+           (Landin.Backend.Images.Measure (Unit, Facts),
+            (if Firmware_Entry /= Landin.IR.No_Item
+             then Landin.Targets.Firmware.Budget
+               (Landin.IR.Firmware_Profile (Unit))
+             else Landin.Targets.Capabilities.Image_Budget_Of (Facts)))
+           /= Landin.Backend.Images.Within
+         then
+            return;
+         end if;
+         for Index in 1 .. Landin.IR.Item_Count (Unit) loop
+            declare
+               Item : constant Landin.IR.Item_Id := Landin.IR.Item_Id (Index);
+            begin
+               if Firmware_Entry = Landin.IR.No_Item
+                 and then Landin.IR.Placement_Of (Unit, Item).Vector /= 0
+               then
+                  return;
+               elsif Landin.IR.Kind_Of (Unit, Item) = Landin.IR.Routine
+                 and then
+                   (not Landin.Backend.Dispatch.Frame_Is_Addressable
+                      (Unit, Item, Facts, Options)
+                    or else
+                      (Firmware_Entry /= Landin.IR.No_Item
+                       and then not Landin.Backend.Dispatch
+                         .Frame_Fits_Firmware_Stack (Unit, Item, Facts)))
+               then
+                  return;
+               end if;
+            end;
+         end loop;
+         Landin.IR.Pipeline.Run_On_Verified (Unit, Facts, Options, Evidence);
+         Landin.Panics.Prepare (Context, Measured, Problem);
+         if Unbounded.Length (Problem) /= 0 then
+            raise Compiler_Defect with "panic plan changed after checking";
+         end if;
+         Hosted_Entry := Landin.Backend.Entry_Point.Hosted_Main
+           (Unit, Landin.Stages.Meanings (Context).all,
+            Landin.Stages.Modules (Context).all,
+            Landin.Stages.Identities (Context).all);
+         Landin.Backend.Dispatch.Emit
+           (Unit, Landin.Stages.Meanings (Context).all,
+            Landin.Stages.Identities (Context).all, Facts,
+            Landin.Stages.Level (Context), Options, Emitted, Evidence,
+            Hosted_Entry => Hosted_Entry, Firmware_Entry => Firmware_Entry,
+            Panic => Measured'Access);
+      end;
+      declare
+         Fit : constant Landin.Build_Reports.Stacks.Handler_Fit :=
+           Landin.Build_Reports.Stacks.Fit_Handler
+             (Evidence, Context, Options, Measured,
+              Landin.Backend.Entry_Point.Hosted_Main
+                (Landin.Stages.Code (Context).all,
+                 Landin.Stages.Meanings (Context).all,
+                 Landin.Stages.Modules (Context).all,
+                 Landin.Stages.Identities (Context).all));
+      begin
+         if Fit.Refused then
+            Landin.Stages.Report
+              (Context,
+               Landin.Diagnostics.Make
+                 (Code    => Rows.Code (Rows.Handler_Exceeds_Stack_Margin),
+                  Level   => Landin.Diagnostics.Error,
+                  Source  => Fit.Site.Source,
+                  Where   => Fit.Site.Where,
+                  Message => Unbounded.To_String (Fit.Message)));
+         end if;
+      end;
+   end Fit_Handler;
 
 end Landin.Driver.Checking;
