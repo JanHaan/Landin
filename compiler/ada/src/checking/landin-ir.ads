@@ -3373,9 +3373,11 @@ package Landin.IR is
    type Assembly_Direction is (Input, Output, Both, Discarded);
 
    --  A register is the target's canonical full-width name -- `rax`,
-   --  `x9`, `r3` -- because the verifier holds it to the target's table
-   --  and has no names table to spell an interned one.  An empty one is
-   --  `general`, which a backend chooses.  None is longer than three.
+   --  `x9`, `r3`, `xmm15`, `v8` -- because the verifier holds it to the
+   --  target's table and has no names table to spell an interned one.  An
+   --  empty one is the class its operand's type selects, `float` for a
+   --  float and `general` otherwise, which a backend chooses (D630).  None
+   --  is longer than five.
    Register_Spelling_Limit : constant := 8;
 
    type Assembly_Operand is record

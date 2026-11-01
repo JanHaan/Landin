@@ -1,0 +1,50 @@
+error[L0330]: `rax` is an integer register, and `f64` is a float
+  --> ../tests/fixtures/negative/assembly-float-register-banks/program.ldn:2:52
+  |
+2 |     assembler.block("movq {v}, %rax", in v: f64 at rax = value)
+  |                                                    ^^^
+  --> ../tests/fixtures/negative/assembly-float-register-banks/program.ldn:2:5
+  |
+2 |     assembler.block("movq {v}, %rax", in v: f64 at rax = value)
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
+  = note: [1990]: a float operand is at a float register or `float`, an integer one at an integer register or `general`
+error[L0330]: `general` chooses an integer register, and `f64` is a float
+  --> ../tests/fixtures/negative/assembly-float-register-banks/program.ldn:3:52
+  |
+3 |     assembler.block("movq {v}, %rax", in v: f64 at general = value)
+  |                                                    ^^^^^^^
+  --> ../tests/fixtures/negative/assembly-float-register-banks/program.ldn:3:5
+  |
+3 |     assembler.block("movq {v}, %rax", in v: f64 at general = value)
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
+  = note: [1990]: a float operand is at a float register or `float`, an integer one at an integer register or `general`
+error[L0330]: `xmm1` is a float register, and `u64` is an integer
+  --> ../tests/fixtures/negative/assembly-float-register-banks/program.ldn:4:53
+  |
+4 |     assembler.block("movq {n}, %xmm0", in n: u64 at xmm1 = count)
+  |                                                     ^^^^
+  --> ../tests/fixtures/negative/assembly-float-register-banks/program.ldn:4:5
+  |
+4 |     assembler.block("movq {n}, %xmm0", in n: u64 at xmm1 = count)
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
+  = note: [1990]: a float operand is at a float register or `float`, an integer one at an integer register or `general`
+error[L0330]: `float` chooses a float register, and `u64` is an integer
+  --> ../tests/fixtures/negative/assembly-float-register-banks/program.ldn:5:53
+  |
+5 |     assembler.block("movq {n}, %xmm0", in n: u64 at float = count)
+  |                                                     ^^^^^
+  --> ../tests/fixtures/negative/assembly-float-register-banks/program.ldn:5:5
+  |
+5 |     assembler.block("movq {n}, %xmm0", in n: u64 at float = count)
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
+  = note: [1990]: a float operand is at a float register or `float`, an integer one at an integer register or `general`
+error[L0330]: a discarded output names the register it overwrites
+  --> ../tests/fixtures/negative/assembly-float-register-banks/program.ldn:6:52
+  |
+6 |     assembler.block("xorps %xmm2, %xmm2", out _ at float)
+  |                                                    ^^^^^
+  --> ../tests/fixtures/negative/assembly-float-register-banks/program.ldn:6:5
+  |
+6 |     assembler.block("xorps %xmm2, %xmm2", out _ at float)
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
+  = note: [1630]: `out _ at register` declares one register; `float` chooses one

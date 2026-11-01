@@ -1358,7 +1358,10 @@ package body Landin.Backend is
                  (Landin.IR.Register_Of (Operand)),
                Bits => (if Operand.Kind in Landin.Types.Integer_Name
                         then Landin.Types.Width (Operand.Kind, Facts)
-                        else Landin.Targets.Assembly.Register_Width (Facts)));
+                        elsif Operand.Kind = Landin.Types.F32 then 32
+                        elsif Operand.Kind = Landin.Types.F64 then 64
+                        else Landin.Targets.Assembly.Register_Width (Facts)),
+               Float => Operand.Kind in Landin.Types.Float_Name);
          end;
       end loop;
       Landin.Targets.Assembly.Choose

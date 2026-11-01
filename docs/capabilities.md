@@ -300,6 +300,11 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   accesses and barriers, each atomic fenced only as its ordering asks on
   every backend (D499), and D228 packed register images with checked
   encoded fields.
+- **Assembly operands.** A block carries integers at `general` or a named
+  integer register on every target with registers, and on x86-64, arm64 and
+  RV64 `f32` and `f64` at `float` or a named float register, a declared
+  callee-saved float register saved by its routine (D630). Cortex-M has no
+  float register yet and refuses a float operand as its boundary.
 - **Stacks.** D450's stack builtins, `compiler.stack_prepare` and
   `compiler.stack_switch`, run on every target with a native backend. On
   Cortex-M0 a prepared stack runs on the process stack pointer, and an

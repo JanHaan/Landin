@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: D630's declared callee-saved float registers are saved by their routine, so a value a caller holds in one across the call, and the caller's own live floats, are there after it
+constructs: 1630, 1990
+program: main.ldn
+status: 42
+targets: linux-arm64, darwin-arm64, freebsd-arm64, linux-rv64

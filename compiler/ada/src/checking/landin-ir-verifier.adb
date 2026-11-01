@@ -477,9 +477,31 @@ package body Landin.IR.Verifier is
            Assembly_Operand_Count (Of_Unit, Item, Value);
          Inputs : Natural := 0;
          Classes : Natural := 0;
+         Float_Classes : Natural := 0;
 
          function Operand (Index : Positive) return Assembly_Operand
            is (Nth_Assembly_Operand (Of_Unit, Item, Value, Index));
+
+         --  How many registers of a class no operand of the block holds.
+         function Left (Float : Boolean) return Natural;
+
+         function Left (Float : Boolean) return Natural is
+            Total : Natural := 0;
+         begin
+            for Index in 1 .. (if Float then Asm.Float_Count (Facts)
+                               else Asm.General_Count (Facts))
+            loop
+               if not (for some Other in 1 .. Count =>
+                         Register_Of (Operand (Other))
+                           = (if Float
+                              then Asm.Float_Class_Register (Facts, Index)
+                              else Asm.General_Register (Facts, Index)))
+               then
+                  Total := Total + 1;
+               end if;
+            end loop;
+            return Total;
+         end Left;
       begin
          if Is_Unchecked (Of_Unit, Item, Value)
            or else Result_Of (Of_Unit, Item, Value) /= Landin.Types.Not_Typed
@@ -502,6 +524,7 @@ package body Landin.IR.Verifier is
                      or else This.Output /= No_Slot))
                  or else (This.Direction /= Discarded
                    and then (This.Kind not in Landin.Types.Integer_Name
+                                            | Landin.Types.Float_Name
                      or else (This.Name = Landin.Source.Names.No_Name
                        and then This.Width = 0)))
                  or else ((This.Direction in Output | Both)
@@ -551,16 +574,36 @@ package body Landin.IR.Verifier is
                   end;
                end loop;
                if Check_Image then
-                  if This.Width = 0 then
-                     Classes := Classes + 1;
-                  elsif Asm.Classify (Facts, Register_Of (This))
-                    /= Asm.Operand_Register
+                  --  D630: a float is held in the float bank and every
+                  --  other operand in the integer one; a discarded output
+                  --  names a register of either.
+                  if This.Kind in Landin.Types.Float_Name
+                    and then not Asm.Has_Float_Registers (Facts)
+                  then
+                     return Assembly_Register_Refused;
+                  elsif This.Width = 0 then
+                     if This.Kind in Landin.Types.Float_Name then
+                        Float_Classes := Float_Classes + 1;
+                     else
+                        Classes := Classes + 1;
+                     end if;
+                  elsif (case Asm.Classify (Facts, Register_Of (This)) is
+                           when Asm.Operand_Register =>
+                              This.Kind in Landin.Types.Float_Name,
+                           when Asm.Float_Register =>
+                              This.Kind in Landin.Types.Integer_Name,
+                           when others => True)
                   then
                      return Assembly_Register_Refused;
                   end if;
-                  if This.Direction /= Discarded
+                  if This.Kind in Landin.Types.Integer_Name
                     and then Landin.Types.Width (This.Kind, Facts)
                       > Asm.Register_Width (Facts)
+                  then
+                     return Assembly_Register_Refused;
+                  elsif This.Kind in Landin.Types.Float_Name
+                    and then (if This.Kind = Landin.Types.F32 then 32
+                              else 64) > Asm.Float_Width (Facts)
                   then
                      return Assembly_Register_Refused;
                   end if;
@@ -573,22 +616,10 @@ package body Landin.IR.Verifier is
             end if;
             --  The registers the text names are the checker's to count:
             --  this walk has no names table to read the text with.
-            if Classes > 0 then
-               declare
-                  Left : Natural := 0;
-               begin
-                  for Index in 1 .. Asm.General_Count (Facts) loop
-                     if not (for some Other in 1 .. Count =>
-                               Register_Of (Operand (Other))
-                                 = Asm.General_Register (Facts, Index))
-                     then
-                        Left := Left + 1;
-                     end if;
-                  end loop;
-                  if Classes > Left then
-                     return Assembly_Register_Refused;
-                  end if;
-               end;
+            if Classes > Left (Float => False)
+              or else Float_Classes > Left (Float => True)
+            then
+               return Assembly_Register_Refused;
             end if;
          end if;
          return Nothing_Wrong;

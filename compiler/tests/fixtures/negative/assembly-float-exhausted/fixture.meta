@@ -1,0 +1,9 @@
+class: negative
+summary: D630's float chooses a register the block does not otherwise name, apart from general, so a fixed float operand or a register the text writes at any view leaves it fewer
+program: program.ldn
+expect: expected.txt
+args: --target=linux-x86-64 ../tests/fixtures/negative/assembly-float-exhausted/program.ldn
+codes: L0330, L0330
+status: 1
+constructs: 1630, 1990
+targets: linux-x86-64

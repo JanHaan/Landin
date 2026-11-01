@@ -3191,8 +3191,11 @@ package body Landin.Backend.X86_64 is
          --  callee-saved five and keeps a declared one out -- so each input
          --  is loaded straight into its register, extended to the whole
          --  register as its type says, and each output is stored from its
-         --  register into its slot, which is always a frame cell.  The text
-         --  is recorded as written: no selection rewrites it.
+         --  register into its slot, which is always a frame cell.  A float
+         --  moves between its cell and its XMM register at its own width
+         --  (D630), and a routine with a block keeps no value in an XMM
+         --  register.  The text is recorded as written: no selection
+         --  rewrites it.
          procedure Emit_Assembly (Value : Landin.IR.Value_Id) is
             package Asm renames Landin.Targets.Assembly;
             Chosen : constant Asm.Operand_Register_Array :=
@@ -3226,24 +3229,31 @@ package body Landin.Backend.X86_64 is
                      From : constant String := Value_Operand
                        (Landin.IR.Nth_Operand (Of_Unit, Item, Value, Inputs));
                   begin
-                     case Held is
-                        when Landin.Targets.Byte_8 =>
-                           Emit_Verbatim
-                             ("movq " & From & ", " & Register (Index, 64));
-                        when Landin.Targets.Byte_4 =>
-                           Emit_Verbatim
-                             ((if Landin.Types.Is_Signed (Kind)
-                               then "movslq " & From & ", "
-                                    & Register (Index, 64)
-                               else "movl " & From & ", "
-                                    & Register (Index, 32)));
-                        when others =>
-                           Emit_Verbatim
-                             ((if Landin.Types.Is_Signed (Kind)
-                               then "movs" else "movz")
-                              & Suffix (Held) & "q " & From & ", "
-                              & Register (Index, 64));
-                     end case;
+                     if Kind in Landin.Types.Float_Name then
+                        Emit_Verbatim
+                          (Float_Move
+                             (Kind = Landin.Types.F32, From,
+                              Register (Index, 64)));
+                     else
+                        case Held is
+                           when Landin.Targets.Byte_8 =>
+                              Emit_Verbatim
+                                ("movq " & From & ", " & Register (Index, 64));
+                           when Landin.Targets.Byte_4 =>
+                              Emit_Verbatim
+                                ((if Landin.Types.Is_Signed (Kind)
+                                  then "movslq " & From & ", "
+                                       & Register (Index, 64)
+                                  else "movl " & From & ", "
+                                       & Register (Index, 32)));
+                           when others =>
+                              Emit_Verbatim
+                                ((if Landin.Types.Is_Signed (Kind)
+                                  then "movs" else "movz")
+                                 & Suffix (Held) & "q " & From & ", "
+                                 & Register (Index, 64));
+                        end case;
+                     end if;
                   end;
                end if;
             end loop;
@@ -3261,7 +3271,15 @@ package body Landin.Backend.X86_64 is
                end if;
             end loop;
             for Index in Chosen'Range loop
-               if Operand (Index).Output /= Landin.IR.No_Slot then
+               if Operand (Index).Output /= Landin.IR.No_Slot
+                 and then Operand (Index).Kind in Landin.Types.Float_Name
+               then
+                  Emit_Verbatim
+                    (Float_Move
+                       (Operand (Index).Kind = Landin.Types.F32,
+                        Register (Index, 64),
+                        Slot_Cell (Operand (Index).Output)));
+               elsif Operand (Index).Output /= Landin.IR.No_Slot then
                   declare
                      Held : constant Held_Size :=
                        Size_Of (Operand (Index).Kind, Facts);

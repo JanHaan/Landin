@@ -1,0 +1,47 @@
+--  D630's float operand forms, each in the arm of the target whose float
+--  registers it names.  A positive fixture is emitted for Linux x86-64, so
+--  its arm is lowered and recorded; the grammar derives every arm.
+fixed if compiler.arch == x86_64 then
+    scaled: (x: f64, by: f32) -> (r: f64) =
+        r = assembler.block("cvtss2sd {by}, %xmm7\nmulsd %xmm7, {x}",
+                            inout x: f64 at float = x,
+                            in by: f32 at float = by)
+    end scaled
+    split: (x: f64) -> (whole: i64, low: f32) =
+        (w, l) := assembler.block("cvttsd2si {x}, {w}\ncvtsd2ss {x}, {l}",
+                                  in x: f64 at xmm4 = x,
+                                  out w: i64 at general,
+                                  out l: f32 at xmm5)
+        whole = w
+        low = l
+    end split
+elsif compiler.arch == arm64 then
+    scaled: (x: f64, by: f32) -> (r: f64) =
+        r = assembler.block("fcvt d7, {by}\nfmul {x}, {x}, d7",
+                            inout x: f64 at float = x,
+                            in by: f32 at float = by)
+    end scaled
+    split: (x: f64) -> (whole: i64, low: f32) =
+        (w, l) := assembler.block("fcvtzs {w}, {x}\nfcvt {l}, {x}\nfmov d8, {x}",
+                                  in x: f64 at v4 = x,
+                                  out w: i64 at general,
+                                  out l: f32 at v5, out _ at v8)
+        whole = w
+        low = l
+    end split
+elsif compiler.arch == rv64 then
+    scaled: (x: f64, by: f32) -> (r: f64) =
+        r = assembler.block("fcvt.d.s ft7, {by}\nfmul.d {x}, {x}, ft7",
+                            inout x: f64 at float = x,
+                            in by: f32 at float = by)
+    end scaled
+    split: (x: f64) -> (whole: i64, low: f32) =
+        (w, l) := assembler.block("fcvt.l.d {w}, {x}, rtz\nfcvt.s.d {l}, {x}\nfmv.d fs0, {x}",
+                                  in x: f64 at f4 = x,
+                                  out w: i64 at general,
+                                  out l: f32 at f5, out _ at f8)
+        whole = w
+        low = l
+    end split
+end if
+start: () -> none = end start

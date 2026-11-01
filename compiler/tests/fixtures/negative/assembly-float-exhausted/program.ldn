@@ -1,0 +1,24 @@
+count: (value: f64) -> none =
+    assembler.block("addsd {a}, {b}\naddsd {c}, {d}\naddsd {e}, {g}\naddsd {h}, {i}\naddsd {j}, {k}\naddsd {l}, {m}\naddsd {n}, {o}\naddsd {p}, {q}",
+                    in a: f64 at float = value, in b: f64 at float = value,
+                    in c: f64 at float = value, in d: f64 at float = value,
+                    in e: f64 at float = value, in g: f64 at float = value,
+                    in h: f64 at float = value, in i: f64 at float = value,
+                    in j: f64 at float = value, in k: f64 at float = value,
+                    in l: f64 at float = value, in m: f64 at float = value,
+                    in n: f64 at float = value, in o: f64 at float = value,
+                    in p: f64 at float = value, in q: f64 at float = value,
+                    in r: f64 at xmm0 = value)
+end count
+named: (value: f64, whole: u64) -> none =
+    assembler.block("vmovaps %ymm3, %ymm3\naddsd {a}, {b}\naddsd {c}, {d}\naddsd {e}, {g}\naddsd {h}, {i}\naddsd {j}, {k}\naddsd {l}, {m}\naddsd {n}, {o}\naddsd {p}, {q}\nmovq {w}, {w}",
+                    in a: f64 at float = value, in b: f64 at float = value,
+                    in c: f64 at float = value, in d: f64 at float = value,
+                    in e: f64 at float = value, in g: f64 at float = value,
+                    in h: f64 at float = value, in i: f64 at float = value,
+                    in j: f64 at float = value, in k: f64 at float = value,
+                    in l: f64 at float = value, in m: f64 at float = value,
+                    in n: f64 at float = value, in o: f64 at float = value,
+                    in p: f64 at float = value, in q: f64 at float = value,
+                    in w: u64 at general = whole)
+end named

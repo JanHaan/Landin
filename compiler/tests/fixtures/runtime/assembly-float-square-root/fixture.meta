@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: D630's float operands carry f32 and f64 through `float` and a fixed register into the target's own square root, beside an integer operand counted apart, and every root of a nonconstant input meets its oracle
+constructs: 1630, 1990
+program: main.ldn
+status: 42
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

@@ -1,0 +1,20 @@
+error[L0330]: this block asks `float` for 16 registers, and linux-x86-64 has 15 left for it
+  --> ../tests/fixtures/negative/assembly-float-exhausted/program.ldn:2:5
+  |
+2 |     assembler.block("addsd {a}, {b}\naddsd {c}, {d}\naddsd {e}, {g}\naddsd {h}, {i}\naddsd {j}, {k}\naddsd {l}, {m}\naddsd {n}, {o}\naddsd {p}, {q}",
+  |     ^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/assembly-float-exhausted/program.ldn:2:5
+  |
+2 |     assembler.block("addsd {a}, {b}\naddsd {c}, {d}\naddsd {e}, {g}\naddsd {h}, {i}\naddsd {j}, {k}\naddsd {l}, {m}\naddsd {n}, {o}\naddsd {p}, {q}",
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
+  = note: [1990]: `float` chooses from the registers the block does not otherwise name
+error[L0330]: this block asks `float` for 16 registers, and linux-x86-64 has 15 left for it
+  --> ../tests/fixtures/negative/assembly-float-exhausted/program.ldn:14:5
+   |
+14 |     assembler.block("vmovaps %ymm3, %ymm3\naddsd {a}, {b}\naddsd {c}, {d}\naddsd {e}, {g}\naddsd {h}, {i}\naddsd {j}, {k}\naddsd {l}, {m}\naddsd {n}, {o}\naddsd ...
+   |     ^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/assembly-float-exhausted/program.ldn:14:5
+   |
+14 |     assembler.block("vmovaps %ymm3, %ymm3\naddsd {a}, {b}\naddsd {c}, {d}\naddsd {e}, {g}\naddsd {h}, {i}\naddsd {j}, {k}\naddsd {l}, {m}\naddsd {n}, {o}\naddsd ...
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
+  = note: [1990]: `float` chooses from the registers the block does not otherwise name

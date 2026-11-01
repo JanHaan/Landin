@@ -137,7 +137,7 @@ package body Landin.Backend.Arm64 is
    subtype Saved_General is Register_Number range 19 .. 28;
    subtype Float_Register is Register_Number range 64 .. 95;
    --  d8-d15, whose low halves AAPCS64 preserves across a call and which
-   --  no assembly block may name, saved as x19-x28 are.
+   --  an assembly block names only by declaring, saved as x19-x28 are.
    subtype Saved_Float is Float_Register range 72 .. 79;
    --  d18-d31.  Selection's float scratch is d16 and d17 and C transport's
    --  d0-d7, so only a call or assembly changes these.
@@ -195,11 +195,11 @@ package body Landin.Backend.Arm64 is
          else (if Size = Landin.Targets.Byte_8 then "x" else "w")
            & Trimmed (Natural'Image (Number)));
 
-   --  [1630]: which of x19-x28 some block of the routine declares.  Each
-   --  is saved in a frame home by the prologue and restored by every
-   --  epilogue, which is what declaring one means.  The same set names
-   --  the callee-saved registers a routine's locations hold, and the
-   --  registers a plan uses at all.
+   --  [1630]: which of x19-x28 and v8-v15 some block of the routine
+   --  declares.  Each is saved in a frame home by the prologue and
+   --  restored by every epilogue, which is what declaring one means.  The
+   --  same set names the callee-saved registers a routine's locations
+   --  hold, and the registers a plan uses at all.
    type Saved_Set is array (Register_Number) of Boolean;
 
    function Declared
@@ -223,6 +223,17 @@ package body Landin.Backend.Arm64 is
                           (Landin.IR.Nth_Assembly_Operand
                              (Of_Unit, Item, Value, Which))
                         = "x" & Trimmed (Natural'Image (Number))
+                     then
+                        Result (Number) := True;
+                     end if;
+                  end loop;
+                  --  D630: a declared v8-v15 is saved as d8-d15 are.
+                  for Number in Saved_Float loop
+                     if Landin.IR.Register_Of
+                          (Landin.IR.Nth_Assembly_Operand
+                             (Of_Unit, Item, Value, Which))
+                        = "v" & Trimmed (Natural'Image
+                                  (Number - Float_Register'First))
                      then
                         Result (Number) := True;
                      end if;
@@ -4086,10 +4097,14 @@ package body Landin.Backend.Arm64 is
          --  input is loaded through its own register -- which addresses its
          --  home first -- and extended to the whole register as its type
          --  says; the text runs as written; and each output is stored
-         --  through a register no output still waiting holds.  Only a block
-         --  whose outputs hold all of x0-x17 finds none for its first, which
-         --  then waits in d16, a register every block overwrites and none
-         --  may name, and is stored last.
+         --  through a register no output still waiting holds.  A float
+         --  input is loaded first, while x15 is still free to address its
+         --  home, and a float output is stored as an integer one is
+         --  (D630).  Only a block whose outputs hold all of x0-x17 finds no
+         --  address register for its first, which then waits in a float
+         --  register no output holds, every block overwrites and the text
+         --  has finished with, or failing one, on the stack, and is stored
+         --  last.
          procedure Assembly_Block (Value : Landin.IR.Value_Id);
 
          procedure Assembly_Block (Value : Landin.IR.Value_Id) is
@@ -4098,15 +4113,20 @@ package body Landin.Backend.Arm64 is
                    (Of_Unit, Item, Value, Names, Facts);
             Text : constant String := Landin.Backend.Assembly_Text
               (Of_Unit, Item, Value, Names, Facts);
-            Inputs : Natural := 0;
             Start : Natural := Text'First;
             Waiting : array (0 .. 28) of Boolean := [others => False];
+            Float_Held : array (0 .. 31) of Boolean := [others => False];
+            Input_Of : array (Chosen'Range) of Natural := [others => 0];
             Aside : Natural := 0;
+            Aside_Float : Natural := Natural'Last;
 
             function Operand (Index : Positive)
               return Landin.IR.Assembly_Operand
               is (Landin.IR.Nth_Assembly_Operand
                     (Of_Unit, Item, Value, Index));
+
+            function Is_Float (Index : Positive) return Boolean
+              is (Operand (Index).Kind in Landin.Types.Float_Name);
 
             function Register (Index : Positive) return String
               is (Unbounded.To_String (Chosen (Index).Register));
@@ -4115,6 +4135,11 @@ package body Landin.Backend.Arm64 is
               is (Natural'Value
                     (Register (Index) (Register (Index)'First + 1
                        .. Register (Index)'Last)));
+
+            --  A float operand's register at its float's width.
+            function Float_Name (Index : Positive) return String
+              is ((if Operand (Index).Kind = Landin.Types.F32 then "s"
+                   else "d") & Trimmed (Natural'Image (Number (Index))));
 
             function Free return String;
 
@@ -4139,21 +4164,46 @@ package body Landin.Backend.Arm64 is
                        From, Base);
             end Store;
          begin
-            for Index in Chosen'Range loop
-               if Operand (Index).Direction
-                 in Landin.IR.Input | Landin.IR.Both
-               then
-                  Inputs := Inputs + 1;
-                  Frame_Address
-                    (Value_Offset (Layout, Landin.IR.Nth_Operand
-                       (Of_Unit, Item, Value, Inputs)), Register (Index));
-                  Memory (False, Size_Of (Operand (Index).Kind, Facts),
-                          Register (Index), Register (Index));
-                  Extend (Register (Index), Operand (Index).Kind);
-               end if;
-               if Operand (Index).Output /= Landin.IR.No_Slot then
-                  Waiting (Number (Index)) := True;
-               end if;
+            declare
+               Inputs : Natural := 0;
+            begin
+               for Index in Chosen'Range loop
+                  if Operand (Index).Direction
+                    in Landin.IR.Input | Landin.IR.Both
+                  then
+                     Inputs := Inputs + 1;
+                     Input_Of (Index) := Inputs;
+                  end if;
+                  if Operand (Index).Output /= Landin.IR.No_Slot then
+                     if Is_Float (Index) then
+                        Float_Held (Number (Index)) := True;
+                     else
+                        Waiting (Number (Index)) := True;
+                     end if;
+                  end if;
+               end loop;
+            end;
+            for Float in reverse Boolean loop
+               for Index in Chosen'Range loop
+                  if Input_Of (Index) /= 0 and then Is_Float (Index) = Float
+                  then
+                     if Float then
+                        Frame_Memory
+                          (False, Size_Of (Operand (Index).Kind, Facts),
+                           Float_Name (Index),
+                           Value_Offset (Layout, Landin.IR.Nth_Operand
+                             (Of_Unit, Item, Value, Input_Of (Index))));
+                     else
+                        Frame_Address
+                          (Value_Offset (Layout, Landin.IR.Nth_Operand
+                             (Of_Unit, Item, Value, Input_Of (Index))),
+                           Register (Index));
+                        Memory (False, Size_Of (Operand (Index).Kind, Facts),
+                                Register (Index), Register (Index));
+                        Extend (Register (Index), Operand (Index).Kind);
+                     end if;
+                  end if;
+               end loop;
             end loop;
             for Index in Text'First .. Text'Last + 1 loop
                if Index > Text'Last or else Text (Index) = LF then
@@ -4169,10 +4219,22 @@ package body Landin.Backend.Arm64 is
                end if;
             end loop;
             if (for all Held of Waiting (0 .. 17) => Held) then
+               for Candidate in 16 .. 39 loop
+                  if not Float_Held (Candidate mod 32) then
+                     Aside_Float := Candidate mod 32;
+                     exit;
+                  end if;
+               end loop;
                for Index in Chosen'Range loop
-                  if Operand (Index).Output /= Landin.IR.No_Slot then
+                  if Operand (Index).Output /= Landin.IR.No_Slot
+                    and then not Is_Float (Index)
+                  then
                      Aside := Index;
-                     Emit ("fmov d16, " & Register (Index));
+                     Emit (if Aside_Float = Natural'Last
+                           then "str " & Register (Index) & ", [sp, #-16]!"
+                           else "fmov d"
+                             & Trimmed (Natural'Image (Aside_Float))
+                             & ", " & Register (Index));
                      Waiting (Number (Index)) := False;
                      exit;
                   end if;
@@ -4182,8 +4244,12 @@ package body Landin.Backend.Arm64 is
                if Operand (Index).Output /= Landin.IR.No_Slot
                  and then Index /= Aside
                then
-                  Store (Index, Register (Index));
-                  Waiting (Number (Index)) := False;
+                  if Is_Float (Index) then
+                     Store (Index, Float_Name (Index));
+                  else
+                     Store (Index, Register (Index));
+                     Waiting (Number (Index)) := False;
+                  end if;
                end if;
             end loop;
             if Aside /= 0 then
@@ -4192,7 +4258,10 @@ package body Landin.Backend.Arm64 is
                begin
                   Waiting (Natural'Value (Held (Held'First + 1 .. Held'Last)))
                     := True;
-                  Emit ("fmov " & Held & ", d16");
+                  Emit (if Aside_Float = Natural'Last
+                        then "ldr " & Held & ", [sp], #16"
+                        else "fmov " & Held & ", d"
+                          & Trimmed (Natural'Image (Aside_Float)));
                   Store (Aside, Held);
                end;
             end if;
