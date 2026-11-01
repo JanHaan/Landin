@@ -374,9 +374,9 @@ class Run:
         elif name == 'backend':
             from backend_acceptance import execute as backend_execute
             backend_execute(self, refine)
-        elif name == 'mainline':
-            from backend_acceptance import execute_mainline
-            execute_mainline(self, refine)
+        elif name in ('mps2-an505', 'mps2-an500'):
+            from backend_acceptance import execute_lane
+            execute_lane(self, refine, name)
         elif name == 'firmware':
             from firmware import execute_suite as firmware_execute
             firmware_execute(self, refine)
@@ -399,11 +399,13 @@ class Run:
 
 #  Every lane run.py runs, in the order it runs them.  `evidence` compares
 #  each debug image with the `driver` lane's, so it needs that lane, and
-#  selecting it alone runs both.  `mainline` is the whole corpus again at
-#  armv8-m.main on the AN505's Cortex-M33.
+#  selecting it alone runs both.  `mps2-an505` and `mps2-an500` are the
+#  whole corpus again on those emulator lanes (backend_corpus.LANES): at
+#  armv8-m.main on the AN505's Cortex-M33, and at armv7e-m with FPv5-D16 on
+#  the AN500's Cortex-M7.
 LANES = ('cpu', 'peripheral', 'abi', 'memory', 'packed', 'packed-native', 'backend',
-         'mainline', 'firmware', 'freestanding', 'devices', 'descriptions', 'driver',
-         'evidence')
+         'mps2-an505', 'mps2-an500', 'firmware', 'freestanding', 'devices', 'descriptions',
+         'driver', 'evidence')
 NEEDS = {'evidence': ('driver',)}
 NEEDS_REFINE = set(LANES[LANES.index('packed-native'):])
 

@@ -2178,11 +2178,18 @@ the profile's (D544): its core's architectural exceptions and 16 + IRQ for
 each interrupt its description names; every other slot is zero, which in the
 reference is core slots 4–10 and 12–13 and slots 21 and 42–47 of its 48.
 Other unspecified handlers enter the compiler's terminal unhandled-exception
-loop. There is no VTOR relocation, FPU frame, exclusive-access primitive,
-priority grouping or later-Thumb instruction contract.
+loop. There is no VTOR relocation, exclusive-access primitive or priority
+grouping. A Thumb-2 level selects its own instructions: hardware division
+(D255), the long multiply (D605) and, at `armv8-m.main`, acquiring loads
+and releasing stores (D606). With a float unit (D615) an exception taken in
+a float context stacks the extended frame (D618), and a fibre's context
+holds d8-d15 and FPSCR (D620); without one there is no FPU frame.
 
 Reset masks configurable interrupts, initializes reserved r9 and the root
-r11 to zero, copies initialized RAM data and RAM code from their flash load
+r11 to zero, and, when the description has a float unit (D615), gives CP10
+and CP11 full access in CPACR followed by DSB and ISB, before anything can
+execute a float instruction, leaving lazy stacking at its reset default
+(D618). It then copies initialized RAM data and RAM code from their flash load
 addresses, and clears BSS. DSB and ISB precede unmasking and transfer to the
 selected entry. It does not call user module initializers [1460]/[1940],
 construct a hosted environment, allocate memory or run a scheduler. This reset
@@ -2207,9 +2214,13 @@ There is no implicit keep attached to either convention.
 
 On exception entry ARMv6-M saves r0–r3, r12, incoming LR, return PC and xPSR
 on the interrupted stack, adding the architectural alignment word when needed.
+With a float unit, an exception that interrupts a context with an active
+float state stacks ARMv7-M's extended frame, s0–s15, FPSCR and a reserved
+word as well, whose space is reserved and filled lazily (D618).
 Handler mode uses MSP; thread mode may use MSP or programmer-established PSP.
 Ordinary and interrupt routines preserve each r4–r7 register their emitted
-instructions use. An ordinary routine with no calls, no inline assembly, and no transient
+instructions use, and with a float unit d8–d15, which only an assembly block
+can name, so a framed routine that holds one saves all eight (D617). An ordinary routine with no calls, no inline assembly, and no transient
 stack changes may use SP-relative homes, leave r11 and LR untouched, and save only
 the low registers it uses. Other routines construct a previous-r11/incoming-LR
 eight-byte record before publishing r11; they also save the low register used
@@ -2219,7 +2230,9 @@ Incoming LR in an interrupt record is EXC_RETURN, not a code address.
 The epilogue uses BX LR; the hardware restores volatile state,
 flags and the interrupted stack. `0xfffffff1`, `0xfffffff9` and `0xfffffffd`
 are respectively supported returns to a handler, a thread using MSP, and a
-thread using PSP. The NVIC implements four programmable priority levels (the upper two
+thread using PSP; with a float unit `0xffffffe1`, `0xffffffe9` and
+`0xffffffed` are the same three returns from an extended frame, and the
+epilogue's BX LR takes either. The NVIC implements four programmable priority levels (the upper two
 priority bits), with fixed NMI/HardFault priorities and no priority grouping.
 Higher-priority interrupts may nest; same/lower priority ones remain pending. PRIMASK masks configurable exceptions, not NMI/HardFault
 or DMA. The compiler adds no interrupt masking around source memory events.
@@ -18412,7 +18425,9 @@ and a build for Apple silicon may select `armv8.1-a`.
 
 A program reads its level as `compiler.feature.NAME`, a fixed bool fact
 [1500] that holds when the selected level has the feature NAME, spelled as
-in the table. A feature of another family is false rather than refused, so
+in the table. Two features are not a level's: `fp` and `fp_dp` hold when
+the selected device description's float unit has single, and double,
+precision, and no level holds either (D615). A feature of another family is false rather than refused, so
 `fixed if compiler.feature.lse then` needs no architecture test before it,
 and a name no family has is L0305. `compiler.feature` is a member chain the
 grammar already derives; it adds no reserved word and no configuration atom,
@@ -18455,7 +18470,8 @@ calculation uses Zba's `sh1add`, `sh2add` or `sh3add` when its scale fits,
 XTheadBa's `th.addsl` when selected without Zba, and the same shift/add
 sequence at baseline; bounds and overflow checks are unchanged. Beyond that: every level of a family shares one
 layout, one calling convention and one C ABI, so code built at two levels of
-one family links together. A level is not a target. Comparing two
+one family links together. A description's float unit is not a level and
+does change the calling convention (D615). A level is not a target. Comparing two
 descriptions still says which backend and which ABI, and type checking and
 the target-neutral IR do not depend on a level. A name that is no level of the selected
 family is L0009. A build at a level the machine running it lacks is not
@@ -18599,20 +18615,21 @@ linked at zero, so the reference's images do not run on it.
 **Chosen:** the corpus links each image with its own harness startup and
 the linker script refine derives from a description (D545, D589), so the
 AN505 is given a description of its own in Landin source,
-`environments/cortex-m/lanes/mps2_an505`: a `cortex-m33` with the
+`environments/cortex-m/lanes/descriptions/mps2_an505`: a `cortex-m33` with the
 reference's 48-word table, its 32 KiB of flash at `0x10000000`, the Secure
 alias of the board's first SSRAM, and its 16 KiB of RAM at `0x38000000`,
 the Secure alias of its second, the upper 4 KiB the stack. It describes an
 emulator's map for the lane and no chip, lives with the lane's sources,
-and nothing else imports it. Its facts are recorded apart from it in
+and a program reaches it only through the lane's entry-module file, as
+the M7's lane reaches its own (D619). Its facts are recorded apart from it in
 `environments/cortex-m/descriptions.json` under `lanes`, and the profile
 refine derives is held to them as each device's is. The capacities are the
 reference's, so a program fits the AN505's map exactly when it fits the
 reference's, and one inventory row says each fixture's verdict at every
-level. Run with `--level=armv8-m.main`, the corpus builds and runs every
-`execute` row at that level alone on the AN505, compiles every `refuse`
-row there to its codes and records every `restriction`; `run.py`'s
-`mainline` lane is that run.
+level. Run with `--lane mps2-an505`, the corpus builds and runs every
+`execute` row at `armv8-m.main` alone on the AN505, compiles every
+`refuse` row there to its codes and records every `restriction`;
+`run.py`'s `mps2-an505` lane is that run.
 
 **The alternatives:** a harness linker script of the lane's own, which the
 compiler would not derive and nothing would hold to the facts every other
@@ -18623,7 +18640,7 @@ the reference itself, which every firmware build that imports no
 description uses.
 
 **Pinned by** `environments/cortex-m/test.py`'s
-`test_a_level_must_change_the_executed_image`, the `mainline` lane of
+`test_a_level_must_change_the_executed_image`, the `mps2-an505` lane of
 `environments/cortex-m/run.py`, and the derived profile's comparison with
 its record in every corpus run.
 
@@ -21181,7 +21198,18 @@ which a change of instruction selection breaks; and checking the IR, which
 is not what is linked.
 
 **Pinned by** `devices/test.py`'s `the consumer's linked accesses` and the
-offline `the evaluator reads stores and their widths`.
+offline `the evaluator reads stores and their widths`, until D621 retired
+the evaluation.
+
+**Retired by D621:** the STM32H753's description has a float unit (D615),
+so its consumer is hard-float Armv7E-M code, which an ARMv6-M evaluator
+does not read, and a board now runs it. The board run's oracle checks the
+consumer's device accesses in their place. What stays checked statically,
+in `devices/test.py`'s `the consumer links cacheless`, is that the consumer
+links where its description places it and that its image holds no literal
+reaching SCB's CCR or the cache maintenance operations, which is how
+nothing enables or maintains the M7's caches stays checked in the gate.
+`devices/thumb.py` remains for RP2040's second stage (D588).
 
 ### D562 — The STM32H753's description is cacheless and keeps DMA out of the TCMs
 
@@ -21207,8 +21235,8 @@ placing data in SRAM1, which reaches no further and is smaller.
 
 **Pinned by** `devices/test.py`'s `the hand-written memory against the
 header`, which holds each region to the header and every placement DMA may
-touch out of the TCMs, and the cache check of `the consumer's linked
-accesses`; and `environments/cortex-m/descriptions.py`, which selects the
+touch out of the TCMs, and the cache check of `the consumer links
+cacheless` (D621); and `environments/cortex-m/descriptions.py`, which selects the
 STM32H753 by importing its description at `--level=armv7e-m` and compares
 its linked regions, vector table at 0x0800_0000 of 166 words, reserved
 slots, USART3's handler at slot 55, a datum placed in the DTCM and its
@@ -21432,6 +21460,7 @@ they read. The directives are:
 | `compiler.vectors(count)` | an integer | the vector table's whole length in words, the initial SP and reset included |
 | `compiler.interrupt(name, irq)` | an ASCII letter, then letters, digits and underscores, at most 64 bytes; an integer | that external interrupt `irq` is implemented, at absolute slot 16 + `irq` |
 | `compiler.boot(kind)` | a boot image kind | how the image begins |
+| `compiler.float_unit(name)` | `fpv5-d16` | the core's float unit, which changes the C ABI (D615) |
 | `linker.region(name, origin, length, access)` | an ASCII letter, then letters, digits and underscores, at most 32 bytes; two integers; `"rx"`, `"rw"` or `"rwx"` | one memory region |
 | `linker.place(kind, region[, size])` | `"vectors"`, `"text"`, `"rodata"`, `"data"`, `"bss"` or `"stack"`; a region's name; for `"stack"` alone, its size in bytes | where the compiler places that part of the image |
 
@@ -21441,9 +21470,10 @@ directives' order carries no meaning.
 A description is usually two files, which the compiler does not tell
 apart. `interrupts.ldn` holds `compiler.device`, `compiler.core`,
 `compiler.vectors` and the interrupts, and is generated from the device's
-CMSIS-SVD file; `memory.ldn` holds the regions, the placements and
-`compiler.boot`, and is written by the developer, since an SVD says nothing
-of either. A generated `interrupts.ldn` has exactly this text, so that
+CMSIS-SVD file; `memory.ldn` holds the regions, the placements,
+`compiler.boot` and any `compiler.float_unit`, and is written by the
+developer, since an SVD says nothing of the first three and too little of
+the last (D615). A generated `interrupts.ldn` has exactly this text, so that
 whatever generates it, and a reviewer, can compare bytes:
 
 1. Line 1 is `-- Interrupts of the NAME, from its SVD: vendor VENDOR, version
@@ -21546,7 +21576,8 @@ are an optional extension of its core. So an RP2040, a `cortex-m0plus`,
 builds at the default `armv6-m` and no higher, a `cortex-m4` builds at
 `armv7e-m`, `armv7-m` or `armv6-m`, and a `cortex-m33` at `armv8-m.main`,
 `armv7-m` or `armv6-m`, its vector slots its core's at any of them; a level above the core's, or a target of another family, is L0515,
-naming the levels the core executes. The constrained reference alone is
+naming the levels the core executes. A description with a float unit builds
+only at the level that holds the unit, and a lower one is L0546 (D615). The constrained reference alone is
 used at every level, with its ARMv6-M slots, because it is the profile the
 levels were always tested on and remains so. The maintainer chose the lower
 levels over requiring the core's own: code built for less runs on the core,
@@ -24110,6 +24141,326 @@ identity; the Cortex-M lanes, which link with the
 pinned archive; and the gate's `outside-user-stock` job, which links
 firmware with Ubuntu's `gcc-arm-none-eabi` while the pinned driver is
 unreachable.
+
+### D615 — A float unit is a fact of a description, and features read it
+
+**The tour said** nothing of floating-point hardware; D255 made a CPU
+feature level a set of instructions that changes no layout and no ABI, and
+D542 made a device a description of its core, memory and vectors. The
+Cortex-M7 of the STM32H753 and QEMU's `mps2-an500` has FPv5-D16, single-
+and double-precision registers whose use changes the C ABI: AAPCS32's VFP
+variant passes floats in them, so code built with the unit does not link
+with code built without it. A level cannot say that, since every level of a
+family shares one ABI (D255), and a chip can have a core without its unit.
+
+**Chosen:** the hand-written half of a description, `memory.ldn`, may hold
+`compiler.float_unit("NAME")`, once, at module level, as every directive of
+D542's table is; `refine svd` does not write it, since an SVD's `fpuPresent`
+says neither the unit nor its precision. The compiler knows float units as
+facts of a core and never of a chip: a `cortex-m7` may have `fpv5-d16`, and
+that is the one unit refine builds. Any other name, or a unit its core
+cannot have, is L0545, whose note says what refine builds and what the core
+may have. A description with a float unit is built at the level whose
+architecture holds the unit, `armv7e-m` for `fpv5-d16`, and at no lower one,
+since the unit's ABI is the build's: `--level=armv7-m` or `armv6-m` is
+L0546, naming the level. D543's lower levels stay for a description with no
+unit.
+
+A program reads the unit as `compiler.feature.fp` and
+`compiler.feature.fp_dp`, fixed bool facts that hold when the selected
+description's unit has single, and double, precision: both for `fpv5-d16`,
+neither for a description without a unit, the constrained reference among
+them, or on a target with no descriptions. This amends D255, whose features
+all came from the level: these two come from the description, and no level
+holds either. A description is selected by import and its directives stand
+outside every fixed arm (D543), so configuration finds it and reads its
+unit before it evaluates any option or fixed condition; the unit's argument
+is a text literal, so no fixed expression can depend on the facts it gives
+and there is no cycle to refuse.
+
+**The alternatives:** a level per unit, `armv7e-m+fp.dp`, which makes a
+level change the ABI and lets a build select a unit its chip lacks; reading
+the unit from the core, which assumes every Cortex-M7 has a double-precision
+unit when ST, NXP and Microchip each sell ones without it or with a
+single-precision one; generating the directive from the SVD, which says
+only that some unit is present; and a feature fact read late, after the
+program's own fixed arms, which would let a declaration be selected by a
+fact whose value changed after it was read.
+
+**Pinned by** `negative/description-float-unit-unknown`,
+`negative/description-float-unit-core`,
+`negative/description-float-unit-level`, and the `cortex ABI` case `device
+descriptions select their profiles`, which holds both refusals, the
+repeated and conditional directive, and the facts read by an option, a
+compiler assertion and a fixed arm of a program whose description has the
+unit, one whose description has none and the reference.
+
+### D616 — A float unit selects AAPCS32's VFP variant, for C and for Landin
+
+**The tour said** nothing; docs/targets.md's Cortex-M0 planning passed every
+float in core registers, "soft-float values use core bit carriers", and
+D615 gives a description a unit whose registers the C ABI uses.
+
+**Chosen:** a program whose description has `fpv5-d16` uses the VFP variant
+of [AAPCS32](https://github.com/ARM-software/abi-aa/blob/2025Q4/aapcs32/aapcs32.rst),
+hard float and not `softfp`. In the C convention a VFP candidate is an
+`f32` or `f64`, or a composite of one to four members all of one of those
+types, nested aggregates and arrays included. Each candidate takes the
+lowest-numbered run of free registers of s0-s15 that holds it, a double or
+an aggregate of doubles an even-aligned run, so a single back-fills the
+slot a double's alignment left. Once a candidate finds no such run every
+VFP register is unavailable, the candidate goes to the stack at its own
+alignment, and no later argument takes one, even a single that would fit
+a slot left free. Candidates consume no core register; everything else is
+placed in r0-r3 and on the stack exactly as before, sharing the stack
+with the candidates in argument order. A candidate result is returned in
+s0 or d0, an aggregate in s0-s3 or d0-d3 whatever its size; any other
+composite result keeps its r0 or hidden-address placement. A variadic call
+uses the base PCS throughout, its fixed arguments included. s16-s31, d8 to
+d15, are call-preserved, and s0-s15 and FPSCR's flags are call-clobbered.
+
+The internal Landin convention uses the same bank for its own floats: an
+`f32` or `f64` parameter is placed as the C convention places it, and an
+`f32` or `f64` result is s0 or d0; aggregates, arrays and multiple results
+stay by address in core registers, and r12's outcome is unchanged.
+`Backend.Arm32_ABI` plans both, its locations naming the first single slot
+and how many a candidate takes. C interoperation stays disabled on
+Cortex-M, where `platform/c` stays refused, so the C half is a planner
+contract measured against GCC rather than a convention any source uses.
+
+**The alternatives:** `softfp`, the unit's instructions with the base PCS's
+transport, which links with soft-float objects and moves every float
+through core registers at each call; the internal convention keeping core
+carriers while C uses the bank, which needs a move at every boundary and a
+second planner; and back-filling after a candidate has gone to the stack,
+which AAPCS32 forbids and GCC does not do.
+
+**Pinned by** the `cortex ABI` case `layout and transport contract`, whose
+`vfp.` rows of `compiler/tests/cortex-m.contract` place back-filled
+singles, aggregates of floats and of doubles, a stack fallback that leaves
+s1 free, a variadic call, a composite of five floats and the internal
+convention, and name s16-s31 as preserved; and `environments/cortex-m/abi.py`,
+which compiles a C caller with GCC at `-mcpu=cortex-m7 -mfloat-abi=hard
+-mfpu=fpv5-d16`, runs it on QEMU's `mps2-an500` against hand-written
+endpoints that record r0-r3, s0-s15 and the stack, holds every recorded
+word to those rows, requires the image's `Tag_ABI_VFP_args: VFP registers`
+and requires GCC to save exactly d8-d15 around a body that clobbers every
+VFP register, with sentinels in them surviving it.
+
+### D617 — With a float unit, floats are computed in VFP instructions
+
+**The tour said** nothing; docs/targets.md's Cortex-M0 selection called the
+runtime's `__aeabi_f*` and `__aeabi_d*` helpers for every float operation,
+and D616 passes floats in the bank D615's unit has.
+
+**Chosen:** with `fpv5-d16`, f32 and f64 addition, subtraction,
+multiplication and division are VADD, VSUB, VMUL and VDIV, negation VNEG,
+and a comparison VCMP for equality and inequality or VCMPE for an ordered
+relation, VMRS of the flags and a branch on the condition that is false
+when unordered. A conversion between the widths is VCVT, and a narrowing
+keeps Landin's finite-overflow guard; one from an integer of at most 32
+bits is VCVT from s32 or u32; and one to such an integer widens an f32 to
+f64 exactly, traps unless the source lies strictly between the type's
+lowest less one and highest plus one, which a NaN does not, and then
+truncates with VCVT, so D171's checks are unchanged. A conversion from or to
+a 64-bit integer keeps the runtime's base-PCS conversion or the integer
+decoding, since no VFP instruction converts 64 bits, and a float's test as
+a bool keeps its comparison of the carrier. Operands and results move
+between their homes and s0-s2 or d0-d2 by VLDR and VSTR, and a banked
+argument or result between its home and its register the same way; a
+value's home and every other move are unchanged. No arithmetic, comparison
+or 32-bit conversion helper is called. FPSCR keeps its reset default: round
+to nearest even, no flush to zero and no default NaN.
+
+Selection names no call-preserved VFP register. An assembly block's text
+can, and the compiler does not read that text for registers, so a framed
+routine that holds a block on a profile with a unit stores d8-d15 in its
+frame with VSTM after it reserves its homes, between them and the incoming
+staging, and loads them with VLDM before its epilogue, each with its CFI
+offset. That is not D471's unchecked area above the frame record, as a
+VPUSH before the record would be, so the limit check covers it. A call-free
+leaf holds no block.
+
+The assembly says `.fpu fpv5-d16`, and declares `Tag_ABI_FP_number_model`
+IEEE 754 and `Tag_ABI_VFP_args` VFP registers, which the assembler does not
+infer from its flags; the assembler and the linker are given
+`-mfloat-abi=hard -mfpu=fpv5-d16`, from which GCC selects the
+`thumb/v7e-m+dp/hard` libgcc multilib, so refine names no multilib path.
+The linker compares objects' `Tag_ABI_VFP_args` only when both declare a
+number model: a soft-float C object is then refused, and a libgcc helper
+object, which declares none, leaves the image's attribute standing. Without
+a unit the assembly, the flags and the code are as they were.
+
+**The alternatives:** helpers with the VFP variant's transport, which
+leaves the unit idle; keeping floats in core registers between operations
+with VMOV at each, which costs two moves for one load; truncating with VCVT
+and checking its saturated result, which cannot tell the type's extreme from
+an overflow; reading assembly text for d8-d15, which a register range or a
+macro defeats; and VPUSH above the frame record, which would add its 64
+bytes to every margin.
+
+**Pinned by** `runtime/float-operations-by-arguments`, whose operands are
+known only at run time, executed on QEMU's `mps2-an500` by the corpus's
+lane (D619), which requires each of its routines at none/off to hold its
+own VFP operation, its image to hold no software float routine, and every
+image the lane runs to call no float helper; the lane's every float
+fixture against its oracle; `runtime/assembly-keeps-call-preserved-floats`,
+whose block writes s16 on the lane, where the harness requires d8-d15 to
+hold its sentinels after `main`; the `cortex ABI` case `a float unit
+selects VFP code`; and the lane's ELF check of `Tag_FP_arch: FPv5/FP-D16 for
+ARMv8` and `Tag_ABI_VFP_args: VFP registers`, with
+`environments/cortex-m/firmware.py`'s refusal of a soft-float object linked
+into a hard-float image.
+
+### D618 — Reset enables the float unit, and handlers take extended frames
+
+**The tour said** nothing; [1990] had no FPU frame and three supported
+returns, and an M7's float instructions fault NOCP until CPACR grants
+CP10 and CP11.
+
+**Chosen:** with a float unit, compiler-owned reset gives CP10 and CP11
+full access in CPACR, 0xE000ED88, then DSB and ISB, right after it
+initializes r9 and r11 and before anything that can execute a float
+instruction, the copies and the entry included. FPCCR keeps its reset
+default, automatic state preservation with lazy stacking, so an exception
+that interrupts a context with an active float state, CONTROL.FPCA set,
+reserves ARMv7-M's extended frame, s0-s15, FPSCR and a reserved word beyond
+the basic eight, and fills it only if the handler executes a float
+instruction. A handler's EXC_RETURN is then `0xffffffe1`, `0xffffffe9` or
+`0xffffffed`, a handler, a thread on MSP or a thread on PSP from an extended
+frame, and its epilogue's BX LR returns through either kind. A handler is an
+ordinary framed routine and needs nothing more: s0-s15 are the hardware's
+to restore, and d8-d15 are preserved as every routine preserves them
+(D617).
+
+**The alternatives:** enabling the unit in the entry, which a float
+instruction in a module initializer or the copies could precede; disabling
+lazy stacking, which stacks 72 more bytes on every exception whether or not
+its handler uses the unit; and refusing a float in a handler, which the
+hardware already makes safe.
+
+**Pinned by** the `cortex ABI` case `a float unit selects VFP code`, which
+holds the CPACR sequence's place in the reset routine; the lane's harness,
+which enables the unit as reset does before it runs the corpus; and the
+firmware lane's `float-unit` case, compiler-owned reset on the lane taking
+an interrupt during a float computation and returning through
+`0xffffffe9`.
+
+### D619 — QEMU's mps2-an500 is the M7's emulator lane, selected by a description
+
+**The tour said** nothing; the corpus ran on the constrained reference at
+ARMv6-M on QEMU's micro:bit and, for `levels: armv7-m`, on the MPS2 AN385,
+and a float unit is a description's (D615), which a corpus program
+does not import.
+
+**Chosen:** the M7 lane is QEMU's `mps2-an500`, a Cortex-M7 r1p2 with a
+double-precision FPv5-D16, described in Landin source as
+`environments/cortex-m/lanes/descriptions/mps2_an500`: 4 MiB of code memory
+at zero, where the table is, 4 MiB of RAM at 0x2000_0000 with a 64 KiB
+stack at its top, a 16-word table and `fpv5-d16`. Unmapped space there
+reads zero and ignores writes without a fault, so nothing is placed outside
+the two. The lane compiles every program at `armv7e-m` with one more
+entry-module file, `lanes/lane-mps2-an500.ldn`, which imports the
+description, so the program reaches it unchanged; a rooted program's entry
+module is named by its files rather than its directory, since a rooted
+request names one or the other. Its derived script and limits are held to
+`descriptions.json`'s `lanes` record, the harness start enables the unit
+and paints d8-d15, and every image must carry the unit's attributes.
+
+`backend_corpus.py --lane mps2-an500` runs the whole inventory there at
+every profile, each row's own disposition included: an `execute` row
+executes, an image the lane's map cannot hold is a limit, a source refusal
+is checked with the lane's inputs, and a restriction is recorded. A row's
+`lanes` entry may give a lane a restriction of its own with its reason,
+which the lane still runs and requires to fail, so a stale one fails the
+run. `run.py`'s `mps2-an500` lane is that run, as its `mps2-an505` lane is
+D607's, and the AN505 is reached through its own entry-module file.
+No limited verdict is linked again against the lane's map, which is no
+device's, and its larger map judges no reference limit stale.
+
+**The alternatives:** a `--device=` option on the corpus, which D543
+declined for refine and which would here describe a program's target
+outside its source; prepending an import to each fixture's source, which
+changes the program the oracle was written for; the STM32H753's own
+description, whose flash at 0x0800_0000 QEMU's machines do not have; and
+QEMU's `mps2-an385` Cortex-M3, which has no float unit.
+
+**Pinned by** `environments/cortex-m/backend_corpus.py`'s `--lane`, the
+inventory's `lanes` entries, `environments/cortex-m/descriptions.json`'s
+`lanes` record that the derived profile is held to, and
+`environments/cortex-m/test.py`'s lane controls.
+
+### D620 — A fibre's context on a float unit holds d8-d15 and FPSCR
+
+**The tour said** nothing; D460's switch saved forty-eight bytes, D461's
+fibre paid for one thirty-six-byte exception frame, and D472's margin was
+sized for both.
+
+**Chosen:** with a float unit the switch also pushes d8-d15 below the limit
+word and FPSCR with a word above it below them, 120 bytes in all: from the
+saved pointer, CONTROL, r8 to r11, FPSCR, a word, d8 to d15, the scratch
+word, the limit, r4 to r7 and the return address. Resuming restores FPSCR
+and d8-d15 after r8 to r11, and the CFI names each saved d register.
+`compiler.stack_prepare` lays the same frame, d8-d15 and FPSCR zero,
+FPSCR's reset default. CONTROL travels with each context as before, its
+FPCA bit included, which a prepared stack starts clear and its first float
+instruction sets. A fibre's backing holds one exception frame as D461 says,
+which with an active float state is the extended frame of D618, 108 bytes
+with its alignment word rather than thirty-six. D472's margin grows by 72
+for that frame and 72 for the larger switch frame a handler that switches
+away saves, 528 bytes, so a handler keeps the room it has without a unit,
+and the worst before a handler is 260 bytes. `core/fibre/stacks` keeps 176
+words below a stack's start rather than 128 when `compiler.feature.fp`
+holds, so a stack too small for the frame and the margin is out of memory
+there and not a trap. D470's consumer is measured on the retained
+Cortex-M0 profile, which has no unit; on one with a unit its fibre would be
+charged the extended frame.
+
+**The alternatives:** saving only the d registers a fibre used, which the
+switch cannot know; leaving FPSCR to the fibre, which lets one fibre's
+rounding mode or cumulative flags reach another; disabling lazy stacking
+around a switch, which is no help with the frame an interrupt stacks; and
+keeping D472's margin, which leaves a selected handler 124 bytes and refuses
+the corpus's own.
+
+**Pinned by** the stack-builtin fixtures `runtime/stack-switch-round-trip`,
+`runtime/stack-frame-past-limit-traps`, `runtime/stack-prepare-too-small-traps`,
+`runtime/stack-exhausted-reaches-the-handler` and the fibre fixtures on the
+mps2-an500 lane, where the harness requires d8-d15 to survive `main`; and
+the `stack report` suite's `a switch costs its frame`, whose Cortex-M
+figures with a unit are 120, 528 and 260.
+
+### D621 — The STM32H753 is hard-float, and its consumer's accesses are the board's to check
+
+**The tour said** nothing; D560 learnt the STM32H753 for prototype 1, D561
+read its consumer's device stores from the linked ARMv6-M image, and D562
+kept its profile cacheless.
+
+**Chosen:** `devices/descriptions/stm32h753/memory.ldn` holds
+`compiler.float_unit("fpv5-d16")`, its Cortex-M7's double-precision unit,
+so the H753 builds at `armv7e-m` alone and hard-float (D615-D617), and its
+reset grants the unit (D618). The profile stays cacheless under R12's rule
+for noncoherent cached profiles: nothing enables the caches, and D562's
+placements are unchanged. D561's static evaluation is retired, since an
+ARMv6-M evaluator does not read Armv7E-M code and a board runs the
+consumer; the board run's oracle checks its device accesses. What stays
+static is D561's amendment's: the consumer links where the description
+places it, its image reaches neither SCB's CCR nor a cache maintenance
+operation, and it does reach CPACR. The corpus derives the profile at
+`armv7e-m`, the level its float unit needs, to link limited verdicts
+against it.
+
+**The alternatives:** keeping the description soft-float, which leaves the
+board's unit idle and its exit evidence on the emulator alone; extending
+the evaluator to Thumb-2 and VFP, a second instruction set kept apart from
+the backend that the board run makes unnecessary; and a cache check in the
+board oracle alone, which the gate does not run.
+
+**Pinned by** `devices/test.py`'s `the consumer links cacheless` and `the
+hand-written memory against the header`; and
+`environments/cortex-m/descriptions.py`, which selects the STM32H753 at
+`--level=armv7e-m` and compares its facts, its float unit among them, with
+`descriptions.json`.
 
 ### D281 — RV64's system call has the standing of `syscall` and `svc`
 

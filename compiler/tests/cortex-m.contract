@@ -66,3 +66,38 @@ native.arg3 3 1 0 0 1
 native.arg4 4 0 0 8 0
 multi.result 1 0 1 0 1
 multi.arg1 1 1 0 0 0
+vfp.mixed.result 0 4 0 0 0 0 1
+vfp.mixed.arg1 4 0 0 0 0 0 1
+vfp.mixed.arg2 4 0 0 0 0 2 2
+vfp.mixed.arg3 4 0 0 0 0 1 1
+vfp.mixed.arg4 0 1 0 0 0 16 0
+vfp.mixed.arg5 4 0 0 0 0 4 2
+vfp.hfa.result 0 4 0 0 0 0 8
+vfp.hfa.arg1 4 0 0 0 0 0 3
+vfp.hfa.arg2 4 0 0 0 0 4 4
+vfp.hfa.arg3 4 0 0 0 0 3 1
+vfp.spill.result 0 4 0 24 0 0 2
+vfp.spill.arg1 4 0 0 0 0 0 1
+vfp.spill.arg2 4 0 0 0 0 2 2
+vfp.spill.arg3 4 0 0 0 0 4 2
+vfp.spill.arg4 4 0 0 0 0 6 2
+vfp.spill.arg5 4 0 0 0 0 8 2
+vfp.spill.arg6 4 0 0 0 0 10 2
+vfp.spill.arg7 4 0 0 0 0 12 2
+vfp.spill.arg8 4 0 0 0 0 14 2
+vfp.spill.arg9 4 0 0 16 0 16 0
+vfp.spill.arg10 4 0 16 4 0 16 0
+vfp.spill.arg11 0 1 0 0 0 16 0
+vfp.varargs.result 0 0 2 8 0 16 0
+vfp.varargs.arg1 0 2 0 0 0 16 0
+vfp.varargs.arg2 2 2 0 0 0 16 0
+vfp.varargs.arg3 4 0 0 4 0 16 0
+vfp.large.result 1 0 1 8 0 16 0
+vfp.large.arg1 1 3 0 8 0 16 0
+vfp.large.arg2 4 0 0 0 0 0 1
+vfp.native.result 0 4 0 0 1 0 2
+vfp.native.arg1 4 0 0 0 0 0 2
+vfp.native.arg2 0 1 0 0 0 16 0
+vfp.native.arg3 4 0 0 0 0 2 1
+vfp.native.arg4 1 1 0 0 1 16 0
+vfp.preserved 16 31

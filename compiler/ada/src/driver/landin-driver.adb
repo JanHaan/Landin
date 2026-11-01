@@ -2353,7 +2353,9 @@ package body Landin.Driver is
                         Landin.Backend.Toolchain.Assemble_Arguments
                           (Assembly_Path, Product_Path & ".o", Facts,
                            Debug => Debug_Enabled,
-                           Level => Landin.Stages.Level (Context)),
+                           Level => Landin.Stages.Level (Context),
+                           Float => Landin.IR.Firmware_Profile
+                             (Landin.Stages.Code (Context).all).Float),
                         Ran, Landin.Platform.Merged);
                      if Ran.Ended /= Landin.Platform.Exited
                        or else Ran.Exit_Code /= 0
@@ -2528,7 +2530,9 @@ package body Landin.Driver is
                           Static => Static_Link,
                           Threads => Starts_C_Threads,
                           Directories => Directories,
-                          Script => Unbounded.To_String (Script_Path)),
+                          Script => Unbounded.To_String (Script_Path),
+                          Float => Landin.IR.Firmware_Profile
+                            (Landin.Stages.Code (Context).all).Float),
                      Result    => Ran,
                      Capture   => Landin.Platform.Merged);
                exception
@@ -3446,7 +3450,9 @@ package body Landin.Driver is
                           (Landin.Backend.Toolchain.Assemble_Arguments
                              (Assembly_Path, Product_Path & ".o", Facts,
                               Debug => Debug_Enabled,
-                              Level => Landin.Stages.Level (Context)));
+                              Level => Landin.Stages.Level (Context),
+                              Float => Landin.IR.Firmware_Profile
+                                (Landin.Stages.Code (Context).all).Float));
                         end if;
                         Plan_Tool (Landin.Backend.Toolchain.Link_Arguments
                           (Assembly => Assembly_Path,
@@ -3457,7 +3463,9 @@ package body Landin.Driver is
                            Build_Id => Unbounded.To_String (Map_Id),
                            Level => Landin.Stages.Level (Context),
                            Static => Static_Link,
-                           Directories => Search_Directories));
+                           Directories => Search_Directories,
+                           Float => Landin.IR.Firmware_Profile
+                             (Landin.Stages.Code (Context).all).Float));
                         if not Keep_Assembly and then not Cortex
                           and then not Emit_Map
                         then

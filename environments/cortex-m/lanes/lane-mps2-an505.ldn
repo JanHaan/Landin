@@ -1,0 +1,4 @@
+-- The mps2-an505 lane's entry-module file (D607, D619): the corpus compiles
+-- a program with this beside its own sources, so the program reaches the
+-- lane's description, and through it the AN505's map, unchanged.
+import descriptions/mps2_an505

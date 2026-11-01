@@ -20,7 +20,7 @@ class ProbeFailures(unittest.TestCase):
         calls=[]
         lanes=[('abi','execute'),('memory','execute'),('packed','execute'),
                ('packed_native','execute'),('backend_acceptance','execute'),
-               ('backend_acceptance','execute_mainline'),
+               ('backend_acceptance','execute_lane'),
                ('firmware','execute_suite'),('freestanding','execute_suite'),
                ('devices','execute_suite'),('descriptions','execute_suite'),
                ('driver','execute_suite'),
@@ -38,12 +38,19 @@ class ProbeFailures(unittest.TestCase):
                 % arm_archive()['version'].rsplit('-', 1)[0]))
             stack.enter_context(patch.object(Run,'qemu',side_effect=lambda:calls.append('qemu')))
             stack.enter_context(patch.object(Run,'peripheral',side_effect=lambda:calls.append('peripheral')))
+            #  Each corpus lane is execute_lane given its own name.
             for name, entry in lanes:
                 stack.enter_context(patch.object(importlib.import_module(name),entry,
-                    side_effect=lambda *args,n=name:calls.append(n)))
+                    side_effect=lambda *args,n=name,e=entry:calls.append(
+                        args[-1] if e == 'execute_lane' else n)))
             Run(root,root).execute(Path('relative/refine'))
-        self.assertEqual(calls,['qemu','peripheral']+[n for n,_ in lanes])
-        self.assertIn('mainline', __import__('run').LANES)
+        from backend_corpus import LANES as CORPUS_LANES
+        names = [n for n,_ in lanes]
+        at = names.index('backend_acceptance') + 1
+        self.assertEqual(calls, ['qemu','peripheral'] + names[:at]
+                         + ['mps2-an505', 'mps2-an500'] + names[at+1:])
+        self.assertEqual(sorted(CORPUS_LANES), ['mps2-an500', 'mps2-an505'])
+        self.assertTrue(set(CORPUS_LANES) <= set(__import__('run').LANES))
 
     def test_a_stop_at_a_line_is_held_to_that_line(self):
         from firmware import landed
@@ -428,6 +435,74 @@ class ProbeFailures(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "linked for constrained-reference does"
                                         " not run on QEMU's mps2-an505"):
                 execute(run, listing, 42, False, level='armv8-m.main', profile=recorded())
+
+    def test_the_m7_lane_reaches_its_description_and_computes_in_hardware(self):
+        from backend import LANE_ROOT, LEVELS, hard_float, lane_inputs, level_flags, recorded
+        from backend_corpus import float_lowering
+        key = 'armv7e-m+fpv5-d16'
+        self.assertEqual(LEVELS[key]['machine'], 'mps2-an500')
+        flags = level_flags(key)
+        self.assertIn('-mfloat-abi=hard', flags)
+        self.assertIn('-mfpu=fpv5-d16', flags)
+        self.assertNotIn('-mfloat-abi=soft', flags)
+        self.assertNotIn('-mcpu=cortex-m0', flags)
+        self.assertTrue(hard_float(key))
+        self.assertFalse(hard_float('armv7-m'))
+        self.assertEqual(lane_inputs('armv6-m', ['a.ldn']), ['a.ldn'])
+        lane = str(LANE_ROOT / 'lane-mps2-an500.ldn')
+        self.assertEqual(lane_inputs(key, ['a.ldn', 'b.ldn']),
+                         ['--root=' + str(LANE_ROOT), 'a.ldn', 'b.ldn', lane])
+        #  The M33's lane reaches its description the same way.
+        self.assertEqual(lane_inputs('armv8-m.main', ['a.ldn'])[-1],
+                         str(LANE_ROOT / 'lane-mps2-an505.ldn'))
+        with tempfile.TemporaryDirectory() as directory:
+            module = Path(directory) / 'module'
+            module.mkdir()
+            (module / 'b.ldn').write_text('')
+            (module / 'a.ldn').write_text('')
+            self.assertEqual(lane_inputs(key, ['--root=' + directory, str(module)]),
+                             ['--root=' + str(LANE_ROOT), '--root=' + directory,
+                              str(module / 'a.ldn'), str(module / 'b.ldn'), lane])
+        profile = recorded('mps2-an500')
+        self.assertEqual((profile['flash_limit'], profile['stack_top'], profile['vector_words']),
+                         (4 * 1024 * 1024, 0x20400000, 16))
+        with tempfile.TemporaryDirectory() as directory:
+            run = Run(Path(directory), HERE)
+            (Path(directory) / 'sections-routines.log').write_text(
+                '00000100 00000010 T add_32\n')
+            listing = Path(directory) / 'disassembly.log'
+            listing.write_text('  104:\tee30 0a20 \tvadd.f32\ts0, s0, s1\n')
+            self.assertEqual(float_lowering(run)['vfp_operations'], {'add_32': {'vadd': 1}})
+            listing.write_text('  104:\tf000 f800 \tbl\t200 <__aeabi_fadd>\n')
+            with self.assertRaisesRegex(RuntimeError, 'in software: __aeabi_fadd'):
+                float_lowering(run)
+            listing.write_text('  104:\tf000 f800 \tbl\t200 <__aeabi_l2d>\n')
+            self.assertEqual(float_lowering(run)['helper_float_calls'], 0)
+
+    def test_a_lane_restriction_needs_its_reason(self):
+        import backend_corpus
+        record = json.loads((HERE.parent.parent / 'compiler/tests/cortex-m/corpus.json').read_text())
+        name = 'runtime/r420-map-arena'
+        self.assertEqual(record['fixtures'][name]['lanes']['mps2-an500']['mode'], 'restriction')
+        original = backend_corpus.COUNTERPARTS
+        with tempfile.TemporaryDirectory() as directory:
+            broken = Path(directory)
+            for one in ('counterparts.json', 'cases'):
+                source = original / one
+                target = broken / one
+                if source.is_dir():
+                    import shutil
+                    shutil.copytree(source, target)
+                else:
+                    target.write_text(source.read_text())
+            del record['fixtures'][name]['lanes']['mps2-an500']['reason']
+            (broken / 'corpus.json').write_text(json.dumps(record))
+            backend_corpus.COUNTERPARTS = broken
+            try:
+                with self.assertRaisesRegex(RuntimeError, 'a "lanes" entry names a corpus lane'):
+                    backend_corpus.inventory()
+            finally:
+                backend_corpus.COUNTERPARTS = original
 
     def test_image_limit_does_not_hide_codegen_failure(self):
         from unittest.mock import patch
@@ -915,7 +990,7 @@ class ProbeFailures(unittest.TestCase):
         self.assertEqual(run.verdicts['abi'], {'status': 'failed', 'error': 'abi broke'})
         self.assertEqual(run.verdicts['evidence']['status'], 'not run')
         self.assertEqual(run.verdicts['firmware'], {'status': 'passed'})
-        self.assertIn('3 of 14 lanes did not pass', str(failed.exception))
+        self.assertIn('3 of 15 lanes did not pass', str(failed.exception))
 
     def test_a_stack_overrun_is_watched_and_named(self):
         from backend import recorded, session

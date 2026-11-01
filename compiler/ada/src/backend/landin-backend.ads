@@ -680,8 +680,14 @@ private
    --  above a prepared stack's lowest byte, and the largest frame of a
    --  call-free routine, or call area, that is not checked, on Facts'
    --  backend.  Zero for a target without a native backend.
+   --
+   --  D620: on Cortex-M with a float unit a fibre's exception frame is
+   --  ARMv7-M's extended one, and a switch's frame holds d8-d15 and FPSCR,
+   --  each 72 bytes larger; the margin grows by both, so a handler that
+   --  switches away keeps the room it has without a unit.
    function Stack_Limit_Margin
-     (Facts : Landin.Targets.Target_Facts) return Landin.Targets.Byte_Count;
+     (Facts : Landin.Targets.Target_Facts;
+      Float : Boolean := False) return Landin.Targets.Byte_Count;
    function Unchecked_Stack_Bytes
      (Facts : Landin.Targets.Target_Facts) return Landin.Targets.Byte_Count;
 
@@ -692,7 +698,14 @@ private
    --  is what a handler and its calls may take (D474).  Zero for a target
    --  without a native backend.
    function Handler_Entry_Bytes
-     (Facts : Landin.Targets.Target_Facts) return Landin.Targets.Byte_Count;
+     (Facts : Landin.Targets.Target_Facts;
+      Float : Boolean := False) return Landin.Targets.Byte_Count;
+
+   --  D620: what a float unit adds on Cortex-M: to a switch's saved frame,
+   --  d8-d15, FPSCR and a word keeping it aligned; and to an exception
+   --  frame, s0-s15, FPSCR and its reserved word.
+   VFP_Switch_Bytes    : constant := 72;
+   VFP_Exception_Bytes : constant := 72;
 
    package Offset_Vectors is new Ada.Containers.Vectors
      (Index_Type   => Positive,

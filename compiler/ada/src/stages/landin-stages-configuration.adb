@@ -94,6 +94,12 @@ package body Landin.Stages.Configuration is
         Configurations (Context);
       Found : Landin.Diagnostics.Diagnostic_List;
       Unavailable_Import : Boolean := False;
+      --  D615: the float unit of the description the program reaches,
+      --  which `compiler.feature.fp` and `fp_dp` read.  A description's
+      --  directives stand outside every fixed arm, so it is read from them
+      --  before any option or fixed condition is evaluated.
+      Float_Facts : Landin.Targets.Firmware.Float_Unit :=
+        Landin.Targets.Firmware.No_Float_Unit;
 
       type Fixed_Kind is
         (Bad_Value, Truth, Number, Machine, Byte_Order, Build_Kind,
@@ -561,6 +567,8 @@ package body Landin.Stages.Configuration is
                if Is_Feature_Fact (Of_Tree, Node) then
                   if not Landin.Targets.Levels.Is_Feature_Name
                     (Spelled (Syn.Name (Of_Tree, Node)))
+                    and then not Firmware.Is_Float_Feature_Name
+                      (Spelled (Syn.Name (Of_Tree, Node)))
                   then
                      Report_Not_Fixed
                        (Of_Tree, Node,
@@ -733,7 +741,16 @@ package body Landin.Stages.Configuration is
                declare
                   Word : constant String := Spelled (Syn.Name (Of_Tree, Node));
                begin
-                  if Is_Feature_Fact (Of_Tree, Node) then
+                  if Is_Feature_Fact (Of_Tree, Node)
+                    and then Firmware.Is_Float_Feature_Name (Word)
+                  then
+                     --  D615: the selected description's float unit,
+                     --  read before any fixed expression is.
+                     return Boolean_Result
+                       (if Word = "fp"
+                        then Firmware.Single_Precision (Float_Facts)
+                        else Firmware.Double_Precision (Float_Facts));
+                  elsif Is_Feature_Fact (Of_Tree, Node) then
                      return Boolean_Result
                        (Landin.Targets.Levels.Has
                           (Level (Context),
@@ -1220,6 +1237,8 @@ package body Landin.Stages.Configuration is
         of Ada.Strings.Unbounded.Unbounded_String;
       Described : Landin.Modules.Module_Id := Landin.Modules.No_Module;
       Device_Site, Core_Site, Vectors_Site, Boot_Site : Site;
+      --  D615: the description's compiler.float_unit, if any.
+      Float_Site : Site;
       --  D587: the description's `link(boot_stage)` routine, if any.
       Stage_Site : Site;
       Regions_At : Region_Sites := [others => No_Site];
@@ -1427,6 +1446,7 @@ package body Landin.Stages.Configuration is
                               "D542/D587: a description is compiler.device,"
                               & " compiler.core, compiler.vectors,"
                               & " compiler.interrupt, compiler.boot,"
+                              & " compiler.float_unit,"
                               & " linker.region and linker.place, and at"
                               & " most one link(boot_stage) naked routine;"
                               & " move this declaration to another module");
@@ -1632,6 +1652,52 @@ package body Landin.Stages.Configuration is
       --  D542: one description directive, recorded once its arguments are
       --  the forms its row says.  What it means beside the others is
       --  Finish_Profile's.
+      --  D615: the float unit the description names, for the feature
+      --  facts, before any fixed expression is read.  Configure_Description
+      --  refuses a name that is no unit; this reads only one that is.
+      procedure Read_Float_Unit;
+      procedure Read_Float_Unit is
+      begin
+         if Described = Landin.Modules.No_Module then
+            return;
+         end if;
+         for Index in 1 .. Source_Count (Context) loop
+            declare
+               Id : constant Landin.Source.Source_Id :=
+                 Nth_Source (Context, Index);
+               Of_Tree : constant not null access constant Syn.Tree :=
+                 Landin.Syntax.Forest.Tree_Of (Trees.all, Id);
+            begin
+               if Module_For (Id) = Described then
+                  for Which in 1 .. Syn.Declaration_Count (Of_Tree.all) loop
+                     declare
+                        Node : constant Syn.Node_Id :=
+                          Syn.Nth_Declaration (Of_Tree.all, Which);
+                        Call, Callee : Syn.Node_Id;
+                     begin
+                        if Description_Directive (Of_Tree.all, Node) then
+                           Call := Syn.Directive_Call (Of_Tree.all, Node);
+                           Callee := Syn.Callee_Of (Of_Tree.all, Call);
+                           if Spelled (Syn.Name (Of_Tree.all, Callee))
+                               = "float_unit"
+                             and then Syn.Argument_Count (Of_Tree.all, Call)
+                               = 1
+                             and then Firmware.Is_Float_Unit_Name
+                               (Text_Argument (Of_Tree.all, Syn.Nth_Argument
+                                  (Of_Tree.all, Call, 1)))
+                           then
+                              Float_Facts := Firmware.Float_Unit_Named
+                                (Text_Argument (Of_Tree.all, Syn.Nth_Argument
+                                   (Of_Tree.all, Call, 1)));
+                           end if;
+                        end if;
+                     end;
+                  end loop;
+               end if;
+            end;
+         end loop;
+      end Read_Float_Unit;
+
       procedure Configure_Description
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
       procedure Configure_Description
@@ -1651,6 +1717,7 @@ package body Landin.Stages.Configuration is
             elsif Member = "vectors" then "(count)"
             elsif Member = "interrupt" then "(""NAME"", irq)"
             elsif Member = "boot" then "(""vector-table"")"
+            elsif Member = "float_unit" then "(""fpv5-d16"")"
             elsif Member = "region"
             then "(""NAME"", origin, length, ""rx"")"
             else "(""text"", ""REGION"")");
@@ -1752,12 +1819,33 @@ package body Landin.Stages.Configuration is
                   Refuse (Argument (1), "this is not a core refine builds"
                     & " for",
                     "compiler.core names ""cortex-m0"", ""cortex-m0plus"","
-                    & " ""cortex-m3"", ""cortex-m4"" or ""cortex-m7""");
+                    & " ""cortex-m3"", ""cortex-m4"", ""cortex-m7"" or"
+                    & " ""cortex-m33""");
                elsif Core_Site /= No_Site then
                   Repeated (Core_Site);
                else
                   Core_Site := Here;
                   Built.Core := Firmware.Core_Named (Name);
+               end if;
+            end;
+         elsif Member = "float_unit" then
+            declare
+               Name : constant String := Text_Argument (Of_Tree, Argument (1));
+            begin
+               if not Firmware.Is_Float_Unit_Name (Name) then
+                  Description_Refused := True;
+                  Report_Configuration_Rule
+                    (Bad.Float_Unit_Unsupported, Of_Tree, Argument (1),
+                     "this is not a float unit refine builds",
+                     "D615: refine builds ""fpv5-d16"", the Cortex-M7's"
+                     & " single- and double-precision unit, on a cortex-m7;"
+                     & " write compiler.float_unit(""fpv5-d16""), or leave"
+                     & " the directive out for a core with no float unit");
+               elsif Float_Site /= No_Site then
+                  Repeated (Float_Site);
+               else
+                  Float_Site := Here;
+                  Built.Float := Firmware.Float_Unit_Named (Name);
                end if;
             end;
          elsif Member = "vectors" then
@@ -1975,6 +2063,7 @@ package body Landin.Stages.Configuration is
       procedure Finish_Profile;
       procedure Finish_Profile is
          use type Firmware.Section_Kind;
+         use type Firmware.Float_Unit;
          use type Landin.Targets.Byte_Count;
          Complete : Boolean := True;
          Logical : constant String :=
@@ -2231,6 +2320,36 @@ package body Landin.Stages.Configuration is
                & " executes its own level and the M-profile levels below"
                & " it, --level=" & Firmware.Lower_Levels (Built.Core)
                & "; build at one of them");
+         elsif Built.Float /= Firmware.No_Float_Unit
+           and then not Firmware.May_Have (Built.Core, Built.Float)
+         then
+            Complete := False;
+            Report_At
+              (Bad.Float_Unit_Unsupported, Float_Site,
+               "this description's core is a "
+               & Firmware.Spelling (Built.Core) & ", which refine builds"
+               & " with no " & Firmware.Spelling (Built.Float) & " unit",
+               "D615: a float unit is a fact of the core; refine builds"
+               & " ""fpv5-d16"" on a cortex-m7, and a "
+               & Firmware.Spelling (Built.Core) & " with "
+               & Firmware.Float_Units_Of (Built.Core)
+               & "; remove compiler.float_unit or name the core it is"
+               & " built into");
+         elsif Built.Float /= Firmware.No_Float_Unit
+           and then Landin.Targets.Levels.Name (Level (Context))
+             /= Firmware.Float_Level (Built.Float)
+         then
+            Complete := False;
+            Report_At
+              (Bad.Float_Unit_Level, Float_Site,
+               "this description's float unit, "
+               & Firmware.Spelling (Built.Float) & ", needs --level="
+               & Firmware.Float_Level (Built.Float) & ", and this build is"
+               & " at --level=" & Landin.Targets.Levels.Name (Level (Context)),
+               "D615: a float unit changes the C ABI, so a description that"
+               & " has one is built at the level whose architecture holds"
+               & " it; build with --level="
+               & Firmware.Float_Level (Built.Float));
          end if;
          if Complete then
             Built.Present := True;
@@ -2542,6 +2661,7 @@ package body Landin.Stages.Configuration is
 
    begin
       if Late then
+         Float_Facts := Landin.Configuration.Profile (Activity.all).Float;
          for Index in 1 .. Source_Count (Context) loop
             declare
                Of_Tree : constant not null access constant Syn.Tree :=
@@ -2676,6 +2796,10 @@ package body Landin.Stages.Configuration is
             end loop;
          end;
       end loop;
+      --  D615: the description, and its float unit, before any option
+      --  or fixed condition reads compiler.feature.fp.
+      Find_Description;
+      Read_Float_Unit;
       for Index in 1 .. Natural (Options.Length) loop
          declare
             Value : constant Fixed_Value := Evaluate_Option (Index);
@@ -2704,7 +2828,6 @@ package body Landin.Stages.Configuration is
             end if;
          end;
       end loop;
-      Find_Description;
       for Index in 1 .. Source_Count (Context) loop
          declare
             Of_Tree : constant not null access constant Syn.Tree :=

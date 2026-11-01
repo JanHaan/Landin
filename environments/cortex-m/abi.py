@@ -1,8 +1,16 @@
-"""Independent Cortex-M0 layout measurements and hand-written calling witnesses."""
+"""Independent Cortex-M0 layout measurements and hand-written calling witnesses.
+
+The VFP profile (D616) is measured the same way on QEMU's mps2-an500: GCC
+at -mfloat-abi=hard -mfpu=fpv5-d16 calls hand-written endpoints that record
+where each argument arrived, and saves exactly the registers the convention
+makes it preserve.
+"""
 import json
 from pathlib import Path
+import re
 import shutil
 import socket
+import struct
 import subprocess
 import time
 
@@ -13,6 +21,13 @@ GOLDEN = ROOT / 'compiler/tests/layout.targets'
 LAYOUT_KEYS = ('u8 u16 u32 u64 i8 i16 i32 i64 usize isize f32 f64 bool '
                'a b c d variant payload wrapped child nested multiple evidence0 evidence any').split()
 CALL_COUNTS = dict(gap=3, split=5, stack=7, sret=3, small=3, varargs=4, floatpair=3, native=4, multi=1)
+#  D616's VFP profile rows, `vfp.NAME`, each with the first single slot of
+#  s0-s15 (16 for none) and the count of single slots after the base five.
+VFP_COUNTS = dict(mixed=5, hfa=3, spill=11, varargs=3, large=2, native=4)
+#  What GCC compiles the VFP control with, and the multilib that selects.
+HARD_FLAGS = ['-mcpu=cortex-m7', '-mthumb', '-mfloat-abi=hard', '-mfpu=fpv5-d16', '-mabi=aapcs',
+              '-ffreestanding', '-fno-builtin', '-fno-omit-frame-pointer', '-g3', '-O1',
+              '-Wall', '-Wextra', '-Werror', '-nostdlib']
 
 
 def contract(text):
@@ -26,8 +41,20 @@ def contract(text):
     for name, count in CALL_COUNTS.items():
         required.add(name + '.result')
         required.update(name + '.arg' + str(i) for i in range(1, count + 1))
+    for name, count in VFP_COUNTS.items():
+        required.add('vfp.' + name + '.result')
+        required.update('vfp.' + name + '.arg' + str(i) for i in range(1, count + 1))
+    required.add('vfp.preserved')
     if set(rows) != required or any(v < 0 for row in rows.values() for v in row):
         raise ValueError('incomplete or invalid ABI contract')
+    for name, count in VFP_COUNTS.items():
+        for key in ['vfp.%s.result' % name] + ['vfp.%s.arg%d' % (name, i)
+                                               for i in range(1, count + 1)]:
+            row = rows[key]
+            if len(row) != 7 or row[5] + row[6] > 16 or (row[6] and row[5] == 16):
+                raise ValueError('invalid VFP contract row ' + key)
+    if rows['vfp.preserved'] != [16, 31]:
+        raise ValueError('the VFP call-preserved registers are s16-s31')
     for name, count in CALL_COUNTS.items():
         if len(rows[name + '.result']) != 5:
             raise ValueError('invalid result contract')
@@ -160,6 +187,111 @@ def execute(run):
             record.update(exit=p.returncode, seconds=time.monotonic()-tick,
                           stopped_by_supervisor=True)
             (run.out / 'commands.json').write_text(json.dumps(run.commands, indent=2)+'\n')
+    execute_vfp(run)
     require(CONTRACT.read_bytes() == (run.out / 'cortex-m.contract').read_bytes()
             and GOLDEN.read_bytes() == (run.out / 'layout.targets').read_bytes(),
             'ABI contracts changed during probes')
+
+
+def words32(value):
+    return [struct.unpack('<I', struct.pack('<f', value))[0]]
+
+
+def words64(value):
+    return list(struct.unpack('<II', struct.pack('<d', value)))
+
+
+#  The words abi-vfp.c passes each endpoint, in its argument order, and
+#  the endpoint's row of vfp_capture.  Unspecified padding and skipped
+#  registers are never compared.
+VFP_ARGUMENTS = {
+    'mixed': (0, [words32(1.5), words64(2.5), words32(3.5), [0x11223344], words64(4.5)]),
+    'hfa': (1, [words32(1.25) + words32(2.25) + words32(3.25), words64(6.5) + words64(7.5),
+                words32(5.5)]),
+    'spill': (2, [words32(1.0)] + [words64(float(n)) for n in range(2, 9)]
+              + [words64(6.5) + words64(7.5), words32(14.0), [0x55667788]]),
+    'varargs': (3, [words64(2.5), words64(3.5), [0x99aabbcc]]),
+    'large': (4, [words32(9.0) + words32(10.0) + words32(11.0) + words32(12.0) + words32(13.0),
+                  words32(15.0)]),
+}
+
+
+def vfp_checks(rows):
+    """GDB assertions holding each recorded argument word where the row says."""
+    from run import require
+    lines = []
+    for name, (index, args) in VFP_ARGUMENTS.items():
+        lines.append(f'assert v("vfp_capture[{index}][26]") % 8 == 0, "{name} sp alignment"')
+        for arg_index, words in enumerate(args, 1):
+            first, count, stack_at, stack_bytes, _, vfp, singles = rows[
+                'vfp.%s.arg%d' % (name, arg_index)]
+            require(count + singles + stack_bytes // 4 == len(words),
+                    'inconsistent VFP call extent: %s argument %d' % (name, arg_index))
+            for word, wanted in enumerate(words):
+                if singles:
+                    at = 4 + vfp + word
+                elif word < count:
+                    at = first + word
+                else:
+                    at = 20 + stack_at // 4 + word - count
+                lines.append(f'assert v("vfp_capture[{index}][{at}]") == {wanted}, '
+                             f'"{name} argument {arg_index} word {word}"')
+    return lines
+
+
+def execute_vfp(run):
+    """GCC's VFP variant against the contract's `vfp.` rows, on mps2-an500."""
+    from run import require, oracle, stop
+    rows = contract(CONTRACT.read_text())
+    run.command('build-abi-vfp', [run.arm / 'arm-eabi-gcc', *HARD_FLAGS,
+                '-Wl,-T,' + str(HERE / 'probes/an500.ld') + ',--gc-sections,-Map,abi-vfp.map',
+                HERE / 'probes/an500-start.S', HERE / 'probes/abi-vfp.c',
+                HERE / 'probes/abi-vfp.S', '-o', 'abi-vfp.elf'])
+    attributes = run.command('elf-abi-vfp', [run.arm / 'arm-eabi-readelf', '-A', 'abi-vfp.elf'])
+    require('Tag_FP_arch: FPv5/FP-D16 for ARMv8' in attributes
+            and 'Tag_ABI_VFP_args: VFP registers' in attributes,
+            'the VFP control is not a hard-float FPv5-D16 image')
+    text = run.command('disassemble-abi-vfp', [run.arm / 'arm-eabi-objdump', '-d', 'abi-vfp.elf'])
+    clobber = text.split('<vfp_clobber>:', 1)[1].split('\n\n', 1)[0]
+    pushes = re.findall(r'\tvpush\t(\{[^}]*\})', clobber)
+    require(pushes == ['{d8-d15}'],
+            'GCC saves %s around a body that clobbers every VFP register, not d8-d15 alone'
+            % (pushes or 'nothing'))
+    with socket.socket() as sock:
+        sock.bind(('127.0.0.1', 0))
+        port = sock.getsockname()[1]
+    gdb = [f'target remote 127.0.0.1:{port}', 'set pagination off', 'set confirm off',
+           'break done', 'break fault_done', 'continue', 'python', 'import gdb',
+           'def v(expr): return int(gdb.parse_and_eval(expr))',
+           'assert v("*(unsigned int*)&fault_seen") == 0, "the VFP control faulted: %d" % v("*(unsigned int*)&fault_seen")',
+           'assert v("vfp_result") == 0x616, "GCC\'s caller saw a result other than the endpoint\'s"',
+           'assert v("vfp_preserved") == 1, "a d8-d15 sentinel did not survive"',
+           *vfp_checks(rows),
+           'print("D616_VFP_ABI_PASS")', 'end', 'quit']
+    (run.out / 'abi-vfp.gdb').write_text('\n'.join(gdb) + '\n')
+    argv = [str(run.bin / 'qemu-system-arm'), '-M', 'mps2-an500', '-accel', 'tcg,thread=single',
+            '-display', 'none', '-monitor', 'none', '-serial', 'null', '-kernel', 'abi-vfp.elf',
+            '-S', '-gdb', f'tcp:127.0.0.1:{port}']
+    record = {'name': 'qemu-abi-vfp', 'argv': argv, 'timeout_seconds': 25}
+    run.commands.append(record)
+    tick = time.monotonic()
+    with (run.out / 'qemu-abi-vfp.log').open('wb') as log:
+        p = subprocess.Popen(argv, cwd=run.out, env=run.env, stdout=log, stderr=log,
+                             start_new_session=True)
+        try:
+            deadline = time.monotonic() + 3
+            while True:
+                require(p.poll() is None, 'VFP ABI QEMU exited before debugger connection')
+                try:
+                    with socket.create_connection(('127.0.0.1', port), timeout=.1):
+                        break
+                except OSError:
+                    require(time.monotonic() < deadline, 'VFP ABI debugger startup timed out')
+                    time.sleep(.02)
+            text = run.debug('gdb-abi-vfp', 'abi-vfp.elf', 'abi-vfp.gdb', timeout=20)
+            oracle(text, 'D616_VFP_ABI_PASS')
+        finally:
+            stop(p)
+            record.update(exit=p.returncode, seconds=time.monotonic()-tick,
+                          stopped_by_supervisor=True)
+            (run.out / 'commands.json').write_text(json.dumps(run.commands, indent=2)+'\n')

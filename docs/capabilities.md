@@ -62,6 +62,17 @@ entry that describes it, and put a new one where a reader would look for it.
   served through its debugger stub. Fifty-five RP2040 registers and
   forty-seven RP2350 registers are checked in as
   [generated device fixtures](../devices/README.md).
+- **A float unit** is a fact of a description: a Cortex-M7's
+  `compiler.float_unit("fpv5-d16")`, which the STM32H753's has, builds
+  hard-float at `armv7e-m` (D615). f32 and f64 arithmetic, negation,
+  comparison and conversion are VFP instructions with no software helper,
+  floats travel in s0-s15 under AAPCS32's VFP variant for C and Landin
+  alike (D616, D617), reset grants the unit and handlers take its extended
+  frames (D618), and a fibre's switch keeps d8-d15 and FPSCR (D620). The
+  C half of the convention is a planner contract measured against GCC on
+  QEMU's `mps2-an500`; C interoperation stays disabled on Cortex-M. The
+  whole runtime corpus also runs there, on a lane described in Landin
+  source (D619).
 - **Devices** are learnt from their CMSIS-SVD files: `refine svd` reads a
   vendor's SVD, fetched by its hash, and a reviewed selection policy, and
   writes the register modules and the generated half of the device's
@@ -93,7 +104,9 @@ them, and [the target contracts](targets.md) say what each selects.
   in one instruction at `armv8-m.main`. Each is executed at its level and at
   the default, the Cortex-M ones on QEMU's Cortex-M3 and Cortex-M33, which
   runs the whole Cortex-M corpus again at `armv8-m.main`, and the linked
-  image is read for the instructions its level selects.
+  image is read for the instructions its level selects. A description's
+  float unit is not a level and does change the ABI; `compiler.feature.fp`
+  and `compiler.feature.fp_dp` read it (D615).
 - A program reads a level as `compiler.feature.NAME` in `fixed if` or in a
   module value, which a routine body then branches on, and every compiler
   fact reads the same way (D437).

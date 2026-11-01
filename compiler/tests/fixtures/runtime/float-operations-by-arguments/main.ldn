@@ -1,0 +1,182 @@
+-- Every operand arrives as a parameter, read from module arrays that main
+-- fills at run time, so no operation here is folded: each is the f32 or
+-- f64 instruction a float unit selects, or the runtime's software helper
+-- without one, and each result is held to its IEEE 754 value, rounded to
+-- nearest even, with signed zero, infinity and NaN.
+mut singles: [6]f32
+mut doubles: [6]f64
+
+add_32: (a: f32, b: f32) -> (r: f32) =
+    r = a + b
+end add_32
+
+subtract_32: (a: f32, b: f32) -> (r: f32) =
+    r = a - b
+end subtract_32
+
+multiply_32: (a: f32, b: f32) -> (r: f32) =
+    r = a * b
+end multiply_32
+
+divide_32: (a: f32, b: f32) -> (r: f32) =
+    r = a / b
+end divide_32
+
+negate_32: (a: f32) -> (r: f32) =
+    r = -a
+end negate_32
+
+add_64: (a: f64, b: f64) -> (r: f64) =
+    r = a + b
+end add_64
+
+subtract_64: (a: f64, b: f64) -> (r: f64) =
+    r = a - b
+end subtract_64
+
+multiply_64: (a: f64, b: f64) -> (r: f64) =
+    r = a * b
+end multiply_64
+
+divide_64: (a: f64, b: f64) -> (r: f64) =
+    r = a / b
+end divide_64
+
+negate_64: (a: f64) -> (r: f64) =
+    r = -a
+end negate_64
+
+-- Each comparison of two floats, as one six-bit answer: equal, unequal,
+-- less, at most, greater and at least, from the lowest bit.
+compare_32: (a: f32, b: f32) -> (bits: u32) =
+    bits = 0
+    if a == b then
+        bits = bits + 1
+    end if
+    if a <> b then
+        bits = bits + 2
+    end if
+    if a < b then
+        bits = bits + 4
+    end if
+    if a <= b then
+        bits = bits + 8
+    end if
+    if a > b then
+        bits = bits + 16
+    end if
+    if a >= b then
+        bits = bits + 32
+    end if
+end compare_32
+
+compare_64: (a: f64, b: f64) -> (bits: u32) =
+    bits = 0
+    if a == b then
+        bits = bits + 1
+    end if
+    if a <> b then
+        bits = bits + 2
+    end if
+    if a < b then
+        bits = bits + 4
+    end if
+    if a <= b then
+        bits = bits + 8
+    end if
+    if a > b then
+        bits = bits + 16
+    end if
+    if a >= b then
+        bits = bits + 32
+    end if
+end compare_64
+
+widen: (a: f32) -> (r: f64) =
+    r = f64(a)
+end widen
+
+narrow: (a: f64) -> (r: f32) =
+    r = f32(a)
+end narrow
+
+single_of: (a: i32) -> (r: f32) =
+    r = f32(a)
+end single_of
+
+double_of: (a: u32) -> (r: f64) =
+    r = f64(a)
+end double_of
+
+truncate_32: (a: f64) -> (r: i32) =
+    r = i32(a)
+end truncate_32
+
+truncate_8: (a: f32) -> (r: u8) =
+    r = u8(a)
+end truncate_8
+
+public main: () -> (code: i32) =
+    singles[0] = 1.5
+    singles[1] = 2.25
+    singles[2] = 3.0
+    singles[3] = 0.0
+    singles[4] = 3.0e38
+    singles[5] = 16777217.0
+    doubles[0] = 0.1
+    doubles[1] = 0.2
+    doubles[2] = 3.0
+    doubles[3] = 0.0
+    doubles[4] = -2.75
+    doubles[5] = 2147483647.75
+    one: f32 = singles[0] - 0.5
+    nan_32: f32 = divide_32(singles[3], singles[3])
+    nan_64: f64 = divide_64(doubles[3], doubles[3])
+    code = 0
+    if add_32(singles[0], singles[1]) == 3.75
+      and subtract_32(singles[0], singles[1]) == -0.75
+      and multiply_32(singles[0], singles[1]) == 3.375
+      and divide_32(one, singles[2]) == 0.33333334
+      and multiply_32(singles[4], 10.0) == f32.infinity
+      and divide_32(one, negate_32(singles[3])) == -f32.infinity
+      and negate_32(singles[1]) == -2.25 then
+        code = code + 1
+    end if
+    if add_64(doubles[0], doubles[1]) == 0.30000000000000004
+      and subtract_64(doubles[1], doubles[0]) == 0.1
+      and multiply_64(doubles[0], doubles[2]) == 0.30000000000000004
+      and divide_64(1.0, doubles[2]) == 0.3333333333333333
+      and divide_64(1.0, negate_64(doubles[3])) == -f64.infinity
+      and negate_64(doubles[4]) == 2.75 then
+        code = code + 2
+    end if
+    if compare_32(singles[0], singles[1]) == 2 + 4 + 8
+      and compare_32(singles[1], singles[0]) == 2 + 16 + 32
+      and compare_32(singles[0], singles[0]) == 1 + 8 + 32
+      and compare_32(nan_32, singles[0]) == 2
+      and compare_32(nan_32, nan_32) == 2
+      and compare_32(singles[3], negate_32(singles[3])) == 1 + 8 + 32 then
+        code = code + 4
+    end if
+    if compare_64(doubles[0], doubles[1]) == 2 + 4 + 8
+      and compare_64(doubles[1], doubles[0]) == 2 + 16 + 32
+      and compare_64(doubles[2], doubles[2]) == 1 + 8 + 32
+      and compare_64(doubles[0], nan_64) == 2
+      and compare_64(nan_64, nan_64) == 2
+      and compare_64(doubles[3], negate_64(doubles[3])) == 1 + 8 + 32 then
+        code = code + 8
+    end if
+    if widen(narrow(doubles[0])) == 0.10000000149011612
+      and narrow(doubles[1]) == 0.2
+      and single_of(16777217) == singles[5]
+      and single_of(-3) == -3.0
+      and double_of(4294967295) == 4294967295.0
+      and truncate_32(doubles[4]) == -2
+      and truncate_32(doubles[5]) == 2147483647
+      and truncate_8(singles[1]) == 2 then
+        code = code + 16
+    end if
+    if code == 31 then
+        code = 42
+    end if
+end main

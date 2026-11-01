@@ -8,6 +8,10 @@
 -- instruction and data caches disabled, as reset leaves them, so no DMA
 -- buffer needs cache maintenance. A cached profile is not admitted.
 --
+-- The STM32H753's Cortex-M7 has a float unit, which ST's stm32h753xx.h
+-- marks with __FPU_PRESENT and its product pages call double-precision:
+-- FPv5-D16, which makes the build hard-float at --level=armv7e-m (D615).
+--
 -- DMA1 and DMA2 cannot reach the DTCM or the ITCM, which only the CPU and
 -- the MDMA reach, so initialized data, BSS and the stack, where prototype
 -- 1's DMA buffers are, are placed in the AXI SRAM, which both reach. A
@@ -23,6 +27,7 @@ linker.region("SRAM2", 0x3002_0000, 128 * 1024, "rw")
 linker.region("SRAM3", 0x3004_0000, 32 * 1024, "rw")
 linker.region("SRAM4", 0x3800_0000, 64 * 1024, "rw")
 compiler.boot("vector-table")
+compiler.float_unit("fpv5-d16")
 linker.place("vectors", "FLASH")
 linker.place("text", "FLASH")
 linker.place("rodata", "FLASH")

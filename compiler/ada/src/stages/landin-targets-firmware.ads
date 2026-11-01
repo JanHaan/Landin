@@ -55,6 +55,40 @@ package Landin.Targets.Firmware is
          or else (not Is_Armv6_M (Core) and then Slot in 4 .. 6 | 12)
          or else (Core = Cortex_M33 and then Slot = 7));
 
+   --  D615: a float unit is a fact of a description, not of a level, since
+   --  the unit a chip was built with changes the C ABI.  The compiler knows
+   --  which unit each core may have and names no chip; it builds one,
+   --  FPv5-D16, the Cortex-M7's single- and double-precision FPv5 with
+   --  sixteen double registers, which needs Armv7E-M.
+   type Float_Unit is (No_Float_Unit, FPv5_D16);
+   function Is_Float_Unit_Name (Text : String) return Boolean
+     is (Text = "fpv5-d16");
+   function Float_Unit_Named (Text : String) return Float_Unit
+     with Pre => Is_Float_Unit_Name (Text);
+   function Spelling (Unit : Float_Unit) return String
+     is (case Unit is
+           when No_Float_Unit => "none",
+           when FPv5_D16 => "fpv5-d16");
+   --  Whether CORE may have UNIT, and the units it may have, as a note
+   --  says them.
+   function May_Have (Core : Core_Kind; Unit : Float_Unit) return Boolean
+     is (Unit = No_Float_Unit
+         or else (Core = Cortex_M7 and then Unit = FPv5_D16));
+   function Float_Units_Of (Core : Core_Kind) return String
+     is (if Core = Cortex_M7 then """fpv5-d16""" else "none");
+   --  The one level whose architecture holds UNIT's instructions.
+   function Float_Level (Unit : Float_Unit) return String
+     is (if Unit = No_Float_Unit then "armv6-m" else "armv7e-m");
+   --  `compiler.feature.fp` and `compiler.feature.fp_dp` (D615): whether
+   --  the unit has single, and double, precision.  No level holds either,
+   --  so they are false on every target without a description's unit.
+   function Is_Float_Feature_Name (Word : String) return Boolean
+     is (Word in "fp" | "fp_dp");
+   function Single_Precision (Unit : Float_Unit) return Boolean
+     is (Unit /= No_Float_Unit);
+   function Double_Precision (Unit : Float_Unit) return Boolean
+     is (Unit = FPv5_D16);
+
    --  D545's closed set.  The last is a reserved name: a description that
    --  selects it is refused until the compiler builds that image.
    type Boot_Kind is
@@ -163,6 +197,8 @@ package Landin.Targets.Firmware is
       --  D587: whether the description holds its boot kind's second
       --  stage, which configuration requires exactly when Takes_Stage.
       Has_Stage : Boolean := False;
+      --  D615: the description's float unit, `compiler.float_unit`.
+      Float : Float_Unit := No_Float_Unit;
    end record;
 
    --  Whether a handler may take absolute slot SLOT: a core slot of the

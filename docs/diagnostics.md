@@ -1669,8 +1669,9 @@ A device description's core does not execute what the request builds
 `armv7e-m` for `cortex-m4` and `cortex-m7`, and `armv8-m.main` for
 `cortex-m33`. A lower M-profile level is accepted: a `cortex-m4` builds at
 `armv7-m` or `armv6-m` too, and a `cortex-m33` at `armv7-m` or `armv6-m`,
-though not at `armv7e-m`, whose DSP instructions its core may lack. Build with the
-target and a level the note names. The constrained reference profile, which applies when no
+though not at `armv7e-m`, whose DSP instructions its core may lack; a
+description with a float unit builds at its unit's level alone (L0546).
+Build with the target and a level the note names. The constrained reference profile, which applies when no
 description is imported, is the one description used at every level.
 
 ```landin
@@ -1948,6 +1949,62 @@ that refers to it, would make the bytes the boot ROM copies and runs at
 another address differ from the ones summed, and the message names the
 relocation and its symbol. Make the stage shorter, or write it with no
 symbol outside itself and refer to it from nowhere.
+
+### L0545
+
+A device description names a float unit refine does not build, or one its
+core cannot have (D615). A float unit is a fact of the core a chip was built
+with, written in the description's hand-written half as
+`compiler.float_unit("NAME")`, and refine builds one: `fpv5-d16`, the
+Cortex-M7's single- and double-precision FPv5 with sixteen double
+registers, on a `cortex-m7`. The note says which unit the description's
+core may have. Write `compiler.float_unit("fpv5-d16")` in a Cortex-M7's
+description, or leave the directive out: a core with no float unit
+computes in software, as every other core refine builds for does.
+
+```landin
+-- refine: --target=cortex-m0 --level=armv7e-m
+compiler.device("board")
+compiler.core("cortex-m4")
+compiler.float_unit("fpv5-d16")
+compiler.vectors(48)
+compiler.boot("vector-table")
+linker.region("FLASH", 0, 1024 * 1024, "rx")
+linker.region("RAM", 0x2000_0000, 128 * 1024, "rwx")
+linker.place("vectors", "FLASH")
+linker.place("text", "FLASH")
+linker.place("rodata", "FLASH")
+linker.place("data", "RAM")
+linker.place("bss", "RAM")
+linker.place("stack", "RAM", 4 * 1024)
+```
+
+### L0546
+
+A device description has a float unit, and the request builds it at a
+level whose architecture lacks that unit (D615). A float unit changes the C
+ABI, single- and double-precision values travel in its registers, so code
+built for the description assumes the unit, and the level that holds
+`fpv5-d16` is `armv7e-m`. Build with the level the note names; a
+lower level of the same core is accepted only for a description with no
+float unit.
+
+```landin
+-- refine: --target=cortex-m0 --level=armv7-m
+compiler.device("board")
+compiler.core("cortex-m7")
+compiler.float_unit("fpv5-d16")
+compiler.vectors(48)
+compiler.boot("vector-table")
+linker.region("FLASH", 0, 1024 * 1024, "rx")
+linker.region("RAM", 0x2000_0000, 128 * 1024, "rwx")
+linker.place("vectors", "FLASH")
+linker.place("text", "FLASH")
+linker.place("rodata", "FLASH")
+linker.place("data", "RAM")
+linker.place("bss", "RAM")
+linker.place("stack", "RAM", 4 * 1024)
+```
 
 ### L0555
 

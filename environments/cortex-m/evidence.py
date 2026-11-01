@@ -145,6 +145,9 @@ def accounting(elf, symbols, buffers=None):
 #  The roadmap's retained profile: 32 KiB flash, 16 KiB RAM of which the main
 #  stack reserves 4 KiB, and D461's one exception frame in a fibre's stack.
 PROFILE=dict(flash=32768,ram=16384,main_stack=4096,exception_frame=36)
+#  D620: what a description with a float unit would charge instead, ARMv7-M's
+#  extended frame with its alignment word; the retained profile has none.
+FLOAT_EXCEPTION_FRAME=108
 #  core/fibre's group (fibre.ldn): its alignment, and the ledger and each
 #  record it keeps at the front of its backing and the base of each stack.
 GROUP_ALIGNMENT,GROUP_LEDGER,GROUP_RECORD=16,32,32

@@ -1,0 +1,4 @@
+-- The mps2-an500 lane's entry-module file (D619): the corpus compiles a
+-- program with this beside its own sources, so the program reaches the
+-- lane's description, and through it the M7's float unit, unchanged.
+import descriptions/mps2_an500

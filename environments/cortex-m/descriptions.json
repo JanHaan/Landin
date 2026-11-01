@@ -1,5 +1,5 @@
 {
-  "comment": "What each device description must select, recorded apart from the compiler and the descriptions: RP2040 and RP2350 from pico-sdk 2.2.0, the STM32H753 from ST's stm32h753xx.h and RM0433, the constrained reference from [1990]. descriptions.py compares every fact of each linked image with these. Under lanes, the same for each lane description, an emulator's map rather than a chip, which the corpus holds its derived profile to (D607).",
+  "comment": "What each device description must select, recorded apart from the compiler and the descriptions: RP2040 and RP2350 from pico-sdk 2.2.0, the STM32H753 from ST's stm32h753xx.h and RM0433, the constrained reference from [1990]. descriptions.py compares every fact of each linked image with these. Under lanes, the same for each lane description, an emulator's map rather than a chip, which the corpus holds its derived profile to (D607, D619).",
   "devices": {
     "rp2040": {
       "sources": {
@@ -10,6 +10,7 @@
         "second stage": "https://github.com/raspberrypi/pico-sdk/blob/2.2.0/src/rp2040/boot_stage2/boot_stage2.ld, SHA-256 bc39ab4a78cf3584c242266ec6bd6ef0400c4d8bcda20ed3211cf96e01107339: the boot ROM loads the stage to the top 256 bytes of SRAM, 0x20041f00, above its stack at 0x20042000, the last 4 bytes the checksum; pad_checksum in the same directory, SHA-256 6d5b37f72bdf9f442b78170f7379ea0fb1c4f87ad4014b5057e6a5d796ac454a, which its CMakeLists.txt, SHA-256 5cdcc9bd3cf04d45641aac34dcc117f5fe1c06f3140502cd19fe9e003ce5365d, runs with -s 0xffffffff, sums the first 252 as descriptions.py's crc32_mpeg2 does; the stage's stores go to XIP_SSI_BASE 0x18000000 (addressmap.h) and PPB_BASE 0xe0000000, VTOR at 0xe000ed08 (m0plus.h); what it stores is read from the fetched boot2_generic_03h.S, not recorded here"
       },
       "core": "cortex-m0plus",
+      "float_unit": "none",
       "boot": "rp2040-boot2",
       "regions": [
         {"name": "FLASH", "origin": 268435456, "length": 2097152, "access": "rx"},
@@ -39,6 +40,7 @@
       },
       "core": "cortex-m33",
       "level": "armv8-m.main",
+      "float_unit": "none",
       "boot": "rp2350-image-block",
       "regions": [
         {"name": "FLASH", "origin": 268435456, "length": 4194304, "access": "rx"},
@@ -65,6 +67,7 @@
       },
       "core": "cortex-m7",
       "level": "armv7e-m",
+      "float_unit": "fpv5-d16",
       "boot": "vector-table",
       "regions": [
         {"name": "FLASH", "origin": 134217728, "length": 2097152, "access": "rx"},
@@ -89,6 +92,7 @@
     "constrained-reference": {
       "sources": {"profile": "spec.md [1990]: 32 KiB flash at zero, 16 KiB RAM at 0x20000000, the upper 4 KiB the stack, a 48-word table at zero, core slots 4-10 and 12-13 and slots 21 and 42-47 zero"},
       "core": "cortex-m0",
+      "float_unit": "none",
       "boot": "vector-table",
       "regions": [
         {"name": "FLASH", "origin": 0, "length": 32768, "access": "rx"},
@@ -111,8 +115,10 @@
         "memory": "the same measurement: SSRAM1 is 4 MiB at 0x10000000, aliased at 0, and SSRAM2 and 3 4 MiB at 0x38000000, aliased at 0x28000000, each readable, writable and executable from Secure state",
         "capacities": "the constrained reference's, spec.md [1990], so the lane's limits are the corpus's"
       },
-      "module": "lanes/mps2_an505",
+      "module": "mps2_an505",
       "core": "cortex-m33",
+      "level": "armv8-m.main",
+      "float_unit": "none",
       "boot": "vector-table",
       "regions": [
         {"name": "FLASH", "origin": 268435456, "length": 32768, "access": "rx"},
@@ -123,6 +129,23 @@
       "vector_words": 48,
       "stack_top": 939540480,
       "stack_reserved": 4096
+    },
+    "mps2-an500": {
+      "sources": {"machine": "QEMU 10.0.13's mps2-an500, measured on the locked binary: a Cortex-M7 r1p2 whose MVFR0 0x10110221 has double precision, VTOR 0, 4 MiB at 0 and 4 MiB at 0x20000000, unmapped space above them reading zero without a fault"},
+      "module": "mps2_an500",
+      "core": "cortex-m7",
+      "level": "armv7e-m",
+      "float_unit": "fpv5-d16",
+      "boot": "vector-table",
+      "regions": [
+        {"name": "CODE", "origin": 0, "length": 4194304, "access": "rx"},
+        {"name": "RAM", "origin": 536870912, "length": 4194304, "access": "rwx"}
+      ],
+      "placed": {"vectors": "CODE", "text": "CODE", "rodata": "CODE", "data": "RAM", "bss": "RAM", "stack": "RAM"},
+      "vector_address": 0,
+      "vector_words": 16,
+      "stack_top": 541065216,
+      "stack_reserved": 65536
     }
   }
 }

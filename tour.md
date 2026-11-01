@@ -4163,8 +4163,12 @@ Landin's own. The README lists the targets.
 On Cortex-M the `cortex_m0` backend emits ARMv6-M Thumb, the default
 `armv6-m` level. `--level=armv7-m`, `--level=armv7e-m` or
 `--level=armv8-m.main` lets it use that level's instructions too, which the
-processor must then support. All four levels are little-endian and
-soft-float. A firmware request emits its own
+processor must then support. All four levels are little-endian, and
+floats are computed in software unless the device description names a
+float unit: a Cortex-M7's `compiler.float_unit("fpv5-d16")` makes the
+build hard-float at `armv7e-m`, its f32 and f64 arithmetic VFP instructions
+and its floats passed in s and d registers, and `compiler.feature.fp` and
+`compiler.feature.fp_dp` say so. A firmware request emits its own
 reset code, vector table and linker script: reset copies initialized data
 and RAM code out of flash and clears BSS before your code runs.
 

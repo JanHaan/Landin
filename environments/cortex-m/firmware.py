@@ -9,7 +9,7 @@ import subprocess
 import sys
 import time
 
-from backend import image_contract
+from backend import LANE_ROOT, derived, image_contract
 from packed_native import PROFILES
 from packed import TRACE
 from machine import Machine
@@ -40,7 +40,7 @@ def landed(commands):
     return checked
 
 
-def execute(run, elf, commands=None, marker="R660_FIRMWARE_BOOT_PASS"):
+def execute(run, elf, commands=None, marker="R660_FIRMWARE_BOOT_PASS", machine='microbit'):
     listener, port, stub = gdb_listener()
     script = run.out / 'firmware.gdb'
     # Poison RAM before execution to distinguish reset initialization from
@@ -86,7 +86,7 @@ def execute(run, elf, commands=None, marker="R660_FIRMWARE_BOOT_PASS"):
         'python', 'import gdb',
         'def v(s): return int(gdb.parse_and_eval(s)) & 0xffffffff',
         'end', *landed(commands), 'quit', '']))
-    argv = [str(run.bin / 'qemu-system-arm'), '-M', 'microbit', '-accel',
+    argv = [str(run.bin / 'qemu-system-arm'), '-M', machine, '-accel',
             'tcg,thread=single', '-display', 'none', '-monitor', 'none',
             '-serial', 'none', '-kernel', str(elf), '-S', *stub]
     record = {'name': 'qemu-firmware', 'argv': argv, 'timeout_seconds': 25}
@@ -111,7 +111,7 @@ def execute(run, elf, commands=None, marker="R660_FIRMWARE_BOOT_PASS"):
 
 
 def build(run, refine, program=None, optimize="none", specialize="off", debug='none',
-          level="armv6-m", root=None):
+          level="armv6-m", root=None, roots=(), profile=None):
     source = run.out / 'boot.ldn'
     if root is not None:
         (run.out / 'app').mkdir()
@@ -126,7 +126,8 @@ end start
 ''')
     elf = run.out / 'firmware.elf'
     run.command('compile', [refine, '--target=cortex-m0', '--level='+level,
-        *(['--root='+str(root)] if root is not None else []), '--firmware-entry=start',
+        *(['--root='+str(root)] if root is not None else []),
+        *('--root=' + str(one) for one in roots), '--firmware-entry=start',
         '--emit=exe', '--debug='+debug, '--toolchain=' + str(run.arm / 'arm-eabi-gcc'),
         '--optimize='+optimize, '--specialize='+specialize,
         'app' if root is not None else source.name, '-o', elf.name], timeout=60)
@@ -147,8 +148,106 @@ end start
             'firmware linked an implicit hosted startup or libc')
     require(not run.command('undefined', [run.arm / 'arm-eabi-nm', '-u', elf]).strip(),
             'firmware contains unresolved symbols')
-    (run.out / 'image.json').write_text(json.dumps(image_contract(elf), indent=2)+'\n')
+    (run.out / 'image.json').write_text(json.dumps(image_contract(elf, profile), indent=2)+'\n')
     return elf
+
+
+FLOAT_UNIT = """import descriptions/mps2_an500
+mut values: [4]f64
+mut handled: u32 = 0
+mut seen: f64 = 0.0
+link(vector: 15)
+extern(interrupt) tick: () -> none =
+    handled = handled + 1
+    seen = values[2] * 2.0
+end tick
+pend: () -> none =
+    assembler.block(\"\"\"
+        ldr r0, =0xe000ed04
+        ldr r1, =0x04000000
+        str r1, [r0]
+        dsb sy
+        isb sy
+        \"\"\")
+end pend
+mix: (a: f64, b: f64) -> (r: f64) =
+    r = a * b + a
+    pend()
+    r = r / b
+end mix
+start: () -> none =
+    values[0] = 1.5
+    values[1] = 2.5
+    values[2] = 3.0
+    values[3] = mix(values[0], values[1])
+end start
+"""
+
+
+def float_unit(parent, refine):
+    """D618: compiler-owned reset on the mps2-an500 lane, a Cortex-M7 with
+    FPv5-D16 (D619).  Reset has granted CP10 and CP11 before `start`; a
+    SysTick pended in the middle of a float computation is taken with the
+    float context active, so its EXC_RETURN is 0xffffffe9 and the extended
+    frame is reserved lazily; the handler's own float instruction fills it,
+    the return restores the interrupted d0, and the computation ends with
+    its IEEE value.  The image carries the unit's attributes, and a
+    soft-float C object linked into it is refused."""
+    out = parent.out
+    run = Run(out, parent.tools)
+    profile = derived(run, refine, 'mps2-an500', out / 'profiles')
+    elf = build(run, refine, FLOAT_UNIT, level='armv7e-m', roots=(LANE_ROOT,), profile=profile)
+    #  D617: GCC selects the hard multilib from the flags refine passes.
+    helper = run.command('float-runtime-archive', [
+        run.arm / 'arm-eabi-gcc', '-mcpu=cortex-m7', '-mthumb', '-mfloat-abi=hard',
+        '-mfpu=fpv5-d16', '-print-libgcc-file-name']).strip()
+    require(helper.endswith('/thumb/v7e-m+dp/hard/libgcc.a'),
+            'hard float selects the runtime archive ' + helper)
+    require('/thumb/v7e-m+dp/hard/libgcc.a' in (out / 'firmware.elf.map').read_text(),
+            'the firmware did not link the hard-float runtime archive')
+    attributes = (out / 'elf.log').read_text()
+    require('Tag_FP_arch: FPv5/FP-D16 for ARMv8' in attributes
+            and 'Tag_ABI_VFP_args: VFP registers' in attributes,
+            'the firmware image does not carry the float unit\'s attributes')
+    execute(run, elf, [
+        'break *start', 'continue', 'delete breakpoints', 'python',
+        'assert v("*(unsigned*)0xe000ed88") & (0xf << 20) == 0xf << 20, "reset left CP10/CP11 closed"',
+        'assert v("*(unsigned*)0xe000ef34") & 0xc0000000 == 0xc0000000, "lazy stacking is not its reset default"',
+        'end',
+        'break *tick', 'continue', 'delete breakpoints', 'python',
+        'assert v("$lr") == 0xffffffe9, "EXC_RETURN is %#x, not a thread on MSP with an extended frame" % v("$lr")',
+        'assert v("*(unsigned*)0xe000ef34") & 1 == 1, "the float state was not preserved lazily"',
+        'assert v("*(unsigned*)0xe000ef38") == v("$sp") + 32, "the lazy frame is not above the basic one"',
+        'before = bytes(gdb.selected_frame().read_register("d0").bytes)',
+        'resume = v("*(unsigned*)($sp+24)")',
+        'gdb.execute("break *%d" % resume)',
+        'end',
+        'continue', 'delete breakpoints', 'python',
+        'assert v("*(unsigned*)&handled") == 1',
+        'assert float(gdb.parse_and_eval("*(double*)&seen")) == 6.0',
+        'assert bytes(gdb.selected_frame().read_register("d0").bytes) == before, "the interrupted d0 was not restored"',
+        'end',
+        'break _landin_firmware_returned', 'continue', 'python',
+        'assert float(gdb.parse_and_eval("((double*)&values)[3]")) == (1.5 * 2.5 + 1.5) / 2.5',
+        'print("D618_FLOAT_UNIT_PASS")', 'end'], marker='D618_FLOAT_UNIT_PASS',
+        machine='mps2-an500')
+    #  D617: a soft-float object does not link into the hard-float image.
+    (out / 'soft.c').write_text('double twice(double x) { return x * 2.0; }\n')
+    run.command('soft-object', [run.arm / 'arm-eabi-gcc', '-mcpu=cortex-m7', '-mthumb',
+                '-mfloat-abi=soft', '-O1', '-c', 'soft.c', '-o', 'soft.o'])
+    try:
+        run.command('mixed-link', [run.arm / 'arm-eabi-gcc', '-mcpu=cortex-m7', '-mthumb',
+                    '-mfloat-abi=hard', '-mfpu=fpv5-d16', '-nostdlib', '-nostartfiles',
+                    '-Wl,-T,firmware.elf.ld', 'firmware.elf.o', 'soft.o', '-lgcc',
+                    '-o', 'mixed.elf'])
+    except RuntimeError:
+        log = (out / 'mixed-link.log').read_text()
+        require('uses VFP register arguments' in log,
+                'the mixed link failed for another reason; inspect ' + str(out / 'mixed-link.log'))
+    else:
+        raise RuntimeError('a soft-float object linked into the hard-float image')
+    return [{'kind': 'float-unit', 'level': 'armv7e-m', 'optimize': 'none',
+             'specialize': 'off', 'status': 'passed', 'lane': 'mps2-an500'}]
 
 
 def cpu_levels(parent, refine):
@@ -612,9 +711,9 @@ def case(name):
         raise RuntimeError('compiler firmware ' + name + ': ' + str(error)) from error
 
 
-#  The lane's cases, in the order it runs them: four once, the rest at each
+#  The lane's cases, in the order it runs them: five once, the rest at each
 #  profile.  `boot` is the cold-booted image built twice.
-ONCE = ('cpu-levels', 'refusals', 'independent-c-assembly', 'compact-images')
+ONCE = ('cpu-levels', 'refusals', 'independent-c-assembly', 'compact-images', 'float-unit')
 KINDS = ('interrupts', 'fibre', 'dma', 'machine', 'veneers', 'fallthrough', 'images',
          'hole', 'byte')
 CASES = ONCE + ('boot',) + KINDS
@@ -642,6 +741,11 @@ def execute_suite(parent, refine, profiles=PROFILES, cases=None):
         out.mkdir()
         with case('cpu-levels'):
             controls += cpu_levels(Run(out, parent.tools), refine)
+    if 'float-unit' in chosen:
+        out = root / 'float-unit'
+        out.mkdir()
+        with case('float-unit'):
+            controls += float_unit(Run(out, parent.tools), refine)
     if 'refusals' in chosen:
         out = root / 'refusals'
         out.mkdir()
@@ -740,7 +844,7 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--all-profiles', action='store_true')
     parser.add_argument('--case', action='append', choices=CASES,
-                        help='run only this case; repeat for more.  The four run once,'
+                        help='run only this case; repeat for more.  The five run once,'
                              ' the rest at each profile; a selection is FILTERED')
     args = parser.parse_args()
     supported_host(args.output)

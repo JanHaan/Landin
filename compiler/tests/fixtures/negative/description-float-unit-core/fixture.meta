@@ -1,0 +1,9 @@
+class: negative
+summary: D615: a float unit is a fact of the core, so a cortex-m4 described with the Cortex-M7's fpv5-d16 is refused
+program: program.ldn
+constructs: 1990
+targets: cortex-m0
+codes: L0545
+args: --target=cortex-m0 --level=armv7e-m ../tests/fixtures/negative/description-float-unit-core/program.ldn
+expect: expected.txt
+status: 1

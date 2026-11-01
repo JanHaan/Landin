@@ -13,7 +13,8 @@ and `platform/cortex_m`/`core/panic` consumers run through that compiler-owned f
 | Probe host | native Linux x86-64 with glibc 2.38 or later, `dpkg-deb` and `tar`; the gate runs it on GitHub's `ubuntu-24.04` |
 | CPU/startup lane | QEMU 10.0.13, Debian `1:10.0.13+ds-0+deb13u1`, `-M microbit -accel tcg,thread=single` |
 | Armv7-M corpus lane | the same QEMU binary, `-M mps2-an385`: a Cortex-M3, for corpus fixtures whose `levels:` name `armv7-m` (D255) |
-| Armv8-M corpus lane | the same QEMU binary, `-M mps2-an505`: a Cortex-M33 r0p3 in Secure state, for the whole corpus at `armv8-m.main` in the `mainline` lane and for fixtures whose `levels:` name it, linked for the lane description `lanes/mps2_an505` (D607); libgcc from `thumb/v8-m.main/nofp` |
+| Armv8-M corpus lane | the same QEMU binary, `-M mps2-an505`: a Cortex-M33 r0p3 in Secure state, for the whole corpus at `armv8-m.main` in `run.py`'s `mps2-an505` lane and for fixtures whose `levels:` name it, on the lane description `lanes/descriptions/mps2_an505` (D607, D619); libgcc from `thumb/v8-m.main/nofp` |
+| M7 corpus lane | the same QEMU binary, `-M mps2-an500`: a Cortex-M7 r1p2 with the double-precision FPv5-D16, for the whole corpus at `armv7e-m` hard-float in `run.py`'s `mps2-an500` lane, on the lane description `lanes/descriptions/mps2_an500` (D619), and for the VFP ABI control and the firmware lane's `float-unit` case; libgcc from `thumb/v7e-m+dp/hard` |
 | Core | nRF51822 Cortex-M0, ARMv6-M, Thumb, little endian, 16 MHz model clock; no FPU, caches or exclusive-access instruction requirement |
 | Peripheral lane | the same QEMU, with `machine.py` serving `models.py`'s synthetic devices through its debugger stub; `-icount shift=0` |
 | EABI compiler | `arm-eabi-gcc` 16.1.0, GNAT's arm-elf archive `16.1.0-1` from the host GNAT's release, pinned in `environments/pins.sh` |
@@ -112,19 +113,48 @@ instructions is held to them, so the level is shown to have reached the
 bytes that ran. The six fixtures whose `levels:` name `armv7-m` add 24 QEMU
 sessions to the default run, and the three that name `armv8-m.main` 12.
 
-`armv8-m.main` runs on the MPS2 AN505's Cortex-M33, from the same binary.
-It boots in Secure state and takes its stack pointer and reset from
-`0x10000000`, so an image linked at zero locks up, and the reference's map
-does not fit it. The corpus links with a script refine derives from a
-description, so the AN505 has one in Landin source,
-[`lanes/mps2_an505`](lanes/mps2_an505), with the reference's capacities
-where the board has memory: 32 KiB of flash at `0x10000000` and 16 KiB of
-RAM at `0x38000000`, the Secure aliases of its two SSRAMs, the upper 4 KiB
-the stack (D607). It describes the emulator, not a chip, and
-`descriptions.json` records its facts under `lanes`, apart from the
-devices. The image must carry `Tag_CPU_arch: v8-M.mainline`, and libgcc
-comes from `thumb/v8-m.main/nofp`. The `mainline` lane runs every corpus
-row at `armv8-m.main` there, beside the default run.
+Two corpus lanes run on maps other than the reference's, each an emulator's
+and no chip's, which a description in Landin source under
+[`lanes/descriptions/`](lanes/descriptions) states. A program reaches its
+lane's description through one more entry-module file,
+`lanes/lane-NAME.ldn`, which imports it, so the program runs unchanged; a
+rooted program's entry module is named by its files then, since a rooted
+request names its directory or its files and not both (D619). The corpus
+derives each lane's profile, links with the script refine derives from it
+(D545, D589) and holds its facts to `descriptions.json`'s `lanes` record,
+apart from the devices. `backend_corpus.py --lane NAME` runs every
+inventory row alone on lane NAME, and `run.py`'s lane of the same name is
+that run.
+
+`mps2-an505` runs `armv8-m.main` on the MPS2 AN505's Cortex-M33, from the
+same binary, for the whole corpus and for fixtures whose `levels:` name
+that level. It boots in Secure state and takes its stack pointer and reset
+from `0x10000000`, so an image linked at zero locks up, and the reference's
+map does not fit it. Its description,
+[`lanes/descriptions/mps2_an505`](lanes/descriptions/mps2_an505), has the
+reference's capacities where the board has memory: 32 KiB of flash at
+`0x10000000` and 16 KiB of RAM at `0x38000000`, the Secure aliases of its
+two SSRAMs, the upper 4 KiB the stack (D607), so a program fits there
+exactly when it fits the reference. The image must carry `Tag_CPU_arch:
+v8-M.mainline`, and libgcc comes from `thumb/v8-m.main/nofp`.
+
+`mps2-an500` runs `armv7e-m` on the MPS2 AN500's Cortex-M7, from the same
+binary, whose float unit, FPv5-D16, is a description's (D615), so the
+lane's description gives it:
+[`lanes/descriptions/mps2_an500`](lanes/descriptions/mps2_an500/description.ldn),
+4 MiB of code memory at 0, VTOR's address, and 4 MiB of RAM at
+`0x20000000` with a 64 KiB stack at its top. Unmapped space there reads
+zero and ignores writes with no fault, so a program that runs away hangs to
+the session's deadline rather than faulting. The harness start grants CP10
+and CP11 before anything else, paints d8-d15 before `main` and checks them
+after, the image must carry `Tag_FP_arch: FPv5/FP-D16 for ARMv8` and
+`Tag_ABI_VFP_args: VFP registers`, libgcc comes from `thumb/v7e-m+dp/hard`,
+and each image is required to call no float helper;
+`runtime/float-operations-by-arguments` must also hold its own VFP
+operation in each of its routines at none/off and no software float
+routine at all. At `LANDIN_CORTEX_JOBS=4` the lane is 3,278 verdicts,
+3,022 of them executions, in five to five and a half minutes on a
+32-thread host, beside the reference's four and a half.
 
 ## Executable routes and limits
 
@@ -180,9 +210,9 @@ repeated, runs only those lanes, and the lanes they need: `evidence`
 compares its images with the `driver` lane's, so `--lane evidence` runs
 both, and a lane whose prerequisite failed is reported as not run. The
 lanes are `cpu`, `peripheral`, `abi`, `memory`, `packed`, `packed-native`,
-`backend`, `mainline`, `firmware`, `freestanding`, `devices`,
-`descriptions`, `driver` and `evidence`; `mainline` is the corpus again at
-`armv8-m.main` on the AN505. A run that selects lanes says `FILTERED` in its last line
+`backend`, `mps2-an505`, `mps2-an500`, `firmware`, `freestanding`,
+`devices`, `descriptions`, `driver` and `evidence`; `mps2-an505` and
+`mps2-an500` are the corpus again on those lanes. A run that selects lanes says `FILTERED` in its last line
 and its `result.json`, and is not the gate's run.
 
 ### On NixOS
@@ -307,6 +337,20 @@ current `cortex-m` gate job runs these controls through `run.py`.
 Development results are indexed separately in `abi-validation.json`;
 `validation.json` keeps its historical meaning as the CPU and peripheral
 environment's record.
+
+The VFP variant (D616) is measured apart, on the M7 lane: `abi.py` builds
+`probes/abi-vfp.c` with GCC at `-mcpu=cortex-m7 -mfloat-abi=hard
+-mfpu=fpv5-d16`, with `probes/an500-start.S`, which grants the unit, and
+`probes/an500.ld`, and runs it on `mps2-an500` against the hand-written
+endpoints of `probes/abi-vfp.S`, which record r0-r3, s0-s15, six stack
+words and sp. Every recorded argument word is held to the contract's
+`vfp.` rows: back-filled singles, aggregates of floats and of doubles, the
+stack fallback that leaves s1 unused, a variadic call and a five-float
+composite; each endpoint's result is returned where the convention says
+and checked by GCC's caller. GCC must save exactly d8-d15 around a body
+that clobbers every VFP register, and sentinels in d8-d15 must survive it,
+which is the contract's `vfp.preserved` row; the image must carry
+`Tag_ABI_VFP_args: VFP registers`.
 
 These bounded probes establish neither floating arithmetic helpers, general
 unwind support, a complete C language ABI surface, firmware stack bounds,
@@ -488,6 +532,15 @@ the refusal names each one and the row to write. A row's `mode` is one of:
 | `refuse` | compiled for `cortex-m0` and required to fail with exactly these diagnostic codes | `codes`, and a `reason` unless the only code is L0015 |
 | `restriction` | a target restriction, the disabled general C surface or a hosted heap, not attempted | a `reason` and a `witness` file that shows it |
 
+An `execute` row may also carry `"lanes": {"mps2-an500": {"mode":
+"restriction", "reason": ...}}`, a corpus lane's own disposition of it
+(D619), which may name either lane. The lane still runs the program and
+requires it to fail, so a restriction that no longer holds fails the lane,
+naming the row; three
+64-bit-sized fixtures, which the reference's map never held and so no
+Cortex-M lane ran before the M7's, have one, until each has a 32-bit
+counterpart.
+
 Firmware gives a program no standard input, arguments, files beside it or
 output, so a fixture whose metadata names `stdin:`, `run_args:`,
 `run_files:` or `run_expect:` cannot be `execute`. The inventory refuses
@@ -555,12 +608,14 @@ which the corpus checks rather than assumes; an image past the harness's
 A filtered run judges no limit stale, because the profile that still
 overflows may be one it did not run, and says `FILTERED` last.
 
-`--level=armv8-m.main` runs every row at that level alone, on its machine
-and its map: each `execute` row at every profile, each `refuse` row
-compiled there to its codes and each `restriction` recorded, so no fixture
-is left without a verdict. It is the `mainline` lane, and judges no limit
-stale, which is the default run's to judge. Every image a Thumb-2 level
-ran is required to call neither `__aeabi_lmul` nor a 32-bit divide helper.
+`--lane mps2-an505` or `--lane mps2-an500` runs every row alone on that
+lane, at its level and on its map: each `execute` row at every profile,
+each `refuse` row compiled there to its codes and each `restriction`
+recorded, so no fixture is left without a verdict. It judges no limit
+stale, which is the default run's to judge, and links no limited verdict
+again for a device. Every image a Thumb-2 level ran, on a lane or for a
+fixture's `levels:`, is required to call neither `__aeabi_lmul` nor a
+32-bit divide helper.
 
 `--program PATH` runs a program of your own, a `.ldn` file or a module
 directory, with `--root DIR` for the roots it imports from, at the corpus's
@@ -659,7 +714,14 @@ expansion or new DMA ownership model is introduced.
 ## Compiler-owned firmware
 
 `firmware.py` is mandatory in `run.py`. It writes records under the run's
-`firmware` output directory, separate from every earlier lane. It invokes the
+`firmware` output directory, separate from every earlier lane. Its
+`float-unit` case builds compiler-owned firmware for the M7 lane's
+description and runs it on `mps2-an500`: reset has granted CP10 and CP11
+before `start`, a SysTick pended in the middle of an f64 computation is
+taken with `0xffffffe9` and the extended frame reserved lazily, the
+handler's float instruction fills it, the return restores the interrupted
+d0, and the computation ends with its IEEE value (D618); a soft-float C
+object linked into the image is refused for its VFP arguments (D617). It invokes the
 compiler with
 `--target=cortex-m0 --firmware-entry=start --emit=exe` and the pinned Arm GCC
 path. The compiler generates reset, vectors and the linker script; `backend-start.S`

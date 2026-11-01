@@ -2350,6 +2350,26 @@ package body Landin.Diagnostics.Citations is
             when 532 =>
                "Cortex-M links through the pinned arm-elf GCC or a distr"
                & "ibution's",
+            when 615 =>
+               "A float unit is a fact of a description, and features re"
+               & "ad it",
+            when 616 =>
+               "A float unit selects AAPCS32's VFP variant, for C and fo"
+               & "r Landin",
+            when 617 =>
+               "With a float unit, floats are computed in VFP instructio"
+               & "ns",
+            when 618 =>
+               "Reset enables the float unit, and handlers take extended"
+               & " frames",
+            when 619 =>
+               "QEMU's mps2-an500 is the M7's emulator lane, selected by"
+               & " a description",
+            when 620 =>
+               "A fibre's context on a float unit holds d8-d15 and FPSCR",
+            when 621 =>
+               "The STM32H753 is hard-float, and its consumer's accesses"
+               & " are the board's to check",
             when 281 =>
                "RV64's system call has the standing of `syscall` and `sv"
                & "c`",
@@ -3522,6 +3542,20 @@ package body Landin.Diagnostics.Citations is
             when 364 =>
                "Decisions: The core library and the derived programs",
             when 532 =>
+               "Decisions: The core library and the derived programs",
+            when 615 =>
+               "Decisions: The core library and the derived programs",
+            when 616 =>
+               "Decisions: The core library and the derived programs",
+            when 617 =>
+               "Decisions: The core library and the derived programs",
+            when 618 =>
+               "Decisions: The core library and the derived programs",
+            when 619 =>
+               "Decisions: The core library and the derived programs",
+            when 620 =>
+               "Decisions: The core library and the derived programs",
+            when 621 =>
                "Decisions: The core library and the derived programs",
             when 281 =>
                "Decisions: The core library and the derived programs",
@@ -5085,6 +5119,28 @@ package body Landin.Diagnostics.Citations is
             when 532 =>
                "https://www.701.dev/spec.html#d532-cortex-m-links-throug"
                & "h-the-pinned-arm-elf-gcc-or-a-distribution-s",
+            when 615 =>
+               "https://www.701.dev/spec.html#d615-a-float-unit-is-a-fac"
+               & "t-of-a-description-and-features-read-it",
+            when 616 =>
+               "https://www.701.dev/spec.html#d616-a-float-unit-selects-"
+               & "aapcs32-s-vfp-variant-for-c-and-for-landin",
+            when 617 =>
+               "https://www.701.dev/spec.html#d617-with-a-float-unit-flo"
+               & "ats-are-computed-in-vfp-instructions",
+            when 618 =>
+               "https://www.701.dev/spec.html#d618-reset-enables-the-flo"
+               & "at-unit-and-handlers-take-extended-frames",
+            when 619 =>
+               "https://www.701.dev/spec.html#d619-qemu-s-mps2-an500-is-"
+               & "the-m7-s-emulator-lane-selected-by-a-description",
+            when 620 =>
+               "https://www.701.dev/spec.html#d620-a-fibre-s-context-on-"
+               & "a-float-unit-holds-d8-d15-and-fpscr",
+            when 621 =>
+               "https://www.701.dev/spec.html#d621-the-stm32h753-is-hard"
+               & "-float-and-its-consumer-s-accesses-are-the-board-s-to-ch"
+               & "eck",
             when 281 =>
                "https://www.701.dev/spec.html#d281-rv64-s-system-call-ha"
                & "s-the-standing-of-syscall-and-svc",

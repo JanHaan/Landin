@@ -2,7 +2,7 @@
 from concurrent.futures import ThreadPoolExecutor
 import json
 from backend import build, derived, execute as qemu
-from backend_corpus import execute as corpus
+from backend_corpus import LANES as CORPUS_LANES, execute as corpus
 from backend_controls import frame_control, instruction_controls
 from backend_peripheral import execute as peripheral, dma, byte
 from packed_native import PROFILES
@@ -64,19 +64,21 @@ def execute(parent, refine):
     (root / 'result.json').write_text(json.dumps(record, indent=2)+'\n')
 
 
-def execute_mainline(parent, refine):
-    """The whole corpus at armv8-m.main on QEMU's mps2-an505 (D605-D607):
-    every row's verdict at that level alone, its executed images held to
-    what the level selects."""
-    root = parent.out / 'mainline'
+def execute_lane(parent, refine, lane):
+    """The whole inventory alone on one emulator lane of backend_corpus.LANES,
+    run.py's lane of the same name: QEMU's mps2-an505 at armv8-m.main
+    (D605-D607), or mps2-an500 at armv7e-m with its float unit (D615-D619).
+    Every row's verdict there, its executed images held to what the lane's
+    level and unit select."""
+    root = parent.out / lane
     root.mkdir()
     refine = refine.resolve(strict=True)
     compiler_hash = sha(refine)
-    parent.command('mainline-refine-identity', [refine, '--identify'])
+    parent.command(lane + '-refine-identity', [refine, '--identify'])
     corpus_out = root / 'corpus'
     corpus_out.mkdir()
-    summary = corpus(corpus_out, parent.tools, refine, level='armv8-m.main')
+    summary = corpus(corpus_out, parent.tools, refine, lane=lane)
     require(sha(refine) == compiler_hash, 'compiler changed during embedded execution')
     (root / 'result.json').write_text(json.dumps({
-        'status': 'passed', 'compiler_sha256': compiler_hash, 'level': 'armv8-m.main',
-        'corpus_rows': len(summary['results'])}, indent=2) + '\n')
+        'status': 'passed', 'compiler_sha256': compiler_hash, 'lane': lane,
+        'level': CORPUS_LANES[lane], 'corpus_rows': len(summary['results'])}, indent=2) + '\n')

@@ -1,0 +1,6 @@
+error[L0545]: this is not a float unit refine builds
+  --> ../tests/fixtures/negative/description-float-unit-unknown/program.ldn:3:21
+  |
+3 | compiler.float_unit("fpv5-sp-d16")
+  |                     ^^^^^^^^^^^^^
+  = note: D615: refine builds "fpv5-d16", the Cortex-M7's single- and double-precision unit, on a cortex-m7; write compiler.float_unit("fpv5-d16"), or leave the directive out for a core with no float unit

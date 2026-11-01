@@ -58,6 +58,26 @@ package body Landin.Backend.Toolchain is
       end if;
    end Add_M_Profile;
 
+   --  D617: soft float without a unit; with one, hard float and the unit,
+   --  which name the libgcc multilib GCC selects, so refine names none.
+   procedure Add_Float
+     (List : in out Landin.Platform.Path_List;
+      Float : Landin.Targets.Firmware.Float_Unit);
+
+   procedure Add_Float
+     (List : in out Landin.Platform.Path_List;
+      Float : Landin.Targets.Firmware.Float_Unit)
+   is
+      use type Landin.Targets.Firmware.Float_Unit;
+   begin
+      if Float = Landin.Targets.Firmware.No_Float_Unit then
+         List.Append ("-mfloat-abi=soft");
+      else
+         List.Append ("-mfloat-abi=hard");
+         List.Append ("-mfpu=" & Landin.Targets.Firmware.Spelling (Float));
+      end if;
+   end Add_Float;
+
    function Identity_Section
      (Build_Id : String; Facts : Landin.Targets.Target_Facts) return String
    is
@@ -285,7 +305,9 @@ package body Landin.Backend.Toolchain is
      (Assembly, Output : String; Facts : Landin.Targets.Target_Facts;
       Debug : Boolean := False;
       Level : Landin.Targets.Levels.Feature_Level :=
-        Landin.Targets.Levels.Default_Level (Landin.Targets.Cortex_M))
+        Landin.Targets.Levels.Default_Level (Landin.Targets.Cortex_M);
+      Float : Landin.Targets.Firmware.Float_Unit :=
+        Landin.Targets.Firmware.No_Float_Unit)
       return Landin.Platform.Path_List
    is
       List : Landin.Platform.Path_List;
@@ -297,7 +319,7 @@ package body Landin.Backend.Toolchain is
       end if;
       Add_M_Profile (List, Level, Facts);
       List.Append ("-mthumb");
-      List.Append ("-mfloat-abi=soft");
+      Add_Float (List, Float);
       List.Append ("-mabi=aapcs");
       List.Append ("-Wa,--fatal-warnings");
       if Debug then
@@ -344,7 +366,9 @@ package body Landin.Backend.Toolchain is
       Threads : Boolean := False;
       Directories : Landin.Platform.Path_List :=
         Landin.Platform.No_Arguments;
-      Script : String := "")
+      Script : String := "";
+      Float : Landin.Targets.Firmware.Float_Unit :=
+        Landin.Targets.Firmware.No_Float_Unit)
       return Landin.Platform.Path_List
    is
       List : Landin.Platform.Path_List;
@@ -366,7 +390,7 @@ package body Landin.Backend.Toolchain is
          end if;
          Add_M_Profile (List, Level, Facts);
          List.Append ("-mthumb");
-         List.Append ("-mfloat-abi=soft");
+         Add_Float (List, Float);
          List.Append ("-mabi=aapcs");
          List.Append ("-nostdlib");
          List.Append ("-nostartfiles");
