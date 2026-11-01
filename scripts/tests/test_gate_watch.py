@@ -22,11 +22,23 @@ if "--commit" in sys.argv:
     open(os.environ["STATES"] + ".commit", "w").write(
         sys.argv[sys.argv.index("--commit") + 1])
 seen = int(open(count).read()) if os.path.exists(count) else 0
+if sys.argv[1] == "api":
+    #  The jobs of the state the last `run view` answered, as GitHub's
+    #  listing of every attempt gives them, in one page.
+    jobs = states[min(max(seen - 1, 0), len(states) - 1)]["jobs"]
+    print(json.dumps([{"total_count": len(jobs), "jobs": [
+        {"id": j["databaseId"], "name": j["name"], "status": j["status"],
+         "conclusion": j["conclusion"] or None, "started_at": j["startedAt"],
+         "completed_at": j["completedAt"], "steps": j["steps"],
+         "run_attempt": j.get("run_attempt", 1)} for j in jobs]}]))
+    sys.exit(0)
 open(count, "w").write(str(seen + 1))
 if sys.argv[1:3] == ["run", "list"]:
     print(json.dumps([{"databaseId": 7}]))
 else:
-    print(json.dumps(states[min(seen, len(states) - 1)]))
+    view = dict(states[min(seen, len(states) - 1)])
+    view.pop("jobs")
+    print(json.dumps(view))
 '''
 
 
@@ -123,6 +135,18 @@ class GateWatch(unittest.TestCase):
         self.assertEqual(result.returncode, 2, result.stdout)
         self.assertIn("names no commit in this clone", result.stderr)
         self.assertFalse((self.states.parent / "states.json.commit").exists())
+
+    def test_a_rerun_job_is_judged_by_its_latest_attempt(self):
+        failed = job(2, "scripts", conclusion="failure")
+        failed["run_attempt"] = 1
+        passed = job(3, "scripts")
+        passed["run_attempt"] = 2
+        result = self.watch([state("completed", [job(1, "documents"), failed,
+                                                 passed], conclusion="success")],
+                            "--run=7", "--all")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertNotIn("FAILED", result.stdout)
+        self.assertIn("judged on 2 jobs", result.stdout)
 
     def test_a_cancelled_run_is_neither_pass_nor_failure(self):
         result = self.watch([

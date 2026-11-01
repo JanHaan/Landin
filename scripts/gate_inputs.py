@@ -132,6 +132,42 @@ def recent_push(run, now):
     return timedelta(0) <= now - started <= MAX_AGE
 
 
+def run_jobs(api, run_id, pages=20):
+    """RUN_ID's jobs, the latest attempt of each by name, as one listing.
+
+    GitHub's `filter=latest` answered three of one run's 47 jobs, with a
+    `total_count` of three, on its first attempt, so a full run read that
+    way looks incomplete and its pass is not reused.  `filter=all` lists
+    every attempt's jobs, a hundred to a page; each page is read until the
+    listing's own total is reached, and the latest attempt of each job is
+    kept.  A listing that ends short of its total is returned short, so
+    `complete` refuses it.
+    """
+    jobs, total = [], None
+    for page in range(1, pages + 1):
+        listing = api("actions/runs/%d/jobs?filter=all&per_page=100&page=%d"
+                      % (run_id, page))
+        total = listing.get("total_count")
+        batch = listing.get("jobs", [])
+        jobs.extend(batch)
+        if not batch or total is None or len(jobs) >= total:
+            break
+    if total is None or len(jobs) != total:
+        return {"total_count": total, "jobs": jobs}
+    #  Each name's jobs of its latest attempt.  A name twice in one
+    #  attempt stays twice, which `full_run` reads as no record.
+    latest = {}
+    for job in jobs:
+        attempt = job.get("run_attempt", 1)
+        held = latest.setdefault(job["name"], (attempt, []))
+        if attempt > held[0]:
+            latest[job["name"]] = (attempt, [job])
+        elif attempt == held[0]:
+            held[1].append(job)
+    kept = [job for _, named in latest.values() for job in named]
+    return {"total_count": len(kept), "jobs": kept}
+
+
 def complete(listing):
     """LISTING's jobs, or None when it is shorter than its own total."""
     jobs = listing.get("jobs", [])
@@ -179,7 +215,7 @@ def decide_candidate(event_name, event, api, key_of, checked_out,
         # Compare inputs before fetching every job of an unrelated run.
         if key_of(run["head_sha"]) != here:
             continue
-        listing = api("actions/runs/%d/jobs?filter=latest&per_page=100" % run["id"])
+        listing = run_jobs(api, run["id"])
         if full_run(run, listing, required, now):
             return True, "identical candidate tree: reusing %s, which ran every lane on %s" % (
                 run["html_url"], run["head_sha"][:12])
@@ -217,7 +253,7 @@ def decide(event_name, event, api, key_of, checked_out, workflow, required, now)
                % workflow)
     reasons = []
     for run in runs.get("workflow_runs", []):
-        listing = api("actions/runs/%d/jobs?filter=latest&per_page=100" % run["id"])
+        listing = run_jobs(api, run["id"])
         if not full_run(run, listing, required, now):
             continue
         base = run["head_sha"]

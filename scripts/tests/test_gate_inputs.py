@@ -139,8 +139,13 @@ class Decide(unittest.TestCase):
         if path.startswith("actions/workflows/"):
             return {"workflow_runs": [self.run]}
         if path.startswith("actions/runs/"):
+            #  Only every attempt's listing is read, a page at a time: the
+            #  latest filter once answered three of a run's 47 jobs.
+            self.assertIn("filter=all", path)
             total = len(self.jobs) if self.total is None else self.total
-            return {"total_count": total, "jobs": self.jobs}
+            page = int(path.rsplit("page=", 1)[1])
+            return {"total_count": total,
+                    "jobs": self.jobs[(page - 1) * 100:page * 100]}
         for tip, messages in self.histories.items():
             if path == "compare/%s...%s" % (BASE, tip):
                 commits = [{"sha": "%040d" % n, "commit": {"message": m}}
@@ -243,6 +248,25 @@ class Decide(unittest.TestCase):
 
     def test_a_job_named_twice_is_no_record(self):
         self.jobs.append({"name": "compiler", "conclusion": "success"})
+        self.assertFalse(self.decide())
+
+    def test_a_listing_longer_than_a_page_is_read_whole(self):
+        self.jobs += [{"name": "lane %d" % n, "conclusion": "success"}
+                      for n in range(150)]
+        self.assertTrue(self.decide())
+        self.assertTrue(any(path.endswith("page=2") for path in self.asked))
+
+    def test_a_job_counts_by_its_latest_attempt(self):
+        #  A leg that failed and passed on its rerun is a pass, and one
+        #  that passed and then failed is not.
+        self.jobs = ([{"name": name, "conclusion": "failure", "run_attempt": 1}
+                      for name in LANES]
+                     + [{"name": name, "conclusion": "success", "run_attempt": 2}
+                        for name in LANES])
+        self.assertTrue(self.decide())
+        for job in self.jobs:
+            job["conclusion"] = ("success" if job["run_attempt"] == 1
+                                 else "failure")
         self.assertFalse(self.decide())
 
     def test_a_failed_matrix_leg_is_no_record(self):

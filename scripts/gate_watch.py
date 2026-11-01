@@ -68,6 +68,35 @@ def find_run(commit, interval):
         time.sleep(interval)
 
 
+def jobs_of(run):
+    """RUN's jobs, each name's latest attempt, from GitHub's job listing.
+
+    `gh run view --json jobs` once named three of a run's 47 jobs, as
+    GitHub's latest-attempt listing did, and the watcher called the run
+    green on those three.  Every attempt's jobs are read here, every page
+    of them, and each name's latest attempt kept: all its jobs, so two of
+    one name in one attempt are both seen.
+    """
+    pages = gh("api", "--paginate", "--slurp",
+               "repos/{owner}/{repo}/actions/runs/%s/jobs"
+               "?filter=all&per_page=100" % run)
+    latest = {}
+    for page in pages:
+        for job in page.get("jobs", ()):
+            attempt = job.get("run_attempt", 1)
+            held = latest.setdefault(job["name"], (attempt, []))
+            if attempt > held[0]:
+                latest[job["name"]] = (attempt, [job])
+            elif attempt == held[0]:
+                held[1].append(job)
+    return [{"databaseId": job["id"], "name": job["name"],
+             "status": job["status"], "conclusion": job.get("conclusion") or "",
+             "startedAt": job.get("started_at") or "",
+             "completedAt": job.get("completed_at") or "",
+             "steps": job.get("steps") or []}
+            for _, named in latest.values() for job in named]
+
+
 def minutes(job):
     started, completed = job.get("startedAt"), job.get("completedAt")
     if not started or not completed or started.startswith("0001"):
@@ -81,9 +110,9 @@ def watch(run, interval, every=False):
     reported = set()
     failed = []
     while True:
-        view = gh("run", "view", str(run), "--json",
-                  "status,conclusion,url,jobs")
-        for job in view["jobs"]:
+        view = gh("run", "view", str(run), "--json", "status,conclusion,url")
+        jobs = jobs_of(run)
+        for job in jobs:
             if job["status"] != "completed" or job["databaseId"] in reported:
                 continue
             reported.add(job["databaseId"])
@@ -101,7 +130,8 @@ def watch(run, interval, every=False):
                     return 1
                 failed.append(job["name"])
         if view["status"] == "completed":
-            print("run %s: %s  %s" % (run, view["conclusion"], view["url"]))
+            print("run %s: %s, judged on %d jobs  %s"
+                  % (run, view["conclusion"], len(jobs), view["url"]))
             if failed:
                 print("failed jobs: %s" % ", ".join(failed))
                 return 1
