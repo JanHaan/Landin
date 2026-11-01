@@ -866,7 +866,7 @@ the generated kept vector image supplies linker relocations to its handlers.
 A convention alone is not a retention root.
 
 Every `assembler.block` lowers to one `Assembly` instruction: its interned
-text and one entry per operand, each a direction, a name, the written integer
+text, without its comments (D597), and one entry per operand, each a direction, a name, the written integer
 type, a register — the target's canonical full-width name, or empty for
 `general` — and, for an output, the scalar frame slot it writes. Inputs are
 the instruction's operands in written order, evaluated and kept in slots

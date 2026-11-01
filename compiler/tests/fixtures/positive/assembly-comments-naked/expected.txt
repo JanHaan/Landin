@@ -1,0 +1,1 @@
+refine: checked ../tests/fixtures/positive/assembly-comments-naked/program.ldn and wrote nothing; run it with `refine run ../tests/fixtures/positive/assembly-comments-naked/program.ldn`, or build it with `refine compile ../tests/fixtures/positive/assembly-comments-naked/program.ldn -o program`

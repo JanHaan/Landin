@@ -711,6 +711,57 @@ file positive/array-zeroed-assignment/program.ldn tokens 32
   88 89 ]
   90 93 end
   94 95 f
+file positive/assembly-comments-naked/program.ldn tokens 42
+  191 196 fixed
+  197 199 if
+  200 208 compiler
+  208 209 .
+  209 213 arch
+  214 216 ==
+  217 226 cortex_m0
+  227 231 then
+  236 240 link
+  240 241 (
+  241 245 keep
+  245 246 )
+  247 253 extern
+  253 254 (
+  254 259 naked
+  259 260 )
+  261 275 count_to_eight
+  275 276 :
+  277 278 (
+  278 279 )
+  280 282 ->
+  283 287 none
+  288 289 =
+  298 307 assembler
+  307 308 .
+  308 313 block
+  313 314 (
+  314 622 """
+            @ r0 counts; {count} in a comment is no slot
+            movs r0, #0
+            again:              @ a label keeps its comment
+            adds r0, #1
+            cmp r0, #8          @ EIGHT, the bound
+            bne again           @ r9 here is not named
+            bx lr
+            """
+  622 623 )
+  628 631 end
+  632 646 count_to_eight
+  647 650 end
+  651 653 if
+  654 659 start
+  659 660 :
+  661 662 (
+  662 663 )
+  664 666 ->
+  667 671 none
+  672 673 =
+  674 677 end
+  678 683 start
 file positive/assembly-operand-forms/program.ldn tokens 341
   208 213 fixed
   214 216 if
@@ -41555,6 +41606,34 @@ file negative/assembly-arm64-statement-separator/program.ldn tokens 15
   56 57 )
   58 61 end
   62 63 f
+file negative/assembly-digit-separator/program.ldn tokens 23
+  0 4 link
+  4 5 (
+  5 9 keep
+  9 10 )
+  11 17 extern
+  17 18 (
+  18 23 naked
+  23 24 )
+  25 26 f
+  26 27 :
+  28 29 (
+  29 30 )
+  31 33 ->
+  34 38 none
+  39 40 =
+  45 54 assembler
+  54 55 .
+  55 60 block
+  60 61 (
+  61 186 """
+        ldr r3, =0x18000000     @ 0x1800_0000, XIP_SSI_BASE
+        ldr r1, =0xe000_ed08
+        str r3, [r1]
+        """
+  186 187 )
+  188 191 end
+  192 193 f
 file negative/assembly-discard-names-register/program.ldn tokens 20
   0 1 f
   1 2 :
@@ -41604,6 +41683,34 @@ file negative/assembly-float-operand/program.ldn tokens 27
   76 77 )
   78 81 end
   82 83 f
+file negative/assembly-foreign-comment/program.ldn tokens 27
+  0 1 f
+  1 2 :
+  3 4 (
+  4 5 )
+  6 8 ->
+  9 13 none
+  14 15 =
+  20 29 assembler
+  29 30 .
+  30 35 block
+  35 36 (
+  36 60 "nop // arm64's comment"
+  60 61 )
+  66 75 assembler
+  75 76 .
+  76 81 block
+  81 82 (
+  82 105 "nop /* C's comment */"
+  105 106 )
+  111 120 assembler
+  120 121 .
+  121 126 block
+  126 127 (
+  127 152 "# x86-64's comment\nnop"
+  152 153 )
+  154 157 end
+  158 159 f
 file negative/assembly-general-exhausted/program.ldn tokens 189
   0 5 count
   5 6 :
@@ -41839,19 +41946,19 @@ file negative/assembly-hosted-straight-line/program.ldn tokens 57
   155 156 .
   156 161 block
   161 162 (
-  162 175 "nop # quiet"
-  175 176 ,
-  177 179 in
-  180 181 v
-  181 182 :
-  183 186 u64
-  187 189 at
-  190 193 rax
-  194 195 =
-  196 201 value
-  201 202 )
-  203 206 end
-  207 208 f
+  162 179 "nop /* quiet */"
+  179 180 ,
+  181 183 in
+  184 185 v
+  185 186 :
+  187 190 u64
+  191 193 at
+  194 197 rax
+  198 199 =
+  200 205 value
+  205 206 )
+  207 210 end
+  211 212 f
 file negative/assembly-naked-operands/program.ldn tokens 24
   0 6 extern
   6 7 (

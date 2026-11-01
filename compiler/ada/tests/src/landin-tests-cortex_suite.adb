@@ -2103,6 +2103,100 @@ package body Landin.Tests.Cortex_Suite is
       end loop;
    end Machine_Directives;
 
+   --  D597: a block's comments, in an ordinary block on each target and
+   --  beside a Cortex-M naked body's labels, are checked as absent and
+   --  written nowhere in the assembly, while every instruction is.
+   procedure Assembly_Comments_Are_Not_Emitted
+     (Item : in out Landin.Testing.Context);
+
+   procedure Assembly_Comments_Are_Not_Emitted
+     (Item : in out Landin.Testing.Context)
+   is
+      type Target_Case is (Cortex, X86, Linux_Arm, Darwin_Arm, RV);
+
+      function Target_Name (Of_Case : Target_Case) return String
+        is (case Of_Case is
+               when Cortex => "cortex-m0",
+               when X86 => "linux-x86-64",
+               when Linux_Arm => "linux-arm64",
+               when Darwin_Arm => "darwin-arm64",
+               when RV => "linux-rv64");
+
+      --  Each block's comment names a slot no operand has, a register the
+      --  block does not declare and a word, WITHHELD, found nowhere else.
+      function Program (Of_Case : Target_Case) return String
+        is (case Of_Case is
+               when Cortex =>
+                 "link(keep) extern(naked) n: () -> none = "
+                 & "assembler.block(""@ WITHHELD {gone}\n"
+                 & "movs r0, #0\nagain: @ WITHHELD\nadds r0, #1"
+                 & "\ncmp r0, #8 @ WITHHELD r9\nbne again\nbx lr"")"
+                 & " end n "
+                 & "h: (v: u32) -> (r: u32) = r = assembler.block("
+                 & """adds {r}, #7 @ WITHHELD {gone} r9"","
+                 & " inout r: u32 at general = v) end h",
+               when X86 =>
+                 "h: (v: u32) -> (r: u32) = r = assembler.block("
+                 & """# WITHHELD\naddl $7, {r} # WITHHELD {gone} %rbx"","
+                 & " inout r: u32 at general = v) end h",
+               when Linux_Arm | Darwin_Arm =>
+                 "h: (v: u32) -> (r: u32) = r = assembler.block("
+                 & """// WITHHELD\nadd {r}, {r}, #7 // WITHHELD {gone}"
+                 & " x19"", inout r: u32 at general = v) end h",
+               when RV =>
+                 "h: (v: u32) -> (r: u32) = r = assembler.block("
+                 & """# WITHHELD\naddi {r}, {r}, 7 # WITHHELD {gone} s1"","
+                 & " inout r: u32 at general = v) end h");
+
+      function Instructions (Of_Case : Target_Case) return String
+        is (case Of_Case is
+               when Cortex => "bne again",
+               when X86 => "addl $7, %",
+               when Linux_Arm | Darwin_Arm => ", #7",
+               when RV => "addi ");
+   begin
+      for Of_Case in Target_Case loop
+         declare
+            Host : Landin.Testing.Fakes.Fake_Filesystem;
+            Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+            Args : Landin.Platform.Path_List;
+            Assembly : U.Unbounded_String;
+            Status : Landin.Platform.Read_Status;
+         begin
+            Host.Add_Firmware_Library;
+            Host.Add_File ("p.ldn", Program (Of_Case)
+              & " start: () -> none = _ = h(35) end start");
+            Args.Append ("--target=" & Target_Name (Of_Case));
+            if Of_Case in X86 | Linux_Arm | RV then
+               --  A static Linux link starts in platform/linux, which the
+               --  fake host does not hold.
+               Args.Append ("--link=libc");
+            end if;
+            Args.Append ("--emit=asm");
+            Args.Append ("-o");
+            Args.Append ("p.s");
+            Args.Append ("p.ldn");
+            declare
+               Result : constant Landin.Driver.Outcome :=
+                 Landin.Driver.Execute (Args, Host, Tools);
+            begin
+               Landin.Testing.Check_Equal
+                 (Item, Result.Status, Landin.Driver.Status_Success,
+                  Target_Name (Of_Case) & ": "
+                  & U.To_String (Result.Report));
+            end;
+            Host.Read_File ("p.s", Assembly, Status);
+            Landin.Testing.Check
+              (Item, Status = Landin.Platform.Read_Ok
+                 and then U.Index (Assembly, Instructions (Of_Case)) > 0
+                 and then U.Index (Assembly, "WITHHELD") = 0
+                 and then U.Index (Assembly, "{gone}") = 0,
+               Target_Name (Of_Case) & " writes the instructions and none"
+               & " of their comments");
+         end;
+      end loop;
+   end Assembly_Comments_Are_Not_Emitted;
+
    procedure Machine_IR (Item : in out Landin.Testing.Context);
 
    procedure Machine_IR (Item : in out Landin.Testing.Context) is
@@ -3292,6 +3386,9 @@ package body Landin.Tests.Cortex_Suite is
         (Into, "cortex ABI", "machine IR boundaries", Machine_IR'Access);
       Landin.Testing.Register
         (Into, "cortex ABI", "machine directives", Machine_Directives'Access);
+      Landin.Testing.Register
+        (Into, "cortex ABI", "assembly comments are not emitted",
+         Assembly_Comments_Are_Not_Emitted'Access);
       Landin.Testing.Register
         (Into, "cortex ABI", "firmware path", Firmware_Path'Access);
       Landin.Testing.Register

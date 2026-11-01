@@ -1,0 +1,9 @@
+class: negative
+summary: D597 takes `@` alone as Cortex-M's comment: `//`, `/* */` and a line that begins `#` are refused, each naming `@`
+program: program.ldn
+expect: expected.txt
+args: --target=cortex-m0 ../tests/fixtures/negative/assembly-foreign-comment/program.ldn
+codes: L0330, L0330, L0330
+status: 1
+constructs: 1630, 1990
+targets: cortex-m0

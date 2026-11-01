@@ -1,4 +1,4 @@
-error[L0330]: assembly directives, comments and statement separators refuse
+error[L0330]: `%%` separates statements, and assembly text holds one instruction a line: a comment is `//` to the end of the line
   --> ../tests/fixtures/negative/assembly-arm64-statement-separator/program.ldn:2:5
   |
 2 |     assembler.block("nop %% b somewhere")

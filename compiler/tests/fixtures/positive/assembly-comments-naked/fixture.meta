@@ -1,0 +1,8 @@
+class: positive
+summary: D597's `@` comment in a Cortex-M naked body beside its labels and branches, one comment holding a `{name}` and one a line of its own, as the RP2040 second stage writes them
+program: program.ldn
+expect: expected.txt
+args: --target=cortex-m0 ../tests/fixtures/positive/assembly-comments-naked/program.ldn
+status: 0
+constructs: 1570, 1630, 1990
+targets: cortex-m0

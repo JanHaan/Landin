@@ -186,8 +186,10 @@ negative/array-return-unassigned | linux-x86-64, linux-arm64, darwin-arm64, free
 negative/array-type-name-is-not-storage | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/array-value-not-enabled | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/assembly-arm64-statement-separator | darwin-arm64
+negative/assembly-digit-separator | cortex-m0
 negative/assembly-discard-names-register | cortex-m0
 negative/assembly-float-operand | cortex-m0
+negative/assembly-foreign-comment | cortex-m0
 negative/assembly-general-exhausted | cortex-m0
 negative/assembly-hosted-straight-line | linux-x86-64
 negative/assembly-naked-operands | cortex-m0
@@ -1533,6 +1535,7 @@ positive/array-of-structs | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86
 positive/array-type-is-declared | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 positive/array-types-alias-and-agree | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 positive/array-zeroed-assignment | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+positive/assembly-comments-naked | cortex-m0
 positive/assembly-operand-forms | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 positive/assigned-on-every-path | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 positive/assignment-to-a-mutable-binding | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -1856,6 +1859,7 @@ runtime/array-returns-cross-calls | linux-x86-64, linux-arm64, darwin-arm64, fre
 runtime/array-zeroed-assignment-clears-storage | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/assembly-block-at-its-arm64-level | linux-arm64, darwin-arm64, freebsd-arm64
 runtime/assembly-block-at-its-level | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/assembly-comments | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0
 runtime/assembly-every-general-register | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/assembly-memory-boundary | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/assembly-operand-free | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

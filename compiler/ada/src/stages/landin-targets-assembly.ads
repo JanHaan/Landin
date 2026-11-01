@@ -110,12 +110,38 @@ package Landin.Targets.Assembly is
      (Facts : Target_Facts; Text : String;
       Operands : Operand_Register_Array) return String;
 
+   --  D597: the line comment the architecture's own assembler reads, from
+   --  this marker to the end of the line: `@` in Thumb, `//` on arm64 and
+   --  `#` on x86-64 and RV64.  The synthetic model has none.
+   function Comment_Marker (On : Architecture) return String;
+
+   --  The text with each line's comment and the blanks before it removed.
+   --  Every LF stays, so a line keeps its place.  This is the text the
+   --  admission reads and the IR holds: a comment never meets an
+   --  instruction, register or label check, a `{name}` in one is no slot,
+   --  and emission writes none.
+   function Uncommented (On : Architecture; Text : String) return String;
+
+   --  The first number Line writes with a digit separator, `0x1800_0000`,
+   --  or the empty string.  Block text is the assembler's syntax, whose
+   --  numbers take none.
+   function Separated_Number (Line : String) return String;
+
+   --  The refusal of Line's first comment form that is not On's own, or of
+   --  a statement separator, naming what to write instead; the empty
+   --  string when Line, already uncommented, holds neither.
+   function Foreign_Comment (On : Architecture; Line : String)
+     return String;
+
+   --  The refusal of a separated number, naming the number to write.
+   function Separator_Refusal (Number : String) return String;
+
    --  [1990]'s uniform text rules on a hosted target, or the empty string:
    --  at most 4096 ASCII bytes in LF lines, instructions and no directive,
-   --  comment, statement separator or label, and straight-line control.
-   --  A naked body's text may transfer control, since it owns its entry
-   --  and its exit.  Which instructions exist is the platform assembler's
-   --  to say.
+   --  statement separator or label, and straight-line control.  Each
+   --  line's comment is removed first (D597).  A naked body's text may
+   --  transfer control, since it owns its entry and its exit.  Which
+   --  instructions exist is the platform assembler's to say.
    function Text_Error
      (Facts : Target_Facts; Text : String; Naked : Boolean := False)
       return String

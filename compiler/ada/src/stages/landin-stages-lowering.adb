@@ -22,6 +22,7 @@ with Landin.Tokens;
 with Landin.Tokens.Text;
 with Landin.Syntax.Forest;
 with Landin.Targets;
+with Landin.Targets.Assembly;
 with Landin.Types;
 
 package body Landin.Stages.Lowering is
@@ -5558,11 +5559,15 @@ package body Landin.Stages.Lowering is
                     IR.Emit_Load (Unit.all, Filling, Saved (Index), Site);
                end if;
             end loop;
+            --  D597: the IR holds the text without its comments, so
+            --  emission never writes one.
             Result := IR.Emit_Assembly
               (Unit.all, Filling, Landin.Source.Names.Intern
-                 (Spellings.all, Landin.Configuration.Fixed_Text
-                    (Source (Context, Syn.Source_Of (Of_Tree)), Of_Tree,
-                     Syn.Nth_Argument (Of_Tree, Node, 1))),
+                 (Spellings.all, Landin.Targets.Assembly.Uncommented
+                    (Landin.Targets.Architecture_Of (Facts),
+                     Landin.Configuration.Fixed_Text
+                       (Source (Context, Syn.Source_Of (Of_Tree)), Of_Tree,
+                        Syn.Nth_Argument (Of_Tree, Node, 1)))),
                Operands, Given (1 .. Inputs), Site);
          end;
          for Index in 1 .. Count loop
@@ -16994,9 +16999,12 @@ package body Landin.Stages.Lowering is
                                   in Syn.Text_Literal | Syn.Raw_Literal
                               then
                                  Note_Words
-                                   (Landin.Configuration.Fixed_Text
-                                      (Source (Context, Src), Of_Tree.all,
-                                       Argument));
+                                   (Landin.Targets.Assembly.Uncommented
+                                      (Landin.Targets.Architecture_Of
+                                         (Facts),
+                                       Landin.Configuration.Fixed_Text
+                                         (Source (Context, Src),
+                                          Of_Tree.all, Argument)));
                               end if;
                            end;
                         end loop;

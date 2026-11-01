@@ -181,6 +181,9 @@ package Landin.Targets.Firmware is
    --  "constrained reference profile", or "rp2040 profile".
    function Profile_Name (Of_Profile : Profile) return String;
 
+   --  [1990]'s Cortex-M text rules over a block's written text, or the
+   --  empty string.  Its `@` comments are removed first (D597), and each
+   --  `{name}` slot reads as a register of r0-r7.
    function Assembly_Error
      (Text : String; Naked : Boolean;
       Level : Landin.Targets.Levels.Feature_Level) return String;

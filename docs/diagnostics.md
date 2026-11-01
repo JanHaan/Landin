@@ -1015,9 +1015,13 @@ An assembly block, operand or template breaks [1630]'s block contract or
 [1990]'s register rules. Only `assembler.block` accepts operands. Each
 operand is one integer register, named by its target-wide name or chosen with
 `general`, and never a stack, frame, link or reserved register. Every `{name}`
-in the template names one operand. A naked body is exactly one block. Change
-the operand, register or template as the note says, or move the operands
-into an assembly block. A pointer crosses as `usize(p)`, and the routine around
+in the template names one operand. A naked body is exactly one block. The
+text holds instructions, one a line, with no directive or statement
+separator, and a comment only in the target's own form: `@` on Cortex-M,
+`//` on arm64, `#` on x86-64 and RV64 (D597). Its numbers are the
+assembler's and take no digit separator, so `0x1800_0000` is written
+`0x18000000`. Change the operand, register, template or text as the message
+says, or move the operands into an assembly block. A pointer crosses as `usize(p)`, and the routine around
 the block takes the storage as `ptr mut u8` or `[]mut u8`, the permission its
 callers are checked against (D440).
 
