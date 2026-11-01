@@ -29,6 +29,24 @@ ABI_REQUIRED = {'r440-native-scalars', 'r440-native-aggregates', 'r440-native-ca
                 'r440-varargs-pointer-callback', 'r450-review-backend-c-entry'}
 
 
+class OutcomeFailures(ValueError):
+    """Every outcome that failed, once the lane has given each its verdict."""
+
+    def __init__(self, stage, failures, total):
+        self.failures = failures
+        super().__init__('%d of %d %s failed:\n' % (len(failures), total, stage)
+                         + '\n'.join('  ' + failure for failure in failures))
+
+
+#  What one outcome's failure can be: a verdict refused, a file the guest
+#  never wrote, or a session that did not finish.
+OUTCOME_ERRORS = (ValueError, OSError, subprocess.TimeoutExpired)
+
+
+def first_line(error):
+    return str(error).split('\n', 1)[0]
+
+
 def metadata(path):
     """A fixture's metadata, read as the harness reads it
     (compiler/tests/fixture_meta.py)."""
@@ -363,31 +381,48 @@ class Lane:
         archive.write_bytes(guest.checked('cat ' + shlex.quote(remote_results)))
         with tarfile.open(archive) as tar:
             tar.extractall(self.bundle, filter='data')
+        #  Every outcome gets its verdict before the lane reports, so one
+        #  failure neither hides the rest nor stands for them.
+        failures = []
         for result in results:
-            label = result['label']
-            meta = fixture_meta.as_metadata(result['meta'], result['case'])
-            path = self.bundle / label
-            status = int(Path(str(path) + '.status').read_text())
-            expected_status = ((132 if self.args.arch == 'amd64' else 133) if meta.traps
-                               else meta.status_at(result['level']))
-            require(status == expected_status, f'{label}: guest status {status}, expected {expected_status}')
-            stdout = Path(str(path) + '.stdout').read_bytes()
-            expected = expected_output(meta, Path(result['base']))
-            if expected is not None:
-                require(stdout == expected, f'{label}: output mismatch {stdout[:400]!r}, expected {expected[:400]!r}')
-            if meta.get('trap_report'):
-                #  D361: the line the trap wrote before it ended, exactly:
-                #  the file is named relative to its module's root, so
-                #  where this lane put the fixture cannot change it.
-                written = stdout + (b'' if meta.get('stream', 'merged') == 'merged'
-                                    else Path(str(path) + '.stderr').read_bytes())
-                wanted = meta['trap_report'].encode()
-                require(wanted in written.split(b'\n'),
-                        f'{label}: trap report missing: {wanted!r}')
-            if meta.get('stream', 'merged') != 'merged':
-                require(not Path(str(path) + '.stderr').read_bytes(), label + ': unexpected stderr')
-            result['status'] = 'passed'
-            del result['meta'], result['base']
+            try:
+                self.outcome(result)
+                result['status'] = 'passed'
+            except OUTCOME_ERRORS as error:
+                result['status'] = 'failed'
+                result['failure'] = str(error)
+                failures.append(first_line(error))
+            result.pop('meta', None)
+            result.pop('base', None)
+        print('%s: %d of %d outcomes passed' % (self.target, len(results) - len(failures),
+                                               len(results)), flush=True)
+        if failures:
+            raise OutcomeFailures('outcomes', failures, len(results))
+
+    def outcome(self, result):
+        """Hold one executed outcome to its fixture; raise what is wrong."""
+        label = result['label']
+        meta = fixture_meta.as_metadata(result['meta'], result['case'])
+        path = self.bundle / label
+        status = int(Path(str(path) + '.status').read_text())
+        expected_status = ((132 if self.args.arch == 'amd64' else 133) if meta.traps
+                           else meta.status_at(result['level']))
+        require(status == expected_status, f'{label}: guest status {status}, expected {expected_status}')
+        stdout = Path(str(path) + '.stdout').read_bytes()
+        expected = expected_output(meta, Path(result['base']))
+        if expected is not None:
+            require(stdout == expected, f'{label}: output mismatch {stdout[:400]!r}, expected {expected[:400]!r}')
+        if meta.get('trap_report'):
+            #  D361: the line the trap wrote before it ended, exactly:
+            #  the file is named relative to its module's root, so
+            #  where this lane put the fixture cannot change it.
+            written = stdout + (b'' if meta.get('stream', 'merged') == 'merged'
+                                else Path(str(path) + '.stderr').read_bytes())
+            wanted = meta['trap_report'].encode()
+            require(wanted in written.split(b'\n'),
+                    f'{label}: trap report missing: {wanted!r}')
+        if meta.get('stream', 'merged') != 'merged':
+            require(not Path(str(path) + '.stderr').read_bytes(), label + ': unexpected stderr')
 
     def build_debugger(self):
         #  The sessions are lldb_batch.py's, which lldb_linux.py also runs
@@ -446,21 +481,35 @@ class Lane:
         result['status'] = 'passed'
 
     def debugger(self, guest, results):
+        failures = []
         for result in results:
-            if 'switch_instructions' in result:
-                self.switch_session(guest, result)
-                continue
-            label, lines = result['label'], result['lines']
-            completed = guest.run('cd ' + shlex.quote(str(self.source_root)) + '; lldb --batch -s '
-                                  + shlex.quote(str(self.remote_bundle / (label + '.lldb'))) + ' '
-                                  + shlex.quote(str(self.remote_bundle / label)), timeout=300)
-            text = (completed.stdout + completed.stderr).decode(errors='replace')
-            (self.output / (label + '-session.log')).write_text(text)
-            require(completed.returncode == 0, label + ': LLDB failed\n' + text[-4000:])
-            lldb_batch.check_source(text, lines, label)
-            print(self.target + ': ' + label + ' source stops, frames, locals and unwinding passed', flush=True)
-            result['status'] = 'passed'
+            try:
+                if 'switch_instructions' in result:
+                    self.switch_session(guest, result)
+                else:
+                    self.source_session(guest, result)
+            except OUTCOME_ERRORS as error:
+                result['status'] = 'failed'
+                result['failure'] = str(error)
+                failures.append(first_line(error))
+        print('%s: %d of %d LLDB sessions passed' % (self.target, len(results) - len(failures),
+                                                    len(results)), flush=True)
+        if failures:
+            raise OutcomeFailures('LLDB sessions', failures, len(results))
         return results
+
+    def source_session(self, guest, result):
+        """The source session's stops, frames, locals and unwinding."""
+        label, lines = result['label'], result['lines']
+        completed = guest.run('cd ' + shlex.quote(str(self.source_root)) + '; lldb --batch -s '
+                              + shlex.quote(str(self.remote_bundle / (label + '.lldb'))) + ' '
+                              + shlex.quote(str(self.remote_bundle / label)), timeout=300)
+        text = (completed.stdout + completed.stderr).decode(errors='replace')
+        (self.output / (label + '-session.log')).write_text(text)
+        require(completed.returncode == 0, label + ': LLDB failed\n' + text[-4000:])
+        lldb_batch.check_source(text, lines, label)
+        print(self.target + ': ' + label + ' source stops, frames, locals and unwinding passed', flush=True)
+        result['status'] = 'passed'
 
 
 
@@ -499,11 +548,19 @@ def build_payload(lane):
         lane.sources()
     work = work_items(args)
     def build(item):
-        result = lane.build(*item)
+        try:
+            result = lane.build(*item)
+        except OUTCOME_ERRORS as error:
+            return error
         print(lane.target + ': built ' + result['label'], flush=True)
         return result
     with ThreadPoolExecutor(max_workers=int(os.environ.get('LANDIN_FREEBSD_JOBS', '4'))) as pool:
-        results = list(pool.map(build, work))
+        built = list(pool.map(build, work))
+    #  Every build runs before the lane reports, as every outcome does.
+    failed = [first_line(one) for one in built if isinstance(one, BaseException)]
+    if failed:
+        raise OutcomeFailures('builds', failed, len(built))
+    results = built
     if args.kind == 'runtime':
         lane.instructions(results)
     return results
@@ -667,6 +724,14 @@ def main():
                 lane.processor(guest)
                 lane.execute(guest, results)
         summary['status'] = 'passed'
+    except ValueError as error:
+        #  A refusal or a failed verdict, which says itself; a traceback
+        #  would only say where this script noticed it.
+        summary['failures'] = getattr(error, 'failures', [first_line(error)])
+        print(f"FreeBSD {args.arch} {args.kind}: {error}", file=sys.stderr)
+        print(f"FreeBSD {args.arch} {args.kind}: failed; every transcript and status is in"
+              f" {args.output}, the verdicts in {args.output / 'summary.json'}", file=sys.stderr)
+        sys.exit(1)
     finally:
         (args.output / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
     print(f"FreeBSD {args.arch} {args.kind}: {len(summary['results'])} {summary['scope']} outcomes passed")

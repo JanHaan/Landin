@@ -75,7 +75,35 @@ bsdtar. Its
 a command that names a target or a sysroot, as every FreeBSD compilation does,
 because nixpkgs' wrapper adds the host's glibc to a FreeBSD build; a host
 program gets the wrapper, as `bindings/test.py` needs. The shell does not
-provide the system emulators and firmware that run the guests.
+provide the system emulators and firmware that run the guests; nixpkgs'
+QEMU does, its iPXE ROMs and arm64 UEFI firmware included, so on a Linux
+host the whole lane runs from the shell with that QEMU added. amd64 needs
+read and write access to `/dev/kvm`:
+
+```sh
+nix develop
+nix shell nixpkgs#qemu -c python3 compiler/tests/freebsd/check.py \
+    --arch=amd64 --kind=runtime \
+    --refine="$PWD/compiler/ada/build/$LANDIN_BUILD_TAG/debug/bin/refine" \
+    --output="$(mktemp -d)/freebsd-runtime"
+```
+
+The arm64 guest is emulated and looks for its firmware only under
+`/usr/share`, so name nixpkgs' with `LANDIN_FREEBSD_EFI`:
+
+```sh
+nix shell nixpkgs#qemu -c sh -c 'LANDIN_FREEBSD_EFI="$(dirname "$(command -v qemu-system-aarch64)")/../share/qemu/edk2-aarch64-code.fd" \
+    python3 compiler/tests/freebsd/check.py --arch=arm64 --kind=runtime \
+    --refine="$PWD/compiler/ada/build/$LANDIN_BUILD_TAG/debug/bin/refine" \
+    --output="$(mktemp -d)/freebsd-arm64-runtime"'
+```
+
+The first run downloads and verifies the locked FreeBSD images and base
+system into `~/.cache/landin/freebsd`. A lane runs every build and every
+outcome before it reports: it prints how many passed, lists every failure
+together, one line each, and exits 1 without a traceback; each failure's
+whole message, and every transcript and status file, is in the output
+directory and its `summary.json`.
 
 The debugger lane's sessions are `compiler/tests/debugging/lldb_batch.py`'s,
 and on a Linux host `nix develop` runs the same sessions against Linux images
