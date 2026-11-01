@@ -361,8 +361,8 @@ success rule.
 `scripts/test.sh` builds and runs the complete Linux test program on native
 Linux. Its `--host` selector retains compiler checks on the Mac. `scripts/dev-build.sh` and
 `scripts/dev-test.sh` use GPRbuild's checksum mode for fast feedback, and the
-latter accepts exact `--suite` and `--case` selectors, as many as a change
-reaches in one run, or one `--fixture`. A
+latter accepts exact `--suite`, `--case` and `--fixture` selectors, as many
+as a change reaches in one run; each named fixture executes in turn. A
 filtered run says `FILTERED` in its transcript and is not gate evidence. There
 is no separate lint or typecheck step: the pinned build treats every warning
 as an error and enforces GNAT style checks. Warnings are policy, not preference
