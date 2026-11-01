@@ -2176,11 +2176,15 @@ the profile's (D544): its core's architectural exceptions and 16 + IRQ for
 each interrupt its description names; every other slot is zero, which in the
 reference is core slots 4–10 and 12–13 and slots 21 and 42–47 of its 48.
 Other unspecified handlers enter the compiler's terminal unhandled-exception
-loop. There is no VTOR relocation, FPU frame, exclusive-access primitive,
-priority grouping or later-Thumb instruction contract.
+loop. There is no VTOR relocation, FPU frame without a float unit (D618),
+exclusive-access primitive, priority grouping or later-Thumb instruction
+contract.
 
 Reset masks configurable interrupts, initializes reserved r9 and the root
-r11 to zero, copies initialized RAM data and RAM code from their flash load
+r11 to zero, and, when the description has a float unit (D615), gives CP10
+and CP11 full access in CPACR followed by DSB and ISB, before anything can
+execute a float instruction, leaving lazy stacking at its reset default
+(D618). It then copies initialized RAM data and RAM code from their flash load
 addresses, and clears BSS. DSB and ISB precede unmasking and transfer to the
 selected entry. It does not call user module initializers [1460]/[1940],
 construct a hosted environment, allocate memory or run a scheduler. This reset
@@ -2205,9 +2209,13 @@ There is no implicit keep attached to either convention.
 
 On exception entry ARMv6-M saves r0–r3, r12, incoming LR, return PC and xPSR
 on the interrupted stack, adding the architectural alignment word when needed.
+With a float unit, an exception that interrupts a context with an active
+float state stacks ARMv7-M's extended frame, s0–s15, FPSCR and a reserved
+word as well, whose space is reserved and filled lazily (D618).
 Handler mode uses MSP; thread mode may use MSP or programmer-established PSP.
 Ordinary and interrupt routines preserve each r4–r7 register their emitted
-instructions use. An ordinary routine with no calls, no inline assembly, and no transient
+instructions use, and with a float unit d8–d15, which only an assembly block
+can name, so a framed routine that holds one saves all eight (D617). An ordinary routine with no calls, no inline assembly, and no transient
 stack changes may use SP-relative homes, leave r11 and LR untouched, and save only
 the low registers it uses. Other routines construct a previous-r11/incoming-LR
 eight-byte record before publishing r11; they also save the low register used
@@ -2217,7 +2225,9 @@ Incoming LR in an interrupt record is EXC_RETURN, not a code address.
 The epilogue uses BX LR; the hardware restores volatile state,
 flags and the interrupted stack. `0xfffffff1`, `0xfffffff9` and `0xfffffffd`
 are respectively supported returns to a handler, a thread using MSP, and a
-thread using PSP. The NVIC implements four programmable priority levels (the upper two
+thread using PSP; with a float unit `0xffffffe1`, `0xffffffe9` and
+`0xffffffed` are the same three returns from an extended frame, and the
+epilogue's BX LR takes either. The NVIC implements four programmable priority levels (the upper two
 priority bits), with fixed NMI/HardFault priorities and no priority grouping.
 Higher-priority interrupts may nest; same/lower priority ones remain pending. PRIMASK masks configurable exceptions, not NMI/HardFault
 or DMA. The compiler adds no interrupt masking around source memory events.
@@ -23851,6 +23861,188 @@ endpoints that record r0-r3, s0-s15 and the stack, holds every recorded
 word to those rows, requires the image's `Tag_ABI_VFP_args: VFP registers`
 and requires GCC to save exactly d8-d15 around a body that clobbers every
 VFP register, with sentinels in them surviving it.
+
+### D617 — With a float unit, floats are computed in VFP instructions
+
+**The tour said** nothing; docs/targets.md's Cortex-M0 selection called the
+runtime's `__aeabi_f*` and `__aeabi_d*` helpers for every float operation,
+and D616 passes floats in the bank D615's unit has.
+
+**Chosen:** with `fpv5-d16`, f32 and f64 addition, subtraction,
+multiplication and division are VADD, VSUB, VMUL and VDIV, negation VNEG,
+and a comparison VCMP for equality and inequality or VCMPE for an ordered
+relation, VMRS of the flags and a branch on the condition that is false
+when unordered. A conversion between the widths is VCVT, and a narrowing
+keeps Landin's finite-overflow guard; one from an integer of at most 32
+bits is VCVT from s32 or u32; and one to such an integer widens an f32 to
+f64 exactly, traps unless the source lies strictly between the type's
+lowest less one and highest plus one, which a NaN does not, and then
+truncates with VCVT, so D171's checks are unchanged. A conversion from or to
+a 64-bit integer keeps the runtime's base-PCS conversion or the integer
+decoding, since no VFP instruction converts 64 bits, and a float's test as
+a bool keeps its comparison of the carrier. Operands and results move
+between their homes and s0-s2 or d0-d2 by VLDR and VSTR, and a banked
+argument or result between its home and its register the same way; a
+value's home and every other move are unchanged. No arithmetic, comparison
+or 32-bit conversion helper is called. FPSCR keeps its reset default: round
+to nearest even, no flush to zero and no default NaN.
+
+Selection names no call-preserved VFP register. An assembly block's text
+can, and the compiler does not read that text for registers, so a framed
+routine that holds a block on a profile with a unit stores d8-d15 in its
+frame with VSTM after it reserves its homes, between them and the incoming
+staging, and loads them with VLDM before its epilogue, each with its CFI
+offset. That is not D471's unchecked area above the frame record, as a
+VPUSH before the record would be, so the limit check covers it. A call-free
+leaf holds no block.
+
+The assembly says `.fpu fpv5-d16`, and declares `Tag_ABI_FP_number_model`
+IEEE 754 and `Tag_ABI_VFP_args` VFP registers, which the assembler does not
+infer from its flags; the assembler and the linker are given
+`-mfloat-abi=hard -mfpu=fpv5-d16`, from which GCC selects the
+`thumb/v7e-m+dp/hard` libgcc multilib, so refine names no multilib path.
+The linker compares objects' `Tag_ABI_VFP_args` only when both declare a
+number model: a soft-float C object is then refused, and a libgcc helper
+object, which declares none, leaves the image's attribute standing. Without
+a unit the assembly, the flags and the code are as they were.
+
+**The alternatives:** helpers with the VFP variant's transport, which
+leaves the unit idle; keeping floats in core registers between operations
+with VMOV at each, which costs two moves for one load; truncating with VCVT
+and checking its saturated result, which cannot tell the type's extreme from
+an overflow; reading assembly text for d8-d15, which a register range or a
+macro defeats; and VPUSH above the frame record, which would add its 64
+bytes to every margin.
+
+**Pinned by** `runtime/float-operations-by-arguments`, whose operands are
+known only at run time, executed on QEMU's `mps2-an500` by the corpus's
+lane (D619), which requires each of its routines at none/off to hold its
+own VFP operation, its image to hold no software float routine, and every
+image the lane runs to call no float helper; the lane's every float
+fixture against its oracle; `runtime/assembly-keeps-call-preserved-floats`,
+whose block writes s16 on the lane, where the harness requires d8-d15 to
+hold its sentinels after `main`; the `cortex ABI` case `a float unit
+selects VFP code`; and the lane's ELF check of `Tag_FP_arch: FPv5/FP-D16 for
+ARMv8` and `Tag_ABI_VFP_args: VFP registers`, with
+`environments/cortex-m/firmware.py`'s refusal of a soft-float object linked
+into a hard-float image.
+
+### D618 — Reset enables the float unit, and handlers take extended frames
+
+**The tour said** nothing; [1990] had no FPU frame and three supported
+returns, and an M7's float instructions fault NOCP until CPACR grants
+CP10 and CP11.
+
+**Chosen:** with a float unit, compiler-owned reset gives CP10 and CP11
+full access in CPACR, 0xE000ED88, then DSB and ISB, right after it
+initializes r9 and r11 and before anything that can execute a float
+instruction, the copies and the entry included. FPCCR keeps its reset
+default, automatic state preservation with lazy stacking, so an exception
+that interrupts a context with an active float state, CONTROL.FPCA set,
+reserves ARMv7-M's extended frame, s0-s15, FPSCR and a reserved word beyond
+the basic eight, and fills it only if the handler executes a float
+instruction. A handler's EXC_RETURN is then `0xffffffe1`, `0xffffffe9` or
+`0xffffffed`, a handler, a thread on MSP or a thread on PSP from an extended
+frame, and its epilogue's BX LR returns through either kind. A handler is an
+ordinary framed routine and needs nothing more: s0-s15 are the hardware's
+to restore, and d8-d15 are preserved as every routine preserves them
+(D617).
+
+**The alternatives:** enabling the unit in the entry, which a float
+instruction in a module initializer or the copies could precede; disabling
+lazy stacking, which stacks 72 more bytes on every exception whether or not
+its handler uses the unit; and refusing a float in a handler, which the
+hardware already makes safe.
+
+**Pinned by** the `cortex ABI` case `a float unit selects VFP code`, which
+holds the CPACR sequence's place in the reset routine; the lane's harness,
+which enables the unit as reset does before it runs the corpus; and the
+firmware lane's `float-unit` case, compiler-owned reset on the lane taking
+an interrupt during a float computation and returning through
+`0xffffffe9`.
+
+### D619 — QEMU's mps2-an500 is the M7's emulator lane, selected by a description
+
+**The tour said** nothing; the corpus ran on the constrained reference at
+ARMv6-M on QEMU's micro:bit and, for `levels: armv7-m`, on the MPS2 AN385,
+and a float unit is a description's (D615), which a corpus program
+does not import.
+
+**Chosen:** the M7 lane is QEMU's `mps2-an500`, a Cortex-M7 r1p2 with a
+double-precision FPv5-D16, described in Landin source as
+`environments/cortex-m/lanes/descriptions/mps2_an500`: 4 MiB of code memory
+at zero, where the table is, 4 MiB of RAM at 0x2000_0000 with a 64 KiB
+stack at its top, a 16-word table and `fpv5-d16`. Unmapped space there
+reads zero and ignores writes without a fault, so nothing is placed outside
+the two. The lane compiles every program at `armv7e-m` with one more
+entry-module file, `lanes/lane-mps2-an500.ldn`, which imports the
+description, so the program reaches it unchanged; a rooted program's entry
+module is named by its files rather than its directory, since a rooted
+request names one or the other. Its derived script and limits are held to
+`descriptions.json`'s `lanes` record, the harness start enables the unit
+and paints d8-d15, and every image must carry the unit's attributes.
+
+`backend_corpus.py --lane mps2-an500` runs the whole inventory there at
+every profile, each row's own disposition included: an `execute` row
+executes, an image the lane's map cannot hold is a limit, a source refusal
+is checked with the lane's inputs, and a restriction is recorded. A row's
+`lanes` entry may give the lane a restriction of its own with its reason,
+which the lane still runs and requires to fail, so a stale one fails the
+run. `backend_acceptance.py` runs the lane after the reference's corpus.
+No limited verdict is linked again against the lane's map, which is no
+device's, and its larger map judges no reference limit stale.
+
+**The alternatives:** a `--device=` option on the corpus, which D543
+declined for refine and which would here describe a program's target
+outside its source; prepending an import to each fixture's source, which
+changes the program the oracle was written for; the STM32H753's own
+description, whose flash at 0x0800_0000 QEMU's machines do not have; and
+QEMU's `mps2-an385` Cortex-M3, which has no float unit.
+
+**Pinned by** `environments/cortex-m/backend_corpus.py`'s `--lane`, the
+inventory's `lanes` entries, `environments/cortex-m/descriptions.json`'s
+`lanes` record that the derived profile is held to, and
+`environments/cortex-m/test.py`'s lane controls.
+
+### D620 — A fibre's context on a float unit holds d8-d15 and FPSCR
+
+**The tour said** nothing; D460's switch saved forty-eight bytes, D461's
+fibre paid for one thirty-six-byte exception frame, and D472's margin was
+sized for both.
+
+**Chosen:** with a float unit the switch also pushes d8-d15 below the limit
+word and FPSCR with a word above it below them, 120 bytes in all: from the
+saved pointer, CONTROL, r8 to r11, FPSCR, a word, d8 to d15, the scratch
+word, the limit, r4 to r7 and the return address. Resuming restores FPSCR
+and d8-d15 after r8 to r11, and the CFI names each saved d register.
+`compiler.stack_prepare` lays the same frame, d8-d15 and FPSCR zero,
+FPSCR's reset default. CONTROL travels with each context as before, its
+FPCA bit included, which a prepared stack starts clear and its first float
+instruction sets. A fibre's backing holds one exception frame as D461 says,
+which with an active float state is the extended frame of D618, 108 bytes
+with its alignment word rather than thirty-six. D472's margin grows by 72
+for that frame and 72 for the larger switch frame a handler that switches
+away saves, 528 bytes, so a handler keeps the room it has without a unit,
+and the worst before a handler is 260 bytes. `core/fibre/stacks` keeps 176
+words below a stack's start rather than 128 when `compiler.feature.fp`
+holds, so a stack too small for the frame and the margin is out of memory
+there and not a trap. D470's consumer is measured on the retained
+Cortex-M0 profile, which has no unit; on one with a unit its fibre would be
+charged the extended frame.
+
+**The alternatives:** saving only the d registers a fibre used, which the
+switch cannot know; leaving FPSCR to the fibre, which lets one fibre's
+rounding mode or cumulative flags reach another; disabling lazy stacking
+around a switch, which is no help with the frame an interrupt stacks; and
+keeping D472's margin, which leaves a selected handler 124 bytes and refuses
+the corpus's own.
+
+**Pinned by** the stack-builtin fixtures `runtime/stack-switch-round-trip`,
+`runtime/stack-frame-past-limit-traps`, `runtime/stack-prepare-too-small-traps`,
+`runtime/stack-exhausted-reaches-the-handler` and the fibre fixtures on the
+mps2-an500 lane, where the harness requires d8-d15 to survive `main`; and
+the `stack report` suite's `a switch costs its frame`, whose Cortex-M
+figures with a unit are 120, 528 and 260.
 
 ### D281 — RV64's system call has the standing of `syscall` and `svc`
 

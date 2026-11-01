@@ -74,5 +74,24 @@
       "handler_slot": 20,
       "refused_slot": 21
     }
+  },
+  "lanes": {
+    "mps2-an500": {
+      "sources": {"machine": "QEMU 10.0.13's mps2-an500, measured on the locked binary: a Cortex-M7 r1p2 whose MVFR0 0x10110221 has double precision, VTOR 0, 4 MiB at 0 and 4 MiB at 0x20000000, unmapped space above them reading zero without a fault"},
+      "module": "mps2_an500",
+      "core": "cortex-m7",
+      "level": "armv7e-m",
+      "float_unit": "fpv5-d16",
+      "boot": "vector-table",
+      "regions": [
+        {"name": "CODE", "origin": 0, "length": 4194304, "access": "rx"},
+        {"name": "RAM", "origin": 536870912, "length": 4194304, "access": "rwx"}
+      ],
+      "placed": {"vectors": "CODE", "text": "CODE", "rodata": "CODE", "data": "RAM", "bss": "RAM", "stack": "RAM"},
+      "vector_address": 0,
+      "vector_words": 16,
+      "stack_top": 541065216,
+      "stack_reserved": 65536
+    }
   }
 }

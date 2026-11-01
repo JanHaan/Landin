@@ -23,12 +23,17 @@ end starting
 --  The least a prepared stack holds below its `starting`, in words: what
 --  `compiler.stack_prepare` lays at its top and the margin it keeps above
 --  its base for a failed check (D472), on every target, which is at most
---  976 bytes on a 64-bit one and 432 on a 32-bit one.  A smaller stack
---  is then out of memory here rather than a trap in the builtin.  Every
---  routine checks its own frame against the limit in its prologue
---  (D471), so how deep a task may go is the stack's business, not this
---  module's.
-least_prepared_words: usize = 128
+--  976 bytes on a 64-bit one and 432 on a 32-bit one, or 648 on a Cortex-M
+--  whose description has a float unit, whose frames hold its registers
+--  too (D620).  A smaller stack is then out of memory here rather than a
+--  trap in the builtin.  Every routine checks its own frame against the
+--  limit in its prologue (D471), so how deep a task may go is the stack's
+--  business, not this module's.
+fixed if compiler.feature.fp then
+    least_prepared_words: usize = 176
+else
+    least_prepared_words: usize = 128
+end if
 
 --  A fibre's first frame: run the task, mark the record ended, and resume
 --  the record the provider named.  Nothing resumes it again.
@@ -49,8 +54,9 @@ end first_frame
 --- can end into it. A routine of the task, or of anything it calls, whose
 --- frame would go below the stack's limit traps `stack_exhausted` in its
 --- prologue (D451, D471), before it has written there. It fails
---- `mem.out_of_memory` when `stack` is smaller than 128 words and the few
---- words the first frame keeps at its top.
+--- `mem.out_of_memory` when `stack` is smaller than 128 words, or 176 with
+--- a Cortex-M float unit, and the few words the first frame keeps at its
+--- top.
 public prepare: (escaping record: ptr mut fibre.space,
                  escaping stack: []mut u8, escaping work: any fibre.task,
                  escaping after: ptr mut fibre.space)

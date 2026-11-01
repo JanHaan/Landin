@@ -29,6 +29,13 @@ COUNTERPARTS = ROOT / 'compiler/tests/cortex-m'
 #  Cortex-M3, from the same locked binary; its RAM sits where the selected
 #  map puts it, and only the corpus runs there, because the synthetic
 #  peripheral windows are real devices on that board.
+#
+#  `armv7e-m+fpv5-d16` is no level but a lane (D619): QEMU's mps2-an500, a
+#  Cortex-M7 with FPv5-D16, whose float unit is a description's (D615), so
+#  the program reaches the lane's description, `lanes/descriptions/mps2_an500`,
+#  through one more entry-module file, `lanes/lane-mps2-an500.ldn`, which
+#  imports it; refine builds it at `level`, and hard float selects the
+#  `v7e-m+dp/hard` multilib, which GCC finds from the flags alone.
 LEVELS = {
     'armv6-m': {'flags': ['-mcpu=cortex-m0'], 'multilib': '/thumb/v6-m/nofp/',
                 'attributes': ['Tag_CPU_arch: v6S-M', 'Tag_THUMB_ISA_use: Thumb-1'],
@@ -37,13 +44,54 @@ LEVELS = {
                 'attributes': ['Tag_CPU_arch: v7', 'Tag_CPU_arch_profile: Microcontroller',
                                'Tag_THUMB_ISA_use: Thumb-2'],
                 'machine': 'mps2-an385'},
+    'armv7e-m+fpv5-d16': {
+        'flags': ['-mcpu=cortex-m7', '-mfloat-abi=hard', '-mfpu=fpv5-d16'],
+        'multilib': '/thumb/v7e-m+dp/hard/',
+        'attributes': ['Tag_CPU_arch: v7E-M', 'Tag_CPU_arch_profile: Microcontroller',
+                       'Tag_THUMB_ISA_use: Thumb-2', 'Tag_FP_arch: FPv5/FP-D16 for ARMv8',
+                       'Tag_ABI_VFP_args: VFP registers'],
+        'machine': 'mps2-an500', 'level': 'armv7e-m', 'lane': 'mps2-an500',
+        'description': 'mps2_an500'},
 }
+
+#  The lanes' descriptions, which a program reaches through the lane's file.
+LANES = HERE / 'lanes'
 
 
 def level_flags(level):
-    """FLAGS with the processor argument the level selects."""
+    """FLAGS with the processor and float arguments the level selects."""
     require(level in LEVELS, 'unknown Cortex level: ' + level)
-    return LEVELS[level]['flags'] + [f for f in FLAGS if not f.startswith('-mcpu=')]
+    own = LEVELS[level]['flags']
+    replaced = ['-mcpu='] + (['-mfloat-abi='] if any(
+        f.startswith('-mfloat-abi=') for f in own) else [])
+    return own + [f for f in FLAGS if not f.startswith(tuple(replaced))]
+
+
+def hard_float(level):
+    """Whether LEVEL's lane passes floats in the VFP bank (D616)."""
+    return '-mfloat-abi=hard' in LEVELS[level]['flags']
+
+
+def refine_level(level):
+    """The --level refine builds LEVEL's programs at."""
+    return LEVELS[level].get('level', level)
+
+
+def lane_inputs(level, inputs):
+    """INPUTS as LEVEL's lane compiles them: with its entry-module file,
+    which imports its description, and a module directory's own sources
+    in place of the directory, since a rooted request names one entry
+    directory or its files (L0002)."""
+    if 'lane' not in LEVELS[level]:
+        return list(inputs)
+    result = ['--root=' + str(LANES)]
+    for one in inputs:
+        path = Path(one)
+        if not one.startswith('-') and path.is_dir():
+            result += sorted(str(p) for p in path.glob('*.ldn'))
+        else:
+            result.append(one)
+    return result + [str(LANES / ('lane-' + LEVELS[level]['lane'] + '.ldn'))]
 
 
 #  The described devices, recorded apart from the compiler; descriptions.py
@@ -52,6 +100,10 @@ def level_flags(level):
 #  profile the corpus executes on QEMU's micro:bit.
 DESCRIPTIONS = json.loads((HERE / 'descriptions.json').read_text())['devices']
 REFERENCE = 'constrained-reference'
+#  The emulator lanes' own descriptions, recorded beside the devices', which
+#  no limited verdict is linked again against: each is a lane's map, not a
+#  device's (D619).
+LANE_DESCRIPTIONS = json.loads((HERE / 'descriptions.json').read_text())['lanes']
 
 #  What each boot image kind (D545) puts before the vector table in its
 #  region, which the harness start supplies as zero bytes: the closed set
@@ -78,7 +130,7 @@ def recorded(device=REFERENCE):
     """DEVICE's profile as descriptions.json records it, apart from the
     compiler, with the capacities a firmware build report derives (D545):
     the text region's length, and the data region's less a stack it holds."""
-    want = DESCRIPTIONS[device]
+    want = {**DESCRIPTIONS, **LANE_DESCRIPTIONS}[device]
     profile = {key: want[key] for key in FACTS if key in want}
     profile.update(device=device, stack_top=want['stack_top'], script=None)
     ram = region(profile, 'data')['length']
@@ -97,7 +149,21 @@ DERIVING = threading.Lock()
 #  module of nothing for the reference, which the library supplies when
 #  the program reaches no description.
 def probe_source(device):
+    if device in LANE_DESCRIPTIONS:
+        return 'import descriptions/%s\n' % LANE_DESCRIPTIONS[device]['module']
     return '' if device == REFERENCE else 'import descriptions/%s\n' % device
+
+
+def probe_root(device):
+    """The root DEVICE's description is found under."""
+    return LANES if device in LANE_DESCRIPTIONS else ROOT / 'devices'
+
+
+def probe_level(device):
+    """The level DEVICE's description builds at: its float unit's, or the
+    default for one without (D615)."""
+    want = {**DESCRIPTIONS, **LANE_DESCRIPTIONS}[device]
+    return ['--level=' + want['level']] if want.get('float_unit') else []
 
 
 def said_why(error):
@@ -128,9 +194,9 @@ def derived(run, refine, device=REFERENCE, where=None):
         probe = Run(out, run.tools)
         try:
             probe.command('derive-profile', [
-                refine, 'compile', '--root=' + str(ROOT / 'devices'), '--target=cortex-m0',
-                '--emit=linker-script', '--build-report=profile.json', 'profile.ldn',
-                '-o', 'profile.ld'], timeout=60)
+                refine, 'compile', '--root=' + str(probe_root(device)), '--target=cortex-m0',
+                *probe_level(device), '--emit=linker-script', '--build-report=profile.json',
+                'profile.ldn', '-o', 'profile.ld'], timeout=60)
         except CommandFailed as error:
             raise said_why(error) from None
         report = json.loads((out / 'profile.json').read_text())['firmware']
@@ -153,7 +219,7 @@ def metadata(path):
     return fixture_meta.read(path.parent)
 
 
-def session(run, port, expected, traps, before=(), profile=None):
+def session(run, port, expected, traps, before=(), profile=None, vfp=False):
     """The debugger session that runs one harness image and holds it to its oracle.
 
     EXPECTED is the exit byte the program must return, or None to observe
@@ -183,7 +249,7 @@ def session(run, port, expected, traps, before=(), profile=None):
         finish = [
             'check(fault == 3, "backend_fault is %d, expected 3" % fault)',
             'check(value("$pc") == value("&backend_fault_done"), "the program did not stop at backend_fault_done")',
-            'check(value("*(unsigned short*)*(unsigned int*)($sp+24)") == 0xde01, '
+            'check(value("*(unsigned short*)*(unsigned int*)(%d+24)" % frame_at) == 0xde01, '
             '"the stacked pc is no udf #1, the trap instruction")']
     else:
         finish = [
@@ -196,6 +262,11 @@ def session(run, port, expected, traps, before=(), profile=None):
             'check(value("$r11") == 0, "r11 is not zero at return")',
             'check([value("$r%d" % i) for i in range(4, 11)] == [44,55,66,77,88,99,100], '
             '"a callee-saved register r4-r10 was not preserved")']
+        if vfp:
+            #  D616: the harness painted d8-d15 before main and compared
+            #  them after it returned.
+            finish.append('check(value("*((unsigned int*)&backend_result+2)") == 1, '
+                          '"a callee-saved register d8-d15 was not preserved")')
     return '\n'.join([
         'set pagination off', 'set confirm off',
         f'target remote 127.0.0.1:{port}',
@@ -232,8 +303,11 @@ def session(run, port, expected, traps, before=(), profile=None):
         'fault = value("*(unsigned int*)&backend_fault")',
         'state = "fault=%d%s pc=%s" % (fault, " (HardFault)" if fault == 3 else "", where(value("$pc")))',
         'frame = None',
+        #  The harness records the stack the exception frame is on, which
+        #  is a fibre's own when the fault was taken there.
+        'frame_at = value("*((unsigned int*)&backend_fault+1)")',
         'if fault:',
-        '    frame = [value("*(unsigned int*)($sp+%d)" % (4 * i)) for i in range(8)]',
+        '    frame = [value("*(unsigned int*)(%d+%d)" % (frame_at, 4 * i)) for i in range(8)]',
         '    state += " stacked pc=%s lr=%s xpsr=%#x" % (where(frame[6]), where(frame[5] & ~1), frame[7])',
         'print("LANDIN-STATE " + state)',
         *finish,
@@ -250,14 +324,19 @@ def execute(run, elf, expected, traps, before=(), level='armv6-m', profile=None)
     """Run ELF under QEMU and hold it to its oracle; see `session`.
 
     PROFILE is the one the image was linked for, which must be the
-    constrained reference: QEMU's machines have its map, not a chip's.
+    constrained reference, or LEVEL's lane's own description: QEMU's
+    machines have their maps, not a chip's.
     """
-    require(profile is None or profile['device'] == REFERENCE,
+    lane = LEVELS[level].get('lane')
+    require(profile is None or profile['device'] in (REFERENCE, lane),
             '%s images are linked, not run: QEMU has no %s' % (
                 profile and profile['device'], profile and profile['device']))
+    require(lane is None or (profile is not None and profile['device'] == lane),
+            'a program run on the %s lane is linked for its description' % lane)
     listener, port, stub = gdb_listener()
     script = run.out / 'backend.gdb'
-    script.write_text(session(run, port, expected, traps, before, profile))
+    script.write_text(session(run, port, expected, traps, before, profile,
+                              vfp=hard_float(level)))
     argv = [str(run.bin / 'qemu-system-arm'), '-M', LEVELS[level]['machine'], '-accel',
             'tcg,thread=single', '-display', 'none', '-monitor', 'none',
             '-serial', 'none', '-kernel', str(elf), '-S', *stub]
@@ -488,6 +567,7 @@ def harness_start(run, profile, level='armv6-m', name='input-0.o'):
                 [run.arm / 'arm-eabi-gcc', *level_flags(level),
                  '-DLANDIN_VECTOR_WORDS=%d' % profile['vector_words'],
                  '-DLANDIN_BOOT_PREFIX=%d' % BOOT_PREFIX[profile['boot']],
+                 '-DLANDIN_FPU=%d' % hard_float(level),
                  '-c', HERE / 'probes/backend-start.S', '-o', obj])
     return obj
 
@@ -627,12 +707,14 @@ def build(run, refine, inputs, optimize, specialize, extra=(), linker=None,
     report gives; LINKER replaces the script for a control that places a
     routine of its own, keeping the reference's facts.
     """
-    profile = profile or derived(run, refine)
+    lane = LEVELS[level].get('lane')
+    profile = profile or derived(run, refine, lane or REFERENCE)
     flags = level_flags(level)
-    selected = [] if level == 'armv6-m' else ['--level=' + level]
+    selected = [] if level == 'armv6-m' else ['--level=' + refine_level(level)]
     assembly = run.out / 'program.s'
     try:
-        run.command('compile', [refine, *inputs, '--target=cortex-m0', *selected, '--emit=asm',
+        run.command('compile', [refine, *lane_inputs(level, inputs), '--target=cortex-m0',
+                    *selected, '--emit=asm',
                     '--optimize=' + optimize, '--specialize=' + specialize,
                     '-o', assembly, '--build-report=' + str(run.out / 'build.json')],
                     timeout=60)
@@ -660,14 +742,14 @@ def build(run, refine, inputs, optimize, specialize, extra=(), linker=None,
     attributes = run.command('elf', [run.arm / 'arm-eabi-readelf', '-h', '-A', '-S', elf])
     require(all(tag in attributes for tag in LEVELS[level]['attributes']),
             'ELF does not describe the selected ' + level + ' profile')
-    require('Tag_ARM_ISA_use: Yes' not in attributes and 'VFP registers' not in attributes,
+    require('Tag_ARM_ISA_use: Yes' not in attributes
+            and ('VFP registers' in attributes) == hard_float(level),
             'ELF requires an unsupported instruction or floating ABI')
     run.command('disassembly', [run.arm / 'arm-eabi-objdump', '-dr', elf])
     run.command('size', [run.arm / 'arm-eabi-size', elf])
     require(not run.command('undefined', [run.arm / 'arm-eabi-nm', '-u', elf]).strip(),
             'freestanding test image has unresolved dependencies')
-    library = Path(run.command('libgcc-path', [run.arm / 'arm-eabi-gcc',
-                   *LEVELS[level]['flags'], '-mthumb', '-mfloat-abi=soft',
+    library = Path(run.command('libgcc-path', [run.arm / 'arm-eabi-gcc', *flags,
                    '-print-libgcc-file-name']).strip()).resolve(strict=True)
     require(LEVELS[level]['multilib'] in str(library), 'wrong Arm runtime multilib')
     (run.out / 'helpers.json').write_text(json.dumps({
@@ -691,9 +773,11 @@ def fixture(run, refine, name, optimize, specialize, level='armv6-m',
     require(not meta.get('run_args') and not meta.get('run_files')
             and not meta.get('run_expect') and not meta.get('stdin'),
             'fixture requires hosted input/output')
-    elf = build(run, refine, inputs, optimize, specialize, level=level)
+    lane = LEVELS[level].get('lane')
+    profile = derived(run, refine, lane) if lane else None
+    elf = build(run, refine, inputs, optimize, specialize, level=level, profile=profile)
     execute(run, elf, 1 if name == 'runtime/fixed-conditional-runtime' else
-            meta.status_at(level), meta.traps, level=level)
+            meta.status_at(refine_level(level)), meta.traps, level=level, profile=profile)
     result = {'fixture': name, 'optimize': optimize, 'specialize': specialize,
               'status': 'passed'}
     if include_compiler_sha256:

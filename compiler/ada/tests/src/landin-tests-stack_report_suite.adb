@@ -1,9 +1,11 @@
 with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 
+with Landin.Backend.Dispatch;
 with Landin.Driver;
 with Landin.Platform;
 with Landin.Platform.Native;
+with Landin.Targets;
 with Landin.Testing.Fakes;
 
 --  D447's stack-depth report (D467, D468), through the driver on a fake
@@ -276,6 +278,22 @@ package body Landin.Tests.Stack_Report_Suite is
                Target & ": a switch adds its frame, not the resumed stack");
          end;
       end loop;
+      --  D620: a Cortex-M description with a float unit saves d8-d15 and
+      --  FPSCR too, and its margin pays for the extended exception frame
+      --  and that larger switch.
+      declare
+         use type Landin.Targets.Byte_Count;
+         Float : constant Landin.Backend.Dispatch.Stack_Facts :=
+           Landin.Backend.Dispatch.Stack_Facts_Of
+             (Landin.Targets.Cortex_M, Float => True);
+      begin
+         Landin.Testing.Check
+           (Item, Float.Switch_Bytes = 120 and then Float.Prepared_Bytes = 120
+              and then Float.Limit_Margin = 528
+              and then Float.Unchecked = 64
+              and then Float.Handler_Entry = 260,
+            "a float unit's switch, first frame, margin and handler entry");
+      end;
    end A_Switch_Costs_Its_Frame;
 
    Trap_Program : constant String :=

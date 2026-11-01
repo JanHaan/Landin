@@ -3,6 +3,7 @@ with Ada.Strings.Unbounded;
 with Landin.Backend;
 with Landin.Backend.Arm32_ABI;
 with Landin.Backend.Cortex_M;
+with Landin.Backend.Toolchain;
 with Landin.Build_Reports;
 with Landin.Build_Reports.Firmware;
 with Landin.Diagnostics;
@@ -30,6 +31,7 @@ with Landin.Targets;
 with Landin.Targets.Capabilities;
 with Landin.Targets.Firmware;
 with Landin.Targets.Layouts;
+with Landin.Targets.Levels;
 with Landin.Types;
 
 package body Landin.Tests.Cortex_Suite is
@@ -2424,13 +2426,16 @@ package body Landin.Tests.Cortex_Suite is
    --  [1630]'s one instruction, from D230's shorthand and from the named
    --  form, and the verifier's refusal of each way it can be malformed.
    --  Mode 8 is the per-target evidence: a register [1990]'s Cortex-M0
-   --  table never answers for.
+   --  table never answers for.  Modes 11 and 12 are the M7 float profile's
+   --  (D615): the same unit with a description of a cortex-m7 with
+   --  fpv5-d16, refusing r8 and a single-precision register for an
+   --  integer operand.
    procedure Assembly_IR (Item : in out Landin.Testing.Context) is
       use type IR.Verifier.Fault_Kind;
       use type IR.Slot_Id;
       use type IR.Assembly_Direction;
    begin
-      for Mode in 1 .. 10 loop
+      for Mode in 1 .. 12 loop
          declare
             Work : Landin.Stages.Compilation :=
               Landin.Stages.Create (T.Cortex_M);
@@ -2543,6 +2548,19 @@ package body Landin.Tests.Cortex_Suite is
                            IR.Operand_At
                              (IR.Output, First.Name, "", Ty.U64,
                               Other_Slot));
+                     when 11 | 12 =>
+                        IR.Set_Firmware_Profile
+                          (Code.all,
+                           (Present => True,
+                            Core => Landin.Targets.Firmware.Cortex_M7,
+                            Float => Landin.Targets.Firmware.FPv5_D16,
+                            Vector_Count => 16, others => <>));
+                        IR.Testing_Support.Overwrite_Assembly_Operand
+                          (Code.all, 1, Assembly_Value, 1,
+                           IR.Operand_At
+                             (IR.Output, First.Name,
+                              (if Mode = 11 then "r8" else "s0"), Ty.U32,
+                              First.Output));
                      when others =>
                         --  An output may not replace the input parameter.
                         IR.Testing_Support.Overwrite_Assembly_Operand
@@ -2561,7 +2579,7 @@ package body Landin.Tests.Cortex_Suite is
                   Landin.Testing.Check
                     (Item, Found /= IR.Verifier.Nothing_Wrong,
                      "malformed assembly refuses before selection");
-                  if Mode in 3 | 8 then
+                  if Mode in 3 | 8 | 11 | 12 then
                      Landin.Testing.Check
                        (Item, Found = IR.Verifier.Assembly_Register_Refused,
                         "the register table refuses it");
@@ -3082,6 +3100,175 @@ package body Landin.Tests.Cortex_Suite is
           & "    assembler.block(""bx lr"")" & LF & "end stage" & LF);
    end Device_Descriptions;
 
+   --  D616-D618: a description with fpv5-d16 makes the build hard-float.
+   --  Its assembly names the unit and the VFP attributes, computes in VFP
+   --  instructions with no float helper, passes floats in the bank, keeps
+   --  d8-d15 where an assembly block is, and its reset grants CP10 and
+   --  CP11 before the copies; the same program without the unit is the
+   --  soft-float build it was.  The tools are told hard float with it.
+   procedure Float_Unit_Code (Item : in out Landin.Testing.Context);
+   procedure Float_Unit_Code (Item : in out Landin.Testing.Context) is
+      LF_Text : constant String := [1 => LF];
+      Program : constant String :=
+        "import descriptions/dev" & LF_Text
+        & "mut seen: [2]f64" & LF_Text
+        & "mix: (a: f32, b: f64, c: f32) -> (r: f64) =" & LF_Text
+        & "    r = f64(a * c) + b / 3.0 - f64(-c)" & LF_Text
+        & "end mix" & LF_Text
+        & "kept: (x: u32) -> (r: u32) =" & LF_Text
+        & "    r = assembler.block(""vmov s16, {x}\nvmov {r}, s16"","
+        & " out r: u32 at general, in x: u32 at general = x)" & LF_Text
+        & "end kept" & LF_Text
+        & "start: () -> none =" & LF_Text
+        & "    seen[0] = mix(1.5, seen[1], 2.0)" & LF_Text
+        & "    if seen[0] < seen[1] then" & LF_Text
+        & "        seen[1] = f64(kept(u32(seen[0]) + 1))" & LF_Text
+        & "        seen[0] = f64(i32(seen[1]))" & LF_Text
+        & "    end if" & LF_Text
+        & "end start" & LF_Text;
+      Description : constant String :=
+        "compiler.device(""dev"")" & LF_Text
+        & "compiler.core(""cortex-m7"")" & LF_Text
+        & "compiler.vectors(16)" & LF_Text
+        & "compiler.boot(""vector-table"")" & LF_Text
+        & "linker.region(""CODE"", 0, 64 * 1024, ""rx"")" & LF_Text
+        & "linker.region(""RAM"", 0x2000_0000, 64 * 1024, ""rwx"")" & LF_Text
+        & "linker.place(""vectors"", ""CODE"")" & LF_Text
+        & "linker.place(""text"", ""CODE"")" & LF_Text
+        & "linker.place(""rodata"", ""CODE"")" & LF_Text
+        & "linker.place(""data"", ""RAM"")" & LF_Text
+        & "linker.place(""bss"", ""RAM"")" & LF_Text
+        & "linker.place(""stack"", ""RAM"", 4 * 1024)" & LF_Text;
+
+      function Emitted (Unit : Boolean) return String;
+      function Emitted (Unit : Boolean) return String is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : Landin.Platform.Path_List;
+         Text : U.Unbounded_String;
+         Status : Landin.Platform.Read_Status;
+      begin
+         Host.Add_Firmware_Library;
+         Host.Add_Directory ("/w");
+         Host.Add_Directory ("/w/app");
+         Host.Add_Directory ("/w/devices");
+         Host.Add_Directory ("/w/devices/descriptions");
+         Host.Add_Directory ("/w/devices/descriptions/dev");
+         Host.Add_File ("/w/app/main.ldn", Program);
+         Host.Add_File ("/w/devices/descriptions/dev/memory.ldn",
+           (if Unit then "compiler.float_unit(""fpv5-d16"")" & LF_Text
+            else "") & Description);
+         Args.Append ("--root=/w/devices");
+         Args.Append ("--target=cortex-m0");
+         Args.Append ("--level=armv7e-m");
+         Args.Append ("--firmware-entry=start");
+         Args.Append ("--debug=lines");
+         Args.Append ("--emit=asm");
+         Args.Append ("-o");
+         Args.Append ("/w/p.s");
+         Args.Append ("/w/app");
+         declare
+            Ran : constant Landin.Driver.Outcome :=
+              Landin.Driver.Execute (Args, Host, Tools);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Ran.Status, Landin.Driver.Status_Success,
+               U.To_String (Ran.Report));
+         end;
+         Host.Read_File ("/w/p.s", Text, Status);
+         return U.To_String (Text);
+      end Emitted;
+
+      Hard : constant String := Emitted (True);
+      Soft : constant String := Emitted (False);
+      Reset : constant Natural := Ada.Strings.Fixed.Index
+        (Hard, "_landin_firmware_reset:");
+      Kept_At : constant Natural := Ada.Strings.Fixed.Index (Hard, "kept:");
+      Mix_At : constant Natural := Ada.Strings.Fixed.Index (Hard, "mix:");
+      Hard_Arguments : constant Landin.Platform.Path_List :=
+        Landin.Backend.Toolchain.Assemble_Arguments
+          ("p.s", "p.o", T.Cortex_M,
+           Level => Landin.Targets.Levels.Level_Named
+             (T.Cortex_M, "armv7e-m"),
+           Float => Landin.Targets.Firmware.FPv5_D16);
+      Soft_Arguments : constant Landin.Platform.Path_List :=
+        Landin.Backend.Toolchain.Assemble_Arguments
+          ("p.s", "p.o", T.Cortex_M);
+   begin
+      Landin.Testing.Check
+        (Item, Contains (Hard, HT & ".fpu fpv5-d16" & LF)
+           and then Contains
+             (Hard, HT & ".eabi_attribute Tag_ABI_FP_number_model, 3" & LF)
+           and then Contains
+             (Hard, HT & ".eabi_attribute Tag_ABI_VFP_args, 1" & LF),
+         "the unit and the VFP variant's attributes are declared");
+      Landin.Testing.Check
+        (Item, Contains (Hard, "vmul.f32 s0, s0, s1")
+           and then Contains (Hard, "vdiv.f64 d0, d0, d1")
+           and then Contains (Hard, "vadd.f64 d0, d0, d1")
+           and then Contains (Hard, "vsub.f64 d0, d0, d1")
+           and then Contains (Hard, "vneg.f32 s0, s0")
+           and then Contains (Hard, "vcvt.f64.f32 d1, s0")
+           and then Contains (Hard, "vcmpe.f64 d0, d1")
+           and then Contains (Hard, "vmrs APSR_nzcv, fpscr")
+           and then Contains (Hard, "vcvt.s32.f64 s0, d0")
+           and then Contains (Hard, "vcvt.u32.f64 s0, d0")
+           and then Contains (Hard, "vcvt.f64.u32 d1, s0")
+           and then Contains (Hard, "vcvt.f64.s32 d1, s0")
+           and then not Contains (Hard, "__aeabi_f")
+           and then not Contains (Hard, "__aeabi_d")
+           and then not Contains (Hard, "__aeabi_i2")
+           and then not Contains (Hard, "__aeabi_ui2"),
+         "floats are computed in VFP instructions and no helper");
+      Landin.Testing.Check
+        (Item, Mix_At > 0
+           and then Contains (Hard (Mix_At .. Hard'Last), "vstr s0, [r6]")
+           and then Contains (Hard (Mix_At .. Hard'Last), "vstr d1, [r6]")
+           and then Contains (Hard (Mix_At .. Hard'Last), "vstr s1, [r6]")
+           and then Contains (Hard, "vldr s1, [r6]" & LF & HT & "bl mix"),
+         "D616: a, b and c arrive in s0, d1 and the back-filled s1, and"
+         & " the call loads them there");
+      Landin.Testing.Check
+        (Item, Kept_At > 0
+           and then Contains (Hard (Kept_At .. Hard'Last),
+                              "vstmia r6, {d8-d15}")
+           and then Contains (Hard (Kept_At .. Hard'Last),
+                              "vldmia r6, {d8-d15}")
+           and then Contains (Hard (Kept_At .. Hard'Last), ".cfi_offset d8,")
+           and then Contains (Hard (Kept_At .. Hard'Last),
+                              ".cfi_restore d15")
+           and then Ada.Strings.Fixed.Count (Hard, "vstmia r6, {d8-d15}") = 1,
+         "the routine holding an assembly block keeps d8-d15, and no other");
+      Landin.Testing.Check
+        (Item, Reset > 0
+           and then Contains (Hard (Reset .. Hard'Last),
+             "mov r11, r0" & LF & "ldr r0, =0xe000ed88" & LF
+             & "ldr r1, [r0]" & LF & "movs r2, #15" & LF
+             & "lsls r2, r2, #20" & LF & "orrs r1, r2" & LF
+             & "str r1, [r0]" & LF & "dsb sy" & LF & "isb sy" & LF
+             & "ldr r0, =_landin_firmware_data_load"),
+         "D618: reset grants CP10 and CP11 before the copies");
+      Landin.Testing.Check
+        (Item, not Contains (Soft, ".fpu")
+           and then not Contains (Soft, "Tag_ABI_VFP_args")
+           and then not Contains (Soft, "0xe000ed88")
+           and then not Contains (Soft, "vstmia")
+           and then Contains (Soft, "bl __aeabi_dadd")
+           and then Contains (Soft, "bl __aeabi_fmul")
+           and then Contains (Soft, "bl __aeabi_dcmplt"),
+         "without the unit the build is soft-float");
+      Landin.Testing.Check
+        (Item, (for some A of Hard_Arguments => A = "-mfloat-abi=hard")
+           and then (for some A of Hard_Arguments => A = "-mfpu=fpv5-d16")
+           and then not (for some A of Hard_Arguments
+                           => A = "-mfloat-abi=soft")
+           and then (for some A of Soft_Arguments
+                       => A = "-mfloat-abi=soft")
+           and then not (for some A of Soft_Arguments
+                           => Ada.Strings.Fixed.Index (A, "-mfpu") = 1),
+         "the assembler is told hard float and the unit, or soft float");
+   end Float_Unit_Code;
+
    --  D588: the boot ROM's checksum, and the object it is sealed into.
    procedure Boot_Stage_Seal (Item : in out Landin.Testing.Context);
    procedure Boot_Stage_Seal (Item : in out Landin.Testing.Context) is
@@ -3453,6 +3640,9 @@ package body Landin.Tests.Cortex_Suite is
       Landin.Testing.Register
         (Into, "cortex ABI", "device descriptions select their profiles",
          Device_Descriptions'Access);
+      Landin.Testing.Register
+        (Into, "cortex ABI", "a float unit selects VFP code",
+         Float_Unit_Code'Access);
       Landin.Testing.Register
         (Into, "cortex ABI", "the reference derives D229's script",
          Reference_Script'Access);

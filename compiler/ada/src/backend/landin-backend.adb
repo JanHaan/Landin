@@ -1633,7 +1633,8 @@ package body Landin.Backend is
    --  selected handlers that run on an overflowed stack, at every profile,
    --  with what runs before them.
    function Stack_Limit_Margin
-     (Facts : Landin.Targets.Target_Facts) return Landin.Targets.Byte_Count
+     (Facts : Landin.Targets.Target_Facts;
+      Float : Boolean := False) return Landin.Targets.Byte_Count
    is
    begin
       case Landin.Targets.Capabilities.Backend_For (Facts) is
@@ -1644,7 +1645,12 @@ package body Landin.Backend is
          when Landin.Targets.Capabilities.RV64_ELF =>
             return 768;
          when Landin.Targets.Capabilities.Cortex_M0_ELF =>
-            return 384;
+            --  D620: the extended exception frame below a checked frame,
+            --  and the larger switch frame a handler that switches away
+            --  saves, each 72 bytes more.
+            return 384 + (if Float
+                          then VFP_Exception_Bytes + VFP_Switch_Bytes
+                          else 0);
          when Landin.Targets.Capabilities.No_Backend =>
             return 0;
       end case;
@@ -1670,7 +1676,8 @@ package body Landin.Backend is
    --  and RV64's frame record with a call that pushes nothing, and
    --  Cortex-M0's pushed registers with D461's thirty-six bytes.
    function Handler_Entry_Bytes
-     (Facts : Landin.Targets.Target_Facts) return Landin.Targets.Byte_Count
+     (Facts : Landin.Targets.Target_Facts;
+      Float : Boolean := False) return Landin.Targets.Byte_Count
    is
    begin
       case Landin.Targets.Capabilities.Backend_For (Facts) is
@@ -1681,7 +1688,7 @@ package body Landin.Backend is
             | Landin.Targets.Capabilities.RV64_ELF =>
             return 144;
          when Landin.Targets.Capabilities.Cortex_M0_ELF =>
-            return 188;
+            return 188 + (if Float then VFP_Exception_Bytes else 0);
          when Landin.Targets.Capabilities.No_Backend =>
             return 0;
       end case;

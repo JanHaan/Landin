@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: D617 an assembly block that names a call-preserved VFP register on a float unit's profile has its routine keep d8-d15, and its integer operand passes through
+constructs: 1500, 1630, 1990
+program: main.ldn
+status: 42
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

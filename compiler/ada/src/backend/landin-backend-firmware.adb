@@ -5,6 +5,7 @@ package body Landin.Backend.Firmware is
    package Profiles renames Landin.Targets.Firmware;
    package US renames Ada.Strings.Unbounded;
    use type Landin.Targets.Byte_Count;
+   use type Landin.Targets.Firmware.Float_Unit;
 
    LF : constant Character := Character'Val (10);
 
@@ -104,6 +105,18 @@ package body Landin.Backend.Firmware is
         & "movs r0, #0" & LF
         & "mov r9, r0" & LF
         & "mov r11, r0" & LF
+        --  D618: CP10 and CP11 full access, before anything can execute
+        --  a float instruction, which faults NOCP until then.  Lazy
+        --  stacking keeps its reset default.
+        & (if Profile.Float = Profiles.No_Float_Unit then ""
+           else "ldr r0, =0xe000ed88" & LF
+             & "ldr r1, [r0]" & LF
+             & "movs r2, #15" & LF
+             & "lsls r2, r2, #20" & LF
+             & "orrs r1, r2" & LF
+             & "str r1, [r0]" & LF
+             & "dsb sy" & LF
+             & "isb sy" & LF)
         & "ldr r0, =_landin_firmware_data_load" & LF
         & "ldr r1, =_landin_firmware_data_start" & LF
         & "ldr r2, =_landin_firmware_data_end" & LF

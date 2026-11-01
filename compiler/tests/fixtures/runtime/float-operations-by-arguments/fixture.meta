@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: f32 and f64 arithmetic, negation, comparison and conversion of operands known only at run time give their IEEE 754 values
+constructs: 0170, 0210, 0230, 0240, 0290, 0310, 0350, 1880, 1890, 1940
+program: main.ldn
+status: 42
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

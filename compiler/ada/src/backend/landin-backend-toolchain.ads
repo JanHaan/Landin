@@ -40,6 +40,7 @@
 
 with Landin.Platform;
 with Landin.Targets;
+with Landin.Targets.Firmware;
 with Landin.Targets.Levels;
 
 package Landin.Backend.Toolchain is
@@ -137,11 +138,16 @@ package Landin.Backend.Toolchain is
    --  the runtime and records the level that the build assumed (D255).  On
    --  x86-64 the assembler is held to the level at the baseline too; on the
    --  M profile the baseline keeps naming its core, as it always did.
+   --  D617: a Cortex-M description's float unit selects hard float and
+   --  the unit for the assembler and the linker, and through them the
+   --  libgcc multilib; without one the tools are told soft float.
    function Assemble_Arguments
      (Assembly, Output : String; Facts : Landin.Targets.Target_Facts;
       Debug : Boolean := False;
       Level : Landin.Targets.Levels.Feature_Level :=
-        Landin.Targets.Levels.Default_Level (Landin.Targets.Cortex_M))
+        Landin.Targets.Levels.Default_Level (Landin.Targets.Cortex_M);
+      Float : Landin.Targets.Firmware.Float_Unit :=
+        Landin.Targets.Firmware.No_Float_Unit)
       return Landin.Platform.Path_List
      with Pre => Landin.Targets.Levels.Belongs_To (Level, Facts);
 
@@ -159,7 +165,9 @@ package Landin.Backend.Toolchain is
       Threads : Boolean := False;
       Directories : Landin.Platform.Path_List :=
         Landin.Platform.No_Arguments;
-      Script : String := "")
+      Script : String := "";
+      Float : Landin.Targets.Firmware.Float_Unit :=
+        Landin.Targets.Firmware.No_Float_Unit)
       return Landin.Platform.Path_List
      with Pre => Landin.Targets.Levels.Belongs_To (Level, Facts);
    --  Script, when given, is a developer's linker script for a Cortex-M

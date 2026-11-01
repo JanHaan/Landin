@@ -394,7 +394,8 @@ package body Landin.Backend.Arm32_ABI is
         (Of_Unit, Parameters, Results, Facts,
          (if Is_C then External_C else Internal_Landin),
          IR.Signature_Errors (Of_Unit, Signature) /= IR.No_Atom_Set,
-         Maximum, (if Is_C then Fixed else Natural'Last));
+         Maximum, (if Is_C then Fixed else Natural'Last),
+         Uses_VFP (Of_Unit));
    end Call_Plan;
 
    function Signature_Plan
@@ -421,7 +422,7 @@ package body Landin.Backend.Arm32_ABI is
          (if IR.Signature_Uses_C_ABI (Of_Unit, Signature)
           then External_C else Internal_Landin),
          IR.Signature_Errors (Of_Unit, Signature) /= IR.No_Atom_Set,
-         Maximum);
+         Maximum, VFP => Uses_VFP (Of_Unit));
    end Signature_Plan;
 
 end Landin.Backend.Arm32_ABI;

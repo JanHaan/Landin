@@ -57,8 +57,10 @@ package Landin.Backend.Dispatch is
       Handler_Entry  : Landin.Targets.Byte_Count := 0;
    end record;
 
+   --  Float: whether the Cortex-M profile has a float unit (D620).
    function Stack_Facts_Of
-     (Facts : Landin.Targets.Target_Facts) return Stack_Facts;
+     (Facts : Landin.Targets.Target_Facts;
+      Float : Boolean := False) return Stack_Facts;
 
    --  D471: whether the program holds a `compiler.stack_prepare`, so that
    --  its routines check their frames against a stack's limit and its

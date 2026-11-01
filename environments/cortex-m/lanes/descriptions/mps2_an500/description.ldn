@@ -1,0 +1,24 @@
+-- QEMU's mps2-an500, Arm's MPS2 FPGA image AN500: a Cortex-M7 r1p2 with
+-- FPv5-D16, the corpus's emulator lane for the M7 (D619). Not a chip and
+-- not a board refine supports: the lane's map, written by hand from the
+-- locked QEMU 10.0.13's machine, as the coordinator's probe measured it.
+--
+-- QEMU puts 4 MiB of memory at 0, where the table is (VTOR is 0), and
+-- 4 MiB at 0x2000_0000. Unmapped space above either reads zero and ignores
+-- writes, with no fault, so nothing is placed outside them, and a program
+-- that runs away hangs until the lane's deadline rather than faulting.
+-- The lane runs no interrupt, so the table holds the core's slots alone.
+
+compiler.device("mps2-an500")
+compiler.core("cortex-m7")
+compiler.float_unit("fpv5-d16")
+compiler.vectors(16)
+compiler.boot("vector-table")
+linker.region("CODE", 0x0000_0000, 4 * 1024 * 1024, "rx")
+linker.region("RAM", 0x2000_0000, 4 * 1024 * 1024, "rwx")
+linker.place("vectors", "CODE")
+linker.place("text", "CODE")
+linker.place("rodata", "CODE")
+linker.place("data", "RAM")
+linker.place("bss", "RAM")
+linker.place("stack", "RAM", 64 * 1024)

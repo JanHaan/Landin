@@ -19,6 +19,11 @@ def execute(parent, refine):
     corpus_out = root / 'corpus'
     corpus_out.mkdir()
     summary = corpus(corpus_out, parent.tools, refine)
+    #  D619: the whole inventory again on the M7 lane, its float unit's
+    #  level and description.
+    lane_out = root / 'corpus-mps2-an500'
+    lane_out.mkdir()
+    lane = corpus(lane_out, parent.tools, refine, lane='mps2-an500')
     def control(item):
         opt, spec, kind = item
         out = root / (kind + '-' + opt + '-' + spec)
@@ -59,6 +64,7 @@ def execute(parent, refine):
     instruction_controls(run, derived(run, refine))
     require(sha(refine) == compiler_hash, 'compiler changed during embedded execution')
     record = {'status': 'passed', 'compiler_sha256': compiler_hash,
-              'corpus_rows': len(summary['results']), 'controls': controls,
+              'corpus_rows': len(summary['results']),
+              'lane_rows': {'mps2-an500': len(lane['results'])}, 'controls': controls,
               'independent_instruction_controls': 'passed'}
     (root / 'result.json').write_text(json.dumps(record, indent=2)+'\n')

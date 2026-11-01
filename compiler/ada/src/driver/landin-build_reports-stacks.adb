@@ -8,6 +8,7 @@ with Landin.Backend;
 with Landin.Backend.Dispatch;
 with Landin.Backend.Entry_Point;
 with Landin.Json;
+with Landin.Targets.Firmware;
 with Landin.Memory;
 with Landin.Resolution;
 with Landin.Source;
@@ -156,7 +157,10 @@ package body Landin.Build_Reports.Stacks is
       Facts : constant Landin.Targets.Target_Facts :=
         Landin.Stages.Target (Context);
       Machine : constant Landin.Backend.Dispatch.Stack_Facts :=
-        Landin.Backend.Dispatch.Stack_Facts_Of (Facts);
+        Landin.Backend.Dispatch.Stack_Facts_Of
+          (Facts, Landin.Targets.Firmware."/="
+             (IR.Firmware_Profile (Unit).Float,
+              Landin.Targets.Firmware.No_Float_Unit));
       --  D491: the C library's `write`, whose stack is not known here, is
       --  open only where the report calls it on the stack that failed: a
       --  program that prepares a stack calls it on the report's own.

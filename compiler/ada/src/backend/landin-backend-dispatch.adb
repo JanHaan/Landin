@@ -66,18 +66,22 @@ package body Landin.Backend.Dispatch is
    --  `write`; arm64's keeps a frame record and calls `write` off Linux;
    --  RV64's keeps a frame record.
    function Stack_Facts_Of
-     (Facts : Landin.Targets.Target_Facts) return Stack_Facts
+     (Facts : Landin.Targets.Target_Facts;
+      Float : Boolean := False) return Stack_Facts
    is
       use type Landin.Targets.Capabilities.Hosted_System;
       Linux : constant Boolean :=
         Landin.Targets.Capabilities.Hosted_System_Of (Facts)
           = Landin.Targets.Capabilities.Linux;
       Margin : constant Landin.Targets.Byte_Count :=
-        Landin.Backend.Stack_Limit_Margin (Facts);
+        Landin.Backend.Stack_Limit_Margin (Facts, Float);
       Unchecked : constant Landin.Targets.Byte_Count :=
         Landin.Backend.Unchecked_Stack_Bytes (Facts);
       Before : constant Landin.Targets.Byte_Count :=
-        Landin.Backend.Handler_Entry_Bytes (Facts);
+        Landin.Backend.Handler_Entry_Bytes (Facts, Float);
+      Switch : constant Landin.Targets.Byte_Count :=
+        Landin.Targets.Byte_Count
+          (48 + (if Float then Landin.Backend.VFP_Switch_Bytes else 0));
    begin
       case Landin.Targets.Capabilities.Backend_For (Facts) is
          when Landin.Targets.Capabilities.X86_64_ELF =>
@@ -101,7 +105,7 @@ package body Landin.Backend.Dispatch is
                     Limit_Margin => Margin, Unchecked => Unchecked,
                     Handler_Entry => Before);
          when Landin.Targets.Capabilities.Cortex_M0_ELF =>
-            return (Switch_Bytes => 48, Prepared_Bytes => 48,
+            return (Switch_Bytes => Switch, Prepared_Bytes => Switch,
                     Entry_Bytes => 0, Report_Bytes => 0,
                     Report_Foreign => False,
                     Limit_Margin => Margin, Unchecked => Unchecked,

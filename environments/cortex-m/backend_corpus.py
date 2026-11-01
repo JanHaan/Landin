@@ -14,11 +14,15 @@ import sys
 from backend import (BOOT_PREFIX, HERE, LEVELS, ROOT, COUNTERPARTS, DESCRIPTIONS,
                      MATERIALIZATION, REFERENCE, ImageLimit, build, derived, describe_routines, describe_sizes,
                      execute as qemu, fixture, harness_start, image_contract, image_sizes,
-                     level_flags, levels_of, link, measure_overflow, metadata, region)
+                     lane_inputs, level_flags, levels_of, link, measure_overflow, metadata,
+                     refine_level, region)
 from run import CommandFailed, Run, require, workers
 from setup import DEFAULT, installed_tools, sha, supported_host
 
 PROFILES = [('none', 'off'), ('size', 'off'), ('size', 'auto'), ('speed', 'auto')]
+#  D619: each emulator lane the whole inventory also runs on, and the level
+#  key of backend.LEVELS that builds and runs it there.
+LANES = {'mps2-an500': 'armv7e-m+fpv5-d16'}
 SPECIALIZATION_PROFILES = [('none', 'all'), ('speed', 'all')]
 INVENTORY = 'compiler/tests/cortex-m/corpus.json'
 RULES = 'environments/cortex-m/README.md#the-corpus-inventory'
@@ -58,6 +62,14 @@ def inventory():
     hosted = []
     for name, row in rows.items():
         require(row['mode'] in ('execute', 'refuse', 'restriction'), 'unknown corpus disposition')
+        #  D619: a lane's own disposition of an execute row, which the lane
+        #  still runs and requires to fail, so a stale one is found.
+        for lane, own in row.get('lanes', {}).items():
+            require(lane in LANES and row['mode'] == 'execute'
+                    and own.get('mode') == 'restriction' and bool(own.get('reason')),
+                    '%s: a "lanes" entry names a corpus lane (%s) of an execute row, with'
+                    ' "mode": "restriction" and its reason (see %s)'
+                    % (name, ', '.join(LANES), RULES))
         meta = metadata(ROOT / 'compiler/tests/fixtures' / name / 'fixture.meta')
         if row['mode'] == 'execute' and (said := hosted_oracle(meta)):
             hosted.append('  %s %s' % (name, said))
@@ -122,13 +134,14 @@ def first_diagnostic(log):
     return next((line.strip() for line in log.splitlines() if line.startswith('error[')), '')
 
 
-def source_refusal(run, refine, name, row):
+def source_refusal(run, refine, name, row, level='armv6-m'):
     base = ROOT / 'compiler/tests/fixtures' / name
     meta = metadata(base / 'fixture.meta')
-    inputs = meta.module_arguments(base)
+    inputs = lane_inputs(level, meta.module_arguments(base))
+    selected = [] if level == 'armv6-m' else ['--level=' + refine_level(level)]
     try:
-        run.command('compile-refusal', [refine, *inputs, '--target=cortex-m0', '--emit=asm',
-                    '-o', run.out / 'refused.s'], timeout=900)
+        run.command('compile-refusal', [refine, *inputs, '--target=cortex-m0', *selected,
+                    '--emit=asm', '-o', run.out / 'refused.s'], timeout=900)
     except RuntimeError:
         command = run.commands[-1]
         require(command.get('exit') == 1 and not command.get('timed_out'),
@@ -269,6 +282,62 @@ def corpus_line(result):
     elif 'refused_imports' in result:
         text += ': ' + ', '.join(result['codes']) + ' refuses ' + ', '.join(result['refused_imports'])
     return text
+
+
+#  D617: the software helpers a float unit leaves unused, its arithmetic,
+#  comparison and 32-bit conversion; the 64-bit integer conversions stay
+#  helpers, since no VFP instruction converts 64 bits.
+SOFT_FLOAT = re.compile(r'\bbl\s+[0-9a-f]+ <(__aeabi_(?:[fd](?:add|sub|rsub|mul|div|neg|cmp\w*)'
+                        r'|f2d|d2f|[iu]i?2[fd]|ui2[fd]|[fd]2u?iz))>')
+VFP_OPERATION = re.compile(r'\t(vadd|vsub|vmul|vdiv|vneg|vcmpe?|vcvt)\.')
+
+
+#  The exit evidence of D617: at none/off, where nothing is inlined, each
+#  routine of this fixture holds its own VFP operation, and the image holds
+#  no software float routine at all.
+VFP_EVIDENCE = ('runtime/float-operations-by-arguments', {
+    'add_32': 'vadd', 'subtract_32': 'vsub', 'multiply_32': 'vmul', 'divide_32': 'vdiv',
+    'negate_32': 'vneg', 'add_64': 'vadd', 'subtract_64': 'vsub', 'multiply_64': 'vmul',
+    'divide_64': 'vdiv', 'negate_64': 'vneg', 'compare_32': 'vcmpe', 'compare_64': 'vcmpe',
+    'widen': 'vcvt', 'narrow': 'vcvt', 'single_of': 'vcvt', 'double_of': 'vcvt',
+    'truncate_32': 'vcvt', 'truncate_8': 'vcvt'})
+
+
+def float_lowering(run, evidence=False):
+    """What the executed image computes floats with, read from its disassembly.
+
+    On a lane with a float unit no arithmetic, comparison or 32-bit
+    conversion helper may be called, and every VFP operation is counted in
+    the routine that holds it, so the unit is shown to have reached the
+    bytes QEMU executed.
+    """
+    text = (run.out / 'disassembly.log').read_text()
+    calls = sorted(set(SOFT_FLOAT.findall(text)))
+    require(not calls, 'the image still computes floats in software: ' + ', '.join(calls))
+    #  Each sized code symbol `nm -S` lists is a routine; a block label
+    #  inside one has no size.
+    spans = []
+    for line in (run.out / 'sections-routines.log').read_text().splitlines():
+        parts = line.split()
+        if len(parts) == 4 and parts[2] in ('T', 't'):
+            start = int(parts[0], 16) & ~1
+            spans.append((start, start + int(parts[1], 16), parts[3]))
+    routines = {}
+    for line in text.splitlines():
+        found = re.match(r'^\s*([0-9a-f]+):', line)
+        op = VFP_OPERATION.search(line)
+        if found and op:
+            at = int(found.group(1), 16)
+            name = next((n for lo, hi, n in spans if lo <= at < hi), '?')
+            routines.setdefault(name, {}).setdefault(op.group(1), 0)
+            routines[name][op.group(1)] += 1
+    if evidence:
+        missing = sorted(routine for routine, op in VFP_EVIDENCE[1].items()
+                         if op not in routines.get(routine, {}))
+        require(not missing, 'routines without their VFP operation: ' + ', '.join(missing))
+        software = sorted(set(n for _, _, n in spans if re.match(r'__(aeabi_[fd]|\w+[sd]f\d?$)', n)))
+        require(not software, 'the image holds software float routines: ' + ', '.join(software))
+    return {'helper_float_calls': 0, 'vfp_operations': routines}
 
 
 def divide_lowering(run):
@@ -430,8 +499,13 @@ def observe(output, tools, refine, program, profiles, level='armv6-m', roots=())
     return results
 
 
-def execute(output, tools, refine, selected=(), profiles=()):
+def execute(output, tools, refine, selected=(), profiles=(), lane=None):
+    """The whole inventory at the corpus's profiles: on the constrained
+    reference at each fixture's levels, or with LANE every row on that
+    emulator lane's description and level alone (D619)."""
     rows = inventory()
+    require(lane is None or lane in LANES, 'unknown corpus lane %s; the lanes are %s'
+            % (lane, ', '.join(LANES)))
     profiles = [profile_name(p) for p in profiles]
     known = ['-'.join(p) for p in PROFILES + SPECIALIZATION_PROFILES]
     require(set(profiles) <= set(known),
@@ -445,9 +519,9 @@ def execute(output, tools, refine, selected=(), profiles=()):
     #  reference's, which the corpus executes, and each other described
     #  device's, which a limited verdict is linked again against.
     deriving = Run(output, tools)
-    reference = derived(deriving, refine, REFERENCE, output / 'profiles')
+    reference = derived(deriving, refine, lane or REFERENCE, output / 'profiles')
     others = {}
-    for device in DESCRIPTIONS:
+    for device in DESCRIPTIONS if lane is None else ():
         if device != REFERENCE:
             others[device] = derived(deriving, refine, device, output / 'profiles')
             require(dominates(others[device], reference),
@@ -467,8 +541,8 @@ def execute(output, tools, refine, selected=(), profiles=()):
             modes = [p for p in modes if '-'.join(p) in profiles]
             if selected:
                 require(bool(modes), 'profile is not applicable to the selected fixture')
-        levels = ['armv6-m']
-        if row['mode'] == 'execute':
+        levels = ['armv6-m'] if lane is None else [LANES[lane]]
+        if row['mode'] == 'execute' and lane is None:
             levels += levels_of(meta)
         work += [(name, row, opt, spec, level)
                  for level in levels for opt, spec in modes]
@@ -487,7 +561,19 @@ def execute(output, tools, refine, selected=(), profiles=()):
                 result.update(verdict='target-restriction', reason=row['reason'],
                               witness_sha256=sha(ROOT / row['witness']))
             elif row['mode'] == 'refuse':
-                result.update(source_refusal(run, refine, name, row))
+                result.update(source_refusal(run, refine, name, row, level))
+            elif lane is not None and lane in row.get('lanes', {}):
+                own = row['lanes'][lane]
+                try:
+                    fixture(run, refine, name, opt, spec, level,
+                            include_compiler_sha256=False)
+                except RuntimeError as error:
+                    result.update(verdict='lane-restriction', reason=own['reason'],
+                                  observed=str(error).split('; inspect ')[0])
+                else:
+                    raise RuntimeError(
+                        'its %s lane restriction is stale: the program passes there; remove'
+                        ' the "lanes" entry from its %s row (see %s)' % (lane, INVENTORY, RULES))
             else:
                 try:
                     fixture(run, refine, name, opt, spec, level,
@@ -495,7 +581,10 @@ def execute(output, tools, refine, selected=(), profiles=()):
                     result['verdict'] = 'executed'
                     result['image'] = {key: json.loads((out / 'image.json').read_text())[key]
                                        for key in ('regions', 'sections', 'routines')}
-                    if level != 'armv6-m':
+                    if lane is not None:
+                        result['lowering'] = float_lowering(
+                            run, name == VFP_EVIDENCE[0] and (opt, spec) == ('none', 'off'))
+                    elif level != 'armv6-m':
                         result['lowering'] = divide_lowering(run)
                 except RuntimeError as error:
                     result.update(image_limit(run, row, error, reference, level))
@@ -519,10 +608,13 @@ def execute(output, tools, refine, selected=(), profiles=()):
         print(corpus_line(result), flush=True)
     #  A run filtered by profile cannot tell a stale limit from one that
     #  holds at a profile it did not run.
-    stale = [] if profiles else stale_limits(rows, results)
+    #  A lane's map is not the reference's, so its limits judge none.
+    stale = [] if profiles or lane else stale_limits(rows, results)
     summary = {'scope': 'development-filtered' if selected or profiles else 'complete-inventory',
                'compiler_sha256': sha(refine), 'results': results, 'stale_limits': stale,
-               'profiles': profile_verdicts(results, others)}
+               'profiles': profile_verdicts(results, others) if lane is None else {}}
+    if lane is not None:
+        summary['lane'] = lane
     for device, verdict in summary['profiles'].items():
         print('cortex corpus capacity against %s: %d of %d limited verdicts still exceed it,'
               ' in %d programs, linked with its derived script'
@@ -563,6 +655,9 @@ def main():
                         help='a module root for --program, passed to refine')
     parser.add_argument('--level', default='armv6-m', choices=sorted(LEVELS),
                         help='the M-profile level --program is built and run at')
+    parser.add_argument('--lane', choices=sorted(LANES),
+                        help='run every inventory row on this emulator lane alone, at its'
+                             ' description\'s level and float unit (D619)')
     args = parser.parse_args()
     #  A rebuild of this build waits for the lane, rather than replace
     #  refine between two of its compilations.
@@ -584,7 +679,8 @@ def main():
         observe(out, args.tools.resolve(), args.refine.resolve(), args.program,
                 [known[p] for p in chosen] or PROFILES, args.level, args.root)
         return
-    execute(out, args.tools.resolve(), args.refine.resolve(), args.case, args.profile)
+    execute(out, args.tools.resolve(), args.refine.resolve(), args.case, args.profile,
+            args.lane)
 
 
 if __name__ == '__main__':

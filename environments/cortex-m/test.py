@@ -379,6 +379,71 @@ class ProbeFailures(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, 'still calls __aeabi_uidivmod'):
                 divide_lowering(run)
 
+    def test_the_m7_lane_reaches_its_description_and_computes_in_hardware(self):
+        from backend import LANES, LEVELS, hard_float, lane_inputs, level_flags, recorded
+        from backend_corpus import float_lowering
+        key = 'armv7e-m+fpv5-d16'
+        self.assertEqual(LEVELS[key]['machine'], 'mps2-an500')
+        flags = level_flags(key)
+        self.assertIn('-mfloat-abi=hard', flags)
+        self.assertIn('-mfpu=fpv5-d16', flags)
+        self.assertNotIn('-mfloat-abi=soft', flags)
+        self.assertNotIn('-mcpu=cortex-m0', flags)
+        self.assertTrue(hard_float(key))
+        self.assertFalse(hard_float('armv7-m'))
+        self.assertEqual(lane_inputs('armv6-m', ['a.ldn']), ['a.ldn'])
+        lane = str(LANES / 'lane-mps2-an500.ldn')
+        self.assertEqual(lane_inputs(key, ['a.ldn', 'b.ldn']),
+                         ['--root=' + str(LANES), 'a.ldn', 'b.ldn', lane])
+        with tempfile.TemporaryDirectory() as directory:
+            module = Path(directory) / 'module'
+            module.mkdir()
+            (module / 'b.ldn').write_text('')
+            (module / 'a.ldn').write_text('')
+            self.assertEqual(lane_inputs(key, ['--root=' + directory, str(module)]),
+                             ['--root=' + str(LANES), '--root=' + directory,
+                              str(module / 'a.ldn'), str(module / 'b.ldn'), lane])
+        profile = recorded('mps2-an500')
+        self.assertEqual((profile['flash_limit'], profile['stack_top'], profile['vector_words']),
+                         (4 * 1024 * 1024, 0x20400000, 16))
+        with tempfile.TemporaryDirectory() as directory:
+            run = Run(Path(directory), HERE)
+            (Path(directory) / 'sections-routines.log').write_text(
+                '00000100 00000010 T add_32\n')
+            listing = Path(directory) / 'disassembly.log'
+            listing.write_text('  104:\tee30 0a20 \tvadd.f32\ts0, s0, s1\n')
+            self.assertEqual(float_lowering(run)['vfp_operations'], {'add_32': {'vadd': 1}})
+            listing.write_text('  104:\tf000 f800 \tbl\t200 <__aeabi_fadd>\n')
+            with self.assertRaisesRegex(RuntimeError, 'in software: __aeabi_fadd'):
+                float_lowering(run)
+            listing.write_text('  104:\tf000 f800 \tbl\t200 <__aeabi_l2d>\n')
+            self.assertEqual(float_lowering(run)['helper_float_calls'], 0)
+
+    def test_a_lane_restriction_needs_its_reason(self):
+        import backend_corpus
+        record = json.loads((HERE.parent.parent / 'compiler/tests/cortex-m/corpus.json').read_text())
+        name = 'runtime/r420-map-arena'
+        self.assertEqual(record['fixtures'][name]['lanes']['mps2-an500']['mode'], 'restriction')
+        original = backend_corpus.COUNTERPARTS
+        with tempfile.TemporaryDirectory() as directory:
+            broken = Path(directory)
+            for one in ('counterparts.json', 'cases'):
+                source = original / one
+                target = broken / one
+                if source.is_dir():
+                    import shutil
+                    shutil.copytree(source, target)
+                else:
+                    target.write_text(source.read_text())
+            del record['fixtures'][name]['lanes']['mps2-an500']['reason']
+            (broken / 'corpus.json').write_text(json.dumps(record))
+            backend_corpus.COUNTERPARTS = broken
+            try:
+                with self.assertRaisesRegex(RuntimeError, 'a "lanes" entry names a corpus lane'):
+                    backend_corpus.inventory()
+            finally:
+                backend_corpus.COUNTERPARTS = original
+
     def test_image_limit_does_not_hide_codegen_failure(self):
         from unittest.mock import patch
         from backend import recorded
