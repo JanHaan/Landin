@@ -3399,6 +3399,16 @@ package body Landin.Driver is
             then
                return;
             end if;
+            --  D572: a handler that would not fit the margin of a stack
+            --  the program prepares is refused here as compiling refuses
+            --  it, from the frames the backend emits at this profile.
+            Checking.Fit_Handler
+              (Context, Panic, Optimization,
+               (if Firmware_Seen then Unbounded.To_String (Firmware_Name)
+                else ""));
+            if Landin.Stages.Failed (Context) then
+               return;
+            end if;
             if not Report_Seen or else Dry_Run then
                return;
             end if;

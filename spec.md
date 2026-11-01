@@ -19798,8 +19798,8 @@ opens it only when the program holds no routine it can reach, naming the first o
 how many more there are. The depth is the emitted code's, on the target and
 profile being compiled, so the rule is decided after emission and before
 anything is written, for `--emit=asm` and `--emit=exe` alike, a dry run
-included; `--emit=ir` and `refine check` have no frames and do not raise
-it, so a program `refine check` accepts may be refused when it is compiled,
+included; `--emit=ir` has no frames and does not raise it, `refine check`
+and the server decide it from the frames the backend would emit (D572),
 and a handler that fits at one profile may not at another. A program that
 prepares no stack is not refused, however large its handler: no fibre can
 exist there, and its handler runs on the stack the program started on. A
@@ -27368,3 +27368,36 @@ the fibre fixtures, `runtime/fibre-turns-interleave` and
 `runtime/fibre-join-first-failure` among them, on every hosted target and
 the Cortex-M corpus; and the `capacity` control of
 `environments/cortex-m/evidence.py` (D470).
+
+### D572 — A check decides whether a handler fits from the frames it would emit
+
+**The tour said** nothing. D474 refuses a selected panic handler that does
+not fit a prepared stack's margin, decided from the emitted frames, and
+`refine check` and the server, which emit nothing, accepted every such
+program: an editor showed nothing wrong with a handler the build then
+refused.
+
+**Chosen:** in a program that prepares a stack and selects a handler, on a
+target with a backend, a check runs the optimization pipeline and the
+backend in memory, keeping nothing, and judges the handler as compiling
+does, with the same L0508 at the same place. `refine check` measures at
+its own profile, `none` unless `--optimize` names another, and the server
+at `none`, which no setting changes yet; a handler that fits there
+may still be refused at another profile, as D474 says. A program that
+compiling refuses before it emits, for an image past its budget, a frame
+the target cannot address or a vector with no firmware entry, is left to
+that refusal, which a check does not raise. Every other program, the great
+majority, prepares no stack or selects no handler, and costs a check
+nothing more.
+
+**The alternatives:** a note that the margin is not decided, which an
+editor would show on every handler of every such program and which says
+nothing a reader can act on; a bound on a handler's depth stated without
+frames, which no target's backend gives and which would refuse what fits;
+and deciding at every profile, which multiplies the emission by the
+profiles for an answer that differs only at the margin. All were declined.
+
+**Pinned by** `negative/stack-handler-refused-by-check`, refused by
+`refine check` on Linux x86-64, and the server's scripted session
+`handler-margin`, whose handler is refused while it is edited and cleared
+when it fits.

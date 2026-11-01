@@ -1172,8 +1172,12 @@ package body Landin.Diagnostics.Explanations is
                & "at only records the kind and switches away fits on every"
                & " target. A program with no `compiler.stack_prepare`, and"
                & " one that selects no handler, is not refused: the defaul"
-               & "t report always fits. The rule is decided from emitted f"
-               & "rames, so `refine check` does not raise it (D474).",
+               & "t report always fits. The rule is decided from the frame"
+               & "s the backend emits at the profile being compiled (D474)"
+               & "; `refine check` emits them in memory at its own profile"
+               & ", `none` unless `--optimize` says otherwise, and `refine"
+               & " lsp` at `none`, so both refuse what compiling at that p"
+               & "rofile refuses (D572).",
             when Catalogue.Library_Not_Found =>
                "A link failed, and a library a `linker.library` directiv"
                & "e asks for is in no directory the link searched (D525): "

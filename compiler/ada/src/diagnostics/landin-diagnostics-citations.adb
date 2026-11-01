@@ -2600,6 +2600,9 @@ package body Landin.Diagnostics.Citations is
             when 571 =>
                "A round's yield calls nothing beneath it but its sweep, "
                & "its idler and its switch",
+            when 572 =>
+               "A check decides whether a handler fits from the frames i"
+               & "t would emit",
             when others => "");
 
    function Decision_Section (Number : Natural) return String
@@ -3667,6 +3670,8 @@ package body Landin.Diagnostics.Citations is
             when 531 =>
                "Decisions: The core library and the derived programs",
             when 571 =>
+               "Decisions: The core library and the derived programs",
+            when 572 =>
                "Decisions: The core library and the derived programs",
             when others => "");
 
@@ -5295,6 +5300,9 @@ package body Landin.Diagnostics.Citations is
                "https://www.701.dev/spec.html#d571-a-round-s-yield-calls"
                & "-nothing-beneath-it-but-its-sweep-its-idler-and-its-swit"
                & "ch",
+            when 572 =>
+               "https://www.701.dev/spec.html#d572-a-check-decides-wheth"
+               & "er-a-handler-fits-from-the-frames-it-would-emit",
             when others => "");
 
 end Landin.Diagnostics.Citations;

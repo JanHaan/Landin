@@ -11,6 +11,7 @@ with Landin.Driver.Checking;
 with Landin.Driver.Loading;
 with Landin.IR;
 with Landin.Modules;
+with Landin.Optimization;
 with Landin.Panics;
 with Landin.Platform.Overlays;
 with Landin.Resolution;
@@ -226,6 +227,12 @@ package body Landin.Server.Analysis is
                Check_Firmware_Entry
                  (Context, Unbounded.To_String (Asked.Firmware_Entry));
             end if;
+            --  D572: the handler judged against the margin as the build
+            --  judges it, at the reference profile; the last use of the
+            --  unit, which the measure optimizes.
+            Landin.Driver.Checking.Fit_Handler
+              (Context, Panic, Landin.Optimization.Reference_Options,
+               Unbounded.To_String (Asked.Firmware_Entry));
             Names_Only := Only_Unresolved_Names
               (Landin.Stages.Report (Context));
             if Landin.Resolution.Is_Prepared

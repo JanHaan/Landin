@@ -187,6 +187,12 @@ package body Landin.Testing.Sessions is
       --  that imports no description reaches the library's reference
       --  (D543), so a session holds the server to not publishing it.
       Host.Add_Firmware_Library;
+      --  A session's own library modules, beside the reference, for one
+      --  that needs `core` without the whole of it.
+      if Real.Is_Directory (Directory & "/library") then
+         Load_Tree (Real, Host, Directory & "/library",
+                    "/opt/landin/lib/landin");
+      end if;
 
       for Line of Lines loop
          if Starts (Line, "-> ")
