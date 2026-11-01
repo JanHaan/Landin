@@ -23,8 +23,8 @@ qualifying edits to reuse a full successful main gate from the preceding
 seven days. Document and script checks always run.
 
 Embedded firmware and freestanding library consumers run on Linux x86-64
-through `environments/cortex-m/run.py`, in the gate's `cortex-m` job on each
-full gate run. They keep separate QEMU CPU and synthetic device evidence. Mac `--host`
+through `environments/cortex-m/run.py`, in the gate's two `cortex-m` jobs on each
+full gate run, each running one of its two parts. They keep separate QEMU CPU and synthetic device evidence. Mac `--host`
 checks compiler behavior for Cortex; they do not execute embedded workloads.
 
 FreeBSD x86-64 and arm64 run in [system VMs](../environments/freebsd/README.md)

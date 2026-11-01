@@ -64,7 +64,8 @@ jobs:
           python3 scripts/gate_inputs.py reuse gate.yml \
             documents scripts linux-debug-build compiler-1 compiler-2 compiler-3 \
             compiler-checks linux-release-build \
-            release bindings editor-grammar flake cortex-m scaling darwin-debug-build \
+            release bindings editor-grammar flake cortex-m-programs cortex-m-corpus \
+            scaling darwin-debug-build \
             darwin-release-build darwin-host darwin-host-release darwin-parity \
             arm64-debug-build arm64-compiler-1 arm64-compiler-2 \
             arm64-compiler-checks arm64-release \
@@ -572,13 +573,22 @@ jobs:
           nix develop --command ./scripts/toolchain.sh
 
   #  QEMU and GDB on the locked tools, with the release compiler.
-  #  Four workers, each with its own shared GDB: 612 s on the runner, and the
-  #  whole job sixteen and a half minutes.
+  #  Four workers, each with its own shared GDB.  Every lane in one job took
+  #  612 s on the runner and the job sixteen and a half minutes, before the
+  #  M33 and M7 ran the whole corpus again; with them it neared the hour, so
+  #  the lanes run as run.py's two parts, `programs` and `corpus`, which
+  #  together are every lane once (environments/cortex-m/test.py holds the
+  #  parts and this matrix to that), and neither leg is FILTERED.
   cortex-m:
+    name: cortex-m-${{ matrix.part }}
     needs: [inputs, linux-release-build]
     if: needs.inputs.outputs.reuse != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [programs, corpus]
     env:
       LANDIN_BUILD_MODE: release
       LANDIN_BUILD_REUSE: 'yes'
@@ -603,24 +613,30 @@ jobs:
       - name: Install the locked Cortex-M tools
         run: python3 environments/cortex-m/setup.py --tools "$RUNNER_TEMP/cortex-m"
 
+      #  Including that the parts below are every lane once.
       - name: The probe supervisor's controls
+        if: matrix.part == 'programs'
         run: python3 environments/cortex-m/test.py
 
       #  D559: the SVDs and vendor headers are pinned in devices/inputs.json
       #  and fetched by hash, never vendored; check.py's offline half of
-      #  devices/test.py cannot regenerate, so this job does.
+      #  devices/test.py cannot regenerate, so this job does.  Only the
+      #  `programs` part's devices and descriptions lanes read them.
       - name: Fetch the pinned device inputs
+        if: matrix.part == 'programs'
         run: python3 scripts/fetch_inputs.py
 
       - name: Regenerate every device from its SVD and check it
+        if: matrix.part == 'programs'
         run: |
           python3 devices/test.py --require-inputs \
             --refine "$PWD/compiler/ada/build/linux-amd64/release/bin/refine" \
             --toolchain "$RUNNER_TEMP/cortex-m/gnat-arm-elf/bin/arm-eabi-gcc"
 
-      - name: Every Cortex-M lane
+      - name: One part of every Cortex-M lane
         run: |
           LANDIN_CORTEX_JOBS=4 python3 environments/cortex-m/run.py \
+            --part="${{ matrix.part }}" \
             --tools "$RUNNER_TEMP/cortex-m" \
             --refine "$PWD/compiler/ada/build/linux-amd64/release/bin/refine" \
             --output "$RUNNER_TEMP/cortex-m-evidence"
@@ -628,9 +644,9 @@ jobs:
       #  D470's retained-profile measurement: the stack-switch consumer's
       #  flash, static RAM with its fibre backing, main-stack reservation,
       #  each fibre's backing and painted peak, and the fit verdict, at
-      #  every profile.
+      #  every profile.  The evidence lane that writes it is `programs`'s.
       - name: Keep the stack-switch consumer's capacity report
-        if: always()
+        if: always() && matrix.part == 'programs'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: cortex-m-fibre-capacity
@@ -646,7 +662,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: cortex-m-evidence
+          name: cortex-m-evidence-${{ matrix.part }}
           path: ${{ runner.temp }}/cortex-m-evidence
           retention-days: 14
 

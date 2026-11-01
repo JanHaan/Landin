@@ -232,7 +232,7 @@ still succeed. The linked full run contains the target-test results.
 | `bindings` | `ubuntu-24.04` | the C binding generator against its pinned Clang |
 | `editor-grammar` | `ubuntu-24.04` | the structural grammar's integration pass with the pinned tree-sitter CLI |
 | `flake` | `ubuntu-24.04` | `nix build .#refine .#refine-bin`, every flake output of every system evaluated and the development shell entered, on every run that does not reuse a pass, manual dispatch included (D585) |
-| `cortex-m` | `ubuntu-24.04` | every Cortex-M lane on the locked QEMU and GDB, at `LANDIN_CORTEX_JOBS=4`, keeping the stack-switch consumer's capacity report (D470) as an artifact |
+| `cortex-m` matrix | `ubuntu-24.04` | every Cortex-M lane on the locked QEMU and GDB, at `LANDIN_CORTEX_JOBS=4`, as `run.py`'s two parts, which together are every lane once: the probes, firmware, device programs and debug evidence in `cortex-m-programs`, which keeps the stack-switch consumer's capacity report (D470) as an artifact, and the whole corpus on the M0, the M33 and the M7 in `cortex-m-corpus` |
 | `scaling` | `ubuntu-24.04` | `scripts/scaling.sh`, failing when frontend time, emission time or peak memory grows more than 2.5 times per doubling, or when a compact static image's assembly, object or assembler memory outgrows its bound |
 | `darwin-debug-build` | `macos-26` | build the debug executables once for the `darwin-host` job and the Darwin determinism manifest |
 | `darwin-release-build` | `macos-26` | build the release executables once for the `darwin-host-release` and `darwin-parity` jobs |

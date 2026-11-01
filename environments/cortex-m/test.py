@@ -1017,10 +1017,37 @@ class ProbeFailures(unittest.TestCase):
             with self.assertRaises(RuntimeError) as failed:
                 run.execute(Path('refine'))
         self.assertEqual(ran, [name for name in LANES if name != 'evidence'])
-        self.assertEqual(run.verdicts['abi'], {'status': 'failed', 'error': 'abi broke'})
+        self.assertEqual({key: run.verdicts['abi'][key] for key in ('status', 'error')},
+                         {'status': 'failed', 'error': 'abi broke'})
         self.assertEqual(run.verdicts['evidence']['status'], 'not run')
-        self.assertEqual(run.verdicts['firmware'], {'status': 'passed'})
+        #  A lane that ran says how long it took; one that did not run, nothing.
+        self.assertNotIn('seconds', run.verdicts['evidence'])
+        self.assertEqual(sorted(run.verdicts['firmware']), ['seconds', 'status'])
+        self.assertEqual(run.verdicts['firmware']['status'], 'passed')
         self.assertIn('3 of 15 lanes did not pass', str(failed.exception))
+
+    def test_the_gate_parts_are_every_lane_once(self):
+        """The gate's two Cortex-M jobs are not FILTERED only because their
+        parts are every lane, each once, and each part holds what its lanes
+        need; and the workflow's matrix runs exactly run.py's parts."""
+        import re
+        from run import LANES, NEEDS, PARTS, selection
+        named = [lane for lanes in PARTS.values() for lane in lanes]
+        self.assertEqual(sorted(named), sorted(LANES), 'the parts are not every lane once')
+        for name, lanes in PARTS.items():
+            with self.subTest(part=name):
+                self.assertEqual(selection(lanes), [lane for lane in LANES if lane in lanes])
+                for lane in lanes:
+                    self.assertTrue(set(NEEDS.get(lane, ())) <= set(lanes),
+                                    '%s needs a lane of another part' % lane)
+        workflow = (HERE.parents[1] / '.github/workflows/gate.yml').read_text()
+        job = workflow.split('\n  cortex-m:\n', 1)[1].split('\n\n  #', 1)[0]
+        self.assertIn('name: cortex-m-${{ matrix.part }}', job)
+        part = re.search(r'\n +part: \[([^\]]*)\]', job)
+        self.assertTrue(part, 'the cortex-m job has no part matrix')
+        self.assertEqual([one.strip() for one in part.group(1).split(',')], list(PARTS))
+        self.assertIn('--part="${{ matrix.part }}"', job)
+        self.assertNotIn('--lane', job)
 
     def test_a_stack_overrun_is_watched_and_named(self):
         from backend import recorded, session

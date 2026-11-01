@@ -336,12 +336,15 @@ class Run:
                                   'error': 'it needs the %s lane, which did not pass'
                                            % ', '.join(missing)}
             else:
+                tick = time.monotonic()
                 try:
                     self.lane(name, refine)
                     verdicts[name] = {'status': 'passed'}
                 except Exception as error:
                     verdicts[name] = {'status': 'failed', 'error': str(error)}
-            print('Cortex-M lane %s %s%s' % (name, verdicts[name]['status'],
+                verdicts[name]['seconds'] = round(time.monotonic() - tick, 1)
+            print('Cortex-M lane %s %s%s%s' % (name, verdicts[name]['status'],
+                  ' in %.0f s' % verdicts[name]['seconds'] if 'seconds' in verdicts[name] else '',
                   ': ' + verdicts[name]['error'] if 'error' in verdicts[name] else ''),
                   file=sys.stderr if 'error' in verdicts[name] else sys.stdout, flush=True)
         self.verdicts = verdicts
@@ -409,6 +412,20 @@ LANES = ('cpu', 'peripheral', 'abi', 'memory', 'packed', 'packed-native', 'backe
 NEEDS = {'evidence': ('driver',)}
 NEEDS_REFINE = set(LANES[LANES.index('packed-native'):])
 
+#  The gate's two Cortex-M jobs, `cortex-m-programs` and `cortex-m-corpus`,
+#  each run one part, so neither is FILTERED: together they are every lane
+#  above, each exactly once, and each part holds the lanes its lanes need,
+#  which test.py holds them to.  `corpus` is the three whole-corpus lanes,
+#  the M0's `backend` and the M33's and M7's again; `programs` is the rest,
+#  the probes, the firmware and device programs and the debug evidence.
+#  Measured at LANDIN_CORTEX_JOBS=6 on one host they took about 600 and 700
+#  seconds, where all of them in one job neared the gate's hour on a
+#  four-CPU runner.
+PARTS = {'programs': ('cpu', 'peripheral', 'abi', 'memory', 'packed', 'packed-native',
+                      'firmware', 'freestanding', 'devices', 'descriptions', 'driver',
+                      'evidence'),
+         'corpus': ('backend', 'mps2-an505', 'mps2-an500')}
+
 
 def selection(lanes):
     """LANES in run order with every lane they need; every lane for None."""
@@ -428,9 +445,16 @@ def main():
     parser.add_argument('--tools', type=Path, default=DEFAULT)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--refine', type=Path, required=True)
-    parser.add_argument('--lane', action='append', choices=LANES,
+    chosen = parser.add_mutually_exclusive_group()
+    chosen.add_argument('--lane', action='append', choices=LANES,
                         help='run only this lane, and the lanes it needs; repeat for more.'
                              ' A run that selects lanes is FILTERED and is not the gate\'s')
+    chosen.add_argument('--part', choices=PARTS,
+                        help='run one part of every lane, as one of the gate\'s two Cortex-M'
+                             ' jobs does: %s.  The parts together are every lane, so a part'
+                             ' is not FILTERED' % '; '.join(
+                                 '%s is %s' % (name, ', '.join(lanes))
+                                 for name, lanes in PARTS.items()))
     args = parser.parse_args()
     #  A rebuild of this build waits for the lane, rather than replace
     #  refine between two of its compilations.
@@ -442,13 +466,17 @@ def main():
     tools = installed_tools(args.tools)
     out = args.output.resolve()
     out.mkdir(parents=True, exist_ok=False)
-    lanes = selection(args.lane)
+    lanes = selection(PARTS[args.part] if args.part else args.lane)
+    scope = ('FILTERED: ' + ', '.join(lanes) if args.lane else
+             'part %s of every lane: %s' % (args.part, ', '.join(lanes)) if args.part else
+             'every lane')
     record = {'status': 'failed', 'inputs': inventory(HERE), 'platform': os.uname().sysname,
-              'machine': os.uname().machine, 'kernel': os.uname().release,
-              'scope': 'every lane' if not args.lane else 'FILTERED: ' + ', '.join(lanes)}
+              'machine': os.uname().machine, 'kernel': os.uname().release, 'scope': scope}
+    if args.part:
+        record['part'] = args.part
     run = Run(out, tools)
     try:
-        run.execute(args.refine, args.lane)
+        run.execute(args.refine, lanes)
         changed = changed_inputs(record['inputs'], inventory(HERE))
         require(not changed, 'probe inputs changed while the lanes ran, so no lane verdict above '
                 'holds for this tree: ' + ', '.join(changed))
@@ -461,8 +489,11 @@ def main():
         record['files'] = inventory(out)
         (out / 'result.json').write_text(json.dumps(record, indent=2, sort_keys=True)+'\n')
     print('Cortex-M probes ' + record['status'] + (
-        '' if not args.lane else ' (FILTERED: the lanes %s only, not the gate\'s run)'
-        % ', '.join(lanes)) + ': ' + str(out))
+        ' (FILTERED: the lanes %s only, not the gate\'s run)' % ', '.join(lanes) if args.lane
+        else ' (part %s: %s; with %s, every lane)' % (
+            args.part, ', '.join(lanes), ' and '.join(
+                'part ' + name for name in PARTS if name != args.part)) if args.part
+        else '') + ': ' + str(out))
     return 0 if record['status'] == 'passed' else 1
 
 
