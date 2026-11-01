@@ -1,0 +1,9 @@
+class: runtime
+summary: D605 checked i32, u32, i16, u8, i64 and u64 products of module values at the edges of what fits are exact, wrapping 64-bit products keep their low 64 bits, and an i32 product of 2^31 overflows to the selected panic handler, which resumes main with the product unwritten
+program: main.ldn
+root: ../../../../..
+profiles: standard
+status: 42
+constructs: 0290, 0300, 1670, 1995
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0
+levels: armv7-m, armv8-m.main

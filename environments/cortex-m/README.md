@@ -13,6 +13,7 @@ and `platform/cortex_m`/`core/panic` consumers run through that compiler-owned f
 | Probe host | native Linux x86-64 with glibc 2.38 or later, `dpkg-deb` and `tar`; the gate runs it on GitHub's `ubuntu-24.04` |
 | CPU/startup lane | QEMU 10.0.13, Debian `1:10.0.13+ds-0+deb13u1`, `-M microbit -accel tcg,thread=single` |
 | Armv7-M corpus lane | the same QEMU binary, `-M mps2-an385`: a Cortex-M3, for corpus fixtures whose `levels:` name `armv7-m` (D255) |
+| Armv8-M corpus lane | the same QEMU binary, `-M mps2-an505`: a Cortex-M33 r0p3 in Secure state, for the whole corpus at `armv8-m.main` in the `mainline` lane and for fixtures whose `levels:` name it, linked for the lane description `lanes/mps2_an505` (D607); libgcc from `thumb/v8-m.main/nofp` |
 | Core | nRF51822 Cortex-M0, ARMv6-M, Thumb, little endian, 16 MHz model clock; no FPU, caches or exclusive-access instruction requirement |
 | Peripheral lane | the same QEMU, with `machine.py` serving `models.py`'s synthetic devices through its debugger stub; `-icount shift=0` |
 | EABI compiler | `arm-eabi-gcc` 16.1.0, GNAT's arm-elf archive `16.1.0-1` from the host GNAT's release, pinned in `environments/pins.sh` |
@@ -105,10 +106,25 @@ carry `Tag_CPU_arch: v7` with Thumb-2, and libgcc comes from
 `thumb/v7-m/nofp`. Only the corpus runs there. The AN385 has real devices
 at `0x40020000`, where `PrototypePeripheral` lives, and its flash is RAM,
 so no peripheral, firmware or flash-protection lane moves to it. Each image
-run at `armv7-m` is disassembled and required to divide in hardware and to
-ask libgcc for no 32-bit quotient, so the level is shown to have reached
-the bytes that ran. The three division fixtures the corpus runs at
-`armv7-m` add 12 QEMU sessions.
+run at a Thumb-2 level is disassembled and required to ask libgcc for no
+product and no 32-bit quotient, and a fixture whose corpus row `selects`
+instructions is held to them, so the level is shown to have reached the
+bytes that ran. The six fixtures whose `levels:` name `armv7-m` add 24 QEMU
+sessions to the default run, and the three that name `armv8-m.main` 12.
+
+`armv8-m.main` runs on the MPS2 AN505's Cortex-M33, from the same binary.
+It boots in Secure state and takes its stack pointer and reset from
+`0x10000000`, so an image linked at zero locks up, and the reference's map
+does not fit it. The corpus links with a script refine derives from a
+description, so the AN505 has one in Landin source,
+[`lanes/mps2_an505`](lanes/mps2_an505), with the reference's capacities
+where the board has memory: 32 KiB of flash at `0x10000000` and 16 KiB of
+RAM at `0x38000000`, the Secure aliases of its two SSRAMs, the upper 4 KiB
+the stack (D607). It describes the emulator, not a chip, and
+`descriptions.json` records its facts under `lanes`, apart from the
+devices. The image must carry `Tag_CPU_arch: v8-M.mainline`, and libgcc
+comes from `thumb/v8-m.main/nofp`. The `mainline` lane runs every corpus
+row at `armv8-m.main` there, beside the default run.
 
 ## Executable routes and limits
 
@@ -164,8 +180,9 @@ repeated, runs only those lanes, and the lanes they need: `evidence`
 compares its images with the `driver` lane's, so `--lane evidence` runs
 both, and a lane whose prerequisite failed is reported as not run. The
 lanes are `cpu`, `peripheral`, `abi`, `memory`, `packed`, `packed-native`,
-`backend`, `firmware`, `freestanding`, `devices`, `descriptions`, `driver`
-and `evidence`. A run that selects lanes says `FILTERED` in its last line
+`backend`, `mainline`, `firmware`, `freestanding`, `devices`,
+`descriptions`, `driver` and `evidence`; `mainline` is the corpus again at
+`armv8-m.main` on the AN505. A run that selects lanes says `FILTERED` in its last line
 and its `result.json`, and is not the gate's run.
 
 ### On NixOS
@@ -466,6 +483,7 @@ the refusal names each one and the row to write. A row's `mode` is one of:
 | `mode` | Meaning | Also required |
 |---|---|---|
 | `execute` | built and run at every profile, and at each M-profile level its `levels:` names | nothing; a fixture that names `cortex-m0` in its `targets:` needs this row, and one with a `trap_report:` may not name it |
+| `execute` with `"selects"` | the same, and at each level the row names, its `routine`, or the whole image without one, must hold every instruction in `has` and none in `lacks`: a mnemonic, or `bl NAME` for a call of NAME | the levels it names are M-profile ones |
 | `execute` with `"profile_limit": "selected-image"` | every profile is still built and attempted; a profile whose image fits runs and must pass, and one that does not is recorded with its sizes | a `reason`; the fixture does *not* name `cortex-m0` in its `targets:`, since an image that overflows is no execution, and `check.py` refuses the claim |
 | `refuse` | compiled for `cortex-m0` and required to fail with exactly these diagnostic codes | `codes`, and a `reason` unless the only code is L0015 |
 | `restriction` | a target restriction, the disabled general C surface or a hosted heap, not attempted | a `reason` and a `witness` file that shows it |
@@ -537,6 +555,13 @@ which the corpus checks rather than assumes; an image past the harness's
 A filtered run judges no limit stale, because the profile that still
 overflows may be one it did not run, and says `FILTERED` last.
 
+`--level=armv8-m.main` runs every row at that level alone, on its machine
+and its map: each `execute` row at every profile, each `refuse` row
+compiled there to its codes and each `restriction` recorded, so no fixture
+is left without a verdict. It is the `mainline` lane, and judges no limit
+stale, which is the default run's to judge. Every image a Thumb-2 level
+ran is required to call neither `__aeabi_lmul` nor a 32-bit divide helper.
+
 `--program PATH` runs a program of your own, a `.ldn` file or a module
 directory, with `--root DIR` for the roots it imports from, at the corpus's
 four profiles, or the `--profile`s named, on the constrained reference,
@@ -577,7 +602,7 @@ use. The lowest changed watermark word is retained as an observation,
 explicitly not a proved stack bound.
 Freestanding evidence below records measured stack/firmware and source debugging.
 
-QEMU uses exactly `microbit`, single-threaded TCG and a loopback-only GDB port.
+QEMU uses exactly `microbit`, or a level's MPS2 machine, single-threaded TCG and a loopback-only GDB port.
 Each program has a bounded startup wait and a 20-second debugger deadline;
 process groups are stopped on failure. Expected traps require HardFault at
 the emitted UDF #1, not merely any fault. Normal results use the shared fixture's

@@ -2026,6 +2026,13 @@ package body Landin.Diagnostics.Citations is
             when 255 =>
                "A build assumes a CPU feature level, and a level changes"
                & " no layout",
+            when 605 =>
+               "A Thumb-2 level multiplies in hardware",
+            when 606 =>
+               "Armv8-M acquires and releases in one instruction",
+            when 607 =>
+               "The Armv8-M corpus runs on a lane description of the AN5"
+               & "05",
             when 256 =>
                "Linux arm64 is the standard AAPCS64, a third C ABI with "
                & "unsigned plain char",
@@ -3263,6 +3270,12 @@ package body Landin.Diagnostics.Citations is
             when 264 =>
                "Decisions: The toolchain, C and the machine",
             when 255 =>
+               "Decisions: The toolchain, C and the machine",
+            when 605 =>
+               "Decisions: The toolchain, C and the machine",
+            when 606 =>
+               "Decisions: The toolchain, C and the machine",
+            when 607 =>
                "Decisions: The toolchain, C and the machine",
             when 256 =>
                "Decisions: The toolchain, C and the machine",
@@ -4677,6 +4690,15 @@ package body Landin.Diagnostics.Citations is
             when 255 =>
                "https://www.701.dev/spec.html#d255-a-build-assumes-a-cpu"
                & "-feature-level-and-a-level-changes-no-layout",
+            when 605 =>
+               "https://www.701.dev/spec.html#d605-a-thumb-2-level-multi"
+               & "plies-in-hardware",
+            when 606 =>
+               "https://www.701.dev/spec.html#d606-armv8-m-acquires-and-"
+               & "releases-in-one-instruction",
+            when 607 =>
+               "https://www.701.dev/spec.html#d607-the-armv8-m-corpus-ru"
+               & "ns-on-a-lane-description-of-the-an505",
             when 256 =>
                "https://www.701.dev/spec.html#d256-linux-arm64-is-the-st"
                & "andard-aapcs64-a-third-c-abi-with-unsigned-plain-char",

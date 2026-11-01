@@ -65,6 +65,11 @@ package Landin.Targets.Levels is
 
    function Has (Level : Feature_Level; Wanted : Feature) return Boolean;
 
+   --  Whether LEVEL is an Armv8-M one.  Every Armv8-M level has the
+   --  load-acquire and store-release instructions, LDA and STL and their
+   --  byte and halfword forms, so no feature names them (D606).
+   function Is_Armv8_M (Level : Feature_Level) return Boolean;
+
    function Belongs_To
      (Level : Feature_Level; Facts : Target_Facts) return Boolean;
 
@@ -80,5 +85,8 @@ private
    type Feature_Level is record
       Id : Level_Id;
    end record;
+
+   function Is_Armv8_M (Level : Feature_Level) return Boolean
+     is (Level.Id = Armv8_M_Main);
 
 end Landin.Targets.Levels;

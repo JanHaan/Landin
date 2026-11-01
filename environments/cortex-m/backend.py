@@ -21,23 +21,33 @@ sys.path.insert(0, str(ROOT / 'compiler/tests'))
 import fixture_meta  # noqa: E402
 COUNTERPARTS = ROOT / 'compiler/tests/cortex-m'
 
-#  The CPU feature levels (D255) the corpus executes beyond Armv6-M, each
-#  with the processor arguments the external harness assembles and links
-#  with, the libgcc multilib that selects, the ELF attributes the image must
-#  carry and the QEMU machine that executes it.  QEMU's micro:bit is a
-#  Cortex-M0 whatever -cpu says, so a higher level runs on the MPS2 AN385's
-#  Cortex-M3, from the same locked binary; its RAM sits where the selected
-#  map puts it, and only the corpus runs there, because the synthetic
-#  peripheral windows are real devices on that board.
+#  The CPU feature levels (D255) the corpus executes, each with the
+#  processor arguments the external harness assembles and links with, the
+#  libgcc multilib that selects, the ELF attributes the image must carry,
+#  the QEMU machine that executes it and the profile its map is.  QEMU's
+#  micro:bit is a Cortex-M0 whatever -cpu says, so a higher level runs on an
+#  MPS2 board's core, from the same locked binary: Armv7-M on the AN385's
+#  Cortex-M3, whose memory is where the constrained reference puts it, and
+#  Armv8-M Mainline on the AN505's Cortex-M33, which boots from 0x10000000
+#  and so has a lane profile of its own (D607).  Only the corpus runs there,
+#  because the synthetic peripheral windows are real devices on those boards.
 LEVELS = {
     'armv6-m': {'flags': ['-mcpu=cortex-m0'], 'multilib': '/thumb/v6-m/nofp/',
                 'attributes': ['Tag_CPU_arch: v6S-M', 'Tag_THUMB_ISA_use: Thumb-1'],
-                'machine': 'microbit'},
+                'machine': 'microbit', 'profile': 'constrained-reference'},
     'armv7-m': {'flags': ['-march=armv7-m'], 'multilib': '/thumb/v7-m/nofp/',
                 'attributes': ['Tag_CPU_arch: v7', 'Tag_CPU_arch_profile: Microcontroller',
                                'Tag_THUMB_ISA_use: Thumb-2'],
-                'machine': 'mps2-an385'},
+                'machine': 'mps2-an385', 'profile': 'constrained-reference'},
+    'armv8-m.main': {'flags': ['-march=armv8-m.main'], 'multilib': '/thumb/v8-m.main/nofp/',
+                     'attributes': ['Tag_CPU_arch: v8-M.mainline',
+                                    'Tag_CPU_arch_profile: Microcontroller'],
+                     'machine': 'mps2-an505', 'profile': 'mps2-an505'},
 }
+
+#  The levels whose instructions are Thumb-2's, at which no image may ask
+#  the runtime for a product or a 32-bit quotient (D255, D605).
+THUMB_2 = ('armv7-m', 'armv8-m.main')
 
 
 def level_flags(level):
@@ -49,8 +59,12 @@ def level_flags(level):
 #  The described devices, recorded apart from the compiler; descriptions.py
 #  holds every linked image's facts to them.  A program that imports no
 #  description is given the constrained reference (D543), which is the
-#  profile the corpus executes on QEMU's micro:bit.
-DESCRIPTIONS = json.loads((HERE / 'descriptions.json').read_text())['devices']
+#  profile the corpus executes on QEMU's micro:bit and AN385.  The lane
+#  profiles are the descriptions of an emulator's map, not of a chip: each
+#  is Landin source under lanes/ beside this file, recorded as a device is.
+RECORDS = json.loads((HERE / 'descriptions.json').read_text())
+DESCRIPTIONS = RECORDS['devices']
+LANE_PROFILES = RECORDS['lanes']
 REFERENCE = 'constrained-reference'
 
 #  What each boot image kind (D545) puts before the vector table in its
@@ -81,7 +95,7 @@ def recorded(device=REFERENCE):
     """DEVICE's profile as descriptions.json records it, apart from the
     compiler, with the capacities a firmware build report derives (D545):
     the text region's length, and the data region's less a stack it holds."""
-    want = DESCRIPTIONS[device]
+    want = DESCRIPTIONS.get(device) or LANE_PROFILES[device]
     profile = {key: want[key] for key in FACTS if key in want}
     profile.update(device=device, stack_top=want['stack_top'], script=None)
     ram = region(profile, 'data')['length']
@@ -98,9 +112,17 @@ DERIVING = threading.Lock()
 
 #  What each device's profile is derived from (D589): its description, or a
 #  module of nothing for the reference, which the library supplies when
-#  the program reaches no description.
+#  the program reaches no description.  A lane profile's module is named in
+#  its record, under this directory's root.
 def probe_source(device):
+    if device in LANE_PROFILES:
+        return 'import %s\n' % LANE_PROFILES[device]['module']
     return '' if device == REFERENCE else 'import descriptions/%s\n' % device
+
+
+def probe_root(device):
+    """The module root a profile's description is found under."""
+    return HERE if device in LANE_PROFILES else ROOT / 'devices'
 
 
 def said_why(error):
@@ -131,7 +153,7 @@ def derived(run, refine, device=REFERENCE, where=None):
         probe = Run(out, run.tools)
         try:
             probe.command('derive-profile', [
-                refine, 'compile', '--root=' + str(ROOT / 'devices'), '--target=cortex-m0',
+                refine, 'compile', '--root=' + str(probe_root(device)), '--target=cortex-m0',
                 '--emit=linker-script', '--build-report=profile.json', 'profile.ldn',
                 '-o', 'profile.ld'], timeout=60)
         except CommandFailed as error:
@@ -252,12 +274,16 @@ def session(run, port, expected, traps, before=(), profile=None):
 def execute(run, elf, expected, traps, before=(), level='armv6-m', profile=None):
     """Run ELF under QEMU and hold it to its oracle; see `session`.
 
-    PROFILE is the one the image was linked for, which must be the
-    constrained reference: QEMU's machines have its map, not a chip's.
+    PROFILE is the one the image was linked for, which must be the level's
+    own: QEMU's machines have the reference's map or a lane profile's, not
+    a chip's.
     """
-    require(profile is None or profile['device'] == REFERENCE,
-            '%s images are linked, not run: QEMU has no %s' % (
-                profile and profile['device'], profile and profile['device']))
+    machine = LEVELS[level]['profile']
+    require(profile is None or profile['device'] == machine,
+            'an image linked for %s does not run on QEMU\'s %s, whose map is %s\'s;'
+            ' a chip\'s images are linked, not run'
+            % (profile and profile['device'], LEVELS[level]['machine'], machine))
+    profile = profile or recorded(machine)
     listener, port, stub = gdb_listener()
     script = run.out / 'backend.gdb'
     script.write_text(session(run, port, expected, traps, before, profile))
@@ -626,12 +652,12 @@ def build(run, refine, inputs, optimize, specialize, extra=(), linker=None,
           level='armv6-m', profile=None):
     """Compile INPUTS to assembly and link them with the external harness.
 
-    The image is linked with PROFILE's derived script, the constrained
-    reference's unless another is given, and held to the limits its build
-    report gives; LINKER replaces the script for a control that places a
-    routine of its own, keeping the reference's facts.
+    The image is linked with PROFILE's derived script, by default the
+    profile of LEVEL's machine, and held to the limits its build report
+    gives; LINKER replaces the script for a control that places a routine
+    of its own, keeping the profile's facts.
     """
-    profile = profile or derived(run, refine)
+    profile = profile or derived(run, refine, LEVELS[level]['profile'])
     flags = level_flags(level)
     selected = [] if level == 'armv6-m' else ['--level=' + level]
     assembly = run.out / 'program.s'

@@ -374,6 +374,9 @@ class Run:
         elif name == 'backend':
             from backend_acceptance import execute as backend_execute
             backend_execute(self, refine)
+        elif name == 'mainline':
+            from backend_acceptance import execute_mainline
+            execute_mainline(self, refine)
         elif name == 'firmware':
             from firmware import execute_suite as firmware_execute
             firmware_execute(self, refine)
@@ -396,9 +399,11 @@ class Run:
 
 #  Every lane run.py runs, in the order it runs them.  `evidence` compares
 #  each debug image with the `driver` lane's, so it needs that lane, and
-#  selecting it alone runs both.
+#  selecting it alone runs both.  `mainline` is the whole corpus again at
+#  armv8-m.main on the AN505's Cortex-M33.
 LANES = ('cpu', 'peripheral', 'abi', 'memory', 'packed', 'packed-native', 'backend',
-         'firmware', 'freestanding', 'devices', 'descriptions', 'driver', 'evidence')
+         'mainline', 'firmware', 'freestanding', 'devices', 'descriptions', 'driver',
+         'evidence')
 NEEDS = {'evidence': ('driver',)}
 NEEDS_REFINE = set(LANES[LANES.index('packed-native'):])
 

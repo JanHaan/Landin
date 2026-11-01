@@ -1,0 +1,8 @@
+class: runtime
+summary: D606 atomic stores of a u8, u16 and u32 cell at relaxed, release and seq_cst, each read back by a load at acquire, seq_cst or relaxed, store and load the value written
+program: main.ldn
+profiles: standard
+status: 42
+constructs: 1620
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0
+levels: armv7-m, armv8-m.main

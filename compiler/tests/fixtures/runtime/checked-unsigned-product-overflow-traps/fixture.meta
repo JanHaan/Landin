@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: D605 a u32 product of module values that needs 33 bits traps
+program: main.ldn
+traps: yes
+constructs: 0290, 0300, 1950, 1960
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+levels: armv7-m, armv8-m.main
