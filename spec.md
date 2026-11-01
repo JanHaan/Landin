@@ -20921,7 +20921,8 @@ they are generated; one access policy per selected register, its `read`
 as a number; `reset_mask_overrides`, the reset knowledge a reviewer
 promises instead of the SVD's; and `reset_corrections`, a reviewed reset
 value with the source it was read from; and `field_corrections`, a field's
-reviewed `bits` or that it is to be omitted, with its `source`, which the
+reviewed `bits` or that it is to be omitted, or a field the SVD lacks,
+added with its `bits` and `access` (D652), with its `source`, which the
 correspondence records beside the SVD's; and `interrupt_corrections`, an
 interrupt to add or move to a `value`, or to `omit`, with its `source`,
 which `interrupts.ldn` says in a line of its own (D542). Any other member is refused, except
@@ -21369,6 +21370,404 @@ attached through the run.
 
 **Pinned by** `environments/boards/rp2040/board.py`'s IRQ5 verdict.
 
+### D645 — The shared command loop takes its indicator and transmitter as function values
+
+**The tour said** nothing; D593 shared `compiler/tests/driver/commands`
+between the synthetic driver and the RP2040 board, and the module imported
+`rp2040/sio` and `rp2040/uart0` and took their bases and the indicator's
+pin, so a board whose GPIO and UART are not the RP2040's could not run it.
+
+**Chosen:** the module names no device. Its `port` is a struct of two
+function values ([1000]), `indicate: (on: bool) -> none` and
+`transmit: (byte: u8) -> none`, and `handle` calls them for each byte: the
+indicator set on ASCII 1 and cleared on ASCII 0, then the byte echoed. Each
+program writes the two from its own register modules and passes them: the
+synthetic application its model's SIO bit 0 and UART, the RP2040 board
+SIO's set and clear aliases for GPIO3 and UART0, the STM32H753 board
+GPIOB's BSRR for PB0 and USART3. `handle` keeps its place in RAM text, and
+the device accesses each program makes are the ones it made before, in the
+same order, so the synthetic lane's exact application trace is unchanged.
+
+**The alternatives:** a concept with each program's port type conforming
+([1230], [1360]), whose generic `handle` the compiler refuses to place
+in RAM text, L0347, so that `handle` would have left the RAM text the lane
+checks; a module each
+program supplies under one name in its first root ([1480]), which hides
+which device a program's loop drives behind the order of its roots; and a
+copy of the loop in each program, which leaves no shared outcome to
+compare.
+
+**Pinned by** `environments/cortex-m/driver.py`'s exact application trace
+at every profile, `environments/cortex-m/source_debug.py`'s stops in
+`handle` and through the application's `transmit`, and the RP2040 and
+STM32H753 board applications, which build with it.
+
+### D646 — The board tools share one module and keep their own oracles
+
+**The tour said** nothing; D595's tool held everything a board run needs in
+one script, written for the RP2040.
+
+**Chosen:** `environments/boards/common.py` holds what does not depend on
+the chip: `Failed` and `require`; the trace's framing and the echo left
+when the frames are taken out; the command log; an ELF32 reader for
+sections and loaded bytes, and the symbols `nm` lists; probe-rs for a chip
+through a probe, a probehive slot over CMSIS-DAP UDP or an ST-LINK named by
+its USB serial, reading words and flashing with verification and a
+readback; the hub's power cycle, one `uhubctl -a cycle` of one port, only
+after the hub's listing shows the device the switched port must hold or a
+guarded port holding the device that must never lose power, run through
+`sg GROUP -c` when the session lacks the group that may switch it; a
+console over probehive's UART bridge or a tty found by its USB serial; and
+the record a passed run writes. Each board keeps its own script, its build,
+its scenario and its oracle, written from its own chip's documents.
+RP2040's tool keeps its behaviour and its record's form. Like the tools it
+serves, the module is a developer's and no compiler feature runs it.
+
+**The alternatives:** one tool for every board, which forces one scenario
+and one oracle on chips whose protocols differ; a copy of the generic parts
+in each board's script, which lets two copies of the hub's guard drift; and
+a package outside the repository, which the gate's script tests could not
+reach.
+
+**Pinned by** `scripts/tests/test_board_common.py`, which holds every part
+to fixed inputs with no board, probe or hub on the gate's Python, and
+`scripts/tests/test_board_rp2040.py`, which still holds the RP2040 tool's
+framing, accounting and guard.
+
+### D647 — The STM32H753 board stays on the HSI, with its supply configured before reset
+
+**The tour said** nothing; D560 learnt the STM32H753 for prototype 1's
+UART and DMA and D561 checked a transmit consumer's stores in its image.
+
+**Chosen:** `compiler/tests/board/stm32h753` brings the NUCLEO-H753ZI up as
+RM0433 Rev 9 says. The supply configuration 6.4.1 (p. 262) requires after
+a power-on reset, before any RAM is written, is the description's stage,
+which the reset vector enters before compiler-owned reset (D653). `start`
+first reads RCC_RSR, VTOR, CPACR and CCR, and PWR_CR3 and PWR_CSR1 as the
+stage left them, and clears the reset flags with RMVF. It enables the clocks of
+GPIO ports B and D, USART3 and DMA1 as 8.5.11 (p. 372) enables a
+peripheral: the enable written and read back, RCC_CR's D2CKRDY waited for,
+since USART3 and DMA1 are in the D2 domain, and a read of each
+peripheral. PB0, LD1, becomes the indicator, a push-pull output driven
+through GPIOB_BSRR, and PD8 and PD9 USART3's pins on alternate function 7.
+The system clock stays the 64 MHz HSI that reset selects (8.5.6, p. 350),
+every prescaler at one, so USART3's kernel clock is rcc_pclk1 at 64 MHz
+(Figure 53, p. 360) and 115,200 baud is BRR 556, 0.08 percent fast. The
+policy so selects PWR_CSR1 and PWR_CR3, RCC_CR and RCC_RSR, and GPIOB's
+MODER, IDR and BSRR, with three more reviewed reset values: port B's mode
+register, which the SVD derives from port A's (11.4.1, p. 541); RCC_CR's,
+0x0000 0001, which the SVD gives as 0x0000 0083 (8.7.2, p. 383); and
+RCC_RSR's power-on flags, which it gives as zero (8.7.39, p. 450). The
+Cortex-M7's own System Control Space, which the SVD does not describe, is
+the board's `scs` module at the Armv7-M addresses.
+
+**The alternatives:** the 8 MHz HSE the ST-LINK's MCO supplies, which needs
+HSE bypass and a PLL to give a USART clock with a smaller error than the
+HSI's divisor, and so a clock tree the run would also have to check; and
+configuring the supply first thing in `start`, after compiler-owned
+reset has copied data and cleared BSS into a RAM that RM0433 says may not
+yet be written.
+
+**Pinned by** `devices/test.py`'s `Stm32h753Oracles`, which holds the new
+registers to ST's header and to the manual's reset values and access
+types, and `environments/boards/stm32h753/board.py`'s boot verdicts.
+
+### D648 — On the STM32H753 an epoch is taken in laps, each armed by the stream's completion
+
+**The tour said** nothing; D594 is the RP2040's protocol, a live count over
+a channel whose writes wrap at the ring's size.
+
+**Chosen:** USART3 receives through DMA1 stream 0, paced by DMAMUX1's
+channel 0 with usart3_rx_dma, request 45 (Table 124, p. 697), into a
+256-byte ring, keeping D593's public receive contract with its atoms and
+its order of checks. The stream has no ring address, and a circular
+stream reloads its count where no reader can see how often, so the stream
+runs in normal mode, which stops at zero with EN clear (15.3.15, p. 654),
+and an epoch's budget is taken in laps of the ring's size, the last one
+shorter when the budget is not a multiple of it. The stream's
+transfer-complete interrupt arms each next lap from the ring's start until
+the budget is reached; an error leaves the stream disabled and its flag in
+DMA_LISR. A snapshot reads DMA_LISR and DMA_S0NDTR with interrupts masked
+and counts the laps completed and, of the lap armed, what the count says,
+or all of it when its completion is still pending. Stop clears EN and the
+completion interrupt in one write, so that no lap is armed after it, waits
+at most 1000 polls for EN to read 0, which 15.3.16 (p. 654) says it does
+once the transfer in progress completes, and keeps what the count then
+says was transferred; bytes received after the last snapshot before a stop
+are discarded with the epoch. FIFO mode is off, so while a stream is
+exhausted or stopped, or between a lap and the next, the receive data
+register holds one byte and the next is lost; the USART sets ORE (48.5.6,
+p. 2030), and a snapshot reports it as `overrun`, so no byte is lost
+unreported. A lap is re-armed within an interrupt's latency, far inside the
+87 microseconds of a byte at 115,200 baud.
+
+TRBUFF, DMA_SxCR's bit 20, is set, since RM0433 says it must be for a
+stream that serves a USART (15.5.5, p. 662); the SVD omits the field, and
+the policy adds it (D652). The board's oracle reads the stream's
+configuration over SWD and refuses a run without it.
+
+**The alternatives:** a circular stream with laps counted from its
+half-transfer and transfer-complete flags, whose budget no hardware
+enforces and whose snapshot cannot tell a lap from two; a ring as large as
+the budget, which leaves no ring to overrun; the USART's 16-entry FIFO,
+whose hold count RM0433 gives two ways (Table 402, p. 2018, and note 2 of
+p. 2067); and double-buffer mode, which reloads as circular mode does.
+
+**Pinned by** `environments/boards/stm32h753/board.py`: an overrun burst
+discarded and restarted, a burst into an exhausted stream flagged by ORE
+and restarted with the byte the receive register held kept, an exhausted
+epoch restarted with no byte lost, every echoed byte in order, and the
+count read over SWD; and `scripts/tests/test_board_stm32h753.py`'s
+accounting.
+
+### D649 — USART3's own IDLE interrupt is the one delivered at slot 55
+
+**The tour said** nothing; D596 delivered RP2040's IRQ5 by setting it
+pending, since nothing on that board raised it.
+
+**Chosen:** USART3's handler is placed at slot 55, IRQ 39 (Table 147,
+p. 755), and USART3 raises it itself: CR1's IDLEIE is set, and the IDLE
+flag, set one frame after the line falls quiet (48.8.10, p. 2091), wakes
+the application for a lap still in progress, the role RP2040's timer
+played. The handler counts its entries, reads IPSR and clears IDLE; the
+oracle requires it to have run in exception 55 and to run again for each
+later byte. DMA_STR0, slot 27, is the stream's completion.
+
+**The alternatives:** setting IRQ 39 pending through NVIC_ISPR as D596
+did, which shows the slot and not that the peripheral reaches it; and a
+timer's interrupt for the wakeup, which would need TIM2's clocks and
+registers beside an interrupt the USART already raises.
+
+**Pinned by** `environments/boards/stm32h753/board.py`'s USART3 verdict.
+
+### D650 — The STM32H753 board's oracle starts at power-on and its first frame waits for the host
+
+**The tour said** nothing; D595 is the RP2040's oracle.
+
+**Chosen:** `environments/boards/stm32h753/board.py` builds the image at
+`--level=armv7e-m` and checks, from the ELF alone, its 166-word vector
+table at the boot address 0x0800_0000 (2.6, p. 138) and the handlers at
+slots 27 and 55; flashes it with probe-rs over the board's ST-LINK V3,
+`--chip STM32H753ZITx`, and reads the table back; cuts the ST-LINK's USB
+power and restores it, only when the hub's listing shows the ST-LINK's
+serial on that port; finds the ST-LINK's virtual COM port again by the
+same serial once it re-enumerates; and sends one byte, since the firmware
+writes nothing until a byte arrives, which a host could otherwise miss
+while the port comes back. Its expectations come from RM0433 Rev 9 and
+from what the host sent, never from the firmware: RCC_RSR's named flags
+are Table 56's power-on line alone (p. 333), so the run began at power-on
+and no software reset followed; VTOR is the boot address; CCR's IC and DC
+are clear, the cacheless profile read on the chip; PWR_CSR1 is not ready
+before the supply is configured and ready after; `1`, `A` and `0` are
+echoed with PB0's input following them; a ring overrun and a USART
+overrun are each reported and restarted; every other byte is echoed in
+order; and the counters read over SWD without halting equal the last
+frame's. The trace's form is the RP2040 board's.
+
+**The alternatives:** a trace that starts at reset, whose first frame the
+virtual COM port can drop while it re-enumerates; probehive's UART for the
+console, which leaves the board's own USB serial line untested; and an
+oracle from the firmware's constants, which a wrong constant would satisfy.
+
+**Pinned by** `scripts/tests/test_board_stm32h753.py`, which holds the
+boot verdicts, the framing and the accounting to fixed inputs without a
+board.
+
+### D651 — The M7 board's float exercise is checked against the host's IEEE 754
+
+**The tour said** nothing; the M7's float unit is the phase's, and no
+emulator checks a board's float results.
+
+**Chosen:** the application's `floats` module computes f32 and f64
+addition, subtraction, multiplication, division and the six comparisons
+over operands the host sends as bit patterns, four bits a byte written `a`
+to `p`, so the arithmetic is compiled code over values no compiler can
+know; each result returns as its bit pattern. The oracle compares f64
+results with Python's binary64 arithmetic and f32 results with the
+binary64 result of the binary32 operands rounded once to binary32, which
+is correctly rounded for these operations; IEEE 754 fixes no NaN's bits,
+so a NaN matches any NaN, and a division by zero is IEEE 754's, not
+Python's refusal. It reads the linked disassembly of the float routines:
+`vadd`, `vsub`, `vmul`, `vdiv` and `vcmp` of both widths and no software
+float helper pass, software helpers alone are pending, and anything else
+fails. The square root is a hook: a `vsqrt` in an assembly block with a
+float operand, under `fixed if compiler.feature.fp_dp`, once float
+register operands and that feature exist; until its results arrive the
+square root is pending, as CPACR is until the compiler-owned startup
+grants CP10 and CP11. A run with anything pending is `pending`, never
+passed.
+
+**The alternatives:** a fixed table of operands in the image, which the
+folder could compute; comparing NaN bits, which IEEE 754 leaves to the
+implementation and which the host's and the M7's default NaNs differ in;
+and a software square root, which shows nothing of the float unit.
+
+**Pinned by** `scripts/tests/test_board_stm32h753.py`, which holds the
+oracle's arithmetic, its rounding at overflow, underflow and ties, its
+signed zeros and NaNs, its operand encoding and frames, and its reading of
+the instructions, pending and passed, to fixed inputs.
+
+### D652 — A reviewed correction may add a field the SVD lacks
+
+**The tour said** nothing; D556's `field_corrections` moved a field the SVD
+gives or omitted it, and D560 corrected the STM32H753's SVD so where
+RM0433 says it is wrong. The SVD's DMA_SxCR omits TRBUFF, bit 20, which
+RM0433 Rev 9 says must be set for a stream that manages UART, USART or
+LPUART transfers (15.5.5, p. 662), so the generated register wrote it as
+zero and no program could set it.
+
+**Chosen:** a field correction may say `"add": true` with `bits`, in the
+`[HIGH:LOW]` form a moved field's take, an `access` in the SVD's own words,
+`read-write`, `read-only`, `write-only`, `writeOnce` or `read-writeOnce`,
+and its `source`, as an interrupt correction may add an interrupt (D560).
+The added field is generated after the register's SVD fields as one of
+them, a `uN` with no enumeration, it joins the named mask its writer keeps,
+and the correspondence records it with `"added": true` and its source. A
+correction that adds a field the SVD gives, one whose bits overlap another
+field's, one that spells another's name once lowercased, an access outside
+those words, and an `access` on a correction that adds nothing are each
+refused as an invalid policy, naming the correction. The STM32H753's
+policy adds `DMA1.S0CR.TRBUFF`, and both of its USART streams set it: the
+board's receive (D648) and D561's transmit consumer, whose linked stores
+the check reads.
+
+**The alternatives:** writing the bit through a raw store beside the
+generated writer, which a reviewer of the module cannot see and which the
+module's write mask would otherwise clear; a field correction that names a
+missing field and so adds it, which would turn a misspelt correction into
+a new field; and a policy-level write mask admitting bit 20 unnamed, which
+D557 refuses, since the mask names no field.
+
+**Pinned by** the `devices` suite's `a correction is recorded`, which holds
+an added field's generated line, its register's named mask and its record,
+and `every refusal is named`, which holds each refusal; `devices/test.py`'s
+`Stm32h753Oracles`, which holds TRBUFF to ST's header and the manual and
+the consumer's stream stores to 0x0010 0440 and 0x0010 0441; and
+`environments/boards/stm32h753/board.py`, which reads DMA1_S0CR's TRBUFF
+over SWD.
+
+### D653 — A vector-table description may hold a stage the reset vector enters before reset
+
+**The tour said** nothing; D587 let a description hold the second stage its
+boot kind enters first, which only `rp2040-boot2` has, and refused one in
+a `vector-table` description as L0535. RM0433 Rev 9 says that after a
+power-on reset the STM32H753 permits no write to its RAMs until the supply
+configuration is written to PWR_CR3 and PWR_CSR1's ACTVOSRDY says the
+voltage levels are valid (6.4.1, step 5a, p. 262), and compiler-owned
+reset copies data and clears BSS before the firmware entry runs, so every
+STM32H753 program wrote RAM before it could configure its supply.
+
+**Chosen:** a `vector-table` description may hold one `link(boot_stage)`
+naked routine, with D587's form and refusals. The vector table's reset
+word is its entry, `_landin_firmware_reset_stage`, which the backend
+labels before the routine in a section of its own,
+`.text.landin_firmware_reset_stage`; without a stage the word is
+`_landin_firmware_reset`, as before. The derived script's `ENTRY` stays
+compiler-owned reset, which a harness linking its own start with a
+device's script defines: the core enters through the table's word.
+The stage runs before compiler-owned reset has written any memory, on the
+stack pointer the core loaded from the table, so it may use neither RAM
+nor the stack, and it ends by branching to `_landin_firmware_reset`, which
+it names, as RP2040's stage ends in the table's reset. Configuration
+refuses a stage that names no `_landin_firmware_reset`, L0560, and one
+that reaches the stack, through `push`, `pop`, `sp`, `r13`, `msp` or `psp`,
+L0561; what it reads and writes is otherwise the description's, checked as
+any naked body is. L0535 is now a stage in a description whose boot kind
+runs none, `rp2350-image-block`. RP2040's stage and `rp2040-boot2` are
+unchanged. The STM32H753's description holds `supply.ldn`: it writes
+PWR_CR3's lower byte with LDOEN set and BYPASS and SCUEN clear, the LDO
+supply (Table 34, p. 261; 6.8.4, p. 308), waits at most a million polls
+for ACTVOSRDY, and enters reset with `ldr` and `bx`, which reach it from
+anywhere in flash at every level; a supply that never becomes valid leaves
+the core in a loop of its own rather than in a reset writing RAM it may
+not. The attribute is D587's own; another spelling for the same routine
+would rename it and change nothing else here.
+
+**The alternatives:** a new link attribute for a routine before reset,
+which names one idea twice; a description directive naming a routine,
+which a reader of the description could not follow to its code; a hook
+in compiler-owned reset that calls a routine after the stack is set up,
+which writes the stack, and so RAM, first; and configuring the supply in
+the program's entry, after reset has written RAM.
+
+**Pinned by** the `cortex ABI` case `device descriptions select their
+profiles`, which holds the stage's section, its labelled entry and the
+table's reset word, the reset word without a stage, and L0536, L0560 and
+L0561; `negative/boot-stage-unwanted`, `negative/reset-stage-without-reset`
+and `negative/reset-stage-uses-the-stack`; `devices/test.py`'s `the
+consumer's linked accesses` and `environments/cortex-m/descriptions.py`,
+which follow the STM32H753 image from its reset word with no RAM and
+require the stage's PWR accesses, recorded from RM0433 in
+`descriptions.json`, before it enters reset; and
+`environments/boards/stm32h753/board.py`, which reads PWR_CR3 and
+PWR_CSR1's ACTVOSRDY in the boot frame.
+
+### D654 — The Pico 2's port is the Pico's, on the RP2350's own registers
+
+**The tour said** nothing; D593 to D596 are the RP2040 board's, and D636
+to D638 the RP2350 image's.
+
+**Chosen:** `compiler/tests/board/rp2350` is the RP2040 port at
+`--level=armv8-m.main` on the Cortex-M33 in Secure state, with no float:
+the same application, trace, command bytes and receive contract, over
+the RP2350's registers, which its description and modules give (D635). Bring-up
+moves clk_ref and clk_sys to the 12 MHz crystal and gives UART0 clk_peri
+as on the RP2040; TIMER0's 1 MHz tick comes from the tick generator, 12
+reference cycles a tick (8.5, Tick generators); UART0, DMA, TIMER0 and bank
+0's pins and pads leave reset and USBCTRL is held in it; and the pads it
+uses are enabled, since bank 0's reset with their inputs off and their
+isolation latched (9.3, Reset state): ISO cleared and IE set on GPIO0,
+GPIO1 and the indicator, GPIO3. The receive protocol is D594's live count,
+over the RP2350's channel: CTRL_TRIG's errors in bits 31:29 and BUSY in
+26, the ring on the write address, TREQ 29 for UART0_RX, and TRANS_COUNT's
+count in bits 27:0 beside its MODE. Stop follows the RP2350's abort
+sequence, which accounts for RP2350-E5 (12.6.8.3, Channel abort): EN
+cleared with CHAIN_TO the channel itself, then CHAN_ABORT written and
+polled, with BUSY, at most 1000 times. IRQ14, USBCTRL_IRQ, at slot 30, is
+set pending in the NVIC, as D596 set IRQ5; TIMER0_IRQ_0 and DMA_IRQ_0, at
+slots 16 and 26, are raised by the chip.
+
+**The alternatives:** a port written afresh, which would leave no
+comparison with the RP2040's run; the RP2040's abort, which RP2350-E5 says
+can fire a chained channel; and leaving the pads as reset leaves them,
+isolated, which drives no output and reads no input.
+
+**Pinned by** `environments/boards/rp2350/board.py`'s verdicts, and the
+application's build at `--level=armv8-m.main`.
+
+### D655 — The Pico 2's oracle starts at power-on and refuses a corrupted block on the board
+
+**The tour said** nothing; D595 is the RP2040's oracle, and D638 checks
+the block refine assembles.
+
+**Chosen:** `environments/boards/rp2350/board.py` builds the image and
+checks, from the ELF alone, its 68-word vector table at the start of
+flash, the USBCTRL_IRQ handler at slot 30, and the block directly after
+the table, the minimum Arm IMAGE_DEF of the datasheet (5.9.5.1, Table 503,
+p. 390); flashes it with probe-rs through probehive slot 1, `--chip
+RP235x`, and reads the table and the block back; cycles the Pico 2's
+power on a hub whose guarded port holds the probe, as the RP2040's tool
+does, since this firmware does not enumerate on USB; and reads the trace
+on slot 1's UART. Its expectations come from the datasheet and from what
+the host sent: POWMAN's CHIP_RESET reads HAD_POR alone (6.4, p. 429);
+VTOR reads 0x1000_0000, so the boot ROM took the block and entered the
+image; clk_ref is on the crystal; and the shared scenario, the IRQ14
+delivery, the overruns, the epochs, the echo and the SWD counters are
+held as D595 holds the RP2040's. As a physical negative control, with
+`--block-control`, a copy of the image whose block's end marker is flipped
+is flashed and power-cycled first, and the board must enumerate as USB
+BOOTSEL, 2e8a:000f (5.6.1, Table 470, p. 370), which the boot ROM does when
+it finds no image to boot; the good image is then flashed again.
+
+**The alternatives:** taking the block's acceptance from the program
+running alone, which a ROM that ignored blocks would also give; and a
+debugger-set program counter, which would not show the boot ROM entering
+the image.
+
+**Pinned by** `scripts/tests/test_board_rp2350.py`, which holds the block
+to the datasheet's table, the corrupted copy, the control's reading of the
+hub and the guard to fixed inputs without a board.
+
 ### D530 — `refine explain` answers a construct and a decision
 
 **The tour said** nothing. Diagnostic notes cite paragraphs and decisions,
@@ -21760,8 +22159,9 @@ does, and each says what to write instead:
   section, symbol, region, vector, alignment, `keep` or `thread`;
 - a boot stage outside the description the program selects, or in a
   program that selects none, is L0534;
-- one in a description whose boot kind takes none, `vector-table`, is
-  L0535;
+- one in a description whose boot kind takes none is L0535, which D653
+  leaves to `rp2350-image-block`, since a `vector-table` description may
+  hold a stage its reset vector enters before reset;
 - a second one in a description is L0536, naming the first;
 - and a description whose boot kind begins with a second stage,
   `rp2040-boot2`, that holds none is L0537, at its `compiler.boot`.

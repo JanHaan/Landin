@@ -147,8 +147,13 @@ def select(run, refine, device):
     require(image.symbols['_landin_firmware_stack_top'] == want['stack_top'],
             '%s: the stack top is %#x' % (device, image.symbols['_landin_firmware_stack_top']))
     require(image.word(vectors) == want['stack_top'], device + ': word 0 is not the stack top')
-    require(image.word(vectors + 4) == image.symbols['_landin_firmware_reset'] | 1,
-            device + ': word 1 is not reset')
+    if 'reset_stage' in want:
+        reset_stage(image, want, device, vectors)
+    else:
+        require(image.word(vectors + 4) == image.symbols['_landin_firmware_reset'] | 1,
+                device + ': word 1 is not reset')
+        require('_landin_firmware_reset_stage' not in image.symbols,
+                device + ' has a stage before reset')
     words = [image.word(vectors + 4 * slot) for slot in range(want['vector_words'])]
     for slot in want['reserved_slots']:
         require(words[slot] == 0, '%s: reserved slot %d holds %#x' % (device, slot, words[slot]))
@@ -181,6 +186,27 @@ def select(run, refine, device):
         require('error[L0347]' in refused and 'reserved in constrained-reference' in refused,
                 'the reference does not refuse slot %d' % want['refused_slot'])
     return image
+
+
+def reset_stage(image, want, device, vectors):
+    """D653: the reset vector enters the description's stage, which makes
+    the device accesses recorded from the manual with no memory but the
+    image's own bytes, no RAM and no stack, and then enters reset."""
+    stage = want['reset_stage']
+    require(image.word(vectors + 4) == image.symbols['_landin_firmware_reset_stage'] | 1,
+            device + ': word 1 is not the stage before reset')
+    reset = image.symbols['_landin_firmware_reset'] & ~1
+    answers = dict(stage['reads'])
+    windows = [(address & ~0x3ff, 0x400) for address, _ in stage['reads']]
+    try:
+        made = thumb.Evaluation(thumb.Image(image.data), windows, (0, 0),
+                                lambda address, width: answers.get(address, 0),
+                                limit=10_000, until=lambda pc: pc == reset).run()
+    except thumb.Refused as refused:
+        raise AssertionError('%s: the stage before reset: %s' % (device, refused))
+    require([list(a) for a in made] == stage['accesses'],
+            '%s: the stage before reset makes %r, and %r is recorded'
+            % (device, made, stage['accesses']))
 
 
 def crc32_mpeg2(data):

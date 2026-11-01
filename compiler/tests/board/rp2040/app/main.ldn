@@ -18,7 +18,6 @@ import rp2040/dma
 import rp2040/ppb
 import rp2040/sio
 import rp2040/timer
-import rp2040/uart0
 import rp2040/vreg_and_chip_reset
 import serial
 
@@ -33,9 +32,19 @@ mut usb_events: u32 = 0
 mut usb_exception: u32 = 0
 mut app_state: u32 = 0
 
--- Pico's indicator, GPIO3, and UART0 at the RP2040's own bases.
-port: commands.port = (sio_base: sio.base, indicator: bringup.indicator,
-                       uart_base: uart0.base)
+-- Pico's indicator, GPIO3, through SIO's set and clear aliases, and UART0
+-- at the RP2040's own bases.
+indicate: (on: bool) -> none =
+    if on then
+        sio.gpio_out_set_write(sio.base, bringup.indicator)
+    else
+        sio.gpio_out_clr_write(sio.base, bringup.indicator)
+    end if
+end indicate
+
+transmit: (byte: u8) -> none = report.put(byte) end transmit
+
+port: commands.port = (indicate: indicate, transmit: transmit)
 -- An epoch ends after 4096 bytes, so a long stream also exhausts and
 -- restarts the ring; the UART's 32-byte FIFO holds what arrives meanwhile.
 budget: u32 = 4096

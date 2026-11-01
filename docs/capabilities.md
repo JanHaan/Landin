@@ -47,12 +47,24 @@ entry that describes it, and put a new one where a reader would look for it.
   timer, GPIO and interrupt port at the RP2040's own addresses, checked
   against a physical oracle by a developer tool,
   [`board.py`](../environments/boards/rp2040/README.md) (D593-D596); no job
-  runs it. RP2350's description, learnt from pico-sdk's SVD (D635),
-  selects a Cortex-M33 with the Pico 2's 4 MiB flash, its 512 KiB of SRAM
-  and scratch banks and all 52 of its interrupts, and boots as an
-  `rp2350-image-block`: refine emits the IMAGE_DEF block the boot ROM looks
-  for directly after the vector table and reads it back from the object it
-  assembles (D636-D638); it compiles and links, and no board has run it.
+  runs it. The NUCLEO-H753ZI's port of the same application, its supply,
+  clocks, USART3 received through DMA in laps, PB0's indicator and a float
+  exercise, builds at `--level=armv7e-m` with an oracle of its own; its
+  description's stage configures the supply from the reset vector before
+  compiler-owned reset writes any RAM (D653), and it is checked by
+  [`board.py`](../environments/boards/stm32h753/README.md) (D647-D651), and
+  no board run of it is recorded yet; the board tools share
+  `environments/boards/common.py` (D646). RP2350's description, learnt from
+  pico-sdk's SVD (D635), selects a Cortex-M33 with the Pico 2's 4 MiB
+  flash, its 512 KiB of SRAM and scratch banks and all 52 of its
+  interrupts, and boots as an `rp2350-image-block`: refine emits the
+  IMAGE_DEF block the boot ROM looks for directly after the vector table
+  and reads it back from the object it assembles (D636-D638); it compiles
+  and links. The Pico 2's port of the RP2040 application, at
+  `--level=armv8-m.main` with no float, is checked by an oracle of its own,
+  [`board.py`](../environments/boards/rp2350/README.md) (D654, D655), with a
+  negative control that a corrupted block is not booted; no board run of
+  it is recorded yet.
   The derived linker script is written as `OUT.ld`, or alone with its
   limits by `--emit=linker-script` (D589), a developer's own is linked with
   `--linker-script=FILE` and held to a contract (D546), and

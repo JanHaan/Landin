@@ -6,8 +6,9 @@ import rp2040/uart0
 
 digits: [16]u8 = [48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 97, 98, 99, 100, 101, 102]
 
--- UARTFR's TXFF, bit 5, is set while the transmit FIFO is full.
-put: (byte: u8) -> none =
+-- UARTFR's TXFF, bit 5, is set while the transmit FIFO is full; a byte
+-- written then is lost.  The echo goes out through this too.
+public put: (byte: u8) -> none =
     while (uart0.uartfr_read(uart0.base) & 0x20) <> 0 do
         continue
     end while

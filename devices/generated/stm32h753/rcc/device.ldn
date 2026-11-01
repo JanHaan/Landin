@@ -6,6 +6,58 @@ compiler.assert(compiler.byte_order == little)
 compiler.assert(sizeof u32 == 4 and alignof u32 == 4)
 public base: usize = 0x58024400
 
+public cr_offset: usize = 0x0
+public cr_address: usize = 0x58024400
+public cr_named_mask: u32 = 0x3f0ff3bf
+public cr_reset_mask: u32 = 0x3f0ff3bf
+public cr_reset_value: u32 = 0x00000001
+public cr_image: type = layout(packed, u32) struct
+    f_hsion: u1 at 0..0
+    f_hsikeron: u1 at 1..1
+    f_hsirdy: u1 at 2..2
+    f_hsidiv: u2 at 3..4
+    f_hsidivf: u1 at 5..5
+    f_csion: u1 at 7..7
+    f_csirdy: u1 at 8..8
+    f_csikeron: u1 at 9..9
+    f_rc48on: u1 at 12..12
+    f_rc48rdy: u1 at 13..13
+    f_d1ckrdy: u1 at 14..14
+    f_d2ckrdy: u1 at 15..15
+    f_hseon: u1 at 16..16
+    f_hserdy: u1 at 17..17
+    f_hsebyp: u1 at 18..18
+    f_hsecsson: u1 at 19..19
+    f_pll1on: u1 at 24..24
+    f_pll1rdy: u1 at 25..25
+    f_pll2on: u1 at 26..26
+    f_pll2rdy: u1 at 27..27
+    f_pll3on: u1 at 28..28
+    f_pll3rdy: u1 at 29..29
+end cr_image
+
+public cr_decode: (raw: u32) -> (image: cr_image) =
+    image = zeroed
+    bits: ptr mut u32 = ptr(usize(addr image))
+    bits.val = raw
+end cr_decode
+
+public cr_encode: (image: cr_image) -> (raw: u32) =
+    bits: ptr u32 = ptr(usize(addr image))
+    raw = bits.val
+end cr_encode
+
+public cr_read: (device_base: usize) -> (raw: u32) =
+    port: ptr u32 = ptr(device_base + cr_offset)
+    raw = compiler.register_read(port, compiler.normal_read)
+end cr_read
+
+public cr_write: (device_base: usize, raw: u32) -> none =
+    port: ptr mut u32 = ptr(device_base + cr_offset)
+    compiler.register_write(port, raw, compiler.normal_write,
+                            compiler.write_zero, 0x3f0ff3bf)
+end cr_write
+
 public ahb1enr_offset: usize = 0xd8
 public ahb1enr_address: usize = 0x580244d8
 public ahb1enr_named_mask: u32 = 0x1e038023
@@ -145,3 +197,44 @@ public apb1lenr_write: (device_base: usize, raw: u32) -> none =
     compiler.register_write(port, raw, compiler.normal_write,
                             compiler.write_zero, 0xe8ffc3ff)
 end apb1lenr_write
+
+public rsr_offset: usize = 0xd0
+public rsr_address: usize = 0x580244d0
+public rsr_named_mask: u32 = 0x55fb0000
+public rsr_reset_mask: u32 = 0x55fb0000
+public rsr_reset_value: u32 = 0x00fa0000
+public rsr_image: type = layout(packed, u32) struct
+    f_rmvf: u1 at 16..16
+    f_cpurstf: u1 at 17..17
+    f_d1rstf: u1 at 19..19
+    f_d2rstf: u1 at 20..20
+    f_borrstf: u1 at 21..21
+    f_pinrstf: u1 at 22..22
+    f_porrstf: u1 at 23..23
+    f_sftrstf: u1 at 24..24
+    f_iwdg1rstf: u1 at 26..26
+    f_wwdg1rstf: u1 at 28..28
+    f_lpwrrstf: u1 at 30..30
+end rsr_image
+
+public rsr_decode: (raw: u32) -> (image: rsr_image) =
+    image = zeroed
+    bits: ptr mut u32 = ptr(usize(addr image))
+    bits.val = raw
+end rsr_decode
+
+public rsr_encode: (image: rsr_image) -> (raw: u32) =
+    bits: ptr u32 = ptr(usize(addr image))
+    raw = bits.val
+end rsr_encode
+
+public rsr_read: (device_base: usize) -> (raw: u32) =
+    port: ptr u32 = ptr(device_base + rsr_offset)
+    raw = compiler.register_read(port, compiler.normal_read)
+end rsr_read
+
+public rsr_write: (device_base: usize, raw: u32) -> none =
+    port: ptr mut u32 = ptr(device_base + rsr_offset)
+    compiler.register_write(port, raw, compiler.normal_write,
+                            compiler.write_zero, 0x55fb0000)
+end rsr_write

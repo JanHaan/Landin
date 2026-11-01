@@ -1,0 +1,283 @@
+-- The prototype-1 receive contract on the STM32H753 (D648): USART3 on PD8
+-- and PD9 received into a ring by DMA1 stream 0, which DMAMUX1's channel 0
+-- paces with usart3_rx_dma, request 45 (Table 124, p. 697).  Its public
+-- interface and its atoms are the synthetic driver's and the RP2040
+-- board's, with the same order of checks; its device protocol is this
+-- chip's, from RM0433 Rev 9.
+--
+-- The stream counts down and, in normal mode, stops at zero with EN clear
+-- (15.3.15, p. 654); it has no ring address, and a circular stream
+-- reloads its count where no snapshot can see how often.  So an epoch's
+-- budget is taken in laps of the ring's size, the last one shorter when
+-- the budget is not a multiple of it, and the stream's transfer-complete
+-- interrupt arms each next lap from the ring's start until the budget is
+-- reached.  A snapshot reads the stream with interrupts masked: the bytes
+-- of the laps completed, and of the lap armed what its count says, or all
+-- of it when its completion is still pending.  Stop clears EN with the
+-- completion interrupt, so that no lap is armed after it, and waits at
+-- most 1000 polls for EN to read 0, which 15.3.16 (p. 654) says it does
+-- once the transfer in progress completes; the count then holds what was
+-- not transferred.  Bytes received after the last snapshot before a stop
+-- are discarded with the epoch.
+--
+-- While an epoch is exhausted or stopped, or between a lap and the next,
+-- USART3's receive data register holds one byte, FIFO mode being off, and
+-- the next is lost: the USART sets ORE (48.5.6, p. 2030), and a snapshot
+-- reports that as an overrun, so no byte is lost unreported.  USART3's
+-- IDLE interrupt, raised one frame after the line falls quiet, wakes the
+-- program for a lap still in progress.
+--
+-- TRBUFF, DMA_SxCR's bit 20, is set, as RM0433 says it must be for a
+-- stream that serves a USART (15.5.5, p. 662); the SVD omits the field and
+-- the policy adds it (D652).
+import platform/cortex_m
+import stm32h753/dma1
+import stm32h753/dmamux1
+import stm32h753/usart3
+
+public busy: atom
+public bad_baud: atom
+public buffer_empty: atom
+public buffer_too_big: atom
+public bad_buffer: atom
+public overrun: atom
+public transfer_error: atom
+public exhausted: atom
+public stop_timeout: atom
+public receive_error: type = overrun | transfer_error | exhausted | stop_timeout
+
+public rx: type = struct
+    buf: []u8
+    consumed: u32
+    budget: u32
+    -- What the last snapshot counted, kept when the stream is stopped.
+    produced: u32
+    config: u32
+    active: bool
+    lost: bool
+    broken: bool
+end rx
+
+-- DMA_LISR and DMA_LIFCR for stream 0 (15.5.1, p. 659; 15.5.3, p. 660):
+-- TCIF0 5, HTIF0 4, TEIF0 3, DMEIF0 2 and FEIF0 0.
+transfer_complete: u32 = 0x20
+completions: u32 = 0x30
+errors: u32 = 0x0d
+-- DMA_SxCR (15.5.5, p. 662): EN 0 and TCIE 4.
+enable: u32 = 0x01
+complete_interrupt: u32 = 0x10
+-- USART_ISR and USART_ICR (48.8.10, p. 2091; 48.8.11, p. 2096): ORE and
+-- ORECF, bit 3, and IDLE and IDLECF, bit 4.
+uart_overrun: u32 = 0x08
+uart_idle: u32 = 0x10
+
+-- What the completion interrupt and the descriptor's routines share, each
+-- written in the interrupt or with interrupts masked: the bytes of the
+-- laps this epoch has completed, the length of the lap armed, the epoch's
+-- budget, the ring's size and address, the stream's configuration, and
+-- whether another lap may be armed.
+mut finished: u32 = 0
+mut lap: u32 = 0
+mut epoch: u32 = 0
+mut ring: u32 = 0
+mut ring_address: u32 = 0
+mut stream_config: u32 = 0
+mut arming: bool = false
+-- Every lap and every epoch the stream has completed, for the trace.
+mut laps_done: u32 = 0
+mut epochs_done: u32 = 0
+
+public laps: () -> (count: u32) = count = laps_done end laps
+
+public epochs: () -> (count: u32) = count = epochs_done end epochs
+
+-- Arm the next lap from the ring's start.  EN is clear, by the stream at
+-- the end of the last lap or by stop, so its registers may be written,
+-- and its completion flags are cleared before it is enabled again
+-- (15.3.19, p. 656).
+arm: () -> none =
+    lap = ring
+    if epoch -% finished < lap then lap = epoch -% finished end if
+    dma1.s0m0ar_write(dma1.base, ring_address)
+    dma1.s0ndtr_write(dma1.base, lap)
+    dma1.lifcr_write(dma1.base, completions)
+    cortex_m.device_barrier()
+    dma1.s0cr_write(dma1.base, stream_config | enable)
+end arm
+
+-- DMA_STR0's handler calls this.  A lap that ended arms the next unless
+-- the budget is reached or a stop cleared `arming`; an error stays in
+-- DMA_LISR for the next snapshot, and its stream stays disabled.
+public completed: () -> none =
+    status := dma1.lisr_read(dma1.base)
+    dma1.lifcr_write(dma1.base, status & completions)
+    if (status & transfer_complete) <> 0 and (status & errors) == 0 and arming then
+        finished = finished +% lap
+        laps_done = laps_done +% 1
+        if finished < epoch then
+            arm()
+        else
+            lap = 0
+            arming = false
+            epochs_done = epochs_done +% 1
+        end if
+    end if
+    cortex_m.device_barrier()
+end completed
+
+-- USART3's handler calls this: whether the line fell idle, IDLE cleared.
+public idle: () -> (seen: bool) =
+    status := usart3.isr_read(usart3.base)
+    seen = (status & uart_idle) <> 0
+    if seen then usart3.icr_write(usart3.base, uart_idle) end if
+    cortex_m.device_barrier()
+end idle
+
+public open: (rate: u32, budget: u32, escaping buf: []mut u8)
+             -> (r: rx from buf) ! busy | bad_baud | buffer_empty | buffer_too_big | bad_buffer =
+    size := lenof buf
+    fail buffer_empty when size == 0
+    fail buffer_too_big when size > 256
+    fail bad_buffer when size < 2 or (size & (size - 1)) <> 0
+    fail bad_buffer when (usize(addr buf[0]) & (size - 1)) <> 0
+    fail bad_buffer when budget < u32(size) or budget > 65535
+    fail bad_baud when rate <> 115200
+    status := dma1.s0cr_read(dma1.base)
+    fail busy when (status & enable) <> 0
+      or (dma1.lisr_read(dma1.base) & errors) <> 0
+    -- 64 MHz / 115200 = 555.6, oversampling by 16: BRR 556 (48.5.7,
+    -- p. 2034), written while UE is clear, as CR3 is.  CR3's DMAR, bit 6,
+    -- receives through DMA; CR1's UE 0, RE 2, TE 3 and IDLEIE 4, with FIFO
+    -- mode off (48.8.2, p. 2070).
+    usart3.brr_write(usart3.base, 556)
+    mut control3 := usart3.cr3_decode(0)
+    control3.f_dmar = 1
+    usart3.cr3_write(usart3.base, usart3.cr3_encode(control3))
+    mut control1 := usart3.cr1_decode(0)
+    control1.f_ue = 1
+    control1.f_re = 1
+    control1.f_te = 1
+    control1.f_idleie = 1
+    usart3.cr1_write(usart3.base, usart3.cr1_encode(control1))
+    usart3.icr_write(usart3.base, uart_overrun | uart_idle)
+    -- DMAMUX1's channel 0 serves DMA1 stream 0 (17.3.2, p. 696).
+    mut request := dmamux1.dmamux_c0cr_decode(0)
+    request.f_dmareq_id = 45
+    dmamux1.dmamux_c0cr_write(dmamux1.base, dmamux1.dmamux_c0cr_encode(request))
+    -- Peripheral to memory, bytes, memory increment, the completion
+    -- interrupt and bufferable transfers; normal mode, direct mode,
+    -- priority low.
+    mut stream := dma1.s0cr_decode(0)
+    stream.f_minc = 1
+    stream.f_tcie = 1
+    stream.f_trbuff = 1
+    config := dma1.s0cr_encode(stream)
+    dma1.s0par_write(dma1.base, u32(usart3.rdr_address))
+    dma1.s0cr_write(dma1.base, config)
+    saved := cortex_m.disable_interrupts()
+    stream_config = config
+    ring = u32(size)
+    ring_address = u32(usize(addr buf[0]))
+    epoch = budget
+    finished = 0
+    arming = true
+    arm()
+    cortex_m.restore_interrupts(saved)
+    r = (buf: buf, consumed: 0, budget: budget, produced: 0, config: config,
+         active: true, lost: false, broken: false)
+end open
+
+-- The count never reloads in an epoch. Failure latches until an explicit
+-- restart; a stopped descriptor answers from what its last snapshot saw.
+snapshot: (inout r: rx) -> (count: usize) ! overrun | transfer_error | exhausted =
+    if r.active then
+        saved := cortex_m.disable_interrupts()
+        status := dma1.lisr_read(dma1.base)
+        remaining := dma1.s0ndtr_read(dma1.base)
+        done := finished
+        armed := lap
+        cortex_m.restore_interrupts(saved)
+        cortex_m.device_barrier()
+        if (status & errors) <> 0 or remaining > armed then r.broken = true end if
+        fail transfer_error when r.broken
+        if (status & transfer_complete) <> 0 then
+            r.produced = done +% armed
+        else
+            r.produced = done +% armed -% remaining
+        end if
+        if r.produced == r.budget then r.active = false end if
+    end if
+    if r.produced < r.consumed or r.produced > r.budget then r.broken = true end if
+    fail transfer_error when r.broken
+    have := r.produced -% r.consumed
+    capacity := lenof r.buf
+    if (usart3.isr_read(usart3.base) & uart_overrun) <> 0 then
+        r.lost = true
+        r.consumed = r.produced
+    end if
+    if have > u32(capacity) then
+        r.lost = true
+        r.consumed = r.produced
+    end if
+    fail overrun when r.lost
+    fail exhausted when r.produced == r.budget and have == 0
+    count = usize(have)
+end snapshot
+
+public available: (inout r: rx) -> (count: usize) ! receive_error =
+    count = try snapshot(r)
+end available
+
+public read: (inout r: rx, out_buf: []mut u8) -> (count: usize) ! receive_error =
+    have := try snapshot(r)
+    count = have
+    if lenof out_buf < count then count = lenof out_buf end if
+    backing := r.buf
+    capacity := lenof backing
+    -- snapshot bounds count by both initialized extents; consumed <= 65535,
+    -- i < 256 and capacity is a nonzero power of two. No arithmetic wraps.
+    unchecked begin
+        for i in 0..<count do
+            out_buf[i] = backing[(usize(r.consumed) + i) & (capacity - 1)]
+        end for
+    end unchecked
+    r.consumed = r.consumed +% u32(count)
+end read
+
+public stop: (inout r: rx) -> none ! stop_timeout =
+    saved := cortex_m.disable_interrupts()
+    defer cortex_m.restore_interrupts(saved)
+    arming = false
+    dma1.s0cr_write(dma1.base, stream_config & ~complete_interrupt)
+    mut attempts: u32 = 0
+    while (dma1.s0cr_read(dma1.base) & enable) <> 0 do
+        attempts += 1
+        fail stop_timeout when attempts == 1000
+    end while
+    if r.active then
+        remaining := dma1.s0ndtr_read(dma1.base)
+        if remaining <= lap then r.produced = finished +% lap -% remaining end if
+    end if
+    r.active = false
+    dma1.lifcr_write(dma1.base, completions)
+    cortex_m.device_barrier()
+end stop
+
+-- Discards unread bytes deliberately; may be called after error or exhaustion.
+public restart: (inout r: rx) -> none ! stop_timeout | transfer_error =
+    try stop(r)
+    status := dma1.lisr_read(dma1.base)
+    fail transfer_error when (status & errors) <> 0
+    usart3.icr_write(usart3.base, uart_overrun)
+    r.consumed = 0
+    r.produced = 0
+    r.lost = false
+    r.broken = false
+    r.active = true
+    saved := cortex_m.disable_interrupts()
+    dma1.s0cr_write(dma1.base, stream_config)
+    finished = 0
+    arming = true
+    arm()
+    cortex_m.restore_interrupts(saved)
+end restart

@@ -1,0 +1,37 @@
+-- What the STM32H753 runs from its reset vector, before compiler-owned
+-- reset writes any memory (D653).  Written by hand from RM0433 Rev 9.
+--
+-- After a power-on reset the system is in Run*, and until the supply
+-- configuration is written to PWR_CR3 and PWR_CSR1's ACTVOSRDY says the
+-- voltage levels are valid, write accesses to the RAMs are not permitted
+-- (6.4.1, step 5a, p. 262).  Reset copies the initialized data and clears
+-- the zeroed into the AXI SRAM, so the supply is configured here first: the
+-- LDO, the H753's only regulator (Table 34, p. 261), LDOEN set with BYPASS
+-- and SCUEN clear in PWR_CR3's write-once lower byte (6.8.4, p. 308), and
+-- ACTVOSRDY, PWR_CSR1's bit 13 (6.8.2, p. 305), waited for at most a
+-- million polls.  The stage uses registers alone: no stack and no RAM.  A
+-- supply that never becomes valid leaves the core at supply_stalled, where
+-- a debugger finds it, rather than in reset writing a RAM it may not.
+link(boot_stage) extern(naked) supply: () -> none =
+    assembler.block("""
+        ldr r0, =0x58024800     @ PWR_BASE (stm32h753xx.h)
+        ldr r1, [r0, #12]       @ PWR_CR3
+        movs r2, #7             @ SCUEN, LDOEN and BYPASS
+        bics r1, r2
+        movs r2, #2             @ LDOEN
+        orrs r1, r2
+        str r1, [r0, #12]
+        ldr r2, =1000000
+        supply_wait:
+        ldr r1, [r0, #4]        @ PWR_CSR1
+        lsls r1, r1, #18        @ ACTVOSRDY, bit 13, to the sign
+        bmi supply_ready
+        subs r2, #1
+        bne supply_wait
+        supply_stalled:
+        b supply_stalled
+        supply_ready:
+        ldr r0, =_landin_firmware_reset
+        bx r0
+        """)
+end supply

@@ -97,8 +97,8 @@ end lifcr_write
 
 public s0cr_offset: usize = 0x10
 public s0cr_address: usize = 0x40020010
-public s0cr_named_mask: u32 = 0x01efffff
-public s0cr_reset_mask: u32 = 0x01efffff
+public s0cr_named_mask: u32 = 0x01ffffff
+public s0cr_reset_mask: u32 = 0x01ffffff
 public s0cr_reset_value: u32 = 0x00000000
 public s0cr_image: type = layout(packed, u32) struct
     f_mburst: u2 at 23..24
@@ -119,6 +119,7 @@ public s0cr_image: type = layout(packed, u32) struct
     f_teie: u1 at 2..2
     f_dmeie: u1 at 1..1
     f_en: u1 at 0..0
+    f_trbuff: u1 at 20..20
 end s0cr_image
 
 public s0cr_decode: (raw: u32) -> (image: s0cr_image) =
@@ -140,7 +141,7 @@ end s0cr_read
 public s0cr_write: (device_base: usize, raw: u32) -> none =
     port: ptr mut u32 = ptr(device_base + s0cr_offset)
     compiler.register_write(port, raw, compiler.normal_write,
-                            compiler.write_zero, 0x01efffff)
+                            compiler.write_zero, 0x01ffffff)
 end s0cr_write
 
 public s0ndtr_offset: usize = 0x14

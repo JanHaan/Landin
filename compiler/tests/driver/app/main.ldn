@@ -3,7 +3,9 @@ import commands
 import drivers/uart
 import platform/cortex_m
 import rp2040/dma
+import rp2040/sio
 import rp2040/timer
+import rp2040/uart0
 
 link(align: 256)
 mut rx_storage: [256]u8 = zeroed
@@ -39,8 +41,29 @@ take_events: () -> none =
     notification = 0
 end take_events
 
--- The synthetic indicator is SIO bit 0 at the model's base.
-port: commands.port = (sio_base: 0x40070100, indicator: 1, uart_base: uart.uart_base)
+-- The synthetic indicator is SIO bit 0 at the model's base, and the echo
+-- goes to the model's UART.
+sio_base: usize = 0x40070100
+indicator: u32 = 1
+
+indicate: (on: bool) -> none =
+    if on then
+        sio.gpio_out_set_write(sio_base, indicator)
+    else
+        sio.gpio_out_clr_write(sio_base, indicator)
+    end if
+end indicate
+
+-- UARTFR's TXFF, bit 5, is set while the transmit FIFO is full; a byte
+-- written then is lost.  The synthetic device always has room.
+transmit: (byte: u8) -> none =
+    while (uart0.uartfr_read(uart.uart_base) & 0x20) <> 0 do
+        continue
+    end while
+    uart0.uartdr_write(uart.uart_base, u32(byte))
+end transmit
+
+port: commands.port = (indicate: indicate, transmit: transmit)
 
 halt: (status: u32) -> noreturn =
     app_state = status

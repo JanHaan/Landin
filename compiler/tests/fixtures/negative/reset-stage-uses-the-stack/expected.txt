@@ -1,0 +1,6 @@
+error[L0561]: this stage runs before reset and uses the stack, through push
+  --> ../tests/fixtures/negative/reset-stage-uses-the-stack/program.ldn:14:1
+   |
+14 | link(boot_stage) extern(naked) supply: () -> none =
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: D653: a vector-table image's stage runs before any memory may be written, on the stack pointer the core loaded from the table; keep what it needs in registers

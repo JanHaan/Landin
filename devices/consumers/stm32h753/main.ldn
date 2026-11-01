@@ -49,6 +49,9 @@ public start: () -> noreturn =
     mut stream := dma1.s0cr_decode(0)
     stream.f_dir = 1
     stream.f_minc = 1
+    -- TRBUFF, which a stream serving a USART must set (RM0433 15.5.5,
+    -- p. 662), a field the policy adds to the SVD's.
+    stream.f_trbuff = 1
     dma1.s0cr_write(dma1.base, dma1.s0cr_encode(stream))
     mut control1 := usart3.cr1_decode(0)
     control1.f_te = 1

@@ -62,7 +62,7 @@ def app_stops(elf):
                        ' else (problem)'),
         open=at(UART, 'fail buffer_empty when size == 0'),
         timer=at(APP, 'timer.intr_write(0x40070300, 1)'),
-        echo=at(COMMANDS, 'uart0.uartdr_write(p.uart_base, u32(byte))'),
+        echo=at(COMMANDS, 'p.transmit(byte)'),
         halt=at(APP, 'loop do cortex_m.wait_for_interrupt() end loop'))
 
 
@@ -129,8 +129,11 @@ def application(run, elf):
         'chain(["handle","start","_landin_firmware_reset"])', 'end', 'bt',
         'delete breakpoints', 'break uartdr_write', 'continue', 'python',
         'frame("uartdr_write","source/rp2040/uart0/device.ldn")',
-        'chain(["uartdr_write","handle","start"])', 'end', 'bt',
+        # The shared loop echoes through the application's transmitter,
+        # a function value its port carries (D645).
+        'chain(["uartdr_write","transmit","handle","start"])', 'end', 'bt',
         'delete breakpoints', 'finish', 'python',
+        f'frame("transmit",{APP!r})', 'end', 'finish', 'python',
         f'frame("handle",{COMMANDS!r})', 'end',
         'break wait_for_interrupt','continue','delete breakpoints',
         'monitor delay_stop 20 -1','monitor feed 65',

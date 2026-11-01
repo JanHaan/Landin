@@ -246,6 +246,9 @@ package Landin.Diagnostics.Catalogue is
       --  D615: a description's float unit.  Configuration finds both.
       Float_Unit_Unsupported,
       Float_Unit_Level,
+      --  D653: a stage the reset vector enters before compiler-owned reset.
+      Reset_Stage_Return,
+      Reset_Stage_Stack,
       --  D251 also admits removing a whole unused, effect-free local.
       Unused_Pure_Local,
       --  The backend and its toolchain.  None is about a frontend
@@ -1088,6 +1091,20 @@ package Landin.Diagnostics.Catalogue is
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("D615: a description with a float unit, built at a"
                    & " level whose architecture lacks it")),
+      Reset_Stage_Return =>
+        (Code => "L0560", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 0, Most => 0, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("D653: a vector-table description's stage that does"
+                   & " not name compiler-owned reset")),
+      Reset_Stage_Stack =>
+        (Code => "L0561", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 0, Most => 0, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("D653: a vector-table description's stage that uses the"
+                   & " stack")),
       --  D251, as for Mutable_Never_Written.
       Unused_Pure_Local =>
         (Code => "L0349", Level => Warning, State => Live,

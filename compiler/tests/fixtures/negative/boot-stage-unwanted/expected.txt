@@ -1,6 +1,6 @@
-error[L0535]: a vector-table image has no second stage, and this description holds one; the boot kind is at ../tests/fixtures/negative/boot-stage-unwanted/program.ldn:4
+error[L0535]: boot kind rp2350-image-block runs no stage, and this description holds one; the boot kind is at ../tests/fixtures/negative/boot-stage-unwanted/program.ldn:4
   --> ../tests/fixtures/negative/boot-stage-unwanted/program.ldn:14:1
    |
 14 | link(boot_stage) extern(naked) stage: () -> none =
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  = note: D587: only an rp2040-boot2 image begins with a second stage; remove this routine, or select the boot kind whose ROM enters it
+  = note: D587, D653: an rp2040-boot2 image begins with a second stage, and a vector-table one may run one before reset; remove this routine, or select a boot kind that runs it

@@ -1,0 +1,174 @@
+-- The prototype-1 application on a Raspberry Pi Pico 2: UART0 received
+-- by DMA and echoed, ASCII 1 and 0 driving GPIO3, timer wakeups, and a
+-- trace of what the board did, which environments/boards/rp2350/board.py
+-- checks against its physical oracle (D654, D655).  The echo and the
+-- indicator are the shared commands.handle, run by the synthetic
+-- application in the emulator and the other boards too.  It runs on the
+-- Cortex-M33 in Secure state, as the image block says, and uses no float.
+--
+-- Three bytes are also commands, after their echo: 0x05 sets IRQ14,
+-- USBCTRL_IRQ, pending, which slot 30's handler counts; 0x11 asks for a
+-- telemetry frame; and 0x12 stops reading for 100 ms, so that a burst
+-- sent then overruns the ring.
+import bringup
+import commands
+import descriptions/rp2350
+import platform/cortex_m
+import report
+import rp2350/clocks
+import rp2350/dma
+import rp2350/powman
+import rp2350/ppb
+import rp2350/sio
+import rp2350/timer0
+import serial
+
+link(align: 256)
+mut rx_storage: [256]u8 = zeroed
+mut notification: u32 = 0
+mut handled: u32 = 0
+mut recoveries: u32 = 0
+mut dma_events: u32 = 0
+mut timer_events: u32 = 0
+mut usb_events: u32 = 0
+mut usb_exception: u32 = 0
+mut app_state: u32 = 0
+
+-- Pico's indicator, GPIO3, through SIO's set and clear aliases, and UART0
+-- at the RP2040's own bases.
+indicate: (on: bool) -> none =
+    if on then
+        sio.gpio_out_set_write(sio.base, bringup.indicator)
+    else
+        sio.gpio_out_clr_write(sio.base, bringup.indicator)
+    end if
+end indicate
+
+transmit: (byte: u8) -> none = report.put(byte) end transmit
+
+port: commands.port = (indicate: indicate, transmit: transmit)
+-- An epoch ends after 4096 bytes, so a long stream also exhausts and
+-- restarts the ring; the UART's 32-byte FIFO holds what arrives meanwhile.
+budget: u32 = 4096
+
+-- TIMER0_IRQ_0 is IRQ0, slot 16; DMA_IRQ_0 IRQ10, slot 26; USBCTRL_IRQ
+-- IRQ14, slot 30 (3.2, Table 95).
+link(vector: 16)
+extern(interrupt) timer_irq: () -> none =
+    timer0.intr_write(timer0.base, 1)
+    timer_events = timer_events +% 1
+    notification = 1
+    cortex_m.completion_barrier()
+end timer_irq
+
+link(vector: 30)
+extern(interrupt) usb_irq: () -> none =
+    usb_events = usb_events +% 1
+    usb_exception = assembler.block("mrs {number}, ipsr", out number: u32 at general)
+    cortex_m.completion_barrier()
+end usb_irq
+
+link(vector: 26)
+extern(interrupt) dma_irq: () -> none =
+    pending := dma.intr_read(dma.base)
+    if (pending & 1) <> 0 then
+        notification = 1
+        dma_events = dma_events +% 1
+    end if
+    dma.intr_write(dma.base, pending & 1)
+    cortex_m.completion_barrier()
+end dma_irq
+
+take_events: () -> none =
+    saved := cortex_m.disable_interrupts()
+    defer cortex_m.restore_interrupts(saved)
+    notification = 0
+end take_events
+
+telemetry: (r: serial.rx) -> none =
+    report.open_frame(116)
+    report.field(104, handled)
+    report.field(99, recoveries)
+    report.field(100, dma_events)
+    report.field(109, timer_events)
+    report.field(117, usb_events)
+    report.field(112, usb_exception)
+    report.field(110, dma.ch0_trans_count_read(dma.base) & 0x0fffffff)
+    report.field(101, r.consumed)
+    report.field(103, sio.gpio_in_read(sio.base) & bringup.indicator)
+    report.field(115, app_state)
+    report.close_frame()
+end telemetry
+
+stall: () -> none =
+    began := timer0.timerawl_read(timer0.base)
+    while timer0.timerawl_read(timer0.base) -% began < 100_000 do
+        continue
+    end while
+end stall
+
+halt: (status: u32) -> noreturn =
+    app_state = status
+    report.open_frame(104)
+    report.field(115, status)
+    report.close_frame()
+    loop do cortex_m.wait_for_interrupt() end loop
+end halt
+
+start: () -> noreturn =
+    -- Read before anything resets it: which reset this was, from POWMAN's
+    -- CHIP_RESET (6.4), and the table the boot ROM pointed VTOR at before
+    -- it entered the image's reset.
+    reason := powman.chip_reset_read(powman.base)
+    table := ppb.vtor_read(ppb.base)
+    bringup.crystal()
+    bringup.peripherals()
+    mut receiver := serial.open(115200, budget, rx_storage[0..<256]) else (problem)
+        _ = problem
+        halt(1)
+    end
+    report.open_frame(98)
+    report.field(114, reason)
+    report.field(118, table)
+    report.field(107, clocks.clk_ref_selected_read(clocks.base))
+    report.close_frame()
+    mut scratch: [64]u8 = zeroed
+    -- The alarm raises TIMER0_IRQ_0 only with its INTE bit set.  NVIC:
+    -- TIMER0_IRQ_0 is IRQ0, DMA_IRQ_0 IRQ10 and USBCTRL_IRQ IRQ14.
+    timer0.inte_write(timer0.base, 1)
+    ppb.nvic_iser0_write(ppb.base, 0x4401)
+    app_state = 2
+    loop do
+        -- An alarm fires only when the counter equals it, so one armed for a
+        -- time already past waits for the 32-bit wrap, 71 minutes.  From
+        -- flash through the generic second stage, code not yet in the XIP
+        -- cache costs about 32 us a line, and the first pass from reading
+        -- the counter to this store took longer than the alarm's margin.
+        -- So the time is checked again after arming, as pico-sdk does.
+        target := timer0.timerawl_read(timer0.base) +% 1000
+        timer0.alarm0_write(timer0.base, target)
+        take_events()
+        if timer0.timerawl_read(timer0.base) -% target < 0x8000_0000 then
+            notification = 1
+        end if
+        n := serial.read(receiver, scratch[0..<64]) else (error)
+            if error == serial.stop_timeout then halt(3) end if
+            recoveries = recoveries +% 1
+            serial.restart(receiver) else (problem)
+                _ = problem
+                halt(3)
+            end
+            continue
+        end
+        handled = handled +% commands.handle(scratch[0..<n], port)
+        for byte in scratch[0..<n] do
+            if byte == 5 then ppb.nvic_ispr0_write(ppb.base, 0x4000) end if
+            if byte == 17 then telemetry(receiver) end if
+            if byte == 18 then stall() end if
+        end for
+        if n == 64 then continue end if
+        saved := cortex_m.disable_interrupts()
+        if notification == 0 then cortex_m.wait_for_interrupt() end if
+        cortex_m.restore_interrupts(saved)
+    end loop
+end start

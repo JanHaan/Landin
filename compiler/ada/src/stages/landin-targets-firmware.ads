@@ -111,6 +111,19 @@ package Landin.Targets.Firmware is
    --  at its first byte; the last four bytes are that CRC, little-endian.
    function Takes_Stage (Boot : Boot_Kind) return Boolean
      is (Boot = RP2040_Boot2);
+
+   --  D653: a boot kind whose description may hold a stage, which
+   --  RP2040's requires; and one whose stage, when it holds one, the reset
+   --  vector enters before compiler-owned reset writes any memory.  Such a
+   --  stage runs on the stack pointer the core loads from the table, may
+   --  use neither the stack nor RAM, and ends by branching to
+   --  Reset_Symbol; the table's reset word is Reset_Stage_Symbol.
+   function Admits_Stage (Boot : Boot_Kind) return Boolean
+     is (Boot in RP2040_Boot2 | Vector_Table);
+   function Stage_Before_Reset (Boot : Boot_Kind) return Boolean
+     is (Boot = Vector_Table);
+   Reset_Symbol : constant String := "_landin_firmware_reset";
+   Reset_Stage_Symbol : constant String := "_landin_firmware_reset_stage";
    Stage_Slot : constant := 256;
    Stage_Limit : constant := 252;
 

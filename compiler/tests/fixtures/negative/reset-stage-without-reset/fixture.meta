@@ -1,0 +1,9 @@
+class: negative
+summary: D653: a vector-table image's stage runs before compiler-owned reset and ends by branching to it, which this one does not name
+program: program.ldn
+constructs: 1640, 1990
+targets: cortex-m0
+codes: L0560
+args: --target=cortex-m0 --level=armv7e-m ../tests/fixtures/negative/reset-stage-without-reset/program.ldn
+expect: expected.txt
+status: 1

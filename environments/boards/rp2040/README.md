@@ -21,8 +21,10 @@ no hosted runner has the board.
 | the compiler | refine and `arm-eabi-gcc` or `arm-none-eabi-gcc` (D532), as `nix develop` gives them | the image |
 
 `uhubctl` needs write access to the hub's port `disable` files; on a host
-where those belong to a group, run the tool in that group, for example
-`sg dialout -c '…'`. The tool switches only `--port` on `--hub`, and only
+where those belong to a group, `--hub-group`, `dialout` by default, the tool
+runs `uhubctl` through `/run/wrappers/bin/sg GROUP -c` when the session is
+not in that group, as a session started before its user joined it is not.
+The tool switches only `--port` on `--hub`, and only
 after `uhubctl` shows `--guard-serial` on `--guard-port` of the same hub:
 on the maintainer's rig that is the probe's own Arty A7, whose bitstream is
 held only in SRAM and would be lost with its power. The port is switched off and on in one
@@ -80,5 +82,9 @@ NVIC (D596), 0x11 asks for a `t` frame, and 0x12 stops reading for 100 ms.
 | the counters | `handled`, `recoveries`, `dma_events`, `usb_events` and TRANS_COUNT, read over SWD without halting the core, equal the last frame's |
 
 What the emulator lane and the board share is
-`compiler/tests/driver/commands` (D593): the echo and the indicator. The
+`compiler/tests/driver/commands` (D593): the echo and the indicator, which
+the application gives its own indicator and transmitter (D645). The
 board's receive protocol is the RP2040's (D594), not the synthetic drain.
+What `board.py` shares with the other boards' tools, the framing, the
+command log, the ELF reader, probe-rs, the hub, the console and the record,
+is [`../common.py`](../common.py) (D646); the oracle is this board's own.

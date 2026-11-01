@@ -1,0 +1,70 @@
+-- Bringing the NUCLEO-H753ZI's STM32H753 up from reset as RM0433 Rev 9
+-- says (D647).  The system clock stays where reset puts it, the 64 MHz HSI
+-- (8.5.6, p. 350), with every bus prescaler at one, so USART3's kernel
+-- clock is rcc_pclk1 at 64 MHz (Figure 53, p. 360).  What this does:
+--
+--   * nothing of the supply: 6.4.1 (p. 262) permits no RAM write until it
+--     is configured, so the description's stage configures it from the
+--     reset vector, before compiler-owned reset writes any memory (D653);
+--   * the clocks of GPIO ports B and D, USART3 and DMA1, as 8.5.11
+--     (p. 372) enables a peripheral: the enable written, read back, the
+--     D2 domain's clocks waited for when the peripheral is in D2, as
+--     USART3 and DMA1 are, and a read of the peripheral;
+--   * PB0, LD1, a push-pull output; PD8 and PD9 to alternate function 7,
+--     USART3's TX and RX, the ST-LINK's virtual COM port.
+import platform/cortex_m
+import stm32h753/dma1
+import stm32h753/gpiob
+import stm32h753/gpiod
+import stm32h753/rcc
+import stm32h753/usart3
+
+-- The indicator, LD1 on PB0.
+public indicator: u32 = 1
+-- The processor's clock, and so SysTick's, in cycles a millisecond.
+public cycles_ms: u32 = 64_000
+
+public peripherals: () -> none =
+    -- RCC_AHB4ENR's GPIOBEN and GPIODEN (8.7.43, p. 458), RCC_APB1LENR's
+    -- USART3EN (8.7.45, p. 462) and RCC_AHB1ENR's DMA1EN (8.7.41, p. 454).
+    mut ahb4 := rcc.ahb4enr_decode(rcc.ahb4enr_read(rcc.base))
+    ahb4.f_gpioben = 1
+    ahb4.f_gpioden = 1
+    rcc.ahb4enr_write(rcc.base, rcc.ahb4enr_encode(ahb4))
+    mut apb1 := rcc.apb1lenr_decode(rcc.apb1lenr_read(rcc.base))
+    apb1.f_usart3en = 1
+    rcc.apb1lenr_write(rcc.base, rcc.apb1lenr_encode(apb1))
+    mut ahb1 := rcc.ahb1enr_decode(rcc.ahb1enr_read(rcc.base))
+    ahb1.f_dma1en = 1
+    rcc.ahb1enr_write(rcc.base, rcc.ahb1enr_encode(ahb1))
+    -- Read back, so no enable waits in a write buffer, then D2CKRDY
+    -- (8.7.2, p. 384), and a read of each peripheral, which takes the two
+    -- clock periods an enable may need.
+    _ = rcc.ahb4enr_read(rcc.base)
+    _ = rcc.apb1lenr_read(rcc.base)
+    _ = rcc.ahb1enr_read(rcc.base)
+    mut clocks := rcc.cr_decode(rcc.cr_read(rcc.base))
+    while clocks.f_d2ckrdy == 0 do
+        clocks = rcc.cr_decode(rcc.cr_read(rcc.base))
+    end while
+    _ = gpiob.moder_read(gpiob.base)
+    _ = gpiod.moder_read(gpiod.base)
+    _ = usart3.isr_read(usart3.base)
+    _ = dma1.lisr_read(dma1.base)
+    cortex_m.completion_barrier()
+    -- GPIOx_MODER (11.4.1, p. 541): 01 is a general-purpose output, 10 an
+    -- alternate function; GPIOx_AFRH (11.4.10, p. 546), AF7 for USART3
+    -- (the datasheet's alternate function table).  Every other pin keeps
+    -- what reset gave it, PB3 and PB4 their debug functions among them.
+    mut b := gpiob.moder_decode(gpiob.moder_read(gpiob.base))
+    b.f_mode0 = 1
+    gpiob.moder_write(gpiob.base, gpiob.moder_encode(b))
+    mut functions := gpiod.afrh_decode(gpiod.afrh_read(gpiod.base))
+    functions.f_afsel8 = 7
+    functions.f_afsel9 = 7
+    gpiod.afrh_write(gpiod.base, gpiod.afrh_encode(functions))
+    mut d := gpiod.moder_decode(gpiod.moder_read(gpiod.base))
+    d.f_mode8 = 2
+    d.f_mode9 = 2
+    gpiod.moder_write(gpiod.base, gpiod.moder_encode(d))
+end peripherals

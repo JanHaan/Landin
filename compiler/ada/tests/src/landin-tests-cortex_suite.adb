@@ -2830,6 +2830,10 @@ package body Landin.Tests.Cortex_Suite is
       Small_Stage : constant String :=
         "link(boot_stage) extern(naked) stage: () -> none =" & LF
         & "    assembler.block(""bx lr"")" & LF & "end stage" & LF;
+      Reset_Stage : constant String :=
+        "link(boot_stage) extern(naked) stage: () -> none =" & LF
+        & "    assembler.block(""ldr r0, =_landin_firmware_reset\nbx r0"")"
+        & LF & "end stage" & LF;
       Boot2_Memory : constant String :=
         "linker.region(""FLASH"", 0x1000_0000, 64 * 1024, ""rx"")" & LF
         & "linker.region(""RAM"", 0x2000_0000, 8 * 1024, ""rw"")" & LF
@@ -3128,8 +3132,45 @@ package body Landin.Tests.Cortex_Suite is
         Plain_Interrupts, Boot2_Memory, "", Stage => Small_Stage);
       Expect ("an rp2040-boot2 description without a stage is L0537", "",
         Plain_Interrupts, Boot2_Memory, "L0537");
-      Expect ("a vector-table description with a stage is L0535", "",
-        Plain_Interrupts, Plain_Memory, "L0535", Stage => Small_Stage);
+      --  D653: a vector-table description's stage runs from the reset
+      --  vector before compiler-owned reset, which it names, on no stack.
+      Try ("", Plain_Interrupts, Plain_Memory, Code, Assembly,
+           Stage => Reset_Stage);
+      Landin.Testing.Check_Equal
+        (Item, U.To_String (Code), "",
+         "a vector-table description with a stage before reset compiles");
+      Landin.Testing.Check_Equal
+        (Item, Vector_Word (U.To_String (Assembly), 1),
+         "_landin_firmware_reset_stage",
+         "the table's reset word is the stage's entry");
+      Landin.Testing.Check
+        (Item, Contains (U.To_String (Assembly),
+           HT & ".section .text.landin_firmware_reset_stage,""ax"","
+           & "%progbits" & LF
+           & HT & ".globl _landin_firmware_reset_stage" & LF
+           & HT & ".balign 2" & LF
+           & HT & ".thumb_func" & LF
+           & "_landin_firmware_reset_stage:" & LF)
+           and then not Contains (U.To_String (Assembly), ".boot2"),
+         "the stage is in a section of its own, its entry labelled");
+      Try ("", Plain_Interrupts, Plain_Memory, Code, Assembly);
+      Landin.Testing.Check_Equal
+        (Item, Vector_Word (U.To_String (Assembly), 1),
+         "_landin_firmware_reset",
+         "without a stage the reset word is compiler-owned reset");
+      Expect ("a vector-table stage that does not enter reset is L0560", "",
+        Plain_Interrupts, Plain_Memory, "L0560", Stage => Small_Stage);
+      Expect ("a vector-table stage that uses the stack is L0561", "",
+        Plain_Interrupts, Plain_Memory, "L0561",
+        Stage => "link(boot_stage) extern(naked) stage: () -> none =" & LF
+          & "    assembler.block(""push {r0}\nldr r0, ="
+          & "_landin_firmware_reset\nbx r0"")" & LF & "end stage" & LF);
+      Expect ("a second vector-table stage is L0536", "",
+        Plain_Interrupts, Plain_Memory, "L0536",
+        Stage => Reset_Stage
+          & "link(boot_stage) extern(naked) other: () -> none =" & LF
+          & "    assembler.block(""ldr r0, =_landin_firmware_reset\n"
+          & "bx r0"")" & LF & "end other" & LF);
       Expect ("an rp2350-image-block description with a stage is L0535", "",
         Plain_Interrupts, Block_Memory, "L0535", Stage => Small_Stage);
       Expect ("an rp2350-image-block description compiles", "",

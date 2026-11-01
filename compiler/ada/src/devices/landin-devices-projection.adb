@@ -548,6 +548,10 @@ package body Landin.Devices.Projection is
          if not State.Seen.Contains (Field_Name) then
             State.Seen.Insert (Field_Name);
          end if;
+         if Correction /= 0 and then Chosen.Fields (Correction).Add then
+            Fail (Invalid_Policy, "field_corrections." & Where & " adds a"
+                  & " field the SVD gives; correct its bits instead", Field);
+         end if;
          if Correction /= 0 and then Chosen.Fields (Correction).Omit then
             State.Omitted.Append (Field_Name);
             State.Omitted_Sources.Append
@@ -698,6 +702,76 @@ package body Landin.Devices.Projection is
                               then "unsigned" else "encoded"));
          Close (Rows, In_Object);
       end Project_Field;
+
+      --  D652: a field the SVD lacks, which a reviewed correction adds,
+      --  generated as the SVD's own are and recorded with its source.
+      procedure Project_Added
+        (Added : P.Field_Correction; State : in out Register_State;
+         Element : X.Element);
+
+      procedure Project_Added
+        (Added : P.Field_Correction; State : in out Register_State;
+         Element : X.Element)
+      is
+         Key : constant String := US.To_String (State.Key);
+         Named : constant String := US.To_String (Added.Key);
+         Field_Name : constant String :=
+           Named (Named'First + Key'Length + 1 .. Named'Last);
+         Spelling : constant String := "f_" & Lowered (Field_Name);
+         Bits : constant Word := Interfaces.Shift_Left
+           (Interfaces.Shift_Left (1, Added.High - Added.Low + 1) - 1,
+            Added.Low);
+      begin
+         if not Is_Vendor_Name (Field_Name) then
+            Fail (Invalid_Policy, "field_corrections." & Named & " adds"
+                  & " a field whose name is not an ASCII letter followed by"
+                  & " letters, digits and underscores", Element);
+         elsif State.Field_Names.Contains (Spelling) then
+            Fail (Invalid_Policy, "field_corrections." & Named & " adds"
+                  & " a field that is " & Spelling & " once lowercased, as"
+                  & " another of " & Key & "'s is", Element);
+         elsif (State.Named_Mask and Bits) /= 0 then
+            Fail (Invalid_Policy, "field_corrections." & Named & " adds"
+                  & " a field that overlaps another of its register's",
+                  Element);
+         end if;
+         State.Field_Names.Insert (Spelling);
+         State.Field_Count := State.Field_Count + 1;
+         State.Named_Mask := State.Named_Mask or Bits;
+         US.Append (State.Field_Lines,
+                    "    " & Spelling & ": u"
+                    & Decimal (Word (Added.High - Added.Low + 1))
+                    & " at " & Decimal (Word (Added.Low)) & ".."
+                    & Decimal (Word (Added.High)) & LF);
+         Open (Rows, In_Object);
+         Member (Rows, "access");
+         String_Value (Rows, US.To_String (Added.Field_Access));
+         Member (Rows, "correction");
+         Open (Rows, In_Object);
+         Member (Rows, "added");
+         Raw (Rows, "true");
+         Member (Rows, "source");
+         String_Value (Rows, US.To_String (Added.Source));
+         Close (Rows, In_Object);
+         Member (Rows, "encodings");
+         Open (Rows, In_Array);
+         Close (Rows, In_Array);
+         Member (Rows, "high");
+         Number_Value (Rows, Word (Added.High));
+         Member (Rows, "low");
+         Number_Value (Rows, Word (Added.Low));
+         Member (Rows, "mask");
+         Number_Value (Rows, Bits);
+         Member (Rows, "modified_write");
+         Raw (Rows, "null");
+         Member (Rows, "name");
+         String_Value (Rows, Field_Name);
+         Member (Rows, "read_action");
+         Raw (Rows, "null");
+         Member (Rows, "representation");
+         String_Value (Rows, "unsigned");
+         Close (Rows, In_Object);
+      end Project_Added;
 
       --  The selected register's element in Template, refusing what it
       --  cannot find by name: a register of a cluster or an array.
@@ -893,6 +967,21 @@ package body Landin.Devices.Projection is
                Container := X.Next_Sibling (Document, Container);
             end loop;
          end;
+         for Correction of Chosen.Fields loop
+            declare
+               Named : constant String := US.To_String (Correction.Key);
+            begin
+               if Correction.Add
+                 and then Named'Length > Key'Length + 1
+                 and then Named (Named'First .. Named'First + Key'Length)
+                   = Key & "."
+                 and then not State.Seen.Contains
+                   (Named (Named'First + Key'Length + 1 .. Named'Last))
+               then
+                  Project_Added (Correction, State, Element);
+               end if;
+            end;
+         end loop;
          Close (Rows, In_Array);
          if State.Field_Count = 0 then
             Fail (Inconsistent_Device, "the selected register " & Key
@@ -934,7 +1023,8 @@ package body Landin.Devices.Projection is
             declare
                Named : constant String := US.To_String (Correction.Key);
             begin
-               if Named'Length > Key'Length + 1
+               if not Correction.Add
+                 and then Named'Length > Key'Length + 1
                  and then Named (Named'First .. Named'First + Key'Length)
                    = Key & "."
                  and then not State.Seen.Contains
