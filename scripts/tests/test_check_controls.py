@@ -1251,6 +1251,29 @@ class Transcriptions(unittest.TestCase):
                       said)
         self.assertIn("retired L0503 must begin `Retired.`", said)
 
+    def test_an_unreadable_options_line_is_named(self):
+        from check_controls import tree
+        inputs = ["compiler/ada/src", "docs/diagnostics.md"]
+        with tree(copied=inputs) as root:
+            page = root / "docs/diagnostics.md"
+            text = page.read_text()
+            self.assertIn("```landin\n-- refine: --target=cortex-m0\n", text)
+            text = text.replace(
+                "```landin\n-- refine: --target=cortex-m0\n",
+                "```landin\n-- refine: target=cortex-m0\n", 1)
+            text = text.replace(
+                "```landin\nmask: u64 = 1u64\n",
+                "```landin\nmask: u64 = 1u64\n-- refine: --target=cortex-m0\n",
+                1)
+            page.write_text(text)
+            said = [why for _, _, why in checker.check_explanations(True)]
+        self.assertTrue(any(
+            "options line `-- refine: target=cortex-m0` cannot be read" in why
+            for why in said), said)
+        self.assertTrue(any(
+            why.startswith("L0011's options line `-- refine: --target=")
+            for why in said), said)
+
     def test_an_explanation_the_compiler_does_not_carry_is_stale(self):
         from check_controls import tree
         inputs = ["compiler/ada/src", "docs/diagnostics.md"]

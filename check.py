@@ -6756,13 +6756,15 @@ def diagnostic_matrix_dump():
 EXPLANATIONS = "docs/diagnostics.md"
 EXPLANATIONS_ADA = ("compiler/ada/src/diagnostics"
                     "/landin-diagnostics-explanations.adb")
+EXAMPLE_OPTIONS = "-- refine:"
 
 
 def explanation_sections():
     """`docs/diagnostics.md`'s sections, keyed by code, in page order.
 
     Each is `### Lnnnn` followed by prose and at most one `landin` block,
-    which is the example.  Returns (sections, problems): a section is
+    which is the example, whose first line alone may be `-- refine:` and
+    the options it is compiled with (D599).  Returns (sections, problems): a section is
     (line, prose, example), prose with its paragraphs rejoined into one
     line each and blank lines between them, the way a terminal wants it.
     """
@@ -6809,6 +6811,16 @@ def explanation_sections():
                                  " example"))
             continue
         if section[3]:
+            #  D599: the example's first line may name the options it is
+            #  compiled with, which the test program reads as this does.
+            if line.startswith(EXAMPLE_OPTIONS) and (
+                    section[2] or not re.fullmatch(
+                        re.escape(EXAMPLE_OPTIONS) + r"( --[!-~]+)+", line)):
+                problems.append((EXPLANATIONS, n,
+                                 "%s's options line `%s` cannot be read: an"
+                                 " example's first line alone may be"
+                                 " `%s` and the options, each beginning --"
+                                 % (current, line, EXAMPLE_OPTIONS)))
             section[2].append(line)
         else:
             section[1].append(line)

@@ -21077,6 +21077,38 @@ and the text on request.
 `compiler/ada/src/diagnostics/landin-diagnostics-citations.adb` and
 `landin-diagnostics-citations-texts.adb` with the documents.
 
+### D599 — A diagnostic's example names the options it is compiled with
+
+**The tour said** nothing. `docs/diagnostics.md`'s examples were compiled
+with no option, on the default hosted target, so a code only a Cortex-M
+build raises could show none: a description that selects `rp2040-boot2` and
+holds no stage is refused on the host as L0515, for its core, before L0537
+can say what it lacks.
+
+**Chosen:** an example's first line may be `-- refine:` followed by the
+options it is compiled with, each a word of printable characters that begins
+`--`, with one space before each, as `-- refine: --target=cortex-m0
+--level=armv7-m`. The line is a Landin comment and stays in the example's
+text, so `refine explain` shows a reader how to reproduce the report. The
+example is still the one file it is compiled with, so an option names no
+root, library or other file, and a code whose program needs one, L0517 to
+L0519 and L0538, has no example. An example without the line is compiled as
+before. `check.py` and the test program refuse a `-- refine:` line that is
+not the example's first or not of that form, naming the line.
+
+**The alternatives:** a fenced block's info string, as `landin
+--target=cortex-m0`, which `refine explain` does not print and the site
+renders as a language name; a second block per section holding several
+files and a root, which needs a layout of its own for what three codes
+show; and the rule that such a code has no example, which leaves the
+codes of a new target without one.
+
+**Pinned by** the `catalogue` cases `every code is explained`, which
+compiles each example with its options, and `unreadable options are
+named`, the `driver` case `explain is a subcommand`, and `check.py`'s
+reading of the page, whose control is
+`test_an_unreadable_options_line_is_named`.
+
 ### D542 — A device description is a module of directives, and its generated half has one text
 
 **The tour said** at [1410] that a module is every `.ldn` file of one

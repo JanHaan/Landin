@@ -5554,6 +5554,8 @@ package body Landin.Tests.Driver_Suite is
         Landin.Driver.Execute (Arguments_Of ("explain"), Host, Tools);
       One : constant Landin.Driver.Outcome :=
         Landin.Driver.Execute (Both ("explain", "L0201"), Host, Tools);
+      Optioned : constant Landin.Driver.Outcome :=
+        Landin.Driver.Execute (Both ("explain", "L0537"), Host, Tools);
       Unknown : constant Landin.Driver.Outcome :=
         Landin.Driver.Execute (Both ("explain", "L9999"), Host, Tools);
       Named_Source : constant Landin.Driver.Outcome :=
@@ -5581,6 +5583,11 @@ package body Landin.Tests.Driver_Suite is
                and then Contains (Said, "For example:")
                and then Contains (Said, "    state := nowhere(value: 1)"),
          "an explanation cites its rule and shows its example");
+      Landin.Testing.Check
+        (Item, Contains (Unbounded.To_String (Optioned.Output),
+                         "For example:" & LF & LF
+                         & "    -- refine: --target=cortex-m0" & LF),
+         "an example's options are shown as its first line (D599)");
       Landin.Testing.Check
         (Item, Unbounded.Length (One.Report) = 0,
          "an explanation reports nothing");

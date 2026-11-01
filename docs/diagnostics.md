@@ -15,8 +15,25 @@ catalogued code to exactly one section here and every citation to a paragraph
 or decision that exists, and generates the compiler's copy of this text.
 
 A section's example, where it has one, is a program the code refuses; the
-test program compiles it and requires its report to begin with that code. A
-code whose diagnostic offers a fix says so. A fix is shown as a `help` line
+test program's `catalogue` case `every code is explained` compiles it, on a
+file system holding the example alone, and requires its report to begin with
+that code. An example is one file, compiled with no option on the default
+hosted target, unless its first line names the options it needs, as a code
+only a Cortex-M build raises does:
+
+```text
+-- refine: --target=cortex-m0
+```
+
+The line is a comment, so the example is still the whole program, and
+`refine --target=cortex-m0 example.ldn` reproduces the report. Each option
+begins `--`, with one space before it, and none names a file, since the
+example is the only one it is compiled with (D599); `check.py` and the test
+program refuse any other `-- refine:` line, naming it. A code whose program
+needs a file beside it, the library refine finds, a developer's linker
+script or the object the assembler writes, shows no example.
+
+A code whose diagnostic offers a fix says so. A fix is shown as a `help` line
 and handed to an editor as an edit; a likely fix is a guess, an exact one is
 what the rule itself requires.
 
@@ -1605,6 +1622,10 @@ image twice or not at all; or the program reaches a second description. A
 program is built for one device, and selects it by importing its
 description; write each directive once, beside `compiler.device`.
 
+```landin
+linker.region("FLASH", 0, 32 * 1024, "rx")
+```
+
 ### L0514
 
 A device description's parts do not fit together (D543): two regions
@@ -1614,6 +1635,22 @@ one, the vector table does not fit its region or would start unaligned, an
 interrupt's slot lies past the vector table, the table is longer than the
 core's architecture allows, or the stack is larger than its region. The
 message names the region or the slot.
+
+```landin
+compiler.device("board")
+compiler.core("cortex-m0plus")
+compiler.vectors(48)
+compiler.boot("vector-table")
+linker.region("FLASH", 0x1000_0000, 2 * 1024 * 1024, "rx")
+linker.region("RAM", 0x2000_0000, 256 * 1024, "rwx")
+linker.region("MORE", 0x2000_2000, 16 * 1024, "rw")
+linker.place("vectors", "FLASH")
+linker.place("text", "FLASH")
+linker.place("rodata", "FLASH")
+linker.place("data", "RAM")
+linker.place("bss", "RAM")
+linker.place("stack", "RAM", 4 * 1024)
+```
 
 ### L0515
 
@@ -1625,11 +1662,43 @@ accepted: a `cortex-m4` builds at `armv7-m` or `armv6-m` too. Build with the
 target and a level the note names. The constrained reference profile, which applies when no
 description is imported, is the one description used at every level.
 
+```landin
+-- refine: --target=cortex-m0 --level=armv7-m
+compiler.device("board")
+compiler.core("cortex-m0plus")
+compiler.vectors(48)
+compiler.boot("vector-table")
+linker.region("FLASH", 0x1000_0000, 2 * 1024 * 1024, "rx")
+linker.region("RAM", 0x2000_0000, 256 * 1024, "rwx")
+linker.place("vectors", "FLASH")
+linker.place("text", "FLASH")
+linker.place("rodata", "FLASH")
+linker.place("data", "RAM")
+linker.place("bss", "RAM")
+linker.place("stack", "RAM", 4 * 1024)
+```
+
 ### L0516
 
 A device description selects a boot image kind refine reserves but does not
 build yet (D545): `rp2350-image-block` or `esp-app-image`. This compiler
 builds `vector-table` and `rp2040-boot2` images.
+
+```landin
+-- refine: --target=cortex-m0
+compiler.device("board")
+compiler.core("cortex-m0plus")
+compiler.vectors(48)
+compiler.boot("rp2350-image-block")
+linker.region("FLASH", 0x1000_0000, 2 * 1024 * 1024, "rx")
+linker.region("RAM", 0x2000_0000, 256 * 1024, "rwx")
+linker.place("vectors", "FLASH")
+linker.place("text", "FLASH")
+linker.place("rodata", "FLASH")
+linker.place("data", "RAM")
+linker.place("bss", "RAM")
+linker.place("stack", "RAM", 4 * 1024)
+```
 
 ### L0517
 
@@ -1739,6 +1808,24 @@ region, vector, alignment, `keep` or `thread`. A boot stage is
 `assembler.block` the boot ROM enters, and the boot kind alone says where
 it goes. Write the attribute alone on such a routine, or remove it.
 
+```landin
+-- refine: --target=cortex-m0
+compiler.device("board")
+compiler.core("cortex-m0plus")
+compiler.vectors(48)
+compiler.boot("rp2040-boot2")
+linker.region("FLASH", 0x1000_0000, 2 * 1024 * 1024, "rx")
+linker.region("RAM", 0x2000_0000, 256 * 1024, "rwx")
+linker.place("vectors", "FLASH")
+linker.place("text", "FLASH")
+linker.place("rodata", "FLASH")
+linker.place("data", "RAM")
+linker.place("bss", "RAM")
+linker.place("stack", "RAM", 4 * 1024)
+
+link(boot_stage) stage: () -> none = end stage
+```
+
 ### L0534
 
 A `link(boot_stage)` routine is outside the device description the program
@@ -1746,6 +1833,14 @@ selects, or the program imports none and is given the constrained reference
 (D587). The second stage is the device's, as its boot kind is, so it is
 declared in the description's own module, beside `compiler.boot`. Move it
 into the description's directory.
+
+```landin
+link(boot_stage) extern(naked) stage: () -> none =
+    assembler.block("bx lr")
+end stage
+
+start: () -> none = end start
+```
 
 ### L0535
 
@@ -1755,11 +1850,55 @@ which the core reads at reset. Only an `rp2040-boot2` image begins with a
 second stage. Remove the routine, or select the boot kind whose boot ROM
 enters it.
 
+```landin
+-- refine: --target=cortex-m0
+compiler.device("board")
+compiler.core("cortex-m0plus")
+compiler.vectors(48)
+compiler.boot("vector-table")
+linker.region("FLASH", 0x1000_0000, 2 * 1024 * 1024, "rx")
+linker.region("RAM", 0x2000_0000, 256 * 1024, "rwx")
+linker.place("vectors", "FLASH")
+linker.place("text", "FLASH")
+linker.place("rodata", "FLASH")
+linker.place("data", "RAM")
+linker.place("bss", "RAM")
+linker.place("stack", "RAM", 4 * 1024)
+
+link(boot_stage) extern(naked) stage: () -> none =
+    assembler.block("bx lr")
+end stage
+```
+
 ### L0536
 
 A device description holds a second `link(boot_stage)` routine (D587). The
 boot kind's slot holds one stage, which the boot ROM enters at its first
 byte. The message names the first; remove one of them.
+
+```landin
+-- refine: --target=cortex-m0
+compiler.device("board")
+compiler.core("cortex-m0plus")
+compiler.vectors(48)
+compiler.boot("rp2040-boot2")
+linker.region("FLASH", 0x1000_0000, 2 * 1024 * 1024, "rx")
+linker.region("RAM", 0x2000_0000, 256 * 1024, "rwx")
+linker.place("vectors", "FLASH")
+linker.place("text", "FLASH")
+linker.place("rodata", "FLASH")
+linker.place("data", "RAM")
+linker.place("bss", "RAM")
+linker.place("stack", "RAM", 4 * 1024)
+
+link(boot_stage) extern(naked) stage: () -> none =
+    assembler.block("bx lr")
+end stage
+
+link(boot_stage) extern(naked) second: () -> none =
+    assembler.block("bx lr")
+end second
+```
 
 ### L0537
 
@@ -1770,6 +1909,22 @@ stay in its USB boot mode. Add the stage to the description as a
 `link(boot_stage) extern(naked)` routine of at most 252 bytes once
 assembled, literals included; `devices/descriptions/rp2040/boot2.ldn` in
 the repository is a port of pico-sdk's generic one.
+
+```landin
+-- refine: --target=cortex-m0
+compiler.device("board")
+compiler.core("cortex-m0plus")
+compiler.vectors(48)
+compiler.boot("rp2040-boot2")
+linker.region("FLASH", 0x1000_0000, 2 * 1024 * 1024, "rx")
+linker.region("RAM", 0x2000_0000, 256 * 1024, "rwx")
+linker.place("vectors", "FLASH")
+linker.place("text", "FLASH")
+linker.place("rodata", "FLASH")
+linker.place("data", "RAM")
+linker.place("bss", "RAM")
+linker.place("stack", "RAM", 4 * 1024)
+```
 
 ### L0538
 

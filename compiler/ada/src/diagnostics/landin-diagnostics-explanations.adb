@@ -1896,27 +1896,242 @@ package body Landin.Diagnostics.Explanations is
                "compiler.device(""RP2040"")"
                & LF,
             when Catalogue.Description_Structure =>
-               "",
+               "linker.region(""FLASH"", 0, 32 * 1024, ""rx"")"
+               & LF,
             when Catalogue.Description_Layout =>
-               "",
+               "compiler.device(""board"")"
+               & LF
+               & "compiler.core(""cortex-m0plus"")"
+               & LF
+               & "compiler.vectors(48)"
+               & LF
+               & "compiler.boot(""vector-table"")"
+               & LF
+               & "linker.region(""FLASH"", 0x1000_0000, 2 * 1024 * 1024, ""rx"
+               & """)"
+               & LF
+               & "linker.region(""RAM"", 0x2000_0000, 256 * 1024, ""rwx"")"
+               & LF
+               & "linker.region(""MORE"", 0x2000_2000, 16 * 1024, ""rw"")"
+               & LF
+               & "linker.place(""vectors"", ""FLASH"")"
+               & LF
+               & "linker.place(""text"", ""FLASH"")"
+               & LF
+               & "linker.place(""rodata"", ""FLASH"")"
+               & LF
+               & "linker.place(""data"", ""RAM"")"
+               & LF
+               & "linker.place(""bss"", ""RAM"")"
+               & LF
+               & "linker.place(""stack"", ""RAM"", 4 * 1024)"
+               & LF,
             when Catalogue.Description_Core_Mismatch =>
-               "",
+               "-- refine: --target=cortex-m0 --level=armv7-m"
+               & LF
+               & "compiler.device(""board"")"
+               & LF
+               & "compiler.core(""cortex-m0plus"")"
+               & LF
+               & "compiler.vectors(48)"
+               & LF
+               & "compiler.boot(""vector-table"")"
+               & LF
+               & "linker.region(""FLASH"", 0x1000_0000, 2 * 1024 * 1024, ""rx"
+               & """)"
+               & LF
+               & "linker.region(""RAM"", 0x2000_0000, 256 * 1024, ""rwx"")"
+               & LF
+               & "linker.place(""vectors"", ""FLASH"")"
+               & LF
+               & "linker.place(""text"", ""FLASH"")"
+               & LF
+               & "linker.place(""rodata"", ""FLASH"")"
+               & LF
+               & "linker.place(""data"", ""RAM"")"
+               & LF
+               & "linker.place(""bss"", ""RAM"")"
+               & LF
+               & "linker.place(""stack"", ""RAM"", 4 * 1024)"
+               & LF,
             when Catalogue.Boot_Kind_Reserved =>
-               "",
+               "-- refine: --target=cortex-m0"
+               & LF
+               & "compiler.device(""board"")"
+               & LF
+               & "compiler.core(""cortex-m0plus"")"
+               & LF
+               & "compiler.vectors(48)"
+               & LF
+               & "compiler.boot(""rp2350-image-block"")"
+               & LF
+               & "linker.region(""FLASH"", 0x1000_0000, 2 * 1024 * 1024, ""rx"
+               & """)"
+               & LF
+               & "linker.region(""RAM"", 0x2000_0000, 256 * 1024, ""rwx"")"
+               & LF
+               & "linker.place(""vectors"", ""FLASH"")"
+               & LF
+               & "linker.place(""text"", ""FLASH"")"
+               & LF
+               & "linker.place(""rodata"", ""FLASH"")"
+               & LF
+               & "linker.place(""data"", ""RAM"")"
+               & LF
+               & "linker.place(""bss"", ""RAM"")"
+               & LF
+               & "linker.place(""stack"", ""RAM"", 4 * 1024)"
+               & LF,
             when Catalogue.Region_Placement =>
                "",
             when Catalogue.No_Description =>
                "",
             when Catalogue.Boot_Stage_Form =>
-               "",
+               "-- refine: --target=cortex-m0"
+               & LF
+               & "compiler.device(""board"")"
+               & LF
+               & "compiler.core(""cortex-m0plus"")"
+               & LF
+               & "compiler.vectors(48)"
+               & LF
+               & "compiler.boot(""rp2040-boot2"")"
+               & LF
+               & "linker.region(""FLASH"", 0x1000_0000, 2 * 1024 * 1024, ""rx"
+               & """)"
+               & LF
+               & "linker.region(""RAM"", 0x2000_0000, 256 * 1024, ""rwx"")"
+               & LF
+               & "linker.place(""vectors"", ""FLASH"")"
+               & LF
+               & "linker.place(""text"", ""FLASH"")"
+               & LF
+               & "linker.place(""rodata"", ""FLASH"")"
+               & LF
+               & "linker.place(""data"", ""RAM"")"
+               & LF
+               & "linker.place(""bss"", ""RAM"")"
+               & LF
+               & "linker.place(""stack"", ""RAM"", 4 * 1024)"
+               & LF
+               & LF
+               & "link(boot_stage) stage: () -> none = end stage"
+               & LF,
             when Catalogue.Boot_Stage_Outside =>
-               "",
+               "link(boot_stage) extern(naked) stage: () -> none ="
+               & LF
+               & "    assembler.block(""bx lr"")"
+               & LF
+               & "end stage"
+               & LF
+               & LF
+               & "start: () -> none = end start"
+               & LF,
             when Catalogue.Boot_Stage_Unwanted =>
-               "",
+               "-- refine: --target=cortex-m0"
+               & LF
+               & "compiler.device(""board"")"
+               & LF
+               & "compiler.core(""cortex-m0plus"")"
+               & LF
+               & "compiler.vectors(48)"
+               & LF
+               & "compiler.boot(""vector-table"")"
+               & LF
+               & "linker.region(""FLASH"", 0x1000_0000, 2 * 1024 * 1024, ""rx"
+               & """)"
+               & LF
+               & "linker.region(""RAM"", 0x2000_0000, 256 * 1024, ""rwx"")"
+               & LF
+               & "linker.place(""vectors"", ""FLASH"")"
+               & LF
+               & "linker.place(""text"", ""FLASH"")"
+               & LF
+               & "linker.place(""rodata"", ""FLASH"")"
+               & LF
+               & "linker.place(""data"", ""RAM"")"
+               & LF
+               & "linker.place(""bss"", ""RAM"")"
+               & LF
+               & "linker.place(""stack"", ""RAM"", 4 * 1024)"
+               & LF
+               & LF
+               & "link(boot_stage) extern(naked) stage: () -> none ="
+               & LF
+               & "    assembler.block(""bx lr"")"
+               & LF
+               & "end stage"
+               & LF,
             when Catalogue.Boot_Stage_Repeated =>
-               "",
+               "-- refine: --target=cortex-m0"
+               & LF
+               & "compiler.device(""board"")"
+               & LF
+               & "compiler.core(""cortex-m0plus"")"
+               & LF
+               & "compiler.vectors(48)"
+               & LF
+               & "compiler.boot(""rp2040-boot2"")"
+               & LF
+               & "linker.region(""FLASH"", 0x1000_0000, 2 * 1024 * 1024, ""rx"
+               & """)"
+               & LF
+               & "linker.region(""RAM"", 0x2000_0000, 256 * 1024, ""rwx"")"
+               & LF
+               & "linker.place(""vectors"", ""FLASH"")"
+               & LF
+               & "linker.place(""text"", ""FLASH"")"
+               & LF
+               & "linker.place(""rodata"", ""FLASH"")"
+               & LF
+               & "linker.place(""data"", ""RAM"")"
+               & LF
+               & "linker.place(""bss"", ""RAM"")"
+               & LF
+               & "linker.place(""stack"", ""RAM"", 4 * 1024)"
+               & LF
+               & LF
+               & "link(boot_stage) extern(naked) stage: () -> none ="
+               & LF
+               & "    assembler.block(""bx lr"")"
+               & LF
+               & "end stage"
+               & LF
+               & LF
+               & "link(boot_stage) extern(naked) second: () -> none ="
+               & LF
+               & "    assembler.block(""bx lr"")"
+               & LF
+               & "end second"
+               & LF,
             when Catalogue.Boot_Stage_Missing =>
-               "",
+               "-- refine: --target=cortex-m0"
+               & LF
+               & "compiler.device(""board"")"
+               & LF
+               & "compiler.core(""cortex-m0plus"")"
+               & LF
+               & "compiler.vectors(48)"
+               & LF
+               & "compiler.boot(""rp2040-boot2"")"
+               & LF
+               & "linker.region(""FLASH"", 0x1000_0000, 2 * 1024 * 1024, ""rx"
+               & """)"
+               & LF
+               & "linker.region(""RAM"", 0x2000_0000, 256 * 1024, ""rwx"")"
+               & LF
+               & "linker.place(""vectors"", ""FLASH"")"
+               & LF
+               & "linker.place(""text"", ""FLASH"")"
+               & LF
+               & "linker.place(""rodata"", ""FLASH"")"
+               & LF
+               & "linker.place(""data"", ""RAM"")"
+               & LF
+               & "linker.place(""bss"", ""RAM"")"
+               & LF
+               & "linker.place(""stack"", ""RAM"", 4 * 1024)"
+               & LF,
             when Catalogue.Unused_Pure_Local =>
                "unused: () -> none ="
                & LF

@@ -24365,6 +24365,20 @@ package body Landin.Diagnostics.Citations.Texts is
                & "-full` may stand anywhere among what is asked, and a dec"
                & "ision's `Chosen` text runs to the next paragraph that op"
                & "ens with a bold label.",
+            when 599 =>
+               "Chosen: an example's first line may be `-- refine:` foll"
+               & "owed by the options it is compiled with, each a word of "
+               & "printable characters that begins `--`, with one space be"
+               & "fore each, as `-- refine: --target=cortex-m0 --level=arm"
+               & "v7-m`. The line is a Landin comment and stays in the exa"
+               & "mple's text, so `refine explain` shows a reader how to r"
+               & "eproduce the report. The example is still the one file i"
+               & "t is compiled with, so an option names no root, library "
+               & "or other file, and a code whose program needs one, L0517"
+               & " to L0519 and L0538, has no example. An example without "
+               & "the line is compiled as before. `check.py` and the test "
+               & "program refuse a `-- refine:` line that is not the examp"
+               & "le's first or not of that form, naming the line.",
             when 542 =>
                "Chosen: a device is described in Landin source, as one m"
                & "odule made only of tool directives in [1740]'s `tool_dir"
