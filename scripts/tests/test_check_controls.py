@@ -1827,6 +1827,31 @@ class CatalogueLabels(unittest.TestCase):
         self.assertIn("could not be read", said[0])
 
 
+class EmissionOrder(unittest.TestCase):
+    """Two IR emissions are never sibling actuals of one call."""
+
+    SAMPLE = "compiler/ada/src/stages/landin-stages-sample.adb"
+
+    def test_the_compiler_passes(self):
+        self.assertEqual(faults(checker.check_emission_order,
+                                copied=["compiler/ada/src"]), [])
+
+    def test_sibling_emissions_are_named(self):
+        said = reasons(checker.check_emission_order, written={
+            self.SAMPLE: "procedure Go is\nbegin\n"
+            "   Use_Both\n     (IR.Emit_Number (Unit, 1),\n"
+            "      Lower_Value (Node));\nend Go;\n"})
+        self.assertEqual(len(said), 1)
+        self.assertIn("Emit_Number and Lower_Value", said[0])
+
+    def test_emissions_bound_first_pass(self):
+        self.assertEqual(reasons(checker.check_emission_order, written={
+            self.SAMPLE: "procedure Go is\n"
+            "   First : constant V := IR.Emit_Number (Unit, 1);\n"
+            "   Second : constant V := Lower_Value (Node);\nbegin\n"
+            "   Use_Both (First, Second);\nend Go;\n"}), [])
+
+
 class HarnessSelectors(unittest.TestCase):
     """A selector a document writes names a registered suite or case."""
 

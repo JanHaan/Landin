@@ -229,7 +229,8 @@ that fails only with its lines is reported on standard error as an
 expected host failure and not counted; one that fails any other way fails
 the run as a regression, and one that passes fails too, naming the row to
 remove. The listed failures are therefore told apart from a regression
-without building an unchanged compiler to compare with.
+without building an unchanged compiler to compare with. A fixture selected
+with `--fixture` on the lane is held to its row the same way.
 The retired routine acceptance policy used this scope for the debug compiler
 and ran the complete runtime/ABI matrix with the release compiler; milestone
 acceptance ran the complete suite in both modes. Those exact-revision

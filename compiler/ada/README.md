@@ -729,6 +729,13 @@ Landin.Stages.Syntax` to build a default pipeline is how the rule would
 actually be broken. Nothing but the rule stops it, and `Landin.Driver` is
 what owns the pipeline.
 
+Ada leaves open the order in which a call's actuals, and an aggregate's
+components, are evaluated, and GNAT's choice differs between the debug and
+the release build. So no two of them may emit IR: an `IR.Emit_*` or
+`Lower_*` call is bound to a constant first, and the declarations' order is
+the order emitted. `check.py` refuses two such calls as siblings; before it
+did, only the build-modes comparison noticed the instructions swap.
+
 ## The four long rows, in full
 
 Four packages own an order of magnitude more than any other, and a table
