@@ -20830,7 +20830,8 @@ they are generated; one access policy per selected register, its `read`
 as a number; `reset_mask_overrides`, the reset knowledge a reviewer
 promises instead of the SVD's; and `reset_corrections`, a reviewed reset
 value with the source it was read from; and `field_corrections`, a field's
-reviewed `bits` or that it is to be omitted, with its `source`, which the
+reviewed `bits` or that it is to be omitted, or a field the SVD lacks,
+added with its `bits` and `access` (D652), with its `source`, which the
 correspondence records beside the SVD's; and `interrupt_corrections`, an
 interrupt to add or move to a `value`, or to `omit`, with its `source`,
 which `interrupts.ldn` says in a line of its own (D542). Any other member is refused, except
@@ -21399,11 +21400,10 @@ p. 2030), and a snapshot reports it as `overrun`, so no byte is lost
 unreported. A lap is re-armed within an interrupt's latency, far inside the
 87 microseconds of a byte at 115,200 baud.
 
-TRBUFF, DMA_SxCR's bit 20, must be set for a stream that serves a USART
-(15.5.5, p. 662). The SVD omits the field, and a policy can move or omit
-a field the SVD gives but not add one, so the generated register writes it
-as zero, as D561's transmit consumer's does; the board's oracle reads the
-stream's configuration over SWD and refuses the run until it is set.
+TRBUFF, DMA_SxCR's bit 20, is set, since RM0433 says it must be for a
+stream that serves a USART (15.5.5, p. 662); the SVD omits the field, and
+the policy adds it (D652). The board's oracle reads the stream's
+configuration over SWD and refuses a run without it.
 
 **The alternatives:** a circular stream with laps counted from its
 half-transfer and transfer-complete flags, whose budget no hardware
@@ -21505,6 +21505,45 @@ and a software square root, which shows nothing of the float unit.
 oracle's arithmetic, its rounding at overflow, underflow and ties, its
 signed zeros and NaNs, its operand encoding and frames, and its reading of
 the instructions, pending and passed, to fixed inputs.
+
+### D652 — A reviewed correction may add a field the SVD lacks
+
+**The tour said** nothing; D556's `field_corrections` moved a field the SVD
+gives or omitted it, and D560 corrected the STM32H753's SVD so where
+RM0433 says it is wrong. The SVD's DMA_SxCR omits TRBUFF, bit 20, which
+RM0433 Rev 9 says must be set for a stream that manages UART, USART or
+LPUART transfers (15.5.5, p. 662), so the generated register wrote it as
+zero and no program could set it.
+
+**Chosen:** a field correction may say `"add": true` with `bits`, in the
+`[HIGH:LOW]` form a moved field's take, an `access` in the SVD's own words,
+`read-write`, `read-only`, `write-only`, `writeOnce` or `read-writeOnce`,
+and its `source`, as an interrupt correction may add an interrupt (D560).
+The added field is generated after the register's SVD fields as one of
+them, a `uN` with no enumeration, it joins the named mask its writer keeps,
+and the correspondence records it with `"added": true` and its source. A
+correction that adds a field the SVD gives, one whose bits overlap another
+field's, one that spells another's name once lowercased, an access outside
+those words, and an `access` on a correction that adds nothing are each
+refused as an invalid policy, naming the correction. The STM32H753's
+policy adds `DMA1.S0CR.TRBUFF`, and both of its USART streams set it: the
+board's receive (D648) and D561's transmit consumer, whose linked stores
+the check reads.
+
+**The alternatives:** writing the bit through a raw store beside the
+generated writer, which a reviewer of the module cannot see and which the
+module's write mask would otherwise clear; a field correction that names a
+missing field and so adds it, which would turn a misspelt correction into
+a new field; and a policy-level write mask admitting bit 20 unnamed, which
+D557 refuses, since the mask names no field.
+
+**Pinned by** the `devices` suite's `a correction is recorded`, which holds
+an added field's generated line, its register's named mask and its record,
+and `every refusal is named`, which holds each refusal; `devices/test.py`'s
+`Stm32h753Oracles`, which holds TRBUFF to ST's header and the manual and
+the consumer's stream stores to 0x0010 0440 and 0x0010 0441; and
+`environments/boards/stm32h753/board.py`, which reads DMA1_S0CR's TRBUFF
+over SWD.
 
 ### D530 — `refine explain` answers a construct and a decision
 

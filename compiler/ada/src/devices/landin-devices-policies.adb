@@ -494,13 +494,41 @@ package body Landin.Devices.Policies is
                   end if;
                   for Member in 1 .. J.Length (Document, Item) loop
                      if J.Key (Document, Item, Member) not in "bits" | "omit"
-                       | "source"
+                       | "add" | "access" | "source"
                      then
                         Fail (Where & " has the member '"
                           & J.Key (Document, Item, Member) & "'; a"
-                          & " correction says bits or omit, and source");
+                          & " correction says bits or omit, or add with"
+                          & " bits and access, and source");
                      end if;
                   end loop;
+                  if J.Is_Present (J.Member (Document, Item, "add")) then
+                     if not J.Is_Kind
+                         (Document, J.Member (Document, Item, "add"),
+                          J.True_Value)
+                       or else J.Is_Present (J.Member (Document, Item, "omit"))
+                       or else not J.Is_Present
+                         (J.Member (Document, Item, "bits"))
+                     then
+                        Fail (Where & " says add: true with bits and"
+                          & " access, and no omit");
+                     end if;
+                     Made.Add := True;
+                     Made.Field_Access := US.To_Unbounded_String
+                       (Member_String (Item, "access", Where));
+                     if US.To_String (Made.Field_Access) not in
+                       "read-write" | "read-only" | "write-only"
+                       | "writeOnce" | "read-writeOnce"
+                     then
+                        Fail (Where & ".access is '"
+                          & US.To_String (Made.Field_Access) & "', not one"
+                          & " of the SVD's read-write, read-only,"
+                          & " write-only, writeOnce or read-writeOnce");
+                     end if;
+                  elsif J.Is_Present (J.Member (Document, Item, "access")) then
+                     Fail (Where & " gives access, which only a field it"
+                       & " adds says");
+                  end if;
                   Made.Key := US.To_Unbounded_String (Key);
                   Made.Source := US.To_Unbounded_String
                     (Member_String (Item, "source", Where));

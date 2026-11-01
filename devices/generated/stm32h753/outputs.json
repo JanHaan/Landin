@@ -1,6 +1,6 @@
 {
-  "stm32h753/correspondence.json": "65b71f69c50bad2f580512f967474df029571b8b5c5fce49cb14d4527ed94dda",
-  "stm32h753/dma1/device.ldn": "db2c76a7ef3d03073e11bdd9703c4b0175b974bc2695e82e2a5d106e01c3a624",
+  "stm32h753/correspondence.json": "ec5be47f4171c79408827a2efef41ed62ed0fcfc45f675c37b40ec8c01bdd019",
+  "stm32h753/dma1/device.ldn": "cddd4b76de6dd332a561dde46dc682b97903a86414d56aa9082302288cb263e7",
   "stm32h753/dmamux1/device.ldn": "461771654ccbeb9509e52316d57d7d454b5d0f22635b6cb4a3ce1667322a4a44",
   "stm32h753/gpiob/device.ldn": "dbb21c9fe79bac5cc5ac680b79a4a39fc75d926198c444a69ea70590c0b87498",
   "stm32h753/gpiod/device.ldn": "6a6d19023ee499a6ec81879990c2bd8f3554c2481abd3904707299b31a5d07f2",

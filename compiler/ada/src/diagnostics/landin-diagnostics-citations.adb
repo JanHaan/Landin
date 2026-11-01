@@ -2243,6 +2243,8 @@ package body Landin.Diagnostics.Citations is
             when 651 =>
                "The M7 board's float exercise is checked against the hos"
                & "t's IEEE 754",
+            when 652 =>
+               "A reviewed correction may add a field the SVD lacks",
             when 530 =>
                "`refine explain` answers a construct and a decision",
             when 599 =>
@@ -3457,6 +3459,8 @@ package body Landin.Diagnostics.Citations is
             when 650 =>
                "Decisions: The toolchain, C and the machine",
             when 651 =>
+               "Decisions: The toolchain, C and the machine",
+            when 652 =>
                "Decisions: The toolchain, C and the machine",
             when 530 =>
                "Decisions: The toolchain, C and the machine",
@@ -4983,6 +4987,9 @@ package body Landin.Diagnostics.Citations is
             when 651 =>
                "https://www.701.dev/spec.html#d651-the-m7-board-s-float-"
                & "exercise-is-checked-against-the-host-s-ieee-754",
+            when 652 =>
+               "https://www.701.dev/spec.html#d652-a-reviewed-correction"
+               & "-may-add-a-field-the-svd-lacks",
             when 530 =>
                "https://www.701.dev/spec.html#d530-refine-explain-answer"
                & "s-a-construct-and-a-decision",

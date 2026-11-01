@@ -165,7 +165,7 @@ reviewer's notes and is not read.
 | `numeric_enums` | the `PERIPHERAL.REGISTER.FIELD`s whose enumeration is read as a plain number |
 | `reset_mask_overrides` | the reset knowledge a reviewer promises for a register, replacing the SVD's |
 | `reset_corrections` | a reviewed reset `value` and the `source` it was read from, where the SVD is wrong |
-| `field_corrections` | for a `PERIPHERAL.REGISTER.FIELD`, its reviewed `bits` as `[HIGH:LOW]`, or `omit: true`, and the `source` |
+| `field_corrections` | for a `PERIPHERAL.REGISTER.FIELD`, its reviewed `bits` as `[HIGH:LOW]`, or `omit: true`, or, for a field the SVD lacks, `add: true` with its `bits` and its `access` in the SVD's words (D652), and the `source` |
 | `interrupt_corrections` | for an interrupt's name, the `value` it is added or moved to, or `omit: true`, and the `source`; `interrupts.ldn` says each in a line (D542) |
 
 A refused read or write leaves no accessor, so a program that tries one is
@@ -299,7 +299,10 @@ p. 450), which the SVD gives as 0x0000 0083 and 0 and the policy corrects; `PWR_
 0x0000 0006 (6.8.4, p. 307); and `GPIOB_IDR`, whose pin levels have no
 known reset value (11.4.5, p. 543).
 `interrupts.ldn` has 166 slots and says its one correction in a line of
-its own (D542).
+its own (D542). The policy also adds a field the SVD lacks:
+`DMA_SxCR`'s TRBUFF, bit 20, which a stream serving a USART must set
+(15.5.5, p. 662), so both the consumer's transmit stream and the board's
+receive stream can set it (D652).
 
 The [consumer](consumers/stm32h753/main.ldn) enables the clocks, sets
 the pins, programs USART3 at 115200 baud from the 64 MHz HSI and transmits

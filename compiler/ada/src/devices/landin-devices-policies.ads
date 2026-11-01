@@ -55,11 +55,15 @@ package Landin.Devices.Policies is
    package Text_Vectors is new Ada.Containers.Indefinite_Vectors
      (Index_Type => Positive, Element_Type => String);
 
-   --  A reviewed correction of where a field lies, or that it is not a
-   --  field, with where the reviewer read it.
+   --  A reviewed correction of where a field lies, that it is not a
+   --  field, or a field the SVD lacks, with where the reviewer read it.
    type Field_Correction is record
       Key : US.Unbounded_String;
       Omit : Boolean := False;
+      --  A field the SVD lacks, added at Low .. High with Field_Access,
+      --  one of the SVD's access words (D652).
+      Add : Boolean := False;
+      Field_Access : US.Unbounded_String;
       Low, High : Natural := 0;
       Source : US.Unbounded_String;
    end record;

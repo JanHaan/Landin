@@ -4250,11 +4250,26 @@
         "name": "EN",
         "read_action": null,
         "representation": "unsigned"
+      },
+      {
+        "access": "read-write",
+        "correction": {
+          "added": true,
+          "source": "RM0433 Rev 9, 15.5.5, p. 662: DMA_SxCR's bit 20 is TRBUFF, bufferable transfers, which must be set to 1 for a stream that manages UART, USART or LPUART transfers; the SVD omits the field"
+        },
+        "encodings": [],
+        "high": 20,
+        "low": 20,
+        "mask": 1048576,
+        "modified_write": null,
+        "name": "TRBUFF",
+        "read_action": null,
+        "representation": "unsigned"
       }
     ],
-    "known_reset_mask": 32505855,
+    "known_reset_mask": 33554431,
     "known_reset_value": 0,
-    "named_mask": 32505855,
+    "named_mask": 33554431,
     "offset": 16,
     "policy": {
       "read": "normal",

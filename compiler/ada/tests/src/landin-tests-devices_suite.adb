@@ -404,6 +404,28 @@ package body Landin.Tests.Devices_Suite is
               Policy => Policy_For
                 (Svd, ", ""reset_corrections"": {""UARTA.CR"":"
                  & " {""value"": ""0x00000001"", ""source"": """"}}"));
+      --  D652: a field a correction adds is one the SVD lacks, beside
+      --  every field the SVD gives, with an access the SVD's words say.
+      Expect (Svd, Dev.Invalid_Policy, "adds a field the SVD gives",
+              Policy => Policy_For
+                (Svd, ", ""field_corrections"": {""UARTA.CR.EN"": {""add"":"
+                 & " true, ""bits"": ""[0:0]"", ""access"": ""read-write"","
+                 & " ""source"": ""p. 1""}}"));
+      Expect (Svd, Dev.Invalid_Policy, "overlaps another",
+              Policy => Policy_For
+                (Svd, ", ""field_corrections"": {""UARTA.CR.WIDE"": {""add"":"
+                 & " true, ""bits"": ""[3:2]"", ""access"": ""read-write"","
+                 & " ""source"": ""p. 1""}}"));
+      Expect (Svd, Dev.Invalid_Policy, "not one of the SVD's",
+              Policy => Policy_For
+                (Svd, ", ""field_corrections"": {""UARTA.CR.NEW"": {""add"":"
+                 & " true, ""bits"": ""[4:4]"", ""access"": ""rw"","
+                 & " ""source"": ""p. 1""}}"));
+      Expect (Svd, Dev.Invalid_Policy, "only a field it adds says",
+              Policy => Policy_For
+                (Svd, ", ""field_corrections"": {""UARTA.CR.EN"": {""bits"":"
+                 & " ""[0:0]"", ""access"": ""read-write"","
+                 & " ""source"": ""p. 1""}}"));
    end Every_Refusal_Is_Named;
 
    procedure A_Correction_Is_Recorded (Item : in out Landin.Testing.Context);
@@ -476,6 +498,32 @@ package body Landin.Tests.Devices_Suite is
          & "compiler.interrupt(""UARTB_IRQ"", 1)" & LF
          & "compiler.interrupt(""EXTRA_IRQ"", 9)" & LF,
          "D542's text with the policy's interrupt corrections, each said");
+      --  D652: a field the SVD lacks, added by a reviewed correction.
+      Dev.Projection.Project
+        (Svd, Policy_For
+           (Svd, ", ""field_corrections"": {""UARTB.CR.READY"": {""add"":"
+            & " true, ""bits"": ""[4:4]"", ""access"": ""read-only"","
+            & " ""source"": ""the manual, p. 6""}}"),
+         Made, Problem);
+      Landin.Testing.Check
+        (Item, Problem.Kind = Dev.No_Fault, US.To_String (Problem.Message));
+      if Problem.Kind /= Dev.No_Fault then
+         return;
+      end if;
+      Landin.Testing.Check
+        (Item, Contains (Output_Of (Made, "toy1/uartb/device.ldn"),
+                         "    f_ready: u1 at 4..4" & LF)
+         and then Contains (Output_Of (Made, "toy1/uartb/device.ldn"),
+                            "public cr_named_mask: u32 = 0x00000017")
+         and then not Contains (Output_Of (Made, "toy1/uarta/device.ldn"),
+                                "f_ready"),
+         "an added field is generated in its register alone");
+      Landin.Testing.Check
+        (Item, Contains (Output_Of (Made, "toy1/correspondence.json"),
+                         """added"": true," & LF)
+         and then Contains (Output_Of (Made, "toy1/correspondence.json"),
+                            """source"": ""the manual, p. 6"""),
+         "and recorded as added, with its source");
    end A_Correction_Is_Recorded;
 
    function Content_Of

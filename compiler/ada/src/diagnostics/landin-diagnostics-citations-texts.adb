@@ -24222,15 +24222,16 @@ package body Landin.Diagnostics.Citations.Texts is
                & "e reset knowledge a reviewer promises instead of the SVD"
                & "'s; and `reset_corrections`, a reviewed reset value with"
                & " the source it was read from; and `field_corrections`, a"
-               & " field's reviewed `bits` or that it is to be omitted, wi"
-               & "th its `source`, which the correspondence records beside"
-               & " the SVD's; and `interrupt_corrections`, an interrupt to"
-               & " add or move to a `value`, or to `omit`, with its `sourc"
-               & "e`, which `interrupts.ldn` says in a line of its own (D5"
-               & "42). Any other member is refused, except `provenance`, t"
-               & "he reviewer's notes, which is not read. A policy refine "
-               & "cannot read is L0526, and one that selects what the SVD "
-               & "lacks L0530.",
+               & " field's reviewed `bits` or that it is to be omitted, or"
+               & " a field the SVD lacks, added with its `bits` and `acces"
+               & "s` (D652), with its `source`, which the correspondence r"
+               & "ecords beside the SVD's; and `interrupt_corrections`, an"
+               & " interrupt to add or move to a `value`, or to `omit`, wi"
+               & "th its `source`, which `interrupts.ldn` says in a line o"
+               & "f its own (D542). Any other member is refused, except `p"
+               & "rovenance`, the reviewer's notes, which is not read. A p"
+               & "olicy refine cannot read is L0526, and one that selects "
+               & "what the SVD lacks L0530.",
             when 557 =>
                "Chosen: each selected register's properties are inherite"
                & "d from the register, its peripheral, the peripheral that"
@@ -24617,13 +24618,11 @@ package body Landin.Diagnostics.Citations.Texts is
                & "ar inside the 87 microseconds of a byte at 115,200 baud."
                & LF
                & LF
-               & "TRBUFF, DMA_SxCR's bit 20, must be set for a stream that"
-               & " serves a USART (15.5.5, p. 662). The SVD omits the fiel"
-               & "d, and a policy can move or omit a field the SVD gives b"
-               & "ut not add one, so the generated register writes it as z"
-               & "ero, as D561's transmit consumer's does; the board's ora"
-               & "cle reads the stream's configuration over SWD and refuse"
-               & "s the run until it is set.",
+               & "TRBUFF, DMA_SxCR's bit 20, is set, since RM0433 says it "
+               & "must be for a stream that serves a USART (15.5.5, p. 662"
+               & "); the SVD omits the field, and the policy adds it (D652"
+               & "). The board's oracle reads the stream's configuration o"
+               & "ver SWD and refuses a run without it.",
             when 649 =>
                "Chosen: USART3's handler is placed at slot 55, IRQ 39 (T"
                & "able 147, p. 755), and USART3 raises it itself: CR1's ID"
@@ -24682,6 +24681,25 @@ package body Landin.Diagnostics.Citations.Texts is
                & "are root is pending, as CPACR is until the compiler-owne"
                & "d startup grants CP10 and CP11. A run with anything pend"
                & "ing is `pending`, never passed.",
+            when 652 =>
+               "Chosen: a field correction may say `""add"": true` with `b"
+               & "its`, in the `[HIGH:LOW]` form a moved field's take, an "
+               & "`access` in the SVD's own words, `read-write`, `read-onl"
+               & "y`, `write-only`, `writeOnce` or `read-writeOnce`, and i"
+               & "ts `source`, as an interrupt correction may add an inter"
+               & "rupt (D560). The added field is generated after the regi"
+               & "ster's SVD fields as one of them, a `uN` with no enumera"
+               & "tion, it joins the named mask its writer keeps, and the "
+               & "correspondence records it with `""added"": true` and its s"
+               & "ource. A correction that adds a field the SVD gives, one"
+               & " whose bits overlap another field's, one that spells ano"
+               & "ther's name once lowercased, an access outside those wor"
+               & "ds, and an `access` on a correction that adds nothing ar"
+               & "e each refused as an invalid policy, naming the correcti"
+               & "on. The STM32H753's policy adds `DMA1.S0CR.TRBUFF`, and "
+               & "both of its USART streams set it: the board's receive (D"
+               & "648) and D561's transmit consumer, whose linked stores t"
+               & "he check reads.",
             when 530 =>
                "Chosen: `refine explain` takes `[1590]`, `1590`, `D275` "
                & "or `d275` beside a diagnostic code. For a construct or a"

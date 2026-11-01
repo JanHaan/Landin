@@ -203,6 +203,12 @@
     "GPIOB.IDR": "0x0"
   },
   "field_corrections": {
+    "DMA1.S0CR.TRBUFF": {
+      "add": true,
+      "bits": "[20:20]",
+      "access": "read-write",
+      "source": "RM0433 Rev 9, 15.5.5, p. 662: DMA_SxCR's bit 20 is TRBUFF, bufferable transfers, which must be set to 1 for a stream that manages UART, USART or LPUART transfers; the SVD omits the field"
+    },
     "RCC.AHB1ENR.USB2OTGHSULPIEN": {
       "omit": true,
       "source": "RM0433 Rev 9, 8.7.41, p. 454: RCC_AHB1ENR's bit 18 is reserved and USB2OTGHSULPIEN is bit 28, which the SVD gives as USB2ULPIEN; the revision history, p. 3313, records the move from bit 18 to bit 28"

@@ -937,6 +937,14 @@ class Stm32h753Oracles(unittest.TestCase):
         # 8.7.41, p. 454: RCC_AHB1ENR's bit 18 is reserved.
         self.assertEqual([f['name'] for f in rows['RCC.AHB1ENR']['omitted_fields']],
                          ['USB2OTGHSULPIEN'])
+        # 15.5.5, p. 662: DMA_SxCR's bit 20 is TRBUFF, which must be set
+        # for a stream serving a USART; the SVD lacks it and the policy adds
+        # it (D652), as the header has it.
+        trbuff = {f['name']: f for f in rows['DMA1.S0CR']['fields']}['TRBUFF']
+        self.assertEqual((trbuff['low'], trbuff['high'], trbuff['access']),
+                         (20, 20, 'read-write'))
+        self.assertTrue(trbuff['correction']['added'])
+        self.assertIn('RM0433 Rev 9, 15.5.5, p. 662', trbuff['correction']['source'])
         self.assertEqual(rows['TIM2.CCMR1_Input']['alternate_register'],
                          'CCMR1_Output')
         self.assertEqual(rows['USART3.CR1']['derived_from'], 'USART1')
@@ -1032,9 +1040,9 @@ class Stm32h753Oracles(unittest.TestCase):
             ('w', 0x40020018, 4, 0x40004828),   # DMA_S0PAR: USART3_TDR
             ('w', 0x4002001c, 4, message),      # DMA_S0M0AR: the message
             ('w', 0x40020014, 4, 4),            # DMA_S0NDTR: four bytes
-            ('w', 0x40020010, 4, 0x00000440),   # DMA_S0CR: MINC, memory to peripheral
+            ('w', 0x40020010, 4, 0x00100440),   # DMA_S0CR: TRBUFF, MINC, memory to peripheral
             ('w', 0x40004800, 4, 0x00000009),   # USART3_CR1: TE, UE
-            ('w', 0x40020010, 4, 0x00000441),   # DMA_S0CR: EN
+            ('w', 0x40020010, 4, 0x00100441),   # DMA_S0CR: EN
         ])
 
     @requires_refine
