@@ -2346,6 +2346,9 @@ package body Landin.Diagnostics.Citations is
                & " a description",
             when 620 =>
                "A fibre's context on a float unit holds d8-d15 and FPSCR",
+            when 621 =>
+               "The STM32H753 is hard-float, and its consumer's accesses"
+               & " are the board's to check",
             when 281 =>
                "RV64's system call has the standing of `syscall` and `sv"
                & "c`",
@@ -3514,6 +3517,8 @@ package body Landin.Diagnostics.Citations is
             when 619 =>
                "Decisions: The core library and the derived programs",
             when 620 =>
+               "Decisions: The core library and the derived programs",
+            when 621 =>
                "Decisions: The core library and the derived programs",
             when 281 =>
                "Decisions: The core library and the derived programs",
@@ -5069,6 +5074,10 @@ package body Landin.Diagnostics.Citations is
             when 620 =>
                "https://www.701.dev/spec.html#d620-a-fibre-s-context-on-"
                & "a-float-unit-holds-d8-d15-and-fpscr",
+            when 621 =>
+               "https://www.701.dev/spec.html#d621-the-stm32h753-is-hard"
+               & "-float-and-its-consumer-s-accesses-are-the-board-s-to-ch"
+               & "eck",
             when 281 =>
                "https://www.701.dev/spec.html#d281-rv64-s-system-call-ha"
                & "s-the-standing-of-syscall-and-svc",

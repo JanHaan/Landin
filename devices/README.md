@@ -238,23 +238,29 @@ its own (D542).
 
 The [consumer](consumers/stm32h753/main.ldn) enables the clocks, sets
 the pins, programs USART3 at 115200 baud from the 64 MHz HSI and transmits
-four bytes through DMA1 stream 0. No emulator models the chip, so
-[`thumb.py`](thumb.py) reads the linked image's instructions from its reset
-vector and lists every store it makes to a device, and the check compares
-the list, address, width and value in order, with one reviewed from
-RM0433, and requires that nothing enables or maintains the caches (D561).
+four bytes through DMA1 stream 0. No emulator models the chip, and its
+device accesses are checked by the board run's oracle (D621), which
+replaced an evaluation of the linked image's ARMv6-M instructions when the
+description gained its float unit (D561). What `test.py` still checks,
+in `the consumer links cacheless`, is that the consumer links where the
+description places it, and that no literal word of its flash reaches SCB's
+CCR or a cache maintenance operation while one reaches CPACR, so nothing
+enables or maintains the caches. [`thumb.py`](thumb.py) remains, for
+RP2040's second stage (D588).
 
 The description's [`memory.ldn`](descriptions/stm32h753/memory.ldn) is
 written by hand and checked against the header's base addresses (D562):
 2 MiB of flash from 0x0800_0000, ITCM 64 KiB at 0, DTCM 128 KiB at
 0x2000_0000, AXI SRAM 512 KiB at 0x2400_0000, SRAM1, SRAM2 and SRAM3 at
 0x3000_0000, 0x3002_0000 and 0x3004_0000, and SRAM4 64 KiB at 0x3800_0000.
-It boots from the plain vector table at 0x0800_0000. The profile is
-cacheless: startup leaves the M7's caches disabled, as reset leaves them,
+It boots from the plain vector table at 0x0800_0000, and names its
+Cortex-M7's float unit, `compiler.float_unit("fpv5-d16")`, which makes the
+build hard-float (D615, D621). The profile is cacheless: startup leaves the M7's caches disabled, as reset leaves them,
 and a cached profile is not admitted. DMA1 and DMA2 reach neither TCM, so
 data, BSS and the stack are placed in the AXI SRAM. A program selects the
 profile by importing `descriptions/stm32h753` with `--root=devices`, and
-builds at `--level=armv7e-m`, the M7's level (D543); the consumer does, so
+builds at `--level=armv7e-m`, the level its float unit needs (D615); the
+consumer does, so
 its linked image is at the H753's addresses. The Cortex-M descriptions lane
 selects it by its identity and compares its linked regions, its 166-word
 vector table at 0x0800_0000, its reserved slots, a handler at USART3's slot

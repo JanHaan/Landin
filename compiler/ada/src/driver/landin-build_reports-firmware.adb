@@ -23,6 +23,7 @@ package body Landin.Build_Reports.Firmware is
       US.Append (Result, """device"":"""
         & Firmware.Spelling (Profile.Device)
         & """,""core"":""" & Firmware.Spelling (Profile.Core)
+        & """,""float_unit"":""" & Firmware.Spelling (Profile.Float)
         & """,""boot"":""" & Firmware.Spelling (Profile.Boot)
         & """,""vector_address"":" & Image (Firmware.Vector_Address (Profile))
         & ",""vector_words"":" & Image

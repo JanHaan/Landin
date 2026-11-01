@@ -123,7 +123,7 @@ def select(run, refine, device):
     image = compile_firmware(run, refine, PROGRAMS[device],
                              ['--level=' + want['level']] if 'level' in want else ())
     report = json.loads((run.out / 'core.elf.json').read_text())['firmware']
-    for key in ('core', 'boot', 'regions', 'placed', 'vector_address',
+    for key in ('core', 'float_unit', 'boot', 'regions', 'placed', 'vector_address',
                 'vector_words', 'stack_reserved'):
         require(report[key] == want[key], '%s: the build report says %s %r, and %r is'
                 ' recorded' % (device, key, report[key], want[key]))

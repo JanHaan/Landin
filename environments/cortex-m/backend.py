@@ -112,8 +112,8 @@ BOOT_PREFIX = {'vector-table': 0, 'rp2040-boot2': 256}
 
 #  A profile's facts, as the firmware build report states them, with the
 #  stack top read from the linked image.
-FACTS = ('device', 'boot', 'regions', 'placed', 'vector_address', 'vector_words',
-         'flash_limit', 'static_ram_limit', 'stack_reserved')
+FACTS = ('device', 'boot', 'float_unit', 'regions', 'placed', 'vector_address',
+         'vector_words', 'flash_limit', 'static_ram_limit', 'stack_reserved')
 
 
 def region(profile, part):
@@ -163,7 +163,7 @@ def probe_level(device):
     """The level DEVICE's description builds at: its float unit's, or the
     default for one without (D615)."""
     want = {**DESCRIPTIONS, **LANE_DESCRIPTIONS}[device]
-    return ['--level=' + want['level']] if want.get('float_unit') else []
+    return ['--level=' + want['level']] if want['float_unit'] != 'none' else []
 
 
 def said_why(error):

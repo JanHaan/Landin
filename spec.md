@@ -20983,7 +20983,18 @@ which a change of instruction selection breaks; and checking the IR, which
 is not what is linked.
 
 **Pinned by** `devices/test.py`'s `the consumer's linked accesses` and the
-offline `the evaluator reads stores and their widths`.
+offline `the evaluator reads stores and their widths`, until D621 retired
+the evaluation.
+
+**Retired by D621:** the STM32H753's description has a float unit (D615),
+so its consumer is hard-float Armv7E-M code, which an ARMv6-M evaluator
+does not read, and a board now runs it. The board run's oracle checks the
+consumer's device accesses in their place. What stays checked statically,
+in `devices/test.py`'s `the consumer links cacheless`, is that the consumer
+links where its description places it and that its image holds no literal
+reaching SCB's CCR or the cache maintenance operations, which is how
+nothing enables or maintains the M7's caches stays checked in the gate.
+`devices/thumb.py` remains for RP2040's second stage (D588).
 
 ### D562 — The STM32H753's description is cacheless and keeps DMA out of the TCMs
 
@@ -21009,8 +21020,8 @@ placing data in SRAM1, which reaches no further and is smaller.
 
 **Pinned by** `devices/test.py`'s `the hand-written memory against the
 header`, which holds each region to the header and every placement DMA may
-touch out of the TCMs, and the cache check of `the consumer's linked
-accesses`; and `environments/cortex-m/descriptions.py`, which selects the
+touch out of the TCMs, and the cache check of `the consumer links
+cacheless` (D621); and `environments/cortex-m/descriptions.py`, which selects the
 STM32H753 by importing its description at `--level=armv7e-m` and compares
 its linked regions, vector table at 0x0800_0000 of 166 words, reserved
 slots, USART3's handler at slot 55, a datum placed in the DTCM and its
@@ -24043,6 +24054,38 @@ the corpus's own.
 mps2-an500 lane, where the harness requires d8-d15 to survive `main`; and
 the `stack report` suite's `a switch costs its frame`, whose Cortex-M
 figures with a unit are 120, 528 and 260.
+
+### D621 — The STM32H753 is hard-float, and its consumer's accesses are the board's to check
+
+**The tour said** nothing; D560 learnt the STM32H753 for prototype 1, D561
+read its consumer's device stores from the linked ARMv6-M image, and D562
+kept its profile cacheless.
+
+**Chosen:** `devices/descriptions/stm32h753/memory.ldn` holds
+`compiler.float_unit("fpv5-d16")`, its Cortex-M7's double-precision unit,
+so the H753 builds at `armv7e-m` alone and hard-float (D615-D617), and its
+reset grants the unit (D618). The profile stays cacheless under R12's rule
+for noncoherent cached profiles: nothing enables the caches, and D562's
+placements are unchanged. D561's static evaluation is retired, since an
+ARMv6-M evaluator does not read Armv7E-M code and a board runs the
+consumer; the board run's oracle checks its device accesses. What stays
+static is D561's amendment's: the consumer links where the description
+places it, its image reaches neither SCB's CCR nor a cache maintenance
+operation, and it does reach CPACR. The corpus derives the profile at
+`armv7e-m`, the level its float unit needs, to link limited verdicts
+against it.
+
+**The alternatives:** keeping the description soft-float, which leaves the
+board's unit idle and its exit evidence on the emulator alone; extending
+the evaluator to Thumb-2 and VFP, a second instruction set kept apart from
+the backend that the board run makes unnecessary; and a cache check in the
+board oracle alone, which the gate does not run.
+
+**Pinned by** `devices/test.py`'s `the consumer links cacheless` and `the
+hand-written memory against the header`; and
+`environments/cortex-m/descriptions.py`, which selects the STM32H753 at
+`--level=armv7e-m` and compares its facts, its float unit among them, with
+`descriptions.json`.
 
 ### D281 — RV64's system call has the standing of `syscall` and `svc`
 

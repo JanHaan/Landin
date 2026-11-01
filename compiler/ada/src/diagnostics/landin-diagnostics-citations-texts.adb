@@ -26822,6 +26822,23 @@ package body Landin.Diagnostics.Citations.Texts is
                & " and not a trap. D470's consumer is measured on the reta"
                & "ined Cortex-M0 profile, which has no unit; on one with a"
                & " unit its fibre would be charged the extended frame.",
+            when 621 =>
+               "Chosen: `devices/descriptions/stm32h753/memory.ldn` hold"
+               & "s `compiler.float_unit(""fpv5-d16"")`, its Cortex-M7's dou"
+               & "ble-precision unit, so the H753 builds at `armv7e-m` alo"
+               & "ne and hard-float (D615-D617), and its reset grants the "
+               & "unit (D618). The profile stays cacheless under R12's rul"
+               & "e for noncoherent cached profiles: nothing enables the c"
+               & "aches, and D562's placements are unchanged. D561's stati"
+               & "c evaluation is retired, since an ARMv6-M evaluator does"
+               & " not read Armv7E-M code and a board runs the consumer; t"
+               & "he board run's oracle checks its device accesses. What s"
+               & "tays static is D561's amendment's: the consumer links wh"
+               & "ere the description places it, its image reaches neither"
+               & " SCB's CCR nor a cache maintenance operation, and it doe"
+               & "s reach CPACR. The corpus derives the profile at `armv7e"
+               & "-m`, the level its float unit needs, to link limited ver"
+               & "dicts against it.",
             when 281 =>
                "Chosen: an ordinary RV64 assembly block admits `ecall`. "
                & "Like x86-64's `syscall` and arm64's `svc`, it enters the"

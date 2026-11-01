@@ -1679,6 +1679,7 @@ package body Landin.Tests.Cortex_Suite is
          & """stack_reserved"":4096,""runtime_members"":"
          & "[""_muldi3.o"",""_udivsi3.o""],"
          & """device"":""constrained-reference"",""core"":""cortex-m0"","
+         & """float_unit"":""none"","
          & """boot"":""vector-table"",""vector_address"":0,"
          & """vector_words"":48,""regions"":[{""name"":""FLASH"","
          & """origin"":0,""length"":32768,""access"":""rx""},"

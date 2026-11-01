@@ -114,27 +114,6 @@ class Offline(unittest.TestCase):
                 for named in re.findall(r'devices/notices/[\w.-]+', line):
                     self.assertTrue((ROOT / named).is_file(), named)
 
-    def test_the_evaluator_reads_stores_and_their_widths(self):
-        import struct
-        import thumb
-
-        class Built:
-            code = struct.pack('<II', 0x20001000, 0x9) + struct.pack(
-                '<6H', 0x4802, 0x2105, 0x6041, 0x8101, 0xbf30, 0) \
-                + struct.pack('<I', 0x40000000)
-            segments = [(0, code, len(code))]
-            symbols = {'_landin_firmware_vectors': 0}
-
-        # ldr r0, =0x40000000; movs r1, #5; str r1, [r0, #4];
-        # strh r1, [r0, #8]; wfi
-        evaluation = thumb.Evaluation(Built(), [(0x40000000, 0x100)],
-                                      (0x20000000, 0x1000))
-        self.assertEqual(evaluation.run(), [('w', 0x40000004, 4, 5),
-                                            ('w', 0x40000008, 2, 5)])
-        broken = thumb.Evaluation(Built(), [], (0x20000000, 0x1000))
-        with self.assertRaisesRegex(thumb.Refused, 'outside the image'):
-            broken.run()
-
     def test_the_evaluator_follows_a_copied_stage_to_its_exit(self):
         import struct
         import thumb
@@ -812,8 +791,17 @@ class Stm32h753Oracles(unittest.TestCase):
                          ('USART3', 'DMA1_Stream0', 'DMAMUX1_OVR', 'TIM2'))
 
     @requires_refine
-    def test_the_consumer_s_linked_accesses(self):
-        """The consumer's every device store, read from its linked image."""
+    def test_the_consumer_links_cacheless(self):
+        """The consumer links where the description places it, and nothing
+        in its image can enable or maintain the M7's caches (D561, D562).
+
+        Its device accesses are the board run's oracle's to check; what
+        stays here is static: every address the code reaches that is not
+        a small constant is a literal word in its flash, and none is SCB's
+        CCR, whose IC and DC bits enable the caches, or the cache operations
+        at 0xE000EF50 to 0xE000EF78.  CPACR's word, which reset writes for
+        the float unit (D618), shows the scan reads reset's literals."""
+        import struct
         import thumb
         if TOOLCHAIN is None and not shutil.which('arm-eabi-gcc') \
                 and not shutil.which('arm-none-eabi-gcc'):
@@ -836,45 +824,19 @@ class Stm32h753Oracles(unittest.TestCase):
         image = thumb.Image(data)
         # The description places data, BSS and the stack in the AXI SRAM,
         # 512 KiB from 0x2400_0000, which is the image's RAM.
-        ram = (0x24000000, 512 * 1024)
         self.assertEqual(image.symbols['_landin_firmware_data_start'], 0x24000000)
         self.assertEqual(image.symbols['_landin_firmware_stack_top'],
                          0x24000000 + 512 * 1024)
         self.assertEqual(image.symbols['_landin_firmware_vectors'], 0x08000000)
         self.assertTrue(0x08000000 <= image.symbols['message'] < 0x08200000)
-        windows = [(0x58024400, 0x400), (0x58020c00, 0x400), (0x40004800, 0x400),
-                   (0x40020000, 0x400), (0x40020800, 0x400), (0xe000e000, 0x1000)]
-        stores = [a for a in thumb.accesses(data, windows, ram) if a[0] != 'barrier']
-        # The cacheless profile: nothing enables the M7's caches, through
-        # SCB_CCR's IC and DC bits, or maintains them, through SCB's cache
-        # operations at 0xE000EF50 to 0xE000EF78.
-        system = [a for a in stores if a[1] >= 0xe000e000]
-        self.assertFalse([a for a in system if a[1] == 0xe000ed14 and a[3] & 0x30000
-                          or 0xe000ef50 <= a[1] <= 0xe000ef78], system)
-        stores = [a for a in stores if a[1] < 0xe000e000]
-        message = image.symbols['message']
-        # Reviewed from RM0433 Rev 9, never the generator: each base from
-        # Table 8's register boundary addresses, pp. 132 to 135, each offset
-        # and bit from the register's section, cited at test_reset_values,
-        # and the request from Table 124, p. 697, usart3_tx_dma being
-        # dmamux1_req_in46; the address, the width and the value of every
-        # store, in order.
-        self.assertEqual(stores, [
-            ('w', 0x580244e0, 4, 0x00000008),   # RCC_AHB4ENR: GPIODEN
-            ('w', 0x580244e8, 4, 0x00040000),   # RCC_APB1LENR: USART3EN
-            ('w', 0x580244d8, 4, 0x00000001),   # RCC_AHB1ENR: DMA1EN
-            ('w', 0x58020c00, 4, 0xfffaffff),   # GPIOD_MODER: PD8, PD9 alternate
-            ('w', 0x58020c24, 4, 0x00000077),   # GPIOD_AFRH: PD8, PD9 AF7
-            ('w', 0x4000480c, 4, 556),          # USART3_BRR: 64 MHz / 115200
-            ('w', 0x40004808, 4, 0x00000080),   # USART3_CR3: DMAT
-            ('w', 0x40020800, 4, 46),           # DMAMUX1_C0CR: usart3_tx_dma
-            ('w', 0x40020018, 4, 0x40004828),   # DMA_S0PAR: USART3_TDR
-            ('w', 0x4002001c, 4, message),      # DMA_S0M0AR: the message
-            ('w', 0x40020014, 4, 4),            # DMA_S0NDTR: four bytes
-            ('w', 0x40020010, 4, 0x00000440),   # DMA_S0CR: MINC, memory to peripheral
-            ('w', 0x40004800, 4, 0x00000009),   # USART3_CR1: TE, UE
-            ('w', 0x40020010, 4, 0x00000441),   # DMA_S0CR: EN
-        ])
+        words = set()
+        for address, content, _ in image.segments:
+            if 0x08000000 <= address < 0x08200000:
+                words.update(struct.unpack_from('<%dI' % (len(content) // 4), content))
+        self.assertIn(0xe000ed88, words, 'reset writes no CPACR')
+        self.assertNotIn(0xe000ed14, words, 'the image reaches SCB_CCR')
+        self.assertFalse([w for w in words if 0xe000ef50 <= w <= 0xe000ef78],
+                         'the image reaches a cache maintenance operation')
 
     @requires_refine
     def test_the_hand_written_memory_against_the_header(self):

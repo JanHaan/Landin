@@ -1,14 +1,15 @@
-"""The device accesses a linked ARMv6-M firmware image makes, found by
-evaluating its instructions (D561).
+"""The device accesses a run of ARMv6-M code makes, found by evaluating its
+instructions.
 
-No emulator models the STM32H753, and none is needed to know what the
-compiled consumer asks of it: the image's instructions, from its reset
-vector, over memory that is nothing but the image's own bytes, determine
-every load and store it makes outside that memory.  This evaluates the
-ARMv6-M Thumb instruction set the Cortex-M backend emits -- every 16-bit
-encoding, BL, MRS, MSR and the three barriers -- and records, in order,
-each access to a window the caller names as a device, with its address,
-its width and the value stored.  A load from a device window returns zero,
+It read the STM32H753 consumer's linked image until D561 retired that: the
+image is hard-float Armv7E-M now, and the board run's oracle checks it.
+What it still reads is RP2040's second stage (D588), from the boot ROM's
+copy: the code's instructions, over memory that is nothing but the image's
+own bytes, determine every load and store it makes outside that memory.
+This evaluates the ARMv6-M Thumb instruction set -- every 16-bit encoding,
+BL, MRS, MSR and the three barriers -- and records, in order, each access
+to a window the caller names as a device, with its address, its width and
+the value stored.  A load from a device window returns zero,
 or what the caller's `reads` answers.  It stops at the first WFI, and
 refuses an instruction it does not know, an access outside the image's
 memory and the device windows, a misaligned access, or more steps than its
@@ -420,7 +421,3 @@ def to_signed(value):
 def sign(value, bits):
     return value - (1 << bits) if value >> (bits - 1) & 1 else value
 
-
-def accesses(data, devices, ram, reads=None, limit=2_000_000):
-    """Every device access the ELF image DATA makes until its first WFI."""
-    return Evaluation(Image(data), devices, ram, reads, limit).run()
