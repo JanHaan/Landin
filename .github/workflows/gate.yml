@@ -575,10 +575,10 @@ jobs:
   #  QEMU and GDB on the locked tools, with the release compiler.
   #  Four workers, each with its own shared GDB.  Every lane in one job took
   #  612 s on the runner and the job sixteen and a half minutes, before the
-  #  M33 and M7 ran the whole corpus again; with them it neared the hour, so
-  #  the lanes run as run.py's two parts, `programs` and `corpus`, which
-  #  together are every lane once (environments/cortex-m/test.py holds the
-  #  parts and this matrix to that), and neither leg is FILTERED.
+  #  M33 and M7 ran the whole corpus again; with them one job risked the
+  #  hour, so the lanes run as run.py's two parts, `programs` and `corpus`,
+  #  which together are every lane once (environments/cortex-m/test.py holds
+  #  the parts and this matrix to that), and neither leg is FILTERED.
   cortex-m:
     name: cortex-m-${{ matrix.part }}
     needs: [inputs, linux-release-build]

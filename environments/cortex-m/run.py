@@ -418,9 +418,9 @@ NEEDS_REFINE = set(LANES[LANES.index('packed-native'):])
 #  which test.py holds them to.  `corpus` is the three whole-corpus lanes,
 #  the M0's `backend` and the M33's and M7's again; `programs` is the rest,
 #  the probes, the firmware and device programs and the debug evidence.
-#  Measured at LANDIN_CORTEX_JOBS=6 on one host they took about 600 and 700
-#  seconds, where all of them in one job neared the gate's hour on a
-#  four-CPU runner.
+#  At LANDIN_CORTEX_JOBS=6 on a 32-CPU host they took 694 and 708 seconds,
+#  and all of them 1,306 in one run, which on a four-CPU runner put one job
+#  at risk of the gate's hour.
 PARTS = {'programs': ('cpu', 'peripheral', 'abi', 'memory', 'packed', 'packed-native',
                       'firmware', 'freestanding', 'devices', 'descriptions', 'driver',
                       'evidence'),

@@ -216,7 +216,7 @@ lanes are `cpu`, `peripheral`, `abi`, `memory`, `packed`, `packed-native`,
 and its `result.json`, and is not the gate's run.
 
 The gate runs every lane in two jobs, one for each of `run.py`'s two
-parts, because one job running all of them neared its hour on a four-CPU
+parts, because one job running all of them risked its hour on a four-CPU
 runner. `--part=NAME` runs one part:
 
 | part | lanes | gate job |
