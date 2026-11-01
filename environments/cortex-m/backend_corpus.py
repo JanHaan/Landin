@@ -11,7 +11,7 @@ from pathlib import Path
 import re
 import sys
 
-from backend import (BOOT_PREFIX, HERE, LEVELS, ROOT, COUNTERPARTS, DESCRIPTIONS,
+from backend import (BOOT_PREFIX, BOOT_SUFFIX, HERE, LEVELS, ROOT, COUNTERPARTS, DESCRIPTIONS,
                      MATERIALIZATION, REFERENCE, ImageLimit, build, derived, describe_routines, describe_sizes,
                      execute as qemu, fixture, harness_start, image_contract, image_sizes,
                      level_flags, levels_of, link, measure_overflow, metadata, region)
@@ -289,11 +289,13 @@ def divide_lowering(run):
 
 def dominates(profile, reference):
     """Whether every image that fits REFERENCE fits PROFILE: as much flash
-    past its boot prefix and vector table, static RAM and stack, so a
+    past its boot prefix, vector table and boot suffix, static RAM and
+    stack, so a
     program the corpus executed on the reference needs no link of its own
     to show it fits, and only the limited ones are linked again."""
     def room(one):
-        return one['flash_limit'] - BOOT_PREFIX[one['boot']] - 4 * one['vector_words']
+        return (one['flash_limit'] - BOOT_PREFIX[one['boot']] - 4 * one['vector_words']
+                - BOOT_SUFFIX[one['boot']])
     return (room(profile) >= room(reference)
             and profile['static_ram_limit'] >= reference['static_ram_limit']
             and profile['stack_reserved'] >= reference['stack_reserved'])

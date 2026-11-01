@@ -1212,9 +1212,10 @@ package body Landin.Devices.Projection is
          if not X.Is_Present (Cpu) then
             Fail (Inconsistent_Device, "the SVD names no cpu, so the"
                   & " description's core is not known", Device);
-         elsif Core not in "CM0" | "CM0PLUS" | "CM3" | "CM4" | "CM7" then
+         elsif Core not in "CM0" | "CM0PLUS" | "CM3" | "CM4" | "CM7" | "CM33"
+         then
             Fail (Unsupported_Form, "the SVD's cpu is " & Core & ", which"
-                  & " is none of CM0, CM0PLUS, CM3, CM4 and CM7",
+                  & " is none of CM0, CM0PLUS, CM3, CM4, CM7 and CM33",
                   Child (Cpu, "name"));
          end if;
          if Has (Cpu, "deviceNumInterrupts") then
@@ -1373,7 +1374,8 @@ package body Landin.Devices.Projection is
                   elsif Core = "CM0PLUS" then "cortex-m0plus"
                   elsif Core = "CM3" then "cortex-m3"
                   elsif Core = "CM4" then "cortex-m4"
-                  else "cortex-m7") & """)");
+                  elsif Core = "CM7" then "cortex-m7"
+                  else "cortex-m33") & """)");
          Line ("compiler.vectors("
                & Decimal (16 + Word'Max (Declared_Count, Highest)) & ")");
          for Pair of Pairs loop

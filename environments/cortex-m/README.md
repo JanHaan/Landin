@@ -815,9 +815,10 @@ measurements have their own lanes below.
 ## Device descriptions
 
 `descriptions.py` follows `devices.py` in `run.py`, in its own
-`descriptions` output directory, and runs nothing: RP2040 is a chip, and
-emulators cover cores. It builds RP2040's description,
-`devices/descriptions/rp2040` imported under `--root=devices`, and the
+`descriptions` output directory, and runs nothing: RP2040 and RP2350 are
+chips, and emulators cover cores. It builds RP2040's description,
+`devices/descriptions/rp2040` imported under `--root=devices`, RP2350's at
+`--level=armv8-m.main`, the STM32H753's at `--level=armv7e-m`, and the
 constrained reference, which a program importing no description is given
 (D543), and compares every fact of each linked image and its build report
 with [`descriptions.json`](descriptions.json): the device, core, boot kind,
@@ -828,7 +829,19 @@ reserved vector word, the handler's word, and a datum placed in its
 `intctrl.h` and its `boot_stage2.ld`, each by URL and SHA-256, and from
 [1990]; none is read from the descriptions or the compiler, so a wrong or
 absent fact fails. RP2040's slot 21, `USBCTRL_IRQ`, holds its handler, and
-the reference refuses slot 21 as L0347 and links zero there.
+the reference refuses slot 21 as L0347 and links zero there. RP2350's are
+recorded from pico-sdk's `memmap_default.ld` for RP2350, `pico2.h` and
+`intctrl.h` the same way; its slot 56, PROC0_IRQ_CTI, holds its handler.
+
+RP2350's image block (D637, D638) is the 20 bytes directly after its
+68-word vector table at `0x10000000`: the lane requires them inside the
+first 4 KiB of flash and equal to the bytes the pinned GCC assembles from
+pico-sdk's fetched `embedded_start_block.inc.S` and `picobin.h` with the
+end block off, finds no relocation in the object's `.embedded_block`, and
+holds the build report's `image_block` to them. It links RP2350's program
+with a copy of the derived script, and refuses as L0519, naming clause 1,
+a script that moves the block past the first 4 KiB and one that writes
+other words in its place.
 
 RP2040's second stage (D587, D588) is the 256 bytes at the start of flash:
 the lane recomputes their checksum as pico-sdk's `pad_checksum` does, finds
@@ -863,13 +876,15 @@ The lanes that stage their own library, `devices.py`, `driver.py` and
 `freestanding.py`, stage `platform/cortex_m/reference` beside the modules
 their programs import, since the reference is part of every program that
 imports no description. The corpus links every program with the
-reference's derived script and links each limited verdict again with RP2040's
-and the STM32H753's, reading every limit from the build report of
+reference's derived script and links each limited verdict again with RP2040's,
+RP2350's and the STM32H753's, reading every limit from the build report of
 `refine compile --target=cortex-m0 --emit=linker-script` over a module that
 imports the device's description (D589), which writes the script and its
 limits with no program to link ([the corpus inventory](#the-corpus-inventory)),
-so its capacity verdicts against those two devices are links against their
-maps, not measurements from sizes; none runs there.
+so its capacity verdicts against those three devices are links against
+their maps, not measurements from sizes; none runs there. The harness start
+supplies each boot kind's prefix and the 20 bytes RP2350's places after the
+table, as zeros, since those images are linked and never booted.
 
 ## Complete derived driver
 

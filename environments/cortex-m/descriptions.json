@@ -1,5 +1,5 @@
 {
-  "comment": "What each device description must select, recorded apart from the compiler and the descriptions: RP2040 from pico-sdk 2.2.0, the STM32H753 from ST's stm32h753xx.h and RM0433, the constrained reference from [1990]. descriptions.py compares every fact of each linked image with these.",
+  "comment": "What each device description must select, recorded apart from the compiler and the descriptions: RP2040 and RP2350 from pico-sdk 2.2.0, the STM32H753 from ST's stm32h753xx.h and RM0433, the constrained reference from [1990]. descriptions.py compares every fact of each linked image with these.",
   "devices": {
     "rp2040": {
       "sources": {
@@ -27,6 +27,35 @@
       "stack_reserved": 4096,
       "reserved_slots": [4, 5, 6, 7, 8, 9, 10, 12, 13],
       "handler_slot": 21
+    },
+    "rp2350": {
+      "sources": {
+        "memory map": "https://github.com/raspberrypi/pico-sdk/blob/2.2.0/src/rp2_common/pico_crt0/rp2350/memmap_default.ld, SHA-256 2349d98352370fc22d84d482e53313300e8a52ea42529eced235fa99c109234f: RAM 0x20000000 512k, SCRATCH_X 0x20080000 4k, SCRATCH_Y 0x20081000 4k, the vectors first in FLASH and the embedded block after them, asserted to end in the first 4096 bytes",
+        "flash region": "https://github.com/raspberrypi/pico-sdk/blob/2.2.0/src/rp2_common/pico_standard_link/pico_flash_region.template.ld, SHA-256 a8cfe6d5eeea94ae1d67eddbcc8c7f9167de30fbac3b196ee51cc52833e6f22a: FLASH at 0x10000000",
+        "flash size": "https://github.com/raspberrypi/pico-sdk/blob/2.2.0/src/boards/include/boards/pico2.h, SHA-256 6d32916eea833abcef7e7d10321853a5c23eb7366b893aba4d5354d6ddc6b76c: PICO_FLASH_SIZE_BYTES (4 * 1024 * 1024)",
+        "interrupts": "https://github.com/raspberrypi/pico-sdk/blob/2.2.0/src/rp2350/hardware_regs/include/hardware/regs/intctrl.h, SHA-256 e9c90fb163105a8083578ea1d5430a499eb696a5734e9dbfe3e7c45d303e9b1c: PROC0_IRQ_CTI 40, SPARE_IRQ_5 51, every IRQ of 0 to 51 named",
+        "core slots": "ARMv8-M Mainline with its Security Extension: MemManage 4, BusFault 5, UsageFault 6, SecureFault 7 and DebugMonitor 12 taken, 8 to 10 and 13 reserved",
+        "image block": "RP2350 Datasheet release 8, 5.9.5.1, Table 503: the 20-byte minimum Arm IMAGE_DEF; 5.1.5.2, p. 329: the boot ROM searches the first 4 kB of flash; its bytes are compared with the fetched embedded_start_block.inc.S assembled by the pinned GCC with its end block off, not recorded here"
+      },
+      "core": "cortex-m33",
+      "level": "armv8-m.main",
+      "boot": "rp2350-image-block",
+      "regions": [
+        {"name": "FLASH", "origin": 268435456, "length": 4194304, "access": "rx"},
+        {"name": "RAM", "origin": 536870912, "length": 524288, "access": "rwx"},
+        {"name": "SCRATCH_X", "origin": 537395200, "length": 4096, "access": "rwx"},
+        {"name": "SCRATCH_Y", "origin": 537399296, "length": 4096, "access": "rwx"}
+      ],
+      "placed": {"vectors": "FLASH", "text": "FLASH", "rodata": "FLASH", "data": "RAM", "bss": "RAM", "stack": "SCRATCH_Y"},
+      "image_block": {"address": 268435728, "bytes": 20, "window": 4096},
+      "vector_address": 268435456,
+      "vector_words": 68,
+      "stack_top": 537403392,
+      "stack_reserved": 4096,
+      "reserved_slots": [8, 9, 10, 13],
+      "handler_slot": 56,
+      "handler_symbol": "cti",
+      "placed_datum": {"symbol": "scratch", "region": "SCRATCH_X"}
     },
     "stm32h753": {
       "sources": {

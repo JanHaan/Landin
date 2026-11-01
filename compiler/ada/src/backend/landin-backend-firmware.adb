@@ -90,7 +90,9 @@ package body Landin.Backend.Firmware is
       end loop;
       --  D588: an rp2040-boot2 image's 256-byte slot is the
       --  description's second stage, which the backend emits as that
-      --  routine and the driver checksums once it is assembled.
+      --  routine and the driver checksums once it is assembled.  D637: an
+      --  rp2350-image-block image's block follows the table, which the
+      --  backend emits with it.
       return
         ".section .text.landin_firmware_reset,""ax"",%progbits" & LF
         & ".balign 2" & LF
@@ -285,6 +287,10 @@ package body Landin.Backend.Firmware is
         & "  .isr_vector ORIGIN(" & Vectors & ")"
         & (if Prefix = 0 then "" else " + " & Number (Prefix))
         & " : { KEEP(*(.isr_vector)) } > " & Vectors & LF
+        & (if Profiles.Takes_Image_Block (Profile.Boot)
+           then "  .embedded_block : { KEEP(*(.embedded_block)) } > "
+             & Vectors & LF
+           else "")
         & "  .text : { *(.text .text.*) } > " & Flash & LF
         & "  .rodata : { *(.rodata .rodata.*) } > "
         & Placed (Profiles.Rodata) & LF
@@ -324,6 +330,18 @@ package body Landin.Backend.Firmware is
         & ", ""vectors must contain "
         & Number (Landin.Targets.Byte_Count (Profile.Vector_Count))
         & " words"")" & LF
+        & (if Profiles.Takes_Image_Block (Profile.Boot)
+           then "ASSERT(SIZEOF(.embedded_block) == "
+             & Number (Profiles.Image_Block_Bytes)
+             & ", ""the image block must be "
+             & Number (Profiles.Image_Block_Bytes) & " bytes"")" & LF
+             & "ASSERT(ADDR(.embedded_block) + SIZEOF(.embedded_block) <= "
+             & "ORIGIN(" & Vectors & ") + "
+             & Number (Profiles.Image_Block_Window) & "," & LF
+             & "       ""the image block must end in the first "
+             & Size_Words (Profiles.Image_Block_Window) & " of the image"")"
+             & LF
+           else "")
         & "ASSERT((_landin_firmware_stack_top & 7) == 0, ""unaligne"
         & "d initial stack"")" & LF
         & (if US.Length (In_Stack_Region) = 0 then ""

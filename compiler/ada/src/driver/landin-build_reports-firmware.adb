@@ -68,6 +68,12 @@ package body Landin.Build_Reports.Firmware is
              & Image (Firmware.Placed_Region (Profile, Firmware.Vectors).Origin
                + Landin.Targets.Byte_Count (Firmware.Stage_Limit)) & "}"
            else "")
+        & (if Firmware.Takes_Image_Block (Profile.Boot)
+           then ",""image_block"":{""address"":"
+             & Image (Firmware.Vector_Address (Profile)
+               + Firmware.Vector_Bytes (Profile))
+             & ",""bytes"":" & Image (Firmware.Image_Block_Bytes) & "}"
+           else "")
         & "}";
    end Limits;
 
@@ -116,6 +122,9 @@ package body Landin.Build_Reports.Firmware is
       Prefix : constant String := "libgcc.a(";
       --  D588: the second stage as the linked image holds it.
       Stage_At, Stage_Bytes, Stage_Sum : Landin.Targets.Byte_Count := 0;
+      --  D638: the image block as the linked image holds it.
+      Block_At, Block_Bytes : Landin.Targets.Byte_Count := 0;
+      Block_Words : US.Unbounded_String;
    begin
       Result := US.Null_Unbounded_String;
       Valid := False;
@@ -153,6 +162,84 @@ package body Landin.Build_Reports.Firmware is
 
          function Word (Position : Natural) return Landin.Targets.Byte_Count is
            (Number (Position, 4));
+
+         --  The value and size of the symbol named WANTED.
+         procedure Find
+           (Wanted : String; Found : out Boolean;
+            Value, Size : out Landin.Targets.Byte_Count);
+         procedure Find
+           (Wanted : String; Found : out Boolean;
+            Value, Size : out Landin.Targets.Byte_Count)
+         is
+            Sections : constant Natural := Natural (Word (32));
+            Entry_Size : constant Natural := Natural (Number (46, 2));
+            Named : constant String := Wanted & ASCII.NUL;
+         begin
+            Found := False;
+            Value := 0;
+            Size := 0;
+            for Index in 0 .. Natural (Number (48, 2)) - 1 loop
+               declare
+                  Header : constant Natural := Sections + Index * Entry_Size;
+               begin
+                  if Word (Header + 4) = 2 then
+                     declare
+                        Table : constant Natural :=
+                          Natural (Word (Header + 16));
+                        Strings : constant Natural := Natural (Word
+                          (Sections + Natural (Word (Header + 24))
+                           * Entry_Size + 16));
+                     begin
+                        for Symbol in 1 .. Natural (Word (Header + 20))
+                          / 16 - 1
+                        loop
+                           declare
+                              Name : constant Natural := Strings + Natural
+                                (Word (Table + Symbol * 16));
+                           begin
+                              if not Found
+                                and then Name + Named'Length <= Data'Length
+                                and then Data (Name + 1
+                                  .. Name + Named'Length) = Named
+                              then
+                                 Found := True;
+                                 Value := Word (Table + Symbol * 16 + 4);
+                                 Size := Word (Table + Symbol * 16 + 8);
+                              end if;
+                           end;
+                        end loop;
+                     end;
+                  end if;
+               end;
+            end loop;
+         end Find;
+
+         --  The file offset of load address ADDRESS, holding SIZE bytes of
+         --  file content, or Natural'Last when no segment does.
+         function Loaded (Address, Size : Landin.Targets.Byte_Count)
+           return Natural;
+         function Loaded (Address, Size : Landin.Targets.Byte_Count)
+           return Natural
+         is
+            Header : constant Natural := Natural (Word (28));
+         begin
+            for Index in 0 .. Natural (Number (44, 2)) - 1 loop
+               declare
+                  At_Entry : constant Natural := Header + Index * 32;
+                  Physical : constant Landin.Targets.Byte_Count :=
+                    Word (At_Entry + 12);
+               begin
+                  if Word (At_Entry) = 1
+                    and then Address >= Physical
+                    and then Address + Size <= Physical + Word (At_Entry + 16)
+                  then
+                     return Natural
+                       (Word (At_Entry + 4) + (Address - Physical));
+                  end if;
+               end;
+            end loop;
+            return Natural'Last;
+         end Loaded;
       begin
          if Mapping'Length = 0
            or else Data'Length < 52
@@ -239,80 +326,42 @@ package body Landin.Build_Reports.Firmware is
          end if;
          if Firmware.Takes_Stage (Profile.Boot) then
             declare
-               Sections : constant Natural := Natural (Word (32));
-               Size : constant Natural := Natural (Number (46, 2));
-               Found : Boolean := False;
+               Found : Boolean;
+               At_File : Natural;
             begin
-               for Index in 0 .. Natural (Number (48, 2)) - 1 loop
-                  declare
-                     Header : constant Natural := Sections + Index * Size;
-                  begin
-                     if Word (Header + 4) = 2 then
-                        declare
-                           Table : constant Natural :=
-                             Natural (Word (Header + 16));
-                           Strings : constant Natural := Natural (Word
-                             (Sections + Natural (Word (Header + 24)) * Size
-                              + 16));
-                           Wanted : constant String :=
-                             "_landin_firmware_boot2" & ASCII.NUL;
-                        begin
-                           for Symbol in 1 .. Natural (Word (Header + 20))
-                             / 16 - 1
-                           loop
-                              declare
-                                 Name : constant Natural := Strings + Natural
-                                   (Word (Table + Symbol * 16));
-                              begin
-                                 if not Found
-                                   and then Name + Wanted'Length
-                                     <= Data'Length
-                                   and then Data (Name + 1
-                                     .. Name + Wanted'Length) = Wanted
-                                 then
-                                    Found := True;
-                                    Stage_At := Word (Table + Symbol * 16 + 4);
-                                    Stage_Bytes :=
-                                      Word (Table + Symbol * 16 + 8);
-                                 end if;
-                              end;
-                           end loop;
-                        end;
-                     end if;
-                  end;
-               end loop;
+               Find ("_landin_firmware_boot2", Found, Stage_At, Stage_Bytes);
                if not Found then
                   return;
                end if;
                --  The checksum's word, through the segment that loads it.
-               declare
-                  Header : constant Natural := Natural (Word (28));
-                  Address : constant Landin.Targets.Byte_Count :=
-                    Stage_At + Landin.Targets.Byte_Count
-                      (Firmware.Stage_Limit);
-               begin
-                  Found := False;
-                  for Index in 0 .. Natural (Number (44, 2)) - 1 loop
-                     declare
-                        At_Entry : constant Natural := Header + Index * 32;
-                        Physical : constant Landin.Targets.Byte_Count :=
-                          Word (At_Entry + 12);
-                     begin
-                        if not Found and then Word (At_Entry) = 1
-                          and then Address >= Physical
-                          and then Address + 4
-                            <= Physical + Word (At_Entry + 16)
-                        then
-                           Found := True;
-                           Stage_Sum := Word (Natural
-                             (Word (At_Entry + 4) + (Address - Physical)));
-                        end if;
-                     end;
-                  end loop;
-                  if not Found then
-                     return;
-                  end if;
-               end;
+               At_File := Loaded
+                 (Stage_At + Landin.Targets.Byte_Count (Firmware.Stage_Limit),
+                  4);
+               if At_File = Natural'Last then
+                  return;
+               end if;
+               Stage_Sum := Word (At_File);
+            end;
+         end if;
+         --  D638: the image block, through the segment that loads it.
+         if Firmware.Takes_Image_Block (Profile.Boot) then
+            declare
+               Found : Boolean;
+               At_File : Natural;
+            begin
+               Find ("_landin_firmware_image_block", Found, Block_At,
+                     Block_Bytes);
+               if not Found or else Block_Bytes mod 4 /= 0 then
+                  return;
+               end if;
+               At_File := Loaded (Block_At, Block_Bytes);
+               if At_File = Natural'Last then
+                  return;
+               end if;
+               for Index in 0 .. Natural (Block_Bytes) / 4 - 1 loop
+                  US.Append (Block_Words, (if Index = 0 then "" else ",")
+                    & Image (Word (At_File + 4 * Index)));
+               end loop;
             end;
          end if;
 
@@ -380,6 +429,11 @@ package body Landin.Build_Reports.Firmware is
            & ",""checksum_address"":" & Image
              (Stage_At + Landin.Targets.Byte_Count (Firmware.Stage_Limit))
            & "}");
+      end if;
+      if Firmware.Takes_Image_Block (Profile.Boot) then
+         US.Append (Result, ",""image_block"":{""address"":" & Image (Block_At)
+           & ",""bytes"":" & Image (Block_Bytes)
+           & ",""words"":[" & US.To_String (Block_Words) & "]}");
       end if;
       US.Append (Result, "}");
       Valid := True;
@@ -603,6 +657,9 @@ package body Landin.Build_Reports.Firmware is
          if Profile.Boot = Firmware.RP2040_Boot2 then
             Need ("_landin_firmware_boot2");
          end if;
+         if Firmware.Takes_Image_Block (Profile.Boot) then
+            Need ("_landin_firmware_image_block");
+         end if;
          for Index in 1 .. Profile.Count loop
             if Used (Index)
               and then Firmware.Writable (Profile.Regions (Index).Mode)
@@ -681,6 +738,44 @@ package body Landin.Build_Reports.Firmware is
                        & " checksum is not the CRC-32 of its first"
                        & Natural'Image (Firmware.Stage_Limit) & " bytes";
                   end if;
+               end;
+            elsif Firmware.Takes_Image_Block (Profile.Boot) then
+               --  D638: the block refine assembled, where the boot ROM
+               --  searches for it.
+               declare
+                  Block : constant Landin.Targets.Byte_Count :=
+                    Value ("_landin_firmware_image_block");
+                  Window : constant Landin.Targets.Byte_Count :=
+                    Firmware.Placed_Region (Profile, Firmware.Vectors).Origin
+                    + Firmware.Image_Block_Window;
+                  At_File : constant Natural :=
+                    Loaded (Block, Firmware.Image_Block_Bytes);
+               begin
+                  if At_File = Natural'Last then
+                     return "clause 1, the vector table: the image does not"
+                       & " hold the image block's"
+                       & Natural'Image (Firmware.Image_Block_Bytes)
+                       & " bytes at its address";
+                  elsif Block + Firmware.Image_Block_Bytes > Window then
+                     return "clause 1, the vector table: the image block at "
+                       & Landin.Backend.Firmware.Hex (Block)
+                       & " ends past the first 4 KiB of "
+                       & Firmware.Spelling
+                           (Firmware.Placed_Region
+                              (Profile, Firmware.Vectors).Name)
+                       & ", where the boot ROM searches for it";
+                  end if;
+                  declare
+                     Fault : constant String := Firmware.Image_Block_Fault
+                       (Data (At_File + 1
+                              .. At_File + Firmware.Image_Block_Bytes));
+                  begin
+                     if Fault /= "" then
+                        return "clause 1, the vector table: the image block"
+                          & " at " & Landin.Backend.Firmware.Hex (Block)
+                          & " is not the one refine assembled: " & Fault;
+                     end if;
+                  end;
                end;
             end if;
          end;

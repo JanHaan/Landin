@@ -55,8 +55,8 @@ package Landin.Targets.Firmware is
          or else (not Is_Armv6_M (Core) and then Slot in 4 .. 6 | 12)
          or else (Core = Cortex_M33 and then Slot = 7));
 
-   --  D545's closed set.  The last two are reserved names: a description
-   --  that selects one is refused until the compiler builds that image.
+   --  D545's closed set.  The last is a reserved name: a description that
+   --  selects it is refused until the compiler builds that image.
    type Boot_Kind is
      (Vector_Table, RP2040_Boot2, RP2350_Image_Block, ESP_App_Image);
    function Is_Boot_Name (Text : String) return Boolean;
@@ -64,7 +64,7 @@ package Landin.Targets.Firmware is
      with Pre => Is_Boot_Name (Text);
    function Spelling (Boot : Boot_Kind) return String;
    function Implemented (Boot : Boot_Kind) return Boolean
-     is (Boot in Vector_Table | RP2040_Boot2);
+     is (Boot in Vector_Table | RP2040_Boot2 | RP2350_Image_Block);
    --  The bytes a boot kind reserves at the start of the vectors' region,
    --  before the vector table: RP2040's 256-byte second stage.
    function Boot_Prefix (Boot : Boot_Kind) return Byte_Count
@@ -85,6 +85,28 @@ package Landin.Targets.Firmware is
    --  exclusive or, which is CRC-32/MPEG-2.
    type Checksum is mod 2 ** 32;
    function Stage_Checksum (Bytes : String) return Checksum;
+
+   --  D637: whether a boot kind's image carries an IMAGE_DEF block, the
+   --  metadata RP2350's boot ROM searches the first Image_Block_Window
+   --  bytes of flash for.  The backend emits it directly after the vector
+   --  table in a section of its own, `.embedded_block`, as pico-sdk names
+   --  it, and the driver reads it back from the assembled object (D638).
+   --  It is one block linked to itself: the start marker; an IMAGE_TYPE
+   --  item, type 16#42# and one word, whose value 16#1021# is an
+   --  executable that runs in Secure state, for Arm, for RP2350; the LAST
+   --  item, type 16#FF#, giving the other items' one word; the link, 0,
+   --  to itself; and the end marker.  It has no hash and no signature.
+   function Takes_Image_Block (Boot : Boot_Kind) return Boolean
+     is (Boot = RP2350_Image_Block);
+   type Block_Word is mod 2 ** 32;
+   type Block_Words is array (1 .. 5) of Block_Word;
+   Image_Block : constant Block_Words :=
+     [16#FFFF_DED3#, 16#1021_0142#, 16#0000_01FF#, 0, 16#AB12_3579#];
+   Image_Block_Bytes : constant := 20;
+   Image_Block_Window : constant := 4096;
+   --  "" when BYTES are that block, word for word; otherwise what in them
+   --  is not, by the part of the block it is in.
+   function Image_Block_Fault (Bytes : String) return String;
 
    type Section_Kind is (Vectors, Text, Rodata, Data, BSS, Stack);
    function Is_Section_Name (Word : String) return Boolean;

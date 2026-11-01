@@ -349,7 +349,8 @@ class Regeneration(unittest.TestCase):
 
 
 CORES = {'CM0': 'cortex-m0', 'CM0PLUS': 'cortex-m0plus',
-         'CM3': 'cortex-m3', 'CM4': 'cortex-m4', 'CM7': 'cortex-m7'}
+         'CM3': 'cortex-m3', 'CM4': 'cortex-m4', 'CM7': 'cortex-m7',
+         'CM33': 'cortex-m33'}
 
 
 def render_d542(raw, corrections=()):
@@ -406,6 +407,69 @@ def render_d542(raw, corrections=()):
     return '\n'.join(lines) + '\n'
 
 
+#  How pico-sdk's headers spell each field access, as the SVD gives it.
+PICO_ACCESS = {
+    'RW': ('read-write', None, None),
+    'RO': ('read-only', None, None),
+    'WO': ('write-only', None, None),
+    'WC': ('read-write', None, 'oneToClear'),
+    # A self-clearing command bit, CHAN_ABORT's, which the SVD writes as
+    # one-to-clear.
+    'SC': ('read-write', None, 'oneToClear'),
+    'RWF': ('read-write', 'modify', None),
+}
+
+
+def compare_with_pico_sdk(case, rows, device, bases, requests, family_of):
+    """Every selected register and field of ROWS against pico-sdk's own
+    headers for DEVICE, which refine never reads: offset, address, width,
+    masks, field positions, access, reset value and each encoding.
+    BASES are each peripheral's base address; REQUESTS is DMA's TREQ_SEL
+    request table, whose names the header does not give; FAMILY_OF names
+    a peripheral's header and macro prefix."""
+    for row in rows:
+        peripheral, register = row['source'].split('.')
+        family = family_of(peripheral)
+        text = fetch_inputs.fetch(device + '/' + family.lower() + '.h').read_text()
+        macros = dict(re.findall(r'^#define (\w+)\s+_u\((0x[0-9a-fA-F]+|[0-9]+)\)',
+                                 text, re.MULTILINE))
+        prefix = family + '_' + register
+        with case.subTest(register=row['source']):
+            case.assertEqual(row['offset'], int(macros[prefix + '_OFFSET'], 0))
+            case.assertEqual(row['address'], bases[peripheral] + row['offset'])
+            case.assertEqual(row['width'], 32)
+            case.assertEqual(row['alignment'], 4)
+            case.assertEqual(row['named_mask'], int(macros[prefix + '_BITS'], 0))
+            reset_mask = 0
+            reset_value = 0
+            for field in row['fields']:
+                # Single-field registers omit a second repeated suffix.
+                field_prefix = (prefix if field['name'] == register
+                                else prefix + '_' + field['name'])
+                case.assertEqual(field['mask'], int(macros[field_prefix + '_BITS'], 0))
+                case.assertEqual(field['low'], int(macros[field_prefix + '_LSB'], 0))
+                case.assertEqual(field['high'], int(macros[field_prefix + '_MSB'], 0))
+                access = re.search(r'^#define ' + field_prefix + r'_ACCESS\s+"(.*?)"',
+                                   text, re.MULTILINE).group(1)
+                case.assertEqual((field['access'], field['read_action'],
+                                  field['modified_write']), PICO_ACCESS[access],
+                                 field_prefix)
+                reset = macros.get(field_prefix + '_RESET')
+                if reset is not None:
+                    reset_mask |= field['mask']
+                    reset_value |= int(reset, 0) << field['low']
+                else:
+                    case.assertRegex(text, r'#define ' + field_prefix + r'_RESET\s+"-"')
+                for name, value in field['encodings']:
+                    if field['name'] == 'TREQ_SEL':
+                        case.assertEqual(value, requests[name], name)
+                    else:
+                        case.assertEqual(value, int(macros[field_prefix + '_VALUE_'
+                                                          + name.upper()], 0))
+            case.assertEqual(row['known_reset_mask'], reset_mask)
+            case.assertEqual(row['known_reset_value'], reset_value)
+
+
 class D542Form(unittest.TestCase):
     """Each generated interrupts.ldn is D542's text, rendered apart from
     refine from the fetched SVD; this replaced the scripts test that read a
@@ -442,70 +506,23 @@ class Rp2040Oracles(unittest.TestCase):
                  'XOSC': 0x40024000, 'PADS_BANK0': 0x4001c000,
                  'VREG_AND_CHIP_RESET': 0x40064000, 'PPB': 0xe0000000,
                  'WATCHDOG': 0x40058000}
-        for row in self.rows():
-            peripheral, register = row['source'].split('.')
+        # The header supplies TREQ_SEL's geometry but not its DREQ names;
+        # this literal request table is independent of both.
+        requests = ([f'PIO{p}_{d}{n}' for p in range(2)
+                     for d in ('TX', 'RX') for n in range(4)] +
+                    ['SPI0_TX', 'SPI0_RX', 'SPI1_TX', 'SPI1_RX',
+                     'UART0_TX', 'UART0_RX', 'UART1_TX', 'UART1_RX'] +
+                    ['PWM_WRAP' + str(n) for n in range(8)] +
+                    ['I2C0_TX', 'I2C0_RX', 'I2C1_TX', 'I2C1_RX', 'ADC',
+                     'XIP_STREAM', 'XIP_SSITX', 'XIP_SSIRX'])
+        expected = dict(zip(requests, range(40)))
+        expected.update(TIMER0=59, TIMER1=60, TIMER2=61, TIMER3=62, PERMANENT=63)
+        compare_with_pico_sdk(
+            self, self.rows(), 'rp2040', bases, expected,
             # The SVD's PPB is the core's private bus, which pico-sdk's
             # header calls by the core's name.
-            family = ('UART' if peripheral.startswith('UART')
-                      else 'M0PLUS' if peripheral == 'PPB' else peripheral)
-            text = fetch_inputs.fetch('rp2040/' + family.lower() + '.h').read_text()
-            macros = dict(re.findall(r'^#define (\w+)\s+_u\((0x[0-9a-fA-F]+|[0-9]+)\)',
-                                     text, re.MULTILINE))
-            prefix = family + '_' + register
-            with self.subTest(register=row['source']):
-                self.assertEqual(row['offset'], int(macros[prefix + '_OFFSET'], 0))
-                self.assertEqual(row['address'], bases[peripheral] + row['offset'])
-                self.assertEqual(row['width'], 32)
-                self.assertEqual(row['alignment'], 4)
-                self.assertEqual(row['named_mask'], int(macros[prefix + '_BITS'], 0))
-                reset_mask = 0
-                reset_value = 0
-                for field in row['fields']:
-                    # Single-field registers omit a second repeated suffix.
-                    field_prefix = (prefix if field['name'] == register
-                                    else prefix + '_' + field['name'])
-                    self.assertEqual(field['mask'], int(macros[field_prefix + '_BITS'], 0))
-                    self.assertEqual(field['low'], int(macros[field_prefix + '_LSB'], 0))
-                    self.assertEqual(field['high'], int(macros[field_prefix + '_MSB'], 0))
-                    access = re.search(r'^#define ' + field_prefix + r'_ACCESS\s+"(.*?)"',
-                                       text, re.MULTILINE).group(1)
-                    self.assertEqual((field['access'], field['read_action'],
-                                      field['modified_write']), {
-                        'RW': ('read-write', None, None),
-                        'RO': ('read-only', None, None),
-                        'WO': ('write-only', None, None),
-                        'WC': ('read-write', None, 'oneToClear'),
-                        # A self-clearing command bit, CHAN_ABORT's, which
-                        # the SVD writes as one-to-clear.
-                        'SC': ('read-write', None, 'oneToClear'),
-                        'RWF': ('read-write', 'modify', None),
-                    }[access])
-                    reset = macros.get(field_prefix + '_RESET')
-                    if reset is not None:
-                        reset_mask |= field['mask']
-                        reset_value |= int(reset, 0) << field['low']
-                    else:
-                        self.assertRegex(text, r'#define ' + field_prefix + r'_RESET\s+"-"')
-                    for name, value in field['encodings']:
-                        if field['name'] == 'TREQ_SEL':
-                            # Header supplies geometry but not DREQ names.
-                            # The literal request table below is independent.
-                            requests = ([f'PIO{p}_{d}{n}' for p in range(2)
-                                         for d in ('TX', 'RX') for n in range(4)] +
-                                        ['SPI0_TX', 'SPI0_RX', 'SPI1_TX', 'SPI1_RX',
-                                         'UART0_TX', 'UART0_RX', 'UART1_TX', 'UART1_RX'] +
-                                        ['PWM_WRAP' + str(n) for n in range(8)] +
-                                        ['I2C0_TX', 'I2C0_RX', 'I2C1_TX', 'I2C1_RX', 'ADC',
-                                         'XIP_STREAM', 'XIP_SSITX', 'XIP_SSIRX'])
-                            expected = dict(zip(requests, range(40)))
-                            expected.update(TIMER0=59, TIMER1=60, TIMER2=61,
-                                            TIMER3=62, PERMANENT=63)
-                            self.assertEqual(value, expected[name])
-                        else:
-                            self.assertEqual(value, int(macros[field_prefix + '_VALUE_'
-                                                              + name.upper()], 0))
-                self.assertEqual(row['known_reset_mask'], reset_mask)
-                self.assertEqual(row['known_reset_value'], reset_value)
+            lambda peripheral: ('UART' if peripheral.startswith('UART')
+                                else 'M0PLUS' if peripheral == 'PPB' else peripheral))
 
     def test_literal_contract(self):
         rows = {r['source']: r for r in self.rows()}
@@ -554,6 +571,115 @@ class Rp2040Oracles(unittest.TestCase):
         self.assertIn('compiler.interrupt("USBCTRL_IRQ", 5)\n', text)
         self.assertIn('compiler.vectors(48)\n', text)
 
+
+
+#  RP2350's DMA request table, RP2350 Datasheet release 8, 12.6.4.1,
+#  Table 1254, pp. 1015 and 1016, each DREQ_ name without its prefix;
+#  pico-sdk's dma.h names only the timers and PERMANENT.
+RP2350_REQUESTS = dict(zip(
+    [f'PIO{p}_{d}{n}' for p in range(3) for d in ('TX', 'RX') for n in range(4)]
+    + ['SPI0_TX', 'SPI0_RX', 'SPI1_TX', 'SPI1_RX',
+       'UART0_TX', 'UART0_RX', 'UART1_TX', 'UART1_RX']
+    + ['PWM_WRAP' + str(n) for n in range(12)]
+    + ['I2C0_TX', 'I2C0_RX', 'I2C1_TX', 'I2C1_RX', 'ADC', 'XIP_STREAM',
+       'XIP_QMITX', 'XIP_QMIRX', 'HSTX', 'CORESIGHT', 'SHA256'],
+    range(55)), TIMER0=59, TIMER1=60, TIMER2=61, TIMER3=62, PERMANENT=63)
+
+
+class Rp2350Oracles(unittest.TestCase):
+    """The RP2350's selection against pico-sdk's own headers and literals
+    reviewed from the RP2350 datasheet (D635)."""
+
+    @classmethod
+    def rows(cls):
+        policy = policies()['rp2350']
+        return json.loads((HERE / policy['modules'] /
+                           policy['correspondence']).read_text())
+
+    @requires_refine
+    def test_vendor_headers(self):
+        # Each base is addressmap.h's PERIPHERAL_BASE; the M33's private
+        # bus is PPB_BASE, whose registers m33.h gives as M33_.
+        addresses = fetch_inputs.fetch('rp2350/addressmap.h').read_text()
+        bases = {name: int(value, 0) for name, value in re.findall(
+            r'^#define (\w+)_BASE _u\((0x[0-9a-fA-F]+)\)', addresses, re.MULTILINE)}
+        compare_with_pico_sdk(
+            self, self.rows(), 'rp2350', bases, RP2350_REQUESTS,
+            lambda peripheral: {'UART0': 'UART', 'TIMER0': 'TIMER',
+                                'PPB': 'M33'}.get(peripheral, peripheral))
+
+    def test_literal_contract(self):
+        rows = {r['source']: r for r in self.rows()}
+        self.assertEqual(len(rows), 47)
+        fields = {(key, f['name']): f for key, row in rows.items() for f in row['fields']}
+        # RP2350 Datasheet release 8, 9.3, p. 539: a pad's isolation
+        # latch resets latched and its input buffer disabled, so bring-up
+        # clears ISO and sets IE; 9.11.3, Table 885, p. 705: GPIO0 resets
+        # to 0x116, ISO bit 8 set, IE bit 6 clear.
+        for pad in ('GPIO0', 'GPIO1', 'GPIO3'):
+            row = rows['PADS_BANK0.' + pad]
+            self.assertEqual((row['known_reset_mask'], row['known_reset_value']),
+                             (0x1ff, 0x116), pad)
+            self.assertEqual(fields[('PADS_BANK0.' + pad, 'ISO')]['mask'], 0x100)
+            self.assertEqual(fields[('PADS_BANK0.' + pad, 'IE')]['mask'], 0x40)
+        # 6.4, Table 521, p. 426: POWMAN's CHIP_RESET at offset 0x2c,
+        # HAD_POR its bit 16, read-only.
+        self.assertEqual(fields[('POWMAN.CHIP_RESET', 'HAD_POR')]['mask'], 1 << 16)
+        self.assertEqual(rows['POWMAN.CHIP_RESET']['address'], 0x4010002c)
+        # The M33's VTOR and NVIC, in its private peripheral bus.
+        self.assertEqual([rows['PPB.' + r]['address'] for r in
+                          ('NVIC_ISER0', 'NVIC_ICPR0', 'NVIC_ISPR0', 'VTOR')],
+                         [0xe000e100, 0xe000e280, 0xe000e200, 0xe000ed08])
+        # TICKS gives TIMER0 its tick, and DMA's control keeps RP2350's
+        # status bits where they are: BUSY at 26, the errors at 29 to 31.
+        self.assertEqual(rows['TICKS.TIMER0_CYCLES']['offset'], 0x1c)
+        trigger = {f['name']: f for f in rows['DMA.CH0_CTRL_TRIG']['fields']}
+        self.assertEqual(trigger['BUSY']['mask'], 1 << 26)
+        self.assertEqual(trigger['RING_SIZE']['representation'], 'unsigned')
+        # An independently reviewed access surface: no policy value builds
+        # what is expected, nor the write masks.
+        for key, row in rows.items():
+            read = ('refused' if key in {'SIO.GPIO_OUT_SET', 'SIO.GPIO_OUT_CLR',
+                                         'SIO.GPIO_OE_SET', 'UART0.UARTICR'}
+                    else 'modify' if key == 'UART0.UARTDR' else 'normal')
+            write = ('refused' if key in {
+                'SIO.GPIO_IN', 'TIMER0.TIMERAWL', 'UART0.UARTFR', 'UART0.UARTRIS',
+                'RESETS.RESET_DONE', 'CLOCKS.CLK_REF_SELECTED',
+                'CLOCKS.CLK_SYS_SELECTED', 'POWMAN.CHIP_RESET', 'PPB.VTOR'}
+                     else 'one_clears' if key in {'TIMER0.INTR', 'DMA.INTR',
+                                                  'UART0.UARTICR', 'DMA.CHAN_ABORT',
+                                                  'XOSC.STATUS'}
+                     else 'normal')
+            expected = {'read': read, 'write': write, 'reserved': 'zero'}
+            if key == 'UART0.UARTDR':
+                expected['write_mask'] = '0x000000ff'
+            if key == 'DMA.CH0_CTRL_TRIG':
+                # Bits 0 to 25 configure the channel; 26 and 31 are status
+                # and 29 and 30 clear when written as one.
+                expected['write_mask'] = '0x03ffffff'
+            self.assertEqual(row['policy'], expected, key)
+
+    @requires_refine
+    def test_interrupts_against_the_header(self):
+        header = fetch_inputs.fetch('rp2350/intctrl.h').read_text()
+        numbers = {int(value): name for name, value in re.findall(
+            r'^#define (\w+) (\d+)$', header, re.MULTILINE)}
+        text = (DESCRIPTIONS / 'rp2350/interrupts.ldn').read_text()
+        given = {int(value): name for name, value in re.findall(
+            r'^compiler\.interrupt\("(\w+)", (\d+)\)$', text, re.MULTILINE)}
+        # RP2350 Datasheet release 8, 3.2, Table 95, pp. 80 and 81: IRQs 0
+        # to 51, of which the SVD omits 40 and 41, the cores' cross trigger
+        # interrupts, and the policy adds them; the table spells the spares
+        # SPAREIRQ_IRQ_n, where the SVD and the header have SPARE_IRQ_n.
+        self.assertEqual(given, numbers)
+        self.assertEqual(sorted(given), list(range(52)))
+        self.assertIn('-- The policy adds PROC0_IRQ_CTI at 40: RP2350 Datasheet', text)
+        self.assertIn('-- The policy adds PROC1_IRQ_CTI at 41: RP2350 Datasheet', text)
+        self.assertIn('compiler.vectors(68)\n', text)
+        self.assertIn('compiler.core("cortex-m33")\n', text)
+        for name, value in (('TIMER0_IRQ_0', 0), ('DMA_IRQ_0', 10), ('USBCTRL_IRQ', 14),
+                            ('UART0_IRQ', 33)):
+            self.assertEqual(given[value], name)
 
 
 class CmsisHeader:

@@ -1,5 +1,5 @@
 class: negative
-summary: D545: RP2350's image block is a reserved boot image kind refine does not build yet
+summary: D545: Espressif's application image is a reserved boot image kind refine does not build yet
 program: program.ldn
 constructs: 1990
 targets: cortex-m0

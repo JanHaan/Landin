@@ -8,6 +8,7 @@ with Landin.Build_Reports.Firmware;
 with Landin.Diagnostics;
 with Landin.Driver;
 with Landin.Driver.Boot_Stage;
+with Landin.Driver.Image_Block;
 with Landin.Testing.Fakes;
 with Landin.IR;
 with Landin.IR.Dump;
@@ -2779,6 +2780,16 @@ package body Landin.Tests.Cortex_Suite is
         & "compiler.boot(""rp2040-boot2"")" & LF
         & Plain_Memory (Ada.Strings.Fixed.Index
           (Plain_Memory, "linker.place(""vectors""") .. Plain_Memory'Last);
+      Block_Memory : constant String :=
+        "linker.region(""FLASH"", 0x1000_0000, 64 * 1024, ""rx"")" & LF
+        & "linker.region(""RAM"", 0x2000_0000, 8 * 1024, ""rw"")" & LF
+        & "compiler.boot(""rp2350-image-block"")" & LF
+        & Plain_Memory (Ada.Strings.Fixed.Index
+          (Plain_Memory, "linker.place(""vectors""") .. Plain_Memory'Last);
+      RP2350_Interrupts : constant String :=
+        Checkout ("devices/descriptions/rp2350/interrupts.ldn");
+      RP2350_Memory : constant String :=
+        Checkout ("devices/descriptions/rp2350/memory.ldn");
       Code, Assembly : U.Unbounded_String;
    begin
       --  RP2040 by its identity: USBCTRL_IRQ's slot 21 holds the handler,
@@ -2829,6 +2840,46 @@ package body Landin.Tests.Cortex_Suite is
       Landin.Testing.Check
         (Item, not Contains (U.To_String (Assembly), ".zero 256"),
          "RP2040's second-stage slot no longer holds zeros alone");
+
+      --  D637: RP2350 by its identity, PROC0_IRQ_CTI's slot 56 taking a
+      --  handler; the table at the start of flash and the image block
+      --  directly after it, in a section of its own.
+      Try ("link(vector: 56) extern(interrupt) cti: () -> none = end cti",
+           RP2350_Interrupts, RP2350_Memory, Code, Assembly,
+           Extra => "--firmware-entry=start --level=armv8-m.main");
+      Landin.Testing.Check_Equal
+        (Item, U.To_String (Code), "", "RP2350 admits slot 56");
+      Landin.Testing.Check
+        (Item, Vector_Word (U.To_String (Assembly), 56)
+           not in "" | "0" | "_landin_firmware_unhandled",
+         "RP2350's vector word 56 is the PROC0_IRQ_CTI handler");
+      Landin.Testing.Check_Equal
+        (Item, Vector_Word (U.To_String (Assembly), 7),
+         "_landin_firmware_unhandled",
+         "RP2350's SecureFault slot 7 is the M33's");
+      Landin.Testing.Check_Equal
+        (Item, Vector_Word (U.To_String (Assembly), 8), "0",
+         "RP2350's reserved slot 8 is zero");
+      Landin.Testing.Check
+        (Item, Contains (U.To_String (Assembly),
+           HT & ".balign 512" & LF
+           & HT & ".globl _landin_firmware_vectors" & LF)
+           and then Contains (U.To_String (Assembly),
+             HT & ".word _landin_firmware_unhandled" & LF
+             & HT & ".section .embedded_block,""a"",%progbits" & LF
+             & HT & ".balign 4" & LF
+             & HT & ".globl _landin_firmware_image_block" & LF
+             & HT & ".type _landin_firmware_image_block, %object" & LF
+             & "_landin_firmware_image_block:" & LF
+             & HT & ".word 0xffffded3" & LF
+             & HT & ".word 0x10210142" & LF
+             & HT & ".word 0x1ff" & LF
+             & HT & ".word 0x0" & LF
+             & HT & ".word 0xab123579" & LF
+             & HT & ".size _landin_firmware_image_block, . -"
+             & " _landin_firmware_image_block" & LF)
+           and then not Contains (U.To_String (Assembly), ".boot2"),
+         "RP2350's image block follows its 68-word table");
 
       --  The constrained reference: slot 21 refused, and zero beside a
       --  handler at slot 20.
@@ -2946,7 +2997,7 @@ package body Landin.Tests.Cortex_Suite is
         Plain_Interrupts, Plain_Memory, "L0515", Extra => "",
         Target => "--target=linux-x86-64");
       Expect ("a reserved boot kind is L0516", "", Plain_Interrupts,
-        "compiler.boot(""rp2350-image-block"")" & LF
+        "compiler.boot(""esp-app-image"")" & LF
         & Plain_Memory (Ada.Strings.Fixed.Index
           (Plain_Memory, "linker.place(""vectors""") .. Plain_Memory'Last)
         & "linker.region(""FLASH"", 0x0800_0000, 64 * 1024, ""rx"")" & LF
@@ -2973,6 +3024,10 @@ package body Landin.Tests.Cortex_Suite is
         Plain_Interrupts, Boot2_Memory, "L0537");
       Expect ("a vector-table description with a stage is L0535", "",
         Plain_Interrupts, Plain_Memory, "L0535", Stage => Small_Stage);
+      Expect ("an rp2350-image-block description with a stage is L0535", "",
+        Plain_Interrupts, Block_Memory, "L0535", Stage => Small_Stage);
+      Expect ("an rp2350-image-block description compiles", "",
+        Plain_Interrupts, Block_Memory, "");
       Expect ("a second stage is L0536", "", Plain_Interrupts,
         Boot2_Memory, "L0536",
         Stage => Small_Stage
@@ -3224,6 +3279,209 @@ package body Landin.Tests.Cortex_Suite is
       end loop;
    end Boot_Stage_Seal;
 
+   --  D637/D638: the image block's words, and the object it is read from.
+   procedure Image_Block_Check (Item : in out Landin.Testing.Context);
+   procedure Image_Block_Check (Item : in out Landin.Testing.Context) is
+      function Bytes (Value : Long_Long_Integer; Width : Natural)
+        return String;
+      function Bytes (Value : Long_Long_Integer; Width : Natural)
+        return String
+      is
+         Result : String (1 .. Width);
+         Rest : Long_Long_Integer := Value;
+      begin
+         for Index in Result'Range loop
+            Result (Index) := Character'Val (Natural (Rest mod 256));
+            Rest := Rest / 256;
+         end loop;
+         return Result;
+      end Bytes;
+
+      Good : constant String :=
+        Bytes (16#FFFF_DED3#, 4) & Bytes (16#1021_0142#, 4)
+        & Bytes (16#0000_01FF#, 4) & Bytes (0, 4) & Bytes (16#AB12_3579#, 4);
+
+      --  GOOD with the word at INDEX, from 1, replaced by WORD.
+      function With_Word (Index : Positive; Word : Long_Long_Integer)
+        return String is
+        (Good (1 .. 4 * (Index - 1)) & Bytes (Word, 4)
+         & Good (4 * Index + 1 .. Good'Last));
+
+      --  A 32-bit little-endian Arm relocatable object holding BLOCK in a
+      --  section named NAME and, when RELOCATED, a relocation in it.
+      function Object
+        (Block : String; Name : String := ".embedded_block";
+         Relocated : Boolean := False) return String;
+      function Object
+        (Block : String; Name : String := ".embedded_block";
+         Relocated : Boolean := False) return String
+      is
+         NUL : constant Character := ASCII.NUL;
+         Names : constant String := NUL & Name & NUL & ".shstrtab" & NUL
+           & ".symtab" & NUL & ".strtab" & NUL & ".rel.x" & NUL;
+         Shstrtab_At : constant Natural := Name'Length + 2;
+         Symtab_At : constant Natural := Shstrtab_At + 10;
+         Strtab_At : constant Natural := Symtab_At + 8;
+         Rel_At : constant Natural := Strtab_At + 8;
+         Strings : constant String := NUL & "far" & NUL;
+         Symbols : constant String := Bytes (0, 16)
+           & Bytes (1, 4) & Bytes (0, 8) & Bytes (16#10#, 2) & Bytes (0, 2);
+         Relocation : constant String := Bytes (8, 4) & Bytes (256 + 2, 4);
+         Body_Of : constant String := Block & Names & Strings & Symbols
+           & (if Relocated then Relocation else "");
+         At_Block : constant Natural := 52;
+         At_Names : constant Natural := At_Block + Block'Length;
+         At_Strings : constant Natural := At_Names + Names'Length;
+         At_Symbols : constant Natural := At_Strings + Strings'Length;
+         At_Relocation : constant Natural := At_Symbols + Symbols'Length;
+         Pad : constant Natural := (4 - (52 + Body_Of'Length) mod 4) mod 4;
+         Headers : constant Natural := 52 + Body_Of'Length + Pad;
+         Count : constant Natural := (if Relocated then 6 else 5);
+         function Word (Value : Natural) return String is
+           (Bytes (Long_Long_Integer (Value), 4));
+         function Section
+           (Name_At, Kind_Of, Flags, Offset, Length, Link, Info, Size_Of :
+              Natural) return String
+         is (Word (Name_At) & Word (Kind_Of) & Word (Flags) & Word (0)
+             & Word (Offset) & Word (Length) & Word (Link) & Word (Info)
+             & Word (4) & Word (Size_Of));
+      begin
+         return Character'Val (127) & "ELF" & Character'Val (1)
+           & Character'Val (1) & Character'Val (1) & Bytes (0, 9)
+           & Bytes (1, 2) & Bytes (40, 2) & Bytes (1, 4) & Bytes (0, 4)
+           & Bytes (0, 4) & Word (Headers) & Bytes (16#0500_0000#, 4)
+           & Bytes (52, 2) & Bytes (0, 2) & Bytes (0, 2) & Bytes (40, 2)
+           & Bytes (Long_Long_Integer (Count), 2) & Bytes (2, 2)
+           & Body_Of & Bytes (0, Pad)
+           & Bytes (0, 40)
+           & Section (1, 1, 2, At_Block, Block'Length, 0, 0, 0)
+           & Section (Shstrtab_At, 3, 0, At_Names, Names'Length, 0, 0, 0)
+           & Section (Symtab_At, 2, 0, At_Symbols, Symbols'Length, 4, 1, 16)
+           & Section (Strtab_At, 3, 0, At_Strings, Strings'Length, 0, 0, 0)
+           & (if Relocated
+              then Section (Rel_At, 9, 0, At_Relocation, Relocation'Length,
+                            3, 1, 8)
+              else "");
+      end Object;
+
+      procedure Try (Name, Object_Bytes, Wanted : String);
+      procedure Try (Name, Object_Bytes, Wanted : String) is
+         Fault : constant String := U.To_String
+           (Landin.Driver.Image_Block.Fault (Object_Bytes));
+      begin
+         if Wanted = "" then
+            Landin.Testing.Check_Equal (Item, Fault, "", Name);
+         else
+            Landin.Testing.Check
+              (Item, Contains (Fault, Wanted), Name & ": " & Fault);
+         end if;
+      end Try;
+   begin
+      Landin.Testing.Check_Equal
+        (Item, Landin.Targets.Firmware.Image_Block_Fault (Good), "",
+         "the image block is RP2350's minimum Arm IMAGE_DEF");
+      Try ("the block in its section is read", Object (Good), "");
+      Try ("a long block names its size", Object (Good & Bytes (0, 4)),
+        "the image block is 24 bytes, and an IMAGE_DEF block of one item"
+        & " is 20");
+      Try ("a block without its start marker is named",
+        Object (With_Word (1, 16#FFFF_DED4#)),
+        "begins with 0xffffded4, not the start marker 0xffffded3");
+      Try ("a first item that is not IMAGE_TYPE is named",
+        Object (With_Word (2, 16#1021_0242#)),
+        "first item is type 0x42 of 2 words, not IMAGE_TYPE");
+      Try ("another image type is named",
+        Object (With_Word (2, 16#1011_0142#)),
+        "image type is 0x1011, not 0x1021");
+      Try ("a last item that is not LAST is named",
+        Object (With_Word (3, 16#0000_01FE#)),
+        "last item is type 0xfe, not LAST, 0xff");
+      Try ("a LAST of another size is named",
+        Object (With_Word (3, 16#0000_02FF#)),
+        "LAST item gives its items 2 words");
+      Try ("a link elsewhere is named", Object (With_Word (4, 16#40#)),
+        "links to offset 0x00000040, and a block loop of one block links"
+        & " to itself");
+      Try ("a block without its end marker is named",
+        Object (With_Word (5, 0)),
+        "ends with 0x00000000, not the end marker 0xab123579");
+      Try ("a relocation in the block is named",
+        Object (Good, Relocated => True),
+        "the image block holds a relocation at offset 0x8 against far");
+      Try ("an object without the section is named",
+        Object (Good, Name => ".embedded_blocks"),
+        "holds no .embedded_block section");
+      Try ("a file that is not an object is refused", "not ELF",
+        "not a 32-bit");
+
+      --  The driver reads the object its assembler wrote before linking
+      --  it, and refuses a block that is not the one it emitted as L0555
+      --  without a link.
+      for Broken in Boolean loop
+         declare
+            Host : Landin.Testing.Fakes.Fake_Filesystem;
+            Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+            Args : Landin.Platform.Path_List;
+         begin
+            Host.Add_Firmware_Library;
+            Host.Add_Directory ("/w");
+            Host.Add_Directory ("/w/app");
+            Host.Add_Directory ("/w/devices");
+            Host.Add_Directory ("/w/devices/descriptions");
+            Host.Add_Directory ("/w/devices/descriptions/dev");
+            Host.Add_File ("/w/app/main.ldn",
+              "import descriptions/dev" & ASCII.LF
+              & "start: () -> none = end start" & ASCII.LF);
+            Host.Add_File ("/w/devices/descriptions/dev/dev.ldn",
+              "compiler.device(""dev"")" & ASCII.LF
+              & "compiler.core(""cortex-m33"")" & ASCII.LF
+              & "compiler.vectors(48)" & ASCII.LF
+              & "compiler.boot(""rp2350-image-block"")" & ASCII.LF
+              & "linker.region(""FLASH"", 0x1000_0000, 64 * 1024, ""rx"")"
+              & ASCII.LF
+              & "linker.region(""RAM"", 0x2000_0000, 8 * 1024, ""rw"")"
+              & ASCII.LF
+              & "linker.place(""vectors"", ""FLASH"")" & ASCII.LF
+              & "linker.place(""text"", ""FLASH"")" & ASCII.LF
+              & "linker.place(""rodata"", ""FLASH"")" & ASCII.LF
+              & "linker.place(""data"", ""RAM"")" & ASCII.LF
+              & "linker.place(""bss"", ""RAM"")" & ASCII.LF
+              & "linker.place(""stack"", ""RAM"", 1024)" & ASCII.LF);
+            --  What the fake assembler leaves as its object.
+            Host.Add_File ("/w/p.elf.o",
+              Object (if Broken then With_Word (4, 4) else Good));
+            Tools.Set_Result (0, "");
+            Args.Append ("--root=/w/devices");
+            Args.Append ("--target=cortex-m0");
+            Args.Append ("--firmware-entry=start");
+            Args.Append ("--emit=exe");
+            Args.Append ("-o");
+            Args.Append ("/w/p.elf");
+            Args.Append ("/w/app");
+            declare
+               Ran : constant Landin.Driver.Outcome :=
+                 Landin.Driver.Execute (Args, Host, Tools);
+            begin
+               if Broken then
+                  Landin.Testing.Check
+                    (Item, Landin.Diagnostics.Count (Ran.Found) > 0
+                       and then Landin.Diagnostics.Code
+                         (Landin.Diagnostics.Get (Ran.Found, 1)) = "L0555"
+                       and then Contains (U.To_String (Ran.Report),
+                         "links to offset 0x00000004")
+                       and then not Host.Exists ("/w/p.elf"),
+                     "a block that is not the one emitted is L0555 before"
+                     & " any link: " & U.To_String (Ran.Report));
+               else
+                  Landin.Testing.Check_Equal
+                    (Item, Ran.Status, Landin.Driver.Status_Success,
+                     U.To_String (Ran.Report));
+               end if;
+            end;
+         end;
+      end loop;
+   end Image_Block_Check;
+
    --  D545: for the constrained reference the derived script is D229's.
    procedure Reference_Script (Item : in out Landin.Testing.Context);
    procedure Reference_Script (Item : in out Landin.Testing.Context) is
@@ -3372,6 +3630,9 @@ package body Landin.Tests.Cortex_Suite is
       Landin.Testing.Register
         (Into, "cortex ABI", "a boot stage is sealed with its checksum",
          Boot_Stage_Seal'Access);
+      Landin.Testing.Register
+        (Into, "cortex ABI", "an image block is read from its object",
+         Image_Block_Check'Access);
       Landin.Testing.Register
         (Into, "cortex ABI", "the linker script is written without a program",
          Script_Without_Program'Access);
