@@ -2481,6 +2481,9 @@ package body Landin.Diagnostics.Citations is
                "`core/sort` takes a comparison with a context",
             when 388 =>
                "A library failure atom has words for a person",
+            when 582 =>
+               "An errno has words in `platform/posix`, which passes the"
+               & " library's on",
             when 418 =>
                "The POSIX and Linux layers keep their routines' own name"
                & "s",
@@ -3575,6 +3578,8 @@ package body Landin.Diagnostics.Citations is
             when 387 =>
                "Decisions: The core library and the derived programs",
             when 388 =>
+               "Decisions: The core library and the derived programs",
+            when 582 =>
                "Decisions: The core library and the derived programs",
             when 418 =>
                "Decisions: The core library and the derived programs",
@@ -5150,6 +5155,9 @@ package body Landin.Diagnostics.Citations is
             when 388 =>
                "https://www.701.dev/spec.html#d388-a-library-failure-ato"
                & "m-has-words-for-a-person",
+            when 582 =>
+               "https://www.701.dev/spec.html#d582-an-errno-has-words-in"
+               & "-platform-posix-which-passes-the-library-s-on",
             when 418 =>
                "https://www.701.dev/spec.html#d418-the-posix-and-linux-l"
                & "ayers-keep-their-routines-own-names",

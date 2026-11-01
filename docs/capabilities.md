@@ -437,7 +437,9 @@ process ignores SIGPIPE and gives its children the default back.
   It waits on and wakes an address, through the futex, `_umtx_op` and
   `os_sync_wait_on_address` (D512).
   Every descriptor is closed on exec, with a descriptor handle type and
-  errno atoms that keep their numbers. It sits over `platform/libc` on
+  errno atoms that keep their numbers and have words for a person,
+  `posix.words`, which passes the core library's failures to
+  `failure.words` (D582). It sits over `platform/libc` on
   Darwin and FreeBSD and `platform/linux` on Linux.
 - A path, a process argument and a directory entry's name are host strings,
   never converted on the way through, with a checked conversion to UTF-8.
