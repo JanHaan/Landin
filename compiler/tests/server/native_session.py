@@ -10,7 +10,10 @@ already-built refine.
 Deliberate real-host exception: each session's `workspace/` is copied into
 its own temporary directory, and `file:///workspace` in what is sent and
 what is expected is that directory's URI, so the expected bytes are the
-transcript's own with only that prefix changed.  A `pause` is a moment the
+transcript's own with only that prefix changed.  The fake host's library,
+`file:///opt/landin/lib/landin`, becomes the library a refine built in this
+checkout finds beside itself, the checkout's root (D275); a session's own
+`library/` stand-in is the fake host's alone.  A `pause` is a moment the
 script waits for the server to have answered what came before it.
 """
 import argparse
@@ -27,6 +30,8 @@ import urllib.parse
 
 HERE = Path(__file__).resolve().parent
 PREFIX = "file:///workspace"
+LIBRARY = "file:///opt/landin/lib/landin"
+CHECKOUT = HERE.parent.parent.parent
 SECONDS = 60
 
 
@@ -97,6 +102,8 @@ def run(refine, name):
             workspace.mkdir()
         uri = "file://" + urllib.parse.quote(str(workspace), safe="/")
         transcript = transcript.replace(PREFIX, uri)
+        transcript = transcript.replace(
+            LIBRARY, "file://" + urllib.parse.quote(str(CHECKOUT), safe="/"))
         transcript = transcript.replace(
             "file://localhost/workspace",
             "file://localhost" + urllib.parse.quote(str(workspace), safe="/"))
