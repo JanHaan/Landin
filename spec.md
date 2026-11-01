@@ -66,7 +66,8 @@ keyword rule omits it, the token is an identifier whose spelling the
 enclosing production recognises. Thus 'of', 'lenof', 'offsetof', 'variant', 'caller', 'range', 'arena', 'concept',
 'is', 'as', 'option', 'compiler', 'assembler', 'linker', 'c', 'layout',
 'optimal', 'packed', 'at', 'u8', 'u16', 'u32', 'u64', 'link', 'symbol',
-'align', 'section', 'region', 'keep', 'thread', 'vector', 'interrupt', 'naked',
+'align', 'section', 'region', 'keep', 'thread', 'boot_stage', 'vector',
+'interrupt', 'naked',
 'noreturn',
 'distinct', 'out' and 'into' remain identifier tokens everywhere
 their contextual productions do not meet them. D225 reserves control words
@@ -511,6 +512,7 @@ link_symbol        ::= "link" "(" "symbol" ":" text ")"
 link_attributes    ::= "link" "(" link_attribute ("," link_attribute)* ")"
 link_attribute     ::= ("symbol" | "section" | "region") ":" text
                      | ("align" | "vector") ":" integer | "keep" | "thread"
+                     | "boot_stage"
 c_signature        ::= "(" (parameters ("," "...")?)? ")" "->" returns errors?
 c_declared_signature ::= "(" (routine_formals ("," "...")?)? ")"
                          "->" returns errors?
@@ -2165,7 +2167,10 @@ homes, exceeds the selected stack reservation. This does not bound total stack
 use across calls or interrupts; those paths remain programmer obligations.
 The compiler creates the profile's vector image, as many words as its
 description counts, aligned to its length rounded up to a power of two and
-no less than 128 bytes, at its boot address (D545). Its first two words are
+no less than 128 bytes, at its boot address (D545). An `rp2040-boot2` image
+begins instead with the description's second stage, the naked routine it
+marks `link(boot_stage)`, assembled into the 256 bytes before the table and
+sealed with the boot ROM's checksum in their last four (D587, D588). Its first two words are
 the initial SP and compiler reset function. The slots a handler may take are
 the profile's (D544): its core's architectural exceptions and 16 + IRQ for
 each interrupt its description names; every other slot is zero, which in the
@@ -2368,7 +2373,9 @@ compiler startup/private Arm helpers. Function symbol spelling retains
 exception slot the selected profile implements (D544): in the constrained
 reference 2, 3, 11, 14, 15, 16–20 or 22–41. Slots are absolute vector indexes,
 not IRQ numbers; external IRQ n is slot 16 + n. `region: text` places the
-declaration in a region of the selected description (D547). Zero, reset, reserved slots, duplicates and
+declaration in a region of the selected description (D547), and
+`boot_stage` marks a description's second-stage boot routine, which its boot
+kind places (D587). Zero, reset, reserved slots, duplicates and
 ordinary/C routines are refused. Emitting such an annotation requires an
 explicit firmware-entry request. The compiler-owned kept vector image carries
 a relocation to the handler; an unreferenced interrupt routine without keep
@@ -21173,7 +21180,7 @@ The directives join D202's closed configuration fold. Each is a
 module-level directive of the description's own module, outside every
 fixed arm, active or not, as an option is; one in another module, or in an
 arm, is L0513, and so is an import or any other declaration in a
-description, and a second description. A description names its device,
+description but its boot stage (D587), and a second description. A description names its device,
 core, vector table and boot image kind once each, and places each of
 `vectors`, `text`, `rodata`, `data`, `bss` and `stack` once; an argument
 outside its row's form is L0399. Once all are read: regions do not overlap;
@@ -21270,12 +21277,14 @@ is `vector-table`, the plain table at the boot address; `rp2040-boot2`, a
 section, with the table after it at 256-byte alignment, as pico-sdk lays it
 out; and the reserved `rp2350-image-block` and `esp-app-image`, which a
 description may name and refine refuses as L0516 until it builds them. The
-second stage's code is not refine's yet: the slot holds 256 zero bytes,
-which fail the RP2040 boot ROM's CRC check, so the ROM does not enter the
-image and stays in its USB boot mode. The firmware build report records the
-selected device, core, boot kind, vector address and length, regions and
-placements beside the capacities, which are the text region's length and
-the data region's less a stack it holds.
+second stage's code is the description's, a `link(boot_stage)` naked
+routine (D587), and the slot, its 252-byte limit and its checksum are the
+boot kind's, which refine emits and seals (D588); until the first board it
+held 256 zero bytes, which the boot ROM's check refused. The firmware build
+report records the selected device, core, boot kind, vector address and
+length, regions and placements beside the capacities, which are the text
+region's length and the data region's less a stack it holds, and for
+`rp2040-boot2` the stage (D588).
 
 **The alternatives:** a script template the developer fills, which is a
 second configuration language; deriving the script from the program's
@@ -21303,7 +21312,8 @@ naming it, the executable is removed and the derived script is offered:
 1. the vector table: `_landin_firmware_vectors` at the profile's boot
    address, its whole length loaded there, its first words the initial
    stack pointer and reset, and for `rp2040-boot2` the second stage at the
-   start of its region;
+   start of its region, its last word the CRC-32 of its first 252 bytes
+   (D588);
 2. the startup symbols: every `_landin_firmware_*` symbol reset reads, the
    stack's two, and each used region's;
 3. the stack: in a writable region of the description, its top aligned to
@@ -21344,6 +21354,149 @@ description makes unnecessary.
 **Pinned by** `negative/region-placement-unknown` and
 `environments/cortex-m/descriptions.py`, which finds a datum placed in
 RP2040's `SCRATCH_X` inside that region in the linked image.
+
+### D587 — A description holds its second-stage boot routine, marked `link(boot_stage)`
+
+**The tour said** nothing of a second stage; D542 made a description a
+module of directives alone and D545 left `rp2040-boot2`'s slot empty, so no
+RP2040 image booted.
+
+**Chosen:** `link_attribute` gains `boot_stage`. A description may hold,
+besides its directives, exactly one declaration: the naked routine its boot
+kind enters first, `link(boot_stage) extern(naked) NAME: () -> none`, whose
+body is one `assembler.block` as [1990] says every naked body is. It is
+source of the device's, beside the directives in the description's module,
+so a reader finds the code that runs before reset where the device is
+described, and the editor tooling reads it as any routine; every other
+declaration in a description stays L0513, amending D543. Each refusal is
+configuration's, so `refine check` and the server report it as a build
+does, and each says what to write instead:
+
+- `boot_stage` on anything but a naked routine, or beside another link
+  attribute, is L0533: the boot kind places the stage, so it has no
+  section, symbol, region, vector, alignment, `keep` or `thread`;
+- a boot stage outside the description the program selects, or in a
+  program that selects none, is L0534;
+- one in a description whose boot kind takes none, `vector-table`, is
+  L0535;
+- a second one in a description is L0536, naming the first;
+- and a description whose boot kind begins with a second stage,
+  `rp2040-boot2`, that holds none is L0537, at its `compiler.boot`.
+
+Which boot kinds take a stage, the slot's 256 bytes, the 252 the stage and
+its literals may use and the checksum are facts of the boot kind, which the
+compiler owns (D545): no chip name enters the compiler. The repository's
+RP2040 description holds `boot2.ldn`, a port of pico-sdk 2.2.0's generic
+`boot2_generic_03h.S` with its `exit_from_boot2.S`, its constants written as
+numbers each beside the macro it is, and both pinned by hash and fetched
+(D559), never vendored. The naked assembly admission takes `ldm`, `ldmia`,
+`stm` and `stmia`, ARMv6-M instructions the port's exit uses, in a naked
+body.
+
+**The alternatives:** the stage as bytes in the compiler, which puts a
+device's code in the compiler and its flash's command set with it; a stage
+as a separate object or binary the description names, which leaves the
+code nowhere the editor, the formatter and the checker reach and a new
+input form beside source; a directive `compiler.boot_stage("FILE.S")`,
+which is a second language in the description; letting any module hold the
+stage, which lets two programs for one device boot differently; and the
+quad-read `boot2_w25q080.S`, which the first board's flash does not need
+and whose non-volatile write no board run would exercise.
+
+**Pinned by** `negative/boot-stage-not-naked`,
+`negative/boot-stage-outside-description`, `negative/boot-stage-unwanted`,
+`negative/boot-stage-second`, `negative/boot-stage-missing`, the `cortex
+ABI` case `device descriptions select their profiles`, which holds each
+refusal and the stage's place at the start of its slot, and
+`environments/cortex-m/descriptions.py`, which reads the stage RP2040's
+description builds against pico-sdk's own.
+
+### D588 — refine emits the stage at the start of its slot and writes its checksum into the object
+
+**The tour said** nothing; D587 puts the stage in the description.
+
+**Chosen:** the backend emits the stage at offset 0 of `.boot2`, labelled
+`_landin_firmware_boot2`, with nothing before its first instruction: the
+boot ROM copies the slot to SRAM and enters the copy at its first byte in
+Thumb state, with lr zero. Its literal pool follows it, so its literals
+stay in the slot, then zeros to the stage's limit, written so that a stage
+longer than the limit still assembles and is refused for its size rather
+than for an assembler message, then a zero word for the checksum. The
+stage runs from the copy, at an address it is not linked at, so it must be
+position-independent: no relocation may be in it, and none in an image
+section may refer to it.
+
+refine has no assembler of its own, so only the assembled bytes can be
+summed. Once the firmware assembly succeeds, the driver reads the object's
+`.boot2`: a section that is not 256 bytes is a stage and literals past 252
+bytes, and a relocation in it, or one in an allocated section against a
+symbol defined in it, is a stage the ROM's copy would not run as linked;
+each is L0538, naming the size or the relocation, its offset and its
+symbol, before anything is linked. Otherwise refine computes the boot ROM's
+CRC-32 over the first 252 bytes, polynomial `0x04c11db7`, initial value all
+ones, neither input nor output reflected and no final exclusive or, and
+writes it into the last four, little-endian, in the object file, in place.
+Every object and executable refine writes for an `rp2040-boot2` profile
+therefore carries the right checksum, a link with `--linker-script` among
+them, and D546's first clause checks the linked slot's checksum again;
+`--emit=asm` keeps the zero word, which no assembler can fill. The firmware
+build report gives the stage as `boot_stage`: its source routine, its
+address, its length as the assembler wrote it, the slot's length, and the
+checksum and the address it is written at.
+
+**The alternatives:** an assembler expression for the checksum, which GNU
+as cannot compute over its own output; a linker-script step or a
+post-link pass over the executable, which a developer's own script or link
+skips and which leaves the object refine wrote unsealed; padding with
+`.org` or `.space` alone, with which an oversize stage fails to assemble
+with the assembler's message rather than refine's; and checking
+position-independence in the assembly text, which the assembler's
+relocations decide.
+
+**Pinned by** the `cortex ABI` cases `device descriptions select their
+profiles`, which holds the slot's emitted text, and `a boot stage is sealed
+with its checksum`, which holds the checksum to CRC-32/MPEG-2's check value
+and seals, and refuses for its size and for each relocation, synthetic
+objects; and `environments/cortex-m/descriptions.py`, which recomputes the
+linked stage's checksum as pico-sdk's `pad_checksum` does, finds no
+relocation reaching it, follows it with `devices/thumb.py` from its first
+instruction in the ROM's copy and requires its device stores, stack pointer
+and branch to be those pico-sdk's `boot2_generic_03h.S` makes, read from the
+fetched source, refuses a developer's script whose slot is not the sealed
+stage, and refuses an oversize stage and a relocated one naming each.
+
+### D589 — `--emit=linker-script` writes a profile's derived script without a program
+
+**The tour said** nothing; D545 wrote the derived script only beside a
+firmware executable, so the Cortex-M corpus, and a developer linking
+objects of their own for a board, built a throwaway program with a `start`
+entry to obtain one.
+
+**Chosen:** `refine compile --target=cortex-m0 --emit=linker-script -o
+OUT.ld MODULE` checks MODULE, which imports a description or is one, and
+writes the profile it selects as D545 derives its script, byte for byte the
+script a firmware build of the same program writes beside its image, with
+no entry, no assembly and no link; a program that reaches no description
+writes the constrained reference's. `-o` defaults to `a.ld`. With
+`--build-report=FILE` the report's `firmware` gives the profile's facts and
+capacities, `flash_limit`, `static_ram_limit` and `stack_reserved`, the
+stack's top, and for `rp2040-boot2` the slot and the checksum's address,
+and none of the figures a linked image gives. Another target is refused
+naming `--target=cortex-m0`, and the options that describe machine code or
+an executable are refused by the command catalogue's requirements (D565),
+which the new value joins.
+
+**The alternatives:** a `refine profile` command, which is a second way to
+name a request the compiler already reads; writing the script with
+`--emit=asm`, which a request for assembly alone should not leave beside
+it; and documenting the throwaway program, which the developer still has to
+write.
+
+**Pinned by** the `commands` case `option requirements are one`, the
+`cortex ABI` case `the linker script is written without a program`, and
+`environments/cortex-m/backend.py`, whose corpus derives each profile's
+script and limits this way and holds them to
+`environments/cortex-m/descriptions.json`.
 
 ### D570 — The depth report closes a call through a table or a function value
 

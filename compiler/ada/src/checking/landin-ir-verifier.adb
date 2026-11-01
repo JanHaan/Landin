@@ -5073,8 +5073,34 @@ package body Landin.IR.Verifier is
                Present : constant Boolean := Attr.Keep
                  or else Attr.Alignment /= 0 or else Attr.Vector /= 0
                  or else Attr.Section /= Landin.Source.Names.No_Name
-                 or else Attr.Region /= Landin.Source.Names.No_Name;
+                 or else Attr.Region /= Landin.Source.Names.No_Name
+                 or else Attr.Boot_Stage;
             begin
+               --  D587: one naked routine, placed by nothing else, is the
+               --  stage of a profile whose boot kind takes one.
+               if Attr.Boot_Stage then
+                  if Is_Datum or else Is_External (Of_Unit, Id)
+                    or else not Landin.Targets.Firmware.Takes_Stage
+                      (Firmware_Profile (Of_Unit).Boot)
+                    or else Signature_Machine
+                      (Of_Unit, Signature_Of (Of_Unit, Id))
+                        /= Landin.Machine.Naked_Routine
+                    or else Attr.Keep or else Attr.Alignment /= 0
+                    or else Attr.Vector /= 0
+                    or else Attr.Section /= Landin.Source.Names.No_Name
+                    or else Attr.Region /= Landin.Source.Names.No_Name
+                  then
+                     return (Kind => Routine_Signature_Disagrees,
+                             Item => Id, others => <>);
+                  end if;
+                  for Prior in 1 .. Which - 1 loop
+                     if Placement_Of (Of_Unit, Item_Id (Prior)).Boot_Stage
+                     then
+                        return (Kind => Routine_Signature_Disagrees,
+                                Item => Id, others => <>);
+                     end if;
+                  end loop;
+               end if;
                if (Is_Immutable (Of_Unit, Id) and then not Is_Datum)
                  or else Attr.Alignment not in
                    0 | 1 | 2 | 4 | 8 | 16 | 32 | 64 | 128 | 256

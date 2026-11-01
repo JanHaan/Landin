@@ -43,10 +43,18 @@ whose FLASH comes from
 [`pico.h`](https://github.com/raspberrypi/pico-sdk/blob/2.2.0/src/boards/include/boards/pico.h)
 (`e88d258b92a7653c360d32042c2cac0de99010a6bc67d6935f6095b9612336d0`); none of
 them is vendored. Its stack takes the whole of SCRATCH_Y, where pico-sdk puts
-core 0's, and its boot kind is `rp2040-boot2`, whose second-stage slot holds
-zeros until the first board item supplies the code. The Cortex-M
+core 0's, and its boot kind is `rp2040-boot2`. Its `boot2.ldn` is the second
+stage that boot kind's ROM enters before the image (D587): one naked routine
+marked `link(boot_stage)`, a port of pico-sdk 2.2.0's generic
+`boot_stage2/boot2_generic_03h.S` with its `exit_from_boot2.S`, which sets
+the flash interface up for serial 03h reads at a quarter of the system
+clock, writes nothing to the flash, points VTOR at the vector table and
+enters reset. Its constants are numbers, each named beside the pico-sdk
+macro it is, and refine seals the assembled stage with the boot ROM's
+checksum (D588). The Cortex-M
 [descriptions lane](../environments/cortex-m/README.md#device-descriptions)
-compares what it selects with expectations recorded from those files.
+compares what it selects with expectations recorded from those files, and
+the stage's stores with the ones pico-sdk's own source makes.
 
 
 | Path | What it is |
@@ -54,7 +62,7 @@ compares what it selects with expectations recorded from those files.
 | [`inputs.json`](inputs.json) | the lock: each vendor input's URL and SHA-256 |
 | [`policies/`](policies) | one selection policy per device |
 | [`generated/`](generated) | the register modules, correspondences and manifests `refine svd` writes |
-| [`descriptions/`](descriptions) | each device's description: the generated `interrupts.ldn` and the hand-written `memory.ldn` |
+| [`descriptions/`](descriptions) | each device's description: the generated `interrupts.ldn`, the hand-written `memory.ldn`, and RP2040's second stage, `boot2.ldn` |
 | [`notices/`](notices) | the licences the generated files are derived under |
 | [`consumers/`](consumers) | firmware that uses the generated modules |
 | [`test.py`](test.py) | the offline checks, and with `--refine` the regeneration and the vendor-header oracles |
@@ -84,6 +92,8 @@ pinned Rev 9, the copy wanted is the maintainer's, and no job verifies it.
 |---|---|---|
 | `rp2040/RP2040.svd` | official [pico-sdk 2.2.0](https://github.com/raspberrypi/pico-sdk/tree/2.2.0), commit `a1438dff1d38bd9c65dbd693f0e5db4b9ae91779`; device `RP2040`, version `0.1`, SVD schema `1.1` | BSD-3-Clause, Raspberry Pi Ltd 2024 |
 | `rp2040/{clocks,dma,io_bank0,m0plus,pads_bank0,resets,sio,timer,uart,vreg_and_chip_reset,watchdog,xosc}.h` | the same commit's `hardware/regs` headers, used only by the oracle | BSD-3-Clause |
+| `rp2040/boot2_generic_03h.S`, `rp2040/exit_from_boot2.S` | the same commit's `boot_stage2/boot2_generic_03h.S` and `boot_stage2/asminclude/boot2_helpers/exit_from_boot2.S`, which `descriptions/rp2040/boot2.ldn` ports and the descriptions lane reads as the stage's oracle | BSD-3-Clause |
+| `rp2040/{addressmap,ssi}.h` | the same commit's `hardware/regs` headers, whose macros that oracle evaluates | BSD-3-Clause |
 | `stm32h753/STM32H753.svd` | Arm's [STM32H7xx_DFP](https://github.com/Open-CMSIS-Pack/STM32H7xx_DFP) tag `v4.1.3`, commit `4c77d2ffa6e885b6da9d6fe949c2d6070b21fe7d`, the device family pack Keil publishes; device `STM32H753`, version `2.0`, SVD schema `1.1` | Apache-2.0, STMicroelectronics 2024, stated in the file's own header |
 | `stm32h753/stm32h753xx.h` | ST's [cmsis-device-h7](https://github.com/STMicroelectronics/cmsis-device-h7), commit `81db1ec63cdc191fae1565b772da3ea5aa29a683`, used only by the oracle | Apache-2.0, per that repository's licence |
 

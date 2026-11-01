@@ -1722,3 +1722,57 @@ missing or not a directory, a destination is a directory, an earlier run left
 its staged or kept copies beside a destination, or the manifest it finds there
 names a file outside the directory. Nothing was written. Remove what the
 message names, or choose another `--out-dir`.
+
+### L0533
+
+A `link(boot_stage)` marks something other than a device description's
+second-stage boot routine (D587): a module binding, an ordinary routine or
+an interrupt handler, or a naked routine that also names a section, symbol,
+region, vector, alignment, `keep` or `thread`. A boot stage is
+`link(boot_stage) extern(naked) NAME: () -> none`, whose body is the one
+`assembler.block` the boot ROM enters, and the boot kind alone says where
+it goes. Write the attribute alone on such a routine, or remove it.
+
+### L0534
+
+A `link(boot_stage)` routine is outside the device description the program
+selects, or the program imports none and is given the constrained reference
+(D587). The second stage is the device's, as its boot kind is, so it is
+declared in the description's own module, beside `compiler.boot`. Move it
+into the description's directory.
+
+### L0535
+
+A device description holds a second-stage boot routine, and its boot kind
+takes none (D587): a `vector-table` image begins with the vector table,
+which the core reads at reset. Only an `rp2040-boot2` image begins with a
+second stage. Remove the routine, or select the boot kind whose boot ROM
+enters it.
+
+### L0536
+
+A device description holds a second `link(boot_stage)` routine (D587). The
+boot kind's slot holds one stage, which the boot ROM enters at its first
+byte. The message names the first; remove one of them.
+
+### L0537
+
+A device description selects `rp2040-boot2`, whose image begins with a
+second stage, and holds no `link(boot_stage)` routine (D587). Without one
+the slot would hold no code, and the boot ROM would refuse its checksum and
+stay in its USB boot mode. Add the stage to the description as a
+`link(boot_stage) extern(naked)` routine of at most 252 bytes once
+assembled, literals included; `devices/descriptions/rp2040/boot2.ldn` in
+the repository is a port of pico-sdk's generic one.
+
+### L0538
+
+The assembled second stage cannot be sealed with the boot ROM's checksum
+(D588). refine reads the `.boot2` section of the object the assembler wrote
+before linking it: a section that is not 256 bytes means the stage and its
+literal pool outgrew the 252 bytes before the checksum, and the message
+gives their size; a relocation in the stage, or one elsewhere in the image
+that refers to it, would make the bytes the boot ROM copies and runs at
+another address differ from the ones summed, and the message names the
+relocation and its symbol. Make the stage shorter, or write it with no
+symbol outside itself and refer to it from nowhere.

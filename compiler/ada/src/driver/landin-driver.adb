@@ -27,6 +27,7 @@ with Landin.Diagnostics.Explanations;
 with Landin.Diagnostics.Suggestions;
 with Landin.Diagnostics.Text;
 with Landin.Driver.Assembler_Sites;
+with Landin.Driver.Boot_Stage;
 with Landin.Driver.Checking;
 with Landin.Driver.Library;
 with Landin.Driver.Loading;
@@ -146,7 +147,9 @@ package body Landin.Driver is
    --  Emit_IR is the verified IR as the backend receives it, after every
    --  pass the request's objective runs (D365).
    type Emit_Kind is
-     (Emit_Nothing, Emit_Assembly, Emit_Executable, Emit_IR);
+     (Emit_Nothing, Emit_Assembly, Emit_Executable, Emit_IR,
+      --  D589: the selected profile's derived linker script, alone.
+      Emit_Linker_Script);
 
    function Identity return String is
      ("refine - the Landin bootstrap compiler" & LF
@@ -783,7 +786,8 @@ package body Landin.Driver is
                when Emit_Nothing => C.No_Emission,
                when Emit_Assembly => C.Emit_Asm,
                when Emit_Executable => C.Emit_Exe,
-               when Emit_IR => C.Emit_IR);
+               when Emit_IR => C.Emit_IR,
+               when Emit_Linker_Script => C.Emit_Linker_Script);
       begin
          if (Wants_Usage or Wants_Identity)
            and then (for some Flag in C.Option =>
@@ -1057,6 +1061,8 @@ package body Landin.Driver is
                      Emit := Emit_Executable;
                   elsif Kind = "ir" then
                      Emit := Emit_IR;
+                  elsif Kind = "linker-script" then
+                     Emit := Emit_Linker_Script;
                   else
                      Unknowns.Append (Argument);
                      Bad_Use := True;
@@ -2357,6 +2363,44 @@ package body Landin.Driver is
                            & Unbounded.To_String (Ran.Output));
                         return;
                      end if;
+                     --  D588: the boot ROM's checksum over the second
+                     --  stage as the assembler wrote it, in the object
+                     --  every link of this build reads.
+                     if Landin.Targets.Firmware.Takes_Stage
+                       (Landin.IR.Firmware_Profile
+                          (Landin.Stages.Code (Context).all).Boot)
+                     then
+                        declare
+                           Object : Unbounded.Unbounded_String;
+                           Read : Landin.Platform.Read_Status;
+                           Fault : Unbounded.Unbounded_String;
+                        begin
+                           Host.Read_File (Product_Path & ".o", Object, Read);
+                           if Read /= Landin.Platform.Read_Ok then
+                              Note_Failure
+                                (Code_Toolchain_Failed,
+                                 "cannot read the assembled object: "
+                                 & Product_Path & ".o");
+                              return;
+                           end if;
+                           Landin.Driver.Boot_Stage.Seal (Object, Fault);
+                           if Unbounded.Length (Fault) > 0 then
+                              Note_Failure
+                                (Rows.Code (Rows.Boot_Stage_Object),
+                                 Unbounded.To_String (Fault) & " (D588)");
+                              return;
+                           end if;
+                           Host.Write_File
+                             (Product_Path & ".o",
+                              Unbounded.To_String (Object), Written);
+                           if Written /= Landin.Platform.Write_Ok then
+                              Note_Failure
+                                (Code_Unwritable,
+                                 "cannot write: " & Product_Path & ".o");
+                              return;
+                           end if;
+                        end;
+                     end if;
                   end if;
                   Host.Lock_Output (Target_Path, Lock_Handle);
                   if Lock_Handle < 0 then
@@ -2607,6 +2651,7 @@ package body Landin.Driver is
                elsif Unbounded.Length (Output) > 0
                then Unbounded.To_String (Output)
                elsif Emit = Emit_IR then Default_IR
+               elsif Emit = Emit_Linker_Script then Default_Script
                else Default_Assembly);
 
             Written : Landin.Platform.Write_Status;
@@ -2627,7 +2672,8 @@ package body Landin.Driver is
               Unbounded.To_String (Stage_Report_Path);
             Stack_Path : constant String :=
               Unbounded.To_String (Stack_Report_Path);
-            Emit_Map : constant Boolean := Emit /= Emit_IR
+            Emit_Map : constant Boolean :=
+              Emit not in Emit_IR | Emit_Linker_Script
               and then (Debug_Enabled or else Panic_Map
                 or else Landin.IR.Caller_Source_Count
                   (Landin.Stages.Code (Context).all) > 0);
@@ -2668,6 +2714,34 @@ package body Landin.Driver is
                end if;
             end Write_Stack_Report;
 
+            --  D587: the source name of the description's second stage,
+            --  or "" when the profile takes none.
+            function Boot_Stage_Routine return String;
+
+            function Boot_Stage_Routine return String is
+               Unit : Landin.IR.Unit renames Landin.Stages.Code (Context).all;
+            begin
+               for Index in 1 .. Landin.IR.Item_Count (Unit) loop
+                  declare
+                     use type Landin.IR.Declaration_Id;
+                     Item : constant Landin.IR.Item_Id :=
+                       Landin.IR.Item_Id (Index);
+                  begin
+                     if Landin.IR.Placement_Of (Unit, Item).Boot_Stage
+                       and then Landin.IR.Declares (Unit, Item)
+                         /= Landin.IR.No_Declaration
+                     then
+                        return Landin.Source.Names.Spelling
+                          (Landin.Stages.Identities (Context).all,
+                           Landin.Resolution.Name_Of
+                             (Landin.Stages.Meanings (Context).all,
+                              Landin.IR.Declares (Unit, Item)));
+                     end if;
+                  end;
+               end loop;
+               return "";
+            end Boot_Stage_Routine;
+
             procedure Write_Build_Report;
 
             procedure Write_Build_Report is
@@ -2675,12 +2749,17 @@ package body Landin.Driver is
                Valid : Boolean := True;
             begin
                if Report_Seen and then not Landin.Stages.Failed (Context) then
-                  if Cortex and then Emit = Emit_Executable then
+                  if Cortex and then Emit = Emit_Linker_Script then
+                     Firmware := Unbounded.To_Unbounded_String
+                       (Landin.Build_Reports.Firmware.Limits
+                          (Landin.IR.Firmware_Profile
+                             (Landin.Stages.Code (Context).all)));
+                  elsif Cortex and then Emit = Emit_Executable then
                      Landin.Build_Reports.Firmware.Measure
                        (Host, Product_Path, Product_Path & ".map",
                         Landin.IR.Firmware_Profile
                           (Landin.Stages.Code (Context).all),
-                        Firmware, Valid);
+                        Boot_Stage_Routine, Firmware, Valid);
                      if not Valid then
                         Note_Failure
                           (Code_Toolchain_Failed,
@@ -2890,6 +2969,43 @@ package body Landin.Driver is
                  ("no backend emits for target "
                   & Landin.Targets.Name (Facts),
                   "describe a target with a backend, or drop --emit");
+               return;
+            end if;
+
+            --  D589: the profile's derived script, as a firmware build
+            --  would write it beside its image, and nothing linked.
+            if Emit = Emit_Linker_Script then
+               if not Landin.IR.Firmware_Profile
+                 (Landin.Stages.Code (Context).all).Present
+               then
+                  Note_Failure
+                    (Rows.Code (Rows.No_Description),
+                     "a linker script is a device profile's, and the"
+                     & " program selects none: import the device's"
+                     & " description, or name a library holding"
+                     & " platform/cortex_m/reference with --library=DIR"
+                     & " (D543)");
+                  return;
+               elsif Dry_Run then
+                  Unbounded.Append (Result.Output,
+                    "write " & Landin.Json.Quoted (Assembly_Path) & LF);
+                  return;
+               end if;
+               Host.Write_File
+                 (Assembly_Path,
+                  Landin.Backend.Firmware.Linker_Script
+                    (Landin.IR.Firmware_Profile
+                       (Landin.Stages.Code (Context).all),
+                     Landin.Backend.Firmware.Used_Regions
+                       (Landin.Stages.Code (Context).all,
+                        Landin.Stages.Identities (Context).all)),
+                  Written);
+               if Written /= Landin.Platform.Write_Ok then
+                  Note_Failure
+                    (Code_Unwritable, "cannot write: " & Assembly_Path);
+                  return;
+               end if;
+               Write_Build_Report;
                return;
             end if;
 
@@ -3779,6 +3895,7 @@ package body Landin.Driver is
                    (if Unbounded.Length (Output) > 0
                     then Unbounded.To_String (Output)
                     elsif Emit = Emit_Executable then Default_Executable
+                    elsif Emit = Emit_Linker_Script then Default_Script
                     else Default_Assembly))))
          then
             Bad_Use := True;
@@ -3860,6 +3977,15 @@ package body Landin.Driver is
                   Note_Failure
                     (Code_Unknown_Option,
                      "--firmware-entry requires --target=cortex-m0");
+                  Target_Option_Refused := True;
+               elsif Emit = Emit_Linker_Script and then not Cortex then
+                  Bad_Use := True;
+                  Note_Failure
+                    (Code_Unknown_Option,
+                     "--emit=linker-script writes a firmware profile's"
+                     & " derived linker script, and "
+                     & Landin.Targets.Name (Facts) & " has no firmware"
+                     & " profile: it needs --target=cortex-m0 (D589)");
                   Target_Option_Refused := True;
                elsif Script_Seen
                  and then (not Cortex or else Emit /= Emit_Executable

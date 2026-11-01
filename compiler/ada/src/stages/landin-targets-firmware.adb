@@ -72,6 +72,22 @@ package body Landin.Targets.Firmware is
         when RP2350_Image_Block => "rp2350-image-block",
         when ESP_App_Image => "esp-app-image");
 
+   function Stage_Checksum (Bytes : String) return Checksum is
+      Result : Checksum := 16#FFFF_FFFF#;
+   begin
+      for Byte of Bytes loop
+         Result := Result xor
+           Checksum (Character'Pos (Byte)) * 2 ** 24;
+         for Bit in 1 .. 8 loop
+            Result :=
+              (if (Result and 16#8000_0000#) /= 0
+               then (Result * 2) xor 16#04C1_1DB7#
+               else Result * 2);
+         end loop;
+      end loop;
+      return Result;
+   end Stage_Checksum;
+
    function Is_Section_Name (Word : String) return Boolean is
      (Word in "vectors" | "text" | "rodata" | "data" | "bss" | "stack");
 
@@ -238,7 +254,8 @@ package body Landin.Targets.Firmware is
                 "b" | "beq" | "bne" | "bcs" | "bcc" | "bhs" | "blo"
                 | "bmi" | "bpl" | "bvs" | "bvc" | "bhi" | "bls"
                 | "bge" | "blt" | "bgt" | "ble" | "bl" | "blx"
-                | "bx" | "push" | "pop" | "udf"))
+                | "bx" | "push" | "pop" | "udf" | "ldm" | "ldmia" | "stm"
+                | "stmia"))
               or else (not Naked and then Transfers_Control (Mnemonic))
             then
                return

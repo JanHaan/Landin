@@ -31,7 +31,7 @@
 
 (defgroup landin nil "Editing Landin source." :group 'languages)
 
-(defcustom landin-treesit-revision "4237ad8d61406fdd480bcf4dd928b869de706418"
+(defcustom landin-treesit-revision "d0c505a0754087f0a09f49174be2c510d95a909f"
   "Git revision used by `landin-ts-install-grammar'."
   :type 'string
   :group 'landin)

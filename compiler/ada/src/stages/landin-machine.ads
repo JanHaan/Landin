@@ -11,5 +11,9 @@ package Landin.Machine is
       --  D547: `link(region: "NAME")`, the region of the selected
       --  description the declaration is placed in.
       Region : Landin.Source.Names.Name_Id := Landin.Source.Names.No_Name;
+      --  D587: `link(boot_stage)`, the description's second-stage boot
+      --  routine, which the backend emits at the start of the boot kind's
+      --  slot rather than in a section of its own.
+      Boot_Stage : Boolean := False;
    end record;
 end Landin.Machine;

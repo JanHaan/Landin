@@ -205,7 +205,7 @@ module.exports = grammar({
             field('value', $.text_literal)),
         seq(field('label', alias(choice('align', 'vector'), $.identifier)), ':',
             field('value', $.integer_literal)),
-        field('label', alias(choice('keep', 'thread'), $.identifier)),
+        field('label', alias(choice('keep', 'thread', 'boot_stage'), $.identifier)),
       )),
       ')',
     ),

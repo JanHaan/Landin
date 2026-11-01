@@ -4666,6 +4666,13 @@ Where things go:
 Calling convention, symbol name, placement and retention are four
 independent choices; none implies another.
 
+A chip whose boot ROM runs a second stage before the image, as RP2040's
+reads its flash through one, holds that stage in its device description: a
+naked routine marked `link(boot_stage)`, which the description's boot kind
+places at the start of the image and the compiler seals with the checksum
+the ROM checks. Nothing else is marked that way, and nothing else in a
+description is code.
+
 ### [0730] Register images: flags, selections and sets
 
 A hardware register mixes kinds of field, and confusing them is the classic

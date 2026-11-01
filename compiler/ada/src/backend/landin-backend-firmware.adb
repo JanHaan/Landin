@@ -50,7 +50,6 @@ package body Landin.Backend.Firmware is
       Returned : String := "udf #1";
       Debug : Boolean := False) return String
    is
-      use type Profiles.Boot_Kind;
       Regions : US.Unbounded_String;
    begin
       --  D547: a writable region a placement uses is loaded and cleared
@@ -89,18 +88,11 @@ package body Landin.Backend.Firmware is
             end;
          end if;
       end loop;
+      --  D588: an rp2040-boot2 image's 256-byte slot is the
+      --  description's second stage, which the backend emits as that
+      --  routine and the driver checksums once it is assembled.
       return
-        --  D545: RP2040's boot ROM reads a 256-byte second stage at the
-        --  start of flash.  Its code is not this compiler's yet, so the
-        --  slot holds zeros, which fail the ROM's CRC: the ROM then does
-        --  not enter the image and stays in its USB boot mode.
-        (if Profile.Boot = Profiles.RP2040_Boot2
-         then ".section .boot2,""a"",%progbits" & LF
-           & ".globl _landin_firmware_boot2" & LF
-           & "_landin_firmware_boot2:" & LF
-           & ".zero 256" & LF
-         else "")
-        & ".section .text.landin_firmware_reset,""ax"",%progbits" & LF
+        ".section .text.landin_firmware_reset,""ax"",%progbits" & LF
         & ".balign 2" & LF
         & ".globl _landin_firmware_reset" & LF
         & ".type _landin_firmware_reset,%function" & LF

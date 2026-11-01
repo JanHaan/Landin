@@ -2229,6 +2229,15 @@ package body Landin.Diagnostics.Citations is
                & "t",
             when 547 =>
                "A declaration can be placed in a named region",
+            when 587 =>
+               "A description holds its second-stage boot routine, marke"
+               & "d `link(boot_stage)`",
+            when 588 =>
+               "refine emits the stage at the start of its slot and writ"
+               & "es its checksum into the object",
+            when 589 =>
+               "`--emit=linker-script` writes a profile's derived script"
+               & " without a program",
             when 570 =>
                "The depth report closes a call through a table or a func"
                & "tion value",
@@ -3390,6 +3399,12 @@ package body Landin.Diagnostics.Citations is
             when 546 =>
                "Decisions: The toolchain, C and the machine",
             when 547 =>
+               "Decisions: The toolchain, C and the machine",
+            when 587 =>
+               "Decisions: The toolchain, C and the machine",
+            when 588 =>
+               "Decisions: The toolchain, C and the machine",
+            when 589 =>
                "Decisions: The toolchain, C and the machine",
             when 570 =>
                "Decisions: The toolchain, C and the machine",
@@ -4870,6 +4885,16 @@ package body Landin.Diagnostics.Citations is
             when 547 =>
                "https://www.701.dev/spec.html#d547-a-declaration-can-be-"
                & "placed-in-a-named-region",
+            when 587 =>
+               "https://www.701.dev/spec.html#d587-a-description-holds-i"
+               & "ts-second-stage-boot-routine-marked-link-boot-stage",
+            when 588 =>
+               "https://www.701.dev/spec.html#d588-refine-emits-the-stag"
+               & "e-at-the-start-of-its-slot-and-writes-its-checksum-into-"
+               & "the-object",
+            when 589 =>
+               "https://www.701.dev/spec.html#d589-emit-linker-script-wr"
+               & "ites-a-profile-s-derived-script-without-a-program",
             when 570 =>
                "https://www.701.dev/spec.html#d570-the-depth-report-clos"
                & "es-a-call-through-a-table-or-a-function-value",

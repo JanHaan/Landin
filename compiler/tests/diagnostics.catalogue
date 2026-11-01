@@ -97,6 +97,11 @@ L0515  Live     D543: a description whose core is not the request's target and l
 L0516  Live     D545: a reserved boot image kind refine does not build
 L0517  Live     D547: a link(region: ...) the selected description cannot hold
 L0518  Live     D543: firmware or a placement that needs a profile, with no description reached and none in the library
+L0533  Live     D587: link(boot_stage) on anything but a naked routine with no other link attribute
+L0534  Live     D587: a boot stage outside the device description the program selects
+L0535  Live     D587: a boot stage in a description whose boot kind takes none
+L0536  Live     D587: a second boot stage in one description
+L0537  Live     D587: a description whose boot kind begins with a second stage, holding none
 L0349  Live     D251: an unused local with an effect-free literal initializer
 L0500  Live     [1550]: the requested output cannot be made with the target, settings or available toolchain
 L0501  Live     [1550]: assembler or linker refusal, or executable output lifecycle failure
@@ -109,6 +114,7 @@ L0507  Live     [1990]: one Cortex-M0 firmware frame exceeds the selected stack 
 L0508  Live     [1670]: a selected panic handler in a program that prepares a stack exceeds or cannot be measured against the target's stack margin
 L0509  Live     [1590]/D525: a failed link's library that no named directory and none of the C driver's own holds
 L0519  Live     D546: a linked firmware image that breaks a clause of the linker script contract
+L0538  Live     D588: an assembled boot stage that outgrows its slot or that a relocation reaches
 L0525  Live     D555: an SVD that is not XML in the subset refine svd reads
 L0526  Live     D556: a selection policy refine svd cannot read
 L0527  Live     D556: an SVD that is not the one its policy was reviewed against

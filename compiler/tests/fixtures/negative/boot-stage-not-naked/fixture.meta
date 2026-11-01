@@ -1,0 +1,9 @@
+class: negative
+summary: D587: link(boot_stage) marks a naked routine, so an ordinary routine is refused as a description's stage
+program: program.ldn
+constructs: 1640, 1990
+targets: cortex-m0
+codes: L0533
+args: --target=cortex-m0 ../tests/fixtures/negative/boot-stage-not-naked/program.ldn
+expect: expected.txt
+status: 1

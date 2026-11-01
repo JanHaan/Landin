@@ -1789,6 +1789,7 @@ package body Landin.IR is
       if Value.Keep or else Value.Vector /= 0
         or else Value.Section /= Landin.Source.Names.No_Name
         or else Value.Region /= Landin.Source.Names.No_Name
+        or else Value.Boot_Stage
       then
          Into.Items (Positive (Item)).Address_Exposed := True;
       end if;

@@ -38,10 +38,14 @@ entry that describes it, and put a new one where a reader would look for it.
   `linker.region`; with none, the constrained 32 KiB flash, 16 KiB RAM and
   4 KiB stack reference profile applies, itself a description in the
   library. RP2040's description selects its 2 MiB flash, its SRAM and
-  scratch banks, all 32 of its interrupts and a 256-byte second-stage slot,
-  checked by compiling and linking only: no RP2040 image is run. The
-  derived linker script is written as `OUT.ld`, a developer's own is linked
-  with `--linker-script=FILE` and held to a contract (D546), and
+  scratch banks and all 32 of its interrupts, and holds its second stage, a
+  port of pico-sdk's generic one marked `link(boot_stage)` (D587), which
+  refine emits at the start of flash and seals with the boot ROM's checksum
+  in the object it assembles (D588); the stage's stores are held to
+  pico-sdk's own by reading the linked instructions, and no RP2040 image is
+  run. The derived linker script is written as `OUT.ld`, or alone with its
+  limits by `--emit=linker-script` (D589), a developer's own is linked with
+  `--linker-script=FILE` and held to a contract (D546), and
   `link(region: ...)` places a declaration in a named region (D547).
   Firmware runs on the pinned QEMU
   [emulator](../environments/cortex-m/README.md), with synthetic devices

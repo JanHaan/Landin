@@ -3437,8 +3437,8 @@ package body Landin.Syntax.Parser is
                     (Syn.Token_Expected, Here, Message,
                      Note => "[1640]: a link annotation takes `section`,"
                              & " `symbol` and `region` with text, `align`"
-                             & " and `vector` with an integer, and `keep`"
-                             & " and `thread` alone, each once",
+                             & " and `vector` with an integer, and `keep`,"
+                             & " `thread` and `boot_stage` alone, each once",
                      Related => Opened, Because => "this annotation");
                end Refuse_Link;
             begin
@@ -3456,12 +3456,12 @@ package body Landin.Syntax.Parser is
                   begin
                      Seen := True;
                      Advance;
-                     if Label not in "keep" | "thread" then
+                     if Label not in "keep" | "thread" | "boot_stage" then
                         if not Expect
                           (Tok.Colon, "a link label requires `:`",
                            "[1640]: each attribute of a link annotation but"
-                           & " `keep` and `thread` is a label, `:` and its"
-                           & " value", Opened, "this annotation")
+                           & " `keep`, `thread` and `boot_stage` is a label,"
+                           & " `:` and its value", Opened, "this annotation")
                         then
                            exit;
                         end if;
@@ -3490,6 +3490,8 @@ package body Landin.Syntax.Parser is
                            /= Landin.Source.Empty_Span)
                        or else (Label = "keep" and then Attr.Keep)
                        or else (Label = "thread" and then Attr.Thread)
+                       or else (Label = "boot_stage"
+                                and then Attr.Boot_Stage)
                      then
                         Refuse_Link ("duplicate link attribute");
                      end if;
@@ -3505,6 +3507,8 @@ package body Landin.Syntax.Parser is
                         Attr.Region := Value;
                      elsif Label = "thread" then
                         Attr.Thread := True;
+                     elsif Label = "boot_stage" then
+                        Attr.Boot_Stage := True;
                      else
                         Attr.Keep := True;
                      end if;

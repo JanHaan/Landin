@@ -1,0 +1,6 @@
+error[L0537]: an rp2040-boot2 image begins with a second stage, and this description holds none
+  --> ../tests/fixtures/negative/boot-stage-missing/program.ldn:4:1
+  |
+4 | compiler.boot("rp2040-boot2")
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: D587: add the stage to the description as a link(boot_stage) extern(naked) routine, at most 252 bytes once assembled, which the boot ROM enters at its first instruction

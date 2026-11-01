@@ -1,0 +1,6 @@
+error[L0533]: link(boot_stage) marks a naked routine, and this is an ordinary routine
+  --> ../tests/fixtures/negative/boot-stage-not-naked/program.ldn:14:1
+   |
+14 | link(boot_stage) stage: () -> none = end stage
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: D587: a boot stage is `link(boot_stage) extern(naked) NAME: () -> none`, whose body is the one assembler.block the boot ROM enters

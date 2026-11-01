@@ -17,6 +17,12 @@ limit.
 It models no peripheral, no exception, no interrupt and no clock: it is a
 reading of the linked image, not a run of a chip, and an image whose
 accesses depend on a device's behaviour is outside it.
+
+A boot ROM's entry into a second stage (D588) is read the same way: `place`
+puts the bytes the ROM copies where it copies them, `start` gives the
+registers the ROM enters with, `until` ends the reading when the program
+counter leaves the copy, and `special` records each write to MSP or PSP as
+('msr', 'msp' or 'psp', value) beside the device accesses.
 """
 import struct
 
@@ -54,7 +60,8 @@ class Image:
 
 
 class Evaluation:
-    def __init__(self, image, devices, ram, reads=None, limit=2_000_000):
+    def __init__(self, image, devices, ram, reads=None, limit=2_000_000,
+                 start=None, until=None, special=False):
         self.memory = {}
         self.regions = []
         for address, content, size in image.segments:
@@ -69,9 +76,21 @@ class Evaluation:
         self.pc = 0
         self.r = [0] * 16
         self.n = self.z = self.c = self.v = False
-        vectors = image.symbols.get('_landin_firmware_vectors', 0)
-        self.r[13] = self.load(vectors, 4)
-        self.r[15] = self.load(vectors + 4, 4) & ~1
+        self.until = until
+        self.special = special
+        if start is None:
+            vectors = image.symbols.get('_landin_firmware_vectors', 0)
+            self.r[13] = self.load(vectors, 4)
+            self.r[15] = self.load(vectors + 4, 4) & ~1
+        else:
+            self.r[13], self.r[14] = start['sp'], start.get('lr', 0)
+            self.r[15] = start['pc'] & ~1
+
+    def place(self, address, content):
+        """CONTENT at ADDRESS, as a boot ROM copies it there."""
+        self.regions.append((address, len(content)))
+        for i, byte in enumerate(content):
+            self.memory[address + i] = byte
 
     # Memory -----------------------------------------------------------
     def device(self, address):
@@ -153,6 +172,8 @@ class Evaluation:
     # Execution --------------------------------------------------------
     def run(self):
         for _ in range(self.limit):
+            if self.until is not None and self.until(self.r[15]):
+                return self.accesses
             if self.step():
                 return self.accesses
         raise Refused('no WFI within %d steps' % self.limit)
@@ -376,7 +397,14 @@ class Evaluation:
         elif first == 0xf3ef and second >> 12 == 8:
             r[second >> 8 & 15] = 0  # MRS: PRIMASK and CONTROL read as reset.
         elif first & 0xfff0 == 0xf380 and second >> 8 == 0x88:
-            pass  # MSR: no special register is modelled.
+            # MSR: no special register is modelled, but with `special` a
+            # stack pointer written is recorded, and MSP is the one thread
+            # mode runs on out of reset.
+            if self.special and second & 0xff in (8, 9):
+                value = r[first & 15]
+                self.accesses.append(('msr', 'msp' if second & 0xff == 8 else 'psp', value))
+                if second & 0xff == 8:
+                    r[13] = value & ~3
         elif first == 0xf3bf and second & 0xfff0 in (0x8f40, 0x8f50, 0x8f60):
             self.accesses.append(('barrier', {0x8f40: 'dsb', 0x8f50: 'dmb',
                                               0x8f60: 'isb'}[second & 0xfff0]))

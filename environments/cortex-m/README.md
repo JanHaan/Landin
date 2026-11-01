@@ -822,19 +822,38 @@ constrained reference, which a program importing no description is given
 (D543), and compares every fact of each linked image and its build report
 with [`descriptions.json`](descriptions.json): the device, core, boot kind,
 regions and placements, the vector address and length, the stack top, every
-reserved vector word, the handler's word, RP2040's 256 zero bytes of second
-stage at the start of flash and a datum placed in its `SCRATCH_X`. Those
-expectations are recorded from pico-sdk 2.2.0's `memmap_default.ld`, its
-flash-region template, its Pico board header and its `intctrl.h`, each by
-URL and SHA-256, and from [1990]; none is read from the descriptions or the
-compiler, so a wrong or absent fact fails. RP2040's slot 21, `USBCTRL_IRQ`,
-holds its handler, and the reference refuses slot 21 as L0347 and links zero
-there. It then links RP2040's program with a copy of the derived script and
-with four scripts each breaking one clause of D546's contract, each refused
-as L0519 naming its clause, and refuses `link(region: "NOWHERE")` as L0517.
-Last, a 100,000-byte static image links for RP2040, inside its 256 KiB RAM,
-and overflows the reference's: the image budget (D537) is the selected
-profile's.
+reserved vector word, the handler's word, and a datum placed in its
+`SCRATCH_X`. Those expectations are recorded from pico-sdk 2.2.0's
+`memmap_default.ld`, its flash-region template, its Pico board header, its
+`intctrl.h` and its `boot_stage2.ld`, each by URL and SHA-256, and from
+[1990]; none is read from the descriptions or the compiler, so a wrong or
+absent fact fails. RP2040's slot 21, `USBCTRL_IRQ`, holds its handler, and
+the reference refuses slot 21 as L0347 and links zero there.
+
+RP2040's second stage (D587, D588) is the 256 bytes at the start of flash:
+the lane recomputes their checksum as pico-sdk's `pad_checksum` does, finds
+no relocation in the linked `.boot2` or reaching it in the object refine
+wrote, and holds the build report's `boot_stage` to the slot. It then
+follows the stage with [`devices/thumb.py`](../../devices/thumb.py) from its
+first instruction in the copy the boot ROM makes at `0x20041f00`, entered
+with lr zero and again with lr nonzero, and requires its device stores, its
+MSP and its branch, VTOR pointed at `0x10000100` and reset entered, or the
+return to its caller, to be what pico-sdk's `boot2_generic_03h.S` and
+`exit_from_boot2.S` do. Those are read from the fetched files, their
+operands evaluated from their own and `ssi.h`'s, `addressmap.h`'s and
+`m0plus.h`'s macros, so a wrong constant in the port fails. The lane needs
+those inputs fetched (`python3 scripts/fetch_inputs.py`), as the gate's
+Cortex-M job does first.
+
+It then links RP2040's program with a copy of the derived script and with
+four scripts each breaking one clause of D546's contract, and a fifth whose
+`.boot2` holds what the script writes rather than the sealed stage, each
+refused as L0519 naming its clause, and refuses `link(region: "NOWHERE")`
+as L0517. A stage padded past its 252 bytes and one loading a symbol's
+address are each refused as L0538, naming the size or the relocation,
+before anything is linked. Last, a 100,000-byte static image links for
+RP2040, inside its 256 KiB RAM, and overflows the reference's: the image
+budget (D537) is the selected profile's.
 
 ```sh
 python3 environments/cortex-m/descriptions.py --refine PATH_TO_REFINE --output NEW_DIRECTORY
@@ -845,8 +864,10 @@ The lanes that stage their own library, `devices.py`, `driver.py` and
 their programs import, since the reference is part of every program that
 imports no description. The corpus links every program with the
 reference's derived script and links each limited verdict again with RP2040's
-and the STM32H753's, reading every limit from the build report of a
-firmware build that selects the device ([the corpus inventory](#the-corpus-inventory)),
+and the STM32H753's, reading every limit from the build report of
+`refine compile --target=cortex-m0 --emit=linker-script` over a module that
+imports the device's description (D589), which writes the script and its
+limits with no program to link ([the corpus inventory](#the-corpus-inventory)),
 so its capacity verdicts against those two devices are links against their
 maps, not measurements from sizes; none runs there.
 

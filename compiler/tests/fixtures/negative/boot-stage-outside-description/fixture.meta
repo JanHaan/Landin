@@ -1,0 +1,9 @@
+class: negative
+summary: D587: a boot stage is the device's and belongs in its description, so one in a program that imports none is refused
+program: program.ldn
+constructs: 1640, 1990
+targets: cortex-m0
+codes: L0534
+args: --target=cortex-m0 ../tests/fixtures/negative/boot-stage-outside-description/program.ldn
+expect: expected.txt
+status: 1

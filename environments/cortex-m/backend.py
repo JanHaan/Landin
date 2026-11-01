@@ -93,12 +93,11 @@ def recorded(device=REFERENCE):
 DERIVED = {}
 DERIVING = threading.Lock()
 
-#  The firmware program each device's profile is derived from: it imports
-#  the device's description, or none for the reference, and places nothing,
-#  as a corpus program places nothing.
-def probe_program(device):
-    selection = '' if device == REFERENCE else 'import descriptions/%s\n' % device
-    return selection + 'start: () -> none = end start\n'
+#  What each device's profile is derived from (D589): its description, or a
+#  module of nothing for the reference, which the library supplies when
+#  the program reaches no description.
+def probe_source(device):
+    return '' if device == REFERENCE else 'import descriptions/%s\n' % device
 
 
 def said_why(error):
@@ -112,8 +111,9 @@ def said_why(error):
 def derived(run, refine, device=REFERENCE, where=None):
     """DEVICE's profile as refine derives it: the linker script a firmware
     build of a program selecting it writes (D545), and the limits its build
-    report gives, from one build in WHERE/DEVICE, by default `profiles/DEVICE`
-    beside RUN's output.
+    report gives, written without a program by `--emit=linker-script`
+    (D589) in WHERE/DEVICE, by default `profiles/DEVICE` beside RUN's
+    output.
 
     The facts are held to descriptions.json's record, so a profile the
     harness links with is the one descriptions.py compares.
@@ -124,24 +124,18 @@ def derived(run, refine, device=REFERENCE, where=None):
             return DERIVED[key]
         out = (where or run.out.parent / 'profiles') / device
         out.mkdir(parents=True, exist_ok=True)
-        (out / 'app').mkdir(exist_ok=True)
-        (out / 'app/main.ldn').write_text(probe_program(device))
+        (out / 'profile.ldn').write_text(probe_source(device))
         probe = Run(out, run.tools)
         try:
             probe.command('derive-profile', [
-                refine, '--root=' + str(ROOT / 'devices'), '--target=cortex-m0',
-                '--firmware-entry=start', '--emit=exe',
-                '--toolchain=' + str(run.arm / 'arm-eabi-gcc'),
-                '--build-report=profile.json', 'app', '-o', 'profile.elf'], timeout=60)
+                refine, 'compile', '--root=' + str(ROOT / 'devices'), '--target=cortex-m0',
+                '--emit=linker-script', '--build-report=profile.json', 'profile.ldn',
+                '-o', 'profile.ld'], timeout=60)
         except CommandFailed as error:
             raise said_why(error) from None
         report = json.loads((out / 'profile.json').read_text())['firmware']
-        symbols = probe.command('profile-symbols', [run.arm / 'arm-eabi-nm', out / 'profile.elf'])
-        top = next(int(parts[0], 16) for line in symbols.splitlines()
-                   if len(parts := line.split()) == 3
-                   and parts[2] == '_landin_firmware_stack_top')
         profile = {key: report[key] for key in FACTS}
-        profile.update(stack_top=top, script=str(out / 'profile.elf.ld'))
+        profile.update(stack_top=report['stack_top'], script=str(out / 'profile.ld'))
         require(profile['boot'] in BOOT_PREFIX,
                 '%s: the harness supplies no %s boot prefix' % (device, profile['boot']))
         want = recorded(device)

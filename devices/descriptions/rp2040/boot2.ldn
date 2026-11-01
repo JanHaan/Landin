@@ -1,0 +1,77 @@
+-- The RP2040's second stage boot, a port of pico-sdk 2.2.0's generic one,
+-- src/rp2040/boot_stage2/boot2_generic_03h.S with its helper
+-- asminclude/boot2_helpers/exit_from_boot2.S, at commit
+-- a1438dff1d38bd9c65dbd693f0e5db4b9ae91779, both pinned by hash in
+-- devices/inputs.json and neither vendored.
+-- Copyright (c) 2019-2021 Raspberry Pi (Trading) Ltd. BSD-3-Clause.
+-- See devices/notices/LICENSE.pico-sdk and devices/README.md.
+--
+-- The boot ROM copies the first 256 bytes of flash to SRAM at 0x2004_1f00,
+-- checks their CRC-32, which refine writes in the last four once the stage
+-- is assembled (D588), and enters the copy at its first instruction with
+-- lr zero.  So the stage runs at an address it is not linked at and uses
+-- no symbol outside itself; its literals follow it in the slot.  It sets
+-- the flash interface up to answer each read in the XIP window with a
+-- serial 03h read, at a quarter of the system clock, which any flash on
+-- any RP2040 board answers, and writes nothing to the flash; then it
+-- points VTOR at the vector table that follows it, loads the initial
+-- stack pointer from the table and jumps to reset.  Called with lr
+-- nonzero, as pico-sdk's flash code calls a copy of it, it returns.
+--
+-- Each constant is a number, here with the pico-sdk macro it is:
+--
+--   0x1800_0000  XIP_SSI_BASE (addressmap.h), the SSI's registers
+--   #8           SSI_SSIENR_OFFSET (ssi.h)
+--   #4           PICO_FLASH_SPI_CLKDIV, the divisor of clk_sys
+--   #20          SSI_BAUDR_OFFSET, 0x14
+--   0x001f_0300  CTRLR0_XIP: SSI_CTRLR0_SPI_FRF_VALUE_STD << 21, standard
+--                serial frames; 31 << SSI_CTRLR0_DFS_32_LSB (16), 32 clocks
+--                a data frame; SSI_CTRLR0_TMOD_VALUE_EEPROM_READ (3) <<
+--                SSI_CTRLR0_TMOD_LSB (8), send instruction and address,
+--                then receive
+--   #0           SSI_CTRLR0_OFFSET
+--   0x0300_0218  SPI_CTRLR0_XIP: CMD_READ (0x03) <<
+--                SSI_SPI_CTRLR0_XIP_CMD_LSB (24); ADDR_L (6) <<
+--                SSI_SPI_CTRLR0_ADDR_L_LSB (2); 2 << SSI_SPI_CTRLR0_INST_L_LSB
+--                (8), an 8-bit instruction; SSI_SPI_CTRLR0_TRANS_TYPE_VALUE_1C1A
+--                (0) << SSI_SPI_CTRLR0_TRANS_TYPE_LSB (0), instruction and
+--                address both serial
+--   0x1800_00f4  XIP_SSI_BASE + SSI_SPI_CTRLR0_OFFSET (0xf4)
+--   #4           SSI_CTRLR1_OFFSET, NDF zero: one 32-bit read a frame
+--   0x1000_0100  XIP_BASE + 0x100 (addressmap.h), the vector table
+--   0xe000_ed08  PPB_BASE (addressmap.h) + M0PLUS_VTOR_OFFSET (m0plus.h)
+--
+-- r3 holds the SSI's base; r0 to r2 are scratch.  The assembler takes the
+-- numbers without separators.
+
+link(boot_stage) extern(naked) boot2: () -> none =
+    assembler.block("""
+        push {lr}
+        ldr r3, =0x18000000
+        movs r1, #0
+        str r1, [r3, #8]
+        movs r1, #4
+        str r1, [r3, #20]
+        ldr r1, =0x001f0300
+        str r1, [r3, #0]
+        ldr r1, =0x03000218
+        ldr r0, =0x180000f4
+        str r1, [r0]
+        movs r1, #0
+        str r1, [r3, #4]
+        movs r1, #1
+        str r1, [r3, #8]
+        check_return:
+        pop {r0}
+        cmp r0, #0
+        beq vector_into_flash
+        bx r0
+        vector_into_flash:
+        ldr r0, =0x10000100
+        ldr r1, =0xe000ed08
+        str r0, [r1]
+        ldmia r0, {r0, r1}
+        msr msp, r0
+        bx r1
+        """)
+end boot2

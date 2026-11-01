@@ -103,6 +103,7 @@ package body Landin.Configuration is
       end Number;
    begin
       Result.Keep := Attr.Keep;
+      Result.Boot_Stage := Attr.Boot_Stage;
       Result.Alignment := Number (Attr.Alignment);
       Result.Vector := Number (Attr.Vector);
       if Attr.Section /= Landin.Source.Empty_Span then
