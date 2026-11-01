@@ -365,9 +365,158 @@ package body Landin.Tests.Catalogue_Suite is
       Check ("12 z", Accepted => True);
    end Integer_Guidance_Covers_Missing_Digits;
 
+   --  D599: an example's first line may be `-- refine: OPTIONS`, the
+   --  options it is compiled with, each a word of printable characters
+   --  that begins `--`, one space before each.  Options_Refusal is empty
+   --  when every `-- refine:` line of the example is that first line in
+   --  that form, and otherwise names the line it cannot read; Options_Of
+   --  is the options of a readable example, none when it has no line.
+   Options_Line : constant String := "-- refine:";
+
+   function Options_Refusal (Example : String) return String;
+   function Options_Of (Example : String) return Landin.Platform.Path_List;
+
+   function Is_Options_Line (Line : String) return Boolean is
+     (Line'Length >= Options_Line'Length
+      and then Line (Line'First .. Line'First + Options_Line'Length - 1)
+        = Options_Line);
+
+   --  The words after the options line's colon, or an empty list when
+   --  one is not a word that begins `--`.
+   function Words_Of (Line : String) return Landin.Platform.Path_List;
+
+   function Words_Of (Line : String) return Landin.Platform.Path_List is
+      Words : Landin.Platform.Path_List;
+      None  : Landin.Platform.Path_List;
+      Rest  : constant String :=
+        Line (Line'First + Options_Line'Length .. Line'Last);
+      Start : Positive := Rest'First;
+   begin
+      if Rest'Length = 0 then
+         return None;
+      end if;
+      for At_Byte in Rest'Range loop
+         if At_Byte = Rest'Last or else Rest (At_Byte + 1) = ' ' then
+            declare
+               Word : constant String := Rest (Start .. At_Byte);
+            begin
+               --  Each word stands after exactly one space.
+               if Word'Length < 4
+                 or else Word (Word'First) /= ' '
+                 or else Word (Word'First + 1 .. Word'First + 2) /= "--"
+                 or else (for some C of Word (Word'First + 1 .. Word'Last)
+                          => C not in '!' .. '~')
+               then
+                  return None;
+               end if;
+               Landin.Platform.Add
+                 (Words, Word (Word'First + 1 .. Word'Last));
+            end;
+            Start := At_Byte + 1;
+         end if;
+      end loop;
+      return Words;
+   end Words_Of;
+
+   function Options_Refusal (Example : String) return String is
+      Start : Positive := Example'First;
+   begin
+      for At_Byte in Example'Range loop
+         if Example (At_Byte) = LF then
+            declare
+               Line : constant String := Example (Start .. At_Byte - 1);
+            begin
+               if Is_Options_Line (Line)
+                 and then (Start /= Example'First
+                           or else Natural (Words_Of (Line).Length) = 0)
+               then
+                  return "the options line `" & Line & "` cannot be read:"
+                    & " an example's first line alone may be `-- refine:`"
+                    & " and the options, each beginning --";
+               end if;
+            end;
+            Start := At_Byte + 1;
+         end if;
+      end loop;
+      return "";
+   end Options_Refusal;
+
+   function Options_Of (Example : String) return Landin.Platform.Path_List
+   is
+      None : Landin.Platform.Path_List;
+   begin
+      for At_Byte in Example'Range loop
+         if Example (At_Byte) = LF then
+            declare
+               Line : constant String :=
+                 Example (Example'First .. At_Byte - 1);
+            begin
+               return (if Is_Options_Line (Line) then Words_Of (Line)
+                       else None);
+            end;
+         end if;
+      end loop;
+      return None;
+   end Options_Of;
+
+   --  A line the reader cannot read is refused naming itself, wherever it
+   --  stands and whatever is wrong with it, and a readable one gives its
+   --  options in order.
+   procedure Unreadable_Options_Are_Named
+     (Item : in out Landin.Testing.Context);
+
+   procedure Unreadable_Options_Are_Named
+     (Item : in out Landin.Testing.Context)
+   is
+      Program : constant String := "x: u32 = 1" & LF;
+
+      procedure Refused (Line : String; First : Boolean := True);
+
+      procedure Refused (Line : String; First : Boolean := True) is
+         Example : constant String :=
+           (if First then Line & LF & Program else Program & Line & LF);
+         Said : constant String := Options_Refusal (Example);
+      begin
+         Landin.Testing.Check
+           (Item, Said'Length > Line'Length
+                  and then (for some At_Byte in Said'Range =>
+                              At_Byte + Line'Length + 1 <= Said'Last
+                              and then Said
+                                (At_Byte .. At_Byte + Line'Length + 1)
+                                = "`" & Line & "`"),
+            "`" & Line & "` is refused naming itself");
+      end Refused;
+
+      Read : constant Landin.Platform.Path_List :=
+        Options_Of ("-- refine: --target=cortex-m0 --level=armv7-m" & LF
+                    & Program);
+   begin
+      Refused ("-- refine:");
+      Refused ("-- refine: ");
+      Refused ("-- refine: target=cortex-m0");
+      Refused ("-- refine:--target=cortex-m0");
+      Refused ("-- refine: --target=cortex-m0  --level=armv7-m");
+      Refused ("-- refine: --target=cortex-m0 ");
+      Refused ("-- refine: --");
+      Refused ("-- refine: --target=cortex-m0", First => False);
+      Landin.Testing.Check
+        (Item, Options_Refusal
+                 ("-- refine: --target=cortex-m0" & LF & Program) = ""
+               and then Options_Refusal (Program) = ""
+               and then Options_Refusal ("-- refined" & LF & Program) = "",
+         "a readable line, and an example with none, are read");
+      Landin.Testing.Check
+        (Item, Natural (Read.Length) = 2
+               and then Read.Element (1) = "--target=cortex-m0"
+               and then Read.Element (2) = "--level=armv7-m"
+               and then Natural (Options_Of (Program).Length) = 0,
+         "the options are the line's words in order");
+   end Unreadable_Options_Are_Named;
+
    --  Every code is explained, and every example an explanation shows is
    --  a program whose report begins with that code.  The example is run on
-   --  a fake filesystem holding only itself, as a one-file negative is.
+   --  a fake filesystem holding only itself, as a one-file negative is,
+   --  with the options its first line names (D599).
    procedure Every_Code_Is_Explained (Item : in out Landin.Testing.Context);
 
    procedure Every_Code_Is_Explained (Item : in out Landin.Testing.Context)
@@ -391,12 +540,17 @@ package body Landin.Tests.Catalogue_Suite is
                   and then Said (Said'First .. Said'First + 7) = "Retired."),
                Rows.Code (Name) & " says it is retired exactly when it is");
 
-            if Example /= "" then
+            if Example /= "" and then Options_Refusal (Example) /= "" then
+               Landin.Testing.Check
+                 (Item, False,
+                  Rows.Code (Name) & "'s example: "
+                  & Options_Refusal (Example));
+            elsif Example /= "" then
                Examples := Examples + 1;
                declare
                   Host  : Landin.Testing.Fakes.Fake_Filesystem;
                   Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
-                  Given : Landin.Platform.Path_List;
+                  Given : Landin.Platform.Path_List := Options_Of (Example);
                begin
                   Host.Add_File ("example.ldn", Example);
                   Given.Append ("example.ldn");
@@ -427,6 +581,9 @@ package body Landin.Tests.Catalogue_Suite is
       Landin.Testing.Register
         (Into, "catalogue", "every code is explained",
          Every_Code_Is_Explained'Access);
+      Landin.Testing.Register
+        (Into, "catalogue", "unreadable options are named",
+         Unreadable_Options_Are_Named'Access);
       Landin.Testing.Register
         (Into, "catalogue", "integer guidance covers missing digits",
          Integer_Guidance_Covers_Missing_Digits'Access);

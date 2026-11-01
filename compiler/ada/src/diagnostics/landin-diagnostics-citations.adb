@@ -2212,6 +2212,9 @@ package body Landin.Diagnostics.Citations is
                "IRQ5 is delivered by setting it pending in the NVIC",
             when 530 =>
                "`refine explain` answers a construct and a decision",
+            when 599 =>
+               "A diagnostic's example names the options it is compiled "
+               & "with",
             when 542 =>
                "A device description is a module of directives, and its "
                & "generated half has one text",
@@ -3387,6 +3390,8 @@ package body Landin.Diagnostics.Citations is
             when 596 =>
                "Decisions: The toolchain, C and the machine",
             when 530 =>
+               "Decisions: The toolchain, C and the machine",
+            when 599 =>
                "Decisions: The toolchain, C and the machine",
             when 542 =>
                "Decisions: The toolchain, C and the machine",
@@ -4865,6 +4870,9 @@ package body Landin.Diagnostics.Citations is
             when 530 =>
                "https://www.701.dev/spec.html#d530-refine-explain-answer"
                & "s-a-construct-and-a-decision",
+            when 599 =>
+               "https://www.701.dev/spec.html#d599-a-diagnostic-s-exampl"
+               & "e-names-the-options-it-is-compiled-with",
             when 542 =>
                "https://www.701.dev/spec.html#d542-a-device-description-"
                & "is-a-module-of-directives-and-its-generated-half-has-one"
