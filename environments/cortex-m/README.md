@@ -485,6 +485,13 @@ them on the fixture's line, and the reason it records names them. The
 row's `reason`, if it has one, says only why firmware has no such thing or
 what runs instead, and may not name a refused module, which the corpus
 refuses, so renaming or splitting a module leaves no reason stale.
+A refusal its row does not record names refine's first diagnostic and the
+codes the row would need, and a compilation that fails, the profile
+derivation's among them, names its first diagnostic, so a compiler with no
+library beside it says so rather than that every refusal changed.
+`python3 scripts/add_fixture.py CLASS/NAME` writes a new fixture's row
+from its Cortex-M0 compilation, and `check.py` names a fixture with no row
+and that command.
 
 A fixture with a `trap_report:` keeps an `execute` row and does
 not name `cortex-m0`: firmware keeps D232's bare trap and writes no report
@@ -961,22 +968,26 @@ stack's top when the firmware returns. The control writes `capacity.json`
 and `capacity.txt` beside it and fails unless the consumer fits; the
 evidence directory's `capacity.json` and `capacity.txt` hold every
 profile's, and the gate's `cortex-m` job keeps them. Its tick is
-`core/atomic`'s `sole_add` in SysTick's handler (D511). At none/off it uses
-23,268 bytes of flash and 3,072 of static RAM, of which the fibre buffer is
-2,992; with the 4,096-byte main-stack reservation, painted to 1,644, that is
-7,168 bytes of reserved RAM, counted once. Each fibre's backing is 1,472
-bytes, a 32-byte record and a 1,440-byte stack whose limit stands 384 bytes
-above its base (D472), painted to 904, 940 with D461's exception frame;
-both are live at once, 2,944 bytes. The size and speed profiles use 20,632
-to 20,660 bytes of flash and paint at most 848 in a fibre and 1,396 on the
-main stack. With the tick written over the builtins directly, as it was
-before the wrapper, the same compiler used 22,492 and 19,916 to 19,944
-bytes of flash and painted the main stack to 1,472 and 1,248: a firmware
-image keeps every scalar's cell entries, since a program without a public
-`main` keeps everything (D296), and the handler's two calls deepen the
-main stack. Every profile fits the
-32 KiB flash, 16 KiB RAM profile. Paint is this run's deepest write, not a
-bound.
+`core/atomic`'s `sole_add` in SysTick's handler (D511). The numbers move
+with the compiler, so they are each run's, in that run's `capacity.txt`;
+the ones below are one run's, of revision 8a03d5343's compiler with
+`evidence.py --control capacity --all-profiles`. At none/off the consumer
+used 22,832 bytes of flash and 3,072 of static RAM, of which the fibre
+buffer is 2,992; with the 4,096-byte main-stack reservation, painted to
+1,644, that is 7,168 bytes of reserved RAM, counted once. Each fibre's
+backing is 1,472 bytes, a 32-byte record and a 1,440-byte stack whose limit
+stands 384 bytes above its base (D472), painted to 784, 820 with D461's
+exception frame; both are live at once, 2,944 bytes. The size and speed
+profiles used 20,096 to 20,124 bytes of flash and painted at most 720 in a
+fibre and 1,340 on the main stack. When the wrapper was introduced (D511),
+the compiler of that revision used 22,492 and 19,916 to 19,944 bytes of
+flash with the tick written over the builtins directly, and painted the
+main stack to 1,472 and 1,248, against its own 23,268 and 20,632 to 20,660
+with the wrapper: a firmware image keeps every scalar's cell entries, since
+a program without a public `main` keeps everything (D296), and the
+handler's two calls deepen the main stack. Every profile fits the 32 KiB
+flash, 16 KiB RAM profile; the control fails a profile that does not. Paint
+is a run's deepest write, not a bound.
 
 `evidence.py` runs on its own with the programs and controls named and the
 profiles to run them at, so the consumer is re-measured alone:

@@ -288,6 +288,17 @@ class ProbeFailures(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, 'names hosted/heap, which the corpus'
                                             ' reads from the refusal'):
                     backend_corpus.source_refusal(run, root / 'refine', 'runtime/word-count', row)
+                #  A refusal the row does not record is said with refine's
+                #  first diagnostic and the row it would need, not as changed
+                #  diagnostics: a compiler without its library refuses all.
+                log = 'error[L0006]: module not found: hosted/heap\n'
+                with self.assertRaises(RuntimeError) as refused:
+                    backend_corpus.source_refusal(run, root / 'refine', 'runtime/word-count', row)
+                text = str(refused.exception)
+                self.assertIn("refine refused it with L0006, first 'error[L0006]: module not"
+                              " found: hosted/heap', and its", text)
+                self.assertIn('row records L0015; if that refusal is the fixture\'s verdict,'
+                              ' write "codes": ["L0006"]', text)
         rows = backend_corpus.inventory()
         self.assertFalse([name for name, row in rows.items()
                           if backend_corpus.namespace_only(row)
@@ -557,7 +568,7 @@ class ProbeFailures(unittest.TestCase):
                 with self.assertRaises(RuntimeError) as refused:
                     backend_corpus.inventory()
             text = str(refused.exception)
-            self.assertIn(removed + ' has no row; add "' + removed + '": {"mode": "execute"}', text)
+            self.assertIn(removed + ' has no row; python3 scripts/add_fixture.py ' + removed + ' writes it, or add "' + removed + '": {"mode": "execute"}', text)
             self.assertIn('runtime/no-such-fixture has a row and no fixture', text)
             self.assertEqual(text.count('\n'), 2)
 

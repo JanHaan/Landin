@@ -39,8 +39,9 @@ def inventory():
     missing, stale = sorted(actual - set(rows)), sorted(set(rows) - actual)
     require(not missing and not stale, '\n'.join(
         ['Cortex corpus inventory %s disagrees with the shared fixtures:' % INVENTORY]
-        + ['  %s has no row; add "%s": {"mode": "execute"} if it runs on Cortex-M0, or a'
-           ' "refuse" or "restriction" row with its reason (see %s)' % (name, name, RULES)
+        + ['  %s has no row; python3 scripts/add_fixture.py %s writes it, or add'
+           ' "%s": {"mode": "execute"} if it runs on Cortex-M0, or a "refuse" or'
+           ' "restriction" row with its reason (see %s)' % (name, name, name, RULES)
            for name in missing]
         + ['  %s has a row and no fixture; remove the row' % name for name in stale]))
     changes = json.loads((COUNTERPARTS / 'counterparts.json').read_text())['replacements']
@@ -116,6 +117,11 @@ def namespace_reason(refused, reason):
     return text + ('. ' + reason if reason else '.')
 
 
+def first_diagnostic(log):
+    """The first `error[...]` line of a compiler log, or ""."""
+    return next((line.strip() for line in log.splitlines() if line.startswith('error[')), '')
+
+
 def source_refusal(run, refine, name, row):
     base = ROOT / 'compiler/tests/fixtures' / name
     meta = metadata(base / 'fixture.meta')
@@ -131,7 +137,15 @@ def source_refusal(run, refine, name, row):
         raise RuntimeError('recorded source restriction unexpectedly compiled: ' + name)
     log = (run.out / 'compile-refusal.log').read_text()
     codes = sorted(set(re.findall(r'error\[(L\d+)\]', log)))
-    require(codes == row['codes'] and bool(codes), 'source restriction diagnostics changed: ' + name)
+    #  A refusal the row does not record says what refine said, first: a
+    #  compiler with no library beside it refuses every fixture with
+    #  L0006, which is no changed verdict.
+    require(codes == row['codes'] and bool(codes),
+            '%s: refine refused it with %s, first %r, and its %s row records %s; if that'
+            ' refusal is the fixture\'s verdict, write "codes": %s (see %s); inspect %s'
+            % (name, ', '.join(codes) or 'no code', first_diagnostic(log), INVENTORY,
+               ', '.join(row['codes']), json.dumps(codes), RULES,
+               run.out / 'compile-refusal.log'))
     require(not (run.out / 'refused.s').exists(), 'refusal wrote an assembly artifact')
     if not namespace_only(row):
         return {'verdict': 'source-refusal', 'codes': codes, 'reason': row['reason']}
@@ -404,11 +418,6 @@ def observe(output, tools, refine, program, profiles, level='armv6-m', roots=())
                 describe_routines(result['image'])), flush=True)
         except Exception as error:
             said = str(error)
-            if isinstance(error, CommandFailed) and error.name == 'compile':
-                #  The compiler's first diagnostic, so the line says why.
-                first = next((line for line in Path(error.log).read_text().splitlines()
-                              if line.startswith('error[')), '')
-                said += (': ' + first) if first else ''
             result.update(status='failed', error=said)
             print('cortex program: %s %s/%s FAILED: %s' % (path.name, opt, spec, said),
                   flush=True)

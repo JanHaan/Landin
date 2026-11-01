@@ -9153,6 +9153,37 @@ OWNED_TESTS = (
 )
 
 
+def cortex_corpus_row_problems():
+    """Every shared runtime and ABI fixture has its Cortex-M corpus row.
+
+    The corpus refuses a fixture with no row, and so do the Cortex-M
+    controls this file runs, each with a traceback; this says it once per
+    fixture, with the command that writes the row.
+    """
+    path = os.path.join(ROOT, CORTEX_CORPUS)
+    if not os.path.exists(path):
+        return []
+    rows = json.load(io.open(path, encoding="utf-8"))["fixtures"]
+    fixtures = set()
+    for kind in ("runtime", "abi"):
+        base = os.path.join(ROOT, "compiler/tests/fixtures", kind)
+        if os.path.isdir(base):
+            fixtures |= {kind + "/" + name for name in os.listdir(base)
+                         if os.path.exists(os.path.join(base, name,
+                                                        "fixture.meta"))}
+    out = []
+    for name in sorted(fixtures - set(rows)):
+        out.append(("compiler/tests/fixtures/%s/fixture.meta" % name, 1,
+                    "%s has no row in %s; write it with python3"
+                    " scripts/add_fixture.py %s, which also regenerates"
+                    " what the fixture is read into" % (name, CORTEX_CORPUS,
+                                                        name)))
+    for name in sorted(set(rows) - fixtures):
+        out.append((CORTEX_CORPUS, 1, "%s has a row and no fixture; remove"
+                    " the row" % name))
+    return out
+
+
 def check_owned_tests(full_run):
     """Run the repository's own Python tests, and say which one failed.
 
@@ -9171,11 +9202,18 @@ def check_owned_tests(full_run):
     import subprocess
 
     out = []
+    rows = cortex_corpus_row_problems()
+    out += rows
     for relative in OWNED_TESTS:
         path = os.path.join(ROOT, relative)
         missing = absent([path])
         if missing:
             out += missing
+            continue
+        #  The Cortex-M controls read the real inventory, so a fixture with
+        #  no row fails a dozen of them at once; the rows above say what
+        #  to write, and the controls run once they are written.
+        if rows and relative == "environments/cortex-m/test.py":
             continue
         try:
             result = subprocess.run([sys.executable, path],
