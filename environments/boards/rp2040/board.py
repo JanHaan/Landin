@@ -26,7 +26,8 @@ a hub uhubctl can switch.  The steps, each recorded under NEW_DIRECTORY:
   5. read the counters back over SWD and compare them with the last frame.
 
 The oracle is written here, from what the host sends and from the RP2040
-datasheet, never from the firmware's own idea of itself; see README.md.
+datasheet, never from the firmware's own idea of itself; see
+environments/boards/rp2040/README.md.
 """
 
 import argparse
