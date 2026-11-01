@@ -70,9 +70,12 @@ USART3_SLOT = 16 + 39   # USART3 (Table 147, p. 755)
 RSR_FLAGS = 0x55fa0000
 RSR_POWER_ON = 0x00fa0000
 # PWR_CSR1 (6.8.2, p. 305): ACTVOS in 15:14 reads VOS3, 01, from reset,
-# and ACTVOSRDY, bit 13, is clear until the supply is configured (6.4.1,
-# p. 262) and set once the voltage levels are valid.
+# and ACTVOSRDY, bit 13, is set once the supply is configured and the
+# voltage levels are valid (6.4.1, p. 262).  PWR_CR3's lower byte (6.8.4,
+# p. 308), as the description's stage writes it before reset (D653): LDOEN
+# set, BYPASS and SCUEN clear.
 ACTVOS, VOS3, ACTVOSRDY = 0xc000, 0x4000, 0x2000
+CR3_SUPPLY, CR3_LDO = 0x7, 0x2
 # SCB_CPACR's CP10 and CP11, full access, and SCB_CCR's IC and DC.
 CPACR_FPU = 0x00f00000
 CCR_CACHES = 0x00030000
@@ -308,13 +311,14 @@ def boot(console):
             'RCC_RSR is %08x, not the flags of a power-on reset alone' % b['r'])
     require(b['v'] == VECTORS, 'VTOR is %08x, not the boot address' % b['v'])
     require(b['c'] & CCR_CACHES == 0, 'SCB_CCR is %08x: a cache is enabled' % b['c'])
-    require(b['q'] & (ACTVOS | ACTVOSRDY) == VOS3,
-            'PWR_CSR1 read %08x before the supply was configured' % b['q'])
-    require(b['y'] & ACTVOSRDY, 'PWR_CSR1 read %08x after the supply was configured' % b['y'])
+    require(b['q'] & CR3_SUPPLY == CR3_LDO,
+            'PWR_CR3 reads %08x: the stage did not configure the LDO supply' % b['q'])
+    require(b['y'] & (ACTVOS | ACTVOSRDY) == VOS3 | ACTVOSRDY,
+            'PWR_CSR1 reads %08x: the voltage levels are not valid at VOS3' % b['y'])
     require(b['w'] == len(START), '%d bytes had arrived when the boot frame was written; the'
             ' host sent %d' % (b['w'], len(START)))
     return dict(rcc_rsr=b['r'], vtor=b['v'], cpacr=b['a'], ccr=b['c'],
-                csr1_before_supply=b['q'], csr1_after_supply=b['y'])
+                pwr_cr3=b['q'], pwr_csr1=b['y'])
 
 
 def discarded(sent, spans):

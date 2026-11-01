@@ -79,7 +79,7 @@ flash and, directly after it, the IMAGE_DEF block refine emits and checks
 | [`inputs.json`](inputs.json) | the lock: each vendor input's URL and SHA-256 |
 | [`policies/`](policies) | one selection policy per device |
 | [`generated/`](generated) | the register modules, correspondences and manifests `refine svd` writes |
-| [`descriptions/`](descriptions) | each device's description: the generated `interrupts.ldn`, the hand-written `memory.ldn`, and RP2040's second stage, `boot2.ldn` |
+| [`descriptions/`](descriptions) | each device's description: the generated `interrupts.ldn`, the hand-written `memory.ldn`, RP2040's second stage, `boot2.ldn`, and the STM32H753's stage before reset, `supply.ldn` |
 | [`notices/`](notices) | the licences the generated files are derived under |
 | [`consumers/`](consumers) | firmware that uses the generated modules |
 | [`test.py`](test.py) | the offline checks, and with `--refine` the regeneration and the vendor-header oracles |
@@ -317,7 +317,11 @@ written by hand and checked against the header's base addresses (D562):
 2 MiB of flash from 0x0800_0000, ITCM 64 KiB at 0, DTCM 128 KiB at
 0x2000_0000, AXI SRAM 512 KiB at 0x2400_0000, SRAM1, SRAM2 and SRAM3 at
 0x3000_0000, 0x3002_0000 and 0x3004_0000, and SRAM4 64 KiB at 0x3800_0000.
-It boots from the plain vector table at 0x0800_0000. The profile is
+It boots from the plain vector table at 0x0800_0000, whose reset word is
+the description's [`supply.ldn`](descriptions/stm32h753/supply.ldn): RM0433
+permits no RAM write until the supply is configured (6.4.1, p. 262), so
+that stage writes PWR_CR3 for the LDO and waits for PWR_CSR1's ACTVOSRDY,
+with registers alone, before it enters compiler-owned reset (D653). The profile is
 cacheless: startup leaves the M7's caches disabled, as reset leaves them,
 and a cached profile is not admitted. DMA1 and DMA2 reach neither TCM, so
 data, BSS and the stack are placed in the AXI SRAM. A program selects the

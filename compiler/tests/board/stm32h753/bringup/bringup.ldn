@@ -3,10 +3,9 @@
 -- (8.5.6, p. 350), with every bus prescaler at one, so USART3's kernel
 -- clock is rcc_pclk1 at 64 MHz (Figure 53, p. 360).  What this does:
 --
---   * the supply configuration 6.4.1 (p. 262) requires after a power-on
---     reset, the LDO's (Table 34, p. 261), the H753's only regulator, and
---     the wait for PWR_CSR1's ACTVOSRDY that says the voltage levels are
---     valid;
+--   * nothing of the supply: 6.4.1 (p. 262) permits no RAM write until it
+--     is configured, so the description's stage configures it from the
+--     reset vector, before compiler-owned reset writes any memory (D653);
 --   * the clocks of GPIO ports B and D, USART3 and DMA1, as 8.5.11
 --     (p. 372) enables a peripheral: the enable written, read back, the
 --     D2 domain's clocks waited for when the peripheral is in D2, as
@@ -17,7 +16,6 @@ import platform/cortex_m
 import stm32h753/dma1
 import stm32h753/gpiob
 import stm32h753/gpiod
-import stm32h753/pwr
 import stm32h753/rcc
 import stm32h753/usart3
 
@@ -25,24 +23,6 @@ import stm32h753/usart3
 public indicator: u32 = 1
 -- The processor's clock, and so SysTick's, in cycles a millisecond.
 public cycles_ms: u32 = 64_000
-
--- Returns PWR_CSR1 as it was before the supply was configured: ACTVOSRDY
--- clear, since until then the system is in Run* (6.4.1, p. 262).
-public supply: () -> (before: u32) =
-    before = pwr.csr1_read(pwr.base)
-    -- PWR_CR3 (6.8.4, p. 308): its lower byte is written once after a
-    -- power-on reset; LDOEN set with BYPASS and SCUEN clear selects the
-    -- LDO and locks the configuration.
-    mut config := pwr.cr3_decode(pwr.cr3_read(pwr.base))
-    config.f_ldoen = 1
-    config.f_bypass = 0
-    config.f_scuen = 0
-    pwr.cr3_write(pwr.base, pwr.cr3_encode(config))
-    mut levels := pwr.csr1_decode(pwr.csr1_read(pwr.base))
-    while levels.f_actvosrdy == 0 do
-        levels = pwr.csr1_decode(pwr.csr1_read(pwr.base))
-    end while
-end supply
 
 public peripherals: () -> none =
     -- RCC_AHB4ENR's GPIOBEN and GPIODEN (8.7.43, p. 458), RCC_APB1LENR's

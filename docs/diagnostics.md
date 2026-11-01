@@ -1851,18 +1851,19 @@ start: () -> none = end start
 
 ### L0535
 
-A device description holds a second-stage boot routine, and its boot kind
-takes none (D587): a `vector-table` image begins with the vector table,
-which the core reads at reset. Only an `rp2040-boot2` image begins with a
-second stage. Remove the routine, or select the boot kind whose boot ROM
-enters it.
+A device description holds a stage, and its boot kind runs none (D587,
+D653): an `rp2350-image-block` image begins with the vector table, which
+the boot ROM finds through the image block, and runs nothing of the
+description's before reset. An `rp2040-boot2` image begins with a second
+stage, and a `vector-table` image may run one from its reset vector before
+reset. Remove the routine, or select the boot kind that runs it.
 
 ```landin
--- refine: --target=cortex-m0
+-- refine: --target=cortex-m0 --level=armv8-m.main
 compiler.device("board")
-compiler.core("cortex-m0plus")
+compiler.core("cortex-m33")
 compiler.vectors(48)
-compiler.boot("vector-table")
+compiler.boot("rp2350-image-block")
 linker.region("FLASH", 0x1000_0000, 2 * 1024 * 1024, "rx")
 linker.region("RAM", 0x2000_0000, 256 * 1024, "rwx")
 linker.place("vectors", "FLASH")
@@ -1956,3 +1957,62 @@ Arm executable for RP2350 that runs in Secure state, and the LAST item giving
 that word, with no relocation in it. The message names the part that is
 not. refine writes these words itself, so this is a defect of refine or of the
 assembler it ran rather than of the program; report it with the message.
+
+### L0560
+
+A `vector-table` description's stage does not branch to compiler-owned
+reset (D653). The reset vector enters the stage before reset has copied
+the initialized data or cleared the zeroed, and the stage ends by entering
+reset, `_landin_firmware_reset`, which it names: nothing else runs reset,
+and a stage that falls off its end traps. Finish it with
+`ldr r0, =_landin_firmware_reset` and `bx r0`, which reach reset from
+anywhere in flash.
+
+```landin
+-- refine: --target=cortex-m0 --level=armv7e-m
+compiler.device("board")
+compiler.core("cortex-m7")
+compiler.vectors(48)
+compiler.boot("vector-table")
+linker.region("FLASH", 0x0800_0000, 2 * 1024 * 1024, "rx")
+linker.region("RAM", 0x2400_0000, 512 * 1024, "rwx")
+linker.place("vectors", "FLASH")
+linker.place("text", "FLASH")
+linker.place("rodata", "FLASH")
+linker.place("data", "RAM")
+linker.place("bss", "RAM")
+linker.place("stack", "RAM", 16 * 1024)
+
+link(boot_stage) extern(naked) supply: () -> none =
+    assembler.block("nop")
+end supply
+```
+
+### L0561
+
+A `vector-table` description's stage uses the stack (D653). The stage runs
+before compiler-owned reset, on the stack pointer the core loaded from the
+vector table, and before any memory may be written: a chip such as the
+STM32H753 permits no write to its RAM until its supply is configured. The
+message names the word that reaches the stack, `push`, `pop`, `sp`, `r13`,
+`msp` or `psp`. Keep what the stage needs in registers.
+
+```landin
+-- refine: --target=cortex-m0 --level=armv7e-m
+compiler.device("board")
+compiler.core("cortex-m7")
+compiler.vectors(48)
+compiler.boot("vector-table")
+linker.region("FLASH", 0x0800_0000, 2 * 1024 * 1024, "rx")
+linker.region("RAM", 0x2400_0000, 512 * 1024, "rwx")
+linker.place("vectors", "FLASH")
+linker.place("text", "FLASH")
+linker.place("rodata", "FLASH")
+linker.place("data", "RAM")
+linker.place("bss", "RAM")
+linker.place("stack", "RAM", 16 * 1024)
+
+link(boot_stage) extern(naked) supply: () -> none =
+    assembler.block("push {r0}\nldr r0, =_landin_firmware_reset\nbx r0")
+end supply
+```

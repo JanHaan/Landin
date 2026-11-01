@@ -63,7 +63,7 @@ writes nothing until a byte has arrived: the host sends `S` first.
 
 | Tag | When | Fields |
 |---|---|---|
-| `b` | once, after the first byte | `r` RCC_RSR as read first in `start`, `v` VTOR, `a` CPACR and `c` CCR then, `q` PWR_CSR1 before the supply is configured and `y` after, `w` the bytes that had arrived |
+| `b` | once, after the first byte | `r` RCC_RSR as read first in `start`, `v` VTOR, `a` CPACR and `c` CCR then, `q` PWR_CR3 and `y` PWR_CSR1, as the description's stage left them before reset, `w` the bytes that had arrived |
 | `t` | after each 0x11 | `h` bytes handled, `c` ring restarts, `d` epochs the stream completed, `w` its laps, `k` DMA_STR0 entries, `u` USART3 entries, `p` the exception number USART3's handler ran in, `n` DMA1_S0NDTR, `e` bytes consumed in this epoch, `g` PB0's input, `s` the application's state |
 | `f` | after 0x14 and 16 operand bytes | f32 results as bit patterns: `a` sum, `s` difference, `m` product, `d` quotient, `c` the comparisons, `q` the square root once it is sent |
 | `F` | after 0x15 and 32 operand bytes | the same for f64, each result's high word under its key and its low word under the next letter: `a` and `b`, `s` and `t`, `m` and `n`, `d` and `e`, `q` and `r`; `c` the comparisons |
@@ -81,7 +81,7 @@ greater or equal 16, greater 32.
 | the ELF's vector table | 166 words at 0x0800_0000, the boot address (RM0433 2.6, p. 138), word 1 reset, word 27 the DMA_STR0 handler and word 55 the USART3 handler (Table 147, pp. 754 and 755) |
 | the float routines' instructions | `vadd`, `vsub`, `vmul`, `vdiv` and `vcmp` of both widths and no call to a software float helper; software helpers alone are pending |
 | flash after flashing | the vector table, read back over SWD, equal to the image's |
-| the boot frame | RCC_RSR's named flags are Table 56's power-on line alone (p. 333), so the run began at power-on and no software reset followed; VTOR is the boot address; CCR's IC and DC are clear, the cacheless profile read on the chip; PWR_CSR1 reads VOS3 and not ready before the supply is configured and ready after (6.4.1, p. 262; 6.8.2, p. 305); one byte, the host's, had arrived; CPACR's CP10 and CP11 granting the float unit, pending until the compiler-owned startup grants them |
+| the boot frame | RCC_RSR's named flags are Table 56's power-on line alone (p. 333), so the run began at power-on and no software reset followed; VTOR is the boot address; CCR's IC and DC are clear, the cacheless profile read on the chip; PWR_CR3 holds the LDO supply the description's stage wrote before reset, and PWR_CSR1 reads VOS3 with ACTVOSRDY set, the voltage levels valid (6.4.1, p. 262; 6.8.2, p. 305; 6.8.4, p. 308; D653); one byte, the host's, had arrived; CPACR's CP10 and CP11 granting the float unit, pending until the compiler-owned startup grants them |
 | the shared scenario | `1`, `A` and `0`, the bytes the emulator lane's application is fed, echoed, with PB0's input 1 after `1` and 0 after `0` |
 | USART3's interrupt | its handler at slot 55 entered in exception 55, raised by the USART's own IDLE flag, and entered again for each later byte |
 | an overrun | after 0x12, a 300-byte burst into the 256-byte ring is discarded, never echoed, and the ring restarts once |

@@ -5080,7 +5080,7 @@ package body Landin.IR.Verifier is
                --  stage of a profile whose boot kind takes one.
                if Attr.Boot_Stage then
                   if Is_Datum or else Is_External (Of_Unit, Id)
-                    or else not Landin.Targets.Firmware.Takes_Stage
+                    or else not Landin.Targets.Firmware.Admits_Stage
                       (Firmware_Profile (Of_Unit).Boot)
                     or else Signature_Machine
                       (Of_Unit, Signature_Of (Of_Unit, Id))

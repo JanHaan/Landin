@@ -1257,6 +1257,8 @@ negative/region-placement-unknown | cortex-m0
 negative/region-release-live-handle | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/register-class-as-operand-type-is-named | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/remainder-by-zero | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/reset-stage-uses-the-stack | cortex-m0
+negative/reset-stage-without-reset | cortex-m0
 negative/result-aggregate-assignment-name-mismatch | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/result-destructure-duplicate-field | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/result-destructure-local-name-duplicate | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

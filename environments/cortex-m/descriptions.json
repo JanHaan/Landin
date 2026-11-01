@@ -84,7 +84,10 @@
       "reserved_slots": [7, 8, 9, 10, 13, 58, 80, 81, 82, 83, 139, 142, 163, 164],
       "handler_slot": 55,
       "handler_symbol": "usart3",
-      "placed_datum": {"symbol": "fast", "region": "DTCM"}
+      "placed_datum": {"symbol": "fast", "region": "DTCM"},
+      "reset_stage": {"source": "RM0433 Rev 9, 6.4.1, step 5a, p. 262: until the supply configuration is written to PWR_CR3 and PWR_CSR1's ACTVOSRDY is set, write accesses to the RAMs are not permitted. PWR_BASE 0x58024800 from stm32h753xx.h; PWR_CR3 at 0x00C, reset value 0x0000 0006 (6.8.4, p. 307), LDOEN set with BYPASS and SCUEN clear the LDO supply (Table 34, p. 261; p. 308); PWR_CSR1 at 0x004, VOS3 with ACTVOSRDY, bit 13, set (6.8.2, p. 305)",
+                      "reads": [[1476544524, 6], [1476544516, 24576]],
+                      "accesses": [["r", 1476544524, 4, 6], ["w", 1476544524, 4, 2], ["r", 1476544516, 4, 24576]]}
     },
     "constrained-reference": {
       "sources": {"profile": "spec.md [1990]: 32 KiB flash at zero, 16 KiB RAM at 0x20000000, the upper 4 KiB the stack, a 48-word table at zero, core slots 4-10 and 12-13 and slots 21 and 42-47 zero"},

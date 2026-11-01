@@ -2229,8 +2229,8 @@ package body Landin.Diagnostics.Citations is
                "The board tools share one module and keep their own orac"
                & "les",
             when 647 =>
-               "The STM32H753 board stays on the HSI and configures its "
-               & "supply first",
+               "The STM32H753 board stays on the HSI, with its supply co"
+               & "nfigured before reset",
             when 648 =>
                "On the STM32H753 an epoch is taken in laps, each armed b"
                & "y the stream's completion",
@@ -2245,6 +2245,9 @@ package body Landin.Diagnostics.Citations is
                & "t's IEEE 754",
             when 652 =>
                "A reviewed correction may add a field the SVD lacks",
+            when 653 =>
+               "A vector-table description may hold a stage the reset ve"
+               & "ctor enters before reset",
             when 530 =>
                "`refine explain` answers a construct and a decision",
             when 599 =>
@@ -3461,6 +3464,8 @@ package body Landin.Diagnostics.Citations is
             when 651 =>
                "Decisions: The toolchain, C and the machine",
             when 652 =>
+               "Decisions: The toolchain, C and the machine",
+            when 653 =>
                "Decisions: The toolchain, C and the machine",
             when 530 =>
                "Decisions: The toolchain, C and the machine",
@@ -4972,7 +4977,7 @@ package body Landin.Diagnostics.Citations is
                & "-one-module-and-keep-their-own-oracles",
             when 647 =>
                "https://www.701.dev/spec.html#d647-the-stm32h753-board-s"
-               & "tays-on-the-hsi-and-configures-its-supply-first",
+               & "tays-on-the-hsi-with-its-supply-configured-before-reset",
             when 648 =>
                "https://www.701.dev/spec.html#d648-on-the-stm32h753-an-e"
                & "poch-is-taken-in-laps-each-armed-by-the-stream-s-complet"
@@ -4990,6 +4995,10 @@ package body Landin.Diagnostics.Citations is
             when 652 =>
                "https://www.701.dev/spec.html#d652-a-reviewed-correction"
                & "-may-add-a-field-the-svd-lacks",
+            when 653 =>
+               "https://www.701.dev/spec.html#d653-a-vector-table-descri"
+               & "ption-may-hold-a-stage-the-reset-vector-enters-before-re"
+               & "set",
             when 530 =>
                "https://www.701.dev/spec.html#d530-refine-explain-answer"
                & "s-a-construct-and-a-decision",

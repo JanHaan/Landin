@@ -21332,17 +21332,17 @@ to fixed inputs with no board, probe or hub on the gate's Python, and
 `scripts/tests/test_board_rp2040.py`, which still holds the RP2040 tool's
 framing, accounting and guard.
 
-### D647 — The STM32H753 board stays on the HSI and configures its supply first
+### D647 — The STM32H753 board stays on the HSI, with its supply configured before reset
 
 **The tour said** nothing; D560 learnt the STM32H753 for prototype 1's
 UART and DMA and D561 checked a transmit consumer's stores in its image.
 
 **Chosen:** `compiler/tests/board/stm32h753` brings the NUCLEO-H753ZI up as
-RM0433 Rev 9 says. `start` first reads RCC_RSR, VTOR, CPACR and CCR, then
-writes the supply configuration 6.4.1 (p. 262) requires after a power-on
-reset, the LDO's, the H753's only regulator (Table 34, p. 261), in
-PWR_CR3's write-once lower byte (6.8.4, p. 308), and waits for PWR_CSR1's
-ACTVOSRDY; it clears the reset flags with RMVF. It enables the clocks of
+RM0433 Rev 9 says. The supply configuration 6.4.1 (p. 262) requires after
+a power-on reset, before any RAM is written, is the description's stage,
+which the reset vector enters before compiler-owned reset (D653). `start`
+first reads RCC_RSR, VTOR, CPACR and CCR, and PWR_CR3 and PWR_CSR1 as the
+stage left them, and clears the reset flags with RMVF. It enables the clocks of
 GPIO ports B and D, USART3 and DMA1 as 8.5.11 (p. 372) enables a
 peripheral: the enable written and read back, RCC_CR's D2CKRDY waited for,
 since USART3 and DMA1 are in the D2 domain, and a read of each
@@ -21362,10 +21362,9 @@ the board's `scs` module at the Armv7-M addresses.
 **The alternatives:** the 8 MHz HSE the ST-LINK's MCO supplies, which needs
 HSE bypass and a PLL to give a USART clock with a smaller error than the
 HSI's divisor, and so a clock tree the run would also have to check; and
-leaving the supply as reset leaves it, which RM0433 says keeps the system
-in Run*, where RAM writes are not permitted. The compiler-owned reset
-still copies data and clears BSS before `start` runs, which this choice
-does not change; that is a question for the boot kind, not for the board.
+configuring the supply first thing in `start`, after compiler-owned
+reset has copied data and cleared BSS into a RAM that RM0433 says may not
+yet be written.
 
 **Pinned by** `devices/test.py`'s `Stm32h753Oracles`, which holds the new
 registers to ST's header and to the manual's reset values and access
@@ -21544,6 +21543,62 @@ and `every refusal is named`, which holds each refusal; `devices/test.py`'s
 the consumer's stream stores to 0x0010 0440 and 0x0010 0441; and
 `environments/boards/stm32h753/board.py`, which reads DMA1_S0CR's TRBUFF
 over SWD.
+
+### D653 — A vector-table description may hold a stage the reset vector enters before reset
+
+**The tour said** nothing; D587 let a description hold the second stage its
+boot kind enters first, which only `rp2040-boot2` has, and refused one in
+a `vector-table` description as L0535. RM0433 Rev 9 says that after a
+power-on reset the STM32H753 permits no write to its RAMs until the supply
+configuration is written to PWR_CR3 and PWR_CSR1's ACTVOSRDY says the
+voltage levels are valid (6.4.1, step 5a, p. 262), and compiler-owned
+reset copies data and clears BSS before the firmware entry runs, so every
+STM32H753 program wrote RAM before it could configure its supply.
+
+**Chosen:** a `vector-table` description may hold one `link(boot_stage)`
+naked routine, with D587's form and refusals. The vector table's reset
+word is its entry, `_landin_firmware_reset_stage`, which the backend
+labels before the routine in a section of its own,
+`.text.landin_firmware_reset_stage`; without a stage the word is
+`_landin_firmware_reset`, as before. The derived script's `ENTRY` stays
+compiler-owned reset, which a harness linking its own start with a
+device's script defines: the core enters through the table's word.
+The stage runs before compiler-owned reset has written any memory, on the
+stack pointer the core loaded from the table, so it may use neither RAM
+nor the stack, and it ends by branching to `_landin_firmware_reset`, which
+it names, as RP2040's stage ends in the table's reset. Configuration
+refuses a stage that names no `_landin_firmware_reset`, L0560, and one
+that reaches the stack, through `push`, `pop`, `sp`, `r13`, `msp` or `psp`,
+L0561; what it reads and writes is otherwise the description's, checked as
+any naked body is. L0535 is now a stage in a description whose boot kind
+runs none, `rp2350-image-block`. RP2040's stage and `rp2040-boot2` are
+unchanged. The STM32H753's description holds `supply.ldn`: it writes
+PWR_CR3's lower byte with LDOEN set and BYPASS and SCUEN clear, the LDO
+supply (Table 34, p. 261; 6.8.4, p. 308), waits at most a million polls
+for ACTVOSRDY, and enters reset with `ldr` and `bx`, which reach it from
+anywhere in flash at every level; a supply that never becomes valid leaves
+the core in a loop of its own rather than in a reset writing RAM it may
+not. The attribute is D587's own; another spelling for the same routine
+would rename it and change nothing else here.
+
+**The alternatives:** a new link attribute for a routine before reset,
+which names one idea twice; a description directive naming a routine,
+which a reader of the description could not follow to its code; a hook
+in compiler-owned reset that calls a routine after the stack is set up,
+which writes the stack, and so RAM, first; and configuring the supply in
+the program's entry, after reset has written RAM.
+
+**Pinned by** the `cortex ABI` case `device descriptions select their
+profiles`, which holds the stage's section, its labelled entry and the
+table's reset word, the reset word without a stage, and L0536, L0560 and
+L0561; `negative/boot-stage-unwanted`, `negative/reset-stage-without-reset`
+and `negative/reset-stage-uses-the-stack`; `devices/test.py`'s `the
+consumer's linked accesses` and `environments/cortex-m/descriptions.py`,
+which follow the STM32H753 image from its reset word with no RAM and
+require the stage's PWR accesses, recorded from RM0433 in
+`descriptions.json`, before it enters reset; and
+`environments/boards/stm32h753/board.py`, which reads PWR_CR3 and
+PWR_CSR1's ACTVOSRDY in the boot frame.
 
 ### D530 — `refine explain` answers a construct and a decision
 
@@ -21933,8 +21988,9 @@ does, and each says what to write instead:
   section, symbol, region, vector, alignment, `keep` or `thread`;
 - a boot stage outside the description the program selects, or in a
   program that selects none, is L0534;
-- one in a description whose boot kind takes none, `vector-table`, is
-  L0535;
+- one in a description whose boot kind takes none is L0535, which D653
+  leaves to `rp2350-image-block`, since a `vector-table` description may
+  hold a stage its reset vector enters before reset;
 - a second one in a description is L0536, naming the first;
 - and a description whose boot kind begins with a second stage,
   `rp2040-boot2`, that holds none is L0537, at its `compiler.boot`.

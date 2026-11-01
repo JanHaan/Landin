@@ -1,9 +1,9 @@
 class: negative
-summary: D587: a vector-table image begins with its vector table, so a description that boots that way holds no stage
+summary: D587, D653: an rp2350-image-block image begins with its vector table, found through its image block, so a description that boots that way holds no stage
 program: program.ldn
 constructs: 1640, 1990
 targets: cortex-m0
 codes: L0535
-args: --target=cortex-m0 ../tests/fixtures/negative/boot-stage-unwanted/program.ldn
+args: --target=cortex-m0 --level=armv8-m.main ../tests/fixtures/negative/boot-stage-unwanted/program.ldn
 expect: expected.txt
 status: 1

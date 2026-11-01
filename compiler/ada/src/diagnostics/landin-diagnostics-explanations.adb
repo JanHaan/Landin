@@ -1088,12 +1088,14 @@ package body Landin.Diagnostics.Explanations is
                & "eclared in the description's own module, beside `compile"
                & "r.boot`. Move it into the description's directory.",
             when Catalogue.Boot_Stage_Unwanted =>
-               "A device description holds a second-stage boot routine, "
-               & "and its boot kind takes none (D587): a `vector-table` im"
-               & "age begins with the vector table, which the core reads a"
-               & "t reset. Only an `rp2040-boot2` image begins with a seco"
-               & "nd stage. Remove the routine, or select the boot kind wh"
-               & "ose boot ROM enters it.",
+               "A device description holds a stage, and its boot kind ru"
+               & "ns none (D587, D653): an `rp2350-image-block` image begi"
+               & "ns with the vector table, which the boot ROM finds throu"
+               & "gh the image block, and runs nothing of the description'"
+               & "s before reset. An `rp2040-boot2` image begins with a se"
+               & "cond stage, and a `vector-table` image may run one from "
+               & "its reset vector before reset. Remove the routine, or se"
+               & "lect the boot kind that runs it.",
             when Catalogue.Boot_Stage_Repeated =>
                "A device description holds a second `link(boot_stage)` r"
                & "outine (D587). The boot kind's slot holds one stage, whi"
@@ -1109,6 +1111,24 @@ package body Landin.Diagnostics.Explanations is
                & "t 252 bytes once assembled, literals included; `devices/"
                & "descriptions/rp2040/boot2.ldn` in the repository is a po"
                & "rt of pico-sdk's generic one.",
+            when Catalogue.Reset_Stage_Return =>
+               "A `vector-table` description's stage does not branch to "
+               & "compiler-owned reset (D653). The reset vector enters the"
+               & " stage before reset has copied the initialized data or c"
+               & "leared the zeroed, and the stage ends by entering reset,"
+               & " `_landin_firmware_reset`, which it names: nothing else "
+               & "runs reset, and a stage that falls off its end traps. Fi"
+               & "nish it with `ldr r0, =_landin_firmware_reset` and `bx r"
+               & "0`, which reach reset from anywhere in flash.",
+            when Catalogue.Reset_Stage_Stack =>
+               "A `vector-table` description's stage uses the stack (D65"
+               & "3). The stage runs before compiler-owned reset, on the s"
+               & "tack pointer the core loaded from the vector table, and "
+               & "before any memory may be written: a chip such as the STM"
+               & "32H753 permits no write to its RAM until its supply is c"
+               & "onfigured. The message names the word that reaches the s"
+               & "tack, `push`, `pop`, `sp`, `r13`, `msp` or `psp`. Keep w"
+               & "hat the stage needs in registers.",
             when Catalogue.Unused_Pure_Local =>
                "An immutable local that is never used and is initialized"
                & " by a direct scalar literal, including a negated integer"
@@ -2051,15 +2071,15 @@ package body Landin.Diagnostics.Explanations is
                & "start: () -> none = end start"
                & LF,
             when Catalogue.Boot_Stage_Unwanted =>
-               "-- refine: --target=cortex-m0"
+               "-- refine: --target=cortex-m0 --level=armv8-m.main"
                & LF
                & "compiler.device(""board"")"
                & LF
-               & "compiler.core(""cortex-m0plus"")"
+               & "compiler.core(""cortex-m33"")"
                & LF
                & "compiler.vectors(48)"
                & LF
-               & "compiler.boot(""vector-table"")"
+               & "compiler.boot(""rp2350-image-block"")"
                & LF
                & "linker.region(""FLASH"", 0x1000_0000, 2 * 1024 * 1024, ""rx"
                & """)"
@@ -2154,6 +2174,77 @@ package body Landin.Diagnostics.Explanations is
                & "linker.place(""bss"", ""RAM"")"
                & LF
                & "linker.place(""stack"", ""RAM"", 4 * 1024)"
+               & LF,
+            when Catalogue.Reset_Stage_Return =>
+               "-- refine: --target=cortex-m0 --level=armv7e-m"
+               & LF
+               & "compiler.device(""board"")"
+               & LF
+               & "compiler.core(""cortex-m7"")"
+               & LF
+               & "compiler.vectors(48)"
+               & LF
+               & "compiler.boot(""vector-table"")"
+               & LF
+               & "linker.region(""FLASH"", 0x0800_0000, 2 * 1024 * 1024, ""rx"
+               & """)"
+               & LF
+               & "linker.region(""RAM"", 0x2400_0000, 512 * 1024, ""rwx"")"
+               & LF
+               & "linker.place(""vectors"", ""FLASH"")"
+               & LF
+               & "linker.place(""text"", ""FLASH"")"
+               & LF
+               & "linker.place(""rodata"", ""FLASH"")"
+               & LF
+               & "linker.place(""data"", ""RAM"")"
+               & LF
+               & "linker.place(""bss"", ""RAM"")"
+               & LF
+               & "linker.place(""stack"", ""RAM"", 16 * 1024)"
+               & LF
+               & LF
+               & "link(boot_stage) extern(naked) supply: () -> none ="
+               & LF
+               & "    assembler.block(""nop"")"
+               & LF
+               & "end supply"
+               & LF,
+            when Catalogue.Reset_Stage_Stack =>
+               "-- refine: --target=cortex-m0 --level=armv7e-m"
+               & LF
+               & "compiler.device(""board"")"
+               & LF
+               & "compiler.core(""cortex-m7"")"
+               & LF
+               & "compiler.vectors(48)"
+               & LF
+               & "compiler.boot(""vector-table"")"
+               & LF
+               & "linker.region(""FLASH"", 0x0800_0000, 2 * 1024 * 1024, ""rx"
+               & """)"
+               & LF
+               & "linker.region(""RAM"", 0x2400_0000, 512 * 1024, ""rwx"")"
+               & LF
+               & "linker.place(""vectors"", ""FLASH"")"
+               & LF
+               & "linker.place(""text"", ""FLASH"")"
+               & LF
+               & "linker.place(""rodata"", ""FLASH"")"
+               & LF
+               & "linker.place(""data"", ""RAM"")"
+               & LF
+               & "linker.place(""bss"", ""RAM"")"
+               & LF
+               & "linker.place(""stack"", ""RAM"", 16 * 1024)"
+               & LF
+               & LF
+               & "link(boot_stage) extern(naked) supply: () -> none ="
+               & LF
+               & "    assembler.block(""push {r0}\nldr r0, =_landin_firmwar"
+               & "e_reset\nbx r0"")"
+               & LF
+               & "end supply"
                & LF,
             when Catalogue.Unused_Pure_Local =>
                "unused: () -> none ="

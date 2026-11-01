@@ -1011,9 +1011,28 @@ class Stm32h753Oracles(unittest.TestCase):
                          0x24000000 + 512 * 1024)
         self.assertEqual(image.symbols['_landin_firmware_vectors'], 0x08000000)
         self.assertTrue(0x08000000 <= image.symbols['message'] < 0x08200000)
-        windows = [(0x58024400, 0x400), (0x58020c00, 0x400), (0x40004800, 0x400),
-                   (0x40020000, 0x400), (0x40020800, 0x400), (0xe000e000, 0x1000)]
-        stores = [a for a in thumb.accesses(data, windows, ram) if a[0] != 'barrier']
+        windows = [(0x58024400, 0x400), (0x58024800, 0x400), (0x58020c00, 0x400),
+                   (0x40004800, 0x400), (0x40020000, 0x400), (0x40020800, 0x400),
+                   (0xe000e000, 0x1000)]
+        # PWR_CR3 reads its reset value, 0x0000 0006, and PWR_CSR1 VOS3 with
+        # ACTVOSRDY set (6.8.4, p. 307; 6.8.2, p. 305).
+        def reads(address, width):
+            return {0x5802480c: 0x6, 0x58024804: 0x6000}.get(address, 0)
+        # D653: the reset vector enters the description's stage, which
+        # configures the supply, using no memory but the image's own bytes,
+        # and ends in compiler-owned reset.
+        flash = next(content for address, content, _ in image.segments
+                     if address == 0x08000000)
+        self.assertEqual(int.from_bytes(flash[4:8], 'little'),
+                         image.symbols['_landin_firmware_reset_stage'] | 1)
+        reset = image.symbols['_landin_firmware_reset'] & ~1
+        before = thumb.Evaluation(image, windows, (0, 0), reads,
+                                  until=lambda pc: pc == reset).run()
+        self.assertEqual(before, [('r', 0x5802480c, 4, 0x6),   # PWR_CR3
+                                  ('w', 0x5802480c, 4, 0x2),   # PWR_CR3: LDOEN
+                                  ('r', 0x58024804, 4, 0x6000)])  # PWR_CSR1: ACTVOSRDY
+        stores = [a for a in thumb.accesses(data, windows, ram, reads)
+                  if a[0] != 'barrier' and a[1] not in (0x5802480c, 0x58024804)]
         # The cacheless profile: nothing enables the M7's caches, through
         # SCB_CCR's IC and DC bits, or maintains them, through SCB's cache
         # operations at 0xE000EF50 to 0xE000EF78.

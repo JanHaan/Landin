@@ -17,6 +17,7 @@ with Landin.Source.Names;
 with Landin.Syntax;
 with Landin.Syntax.Forest;
 with Landin.Targets;
+with Landin.Targets.Assembly;
 with Landin.Targets.Firmware;
 with Landin.Targets.Levels;
 with Landin.Types;
@@ -1570,6 +1571,109 @@ package body Landin.Stages.Configuration is
          end loop;
       end Find_Boot_Stages;
 
+      --  D653: a stage the reset vector enters before compiler-owned
+      --  reset runs on the stack pointer the core loaded and may not use
+      --  the stack, and it ends by branching to the compiler's reset, which
+      --  it names.  Its text is read only when it has the shape [1570]
+      --  requires, one assembler.block of a literal, which checking holds.
+      function Reset_Stage_Holds return Boolean;
+      function Reset_Stage_Holds return Boolean is
+         Of_Tree : constant not null access constant Syn.Tree :=
+           Landin.Syntax.Forest.Tree_Of (Trees.all, Stage_Site.Source);
+         Node : constant Syn.Node_Id := Stage_Site.Node;
+         Body_Node, Statement, Argument : Syn.Node_Id;
+      begin
+         if Syn.Kind (Of_Tree.all, Node) /= Syn.Function_Declaration then
+            return True;
+         end if;
+         Body_Node := Syn.Body_Of (Of_Tree.all, Node);
+         if Syn.Kind (Of_Tree.all, Body_Node) /= Syn.Block
+           or else Syn.Statement_Count (Of_Tree.all, Body_Node) /= 1
+         then
+            return True;
+         end if;
+         Statement := Syn.Nth_Statement (Of_Tree.all, Body_Node, 1);
+         if Syn.Kind (Of_Tree.all, Statement) /= Syn.Call
+           or else Syn.Argument_Count (Of_Tree.all, Statement) /= 1
+         then
+            return True;
+         end if;
+         Argument := Syn.Nth_Argument (Of_Tree.all, Statement, 1);
+         if Syn.Kind (Of_Tree.all, Argument)
+           not in Syn.Text_Literal | Syn.Raw_Literal
+         then
+            return True;
+         end if;
+         declare
+            Lines : constant String :=
+              Landin.Targets.Assembly.Uncommented
+                (Landin.Targets.Cortex_M0,
+                 Landin.Configuration.Fixed_Text
+                   (Source (Context, Syn.Source_Of (Of_Tree.all)),
+                    Of_Tree.all, Argument));
+            Stack_Word : Ada.Strings.Unbounded.Unbounded_String;
+            Names_Reset : Boolean := False;
+            Cursor : Natural := Lines'First;
+         begin
+            while Cursor <= Lines'Last loop
+               if Lines (Cursor) in 'a' .. 'z' | 'A' .. 'Z' | '_' then
+                  declare
+                     First : constant Natural := Cursor;
+                  begin
+                     while Cursor <= Lines'Last and then Lines (Cursor) in
+                       'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '_'
+                     loop
+                        Cursor := Cursor + 1;
+                     end loop;
+                     declare
+                        Word : constant String := Lines (First .. Cursor - 1);
+                        Lower : String := Word;
+                     begin
+                        for C of Lower loop
+                           if C in 'A' .. 'Z' then
+                              C := Character'Val (Character'Pos (C) + 32);
+                           end if;
+                        end loop;
+                        if Word = Firmware.Reset_Symbol then
+                           Names_Reset := True;
+                        elsif Lower in "push" | "pop" | "sp" | "r13" | "msp"
+                          | "psp"
+                          and then Ada.Strings.Unbounded.Length (Stack_Word)
+                            = 0
+                        then
+                           Stack_Word :=
+                             Ada.Strings.Unbounded.To_Unbounded_String (Lower);
+                        end if;
+                     end;
+                  end;
+               else
+                  Cursor := Cursor + 1;
+               end if;
+            end loop;
+            if Ada.Strings.Unbounded.Length (Stack_Word) /= 0 then
+               Report_At
+                 (Bad.Reset_Stage_Stack, Stage_Site,
+                  "this stage runs before reset and uses the stack, through "
+                  & Ada.Strings.Unbounded.To_String (Stack_Word),
+                  "D653: a vector-table image's stage runs before any"
+                  & " memory may be written, on the stack pointer the core"
+                  & " loaded from the table; keep what it needs in"
+                  & " registers");
+               return False;
+            elsif not Names_Reset then
+               Report_At
+                 (Bad.Reset_Stage_Return, Stage_Site,
+                  "this stage runs before reset and does not branch to "
+                  & Firmware.Reset_Symbol,
+                  "D653: the reset vector enters the stage, and the stage"
+                  & " ends in compiler-owned reset; finish it with ldr r0, ="
+                  & Firmware.Reset_Symbol & " and bx r0");
+               return False;
+            end if;
+            return True;
+         end;
+      end Reset_Stage_Holds;
+
       --  A text argument, decoded as linker.library's is; "" refused.
       function Text_Argument
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return String;
@@ -2173,18 +2277,25 @@ package body Landin.Stages.Configuration is
                & " assembled, which the boot ROM enters at its first"
                & " instruction");
          elsif Firmware.Implemented (Built.Boot)
-           and then not Firmware.Takes_Stage (Built.Boot)
+           and then not Firmware.Admits_Stage (Built.Boot)
            and then Stage_Site /= No_Site
          then
             Complete := False;
             Report_At
               (Bad.Boot_Stage_Unwanted, Stage_Site,
-               "a " & Firmware.Spelling (Built.Boot) & " image has no"
-               & " second stage, and this description holds one",
-               "D587: only an rp2040-boot2 image begins with a second"
-               & " stage; remove this routine, or select the boot kind"
-               & " whose ROM enters it",
+               "boot kind " & Firmware.Spelling (Built.Boot) & " runs no"
+               & " stage, and this description holds one",
+               "D587, D653: an rp2040-boot2 image begins with a second"
+               & " stage, and a vector-table one may run one before"
+               & " reset; remove this routine, or select a boot kind that"
+               & " runs it",
                Related => Boot_Site, Because => "the boot kind");
+         elsif Firmware.Implemented (Built.Boot)
+           and then Firmware.Stage_Before_Reset (Built.Boot)
+           and then Stage_Site /= No_Site
+           and then not Reset_Stage_Holds
+         then
+            Complete := False;
          end if;
          Built.Has_Stage := Stage_Site /= No_Site;
          if not Firmware.Implemented (Built.Boot) then

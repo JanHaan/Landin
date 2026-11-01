@@ -161,13 +161,14 @@ end halt
 start: () -> noreturn =
     -- Read before anything changes them: the reset flags, which RCC_RSR
     -- keeps until RMVF clears them (8.7.39, p. 451), the vector table's
-    -- address, the coprocessors' access and the caches' enables.
+    -- address, the coprocessors' access and the caches' enables; and the
+    -- supply the description's stage configured before reset (D653).
     reason := rcc.rsr_read(rcc.base)
     table := scs.vtor()
     access := scs.cpacr()
     control := scs.ccr()
-    before := bringup.supply()
-    after := pwr.csr1_read(pwr.base)
+    supply := pwr.cr3_read(pwr.base)
+    levels := pwr.csr1_read(pwr.base)
     mut flags := rcc.rsr_decode(0)
     flags.f_rmvf = 1
     rcc.rsr_write(rcc.base, rcc.rsr_encode(flags))
@@ -195,8 +196,8 @@ start: () -> noreturn =
     report.field(118, table)
     report.field(97, access)
     report.field(99, control)
-    report.field(113, before)
-    report.field(121, after)
+    report.field(113, supply)
+    report.field(121, levels)
     report.field(119, u32(waiting))
     report.close_frame()
     mut scratch: [64]u8 = zeroed

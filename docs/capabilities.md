@@ -49,7 +49,9 @@ entry that describes it, and put a new one where a reader would look for it.
   [`board.py`](../environments/boards/rp2040/README.md) (D593-D596); no job
   runs it. The NUCLEO-H753ZI's port of the same application, its supply,
   clocks, USART3 received through DMA in laps, PB0's indicator and a float
-  exercise, builds at `--level=armv7e-m` with an oracle of its own,
+  exercise, builds at `--level=armv7e-m` with an oracle of its own; its
+  description's stage configures the supply from the reset vector before
+  compiler-owned reset writes any RAM (D653), and it is checked by
   [`board.py`](../environments/boards/stm32h753/README.md) (D647-D651), and
   no board run of it is recorded yet; the board tools share
   `environments/boards/common.py` (D646). RP2350's description, learnt from

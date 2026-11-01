@@ -1409,7 +1409,14 @@ package body Landin.Backend.Cortex_M is
          Emit (".globl _landin_firmware_vectors");
          Put ("_landin_firmware_vectors:");
          Emit (".word _landin_firmware_stack_top");
-         Emit (".word _landin_firmware_reset");
+         --  D653: a vector-table description's stage runs before reset.
+         if Profile.Has_Stage
+           and then Landin.Targets.Firmware.Stage_Before_Reset (Profile.Boot)
+         then
+            Emit (".word " & Landin.Targets.Firmware.Reset_Stage_Symbol);
+         else
+            Emit (".word _landin_firmware_reset");
+         end if;
          for Slot in 2 .. Profile.Vector_Count - 1 loop
             if not Landin.Targets.Firmware.Admits (Profile, Slot) then
                Emit (".word 0");
@@ -1513,8 +1520,15 @@ package body Landin.Backend.Cortex_M is
          Kept : constant Natural := (if Keeps_Limit then 8 else 0);
          --  D587: the description's second stage, emitted at the start of
          --  the boot kind's slot.
-         Boot_Stage : constant Boolean :=
+         Marked_Stage : constant Boolean :=
            Landin.IR.Placement_Of (Of_Unit, Item).Boot_Stage;
+         --  D653: on a vector-table image the stage runs from the reset
+         --  vector, before compiler-owned reset, wherever the text lies.
+         Reset_Stage : constant Boolean := Marked_Stage
+           and then Landin.Targets.Firmware.Stage_Before_Reset
+             (Landin.IR.Firmware_Profile (Of_Unit).Boot);
+         Boot_Stage : constant Boolean :=
+           Marked_Stage and then not Reset_Stage;
 
          procedure Mark_Low (Assembly : String);
          function Call_Free (Assembly : String) return Boolean;
@@ -4622,6 +4636,14 @@ package body Landin.Backend.Cortex_M is
             Emit (".section .boot2,""ax"",%progbits");
             Emit (".globl _landin_firmware_boot2");
             Put ("_landin_firmware_boot2:");
+         elsif Reset_Stage then
+            --  D653: the table's reset word names the stage's entry.
+            Emit (".section .text.landin_firmware_reset_stage,""ax"","
+              & "%progbits");
+            Emit (".globl " & Landin.Targets.Firmware.Reset_Stage_Symbol);
+            Emit (".balign 2");
+            Emit (".thumb_func");
+            Put (Landin.Targets.Firmware.Reset_Stage_Symbol & ":");
          else
             Select_Section (Item, ".text.", "ax");
          end if;

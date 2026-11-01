@@ -148,7 +148,7 @@ class Line:
 
 
 class Boot(unittest.TestCase):
-    FRAME = (b'\x02b r=00fa0000 v=08000000 a=00000000 c=00040200 q=00004000'
+    FRAME = (b'\x02b r=00fa0000 v=08000000 a=00000000 c=00040200 q=00000002'
              b' y=00006000 w=00000001\x03\nS')
 
     def test_a_power_on_boot_passes(self):
@@ -161,8 +161,10 @@ class Boot(unittest.TestCase):
                          (b'r=00fa0000', b'r=00400000'),   # PINRSTF alone
                          (b'v=08000000', b'v=00000000'),
                          (b'c=00040200', b'c=00070200'),   # IC and DC
-                         (b'q=00004000', b'q=00006000'),   # ready before configuration
-                         (b'y=00006000', b'y=00004000'),
+                         (b'q=00000002', b'q=00000006'),   # the supply not configured
+                         (b'q=00000002', b'q=00000001'),   # bypassed
+                         (b'y=00006000', b'y=00004000'),   # the levels not valid
+                         (b'y=00006000', b'y=0000e000'),   # VOS1, not reset's VOS3
                          (b'w=00000001', b'w=00000002')):   # a byte before the host's
             with self.subTest(reading=new):
                 with self.assertRaises(BOARD.Failed):

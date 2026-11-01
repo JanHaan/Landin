@@ -1,0 +1,6 @@
+error[L0560]: this stage runs before reset and does not branch to _landin_firmware_reset
+  --> ../tests/fixtures/negative/reset-stage-without-reset/program.ldn:14:1
+   |
+14 | link(boot_stage) extern(naked) supply: () -> none =
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: D653: the reset vector enters the stage, and the stage ends in compiler-owned reset; finish it with ldr r0, =_landin_firmware_reset and bx r0

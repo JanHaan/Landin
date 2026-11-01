@@ -1,0 +1,9 @@
+class: negative
+summary: D653: a vector-table image's stage runs before any memory may be written, on the stack pointer the core loaded, so it uses no stack
+program: program.ldn
+constructs: 1640, 1990
+targets: cortex-m0
+codes: L0561
+args: --target=cortex-m0 --level=armv7e-m ../tests/fixtures/negative/reset-stage-uses-the-stack/program.ldn
+expect: expected.txt
+status: 1
