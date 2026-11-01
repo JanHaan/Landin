@@ -215,6 +215,22 @@ lanes are `cpu`, `peripheral`, `abi`, `memory`, `packed`, `packed-native`,
 `mps2-an500` are the corpus again on those lanes. A run that selects lanes says `FILTERED` in its last line
 and its `result.json`, and is not the gate's run.
 
+The gate runs every lane in two jobs, one for each of `run.py`'s two
+parts, because one job running all of them risked its hour on a four-CPU
+runner. `--part=NAME` runs one part:
+
+| part | lanes | gate job |
+|---|---|---|
+| `programs` | `cpu`, `peripheral`, `abi`, `memory`, `packed`, `packed-native`, `firmware`, `freestanding`, `devices`, `descriptions`, `driver`, `evidence` | `cortex-m-programs` |
+| `corpus` | `backend`, `mps2-an505`, `mps2-an500` | `cortex-m-corpus` |
+
+The parts together are every lane, each exactly once, and each part holds
+the lanes its lanes need, so a part is not `FILTERED`: its `result.json`
+records `part` and a scope naming the part and its lanes. `test.py` holds
+`run.py`'s parts to that, and the gate's `cortex-m` matrix to running
+exactly those parts. Each lane's verdict in `result.json` gives the seconds
+it took, which is what to rebalance the parts by.
+
 ### On NixOS
 
 The locked QEMU and GDB are Debian binaries, and NixOS's own
@@ -706,8 +722,8 @@ python3 environments/cortex-m/backend_controls.py --refine PATH_TO_REFINE --outp
 python3 environments/cortex-m/backend_peripheral.py --refine PATH_TO_REFINE --output NEW_DIRECTORY --all-profiles
 ```
 
-Filtered commands are development feedback. The current `cortex-m` gate job
-runs `run.py` with the built compiler. Its mandatory `backend_acceptance.py`
+Filtered commands are development feedback. The current `cortex-m-corpus` gate job
+runs `run.py --part=corpus` with the built compiler. Its mandatory `backend_acceptance.py`
 lane executes the complete compiler-generated corpus and controls under the
 pinned tools and records their results in `backend/result.json`. The retired
 exact-revision native acceptance separately exported
@@ -1099,7 +1115,7 @@ whole buffer are painted at `start`, and each fibre's peak is read below its
 stack's top when the firmware returns. The control writes `capacity.json`
 and `capacity.txt` beside it and fails unless the consumer fits; the
 evidence directory's `capacity.json` and `capacity.txt` hold every
-profile's, and the gate's `cortex-m` job keeps them. Its tick is
+profile's, and the gate's `cortex-m-programs` job keeps them. Its tick is
 `core/atomic`'s `sole_add` in SysTick's handler (D511). The numbers move
 with the compiler, so they are each run's, in that run's `capacity.txt`;
 the ones below are one run's, of revision 8a03d5343's compiler with
