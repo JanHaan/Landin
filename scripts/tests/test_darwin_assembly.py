@@ -43,6 +43,18 @@ class DarwinAssemblyTests(unittest.TestCase):
             with self.subTest(body=body), self.assertRaisesRegex(ValueError, "missing frame record"):
                 CHECK.assembly_contract(assembly("_ordinary", body))
 
+    def test_a_naked_routine_is_known_by_its_symbol(self):
+        source = ('public extern(c) link(symbol: "count") count: (n: u64) -> (r: u64)\n'
+                  'link(symbol: "count")\nextern(naked) count_text: () -> none =\n'
+                  '    assembler.block("ret")\nend count_text\n')
+        naked = CHECK.naked_labels([source])
+        self.assertEqual(naked, {"_count:"})
+        CHECK.assembly_contract(assembly("_count", ["ret", "brk #1"]), naked)
+        with self.assertRaisesRegex(ValueError, "missing frame record"):
+            CHECK.assembly_contract(assembly("_count", ["ret", "brk #1"]))
+        with self.assertRaisesRegex(ValueError, "missing frame record"):
+            CHECK.assembly_contract(assembly("_other", ["ret"]), naked)
+
     def test_only_the_start_routine_opens_no_frame(self):
         start = ["nop", "mov x0, x20", "blr x19", "brk #1"]
         CHECK.assembly_contract(assembly("_landin.stack_start", start))

@@ -2950,6 +2950,8 @@ def token_dump():
 
     A line is `first last spelling`, which is the whole of what a
     tokeniser agreement needs: the same boundaries over the same bytes.
+    A line break inside a spelling is written `\\n`, so each token is
+    one line; the offsets, not the spelling, carry its extent.
     Kinds are deliberately not in it -- the two implementations have
     different kind vocabularies, and a boundary difference is what a
     disagreement actually looks like.
@@ -2989,8 +2991,11 @@ def token_dump():
 
                 lines.append("file %s tokens %d" % (where, len(tokens)))
                 for token_kind, spelling, at in tokens:
+                    #  A raw literal spans lines; written as they are, its
+                    #  lines would read as tokens of their own.
                     lines.append("  %d %d %s"
-                                 % (at, at + len(spelling), spelling))
+                                 % (at, at + len(spelling),
+                                    spelling.replace("\n", "\\n")))
 
     return "\n".join(lines) + "\n"
 

@@ -96,12 +96,22 @@ FUNCTION_LABEL = r"_[A-Za-z0-9_.$]+:"
 #  so that a debugger's walk ends there (D447, D469).  A record would give
 #  the walk a frame beneath it.  The switch routine has one (D475).
 UNFRAMED = {"_landin.stack_start:"}
+#  A naked routine has no compiler frame: its text owns the stack ([1990],
+#  D229).  On a hosted target it is reached only through the C import of
+#  its symbol (D516), so the fixture's source names it there.
+NAKED = re.compile(r'link\(symbol:\s*"([^"]+)"\)\s*extern\(naked\)')
 
 
-def assembly_contract(text):
+def naked_labels(sources):
+    """The labels of the naked routines SOURCES define, by their symbols."""
+    return {"_" + symbol + ":" for text in sources for symbol in NAKED.findall(text)}
+
+
+def assembly_contract(text, naked=()):
     """Check function frames and the reserved register.  Every routine is
     Landin's own, the hosted library's included, so each keeps a frame,
-    but for the start routine of a stack that ends the chain."""
+    but for the start routine of a stack that ends the chain and the
+    program's NAKED routines, whose text owns theirs."""
     require(not re.search(r"\b[wx]18\b", text), "reserved x18 used")
     in_code = False
     lines = text.splitlines()
@@ -111,7 +121,8 @@ def assembly_contract(text):
             in_code = True
         elif line.strip() == ".data" or line.strip().startswith(".section"):
             in_code = False
-        if in_code and re.fullmatch(FUNCTION_LABEL, line) and line not in UNFRAMED:
+        if (in_code and re.fullmatch(FUNCTION_LABEL, line) and line not in UNFRAMED
+                and line not in naked):
             require([entry.strip() for entry in lines[index + 1:index + 3]] ==
                     ["stp x29, x30, [sp, #-16]!", "mov x29, sp"],
                     "missing frame record: " + line)
@@ -363,7 +374,8 @@ def main(argv=None):
                                  "-Wall", "-Wextra", "-Werror", *c_args, object_file, *companions,
                                  "-o", executable], label + "-link", cwd)
                 _, file_output, _ = run.command(["/usr/bin/file", executable], label + "-file", cwd)
-                assembly_contract(assembly.read_text())
+                assembly_contract(assembly.read_text(), naked_labels(
+                    source.read_text() for source in sorted(base.rglob("*.ldn"))))
                 require(b"Mach-O 64-bit executable arm64" in file_output, "wrong executable target")
                 #  `c-shared:` sources become dylibs the program loads, their
                 #  paths its first arguments; an undefined symbol is left for

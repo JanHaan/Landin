@@ -739,15 +739,7 @@ file positive/assembly-comments-naked/program.ldn tokens 42
   307 308 .
   308 313 block
   313 314 (
-  314 622 """
-            @ r0 counts; {count} in a comment is no slot
-            movs r0, #0
-            again:              @ a label keeps its comment
-            adds r0, #1
-            cmp r0, #8          @ EIGHT, the bound
-            bne again           @ r9 here is not named
-            bx lr
-            """
+  314 622 """\n            @ r0 counts; {count} in a comment is no slot\n            movs r0, #0\n            again:              @ a label keeps its comment\n            adds r0, #1\n            cmp r0, #8          @ EIGHT, the bound\n            bne again           @ r9 here is not named\n            bx lr\n            """
   622 623 )
   628 631 end
   632 646 count_to_eight
@@ -41626,11 +41618,7 @@ file negative/assembly-digit-separator/program.ldn tokens 23
   54 55 .
   55 60 block
   60 61 (
-  61 186 """
-        ldr r3, =0x18000000     @ 0x1800_0000, XIP_SSI_BASE
-        ldr r1, =0xe000_ed08
-        str r3, [r1]
-        """
+  61 186 """\n        ldr r3, =0x18000000     @ 0x1800_0000, XIP_SSI_BASE\n        ldr r1, =0xe000_ed08\n        str r3, [r1]\n        """
   186 187 )
   188 191 end
   192 193 f

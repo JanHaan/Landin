@@ -58,7 +58,7 @@ class Oracle(unittest.TestCase):
             self.assertEqual(hub.calls, ['hub-status'])
         hub = Hub(STATUS)
         with self.assertRaises(BOARD.Failed):
-            BOARD.power_cycle(hub, SimpleNamespace(vars(args), port=4))
+            BOARD.power_cycle(hub, SimpleNamespace(**{**vars(args), 'port': 4}))
         self.assertEqual(hub.calls, ['hub-status'])
         hub = Hub(STATUS)
         BOARD.power_cycle(hub, args)
