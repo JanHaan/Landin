@@ -1,6 +1,7 @@
 {
   "status": "passed",
   "image_sha256": "6294e3d98e83ceada33475c6fa403d38e2cc1e36def69a7ea6bdba321b0ca07a",
+  "image_name": "board.elf",
   "image_block": [
     "ffffded3",
     "10210142",
@@ -34,7 +35,7 @@
       "held_by_fifo": 32,
       "restarts": 3,
       "dma_completions": 2,
-      "timer_events": 1840,
+      "timer_events": 1831,
       "echoed": 11202,
       "sent": 11570
     }
@@ -46,7 +47,7 @@
     "usb_events": 1,
     "trans_count": 1094
   },
-  "uart_sha256": "9d7dc335c5828b74fe8e5d94805ede04a3725cf2fe2bbaf24c1e02469c38bfa5",
+  "uart_sha256": "e748dd5da53e2db552683e104783f75625ecfaea565848f3726f876081dd630c",
   "block_control": {
     "corrupted_end_marker": "54edca86",
     "enumerated": "2e8a:000f"
@@ -64,7 +65,7 @@
       "h": "00002bc2",
       "c": "00000003",
       "d": "00000002",
-      "m": "00000730",
+      "m": "00000727",
       "u": "00000001",
       "p": "0000001e",
       "n": "00000446",
