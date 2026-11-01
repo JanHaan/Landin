@@ -4500,6 +4500,51 @@ def reported_through(package):
     return out
 
 
+EMISSION_CALL = re.compile(r"\b(?:Emit|Lower)_\w+\s*\(")
+
+
+def check_emission_order(full_run):
+    """No two actuals of one call, or parts of one aggregate, emit IR.
+
+    Ada leaves the order a call's actuals and an aggregate's components
+    are evaluated in to the compiler, so two `IR.Emit_*` or `Lower_*`
+    calls written as siblings emit their instructions in an order that
+    can differ between -O0 and -O2, which only the build-modes comparison
+    used to notice.  Each emission goes into a constant first, whose
+    declaration order is the order emitted; compiler/ada/README.md states
+    the rule.
+    """
+    if not full_run:
+        return []
+    out = []
+    source_root = os.path.join(ROOT, "compiler/ada/src")
+    for here, _, files in sorted(os.walk(source_root)):
+        for name in sorted(files):
+            if not name.endswith(".adb"):
+                continue
+            path = os.path.join(here, name)
+            with io.open(path, encoding="utf-8") as stream:
+                text = ada_without_comments(stream.read())
+            if not EMISSION_CALL.search(text):
+                continue
+            for found in re.finditer(r"[(\[]", text):
+                arguments = ada_call_arguments(text, found.start())
+                if not arguments or len(arguments) < 2:
+                    continue
+                emitting = [one for one in arguments
+                            if EMISSION_CALL.search(one)]
+                if len(emitting) >= 2:
+                    out.append((os.path.relpath(path, ROOT),
+                                text.count("\n", 0, found.start()) + 1,
+                                "two actuals here emit IR, %s and %s, in an"
+                                " order Ada leaves open; emit each into a"
+                                " constant first"
+                                % tuple(EMISSION_CALL.search(one).group(0)
+                                        .rstrip(" (") for one in
+                                        emitting[:2])))
+    return out
+
+
 def check_catalogue_labels(full_run):
     """A report's second places are the catalogue row's, read at the call.
 
@@ -9590,6 +9635,7 @@ def main(argv):
     extra += check_named_files(full_run)
     extra += check_catalogue(full_run)
     extra += check_catalogue_labels(full_run)
+    extra += check_emission_order(full_run)
     extra += check_diagnostic_matrix(full_run)
     extra += check_explanations(full_run)
     extra += check_citation_table(full_run)
