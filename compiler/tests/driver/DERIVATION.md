@@ -12,8 +12,9 @@ historical findings remain in `prototype-1-driver.md`.
 The prototype's conceptual GPIO ports, USART2 and DMA1 stream 5 are not a
 vendor part. The checked-in `devices/generated/rp2040` modules describe the
 bounded real RP2040 register selection, using retained official metadata and
-independent header oracles. Their six modules, 30 registers, provenance,
-corrections, reset masks and offline regeneration remain unchanged.
+independent header oracles. The registers this driver binds, their
+provenance, corrections, reset masks and offline regeneration are unchanged;
+the selection around them grew for the first board's clocks, resets and pads.
 
 The executable application binds five of those modules at **synthetic** bases:
 

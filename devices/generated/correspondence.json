@@ -370,6 +370,191 @@
     "width": 32
   },
   {
+    "address": 1073823764,
+    "alignment": 4,
+    "derived_from": null,
+    "fields": [
+      {
+        "access": "read-write",
+        "encodings": [
+          [
+            "NORMAL",
+            0
+          ],
+          [
+            "INVERT",
+            1
+          ],
+          [
+            "LOW",
+            2
+          ],
+          [
+            "HIGH",
+            3
+          ]
+        ],
+        "high": 29,
+        "low": 28,
+        "mask": 805306368,
+        "modified_write": null,
+        "name": "IRQOVER",
+        "read_action": null,
+        "representation": "encoded"
+      },
+      {
+        "access": "read-write",
+        "encodings": [
+          [
+            "NORMAL",
+            0
+          ],
+          [
+            "INVERT",
+            1
+          ],
+          [
+            "LOW",
+            2
+          ],
+          [
+            "HIGH",
+            3
+          ]
+        ],
+        "high": 17,
+        "low": 16,
+        "mask": 196608,
+        "modified_write": null,
+        "name": "INOVER",
+        "read_action": null,
+        "representation": "encoded"
+      },
+      {
+        "access": "read-write",
+        "encodings": [
+          [
+            "NORMAL",
+            0
+          ],
+          [
+            "INVERT",
+            1
+          ],
+          [
+            "DISABLE",
+            2
+          ],
+          [
+            "ENABLE",
+            3
+          ]
+        ],
+        "high": 13,
+        "low": 12,
+        "mask": 12288,
+        "modified_write": null,
+        "name": "OEOVER",
+        "read_action": null,
+        "representation": "encoded"
+      },
+      {
+        "access": "read-write",
+        "encodings": [
+          [
+            "NORMAL",
+            0
+          ],
+          [
+            "INVERT",
+            1
+          ],
+          [
+            "LOW",
+            2
+          ],
+          [
+            "HIGH",
+            3
+          ]
+        ],
+        "high": 9,
+        "low": 8,
+        "mask": 768,
+        "modified_write": null,
+        "name": "OUTOVER",
+        "read_action": null,
+        "representation": "encoded"
+      },
+      {
+        "access": "read-write",
+        "encodings": [
+          [
+            "jtag_tdi",
+            0
+          ],
+          [
+            "spi0_sclk",
+            1
+          ],
+          [
+            "uart0_cts",
+            2
+          ],
+          [
+            "i2c1_sda",
+            3
+          ],
+          [
+            "pwm_a_1",
+            4
+          ],
+          [
+            "sio_2",
+            5
+          ],
+          [
+            "pio0_2",
+            6
+          ],
+          [
+            "pio1_2",
+            7
+          ],
+          [
+            "usb_muxing_vbus_en",
+            9
+          ],
+          [
+            "null",
+            31
+          ]
+        ],
+        "high": 4,
+        "low": 0,
+        "mask": 31,
+        "modified_write": null,
+        "name": "FUNCSEL",
+        "read_action": null,
+        "representation": "encoded"
+      }
+    ],
+    "known_reset_mask": 805516063,
+    "known_reset_value": 31,
+    "named_mask": 805516063,
+    "offset": 20,
+    "policy": {
+      "read": "normal",
+      "reserved": "zero",
+      "write": "normal"
+    },
+    "register_access": "read-write",
+    "source": "IO_BANK0.GPIO2_CTRL",
+    "svd_reset_mask": 4294967295,
+    "svd_reset_value": 31,
+    "width": 32
+  },
+  {
     "address": 3489660932,
     "alignment": 4,
     "derived_from": null,
@@ -1144,6 +1329,159 @@
     "source": "UART0.UARTLCR_H",
     "svd_reset_mask": 4294967295,
     "svd_reset_value": 0,
+    "width": 32
+  },
+  {
+    "address": 1073954864,
+    "alignment": 4,
+    "derived_from": null,
+    "fields": [
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 15,
+        "low": 15,
+        "mask": 32768,
+        "modified_write": null,
+        "name": "CTSEN",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 14,
+        "low": 14,
+        "mask": 16384,
+        "modified_write": null,
+        "name": "RTSEN",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 13,
+        "low": 13,
+        "mask": 8192,
+        "modified_write": null,
+        "name": "OUT2",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 12,
+        "low": 12,
+        "mask": 4096,
+        "modified_write": null,
+        "name": "OUT1",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 11,
+        "low": 11,
+        "mask": 2048,
+        "modified_write": null,
+        "name": "RTS",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 10,
+        "low": 10,
+        "mask": 1024,
+        "modified_write": null,
+        "name": "DTR",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 9,
+        "low": 9,
+        "mask": 512,
+        "modified_write": null,
+        "name": "RXE",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 8,
+        "low": 8,
+        "mask": 256,
+        "modified_write": null,
+        "name": "TXE",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 7,
+        "low": 7,
+        "mask": 128,
+        "modified_write": null,
+        "name": "LBE",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 2,
+        "low": 2,
+        "mask": 4,
+        "modified_write": null,
+        "name": "SIRLP",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 1,
+        "low": 1,
+        "mask": 2,
+        "modified_write": null,
+        "name": "SIREN",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 0,
+        "low": 0,
+        "mask": 1,
+        "modified_write": null,
+        "name": "UARTEN",
+        "read_action": null,
+        "representation": "unsigned"
+      }
+    ],
+    "known_reset_mask": 65415,
+    "known_reset_value": 768,
+    "named_mask": 65415,
+    "offset": 48,
+    "policy": {
+      "read": "normal",
+      "reserved": "zero",
+      "write": "normal"
+    },
+    "register_access": "read-write",
+    "source": "UART0.UARTCR",
+    "svd_reset_mask": 4294967295,
+    "svd_reset_value": 768,
     "width": 32
   },
   {
@@ -2476,6 +2814,1655 @@
     },
     "register_access": "read-write",
     "source": "DMA.INTE0",
+    "svd_reset_mask": 4294967295,
+    "svd_reset_value": 0,
+    "width": 32
+  },
+  {
+    "address": 1342178372,
+    "alignment": 4,
+    "derived_from": null,
+    "fields": [
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 15,
+        "low": 0,
+        "mask": 65535,
+        "modified_write": "oneToClear",
+        "name": "CHAN_ABORT",
+        "read_action": null,
+        "representation": "unsigned"
+      }
+    ],
+    "known_reset_mask": 65535,
+    "known_reset_value": 0,
+    "named_mask": 65535,
+    "offset": 1092,
+    "policy": {
+      "read": "normal",
+      "reserved": "zero",
+      "write": "one_clears"
+    },
+    "register_access": "read-write",
+    "source": "DMA.CHAN_ABORT",
+    "svd_reset_mask": 4294967295,
+    "svd_reset_value": 0,
+    "width": 32
+  },
+  {
+    "address": 1073790976,
+    "alignment": 4,
+    "derived_from": null,
+    "fields": [
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 24,
+        "low": 24,
+        "mask": 16777216,
+        "modified_write": null,
+        "name": "USBCTRL",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 23,
+        "low": 23,
+        "mask": 8388608,
+        "modified_write": null,
+        "name": "UART1",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 22,
+        "low": 22,
+        "mask": 4194304,
+        "modified_write": null,
+        "name": "UART0",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 21,
+        "low": 21,
+        "mask": 2097152,
+        "modified_write": null,
+        "name": "TIMER",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 20,
+        "low": 20,
+        "mask": 1048576,
+        "modified_write": null,
+        "name": "TBMAN",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 19,
+        "low": 19,
+        "mask": 524288,
+        "modified_write": null,
+        "name": "SYSINFO",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 18,
+        "low": 18,
+        "mask": 262144,
+        "modified_write": null,
+        "name": "SYSCFG",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 17,
+        "low": 17,
+        "mask": 131072,
+        "modified_write": null,
+        "name": "SPI1",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 16,
+        "low": 16,
+        "mask": 65536,
+        "modified_write": null,
+        "name": "SPI0",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 15,
+        "low": 15,
+        "mask": 32768,
+        "modified_write": null,
+        "name": "RTC",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 14,
+        "low": 14,
+        "mask": 16384,
+        "modified_write": null,
+        "name": "PWM",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 13,
+        "low": 13,
+        "mask": 8192,
+        "modified_write": null,
+        "name": "PLL_USB",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 12,
+        "low": 12,
+        "mask": 4096,
+        "modified_write": null,
+        "name": "PLL_SYS",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 11,
+        "low": 11,
+        "mask": 2048,
+        "modified_write": null,
+        "name": "PIO1",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 10,
+        "low": 10,
+        "mask": 1024,
+        "modified_write": null,
+        "name": "PIO0",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 9,
+        "low": 9,
+        "mask": 512,
+        "modified_write": null,
+        "name": "PADS_QSPI",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 8,
+        "low": 8,
+        "mask": 256,
+        "modified_write": null,
+        "name": "PADS_BANK0",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 7,
+        "low": 7,
+        "mask": 128,
+        "modified_write": null,
+        "name": "JTAG",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 6,
+        "low": 6,
+        "mask": 64,
+        "modified_write": null,
+        "name": "IO_QSPI",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 5,
+        "low": 5,
+        "mask": 32,
+        "modified_write": null,
+        "name": "IO_BANK0",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 4,
+        "low": 4,
+        "mask": 16,
+        "modified_write": null,
+        "name": "I2C1",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 3,
+        "low": 3,
+        "mask": 8,
+        "modified_write": null,
+        "name": "I2C0",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 2,
+        "low": 2,
+        "mask": 4,
+        "modified_write": null,
+        "name": "DMA",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 1,
+        "low": 1,
+        "mask": 2,
+        "modified_write": null,
+        "name": "BUSCTRL",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 0,
+        "low": 0,
+        "mask": 1,
+        "modified_write": null,
+        "name": "ADC",
+        "read_action": null,
+        "representation": "unsigned"
+      }
+    ],
+    "known_reset_mask": 33554431,
+    "known_reset_value": 33554431,
+    "named_mask": 33554431,
+    "offset": 0,
+    "policy": {
+      "read": "normal",
+      "reserved": "zero",
+      "write": "normal"
+    },
+    "register_access": "read-write",
+    "source": "RESETS.RESET",
+    "svd_reset_mask": 4294967295,
+    "svd_reset_value": 33554431,
+    "width": 32
+  },
+  {
+    "address": 1073790984,
+    "alignment": 4,
+    "derived_from": null,
+    "fields": [
+      {
+        "access": "read-only",
+        "encodings": [],
+        "high": 24,
+        "low": 24,
+        "mask": 16777216,
+        "modified_write": null,
+        "name": "USBCTRL",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-only",
+        "encodings": [],
+        "high": 23,
+        "low": 23,
+        "mask": 8388608,
+        "modified_write": null,
+        "name": "UART1",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-only",
+        "encodings": [],
+        "high": 22,
+        "low": 22,
+        "mask": 4194304,
+        "modified_write": null,
+        "name": "UART0",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-only",
+        "encodings": [],
+        "high": 21,
+        "low": 21,
+        "mask": 2097152,
+        "modified_write": null,
+        "name": "TIMER",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-only",
+        "encodings": [],
+        "high": 20,
+        "low": 20,
+        "mask": 1048576,
+        "modified_write": null,
+        "name": "TBMAN",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-only",
+        "encodings": [],
+        "high": 19,
+        "low": 19,
+        "mask": 524288,
+        "modified_write": null,
+        "name": "SYSINFO",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-only",
+        "encodings": [],
+        "high": 18,
+        "low": 18,
+        "mask": 262144,
+        "modified_write": null,
+        "name": "SYSCFG",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-only",
+        "encodings": [],
+        "high": 17,
+        "low": 17,
+        "mask": 131072,
+        "modified_write": null,
+        "name": "SPI1",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-only",
+        "encodings": [],
+        "high": 16,
+        "low": 16,
+        "mask": 65536,
+        "modified_write": null,
+        "name": "SPI0",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-only",
+        "encodings": [],
+        "high": 15,
+        "low": 15,
+        "mask": 32768,
+        "modified_write": null,
+        "name": "RTC",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-only",
+        "encodings": [],
+        "high": 14,
+        "low": 14,
+        "mask": 16384,
+        "modified_write": null,
+        "name": "PWM",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-only",
+        "encodings": [],
+        "high": 13,
+        "low": 13,
+        "mask": 8192,
+        "modified_write": null,
+        "name": "PLL_USB",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-only",
+        "encodings": [],
+        "high": 12,
+        "low": 12,
+        "mask": 4096,
+        "modified_write": null,
+        "name": "PLL_SYS",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-only",
+        "encodings": [],
+        "high": 11,
+        "low": 11,
+        "mask": 2048,
+        "modified_write": null,
+        "name": "PIO1",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-only",
+        "encodings": [],
+        "high": 10,
+        "low": 10,
+        "mask": 1024,
+        "modified_write": null,
+        "name": "PIO0",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-only",
+        "encodings": [],
+        "high": 9,
+        "low": 9,
+        "mask": 512,
+        "modified_write": null,
+        "name": "PADS_QSPI",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-only",
+        "encodings": [],
+        "high": 8,
+        "low": 8,
+        "mask": 256,
+        "modified_write": null,
+        "name": "PADS_BANK0",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-only",
+        "encodings": [],
+        "high": 7,
+        "low": 7,
+        "mask": 128,
+        "modified_write": null,
+        "name": "JTAG",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-only",
+        "encodings": [],
+        "high": 6,
+        "low": 6,
+        "mask": 64,
+        "modified_write": null,
+        "name": "IO_QSPI",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-only",
+        "encodings": [],
+        "high": 5,
+        "low": 5,
+        "mask": 32,
+        "modified_write": null,
+        "name": "IO_BANK0",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-only",
+        "encodings": [],
+        "high": 4,
+        "low": 4,
+        "mask": 16,
+        "modified_write": null,
+        "name": "I2C1",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-only",
+        "encodings": [],
+        "high": 3,
+        "low": 3,
+        "mask": 8,
+        "modified_write": null,
+        "name": "I2C0",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-only",
+        "encodings": [],
+        "high": 2,
+        "low": 2,
+        "mask": 4,
+        "modified_write": null,
+        "name": "DMA",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-only",
+        "encodings": [],
+        "high": 1,
+        "low": 1,
+        "mask": 2,
+        "modified_write": null,
+        "name": "BUSCTRL",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-only",
+        "encodings": [],
+        "high": 0,
+        "low": 0,
+        "mask": 1,
+        "modified_write": null,
+        "name": "ADC",
+        "read_action": null,
+        "representation": "unsigned"
+      }
+    ],
+    "known_reset_mask": 33554431,
+    "known_reset_value": 0,
+    "named_mask": 33554431,
+    "offset": 8,
+    "policy": {
+      "read": "normal",
+      "reserved": "zero",
+      "write": "refused"
+    },
+    "register_access": "read-write",
+    "source": "RESETS.RESET_DONE",
+    "svd_reset_mask": 4294967295,
+    "svd_reset_value": 0,
+    "width": 32
+  },
+  {
+    "address": 1073774640,
+    "alignment": 4,
+    "derived_from": null,
+    "fields": [
+      {
+        "access": "read-write",
+        "encodings": [
+          [
+            "clksrc_pll_usb",
+            0
+          ],
+          [
+            "clksrc_gpin0",
+            1
+          ],
+          [
+            "clksrc_gpin1",
+            2
+          ]
+        ],
+        "high": 6,
+        "low": 5,
+        "mask": 96,
+        "modified_write": null,
+        "name": "AUXSRC",
+        "read_action": null,
+        "representation": "encoded"
+      },
+      {
+        "access": "read-write",
+        "encodings": [
+          [
+            "rosc_clksrc_ph",
+            0
+          ],
+          [
+            "clksrc_clk_ref_aux",
+            1
+          ],
+          [
+            "xosc_clksrc",
+            2
+          ]
+        ],
+        "high": 1,
+        "low": 0,
+        "mask": 3,
+        "modified_write": null,
+        "name": "SRC",
+        "read_action": null,
+        "representation": "encoded"
+      }
+    ],
+    "known_reset_mask": 96,
+    "known_reset_value": 0,
+    "named_mask": 99,
+    "offset": 48,
+    "policy": {
+      "read": "normal",
+      "reserved": "zero",
+      "write": "normal"
+    },
+    "register_access": "read-write",
+    "source": "CLOCKS.CLK_REF_CTRL",
+    "svd_reset_mask": 4294967295,
+    "svd_reset_value": 0,
+    "width": 32
+  },
+  {
+    "address": 1073774648,
+    "alignment": 4,
+    "derived_from": null,
+    "fields": [
+      {
+        "access": "read-only",
+        "encodings": [],
+        "high": 31,
+        "low": 0,
+        "mask": 4294967295,
+        "modified_write": null,
+        "name": "CLK_REF_SELECTED",
+        "read_action": null,
+        "representation": "unsigned"
+      }
+    ],
+    "known_reset_mask": 4294967295,
+    "known_reset_value": 1,
+    "named_mask": 4294967295,
+    "offset": 56,
+    "policy": {
+      "read": "normal",
+      "reserved": "zero",
+      "write": "refused"
+    },
+    "register_access": "read-write",
+    "source": "CLOCKS.CLK_REF_SELECTED",
+    "svd_reset_mask": 4294967295,
+    "svd_reset_value": 1,
+    "width": 32
+  },
+  {
+    "address": 1073774652,
+    "alignment": 4,
+    "derived_from": null,
+    "fields": [
+      {
+        "access": "read-write",
+        "encodings": [
+          [
+            "clksrc_pll_sys",
+            0
+          ],
+          [
+            "clksrc_pll_usb",
+            1
+          ],
+          [
+            "rosc_clksrc",
+            2
+          ],
+          [
+            "xosc_clksrc",
+            3
+          ],
+          [
+            "clksrc_gpin0",
+            4
+          ],
+          [
+            "clksrc_gpin1",
+            5
+          ]
+        ],
+        "high": 7,
+        "low": 5,
+        "mask": 224,
+        "modified_write": null,
+        "name": "AUXSRC",
+        "read_action": null,
+        "representation": "encoded"
+      },
+      {
+        "access": "read-write",
+        "encodings": [
+          [
+            "clk_ref",
+            0
+          ],
+          [
+            "clksrc_clk_sys_aux",
+            1
+          ]
+        ],
+        "high": 0,
+        "low": 0,
+        "mask": 1,
+        "modified_write": null,
+        "name": "SRC",
+        "read_action": null,
+        "representation": "encoded"
+      }
+    ],
+    "known_reset_mask": 225,
+    "known_reset_value": 0,
+    "named_mask": 225,
+    "offset": 60,
+    "policy": {
+      "read": "normal",
+      "reserved": "zero",
+      "write": "normal"
+    },
+    "register_access": "read-write",
+    "source": "CLOCKS.CLK_SYS_CTRL",
+    "svd_reset_mask": 4294967295,
+    "svd_reset_value": 0,
+    "width": 32
+  },
+  {
+    "address": 1073774660,
+    "alignment": 4,
+    "derived_from": null,
+    "fields": [
+      {
+        "access": "read-only",
+        "encodings": [],
+        "high": 31,
+        "low": 0,
+        "mask": 4294967295,
+        "modified_write": null,
+        "name": "CLK_SYS_SELECTED",
+        "read_action": null,
+        "representation": "unsigned"
+      }
+    ],
+    "known_reset_mask": 4294967295,
+    "known_reset_value": 1,
+    "named_mask": 4294967295,
+    "offset": 68,
+    "policy": {
+      "read": "normal",
+      "reserved": "zero",
+      "write": "refused"
+    },
+    "register_access": "read-write",
+    "source": "CLOCKS.CLK_SYS_SELECTED",
+    "svd_reset_mask": 4294967295,
+    "svd_reset_value": 1,
+    "width": 32
+  },
+  {
+    "address": 1073774664,
+    "alignment": 4,
+    "derived_from": null,
+    "fields": [
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 11,
+        "low": 11,
+        "mask": 2048,
+        "modified_write": null,
+        "name": "ENABLE",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 10,
+        "low": 10,
+        "mask": 1024,
+        "modified_write": null,
+        "name": "KILL",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-write",
+        "encodings": [
+          [
+            "clk_sys",
+            0
+          ],
+          [
+            "clksrc_pll_sys",
+            1
+          ],
+          [
+            "clksrc_pll_usb",
+            2
+          ],
+          [
+            "rosc_clksrc_ph",
+            3
+          ],
+          [
+            "xosc_clksrc",
+            4
+          ],
+          [
+            "clksrc_gpin0",
+            5
+          ],
+          [
+            "clksrc_gpin1",
+            6
+          ]
+        ],
+        "high": 7,
+        "low": 5,
+        "mask": 224,
+        "modified_write": null,
+        "name": "AUXSRC",
+        "read_action": null,
+        "representation": "encoded"
+      }
+    ],
+    "known_reset_mask": 3296,
+    "known_reset_value": 0,
+    "named_mask": 3296,
+    "offset": 72,
+    "policy": {
+      "read": "normal",
+      "reserved": "zero",
+      "write": "normal"
+    },
+    "register_access": "read-write",
+    "source": "CLOCKS.CLK_PERI_CTRL",
+    "svd_reset_mask": 4294967295,
+    "svd_reset_value": 0,
+    "width": 32
+  },
+  {
+    "address": 1073889280,
+    "alignment": 4,
+    "derived_from": null,
+    "fields": [
+      {
+        "access": "read-write",
+        "encodings": [
+          [
+            "DISABLE",
+            3358
+          ],
+          [
+            "ENABLE",
+            4011
+          ]
+        ],
+        "high": 23,
+        "low": 12,
+        "mask": 16773120,
+        "modified_write": null,
+        "name": "ENABLE",
+        "read_action": null,
+        "representation": "encoded"
+      },
+      {
+        "access": "read-write",
+        "encodings": [
+          [
+            "1_15MHZ",
+            2720
+          ],
+          [
+            "RESERVED_1",
+            2721
+          ],
+          [
+            "RESERVED_2",
+            2722
+          ],
+          [
+            "RESERVED_3",
+            2723
+          ]
+        ],
+        "high": 11,
+        "low": 0,
+        "mask": 4095,
+        "modified_write": null,
+        "name": "FREQ_RANGE",
+        "read_action": null,
+        "representation": "unsigned"
+      }
+    ],
+    "known_reset_mask": 0,
+    "known_reset_value": 0,
+    "named_mask": 16777215,
+    "offset": 0,
+    "policy": {
+      "read": "normal",
+      "reserved": "zero",
+      "write": "normal"
+    },
+    "register_access": "read-write",
+    "source": "XOSC.CTRL",
+    "svd_reset_mask": 4294967295,
+    "svd_reset_value": 0,
+    "width": 32
+  },
+  {
+    "address": 1073889284,
+    "alignment": 4,
+    "derived_from": null,
+    "fields": [
+      {
+        "access": "read-only",
+        "encodings": [],
+        "high": 31,
+        "low": 31,
+        "mask": 2147483648,
+        "modified_write": null,
+        "name": "STABLE",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 24,
+        "low": 24,
+        "mask": 16777216,
+        "modified_write": "oneToClear",
+        "name": "BADWRITE",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-only",
+        "encodings": [],
+        "high": 12,
+        "low": 12,
+        "mask": 4096,
+        "modified_write": null,
+        "name": "ENABLED",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-only",
+        "encodings": [
+          [
+            "1_15MHZ",
+            0
+          ],
+          [
+            "RESERVED_1",
+            1
+          ],
+          [
+            "RESERVED_2",
+            2
+          ],
+          [
+            "RESERVED_3",
+            3
+          ]
+        ],
+        "high": 1,
+        "low": 0,
+        "mask": 3,
+        "modified_write": null,
+        "name": "FREQ_RANGE",
+        "read_action": null,
+        "representation": "unsigned"
+      }
+    ],
+    "known_reset_mask": 2164260864,
+    "known_reset_value": 0,
+    "named_mask": 2164264963,
+    "offset": 4,
+    "policy": {
+      "read": "normal",
+      "reserved": "zero",
+      "write": "one_clears"
+    },
+    "register_access": "read-write",
+    "source": "XOSC.STATUS",
+    "svd_reset_mask": 4294967295,
+    "svd_reset_value": 0,
+    "width": 32
+  },
+  {
+    "address": 1073889292,
+    "alignment": 4,
+    "derived_from": null,
+    "fields": [
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 20,
+        "low": 20,
+        "mask": 1048576,
+        "modified_write": null,
+        "name": "X4",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 13,
+        "low": 0,
+        "mask": 16383,
+        "modified_write": null,
+        "name": "DELAY",
+        "read_action": null,
+        "representation": "unsigned"
+      }
+    ],
+    "known_reset_mask": 0,
+    "known_reset_value": 0,
+    "named_mask": 1064959,
+    "offset": 12,
+    "policy": {
+      "read": "normal",
+      "reserved": "zero",
+      "write": "normal"
+    },
+    "register_access": "read-write",
+    "source": "XOSC.STARTUP",
+    "svd_reset_mask": 4294967295,
+    "svd_reset_value": 0,
+    "width": 32
+  },
+  {
+    "address": 1073856516,
+    "alignment": 4,
+    "derived_from": null,
+    "fields": [
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 7,
+        "low": 7,
+        "mask": 128,
+        "modified_write": null,
+        "name": "OD",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 6,
+        "low": 6,
+        "mask": 64,
+        "modified_write": null,
+        "name": "IE",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-write",
+        "encodings": [
+          [
+            "2mA",
+            0
+          ],
+          [
+            "4mA",
+            1
+          ],
+          [
+            "8mA",
+            2
+          ],
+          [
+            "12mA",
+            3
+          ]
+        ],
+        "high": 5,
+        "low": 4,
+        "mask": 48,
+        "modified_write": null,
+        "name": "DRIVE",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 3,
+        "low": 3,
+        "mask": 8,
+        "modified_write": null,
+        "name": "PUE",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 2,
+        "low": 2,
+        "mask": 4,
+        "modified_write": null,
+        "name": "PDE",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 1,
+        "low": 1,
+        "mask": 2,
+        "modified_write": null,
+        "name": "SCHMITT",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 0,
+        "low": 0,
+        "mask": 1,
+        "modified_write": null,
+        "name": "SLEWFAST",
+        "read_action": null,
+        "representation": "unsigned"
+      }
+    ],
+    "known_reset_mask": 255,
+    "known_reset_value": 86,
+    "named_mask": 255,
+    "offset": 4,
+    "policy": {
+      "read": "normal",
+      "reserved": "zero",
+      "write": "normal"
+    },
+    "register_access": "read-write",
+    "source": "PADS_BANK0.GPIO0",
+    "svd_reset_mask": 4294967295,
+    "svd_reset_value": 86,
+    "width": 32
+  },
+  {
+    "address": 1073856520,
+    "alignment": 4,
+    "derived_from": null,
+    "fields": [
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 7,
+        "low": 7,
+        "mask": 128,
+        "modified_write": null,
+        "name": "OD",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 6,
+        "low": 6,
+        "mask": 64,
+        "modified_write": null,
+        "name": "IE",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-write",
+        "encodings": [
+          [
+            "2mA",
+            0
+          ],
+          [
+            "4mA",
+            1
+          ],
+          [
+            "8mA",
+            2
+          ],
+          [
+            "12mA",
+            3
+          ]
+        ],
+        "high": 5,
+        "low": 4,
+        "mask": 48,
+        "modified_write": null,
+        "name": "DRIVE",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 3,
+        "low": 3,
+        "mask": 8,
+        "modified_write": null,
+        "name": "PUE",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 2,
+        "low": 2,
+        "mask": 4,
+        "modified_write": null,
+        "name": "PDE",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 1,
+        "low": 1,
+        "mask": 2,
+        "modified_write": null,
+        "name": "SCHMITT",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 0,
+        "low": 0,
+        "mask": 1,
+        "modified_write": null,
+        "name": "SLEWFAST",
+        "read_action": null,
+        "representation": "unsigned"
+      }
+    ],
+    "known_reset_mask": 255,
+    "known_reset_value": 86,
+    "named_mask": 255,
+    "offset": 8,
+    "policy": {
+      "read": "normal",
+      "reserved": "zero",
+      "write": "normal"
+    },
+    "register_access": "read-write",
+    "source": "PADS_BANK0.GPIO1",
+    "svd_reset_mask": 4294967295,
+    "svd_reset_value": 86,
+    "width": 32
+  },
+  {
+    "address": 1073856524,
+    "alignment": 4,
+    "derived_from": null,
+    "fields": [
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 7,
+        "low": 7,
+        "mask": 128,
+        "modified_write": null,
+        "name": "OD",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 6,
+        "low": 6,
+        "mask": 64,
+        "modified_write": null,
+        "name": "IE",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-write",
+        "encodings": [
+          [
+            "2mA",
+            0
+          ],
+          [
+            "4mA",
+            1
+          ],
+          [
+            "8mA",
+            2
+          ],
+          [
+            "12mA",
+            3
+          ]
+        ],
+        "high": 5,
+        "low": 4,
+        "mask": 48,
+        "modified_write": null,
+        "name": "DRIVE",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 3,
+        "low": 3,
+        "mask": 8,
+        "modified_write": null,
+        "name": "PUE",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 2,
+        "low": 2,
+        "mask": 4,
+        "modified_write": null,
+        "name": "PDE",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 1,
+        "low": 1,
+        "mask": 2,
+        "modified_write": null,
+        "name": "SCHMITT",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 0,
+        "low": 0,
+        "mask": 1,
+        "modified_write": null,
+        "name": "SLEWFAST",
+        "read_action": null,
+        "representation": "unsigned"
+      }
+    ],
+    "known_reset_mask": 255,
+    "known_reset_value": 86,
+    "named_mask": 255,
+    "offset": 12,
+    "policy": {
+      "read": "normal",
+      "reserved": "zero",
+      "write": "normal"
+    },
+    "register_access": "read-write",
+    "source": "PADS_BANK0.GPIO2",
+    "svd_reset_mask": 4294967295,
+    "svd_reset_value": 86,
+    "width": 32
+  },
+  {
+    "address": 1074151432,
+    "alignment": 4,
+    "derived_from": null,
+    "fields": [
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 24,
+        "low": 24,
+        "mask": 16777216,
+        "modified_write": "oneToClear",
+        "name": "PSM_RESTART_FLAG",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-only",
+        "encodings": [],
+        "high": 20,
+        "low": 20,
+        "mask": 1048576,
+        "modified_write": null,
+        "name": "HAD_PSM_RESTART",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-only",
+        "encodings": [],
+        "high": 16,
+        "low": 16,
+        "mask": 65536,
+        "modified_write": null,
+        "name": "HAD_RUN",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-only",
+        "encodings": [],
+        "high": 8,
+        "low": 8,
+        "mask": 256,
+        "modified_write": null,
+        "name": "HAD_POR",
+        "read_action": null,
+        "representation": "unsigned"
+      }
+    ],
+    "known_reset_mask": 17891584,
+    "known_reset_value": 0,
+    "named_mask": 17891584,
+    "offset": 8,
+    "policy": {
+      "read": "normal",
+      "reserved": "zero",
+      "write": "refused"
+    },
+    "register_access": "read-write",
+    "source": "VREG_AND_CHIP_RESET.CHIP_RESET",
+    "svd_reset_mask": 4294967295,
+    "svd_reset_value": 0,
+    "width": 32
+  },
+  {
+    "address": 3758153984,
+    "alignment": 4,
+    "derived_from": null,
+    "fields": [
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 31,
+        "low": 0,
+        "mask": 4294967295,
+        "modified_write": null,
+        "name": "SETENA",
+        "read_action": null,
+        "representation": "unsigned"
+      }
+    ],
+    "known_reset_mask": 4294967295,
+    "known_reset_value": 0,
+    "named_mask": 4294967295,
+    "offset": 57600,
+    "policy": {
+      "read": "normal",
+      "reserved": "zero",
+      "write": "normal"
+    },
+    "register_access": "read-write",
+    "source": "PPB.NVIC_ISER",
+    "svd_reset_mask": 4294967295,
+    "svd_reset_value": 0,
+    "width": 32
+  },
+  {
+    "address": 3758154368,
+    "alignment": 4,
+    "derived_from": null,
+    "fields": [
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 31,
+        "low": 0,
+        "mask": 4294967295,
+        "modified_write": null,
+        "name": "CLRPEND",
+        "read_action": null,
+        "representation": "unsigned"
+      }
+    ],
+    "known_reset_mask": 4294967295,
+    "known_reset_value": 0,
+    "named_mask": 4294967295,
+    "offset": 57984,
+    "policy": {
+      "read": "normal",
+      "reserved": "zero",
+      "write": "normal"
+    },
+    "register_access": "read-write",
+    "source": "PPB.NVIC_ICPR",
+    "svd_reset_mask": 4294967295,
+    "svd_reset_value": 0,
+    "width": 32
+  },
+  {
+    "address": 3758154240,
+    "alignment": 4,
+    "derived_from": null,
+    "fields": [
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 31,
+        "low": 0,
+        "mask": 4294967295,
+        "modified_write": null,
+        "name": "SETPEND",
+        "read_action": null,
+        "representation": "unsigned"
+      }
+    ],
+    "known_reset_mask": 4294967295,
+    "known_reset_value": 0,
+    "named_mask": 4294967295,
+    "offset": 57856,
+    "policy": {
+      "read": "normal",
+      "reserved": "zero",
+      "write": "normal"
+    },
+    "register_access": "read-write",
+    "source": "PPB.NVIC_ISPR",
+    "svd_reset_mask": 4294967295,
+    "svd_reset_value": 0,
+    "width": 32
+  },
+  {
+    "address": 3758157064,
+    "alignment": 4,
+    "derived_from": null,
+    "fields": [
+      {
+        "access": "read-write",
+        "encodings": [],
+        "high": 31,
+        "low": 8,
+        "mask": 4294967040,
+        "modified_write": null,
+        "name": "TBLOFF",
+        "read_action": null,
+        "representation": "unsigned"
+      }
+    ],
+    "known_reset_mask": 4294967040,
+    "known_reset_value": 0,
+    "named_mask": 4294967040,
+    "offset": 60680,
+    "policy": {
+      "read": "normal",
+      "reserved": "zero",
+      "write": "refused"
+    },
+    "register_access": "read-write",
+    "source": "PPB.VTOR",
     "svd_reset_mask": 4294967295,
     "svd_reset_value": 0,
     "width": 32

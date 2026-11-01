@@ -408,3 +408,34 @@ public inte0_write: (device_base: usize, raw: u32) -> none =
     compiler.register_write(port, raw, compiler.normal_write,
                             compiler.write_zero, 0x0000ffff)
 end inte0_write
+
+public chan_abort_offset: usize = 0x444
+public chan_abort_address: usize = 0x50000444
+public chan_abort_named_mask: u32 = 0x0000ffff
+public chan_abort_reset_mask: u32 = 0x0000ffff
+public chan_abort_reset_value: u32 = 0x00000000
+public chan_abort_image: type = layout(packed, u32) struct
+    f_chan_abort: u16 at 0..15
+end chan_abort_image
+
+public chan_abort_decode: (raw: u32) -> (image: chan_abort_image) =
+    image = zeroed
+    bits: ptr mut u32 = ptr(usize(addr image))
+    bits.val = raw
+end chan_abort_decode
+
+public chan_abort_encode: (image: chan_abort_image) -> (raw: u32) =
+    bits: ptr u32 = ptr(usize(addr image))
+    raw = bits.val
+end chan_abort_encode
+
+public chan_abort_read: (device_base: usize) -> (raw: u32) =
+    port: ptr u32 = ptr(device_base + chan_abort_offset)
+    raw = compiler.register_read(port, compiler.normal_read)
+end chan_abort_read
+
+public chan_abort_write: (device_base: usize, raw: u32) -> none =
+    port: ptr mut u32 = ptr(device_base + chan_abort_offset)
+    compiler.register_write(port, raw, compiler.one_clears,
+                            compiler.write_zero, 0x0000ffff)
+end chan_abort_write

@@ -5,6 +5,10 @@
       "url": "https://raw.githubusercontent.com/raspberrypi/pico-sdk/a1438dff1d38bd9c65dbd693f0e5db4b9ae91779/src/rp2040/hardware_regs/RP2040.svd",
       "sha256": "49f53398e0496b6de0849faf17a9f4e58565af311b98b727e4ebeee964619bc6"
     },
+    "rp2040/clocks.h": {
+      "url": "https://raw.githubusercontent.com/raspberrypi/pico-sdk/a1438dff1d38bd9c65dbd693f0e5db4b9ae91779/src/rp2040/hardware_regs/include/hardware/regs/clocks.h",
+      "sha256": "dde1025b009c5a2f9c42e53ebe2a3990f0711184cb6089bf7a161308e0f93138"
+    },
     "rp2040/dma.h": {
       "url": "https://raw.githubusercontent.com/raspberrypi/pico-sdk/a1438dff1d38bd9c65dbd693f0e5db4b9ae91779/src/rp2040/hardware_regs/include/hardware/regs/dma.h",
       "sha256": "bf7892e0df82439f896ffae07eca3e08181800fd3b537c04450192c31ce9144f"
@@ -12,6 +16,18 @@
     "rp2040/io_bank0.h": {
       "url": "https://raw.githubusercontent.com/raspberrypi/pico-sdk/a1438dff1d38bd9c65dbd693f0e5db4b9ae91779/src/rp2040/hardware_regs/include/hardware/regs/io_bank0.h",
       "sha256": "1a17be1e3e721d8e74bd31d5ef46e23691db52d23147a92cf31219a108949990"
+    },
+    "rp2040/m0plus.h": {
+      "url": "https://raw.githubusercontent.com/raspberrypi/pico-sdk/a1438dff1d38bd9c65dbd693f0e5db4b9ae91779/src/rp2040/hardware_regs/include/hardware/regs/m0plus.h",
+      "sha256": "e09f8fa151f6564527b2314a34476ea6654f69e3185ac0ba2ca7b1e192d70b15"
+    },
+    "rp2040/pads_bank0.h": {
+      "url": "https://raw.githubusercontent.com/raspberrypi/pico-sdk/a1438dff1d38bd9c65dbd693f0e5db4b9ae91779/src/rp2040/hardware_regs/include/hardware/regs/pads_bank0.h",
+      "sha256": "10f2569e324df12e674432c2107db0841e03f8a196633ce48047c092524fffe3"
+    },
+    "rp2040/resets.h": {
+      "url": "https://raw.githubusercontent.com/raspberrypi/pico-sdk/a1438dff1d38bd9c65dbd693f0e5db4b9ae91779/src/rp2040/hardware_regs/include/hardware/regs/resets.h",
+      "sha256": "d1b3a8a6567c54b7767b15b5883728b5e27c4f86f83321bd0e2f7669d84f25d0"
     },
     "rp2040/sio.h": {
       "url": "https://raw.githubusercontent.com/raspberrypi/pico-sdk/a1438dff1d38bd9c65dbd693f0e5db4b9ae91779/src/rp2040/hardware_regs/include/hardware/regs/sio.h",
@@ -24,6 +40,14 @@
     "rp2040/uart.h": {
       "url": "https://raw.githubusercontent.com/raspberrypi/pico-sdk/a1438dff1d38bd9c65dbd693f0e5db4b9ae91779/src/rp2040/hardware_regs/include/hardware/regs/uart.h",
       "sha256": "da0efa09d5130e0584a50a75694d28a64311d5435656ef3e02c15e33ce259f98"
+    },
+    "rp2040/vreg_and_chip_reset.h": {
+      "url": "https://raw.githubusercontent.com/raspberrypi/pico-sdk/a1438dff1d38bd9c65dbd693f0e5db4b9ae91779/src/rp2040/hardware_regs/include/hardware/regs/vreg_and_chip_reset.h",
+      "sha256": "d1027b70f7b55a08e81fb28e2dc66c0ab03b211f9dfbc860426986b602c87725"
+    },
+    "rp2040/xosc.h": {
+      "url": "https://raw.githubusercontent.com/raspberrypi/pico-sdk/a1438dff1d38bd9c65dbd693f0e5db4b9ae91779/src/rp2040/hardware_regs/include/hardware/regs/xosc.h",
+      "sha256": "95e0d4c96bbafedf6c229eb9897c5c7c9b1a46d501ea8d579716c2716f1d5828"
     },
     "stm32h753/STM32H753.svd": {
       "url": "https://raw.githubusercontent.com/Open-CMSIS-Pack/STM32H7xx_DFP/4c77d2ffa6e885b6da9d6fe949c2d6070b21fe7d/CMSIS/SVD/STM32H753.svd",

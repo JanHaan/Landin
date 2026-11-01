@@ -399,10 +399,16 @@ class Rp2040Oracles(unittest.TestCase):
         # refine. Every selected register and field is compared.
         bases = {'IO_BANK0': 0x40014000, 'SIO': 0xd0000000,
                  'TIMER': 0x40054000, 'UART0': 0x40034000,
-                 'UART1': 0x40038000, 'DMA': 0x50000000}
+                 'UART1': 0x40038000, 'DMA': 0x50000000,
+                 'RESETS': 0x4000c000, 'CLOCKS': 0x40008000,
+                 'XOSC': 0x40024000, 'PADS_BANK0': 0x4001c000,
+                 'VREG_AND_CHIP_RESET': 0x40064000, 'PPB': 0xe0000000}
         for row in self.rows():
             peripheral, register = row['source'].split('.')
-            family = 'UART' if peripheral.startswith('UART') else peripheral
+            # The SVD's PPB is the core's private bus, which pico-sdk's
+            # header calls by the core's name.
+            family = ('UART' if peripheral.startswith('UART')
+                      else 'M0PLUS' if peripheral == 'PPB' else peripheral)
             text = fetch_inputs.fetch('rp2040/' + family.lower() + '.h').read_text()
             macros = dict(re.findall(r'^#define (\w+)\s+_u\((0x[0-9a-fA-F]+|[0-9]+)\)',
                                      text, re.MULTILINE))
@@ -430,6 +436,9 @@ class Rp2040Oracles(unittest.TestCase):
                         'RO': ('read-only', None, None),
                         'WO': ('write-only', None, None),
                         'WC': ('read-write', None, 'oneToClear'),
+                        # A self-clearing command bit, CHAN_ABORT's, which
+                        # the SVD writes as one-to-clear.
+                        'SC': ('read-write', None, 'oneToClear'),
                         'RWF': ('read-write', 'modify', None),
                     }[access])
                     reset = macros.get(field_prefix + '_RESET')
@@ -461,7 +470,7 @@ class Rp2040Oracles(unittest.TestCase):
 
     def test_literal_contract(self):
         rows = {r['source']: r for r in self.rows()}
-        self.assertEqual(len(rows), 30)
+        self.assertEqual(len(rows), 51)
         self.assertEqual(rows['UART1.UARTFR']['derived_from'], 'UART0')
         self.assertEqual(rows['DMA.CH1_CTRL_TRIG']['offset']
                          - rows['DMA.CH0_CTRL_TRIG']['offset'], 64)
@@ -486,8 +495,12 @@ class Rp2040Oracles(unittest.TestCase):
             read = ('refused' if key in {'SIO.GPIO_OUT_SET', 'SIO.GPIO_OUT_CLR',
                     'UART0.UARTICR'} else 'modify' if key == 'UART0.UARTDR' else 'normal')
             write = ('refused' if key in {'SIO.GPIO_IN', 'TIMER.TIMERAWL',
-                     'UART0.UARTRSR', 'UART0.UARTFR', 'UART1.UARTFR', 'DMA.CH0_AL1_CTRL'}
-                     else 'one_clears' if key in {'TIMER.INTR', 'DMA.INTR', 'UART0.UARTICR'}
+                     'UART0.UARTRSR', 'UART0.UARTFR', 'UART1.UARTFR', 'DMA.CH0_AL1_CTRL',
+                     'RESETS.RESET_DONE', 'CLOCKS.CLK_REF_SELECTED',
+                     'CLOCKS.CLK_SYS_SELECTED', 'VREG_AND_CHIP_RESET.CHIP_RESET',
+                     'PPB.VTOR'}
+                     else 'one_clears' if key in {'TIMER.INTR', 'DMA.INTR', 'UART0.UARTICR',
+                                                  'DMA.CHAN_ABORT', 'XOSC.STATUS'}
                      else 'normal')
             expected = {'read': read, 'write': write,
                         'reserved': 'preserve' if key == 'SIO.GPIO_OUT' else 'zero'}

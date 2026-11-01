@@ -201,6 +201,48 @@ public uartlcr_h_write: (device_base: usize, raw: u32) -> none =
                             compiler.write_zero, 0x000000ff)
 end uartlcr_h_write
 
+public uartcr_offset: usize = 0x30
+public uartcr_address: usize = 0x40034030
+public uartcr_named_mask: u32 = 0x0000ff87
+public uartcr_reset_mask: u32 = 0x0000ff87
+public uartcr_reset_value: u32 = 0x00000300
+public uartcr_image: type = layout(packed, u32) struct
+    f_ctsen: u1 at 15..15
+    f_rtsen: u1 at 14..14
+    f_out2: u1 at 13..13
+    f_out1: u1 at 12..12
+    f_rts: u1 at 11..11
+    f_dtr: u1 at 10..10
+    f_rxe: u1 at 9..9
+    f_txe: u1 at 8..8
+    f_lbe: u1 at 7..7
+    f_sirlp: u1 at 2..2
+    f_siren: u1 at 1..1
+    f_uarten: u1 at 0..0
+end uartcr_image
+
+public uartcr_decode: (raw: u32) -> (image: uartcr_image) =
+    image = zeroed
+    bits: ptr mut u32 = ptr(usize(addr image))
+    bits.val = raw
+end uartcr_decode
+
+public uartcr_encode: (image: uartcr_image) -> (raw: u32) =
+    bits: ptr u32 = ptr(usize(addr image))
+    raw = bits.val
+end uartcr_encode
+
+public uartcr_read: (device_base: usize) -> (raw: u32) =
+    port: ptr u32 = ptr(device_base + uartcr_offset)
+    raw = compiler.register_read(port, compiler.normal_read)
+end uartcr_read
+
+public uartcr_write: (device_base: usize, raw: u32) -> none =
+    port: ptr mut u32 = ptr(device_base + uartcr_offset)
+    compiler.register_write(port, raw, compiler.normal_write,
+                            compiler.write_zero, 0x0000ff87)
+end uartcr_write
+
 public uarticr_offset: usize = 0x44
 public uarticr_address: usize = 0x40034044
 public uarticr_named_mask: u32 = 0x000007ff
