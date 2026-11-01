@@ -2248,6 +2248,12 @@ package body Landin.Diagnostics.Citations is
             when 653 =>
                "A vector-table description may hold a stage the reset ve"
                & "ctor enters before reset",
+            when 654 =>
+               "The Pico 2's port is the Pico's, on the RP2350's own reg"
+               & "isters",
+            when 655 =>
+               "The Pico 2's oracle starts at power-on and refuses a cor"
+               & "rupted block on the board",
             when 530 =>
                "`refine explain` answers a construct and a decision",
             when 599 =>
@@ -3466,6 +3472,10 @@ package body Landin.Diagnostics.Citations is
             when 652 =>
                "Decisions: The toolchain, C and the machine",
             when 653 =>
+               "Decisions: The toolchain, C and the machine",
+            when 654 =>
+               "Decisions: The toolchain, C and the machine",
+            when 655 =>
                "Decisions: The toolchain, C and the machine",
             when 530 =>
                "Decisions: The toolchain, C and the machine",
@@ -4999,6 +5009,13 @@ package body Landin.Diagnostics.Citations is
                "https://www.701.dev/spec.html#d653-a-vector-table-descri"
                & "ption-may-hold-a-stage-the-reset-vector-enters-before-re"
                & "set",
+            when 654 =>
+               "https://www.701.dev/spec.html#d654-the-pico-2-s-port-is-"
+               & "the-pico-s-on-the-rp2350-s-own-registers",
+            when 655 =>
+               "https://www.701.dev/spec.html#d655-the-pico-2-s-oracle-s"
+               & "tarts-at-power-on-and-refuses-a-corrupted-block-on-the-b"
+               & "oard",
             when 530 =>
                "https://www.701.dev/spec.html#d530-refine-explain-answer"
                & "s-a-construct-and-a-decision",

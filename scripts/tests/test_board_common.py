@@ -217,6 +217,22 @@ class Hubs(unittest.TestCase):
                 'uhubctl -l 7-2.3 -p 2 -a cycle -d 1'])])
         self.assertEqual(COMMON.as_group(argv, None, 'sg'), argv)
 
+    def test_a_port_s_device_is_read_from_the_listing(self):
+        self.assertTrue(COMMON.port_device(STATUS, 2).startswith('0483:374e'))
+        self.assertIsNone(COMMON.port_device(STATUS, 1))
+        self.assertIsNone(COMMON.port_device(STATUS, 9))
+
+    def test_a_port_that_shows_a_device_must_show_the_one_named(self):
+        quiet = STATUS.replace('0103 power enable connect [0483:374e STMicroelectronics STLINK-V3'
+                               ' 001900293137511339383538]', '0101 power connect')
+        hub = Recorded(**{'hub-status': quiet})
+        COMMON.power_cycle(hub, '7-2.3', 2, 1.0, holds_if_any='001900293137511339383538')
+        self.assertEqual([n for n, _ in hub.calls], ['hub-status', 'power-cycle'])
+        hub = Recorded(**{'hub-status': STATUS})
+        with self.assertRaises(COMMON.Failed):
+            COMMON.power_cycle(hub, '7-2.3', 2, 1.0, holds_if_any='SOMEONE-ELSE')
+        self.assertEqual([n for n, _ in hub.calls], ['hub-status'])
+
     def test_a_group_the_host_lacks_is_none_to_lack(self):
         self.assertTrue(COMMON.in_group('no-such-group-on-any-host-1230'))
 
@@ -280,6 +296,24 @@ class Consoles(unittest.TestCase):
         finally:
             console.close()
             server.close()
+
+
+class Bridges(unittest.TestCase):
+    def test_the_bridge_is_running_once_every_slot_listens(self):
+        with tempfile.TemporaryDirectory() as root:
+            root = Path(root)
+            (root / 'scripts').mkdir()
+            (root / 'scripts/dap_bridge.py').write_text(
+                'import sys, time\n'
+                'slots = int(sys.argv[sys.argv.index("--slots") + 1])\n'
+                'for n in range(2 * slots): print("listening on", n, flush=True)\n'
+                'time.sleep(30)\n')
+            run = COMMON.Run(root)
+            bridge = COMMON.ProbehiveBridge(run, root, '10.42.0.50', slots=2)
+            try:
+                self.assertEqual(bridge.path.read_text().count('listening on'), 4)
+            finally:
+                bridge.close()
 
 
 class Records(unittest.TestCase):

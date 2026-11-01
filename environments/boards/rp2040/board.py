@@ -32,7 +32,6 @@ environments/boards/rp2040/README.md.
 
 import argparse
 import hashlib
-import json
 import random
 import shutil
 import struct
@@ -72,35 +71,6 @@ def crc32_mpeg2(data):
     return crc
 
 
-class Pins:
-    """The probe's GPIO through probehive's scripts/gpio.py, which needs the
-    LiteX its own development shell carries: that shell's Python and its
-    environment are found once, and each read runs the script with them."""
-    def __init__(self, run, args):
-        self.run, self.args = run, args
-        found = run.command('gpio-environment', ['nix', 'develop', args.probehive, '-c',
-            'python3', '-c',
-            'import json, os, sys, litex; print(json.dumps([sys.executable, dict(os.environ)]))'],
-            timeout=300, cwd=args.probehive)
-        self.python, self.env = json.loads(found.strip().splitlines()[-1])
-        self.release()
-
-    def gpio(self, name, *pins):
-        return self.run.command(name, [self.python, self.args.probehive / 'scripts/gpio.py',
-                                       self.args.probehive_build, *pins], env=self.env)
-
-    def release(self):
-        self.gpio('gpio-release', self.args.indicator_pin + '=z')
-
-    def level(self, name):
-        for line in self.gpio(name).splitlines():
-            fields = line.split()
-            if fields and fields[0] == self.args.indicator_pin:
-                require(fields[1] == 'input', '%s is driven by the probe' % fields[0])
-                return int(fields[2])
-        raise Failed('gpio.py listed no %s' % self.args.indicator_pin)
-
-
 def build(run, args):
     elf = run.out / 'board.elf'
     run.command('compile', [args.refine, '--root=' + str(ROOT / 'devices'),
@@ -121,28 +91,6 @@ def build(run, args):
     names = symbols(run, args.nm, elf)
     require(words[USBCTRL_SLOT] == names['usb_irq'] | 1, 'vector word 21 is not the USBCTRL_IRQ handler')
     return elf, stage, crc, names
-
-
-class Bridge:
-    """probehive's bridge for one slot, started for this run."""
-    def __init__(self, run, args):
-        self.log = open(run.out / 'bridge.log', 'w')
-        self.process = subprocess.Popen([sys.executable, str(args.probehive / 'scripts/dap_bridge.py'),
-            '--host', args.probe_host, '--slots', '1', '--listen', '127.0.0.1:%d' % args.debug_port,
-            '--uart-listen', '127.0.0.1:%d' % args.uart_port], stdout=self.log, stderr=subprocess.STDOUT)
-        deadline = time.time() + 10
-        while time.time() < deadline:
-            text = (run.out / 'bridge.log').read_text()
-            if text.count('listening on') >= 2:
-                return
-            require(self.process.poll() is None, 'the bridge exited; see bridge.log')
-            time.sleep(0.1)
-        raise Failed('the bridge did not listen within 10 s; see bridge.log')
-
-    def close(self):
-        self.process.terminate()
-        self.process.wait(5)
-        self.log.close()
 
 
 def probe(run, args):
@@ -197,7 +145,7 @@ def scenario(console, run, seed, pins=None):
     verdicts['shared'] = dict(input=SHARED.decode(), echo=SHARED.decode(),
                               indicator_after_1=high['g'], indicator_after_0=low['g'])
     if pins:
-        verdicts['shared'].update(wire=pins.args.indicator_pin, wire_after_1=wire_high,
+        verdicts['shared'].update(wire=pins.pin, wire_after_1=wire_high,
                                   wire_after_0=wire_low)
     # IRQ5, set pending in the NVIC: slot 21's handler runs once, in
     # exception 21.
@@ -330,8 +278,10 @@ def main():
                       second_stage_sha256=hashlib.sha256(stage).hexdigest())
         flash(run, args, elf, stage)
         result['flash_readback'] = 'matches'
-        pins = Pins(run, args) if args.indicator_pin else None
-        bridge = Bridge(run, args)
+        pins = (common.ProbehivePins(run, args.probehive, args.probehive_build, args.indicator_pin)
+                if args.indicator_pin else None)
+        bridge = common.ProbehiveBridge(run, args.probehive, args.probe_host, 1,
+                                        args.debug_port, args.uart_port)
         console = common.TcpConsole(args.uart_port)
         power_cycle(common.InGroup(run, args.hub_group), args)
         verdicts, final = scenario(console, run, args.seed, pins)

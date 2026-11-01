@@ -39,6 +39,7 @@ import shlex
 import socket
 import struct
 import subprocess
+import sys
 import termios
 import threading
 import time
@@ -244,13 +245,23 @@ class InGroup:
         return self.run.command(name, as_group(argv, self.group, self.sg), **kw)
 
 
-def power_cycle(hub, location, port, off_seconds, holds=None, keeps=None):
+def port_device(status, port):
+    """The USB device uhubctl lists on PORT, `[VID:PID ...]`, or None when
+    the port holds none, as a board running firmware without USB does."""
+    line = hub_ports(status).get(port)
+    found = re.search(r'\[([0-9a-f]{4}:[0-9a-f]{4}[^\]]*)\]', line or '')
+    return found.group(1) if found else None
+
+
+def power_cycle(hub, location, port, off_seconds, holds=None, keeps=None, holds_if_any=None):
     """Cut PORT of the hub at LOCATION and restore it, in one call.
 
     HOLDS is the serial the switched port must show, so that only the
     device named loses power; KEEPS is (port, serial), a port that must
     show that serial and is never switched, so that a hub whose listing is
-    not the one expected is never touched.  HUB has `command(name, argv)`:
+    not the one expected is never touched.  HOLDS_IF_ANY is a serial the
+    switched port must show if it shows a device at all, for a board whose
+    firmware does not enumerate.  HUB has `command(name, argv)`:
     an `InGroup`, or a `Run`."""
     status = hub.command('hub-status', ['uhubctl', '-l', location])
     ports = hub_ports(status)
@@ -264,11 +275,71 @@ def power_cycle(hub, location, port, off_seconds, holds=None, keeps=None):
         require(port in ports and holds in ports[port],
                 'port %d of hub %s does not hold %s; refusing to switch it'
                 % (port, location, holds))
+    if holds_if_any:
+        require(port in ports, 'hub %s has no port %d' % (location, port))
+        device = port_device(status, port)
+        require(device is None or holds_if_any in device,
+                'port %d of hub %s holds %s, not %s; refusing to switch it'
+                % (port, location, device, holds_if_any))
     # One call: switching the port off re-enumerates the hub's inner hubs,
     # and a second call can meet their new device nodes before udev has
     # given them the group that may switch them.
     hub.command('power-cycle', ['uhubctl', '-l', location, '-p', str(port), '-a', 'cycle',
                                 '-d', '%g' % off_seconds])
+
+
+class ProbehiveBridge:
+    """probehive's scripts/dap_bridge.py for SLOTS slots, started for a run:
+    slot N's SWD on DEBUG_PORT + N and its UART on UART_PORT + N."""
+    def __init__(self, run, probehive, host, slots=1, debug_port=4441, uart_port=4461):
+        self.path = run.out / 'bridge.log'
+        self.log = open(self.path, 'w')
+        self.process = subprocess.Popen([
+            sys.executable, str(Path(probehive) / 'scripts/dap_bridge.py'), '--host', host,
+            '--slots', str(slots), '--listen', '127.0.0.1:%d' % debug_port,
+            '--uart-listen', '127.0.0.1:%d' % uart_port], stdout=self.log, stderr=subprocess.STDOUT)
+        deadline = time.time() + 10
+        while time.time() < deadline:
+            if self.path.read_text().count('listening on') >= 2 * slots:
+                return
+            require(self.process.poll() is None, 'the bridge exited; see bridge.log')
+            time.sleep(0.1)
+        raise Failed('the bridge did not listen within 10 s; see bridge.log')
+
+    def close(self):
+        self.process.terminate()
+        self.process.wait(5)
+        self.log.close()
+
+
+class ProbehivePins:
+    """The probe's GPIO PIN through probehive's scripts/gpio.py, which needs
+    the LiteX its own development shell carries: that shell's Python and its
+    environment are found once, each read runs the script with them, and
+    the pin is released to an input first."""
+    def __init__(self, run, probehive, build, pin):
+        self.run, self.probehive, self.build, self.pin = run, Path(probehive), build, pin
+        found = run.command('gpio-environment', ['nix', 'develop', self.probehive, '-c',
+            'python3', '-c',
+            'import json, os, sys, litex; print(json.dumps([sys.executable, dict(os.environ)]))'],
+            timeout=300, cwd=self.probehive)
+        self.python, self.env = json.loads(found.strip().splitlines()[-1])
+        self.release()
+
+    def gpio(self, name, *pins):
+        return self.run.command(name, [self.python, self.probehive / 'scripts/gpio.py',
+                                       self.build, *pins], env=self.env)
+
+    def release(self):
+        self.gpio('gpio-release', self.pin + '=z')
+
+    def level(self, name):
+        for line in self.gpio(name).splitlines():
+            fields = line.split()
+            if fields and fields[0] == self.pin:
+                require(fields[1] == 'input', '%s is driven by the probe' % fields[0])
+                return int(fields[2])
+        raise Failed('gpio.py listed no %s' % self.pin)
 
 
 class Console:

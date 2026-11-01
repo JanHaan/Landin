@@ -60,7 +60,11 @@ entry that describes it, and put a new one where a reader would look for it.
   interrupts, and boots as an `rp2350-image-block`: refine emits the
   IMAGE_DEF block the boot ROM looks for directly after the vector table
   and reads it back from the object it assembles (D636-D638); it compiles
-  and links, and no board has run it.
+  and links. The Pico 2's port of the RP2040 application, at
+  `--level=armv8-m.main` with no float, is checked by an oracle of its own,
+  [`board.py`](../environments/boards/rp2350/README.md) (D654, D655), with a
+  negative control that a corrupted block is not booted; no board run of
+  it is recorded yet.
   The derived linker script is written as `OUT.ld`, or alone with its
   limits by `--emit=linker-script` (D589), a developer's own is linked with
   `--linker-script=FILE` and held to a contract (D546), and

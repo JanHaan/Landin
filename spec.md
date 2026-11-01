@@ -21600,6 +21600,72 @@ require the stage's PWR accesses, recorded from RM0433 in
 `environments/boards/stm32h753/board.py`, which reads PWR_CR3 and
 PWR_CSR1's ACTVOSRDY in the boot frame.
 
+### D654 — The Pico 2's port is the Pico's, on the RP2350's own registers
+
+**The tour said** nothing; D593 to D596 are the RP2040 board's, and D636
+to D638 the RP2350 image's.
+
+**Chosen:** `compiler/tests/board/rp2350` is the RP2040 port at
+`--level=armv8-m.main` on the Cortex-M33 in Secure state, with no float:
+the same application, trace, command bytes and receive contract, over
+the RP2350's registers, which its description and modules give (D635). Bring-up
+moves clk_ref and clk_sys to the 12 MHz crystal and gives UART0 clk_peri
+as on the RP2040; TIMER0's 1 MHz tick comes from the tick generator, 12
+reference cycles a tick (8.5, Tick generators); UART0, DMA, TIMER0 and bank
+0's pins and pads leave reset and USBCTRL is held in it; and the pads it
+uses are enabled, since bank 0's reset with their inputs off and their
+isolation latched (9.3, Reset state): ISO cleared and IE set on GPIO0,
+GPIO1 and the indicator, GPIO3. The receive protocol is D594's live count,
+over the RP2350's channel: CTRL_TRIG's errors in bits 31:29 and BUSY in
+26, the ring on the write address, TREQ 29 for UART0_RX, and TRANS_COUNT's
+count in bits 27:0 beside its MODE. Stop follows the RP2350's abort
+sequence, which accounts for RP2350-E5 (12.6.8.3, Channel abort): EN
+cleared with CHAIN_TO the channel itself, then CHAN_ABORT written and
+polled, with BUSY, at most 1000 times. IRQ14, USBCTRL_IRQ, at slot 30, is
+set pending in the NVIC, as D596 set IRQ5; TIMER0_IRQ_0 and DMA_IRQ_0, at
+slots 16 and 26, are raised by the chip.
+
+**The alternatives:** a port written afresh, which would leave no
+comparison with the RP2040's run; the RP2040's abort, which RP2350-E5 says
+can fire a chained channel; and leaving the pads as reset leaves them,
+isolated, which drives no output and reads no input.
+
+**Pinned by** `environments/boards/rp2350/board.py`'s verdicts, and the
+application's build at `--level=armv8-m.main`.
+
+### D655 — The Pico 2's oracle starts at power-on and refuses a corrupted block on the board
+
+**The tour said** nothing; D595 is the RP2040's oracle, and D638 checks
+the block refine assembles.
+
+**Chosen:** `environments/boards/rp2350/board.py` builds the image and
+checks, from the ELF alone, its 68-word vector table at the start of
+flash, the USBCTRL_IRQ handler at slot 30, and the block directly after
+the table, the minimum Arm IMAGE_DEF of the datasheet (5.9.5.1, Table 503,
+p. 390); flashes it with probe-rs through probehive slot 1, `--chip
+RP235x`, and reads the table and the block back; cycles the Pico 2's
+power on a hub whose guarded port holds the probe, as the RP2040's tool
+does, since this firmware does not enumerate on USB; and reads the trace
+on slot 1's UART. Its expectations come from the datasheet and from what
+the host sent: POWMAN's CHIP_RESET reads HAD_POR alone (6.4, p. 429);
+VTOR reads 0x1000_0000, so the boot ROM took the block and entered the
+image; clk_ref is on the crystal; and the shared scenario, the IRQ14
+delivery, the overruns, the epochs, the echo and the SWD counters are
+held as D595 holds the RP2040's. As a physical negative control, with
+`--block-control`, a copy of the image whose block's end marker is flipped
+is flashed and power-cycled first, and the board must enumerate as USB
+BOOTSEL, 2e8a:000f (5.6.1, Table 470, p. 370), which the boot ROM does when
+it finds no image to boot; the good image is then flashed again.
+
+**The alternatives:** taking the block's acceptance from the program
+running alone, which a ROM that ignored blocks would also give; and a
+debugger-set program counter, which would not show the boot ROM entering
+the image.
+
+**Pinned by** `scripts/tests/test_board_rp2350.py`, which holds the block
+to the datasheet's table, the corrupted copy, the control's reading of the
+hub and the guard to fixed inputs without a board.
+
 ### D530 — `refine explain` answers a construct and a decision
 
 **The tour said** nothing. Diagnostic notes cite paragraphs and decisions,
