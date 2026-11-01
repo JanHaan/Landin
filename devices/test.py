@@ -626,6 +626,12 @@ H753_REGISTERS = {
     'RCC.AHB1ENR': ('RCC_BASE', 'RCC_TypeDef', 'AHB1ENR', 'RCC_AHB1ENR'),
     'RCC.AHB4ENR': ('RCC_BASE', 'RCC_TypeDef', 'AHB4ENR', 'RCC_AHB4ENR'),
     'RCC.APB1LENR': ('RCC_BASE', 'RCC_TypeDef', 'APB1LENR', 'RCC_APB1LENR'),
+    'RCC.RSR': ('RCC_BASE', 'RCC_TypeDef', 'RSR', 'RCC_RSR'),
+    'PWR.CSR1': ('PWR_BASE', 'PWR_TypeDef', 'CSR1', 'PWR_CSR1'),
+    'PWR.CR3': ('PWR_BASE', 'PWR_TypeDef', 'CR3', 'PWR_CR3'),
+    'GPIOB.MODER': ('GPIOB_BASE', 'GPIO_TypeDef', 'MODER', 'GPIO_MODER'),
+    'GPIOB.IDR': ('GPIOB_BASE', 'GPIO_TypeDef', 'IDR', 'GPIO_IDR'),
+    'GPIOB.BSRR': ('GPIOB_BASE', 'GPIO_TypeDef', 'BSRR', 'GPIO_BSRR'),
     'GPIOD.MODER': ('GPIOD_BASE', 'GPIO_TypeDef', 'MODER', 'GPIO_MODER'),
     'GPIOD.AFRH': ('GPIOD_BASE', 'GPIO_TypeDef', 'AFR[1]', 'GPIO_AFRH'),
     'USART3.CR1': ('USART3_BASE', 'USART_TypeDef', 'CR1', 'USART_CR1'),
@@ -723,43 +729,64 @@ class Stm32h753Oracles(unittest.TestCase):
     def test_reset_values(self):
         # Reviewed from RM0433 Rev 9, pinned by its SHA-256 in
         # devices/inputs.json, never the SVD: every selected register resets
-        # to zero but these two.
+        # to zero but these.
         expected = {
             # 11.4.1, p. 541: 0xFFFF FFFF for ports other than A and B;
-            # 0xABFF FFFF is port A's, which the SVD gives port D by
-            # deriving it from port A.
+            # 0xABFF FFFF is port A's, which the SVD gives ports B and D by
+            # deriving them from port A, and port B's is 0xFFFF FEBF.
             'GPIOD.MODER': 0xffffffff,
+            'GPIOB.MODER': 0xfffffebf,
             # 48.8.10, p. 2091, the FIFO-disabled view, which reset selects;
             # 48.8.9, p. 2085, the FIFO-enabled one, is 0x0X80 00C0.
             'USART3.ISR': 0x000000c0,
+            # 8.7.39, p. 450, Table 65: 0x00FE 0000, by power-on reset
+            # only, whose bit 18 the register's own diagram reserves; the
+            # named bits are Table 56's power-on line, p. 333, PORRSTF,
+            # PINRSTF, BORRSTF, D2RSTF, D1RSTF and CPURSTF.  The SVD gives 0.
+            'RCC.RSR': 0x00fa0000,
+            # 6.8.2, p. 305: ACTVOS reads VOS3, and ACTVOSRDY is clear until
+            # the supply configuration is written (6.4.1, p. 262).
+            'PWR.CSR1': 0x00004000,
+            # 6.8.4, p. 307: 0x0000 0006 on revision Y, LDOEN and SCUEN;
+            # revision V's 0x0000 0046 differs in reserved bit 6 alone.
+            'PWR.CR3': 0x00000006,
         }
+        # 11.4.5, p. 543: GPIOx_IDR resets to 0x0000 XXXX, the pins' levels,
+        # so no named bit of it has a known reset value.
+        unknown = {'GPIOB.IDR': 0}
         # The zeros: RCC 8.7.41, p. 454, 8.7.43, p. 458, 8.7.45, p. 462;
-        # GPIOx_AFRH 11.4.10, p. 546; USART 48.8.1, p. 2067, 48.8.4,
-        # p. 2078, 48.8.5, p. 2082, 48.8.11, p. 2096, 48.8.12 and 48.8.13,
-        # p. 2098; DMA 15.5.1, p. 659, 15.5.3, p. 660, 15.5.5, p. 662,
-        # 15.5.6 and 15.5.7, p. 665, 15.5.8, p. 666; DMAMUX1 17.6.1,
-        # p. 708; TIM2 39.4.7, p. 1688.
+        # GPIOx_AFRH 11.4.10, p. 546, GPIOx_BSRR 11.4.7, p. 544; USART
+        # 48.8.1, p. 2067, 48.8.4, p. 2078, 48.8.5, p. 2082, 48.8.11,
+        # p. 2096, 48.8.12 and 48.8.13, p. 2098; DMA 15.5.1, p. 659, 15.5.3,
+        # p. 660, 15.5.5, p. 662, 15.5.6 and 15.5.7, p. 665, 15.5.8, p. 666;
+        # DMAMUX1 17.6.1, p. 708; TIM2 39.4.7, p. 1688.
         for row in self.rows():
             with self.subTest(register=row['source']):
-                self.assertEqual(row['known_reset_mask'], row['named_mask'])
+                self.assertEqual(row['known_reset_mask'],
+                                 unknown.get(row['source'], row['named_mask']))
                 self.assertEqual(row['known_reset_value'],
                                  expected.get(row['source'], 0))
         rows = {row['source']: row for row in self.rows()}
-        self.assertEqual(rows['GPIOD.MODER']['svd_reset_value'], 0xabffffff)
-        self.assertIn('RM0433', rows['GPIOD.MODER']['reset_correction']['source'])
+        for key, given in (('GPIOD.MODER', 0xabffffff), ('GPIOB.MODER', 0xabffffff),
+                           ('RCC.RSR', 0)):
+            self.assertEqual(rows[key]['svd_reset_value'], given, key)
+            self.assertIn('RM0433', rows[key]['reset_correction']['source'], key)
 
     def test_access_policies(self):
         # Reviewed from RM0433 Rev 9's access types, never the policy: status
         # is read-only (USART_ISR 48.8.10, p. 2091; DMA_LISR 15.5.1,
-        # p. 659), a clear register is write-only, written as one to clear
-        # (USART_ICR 48.8.11, p. 2096; DMA_LIFCR 15.5.3, p. 660), and the
-        # receive register is read-only and its read takes a byte from its
-        # FIFO (USART_RDR 48.8.12, p. 2098).
+        # p. 659; PWR_CSR1 6.8.2, p. 305; GPIOx_IDR 11.4.5, p. 543), a
+        # clear register is write-only, written as one to clear (USART_ICR
+        # 48.8.11, p. 2096; DMA_LIFCR 15.5.3, p. 660), a set and reset
+        # register write-only, its zeros no action (GPIOx_BSRR 11.4.7,
+        # p. 544), and the receive register is read-only and its read takes
+        # a byte from its FIFO (USART_RDR 48.8.12, p. 2098).
         for row in self.rows():
             key = row['source']
-            read = ('refused' if key in {'USART3.ICR', 'DMA1.LIFCR'}
+            read = ('refused' if key in {'USART3.ICR', 'DMA1.LIFCR', 'GPIOB.BSRR'}
                     else 'modify' if key == 'USART3.RDR' else 'normal')
-            write = ('refused' if key in {'USART3.ISR', 'USART3.RDR', 'DMA1.LISR'}
+            write = ('refused' if key in {'USART3.ISR', 'USART3.RDR', 'DMA1.LISR',
+                                          'PWR.CSR1', 'GPIOB.IDR'}
                      else 'one_clears' if key in {'USART3.ICR', 'DMA1.LIFCR'}
                      else 'normal')
             self.assertEqual(row['policy'], {'read': read, 'write': write,
@@ -781,6 +808,7 @@ class Stm32h753Oracles(unittest.TestCase):
                          'CCMR1_Output')
         self.assertEqual(rows['USART3.CR1']['derived_from'], 'USART1')
         self.assertEqual(rows['GPIOD.MODER']['derived_from'], 'GPIOA')
+        self.assertEqual(rows['GPIOB.MODER']['derived_from'], 'GPIOA')
 
     @requires_refine
     def test_interrupts_against_the_header(self):

@@ -15,7 +15,17 @@
     "RCC": [
       "AHB1ENR",
       "AHB4ENR",
-      "APB1LENR"
+      "APB1LENR",
+      "RSR"
+    ],
+    "PWR": [
+      "CSR1",
+      "CR3"
+    ],
+    "GPIOB": [
+      "MODER",
+      "IDR",
+      "BSRR"
     ],
     "GPIOD": [
       "MODER",
@@ -58,6 +68,36 @@
     },
     "RCC.APB1LENR": {
       "read": "normal",
+      "write": "normal",
+      "reserved": "zero"
+    },
+    "RCC.RSR": {
+      "read": "normal",
+      "write": "normal",
+      "reserved": "zero"
+    },
+    "PWR.CSR1": {
+      "read": "normal",
+      "write": "refused",
+      "reserved": "zero"
+    },
+    "PWR.CR3": {
+      "read": "normal",
+      "write": "normal",
+      "reserved": "zero"
+    },
+    "GPIOB.MODER": {
+      "read": "normal",
+      "write": "normal",
+      "reserved": "zero"
+    },
+    "GPIOB.IDR": {
+      "read": "normal",
+      "write": "refused",
+      "reserved": "zero"
+    },
+    "GPIOB.BSRR": {
+      "read": "refused",
       "write": "normal",
       "reserved": "zero"
     },
@@ -153,6 +193,9 @@
     "DMAMUX1.DMAMUX_C0CR.SE",
     "DMAMUX1.DMAMUX_C0CR.SPOL"
   ],
+  "reset_mask_overrides": {
+    "GPIOB.IDR": "0x0"
+  },
   "field_corrections": {
     "RCC.AHB1ENR.USB2OTGHSULPIEN": {
       "omit": true,
@@ -160,6 +203,14 @@
     }
   },
   "reset_corrections": {
+    "RCC.RSR": {
+      "value": "0x00fe0000",
+      "source": "RM0433 Rev 9, 8.7.39, p. 450, Table 65: RCC_RSR resets to 0x00FE 0000, by power-on reset only; the SVD gives 0"
+    },
+    "GPIOB.MODER": {
+      "value": "0xfffffebf",
+      "source": "RM0433 Rev 9, 11.4.1, p. 541: GPIOx_MODER resets to 0xFFFF FEBF for port B; 0xABFF FFFF is port A's, which the SVD gives port B by deriving it from port A"
+    },
     "GPIOD.MODER": {
       "value": "0xffffffff",
       "source": "RM0433 Rev 9, 11.4.1, p. 541: GPIOx_MODER resets to 0xFFFF FFFF for ports other than A and B; 0xABFF FFFF is port A's, which the SVD gives port D by deriving it from port A"
@@ -180,7 +231,7 @@
       "commit": "4c77d2ffa6e885b6da9d6fe949c2d6070b21fe7d"
     },
     "header_url": "https://raw.githubusercontent.com/STMicroelectronics/cmsis-device-h7/81db1ec63cdc191fae1565b772da3ea5aa29a683/Include/stm32h753xx.h",
-    "scenario": "prototype 1's UART and DMA: the NUCLEO-H753ZI's ST-LINK virtual COM port is USART3 on PD8 (TX) and PD9 (RX), alternate function 7; DMA1 stream 0 through DMAMUX1 channel 0; TIM2's capture view as the timer's alternate register",
+    "scenario": "prototype 1's UART and DMA: the NUCLEO-H753ZI's ST-LINK virtual COM port is USART3 on PD8 (TX) and PD9 (RX), alternate function 7; DMA1 stream 0 through DMAMUX1 channel 0; TIM2's capture view as the timer's alternate register; and the board application's bring-up and trace: PWR's supply configuration and its ready flag, RCC's reset flags, and LD1 on PB0 as the indicator",
     "manual": {
       "document": "RM0433 Rev 9",
       "input": "rm0433/RM0433.pdf",

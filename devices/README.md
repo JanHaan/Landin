@@ -204,7 +204,9 @@ manifest beside them, and its description in `descriptions/stm32h753`.
 
 | Module | Selected registers | Why |
 |---|---|---|
-| `rcc` | AHB1ENR, AHB4ENR, APB1LENR | the clock enables of DMA1, GPIO port D and USART3 |
+| `rcc` | AHB1ENR, AHB4ENR, APB1LENR, RSR | the clock enables of DMA1, GPIO ports B and D and USART3, and the reset flags the board's boot frame reports |
+| `pwr` | CSR1, CR3 | the supply configuration RM0433 requires after reset, and the flag that says the voltage levels are valid |
+| `gpiob` | MODER, IDR, BSRR | the board's indicator, LD1 on PB0, driven through the set and reset register and read back; port B is derived from port A |
 | `gpiod` | MODER, AFRH | PD8 and PD9 to alternate function 7; port D is derived from port A |
 | `usart3` | CR1, CR3, BRR, ISR, ICR, RDR, TDR | enable, DMA transmit, the divisor, status, clears and data; USART3 is derived from USART1 |
 | `dma1` | LISR, LIFCR, S0CR, S0NDTR, S0PAR, S0M0AR | stream 0's configuration, count and addresses, its status and clears |
@@ -212,7 +214,7 @@ manifest beside them, and its description in `descriptions/stm32h753`.
 | `tim2` | CCMR1_Input | the timer's capture view, the selection's alternate register |
 
 Status registers have no writer, the clear registers LIFCR and ICR no
-reader and a one-clears writer, and RDR one volatile load. DMAMUX1's
+reader and a one-clears writer, BSRR no reader, and RDR one volatile load. DMAMUX1's
 single-bit and polarity fields enumerate values named `B_0x0` and so on,
 which the policy reads as numbers.
 
@@ -231,8 +233,13 @@ masks are DMAMUX2's, and `WWDG1_RST` is at 143, which the header lacks.
 Reset values and access policies are compared with literals reviewed from
 RM0433 Rev 9, each citing its section and page: every selected register
 resets to zero but `USART3_ISR`, 0x0000 00C0 in its FIFO-disabled view
-(48.8.10, p. 2091), and `GPIOD_MODER`, 0xFFFF FFFF (11.4.1, p. 541), which
-the SVD gets wrong by deriving port D from port A and the policy corrects.
+(48.8.10, p. 2091); `GPIOD_MODER`, 0xFFFF FFFF, and `GPIOB_MODER`,
+0xFFFF FEBF (11.4.1, p. 541), which the SVD gets wrong by deriving both
+ports from port A and the policy corrects; `RCC_RSR`, 0x00FE 0000 after a
+power-on reset (8.7.39, p. 450), which the SVD gives as 0 and the policy
+corrects; `PWR_CSR1`, 0x0000 4000 (6.8.2, p. 305), and `PWR_CR3`,
+0x0000 0006 (6.8.4, p. 307); and `GPIOB_IDR`, whose pin levels have no
+known reset value (11.4.5, p. 543).
 `interrupts.ldn` has 166 slots and says its one correction in a line of
 its own (D542).
 
