@@ -5541,7 +5541,8 @@ package body Landin.Stages.Lowering is
                  (Direction,
                   (if Shorthand then Landin.Source.Names.No_Name
                    else Syn.Name (Of_Tree, Argument)),
-                  (if Register = "general" then "" else Register),
+                  (if Register in "general" | "float" then ""
+                   else Register),
                   Kind,
                   (if Direction in IR.Output | IR.Both
                    then IR.Add_Slot

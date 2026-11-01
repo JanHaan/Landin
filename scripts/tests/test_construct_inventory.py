@@ -271,7 +271,7 @@ class Inventory(unittest.TestCase):
                          ("0170", "transferred"),
                          ("0660", "boundary"),
                          ("1350", "boundary"),
-                         ("1630", "transferred")):
+                         ("1630", "boundary")):
             self.assertIn(expected, wording)
         self.assertEqual({how for _, how in wording},
                          {"boundary", "withdrawn", "transferred"})

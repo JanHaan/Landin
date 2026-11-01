@@ -594,8 +594,10 @@ package body Landin.IR.Dump is
                            & (if Operand.Direction = Discarded then ""
                               else " " & Shown (Operand.Kind))
                            & " at "
-                           & (if Operand.Width = 0 then "general"
-                              else Register_Of (Operand))
+                           & (if Operand.Width /= 0
+                              then Register_Of (Operand)
+                              elsif Operand.Kind in Landin.Types.Float_Name
+                              then "float" else "general")
                            & (if Operand.Output = No_Slot then ""
                               else " slot " & Trimmed
                                 (Slot_Id'Image (Operand.Output))));

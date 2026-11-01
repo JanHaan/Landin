@@ -4549,9 +4549,10 @@ result you destructure.
 
 What an operand can be:
 
-- An integer scalar that fits one register. A float operand is refused by
-  name. Float operands are not in Landin yet; they are planned
-  (Language evolution, in [the roadmap](ROADMAP.md)).
+- An integer scalar that fits one register, placed `at general` or at an
+  integer register, or an `f32` or `f64`, placed `at float` or at a float
+  register: `xmm3`, `v3`, `f3`. A target without float registers, such as
+  a Cortex-M with no float unit, refuses a float operand.
 - A pointer crosses as `usize(p)` and comes back through `ptr(u)`, whose
   zero check then happens there. A flag comes back as `x <> 0`.
 - Inputs are evaluated once, left to right, before the block runs.
@@ -4560,11 +4561,26 @@ What an operand can be:
   against that parameter, and an immutable buffer is refused there rather
   than handed to the system.
 
+Landin has no square-root builtin, so a block is how you reach the
+instruction. `float` chooses a float register, as `general` chooses an
+integer one, and the text spells it at the operand's width: `%xmm1` for
+either on x86-64, `d1` or `s1` on arm64.
+
+```landin
+root: (x: f64) -> (r: f64) =
+    r = assembler.block("sqrtsd {x}, {r}", in x: f64 at float = x,
+                        out r: f64 at float)
+end root
+```
+
 What a block may touch: every block may overwrite the registers a call may,
 and the flags. A register a call must preserve is declared, as an operand
-or as a discarded output `out _ at rbx`, and that is what makes the routine
-save it. The frame, stack and link registers are never named, so a block
-cannot break a backtrace. The language reserves no register of its own.
+or as a discarded output `out _ at rbx`, or `out _ at v8` for a float one,
+and that is what makes the routine save it. The frame, stack and link
+registers are never named, so a block cannot break a backtrace. The
+language reserves no register of its own. A block that changes x86-64's
+direction flag, or a float unit's rounding mode or exception flags, puts
+them back before it ends.
 
 Every block is opaque to the compiler: memory knowledge is invalidated and
 memory accesses cannot be moved across it, which is exactly what a critical

@@ -1,0 +1,6 @@
+f: (value: f64) -> none =
+    assembler.block("fadd {a}, {a}, {b}", in a: f64 at v1 = value,
+                    in b: f32 at v1 = f32(value))
+    assembler.block("fmov d9, {v}", in v: f64 at float = value)
+    assembler.block("fmov {r}, d9", out r: f64 at v9, out _ at v9)
+end f

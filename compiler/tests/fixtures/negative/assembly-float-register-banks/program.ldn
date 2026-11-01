@@ -1,0 +1,7 @@
+f: (value: f64, count: u64) -> none =
+    assembler.block("movq {v}, %rax", in v: f64 at rax = value)
+    assembler.block("movq {v}, %rax", in v: f64 at general = value)
+    assembler.block("movq {n}, %xmm0", in n: u64 at xmm1 = count)
+    assembler.block("movq {n}, %xmm0", in n: u64 at float = count)
+    assembler.block("xorps %xmm2, %xmm2", out _ at float)
+end f

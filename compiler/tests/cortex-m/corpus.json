@@ -469,6 +469,13 @@
     "runtime/assembly-every-general-register": {
       "mode": "execute"
     },
+    "runtime/assembly-float-square-root": {
+      "codes": [
+        "L0330"
+      ],
+      "mode": "refuse",
+      "reason": "Cortex-M0's reference profile has no float unit: `vsqrt` is no armv6-m instruction, and its float operands have no float register to be placed at (D630)."
+    },
     "runtime/assembly-memory-boundary": {
       "mode": "execute"
     },
@@ -483,6 +490,9 @@
       "mode": "execute"
     },
     "runtime/assembly-operands": {
+      "mode": "execute"
+    },
+    "runtime/assembly-saved-float-registers": {
       "mode": "execute"
     },
     "runtime/assembly-saved-registers": {

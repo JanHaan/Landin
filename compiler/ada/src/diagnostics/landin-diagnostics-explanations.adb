@@ -432,7 +432,14 @@ package body Landin.Diagnostics.Explanations is
                & " the report names the binding to pass instead, `values :"
                & "= [...]`, or `values: [N]E = [...]` when an element such"
                & " as `any(addr x)` needs a context, which an inferred bin"
-               & "ding does not give.",
+               & "ding does not give."
+               & LF
+               & LF
+               & "An `f32` or `f64` assembly operand [1630] is placed in a"
+               & " float register, and a profile with no float registers, "
+               & "a Cortex-M with no float unit among them, has none to pl"
+               & "ace it in (D630). There a block takes integer operands o"
+               & "nly.",
             when Catalogue.Not_Known_At_Compile_Time =>
                "A required static value or initial image cannot be estab"
                & "lished before the program runs [1940] (D136, D202). A mo"

@@ -9472,6 +9472,163 @@ package body Landin.Tests.Backend_Suite is
    --  refusal, under Darwin's description and Linux's alike, of x18, the
    --  platform register no block may name, and of every other name that is
    --  no operand register.
+   --  D630: a float operand moves through its own bank on every hosted
+   --  backend; a declared callee-saved float register is saved and
+   --  restored; an integer output set aside while every address register
+   --  waits never lands in a float output's register; and the verifier
+   --  holds each operand to the bank its type selects.
+   procedure Float_Operands_Keep_Their_Banks
+     (Item : in out Landin.Testing.Context);
+
+   procedure Float_Operands_Keep_Their_Banks
+     (Item : in out Landin.Testing.Context)
+   is
+      use type IR.Verifier.Fault_Kind;
+      use type IR.Opcode;
+
+      function Outputs (Count : Natural) return String
+        is (if Count = 0 then ""
+            else Outputs (Count - 1) & ", out o"
+              & Ada.Strings.Fixed.Trim (Natural'Image (Count - 1),
+                                        Ada.Strings.Left)
+              & ": u64 at x"
+              & Ada.Strings.Fixed.Trim (Natural'Image (Count - 1),
+                                        Ada.Strings.Left));
+
+      Full : constant String :=
+        "f: (v: f64) -> (r: f64) =" & LF
+        & "    (" & "q, o0, o1, o2, o3, o4, o5, o6, o7, o8, o9, o10, o11,"
+        & " o12, o13, o14, o15, o16, o17) := assembler.block(" & LF
+        & "        ""fmov d16, {v}\nfmov d8, {v}\nfmov d17, d8"","
+        & " out q: f64 at v16, in v: f64 at float = v,"
+        & " out _ at v8" & Outputs (18) & ")" & LF
+        & "    r = q + f64(o0 + o17)" & LF
+        & "end f" & LF;
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_Arm64);
+      Ran  : Natural;
+      Assembly : Ada.Strings.Unbounded.Unbounded_String;
+      Report : Landin.Build_Reports.Report;
+   begin
+      Lower (Work, Full, Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
+      Landin.Backend.Arm64.Emit
+        (Landin.Stages.Code (Work).all,
+         Landin.Stages.Meanings (Work).all,
+         Landin.Stages.Identities (Work).all,
+         Landin.Stages.Target (Work), Landin.Optimization.Reference_Options,
+         Assembly, Report);
+      declare
+         Text : constant String := Ada.Strings.Unbounded.To_String (Assembly);
+         function Count (Part : String) return Natural
+           is (Ada.Strings.Fixed.Count (Text, Part));
+      begin
+         Landin.Testing.Check
+           (Item, Count (HT & "fmov d16, d0" & LF) = 1
+              and then Count ("fmov d17, x0" & LF) = 1
+              and then Count ("fmov x17, d17" & LF) = 1
+              and then Count ("fmov d16, x0") = 0,
+            "the integer set aside waits in a float register no float"
+            & " output holds");
+         Landin.Testing.Check
+           (Item, Count ("str d16, [") = 1,
+            "the float output is stored from its own register");
+         Landin.Testing.Check
+           (Item, Count ("str d8, [x15]") = 1
+              and then Count ("ldr d8, [x15]") = 1,
+            "a declared v8 is saved once and restored by the one epilogue");
+      end;
+      declare
+         Code : constant not null access IR.Unit :=
+           Landin.Stages.Code (Work);
+         Block : IR.Value_Id := IR.No_Value;
+      begin
+         for V in 1 .. IR.Value_Count (Code.all, 1) loop
+            if IR.Op_Of (Code.all, 1, IR.Value_Id (V)) = IR.Assembly then
+               Block := IR.Value_Id (V);
+            end if;
+         end loop;
+         Landin.Testing.Check
+           (Item, IR.Verifier.Check (Code.all, Landin.Targets.Linux_Arm64)
+                    .Kind = IR.Verifier.Nothing_Wrong,
+            "the lowered block verifies");
+         Landin.Testing.Check
+           (Item, IR.Verifier.Check (Code.all, Landin.Targets.Cortex_M).Kind
+                    = IR.Verifier.Assembly_Register_Refused,
+            "a target with no float registers refuses a float operand");
+         IR.Testing_Support.Overwrite_Assembly_Operand
+           (Code.all, 1, Block, 2,
+            IR.Operand_At
+              (IR.Input, IR.Nth_Assembly_Operand (Code.all, 1, Block, 2).Name,
+               "x9", Landin.Types.F64));
+         Landin.Testing.Check
+           (Item, IR.Verifier.Check (Code.all, Landin.Targets.Linux_Arm64)
+                    .Kind = IR.Verifier.Assembly_Register_Refused,
+            "the verifier refuses a float at an integer register");
+         IR.Testing_Support.Overwrite_Assembly_Operand
+           (Code.all, 1, Block, 2,
+            IR.Operand_At
+              (IR.Input, IR.Nth_Assembly_Operand (Code.all, 1, Block, 2).Name,
+               "v3", Landin.Types.F64));
+         Landin.Testing.Check
+           (Item, IR.Verifier.Check (Code.all, Landin.Targets.Linux_Arm64)
+                    .Kind = IR.Verifier.Nothing_Wrong,
+            "a float at a fixed float register verifies");
+         IR.Testing_Support.Overwrite_Assembly_Operand
+           (Code.all, 1, Block, 4,
+            IR.Operand_At
+              (IR.Output, IR.Nth_Assembly_Operand (Code.all, 1, Block, 4).Name,
+               "v4", Landin.Types.U64,
+               IR.Nth_Assembly_Operand (Code.all, 1, Block, 4).Output));
+         Landin.Testing.Check
+           (Item, IR.Verifier.Check (Code.all, Landin.Targets.Linux_Arm64)
+                    .Kind = IR.Verifier.Assembly_Register_Refused,
+            "the verifier refuses an integer at a float register");
+      end;
+
+      declare
+         RV64 : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_RV64);
+         RV64_Assembly : Ada.Strings.Unbounded.Unbounded_String;
+         RV64_Report : Landin.Build_Reports.Report;
+      begin
+         Lower
+           (RV64,
+            "f: (v: f32) -> (r: f32) =" & LF
+            & "    r = assembler.block(""fmv.s fs0, {v}\nfadd.s {r}, fs0,"
+            & " {v}"", in v: f32 at float = v, out r: f32 at f17,"
+            & " out _ at f8)" & LF
+            & "end f" & LF,
+            Ran);
+         Landin.Testing.Check_Equal (Item, Ran, 5, "five RV64 stages ran");
+         Landin.Backend.RiscV.Emit
+           (Landin.Stages.Code (RV64).all,
+            Landin.Stages.Meanings (RV64).all,
+            Landin.Stages.Identities (RV64).all,
+            Landin.Stages.Target (RV64),
+            Landin.Optimization.Reference_Options, RV64_Assembly,
+            RV64_Report);
+         declare
+            Text : constant String :=
+              Ada.Strings.Unbounded.To_String (RV64_Assembly);
+            function Count (Part : String) return Natural
+              is (Ada.Strings.Fixed.Count (Text, Part));
+         begin
+            Landin.Testing.Check
+              (Item, Count (HT & "flw f0, 0(x5)" & LF
+                            & HT & "fmv.s fs0, f0" & LF
+                            & HT & "fadd.s f17, fs0, f0" & LF) = 1
+                 and then Count ("fsw f17, 0(") = 1,
+               "RV64 loads a float input, fills its slots and stores its"
+               & " float output at its width");
+            Landin.Testing.Check
+              (Item, Count ("fsd f8, 0(x5)") = 1
+                 and then Count ("fld f8, 0(x5)") = 1,
+               "RV64 saves and restores a declared f8 once");
+         end;
+      end;
+   end Float_Operands_Keep_Their_Banks;
+
    procedure Arm64_Assembly_Saves_What_It_Declares
      (Item : in out Landin.Testing.Context);
 
@@ -10281,6 +10438,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "assembly blocks keep their registers",
          Assembly_Blocks_Keep_Their_Registers'Access);
+      Landin.Testing.Register
+        (Into, "backend", "float assembly operands keep their banks",
+         Float_Operands_Keep_Their_Banks'Access);
       Landin.Testing.Register
         (Into, "backend", "RV64 assembly registers are verified",
          RV64_Assembly_Registers_Are_Verified'Access);

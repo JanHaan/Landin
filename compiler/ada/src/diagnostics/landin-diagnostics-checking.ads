@@ -131,10 +131,9 @@ package Landin.Diagnostics.Checking is
       --  migration guidance for the unresolved type spelling; a declared
       --  ordinary type of that name has already resolved normally.
       Arena_Region,
-      --  D248 keeps [1630]'s operands to integer registers and transfers
-      --  float operands to Language evolution: Cortex-M0 has no float
-      --  register, and the float instructions assembly would reach are
-      --  builtins by [1560]'s rule.
+      --  D630 places a float operand in a float register, and a profile
+      --  with no float unit has none to hold it: armv6-m, and any Cortex-M
+      --  description that selects no float unit.
       Float_Operand);
 
    function Construct (Item : Refused_Use)
@@ -201,10 +200,10 @@ private
             --  [0150] and [0170] are otherwise enabled.
             when Wide_Integer_Type
                | Narrow_Float_Type  => Transferred,
-            --  D248 transfers float assembly operands to the same successor,
-            --  whose trigger is a program that needs one or a target with
-            --  float registers.
-            when Float_Operand      => Transferred,
+            --  D630 records a float assembly operand on a profile without
+            --  float registers as that profile's boundary: there is no
+            --  register to place it at.
+            when Float_Operand      => Recorded_Boundary,
             --  D241 leaves each aggregate form its permanent source
             --  boundary: a value that needs a destination it was not
             --  given, a module image [1940] cannot fold, or a guard no

@@ -116,7 +116,17 @@ package body Landin.Backend.RiscV is
 
    --  Integer callee-save registers declared by assembly, together with
    --  the backend's fixed scratch homes, are preserved across every call.
-   type Saved_Set is array (9 .. 27) of Boolean;
+   --  So are the float ones a block declares, f8, f9 and f18-f27 (D630),
+   --  numbered as DWARF numbers them, 32 above their own: 40, 41, 50-59.
+   type Saved_Set is array (9 .. 59) of Boolean;
+
+   subtype Saved_Float is Natural range 40 .. 59;
+
+   --  A saved register as the assembler spells it.
+   function Saved_Name (Number : Natural) return String
+     is ((if Number in Saved_Float then "f" & Trimmed
+            (Natural'Image (Number - 32))
+          else "x" & Trimmed (Natural'Image (Number))));
 
    function Declared
      (Of_Unit : Landin.IR.Unit; Item : Landin.IR.Item_Id) return Saved_Set;
@@ -135,11 +145,11 @@ package body Landin.Backend.RiscV is
                  (Of_Unit, Item, Value)
                loop
                   for Number in Result'Range loop
-                     if Number in 9 | 18 .. 27
+                     if Number in 9 | 18 .. 27 | 40 | 41 | 50 .. 59
                        and then Landin.IR.Register_Of
                           (Landin.IR.Nth_Assembly_Operand
                              (Of_Unit, Item, Value, Which))
-                        = "x" & Trimmed (Natural'Image (Number))
+                        = Saved_Name (Number)
                      then
                         Result (Number) := True;
                      end if;
@@ -1693,7 +1703,8 @@ package body Landin.Backend.RiscV is
             for Number in Saves'Range loop
                if Saves (Number) then
                   Frame_Address (Save_Home (Number), "x5");
-                  Emit ("ld x" & Trimmed (Natural'Image (Number)) & ", 0(x5)");
+                  Emit ((if Number in Saved_Float then "fld " else "ld ")
+                        & Saved_Name (Number) & ", 0(x5)");
                   if Debug /= null then
                      Emit (".cfi_restore "
                            & Trimmed (Natural'Image (Number)));
@@ -2438,8 +2449,13 @@ package body Landin.Backend.RiscV is
          end C_Result;
 
          --  Numeric integer operands use their own address register;
-         --  outputs remain live until copied, with f0 as the full-register
-         --  escape carrier when every caller scratch register is occupied.
+         --  outputs remain live until copied, with a float register no
+         --  float output holds, f0 first, as the full-register escape
+         --  carrier when every caller scratch register is occupied, and
+         --  the stack when every such float register is an output too.
+         --  Float inputs are loaded first, through x5 while it is still
+         --  free, and float outputs stored through a free scratch register
+         --  as integer ones are (D630).
          procedure Assembly_Block (Value : Landin.IR.Value_Id);
 
          procedure Assembly_Block (Value : Landin.IR.Value_Id) is
@@ -2448,15 +2464,20 @@ package body Landin.Backend.RiscV is
                    (Of_Unit, Item, Value, Names, Facts);
             Text : constant String := Landin.Backend.Assembly_Text
               (Of_Unit, Item, Value, Names, Facts);
-            Inputs : Natural := 0;
             Start : Natural := Text'First;
             Waiting : array (0 .. 31) of Boolean := [others => False];
+            Float_Held : array (0 .. 31) of Boolean := [others => False];
+            Input_Of : array (Chosen'Range) of Natural := [others => 0];
             Aside : Natural := 0;
+            Aside_Float : Natural := Natural'Last;
 
             function Operand (Index : Positive)
               return Landin.IR.Assembly_Operand
               is (Landin.IR.Nth_Assembly_Operand
                     (Of_Unit, Item, Value, Index));
+
+            function Is_Float (Index : Positive) return Boolean
+              is (Operand (Index).Kind in Landin.Types.Float_Name);
 
             function Register (Index : Positive) return String
               is (Unbounded.To_String (Chosen (Index).Register));
@@ -2465,6 +2486,11 @@ package body Landin.Backend.RiscV is
               is (Natural'Value
                     (Register (Index) (Register (Index)'First + 1
                        .. Register (Index)'Last)));
+
+            --  `w` or `d`: the width a float operand moves at.
+            function Width_Letter (Index : Positive) return String
+              is (if Operand (Index).Kind = Landin.Types.F32 then "w"
+                  else "d");
 
             function Free return String;
 
@@ -2487,25 +2513,57 @@ package body Landin.Backend.RiscV is
             begin
                Frame_Address (Slot_Offset (Layout, Operand (Index).Output),
                               Base);
-               Memory (True, Size_Of (Operand (Index).Kind, Facts),
-                       From, Base);
+               if Is_Float (Index) then
+                  Emit ("fs" & Width_Letter (Index) & " " & From & ", 0("
+                        & Base & ")");
+               else
+                  Memory (True, Size_Of (Operand (Index).Kind, Facts),
+                          From, Base);
+               end if;
             end Store;
          begin
-            for Index in Chosen'Range loop
-               if Operand (Index).Direction
-                 in Landin.IR.Input | Landin.IR.Both
-               then
-                  Inputs := Inputs + 1;
-                  Frame_Address
-                    (Value_Offset (Layout, Landin.IR.Nth_Operand
-                       (Of_Unit, Item, Value, Inputs)), Register (Index));
-                  Memory (False, Size_Of (Operand (Index).Kind, Facts),
-                          Register (Index), Register (Index));
-                  Extend (Register (Index), Operand (Index).Kind);
-               end if;
-               if Operand (Index).Output /= Landin.IR.No_Slot then
-                  Waiting (Number (Index)) := True;
-               end if;
+            declare
+               Inputs : Natural := 0;
+            begin
+               for Index in Chosen'Range loop
+                  if Operand (Index).Direction
+                    in Landin.IR.Input | Landin.IR.Both
+                  then
+                     Inputs := Inputs + 1;
+                     Input_Of (Index) := Inputs;
+                  end if;
+                  if Operand (Index).Output /= Landin.IR.No_Slot then
+                     if Is_Float (Index) then
+                        Float_Held (Number (Index)) := True;
+                     else
+                        Waiting (Number (Index)) := True;
+                     end if;
+                  end if;
+               end loop;
+            end;
+            for Float in reverse Boolean loop
+               for Index in Chosen'Range loop
+                  if Input_Of (Index) /= 0 and then Is_Float (Index) = Float
+                  then
+                     declare
+                        Home : constant Landin.Targets.Byte_Count :=
+                          Value_Offset (Layout, Landin.IR.Nth_Operand
+                            (Of_Unit, Item, Value, Input_Of (Index)));
+                     begin
+                        if Float then
+                           Frame_Address (Home, "x5");
+                           Emit ("fl" & Width_Letter (Index) & " "
+                                 & Register (Index) & ", 0(x5)");
+                        else
+                           Frame_Address (Home, Register (Index));
+                           Memory (False,
+                                   Size_Of (Operand (Index).Kind, Facts),
+                                   Register (Index), Register (Index));
+                           Extend (Register (Index), Operand (Index).Kind);
+                        end if;
+                     end;
+                  end if;
+               end loop;
             end loop;
             for Index in Text'First .. Text'Last + 1 loop
                if Index > Text'Last or else Text (Index) = LF then
@@ -2524,12 +2582,28 @@ package body Landin.Backend.RiscV is
               (if Candidate in 5 .. 7 | 28 .. 31
                then Waiting (Candidate) else True))
             then
+               for Candidate in 0 .. 31 loop
+                  if Candidate in 0 .. 7 | 10 .. 17 | 28 .. 31
+                    and then not Float_Held (Candidate)
+                  then
+                     Aside_Float := Candidate;
+                     exit;
+                  end if;
+               end loop;
                for Index in Chosen'Range loop
                   if Operand (Index).Output /= Landin.IR.No_Slot
+                    and then not Is_Float (Index)
                     and then Number (Index) in 5 .. 7 | 28 .. 31
                   then
                      Aside := Index;
-                     Emit ("fmv.d.x f0, " & Register (Index));
+                     if Aside_Float = Natural'Last then
+                        Emit ("addi sp, sp, -16");
+                        Emit ("sd " & Register (Index) & ", 0(sp)");
+                     else
+                        Emit ("fmv.d.x f"
+                              & Trimmed (Natural'Image (Aside_Float))
+                              & ", " & Register (Index));
+                     end if;
                      Waiting (Number (Index)) := False;
                      exit;
                   end if;
@@ -2540,7 +2614,9 @@ package body Landin.Backend.RiscV is
                  and then Index /= Aside
                then
                   Store (Index, Register (Index));
-                  Waiting (Number (Index)) := False;
+                  if not Is_Float (Index) then
+                     Waiting (Number (Index)) := False;
+                  end if;
                end if;
             end loop;
             if Aside /= 0 then
@@ -2549,7 +2625,13 @@ package body Landin.Backend.RiscV is
                begin
                   Waiting (Natural'Value (Held (Held'First + 1 .. Held'Last)))
                     := True;
-                  Emit ("fmv.x.d " & Held & ", f0");
+                  if Aside_Float = Natural'Last then
+                     Emit ("ld " & Held & ", 0(sp)");
+                     Emit ("addi sp, sp, 16");
+                  else
+                     Emit ("fmv.x.d " & Held & ", f"
+                           & Trimmed (Natural'Image (Aside_Float)));
+                  end if;
                   Store (Aside, Held);
                end;
             end if;
@@ -3922,7 +4004,8 @@ package body Landin.Backend.RiscV is
          for Number in Saves'Range loop
             if Saves (Number) then
                Frame_Address (Save_Home (Number), "x5");
-               Emit ("sd x" & Trimmed (Natural'Image (Number)) & ", 0(x5)");
+               Emit ((if Number in Saved_Float then "fsd " else "sd ")
+                     & Saved_Name (Number) & ", 0(x5)");
                if Debug /= null then
                   --  The home sits below the CFA and saved-frame header.
                   Emit (".cfi_offset " & Trimmed (Natural'Image (Number))

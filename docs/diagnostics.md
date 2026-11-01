@@ -623,6 +623,10 @@ from the arguments, the report names the binding to pass instead,
 `values := [...]`, or `values: [N]E = [...]` when an element such as
 `any(addr x)` needs a context, which an inferred binding does not give.
 
+An `f32` or `f64` assembly operand [1630] is placed in a float register, and
+a profile with no float registers, a Cortex-M with no float unit among them,
+has none to place it in (D630). There a block takes integer operands only.
+
 ```landin
 holder: type = struct
     kind: variant

@@ -1,3 +1,4 @@
-f: (value: f32) -> none =
+f: (value: f32, wide: f64) -> none =
     assembler.block("nop", in v: f32 at r1 = value)
+    assembler.block("nop", in w: f64 at float = wide)
 end f

@@ -1,0 +1,83 @@
+--  D630: Landin has no square-root builtin, so a block is the natural
+--  way to reach the instruction.  A float operand is placed at `float`,
+--  which chooses one of the registers every block overwrites, or at a
+--  fixed float register, and its type selects the spelling: x86-64's
+--  `%xmmN` for both widths, arm64's `sN` or `dN`, RV64's `fN`.  `widened`
+--  takes an integer through `general` and gives a float back through
+--  `float`, the two classes counted apart.
+fixed if compiler.arch == x86_64 then
+    root: (x: f64) -> (r: f64) =
+        r = assembler.block("sqrtsd {x}, {r}", in x: f64 at float = x,
+                            out r: f64 at float)
+    end root
+    root32: (x: f32) -> (r: f32) =
+        r = assembler.block("sqrtss {x}, {x}", inout x: f32 at xmm9 = x)
+    end root32
+    widened: (n: i64) -> (r: f64) =
+        r = assembler.block("cvtsi2sdq {n}, {r}", in n: i64 at general = n,
+                            out r: f64 at float)
+    end widened
+elsif compiler.arch == arm64 then
+    root: (x: f64) -> (r: f64) =
+        r = assembler.block("fsqrt {r}, {x}", in x: f64 at float = x,
+                            out r: f64 at float)
+    end root
+    root32: (x: f32) -> (r: f32) =
+        r = assembler.block("fsqrt {x}, {x}", inout x: f32 at v20 = x)
+    end root32
+    widened: (n: i64) -> (r: f64) =
+        r = assembler.block("scvtf {r}, {n}", in n: i64 at general = n,
+                            out r: f64 at float)
+    end widened
+elsif compiler.arch == rv64 then
+    root: (x: f64) -> (r: f64) =
+        r = assembler.block("fsqrt.d {r}, {x}", in x: f64 at float = x,
+                            out r: f64 at float)
+    end root
+    root32: (x: f32) -> (r: f32) =
+        r = assembler.block("fsqrt.s {x}, {x}", inout x: f32 at f12 = x)
+    end root32
+    widened: (n: i64) -> (r: f64) =
+        r = assembler.block("fcvt.d.l {r}, {n}", in n: i64 at general = n,
+                            out r: f64 at float)
+    end widened
+else
+    --  A Cortex-M profile with no float unit has no float register to
+    --  hold one, so the operand is refused there (D630).
+    root: (x: f64) -> (r: f64) =
+        r = assembler.block("vsqrt.f64 {r}, {x}", in x: f64 at float = x,
+                            out r: f64 at float)
+    end root
+    root32: (x: f32) -> (r: f32) =
+        r = assembler.block("vsqrt.f32 {x}, {x}", inout x: f32 at float = x)
+    end root32
+    widened: (n: i64) -> (r: f64) =
+        r = f64(n)
+    end widened
+end if
+
+public main: () -> (code: i32) =
+    mut wrong: u32 = 0
+    for k in 1..41 do
+        --  Every input is made at run time, and a perfect square's root
+        --  is exact at both widths.
+        x := widened(i64(k))
+        if root(x * x) <> x then
+            wrong = wrong + 1
+        end if
+        y := f32(k)
+        if root32(y * y) <> y then
+            wrong = wrong + 1
+        end if
+    end for
+    --  A square root is correctly rounded, so the root of two is the
+    --  nearest float to it at each width.
+    two := widened(2)
+    if root(two) <> 1.4142135623730951 then
+        wrong = wrong + 1
+    end if
+    if root32(f32(two)) <> 1.4142135 then
+        wrong = wrong + 1
+    end if
+    code = if wrong == 0 then 42 else i32(wrong) end if
+end main

@@ -1570,10 +1570,14 @@ package body Landin.Tests.Targets_Suite is
       use Ada.Strings.Unbounded;
       use type Asm.Register_Kind;
 
-      function Operand (Name, Register : String; Bits : Bit_Width)
+      type Hosted_Facts is array (Positive range <>) of Target_Facts;
+
+      function Operand
+        (Name, Register : String; Bits : Bit_Width; Float : Boolean := False)
         return Asm.Operand_Register_Choice
         is (Name => To_Unbounded_String (Name),
-            Register => To_Unbounded_String (Register), Bits => Bits);
+            Register => To_Unbounded_String (Register), Bits => Bits,
+            Float => Float);
    begin
       for Case_Of in 1 .. 12 loop
          declare
@@ -1686,6 +1690,8 @@ package body Landin.Tests.Targets_Suite is
            and then Asm.Names_Reserved (Linux_RV64, "fp")
            and then Asm.Names_Reserved (Linux_RV64, "zero"),
          "ABI aliases keep canonical operands and saved-register checks");
+      --  D630: every float register is an operand's, and LP64D's
+      --  preserved ones are declared, as its preserved integers are.
       for Index in 0 .. 31 loop
          declare
             Image : constant String := Natural'Image (Index);
@@ -1693,19 +1699,29 @@ package body Landin.Tests.Targets_Suite is
               "f" & Image (Image'First + 1 .. Image'Last);
          begin
             Landin.Testing.Check
-              (Item, Asm.Names_Reserved (Linux_RV64, Register)
-                 = (Index in 8 .. 9 | 18 .. 27),
-               "only preserved FP registers need undeclarable float operands");
+              (Item, not Asm.Names_Reserved (Linux_RV64, Register)
+                 and then Asm.Classify (Linux_RV64, Register)
+                   = Asm.Float_Register
+                 and then Asm.Overwritten (Linux_RV64, Register)
+                   = (Index not in 8 .. 9 | 18 .. 27),
+               "only LP64D's preserved float registers need declaring");
          end;
       end loop;
       Landin.Testing.Check
-        (Item, not Asm.Names_Reserved (Linux_RV64, "fa0")
-           and then not Asm.Names_Reserved (Linux_RV64, "fa7")
-           and then not Asm.Names_Reserved (Linux_RV64, "ft0")
-           and then not Asm.Names_Reserved (Linux_RV64, "ft11")
-           and then Asm.Names_Reserved (Linux_RV64, "fs0")
-           and then Asm.Names_Reserved (Linux_RV64, "fs11"),
-         "FP ABI aliases preserve the caller and callee register distinction");
+        (Item, Asm.Canonical (Linux_RV64, "ft0") = "f0"
+           and then Asm.Canonical (Linux_RV64, "ft7") = "f7"
+           and then Asm.Canonical (Linux_RV64, "fs0") = "f8"
+           and then Asm.Canonical (Linux_RV64, "fs1") = "f9"
+           and then Asm.Canonical (Linux_RV64, "fa0") = "f10"
+           and then Asm.Canonical (Linux_RV64, "fa7") = "f17"
+           and then Asm.Canonical (Linux_RV64, "fs2") = "f18"
+           and then Asm.Canonical (Linux_RV64, "fs11") = "f27"
+           and then Asm.Canonical (Linux_RV64, "ft8") = "f28"
+           and then Asm.Canonical (Linux_RV64, "ft11") = "f31"
+           and then Asm.Canonical (Linux_RV64, "fa8") = ""
+           and then Asm.Canonical (Linux_RV64, "fsd") = ""
+           and then Asm.Classify (Linux_RV64, "fa0") = Asm.Not_A_Register,
+         "FP ABI aliases name the registers their numbers do");
       declare
          Block : Asm.Operand_Register_Array := [Operand ("r", "", 32)];
          Text : constant String := "add {r}, t0, a0";
@@ -1739,6 +1755,72 @@ package body Landin.Tests.Targets_Suite is
       --  The system call returns to the next instruction on every hosted
       --  architecture, so each admits its own; RV64's breakpoint, like
       --  every other control transfer, stays refused.
+      --  D630: the float class on every target that has float registers,
+      --  each register spelled at its float's width, and its views.
+      Landin.Testing.Check
+        (Item, Asm.Classify (Linux_X86_64, "float") = Asm.Float_Class
+           and then Asm.Classify (Cortex_M, "float") = Asm.Float_Class
+           and then not Asm.Has_Float_Registers (Cortex_M)
+           and then Asm.Has_Float_Registers (Linux_X86_64)
+           and then Asm.Has_Float_Registers (Darwin_Arm64)
+           and then Asm.Has_Float_Registers (Linux_RV64)
+           and then Asm.Classify (Linux_X86_64, "xmm15") = Asm.Float_Register
+           and then Asm.Classify (Linux_X86_64, "xmm16") = Asm.Not_A_Register
+           and then Asm.Classify (Darwin_Arm64, "v8") = Asm.Float_Register
+           and then Asm.Classify (Darwin_Arm64, "d8") = Asm.Not_A_Register
+           and then Asm.Spelled (Linux_X86_64, "xmm3", 32) = "%xmm3"
+           and then Asm.Spelled (Linux_X86_64, "xmm3", 64) = "%xmm3"
+           and then Asm.Spelled (Darwin_Arm64, "v9", 32) = "s9"
+           and then Asm.Spelled (Darwin_Arm64, "v9", 64) = "d9"
+           and then Asm.Spelled (Linux_RV64, "f9", 32) = "f9"
+           and then Asm.Canonical (Linux_X86_64, "ymm4") = "xmm4"
+           and then Asm.Canonical (Linux_X86_64, "zmm15") = "xmm15"
+           and then Asm.Canonical (Darwin_Arm64, "q8") = "v8"
+           and then Asm.Canonical (Darwin_Arm64, "h31") = "v31"
+           and then Asm.Canonical (Darwin_Arm64, "b0") = "v0"
+           and then not Asm.Names_Reserved (Darwin_Arm64, "d8")
+           and then not Asm.Overwritten (Darwin_Arm64, "v8")
+           and then not Asm.Overwritten (Darwin_Arm64, "v15")
+           and then Asm.Overwritten (Darwin_Arm64, "v16")
+           and then Asm.Overwritten (Linux_X86_64, "xmm15"),
+         "float registers are classified, spelled and named at every view");
+      Landin.Testing.Check
+        (Item, Asm.Float_Count (Linux_X86_64) = 16
+           and then Asm.Float_Count (Linux_Arm64) = 24
+           and then Asm.Float_Count (Linux_RV64) = 20
+           and then Asm.Float_Count (Cortex_M) = 0
+           and then Asm.Float_Class_Register (Linux_X86_64, 16) = "xmm15"
+           and then Asm.Float_Class_Register (Linux_Arm64, 8) = "v7"
+           and then Asm.Float_Class_Register (Linux_Arm64, 9) = "v16"
+           and then Asm.Float_Class_Register (Linux_Arm64, 24) = "v31"
+           and then Asm.Float_Class_Register (Linux_RV64, 9) = "f10"
+           and then Asm.Float_Class_Register (Linux_RV64, 17) = "f28"
+           and then Asm.Float_Class_Register (Linux_RV64, 20) = "f31",
+         "float's class in its table order");
+      for Facts of Hosted_Facts'[Linux_X86_64, Linux_Arm64, Linux_RV64] loop
+         for Index in 1 .. Asm.Float_Count (Facts) loop
+            Landin.Testing.Check
+              (Item, Asm.In_Float_Class
+                 (Facts, Asm.Float_Class_Register (Facts, Index)),
+               "every register float chooses is one every block overwrites");
+         end loop;
+      end loop;
+      declare
+         Text : constant String :=
+           "fadd {a}, {b}, d0, {n}" & ASCII.LF & "fmov s1, {c}";
+         Block : Asm.Operand_Register_Array :=
+           [Operand ("a", "", 64, Float => True), Operand ("n", "", 64),
+            Operand ("b", "", 32, Float => True),
+            Operand ("c", "v16", 32, Float => True)];
+      begin
+         Asm.Choose (Linux_Arm64, Text, Block);
+         Landin.Testing.Check_Equal
+           (Item, Asm.Substituted (Linux_Arm64, Text, Block),
+            "fadd d2, s3, d0, x0" & ASCII.LF & "fmov s1, s16",
+            "float chooses past the registers the text names, apart from"
+            & " general");
+      end;
+
       Landin.Testing.Check
         (Item, Asm.Text_Error (Linux_RV64, "ecall") = ""
            and then Asm.Text_Error (Linux_X86_64, "syscall") = ""

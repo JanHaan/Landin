@@ -773,10 +773,11 @@ C controls, and abstract model assertions.
 `Backend.X86_64` emits a block's text as written, one instruction a line and
 outside selection, so no rewrite reaches it; body sharing still compares it.
 Each input is moved into its register at its type's width, zero- or
-sign-extended to the whole register (`movz`/`movs`, `movl`, `movslq`), and
-each output is stored from its register into its slot. In a routine with
-assembly the allocator hands out only rbx and r12-r15, and none a block of
-the routine declares: that register
+sign-extended to the whole register (`movz`/`movs`, `movl`, `movslq`), a
+float one with `movss` or `movsd` (D630), and each output is stored from its
+register into its slot. In a routine with assembly the allocator hands out
+only rbx and r12-r15, no XMM register at all, and none a block of the
+routine declares: that register
 is marked saved instead, so the prologue stores it with a `.cfi_offset` and
 every epilogue restores it. No value therefore lives in a register a block
 names or overwrites, which is what lets inputs and outputs move directly.
@@ -789,13 +790,18 @@ slot may hold a register over its live interval: x0-x7, or d18-d31 for a
 float, where no call crosses it, else x19-x24 or d8-d15. Its optimized
 value plan reuses nonoverlapping scalar homes and at speed may hold
 eligible values in the same registers, x19-x28 standing for x19-x24;
-assembly leaves values only x19-x28 and d8-d15, which no block may name.
-A block's declared registers are excluded from that plan. Each input is loaded
-through its own register, which addresses its home first, and extended to the
-whole register (`sxtb`, `sxth`, `sxtw`); the text is emitted as written; and
-each output is stored through a register no waiting output holds. A block whose outputs hold all of x0-x17 moves its first
-aside into d16, which every block may overwrite and none may name, and stores
-it last. A declared x19-x28 gets a frame home: the prologue stores it after
+assembly leaves values only x19-x28 and d8-d15, which a block names only
+by declaring. A block's declared registers are excluded from that plan. A
+float input is loaded first, at its width as `sN` or `dN`, straight from its
+home while x15 is free to address a distant one (D630). Each integer input
+is loaded through its own register, which addresses its home first, and
+extended to the whole register (`sxtb`, `sxth`, `sxtw`); the text is emitted
+as written; and each output, a float one too, is stored through a register
+no waiting output holds. A block whose outputs hold all of x0-x17 moves its
+first aside into the first of d16-d31 and d0-d7 that no float output holds,
+which every block may overwrite and the text has finished with, or failing
+one onto the stack, and stores it last. A declared x19-x28 or v8-v15 gets a
+frame home: the prologue stores it, as `d8`-`d15` for a float one, after
 reserving the frame, with a `.cfi_offset` from the CFA at x29+16, and every
 epilogue restores it before the frame record.
 
@@ -1033,10 +1039,16 @@ The target fact `compiler.c_riscv_lp64d` selects `platform/c`'s LP64 aliases,
 including unsigned plain `c_char`. Linux libc record selection stays separate;
 the generic 128-byte `stat` is checked against independently compiled headers.
 
-Integer assembly operands name x5–x7 or x9–x31. x0, return address x1, stack
-pointer x2, global pointer x3, thread pointer x4 and frame pointer x8 remain
-reserved. `general` allocates caller-clobbered registers; declared saved
-registers acquire routine saves. Ordinary blocks cannot transfer control or
+Integer assembly operands name x5–x7 or x9–x31 and float ones f0–f31. x0,
+return address x1, stack pointer x2, global pointer x3, thread pointer x4
+and frame pointer x8 remain reserved. `general` and `float` allocate
+caller-clobbered registers; declared saved registers, f8, f9 and f18–f27
+among them, acquire routine saves, a float one with `fsd` and `fld` and its
+DWARF number, 32 above its own (D630). A float input is loaded with `flw` or
+`fld` through x5 before any integer input, and a float output stored through
+a free scratch register; a block whose outputs fill the scratch registers
+moves one aside into a float register no float output holds, f0 first, or
+failing one onto the stack. Ordinary blocks cannot transfer control or
 change assembly directives. ELF DWARF and CFI use x8 as the entry CFA, with
 saved return address at CFA−8 and caller frame at CFA−16. The GNU target
 driver receives both `-march=ISA` and `-mabi=lp64d`, keeping user assembly

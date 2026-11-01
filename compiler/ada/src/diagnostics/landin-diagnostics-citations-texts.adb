@@ -5702,10 +5702,11 @@ package body Landin.Diagnostics.Citations.Texts is
                & "What an operand can be:"
                & LF
                & LF
-               & "- An integer scalar that fits one register. A float oper"
-               & "and is refused by name. Float operands are not in Landin"
-               & " yet; they are planned (Language evolution, in the roadm"
-               & "ap)."
+               & "- An integer scalar that fits one register, placed `at g"
+               & "eneral` or at an integer register, or an `f32` or `f64`,"
+               & " placed `at float` or at a float register: `xmm3`, `v3`,"
+               & " `f3`. A target without float registers, such as a Corte"
+               & "x-M with no float unit, refuses a float operand."
                & LF
                & "- A pointer crosses as `usize(p)` and comes back through"
                & " `ptr(u)`, whose zero check then happens there. A flag c"
@@ -5721,13 +5722,33 @@ package body Landin.Diagnostics.Citations.Texts is
                & "handed to the system."
                & LF
                & LF
+               & "Landin has no square-root builtin, so a block is how you"
+               & " reach the instruction. `float` chooses a float register"
+               & ", as `general` chooses an integer one, and the text spel"
+               & "ls it at the operand's width: `%xmm1` for either on x86-"
+               & "64, `d1` or `s1` on arm64."
+               & LF
+               & LF
+               & "    root: (x: f64) -> (r: f64) ="
+               & LF
+               & "        r = assembler.block(""sqrtsd {x}, {r}"", in x: f64"
+               & " at float = x,"
+               & LF
+               & "                            out r: f64 at float)"
+               & LF
+               & "    end root"
+               & LF
+               & LF
                & "What a block may touch: every block may overwrite the re"
                & "gisters a call may, and the flags. A register a call mus"
                & "t preserve is declared, as an operand or as a discarded "
-               & "output `out _ at rbx`, and that is what makes the routin"
-               & "e save it. The frame, stack and link registers are never"
-               & " named, so a block cannot break a backtrace. The languag"
-               & "e reserves no register of its own."
+               & "output `out _ at rbx`, or `out _ at v8` for a float one,"
+               & " and that is what makes the routine save it. The frame, "
+               & "stack and link registers are never named, so a block can"
+               & "not break a backtrace. The language reserves no register"
+               & " of its own. A block that changes x86-64's direction fla"
+               & "g, or a float unit's rounding mode or exception flags, p"
+               & "uts them back before it ends."
                & LF
                & LF
                & "Every block is opaque to the compiler: memory knowledge "
@@ -10089,20 +10110,23 @@ package body Landin.Diagnostics.Citations.Texts is
                & "field; it declares nothing any scope can see, and two op"
                & "erands of one block cannot share a name. Its type is an "
                & "exact enabled integer scalar no wider than one register "
-               & "of the target: not bool, a pointer, a distinct type, a r"
-               & "ange subtype or a type formal. A float operand is transf"
-               & "erred to Language evolution by name (D248). An input is "
-               & "evaluated once, in written order, before the block, in t"
-               & "he declared type's context; a narrower value is zero- or"
-               & " sign-extended to the full register as its type says. An"
-               & " output takes the low bits of its register. `inout` pass"
-               & "es its input in and its output out of one register, and "
-               & "its output has its input's type. A block with no named o"
-               & "utput is `none`; with one, it is that output's scalar; w"
-               & "ith more, it is the anonymous aggregate of [0990] whose "
-               & "fields are the named outputs in written order. Binding, "
-               & "assignment, destructuring, discard [1020] and D244 treat"
-               & " that value as they treat a call's."
+               & "of the target, or `f32` or `f64` (D630): not bool, a poi"
+               & "nter, a distinct type, a range subtype or a type formal."
+               & " An integer is placed at an integer register or `general"
+               & "`, a float at a float register or `float`, and a profile"
+               & " with no float registers refuses a float operand. An inp"
+               & "ut is evaluated once, in written order, before the block"
+               & ", in the declared type's context; a narrower integer is "
+               & "zero- or sign-extended to the full register as its type "
+               & "says, and a float occupies its register's low bits at it"
+               & "s own width. An output takes the low bits of its registe"
+               & "r. `inout` passes its input in and its output out of one"
+               & " register, and its output has its input's type. A block "
+               & "with no named output is `none`; with one, it is that out"
+               & "put's scalar; with more, it is the anonymous aggregate o"
+               & "f [0990] whose fields are the named outputs in written o"
+               & "rder. Binding, assignment, destructuring, discard [1020]"
+               & " and D244 treat that value as they treat a call's."
                & LF
                & LF
                & "A register is a name the selected target's table answers"
@@ -10117,7 +10141,7 @@ package body Landin.Diagnostics.Citations.Texts is
                & "| instruction text | ARMv6-M unified | AT&T | GNU or App"
                & "le arm64 | GNU RISC-V |"
                & LF
-               & "| operand registers | `r0`"
+               & "| integer operand registers | `r0`"
                & Character'Val (226)
                & Character'Val (128)
                & Character'Val (147)
@@ -10169,15 +10193,25 @@ package body Landin.Diagnostics.Citations.Texts is
                & Character'Val (147)
                & "`x31` |"
                & LF
-               & "| every ordinary block overwrites | `r0`"
+               & "| float operand registers | none | `xmm0`"
                & Character'Val (226)
                & Character'Val (128)
                & Character'Val (147)
-               & "`r7`, flags | those, `xmm0`"
+               & "`xmm15` | `v0`"
                & Character'Val (226)
                & Character'Val (128)
                & Character'Val (147)
-               & "`xmm15`, flags | those, `v0`"
+               & "`v31` | `f0`"
+               & Character'Val (226)
+               & Character'Val (128)
+               & Character'Val (147)
+               & "`f31` |"
+               & LF
+               & "| `float` chooses from | none | `xmm0`"
+               & Character'Val (226)
+               & Character'Val (128)
+               & Character'Val (147)
+               & "`xmm15` | `v0`"
                & Character'Val (226)
                & Character'Val (128)
                & Character'Val (147)
@@ -10185,7 +10219,7 @@ package body Landin.Diagnostics.Citations.Texts is
                & Character'Val (226)
                & Character'Val (128)
                & Character'Val (147)
-               & "`v31`, flags | the `general` row, `f0`"
+               & "`v31` | `f0`"
                & Character'Val (226)
                & Character'Val (128)
                & Character'Val (147)
@@ -10199,6 +10233,14 @@ package body Landin.Diagnostics.Citations.Texts is
                & Character'Val (147)
                & "`f31` |"
                & LF
+               & "| every ordinary block overwrites | `r0`"
+               & Character'Val (226)
+               & Character'Val (128)
+               & Character'Val (147)
+               & "`r7`, flags | the `general` and `float` rows, flags | th"
+               & "e `general` and `float` rows, flags | the `general` and "
+               & "`float` rows |"
+               & LF
                & "| saved by the routine when a block names one | none | `"
                & "rbx`, `r12`"
                & Character'Val (226)
@@ -10208,11 +10250,19 @@ package body Landin.Diagnostics.Citations.Texts is
                & Character'Val (226)
                & Character'Val (128)
                & Character'Val (147)
-               & "`x28` | `x9`, `x18`"
+               & "`x28`, `v8`"
                & Character'Val (226)
                & Character'Val (128)
                & Character'Val (147)
-               & "`x27` |"
+               & "`v15` | `x9`, `x18`"
+               & Character'Val (226)
+               & Character'Val (128)
+               & Character'Val (147)
+               & "`x27`, `f8`, `f9`, `f18`"
+               & Character'Val (226)
+               & Character'Val (128)
+               & Character'Val (147)
+               & "`f27` |"
                & LF
                & "| never named | `r8`"
                & Character'Val (226)
@@ -10220,52 +10270,44 @@ package body Landin.Diagnostics.Citations.Texts is
                & Character'Val (147)
                & "`r15` and their aliases, `sp`, `lr`, `pc`, `msp`, `psp`,"
                & " `control` | `rsp`, `rbp`, `rip` | `sp`, `fp`, `lr`, `x1"
-               & "8`, `x29`, `x30`, and `v8`"
+               & "8`, `x29`, `x30` | `x0`"
                & Character'Val (226)
                & Character'Val (128)
                & Character'Val (147)
-               & "`v15` at every width | `x0`"
-               & Character'Val (226)
-               & Character'Val (128)
-               & Character'Val (147)
-               & "`x4`, `x8` and their aliases, and `f8`, `f9`, `f18`"
-               & Character'Val (226)
-               & Character'Val (128)
-               & Character'Val (147)
-               & "`f27` and their aliases |"
+               & "`x4`, `x8` and their aliases |"
                & LF
                & LF
-               & "A fixed register is its full-width name; `general` is th"
-               & "e one class and asks the compiler to choose a register i"
-               & "t does not otherwise name in the block. Every register a"
-               & "n operand names is distinct from every other, and a bloc"
-               & "k cannot ask `general` for more registers than the class"
-               & " has left once its fixed registers and every register it"
-               & "s text names are set aside. Every ordinary block may ove"
-               & "rwrite the overwritten row; a register the routine saves"
-               & " must be declared, as an operand or as `out _ at registe"
-               & "r`, which is what makes the routine save and restore it."
-               & " A discarded output names one fixed register. The text w"
-               & "rites `{name}` where an operand's register belongs, spel"
-               & "led at the width its type selects (`%eax` or `%rax`, `w9"
-               & "` or `x9`, `r3`; RV64 uses its full-width `xN` name for "
-               & "every enabled integer width); `{{` and `}}` are literal "
-               & "braces. Every `{name}` must name an operand, every `gene"
-               & "ral` operand must be written in the text, and every regi"
-               & "ster the text names at any width must be declared or ove"
-               & "rwritten and never be one no block names. Frame pointers"
-               & ", stack pointers, link registers, the platform register "
-               & "and Cortex-M0's reserved r9 are therefore never named, a"
-               & "nd no register is reserved by the language beyond them. "
-               & "arm64's `v8`"
+               & "A fixed register is its full-width name; `general` and `"
+               & "float` are the two classes, spelled the same on every ta"
+               & "rget, and each asks the compiler to choose a register of"
+               & " its row it does not otherwise name in the block. Every "
+               & "register an operand names is distinct from every other, "
+               & "and a block cannot ask a class for more registers than i"
+               & "t has left once its fixed registers and every register i"
+               & "ts text names are set aside; the two classes count apart"
+               & ". Every ordinary block may overwrite the overwritten row"
+               & "; a register the routine saves must be declared, as an o"
+               & "perand or as `out _ at register`, which is what makes th"
+               & "e routine save and restore it. A discarded output names "
+               & "one fixed register. The text writes `{name}` where an op"
+               & "erand's register belongs, spelled at the width its type "
+               & "selects (`%eax` or `%rax`, `w9` or `x9`, `r3`; RV64 uses"
+               & " its full-width `xN` name for every enabled integer widt"
+               & "h; a float register is `%xmm3` at both widths, `s3` or `"
+               & "d3` on arm64 and `f3` on RV64); `{{` and `}}` are litera"
+               & "l braces. Every `{name}` must name an operand, every `ge"
+               & "neral` operand must be written in the text, and every re"
+               & "gister the text names at any width must be declared or o"
+               & "verwritten and never be one no block names. Frame pointe"
+               & "rs, stack pointers, link registers, the platform registe"
+               & "r and Cortex-M0's reserved r9 are therefore never named,"
+               & " and no register is reserved by the language beyond them"
+               & ". arm64's `v8`"
                & Character'Val (226)
                & Character'Val (128)
                & Character'Val (147)
-               & "`v15` are callee-saved and no operand can declare a floa"
-               & "t register, so an ordinary block cannot name them until "
-               & "float operands exist. The same restriction applies to RV"
-               & "64's callee-saved floating registers `f8`, `f9` and `f18"
-               & "`"
+               & "`v15`, whose low halves AAPCS64 preserves, and RV64's `f"
+               & "8`, `f9` and `f18`"
                & Character'Val (226)
                & Character'Val (128)
                & Character'Val (147)
@@ -10273,15 +10315,18 @@ package body Landin.Diagnostics.Citations.Texts is
                & Character'Val (226)
                & Character'Val (128)
                & Character'Val (147)
-               & "`fs11`); its caller-clobbered floating registers may be "
-               & "named in text without an operand. RV64 integer operands "
-               & "use canonical `xN` names, while raw text may use the ABI"
-               & "'s `a`, `t` and `s` aliases. An alias identifies the sam"
-               & "e register for declaration checks and exclusion from `ge"
-               & "neral`, so naming `s1` requires declaring `x9`. The priv"
-               & "ate failure registers are overwritten: a failure outcome"
-               & " is copied out as its call returns and is never live acr"
-               & "oss a block."
+               & "`fs11`) are declared as the saved integer registers are,"
+               & " at whatever width the text names them: `d8`, `s8` and `"
+               & "q8` are all `v8`, and x86-64's `ymm3` and `zmm3` are `xm"
+               & "m3`. RV64 operands use canonical `xN` and `fN` names, wh"
+               & "ile raw text may use the ABI's `a`, `t` and `s` aliases "
+               & "and their float `fa`, `ft` and `fs` forms. An alias iden"
+               & "tifies the same register for declaration checks and excl"
+               & "usion from a class, so naming `s1` requires declaring `x"
+               & "9` and naming `fs0` requires declaring `f8`. The private"
+               & " failure registers are overwritten: a failure outcome is"
+               & " copied out as its call returns and is never live across"
+               & " a block."
                & LF
                & LF
                & "Every block is a conservative read/write, call and trap "
@@ -10343,11 +10388,13 @@ package body Landin.Diagnostics.Citations.Texts is
                & "never a target upgrade. Assembly must not overwrite comp"
                & "iler spill or frame storage, saved registers or immutabl"
                & "e source storage through an indirect address, leave the "
-               & "stack pointer changed, or on x86-64 leave the direction "
-               & "flag set; an instruction's implicit register effects are"
-               & " the programmer's to declare, as `cpuid`'s write of `rbx"
-               & "` is. Arbitrary machine text cannot prove those obligati"
-               & "ons."
+               & "stack pointer changed, on x86-64 leave the direction fla"
+               & "g set, or leave a float unit's rounding mode or exceptio"
+               & "n flags other than it found them: x86-64's MXCSR, arm64'"
+               & "s FPCR and FPSR and RV64's `fcsr` (D630). An instruction"
+               & "'s implicit register effects are the programmer's to dec"
+               & "lare, as `cpuid`'s write of `rbx` is. Arbitrary machine "
+               & "text cannot prove those obligations."
                & LF
                & LF
                & "This compiler lowers ordinary assembly on every implemen"
@@ -22280,17 +22327,18 @@ package body Landin.Diagnostics.Citations.Texts is
             when 248 =>
                "Chosen: [1990]'s operand form. An operand has a directio"
                & "n, a name, an integer type and a register, and the regis"
-               & "ter is a name the target's table answers for or the one "
-               & "class `general`. The block's value is its named outputs,"
-               & " as a function's is its named returns. Every ordinary bl"
-               & "ock overwrites the target's call-clobbered registers and"
-               & " flags; a callee-saved register is declared, which makes"
-               & " the routine save it; frame, stack and link registers ar"
-               & "e never named, and the language reserves no register bey"
-               & "ond them. Every block keeps the opaque read/write, call "
-               & "and trap boundary on every target, so the verified IR se"
-               & "es one instruction with declared register effects. D230'"
-               & "s form is kept as the shorthand for `inout` at r0."
+               & "ter is a name the target's table answers for or the clas"
+               & "s `general`; D630 adds float types and the class `float`"
+               & ". The block's value is its named outputs, as a function'"
+               & "s is its named returns. Every ordinary block overwrites "
+               & "the target's call-clobbered registers and flags; a calle"
+               & "e-saved register is declared, which makes the routine sa"
+               & "ve it; frame, stack and link registers are never named, "
+               & "and the language reserves no register beyond them. Every"
+               & " block keeps the opaque read/write, call and trap bounda"
+               & "ry on every target, so the verified IR sees one instruct"
+               & "ion with declared register effects. D230's form is kept "
+               & "as the shorthand for `inout` at r0."
                & LF
                & LF
                & "| Choice | Alternative and reason for declining it | Exe"
@@ -22328,12 +22376,14 @@ package body Landin.Diagnostics.Citations.Texts is
                & "ubtypes would each need a check or construction inside t"
                & "he block | `negative/assembly-operand-types` |"
                & LF
-               & "| Float operands are transferred to Language evolution |"
-               & " Cortex-M0 has no float register, the float work assembl"
-               & "y would reach is a builtin by [1560]'s rule, and the con"
-               & "trol registers hold integers; a program that needs one, "
-               & "or a target with float registers, is what brings it back"
-               & " | `negative/assembly-float-operand` |"
+               & "| Float operands are D630's: `f32` and `f64` at a float "
+               & "register or the class `float`, refused on a profile with"
+               & " none | The first form transferred them to Language evol"
+               & "ution while Cortex-M0, which has no float register, was "
+               & "the only target; the hosted targets' float registers and"
+               & " the M7's float unit are what brought them back | `negat"
+               & "ive/assembly-float-operand`, `runtime/assembly-float-squ"
+               & "are-root` |"
                & LF
                & "| Every block overwrites the call-clobbered set and flag"
                & "s; callee-saved registers are declared with `out _` or a"
@@ -22481,6 +22531,92 @@ package body Landin.Diagnostics.Citations.Texts is
                & "ed label requires an ASCII identifier"", on every target "
                & "alike. The `clone` trampolines stay as they are; nothing"
                & " requires them to branch.",
+            when 630 =>
+               "Chosen: an operand's type may be `f32` or `f64`, placed "
+               & "at a fixed float register or at the class `float`, spell"
+               & "ed the same on every target as `general` is. A fixed flo"
+               & "at register is the architecture's full-width name, and t"
+               & "he operand's type selects its spelling in the text, as `"
+               & "w9` and `x9` do for an integer:"
+               & LF
+               & LF
+               & "| target | float operand registers | text spelling | `fl"
+               & "oat` chooses from, and every block overwrites | saved by"
+               & " the routine when named |"
+               & LF
+               & "| --- | --- | --- | --- | --- |"
+               & LF
+               & "| hosted x86-64 (Linux, FreeBSD) | `xmm0`"
+               & Character'Val (226)
+               & Character'Val (128)
+               & Character'Val (147)
+               & "`xmm15` | `%xmmN` at both widths | all | none |"
+               & LF
+               & "| hosted arm64 (Linux, Darwin, FreeBSD) | `v0`"
+               & Character'Val (226)
+               & Character'Val (128)
+               & Character'Val (147)
+               & "`v31` | `sN` for `f32`, `dN` for `f64` | `v0`"
+               & Character'Val (226)
+               & Character'Val (128)
+               & Character'Val (147)
+               & "`v7`, `v16`"
+               & Character'Val (226)
+               & Character'Val (128)
+               & Character'Val (147)
+               & "`v31` | `v8`"
+               & Character'Val (226)
+               & Character'Val (128)
+               & Character'Val (147)
+               & "`v15` |"
+               & LF
+               & "| RV64 Linux | `f0`"
+               & Character'Val (226)
+               & Character'Val (128)
+               & Character'Val (147)
+               & "`f31`; the text's `ft`, `fa` and `fs` aliases are those "
+               & "registers | `fN` at both widths | `f0`"
+               & Character'Val (226)
+               & Character'Val (128)
+               & Character'Val (147)
+               & "`f7`, `f10`"
+               & Character'Val (226)
+               & Character'Val (128)
+               & Character'Val (147)
+               & "`f17`, `f28`"
+               & Character'Val (226)
+               & Character'Val (128)
+               & Character'Val (147)
+               & "`f31` | `f8`, `f9`, `f18`"
+               & Character'Val (226)
+               & Character'Val (128)
+               & Character'Val (147)
+               & "`f27` |"
+               & LF
+               & LF
+               & "An integer is placed at an integer register or `general`"
+               & " and a float at a float register or `float`; each mispla"
+               & "cement is L0330, naming the register and the type. The t"
+               & "wo classes count apart, each only the registers of its o"
+               & "wn row the block does not otherwise name, and every outp"
+               & "ut keeps a register distinct from every input unless it "
+               & "is `inout`. A text register at any width or view counts "
+               & "as its full-width register, `d8` and `q8` as `v8` and `y"
+               & "mm3` as `xmm3`, so the callee-saved float registers that"
+               & " D248 left never named are declared as the saved integer"
+               & " registers are, by an operand or by `out _ at v8`, and t"
+               & "he routine then saves and restores them. A profile with "
+               & "no float registers, Cortex-M at `armv6-m` and any descri"
+               & "ption that selects no float unit, refuses a float operan"
+               & "d as L0304, whose standing is now that profile's recorde"
+               & "d boundary rather than a transfer. The float unit's roun"
+               & "ding mode and exception flags, MXCSR, FPCR and FPSR, and"
+               & " `fcsr`, are the programmer's to restore, beside x86-64'"
+               & "s direction flag. Each backend lowers a float operand by"
+               & " moving it between its frame home and its register at it"
+               & "s own width, and the verified IR keeps one instruction w"
+               & "ith declared register effects, whose empty register is t"
+               & "he class its operand's type selects.",
             when 252 =>
                "Chosen: one layout, decided by the compiler and not by t"
                & "he program: `refine fmt`. It decides space and nothing e"

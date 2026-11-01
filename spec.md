@@ -2248,12 +2248,15 @@ An operand is `in name: type at register = expression`,
 or `out _ at register`. Its name is its `{name}` template slot and, for an
 output, its result field; it declares nothing any scope can see, and two
 operands of one block cannot share a name. Its type is an exact enabled
-integer scalar no wider than one register of the target: not bool, a
-pointer, a distinct type, a range subtype or a type formal. A float operand
-is transferred to Language evolution by name (D248). An input is evaluated
+integer scalar no wider than one register of the target, or `f32` or `f64`
+(D630): not bool, a pointer, a distinct type, a range subtype or a type
+formal. An integer is placed at an integer register or `general`, a float
+at a float register or `float`, and a profile with no float registers
+refuses a float operand. An input is evaluated
 once, in written order, before the block, in the declared type's context;
-a narrower value is zero- or sign-extended to the full register as its type
-says. An output takes the low bits of its register. `inout` passes its input
+a narrower integer is zero- or sign-extended to the full register as its
+type says, and a float occupies its register's low bits at its own width.
+An output takes the low bits of its register. `inout` passes its input
 in and its output out of one register, and its output has its input's type.
 A block with no named output is `none`; with one, it is that output's
 scalar; with more, it is the anonymous aggregate of [0990] whose fields are
@@ -2265,37 +2268,41 @@ A register is a name the selected target's table answers for, never text:
 | | Cortex-M0 | Hosted x86-64 | Hosted arm64 | RV64 Linux |
 | --- | --- | --- | --- | --- |
 | instruction text | ARMv6-M unified | AT&T | GNU or Apple arm64 | GNU RISC-V |
-| operand registers | `r0`–`r7` | `rax` `rbx` `rcx` `rdx` `rsi` `rdi` `r8`–`r15` | `x0`–`x17`, `x19`–`x28` | `x5`–`x7`, `x9`–`x31` |
+| integer operand registers | `r0`–`r7` | `rax` `rbx` `rcx` `rdx` `rsi` `rdi` `r8`–`r15` | `x0`–`x17`, `x19`–`x28` | `x5`–`x7`, `x9`–`x31` |
 | `general` chooses from | `r0`–`r7` | `rax` `rcx` `rdx` `rsi` `rdi` `r8`–`r11` | `x0`–`x17` | `x5`–`x7`, `x10`–`x17`, `x28`–`x31` |
-| every ordinary block overwrites | `r0`–`r7`, flags | those, `xmm0`–`xmm15`, flags | those, `v0`–`v7`, `v16`–`v31`, flags | the `general` row, `f0`–`f7`, `f10`–`f17`, `f28`–`f31` |
-| saved by the routine when a block names one | none | `rbx`, `r12`–`r15` | `x19`–`x28` | `x9`, `x18`–`x27` |
-| never named | `r8`–`r15` and their aliases, `sp`, `lr`, `pc`, `msp`, `psp`, `control` | `rsp`, `rbp`, `rip` | `sp`, `fp`, `lr`, `x18`, `x29`, `x30`, and `v8`–`v15` at every width | `x0`–`x4`, `x8` and their aliases, and `f8`, `f9`, `f18`–`f27` and their aliases |
+| float operand registers | none | `xmm0`–`xmm15` | `v0`–`v31` | `f0`–`f31` |
+| `float` chooses from | none | `xmm0`–`xmm15` | `v0`–`v7`, `v16`–`v31` | `f0`–`f7`, `f10`–`f17`, `f28`–`f31` |
+| every ordinary block overwrites | `r0`–`r7`, flags | the `general` and `float` rows, flags | the `general` and `float` rows, flags | the `general` and `float` rows |
+| saved by the routine when a block names one | none | `rbx`, `r12`–`r15` | `x19`–`x28`, `v8`–`v15` | `x9`, `x18`–`x27`, `f8`, `f9`, `f18`–`f27` |
+| never named | `r8`–`r15` and their aliases, `sp`, `lr`, `pc`, `msp`, `psp`, `control` | `rsp`, `rbp`, `rip` | `sp`, `fp`, `lr`, `x18`, `x29`, `x30` | `x0`–`x4`, `x8` and their aliases |
 
-A fixed register is its full-width name; `general` is the one class and asks
-the compiler to choose a register it does not otherwise name in the block.
-Every register an operand names is distinct from every other, and a block
-cannot ask `general` for more registers than the class has left once its fixed
-registers and every register its text names are set aside. Every ordinary
+A fixed register is its full-width name; `general` and `float` are the two
+classes, spelled the same on every target, and each asks the compiler to
+choose a register of its row it does not otherwise name in the block. Every
+register an operand names is distinct from every other, and a block cannot
+ask a class for more registers than it has left once its fixed registers and
+every register its text names are set aside; the two classes count apart. Every ordinary
 block may overwrite the overwritten row; a register the routine saves must be
 declared, as an operand or as `out _ at register`, which is what makes the
 routine save and restore it. A discarded output names one fixed register.
 The text writes `{name}` where an operand's register belongs, spelled at the
 width its type selects (`%eax` or `%rax`, `w9` or `x9`, `r3`; RV64 uses
-its full-width `xN` name for every enabled integer width); `{{` and `}}`
-are literal braces. Every `{name}` must name an operand, every `general`
+its full-width `xN` name for every enabled integer width; a float register
+is `%xmm3` at both widths, `s3` or `d3` on arm64 and `f3` on RV64); `{{`
+and `}}` are literal braces. Every `{name}` must name an operand, every `general`
 operand must be written in the text, and every register the text names at
 any width must be declared or overwritten and never be one no block names.
 Frame pointers, stack pointers, link registers, the platform register and
 Cortex-M0's reserved r9 are therefore never named, and no register is
-reserved by the language beyond them. arm64's `v8`–`v15` are callee-saved and
-no operand can declare a float register, so an ordinary block cannot name
-them until float operands exist. The same restriction applies to RV64's
-callee-saved floating registers `f8`, `f9` and `f18`–`f27` (`fs0`–`fs11`);
-its caller-clobbered floating registers may be named in text without an
-operand. RV64 integer operands use canonical `xN` names, while raw text may
-use the ABI's `a`, `t` and `s` aliases. An alias identifies the same register
-for declaration checks and exclusion from `general`, so naming `s1` requires
-declaring `x9`. The private failure registers are
+reserved by the language beyond them. arm64's `v8`–`v15`, whose low halves
+AAPCS64 preserves, and RV64's `f8`, `f9` and `f18`–`f27` (`fs0`–`fs11`)
+are declared as the saved integer registers are, at whatever width the text
+names them: `d8`, `s8` and `q8` are all `v8`, and x86-64's `ymm3` and `zmm3`
+are `xmm3`. RV64 operands use canonical `xN` and `fN` names, while raw text
+may use the ABI's `a`, `t` and `s` aliases and their float `fa`, `ft` and
+`fs` forms. An alias identifies the same register for declaration checks
+and exclusion from a class, so naming `s1` requires declaring `x9` and
+naming `fs0` requires declaring `f8`. The private failure registers are
 overwritten: a failure outcome is copied out as its call returns and is never
 live across a block.
 
@@ -2343,7 +2350,9 @@ the next instruction and is not a control transfer there (D281). Unencodable ope
 failures under the pinned flags, never a target upgrade. Assembly must not
 overwrite compiler spill or frame storage, saved registers or immutable
 source storage through an indirect address, leave the stack pointer changed,
-or on x86-64 leave the direction flag set; an instruction's implicit register
+on x86-64 leave the direction flag set, or leave a float unit's rounding
+mode or exception flags other than it found them: x86-64's MXCSR, arm64's
+FPCR and FPSR and RV64's `fcsr` (D630). An instruction's implicit register
 effects are the programmer's to declare, as `cpuid`'s write of `rbx` is.
 Arbitrary machine text cannot prove those obligations.
 
@@ -17744,7 +17753,8 @@ cannot see into.
 
 **Chosen:** [1990]'s operand form. An operand has a direction, a name, an
 integer type and a register, and the register is a name the target's table
-answers for or the one class `general`. The block's value is its named
+answers for or the class `general`; D630 adds float types and the class
+`float`. The block's value is its named
 outputs, as a function's is its named returns. Every ordinary block
 overwrites the target's call-clobbered registers and flags; a callee-saved
 register is declared, which makes the routine save it; frame, stack and link
@@ -17759,7 +17769,7 @@ effects. D230's form is kept as the shorthand for `inout` at r0.
 | The type selects the register's width in the text | GCC's width modifiers (`%w0`, `%k0`) are a second language in the template | `positive/assembly-operand-forms` |
 | Outputs are the block's value, bound like a call's named returns | Outputs that write existing places need rules for when the place is evaluated, its permission, definite assignment and aliasing with an input; a value reuses binding, assignment, destructuring, discard and D244 unchanged | `negative/assembly-outputs-dropped-by-omission`, `core-cpu.ldn` |
 | Operands are exact integer scalars one register wide | Pointer operands would convert implicitly across the boundary where X6 says origin ends, and a pointer output would hide `ptr`'s zero trap; `usize(p)` and `ptr(u)` say it where it happens. `bool`, distinct types and range subtypes would each need a check or construction inside the block | `negative/assembly-operand-types` |
-| Float operands are transferred to Language evolution | Cortex-M0 has no float register, the float work assembly would reach is a builtin by [1560]'s rule, and the control registers hold integers; a program that needs one, or a target with float registers, is what brings it back | `negative/assembly-float-operand` |
+| Float operands are D630's: `f32` and `f64` at a float register or the class `float`, refused on a profile with none | The first form transferred them to Language evolution while Cortex-M0, which has no float register, was the only target; the hosted targets' float registers and the M7's float unit are what brought them back | `negative/assembly-float-operand`, `runtime/assembly-float-square-root` |
 | Every block overwrites the call-clobbered set and flags; callee-saved registers are declared with `out _` or as an operand | Clobber-nothing by default (GCC, Rust) makes a forgotten clobber a silent miscompile and buys precision no allocator here uses; a separate clobber list states what `out _` already does | `negative/assembly-reserved-registers-x86-64`, `negative/assembly-reserved-registers-arm64`, `negative/assembly-discard-names-register` |
 | Frame, stack and link registers and the platform's are never named, and the language reserves no other | Letting a block name the frame pointer loses backtraces and the stackful-fibre route [1680]; reserving a register for the language is what the ambient environment cost and lost | `negative/assembly-reserved-registers-cortex`, `negative/assembly-reserved-registers-x86-64`, `negative/assembly-reserved-registers-arm64` |
 | The memory effect is fixed: every block reads and writes memory, may call and may trap | GCC's `"memory"` clobber and Rust's `nomem` and `readonly` let a block promise less. The default is always correct, no optimisation here would use the promise, and the case assembly exists for, a critical section, is the one a narrower promise breaks; a measured need in optimisation reopens it | `core-cpu.ldn` |
@@ -17864,6 +17874,70 @@ forward exit, a backward branch and a label sharing its line with an
 instruction, called through the C import of its symbol on every hosted
 target, and `negative/assembly-hosted-straight-line`, an ordinary block's
 label refused naming the naked body that may have one.
+
+### D630 — Float assembly operands are a second class, `float`
+
+**From** [1560], [1630], [1990], D248, D256 and D265.
+
+**The tour said** at [1630] that an operand is an integer scalar that fits
+one register and that float operands were planned, and D248 transferred them
+to Language evolution while Cortex-M0, which has no float register, was the
+only target that had assembly. Every hosted target has float registers, and
+Landin has no builtin for an operation such as the square root, which is
+what [1560] leaves to assembly; a block could name `xmm0` or `d0` in its text
+but could carry no value through one, and could not name arm64's or RV64's
+callee-saved float registers at all.
+
+**Chosen:** an operand's type may be `f32` or `f64`, placed at a fixed float
+register or at the class `float`, spelled the same on every target as
+`general` is. A fixed float register is the architecture's full-width name,
+and the operand's type selects its spelling in the text, as `w9` and `x9` do
+for an integer:
+
+| target | float operand registers | text spelling | `float` chooses from, and every block overwrites | saved by the routine when named |
+| --- | --- | --- | --- | --- |
+| hosted x86-64 (Linux, FreeBSD) | `xmm0`–`xmm15` | `%xmmN` at both widths | all | none |
+| hosted arm64 (Linux, Darwin, FreeBSD) | `v0`–`v31` | `sN` for `f32`, `dN` for `f64` | `v0`–`v7`, `v16`–`v31` | `v8`–`v15` |
+| RV64 Linux | `f0`–`f31`; the text's `ft`, `fa` and `fs` aliases are those registers | `fN` at both widths | `f0`–`f7`, `f10`–`f17`, `f28`–`f31` | `f8`, `f9`, `f18`–`f27` |
+
+An integer is placed at an integer register or `general` and a float at a
+float register or `float`; each misplacement is L0330, naming the register
+and the type. The two classes count apart, each only the registers of its
+own row the block does not otherwise name, and every output keeps a
+register distinct from every input unless it is `inout`. A text register at
+any width or view counts as its full-width register, `d8` and `q8` as `v8`
+and `ymm3` as `xmm3`, so the callee-saved float registers that D248 left
+never named are declared as the saved integer registers are, by an operand
+or by `out _ at v8`, and the routine then saves and restores them. A profile
+with no float registers, Cortex-M at `armv6-m` and any description that
+selects no float unit, refuses a float operand as L0304, whose standing is
+now that profile's recorded boundary rather than a transfer. The float
+unit's rounding mode and exception flags, MXCSR, FPCR and FPSR, and `fcsr`,
+are the programmer's to restore, beside x86-64's direction flag. Each
+backend lowers a float operand by moving it between its frame home and its
+register at its own width, and the verified IR keeps one instruction with
+declared register effects, whose empty register is the class its operand's
+type selects.
+
+**The alternatives:** fixed float registers only, with no class, which makes
+every block choose its own register and leaves nothing for the compiler to
+keep apart from the registers the text names; and GCC's constraint letters
+(`"x"`, `"w"`, `"f"`), which put a second target-specific language in a
+string, as D248 declined for integers. A third alternative, keeping float
+operands transferred, leaves the square root and every other float
+instruction without a builtin unreachable with a value.
+
+**Pinned by** `runtime/assembly-float-square-root`, whose square roots of
+nonconstant inputs at both widths meet their oracles on every hosted lane;
+`runtime/assembly-saved-float-registers`, a value held in a declared
+callee-saved float register across a call to a routine that overwrites them
+all; `positive/assembly-float-operand-forms`;
+`negative/assembly-float-register-banks`, `negative/assembly-float-exhausted`,
+`negative/assembly-float-register-twice` and
+`negative/assembly-float-operand`; `targets/assembly registers are spelled
+and chosen`; and `backend/float assembly operands keep their banks`, whose
+arm64 block sets an integer output aside past a float output's register and
+whose verifier refuses each operand at the other bank.
 
 ### D252 — A source has one layout, and the compiler lays it out
 

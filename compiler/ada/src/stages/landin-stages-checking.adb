@@ -7189,6 +7189,7 @@ package body Landin.Stages.Checking is
          Kind_At : array (1 .. Count) of Ty.Type_Kind :=
            [others => Ty.Undecided];
          Classes : Natural := 0;
+         Float_Classes : Natural := 0;
          Outputs : Natural := 0;
          Faulted : Boolean := False;
          --  D597: the text without its comments, so a `{name}` or a
@@ -7199,6 +7200,11 @@ package body Landin.Stages.Checking is
               Landin.Configuration.Fixed_Text
                 (Source (Context, Syn.Source_Of (Of_Tree)), Of_Tree,
                  Syn.Nth_Argument (Of_Tree, Node, 1)));
+
+         --  D630: which registers each kind of operand is placed at.
+         Register_Bank_Note : constant String :=
+           "[1990]: a float operand is at a float register or `float`, an"
+           & " integer one at an integer register or `general`";
 
          procedure Refuse_At
            (Where : Syn.Node_Id; Message : String; Note : String);
@@ -7372,7 +7378,7 @@ package body Landin.Stages.Checking is
                    (Syn.Name
                       (Of_Tree,
                        Syn.Operand_Register (Of_Tree, Operand_At (Index))))
-                     = "general"
+                     in "general" | "float"
                  and then not Used (Index)
                then
                   Refuse_At
@@ -7449,7 +7455,11 @@ package body Landin.Stages.Checking is
                      Classes := Classes + 1;
                      Spelled_At (Index) :=
                        Ada.Strings.Unbounded.Null_Unbounded_String;
-                  when Asm.Operand_Register =>
+                  when Asm.Float_Class =>
+                     Float_Classes := Float_Classes + 1;
+                     Spelled_At (Index) :=
+                       Ada.Strings.Unbounded.Null_Unbounded_String;
+                  when Asm.Operand_Register | Asm.Float_Register =>
                      Spelled_At (Index) :=
                        Ada.Strings.Unbounded.To_Unbounded_String (Named);
                      for Earlier in 1 .. Index - 1 loop
@@ -7466,7 +7476,7 @@ package body Landin.Stages.Checking is
                      end loop;
                end case;
 
-               if Class = Asm.General_Class
+               if Class in Asm.General_Class | Asm.Float_Class
                  and then Syn.Name (Of_Tree, Operand)
                    = Landin.Source.Names.No_Name
                then
@@ -7474,7 +7484,7 @@ package body Landin.Stages.Checking is
                     (Register,
                      "a discarded output names the register it overwrites",
                      "[1630]: `out _ at register` declares one register;"
-                     & " `general` chooses one");
+                     & " `" & Named & "` chooses one");
                end if;
 
                --  [1990]: an operand type is written, never deduced.  A
@@ -7507,16 +7517,45 @@ package body Landin.Stages.Checking is
                   begin
                      if Held = Ty.Ill_Typed then
                         Faulted := True;
-                     elsif Held in Ty.Float_Name then
+                     elsif Held in Ty.Float_Name
+                       and then not Asm.Has_Float_Registers (Facts)
+                     then
+                        --  D630: a float operand is held in a float
+                        --  register, and this profile has none.
                         Faulted := True;
                         Bad.Report
                           (Item    => Bad.Unsupported_Use,
                            Source  => Syn.Source_Of (Of_Tree),
                            Where   => Syn.Where (Of_Tree, Written),
-                           Message => "a float assembly operand is not in"
-                                      & " this version of the language",
+                           Message => "a float assembly operand needs a"
+                                      & " float register, and the "
+                                      & Landin.Targets.Name (Facts)
+                                      & " profile has none",
                            Refused => Bad.Float_Operand,
                            Into    => Found);
+                     elsif Held in Ty.Float_Name then
+                        if Class in Asm.Operand_Register | Asm.General_Class
+                        then
+                           Refuse_At
+                             (Register,
+                              "`" & Named & "` "
+                              & (if Class = Asm.General_Class
+                                 then "chooses an integer register"
+                                 else "is an integer register")
+                              & ", and " & Shown (Held) & " is a float",
+                              Register_Bank_Note);
+                        elsif (if Held = Ty.F32 then 32 else 64)
+                          > Asm.Float_Width (Facts)
+                        then
+                           Refuse_At
+                             (Written,
+                              Shown (Held) & " is wider than one "
+                              & Landin.Targets.Name (Facts)
+                              & " float register",
+                              "[1630]: an operand is one register");
+                        else
+                           Kind_At (Index) := Held;
+                        end if;
                      elsif Held not in Ty.Integer_Name
                        or else Nominal /= Landin.Checking.No_Nominal_Type
                        or else Landin.Checking.Constraint_Of
@@ -7543,6 +7582,15 @@ package body Landin.Stages.Checking is
                               & " are checked against"
                             else "[1630]: convert explicitly where the value"
                               & " crosses: `usize(p)`, `ptr(u)`, `x <> 0`"));
+                     elsif Class in Asm.Float_Register | Asm.Float_Class then
+                        Refuse_At
+                          (Register,
+                           "`" & Named & "` "
+                           & (if Class = Asm.Float_Class
+                              then "chooses a float register"
+                              else "is a float register")
+                           & ", and " & Shown (Held) & " is an integer",
+                           Register_Bank_Note);
                      elsif Ty.Width (Held, Facts)
                        > Asm.Register_Width (Facts)
                      then
@@ -7558,7 +7606,7 @@ package body Landin.Stages.Checking is
                end if;
 
                if Direction in Syn.Input_Operand | Syn.Inout_Operand
-                 and then Kind_At (Index) in Ty.Integer_Name
+                 and then Kind_At (Index) in Ty.Integer_Name | Ty.Float_Name
                then
                   Require
                     (Of_Tree, Syn.Operand_Input (Of_Tree, Operand),
@@ -7592,37 +7640,49 @@ package body Landin.Stages.Checking is
             Check_Text;
          end if;
 
-         --  [1990]: `general` chooses a register the block does not
-         --  otherwise name, so its fixed registers and every register its
-         --  text names are not the class's to give.
-         if not Faulted and then Classes > 0 then
+         --  [1990]: `general` and `float` each choose a register the
+         --  block does not otherwise name, so its fixed registers and every
+         --  register its text names are not the class's to give, and the
+         --  two classes count apart (D630).
+         for Float in Boolean loop
             declare
+               Asked : constant Natural :=
+                 (if Float then Float_Classes else Classes);
+               Class_Name : constant String :=
+                 (if Float then "float" else "general");
                Left : Natural := 0;
             begin
-               for Index in 1 .. Asm.General_Count (Facts) loop
-                  declare
-                     Register : constant String :=
-                       Asm.General_Register (Facts, Index);
-                  begin
-                     if not Declares_Register (Register)
-                       and then not Asm.Text_Names (Facts, Text, Register)
-                     then
-                        Left := Left + 1;
-                     end if;
-                  end;
-               end loop;
-               if Classes > Left then
-                  Refuse_At
-                    (Node,
-                     "this block asks `general` for"
-                     & Natural'Image (Classes) & " registers, and "
-                     & Landin.Targets.Name (Facts) & " has"
-                     & Natural'Image (Left) & " left for it",
-                     "[1990]: `general` chooses from the registers the"
-                     & " block does not otherwise name");
+               if not Faulted and then Asked > 0 then
+                  for Index in 1 .. (if Float then Asm.Float_Count (Facts)
+                                     else Asm.General_Count (Facts))
+                  loop
+                     declare
+                        Register : constant String :=
+                          (if Float
+                           then Asm.Float_Class_Register (Facts, Index)
+                           else Asm.General_Register (Facts, Index));
+                     begin
+                        if not Declares_Register (Register)
+                          and then not Asm.Text_Names
+                            (Facts, Text, Register)
+                        then
+                           Left := Left + 1;
+                        end if;
+                     end;
+                  end loop;
+                  if Asked > Left then
+                     Refuse_At
+                       (Node,
+                        "this block asks `" & Class_Name & "` for"
+                        & Natural'Image (Asked) & " registers, and "
+                        & Landin.Targets.Name (Facts) & " has"
+                        & Natural'Image (Left) & " left for it",
+                        "[1990]: `" & Class_Name & "` chooses from the"
+                        & " registers the block does not otherwise name");
+                  end if;
                end if;
             end;
-         end if;
+         end loop;
 
          if Faulted then
             return Ty.Ill_Typed;
@@ -7630,7 +7690,7 @@ package body Landin.Stages.Checking is
 
          --  Lowering reads each operand's written type off its node.
          for Index in 1 .. Count loop
-            if Kind_At (Index) in Ty.Integer_Name
+            if Kind_At (Index) in Ty.Integer_Name | Ty.Float_Name
               and then Landin.Checking.Type_Of
                 (Types.all, Of_Tree, Operand_At (Index)) = Ty.Undecided
             then

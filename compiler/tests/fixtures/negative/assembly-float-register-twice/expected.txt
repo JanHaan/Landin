@@ -1,0 +1,30 @@
+error[L0330]: `v1` is already this block's register for another operand
+  --> ../tests/fixtures/negative/assembly-float-register-twice/program.ldn:3:34
+  |
+3 |                     in b: f32 at v1 = f32(value))
+  |                                  ^^
+  --> ../tests/fixtures/negative/assembly-float-register-twice/program.ldn:2:5
+  |
+2 |     assembler.block("fadd {a}, {a}, {b}", in a: f64 at v1 = value,
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
+  = note: [1630]: each operand has a register of its own; `inout` passes one value in and out
+error[L0330]: the text names `d9`, a register the routine preserves, and no operand declares it
+  --> ../tests/fixtures/negative/assembly-float-register-twice/program.ldn:4:21
+  |
+4 |     assembler.block("fmov d9, {v}", in v: f64 at float = value)
+  |                     ^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/assembly-float-register-twice/program.ldn:4:5
+  |
+4 |     assembler.block("fmov d9, {v}", in v: f64 at float = value)
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
+  = note: [1630]: declare it with `out _ at v9` so the routine saves it
+error[L0330]: `v9` is already this block's register for another operand
+  --> ../tests/fixtures/negative/assembly-float-register-twice/program.ldn:5:64
+  |
+5 |     assembler.block("fmov {r}, d9", out r: f64 at v9, out _ at v9)
+  |                                                                ^^
+  --> ../tests/fixtures/negative/assembly-float-register-twice/program.ldn:5:5
+  |
+5 |     assembler.block("fmov {r}, d9", out r: f64 at v9, out _ at v9)
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this assembly block
+  = note: [1630]: each operand has a register of its own; `inout` passes one value in and out

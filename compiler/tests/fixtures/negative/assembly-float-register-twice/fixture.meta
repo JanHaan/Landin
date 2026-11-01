@@ -1,0 +1,9 @@
+class: negative
+summary: D630 gives each float operand a register of its own at whatever width it is spelled, and a callee-saved float register the text writes is declared once, never twice
+program: program.ldn
+expect: expected.txt
+args: --target=linux-arm64 ../tests/fixtures/negative/assembly-float-register-twice/program.ldn
+codes: L0330, L0330, L0330
+status: 1
+constructs: 1630, 1990
+targets: linux-arm64
