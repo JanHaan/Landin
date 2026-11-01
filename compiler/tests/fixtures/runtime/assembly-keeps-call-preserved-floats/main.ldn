@@ -2,13 +2,15 @@
 --  block may name a call-preserved VFP register, and the routine holding it
 --  keeps d8-d15 in its frame, so its caller's survive; the M7 lane's
 --  harness requires its sentinels in them once main returns.  The operand
---  is an integer, moved through s16 and s31.  Without a unit the block
+--  is an integer, moved through s16 and s31, the halves of d8 and d15,
+--  which the block declares (D630).  Without a unit the block
 --  adds in a core register, and a hosted target adds without one.
 fixed if compiler.feature.fp then
     bump: (seed: u32) -> (r: u32) =
         r = assembler.block(
             "vmov s16, {s}\nvmov s31, {s}\nvmov {r}, s16\nadds {r}, #1",
-            in s: u32 at general = seed, out r: u32 at general)
+            in s: u32 at general = seed, out r: u32 at general,
+            out _ at d8, out _ at d15)
     end bump
 elsif compiler.arch == cortex_m0 then
     bump: (seed: u32) -> (r: u32) =

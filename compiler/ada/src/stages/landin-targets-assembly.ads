@@ -10,8 +10,17 @@
 --  every target (D630).
 
 with Ada.Strings.Unbounded;
+with Landin.Targets.Firmware;
 
 package Landin.Targets.Assembly is
+
+   --  D630: a Cortex-M profile's float registers are its description's
+   --  float unit's (D615), which the target facts do not hold, so every
+   --  question a float register's answer depends on also takes the unit.
+   --  A hosted target has its float registers whatever the unit says.
+   subtype Float_Unit is Landin.Targets.Firmware.Float_Unit;
+   No_Float_Unit : constant Float_Unit :=
+     Landin.Targets.Firmware.No_Float_Unit;
 
    --  What one written register name is on a target.
    type Register_Kind is
@@ -28,14 +37,18 @@ package Landin.Targets.Assembly is
       --  ones, which no operand may name and no ordinary block may write.
       Never_Named);
 
-   function Classify (Facts : Target_Facts; Name : String)
-     return Register_Kind;
+   function Classify
+     (Facts : Target_Facts; Name : String;
+      Unit : Float_Unit := No_Float_Unit) return Register_Kind;
 
    --  Whether an ordinary block may leave this operand register changed
    --  without declaring it.  The rest are callee-saved: naming one, as an
    --  operand or a discarded output, is what makes the routine save it.
-   function Overwritten (Facts : Target_Facts; Name : String) return Boolean
-     with Pre => Classify (Facts, Name) in Operand_Register | Float_Register;
+   function Overwritten
+     (Facts : Target_Facts; Name : String;
+      Unit : Float_Unit := No_Float_Unit) return Boolean
+     with Pre => Classify (Facts, Name, Unit)
+                   in Operand_Register | Float_Register;
 
    --  Whether `general` may choose this register.
    function In_General_Class (Facts : Target_Facts; Name : String)
@@ -58,33 +71,44 @@ package Landin.Targets.Assembly is
    function Has_Registers (Facts : Target_Facts) return Boolean;
 
    --  D630: whether the target has float registers an operand may name.
-   --  Cortex-M has none until a description selects a float unit, and
-   --  the synthetic model has no registers at all.
-   function Has_Float_Registers (Facts : Target_Facts) return Boolean;
+   --  Cortex-M has them when its description selects a float unit,
+   --  FPv5-D16's d0-d15, and the synthetic model has no registers at all.
+   function Has_Float_Registers
+     (Facts : Target_Facts; Unit : Float_Unit := No_Float_Unit)
+      return Boolean;
 
    --  Whether `float` may choose this register: the ones every ordinary
    --  block overwrites.
-   function In_Float_Class (Facts : Target_Facts; Name : String)
-     return Boolean
-     with Pre => Classify (Facts, Name) = Float_Register;
+   function In_Float_Class
+     (Facts : Target_Facts; Name : String;
+      Unit : Float_Unit := No_Float_Unit) return Boolean
+     with Pre => Classify (Facts, Name, Unit) = Float_Register;
 
    --  How many registers `float` chooses from.
-   function Float_Count (Facts : Target_Facts) return Natural;
+   function Float_Count
+     (Facts : Target_Facts; Unit : Float_Unit := No_Float_Unit)
+      return Natural;
 
    --  The registers `float` chooses from, in the order it chooses them.
-   function Float_Class_Register (Facts : Target_Facts; Index : Positive)
-     return String
-     with Pre => Index <= Float_Count (Facts);
+   function Float_Class_Register
+     (Facts : Target_Facts; Index : Positive;
+      Unit : Float_Unit := No_Float_Unit) return String
+     with Pre => Index <= Float_Count (Facts, Unit);
 
    --  The widest float a float register holds, in bits.
-   function Float_Width (Facts : Target_Facts) return Bit_Width
-     with Pre => Has_Float_Registers (Facts);
+   function Float_Width
+     (Facts : Target_Facts; Unit : Float_Unit := No_Float_Unit)
+      return Bit_Width
+     with Pre => Has_Float_Registers (Facts, Unit);
 
    --  The registers a text word names on this target, whatever width it is
    --  spelled at: `eax`, `ax` and `al` all name `rax`, `w9` names `x9`,
-   --  `ymm3` names `xmm3`, `d8` and `s8` name `v8`, and `fs0` names `f8`.
+   --  `ymm3` names `xmm3`, `d8` and `s8` name `v8`, and `fs0` names `f8`;
+   --  on a Cortex-M with a float unit `s16` and `s17` both name `d8`.
    --  The empty string when the word names no operand register.
-   function Canonical (Facts : Target_Facts; Word : String) return String;
+   function Canonical
+     (Facts : Target_Facts; Word : String;
+      Unit : Float_Unit := No_Float_Unit) return String;
 
    --  Whether a text word names a register no ordinary block may name,
    --  at any of its widths.
@@ -95,8 +119,8 @@ package Landin.Targets.Assembly is
    --  width outside its `{name}` slots.  A number is one word, so `0x9`
    --  names no `x9`.
    function Text_Names
-     (Facts : Target_Facts; Text : String; Register : String)
-      return Boolean;
+     (Facts : Target_Facts; Text : String; Register : String;
+      Unit : Float_Unit := No_Float_Unit) return Boolean;
 
    --  A text word as the tables spell it, so `RAX` and `rax` are one.
    function Lowered (Word : String) return String;
@@ -107,14 +131,15 @@ package Landin.Targets.Assembly is
 
    --  An operand register as the target's assembler spells it at a width
    --  of Bits: `%eax` or `%rax`, `w9` or `x9`, `r3`; a float register at
-   --  its float's width, `%xmm3` for both, `s8` or `d8`, `f8` for both.
+   --  its float's width, `%xmm3` for both, `s8` or `d8`, `f8` for both,
+   --  and on a Cortex-M float unit `s16` or `d8`.
    function Spelled
-     (Facts : Target_Facts; Register : String; Bits : Bit_Width)
-      return String
-     with Pre => (Classify (Facts, Register) = Operand_Register
+     (Facts : Target_Facts; Register : String; Bits : Bit_Width;
+      Unit : Float_Unit := No_Float_Unit) return String
+     with Pre => (Classify (Facts, Register, Unit) = Operand_Register
                   and then Bits <= Register_Width (Facts))
-                 or else (Classify (Facts, Register) = Float_Register
-                          and then Bits <= Float_Width (Facts));
+                 or else (Classify (Facts, Register, Unit) = Float_Register
+                          and then Bits <= Float_Width (Facts, Unit));
 
    --  One operand of a block as emission sees it: its template name,
    --  its register once chosen, the width its type selects, and whether
@@ -136,13 +161,15 @@ package Landin.Targets.Assembly is
    --  refused a block a class cannot serve.
    procedure Choose
      (Facts : Target_Facts; Text : String;
-      Operands : in out Operand_Register_Array);
+      Operands : in out Operand_Register_Array;
+      Unit : Float_Unit := No_Float_Unit);
 
    --  The text with every `{name}` replaced by that operand's register at
    --  its width, and every doubled brace by one.
    function Substituted
      (Facts : Target_Facts; Text : String;
-      Operands : Operand_Register_Array) return String;
+      Operands : Operand_Register_Array;
+      Unit : Float_Unit := No_Float_Unit) return String;
 
    --  D597: the line comment the architecture's own assembler reads, from
    --  this marker to the end of the line: `@` in Thumb, `//` on arm64 and

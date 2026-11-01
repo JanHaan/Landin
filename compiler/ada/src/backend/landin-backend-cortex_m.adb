@@ -334,9 +334,9 @@ package body Landin.Backend.Cortex_M is
    end Allocated_Frame;
 
    --  D617: whether ITEM keeps d8-d15 in its frame.  Selection never names
-   --  a call-preserved VFP register; only an assembly block's text can, and
-   --  the compiler does not read that text for registers, so a framed
-   --  routine that holds one saves all eight when the profile has a unit.
+   --  a call-preserved VFP register; only an assembly block can, declaring
+   --  each one its text names (D630), and a framed routine that holds one
+   --  saves all eight when the profile has a unit.
    --  A call-free leaf holds no block, and a naked body is its own.
    function Saves_VFP
      (Of_Unit : Landin.IR.Unit; Item : Landin.IR.Item_Id) return Boolean;
@@ -2856,6 +2856,10 @@ package body Landin.Backend.Cortex_M is
          --  for its first, which then waits in r12 -- a register no block
          --  names and every block may overwrite -- and is stored last.  The
          --  literal pool the text may have used is flushed behind a branch.
+         --  On a float unit's profile a float input is loaded first by
+         --  VLDR, through r6 while no input holds it, and a float output
+         --  stored by VSTR through a free low register, as s(2n) for an
+         --  f32 and d(n) for an f64 (D630).
          procedure Assembly_Block (Value : Landin.IR.Value_Id);
 
          procedure Assembly_Block (Value : Landin.IR.Value_Id) is
@@ -2863,14 +2867,17 @@ package body Landin.Backend.Cortex_M is
               Landin.Backend.Assembly_Registers
                 (Of_Unit, Item, Value, Names, Facts);
             After_Block : constant String := Fresh;
-            Inputs : Natural := 0;
             Waiting : array (0 .. 7) of Boolean := [others => False];
+            Input_Of : array (Chosen'Range) of Natural := [others => 0];
             Aside : Natural := 0;
 
             function Operand (Index : Positive)
               return Landin.IR.Assembly_Operand
               is (Landin.IR.Nth_Assembly_Operand
                     (Of_Unit, Item, Value, Index));
+
+            function Is_Float (Index : Positive) return Boolean
+              is (Operand (Index).Kind in Landin.Types.Float_Name);
 
             function Register (Index : Positive) return String
               is (Ada.Strings.Unbounded.To_String (Chosen (Index).Register));
@@ -2879,6 +2886,12 @@ package body Landin.Backend.Cortex_M is
               is (Natural'Value
                     (Register (Index) (Register (Index)'First + 1
                        .. Register (Index)'Last)));
+
+            --  A float operand's register at its float's width.
+            function Float_Name (Index : Positive) return String
+              is (if Operand (Index).Kind = Landin.Types.F64
+                  then Register (Index)
+                  else "s" & Trimmed (Natural'Image (2 * Number (Index))));
 
             function Free return String;
 
@@ -2899,32 +2912,62 @@ package body Landin.Backend.Cortex_M is
             begin
                Frame_Address_Through
                  (Slot_Offset (Layout, Operand (Index).Output), Base);
-               Memory (True, Size_Of (Operand (Index).Kind, Facts),
-                       From, Base);
+               if Is_Float (Index) then
+                  Emit ("vstr " & From & ", [" & Base & "]");
+               else
+                  Memory (True, Size_Of (Operand (Index).Kind, Facts),
+                          From, Base);
+               end if;
             end Store;
          begin
-            for Index in Chosen'Range loop
-               if Operand (Index).Direction
-                 in Landin.IR.Input | Landin.IR.Both
-               then
-                  Inputs := Inputs + 1;
-                  Frame_Address_Through
-                    (Value_Offset (Layout, Landin.IR.Nth_Operand
-                       (Of_Unit, Item, Value, Inputs)), Register (Index));
-                  Memory (False, Size_Of (Operand (Index).Kind, Facts),
-                          Register (Index), Register (Index));
-                  Extend (Register (Index), Operand (Index).Kind);
-               end if;
-               if Operand (Index).Output /= Landin.IR.No_Slot then
-                  Waiting (Number (Index)) := True;
-               end if;
+            declare
+               Inputs : Natural := 0;
+            begin
+               for Index in Chosen'Range loop
+                  if Operand (Index).Direction
+                    in Landin.IR.Input | Landin.IR.Both
+                  then
+                     Inputs := Inputs + 1;
+                     Input_Of (Index) := Inputs;
+                  end if;
+                  if Operand (Index).Output /= Landin.IR.No_Slot
+                    and then not Is_Float (Index)
+                  then
+                     Waiting (Number (Index)) := True;
+                  end if;
+               end loop;
+            end;
+            for Float in reverse Boolean loop
+               for Index in Chosen'Range loop
+                  if Input_Of (Index) /= 0 and then Is_Float (Index) = Float
+                  then
+                     declare
+                        Home : constant Landin.Targets.Byte_Count :=
+                          Value_Offset (Layout, Landin.IR.Nth_Operand
+                            (Of_Unit, Item, Value, Input_Of (Index)));
+                     begin
+                        if Float then
+                           Frame_Address_Through (Home, "r6");
+                           Emit ("vldr " & Float_Name (Index) & ", [r6]");
+                        else
+                           Frame_Address_Through (Home, Register (Index));
+                           Memory (False,
+                                   Size_Of (Operand (Index).Kind, Facts),
+                                   Register (Index), Register (Index));
+                           Extend (Register (Index), Operand (Index).Kind);
+                        end if;
+                     end;
+                  end if;
+               end loop;
             end loop;
             Assembly_Barriers.Append (Unbounded.Length (Out_Text) + 1);
             Emit_Verbatim (Landin.Backend.Assembly_Text
               (Of_Unit, Item, Value, Names, Facts));
             if (for all Held of Waiting => Held) then
                for Index in Chosen'Range loop
-                  if Operand (Index).Output /= Landin.IR.No_Slot then
+                  if Operand (Index).Output /= Landin.IR.No_Slot
+                    and then not Is_Float (Index)
+                  then
                      Aside := Index;
                      Emit ("mov r12, " & Register (Index));
                      Waiting (Number (Index)) := False;
@@ -2936,8 +2979,12 @@ package body Landin.Backend.Cortex_M is
                if Operand (Index).Output /= Landin.IR.No_Slot
                  and then Index /= Aside
                then
-                  Store (Index, Register (Index));
-                  Waiting (Number (Index)) := False;
+                  if Is_Float (Index) then
+                     Store (Index, Float_Name (Index));
+                  else
+                     Store (Index, Register (Index));
+                     Waiting (Number (Index)) := False;
+                  end if;
                end if;
             end loop;
             if Aside /= 0 then

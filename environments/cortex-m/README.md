@@ -541,10 +541,14 @@ never held and so no Cortex-M lane ran before the M7's, have one, until
 each has a 32-bit counterpart. A `refuse` row may carry `"lanes":
 {"mps2-an505": {"mode": "refuse", "codes": [...], "reason": ...}}`, the
 codes that lane's level and map refuse it with where they differ from the
-reference's; `runtime/assembly-float-square-root`'s `vsqrt` is L0330 at
-`armv6-m` and its float operands L0304 at `armv8-m.main` on a map with no
-float unit (D630). A lane run whose refusal differs names the entry to
-write.
+reference's. It may instead carry `"lanes": {"mps2-an500": {"mode":
+"execute", "reason": ...}}` where the lane's description gives the program
+what the reference lacks: the lane then builds and runs it at every
+profile and holds it to its oracle, as it does an `execute` row.
+`runtime/assembly-float-square-root` has one: its float operands are L0304
+on the reference and the AN505's map, which have no float unit, and the
+M7's FPv5-D16 holds them (D630). A lane run whose refusal differs names the
+entry to write.
 
 Firmware gives a program no standard input, arguments, files beside it or
 output, so a fixture whose metadata names `stdin:`, `run_args:`,

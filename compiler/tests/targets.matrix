@@ -190,6 +190,7 @@ negative/assembly-digit-separator | cortex-m0
 negative/assembly-discard-names-register | cortex-m0
 negative/assembly-float-exhausted | linux-x86-64
 negative/assembly-float-operand | cortex-m0
+negative/assembly-float-register-alias | cortex-m0
 negative/assembly-float-register-banks | linux-x86-64
 negative/assembly-float-register-twice | linux-arm64
 negative/assembly-foreign-comment | cortex-m0

@@ -5710,8 +5710,9 @@ package body Landin.Diagnostics.Citations.Texts is
                & "- An integer scalar that fits one register, placed `at g"
                & "eneral` or at an integer register, or an `f32` or `f64`,"
                & " placed `at float` or at a float register: `xmm3`, `v3`,"
-               & " `f3`. A target without float registers, such as a Corte"
-               & "x-M with no float unit, refuses a float operand."
+               & " `f3`, or `d3` on a Cortex-M7 whose description has its "
+               & "float unit. A target without float registers, such as a "
+               & "Cortex-M with no float unit, refuses a float operand."
                & LF
                & "- A pointer crosses as `usize(p)` and comes back through"
                & " `ptr(u)`, whose zero check then happens there. A flag c"
@@ -10227,7 +10228,11 @@ package body Landin.Diagnostics.Citations.Texts is
                & Character'Val (147)
                & "`x31` |"
                & LF
-               & "| float operand registers | none | `xmm0`"
+               & "| float operand registers | `d0`"
+               & Character'Val (226)
+               & Character'Val (128)
+               & Character'Val (147)
+               & "`d15` with an FPv5-D16 unit (D615), else none | `xmm0`"
                & Character'Val (226)
                & Character'Val (128)
                & Character'Val (147)
@@ -10241,7 +10246,11 @@ package body Landin.Diagnostics.Citations.Texts is
                & Character'Val (147)
                & "`f31` |"
                & LF
-               & "| `float` chooses from | none | `xmm0`"
+               & "| `float` chooses from | `d0`"
+               & Character'Val (226)
+               & Character'Val (128)
+               & Character'Val (147)
+               & "`d7` with the unit | `xmm0`"
                & Character'Val (226)
                & Character'Val (128)
                & Character'Val (147)
@@ -10271,12 +10280,16 @@ package body Landin.Diagnostics.Citations.Texts is
                & Character'Val (226)
                & Character'Val (128)
                & Character'Val (147)
-               & "`r7`, flags | the `general` and `float` rows, flags | th"
-               & "e `general` and `float` rows, flags | the `general` and "
-               & "`float` rows |"
+               & "`r7`, flags, and with the unit the `float` row and FPSCR"
+               & "'s flags | the `general` and `float` rows, flags | the `"
+               & "general` and `float` rows, flags | the `general` and `fl"
+               & "oat` rows |"
                & LF
-               & "| saved by the routine when a block names one | none | `"
-               & "rbx`, `r12`"
+               & "| saved by the routine when a block names one | `d8`"
+               & Character'Val (226)
+               & Character'Val (128)
+               & Character'Val (147)
+               & "`d15` with the unit | `rbx`, `r12`"
                & Character'Val (226)
                & Character'Val (128)
                & Character'Val (147)
@@ -10328,15 +10341,16 @@ package body Landin.Diagnostics.Citations.Texts is
                & "selects (`%eax` or `%rax`, `w9` or `x9`, `r3`; RV64 uses"
                & " its full-width `xN` name for every enabled integer widt"
                & "h; a float register is `%xmm3` at both widths, `s3` or `"
-               & "d3` on arm64 and `f3` on RV64); `{{` and `}}` are litera"
-               & "l braces. Every `{name}` must name an operand, every `ge"
-               & "neral` operand must be written in the text, and every re"
-               & "gister the text names at any width must be declared or o"
-               & "verwritten and never be one no block names. Frame pointe"
-               & "rs, stack pointers, link registers, the platform registe"
-               & "r and Cortex-M0's reserved r9 are therefore never named,"
-               & " and no register is reserved by the language beyond them"
-               & ". arm64's `v8`"
+               & "d3` on arm64, `f3` on RV64, and on a Cortex-M float unit"
+               & " `s6` for an `f32` at `d3` and `d3` for an `f64`); `{{` "
+               & "and `}}` are literal braces. Every `{name}` must name an"
+               & " operand, every `general` operand must be written in the"
+               & " text, and every register the text names at any width mu"
+               & "st be declared or overwritten and never be one no block "
+               & "names. Frame pointers, stack pointers, link registers, t"
+               & "he platform register and Cortex-M0's reserved r9 are the"
+               & "refore never named, and no register is reserved by the l"
+               & "anguage beyond them. arm64's `v8`"
                & Character'Val (226)
                & Character'Val (128)
                & Character'Val (147)
@@ -10351,16 +10365,17 @@ package body Landin.Diagnostics.Citations.Texts is
                & Character'Val (147)
                & "`fs11`) are declared as the saved integer registers are,"
                & " at whatever width the text names them: `d8`, `s8` and `"
-               & "q8` are all `v8`, and x86-64's `ymm3` and `zmm3` are `xm"
-               & "m3`. RV64 operands use canonical `xN` and `fN` names, wh"
-               & "ile raw text may use the ABI's `a`, `t` and `s` aliases "
-               & "and their float `fa`, `ft` and `fs` forms. An alias iden"
-               & "tifies the same register for declaration checks and excl"
-               & "usion from a class, so naming `s1` requires declaring `x"
-               & "9` and naming `fs0` requires declaring `f8`. The private"
-               & " failure registers are overwritten: a failure outcome is"
-               & " copied out as its call returns and is never live across"
-               & " a block."
+               & "q8` are all `v8`, x86-64's `ymm3` and `zmm3` are `xmm3`,"
+               & " and on a Cortex-M float unit `s16` and `s17` are the ha"
+               & "lves of `d8`, one of the eight its routine saves. RV64 o"
+               & "perands use canonical `xN` and `fN` names, while raw tex"
+               & "t may use the ABI's `a`, `t` and `s` aliases and their f"
+               & "loat `fa`, `ft` and `fs` forms. An alias identifies the "
+               & "same register for declaration checks and exclusion from "
+               & "a class, so naming `s1` requires declaring `x9` and nami"
+               & "ng `fs0` requires declaring `f8`. The private failure re"
+               & "gisters are overwritten: a failure outcome is copied out"
+               & " as its call returns and is never live across a block."
                & LF
                & LF
                & "Every block is a conservative read/write, call and trap "
@@ -10425,10 +10440,11 @@ package body Landin.Diagnostics.Citations.Texts is
                & "stack pointer changed, on x86-64 leave the direction fla"
                & "g set, or leave a float unit's rounding mode or exceptio"
                & "n flags other than it found them: x86-64's MXCSR, arm64'"
-               & "s FPCR and FPSR and RV64's `fcsr` (D630). An instruction"
-               & "'s implicit register effects are the programmer's to dec"
-               & "lare, as `cpuid`'s write of `rbx` is. Arbitrary machine "
-               & "text cannot prove those obligations."
+               & "s FPCR and FPSR, RV64's `fcsr` and a Cortex-M float unit"
+               & "'s FPSCR (D630). An instruction's implicit register effe"
+               & "cts are the programmer's to declare, as `cpuid`'s write "
+               & "of `rbx` is. Arbitrary machine text cannot prove those o"
+               & "bligations."
                & LF
                & LF
                & "This compiler lowers ordinary assembly on every implemen"
@@ -22627,6 +22643,21 @@ package body Landin.Diagnostics.Citations.Texts is
                & Character'Val (147)
                & "`f27` |"
                & LF
+               & "| Cortex-M with FPv5-D16 (D615) | `d0`"
+               & Character'Val (226)
+               & Character'Val (128)
+               & Character'Val (147)
+               & "`d15`; the text's `s(2n)` and `s(2n+1)` are `d(n)`'s hal"
+               & "ves | `s(2n)` for `f32`, `dn` for `f64` | `d0`"
+               & Character'Val (226)
+               & Character'Val (128)
+               & Character'Val (147)
+               & "`d7`, and FPSCR's flags | `d8`"
+               & Character'Val (226)
+               & Character'Val (128)
+               & Character'Val (147)
+               & "`d15` |"
+               & LF
                & LF
                & "An integer is placed at an integer register or `general`"
                & " and a float at a float register or `float`; each mispla"
@@ -22643,14 +22674,21 @@ package body Landin.Diagnostics.Citations.Texts is
                & "no float registers, Cortex-M at `armv6-m` and any descri"
                & "ption that selects no float unit, refuses a float operan"
                & "d as L0304, whose standing is now that profile's recorde"
-               & "d boundary rather than a transfer. The float unit's roun"
-               & "ding mode and exception flags, MXCSR, FPCR and FPSR, and"
-               & " `fcsr`, are the programmer's to restore, beside x86-64'"
-               & "s direction flag. Each backend lowers a float operand by"
-               & " moving it between its frame home and its register at it"
-               & "s own width, and the verified IR keeps one instruction w"
-               & "ith declared register effects, whose empty register is t"
-               & "he class its operand's type selects.",
+               & "d boundary rather than a transfer, and the refusal names"
+               & " the profile. It is reported in place of a refusal of th"
+               & "e block's text there, since a float instruction is no in"
+               & "struction on that profile either and the operand says wh"
+               & "y. The float unit's rounding mode and exception flags, M"
+               & "XCSR, FPCR and FPSR, `fcsr` and FPSCR, are the programme"
+               & "r's to restore, beside x86-64's direction flag. On Corte"
+               & "x-M a routine that holds a block keeps d8-d15 in its fra"
+               & "me whatever the block declares (D617); a block that name"
+               & "s one now declares it, as on the hosted targets. Each ba"
+               & "ckend lowers a float operand by moving it between its fr"
+               & "ame home and its register at its own width, and the veri"
+               & "fied IR keeps one instruction with declared register eff"
+               & "ects, whose empty register is the class its operand's ty"
+               & "pe selects.",
             when 252 =>
                "Chosen: one layout, decided by the compiler and not by t"
                & "he program: `refine fmt`. It decides space and nothing e"

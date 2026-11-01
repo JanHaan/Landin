@@ -1,0 +1,9 @@
+class: negative
+summary: D630 makes a Cortex-M7 FPv5-D16 single s(2n) or s(2n+1) the half of d(n) it is, so a text's s17 names d8, which a block declares, an f32 at d1 is the register an f64 at d1 holds, and float passes over a d register the text names a half of
+program: main.ldn
+root: root
+args: --target=cortex-m0 --level=armv7e-m
+expect: expected.txt
+codes: L0330, L0330, L0330
+constructs: 1630, 1990
+targets: cortex-m0

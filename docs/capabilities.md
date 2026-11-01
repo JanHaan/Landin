@@ -327,9 +327,10 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   encoded fields.
 - **Assembly operands.** A block carries integers at `general` or a named
   integer register on every target with registers, and on x86-64, arm64 and
-  RV64 `f32` and `f64` at `float` or a named float register, a declared
-  callee-saved float register saved by its routine (D630). Cortex-M has no
-  float register yet and refuses a float operand as its boundary.
+  RV64, and on a Cortex-M whose description has FPv5-D16, `f32` and `f64`
+  at `float` or a named float register, a declared callee-saved float
+  register saved by its routine (D630). A Cortex-M with no float unit
+  refuses a float operand as its boundary.
 - **Stacks.** D450's stack builtins, `compiler.stack_prepare` and
   `compiler.stack_switch`, run on every target with a native backend. On
   Cortex-M0 a prepared stack runs on the process stack pointer, and an

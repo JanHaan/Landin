@@ -1805,6 +1805,46 @@ package body Landin.Tests.Targets_Suite is
                "every register float chooses is one every block overwrites");
          end loop;
       end loop;
+      --  A Cortex-M7's FPv5-D16 has d0-d15, whose singles are their
+      --  halves; without a unit Cortex-M has no float register at all.
+      declare
+         M7 : constant Asm.Float_Unit := Landin.Targets.Firmware.FPv5_D16;
+         Text : constant String := "vmov s3, s17" & ASCII.LF
+           & "vadd.f32 {a}, {a}, {a}";
+         Block : Asm.Operand_Register_Array :=
+           [Operand ("a", "", 32, Float => True)];
+      begin
+         Landin.Testing.Check
+           (Item, Asm.Has_Float_Registers (Cortex_M, M7)
+              and then Asm.Classify (Cortex_M, "d15", M7) = Asm.Float_Register
+              and then Asm.Classify (Cortex_M, "d16", M7) = Asm.Not_A_Register
+              and then Asm.Classify (Cortex_M, "s0", M7) = Asm.Not_A_Register
+              and then Asm.Classify (Cortex_M, "d0") = Asm.Not_A_Register
+              and then Asm.Canonical (Cortex_M, "s16", M7) = "d8"
+              and then Asm.Canonical (Cortex_M, "s17", M7) = "d8"
+              and then Asm.Canonical (Cortex_M, "s31", M7) = "d15"
+              and then Asm.Canonical (Cortex_M, "d3", M7) = "d3"
+              and then Asm.Canonical (Cortex_M, "s17") = ""
+              and then Asm.Overwritten (Cortex_M, "d7", M7)
+              and then not Asm.Overwritten (Cortex_M, "d8", M7)
+              and then Asm.Float_Count (Cortex_M, M7) = 8
+              and then Asm.Float_Class_Register (Cortex_M, 8, M7) = "d7"
+              and then Asm.Float_Width (Cortex_M, M7) = 64
+              and then Asm.Spelled (Cortex_M, "d4", 32, M7) = "s8"
+              and then Asm.Spelled (Cortex_M, "d4", 64, M7) = "d4",
+            "a Cortex-M float unit's d registers, singles and class");
+         Asm.Choose (Cortex_M, Text, Block, M7);
+         Landin.Testing.Check_Equal
+           (Item, Asm.Substituted (Cortex_M, Text, Block, M7),
+            "vmov s3, s17" & ASCII.LF & "vadd.f32 s0, s0, s0",
+            "float passes over no d register the text leaves alone");
+         Block (1).Register := Ada.Strings.Unbounded.Null_Unbounded_String;
+         Asm.Choose (Cortex_M, "vmov s0, s1" & ASCII.LF & "{a}", Block, M7);
+         Landin.Testing.Check_Equal
+           (Item, To_String (Block (1).Register), "d1",
+            "a single the text names sets its d register aside");
+      end;
+
       declare
          Text : constant String :=
            "fadd {a}, {b}, d0, {n}" & ASCII.LF & "fmov s1, {c}";

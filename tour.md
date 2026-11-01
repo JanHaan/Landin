@@ -4555,8 +4555,9 @@ What an operand can be:
 
 - An integer scalar that fits one register, placed `at general` or at an
   integer register, or an `f32` or `f64`, placed `at float` or at a float
-  register: `xmm3`, `v3`, `f3`. A target without float registers, such as
-  a Cortex-M with no float unit, refuses a float operand.
+  register: `xmm3`, `v3`, `f3`, or `d3` on a Cortex-M7 whose description
+  has its float unit. A target without float registers, such as a Cortex-M
+  with no float unit, refuses a float operand.
 - A pointer crosses as `usize(p)` and comes back through `ptr(u)`, whose
   zero check then happens there. A flag comes back as `x <> 0`.
 - Inputs are evaluated once, left to right, before the block runs.

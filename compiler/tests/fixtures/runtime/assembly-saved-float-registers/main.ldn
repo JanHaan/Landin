@@ -1,12 +1,13 @@
 --  D630: a block that declares the float registers a call must preserve,
---  arm64's v8-v15 and LP64D's f8, f9 and f18-f27, makes its routine save
---  and restore them.  `held` puts a value in the first of them, calls the
---  routine that overwrites them all, and reads the register back: the
---  value is there because the callee restored it, and `held` names the
---  register in both its blocks, so nothing of its own is placed there.
---  `main` also keeps floats live across every call, which the optimising
---  allocators place in those same registers.  x86-64's ABI preserves no
---  XMM register, so it has nothing here to declare.
+--  arm64's v8-v15, LP64D's f8, f9 and f18-f27 and a Cortex-M7's d8-d15,
+--  makes its routine save and restore them.  `held` puts a value in the
+--  first of them, calls the routine that overwrites them all, and reads
+--  the register back: the value is there because the callee restored it,
+--  and `held` names the register in both its blocks, so nothing of its own
+--  is placed there.  `main` also keeps floats live across every call,
+--  which the optimising allocators place in those same registers.  x86-64's
+--  ABI preserves no XMM register, so it has nothing here to declare, and a
+--  Cortex-M with no float unit has no float register.
 fixed if compiler.arch == arm64 then
     clobber: (seed: f64) -> (r: f64) =
         r = assembler.block(
@@ -37,6 +38,22 @@ elsif compiler.arch == rv64 then
         _ = clobber(value + 1.0)
         seen = assembler.block("fmv.d {s}, fs0", out s: f64 at float,
                                out _ at f8)
+    end held
+elsif compiler.feature.fp_dp then
+    --  A Cortex-M7's FPv5-D16 preserves d8-d15 (D616).
+    clobber: (seed: f64) -> (r: f64) =
+        r = assembler.block(
+            "vmov.f64 d8, {s}\nvmov.f64 d9, {s}\nvmov.f64 d10, {s}\nvmov.f64 d11, {s}\nvmov.f64 d12, {s}\nvmov.f64 d13, {s}\nvmov.f64 d14, {s}\nvmov.f64 d15, {s}\nvadd.f64 {r}, d8, d15",
+            in s: f64 at float = seed, out r: f64 at float,
+            out _ at d8, out _ at d9, out _ at d10, out _ at d11,
+            out _ at d12, out _ at d13, out _ at d14, out _ at d15)
+    end clobber
+    held: (value: f64) -> (seen: f64) =
+        assembler.block("vmov.f64 d8, {v}", in v: f64 at float = value,
+                        out _ at d8)
+        _ = clobber(value + 1.0)
+        seen = assembler.block("vmov.f64 {s}, d8", out s: f64 at float,
+                               out _ at d8)
     end held
 else
     clobber: (seed: f64) -> (r: f64) =

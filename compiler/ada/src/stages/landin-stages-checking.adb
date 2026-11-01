@@ -7190,6 +7190,11 @@ package body Landin.Stages.Checking is
            [others => Ty.Undecided];
          Classes : Natural := 0;
          Float_Classes : Natural := 0;
+         --  D615/D630: a Cortex-M profile's float registers are its
+         --  description's float unit's.
+         Board : constant Landin.Targets.Firmware.Profile :=
+           Landin.Configuration.Profile (Configurations (Context).all);
+         Unit : constant Asm.Float_Unit := Board.Float;
          Outputs : Natural := 0;
          Faulted : Boolean := False;
          --  D597: the text without its comments, so a `{name}` or a
@@ -7333,7 +7338,7 @@ package body Landin.Stages.Checking is
                         Word : constant String :=
                           Asm.Lowered (Text (First .. Position - 1));
                         Canonical : constant String :=
-                          Asm.Canonical (Facts, Word);
+                          Asm.Canonical (Facts, Word, Unit);
                      begin
                         if Asm.Names_Reserved (Facts, Word) then
                            Refuse_At
@@ -7345,7 +7350,8 @@ package body Landin.Stages.Checking is
                               & " never named");
                            return;
                         elsif Canonical /= ""
-                          and then not Asm.Overwritten (Facts, Canonical)
+                          and then not Asm.Overwritten
+                            (Facts, Canonical, Unit)
                           and then not Declares_Register (Canonical)
                         then
                            Refuse_At
@@ -7418,7 +7424,7 @@ package body Landin.Stages.Checking is
                Named : constant String :=
                  Spelled (Syn.Name (Of_Tree, Register));
                Class : constant Asm.Register_Kind :=
-                 Asm.Classify (Facts, Named);
+                 Asm.Classify (Facts, Named, Unit);
             begin
                --  The name, when there is one, is unique in the block.
                if Syn.Name (Of_Tree, Operand) /= Landin.Source.Names.No_Name
@@ -7518,7 +7524,7 @@ package body Landin.Stages.Checking is
                      if Held = Ty.Ill_Typed then
                         Faulted := True;
                      elsif Held in Ty.Float_Name
-                       and then not Asm.Has_Float_Registers (Facts)
+                       and then not Asm.Has_Float_Registers (Facts, Unit)
                      then
                         --  D630: a float operand is held in a float
                         --  register, and this profile has none.
@@ -7529,8 +7535,12 @@ package body Landin.Stages.Checking is
                            Where   => Syn.Where (Of_Tree, Written),
                            Message => "a float assembly operand needs a"
                                       & " float register, and the "
-                                      & Landin.Targets.Name (Facts)
-                                      & " profile has none",
+                                      & (if Board.Present
+                                         then Landin.Targets.Firmware
+                                           .Profile_Name (Board)
+                                         else Landin.Targets.Name (Facts)
+                                           & " profile")
+                                      & " has none",
                            Refused => Bad.Float_Operand,
                            Into    => Found);
                      elsif Held in Ty.Float_Name then
@@ -7545,7 +7555,7 @@ package body Landin.Stages.Checking is
                               & ", and " & Shown (Held) & " is a float",
                               Register_Bank_Note);
                         elsif (if Held = Ty.F32 then 32 else 64)
-                          > Asm.Float_Width (Facts)
+                          > Asm.Float_Width (Facts, Unit)
                         then
                            Refuse_At
                              (Written,
@@ -7653,18 +7663,19 @@ package body Landin.Stages.Checking is
                Left : Natural := 0;
             begin
                if not Faulted and then Asked > 0 then
-                  for Index in 1 .. (if Float then Asm.Float_Count (Facts)
+                  for Index in 1 .. (if Float
+                                     then Asm.Float_Count (Facts, Unit)
                                      else Asm.General_Count (Facts))
                   loop
                      declare
                         Register : constant String :=
                           (if Float
-                           then Asm.Float_Class_Register (Facts, Index)
+                           then Asm.Float_Class_Register (Facts, Index, Unit)
                            else Asm.General_Register (Facts, Index));
                      begin
                         if not Declares_Register (Register)
                           and then not Asm.Text_Names
-                            (Facts, Text, Register)
+                            (Facts, Text, Register, Unit)
                         then
                            Left := Left + 1;
                         end if;
@@ -24630,6 +24641,33 @@ package body Landin.Stages.Checking is
                            Fault := Ada.Strings.Unbounded.To_Unbounded_String
                              ("assembly scalar transport requires u32");
                         end if;
+                     end if;
+                     --  D630: a float operand on a profile with no float
+                     --  register is refused as such, whatever its text: a
+                     --  float instruction's text is no instruction there
+                     --  either, and the operand says why.
+                     if Ada.Strings.Unbounded.Length (Fault) /= 0
+                       and then Operands
+                       and then not Landin.Targets.Assembly
+                         .Has_Float_Registers
+                           (Facts, Landin.Configuration.Profile
+                              (Configurations (Context).all).Float)
+                       and then (for some Index in 2 .. Syn.Argument_Count
+                                   (Of_Tree, Node) =>
+                                   Syn.Kind (Of_Tree, Syn.Nth_Argument
+                                     (Of_Tree, Node, Index))
+                                     = Syn.Assembly_Operand
+                                   and then Syn.Operand_Type
+                                     (Of_Tree, Syn.Nth_Argument
+                                        (Of_Tree, Node, Index))
+                                       /= Syn.No_Node
+                                   and then Type_At
+                                     (Of_Tree, Syn.Operand_Type
+                                        (Of_Tree, Syn.Nth_Argument
+                                           (Of_Tree, Node, Index)))
+                                       in Ty.Float_Name)
+                     then
+                        Fault := Ada.Strings.Unbounded.Null_Unbounded_String;
                      end if;
                      if Ada.Strings.Unbounded.Length (Fault) /= 0 then
                         Bad.Report

@@ -30,6 +30,13 @@ INVENTORY = 'compiler/tests/cortex-m/corpus.json'
 RULES = 'environments/cortex-m/README.md#the-corpus-inventory'
 
 
+def executes_on(row, lane):
+    """Whether a refuse ROW executes on LANE, which gives the program what
+    the reference lacks (D630)."""
+    return (lane is not None and row['mode'] == 'refuse'
+            and row.get('lanes', {}).get(lane, {}).get('mode') == 'execute')
+
+
 def profile_name(text):
     """A --profile as either spelling: `none-off`, or `none/off` as the log prints it."""
     return text.replace('/', '-')
@@ -68,15 +75,20 @@ def inventory():
         #  execute row, which the lane still runs and requires to fail, so a
         #  stale one is found, or the codes a refuse row is refused with on
         #  that lane's level and map, where they differ from the reference's.
+        #  D630: a refuse row may also execute on a lane whose description
+        #  gives the program what the reference lacks, a float unit, and the
+        #  lane then holds it to its oracle at every profile.
         for lane, own in row.get('lanes', {}).items():
             require(lane in LANES and bool(own.get('reason')) and (
                         (row['mode'] == 'execute' and own.get('mode') == 'restriction')
                         or (row['mode'] == 'refuse' and own.get('mode') == 'refuse'
-                            and bool(own.get('codes')) and own['codes'] != row['codes'])),
+                            and bool(own.get('codes')) and own['codes'] != row['codes'])
+                        or (row['mode'] == 'refuse' and own.get('mode') == 'execute'
+                            and 'codes' not in own)),
                     '%s: a "lanes" entry names a corpus lane (%s) and its reason, with'
-                    ' "mode": "restriction" for an execute row, or "mode": "refuse" and the'
-                    ' lane\'s own "codes" for a refuse row (see %s)'
-                    % (name, ', '.join(LANES), RULES))
+                    ' "mode": "restriction" for an execute row, or for a refuse row'
+                    ' "mode": "refuse" and the lane\'s own "codes", or "mode": "execute"'
+                    ' (see %s)' % (name, ', '.join(LANES), RULES))
         meta = metadata(ROOT / 'compiler/tests/fixtures' / name / 'fixture.meta')
         if row['mode'] == 'execute' and (said := hosted_oracle(meta)):
             hosted.append('  %s %s' % (name, said))
@@ -621,9 +633,10 @@ def execute(output, tools, refine, selected=(), profiles=(), lane=None):
         meta = metadata(ROOT / 'compiler/tests/fixtures' / name / 'fixture.meta')
         modes = PROFILES + (SPECIALIZATION_PROFILES
                             if meta.get('profiles') == 'specialization' else [])
-        if row['mode'] != 'execute':
+        executes = row['mode'] == 'execute' or executes_on(row, lane)
+        if not executes:
             modes = [('none', 'off')]
-        if profiles and row['mode'] == 'execute':
+        if profiles and executes:
             modes = [p for p in modes if '-'.join(p) in profiles]
             if selected:
                 require(bool(modes), 'profile is not applicable to the selected fixture')
@@ -650,11 +663,11 @@ def execute(output, tools, refine, selected=(), profiles=(), lane=None):
             if row['mode'] == 'restriction':
                 result.update(verdict='target-restriction', reason=row['reason'],
                               witness_sha256=sha(ROOT / row['witness']))
-            elif row['mode'] == 'refuse':
+            elif row['mode'] == 'refuse' and not executes_on(row, lane_of(level)):
                 own = row.get('lanes', {}).get(lane_of(level))
                 result.update(source_refusal(run, refine, name, {**row, **own} if own else row,
                                              level))
-            elif lane_of(level) in row.get('lanes', {}):
+            elif row['mode'] == 'execute' and lane_of(level) in row.get('lanes', {}):
                 own = row['lanes'][lane_of(level)]
                 try:
                     fixture(run, refine, name, opt, spec, level,
