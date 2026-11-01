@@ -4,6 +4,7 @@ import argparse
 import contextlib
 import json
 from pathlib import Path
+import re
 import subprocess
 import sys
 import time
@@ -15,6 +16,28 @@ from machine import Machine
 from models import EncodingPeripheral, PrototypePeripheral
 from run import Run, gdb_listener, oracle, require, stop
 from setup import DEFAULT, installed_tools, inventory, sha, supported_host
+
+
+BREAK_AT_LINE = re.compile(r'break (\S+):(\d+)$')
+
+
+def landed(commands):
+    """COMMANDS with each `break FILE:LINE` followed by GDB's own check that
+    the breakpoint is on LINE.  GDB moves a breakpoint on a line with no
+    code to the next one that has some, so a stop whose source moved would
+    otherwise wait for a line that never runs and end as a timeout."""
+    checked = []
+    for command in commands:
+        checked.append(command)
+        found = BREAK_AT_LINE.match(command)
+        if found:
+            path, line = found.group(1), int(found.group(2))
+            checked += ['python',
+                        'lines = sorted({l.source[1] for l in gdb.breakpoints()[-1].locations})',
+                        f'assert lines == [{line}], "break {path}:{line} has no code on line'
+                        f' {line}; GDB put it on line(s) %s" % lines',
+                        'end']
+    return checked
 
 
 def execute(run, elf, commands=None, marker="R660_FIRMWARE_BOOT_PASS"):
@@ -62,7 +85,7 @@ def execute(run, elf, commands=None, marker="R660_FIRMWARE_BOOT_PASS"):
         f'target remote 127.0.0.1:{port}',
         'python', 'import gdb',
         'def v(s): return int(gdb.parse_and_eval(s)) & 0xffffffff',
-        'end', *commands, 'quit', '']))
+        'end', *landed(commands), 'quit', '']))
     argv = [str(run.bin / 'qemu-system-arm'), '-M', 'microbit', '-accel',
             'tcg,thread=single', '-display', 'none', '-monitor', 'none',
             '-serial', 'none', '-kernel', str(elf), '-S', *stub]

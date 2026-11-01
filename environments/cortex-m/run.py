@@ -442,7 +442,9 @@ def main():
     run = Run(out, tools)
     try:
         run.execute(args.refine, args.lane)
-        require(record['inputs'] == inventory(HERE), 'probe inputs changed')
+        changed = changed_inputs(record['inputs'], inventory(HERE))
+        require(not changed, 'probe inputs changed while the lanes ran, so no lane verdict above '
+                'holds for this tree: ' + ', '.join(changed))
         record['status'] = 'passed'
     except Exception as exc:
         record['error'] = str(exc)
@@ -455,6 +457,15 @@ def main():
         '' if not args.lane else ' (FILTERED: the lanes %s only, not the gate\'s run)'
         % ', '.join(lanes)) + ': ' + str(out))
     return 0 if record['status'] == 'passed' else 1
+
+
+def changed_inputs(before, after):
+    """Each file of environments/cortex-m added, removed or changed between
+    two inventories, in order."""
+    return ['%s %s' % ('added' if name not in before else
+                       'removed' if name not in after else 'changed', name)
+            for name in sorted(set(before) | set(after))
+            if before.get(name) != after.get(name)]
 
 
 if __name__ == '__main__':

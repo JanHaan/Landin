@@ -20649,7 +20649,11 @@ L0528 refuses, for a selected register, what is not read: `dim` arrays of
 peripherals, registers or fields, a register in a `cluster`, a register or
 field derived from another, derived enumerated values, an `alternateGroup`,
 a default enumerated value, a number with a multiplier or don't-care bits,
-another width, and a core other than the five D542 names. L0529 refuses
+another width, and a core other than the five D542 names. An enumerated
+value named otherwise than an identifier cannot be an atom: every selected
+field with one is named in one refusal, each with its first such name, and
+with the policy's `numeric_enums` as the way out, rather than one field a
+run. L0529 refuses
 what cannot be generated as it is said: overlapping fields, a field outside
 its register, an enumerated value that does not fit or is given twice, a
 property given nowhere it is inherited from, an address that is not a

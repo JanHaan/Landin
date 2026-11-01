@@ -4,7 +4,7 @@ from pathlib import Path
 import sys
 
 from driver import HERE, build, machine
-from firmware import execute
+from firmware import execute, landed
 from run import Run, oracle, require
 
 sys.path.insert(0, str(HERE.parents[1] / 'scripts'))
@@ -99,7 +99,7 @@ def relayed(run, elf, commands):
         script.write_text('\n'.join([
             'set pagination off', 'set confirm off', 'set remotetimeout 30',
             *search(elf), f'target remote 127.0.0.1:{port}', *PRELUDE,
-            *commands, 'python', 'print("R6100_RELAYED_SOURCE_PASS")', 'end', 'detach', 'quit', '']))
+            *landed(commands), 'python', 'print("R6100_RELAYED_SOURCE_PASS")', 'end', 'detach', 'quit', '']))
         text = run.debug('gdb-relayed-source', elf, script, timeout=60)
         oracle(text, 'R6100_RELAYED_SOURCE_PASS')
 

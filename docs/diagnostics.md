@@ -1697,6 +1697,12 @@ bits, or a number with a multiplier. The message names the element and the
 line it is at. Select registers that use the forms D557 lists, or extend the
 importer.
 
+An enumerated value whose name is not an ASCII letter followed by letters,
+digits and underscores, such as RP2040's `1_15MHZ` or `2mA`, cannot be an
+atom. Every selected field with one is named in a single refusal, each with
+its first such name; list each in the policy's `numeric_enums`, which reads
+the field as a plain number.
+
 ### L0529
 
 The SVD describes a selected register in a way that cannot be generated as

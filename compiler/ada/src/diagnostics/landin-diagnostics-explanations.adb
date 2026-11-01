@@ -1295,7 +1295,15 @@ package body Landin.Diagnostics.Explanations is
                & "numerated value or one with don't-care bits, or a number"
                & " with a multiplier. The message names the element and th"
                & "e line it is at. Select registers that use the forms D55"
-               & "7 lists, or extend the importer.",
+               & "7 lists, or extend the importer."
+               & LF
+               & LF
+               & "An enumerated value whose name is not an ASCII letter fo"
+               & "llowed by letters, digits and underscores, such as RP204"
+               & "0's `1_15MHZ` or `2mA`, cannot be an atom. Every selecte"
+               & "d field with one is named in a single refusal, each with"
+               & " its first such name; list each in the policy's `numeric"
+               & "_enums`, which reads the field as a plain number.",
             when Catalogue.Svd_Device_Inconsistent =>
                "The SVD describes a selected register in a way that cann"
                & "ot be generated as it says (D557): two fields overlap, a"

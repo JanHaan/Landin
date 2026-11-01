@@ -307,6 +307,23 @@ class Regeneration(unittest.TestCase):
                     self.assertIn('error[' + code + ']', result.stderr)
                     self.assertIn(words, result.stderr)
                     self.assertEqual(tree(out), {})
+            # A field whose enumerated values are not named as identifiers
+            # is read as a number only when the policy says so; without that,
+            # one refusal names every such field and the way out.
+            unnumbered = dict(policy, numeric_enums=[
+                name for name in policy['numeric_enums']
+                if not name.startswith(('XOSC.', 'PADS_BANK0.'))])
+            path = Path(root) / 'unnumbered.json'
+            path.write_text(json.dumps(unnumbered))
+            out = Path(root) / 'unnumbered'
+            out.mkdir()
+            result = run_svd(path, fetch_inputs.fetch(svd_input(policy)), out, expect=1)
+            self.assertEqual(result.stderr.count('error[L0528]'), 1)
+            for name in ('XOSC.CTRL.FREQ_RANGE ("1_15MHZ")', 'XOSC.STATUS.FREQ_RANGE',
+                         'PADS_BANK0.GPIO0.DRIVE ("2mA")', 'PADS_BANK0.GPIO2.DRIVE'):
+                self.assertIn(name, result.stderr)
+            self.assertIn("the policy's numeric_enums reads such a field", result.stderr)
+            self.assertEqual(tree(out), {})
             # Rehashing alone is what admits a changed SVD; without it the
             # policy's review does not cover the file.
             svd = Path(root) / 'unreviewed.svd'

@@ -573,8 +573,13 @@ class Readers(unittest.TestCase):
             if MENTION.search(text):
                 unexplained.append(name)
         self.assertEqual(unexplained, [],
-                         "a lane gate_inputs.py may skip could read one of %s; "
-                         "keep it out of the lane or take the file out of "
+                         "these name one of %s bare, so a lane gate_inputs.py "
+                         "may skip could read it.  A file that only names "
+                         "another README, its own directory's say, names it by "
+                         "its path (environments/x/README.md), which this does "
+                         "not match; one that names a top-level document without "
+                         "reading it gets an entry in READERS saying why; and one "
+                         "a lane really reads takes the document out of "
                          "CONTENT_FREE" % ", ".join(gate_inputs.CONTENT_FREE))
 
 

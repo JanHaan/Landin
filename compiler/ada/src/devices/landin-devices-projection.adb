@@ -213,6 +213,12 @@ package body Landin.Devices.Projection is
       Document : X.Document;
       Device : X.Element;
       Rows : Writer;
+      --  Each selected field whose enumerated values are named otherwise
+      --  than an identifier, with the first such name, so that one refusal
+      --  names them all (D557) rather than one a run.
+      Unnamed : US.Unbounded_String;
+      Unnamed_Count : Natural := 0;
+      First_Unnamed : X.Element := X.No_Element;
 
       procedure Fail
         (Kind : Fault_Kind; Message : String;
@@ -537,6 +543,7 @@ package body Landin.Devices.Projection is
          Field_Type : US.Unbounded_String;
          Correction : constant Natural := P.Correction_Of (Chosen, Where);
          Svd_Low, Svd_High : Natural := 0;
+         Unreadable : Boolean;
       begin
          if not State.Seen.Contains (Field_Name) then
             State.Seen.Insert (Field_Name);
@@ -581,6 +588,27 @@ package body Landin.Devices.Projection is
          Read_Encodings (Field, Where, High - Low + 1, Values);
          Field_Type := US.To_Unbounded_String
            ("u" & Decimal (Word (High - Low + 1)));
+         if not Numeric then
+            Unreadable := False;
+            for Value of Values loop
+               if not Is_Vendor_Name (US.To_String (Value.Name)) then
+                  US.Append
+                    (Unnamed, (if Unnamed_Count = 0 then "" else ", ")
+                     & Where & " (""" & US.To_String (Value.Name) & """)");
+                  Unnamed_Count := Unnamed_Count + 1;
+                  if not X.Is_Present (First_Unnamed) then
+                     First_Unnamed := Field;
+                  end if;
+                  Unreadable := True;
+                  exit;
+               end if;
+            end loop;
+            --  Read as a number meanwhile; the refusal comes once every
+            --  selected field has been read.
+            if Unreadable then
+               Values.Clear;
+            end if;
+         end if;
          if not Values.Is_Empty and then not Numeric then
             declare
                Type_Name : constant String :=
@@ -594,12 +622,6 @@ package body Landin.Devices.Projection is
                        Reg & "_" & Lowered (Field_Name) & "_"
                        & Lowered (Said);
                   begin
-                     if not Is_Vendor_Name (Said) then
-                        Fail (Unsupported_Form, "the enumerated value name"
-                              & " """ & Said & """ of " & Where & " is not"
-                              & " an ASCII letter followed by letters,"
-                              & " digits and underscores", Field);
-                     end if;
                      Declare_Name (Atom, Field);
                      Line ("public " & Atom & ": atom");
                      US.Append (Alternatives,
@@ -1409,6 +1431,16 @@ package body Landin.Devices.Projection is
       for Choice of Chosen.Peripherals loop
          Project_Peripheral (Choice);
       end loop;
+      if Unnamed_Count > 0 then
+         Fail (Unsupported_Form,
+               (if Unnamed_Count = 1 then "a field's enumerated values are"
+                else Decimal (Word (Unnamed_Count))
+                & " fields' enumerated values are")
+               & " named otherwise than an ASCII letter followed by"
+               & " letters, digits and underscores: " & US.To_String (Unnamed)
+               & "; the policy's numeric_enums reads such a field as a plain"
+               & " number", First_Unnamed);
+      end if;
       Close (Rows, In_Array);
       Add (US.To_String (Chosen.Correspondence),
            US.To_String (Rows.Text) & LF, In_Manifest => True);

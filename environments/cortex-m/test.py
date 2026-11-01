@@ -43,6 +43,22 @@ class ProbeFailures(unittest.TestCase):
             Run(root,root).execute(Path('relative/refine'))
         self.assertEqual(calls,['qemu','peripheral']+[n for n,_ in lanes])
 
+    def test_a_stop_at_a_line_is_held_to_that_line(self):
+        from firmware import landed
+        checked = landed(['break source/app/main.ldn:61', 'continue', 'break start'])
+        self.assertEqual(checked[0], 'break source/app/main.ldn:61')
+        self.assertEqual(checked[1], 'python')
+        self.assertIn('assert lines == [61]', checked[3])
+        self.assertIn('no code on line 61', checked[3])
+        self.assertEqual(checked[4:], ['end', 'continue', 'break start'])
+
+    def test_a_changed_input_is_named(self):
+        from run import changed_inputs
+        self.assertEqual(changed_inputs({'a.py': '1', 'b.py': '2', 'c.py': '3'},
+                                        {'a.py': '1', 'b.py': '9', 'd.py': '4'}),
+                         ['changed b.py', 'removed c.py', 'added d.py'])
+        self.assertEqual(changed_inputs({'a.py': '1'}, {'a.py': '1'}), [])
+
     def test_stack_observation_sites(self):
         from resources import hook_addresses
         sites, changes = hook_addresses('''000000c0 <reset>:
