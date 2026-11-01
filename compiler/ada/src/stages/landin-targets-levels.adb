@@ -5,7 +5,7 @@ package body Landin.Targets.Levels is
 
    subtype X86_64_Level is Level_Id range X86_64_V1 .. X86_64_V4;
    subtype Arm64_Level is Level_Id range Armv8_A .. Armv8_1_A;
-   subtype M_Profile_Level is Level_Id range Armv6_M .. Armv7E_M;
+   subtype M_Profile_Level is Level_Id range Armv6_M .. Armv8_M_Main;
    subtype RV64_Level is Level_Id range RV64GC .. RV64GC_Zba_Xtheadba;
 
    function Spelling (Of_Feature : Feature) return String
@@ -81,6 +81,7 @@ package body Landin.Targets.Levels is
             when Armv6_M   => "armv6-m",
             when Armv7_M   => "armv7-m",
             when Armv7E_M  => "armv7e-m",
+            when Armv8_M_Main => "armv8-m.main",
             when RV64GC => "rv64gc",
             when RV64GC_Zba => "rv64gc_zba",
             when RV64GC_Xtheadba => "rv64gc_xtheadba",
@@ -139,7 +140,7 @@ package body Landin.Targets.Levels is
          when Lse | Crc32 | Rdm =>
             return Level.Id = Armv8_1_A;
          when Thumb2 | Idiv =>
-            return Level.Id in Armv7_M .. Armv7E_M;
+            return Level.Id in Armv7_M .. Armv8_M_Main;
          when Dsp =>
             return Level.Id = Armv7E_M;
          when I | M | A | F | D | C | Zicsr | Zifencei | Zba | Xtheadba =>

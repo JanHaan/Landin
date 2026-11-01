@@ -17,14 +17,15 @@ package body Landin.Targets.Firmware is
 
    function Is_Core_Name (Text : String) return Boolean is
      (Text in "cortex-m0" | "cortex-m0plus" | "cortex-m3" | "cortex-m4"
-        | "cortex-m7");
+        | "cortex-m7" | "cortex-m33");
 
    function Core_Named (Text : String) return Core_Kind is
      (if Text = "cortex-m0" then Cortex_M0
       elsif Text = "cortex-m0plus" then Cortex_M0plus
       elsif Text = "cortex-m3" then Cortex_M3
       elsif Text = "cortex-m4" then Cortex_M4
-      else Cortex_M7);
+      elsif Text = "cortex-m7" then Cortex_M7
+      else Cortex_M33);
 
    function Spelling (Core : Core_Kind) return String is
      (case Core is
@@ -32,29 +33,30 @@ package body Landin.Targets.Firmware is
         when Cortex_M0plus => "cortex-m0plus",
         when Cortex_M3 => "cortex-m3",
         when Cortex_M4 => "cortex-m4",
-        when Cortex_M7 => "cortex-m7");
+        when Cortex_M7 => "cortex-m7",
+        when Cortex_M33 => "cortex-m33");
 
    function Level_Name (Core : Core_Kind) return String is
      (case Core is
         when Cortex_M0 | Cortex_M0plus => "armv6-m",
         when Cortex_M3 => "armv7-m",
-        when Cortex_M4 | Cortex_M7 => "armv7e-m");
+        when Cortex_M4 | Cortex_M7 => "armv7e-m",
+        when Cortex_M33 => "armv8-m.main");
 
-   function Rank (Level : String) return Natural;
-   function Rank (Level : String) return Natural is
-     (if Level = "armv6-m" then 1
-      elsif Level = "armv7-m" then 2
-      elsif Level = "armv7e-m" then 3
-      else 0);
-
+   --  ARMv7E-M and ARMv8-M Mainline each hold all of ARMv7-M, and neither
+   --  holds the other: Armv8-M's DSP instructions are an optional extension
+   --  of the core, so a cortex-m33 is not assumed to have them.
    function Executes (Core : Core_Kind; Level : String) return Boolean is
-     (Rank (Level) /= 0 and then Rank (Level) <= Rank (Level_Name (Core)));
+     (Level = "armv6-m"
+      or else (Level = "armv7-m" and then not Is_Armv6_M (Core))
+      or else Level = Level_Name (Core));
 
    function Lower_Levels (Core : Core_Kind) return String is
-     (case Rank (Level_Name (Core)) is
-        when 3 => "armv7e-m, armv7-m or armv6-m",
-        when 2 => "armv7-m or armv6-m",
-        when others => "armv6-m alone");
+     (case Core is
+        when Cortex_M0 | Cortex_M0plus => "armv6-m alone",
+        when Cortex_M3 => "armv7-m or armv6-m",
+        when Cortex_M4 | Cortex_M7 => "armv7e-m, armv7-m or armv6-m",
+        when Cortex_M33 => "armv8-m.main, armv7-m or armv6-m");
 
    function Is_Boot_Name (Text : String) return Boolean is
      (Text in "vector-table" | "rp2040-boot2" | "rp2350-image-block"

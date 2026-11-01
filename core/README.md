@@ -62,7 +62,7 @@ modules' scope is the hosted POSIX systems, and firmware refuses each by
 name. `platform/c` holds the
 currently enabled LP64 C ABI aliases; it does not admit Cortex AAPCS32 or
 synthetic-32. `platform/cortex_m` holds M-profile CPU operations for the
-armv6-m, armv7-m and armv7e-m feature levels; it is importable on every target
+armv6-m, armv7-m, armv7e-m and armv8-m.main feature levels; it is importable on every target
 and declares them only on an M-profile one, so a shared program calls it from a
 `fixed if compiler.arch == cortex_m0` arm (D575), while its device descriptions
 keep the M-profile scope. Namespace availability is checked

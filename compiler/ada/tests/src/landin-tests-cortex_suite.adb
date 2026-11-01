@@ -2920,6 +2920,24 @@ package body Landin.Tests.Cortex_Suite is
         "compiler.device(""plain"")" & LF & "compiler.core(""cortex-m3"")"
         & LF & "compiler.vectors(48)" & LF, Plain_Memory, "L0515",
         Extra => "--firmware-entry=start --level=armv7e-m");
+      --  ARMv7E-M and ARMv8-M Mainline do not nest: each holds ARMv7-M.
+      Expect ("a cortex-m33 at its own level compiles",
+        "link(vector: 7) extern(interrupt) h: () -> none = end h",
+        "compiler.device(""plain"")" & LF & "compiler.core(""cortex-m33"")"
+        & LF & "compiler.vectors(48)" & LF, Plain_Memory, "",
+        Extra => "--firmware-entry=start --level=armv8-m.main");
+      Expect ("a cortex-m33 at armv7-m compiles", "",
+        "compiler.device(""plain"")" & LF & "compiler.core(""cortex-m33"")"
+        & LF & "compiler.vectors(48)" & LF, Plain_Memory, "",
+        Extra => "--firmware-entry=start --level=armv7-m");
+      Expect ("a cortex-m33 at armv7e-m is L0515", "",
+        "compiler.device(""plain"")" & LF & "compiler.core(""cortex-m33"")"
+        & LF & "compiler.vectors(48)" & LF, Plain_Memory, "L0515",
+        Extra => "--firmware-entry=start --level=armv7e-m");
+      Expect ("a cortex-m7 at armv8-m.main is L0515", "",
+        "compiler.device(""plain"")" & LF & "compiler.core(""cortex-m7"")"
+        & LF & "compiler.vectors(48)" & LF, Plain_Memory, "L0515",
+        Extra => "--firmware-entry=start --level=armv8-m.main");
       Expect ("the reference builds at armv7e-m",
         "link(vector: 20) extern(interrupt) h: () -> none = end h",
         "", "", "", Imports => False,

@@ -168,7 +168,7 @@ end start
     inputs = {str(p.relative_to(root)): sha(p)
               for p in sorted((root / 'platform/cortex_m').glob('*.ldn'))}
     controls = []
-    for level in ('armv6-m', 'armv7-m', 'armv7e-m'):
+    for level in ('armv6-m', 'armv7-m', 'armv7e-m', 'armv8-m.main'):
         out = parent.out / level
         out.mkdir()
         run = Run(out, parent.tools)

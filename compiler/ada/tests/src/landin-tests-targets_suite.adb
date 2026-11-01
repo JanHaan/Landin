@@ -330,8 +330,10 @@ package body Landin.Tests.Targets_Suite is
         (Item, L.Levels_Of (Darwin_Arm64), "armv8-a, armv8.1-a",
          "arm64 selects Armv8.0-A and Armv8.1-A");
       Landin.Testing.Check_Equal
-        (Item, L.Levels_Of (Cortex_M), "armv6-m, armv7-m, armv7e-m",
-         "the M profile selects Armv6-M, Armv7-M and Armv7E-M");
+        (Item, L.Levels_Of (Cortex_M),
+         "armv6-m, armv7-m, armv7e-m, armv8-m.main",
+         "the M profile selects Armv6-M, Armv7-M, Armv7E-M and Armv8-M"
+         & " Mainline");
       Landin.Testing.Check_Equal
         (Item, L.Levels_Of (Synthetic_32), "",
          "synthetic-32 selects no level");
@@ -403,6 +405,10 @@ package body Landin.Tests.Targets_Suite is
       Landin.Testing.Check_Equal
         (Item, Holds (Cortex_M, "armv7e-m"), "thumb2 idiv dsp",
          "Armv7E-M adds the DSP extension");
+      Landin.Testing.Check_Equal
+        (Item, Holds (Cortex_M, "armv8-m.main"), "thumb2 idiv",
+         "Armv8-M Mainline has Armv7-M's features and not the optional DSP"
+         & " extension");
 
       Landin.Testing.Check
         (Item,
@@ -2044,7 +2050,7 @@ package body Landin.Tests.Targets_Suite is
          end loop;
       end;
       Landin.Testing.Check_Equal
-        (Item, Count, 13, "D255's table states thirteen levels");
+        (Item, Count, 14, "D255's table states fourteen levels");
 
       --  The compiler holds exactly the features the table gives a level.
       for Index in 1 .. Count loop

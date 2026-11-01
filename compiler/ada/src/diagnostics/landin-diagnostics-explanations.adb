@@ -1039,13 +1039,16 @@ package body Landin.Diagnostics.Explanations is
                "A device description's core does not execute what the re"
                & "quest builds (D543): the target is not `cortex-m0`, or `"
                & "--level` is above the core's own, `armv6-m` for `cortex-"
-               & "m0` and `cortex-m0plus`, `armv7-m` for `cortex-m3` and `"
-               & "armv7e-m` for `cortex-m4` and `cortex-m7`. A lower M-pro"
-               & "file level is accepted: a `cortex-m4` builds at `armv7-m"
-               & "` or `armv6-m` too. Build with the target and a level th"
-               & "e note names. The constrained reference profile, which a"
-               & "pplies when no description is imported, is the one descr"
-               & "iption used at every level.",
+               & "m0` and `cortex-m0plus`, `armv7-m` for `cortex-m3`, `arm"
+               & "v7e-m` for `cortex-m4` and `cortex-m7`, and `armv8-m.mai"
+               & "n` for `cortex-m33`. A lower M-profile level is accepted"
+               & ": a `cortex-m4` builds at `armv7-m` or `armv6-m` too, an"
+               & "d a `cortex-m33` at `armv7-m` or `armv6-m`, though not a"
+               & "t `armv7e-m`, whose DSP instructions its core may lack. "
+               & "Build with the target and a level the note names. The co"
+               & "nstrained reference profile, which applies when no descr"
+               & "iption is imported, is the one description used at every"
+               & " level.",
             when Catalogue.Boot_Kind_Reserved =>
                "A device description selects a boot image kind refine re"
                & "serves but does not build yet (D545): `rp2350-image-bloc"

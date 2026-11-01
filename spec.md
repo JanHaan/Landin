@@ -2327,13 +2327,13 @@ resumes after `svc`; this exception does not admit other control transfers
 in an ordinary block. At the default `armv6-m` level the
 accepted spelling is a bounded subset of ARMv6-M unified assembly; its
 instruction allowlist is an implementation limit, pinned by the machine
-checks. At `armv7-m` and `armv7e-m`, the checker retains the text and
-straight-line restrictions, and the assembler enforces the selected
+checks. At the Thumb-2 levels, `armv7-m`, `armv7e-m` and `armv8-m.main`, the
+checker retains the text and straight-line restrictions, and the assembler enforces the selected
 architecture's instruction set. `UDF` and `BKPT` are refused in ordinary
 blocks at every level because they enter exception handling. Naked blocks
 additionally admit labels, branches, BL/BLX/BX, PUSH/POP, UDF and the
 MSP/PSP/CONTROL system registers, and take no operands. CPS changes
-PRIMASK at every level and may change FAULTMASK at `armv7-m` or `armv7e-m`;
+PRIMASK at every level and may change FAULTMASK at a Thumb-2 level;
 barrier operands are `sy` or omitted. BASEPRI and FAULTMASK system registers
 are available at those higher levels. Unsupported system registers remain
 refused. On hosted x86-64, arm64 and RV64 the checker refuses control transfer
@@ -16717,8 +16717,8 @@ and refused by name on firmware. hosted/system needs no alias beside core/io
 freestanding interfaces. platform/c admits only enabled SysV AMD64 LP64, Darwin
 AAPCS64 LP64, AAPCS64 LP64 and RISC-V LP64D C signature ABIs; equal pointer width
 does not enable it. Cortex AAPCS32 and synthetic-32 remain refused. platform/cortex_m
-admits the Cortex M-profile family, including armv6-m, armv7-m and armv7e-m
-feature levels, and refuses hosted architectures. Existing compiler.assert
+admits the Cortex M-profile family, including armv6-m, armv7-m, armv7e-m and
+armv8-m.main feature levels, and refuses hosted architectures. Existing compiler.assert
 source guards remain. No generic package manifest is introduced.
 
 Availability is a property of the written source namespace, independent of
@@ -18313,6 +18313,7 @@ A level is a set of features; the levels and what each holds are:
 | M profile | `armv6-m`, the default | none |
 | | `armv7-m` | `thumb2`, `idiv` |
 | | `armv7e-m` | `thumb2`, `idiv`, `dsp` |
+| | `armv8-m.main` | `thumb2`, `idiv` |
 | RV64 | `rv64gc`, the default | `i`, `m`, `a`, `f`, `d`, `c`, `zicsr`, `zifencei` |
 | | `rv64gc_zba` | those, and `zba` |
 | | `rv64gc_xtheadba` | baseline, and `xtheadba` |
@@ -21216,7 +21217,7 @@ they read. The directives are:
 | directive | arguments | says |
 |---|---|---|
 | `compiler.device(name)` | lowercase ASCII letters, digits and hyphens, beginning with a letter, at most 32 bytes | the device's identity; the module holding it is a description |
-| `compiler.core(name)` | `cortex-m0`, `cortex-m0plus`, `cortex-m3`, `cortex-m4` or `cortex-m7` | the core, and through it the architecture level: `armv6-m`, `armv6-m`, `armv7-m`, `armv7e-m` and `armv7e-m` |
+| `compiler.core(name)` | `cortex-m0`, `cortex-m0plus`, `cortex-m3`, `cortex-m4`, `cortex-m7` or `cortex-m33` | the core, and through it the architecture level: `armv6-m`, `armv6-m`, `armv7-m`, `armv7e-m`, `armv7e-m` and `armv8-m.main` |
 | `compiler.vectors(count)` | an integer | the vector table's whole length in words, the initial SP and reset included |
 | `compiler.interrupt(name, irq)` | an ASCII letter, then letters, digits and underscores, at most 64 bytes; an integer | that external interrupt `irq` is implemented, at absolute slot 16 + `irq` |
 | `compiler.boot(kind)` | a boot image kind | how the image begins |
@@ -21328,10 +21329,12 @@ and the stack fits its region. Those are L0514. `.ramtext` is placed with
 
 A description's core must execute what the request builds: the target is
 `cortex-m0`, and `--level` is the core's own level or a lower M-profile one,
-`armv6-m` below `armv7-m` below `armv7e-m`. So an RP2040, a `cortex-m0plus`,
-builds at the default `armv6-m` and no higher, and a `cortex-m4` builds at
-`armv7e-m`, `armv7-m` or `armv6-m`, its vector slots its core's at any of
-them; a level above the core's, or a target of another family, is L0515,
+`armv6-m` below `armv7-m`, and `armv7-m` below both `armv7e-m` and
+`armv8-m.main`, neither of which holds the other: Armv8-M's DSP instructions
+are an optional extension of its core. So an RP2040, a `cortex-m0plus`,
+builds at the default `armv6-m` and no higher, a `cortex-m4` builds at
+`armv7e-m`, `armv7-m` or `armv6-m`, and a `cortex-m33` at `armv8-m.main`,
+`armv7-m` or `armv6-m`, its vector slots its core's at any of them; a level above the core's, or a target of another family, is L0515,
 naming the levels the core executes. The constrained reference alone is
 used at every level, with its ARMv6-M slots, because it is the profile the
 levels were always tested on and remains so. The maintainer chose the lower

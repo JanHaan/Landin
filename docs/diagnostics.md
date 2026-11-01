@@ -1661,9 +1661,11 @@ linker.place("stack", "RAM", 4 * 1024)
 
 A device description's core does not execute what the request builds
 (D543): the target is not `cortex-m0`, or `--level` is above the core's own,
-`armv6-m` for `cortex-m0` and `cortex-m0plus`, `armv7-m` for `cortex-m3` and
-`armv7e-m` for `cortex-m4` and `cortex-m7`. A lower M-profile level is
-accepted: a `cortex-m4` builds at `armv7-m` or `armv6-m` too. Build with the
+`armv6-m` for `cortex-m0` and `cortex-m0plus`, `armv7-m` for `cortex-m3`,
+`armv7e-m` for `cortex-m4` and `cortex-m7`, and `armv8-m.main` for
+`cortex-m33`. A lower M-profile level is accepted: a `cortex-m4` builds at
+`armv7-m` or `armv6-m` too, and a `cortex-m33` at `armv7-m` or `armv6-m`,
+though not at `armv7e-m`, whose DSP instructions its core may lack. Build with the
 target and a level the note names. The constrained reference profile, which applies when no
 description is imported, is the one description used at every level.
 

@@ -6505,6 +6505,7 @@ package body Landin.Tests.Driver_Suite is
       CPU_Accepted ("armv6-m");
       CPU_Accepted ("armv7-m");
       CPU_Accepted ("armv7e-m");
+      CPU_Accepted ("armv8-m.main");
       Refused ("cortex-m0", "hosted/heap", True);
       Refused ("cortex-m0", "hosted/system", False);
       --  The event-driven provider is hosted (D485): firmware refuses it by

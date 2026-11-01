@@ -50,7 +50,7 @@ FAMILIES = {
     "arm64": ("armv8-a", "armv8.1-a"),
     "rv64": ("rv64gc", "rv64gc_zba", "rv64gc_xtheadba",
              "rv64gc_zba_xtheadba"),
-    "m-profile": ("armv6-m", "armv7-m", "armv7e-m"),
+    "m-profile": ("armv6-m", "armv7-m", "armv7e-m", "armv8-m.main"),
     "none": (),
 }
 FAMILY_OF = {

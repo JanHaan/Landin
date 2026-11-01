@@ -4161,9 +4161,10 @@ information Landin is precise about, so every target's backend is
 Landin's own. The README lists the targets.
 
 On Cortex-M the `cortex_m0` backend emits ARMv6-M Thumb, the default
-`armv6-m` level. `--level=armv7-m` or `--level=armv7e-m` lets it use that
-level's instructions too, which the processor must then support. All three
-levels are little-endian and soft-float. A firmware request emits its own
+`armv6-m` level. `--level=armv7-m`, `--level=armv7e-m` or
+`--level=armv8-m.main` lets it use that level's instructions too, which the
+processor must then support. All four levels are little-endian and
+soft-float. A firmware request emits its own
 reset code, vector table and linker script: reset copies initialized data
 and RAM code out of flash and clears BSS before your code runs.
 

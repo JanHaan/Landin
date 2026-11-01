@@ -23,9 +23,9 @@ package Landin.Targets.Firmware is
      with Pre => Text'Length <= Name_Capacity;
    function Spelling (Name : Name_Text) return String;
 
-   --  The five cores a description may name, each with its architecture.
+   --  The six cores a description may name, each with its architecture.
    type Core_Kind is
-     (Cortex_M0, Cortex_M0plus, Cortex_M3, Cortex_M4, Cortex_M7);
+     (Cortex_M0, Cortex_M0plus, Cortex_M3, Cortex_M4, Cortex_M7, Cortex_M33);
    function Is_Core_Name (Text : String) return Boolean;
    function Core_Named (Text : String) return Core_Kind
      with Pre => Is_Core_Name (Text);
@@ -33,23 +33,27 @@ package Landin.Targets.Firmware is
    --  The feature level a core executes, as Landin.Targets.Levels names it.
    function Level_Name (Core : Core_Kind) return String;
    --  D543: whether a build at LEVEL runs on CORE: the core's own level or
-   --  a lower M-profile one, armv6-m below armv7-m below armv7e-m.
+   --  one it holds, armv6-m on every core and armv7-m on every Thumb-2 one.
    function Executes (Core : Core_Kind; Level : String) return Boolean;
    --  The levels Executes admits for CORE, as a note lists them.
    function Lower_Levels (Core : Core_Kind) return String;
    function Is_Armv6_M (Core : Core_Kind) return Boolean
      is (Core in Cortex_M0 | Cortex_M0plus);
    --  The longest vector table the core's architecture allows, in words:
-   --  ARMv6-M's 16 + 32 and ARMv7-M's 16 + 496.
+   --  ARMv6-M's 16 + 32, ARMv7-M's 16 + 496 and ARMv8-M's 16 + 480.
    function Vector_Limit (Core : Core_Kind) return Positive
-     is (if Is_Armv6_M (Core) then 48 else 512);
+     is (if Is_Armv6_M (Core) then 48
+         elsif Core = Cortex_M33 then 496
+         else 512);
    --  The architecture's own exception slots a handler may take: NMI,
-   --  HardFault, SVCall, PendSV and SysTick, and on ARMv7-M MemManage,
-   --  BusFault, UsageFault and DebugMonitor.  Slots 0 and 1 are the
-   --  compiler's initial SP and reset.
+   --  HardFault, SVCall, PendSV and SysTick, on ARMv7-M MemManage,
+   --  BusFault, UsageFault and DebugMonitor, and on a cortex-m33 the
+   --  SecureFault its Security Extension raises.
+   --  Slots 0 and 1 are the compiler's initial SP and reset.
    function Core_Slot (Core : Core_Kind; Slot : Natural) return Boolean
      is (Slot in 2 | 3 | 11 | 14 | 15
-         or else (not Is_Armv6_M (Core) and then Slot in 4 .. 6 | 12));
+         or else (not Is_Armv6_M (Core) and then Slot in 4 .. 6 | 12)
+         or else (Core = Cortex_M33 and then Slot = 7));
 
    --  D545's closed set.  The last two are reserved names: a description
    --  that selects one is refused until the compiler builds that image.

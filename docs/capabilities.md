@@ -75,7 +75,7 @@ them, and [the target contracts](targets.md) say what each selects.
 | --- | --- |
 | x86-64 | `x86-64-v1` to `x86-64-v4` |
 | arm64 | `armv8-a`, `armv8.1-a` |
-| M profile | `armv6-m`, `armv7-m`, `armv7e-m` |
+| M profile | `armv6-m`, `armv7-m`, `armv7e-m`, `armv8-m.main` |
 | RV64 | `rv64gc` baseline; `rv64gc_zba` and `rv64gc_xtheadba` add independent address-generation extensions, and `rv64gc_zba_xtheadba` selects both |
 
 - A level changes instructions and never layout or ABI: BMI2 shifts at

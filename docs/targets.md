@@ -215,7 +215,7 @@ ABI, is the same at every level of a family.
 | `freebsd-arm64` | `armv8-a` | `armv8.1-a` | LSE atomic read-modify-write | `.arch` and Clang `-march=` with the selected level |
 | `linux-rv64` | `rv64gc` | `rv64gc_zba`, `rv64gc_xtheadba`, `rv64gc_zba_xtheadba` | `sh1add`/`sh2add`/`sh3add` or `th.addsl` for indexed addresses | selected ISA string passed to GNU tools with LP64D |
 | `darwin-arm64` | `armv8-a` | `armv8.1-a` | LSE `ldadd`/`swp`/`cas`, in the ordering's form, for atomic read-modify-write | `.arch armv8-a` or `.arch armv8.1-a` in the assembly |
-| `cortex-m0` | `armv6-m` | `armv7-m`, `armv7e-m` | `sdiv`/`udiv` and `mls` for 32-bit division and remainder | default: `.cpu cortex-m0` in assembly and `-mcpu=cortex-m0` for the assembler and linker; higher levels: `.arch` and `-march=` |
+| `cortex-m0` | `armv6-m` | `armv7-m`, `armv7e-m`, `armv8-m.main` | `sdiv`/`udiv` and `mls` for 32-bit division and remainder | default: `.cpu cortex-m0` in assembly and `-mcpu=cortex-m0` for the assembler and linker; higher levels: `.arch` and `-march=` |
 | `synthetic-32` | none | none | nothing | none |
 
 The x86-64 assembler is held to the level at every level, the baseline's
@@ -574,7 +574,7 @@ remain unchanged.
 `Targets.Cortex_M` (`cortex-m0`) defaults to ARMv6-M Thumb,
 little endian and base AAPCS32 soft-float identity. `refine --target=cortex-m0`
 checks source and emits ARMv6-M assembly at the default `armv6-m` level;
-selecting `armv7-m` or `armv7e-m` permits instructions from that higher level
+selecting `armv7-m`, `armv7e-m` or `armv8-m.main` permits instructions from that higher level
 while retaining the same layout and ABI. The toolchain identity is
 `arm-eabi`, the pinned GNAT arm-elf archive's; with no `--toolchain`, a
 link tries `arm-eabi-gcc` and then `arm-none-eabi-gcc`, the name the

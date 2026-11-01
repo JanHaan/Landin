@@ -16,7 +16,8 @@
 --  architecture first.
 --
 --  Each level is named as the platform's own documents name it: the psABI's
---  `x86-64-v2`, and Arm's and GCC's `armv8.1-a` and `armv7-m`.
+--  `x86-64-v2`, and Arm's and GCC's `armv8.1-a`, `armv7-m` and
+--  `armv8-m.main`.
 
 package Landin.Targets.Levels is
 
@@ -30,7 +31,7 @@ package Landin.Targets.Levels is
       Avx512f, Avx512bw, Avx512cd, Avx512dq, Avx512vl,
       --  Armv8.1-A
       Lse, Crc32, Rdm,
-      --  Armv7-M and Armv7E-M
+      --  Armv7-M, Armv7E-M and Armv8-M Mainline
       Thumb2, Idiv, Dsp,
       --  RV64GC and independent address-generation extensions
       I, M, A, F, D, C, Zicsr, Zifencei, Zba, Xtheadba);
@@ -73,7 +74,7 @@ private
      (No_Level,
       X86_64_V1, X86_64_V2, X86_64_V3, X86_64_V4,
       Armv8_A, Armv8_1_A,
-      Armv6_M, Armv7_M, Armv7E_M,
+      Armv6_M, Armv7_M, Armv7E_M, Armv8_M_Main,
       RV64GC, RV64GC_Zba, RV64GC_Xtheadba, RV64GC_Zba_Xtheadba);
 
    type Feature_Level is record
