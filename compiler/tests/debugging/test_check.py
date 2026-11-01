@@ -6,6 +6,7 @@ import importlib.util
 import io
 import os
 import re
+import sys
 from pathlib import Path
 import unittest
 from unittest import mock
@@ -885,7 +886,11 @@ class LldbBatchTests(unittest.TestCase):
         spec.loader.exec_module(linux)
         with tempfile.TemporaryDirectory() as directory:
             (Path(directory) / "earlier").write_text("")
-            for arguments in (["--output", directory],
+            #  Tools that exist on every host, so a host without LLDB on its
+            #  PATH meets the refusal the case is about rather than that one.
+            present = ["--lldb", sys.executable, "--objdump", sys.executable,
+                       "--nm", sys.executable]
+            for arguments in (["--output", directory, *present],
                               ["--output", directory + "/new", "--lldb", "no-such-lldb"]):
                 with self.subTest(arguments=arguments), \
                         mock.patch("sys.stderr", io.StringIO()) as said, \

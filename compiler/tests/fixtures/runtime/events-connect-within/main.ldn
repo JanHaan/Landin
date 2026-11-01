@@ -6,8 +6,8 @@
 --  answers once its limit has passed, while another fibre, sleeping
 --  twenty milliseconds at a time, goes on counting; a connection made
 --  afterwards is unharmed.  The peer that never answers is a full
---  listener of backlog 0 on Linux and `fe80::2%lo0` on Darwin and FreeBSD,
---  as there.
+--  listener, of backlog 0 on Linux and 1 on Darwin, and `fe80::2%lo0` on
+--  FreeBSD, as there.
 import core/io
 import core/net
 import core/time
@@ -58,22 +58,31 @@ times_out: (host: events.host, at: net.address) -> (yes: bool) ! ... =
     end for
 end times_out
 
-fixed if compiler.os == linux then
-    --  A listener of backlog 0 that nothing accepts from.
+--  Darwin reads a listener's backlog of 0 as its default of 128, beyond
+--  the attempts `times_out` makes, so its listener is given 1.
+on_darwin: bool = compiler.os == darwin
+
+fixed if compiler.os == freebsd then
+    --  An address on the loopback's link-local prefix that nothing holds.
+    unanswered: (host: events.host) -> (yes: bool) ! ... =
+        yes = try times_out(host, try net.parse_address("[fe80::2%lo0]:9"))
+    end unanswered
+else
+    --  A listener that nothing accepts from, whose queue the first
+    --  attempts fill.
     unanswered: (host: events.host) -> (yes: bool) ! ... =
         held: posix.descriptor = try posix.socket(posix.internet,
                                                   posix.stream)
         defer posix.close(held) else none
         try posix.bind(held,
                        try posix.internet_address(net.loopback(net.ipv4, 0)))
-        try posix.listen(held, 0)
+        if on_darwin then
+            try posix.listen(held, 1)
+        else
+            try posix.listen(held, 0)
+        end if
         at: net.address = try posix.address_of(try posix.socket_name(held))
         yes = try times_out(host, at)
-    end unanswered
-else
-    --  An address on the loopback's link-local prefix that nothing holds.
-    unanswered: (host: events.host) -> (yes: bool) ! ... =
-        yes = try times_out(host, try net.parse_address("[fe80::2%lo0]:9"))
     end unanswered
 end if
 
@@ -142,8 +151,20 @@ connect_all: (inout state: connecting) -> none ! failure.reason =
     outcome = 3
     before: u32 = ticks
     --  The system's own errors, Linux's listener's, are no reason here.
+    --  A failure here, rather than a timeout, says which: 31 refused,
+    --  32 unreachable, 33 address unavailable, 34 invalid address, 39
+    --  another.
     timed: bool = unanswered(state.host) else (problem)
-        _ = problem
+        outcome = 39
+        if problem == net.refused then
+            outcome = 31
+        elsif problem == net.unreachable then
+            outcome = 32
+        elsif problem == net.address_unavailable then
+            outcome = 33
+        elsif problem == net.invalid_address then
+            outcome = 34
+        end if
         fail io.io_failed
     end
     return when not timed
@@ -185,8 +206,14 @@ public main: () -> (code: i32) =
         return
     end
     code = 2
+    --  A case that fails rather than answers false is 20 and its number,
+    --  or the unanswered case's own failure, 31 to 39.
     run(host) else (problem)
         _ = problem
+        code = 20 + outcome
+        if outcome > 30 then
+            code = outcome
+        end if
         return
     end
     code = 10 + outcome

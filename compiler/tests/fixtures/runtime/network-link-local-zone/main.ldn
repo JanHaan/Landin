@@ -9,7 +9,10 @@
 --  `address_unavailable`, a connection to `fe80::1%lo` is `unreachable`,
 --  the system having found the interface and no route on it, and one to
 --  `fe80::1` without its zone is `io_failed`, EINVAL, Linux's refusal of a
---  link-local address that names no interface.  On every system a zone
+--  link-local address that names no interface.  A Mac's loopback need not
+--  hold `fe80::1` either, and GitHub's macOS image's does not; there the
+--  zoned connection is `unreachable` as on Linux, and the bare one is
+--  `unreachable` too, Darwin finding no route rather than refusing it.  On every system a zone
 --  that names no interface is `address_unavailable`, whether it is
 --  listened at, connected to or bound to for datagrams.
 import core/cmp
@@ -19,6 +22,8 @@ import core/text
 import core/time
 import hosted/blocking
 import platform/posix
+
+on_linux: bool = compiler.os == linux
 
 fixed if compiler.os == linux then
     --- The loopback interface's name.
@@ -92,9 +97,10 @@ allowed: (host: blocking.host, listener: io.file) -> (yes: bool) ! ... =
     yes = yes and try datagram(host, net.with_port(at, 0))
 end allowed
 
---  Where it does not, Linux: the zone still reaches the socket, which
+--  Where it does not, Linux and a Mac whose loopback holds no `fe80::1`,
+--  as GitHub's macOS image's: the zone still reaches the socket, which
 --  finds no route on the interface it names, where without one Linux
---  refuses the address outright.
+--  refuses the address outright, EINVAL, and Darwin finds no route.
 refused_here: (host: blocking.host) -> (yes: bool) ! ... =
     zoned: net.address = try net.with_zone(
         try net.parse_address("[fe80::1]:9"), loopback_name)
@@ -109,17 +115,21 @@ refused_here: (host: blocking.host) -> (yes: bool) ! ... =
         yes = false
         return
     end if
-    mut invalid: bool = false
+    mut refused: bool = false
     bare: io.file = net.connect_within(host, try net.parse_address("[fe80::1]:9"),
                                        time.seconds(5)) else (problem)
-        invalid = problem == io.io_failed
-                  and blocking.last_errno(host) == posix.number(posix.einval)
+        if on_linux then
+            refused = problem == io.io_failed
+                      and blocking.last_errno(host) == posix.number(posix.einval)
+        else
+            refused = problem == net.unreachable
+        end if
         io.file(0)
     end
-    if not invalid then
+    if not refused then
         try net.close_socket(host, bare)
     end if
-    yes = invalid
+    yes = refused
 end refused_here
 
 --  A zone that names no interface, on every system.

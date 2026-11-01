@@ -24501,10 +24501,14 @@ network connects or refuses at once, so its limit is never reached.
 own, and the fixtures say which. Linux drops a connection's first segment
 while a listener's queue of finished handshakes is full, so once a
 listener of backlog 0 holds one connection nothing accepts, the next is not
-answered. FreeBSD answers such a connection from its SYN cache and resets
-it when the queue has no room, which is no timeout; there, and on Darwin, a
-segment for an address on the loopback interface's link-local prefix that
-no interface holds, `fe80::2%lo0`, is carried to nobody (D581).
+answered. Darwin does the same, but reads a backlog of 0 as its default of
+128, so its listener is given a backlog of 1. FreeBSD answers such a
+connection from its SYN cache and resets it when the queue has no room,
+which is no timeout; there a segment for an address on the loopback
+interface's link-local prefix that no interface holds, `fe80::2%lo0`, is
+carried to nobody (D581). Darwin carries that segment to nobody too, but
+only while its loopback holds `fe80::1`: on GitHub's macOS image, whose
+loopback holds none, the connect fails at once as unreachable.
 
 **The alternatives:** a `limit` parameter on `connect` itself, zero for none,
 which is one entry where this is two but makes every connection name a
@@ -24559,7 +24563,10 @@ about 2.6 KiB, so the firmware fixture is two, one reading and one writing.
 Linux's loopback holds no link-local address, so on Linux a zoned
 connection to the loopback is shown reaching the socket by the system's
 answers: `fe80::1%lo` is ENETUNREACH, where `fe80::1` without its zone is
-EINVAL.
+EINVAL. A Mac's loopback need not hold `fe80::1` either, and GitHub's macOS
+image's does not; there the fixture decides by whether the listener at
+`fe80::1%lo0` is `address_unavailable`, and Darwin answers both connections
+EHOSTUNREACH, which is `unreachable`.
 
 **The alternatives:** the interface's number in the address, D320's
 declined scope identifier, which no firmware image could read from `%eth0`;
@@ -24574,8 +24581,9 @@ not the address's text.
 zones on every target; `runtime/network-addresses-firmware` and
 `runtime/network-addresses-written-firmware`, which read and write a zoned
 address on Cortex-M0; `runtime/network-link-local-zone`, a connection and a
-datagram at `fe80::1%lo0` by name and by number on Darwin and FreeBSD, the
-system's answers for `fe80::1%lo` on Linux and a zone naming no interface
+datagram at `fe80::1%lo0` by name and by number where the loopback holds
+that address, the system's answers where it does not, on Linux and on such
+a Mac, and a zone naming no interface
 refused everywhere; and `abi/libc-socket-facts`, which holds the scope's
 place in the record, the interface requests and their record, and the
 lookups both ways to the C library's.

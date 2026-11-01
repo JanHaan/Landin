@@ -1,6 +1,6 @@
 class: runtime
 profiles: standard
-summary: D581 an IPv6 zone reaches the socket over hosted/blocking; where the loopback holds fe80::1, on Darwin and FreeBSD, a listener at fe80::1%lo0 takes connections made within a limit with the zone named and with the interface's number, a byte crosses each, both ends report fe80::1 with the zone the system's scope names, written in brackets with the port, and a datagram's sender is zoned the same way; on Linux, whose lo holds none, the listener is address_unavailable, a connection to fe80::1%lo unreachable and one to fe80::1 without a zone io_failed with EINVAL; everywhere a zone naming no interface is address_unavailable for a listener, a connection and a datagram socket
+summary: D581 an IPv6 zone reaches the socket over hosted/blocking; where the loopback holds fe80::1, on FreeBSD and most Macs, a listener at fe80::1%lo0 takes connections made within a limit with the zone named and with the interface's number, a byte crosses each, both ends report fe80::1 with the zone the system's scope names, written in brackets with the port, and a datagram's sender is zoned the same way; on Linux, whose lo holds none, the listener is address_unavailable, a connection to fe80::1%lo unreachable and one to fe80::1 without a zone io_failed with EINVAL, and on a Mac whose lo0 holds none, as GitHub's macOS image's, both connections are unreachable; everywhere a zone naming no interface is address_unavailable for a listener, a connection and a datagram socket
 program: main.ldn
 root: ../../../../..
 status: 42

@@ -1,6 +1,6 @@
 class: runtime
 profiles: standard
-summary: D580 net.connect_within over hosted/events connects within a limit and with none, is refused at once by a port nothing listens on, and fails timed_out against a peer that never answers once the limit has passed, its fibre parked on the loop with the limit as its deadline while another fibre sleeps and counts, after which a connection is unharmed; the peer is a full listener of backlog 0 on Linux and fe80::2%lo0 on Darwin and FreeBSD
+summary: D580 net.connect_within over hosted/events connects within a limit and with none, is refused at once by a port nothing listens on, and fails timed_out against a peer that never answers once the limit has passed, its fibre parked on the loop with the limit as its deadline while another fibre sleeps and counts, after which a connection is unharmed; the peer is a full listener, of backlog 0 on Linux and 1 on Darwin, and fe80::2%lo0 on FreeBSD
 program: main.ldn
 root: ../../../../..
 status: 42
