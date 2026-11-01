@@ -48,7 +48,8 @@ bridge's log, `uart.bin` (every byte the board sent) and `sent.bin` (every
 byte the host sent), and `result.json`: the image's and the second stage's
 hashes, the stage's CRC, each verdict, every frame and the commands with
 their status and time. The run the item recorded is
-[`record.json`](record.json).
+[`record.json`](record.json), whose image was built as `board.elf`; it
+predates the record's `image_name`. The linked ELF holds the name of the object refine assembled beside it, so its hash depends on the output's name: a record gives the name as `image_name`, and a reader rebuilding the image to check the hash builds it under that name.
 
 ## The trace
 

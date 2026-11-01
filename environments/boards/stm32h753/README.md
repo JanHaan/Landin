@@ -52,7 +52,7 @@ with their status and time. Its status is `passed`, `failed` with the first
 refusal, or `pending`, naming what the float unit still lacks: the image's
 float routines calling software helpers, the compiler-owned startup not
 granting CP10 and CP11, or the square root not yet sent. A pending run is
-never a passed one, and `--record` writes only a passed run's record.
+never a passed one, and `--record` writes only a passed run's record. The linked ELF holds the name of the object refine assembled beside it, so its hash depends on the output's name: a record gives the name as `image_name`, and a reader rebuilding the image to check the hash builds it under that name.
 
 ## The trace
 

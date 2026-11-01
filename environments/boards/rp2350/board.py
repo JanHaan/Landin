@@ -342,7 +342,7 @@ def main():
     bridge = console = None
     try:
         elf, head, names = build(run, args)
-        result.update(image_sha256=sha(elf), image_block=['%08x' % w for w in IMAGE_DEF])
+        result.update(image_sha256=sha(elf), image_name=elf.name, image_block=['%08x' % w for w in IMAGE_DEF])
         if args.block_control:
             result['block_control'] = block_control(run, args, elf, head)
         flash(run, args, elf, head)
@@ -374,7 +374,7 @@ def main():
         result['commands'] = run.commands
         common.write_json(args.output / 'result.json', result)
     if args.record and result['status'] == 'passed':
-        kept = ('status', 'image_sha256', 'image_block', 'flash_readback', 'verdicts', 'swd',
+        kept = ('status', 'image_sha256', 'image_name', 'image_block', 'flash_readback', 'verdicts', 'swd',
                 'uart_sha256') + (('block_control',) if args.block_control else ())
         common.write_json(args.record, common.record(
             result, kept, (args.output / 'sent.bin').read_bytes(), run.commands, ('b',)))

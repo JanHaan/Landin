@@ -274,7 +274,7 @@ def main():
     bridge = console = None
     try:
         elf, stage, crc, names = build(run, args)
-        result.update(image_sha256=sha(elf), second_stage_crc32='%08x' % crc,
+        result.update(image_sha256=sha(elf), image_name=elf.name, second_stage_crc32='%08x' % crc,
                       second_stage_sha256=hashlib.sha256(stage).hexdigest())
         flash(run, args, elf, stage)
         result['flash_readback'] = 'matches'
@@ -305,7 +305,7 @@ def main():
         result['commands'] = run.commands
         common.write_json(args.output / 'result.json', result)
     if args.record and result['status'] == 'passed':
-        kept = ('status', 'image_sha256', 'second_stage_crc32', 'second_stage_sha256',
+        kept = ('status', 'image_sha256', 'image_name', 'second_stage_crc32', 'second_stage_sha256',
                 'flash_readback', 'verdicts', 'swd', 'uart_sha256')
         common.write_json(args.record, common.record(
             result, kept, (args.output / 'sent.bin').read_bytes(), run.commands, ('b',)))

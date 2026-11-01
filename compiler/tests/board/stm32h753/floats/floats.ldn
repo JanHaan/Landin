@@ -4,11 +4,10 @@
 -- values no compiler could know.  Each result goes back as its bit
 -- pattern, which the host compares with IEEE 754 arithmetic of its own.
 --
--- The square root is the hook the M7's float unit fills: a `vsqrt` in an
--- assembly block with a float operand, under
--- `fixed if compiler.feature.fp_dp`, once float register operands and the
--- feature exist.  Until then `root` reports none, and the oracle says the
--- square root is pending.
+-- The square root is the M7's float unit's own: a `vsqrt` in an assembly
+-- block with a float operand (D630), under `fixed if compiler.feature.fp_dp`.
+-- Without the unit `rooted` is false, and the oracle says the square root
+-- is pending.
 
 -- One f32 exercise's results: the four operations' bit patterns, the
 -- comparisons, and the square root of the first operand when there is one.
@@ -80,16 +79,44 @@ order64: (a: f64, b: f64) -> (bits: u32) =
     if a > b then bits = bits | 32 end if
 end order64
 
+fixed if compiler.feature.fp_dp then
+    root32: (x: f32) -> (r: f32, rooted: bool) =
+        r = assembler.block("vsqrt.f32 {r}, {x}", in x: f32 at float = x,
+                            out r: f32 at float)
+        rooted = true
+    end root32
+
+    root64: (x: f64) -> (r: f64, rooted: bool) =
+        r = assembler.block("vsqrt.f64 {r}, {x}", in x: f64 at float = x,
+                            out r: f64 at float)
+        rooted = true
+    end root64
+else
+    root32: (x: f32) -> (r: f32, rooted: bool) =
+        r = x
+        rooted = false
+    end root32
+
+    root64: (x: f64) -> (r: f64, rooted: bool) =
+        r = x
+        rooted = false
+    end root64
+end if
+
 public exercise32: (x: u32, y: u32) -> (r: results32) =
     a := float32(x)
     b := float32(y)
+    (r: square, rooted) := root32(a)
     r = (sum: bits32(a + b), difference: bits32(a - b), product: bits32(a * b),
-         quotient: bits32(a / b), order: order32(a, b), root: 0, rooted: false)
+         quotient: bits32(a / b), order: order32(a, b),
+         root: bits32(square), rooted: rooted)
 end exercise32
 
 public exercise64: (x: u64, y: u64) -> (r: results64) =
     a := float64(x)
     b := float64(y)
+    (r: square, rooted) := root64(a)
     r = (sum: bits64(a + b), difference: bits64(a - b), product: bits64(a * b),
-         quotient: bits64(a / b), order: order64(a, b), root: 0, rooted: false)
+         quotient: bits64(a / b), order: order64(a, b),
+         root: bits64(square), rooted: rooted)
 end exercise64

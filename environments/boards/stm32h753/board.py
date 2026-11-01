@@ -513,7 +513,7 @@ def main():
     console = None
     try:
         elf, table, names, image = build(run, args)
-        result.update(image_sha256=common.sha(elf), image=image)
+        result.update(image_sha256=common.sha(elf), image_name=elf.name, image=image)
         probe(run, args).flash(elf, VECTORS, table, "the image's vector table")
         result['flash_readback'] = 'matches'
         power_cycle(common.InGroup(run, args.hub_group), args)
@@ -551,7 +551,7 @@ def main():
         result['commands'] = run.commands
         common.write_json(args.output / 'result.json', result)
     if args.record and result['status'] == 'passed':
-        kept = ('status', 'image_sha256', 'image', 'flash_readback', 'verdicts', 'swd', 'uart_sha256')
+        kept = ('status', 'image_sha256', 'image_name', 'image', 'flash_readback', 'verdicts', 'swd', 'uart_sha256')
         common.write_json(args.record, common.record(
             result, kept, (args.output / 'sent.bin').read_bytes(), run.commands, ('b',)))
     print('board %s: %s%s' % (result['status'], args.output,

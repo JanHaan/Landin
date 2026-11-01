@@ -1,0 +1,95 @@
+{
+  "status": "passed",
+  "image_sha256": "6294e3d98e83ceada33475c6fa403d38e2cc1e36def69a7ea6bdba321b0ca07a",
+  "image_block": [
+    "ffffded3",
+    "10210142",
+    "000001ff",
+    "00000000",
+    "ab123579"
+  ],
+  "flash_readback": "matches",
+  "verdicts": {
+    "boot": {
+      "chip_reset": 65536,
+      "vtor": 268435456,
+      "clk_ref_selected": 4
+    },
+    "shared": {
+      "input": "1A0",
+      "echo": "1A0",
+      "indicator_after_1": 8,
+      "indicator_after_0": 0
+    },
+    "irq14": {
+      "entries": 1,
+      "exception": 30
+    },
+    "overrun": {
+      "burst": 300,
+      "recoveries": 1
+    },
+    "epochs": {
+      "flagged_burst": 100,
+      "held_by_fifo": 32,
+      "restarts": 3,
+      "dma_completions": 2,
+      "timer_events": 1840,
+      "echoed": 11202,
+      "sent": 11570
+    }
+  },
+  "swd": {
+    "handled": 11202,
+    "recoveries": 3,
+    "dma_events": 2,
+    "usb_events": 1,
+    "trans_count": 1094
+  },
+  "uart_sha256": "9d7dc335c5828b74fe8e5d94805ede04a3725cf2fe2bbaf24c1e02469c38bfa5",
+  "block_control": {
+    "corrupted_end_marker": "54edca86",
+    "enumerated": "2e8a:000f"
+  },
+  "sent_sha256": "9c0cc945143073f2c4bf1db39793c585ee62bf044750f2315465972e72277a18",
+  "frames": [
+    {
+      "tag": "b",
+      "r": "00010000",
+      "v": "10000000",
+      "k": "00000004"
+    },
+    {
+      "tag": "t",
+      "h": "00002bc2",
+      "c": "00000003",
+      "d": "00000002",
+      "m": "00000730",
+      "u": "00000001",
+      "p": "0000001e",
+      "n": "00000446",
+      "e": "00000bba",
+      "g": "00000000",
+      "s": "00000002"
+    }
+  ],
+  "commands": [
+    "compile",
+    "symbols",
+    "flash",
+    "flash-readback",
+    "hub-status",
+    "power-cycle",
+    "hub-after-corrupt",
+    "hub-after-corrupt",
+    "flash",
+    "flash-readback",
+    "hub-status",
+    "power-cycle",
+    "swd-handled",
+    "swd-recoveries",
+    "swd-dma_events",
+    "swd-usb_events",
+    "swd-trans-count"
+  ]
+}

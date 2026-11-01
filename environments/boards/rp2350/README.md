@@ -49,7 +49,7 @@ The output holds the image, its build report and every command's log, the
 bridge's log, `uart.bin` (every byte the board sent) and `sent.bin` (every
 byte the host sent), and `result.json`: the image's hash, its block, the
 block control's verdict, each verdict, every frame and the commands with
-their status and time. `--record` writes a passed run's record.
+their status and time. `--record` writes a passed run's record. The linked ELF holds the name of the object refine assembled beside it, so its hash depends on the output's name: a record gives the name as `image_name`, and a reader rebuilding the image to check the hash builds it under that name.
 
 ## The trace
 
