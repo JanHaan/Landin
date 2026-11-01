@@ -27115,12 +27115,14 @@ package body Landin.Diagnostics.Citations.Texts is
                & "ed with the lane's inputs, and a restriction is recorded"
                & ". A row's `lanes` entry may give a lane a restriction of"
                & " its own with its reason, which the lane still runs and "
-               & "requires to fail, so a stale one fails the run. `run.py`"
-               & "'s `mps2-an500` lane is that run, as its `mps2-an505` la"
-               & "ne is D607's, and the AN505 is reached through its own e"
-               & "ntry-module file. No limited verdict is linked again aga"
-               & "inst the lane's map, which is no device's, and its large"
-               & "r map judges no reference limit stale.",
+               & "requires to fail, so a stale one fails the run, and a `r"
+               & "efuse` row's entry the codes the lane refuses it with wh"
+               & "ere they differ from the reference's. `run.py`'s `mps2-a"
+               & "n500` lane is that run, as its `mps2-an505` lane is D607"
+               & "'s, and the AN505 is reached through its own entry-modul"
+               & "e file. No limited verdict is linked again against the l"
+               & "ane's map, which is no device's, and its larger map judg"
+               & "es no reference limit stale.",
             when 620 =>
                "Chosen: with a float unit the switch also pushes d8-d15 "
                & "below the limit word and FPSCR with a word above it belo"

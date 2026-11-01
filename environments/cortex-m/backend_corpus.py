@@ -64,13 +64,18 @@ def inventory():
     hosted = []
     for name, row in rows.items():
         require(row['mode'] in ('execute', 'refuse', 'restriction'), 'unknown corpus disposition')
-        #  D619: a lane's own disposition of an execute row, which the lane
-        #  still runs and requires to fail, so a stale one is found.
+        #  D619: a lane's own disposition of a row: a restriction of an
+        #  execute row, which the lane still runs and requires to fail, so a
+        #  stale one is found, or the codes a refuse row is refused with on
+        #  that lane's level and map, where they differ from the reference's.
         for lane, own in row.get('lanes', {}).items():
-            require(lane in LANES and row['mode'] == 'execute'
-                    and own.get('mode') == 'restriction' and bool(own.get('reason')),
-                    '%s: a "lanes" entry names a corpus lane (%s) of an execute row, with'
-                    ' "mode": "restriction" and its reason (see %s)'
+            require(lane in LANES and bool(own.get('reason')) and (
+                        (row['mode'] == 'execute' and own.get('mode') == 'restriction')
+                        or (row['mode'] == 'refuse' and own.get('mode') == 'refuse'
+                            and bool(own.get('codes')) and own['codes'] != row['codes'])),
+                    '%s: a "lanes" entry names a corpus lane (%s) and its reason, with'
+                    ' "mode": "restriction" for an execute row, or "mode": "refuse" and the'
+                    ' lane\'s own "codes" for a refuse row (see %s)'
                     % (name, ', '.join(LANES), RULES))
         meta = metadata(ROOT / 'compiler/tests/fixtures' / name / 'fixture.meta')
         if row['mode'] == 'execute' and (said := hosted_oracle(meta)):
@@ -162,11 +167,17 @@ def source_refusal(run, refine, name, row, level='armv6-m'):
     #  A refusal the row does not record says what refine said, first: a
     #  compiler with no library beside it refuses every fixture with
     #  L0006, which is no changed verdict.
+    #  On a lane the row's own codes are the reference's, so a lane whose
+    #  refusal differs is given an entry of its own rather than new codes.
+    lane = lane_of(level)
+    write = ('"codes": %s' % json.dumps(codes) if lane is None else
+             '"lanes": {"%s": {"mode": "refuse", "codes": %s, "reason": ...}}'
+             % (lane, json.dumps(codes)))
     require(codes == row['codes'] and bool(codes),
-            '%s: refine refused it with %s, first %r, and its %s row records %s; if that'
-            ' refusal is the fixture\'s verdict, write "codes": %s (see %s); inspect %s'
+            '%s: refine refused it with %s, first %r, and its %s row records %s%s; if that'
+            ' refusal is the fixture\'s verdict, write %s (see %s); inspect %s'
             % (name, ', '.join(codes) or 'no code', first_diagnostic(log), INVENTORY,
-               ', '.join(row['codes']), json.dumps(codes), RULES,
+               ', '.join(row['codes']), '' if lane is None else ' on ' + lane, write, RULES,
                run.out / 'compile-refusal.log'))
     require(not (run.out / 'refused.s').exists(), 'refusal wrote an assembly artifact')
     if not namespace_only(row):
@@ -640,7 +651,9 @@ def execute(output, tools, refine, selected=(), profiles=(), lane=None):
                 result.update(verdict='target-restriction', reason=row['reason'],
                               witness_sha256=sha(ROOT / row['witness']))
             elif row['mode'] == 'refuse':
-                result.update(source_refusal(run, refine, name, row, level))
+                own = row.get('lanes', {}).get(lane_of(level))
+                result.update(source_refusal(run, refine, name, {**row, **own} if own else row,
+                                             level))
             elif lane_of(level) in row.get('lanes', {}):
                 own = row['lanes'][lane_of(level)]
                 try:

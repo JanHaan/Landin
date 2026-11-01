@@ -536,10 +536,15 @@ An `execute` row may also carry `"lanes": {"mps2-an500": {"mode":
 "restriction", "reason": ...}}`, a corpus lane's own disposition of it
 (D619), which may name either lane. The lane still runs the program and
 requires it to fail, so a restriction that no longer holds fails the lane,
-naming the row; three
-64-bit-sized fixtures, which the reference's map never held and so no
-Cortex-M lane ran before the M7's, have one, until each has a 32-bit
-counterpart.
+naming the row; three 64-bit-sized fixtures, which the reference's map
+never held and so no Cortex-M lane ran before the M7's, have one, until
+each has a 32-bit counterpart. A `refuse` row may carry `"lanes":
+{"mps2-an505": {"mode": "refuse", "codes": [...], "reason": ...}}`, the
+codes that lane's level and map refuse it with where they differ from the
+reference's; `runtime/assembly-float-square-root`'s `vsqrt` is L0330 at
+`armv6-m` and its float operands L0304 at `armv8-m.main` on a map with no
+float unit (D630). A lane run whose refusal differs names the entry to
+write.
 
 Firmware gives a program no standard input, arguments, files beside it or
 output, so a fixture whose metadata names `stdin:`, `run_args:`,

@@ -502,6 +502,15 @@
       "codes": [
         "L0330"
       ],
+      "lanes": {
+        "mps2-an505": {
+          "codes": [
+            "L0304"
+          ],
+          "mode": "refuse",
+          "reason": "The AN505's lane description selects no float unit, so at armv8-m.main, where the Armv6-M instruction list no longer applies, its float operands have no float register to be placed at (D630)."
+        }
+      },
       "mode": "refuse",
       "reason": "Cortex-M0's reference profile has no float unit: `vsqrt` is no armv6-m instruction, and its float operands have no float register to be placed at (D630)."
     },

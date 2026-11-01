@@ -24373,8 +24373,10 @@ executes, an image the lane's map cannot hold is a limit, a source refusal
 is checked with the lane's inputs, and a restriction is recorded. A row's
 `lanes` entry may give a lane a restriction of its own with its reason,
 which the lane still runs and requires to fail, so a stale one fails the
-run. `run.py`'s `mps2-an500` lane is that run, as its `mps2-an505` lane is
-D607's, and the AN505 is reached through its own entry-module file.
+run, and a `refuse` row's entry the codes the lane refuses it with where
+they differ from the reference's. `run.py`'s `mps2-an500` lane is that
+run, as its `mps2-an505` lane is D607's, and the AN505 is reached through
+its own entry-module file.
 No limited verdict is linked again against the lane's map, which is no
 device's, and its larger map judges no reference limit stale.
 
