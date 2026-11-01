@@ -3476,6 +3476,35 @@ package body Landin.Tests.Cortex_Suite is
                   Landin.Testing.Check_Equal
                     (Item, Ran.Status, Landin.Driver.Status_Success,
                      U.To_String (Ran.Report));
+                  --  D589: the profile's script and limits alone give the
+                  --  block's place, after the 48-word table.
+                  Args.Clear;
+                  Args.Append ("--root=/w/devices");
+                  Args.Append ("--target=cortex-m0");
+                  Args.Append ("--emit=linker-script");
+                  Args.Append ("--build-report=/w/q.json");
+                  Args.Append ("-o");
+                  Args.Append ("/w/q.ld");
+                  Args.Append ("/w/app");
+                  declare
+                     Script : constant Landin.Driver.Outcome :=
+                       Landin.Driver.Execute (Args, Host, Tools);
+                  begin
+                     Landin.Testing.Check
+                       (Item, Script.Status = Landin.Driver.Status_Success
+                          and then Contains (Host.Written ("/w/q.json"),
+                            """image_block"":{""address"":268435648,"
+                            & """bytes"":20}")
+                          and then Contains (Host.Written ("/w/q.ld"),
+                            "  .embedded_block : { KEEP(*(.embedded_block))"
+                            & " } > FLASH" & ASCII.LF)
+                          and then Contains (Host.Written ("/w/q.ld"),
+                            "ASSERT(ADDR(.embedded_block) + SIZEOF(.embedded"
+                            & "_block) <= ORIGIN(FLASH) + 4096,"),
+                        "the limits give the block, and the script places it"
+                        & " and asserts its 4 KiB: "
+                        & U.To_String (Script.Report));
+                  end;
                end if;
             end;
          end;
