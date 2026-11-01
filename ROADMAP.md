@@ -1280,7 +1280,7 @@ datasheet (D595); IRQ5 is set pending in the NVIC and runs slot 21's
 handler in exception 21 (D596). The recorded run is
 `environments/boards/rp2040/record.json`: a power-on boot, CHIP_RESET
 HAD_POR alone, with no probe attached; VTOR 0x1000_0100, written only by the
-ROM-loaded stage, whose CRC is e5e96a65; the shared `1A0` echoed with GPIO2
+ROM-loaded stage, whose CRC is e5e96a65; the shared `1A0` echoed with GPIO3
 set and cleared as the emulator lane's application does; a ring overrun and
 a FIFO overflow each reported and restarted; an exhausted epoch restarted
 with nothing lost; 11,202 bytes echoed in order; and the counters read over

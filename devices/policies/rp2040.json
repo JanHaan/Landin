@@ -17,7 +17,7 @@
     "IO_BANK0": [
       "GPIO0_CTRL",
       "GPIO1_CTRL",
-      "GPIO2_CTRL"
+      "GPIO3_CTRL"
     ],
     "SIO": [
       "GPIO_IN",
@@ -81,7 +81,7 @@
     "PADS_BANK0": [
       "GPIO0",
       "GPIO1",
-      "GPIO2"
+      "GPIO3"
     ],
     "VREG_AND_CHIP_RESET": [
       "CHIP_RESET"
@@ -107,7 +107,7 @@
       "write": "normal",
       "reserved": "zero"
     },
-    "IO_BANK0.GPIO2_CTRL": {
+    "IO_BANK0.GPIO3_CTRL": {
       "read": "normal",
       "write": "normal",
       "reserved": "zero"
@@ -340,7 +340,7 @@
       "write": "normal",
       "reserved": "zero"
     },
-    "PADS_BANK0.GPIO2": {
+    "PADS_BANK0.GPIO3": {
       "read": "normal",
       "write": "normal",
       "reserved": "zero"
@@ -383,7 +383,7 @@
     "XOSC.STATUS.FREQ_RANGE",
     "PADS_BANK0.GPIO0.DRIVE",
     "PADS_BANK0.GPIO1.DRIVE",
-    "PADS_BANK0.GPIO2.DRIVE"
+    "PADS_BANK0.GPIO3.DRIVE"
   ],
   "reset_mask_overrides": {
     "UART0.UARTDR": "0x0",

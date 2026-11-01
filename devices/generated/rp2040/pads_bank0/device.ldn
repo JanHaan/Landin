@@ -80,12 +80,12 @@ public gpio1_write: (device_base: usize, raw: u32) -> none =
                             compiler.write_zero, 0x000000ff)
 end gpio1_write
 
-public gpio2_offset: usize = 0xc
-public gpio2_address: usize = 0x4001c00c
-public gpio2_named_mask: u32 = 0x000000ff
-public gpio2_reset_mask: u32 = 0x000000ff
-public gpio2_reset_value: u32 = 0x00000056
-public gpio2_image: type = layout(packed, u32) struct
+public gpio3_offset: usize = 0x10
+public gpio3_address: usize = 0x4001c010
+public gpio3_named_mask: u32 = 0x000000ff
+public gpio3_reset_mask: u32 = 0x000000ff
+public gpio3_reset_value: u32 = 0x00000056
+public gpio3_image: type = layout(packed, u32) struct
     f_od: u1 at 7..7
     f_ie: u1 at 6..6
     f_drive: u2 at 4..5
@@ -93,26 +93,26 @@ public gpio2_image: type = layout(packed, u32) struct
     f_pde: u1 at 2..2
     f_schmitt: u1 at 1..1
     f_slewfast: u1 at 0..0
-end gpio2_image
+end gpio3_image
 
-public gpio2_decode: (raw: u32) -> (image: gpio2_image) =
+public gpio3_decode: (raw: u32) -> (image: gpio3_image) =
     image = zeroed
     bits: ptr mut u32 = ptr(usize(addr image))
     bits.val = raw
-end gpio2_decode
+end gpio3_decode
 
-public gpio2_encode: (image: gpio2_image) -> (raw: u32) =
+public gpio3_encode: (image: gpio3_image) -> (raw: u32) =
     bits: ptr u32 = ptr(usize(addr image))
     raw = bits.val
-end gpio2_encode
+end gpio3_encode
 
-public gpio2_read: (device_base: usize) -> (raw: u32) =
-    port: ptr u32 = ptr(device_base + gpio2_offset)
+public gpio3_read: (device_base: usize) -> (raw: u32) =
+    port: ptr u32 = ptr(device_base + gpio3_offset)
     raw = compiler.register_read(port, compiler.normal_read)
-end gpio2_read
+end gpio3_read
 
-public gpio2_write: (device_base: usize, raw: u32) -> none =
-    port: ptr mut u32 = ptr(device_base + gpio2_offset)
+public gpio3_write: (device_base: usize, raw: u32) -> none =
+    port: ptr mut u32 = ptr(device_base + gpio3_offset)
     compiler.register_write(port, raw, compiler.normal_write,
                             compiler.write_zero, 0x000000ff)
-end gpio2_write
+end gpio3_write

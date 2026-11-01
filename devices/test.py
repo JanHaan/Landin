@@ -320,7 +320,7 @@ class Regeneration(unittest.TestCase):
             result = run_svd(path, fetch_inputs.fetch(svd_input(policy)), out, expect=1)
             self.assertEqual(result.stderr.count('error[L0528]'), 1)
             for name in ('XOSC.CTRL.FREQ_RANGE ("1_15MHZ")', 'XOSC.STATUS.FREQ_RANGE',
-                         'PADS_BANK0.GPIO0.DRIVE ("2mA")', 'PADS_BANK0.GPIO2.DRIVE'):
+                         'PADS_BANK0.GPIO0.DRIVE ("2mA")', 'PADS_BANK0.GPIO3.DRIVE'):
                 self.assertIn(name, result.stderr)
             self.assertIn("the policy's numeric_enums reads such a field", result.stderr)
             self.assertEqual(tree(out), {})

@@ -138,68 +138,68 @@ public gpio1_ctrl_write: (device_base: usize, raw: u32) -> none =
                             compiler.write_zero, 0x3003331f)
 end gpio1_ctrl_write
 
-public gpio2_ctrl_irqover_normal: atom
-public gpio2_ctrl_irqover_invert: atom
-public gpio2_ctrl_irqover_low: atom
-public gpio2_ctrl_irqover_high: atom
-public gpio2_ctrl_irqover_value: type = u2 (gpio2_ctrl_irqover_normal = 0 | gpio2_ctrl_irqover_invert = 1 | gpio2_ctrl_irqover_low = 2 | gpio2_ctrl_irqover_high = 3)
-public gpio2_ctrl_inover_normal: atom
-public gpio2_ctrl_inover_invert: atom
-public gpio2_ctrl_inover_low: atom
-public gpio2_ctrl_inover_high: atom
-public gpio2_ctrl_inover_value: type = u2 (gpio2_ctrl_inover_normal = 0 | gpio2_ctrl_inover_invert = 1 | gpio2_ctrl_inover_low = 2 | gpio2_ctrl_inover_high = 3)
-public gpio2_ctrl_oeover_normal: atom
-public gpio2_ctrl_oeover_invert: atom
-public gpio2_ctrl_oeover_disable: atom
-public gpio2_ctrl_oeover_enable: atom
-public gpio2_ctrl_oeover_value: type = u2 (gpio2_ctrl_oeover_normal = 0 | gpio2_ctrl_oeover_invert = 1 | gpio2_ctrl_oeover_disable = 2 | gpio2_ctrl_oeover_enable = 3)
-public gpio2_ctrl_outover_normal: atom
-public gpio2_ctrl_outover_invert: atom
-public gpio2_ctrl_outover_low: atom
-public gpio2_ctrl_outover_high: atom
-public gpio2_ctrl_outover_value: type = u2 (gpio2_ctrl_outover_normal = 0 | gpio2_ctrl_outover_invert = 1 | gpio2_ctrl_outover_low = 2 | gpio2_ctrl_outover_high = 3)
-public gpio2_ctrl_funcsel_jtag_tdi: atom
-public gpio2_ctrl_funcsel_spi0_sclk: atom
-public gpio2_ctrl_funcsel_uart0_cts: atom
-public gpio2_ctrl_funcsel_i2c1_sda: atom
-public gpio2_ctrl_funcsel_pwm_a_1: atom
-public gpio2_ctrl_funcsel_sio_2: atom
-public gpio2_ctrl_funcsel_pio0_2: atom
-public gpio2_ctrl_funcsel_pio1_2: atom
-public gpio2_ctrl_funcsel_usb_muxing_vbus_en: atom
-public gpio2_ctrl_funcsel_null: atom
-public gpio2_ctrl_funcsel_value: type = u5 (gpio2_ctrl_funcsel_jtag_tdi = 0 | gpio2_ctrl_funcsel_spi0_sclk = 1 | gpio2_ctrl_funcsel_uart0_cts = 2 | gpio2_ctrl_funcsel_i2c1_sda = 3 | gpio2_ctrl_funcsel_pwm_a_1 = 4 | gpio2_ctrl_funcsel_sio_2 = 5 | gpio2_ctrl_funcsel_pio0_2 = 6 | gpio2_ctrl_funcsel_pio1_2 = 7 | gpio2_ctrl_funcsel_usb_muxing_vbus_en = 9 | gpio2_ctrl_funcsel_null = 31)
-public gpio2_ctrl_offset: usize = 0x14
-public gpio2_ctrl_address: usize = 0x40014014
-public gpio2_ctrl_named_mask: u32 = 0x3003331f
-public gpio2_ctrl_reset_mask: u32 = 0x3003331f
-public gpio2_ctrl_reset_value: u32 = 0x0000001f
-public gpio2_ctrl_image: type = layout(packed, u32) struct
-    f_irqover: gpio2_ctrl_irqover_value at 28..29
-    f_inover: gpio2_ctrl_inover_value at 16..17
-    f_oeover: gpio2_ctrl_oeover_value at 12..13
-    f_outover: gpio2_ctrl_outover_value at 8..9
-    f_funcsel: gpio2_ctrl_funcsel_value at 0..4
-end gpio2_ctrl_image
+public gpio3_ctrl_irqover_normal: atom
+public gpio3_ctrl_irqover_invert: atom
+public gpio3_ctrl_irqover_low: atom
+public gpio3_ctrl_irqover_high: atom
+public gpio3_ctrl_irqover_value: type = u2 (gpio3_ctrl_irqover_normal = 0 | gpio3_ctrl_irqover_invert = 1 | gpio3_ctrl_irqover_low = 2 | gpio3_ctrl_irqover_high = 3)
+public gpio3_ctrl_inover_normal: atom
+public gpio3_ctrl_inover_invert: atom
+public gpio3_ctrl_inover_low: atom
+public gpio3_ctrl_inover_high: atom
+public gpio3_ctrl_inover_value: type = u2 (gpio3_ctrl_inover_normal = 0 | gpio3_ctrl_inover_invert = 1 | gpio3_ctrl_inover_low = 2 | gpio3_ctrl_inover_high = 3)
+public gpio3_ctrl_oeover_normal: atom
+public gpio3_ctrl_oeover_invert: atom
+public gpio3_ctrl_oeover_disable: atom
+public gpio3_ctrl_oeover_enable: atom
+public gpio3_ctrl_oeover_value: type = u2 (gpio3_ctrl_oeover_normal = 0 | gpio3_ctrl_oeover_invert = 1 | gpio3_ctrl_oeover_disable = 2 | gpio3_ctrl_oeover_enable = 3)
+public gpio3_ctrl_outover_normal: atom
+public gpio3_ctrl_outover_invert: atom
+public gpio3_ctrl_outover_low: atom
+public gpio3_ctrl_outover_high: atom
+public gpio3_ctrl_outover_value: type = u2 (gpio3_ctrl_outover_normal = 0 | gpio3_ctrl_outover_invert = 1 | gpio3_ctrl_outover_low = 2 | gpio3_ctrl_outover_high = 3)
+public gpio3_ctrl_funcsel_jtag_tdo: atom
+public gpio3_ctrl_funcsel_spi0_tx: atom
+public gpio3_ctrl_funcsel_uart0_rts: atom
+public gpio3_ctrl_funcsel_i2c1_scl: atom
+public gpio3_ctrl_funcsel_pwm_b_1: atom
+public gpio3_ctrl_funcsel_sio_3: atom
+public gpio3_ctrl_funcsel_pio0_3: atom
+public gpio3_ctrl_funcsel_pio1_3: atom
+public gpio3_ctrl_funcsel_usb_muxing_overcurr_detect: atom
+public gpio3_ctrl_funcsel_null: atom
+public gpio3_ctrl_funcsel_value: type = u5 (gpio3_ctrl_funcsel_jtag_tdo = 0 | gpio3_ctrl_funcsel_spi0_tx = 1 | gpio3_ctrl_funcsel_uart0_rts = 2 | gpio3_ctrl_funcsel_i2c1_scl = 3 | gpio3_ctrl_funcsel_pwm_b_1 = 4 | gpio3_ctrl_funcsel_sio_3 = 5 | gpio3_ctrl_funcsel_pio0_3 = 6 | gpio3_ctrl_funcsel_pio1_3 = 7 | gpio3_ctrl_funcsel_usb_muxing_overcurr_detect = 9 | gpio3_ctrl_funcsel_null = 31)
+public gpio3_ctrl_offset: usize = 0x1c
+public gpio3_ctrl_address: usize = 0x4001401c
+public gpio3_ctrl_named_mask: u32 = 0x3003331f
+public gpio3_ctrl_reset_mask: u32 = 0x3003331f
+public gpio3_ctrl_reset_value: u32 = 0x0000001f
+public gpio3_ctrl_image: type = layout(packed, u32) struct
+    f_irqover: gpio3_ctrl_irqover_value at 28..29
+    f_inover: gpio3_ctrl_inover_value at 16..17
+    f_oeover: gpio3_ctrl_oeover_value at 12..13
+    f_outover: gpio3_ctrl_outover_value at 8..9
+    f_funcsel: gpio3_ctrl_funcsel_value at 0..4
+end gpio3_ctrl_image
 
-public gpio2_ctrl_decode: (raw: u32) -> (image: gpio2_ctrl_image) =
+public gpio3_ctrl_decode: (raw: u32) -> (image: gpio3_ctrl_image) =
     image = zeroed
     bits: ptr mut u32 = ptr(usize(addr image))
     bits.val = raw
-end gpio2_ctrl_decode
+end gpio3_ctrl_decode
 
-public gpio2_ctrl_encode: (image: gpio2_ctrl_image) -> (raw: u32) =
+public gpio3_ctrl_encode: (image: gpio3_ctrl_image) -> (raw: u32) =
     bits: ptr u32 = ptr(usize(addr image))
     raw = bits.val
-end gpio2_ctrl_encode
+end gpio3_ctrl_encode
 
-public gpio2_ctrl_read: (device_base: usize) -> (raw: u32) =
-    port: ptr u32 = ptr(device_base + gpio2_ctrl_offset)
+public gpio3_ctrl_read: (device_base: usize) -> (raw: u32) =
+    port: ptr u32 = ptr(device_base + gpio3_ctrl_offset)
     raw = compiler.register_read(port, compiler.normal_read)
-end gpio2_ctrl_read
+end gpio3_ctrl_read
 
-public gpio2_ctrl_write: (device_base: usize, raw: u32) -> none =
-    port: ptr mut u32 = ptr(device_base + gpio2_ctrl_offset)
+public gpio3_ctrl_write: (device_base: usize, raw: u32) -> none =
+    port: ptr mut u32 = ptr(device_base + gpio3_ctrl_offset)
     compiler.register_write(port, raw, compiler.normal_write,
                             compiler.write_zero, 0x3003331f)
-end gpio2_ctrl_write
+end gpio3_ctrl_write

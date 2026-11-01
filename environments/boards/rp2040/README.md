@@ -16,7 +16,7 @@ no hosted runner has the board.
 | the board | a Raspberry Pi Pico H, its SWD on the 3-pin debug connector, GPIO0 (UART0 TX) to the probe's UART RX and GPIO1 (UART0 RX) to its TX, powered from its USB port | the RP2040 and its 2 MiB W25Q16JV flash, as the description lays them out |
 | a probe | a [probehive](https://github.com/JanHaan/probehive) SWD slot and a checkout of it, whose `scripts/dap_bridge.py` serves the slot's UART as TCP port 4461 | SWD to flash and read back, and the UART the trace comes over |
 | probe-rs | one that reaches the slot as `--probe` names it: the CMSIS-DAP UDP transport the default `0000:0002:10.42.0.50/0` asks for is a pull request to probe-rs, and upstream's TCP transport reaches a bridge as `0000:0001:HOST:PORT` | flashing, verifying and reading memory |
-| the indicator's wire | optionally, GPIO2 (the Pico's pin 4) wired to one of the probe's GPIO, named with `--indicator-pin`; IO32 on the maintainer's rig. probehive's `scripts/gpio.py` reads it, with the LiteX its `nix develop` carries | the indicator's level on the wire, not only as its pad reads it back |
+| the indicator's wire | optionally, GPIO3 (the Pico's pin 5) wired to one of the probe's GPIO, named with `--indicator-pin`; IO32 on the maintainer's rig. probehive's `scripts/gpio.py` reads it, with the LiteX its `nix develop` carries | the indicator's level on the wire, not only as its pad reads it back |
 | power | the Pico's USB port on a hub with per-port power switching, and `uhubctl` with the right to switch it | a power cycle, so the run starts at power-on |
 | the compiler | refine and `arm-eabi-gcc` or `arm-none-eabi-gcc` (D532), as `nix develop` gives them | the image |
 
@@ -71,7 +71,7 @@ NVIC (D596), 0x11 asks for a `t` frame, and 0x12 stops reading for 100 ms.
 | vector word 21 | the USBCTRL_IRQ handler's address, Thumb bit set |
 | flash after flashing | its first 256 bytes, read back over SWD, equal to the image's |
 | the boot frame | CHIP_RESET is HAD_POR alone, so the run began at power-on; VTOR is 0x1000_0100, which only the second stage writes, so the ROM entered the flashed stage and the stage entered compiler-owned reset; clk_ref is on the crystal |
-| the shared scenario | `1`, `A` and `0`, the bytes the emulator lane's application is fed, echoed, with `g` 4 after `1` and 0 after `0`, and with `--indicator-pin` the wire high after `1` and low after `0`; the probe's pin is pulled up when nothing drives it, so low is what shows the Pico driving it |
+| the shared scenario | `1`, `A` and `0`, the bytes the emulator lane's application is fed, echoed, with `g` 8 after `1` and 0 after `0`, and with `--indicator-pin` the wire high after `1` and low after `0`; the probe's pin is pulled up when nothing drives it, so low is what shows the Pico driving it |
 | IRQ5 | one entry, in exception 21 |
 | an overrun | after 0x12, a 300-byte burst into the 256-byte ring is discarded, never echoed, and the ring restarts once |
 | an epoch ended by STALL | the 4096-byte epoch filled, its last byte STALL, then 100 bytes while the channel is exhausted and nothing reads: the UART's 32-byte FIFO holds the first 32, it flags the rest lost, the application restarts on that overrun, and only those 32 are echoed |

@@ -21005,7 +21005,7 @@ never from the firmware: CHIP_RESET reads HAD_POR alone, so the run began at
 power-on; VTOR reads 0x1000_0100, which only the second stage writes, so the
 ROM entered the flashed stage and the stage entered compiler-owned reset;
 clk_ref is on the crystal; `1`, `A` and `0`, the emulator lane's input,
-are echoed, the pad reading GPIO2 high after `1` and low after `0`; a
+are echoed, the pad reading GPIO3 high after `1` and low after `0`; a
 burst during a stall overruns the ring once; an epoch ended by a stall and
 followed by a burst is flagged by the UART and keeps the FIFO's 32 bytes;
 an epoch filled exactly is exhausted and restarted with nothing lost;

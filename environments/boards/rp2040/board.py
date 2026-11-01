@@ -339,7 +339,7 @@ def scenario(console, run, seed, pins=None):
     verdicts['boot'] = dict(chip_reset=boot['r'], vtor=boot['v'], clk_ref_selected=boot['k'])
     seen = 0
     # The shared scenario (D593), the bytes the emulator lane's application
-    # is fed, 1, A and 0: each echoed, 1 setting GPIO2 and 0 clearing it,
+    # is fed, 1, A and 0: each echoed, 1 setting GPIO3 and 0 clearing it,
     # which the pad's input reads back.
     console.send(SHARED[:1])
     high = report(console, seen); seen += 1
@@ -347,12 +347,12 @@ def scenario(console, run, seed, pins=None):
     console.send(SHARED[1:])
     low = report(console, seen); seen += 1
     wire_low = pins.level('gpio-after-0') if pins else None
-    require(high['g'] == 4 and low['g'] == 0,
-            'GPIO2 read back %x after 1 and %x after 0' % (high['g'], low['g']))
+    require(high['g'] == 8 and low['g'] == 0,
+            'GPIO3 read back %x after 1 and %x after 0' % (high['g'], low['g']))
     # The probe's pin is pulled up when nothing drives it, so low after 0
     # is what shows the Pico's pin driving the wire.
     require(pins is None or (wire_high, wire_low) == (1, 0),
-            'the wire from GPIO2 read %s after 1 and %s after 0' % (wire_high, wire_low))
+            'the wire from GPIO3 read %s after 1 and %s after 0' % (wire_high, wire_low))
     require(echo_of(console.received).startswith(SHARED[:1] + bytes([REPORT]) + SHARED[1:]),
             'the shared scenario was not echoed')
     verdicts['shared'] = dict(input=SHARED.decode(), echo=SHARED.decode(),
@@ -464,7 +464,7 @@ def main():
                         help='the serial the guarded port must show, or the hub is not switched')
     parser.add_argument('--off-seconds', type=float, default=1.0)
     parser.add_argument('--indicator-pin', metavar='PIN',
-                        help="the probe's GPIO wired to the Pico's GPIO2, IO32 on the maintainer's"
+                        help="the probe's GPIO wired to the Pico's GPIO3, IO32 on the maintainer's"
                              " rig; without it the indicator is checked by its pad's readback alone")
     parser.add_argument('--probehive-build', type=Path,
                         help="the loaded bitstream's build directory, DIR/build/slots_ci by default")

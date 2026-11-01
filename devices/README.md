@@ -281,7 +281,7 @@ reviewed against.
 
 | Module under `generated/rp2040` | Selected vendor registers | Pressure and limits |
 |---|---|---|
-| `io_bank0` | GPIO0_CTRL, GPIO1_CTRL, GPIO2_CTRL | Pin function/override images, stride 8; different enumerated domains despite identical field names. No pad/electrical model. |
+| `io_bank0` | GPIO0_CTRL, GPIO1_CTRL, GPIO3_CTRL | Pin function/override images, stride 8; different enumerated domains despite identical field names. No pad/electrical model. |
 | `sio` | GPIO_IN, GPIO_OUT, GPIO_OUT_SET, GPIO_OUT_CLR, GPIO_OE_SET | Input/output and separate write commands; 30-bit masks, sparse offsets, no implicit RMW. |
 | `timer` | ALARM0–3, TIMERAWL, INTR, INTE | Four explicit alarm registers, stride 4, low counter word and one-clears interrupt image. No timekeeping driver or 64-bit counter protocol. |
 | `uart0` | UARTDR, UARTRSR, UARTFR, UARTIBRD, UARTFBRD, UARTLCR_H, UARTCR, UARTRIS, UARTICR, UARTDMACR | FIFO read side effects, divisors, flags, the enables, the raw overrun status, clear commands and DMA enable. No serial timing or full UART driver. |
@@ -290,7 +290,7 @@ reviewed against.
 | `resets` | RESET, RESET_DONE | The first board's peripherals taken out of reset and the wait for each. |
 | `clocks` | CLK_REF_CTRL, CLK_REF_SELECTED, CLK_SYS_CTRL, CLK_SYS_SELECTED, CLK_PERI_CTRL | The reference and system clocks moved to the crystal, and the peripheral clock enabled; the glitchless switch's selected images. No PLL. |
 | `xosc` | CTRL, STATUS, STARTUP | The 12 MHz crystal's enable, its stability and its start-up delay; FREQ_RANGE is read as a number, its SVD names beginning with a digit. |
-| `pads_bank0` | GPIO0, GPIO1, GPIO2 | Pad input enable, drive and pulls of the UART and indicator pins; DRIVE is read as a number for the same reason. |
+| `pads_bank0` | GPIO0, GPIO1, GPIO3 | Pad input enable, drive and pulls of the UART and indicator pins; DRIVE is read as a number for the same reason. |
 | `vreg_and_chip_reset` | CHIP_RESET | Which reset the chip last had, power-on among them. |
 | `watchdog` | TICK | The reference clock's divider to the 1 MHz tick the timer counts. |
 | `ppb` | NVIC_ISER, NVIC_ICPR, NVIC_ISPR, VTOR | The core's interrupt enables and pending bits, and the vector table's address, read only. pico-sdk's header for them is `m0plus.h`. |

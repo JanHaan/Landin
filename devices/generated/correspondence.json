@@ -370,7 +370,7 @@
     "width": 32
   },
   {
-    "address": 1073823764,
+    "address": 1073823772,
     "alignment": 4,
     "derived_from": null,
     "fields": [
@@ -490,39 +490,39 @@
         "access": "read-write",
         "encodings": [
           [
-            "jtag_tdi",
+            "jtag_tdo",
             0
           ],
           [
-            "spi0_sclk",
+            "spi0_tx",
             1
           ],
           [
-            "uart0_cts",
+            "uart0_rts",
             2
           ],
           [
-            "i2c1_sda",
+            "i2c1_scl",
             3
           ],
           [
-            "pwm_a_1",
+            "pwm_b_1",
             4
           ],
           [
-            "sio_2",
+            "sio_3",
             5
           ],
           [
-            "pio0_2",
+            "pio0_3",
             6
           ],
           [
-            "pio1_2",
+            "pio1_3",
             7
           ],
           [
-            "usb_muxing_vbus_en",
+            "usb_muxing_overcurr_detect",
             9
           ],
           [
@@ -542,14 +542,14 @@
     "known_reset_mask": 805516063,
     "known_reset_value": 31,
     "named_mask": 805516063,
-    "offset": 20,
+    "offset": 28,
     "policy": {
       "read": "normal",
       "reserved": "zero",
       "write": "normal"
     },
     "register_access": "read-write",
-    "source": "IO_BANK0.GPIO2_CTRL",
+    "source": "IO_BANK0.GPIO3_CTRL",
     "svd_reset_mask": 4294967295,
     "svd_reset_value": 31,
     "width": 32
@@ -4399,7 +4399,7 @@
     "width": 32
   },
   {
-    "address": 1073856524,
+    "address": 1073856528,
     "alignment": 4,
     "derived_from": null,
     "fields": [
@@ -4501,14 +4501,14 @@
     "known_reset_mask": 255,
     "known_reset_value": 86,
     "named_mask": 255,
-    "offset": 12,
+    "offset": 16,
     "policy": {
       "read": "normal",
       "reserved": "zero",
       "write": "normal"
     },
     "register_access": "read-write",
-    "source": "PADS_BANK0.GPIO2",
+    "source": "PADS_BANK0.GPIO3",
     "svd_reset_mask": 4294967295,
     "svd_reset_value": 86,
     "width": 32

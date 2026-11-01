@@ -1,5 +1,5 @@
 -- The prototype-1 application on a Raspberry Pi Pico: UART0 received by
--- DMA and echoed, ASCII 1 and 0 driving GPIO2, timer wakeups, and a trace
+-- DMA and echoed, ASCII 1 and 0 driving GPIO3, timer wakeups, and a trace
 -- of what the board did, which environments/boards/rp2040/board.py checks
 -- against its physical oracle.  The echo and the indicator are the shared
 -- commands.handle, run by the synthetic application in the emulator too.
@@ -33,7 +33,7 @@ mut usb_events: u32 = 0
 mut usb_exception: u32 = 0
 mut app_state: u32 = 0
 
--- Pico's indicator, GPIO2, and UART0 at the RP2040's own bases.
+-- Pico's indicator, GPIO3, and UART0 at the RP2040's own bases.
 port: commands.port = (sio_base: sio.base, indicator: bringup.indicator,
                        uart_base: uart0.base)
 -- An epoch ends after 4096 bytes, so a long stream also exhausts and
