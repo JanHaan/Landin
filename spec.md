@@ -21130,6 +21130,70 @@ attached through the run.
 
 **Pinned by** `environments/boards/rp2040/board.py`'s IRQ5 verdict.
 
+### D645 — The shared command loop takes its indicator and transmitter as function values
+
+**The tour said** nothing; D593 shared `compiler/tests/driver/commands`
+between the synthetic driver and the RP2040 board, and the module imported
+`rp2040/sio` and `rp2040/uart0` and took their bases and the indicator's
+pin, so a board whose GPIO and UART are not the RP2040's could not run it.
+
+**Chosen:** the module names no device. Its `port` is a struct of two
+function values ([1000]), `indicate: (on: bool) -> none` and
+`transmit: (byte: u8) -> none`, and `handle` calls them for each byte: the
+indicator set on ASCII 1 and cleared on ASCII 0, then the byte echoed. Each
+program writes the two from its own register modules and passes them: the
+synthetic application its model's SIO bit 0 and UART, the RP2040 board
+SIO's set and clear aliases for GPIO3 and UART0, the STM32H753 board
+GPIOB's BSRR for PB0 and USART3. `handle` keeps its place in RAM text, and
+the device accesses each program makes are the ones it made before, in the
+same order, so the synthetic lane's exact application trace is unchanged.
+
+**The alternatives:** a concept with each program's port type conforming
+([1230], [1360]), whose generic `handle` the compiler refuses to place
+in RAM text, L0347, so that `handle` would have left the RAM text the lane
+checks; a module each
+program supplies under one name in its first root ([1480]), which hides
+which device a program's loop drives behind the order of its roots; and a
+copy of the loop in each program, which leaves no shared outcome to
+compare.
+
+**Pinned by** `environments/cortex-m/driver.py`'s exact application trace
+at every profile, `environments/cortex-m/source_debug.py`'s stops in
+`handle` and through the application's `transmit`, and the RP2040 and
+STM32H753 board applications, which build with it.
+
+### D646 — The board tools share one module and keep their own oracles
+
+**The tour said** nothing; D595's tool held everything a board run needs in
+one script, written for the RP2040.
+
+**Chosen:** `environments/boards/common.py` holds what does not depend on
+the chip: `Failed` and `require`; the trace's framing and the echo left
+when the frames are taken out; the command log; an ELF32 reader for
+sections and loaded bytes, and the symbols `nm` lists; probe-rs for a chip
+through a probe, a probehive slot over CMSIS-DAP UDP or an ST-LINK named by
+its USB serial, reading words and flashing with verification and a
+readback; the hub's power cycle, one `uhubctl -a cycle` of one port, only
+after the hub's listing shows the device the switched port must hold or a
+guarded port holding the device that must never lose power, run through
+`sg GROUP -c` when the session lacks the group that may switch it; a
+console over probehive's UART bridge or a tty found by its USB serial; and
+the record a passed run writes. Each board keeps its own script, its build,
+its scenario and its oracle, written from its own chip's documents.
+RP2040's tool keeps its behaviour and its record's form. Like the tools it
+serves, the module is a developer's and no compiler feature runs it.
+
+**The alternatives:** one tool for every board, which forces one scenario
+and one oracle on chips whose protocols differ; a copy of the generic parts
+in each board's script, which lets two copies of the hub's guard drift; and
+a package outside the repository, which the gate's script tests could not
+reach.
+
+**Pinned by** `scripts/tests/test_board_common.py`, which holds every part
+to fixed inputs with no board, probe or hub on the gate's Python, and
+`scripts/tests/test_board_rp2040.py`, which still holds the RP2040 tool's
+framing, accounting and guard.
+
 ### D530 — `refine explain` answers a construct and a decision
 
 **The tour said** nothing. Diagnostic notes cite paragraphs and decisions,

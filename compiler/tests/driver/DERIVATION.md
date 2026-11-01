@@ -51,15 +51,16 @@ emulator.
 
 `commands/commands.ldn` is what the application does with the bytes it
 receives: each echoed, ASCII 1 setting the indicator and ASCII 0 clearing
-it, given its bases and its pin. The board port in
+it, through the indicator and the transmitter its program passes it as
+function values, so the module names no device (D645). The board port in
 `compiler/tests/board/rp2040` runs the same module at the RP2040's own
 bases with GPIO3 as its indicator, and keeps this driver's public receive
 contract over the RP2040's own protocol: a live count rather than the drain
 below, and an abort for stop (D593, D594). The echo and the indicator are
 the outcome the two compare, and [the board's run](../../../environments/boards/rp2040/README.md)
 says how the board's side is checked; everything below that depends on the
-synthetic drain stays the emulator's. The shared loop waits on UARTFR's TXFF before
-each byte, which the model answers as always having room.
+synthetic drain stays the emulator's. The application's transmitter waits on UARTFR's
+TXFF before each byte, which the model answers as always having room.
 
 ## Public receive contract
 

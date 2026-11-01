@@ -2215,6 +2215,12 @@ package body Landin.Diagnostics.Citations is
                & "en from what the host sent",
             when 596 =>
                "IRQ5 is delivered by setting it pending in the NVIC",
+            when 645 =>
+               "The shared command loop takes its indicator and transmit"
+               & "ter as function values",
+            when 646 =>
+               "The board tools share one module and keep their own orac"
+               & "les",
             when 530 =>
                "`refine explain` answers a construct and a decision",
             when 599 =>
@@ -3397,6 +3403,10 @@ package body Landin.Diagnostics.Citations is
             when 595 =>
                "Decisions: The toolchain, C and the machine",
             when 596 =>
+               "Decisions: The toolchain, C and the machine",
+            when 645 =>
+               "Decisions: The toolchain, C and the machine",
+            when 646 =>
                "Decisions: The toolchain, C and the machine",
             when 530 =>
                "Decisions: The toolchain, C and the machine",
@@ -4882,6 +4892,13 @@ package body Landin.Diagnostics.Citations is
             when 596 =>
                "https://www.701.dev/spec.html#d596-irq5-is-delivered-by-"
                & "setting-it-pending-in-the-nvic",
+            when 645 =>
+               "https://www.701.dev/spec.html#d645-the-shared-command-lo"
+               & "op-takes-its-indicator-and-transmitter-as-function-value"
+               & "s",
+            when 646 =>
+               "https://www.701.dev/spec.html#d646-the-board-tools-share"
+               & "-one-module-and-keep-their-own-oracles",
             when 530 =>
                "https://www.701.dev/spec.html#d530-refine-explain-answer"
                & "s-a-construct-and-a-decision",

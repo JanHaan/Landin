@@ -1,28 +1,27 @@
--- What both prototype-1 applications do with the bytes they receive, the
--- synthetic one in the emulator lane and the RP2040 board's: each byte is
--- echoed, ASCII 1 sets the indicator and ASCII 0 clears it.  Only the
--- bases and the indicator's pin differ, so this is the scenario whose
--- outcome the two lanes compare.
-import rp2040/sio
-import rp2040/uart0
+-- What every prototype-1 application does with the bytes it receives, the
+-- synthetic one in the emulator lane and each board's: each byte is
+-- echoed, ASCII 1 sets the indicator and ASCII 0 clears it.  The module
+-- names no device: the program that calls it passes its own indicator and
+-- transmitter, so the same loop runs over the synthetic map, the RP2040's
+-- SIO and UART0 and the STM32H753's GPIOB and USART3 (D645).  This is the
+-- scenario whose outcome the lanes compare.
 
+-- A program's indicator and transmitter.  `indicate` sets the indicator
+-- when `on` is true and clears it otherwise; `transmit` writes one byte,
+-- waiting while the transmitter has no room, since a byte written then
+-- would be lost.
 public port: type = struct
-    sio_base: usize
-    indicator: u32
-    uart_base: usize
+    indicate: (on: bool) -> none
+    transmit: (byte: u8) -> none
 end port
 
--- UARTFR's TXFF, bit 5, is set while the transmit FIFO is full; a byte
--- written then is lost.  The synthetic device always has room.
+-- The indicator changes before the byte that changed it is echoed.
 link(section: ".ramtext.handle")
 public handle: (bytes: []u8, p: port) -> (count: u32) =
     for byte in bytes do
-        if byte == 49 then sio.gpio_out_set_write(p.sio_base, p.indicator) end if
-        if byte == 48 then sio.gpio_out_clr_write(p.sio_base, p.indicator) end if
-        while (uart0.uartfr_read(p.uart_base) & 0x20) <> 0 do
-            continue
-        end while
-        uart0.uartdr_write(p.uart_base, u32(byte))
+        if byte == 49 then p.indicate(true) end if
+        if byte == 48 then p.indicate(false) end if
+        p.transmit(byte)
     end for
     count = u32(lenof bytes)
 end handle

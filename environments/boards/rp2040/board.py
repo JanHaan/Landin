@@ -33,25 +33,24 @@ environments/boards/rp2040/README.md.
 import argparse
 import hashlib
 import json
-import os
 import random
-import re
 import shutil
-import socket
 import struct
 import subprocess
 import sys
-import threading
 import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 SOURCE = ROOT / 'compiler/tests/board/rp2040'
+sys.path.insert(0, str(HERE.parent))
+import common  # noqa: E402
+from common import (Failed, echo_of, elf_sections, frames, frames_safe,  # noqa: E402,F401
+                    require, sha, symbols)
 
 # The board's command bytes, which it also echoes.
 IRQ5, REPORT, STALL = 0x05, 0x11, 0x12
-STX, ETX = 0x02, 0x03
 BUDGET = 4096           # the application's DMA epoch
 RING = 256              # its receive ring
 CHIP_RESET_HAD_POR = 0x100
@@ -60,15 +59,6 @@ CLK_REF_XOSC = 4        # CLK_REF_SELECTED's bit for source 2, the crystal
 USBCTRL_SLOT = 21
 # What environments/cortex-m/driver.py feeds the synthetic application.
 SHARED = b'1A0'
-
-
-class Failed(Exception):
-    pass
-
-
-def require(condition, message):
-    if not condition:
-        raise Failed(message)
 
 
 def crc32_mpeg2(data):
@@ -80,68 +70,6 @@ def crc32_mpeg2(data):
         for _ in range(8):
             crc = ((crc << 1) ^ 0x04C11DB7 if crc & 0x80000000 else crc << 1) & 0xFFFFFFFF
     return crc
-
-
-def frames(stream):
-    """Every STX ... ETX frame in STREAM, as (tag, {key: value}), and the
-    stream with the frames and the LF after each removed: the echo."""
-    found, echo, i = [], bytearray(), 0
-    while i < len(stream):
-        if stream[i] == STX:
-            end = stream.index(ETX, i)
-            text = stream[i + 1:end].decode('ascii')
-            fields = dict((k, int(v, 16)) for k, v in re.findall(r' ([a-z])=([0-9a-f]{8})', text))
-            found.append((text[0], fields))
-            i = end + 2 if end + 1 < len(stream) and stream[end + 1] == 0x0A else end + 1
-        else:
-            echo.append(stream[i])
-            i += 1
-    return found, bytes(echo)
-
-
-class Run:
-    def __init__(self, out):
-        self.out = out
-        self.commands = []
-
-    def command(self, name, argv, timeout=120, check=True, **kw):
-        started = time.time()
-        result = subprocess.run([str(a) for a in argv], capture_output=True, text=True,
-                                timeout=timeout, **kw)
-        (self.out / (name + '.log')).write_text(
-            '$ ' + ' '.join(map(str, argv)) + '\n' + result.stdout + result.stderr)
-        self.commands.append(dict(name=name, argv=[str(a) for a in argv],
-                                  status=result.returncode,
-                                  seconds=round(time.time() - started, 3)))
-        if check:
-            require(result.returncode == 0, '%s failed (%d); see %s.log'
-                    % (name, result.returncode, self.out / name))
-        return result.stdout
-
-
-def sha(path):
-    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
-
-
-def elf_sections(image):
-    """Each section's (address, file offset, size) by name, from the ELF32
-    header; nothing but the standard library."""
-    data = image.read_bytes()
-    require(data[:4] == b'\x7fELF' and data[4] == 1 and data[5] == 1, 'not an ELF32 LE image')
-    shoff, = struct.unpack_from('<I', data, 0x20)
-    shentsize, shnum, shstrndx = struct.unpack_from('<HHH', data, 0x2e)
-    headers = [struct.unpack_from('<IIIIIIIIII', data, shoff + i * shentsize) for i in range(shnum)]
-    names = headers[shstrndx][4]
-    sections = {}
-    for h in headers:
-        name = data[names + h[0]:data.index(b'\0', names + h[0])].decode()
-        sections[name] = (h[3], h[4], h[5])
-    return data, sections
-
-
-def symbols(run, nm, image):
-    listing = run.command('symbols', [nm, image])
-    return {f[2]: int(f[0], 16) for f in (l.split() for l in listing.splitlines()) if len(f) == 3}
 
 
 class Pins:
@@ -217,113 +145,24 @@ class Bridge:
         self.log.close()
 
 
-def probe_rs(args, *rest):
-    return [args.probe_rs, *rest, '--chip', 'RP2040', '--probe', args.probe]
-
-
-def read_words(run, args, name, address, count):
-    text = run.command(name, probe_rs(args, 'read', 'b32', hex(address), str(count)))
-    # Each line begins with its address and a colon.
-    words = [int(w, 16) for w in text.split() if not w.endswith(':')]
-    require(len(words) == count, '%s read %d words, not %d' % (name, len(words), count))
-    return words
+def probe(run, args):
+    return common.Probe(run, args.probe_rs, 'RP2040', args.probe)
 
 
 def flash(run, args, elf, stage):
-    run.command('flash', probe_rs(args, 'download', '--verify', elf), timeout=300)
-    back = struct.pack('<64I', *read_words(run, args, 'flash-readback', 0x10000000, 64))
-    require(back == stage, 'flash does not hold the image\'s second stage')
-    return back
-
-
-def hub(run, args, *rest, name):
-    return run.command(name, ['uhubctl', '-l', args.hub, *rest])
+    return probe(run, args).flash(elf, 0x10000000, stage, "the image's second stage")
 
 
 def power_cycle(run, args):
-    status = hub(run, args, name='hub-status')
-    ports = dict(re.findall(r'^\s+Port (\d+): (.*)$', status, re.MULTILINE))
-    require(str(args.guard_port) in ports and args.guard_serial in ports[str(args.guard_port)],
-            'port %d of hub %s does not hold %s; refusing to switch this hub'
-            % (args.guard_port, args.hub, args.guard_serial))
-    require(args.port != args.guard_port, 'refusing to switch the guarded port')
-    # One call: switching the port off re-enumerates the hub's inner hubs,
-    # and a second call can meet their new device nodes before udev has
-    # given them the group that may switch them.
-    hub(run, args, '-p', str(args.port), '-a', 'cycle', '-d', '%g' % args.off_seconds,
-        name='power-cycle')
-
-
-class Console:
-    """The slot's UART through the bridge, every byte kept."""
-    def __init__(self, port):
-        self.socket = socket.create_connection(('127.0.0.1', port), 5)
-        self.socket.settimeout(0.05)
-        self.received = bytearray()
-        self.sent = bytearray()
-        self.lock = threading.Lock()
-        self.alive = True
-        self.reader = threading.Thread(target=self.read, daemon=True)
-        self.reader.start()
-
-    def read(self):
-        while self.alive:
-            try:
-                data = self.socket.recv(4096)
-            except socket.timeout:
-                continue
-            except OSError:
-                return
-            if not data:
-                return
-            with self.lock:
-                self.received += data
-
-    def send(self, data, pace=64):
-        # In pieces a little faster than the line, so the probe's 64-byte
-        # buffer toward the target is never asked to hold more.
-        for i in range(0, len(data), pace):
-            piece = bytes(data[i:i + pace])
-            self.socket.sendall(piece)
-            self.sent += piece
-            time.sleep(len(piece) * 10 / 115200 * 0.9)
-
-    def wait(self, predicate, seconds, what):
-        deadline = time.time() + seconds
-        while time.time() < deadline:
-            with self.lock:
-                if predicate(bytes(self.received)):
-                    return bytes(self.received)
-            time.sleep(0.02)
-        raise Failed('waited %g s for %s; received %d bytes' % (seconds, what, len(self.received)))
-
-    def close(self):
-        if self.alive:
-            self.alive = False
-            self.socket.close()
-            self.reader.join(1)
-
-
-def complete(stream):
-    """STREAM without a frame still arriving at its end."""
-    start, end = stream.rfind(bytes([STX])), stream.rfind(bytes([ETX]))
-    return stream if start <= end else stream[:start]
-
-
-def frames_safe(stream):
-    return frames(complete(stream))[0]
-
-
-def echo_of(stream):
-    return frames(complete(stream))[1]
+    """The Pico's port, never the guarded one, and only on a hub whose
+    guarded port holds the device named."""
+    common.power_cycle(run, args.hub, args.port, args.off_seconds,
+                       keeps=(args.guard_port, args.guard_serial))
 
 
 def report(console, count):
     """Ask for a telemetry frame and return it."""
-    console.send(bytes([REPORT]))
-    stream = console.wait(lambda s: sum(1 for t, _ in frames_safe(s) if t == 't') > count, 5,
-                          'telemetry frame %d' % (count + 1))
-    return [f for t, f in frames_safe(stream) if t == 't'][count]
+    return common.ask(console, REPORT, 't', count)
 
 
 def scenario(console, run, seed, pins=None):
@@ -434,11 +273,12 @@ def scenario(console, run, seed, pins=None):
 def cross_check(run, args, names, final):
     """The counters as SWD reads them, without halting, against the frame."""
     pairs = [('handled', 'h'), ('recoveries', 'c'), ('dma_events', 'd'), ('usb_events', 'u')]
-    read = {name: read_words(run, args, 'swd-' + name, names[name], 1)[0] for name, _ in pairs}
+    swd = probe(run, args)
+    read = {name: swd.read_words('swd-' + name, names[name], 1)[0] for name, _ in pairs}
     for name, key in pairs:
         require(read[name] == final[key], '%s reads %d over SWD, %d in the frame'
                 % (name, read[name], final[key]))
-    count = read_words(run, args, 'swd-trans-count', 0x50000008, 1)[0]
+    count = swd.read_words('swd-trans-count', 0x50000008, 1)[0]
     require(count == final['n'], 'TRANS_COUNT reads %d over SWD, %d in the frame' % (count, final['n']))
     return dict(read, trans_count=count)
 
@@ -463,6 +303,9 @@ def main():
     parser.add_argument('--guard-serial', default='210319B3E738',
                         help='the serial the guarded port must show, or the hub is not switched')
     parser.add_argument('--off-seconds', type=float, default=1.0)
+    parser.add_argument('--hub-group', default='dialout',
+                        help="the group that may switch the hub's ports; uhubctl runs through"
+                             " sg when the session is not in it")
     parser.add_argument('--indicator-pin', metavar='PIN',
                         help="the probe's GPIO wired to the Pico's GPIO3, IO32 on the maintainer's"
                              " rig; without it the indicator is checked by its pad's readback alone")
@@ -478,7 +321,7 @@ def main():
     args.probehive_build = (args.probehive_build or args.probehive / 'build/slots_ci').resolve()
     args.output = args.output.resolve()
     args.output.mkdir(parents=True)
-    run = Run(args.output)
+    run = common.Run(args.output)
     result = dict(status='failed')
     bridge = console = None
     try:
@@ -489,8 +332,8 @@ def main():
         result['flash_readback'] = 'matches'
         pins = Pins(run, args) if args.indicator_pin else None
         bridge = Bridge(run, args)
-        console = Console(args.uart_port)
-        power_cycle(run, args)
+        console = common.TcpConsole(args.uart_port)
+        power_cycle(common.InGroup(run, args.hub_group), args)
         verdicts, final = scenario(console, run, args.seed, pins)
         result['verdicts'] = verdicts
         console.close()
@@ -506,20 +349,16 @@ def main():
             (args.output / 'uart.bin').write_bytes(bytes(console.received))
             (args.output / 'sent.bin').write_bytes(bytes(console.sent))
             result['uart_sha256'] = hashlib.sha256(bytes(console.received)).hexdigest()
-            result['frames'] = [dict(tag=t, **{k: '%08x' % v for k, v in f.items()})
-                                for t, f in frames_safe(bytes(console.received))]
+            result['frames'] = common.frame_record(bytes(console.received))
         if bridge:
             bridge.close()
         result['commands'] = run.commands
-        (args.output / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
+        common.write_json(args.output / 'result.json', result)
     if args.record and result['status'] == 'passed':
         kept = ('status', 'image_sha256', 'second_stage_crc32', 'second_stage_sha256',
                 'flash_readback', 'verdicts', 'swd', 'uart_sha256')
-        record = {k: result[k] for k in kept}
-        record['sent_sha256'] = hashlib.sha256((args.output / 'sent.bin').read_bytes()).hexdigest()
-        record['frames'] = [f for f in result['frames'] if f['tag'] == 'b'] + result['frames'][-1:]
-        record['commands'] = [c['name'] for c in run.commands]
-        args.record.write_text(json.dumps(record, indent=2) + '\n')
+        common.write_json(args.record, common.record(
+            result, kept, (args.output / 'sent.bin').read_bytes(), run.commands, ('b',)))
     print('board %s: %s%s' % (result['status'], args.output,
                               '' if result['status'] == 'passed' else ': ' + result['failure']))
     return 0 if result['status'] == 'passed' else 1
