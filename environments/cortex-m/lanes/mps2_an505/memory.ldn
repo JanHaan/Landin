@@ -1,0 +1,16 @@
+-- The constrained reference's capacities where the AN505 has memory: its
+-- Cortex-M33 boots in Secure state with VTOR at 0x1000_0000, the Secure
+-- alias of the 4 MiB SSRAM1, so the 32 KiB of flash and the vector table
+-- start there, and the 16 KiB of RAM, the upper 4 KiB the stack, is at
+-- 0x3800_0000, the Secure alias of the 4 MiB SSRAM2 (D607).  The sizes are
+-- the reference's, so a program fits here exactly when it fits there.
+
+linker.region("FLASH", 0x1000_0000, 32 * 1024, "rx")
+linker.region("RAM", 0x3800_0000, 16 * 1024, "rwx")
+compiler.boot("vector-table")
+linker.place("vectors", "FLASH")
+linker.place("text", "FLASH")
+linker.place("rodata", "FLASH")
+linker.place("data", "RAM")
+linker.place("bss", "RAM")
+linker.place("stack", "RAM", 4 * 1024)

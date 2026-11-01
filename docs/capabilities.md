@@ -79,9 +79,13 @@ them, and [the target contracts](targets.md) say what each selects.
 | RV64 | `rv64gc` baseline; `rv64gc_zba` and `rv64gc_xtheadba` add independent address-generation extensions, and `rv64gc_zba_xtheadba` selects both |
 
 - A level changes instructions and never layout or ABI: BMI2 shifts at
-  `x86-64-v3`, LSE atomics at `armv8.1-a` on Linux, macOS and FreeBSD, and
-  hardware division at `armv7-m`. Each is executed at both levels, the last
-  on QEMU's Cortex-M3.
+  `x86-64-v3`, LSE atomics at `armv8.1-a` on Linux, macOS and FreeBSD,
+  hardware division and multiplication at every Thumb-2 level, `armv7-m`,
+  `armv7e-m` and `armv8-m.main`, and acquiring loads and releasing stores
+  in one instruction at `armv8-m.main`. Each is executed at its level and at
+  the default, the Cortex-M ones on QEMU's Cortex-M3 and Cortex-M33, which
+  runs the whole Cortex-M corpus again at `armv8-m.main`, and the linked
+  image is read for the instructions its level selects.
 - A program reads a level as `compiler.feature.NAME` in `fixed if` or in a
   module value, which a routine body then branches on, and every compiler
   fact reads the same way (D437).

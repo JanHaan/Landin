@@ -321,7 +321,36 @@
       "witness": "compiler/tests/fixtures/abi/thread-storage-per-thread/fixture.meta"
     },
     "runtime/a-zero-divisor-traps": {
-      "mode": "execute"
+      "mode": "execute",
+      "selects": {
+        "armv6-m": {
+          "has": [
+            "bl __aeabi_idivmod"
+          ],
+          "lacks": [
+            "sdiv",
+            "udiv"
+          ]
+        },
+        "armv7-m": {
+          "has": [
+            "sdiv"
+          ],
+          "lacks": [
+            "bl __aeabi_idivmod",
+            "bl __aeabi_uidivmod"
+          ]
+        },
+        "armv8-m.main": {
+          "has": [
+            "sdiv"
+          ],
+          "lacks": [
+            "bl __aeabi_idivmod",
+            "bl __aeabi_uidivmod"
+          ]
+        }
+      }
     },
     "runtime/a-zero-remainder-divisor-traps": {
       "mode": "execute"
@@ -494,6 +523,44 @@
     "runtime/atom-values-cross-the-abi": {
       "mode": "execute"
     },
+    "runtime/atomic-accesses-at-every-ordering": {
+      "mode": "execute",
+      "selects": {
+        "routine": "main",
+        "armv7-m": {
+          "has": [
+            "ldr",
+            "ldrb",
+            "ldrh",
+            "str",
+            "strb",
+            "strh",
+            "dmb"
+          ],
+          "lacks": [
+            "lda",
+            "ldab",
+            "ldah",
+            "stl",
+            "stlb",
+            "stlh"
+          ]
+        },
+        "armv8-m.main": {
+          "has": [
+            "lda",
+            "ldab",
+            "ldah",
+            "stl",
+            "stlb",
+            "stlh"
+          ],
+          "lacks": [
+            "dmb"
+          ]
+        }
+      }
+    },
     "runtime/atomic-orderings-between-processes": {
       "codes": [
         "L0015"
@@ -616,8 +683,74 @@
     "runtime/checked-overflow-traps": {
       "mode": "execute"
     },
+    "runtime/checked-products-of-arguments": {
+      "mode": "execute",
+      "selects": {
+        "routine": "main",
+        "armv6-m": {
+          "has": [
+            "bl __aeabi_lmul"
+          ],
+          "lacks": [
+            "smull",
+            "umull",
+            "mla"
+          ]
+        },
+        "armv7-m": {
+          "has": [
+            "smull",
+            "umull",
+            "mla"
+          ],
+          "lacks": [
+            "bl __aeabi_lmul"
+          ]
+        },
+        "armv8-m.main": {
+          "has": [
+            "smull",
+            "umull",
+            "mla"
+          ],
+          "lacks": [
+            "bl __aeabi_lmul"
+          ]
+        }
+      }
+    },
     "runtime/checked-subtraction-traps": {
       "mode": "execute"
+    },
+    "runtime/checked-unsigned-product-overflow-traps": {
+      "mode": "execute",
+      "selects": {
+        "routine": "main",
+        "armv6-m": {
+          "has": [
+            "bl __aeabi_lmul"
+          ],
+          "lacks": [
+            "umull"
+          ]
+        },
+        "armv7-m": {
+          "has": [
+            "umull"
+          ],
+          "lacks": [
+            "bl __aeabi_lmul"
+          ]
+        },
+        "armv8-m.main": {
+          "has": [
+            "umull"
+          ],
+          "lacks": [
+            "bl __aeabi_lmul"
+          ]
+        }
+      }
     },
     "runtime/checks-return-after-the-region": {
       "mode": "execute"
@@ -1027,7 +1160,41 @@
       "mode": "execute"
     },
     "runtime/division-by-arguments-at-every-width": {
-      "mode": "execute"
+      "mode": "execute",
+      "selects": {
+        "armv6-m": {
+          "has": [
+            "bl __aeabi_idivmod",
+            "bl __aeabi_uidivmod"
+          ],
+          "lacks": [
+            "sdiv",
+            "udiv"
+          ]
+        },
+        "armv7-m": {
+          "has": [
+            "sdiv",
+            "udiv",
+            "mls"
+          ],
+          "lacks": [
+            "bl __aeabi_idivmod",
+            "bl __aeabi_uidivmod"
+          ]
+        },
+        "armv8-m.main": {
+          "has": [
+            "sdiv",
+            "udiv",
+            "mls"
+          ],
+          "lacks": [
+            "bl __aeabi_idivmod",
+            "bl __aeabi_uidivmod"
+          ]
+        }
+      }
     },
     "runtime/division-by-constants-agrees-with-division": {
       "mode": "execute",
@@ -3040,7 +3207,36 @@
       "reason": "A server over core/io's memory network stopped by a fake signal needs 72,080 bytes of flash at size/auto, overflowing the 32 KiB profile by 39,312. A table keeps only the entries something projects (D374), so what remains is the program's direct calls into the network, most of it the Cortex-M0 backend's frame homes and copies between them, as runtime/network-echo-memory's limit records. Each profile still attempts execution; runtime/signals-fake-firmware runs core/io/fake's signals over a round of turns within the image and requires execution; this image limit is not runtime evidence."
     },
     "runtime/signed-division-overflow-traps": {
-      "mode": "execute"
+      "mode": "execute",
+      "selects": {
+        "armv6-m": {
+          "has": [
+            "bl __aeabi_idivmod"
+          ],
+          "lacks": [
+            "sdiv",
+            "udiv"
+          ]
+        },
+        "armv7-m": {
+          "has": [
+            "sdiv"
+          ],
+          "lacks": [
+            "bl __aeabi_idivmod",
+            "bl __aeabi_uidivmod"
+          ]
+        },
+        "armv8-m.main": {
+          "has": [
+            "sdiv"
+          ],
+          "lacks": [
+            "bl __aeabi_idivmod",
+            "bl __aeabi_uidivmod"
+          ]
+        }
+      }
     },
     "runtime/sizeof-of-nominal-element-array": {
       "counterpart": "sizeof-of-nominal-element-array",

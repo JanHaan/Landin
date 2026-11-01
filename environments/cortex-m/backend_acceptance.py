@@ -62,3 +62,21 @@ def execute(parent, refine):
               'corpus_rows': len(summary['results']), 'controls': controls,
               'independent_instruction_controls': 'passed'}
     (root / 'result.json').write_text(json.dumps(record, indent=2)+'\n')
+
+
+def execute_mainline(parent, refine):
+    """The whole corpus at armv8-m.main on QEMU's mps2-an505 (D605-D607):
+    every row's verdict at that level alone, its executed images held to
+    what the level selects."""
+    root = parent.out / 'mainline'
+    root.mkdir()
+    refine = refine.resolve(strict=True)
+    compiler_hash = sha(refine)
+    parent.command('mainline-refine-identity', [refine, '--identify'])
+    corpus_out = root / 'corpus'
+    corpus_out.mkdir()
+    summary = corpus(corpus_out, parent.tools, refine, level='armv8-m.main')
+    require(sha(refine) == compiler_hash, 'compiler changed during embedded execution')
+    (root / 'result.json').write_text(json.dumps({
+        'status': 'passed', 'compiler_sha256': compiler_hash, 'level': 'armv8-m.main',
+        'corpus_rows': len(summary['results'])}, indent=2) + '\n')

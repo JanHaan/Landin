@@ -18365,10 +18365,16 @@ guard [0320] and [1950] ask of a shift are unchanged. At `armv8.1-a` an
 atomic add, exchange or compare-exchange is one LSE instruction, `ldadd`,
 `swp` or `cas` in its ordering's form, rather than an exclusive-monitor
 retry loop; each orders exactly as the loop does at the same ordering
-(D522). At `armv7-m` a 32-bit quotient is `sdiv` or
+(D522). At each Thumb-2 level, `armv7-m`, `armv7e-m` and `armv8-m.main`, a
+32-bit quotient is `sdiv` or
 `udiv` and its remainder `mls`, after the same zero-divisor and
 minimum-over-minus-one guards, rather than a call to the runtime's
-`__aeabi_idivmod`; a 64-bit one still calls the runtime. RV64 indexed address
+`__aeabi_idivmod`; a 64-bit one still calls the runtime. There a product of
+32 bits or fewer is `smull` or `umull`, a checked one held to its high word,
+and a 64-bit one `umull` with `mul` and `mla` for its cross products, rather
+than a call to `__aeabi_lmul` (D605). At `armv8-m.main` an acquire or
+seq_cst load is `lda`, `ldab` or `ldah` and a release or seq_cst store
+`stl`, `stlb` or `stlh`, with no `dmb` beside it (D606). RV64 indexed address
 calculation uses Zba's `sh1add`, `sh2add` or `sh3add` when its scale fits,
 XTheadBa's `th.addsl` when selected without Zba, and the same shift/add
 sequence at baseline; bounds and overflow checks are unchanged. Beyond that: every level of a family shares one
@@ -18418,7 +18424,132 @@ x86-64 levels, `runtime/assembly-block-at-its-arm64-level`, which selects an
 LSE block by `compiler.feature.lse` and runs at both arm64 levels, and
 `runtime/division-by-arguments-at-every-width`,
 `runtime/a-zero-divisor-traps` and `runtime/signed-division-overflow-traps`,
-which the Cortex-M corpus executes at `armv7-m` on QEMU's Cortex-M3.
+which the Cortex-M corpus executes at `armv7-m` on QEMU's Cortex-M3,
+`runtime/checked-products-of-arguments`,
+`runtime/checked-unsigned-product-overflow-traps` and
+`runtime/atomic-accesses-at-every-ordering`, which it executes at `armv7-m`
+and at `armv8-m.main` too, and the whole corpus, which it executes again at
+`armv8-m.main` on QEMU's Cortex-M33 (D607). In each image a Thumb-2 level
+ran, the corpus finds no call of `__aeabi_lmul`, `__aeabi_idivmod` or
+`__aeabi_uidivmod`, and in each of these fixtures the instructions its row
+in `compiler/tests/cortex-m/corpus.json` says the level selects, and none
+of the default's.
+
+### D605 — A Thumb-2 level multiplies in hardware
+
+**From** [0290], [0300] and D255.
+
+**The discrepancy:** D255 gave the Thumb-2 levels hardware division and
+nothing more, so every product at `armv7-m`, `armv7e-m` and `armv8-m.main`
+still called `__aeabi_lmul`, as ARMv6-M must, though Thumb-2 multiplies 32
+bits by 32 into 64 in one instruction.
+
+**Chosen:** at each Thumb-2 level a product of 32 bits or fewer is `smull`
+or `umull` of the extended operands into r1:r0, the whole product the
+helper returned, and a checked one is held to that high word as it was: to
+the low word's sign for a signed product and to zero for an unsigned one,
+then to [0300]'s narrower width. A 64-bit product, checked or wrapping, is
+`umull` of the low halves with each cross product added to its high word by
+`mul` and `mla`, after the same bound a checked one is held to first, which
+still asks `__aeabi_uldivmod` for it, because no M profile divides 64 bits.
+A wrapping product of 32 bits or fewer is still `muls`, and `armv6-m` keeps
+its lowering byte for byte. A routine whose only call was the helper
+becomes call-free there, and so may be a leaf, whose frame is the
+backend's own; no layout or calling convention changes.
+
+**The alternatives:** a checked 64-bit product held by its partial
+products' high words, which would remove `__aeabi_uldivmod` from it at the
+Thumb-2 levels as well, and a different check from the default's; it waits
+for a measured need. Keeping the helper beside hardware division, which is
+what D255 alone left; the maintainer chose the instructions.
+
+**Pinned by** `backend/a level selects its instructions`, which holds each
+level's products to their instructions and every guard to the default's
+count, `runtime/checked-products-of-arguments`, products at the edges of
+what fits at every width with an i32 product of 2^31 overflowing to the
+handler, and `runtime/checked-unsigned-product-overflow-traps`, each
+executed at `armv6-m`, `armv7-m` and `armv8-m.main`; the corpus finds
+`smull`, `umull` and `mla` and no call of `__aeabi_lmul` in the first's
+`main` at the Thumb-2 levels, and the call and none of them at `armv6-m`.
+
+### D606 — Armv8-M acquires and releases in one instruction
+
+**From** [1620], D255, D499 and D522.
+
+**The discrepancy:** D522 gave Cortex-M0 ARMv7's mapping, the one for a
+core with no acquire or release instruction, and an Armv8-M core has them:
+LDA, LDAB and LDAH, and STL, STLB and STLH.
+
+**Chosen:** at `armv8-m.main`, ARMv8's mapping from the same collection: a
+relaxed load or store is plain, an acquire or seq_cst load is `lda`, `ldab`
+or `ldah` and a release or seq_cst store `stl`, `stlb` or `stlh`, in the
+access's width, and none has a `dmb` beside it. Every thread fence is still
+`dmb sy`, the only option Armv8-M's DMB has, and the device and completion
+barriers, the alignment check and the compiler boundary are unchanged. Each
+access orders as D227 asks and as ARMv7's mapping did: an acquiring load
+before every later access, a releasing store after every earlier one, and
+a seq_cst store before a later seq_cst load, since a load-acquire is never
+reordered before an earlier store-release, so the seq_cst accesses keep
+their single order. The barrier ARMv7's mapping put after a seq_cst store
+also held it before later relaxed accesses, which no ordering asks for.
+`armv7-m` and `armv7e-m`, whose cores have no such instruction, keep
+ARMv7's mapping. No feature names the instructions: every Armv8-M level
+has them, and a program has nothing to choose between.
+
+**The alternatives:** keeping a `dmb sy` after a seq_cst `stl`, which
+orders more than C11's seq_cst asks; D522 took each architecture's
+published mapping, and ARMv8's has none. A feature in D255's table that
+names them, which every Armv8-M level would hold and no declaration would
+be selected by. Read-modify-write through `ldaex` and `stlex` stays
+refused at every level (D510), since checking does not depend on a level.
+
+**Pinned by** `backend/atomics are fenced as their orderings ask`, which
+holds each ordering's access at `armv8-m.main` to its instruction, and
+`runtime/atomic-accesses-at-every-ordering`, executed at `armv6-m`,
+`armv7-m` and `armv8-m.main`, in whose `main` the corpus finds `lda`,
+`ldab`, `ldah`, `stl`, `stlb` and `stlh` and no `dmb` at `armv8-m.main`, and
+the plain accesses and `dmb` and none of those at `armv7-m`.
+
+### D607 — The Armv8-M corpus runs on a lane description of the AN505
+
+**From** [1990], D255, D543, D545 and D589.
+
+**The discrepancy:** the corpus ran each level on a QEMU machine with the
+constrained reference's map, flash at zero and RAM at `0x20000000`, which
+the micro:bit and the AN385 have. QEMU's Cortex-M33 machine, `mps2-an505`,
+boots in Secure state from VTOR `0x10000000` and locks up on an image
+linked at zero, so the reference's images do not run on it.
+
+**Chosen:** the corpus links each image with its own harness startup and
+the linker script refine derives from a description (D545, D589), so the
+AN505 is given a description of its own in Landin source,
+`environments/cortex-m/lanes/mps2_an505`: a `cortex-m33` with the
+reference's 48-word table, its 32 KiB of flash at `0x10000000`, the Secure
+alias of the board's first SSRAM, and its 16 KiB of RAM at `0x38000000`,
+the Secure alias of its second, the upper 4 KiB the stack. It describes an
+emulator's map for the lane and no chip, lives with the lane's sources,
+and nothing else imports it. Its facts are recorded apart from it in
+`environments/cortex-m/descriptions.json` under `lanes`, and the profile
+refine derives is held to them as each device's is. The capacities are the
+reference's, so a program fits the AN505's map exactly when it fits the
+reference's, and one inventory row says each fixture's verdict at every
+level. Run with `--level=armv8-m.main`, the corpus builds and runs every
+`execute` row at that level alone on the AN505, compiles every `refuse`
+row there to its codes and records every `restriction`; `run.py`'s
+`mainline` lane is that run.
+
+**The alternatives:** a harness linker script of the lane's own, which the
+compiler would not derive and nothing would hold to the facts every other
+profile is held to. The AN505's whole 4 MiB banks, which would run the
+programs the reference cannot hold at one level only, with a limit that
+held at some levels and not others; larger images remain open work. Moving
+the reference itself, which every firmware build that imports no
+description uses.
+
+**Pinned by** `environments/cortex-m/test.py`'s
+`test_a_level_must_change_the_executed_image`, the `mainline` lane of
+`environments/cortex-m/run.py`, and the derived profile's comparison with
+its record in every corpus run.
 
 ### D256 — Linux arm64 is the standard AAPCS64, a third C ABI with unsigned plain char
 
@@ -20119,9 +20250,10 @@ locked instruction with no fence, and only a seq_cst fence an `mfence`; on
 arm64 acquire and release accesses are `ldar` and `stlr` or their exclusive
 and LSE forms, and fences `dmb ishld` or `dmb ish`; on RV64 the mapping the
 RISC-V memory model gives, with `.aq` and `.rl` on its atomic instructions;
-and on Cortex-M0 a `dmb` only where an acquire or a release needs one. Every
-atomic stays a full compiler memory boundary, and the alignment check is
-unchanged.
+and on Cortex-M0 a `dmb` only where an acquire or a release needs one, or
+at `armv8-m.main` the `lda` and `stl` that acquire and release (D606).
+Every atomic stays a full compiler memory boundary, and the alignment check
+is unchanged.
 
 **The alternatives:** fixing x86-64 alone and leaving arm64 and RV64 fully
 fenced until the optimization phase. It was declined.
@@ -20142,8 +20274,9 @@ without choosing among the mappings each admits.
 **Chosen:** the mappings of the C/C++11 orderings the architectures'
 authors publish: x86-TSO's and ARMv8's from Sewell's collection
 (<https://www.cl.cam.ac.uk/~pes20/cpp/cpp0xmappings.html>), ARMv7's from the
-same collection for Cortex-M0, which has no acquire or release instruction,
-and Table A.6 of the RISC-V unprivileged ISA's memory model appendix for RV64.
+same collection for Cortex-M0 at the levels with no acquire or release
+instruction and ARMv8's at `armv8-m.main` (D606), and Table A.6 of the
+RISC-V unprivileged ISA's memory model appendix for RV64.
 
 - **x86-64.** Every load is a `mov`; a relaxed or release store is a `mov`
   and a seq_cst store `xchg`; exchange, add and compare-exchange are `xchg`,
@@ -20166,7 +20299,9 @@ and Table A.6 of the RISC-V unprivileged ISA's memory model appendix for RV64.
 - **Cortex-M0.** A relaxed access is plain; an acquire or seq_cst load is
   followed by `dmb sy`, a release store preceded by one and a seq_cst store
   has one on each side; every thread fence is `dmb sy`, the only option
-  ARMv6-M's DMB has.
+  ARMv6-M's DMB has. At `armv8-m.main` an acquire or seq_cst load is `lda`
+  and a release or seq_cst store `stl`, each in the access's width, with no
+  `dmb`; the fences are unchanged (D606).
 
 A compare-exchange is lowered by its success ordering, never weaker than its
 failure ordering (D227), so the acquiring read a failed comparison may ask

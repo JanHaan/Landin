@@ -8325,6 +8325,15 @@ package body Landin.Tests.Backend_Suite is
         & "    s = c / c" & LF
         & "    t = d % d" & LF
         & "end divide" & LF;
+      Products : constant String :=
+        "public multiply: (a: i32, b: u32, c: i64, d: u64, e: i16)"
+        & " -> (p: i32, q: u32, r: i64, s: u64, t: i16) =" & LF
+        & "    p = a * a" & LF
+        & "    q = b * b" & LF
+        & "    r = c * c" & LF
+        & "    s = d *% d" & LF
+        & "    t = e * e" & LF
+        & "end multiply" & LF;
       Base_Arm : constant String :=
         Emitted (Landin.Targets.Darwin_Arm64, Atomics, "armv8-a");
       Inline_LSE : constant String :=
@@ -8343,6 +8352,38 @@ package body Landin.Tests.Backend_Suite is
         Emitted (Landin.Targets.Cortex_M, Division, "armv6-m");
       Seven : constant String :=
         Emitted (Landin.Targets.Cortex_M, Division, "armv7-m");
+      Base_Products : constant String :=
+        Emitted (Landin.Targets.Cortex_M, Products, "armv6-m");
+      Seven_Products : constant String :=
+        Emitted (Landin.Targets.Cortex_M, Products, "armv7-m");
+      Mainline_Products : constant String :=
+        Emitted (Landin.Targets.Cortex_M, Products, "armv8-m.main");
+      Checked_Signed : constant String :=
+        "smull r0, r1, r0, r2" & LF & HT & "asrs r4, r0, #31" & LF
+        & HT & "cmp r1, r4" & LF;
+      Checked_Unsigned : constant String :=
+        "umull r0, r1, r0, r2" & LF & HT & "movs r4, #0" & LF
+        & HT & "cmp r1, r4" & LF;
+      Long_Product : constant String :=
+        "mul r3, r0, r3" & LF & HT & "mla r3, r1, r2, r3" & LF
+        & HT & "umull r0, r1, r0, r2" & LF & HT & "add r1, r1, r3" & LF;
+
+      procedure Check_Thumb_2 (Text, Level : String);
+
+      procedure Check_Thumb_2 (Text, Level : String) is
+      begin
+         Landin.Testing.Check
+           (Item, Occurrences (Text, "lmul") = 0
+              and then Occurrences (Text, Checked_Signed) = 2
+              and then Occurrences (Text, Checked_Unsigned) = 1
+              and then Occurrences (Text, Long_Product) = 2
+              and then Occurrences (Text, "bl __aeabi_uldivmod")
+                = Occurrences (Base_Products, "bl __aeabi_uldivmod")
+              and then Occurrences (Text, "udf")
+                = Occurrences (Base_Products, "udf"),
+            Level & " checks a 32-bit product's high word, and multiplies"
+            & " 64 bits by UMULL and MLA, keeping every guard");
+      end Check_Thumb_2;
    begin
       Landin.Testing.Check
         (Item, Occurrences (Base_Arm, "ldxr")
@@ -8432,6 +8473,15 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Check
         (Item, Occurrences (Seven, "udf") = Occurrences (Base_M, "udf"),
          "every division guard is kept at both levels");
+      --  D605: every Thumb-2 level multiplies in hardware, and Armv6-M
+      --  still asks the runtime for each product.
+      Landin.Testing.Check
+        (Item, Occurrences (Base_Products, "bl __aeabi_lmul") = 5
+           and then Occurrences (Base_Products, "mull") = 0
+           and then Occurrences (Base_Products, "mla") = 0,
+         "armv6-m multiplies through the runtime helper");
+      Check_Thumb_2 (Seven_Products, "armv7-m");
+      Check_Thumb_2 (Mainline_Products, "armv8-m.main");
    end A_Level_Selects_Its_Instructions;
 
    --  D499: every native backend lowers an atomic by its ordering, by its
@@ -8447,7 +8497,8 @@ package body Landin.Tests.Backend_Suite is
      (Item : in out Landin.Testing.Context)
    is
       package L renames Landin.Targets.Levels;
-      type Lowering is (X86_64, Arm64, Arm64_LSE, RV64, Cortex_M);
+      type Lowering is
+        (X86_64, Arm64, Arm64_LSE, RV64, Cortex_M, Cortex_M_Mainline);
 
       function Routine
         (Name, Parameter, Result, Body_Text : String) return String
@@ -8542,7 +8593,7 @@ package body Landin.Tests.Backend_Suite is
               when X86_64 => Landin.Targets.Linux_X86_64,
               when Arm64 | Arm64_LSE => Landin.Targets.Linux_Arm64,
               when RV64 => Landin.Targets.Linux_RV64,
-              when Cortex_M => Landin.Targets.Cortex_M);
+              when Cortex_M | Cortex_M_Mainline => Landin.Targets.Cortex_M);
          Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
          Ran : Natural;
          Assembly : Ada.Strings.Unbounded.Unbounded_String;
@@ -8578,12 +8629,15 @@ package body Landin.Tests.Backend_Suite is
                   Landin.Stages.Meanings (Work).all,
                   Landin.Stages.Identities (Work).all, Facts, Options,
                   Assembly, Report);
-            when Cortex_M =>
+            when Cortex_M | Cortex_M_Mainline =>
                Landin.Backend.Cortex_M.Emit
                  (Landin.Stages.Code (Work).all,
                   Landin.Stages.Meanings (Work).all,
                   Landin.Stages.Identities (Work).all, Facts, Options,
-                  Assembly, Report);
+                  Assembly, Report,
+                  Level => L.Level_Named
+                    (Facts, (if Kind = Cortex_M then "armv6-m"
+                             else "armv8-m.main")));
          end case;
          return Ada.Strings.Unbounded.To_String (Assembly);
       end Emitted;
@@ -8618,7 +8672,7 @@ package body Landin.Tests.Backend_Suite is
                   return Contains (Line, "(x6)")
                     or else Contains (Line, "(x18)")
                     or else Starts ("fence");
-               when Cortex_M =>
+               when Cortex_M | Cortex_M_Mainline =>
                   return Contains (Line, "[r2]") or else Starts ("dmb")
                     or else Starts ("dsb");
             end case;
@@ -8806,6 +8860,22 @@ package body Landin.Tests.Backend_Suite is
         & "fence_seq_cst|dmb sy" & LF
         & "device|dmb sy" & LF
         & "completion|dsb sy" & LF;
+      --  D606: Armv8-M's own acquire and release instructions, with the
+      --  fences and barriers ARMv6-M's.
+      Mainline_Accesses : constant String :=
+        "load_relaxed|ldr r0, [r2]" & LF
+        & "load_acquire|lda r0, [r2]" & LF
+        & "load_seq_cst|lda r0, [r2]" & LF
+        & "store_relaxed|str r0, [r2]" & LF
+        & "store_release|stl r0, [r2]" & LF
+        & "store_seq_cst|stl r0, [r2]" & LF
+        & "store8_seq_cst|stlb r0, [r2]" & LF
+        & "fence_acquire|dmb sy" & LF
+        & "fence_release|dmb sy" & LF
+        & "fence_acq_rel|dmb sy" & LF
+        & "fence_seq_cst|dmb sy" & LF
+        & "device|dmb sy" & LF
+        & "completion|dsb sy" & LF;
    begin
       Landin.Testing.Check_Equal
         (Item, Signature (X86_64, Emitted (X86_64, Accesses & Updates),
@@ -8834,6 +8904,12 @@ package body Landin.Tests.Backend_Suite is
          M0_Accesses,
          "Cortex-M0 takes a DMB only where an acquire or a release needs"
          & " one");
+      Landin.Testing.Check_Equal
+        (Item, Signature (Cortex_M_Mainline,
+                          Emitted (Cortex_M_Mainline, Accesses),
+                          Access_Names),
+         Mainline_Accesses,
+         "armv8-m.main acquires by LDA and releases by STL, unfenced");
    end Atomics_Are_Fenced_As_Their_Orderings_Ask;
 
    procedure Cortex_Wrapping_Products_Use_Low_Word
@@ -9042,6 +9118,93 @@ package body Landin.Tests.Backend_Suite is
          end loop;
       end;
    end RV64_Assembly_Registers_Are_Verified;
+
+   --  The verifier refuses on Cortex-M what [1990]'s table does not answer
+   --  for, at every level: the verified IR does not depend on a level
+   --  (D255), so the armv8-m.main profile's gate is this case.  The block
+   --  that verifies is emitted at armv8-m.main as written.
+   procedure Cortex_Assembly_Registers_Are_Verified
+     (Item : in out Landin.Testing.Context);
+
+   procedure Cortex_Assembly_Registers_Are_Verified
+     (Item : in out Landin.Testing.Context)
+   is
+      use type IR.Verifier.Fault_Kind;
+      use type IR.Opcode;
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Cortex_M);
+      Ran : Natural;
+      type Name_Access is access constant String;
+      R8  : aliased constant String := "r8";
+      R9  : aliased constant String := "r9";
+      R11 : aliased constant String := "r11";
+      R12 : aliased constant String := "r12";
+      R13 : aliased constant String := "r13";
+      SP  : aliased constant String := "sp";
+      LR  : aliased constant String := "lr";
+      PC  : aliased constant String := "pc";
+      X0  : aliased constant String := "x0";
+      Refused_Names : constant array (1 .. 9) of Name_Access :=
+        [R8'Access, R9'Access, R11'Access, R12'Access, R13'Access,
+         SP'Access, LR'Access, PC'Access, X0'Access];
+   begin
+      Lower
+        (Work,
+         "public f: (v: u32) -> (r: u32) =" & LF
+         & "    r = assembler.block(""adds {r}, {r}, #1""," & LF
+         & "        inout r: u32 at general = v, out _ at r4)" & LF
+         & "end f" & LF, Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
+      if Landin.Stages.Failed (Work) then
+         return;
+      end if;
+      declare
+         Assembly : Ada.Strings.Unbounded.Unbounded_String;
+         Report : Landin.Build_Reports.Report;
+      begin
+         Landin.Backend.Cortex_M.Emit
+           (Landin.Stages.Code (Work).all,
+            Landin.Stages.Meanings (Work).all,
+            Landin.Stages.Identities (Work).all, Landin.Targets.Cortex_M,
+            Landin.Optimization.Reference_Options, Assembly, Report,
+            Level => Landin.Targets.Levels.Level_Named
+              (Landin.Targets.Cortex_M, "armv8-m.main"));
+         Landin.Testing.Check
+           (Item, Contains (Ada.Strings.Unbounded.To_String (Assembly),
+                            ".arch armv8-m.main" & LF)
+              and then Occurrences
+                (Ada.Strings.Unbounded.To_String (Assembly), "adds r") > 0,
+            "the block is emitted at armv8-m.main");
+      end;
+      declare
+         Code : constant not null access IR.Unit :=
+           Landin.Stages.Code (Work);
+         Block : IR.Value_Id := IR.No_Value;
+      begin
+         for V in 1 .. IR.Value_Count (Code.all, 1) loop
+            if IR.Op_Of (Code.all, 1, IR.Value_Id (V)) = IR.Assembly then
+               Block := IR.Value_Id (V);
+            end if;
+         end loop;
+         Landin.Testing.Check
+           (Item, IR.Verifier.Check
+              (Code.all, Landin.Targets.Cortex_M).Kind
+                 = IR.Verifier.Nothing_Wrong,
+            "a block naming r4 verifies");
+         for Name of Refused_Names loop
+            IR.Testing_Support.Overwrite_Assembly_Operand
+              (Code.all, 1, Block, 2,
+               IR.Operand_At
+                 (IR.Discarded, Landin.Source.Names.No_Name, Name.all,
+                  Landin.Types.Not_Typed));
+            Landin.Testing.Check
+              (Item, IR.Verifier.Check
+                 (Code.all, Landin.Targets.Cortex_M).Kind
+                    = IR.Verifier.Assembly_Register_Refused,
+               "Cortex-M verifier refuses " & Name.all);
+         end loop;
+      end;
+   end Cortex_Assembly_Registers_Are_Verified;
 
    --  The A extension only guarantees eventual success for constrained
    --  reservation loops: at most 16 instructions and no JALR, including
@@ -10284,6 +10447,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "RV64 assembly registers are verified",
          RV64_Assembly_Registers_Are_Verified'Access);
+      Landin.Testing.Register
+        (Into, "backend", "Cortex-M assembly registers are verified",
+         Cortex_Assembly_Registers_Are_Verified'Access);
       Landin.Testing.Register
         (Into, "backend", "RV64 reservation loops are constrained",
          RV64_Reservation_Loops_Are_Constrained'Access);

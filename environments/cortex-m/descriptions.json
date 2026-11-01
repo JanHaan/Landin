@@ -1,5 +1,5 @@
 {
-  "comment": "What each device description must select, recorded apart from the compiler and the descriptions: RP2040 from pico-sdk 2.2.0, the STM32H753 from ST's stm32h753xx.h and RM0433, the constrained reference from [1990]. descriptions.py compares every fact of each linked image with these.",
+  "comment": "What each device description must select, recorded apart from the compiler and the descriptions: RP2040 from pico-sdk 2.2.0, the STM32H753 from ST's stm32h753xx.h and RM0433, the constrained reference from [1990]. descriptions.py compares every fact of each linked image with these. Under lanes, the same for each lane description, an emulator's map rather than a chip, which the corpus holds its derived profile to (D607).",
   "devices": {
     "rp2040": {
       "sources": {
@@ -73,6 +73,27 @@
       "reserved_slots": [4, 5, 6, 7, 8, 9, 10, 12, 13, 21, 42, 43, 44, 45, 46, 47],
       "handler_slot": 20,
       "refused_slot": 21
+    }
+  },
+  "lanes": {
+    "mps2-an505": {
+      "sources": {
+        "boot": "QEMU 10.0.13's mps2-an505, measured with the locked binary: its Cortex-M33 r0p3 resets in Secure state with SAU_CTRL 0, loads SP and PC from VTOR_S 0x10000000, and locks up when the image is linked at 0",
+        "memory": "the same measurement: SSRAM1 is 4 MiB at 0x10000000, aliased at 0, and SSRAM2 and 3 4 MiB at 0x38000000, aliased at 0x28000000, each readable, writable and executable from Secure state",
+        "capacities": "the constrained reference's, spec.md [1990], so the lane's limits are the corpus's"
+      },
+      "module": "lanes/mps2_an505",
+      "core": "cortex-m33",
+      "boot": "vector-table",
+      "regions": [
+        {"name": "FLASH", "origin": 268435456, "length": 32768, "access": "rx"},
+        {"name": "RAM", "origin": 939524096, "length": 16384, "access": "rwx"}
+      ],
+      "placed": {"vectors": "FLASH", "text": "FLASH", "rodata": "FLASH", "data": "RAM", "bss": "RAM", "stack": "RAM"},
+      "vector_address": 268435456,
+      "vector_words": 48,
+      "stack_top": 939540480,
+      "stack_reserved": 4096
     }
   }
 }
