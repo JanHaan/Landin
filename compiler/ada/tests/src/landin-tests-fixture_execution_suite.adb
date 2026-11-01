@@ -3263,6 +3263,56 @@ package body Landin.Tests.Fixture_Execution_Suite is
       return True;
    end Only_Listed_Failures;
 
+   --  The verdict on a listed fixture run into LOCAL, given in SLOT: a
+   --  pass is a stale row, failures only of the row's lines are expected
+   --  and Expected says so, and any other failure is reported with the row
+   --  named beside it.  The corpus and a selected fixture both give it.
+   procedure Judge_Listed
+     (Row      : Host_Failure;
+      Local    : Landin.Testing.Context;
+      Slot     : in out Landin.Testing.Context;
+      Expected : out Boolean);
+
+   procedure Judge_Listed
+     (Row      : Host_Failure;
+      Local    : Landin.Testing.Context;
+      Slot     : in out Landin.Testing.Context;
+      Expected : out Boolean) is
+   begin
+      Expected := False;
+      if Landin.Testing.Failures (Local) = 0 then
+         Landin.Testing.Fail
+           (Slot, Unbounded.To_String (Row.Fixture)
+            & " passed under " & Runner_Name & ", which "
+            & Cross_Lanes_Record & " lists as failing there ("
+            & Unbounded.To_String (Row.Reason)
+            & "): remove the runner from its row, or the row");
+      elsif Only_Listed_Failures (Row, Local) then
+         Landin.Testing.Check (Slot, True, "an expected host failure");
+         Expected := True;
+      else
+         Landin.Testing.Absorb (Slot, Local);
+         Landin.Testing.Fail
+           (Slot, Unbounded.To_String (Row.Fixture)
+            & " failed under " & Runner_Name & " otherwise than "
+            & Cross_Lanes_Record & " lists, so the failures above"
+            & " are not the host's ("
+            & Unbounded.To_String (Row.Reason) & ")");
+      end if;
+   end Judge_Listed;
+
+   --  What standard error says of an expected host failure.
+   procedure Say_Expected (Row : Host_Failure);
+
+   procedure Say_Expected (Row : Host_Failure) is
+   begin
+      Ada.Text_IO.Put_Line
+        (Ada.Text_IO.Standard_Error,
+         "landin_tests: expected host failure under " & Runner_Name & ": "
+         & Unbounded.To_String (Row.Fixture) & ": "
+         & Unbounded.To_String (Row.Reason));
+   end Say_Expected;
+
    procedure Runtime_Fixtures_Execute
      (Item : in out Landin.Testing.Context);
 
@@ -3360,27 +3410,12 @@ package body Landin.Tests.Fixture_Execution_Suite is
             end if;
             Run_Profiles (Local);
             declare
-               Row : constant Host_Failure := Host_Failures.Element (Listed);
+               Expected : Boolean;
             begin
-               if Landin.Testing.Failures (Local) = 0 then
-                  Landin.Testing.Fail
-                    (Slot, Unbounded.To_String (Row.Fixture)
-                     & " passed under " & Runner_Name & ", which "
-                     & Cross_Lanes_Record & " lists as failing there ("
-                     & Unbounded.To_String (Row.Reason)
-                     & "): remove the runner from its row, or the row");
-               elsif Only_Listed_Failures (Row, Local) then
-                  Landin.Testing.Check
-                    (Slot, True, "an expected host failure");
+               Judge_Listed
+                 (Host_Failures.Element (Listed), Local, Slot, Expected);
+               if Expected then
                   Expected_Seen (Piece.Index) := Listed;
-               else
-                  Landin.Testing.Absorb (Slot, Local);
-                  Landin.Testing.Fail
-                    (Slot, Unbounded.To_String (Row.Fixture)
-                     & " failed under " & Runner_Name & " otherwise than "
-                     & Cross_Lanes_Record & " lists, so the failures above"
-                     & " are not the host's ("
-                     & Unbounded.To_String (Row.Reason) & ")");
                end if;
             end;
          end Run_One;
@@ -3436,15 +3471,7 @@ package body Landin.Tests.Fixture_Execution_Suite is
          Run_Each (Work (1 .. Last), Item);
          for Index in Expected_Seen'Range loop
             if Expected_Seen (Index) /= 0 then
-               Ada.Text_IO.Put_Line
-                 (Ada.Text_IO.Standard_Error,
-                  "landin_tests: expected host failure under "
-                  & Runner_Name & ": "
-                  & Unbounded.To_String
-                      (Host_Failures.Element (Expected_Seen (Index)).Fixture)
-                  & ": "
-                  & Unbounded.To_String
-                      (Host_Failures.Element (Expected_Seen (Index)).Reason));
+               Say_Expected (Host_Failures.Element (Expected_Seen (Index)));
             end if;
          end loop;
       end;
@@ -3529,7 +3556,40 @@ package body Landin.Tests.Fixture_Execution_Suite is
                elsif Label_Of (Case_Item) = Wanted then
                   Ran := Ran + 1;
 
-                  if Class (Case_Item) = Abi then
+                  if Class (Case_Item) in Runtime | Abi
+                    and then Host_Failure_Of (Wanted) /= 0
+                  then
+                     --  A cross-lanes row is held as the corpus holds it.
+                     declare
+                        Row : constant Host_Failure :=
+                          Host_Failures.Element (Host_Failure_Of (Wanted));
+                        Local : Landin.Testing.Context;
+                        Expected : Boolean;
+                     begin
+                        if not Lane_Levels (Case_Item).Is_Empty then
+                           Ask_Lane_Processor (Host);
+                           Report_Levels (Lane_Levels (Case_Item));
+                        end if;
+                        for Profile in 1 .. Profile_Count (Case_Item) loop
+                           if Class (Case_Item) = Abi then
+                              Run_ABI
+                                (Case_Item, Host, Program, Profile, Local);
+                           else
+                              Run_Runtime
+                                (Case_Item, Host, Program, Profile, Local);
+                              for Level of Lane_Levels (Case_Item) loop
+                                 Run_Runtime
+                                   (Case_Item, Host, Program, Profile, Local,
+                                    Level);
+                              end loop;
+                           end if;
+                        end loop;
+                        Judge_Listed (Row, Local, Item, Expected);
+                        if Expected then
+                           Say_Expected (Row);
+                        end if;
+                     end;
+                  elsif Class (Case_Item) = Abi then
                      for Profile in 1 .. Profile_Count (Case_Item) loop
                         Run_ABI (Case_Item, Host, Program, Profile, Item);
                      end loop;
@@ -3571,6 +3631,7 @@ package body Landin.Tests.Fixture_Execution_Suite is
             & "; run the harness through scripts/test.sh");
          return;
       end if;
+      Load_Host_Failures (Host, Item);
       for Wanted of Selected loop
          Execute (Wanted);
       end loop;
