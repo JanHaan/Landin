@@ -144,6 +144,35 @@ def symbols(run, nm, image):
     return {f[2]: int(f[0], 16) for f in (l.split() for l in listing.splitlines()) if len(f) == 3}
 
 
+class Pins:
+    """The probe's GPIO through probehive's scripts/gpio.py, which needs the
+    LiteX its own development shell carries: that shell's Python and its
+    environment are found once, and each read runs the script with them."""
+    def __init__(self, run, args):
+        self.run, self.args = run, args
+        found = run.command('gpio-environment', ['nix', 'develop', args.probehive, '-c',
+            'python3', '-c',
+            'import json, os, sys, litex; print(json.dumps([sys.executable, dict(os.environ)]))'],
+            timeout=300, cwd=args.probehive)
+        self.python, self.env = json.loads(found.strip().splitlines()[-1])
+        self.release()
+
+    def gpio(self, name, *pins):
+        return self.run.command(name, [self.python, self.args.probehive / 'scripts/gpio.py',
+                                       self.args.probehive_build, *pins], env=self.env)
+
+    def release(self):
+        self.gpio('gpio-release', self.args.indicator_pin + '=z')
+
+    def level(self, name):
+        for line in self.gpio(name).splitlines():
+            fields = line.split()
+            if fields and fields[0] == self.args.indicator_pin:
+                require(fields[1] == 'input', '%s is driven by the probe' % fields[0])
+                return int(fields[2])
+        raise Failed('gpio.py listed no %s' % self.args.indicator_pin)
+
+
 def build(run, args):
     elf = run.out / 'board.elf'
     run.command('compile', [args.refine, '--root=' + str(ROOT / 'devices'),
@@ -297,7 +326,7 @@ def report(console, count):
     return [f for t, f in frames_safe(stream) if t == 't'][count]
 
 
-def scenario(console, run, seed):
+def scenario(console, run, seed, pins=None):
     """The board-port scenario and its oracle.  Returns the verdicts and
     the last telemetry frame."""
     verdicts = {}
@@ -314,14 +343,23 @@ def scenario(console, run, seed):
     # which the pad's input reads back.
     console.send(SHARED[:1])
     high = report(console, seen); seen += 1
+    wire_high = pins.level('gpio-after-1') if pins else None
     console.send(SHARED[1:])
     low = report(console, seen); seen += 1
+    wire_low = pins.level('gpio-after-0') if pins else None
     require(high['g'] == 4 and low['g'] == 0,
             'GPIO2 read back %x after 1 and %x after 0' % (high['g'], low['g']))
+    # The probe's pin is pulled up when nothing drives it, so low after 0
+    # is what shows the Pico's pin driving the wire.
+    require(pins is None or (wire_high, wire_low) == (1, 0),
+            'the wire from GPIO2 read %s after 1 and %s after 0' % (wire_high, wire_low))
     require(echo_of(console.received).startswith(SHARED[:1] + bytes([REPORT]) + SHARED[1:]),
             'the shared scenario was not echoed')
     verdicts['shared'] = dict(input=SHARED.decode(), echo=SHARED.decode(),
                               indicator_after_1=high['g'], indicator_after_0=low['g'])
+    if pins:
+        verdicts['shared'].update(wire=pins.args.indicator_pin, wire_after_1=wire_high,
+                                  wire_after_0=wire_low)
     # IRQ5, set pending in the NVIC: slot 21's handler runs once, in
     # exception 21.
     console.send(bytes([IRQ5]))
@@ -425,12 +463,19 @@ def main():
     parser.add_argument('--guard-serial', default='210319B3E738',
                         help='the serial the guarded port must show, or the hub is not switched')
     parser.add_argument('--off-seconds', type=float, default=1.0)
+    parser.add_argument('--indicator-pin', metavar='PIN',
+                        help="the probe's GPIO wired to the Pico's GPIO2, IO32 on the maintainer's"
+                             " rig; without it the indicator is checked by its pad's readback alone")
+    parser.add_argument('--probehive-build', type=Path,
+                        help="the loaded bitstream's build directory, DIR/build/slots_ci by default")
     parser.add_argument('--seed', type=int, default=1220)
     parser.add_argument('--record', type=Path,
                         help="also write a passed run's record here, as record.json is")
     args = parser.parse_args()
     require(args.probe_rs, 'no probe-rs: name one with --probe-rs')
     require(args.nm, 'no arm-eabi-nm or arm-none-eabi-nm on PATH: name one with --nm')
+    args.probehive = args.probehive.resolve()
+    args.probehive_build = (args.probehive_build or args.probehive / 'build/slots_ci').resolve()
     args.output = args.output.resolve()
     args.output.mkdir(parents=True)
     run = Run(args.output)
@@ -442,10 +487,11 @@ def main():
                       second_stage_sha256=hashlib.sha256(stage).hexdigest())
         flash(run, args, elf, stage)
         result['flash_readback'] = 'matches'
+        pins = Pins(run, args) if args.indicator_pin else None
         bridge = Bridge(run, args)
         console = Console(args.uart_port)
         power_cycle(run, args)
-        verdicts, final = scenario(console, run, args.seed)
+        verdicts, final = scenario(console, run, args.seed, pins)
         result['verdicts'] = verdicts
         console.close()
         bridge.close()
