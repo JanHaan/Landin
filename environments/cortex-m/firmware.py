@@ -197,6 +197,14 @@ def float_unit(parent, refine):
     run = Run(out, parent.tools)
     profile = derived(run, refine, 'mps2-an500', out / 'profiles')
     elf = build(run, refine, FLOAT_UNIT, level='armv7e-m', roots=(LANES,), profile=profile)
+    #  D617: GCC selects the hard multilib from the flags refine passes.
+    helper = run.command('float-runtime-archive', [
+        run.arm / 'arm-eabi-gcc', '-mcpu=cortex-m7', '-mthumb', '-mfloat-abi=hard',
+        '-mfpu=fpv5-d16', '-print-libgcc-file-name']).strip()
+    require(helper.endswith('/thumb/v7e-m+dp/hard/libgcc.a'),
+            'hard float selects the runtime archive ' + helper)
+    require('/thumb/v7e-m+dp/hard/libgcc.a' in (out / 'firmware.elf.map').read_text(),
+            'the firmware did not link the hard-float runtime archive')
     attributes = (out / 'elf.log').read_text()
     require('Tag_FP_arch: FPv5/FP-D16 for ARMv8' in attributes
             and 'Tag_ABI_VFP_args: VFP registers' in attributes,

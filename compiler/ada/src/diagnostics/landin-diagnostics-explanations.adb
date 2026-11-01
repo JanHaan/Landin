@@ -1044,11 +1044,12 @@ package body Landin.Diagnostics.Explanations is
                & "n` for `cortex-m33`. A lower M-profile level is accepted"
                & ": a `cortex-m4` builds at `armv7-m` or `armv6-m` too, an"
                & "d a `cortex-m33` at `armv7-m` or `armv6-m`, though not a"
-               & "t `armv7e-m`, whose DSP instructions its core may lack. "
-               & "Build with the target and a level the note names. The co"
-               & "nstrained reference profile, which applies when no descr"
-               & "iption is imported, is the one description used at every"
-               & " level.",
+               & "t `armv7e-m`, whose DSP instructions its core may lack; "
+               & "a description with a float unit builds at its unit's lev"
+               & "el alone (L0546). Build with the target and a level the "
+               & "note names. The constrained reference profile, which app"
+               & "lies when no description is imported, is the one descrip"
+               & "tion used at every level.",
             when Catalogue.Boot_Kind_Reserved =>
                "A device description selects a boot image kind refine re"
                & "serves but does not build yet (D545): `rp2350-image-bloc"

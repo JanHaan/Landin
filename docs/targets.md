@@ -572,7 +572,10 @@ remain unchanged.
 ## Cortex-M0 layout and ABI planning
 
 `Targets.Cortex_M` (`cortex-m0`) defaults to ARMv6-M Thumb,
-little endian and base AAPCS32 soft-float identity. `refine --target=cortex-m0`
+little endian and base AAPCS32 soft-float identity. A device description
+with a float unit, a Cortex-M7's `compiler.float_unit("fpv5-d16")`, makes the
+build hard-float at `armv7e-m` with AAPCS32's VFP variant (D615, D616),
+below. `refine --target=cortex-m0`
 checks source and emits ARMv6-M assembly at the default `armv6-m` level;
 selecting `armv7-m`, `armv7e-m` or `armv8-m.main` permits instructions from that higher level
 while retaining the same layout and ABI. The toolchain identity is
@@ -626,7 +629,16 @@ r0–r3 precede the stack, double-word arguments start at even registers or
 8-byte stack addresses, and a composite may split at the register/stack
 boundary. Narrow integers extend to 32 bits. Stack argument extents round to
 four bytes; the total outgoing area rounds to eight. Soft-float values use
-core bit carriers, including float-only records; there is no HFA register bank.
+core bit carriers, including float-only records, and without a float unit
+there is no VFP register bank. With one (D616) an f32 or f64, or a
+composite of one to four of one of them, takes the lowest free run of
+s0-s15, a double an even-aligned pair, so a single back-fills; once one goes
+to the stack no VFP register is taken again; results are s0/d0, s0-s3/d0-d3
+for an aggregate whatever its size; a variadic call keeps the base PCS
+throughout; s16-s31 are call-preserved; and every other argument keeps the
+base placement. `compiler/tests/cortex-m.contract`'s `vfp.` rows are the
+planner's, measured against GCC at `-mfloat-abi=hard -mfpu=fpv5-d16` on
+QEMU's `mps2-an500` by `environments/cortex-m/abi.py`.
 C composite results through four bytes use r0; larger results use a hidden
 address in r0, consuming that argument position. Scalar 64-bit results use
 r0/r1. Variadic tails use this same base PCS after default promotions, with
@@ -638,7 +650,9 @@ aggregate, array, slice and any values by address, with the required callee
 value copy. `inout` instead carries the original place address. Aggregate and
 multiple results always use caller-owned storage, even below five bytes.
 Its address comes first; the existing signature's generic evidence pointers
-follow in D144 order, then written parameters. Static type/fixed parameters
+follow in D144 order, then written parameters. With a float unit an `f32`
+or `f64` parameter or result takes the VFP bank as the C convention places
+it. Static type/fixed parameters
 consume no runtime position. Erased dispatch inserts its data pointer in the
 provider's self position, without a hidden table argument. Declared failure
 uses r12: zero on success, otherwise the nonzero atom code. Successful scalar
@@ -821,11 +835,11 @@ Outgoing arguments use the planner's aligned stack area plus private r0-r3 stagi
 | Addresses and branches | Frame offsets materialize into a low register; no narrow displacement is assumed. Conditional transfers invert a nearby condition over an absolute Thumb jump. Direct BL relocations permit GNU veneers; indirect calls use BLX. ELF function identity carries the Thumb bit, ordinary data identity does not. |
 | Frames and limits | Shared target-byte placement, no red zone. Preflight reserves selector and outgoing-call overhead inside the 32-bit address budget and reports L0504. The external test map's 32 KiB flash/16 KiB RAM/4 KiB stack limits are separate from that arithmetic bound. |
 | Integer operations | Enabled 8/16/32/64-bit values, explicit narrow extension and pair operations, width-bounded shifts, signed/unsigned comparisons, checked overflow, division-zero and signed minimum/-1 handling. D187 removes only its specified checks. |
-| Conversion and floating operations | Software IEEE arithmetic/comparison and integer-to-float/float-width helpers. Float-to-integer selection decodes the IEEE carrier and checks range before constructing the integer; bool accepts only its specified domain. Finite narrowing overflow traps. |
+| Conversion and floating operations | Software IEEE arithmetic/comparison and integer-to-float/float-width helpers. Float-to-integer selection decodes the IEEE carrier and checks range before constructing the integer; bool accepts only its specified domain. Finite narrowing overflow traps. With a float unit (D617): VADD, VSUB, VMUL, VDIV and VNEG; VCMP or VCMPE, VMRS and a branch false when unordered; VCVT between the widths and from or to integers of at most 32 bits, a float-to-integer conversion widening to f64 and checking its open range first; operands moved by VLDR and VSTR through r6; no float helper. 64-bit integer conversions keep the base-PCS runtime conversion or the carrier decoding. |
 | Calls and values | Direct/indirect entries, value copies, inout places, caller-owned aggregate/multiple results, generic evidence and erased self/table dispatch. Capture r12 immediately after a Landin call; foreign helpers and veneers may clobber it. Every successful Landin return writes zero privately. |
 | Images and checks | Raw packed copies retain every bit. Extraction validates named encodings even when discarded or unchecked; insertion fit, indices and reserved policies retain their guards. Ordinary atoms still exclude zero. |
 | Memory and traps | One aligned LDRB/LDRH/LDR or STRB/STRH/STR per admitted transaction. Atomic orders are conservatively strengthened by DMB SY before and after; compiler barriers emit no hardware operation, device/thread barriers use DMB SY, completion uses DSB SY. Checked failure uses UDF #1. No interrupt masking or helper atomics. |
-| Stack switching | D450's prepare is inline: it aligns the slice's top down to eight and lays a 48-byte frame whose CONTROL word selects PSP and whose limit word is the slice's base plus D472's 384-byte margin, and traps `stack_exhausted` when the slice cannot hold both. A switch checks nothing: it calls one per-program routine that pushes r4-r7 and the return address, a scratch word and the current limit cell, then CONTROL with r8-r11 above it, stores SP, writes the resumed pointer into MSP or PSP as that frame's CONTROL word says, writes CONTROL with an ISB, pops, and installs the resumed frame's limit in the cell; its CFI is exact at every instruction. In a program that prepares a stack each routine checks its frame against the cell in its prologue, eight instructions with a far branch to the trap, and an interrupt handler keeps the interrupted limit below its frame record and runs with zero in the cell (D471). A prepared stack's first return is a start routine whose CFI leaves the return address undefined. D460 records the layout, D461 the exception frame each fibre's backing holds, D472 the limit. |
+| Stack switching | D450's prepare is inline: it aligns the slice's top down to eight and lays a 48-byte frame whose CONTROL word selects PSP and whose limit word is the slice's base plus D472's 384-byte margin, and traps `stack_exhausted` when the slice cannot hold both. A switch checks nothing: it calls one per-program routine that pushes r4-r7 and the return address, a scratch word and the current limit cell, then CONTROL with r8-r11 above it, stores SP, writes the resumed pointer into MSP or PSP as that frame's CONTROL word says, writes CONTROL with an ISB, pops, and installs the resumed frame's limit in the cell; its CFI is exact at every instruction. In a program that prepares a stack each routine checks its frame against the cell in its prologue, eight instructions with a far branch to the trap, and an interrupt handler keeps the interrupted limit below its frame record and runs with zero in the cell (D471). A prepared stack's first return is a start routine whose CFI leaves the return address undefined. D460 records the layout, D461 the exception frame each fibre's backing holds, D472 the limit. With a float unit the frame is 120 bytes, d8-d15 and FPSCR between the limit and r8-r11, and the margin 528 (D620). |
 
 The instruction envelope follows the official
 [ARMv6-M Architecture Reference Manual](https://documentation-service.arm.com/static/5f8ff05ef86e16515cdbf826),
@@ -894,7 +908,15 @@ cortex-m0`, a 32-bit quotient is SDIV or UDIV and its remainder MLS after it,
 after the same zero-divisor and minimum-over-minus-one guards, and the link
 selects the pinned `thumb/v7-m/nofp/libgcc.a` with `-march=armv7-m`. Every
 other selection above, the r0-r7 selector and the 64-bit helpers, is
-unchanged. Inline assembly keeps the ordinary block's straight-line and
+unchanged. With a float unit the assembly also says `.fpu fpv5-d16` and
+declares `Tag_ABI_FP_number_model` IEEE 754 and `Tag_ABI_VFP_args` VFP
+registers, the tools are told `-mfloat-abi=hard -mfpu=fpv5-d16`, and GCC
+selects `thumb/v7e-m+dp/hard/libgcc.a` from them; the linker then refuses a
+soft-float object that declares a number model, and a libgcc helper object,
+which declares none, leaves the image's attribute standing (D617). Only the
+64-bit integer conversions and divisions still call libgcc there. A framed
+routine holding an assembly block keeps d8-d15 in its frame with VSTM and
+VLDM, between its homes and its staging, where D471's check covers them. Inline assembly keeps the ordinary block's straight-line and
 register restrictions, but the ARMv6-M instruction allowlist applies only
 at `armv6-m`; at higher levels the assembler checks instructions against
 the selected `.arch`.
@@ -928,8 +950,10 @@ second-stage slot for `rp2040-boot2` (D545), which holds the description's
 `link(boot_stage)` routine and the checksum the driver writes into the
 assembled object (D587, D588). The slots a handler takes are its
 core's exceptions and 16 + IRQ for each interrupt the description names, and
-every other slot is zero (D544). There is no VTOR relocation, FPU or
-exclusive-access implementation. D229 owns the typed handlers and
+every other slot is zero (D544). There is no VTOR relocation or
+exclusive-access implementation; with a float unit reset grants CP10 and
+CP11 in CPACR, then DSB and ISB, before the copies, and an exception
+interrupting a float context stacks the extended frame lazily (D618). D229 owns the typed handlers and
 ordinary/naked obligations.
 
 `Backend.Firmware` derives the reset source and the linker script from the
@@ -950,7 +974,8 @@ the profile it was built for: device, core, boot kind, vector address and
 length, regions and placements.
 The sizes come from ELF load segments; the helper names come from the linker
 map. Assembly-only reports have no linked capacity measurement.
-The assembler uses Cortex-M0/Thumb/soft-float/AAPCS flags and fatal warnings.
+The assembler uses Cortex-M0/Thumb/soft-float/AAPCS flags and fatal warnings,
+or hard float and the unit with a float unit (D617).
 The linker uses those flags plus `-nostdlib -nostartfiles -nodefaultlibs`, the
 explicit generated script, `--gc-sections --build-id=none --emit-relocs` and
 `-lgcc`. Host writes and invocations pass through `Landin.Platform`.

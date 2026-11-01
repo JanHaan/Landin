@@ -1665,8 +1665,9 @@ A device description's core does not execute what the request builds
 `armv7e-m` for `cortex-m4` and `cortex-m7`, and `armv8-m.main` for
 `cortex-m33`. A lower M-profile level is accepted: a `cortex-m4` builds at
 `armv7-m` or `armv6-m` too, and a `cortex-m33` at `armv7-m` or `armv6-m`,
-though not at `armv7e-m`, whose DSP instructions its core may lack. Build with the
-target and a level the note names. The constrained reference profile, which applies when no
+though not at `armv7e-m`, whose DSP instructions its core may lack; a
+description with a float unit builds at its unit's level alone (L0546).
+Build with the target and a level the note names. The constrained reference profile, which applies when no
 description is imported, is the one description used at every level.
 
 ```landin

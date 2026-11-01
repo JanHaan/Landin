@@ -13,6 +13,7 @@ and `platform/cortex_m`/`core/panic` consumers run through that compiler-owned f
 | Probe host | native Linux x86-64 with glibc 2.38 or later, `dpkg-deb` and `tar`; the gate runs it on GitHub's `ubuntu-24.04` |
 | CPU/startup lane | QEMU 10.0.13, Debian `1:10.0.13+ds-0+deb13u1`, `-M microbit -accel tcg,thread=single` |
 | Armv7-M corpus lane | the same QEMU binary, `-M mps2-an385`: a Cortex-M3, for corpus fixtures whose `levels:` name `armv7-m` (D255) |
+| M7 corpus lane | the same QEMU binary, `-M mps2-an500`: a Cortex-M7 r1p2 with the double-precision FPv5-D16, the whole corpus at `armv7e-m` hard-float through the lane's own description (D619), and the VFP ABI control and the firmware lane's `float-unit` case |
 | Core | nRF51822 Cortex-M0, ARMv6-M, Thumb, little endian, 16 MHz model clock; no FPU, caches or exclusive-access instruction requirement |
 | Peripheral lane | the same QEMU, with `machine.py` serving `models.py`'s synthetic devices through its debugger stub; `-icount shift=0` |
 | EABI compiler | `arm-eabi-gcc` 16.1.0, GNAT's arm-elf archive `16.1.0-1` from the host GNAT's release, pinned in `environments/pins.sh` |
@@ -109,6 +110,28 @@ run at `armv7-m` is disassembled and required to divide in hardware and to
 ask libgcc for no 32-bit quotient, so the level is shown to have reached
 the bytes that ran. The three division fixtures the corpus runs at
 `armv7-m` add 12 QEMU sessions.
+
+The M7 lane is the MPS2 AN500, from the same binary: a Cortex-M7 whose
+float unit, FPv5-D16, is a description's (D615), so the lane has one,
+[`lanes/descriptions/mps2_an500`](lanes/descriptions/mps2_an500/description.ldn):
+4 MiB of code memory at 0, VTOR's address, and 4 MiB of RAM at
+`0x20000000` with a 64 KiB stack at its top. Unmapped space there reads
+zero and ignores writes with no fault, so a program that runs away hangs to
+the session's deadline rather than faulting. A corpus program reaches the
+description through one more entry-module file,
+[`lanes/lane-mps2-an500.ldn`](lanes/lane-mps2-an500.ldn), so it runs
+unchanged; a rooted program's entry module is named by its files then,
+since a rooted request names its directory or its files and not both.
+The harness start grants CP10 and CP11 before anything else, paints
+d8-d15 before `main` and checks them after, the image must carry
+`Tag_FP_arch: FPv5/FP-D16 for ARMv8` and `Tag_ABI_VFP_args: VFP registers`,
+libgcc comes from `thumb/v7e-m+dp/hard`, and each image is required to call
+no float helper; `runtime/float-operations-by-arguments` must also hold its
+own VFP operation in each of its routines at none/off and no software float
+routine at all. `backend_corpus.py --lane mps2-an500` runs the whole
+inventory there; at `LANDIN_CORTEX_JOBS=4` that is 3,278 verdicts, 3,022 of
+them executions, in five to five and a half minutes on a 32-thread host,
+beside the reference's four and a half.
 
 ## Executable routes and limits
 
@@ -291,6 +314,20 @@ Development results are indexed separately in `abi-validation.json`;
 `validation.json` keeps its historical meaning as the CPU and peripheral
 environment's record.
 
+The VFP variant (D616) is measured apart, on the M7 lane: `abi.py` builds
+`probes/abi-vfp.c` with GCC at `-mcpu=cortex-m7 -mfloat-abi=hard
+-mfpu=fpv5-d16`, with `probes/an500-start.S`, which grants the unit, and
+`probes/an500.ld`, and runs it on `mps2-an500` against the hand-written
+endpoints of `probes/abi-vfp.S`, which record r0-r3, s0-s15, six stack
+words and sp. Every recorded argument word is held to the contract's
+`vfp.` rows: back-filled singles, aggregates of floats and of doubles, the
+stack fallback that leaves s1 unused, a variadic call and a five-float
+composite; each endpoint's result is returned where the convention says
+and checked by GCC's caller. GCC must save exactly d8-d15 around a body
+that clobbers every VFP register, and sentinels in d8-d15 must survive it,
+which is the contract's `vfp.preserved` row; the image must carry
+`Tag_ABI_VFP_args: VFP registers`.
+
 These bounded probes establish neither floating arithmetic helpers, general
 unwind support, a complete C language ABI surface, firmware stack bounds,
 physical hardware behavior nor a Cortex-M compiler backend. The backend
@@ -470,6 +507,14 @@ the refusal names each one and the row to write. A row's `mode` is one of:
 | `refuse` | compiled for `cortex-m0` and required to fail with exactly these diagnostic codes | `codes`, and a `reason` unless the only code is L0015 |
 | `restriction` | a target restriction, the disabled general C surface or a hosted heap, not attempted | a `reason` and a `witness` file that shows it |
 
+An `execute` row may also carry `"lanes": {"mps2-an500": {"mode":
+"restriction", "reason": ...}}`, the M7 lane's own disposition of it
+(D619). The lane still runs the program and requires it to fail, so a
+restriction that no longer holds fails the lane, naming the row; three
+64-bit-sized fixtures, which the reference's map never held and so no
+Cortex-M lane ran before the M7's, have one, until each has a 32-bit
+counterpart.
+
 Firmware gives a program no standard input, arguments, files beside it or
 output, so a fixture whose metadata names `stdin:`, `run_args:`,
 `run_files:` or `run_expect:` cannot be `execute`. The inventory refuses
@@ -634,7 +679,14 @@ expansion or new DMA ownership model is introduced.
 ## Compiler-owned firmware
 
 `firmware.py` is mandatory in `run.py`. It writes records under the run's
-`firmware` output directory, separate from every earlier lane. It invokes the
+`firmware` output directory, separate from every earlier lane. Its
+`float-unit` case builds compiler-owned firmware for the M7 lane's
+description and runs it on `mps2-an500`: reset has granted CP10 and CP11
+before `start`, a SysTick pended in the middle of an f64 computation is
+taken with `0xffffffe9` and the extended frame reserved lazily, the
+handler's float instruction fills it, the return restores the interrupted
+d0, and the computation ends with its IEEE value (D618); a soft-float C
+object linked into the image is refused for its VFP arguments (D617). It invokes the
 compiler with
 `--target=cortex-m0 --firmware-entry=start --emit=exe` and the pinned Arm GCC
 path. The compiler generates reset, vectors and the linker script; `backend-start.S`

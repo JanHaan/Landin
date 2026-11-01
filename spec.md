@@ -21361,7 +21361,8 @@ are an optional extension of its core. So an RP2040, a `cortex-m0plus`,
 builds at the default `armv6-m` and no higher, a `cortex-m4` builds at
 `armv7e-m`, `armv7-m` or `armv6-m`, and a `cortex-m33` at `armv8-m.main`,
 `armv7-m` or `armv6-m`, its vector slots its core's at any of them; a level above the core's, or a target of another family, is L0515,
-naming the levels the core executes. The constrained reference alone is
+naming the levels the core executes. A description with a float unit builds
+only at the level that holds the unit, and a lower one is L0546 (D615). The constrained reference alone is
 used at every level, with its ARMv6-M slots, because it is the profile the
 levels were always tested on and remains so. The maintainer chose the lower
 levels over requiring the core's own: code built for less runs on the core,
