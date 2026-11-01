@@ -229,6 +229,11 @@ negative/atomic-read-modify-write-cortex-m0 | cortex-m0
 negative/bare-block-scope-does-not-leak | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/bare-block-unclosed | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/binding-missing-its-name-is-reported-on-its-line | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/boot-stage-missing | cortex-m0
+negative/boot-stage-not-naked | cortex-m0
+negative/boot-stage-outside-description | cortex-m0
+negative/boot-stage-second | cortex-m0
+negative/boot-stage-unwanted | cortex-m0
 negative/borrow-read-above-inout-in-loop | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/borrow-read-after-inout-loop | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/borrow-read-through-view-address | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

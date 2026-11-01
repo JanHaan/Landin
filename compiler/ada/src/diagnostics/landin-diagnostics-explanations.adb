@@ -1061,6 +1061,45 @@ package body Landin.Diagnostics.Explanations is
                & "r no library was found. Import the device's description,"
                & " or name a library that holds the reference with `--libr"
                & "ary=DIR`.",
+            when Catalogue.Boot_Stage_Form =>
+               "A `link(boot_stage)` marks something other than a device"
+               & " description's second-stage boot routine (D587): a modul"
+               & "e binding, an ordinary routine or an interrupt handler, "
+               & "or a naked routine that also names a section, symbol, re"
+               & "gion, vector, alignment, `keep` or `thread`. A boot stag"
+               & "e is `link(boot_stage) extern(naked) NAME: () -> none`, "
+               & "whose body is the one `assembler.block` the boot ROM ent"
+               & "ers, and the boot kind alone says where it goes. Write t"
+               & "he attribute alone on such a routine, or remove it.",
+            when Catalogue.Boot_Stage_Outside =>
+               "A `link(boot_stage)` routine is outside the device descr"
+               & "iption the program selects, or the program imports none "
+               & "and is given the constrained reference (D587). The secon"
+               & "d stage is the device's, as its boot kind is, so it is d"
+               & "eclared in the description's own module, beside `compile"
+               & "r.boot`. Move it into the description's directory.",
+            when Catalogue.Boot_Stage_Unwanted =>
+               "A device description holds a second-stage boot routine, "
+               & "and its boot kind takes none (D587): a `vector-table` im"
+               & "age begins with the vector table, which the core reads a"
+               & "t reset. Only an `rp2040-boot2` image begins with a seco"
+               & "nd stage. Remove the routine, or select the boot kind wh"
+               & "ose boot ROM enters it.",
+            when Catalogue.Boot_Stage_Repeated =>
+               "A device description holds a second `link(boot_stage)` r"
+               & "outine (D587). The boot kind's slot holds one stage, whi"
+               & "ch the boot ROM enters at its first byte. The message na"
+               & "mes the first; remove one of them.",
+            when Catalogue.Boot_Stage_Missing =>
+               "A device description selects `rp2040-boot2`, whose image"
+               & " begins with a second stage, and holds no `link(boot_sta"
+               & "ge)` routine (D587). Without one the slot would hold no "
+               & "code, and the boot ROM would refuse its checksum and sta"
+               & "y in its USB boot mode. Add the stage to the description"
+               & " as a `link(boot_stage) extern(naked)` routine of at mos"
+               & "t 252 bytes once assembled, literals included; `devices/"
+               & "descriptions/rp2040/boot2.ldn` in the repository is a po"
+               & "rt of pico-sdk's generic one.",
             when Catalogue.Unused_Pure_Local =>
                "An immutable local that is never used and is initialized"
                & " by a direct scalar literal, including a negated integer"
@@ -1205,6 +1244,19 @@ package body Landin.Diagnostics.Explanations is
                & "n the region text is placed in. Change the script so the"
                & " clause holds; the derived script refine writes beside t"
                & "he image as `OUT.ld` meets every clause.",
+            when Catalogue.Boot_Stage_Object =>
+               "The assembled second stage cannot be sealed with the boo"
+               & "t ROM's checksum (D588). refine reads the `.boot2` secti"
+               & "on of the object the assembler wrote before linking it: "
+               & "a section that is not 256 bytes means the stage and its "
+               & "literal pool outgrew the 252 bytes before the checksum, "
+               & "and the message gives their size; a relocation in the st"
+               & "age, or one elsewhere in the image that refers to it, wo"
+               & "uld make the bytes the boot ROM copies and runs at anoth"
+               & "er address differ from the ones summed, and the message "
+               & "names the relocation and its symbol. Make the stage shor"
+               & "ter, or write it with no symbol outside itself and refer"
+               & " to it from nowhere.",
             when Catalogue.Svd_Malformed =>
                "`refine svd` read an SVD that is not XML in the subset i"
                & "t reads (D555). The message says what was met and the li"
@@ -1847,6 +1899,16 @@ package body Landin.Diagnostics.Explanations is
                "",
             when Catalogue.No_Description =>
                "",
+            when Catalogue.Boot_Stage_Form =>
+               "",
+            when Catalogue.Boot_Stage_Outside =>
+               "",
+            when Catalogue.Boot_Stage_Unwanted =>
+               "",
+            when Catalogue.Boot_Stage_Repeated =>
+               "",
+            when Catalogue.Boot_Stage_Missing =>
+               "",
             when Catalogue.Unused_Pure_Local =>
                "unused: () -> none ="
                & LF
@@ -1875,6 +1937,8 @@ package body Landin.Diagnostics.Explanations is
             when Catalogue.Library_Not_Found =>
                "",
             when Catalogue.Linker_Script_Contract =>
+               "",
+            when Catalogue.Boot_Stage_Object =>
                "",
             when Catalogue.Svd_Malformed =>
                "",

@@ -1488,6 +1488,10 @@ package body Landin.Backend.Cortex_M is
          --  for that: the interrupted context's limit and a word that
          --  keeps eight-byte alignment.
          Kept : constant Natural := (if Keeps_Limit then 8 else 0);
+         --  D587: the description's second stage, emitted at the start of
+         --  the boot kind's slot.
+         Boot_Stage : constant Boolean :=
+           Landin.IR.Placement_Of (Of_Unit, Item).Boot_Stage;
 
          procedure Mark_Low (Assembly : String);
          function Call_Free (Assembly : String) return Boolean;
@@ -4539,7 +4543,15 @@ package body Landin.Backend.Cortex_M is
                end;
             end loop;
          end loop;
-         Select_Section (Item, ".text.", "ax");
+         if Boot_Stage then
+            --  D588: the stage's first instruction is the slot's first
+            --  byte, which the boot ROM enters in its SRAM copy.
+            Emit (".section .boot2,""ax"",%progbits");
+            Emit (".globl _landin_firmware_boot2");
+            Put ("_landin_firmware_boot2:");
+         else
+            Select_Section (Item, ".text.", "ax");
+         end if;
          if Is_Exported_Item (Item) then
             Emit (".globl " & Symbol (Item));
          end if;
@@ -4587,6 +4599,22 @@ package body Landin.Backend.Cortex_M is
                Emit (".cfi_endproc");
             end if;
             Emit (".size " & Symbol (Item) & ", . - " & Symbol (Item));
+            if Boot_Stage then
+               --  D588: the stage and its literals, then zeros to the
+               --  checksum's word, which the driver writes once the stage
+               --  is assembled.  GNU as gives a true comparison as -1, so
+               --  the mask leaves the padding nothing when the stage is
+               --  longer than its limit: it still assembles, and the
+               --  driver refuses the section's size, naming it.
+               Emit (".size _landin_firmware_boot2, . - _landin_firmware_"
+                 & "boot2");
+               Emit (".space (" & Trimmed (Natural'Image
+                 (Landin.Targets.Firmware.Stage_Limit))
+                 & " - (. - _landin_firmware_boot2)) & ((. - _landin_firm"
+                 & "ware_boot2) <= " & Trimmed (Natural'Image
+                   (Landin.Targets.Firmware.Stage_Limit)) & ")");
+               Emit (".word 0");
+            end if;
             Landin.Build_Reports.Append (Report,
               Landin.Build_Reports.Routine_Statistics'
                 (Item => Item, Naked => True, others => <>));

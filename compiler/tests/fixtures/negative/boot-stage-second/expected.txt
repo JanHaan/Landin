@@ -1,0 +1,6 @@
+error[L0536]: this description holds a second boot stage; the first is at ../tests/fixtures/negative/boot-stage-second/program.ldn:14
+  --> ../tests/fixtures/negative/boot-stage-second/program.ldn:18:1
+   |
+18 | link(boot_stage) extern(naked) second: () -> none =
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: D587: the boot kind's slot holds one stage; remove one of them

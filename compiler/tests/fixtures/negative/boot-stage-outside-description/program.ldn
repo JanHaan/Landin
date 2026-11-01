@@ -1,0 +1,5 @@
+link(boot_stage) extern(naked) stage: () -> none =
+    assembler.block("bx lr")
+end stage
+
+start: () -> none = end start

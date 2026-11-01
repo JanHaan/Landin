@@ -655,6 +655,10 @@
                         {
                           "type": "STRING",
                           "value": "thread"
+                        },
+                        {
+                          "type": "STRING",
+                          "value": "boot_stage"
                         }
                       ]
                     },
@@ -783,6 +787,10 @@
                               {
                                 "type": "STRING",
                                 "value": "thread"
+                              },
+                              {
+                                "type": "STRING",
+                                "value": "boot_stage"
                               }
                             ]
                           },

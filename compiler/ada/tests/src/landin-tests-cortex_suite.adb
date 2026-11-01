@@ -7,6 +7,7 @@ with Landin.Build_Reports;
 with Landin.Build_Reports.Firmware;
 with Landin.Diagnostics;
 with Landin.Driver;
+with Landin.Driver.Boot_Stage;
 with Landin.Testing.Fakes;
 with Landin.IR;
 with Landin.IR.Dump;
@@ -1628,7 +1629,7 @@ package body Landin.Tests.Cortex_Suite is
         & "/tool/libgcc.a(_muldi3.o)" & LF
         & "/tool/libgcc.a(_udivsi3.o)" & LF);
       Landin.Build_Reports.Firmware.Measure
-        (Host, "p.elf", "p.elf.map", Reference, Valid => Valid,
+        (Host, "p.elf", "p.elf.map", Reference, Stage => "", Valid => Valid,
          Result => Result);
       Landin.Testing.Check (Item, Valid, "ELF load extents are measured");
       Landin.Testing.Check_Equal
@@ -1675,13 +1676,13 @@ package body Landin.Tests.Cortex_Suite is
       end;
       Host.Add_File ("p.elf", "invalid ELF");
       Landin.Build_Reports.Firmware.Measure
-        (Host, "p.elf", "p.elf.map", Reference, Valid => Valid,
+        (Host, "p.elf", "p.elf.map", Reference, Stage => "", Valid => Valid,
          Result => Result);
       Landin.Testing.Check (Item, not Valid, "invalid ELF is refused");
       Host.Add_File ("p.elf", Data);
       Host.Add_File ("p.elf.map", "");
       Landin.Build_Reports.Firmware.Measure
-        (Host, "p.elf", "p.elf.map", Reference, Valid => Valid,
+        (Host, "p.elf", "p.elf.map", Reference, Stage => "", Valid => Valid,
          Result => Result);
       Landin.Testing.Check (Item, not Valid, "empty map is refused");
 
@@ -2554,14 +2555,14 @@ package body Landin.Tests.Cortex_Suite is
          Imports : Boolean := True; Library : Boolean := True;
          Extra : String := "--firmware-entry=start";
          Target : String := "--target=cortex-m0";
-         Second : Boolean := False);
+         Second : Boolean := False; Stage : String := "");
       procedure Try
         (Program : String; Interrupts, Memory : String;
          Code : out U.Unbounded_String; Assembly : out U.Unbounded_String;
          Imports : Boolean := True; Library : Boolean := True;
          Extra : String := "--firmware-entry=start";
          Target : String := "--target=cortex-m0";
-         Second : Boolean := False)
+         Second : Boolean := False; Stage : String := "")
       is
          Host : Landin.Testing.Fakes.Fake_Filesystem;
          Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
@@ -2583,6 +2584,9 @@ package body Landin.Tests.Cortex_Suite is
          Host.Add_File ("/w/devices/descriptions/dev/interrupts.ldn",
            Interrupts);
          Host.Add_File ("/w/devices/descriptions/dev/memory.ldn", Memory);
+         if Stage /= "" then
+            Host.Add_File ("/w/devices/descriptions/dev/boot2.ldn", Stage);
+         end if;
          if Second then
             Host.Add_Directory ("/w/devices/descriptions/other");
             Host.Add_File ("/w/devices/descriptions/other/interrupts.ldn",
@@ -2649,18 +2653,18 @@ package body Landin.Tests.Cortex_Suite is
          Imports : Boolean := True; Library : Boolean := True;
          Extra : String := "--firmware-entry=start";
          Target : String := "--target=cortex-m0";
-         Second : Boolean := False);
+         Second : Boolean := False; Stage : String := "");
       procedure Expect
         (Name, Program, Interrupts, Memory, Wanted : String;
          Imports : Boolean := True; Library : Boolean := True;
          Extra : String := "--firmware-entry=start";
          Target : String := "--target=cortex-m0";
-         Second : Boolean := False)
+         Second : Boolean := False; Stage : String := "")
       is
          Code, Assembly : U.Unbounded_String;
       begin
          Try (Program, Interrupts, Memory, Code, Assembly, Imports, Library,
-              Extra, Target, Second);
+              Extra, Target, Second, Stage);
          Landin.Testing.Check_Equal
            (Item, U.To_String (Code), Wanted, Name);
       end Expect;
@@ -2669,12 +2673,25 @@ package body Landin.Tests.Cortex_Suite is
         Checkout ("devices/descriptions/rp2040/interrupts.ldn");
       RP2040_Memory : constant String :=
         Checkout ("devices/descriptions/rp2040/memory.ldn");
+      RP2040_Stage : constant String :=
+        Checkout ("devices/descriptions/rp2040/boot2.ldn");
+      --  D587: a stage, and a plain description that boots RP2040's way.
+      Small_Stage : constant String :=
+        "link(boot_stage) extern(naked) stage: () -> none =" & LF
+        & "    assembler.block(""bx lr"")" & LF & "end stage" & LF;
+      Boot2_Memory : constant String :=
+        "linker.region(""FLASH"", 0x1000_0000, 64 * 1024, ""rx"")" & LF
+        & "linker.region(""RAM"", 0x2000_0000, 8 * 1024, ""rw"")" & LF
+        & "compiler.boot(""rp2040-boot2"")" & LF
+        & Plain_Memory (Ada.Strings.Fixed.Index
+          (Plain_Memory, "linker.place(""vectors""") .. Plain_Memory'Last);
       Code, Assembly : U.Unbounded_String;
    begin
       --  RP2040 by its identity: USBCTRL_IRQ's slot 21 holds the handler,
       --  the second stage comes first and the table follows it.
       Try ("link(vector: 21) extern(interrupt) usb: () -> none = end usb",
-           RP2040_Interrupts, RP2040_Memory, Code, Assembly);
+           RP2040_Interrupts, RP2040_Memory, Code, Assembly,
+           Stage => RP2040_Stage);
       Landin.Testing.Check_Equal
         (Item, U.To_String (Code), "", "RP2040 admits slot 21");
       Landin.Testing.Check
@@ -2689,12 +2706,35 @@ package body Landin.Tests.Cortex_Suite is
       Landin.Testing.Check_Equal
         (Item, Vector_Word (U.To_String (Assembly), 4), "0",
          "RP2040's ARMv6-M reserved slot 4 is zero");
+      --  D588: the stage's first instruction is the slot's first byte,
+      --  its literals follow it, then zeros to the checksum's word.
       Landin.Testing.Check
-        (Item, Ada.Strings.Fixed.Index (U.To_String (Assembly),
-           ".section .boot2,""a"",%progbits" & LF
-           & ".globl _landin_firmware_boot2" & LF
-           & "_landin_firmware_boot2:" & LF & ".zero 256" & LF) > 0,
-         "RP2040's second-stage slot is 256 zero bytes");
+        (Item, Contains (U.To_String (Assembly),
+           HT & ".section .boot2,""ax"",%progbits" & LF
+           & HT & ".globl _landin_firmware_boot2" & LF
+           & "_landin_firmware_boot2:" & LF
+           & HT & ".globl boot2" & LF
+           & HT & ".balign 2" & LF
+           & HT & ".type boot2, %function" & LF
+           & HT & ".thumb_func" & LF
+           & "boot2:" & LF & LF
+           & "push {lr}" & LF),
+         "RP2040's second stage begins its slot");
+      Landin.Testing.Check
+        (Item, Contains (U.To_String (Assembly),
+           "bx r1" & LF & LF
+           & HT & "udf #1" & LF
+           & HT & ".ltorg" & LF
+           & HT & ".size boot2, . - boot2" & LF
+           & HT & ".size _landin_firmware_boot2, . - _landin_firmware_boot2"
+           & LF
+           & HT & ".space (252 - (. - _landin_firmware_boot2)) & ((. -"
+           & " _landin_firmware_boot2) <= 252)" & LF
+           & HT & ".word 0" & LF),
+         "RP2040's stage is padded to 252 bytes and a zero checksum word");
+      Landin.Testing.Check
+        (Item, not Contains (U.To_String (Assembly), ".zero 256"),
+         "RP2040's second-stage slot no longer holds zeros alone");
 
       --  The constrained reference: slot 21 refused, and zero beside a
       --  handler at slot 20.
@@ -2813,7 +2853,264 @@ package body Landin.Tests.Cortex_Suite is
         "", "", "L0518", Imports => False, Library => False, Extra => "");
       Expect ("a program with no placement needs no library", "",
         "", "", "", Imports => False, Library => False, Extra => "");
+
+      --  D587: the boot stage and where it may be.
+      Expect ("an rp2040-boot2 description with a stage compiles", "",
+        Plain_Interrupts, Boot2_Memory, "", Stage => Small_Stage);
+      Expect ("an rp2040-boot2 description without a stage is L0537", "",
+        Plain_Interrupts, Boot2_Memory, "L0537");
+      Expect ("a vector-table description with a stage is L0535", "",
+        Plain_Interrupts, Plain_Memory, "L0535", Stage => Small_Stage);
+      Expect ("a second stage is L0536", "", Plain_Interrupts,
+        Boot2_Memory, "L0536",
+        Stage => Small_Stage
+          & "link(boot_stage) extern(naked) other: () -> none =" & LF
+          & "    assembler.block(""bx lr"")" & LF & "end other" & LF);
+      Expect ("a stage outside the description is L0534", Small_Stage,
+        Plain_Interrupts, Boot2_Memory, "L0534", Stage => Small_Stage);
+      Expect ("a stage with no description is L0534", Small_Stage,
+        "", "", "L0534", Imports => False);
+      Expect ("an ordinary routine as a stage is L0533", "",
+        Plain_Interrupts, Boot2_Memory, "L0533",
+        Stage => "link(boot_stage) stage: () -> none = end stage" & LF);
+      Expect ("a binding as a stage is L0533", "",
+        Plain_Interrupts, Boot2_Memory, "L0533",
+        Stage => "link(boot_stage) stage: u32 = 1" & LF);
+      Expect ("a stage with a section is L0533", "",
+        Plain_Interrupts, Boot2_Memory, "L0533",
+        Stage => "link(boot_stage, section: "".text.x"") extern(naked)"
+          & " stage: () -> none =" & LF
+          & "    assembler.block(""bx lr"")" & LF & "end stage" & LF);
    end Device_Descriptions;
+
+   --  D588: the boot ROM's checksum, and the object it is sealed into.
+   procedure Boot_Stage_Seal (Item : in out Landin.Testing.Context);
+   procedure Boot_Stage_Seal (Item : in out Landin.Testing.Context) is
+      use type Landin.Targets.Firmware.Checksum;
+      type Relocation_Kind is (None, From_Stage, To_Stage);
+
+      function Bytes (Value, Width : Natural) return String;
+      function Bytes (Value, Width : Natural) return String is
+         Result : String (1 .. Width);
+         Rest : Natural := Value;
+      begin
+         for Index in Result'Range loop
+            Result (Index) := Character'Val (Rest mod 256);
+            Rest := Rest / 256;
+         end loop;
+         return Result;
+      end Bytes;
+
+      --  A 32-bit little-endian Arm relocatable object holding a .boot2 of
+      --  SIZE bytes, and with KIND a relocation in it, or one in .text
+      --  against a symbol defined in it.
+      function Object (Size : Natural; Kind : Relocation_Kind)
+        return String;
+      function Object (Size : Natural; Kind : Relocation_Kind)
+        return String
+      is
+         NUL : constant Character := ASCII.NUL;
+         Names : constant String := NUL & ".boot2" & NUL & ".shstrtab" & NUL
+           & ".symtab" & NUL & ".strtab" & NUL & ".text" & NUL & ".rel.x"
+           & NUL;
+         function Pattern return String;
+         function Pattern return String is
+            Result : String (1 .. Size);
+         begin
+            for Index in Result'Range loop
+               Result (Index) := Character'Val (Index * 7 mod 251);
+            end loop;
+            return Result;
+         end Pattern;
+         Stage : constant String := Pattern;
+         Strings : constant String := NUL & "far" & NUL & "inside" & NUL;
+         --  The null symbol, `far` undefined and `inside` in .boot2.
+         Symbols : constant String := Bytes (0, 16)
+           & Bytes (1, 4) & Bytes (0, 8) & Bytes (16#10#, 2) & Bytes (0, 2)
+           & Bytes (5, 4) & Bytes (0, 8) & Bytes (16#10#, 2) & Bytes (1, 2);
+         Text : constant String := Bytes (0, 4);
+         Relocation : constant String := Bytes (8, 4)
+           & Bytes ((if Kind = From_Stage then 1 else 2) * 256 + 2, 4);
+         Body_Of : constant String := Stage & Names & Strings & Symbols
+           & Text & Relocation;
+         At_Stage : constant Natural := 52;
+         At_Names : constant Natural := At_Stage + Size;
+         At_Strings : constant Natural := At_Names + Names'Length;
+         At_Symbols : constant Natural := At_Strings + Strings'Length;
+         At_Text : constant Natural := At_Symbols + Symbols'Length;
+         At_Relocation : constant Natural := At_Text + Text'Length;
+         Pad : constant Natural := (4 - (52 + Body_Of'Length) mod 4) mod 4;
+         Headers : constant Natural := 52 + Body_Of'Length + Pad;
+         Count : constant Natural := (if Kind = None then 6 else 7);
+         function Section
+           (Name, Kind_Of, Flags, Offset, Length, Link, Info, Size_Of :
+              Natural) return String
+         is (Bytes (Name, 4) & Bytes (Kind_Of, 4) & Bytes (Flags, 4)
+             & Bytes (0, 4) & Bytes (Offset, 4) & Bytes (Length, 4)
+             & Bytes (Link, 4) & Bytes (Info, 4) & Bytes (4, 4)
+             & Bytes (Size_Of, 4));
+      begin
+         return Character'Val (127) & "ELF" & Character'Val (1)
+           & Character'Val (1) & Character'Val (1) & Bytes (0, 9)
+           & Bytes (1, 2) & Bytes (40, 2) & Bytes (1, 4) & Bytes (0, 4)
+           & Bytes (0, 4) & Bytes (Headers, 4) & Bytes (16#0500_0000#, 4)
+           & Bytes (52, 2) & Bytes (0, 2) & Bytes (0, 2) & Bytes (40, 2)
+           & Bytes (Count, 2) & Bytes (2, 2)
+           & (if Kind = None
+              then Body_Of (1 .. Body_Of'Length - Relocation'Length)
+                & Bytes (0, Relocation'Length)
+              else Body_Of)
+           & Bytes (0, Pad)
+           & Bytes (0, 40)
+           & Section (1, 1, 6, At_Stage, Size, 0, 0, 0)
+           & Section (8, 3, 0, At_Names, Names'Length, 0, 0, 0)
+           & Section (18, 2, 0, At_Symbols, Symbols'Length, 4, 1, 16)
+           & Section (26, 3, 0, At_Strings, Strings'Length, 0, 0, 0)
+           & Section (34, 1, 6, At_Text, Text'Length, 0, 0, 0)
+           & (if Kind = None then ""
+              else Section (40, 9, 0, At_Relocation, Relocation'Length, 3,
+                            (if Kind = From_Stage then 1 else 5), 8));
+      end Object;
+
+      procedure Try
+        (Name : String; Size : Natural; Kind : Relocation_Kind;
+         Wanted : String);
+      procedure Try
+        (Name : String; Size : Natural; Kind : Relocation_Kind;
+         Wanted : String)
+      is
+         Original : constant String := Object (Size, Kind);
+         Sealed : U.Unbounded_String := U.To_Unbounded_String (Original);
+         Fault : U.Unbounded_String;
+      begin
+         Landin.Driver.Boot_Stage.Seal (Sealed, Fault);
+         if Wanted = "" then
+            declare
+               Result : constant String := U.To_String (Sealed);
+               Sum : constant Landin.Targets.Firmware.Checksum :=
+                 Landin.Targets.Firmware.Stage_Checksum
+                   (Original (53 .. 52 + 252));
+            begin
+               Landin.Testing.Check_Equal
+                 (Item, U.To_String (Fault), "", Name);
+               Landin.Testing.Check
+                 (Item, Result (1 .. 52 + 252) = Original (1 .. 52 + 252)
+                    and then Result (52 + 257 .. Result'Last)
+                      = Original (52 + 257 .. Original'Last)
+                    and then Result (52 + 253 .. 52 + 256)
+                      = Bytes (Natural (Sum mod 2 ** 16), 2)
+                        & Bytes (Natural (Sum / 2 ** 16), 2),
+                  Name & ": the checksum is the slot's last word alone");
+            end;
+         else
+            Landin.Testing.Check
+              (Item, Contains (U.To_String (Fault), Wanted)
+                 and then U.To_String (Sealed) = Original,
+               Name & ": " & U.To_String (Fault));
+         end if;
+      end Try;
+   begin
+      Landin.Testing.Check
+        (Item, Landin.Targets.Firmware.Stage_Checksum ("123456789")
+           = 16#0376_E6E7#,
+         "the stage checksum is CRC-32/MPEG-2");
+      Landin.Testing.Check
+        (Item, Landin.Targets.Firmware.Stage_Checksum ("") = 16#FFFF_FFFF#,
+         "the checksum of nothing is its initial value");
+      Try ("a 256-byte stage is sealed", 256, None, "");
+      Try ("an oversize stage names its size", 300, None,
+        "the second stage and its literals are 296 bytes, and its slot"
+        & " holds 252 before the checksum");
+      Try ("a relocation in the stage is named", 256, From_Stage,
+        "the second stage holds a relocation at offset 0x8 against far");
+      Try ("a relocation to the stage is named", 256, To_Stage,
+        "a relocation in .text at offset 0x8 refers to the second stage"
+        & " through inside");
+      declare
+         Text : U.Unbounded_String := U.To_Unbounded_String ("not ELF");
+         Fault : U.Unbounded_String;
+      begin
+         Landin.Driver.Boot_Stage.Seal (Text, Fault);
+         Landin.Testing.Check
+           (Item, Contains (U.To_String (Fault), "not a 32-bit"),
+            "a file that is not an object is refused");
+      end;
+
+      --  The driver seals the object its assembler wrote before linking
+      --  it, and refuses one it cannot seal as L0538 without a link.
+      for Oversize in Boolean loop
+         declare
+            Host : Landin.Testing.Fakes.Fake_Filesystem;
+            Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+            Args : Landin.Platform.Path_List;
+            Written : constant String :=
+              Object ((if Oversize then 300 else 256), None);
+         begin
+            Host.Add_Firmware_Library;
+            Host.Add_Directory ("/w");
+            Host.Add_Directory ("/w/app");
+            Host.Add_Directory ("/w/devices");
+            Host.Add_Directory ("/w/devices/descriptions");
+            Host.Add_Directory ("/w/devices/descriptions/dev");
+            Host.Add_File ("/w/app/main.ldn",
+              "import descriptions/dev" & LF
+              & "start: () -> none = end start" & LF);
+            Host.Add_File ("/w/devices/descriptions/dev/dev.ldn",
+              "compiler.device(""dev"")" & LF
+              & "compiler.core(""cortex-m0plus"")" & LF
+              & "compiler.vectors(48)" & LF
+              & "compiler.boot(""rp2040-boot2"")" & LF
+              & "linker.region(""FLASH"", 0x1000_0000, 64 * 1024, ""rx"")"
+              & LF
+              & "linker.region(""RAM"", 0x2000_0000, 8 * 1024, ""rw"")" & LF
+              & "linker.place(""vectors"", ""FLASH"")" & LF
+              & "linker.place(""text"", ""FLASH"")" & LF
+              & "linker.place(""rodata"", ""FLASH"")" & LF
+              & "linker.place(""data"", ""RAM"")" & LF
+              & "linker.place(""bss"", ""RAM"")" & LF
+              & "linker.place(""stack"", ""RAM"", 1024)" & LF
+              & "link(boot_stage) extern(naked) stage: () -> none =" & LF
+              & "    assembler.block(""bx lr"")" & LF & "end stage" & LF);
+            --  What the fake assembler leaves as its object.
+            Host.Add_File ("/w/p.elf.o", Written);
+            Tools.Set_Result (0, "");
+            Args.Append ("--root=/w/devices");
+            Args.Append ("--target=cortex-m0");
+            Args.Append ("--firmware-entry=start");
+            Args.Append ("--emit=exe");
+            Args.Append ("-o");
+            Args.Append ("/w/p.elf");
+            Args.Append ("/w/app");
+            declare
+               Ran : constant Landin.Driver.Outcome :=
+                 Landin.Driver.Execute (Args, Host, Tools);
+            begin
+               if Oversize then
+                  Landin.Testing.Check
+                    (Item, Landin.Diagnostics.Count (Ran.Found) > 0
+                       and then Landin.Diagnostics.Code
+                         (Landin.Diagnostics.Get (Ran.Found, 1)) = "L0538"
+                       and then Contains (U.To_String (Ran.Report),
+                         "its literals are 296 bytes")
+                       and then not Host.Exists ("/w/p.elf"),
+                     "an oversize stage is L0538 before any link: "
+                     & U.To_String (Ran.Report));
+               else
+                  Landin.Testing.Check_Equal
+                    (Item, Ran.Status, Landin.Driver.Status_Success,
+                     U.To_String (Ran.Report));
+                  Landin.Testing.Check
+                    (Item, Host.Written ("/w/p.elf.o")'Length = Written'Length
+                       and then Host.Written ("/w/p.elf.o") /= Written
+                       and then Host.Written ("/w/p.elf.o") (1 .. 52 + 252)
+                         = Written (1 .. 52 + 252),
+                     "the driver writes the checksum into the object it"
+                     & " links");
+               end if;
+            end;
+         end;
+      end loop;
+   end Boot_Stage_Seal;
 
    --  D545: for the constrained reference the derived script is D229's.
    procedure Reference_Script (Item : in out Landin.Testing.Context);
@@ -2891,6 +3188,67 @@ package body Landin.Tests.Cortex_Suite is
       end;
    end Reference_Script;
 
+   --  D589: the derived script and its limits, with no entry and no link.
+   procedure Script_Without_Program (Item : in out Landin.Testing.Context);
+   procedure Script_Without_Program (Item : in out Landin.Testing.Context)
+   is
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+
+      function Run (Words : String) return Landin.Driver.Outcome;
+      function Run (Words : String) return Landin.Driver.Outcome is
+         Args : Landin.Platform.Path_List;
+         First : Positive := Words'First;
+      begin
+         for Index in Words'Range loop
+            if Words (Index) = ' ' then
+               Args.Append (Words (First .. Index - 1));
+               First := Index + 1;
+            end if;
+         end loop;
+         Args.Append (Words (First .. Words'Last));
+         return Landin.Driver.Execute (Args, Host, Tools);
+      end Run;
+   begin
+      Host.Add_Firmware_Library;
+      Host.Add_File ("p.ldn", "start: () -> none = end start");
+      Host.Add_File ("q.ldn", "x: u32 = 1");
+      Tools.Set_Result (0, "");
+      declare
+         Built : constant Landin.Driver.Outcome := Run
+           ("--target=cortex-m0 --firmware-entry=start --emit=exe -o p.elf"
+            & " p.ldn");
+         Script : constant Landin.Driver.Outcome := Run
+           ("--target=cortex-m0 --emit=linker-script --build-report=q.json"
+            & " -o q.ld q.ldn");
+         pragma Unreferenced (Built);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Script.Status, Landin.Driver.Status_Success,
+            U.To_String (Script.Report));
+         Landin.Testing.Check_Equal
+           (Item, Host.Written ("q.ld"), Host.Written ("p.elf.ld"),
+            "the script is the one a firmware build writes beside its image");
+         Landin.Testing.Check
+           (Item, Contains (Host.Written ("q.json"),
+              """firmware"":{""flash_limit"":32768,""static_ram_limit"""
+              & ":12288,""stack_reserved"":4096,""stack_top"":536887296,"
+              & """device"":""constrained-reference""")
+              and then not Contains (Host.Written ("q.json"), "flash_used"),
+            "the report gives the profile's limits and no linked figure");
+      end;
+      declare
+         Hosted : constant Landin.Driver.Outcome := Run
+           ("--target=linux-x86-64 --emit=linker-script -o h.ld q.ldn");
+      begin
+         Landin.Testing.Check
+           (Item, Hosted.Status /= Landin.Driver.Status_Success
+              and then Contains (U.To_String (Hosted.Report),
+                "it needs --target=cortex-m0 (D589)"),
+            "a hosted target has no firmware profile to write");
+      end;
+   end Script_Without_Program;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -2899,6 +3257,12 @@ package body Landin.Tests.Cortex_Suite is
       Landin.Testing.Register
         (Into, "cortex ABI", "the reference derives D229's script",
          Reference_Script'Access);
+      Landin.Testing.Register
+        (Into, "cortex ABI", "a boot stage is sealed with its checksum",
+         Boot_Stage_Seal'Access);
+      Landin.Testing.Register
+        (Into, "cortex ABI", "the linker script is written without a program",
+         Script_Without_Program'Access);
       Landin.Testing.Register
         (Into, "cortex ABI", "routine register saves", Frame_Saves'Access);
       Landin.Testing.Register

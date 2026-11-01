@@ -6,7 +6,8 @@
         "memory map": "https://github.com/raspberrypi/pico-sdk/blob/2.2.0/src/rp2_common/pico_crt0/rp2040/memmap_default.ld, SHA-256 d409afb35ec0a8c3edf5ad6935907cb45f225a3cbdfd4c3b8505a7ed92df28dc: RAM 0x20000000 256k, SCRATCH_X 0x20040000 4k, SCRATCH_Y 0x20041000 4k, the 256-byte .boot2 first in FLASH, then the vectors",
         "flash region": "https://github.com/raspberrypi/pico-sdk/blob/2.2.0/src/rp2_common/pico_standard_link/pico_flash_region.template.ld, SHA-256 a8cfe6d5eeea94ae1d67eddbcc8c7f9167de30fbac3b196ee51cc52833e6f22a: FLASH at 0x10000000",
         "flash size": "https://github.com/raspberrypi/pico-sdk/blob/2.2.0/src/boards/include/boards/pico.h, SHA-256 e88d258b92a7653c360d32042c2cac0de99010a6bc67d6935f6095b9612336d0: PICO_FLASH_SIZE_BYTES (2 * 1024 * 1024)",
-        "interrupts": "https://github.com/raspberrypi/pico-sdk/blob/2.2.0/src/rp2040/hardware_regs/include/hardware/regs/intctrl.h, SHA-256 2b980182228b23774923de78b85da5900ad3976a07ffd5c437915f9b8c0af6e4: USBCTRL_IRQ 5, SPARE_IRQ_5 31"
+        "interrupts": "https://github.com/raspberrypi/pico-sdk/blob/2.2.0/src/rp2040/hardware_regs/include/hardware/regs/intctrl.h, SHA-256 2b980182228b23774923de78b85da5900ad3976a07ffd5c437915f9b8c0af6e4: USBCTRL_IRQ 5, SPARE_IRQ_5 31",
+        "second stage": "https://github.com/raspberrypi/pico-sdk/blob/2.2.0/src/rp2040/boot_stage2/boot_stage2.ld, SHA-256 bc39ab4a78cf3584c242266ec6bd6ef0400c4d8bcda20ed3211cf96e01107339: the boot ROM loads the stage to the top 256 bytes of SRAM, 0x20041f00, above its stack at 0x20042000, the last 4 bytes the checksum; pad_checksum in the same directory, SHA-256 6d5b37f72bdf9f442b78170f7379ea0fb1c4f87ad4014b5057e6a5d796ac454a, which its CMakeLists.txt, SHA-256 5cdcc9bd3cf04d45641aac34dcc117f5fe1c06f3140502cd19fe9e003ce5365d, runs with -s 0xffffffff, sums the first 252 as descriptions.py's crc32_mpeg2 does; the stage's stores go to XIP_SSI_BASE 0x18000000 (addressmap.h) and PPB_BASE 0xe0000000, VTOR at 0xe000ed08 (m0plus.h); what it stores is read from the fetched boot2_generic_03h.S, not recorded here"
       },
       "core": "cortex-m0plus",
       "boot": "rp2040-boot2",
@@ -17,8 +18,9 @@
         {"name": "SCRATCH_Y", "origin": 537137152, "length": 4096, "access": "rwx"}
       ],
       "placed": {"vectors": "FLASH", "text": "FLASH", "rodata": "FLASH", "data": "RAM", "bss": "RAM", "stack": "SCRATCH_Y"},
-      "boot2_address": 268435456,
-      "boot2_bytes": 256,
+      "boot2": {"address": 268435456, "slot": 256, "limit": 252, "routine": "boot2",
+                "copy": 537140992, "rom_stack": 537141248, "vtor": 3758157064,
+                "devices": [[402653184, 256], [3758096384, 1048576]]},
       "vector_address": 268435712,
       "vector_words": 48,
       "stack_top": 537141248,

@@ -66,6 +66,22 @@ package Landin.Targets.Firmware is
    function Boot_Prefix (Boot : Boot_Kind) return Byte_Count
      is (if Boot = RP2040_Boot2 then 256 else 0);
 
+   --  D587/D588: whether a boot kind's image begins with a second stage
+   --  the description supplies, as a `link(boot_stage)` naked routine.
+   --  RP2040's boot ROM copies the first Stage_Slot bytes of flash to
+   --  SRAM, checks a CRC-32 over the first Stage_Limit and enters the copy
+   --  at its first byte; the last four bytes are that CRC, little-endian.
+   function Takes_Stage (Boot : Boot_Kind) return Boolean
+     is (Boot = RP2040_Boot2);
+   Stage_Slot : constant := 256;
+   Stage_Limit : constant := 252;
+
+   --  The boot ROM's CRC-32 over BYTES: polynomial 16#04C1_1DB7#, initial
+   --  value all ones, neither input nor output reflected and no final
+   --  exclusive or, which is CRC-32/MPEG-2.
+   type Checksum is mod 2 ** 32;
+   function Stage_Checksum (Bytes : String) return Checksum;
+
    type Section_Kind is (Vectors, Text, Rodata, Data, BSS, Stack);
    function Is_Section_Name (Word : String) return Boolean;
    function Section_Named (Word : String) return Section_Kind
@@ -118,6 +134,9 @@ package Landin.Targets.Firmware is
       Count : Region_Count := 0;
       Placed : Placements := [others => 0];
       Stack_Size : Byte_Count := 0;
+      --  D587: whether the description holds its boot kind's second
+      --  stage, which configuration requires exactly when Takes_Stage.
+      Has_Stage : Boolean := False;
    end record;
 
    --  Whether a handler may take absolute slot SLOT: a core slot of the

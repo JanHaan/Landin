@@ -1,0 +1,6 @@
+error[L0534]: a boot stage belongs in a device description, and this program imports none
+  --> ../tests/fixtures/negative/boot-stage-outside-description/program.ldn:1:1
+  |
+1 | link(boot_stage) extern(naked) stage: () -> none =
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: D587: the second stage is the device's, so it is declared in the description's module beside compiler.boot; move it there

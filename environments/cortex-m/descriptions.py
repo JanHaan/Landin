@@ -10,12 +10,27 @@ compiler and the description, so a wrong or absent fact fails.  The slot-21
 controls (D544), the region placement (D547) and the developer linker
 script's contract (D546), each clause broken once, are here too.
 
-Nothing here runs an image: RP2040 and the STM32H753 are chips, and
-emulators cover cores only, so their evidence is compile-and-link.
+RP2040's second stage (D587, D588) is held to pico-sdk's own: the linked
+`.boot2`'s CRC is recomputed here, no relocation may reach it, and
+devices/thumb.py follows it from its first instruction in the copy the boot
+ROM makes, recording the device stores it makes and the stack pointer and
+branch it ends with, which must be what pico-sdk's boot2_generic_03h.S and
+its exit_from_boot2.S do, read from the fetched files and their headers'
+macros rather than from the port.  An oversize stage and one with a
+relocation are each refused naming the problem.
+
+Nothing here runs an image on a chip: RP2040 and the STM32H753 are chips,
+and emulators cover cores only, so their evidence is compile-and-link and a
+reading of the linked instructions.
 """
 import argparse
+import ast
+import binascii
 import json
+import operator
 from pathlib import Path
+import re
+import shutil
 import struct
 import sys
 
@@ -24,6 +39,10 @@ from setup import DEFAULT, installed_tools, inventory, sha, supported_host
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
+sys.path.insert(0, str(ROOT / 'devices'))
+sys.path.insert(0, str(ROOT / 'scripts'))
+import fetch_inputs  # noqa: E402
+import thumb  # noqa: E402
 EXPECTED = json.loads((HERE / 'descriptions.json').read_text())['devices']
 
 PROGRAMS = {
@@ -80,10 +99,11 @@ class Image:
         return struct.unpack('<I', self.read(address, 4))[0]
 
 
-def compile_firmware(run, refine, program, extra=(), name='core.elf', check=True):
+def compile_firmware(run, refine, program, extra=(), name='core.elf', check=True,
+                     devices=ROOT / 'devices'):
     (run.out / 'app').mkdir(exist_ok=True)
     (run.out / 'app/main.ldn').write_text(program)
-    argv = [refine, '--root=' + str(ROOT / 'devices'), '--target=cortex-m0',
+    argv = [refine, '--root=' + str(devices), '--target=cortex-m0',
             '--firmware-entry=start', '--emit=exe',
             '--toolchain=' + str(run.arm / 'arm-eabi-gcc'),
             '--build-report=' + name + '.json', *extra, 'app', '-o', name]
@@ -122,11 +142,8 @@ def select(run, refine, device):
     handler = want.get('handler_symbol', 'usb' if device == 'rp2040' else 'irq4')
     require(words[want['handler_slot']] == image.symbols[handler] | 1,
             '%s: slot %d is not its handler' % (device, want['handler_slot']))
-    if 'boot2_address' in want:
-        require(image.symbols['_landin_firmware_boot2'] == want['boot2_address'],
-                device + ': the second stage is not at the start of flash')
-        require(image.read(want['boot2_address'], want['boot2_bytes'])
-                == bytes(want['boot2_bytes']), device + ': the second-stage slot is not zero')
+    if 'boot2' in want:
+        boot_stage(run, image, report, want)
     else:
         require('_landin_firmware_boot2' not in image.symbols, device + ' has a second stage')
     if device == 'rp2040':
@@ -148,6 +165,234 @@ def select(run, refine, device):
     return image
 
 
+def crc32_mpeg2(data):
+    """The RP2040 boot ROM's CRC-32 as pico-sdk 2.2.0's
+    boot_stage2/pad_checksum computes it when its CMakeLists.txt calls it
+    with `-s 0xffffffff`: zlib's reflected CRC-32 over bit-reversed bytes,
+    reversed, which is polynomial 0x04c11db7, initial value all ones,
+    nothing reflected and no final exclusive or."""
+    seed = 0xffffffff
+
+    def reverse(value, width):
+        return int(format(value, '0%db' % width)[::-1], 2)
+    return reverse((binascii.crc32(bytes(reverse(b, 8) for b in data), seed ^ 0xffffffff)
+                    ^ 0xffffffff) & 0xffffffff, 32)
+
+
+class Elf:
+    """The sections, symbols and relocations of a 32-bit little-endian ELF."""
+
+    def __init__(self, data):
+        require(data[:6] == b'\x7fELF\x01\x01', 'not an ELF32 LE file')
+        shoff = struct.unpack_from('<I', data, 32)[0]
+        shentsize, shnum, shstrndx = struct.unpack_from('<HHH', data, 46)
+        self.data = data
+        self.sections = [struct.unpack_from('<IIIIIIIIII', data, shoff + shentsize * i)
+                         for i in range(shnum)]
+        names = self.sections[shstrndx][4]
+        self.names = [self.text(names + header[0]) for header in self.sections]
+
+    def text(self, at):
+        return self.data[at:self.data.index(b'\0', at)].decode()
+
+    def index(self, name):
+        return self.names.index(name)
+
+    def symbols(self, table):
+        header = self.sections[table]
+        strings = self.sections[header[6]][4]
+        for at in range(header[4], header[4] + header[5], 16):
+            name, value, size, info, _, shndx = struct.unpack_from('<IIIBBH', self.data, at)
+            yield self.text(strings + name) if name else '', value, size, info, shndx
+
+    def reaching(self, target, into_only=False):
+        """Every relocation in section TARGET, or, unless INTO_ONLY, in an
+        allocated section against a symbol defined in TARGET: (section,
+        offset, symbol).  A linked image gives a symbol its script defines
+        whatever section is beside it, so only an object says which
+        symbols are the stage's."""
+        found = []
+        for header, name in zip(self.sections, self.names):
+            if header[1] not in (4, 9):
+                continue
+            symbols = list(self.symbols(header[6]))
+            into = header[7]
+            size = 8 if header[1] == 9 else 12
+            for at in range(header[4], header[4] + header[5], size):
+                offset, info = struct.unpack_from('<II', self.data, at)
+                symbol = symbols[info >> 8]
+                if into == target or (not into_only and self.sections[into][2] & 2
+                                      and info >> 8 and symbol[4] == target):
+                    found.append((self.names[into], offset, symbol[0] or name))
+        return found
+
+
+def defines(*texts):
+    """The C preprocessor's object-like #defines of TEXTS, continuation
+    lines joined and comments removed, `_u(x)` read as x."""
+    found = {}
+    for text in texts:
+        text = re.sub(r'/\*.*?\*/', ' ', text.replace('\\\n', ' '), flags=re.S)
+        for line in text.splitlines():
+            line = line.split('//')[0]
+            match = re.match(r'\s*#define\s+(\w+)\s+(.+)', line)
+            if match:
+                found.setdefault(match.group(1), match.group(2).strip())
+    return found
+
+
+OPERATORS = {ast.BitOr: operator.or_, ast.LShift: operator.lshift, ast.Add: operator.add,
+             ast.Sub: operator.sub, ast.BitAnd: operator.and_, ast.RShift: operator.rshift}
+
+
+def evaluate(expression, macros, depth=0):
+    """A C integer constant expression of MACROS' names, with nothing but
+    numbers, parentheses, names and | << >> & + -."""
+    require(depth < 20, 'the macros of %r do not end' % expression)
+    expression = re.sub(r'_u\(([^()]*)\)', r'(\1)', expression)
+
+    def value(node):
+        if isinstance(node, ast.Expression):
+            return value(node.body)
+        if isinstance(node, ast.Constant) and isinstance(node.value, int):
+            return node.value
+        if isinstance(node, ast.Name):
+            require(node.id in macros, 'pico-sdk defines no %s' % node.id)
+            return evaluate(macros[node.id], macros, depth + 1)
+        if isinstance(node, ast.BinOp) and type(node.op) in OPERATORS:
+            return OPERATORS[type(node.op)](value(node.left), value(node.right))
+        raise RuntimeError('not a constant expression the oracle reads: %r' % expression)
+    return value(ast.parse(expression.strip(), mode='eval')) & 0xffffffff
+
+
+def pico_sdk_stage(word, lr):
+    """What pico-sdk 2.2.0's boot2_generic_03h.S, with exit_from_boot2.S at
+    its #include, does when entered with LR: its device stores, then
+    ('msr', 'msp', value) and the address it branches to, or the address it
+    returns to.  It is read from the fetched files: each instruction of the
+    two is one of the few forms below, any other line is refused, and each
+    operand is evaluated from the files' and their headers' #defines.  WORD
+    reads the linked image, for the vector table the stage loads."""
+    inputs = fetch_inputs.read_lock()
+    read = {name: fetch_inputs.fetch('rp2040/' + name, inputs).read_text()
+            for name in ('boot2_generic_03h.S', 'exit_from_boot2.S', 'ssi.h',
+                         'addressmap.h', 'm0plus.h')}
+    macros = defines(*read.values())
+    body = read['boot2_generic_03h.S'].split('regular_func _stage2_boot', 1)[1]
+    body = body.replace('#include "boot2_helpers/exit_from_boot2.S"',
+                        read['exit_from_boot2.S'].split('#include "hardware/regs/m0plus.h"', 1)[1])
+    lines = [re.sub(r'//.*|/\*.*?\*/', '', line).strip() for line in body.splitlines()]
+    lines = [line for line in lines if line and not line.startswith(('#', '.global', '.ltorg',
+                                                                       '.end', 'literals:'))]
+    labels = {line[:-1]: index for index, line in enumerate(lines) if line.endswith(':')}
+    r = {'lr': lr}
+    stack, effects, at = [], [], 0
+    while at < len(lines):
+        line, at = lines[at], at + 1
+        if line.endswith(':'):
+            continue
+        op, _, rest = line.partition(' ')
+        args = [a.strip() for a in re.split(r',(?![^{]*})', rest)]
+        if op == 'push' and args == ['{lr}']:
+            stack.append(r['lr'])
+        elif op == 'pop' and len(args) == 1:
+            r[args[0].strip('{}')] = stack.pop()
+        elif op == 'ldr' and args[1].startswith('='):
+            r[args[0]] = evaluate(args[1][1:], macros)
+        elif op == 'movs' and args[1].startswith('#'):
+            r[args[0]] = evaluate(args[1][1:], macros)
+        elif op == 'str':
+            base = re.fullmatch(r'\[(\w+)(?:,\s*#(.+))?\]', ', '.join(args[1:]))
+            require(base, 'the oracle does not read %r' % line)
+            address = r[base.group(1)] + (evaluate(base.group(2), macros) if base.group(2) else 0)
+            effects.append(('w', address & 0xffffffff, 4, r[args[0]]))
+        elif op == 'cmp' and args[1].startswith('#'):
+            r['flags'] = r[args[0]] - evaluate(args[1][1:], macros)
+        elif op == 'beq':
+            if r['flags'] == 0:
+                at = labels[args[0]]
+        elif op == 'ldmia' and args[1] == '{r0, r1}':
+            base = r[args[0]]
+            r['r0'], r['r1'] = word(base), word(base + 4)
+        elif op == 'msr' and args[0] == 'msp':
+            effects.append(('msr', 'msp', r[args[1]]))
+        elif op == 'bx':
+            return effects, r[args[0]] & ~1
+        else:
+            raise RuntimeError('the oracle does not read pico-sdk\'s %r' % line)
+    raise RuntimeError('pico-sdk\'s stage does not end in a branch')
+
+
+def boot_stage(run, image, report, want):
+    """D587/D588: RP2040's second stage in the linked image and its object."""
+    boot2 = want['boot2']
+    at, slot, limit = boot2['address'], boot2['slot'], boot2['limit']
+    require(image.symbols['_landin_firmware_boot2'] == at,
+            'the second stage is not at the start of flash')
+    stage = image.read(at, slot)
+    checksum = struct.unpack_from('<I', stage, limit)[0]
+    require(checksum == crc32_mpeg2(stage[:limit]),
+            'the second stage\'s checksum %#x is not the CRC-32 of its %d bytes, %#x'
+            % (checksum, limit, crc32_mpeg2(stage[:limit])))
+    linked, assembled = Elf(image.data), Elf((run.out / 'core.elf.o').read_bytes())
+    for elf, which in ((linked, 'linked image'), (assembled, 'object')):
+        reached = elf.reaching(elf.index('.boot2'), into_only=elf is linked)
+        require(not reached, 'a relocation reaches the %s\'s .boot2: %r' % (which, reached))
+    length = next(size for name, _, size, _, _ in linked.symbols(linked.names.index('.symtab'))
+                  if name == '_landin_firmware_boot2')
+    require(0 < length <= limit and not any(stage[length:limit]),
+            'the stage is %d bytes and the slot past it is not zeros' % length)
+    said = report['boot_stage']
+    wanted = {'routine': boot2['routine'], 'address': at, 'bytes': length, 'slot': slot,
+              'checksum': checksum, 'checksum_address': at + limit}
+    require(said == wanted, 'the build report says the stage is %r, not %r' % (said, wanted))
+    vectors = want['vector_address']
+    copy, top = boot2['copy'], boot2['copy'] + slot
+    windows = [(base, size) for base, size in boot2['devices']]
+    for lr in (0, 0x20000101):
+        evaluation = thumb.Evaluation(
+            thumb.Image(image.data), windows, (0x20000000, 0x42000), special=True,
+            start={'pc': copy, 'sp': boot2['rom_stack'], 'lr': lr},
+            until=lambda pc: not copy <= pc < top, limit=10_000)
+        evaluation.place(copy, stage)
+        effects = evaluation.run()
+        expected, branch = pico_sdk_stage(image.word, lr)
+        require(effects == expected, 'entered with lr %#x, the stage makes %r, and pico-sdk\'s'
+                ' makes %r' % (lr, effects, expected))
+        require(evaluation.r[15] == branch, 'entered with lr %#x, the stage leaves for %#x,'
+                ' and pico-sdk\'s for %#x' % (lr, evaluation.r[15], branch))
+    require(branch == lr & ~1, 'called, the stage does not return')
+    entered, branch = pico_sdk_stage(image.word, 0)
+    require(branch == image.symbols['_landin_firmware_reset'] & ~1
+            and entered[-1] == ('msr', 'msp', want['stack_top'])
+            and entered[-2] == ('w', boot2['vtor'], 4, vectors),
+            'from the ROM the stage does not point VTOR at the table, load its stack and'
+            ' enter reset: %r' % entered)
+
+
+def stage_refusals(run, refine):
+    """D588: an oversize stage and a stage with a relocation are refused
+    before the link, each naming its problem, and leave no image."""
+    devices = run.out / 'devices'
+    shutil.copytree(ROOT / 'devices/descriptions/rp2040', devices / 'descriptions/rp2040')
+    port = (devices / 'descriptions/rp2040/boot2.ldn').read_text()
+    cases = {
+        'oversize': (port.replace('        push {lr}\n', '        push {lr}\n' + '        nop\n' * 120),
+                     'the second stage and its literals are '),
+        'relocated': (port.replace('ldr r3, =0x18000000', 'ldr r3, =_landin_firmware_reset'),
+                      'the second stage holds a relocation at offset '),
+    }
+    for name, (text, said) in cases.items():
+        require(text != port, 'the port no longer has the line the %s control edits' % name)
+        (devices / 'descriptions/rp2040/boot2.ldn').write_text(text)
+        refused = compile_firmware(run, refine, PROGRAMS['rp2040'], name=name + '.elf',
+                                   check=False, devices=devices)
+        require('error[L0538]' in refused and said in refused,
+                'the %s stage is not refused naming its problem: %s' % (name, refused))
+        require(not (run.out / (name + '.elf')).exists(),
+                'a refused %s stage leaves an image' % name)
+
+
 def contract(run, refine):
     """D546: a copy of the derived script links; each broken clause is named."""
     compile_firmware(run, refine, PROGRAMS['rp2040'], name='derived.elf')
@@ -158,6 +403,12 @@ def contract(run, refine):
     broken = {
         1: [('ORIGIN(FLASH) + 256 :', 'ORIGIN(FLASH) + 512 :'),
             ('ASSERT(ADDR(.isr_vector) == 268435712, "vectors must start at 0x10000100")\n', '')],
+        #  D588: the slot holds what the script fills it with, not the
+        #  stage refine sealed, so its checksum is wrong.
+        'checksum': [('  .boot2 ORIGIN(FLASH) : { KEEP(*(.boot2)) } > FLASH\n',
+                      '  .boot2 ORIGIN(FLASH) : { _landin_firmware_boot2 = .; LONG(1)'
+                      ' . = ORIGIN(FLASH) + 256; } > FLASH\n'
+                      '  /DISCARD/ : { *(.boot2) }\n')],
         2: [('_landin_firmware_stack_bottom = _landin_firmware_stack_top - 4096;\n', '')],
         3: [('_landin_firmware_stack_top - 4096', '_landin_firmware_stack_top - 2048')],
         4: [('} > RAM AT> FLASH', '} > RAM AT> RAM'),
@@ -168,14 +419,16 @@ def contract(run, refine):
         for old, new in edits:
             require(old in text, 'the derived script lacks %r' % old)
             text = text.replace(old, new)
-        (run.out / ('clause%d.ld' % clause)).write_text(text)
+        (run.out / ('clause%s.ld' % clause)).write_text(text)
         said = compile_firmware(run, refine, PROGRAMS['rp2040'],
-                                ['--linker-script=clause%d.ld' % clause],
-                                name='clause%d.elf' % clause, check=False)
-        require('error[L0519]' in said and 'clause %d,' % clause in said,
-                'a script breaking clause %d is not refused naming it' % clause)
-        require(not (run.out / ('clause%d.elf' % clause)).exists(),
-                'a refused image is left behind for clause %d' % clause)
+                                ['--linker-script=clause%s.ld' % clause],
+                                name='clause%s.elf' % clause, check=False)
+        named = 'clause 1,' if clause == 'checksum' else 'clause %d,' % clause
+        require('error[L0519]' in said and named in said
+                and (clause != 'checksum' or 'checksum is not the CRC-32' in said),
+                'a script breaking clause %s is not refused naming it: %s' % (clause, said))
+        require(not (run.out / ('clause%s.elf' % clause)).exists(),
+                'a refused image is left behind for clause %s' % clause)
     said = compile_firmware(run, refine, 'import descriptions/rp2040\n'
                             'link(region: "NOWHERE") table: u32 = 1\n'
                             'start: () -> none = end start\n',
@@ -216,7 +469,12 @@ def execute_suite(parent, refine):
     out = root / 'contract'
     out.mkdir()
     contract(Run(out, parent.tools), refine)
-    controls.append({'contract': 'four clauses and an unknown region', 'status': 'passed'})
+    controls.append({'contract': 'four clauses, the stage\'s checksum and an unknown region',
+                     'status': 'passed'})
+    out = root / 'stage-refusals'
+    out.mkdir()
+    stage_refusals(Run(out, parent.tools), refine)
+    controls.append({'stage': 'an oversize and a relocated stage refused', 'status': 'passed'})
     out = root / 'larger-than-the-reference'
     out.mkdir()
     larger_than_the_reference(Run(out, parent.tools), refine)

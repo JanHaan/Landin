@@ -135,6 +135,27 @@ class Offline(unittest.TestCase):
         with self.assertRaisesRegex(thumb.Refused, 'outside the image'):
             broken.run()
 
+    def test_the_evaluator_follows_a_copied_stage_to_its_exit(self):
+        import struct
+        import thumb
+
+        class Flash:
+            segments = [(0x10000000, struct.pack('<II', 0x20042000, 0x10000101), 8)]
+            symbols = {}
+
+        # ldr r0, =0x10000000; ldmia r0, {r0, r1}; msr msp, r0; bx r1;
+        # then the literal, run from a copy at 0x20041f00.
+        stage = struct.pack('<6HI', 0x4802, 0xc803, 0xf380, 0x8808, 0x4708,
+                            0, 0x10000000)
+        evaluation = thumb.Evaluation(
+            Flash(), [], (0x20000000, 0x42000), special=True,
+            start={'pc': 0x20041f00, 'sp': 0x20042000},
+            until=lambda pc: not 0x20041f00 <= pc < 0x20042000)
+        evaluation.place(0x20041f00, stage)
+        self.assertEqual(evaluation.run(), [('msr', 'msp', 0x20042000)])
+        self.assertEqual(evaluation.r[15], 0x10000100)
+        self.assertEqual(evaluation.r[13], 0x20042000)
+
     def test_no_vendor_input_is_vendored(self):
         self.assertFalse((HERE / 'inputs').exists())
         for path in HERE.rglob('*'):

@@ -1,0 +1,9 @@
+class: negative
+summary: D587: a vector-table image begins with its vector table, so a description that boots that way holds no stage
+program: program.ldn
+constructs: 1640, 1990
+targets: cortex-m0
+codes: L0535
+args: --target=cortex-m0 ../tests/fixtures/negative/boot-stage-unwanted/program.ldn
+expect: expected.txt
+status: 1

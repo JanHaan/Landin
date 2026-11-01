@@ -643,6 +643,9 @@ package Landin.Syntax is
       --  it leaves Present alone: Present says a Cortex-M0 placement was
       --  written, and Thread says per-thread storage was asked for.
       Thread : Boolean := False;
+      --  D587: `link(boot_stage)`, a description's second-stage boot
+      --  routine.  It is a Cortex-M placement, so it sets Present too.
+      Boot_Stage : Boolean := False;
    end record;
    function Attributes (Of_Tree : Tree; Id : Node_Id)
      return Machine_Attributes

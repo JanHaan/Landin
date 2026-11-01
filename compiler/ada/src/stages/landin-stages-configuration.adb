@@ -11,6 +11,7 @@ with Landin.Diagnostics.Modules;
 with Landin.Modules;
 with Landin.Modules.Availability;
 with Landin.Diagnostics.Resolution;
+with Landin.Machine;
 with Landin.Source;
 with Landin.Source.Names;
 with Landin.Syntax;
@@ -41,6 +42,7 @@ package body Landin.Stages.Configuration is
    use type Landin.Tokens.Text.Problem;
    use type Landin.Modules.Module_Id;
    use type Landin.Source.Source_Id;
+   use type Landin.Machine.Convention;
 
    overriding function Name (Item : Instance) return String is
       pragma Unreferenced (Item);
@@ -1218,6 +1220,8 @@ package body Landin.Stages.Configuration is
         of Ada.Strings.Unbounded.Unbounded_String;
       Described : Landin.Modules.Module_Id := Landin.Modules.No_Module;
       Device_Site, Core_Site, Vectors_Site, Boot_Site : Site;
+      --  D587: the description's `link(boot_stage)` routine, if any.
+      Stage_Site : Site;
       Regions_At : Region_Sites := [others => No_Site];
       Placed_At : Place_Sites := [others => No_Site];
       Placed_Names : Place_Names;
@@ -1324,6 +1328,13 @@ package body Landin.Stages.Configuration is
          end loop;
       end Refuse_In_Arms;
 
+      --  D587: whether NODE is written `link(boot_stage)`.
+      function Marks_Boot_Stage
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
+        is (Syn.Kind (Of_Tree, Node) in Syn.Function_Declaration
+              | Syn.Binding
+            and then Syn.Attributes (Of_Tree, Node).Boot_Stage);
+
       --  Which module is the description, refusing a second one and
       --  whatever else a description module holds.
       procedure Find_Description;
@@ -1406,16 +1417,19 @@ package body Landin.Stages.Configuration is
                           Syn.Nth_Declaration (Of_Tree.all, Which);
                      begin
                         if not Description_Directive (Of_Tree.all, Node)
+                          and then not Marks_Boot_Stage (Of_Tree.all, Node)
                         then
                            Report_At
                              (Bad.Description_Structure, (Id, Node),
                               "a device description holds only its"
-                              & " directives, unconditionally",
-                              "D542: a description is compiler.device,"
+                              & " directives, unconditionally, and its boot"
+                              & " stage",
+                              "D542/D587: a description is compiler.device,"
                               & " compiler.core, compiler.vectors,"
                               & " compiler.interrupt, compiler.boot,"
-                              & " linker.region and linker.place; move this"
-                              & " declaration to another module");
+                              & " linker.region and linker.place, and at"
+                              & " most one link(boot_stage) naked routine;"
+                              & " move this declaration to another module");
                         end if;
                      end;
                   end loop;
@@ -1423,6 +1437,138 @@ package body Landin.Stages.Configuration is
             end;
          end loop;
       end Find_Description;
+
+      --  D587: every `link(boot_stage)` the program holds is one naked
+      --  routine with no other placement, in the description's own module,
+      --  and there is at most one.  An arm of the description is refused
+      --  whole by Find_Description, so a stage inside one is not counted.
+      procedure Find_Boot_Stages;
+      procedure Find_Boot_Stages is
+         procedure Scan
+           (Id : Landin.Source.Source_Id; Of_Tree : Syn.Tree;
+            Node : Syn.Node_Id; Nested : Boolean);
+         procedure Scan
+           (Id : Landin.Source.Source_Id; Of_Tree : Syn.Tree;
+            Node : Syn.Node_Id; Nested : Boolean)
+         is
+            Here : constant Site := (Id, Node);
+            In_Description : constant Boolean :=
+              Described /= Landin.Modules.No_Module
+              and then Module_For (Id) = Described;
+         begin
+            if Syn.Kind (Of_Tree, Node) = Syn.Fixed_Conditional then
+               for Index in 1 .. Syn.Fixed_Arm_Count (Of_Tree, Node) loop
+                  declare
+                     Arm : constant Syn.Node_Id :=
+                       Syn.Nth_Fixed_Arm (Of_Tree, Node, Index);
+                  begin
+                     for Which in 1 .. Syn.Fixed_Declaration_Count
+                       (Of_Tree, Arm)
+                     loop
+                        Scan (Id, Of_Tree, Syn.Nth_Fixed_Declaration
+                          (Of_Tree, Arm, Which), Nested => True);
+                     end loop;
+                  end;
+               end loop;
+               return;
+            elsif not Marks_Boot_Stage (Of_Tree, Node)
+              or else (Nested and then In_Description)
+            then
+               return;
+            end if;
+            declare
+               use type Landin.Source.Span;
+               Attr : constant Syn.Machine_Attributes :=
+                 Syn.Attributes (Of_Tree, Node);
+               --  Whether the program imports a description of its own,
+               --  rather than being given the library's reference.
+               Imported : constant Boolean :=
+                 Described /= Landin.Modules.No_Module
+                 and then Landin.Modules.Logical_Path
+                   (Landin.Stages.Modules (Context).all, Described)
+                   /= Firmware.Reference_Module;
+               Naked : constant Boolean :=
+                 Syn.Kind (Of_Tree, Node) = Syn.Function_Declaration
+                 and then Syn.Machine_Convention (Of_Tree, Node)
+                   = Landin.Machine.Naked_Routine;
+            begin
+               if not Naked then
+                  Report_At
+                    (Bad.Boot_Stage_Form, Here,
+                     "link(boot_stage) marks a naked routine, and this is "
+                     & (if Syn.Kind (Of_Tree, Node) = Syn.Binding
+                        then "a module binding"
+                        elsif Syn.Machine_Convention (Of_Tree, Node)
+                          = Landin.Machine.Interrupt_Handler
+                        then "an interrupt handler"
+                        else "an ordinary routine"),
+                     "D587: a boot stage is `link(boot_stage)"
+                     & " extern(naked) NAME: () -> none`, whose body is the"
+                     & " one assembler.block the boot ROM enters");
+               elsif Attr.Section /= Landin.Source.Empty_Span
+                 or else Attr.Alignment /= Landin.Source.Empty_Span
+                 or else Attr.Vector /= Landin.Source.Empty_Span
+                 or else Attr.Region /= Landin.Source.Empty_Span
+                 or else Attr.Keep or else Attr.Thread
+                 or else Syn.Link_Symbol_Span (Of_Tree, Node)
+                   /= Landin.Source.Empty_Span
+               then
+                  Report_At
+                    (Bad.Boot_Stage_Form, Here,
+                     "a boot stage takes no other link attribute",
+                     "D587: the boot kind places its stage at the start of"
+                     & " its slot, so it has no section, symbol, region,"
+                     & " vector, alignment, keep or thread; write"
+                     & " link(boot_stage) alone");
+               end if;
+               if not In_Description then
+                  Report_At
+                    (Bad.Boot_Stage_Outside, Here,
+                     (if not Imported
+                      then "a boot stage belongs in a device description,"
+                        & " and this program imports none"
+                      else "a boot stage belongs in the device description,"
+                        & " "
+                        & Landin.Modules.Logical_Path
+                            (Landin.Stages.Modules (Context).all, Described)
+                        & ", not in "
+                        & Landin.Modules.Logical_Path
+                            (Landin.Stages.Modules (Context).all,
+                             Module_For (Id))),
+                     "D587: the second stage is the device's, so it is"
+                     & " declared in the description's module beside"
+                     & " compiler.boot; move it there",
+                     Related => (if Imported then Device_Site
+                                 else No_Site),
+                     Because => "the description's device");
+               elsif Stage_Site /= No_Site then
+                  Report_At
+                    (Bad.Boot_Stage_Repeated, Here,
+                     "this description holds a second boot stage",
+                     "D587: the boot kind's slot holds one stage; remove"
+                     & " one of them",
+                     Related => Stage_Site, Because => "the first");
+               else
+                  Stage_Site := Here;
+               end if;
+            end;
+         end Scan;
+      begin
+         for Index in 1 .. Source_Count (Context) loop
+            declare
+               Id : constant Landin.Source.Source_Id :=
+                 Nth_Source (Context, Index);
+               Of_Tree : constant not null access constant Syn.Tree :=
+                 Landin.Syntax.Forest.Tree_Of (Trees.all, Id);
+            begin
+               for Which in 1 .. Syn.Declaration_Count (Of_Tree.all) loop
+                  Scan (Id, Of_Tree.all,
+                        Syn.Nth_Declaration (Of_Tree.all, Which),
+                        Nested => False);
+               end loop;
+            end;
+         end loop;
+      end Find_Boot_Stages;
 
       --  A text argument, decoded as linker.library's is; "" refused.
       function Text_Argument
@@ -2013,6 +2159,37 @@ package body Landin.Stages.Configuration is
                  "make the stack smaller or place it in a larger region");
             end if;
          end;
+         --  D587: the boot kind says whether the image begins with the
+         --  description's second stage.
+         if Firmware.Implemented (Built.Boot)
+           and then Firmware.Takes_Stage (Built.Boot)
+           and then Stage_Site = No_Site
+         then
+            Complete := False;
+            Report_At
+              (Bad.Boot_Stage_Missing, Boot_Site,
+               "an " & Firmware.Spelling (Built.Boot) & " image begins with"
+               & " a second stage, and this description holds none",
+               "D587: add the stage to the description as a"
+               & " link(boot_stage) extern(naked) routine, at most"
+               & Natural'Image (Firmware.Stage_Limit) & " bytes once"
+               & " assembled, which the boot ROM enters at its first"
+               & " instruction");
+         elsif Firmware.Implemented (Built.Boot)
+           and then not Firmware.Takes_Stage (Built.Boot)
+           and then Stage_Site /= No_Site
+         then
+            Complete := False;
+            Report_At
+              (Bad.Boot_Stage_Unwanted, Stage_Site,
+               "a " & Firmware.Spelling (Built.Boot) & " image has no"
+               & " second stage, and this description holds one",
+               "D587: only an rp2040-boot2 image begins with a second"
+               & " stage; remove this routine, or select the boot kind"
+               & " whose ROM enters it",
+               Related => Boot_Site, Because => "the boot kind");
+         end if;
+         Built.Has_Stage := Stage_Site /= No_Site;
          if not Firmware.Implemented (Built.Boot) then
             Complete := False;
             Report_At
@@ -2541,6 +2718,7 @@ package body Landin.Stages.Configuration is
             end loop;
          end;
       end loop;
+      Find_Boot_Stages;
       Finish_Profile;
 
       declare

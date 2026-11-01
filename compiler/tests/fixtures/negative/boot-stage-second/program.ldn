@@ -1,0 +1,20 @@
+compiler.device("board")
+compiler.core("cortex-m0plus")
+compiler.vectors(48)
+compiler.boot("rp2040-boot2")
+linker.region("FLASH", 0x1000_0000, 2 * 1024 * 1024, "rx")
+linker.region("RAM", 0x2000_0000, 256 * 1024, "rwx")
+linker.place("vectors", "FLASH")
+linker.place("text", "FLASH")
+linker.place("rodata", "FLASH")
+linker.place("data", "RAM")
+linker.place("bss", "RAM")
+linker.place("stack", "RAM", 4 * 1024)
+
+link(boot_stage) extern(naked) stage: () -> none =
+    assembler.block("bx lr")
+end stage
+
+link(boot_stage) extern(naked) second: () -> none =
+    assembler.block("bx lr")
+end second

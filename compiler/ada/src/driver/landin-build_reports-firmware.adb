@@ -11,10 +11,71 @@ package body Landin.Build_Reports.Firmware is
    function Image (Value : Landin.Targets.Byte_Count) return String is
      (Ada.Strings.Fixed.Trim (Value'Image, Ada.Strings.Both));
 
+   --  D543: what the description selected, so that a check can compare
+   --  each fact with one recorded apart from the compiler.
+   function Facts (Profile : Landin.Targets.Firmware.Profile) return String;
+   function Facts (Profile : Landin.Targets.Firmware.Profile) return String
+   is
+      package Firmware renames Landin.Targets.Firmware;
+      use type Firmware.Section_Kind;
+      Result : US.Unbounded_String;
+   begin
+      US.Append (Result, """device"":"""
+        & Firmware.Spelling (Profile.Device)
+        & """,""core"":""" & Firmware.Spelling (Profile.Core)
+        & """,""boot"":""" & Firmware.Spelling (Profile.Boot)
+        & """,""vector_address"":" & Image (Firmware.Vector_Address (Profile))
+        & ",""vector_words"":" & Image
+          (Landin.Targets.Byte_Count (Profile.Vector_Count))
+        & ",""regions"":[");
+      for Index in 1 .. Profile.Count loop
+         US.Append (Result, (if Index = 1 then "" else ",")
+           & "{""name"":"""
+           & Firmware.Spelling (Profile.Regions (Index).Name)
+           & """,""origin"":" & Image (Profile.Regions (Index).Origin)
+           & ",""length"":" & Image (Profile.Regions (Index).Length)
+           & ",""access"":"""
+           & Firmware.Spelling (Profile.Regions (Index).Mode) & """}");
+      end loop;
+      US.Append (Result, "],""placed"":{");
+      for Section in Firmware.Section_Kind loop
+         US.Append (Result,
+           (if Section = Firmware.Section_Kind'First then "" else ",")
+           & """" & Firmware.Spelling (Section) & """:"""
+           & Firmware.Spelling
+               (Firmware.Placed_Region (Profile, Section).Name) & """");
+      end loop;
+      US.Append (Result, "}");
+      return US.To_String (Result);
+   end Facts;
+
+   function Limits (Profile : Landin.Targets.Firmware.Profile) return String
+   is
+      package Firmware renames Landin.Targets.Firmware;
+      Stack : constant Firmware.Region :=
+        Firmware.Placed_Region (Profile, Firmware.Stack);
+   begin
+      return "{""flash_limit"":" & Image (Firmware.Flash_Capacity (Profile))
+        & ",""static_ram_limit"":"
+        & Image (Firmware.Static_RAM_Capacity (Profile))
+        & ",""stack_reserved"":" & Image (Profile.Stack_Size)
+        & ",""stack_top"":" & Image (Stack.Origin + Stack.Length)
+        & "," & Facts (Profile)
+        & (if Firmware.Takes_Stage (Profile.Boot)
+           then ",""boot_stage"":{""slot"":"
+             & Image (Landin.Targets.Byte_Count (Firmware.Stage_Slot))
+             & ",""checksum_address"":"
+             & Image (Firmware.Placed_Region (Profile, Firmware.Vectors).Origin
+               + Landin.Targets.Byte_Count (Firmware.Stage_Limit)) & "}"
+           else "")
+        & "}";
+   end Limits;
+
    procedure Measure
      (Host : Landin.Platform.Filesystem'Class;
       Executable, Link_Map : String;
       Profile : Landin.Targets.Firmware.Profile;
+      Stage : String;
       Result : out US.Unbounded_String;
       Valid : out Boolean)
    is
@@ -53,6 +114,8 @@ package body Landin.Build_Reports.Firmware is
       end Region_Of;
       Selected : Members.Set;
       Prefix : constant String := "libgcc.a(";
+      --  D588: the second stage as the linked image holds it.
+      Stage_At, Stage_Bytes, Stage_Sum : Landin.Targets.Byte_Count := 0;
    begin
       Result := US.Null_Unbounded_String;
       Valid := False;
@@ -174,6 +237,84 @@ package body Landin.Build_Reports.Firmware is
          if Flash_End = Flash.Origin then
             return;
          end if;
+         if Firmware.Takes_Stage (Profile.Boot) then
+            declare
+               Sections : constant Natural := Natural (Word (32));
+               Size : constant Natural := Natural (Number (46, 2));
+               Found : Boolean := False;
+            begin
+               for Index in 0 .. Natural (Number (48, 2)) - 1 loop
+                  declare
+                     Header : constant Natural := Sections + Index * Size;
+                  begin
+                     if Word (Header + 4) = 2 then
+                        declare
+                           Table : constant Natural :=
+                             Natural (Word (Header + 16));
+                           Strings : constant Natural := Natural (Word
+                             (Sections + Natural (Word (Header + 24)) * Size
+                              + 16));
+                           Wanted : constant String :=
+                             "_landin_firmware_boot2" & ASCII.NUL;
+                        begin
+                           for Symbol in 1 .. Natural (Word (Header + 20))
+                             / 16 - 1
+                           loop
+                              declare
+                                 Name : constant Natural := Strings + Natural
+                                   (Word (Table + Symbol * 16));
+                              begin
+                                 if not Found
+                                   and then Name + Wanted'Length
+                                     <= Data'Length
+                                   and then Data (Name + 1
+                                     .. Name + Wanted'Length) = Wanted
+                                 then
+                                    Found := True;
+                                    Stage_At := Word (Table + Symbol * 16 + 4);
+                                    Stage_Bytes :=
+                                      Word (Table + Symbol * 16 + 8);
+                                 end if;
+                              end;
+                           end loop;
+                        end;
+                     end if;
+                  end;
+               end loop;
+               if not Found then
+                  return;
+               end if;
+               --  The checksum's word, through the segment that loads it.
+               declare
+                  Header : constant Natural := Natural (Word (28));
+                  Address : constant Landin.Targets.Byte_Count :=
+                    Stage_At + Landin.Targets.Byte_Count
+                      (Firmware.Stage_Limit);
+               begin
+                  Found := False;
+                  for Index in 0 .. Natural (Number (44, 2)) - 1 loop
+                     declare
+                        At_Entry : constant Natural := Header + Index * 32;
+                        Physical : constant Landin.Targets.Byte_Count :=
+                          Word (At_Entry + 12);
+                     begin
+                        if not Found and then Word (At_Entry) = 1
+                          and then Address >= Physical
+                          and then Address + 4
+                            <= Physical + Word (At_Entry + 16)
+                        then
+                           Found := True;
+                           Stage_Sum := Word (Natural
+                             (Word (At_Entry + 4) + (Address - Physical)));
+                        end if;
+                     end;
+                  end loop;
+                  if not Found then
+                     return;
+                  end if;
+               end;
+            end;
+         end if;
 
          --  Every occurrence is a selected archive member in GNU ld's map.
          --  Strip the toolchain path so equivalent builds retain equal JSON.
@@ -228,34 +369,19 @@ package body Landin.Build_Reports.Firmware is
          end if;
          US.Append (Result, """" & Member & """");
       end loop;
-      --  D543: what the description selected, so that a check can compare
-      --  each fact with one recorded apart from the compiler.
-      US.Append (Result, "],""device"":"""
-        & Firmware.Spelling (Profile.Device)
-        & """,""core"":""" & Firmware.Spelling (Profile.Core)
-        & """,""boot"":""" & Firmware.Spelling (Profile.Boot)
-        & """,""vector_address"":" & Image (Firmware.Vector_Address (Profile))
-        & ",""vector_words"":" & Image
-          (Landin.Targets.Byte_Count (Profile.Vector_Count))
-        & ",""regions"":[");
-      for Index in 1 .. Profile.Count loop
-         US.Append (Result, (if Index = 1 then "" else ",")
-           & "{""name"":"""
-           & Firmware.Spelling (Profile.Regions (Index).Name)
-           & """,""origin"":" & Image (Profile.Regions (Index).Origin)
-           & ",""length"":" & Image (Profile.Regions (Index).Length)
-           & ",""access"":"""
-           & Firmware.Spelling (Profile.Regions (Index).Mode) & """}");
-      end loop;
-      US.Append (Result, "],""placed"":{");
-      for Section in Firmware.Section_Kind loop
-         US.Append (Result,
-           (if Section = Firmware.Section_Kind'First then "" else ",")
-           & """" & Firmware.Spelling (Section) & """:"""
-           & Firmware.Spelling
-               (Firmware.Placed_Region (Profile, Section).Name) & """");
-      end loop;
-      US.Append (Result, "}}");
+      US.Append (Result, "]," & Facts (Profile));
+      if Firmware.Takes_Stage (Profile.Boot) then
+         US.Append (Result, ",""boot_stage"":{""routine"":"""
+           & Stage & """,""address"":" & Image (Stage_At)
+           & ",""bytes"":" & Image (Stage_Bytes)
+           & ",""slot"":" & Image
+             (Landin.Targets.Byte_Count (Firmware.Stage_Slot))
+           & ",""checksum"":" & Image (Stage_Sum)
+           & ",""checksum_address"":" & Image
+             (Stage_At + Landin.Targets.Byte_Count (Firmware.Stage_Limit))
+           & "}");
+      end if;
+      US.Append (Result, "}");
       Valid := True;
    exception
       when Constraint_Error =>
@@ -532,6 +658,30 @@ package body Landin.Build_Reports.Firmware is
                  & " at the start of "
                  & Firmware.Spelling
                      (Firmware.Placed_Region (Profile, Firmware.Vectors).Name);
+            elsif Firmware.Takes_Stage (Profile.Boot) then
+               --  D588: the stage the boot ROM copies, with the checksum
+               --  refine wrote into its object.
+               declare
+                  use type Firmware.Checksum;
+                  Slot : constant Natural := Loaded
+                    (Value ("_landin_firmware_boot2"),
+                     Landin.Targets.Byte_Count (Firmware.Stage_Slot));
+               begin
+                  if Slot = Natural'Last then
+                     return "clause 1, the vector table: the image does not"
+                       & " hold the second stage's"
+                       & Natural'Image (Firmware.Stage_Slot)
+                       & " bytes at its address";
+                  elsif Firmware.Checksum
+                      (Word (Slot + Firmware.Stage_Limit))
+                    /= Firmware.Stage_Checksum
+                      (Data (Slot + 1 .. Slot + Firmware.Stage_Limit))
+                  then
+                     return "clause 1, the vector table: the second stage's"
+                       & " checksum is not the CRC-32 of its first"
+                       & Natural'Image (Firmware.Stage_Limit) & " bytes";
+                  end if;
+               end;
             end if;
          end;
 

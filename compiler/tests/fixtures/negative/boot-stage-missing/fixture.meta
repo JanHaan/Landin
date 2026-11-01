@@ -1,0 +1,9 @@
+class: negative
+summary: D587: an rp2040-boot2 image begins with a second stage, so a description that selects it and holds none is refused
+program: program.ldn
+constructs: 1640, 1990
+targets: cortex-m0
+codes: L0537
+args: --target=cortex-m0 ../tests/fixtures/negative/boot-stage-missing/program.ldn
+expect: expected.txt
+status: 1

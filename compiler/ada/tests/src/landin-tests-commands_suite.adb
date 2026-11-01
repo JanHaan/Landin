@@ -1099,6 +1099,12 @@ package body Landin.Tests.Commands_Suite is
       Same (["compile", "--emit=ir", "--debug=full", "main.ldn"],
             ["--emit=ir", "--debug=full", "main.ldn"],
             Cat.Requirement_Problem (Cat.Debug, Cat.Emit_IR, True));
+      Same (["compile", "--target=cortex-m0", "--emit=linker-script",
+             "--debug=lines", "main.ldn"],
+            ["--target=cortex-m0", "--emit=linker-script", "--debug=lines",
+             "main.ldn"],
+            Cat.Requirement_Problem
+              (Cat.Debug, Cat.Emit_Linker_Script, True));
       Same (["compile", "--emit=asm", "--keep-asm", "main.ldn", "-o", "a.s"],
             ["--emit=asm", "--keep-asm", "main.ldn", "-o", "a.s"],
             Cat.Requirement_Problem (Cat.Keep_Asm, Cat.Emit_Asm, True));

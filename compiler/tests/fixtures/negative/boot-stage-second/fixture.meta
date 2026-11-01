@@ -1,0 +1,9 @@
+class: negative
+summary: D587: a boot kind's slot holds one stage, so a description with two is refused naming the first
+program: program.ldn
+constructs: 1640, 1990
+targets: cortex-m0
+codes: L0536
+args: --target=cortex-m0 ../tests/fixtures/negative/boot-stage-second/program.ldn
+expect: expected.txt
+status: 1

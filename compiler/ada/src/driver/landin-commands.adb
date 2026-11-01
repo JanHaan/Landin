@@ -354,6 +354,8 @@ package body Landin.Commands is
               (if Result.Command = C.Run then C.Emit_Exe
                elsif US.To_String (Emitted) = "asm" then C.Emit_Asm
                elsif US.To_String (Emitted) = "ir" then C.Emit_IR
+               elsif US.To_String (Emitted) = "linker-script"
+               then C.Emit_Linker_Script
                else C.Emit_Exe);
          begin
             for Flag in C.Option loop

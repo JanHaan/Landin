@@ -924,7 +924,9 @@ stack reservation, counting its saved registers and reserved homes. This
 per-routine check does not bound stack use through calls or interrupt nesting.
 The vector image has the description's word count at its boot address, the
 start of the region it places `vectors` in, after RP2040's 256-byte
-second-stage slot for `rp2040-boot2` (D545). The slots a handler takes are its
+second-stage slot for `rp2040-boot2` (D545), which holds the description's
+`link(boot_stage)` routine and the checksum the driver writes into the
+assembled object (D587, D588). The slots a handler takes are its
 core's exceptions and 16 + IRQ for each interrupt the description names, and
 every other slot is zero (D544). There is no VTOR relocation, FPU or
 exclusive-access implementation. D229 owns the typed handlers and
@@ -935,7 +937,8 @@ profile: a MEMORY region for each of the description's, each part of the image
 in the region it is placed in, and an output section, a reset copy and a reset
 clear for each region `link(region: "NAME")` uses (D547). For the reference the
 script is D229's, byte for byte. The driver retains `OUTPUT.s`, `OUTPUT.o`,
-`OUTPUT.ld`, `OUTPUT.map` and the ELF. `--linker-script=FILE` links with a
+`OUTPUT.ld`, `OUTPUT.map` and the ELF; `--emit=linker-script` writes the
+script alone, with no program to link (D589). `--linker-script=FILE` links with a
 developer's script instead, still writing `OUTPUT.ld`, and then holds the ELF
 to D546's four clauses: the vector table at the boot address, the startup
 symbols, the stack in a writable region of its size, and each initialized

@@ -146,5 +146,6 @@ package Landin.Driver is
    Default_Executable : constant String := "a.out";
    Default_Assembly   : constant String := "a.s";
    Default_IR         : constant String := "a.ir";
+   Default_Script     : constant String := "a.ld";
 
 end Landin.Driver;

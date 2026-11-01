@@ -95,7 +95,7 @@ package body Landin.Commands.Catalogue is
            "Code objective: none, size (default), speed",
          when Specialize =>
            "Direct evidence calls: off, auto (default, if worth it), all",
-         when Emit => "Artifact kind: exe (default), asm, ir",
+         when Emit => "Artifact kind: exe (default), asm, ir, linker-script",
          when Output => "Output path; default a.out, a.s or a.ir",
          when Keep_Asm => "Keep an executable's assembly beside it as OUT.s",
          when Debug => "Debug information: none (default), full, lines",
@@ -139,7 +139,8 @@ package body Landin.Commands.Catalogue is
          when Diagnostics => "human|short|json",
          when Build_Mode => "debug|release",
          when Optimize => "none|size|speed",
-         when Specialize => "off|auto|all", when Emit => "asm|exe|ir",
+         when Specialize => "off|auto|all",
+         when Emit => "asm|exe|ir|linker-script",
          when Debug => "none|full|lines", when Link => "static|libc",
          when others => "");
 
@@ -224,7 +225,7 @@ package body Landin.Commands.Catalogue is
          when Build_Mode => return Text in "debug" | "release";
          when Optimize => return Text in "none" | "size" | "speed";
          when Specialize => return Text in "off" | "auto" | "all";
-         when Emit => return Text in "asm" | "exe" | "ir";
+         when Emit => return Text in "asm" | "exe" | "ir" | "linker-script";
          when Debug => return Text in "none" | "full" | "lines";
          when Link => return Text in "static" | "libc";
          when others => return Text /= "";
@@ -276,6 +277,9 @@ package body Landin.Commands.Catalogue is
             elsif Emitted = Emit_IR
             then Name (Flag) & " describes machine code, and --emit=ir"
                  & " writes the IR before any is chosen"
+            elsif Emitted = Emit_Linker_Script
+            then Name (Flag) & " describes machine code, and"
+                 & " --emit=linker-script writes a profile's script alone"
             else Name (Flag) & " describes emitted machine code: add"
                  & " --emit=asm or --emit=exe"),
          when An_Executable =>

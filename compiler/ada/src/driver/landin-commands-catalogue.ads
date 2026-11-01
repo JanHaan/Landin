@@ -55,7 +55,10 @@ package Landin.Commands.Catalogue is
 
    function Needs (Flag : Option) return Requirement;
 
-   type Emission is (No_Emission, Emit_Asm, Emit_Exe, Emit_IR);
+   --  D589: Emit_Linker_Script writes the selected profile's derived
+   --  linker script, and with --build-report its limits, without a link.
+   type Emission is
+     (No_Emission, Emit_Asm, Emit_Exe, Emit_IR, Emit_Linker_Script);
 
    --  Why FLAG cannot be in a request that emits EMITTED and names a
    --  source or not, or "" when it can.

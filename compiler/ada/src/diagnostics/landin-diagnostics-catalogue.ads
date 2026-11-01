@@ -236,6 +236,13 @@ package Landin.Diagnostics.Catalogue is
       Boot_Kind_Reserved,
       Region_Placement,
       No_Description,
+      --  D587: a description's second-stage boot routine.  Configuration
+      --  finds all five.
+      Boot_Stage_Form,
+      Boot_Stage_Outside,
+      Boot_Stage_Unwanted,
+      Boot_Stage_Repeated,
+      Boot_Stage_Missing,
       --  D251 also admits removing a whole unused, effect-free local.
       Unused_Pure_Local,
       --  The backend and its toolchain.  None is about a frontend
@@ -256,6 +263,8 @@ package Landin.Diagnostics.Catalogue is
       Library_Not_Found,
       --  D546's post-link contract.
       Linker_Script_Contract,
+      --  D588: the assembled second stage, read from its object.
+      Boot_Stage_Object,
       --  D555-D558: `refine svd`, which reads a vendor's SVD and a
       --  selection policy and replaces the modules it generates.  No
       --  program is refused for any of them.
@@ -1022,6 +1031,42 @@ package Landin.Diagnostics.Catalogue is
          Fixes => No_Fix, Shown_By => Invocation,
          Rule => +("D543: firmware or a placement that needs a profile, with"
                    & " no description reached and none in the library")),
+      --  D587: the boot stage's place in the description, which says
+      --  what to write instead.
+      Boot_Stage_Form =>
+        (Code => "L0533", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 0, Most => 0, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("D587: link(boot_stage) on anything but a naked routine"
+                   & " with no other link attribute")),
+      Boot_Stage_Outside =>
+        (Code => "L0534", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 0, Most => 0, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("D587: a boot stage outside the device description the"
+                   & " program selects")),
+      Boot_Stage_Unwanted =>
+        (Code => "L0535", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 0, Most => 0, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("D587: a boot stage in a description whose boot kind"
+                   & " takes none")),
+      Boot_Stage_Repeated =>
+        (Code => "L0536", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 0, Most => 0, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +"D587: a second boot stage in one description"),
+      Boot_Stage_Missing =>
+        (Code => "L0537", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 0, Most => 0, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("D587: a description whose boot kind begins with a"
+                   & " second stage, holding none")),
       --  D251, as for Mutable_Never_Written.
       Unused_Pure_Local =>
         (Code => "L0349", Level => Warning, State => Live,
@@ -1118,6 +1163,16 @@ package Landin.Diagnostics.Catalogue is
          Fixes => No_Fix, Shown_By => Invocation,
          Rule => +("D546: a linked firmware image that breaks a clause of"
                    & " the linker script contract")),
+      --  D588: about an assembled object, raised by the driver before the
+      --  link, and shown by the cortex ABI cases and the descriptions
+      --  lane.
+      Boot_Stage_Object =>
+        (Code => "L0538", Level => Error, State => Live,
+         Source => False, Bytes => False,
+         Least => 0, Most => 0, Notes => 0,
+         Fixes => No_Fix, Shown_By => Invocation,
+         Rule => +("D588: an assembled boot stage that outgrows its slot or"
+                   & " that a relocation reaches")),
       --  D558: `refine svd` raises these for an SVD, its policy or its
       --  outputs, and the devices suite owns them. The SVD or the policy is
       --  the source a fault is in, and a fault points at the element or byte
