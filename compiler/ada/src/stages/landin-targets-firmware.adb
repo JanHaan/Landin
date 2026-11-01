@@ -58,6 +58,9 @@ package body Landin.Targets.Firmware is
         when Cortex_M4 | Cortex_M7 => "armv7e-m, armv7-m or armv6-m",
         when Cortex_M33 => "armv8-m.main, armv7-m or armv6-m");
 
+   function Float_Unit_Named (Text : String) return Float_Unit is
+     (if Text = "fpv5-d16" then FPv5_D16 else No_Float_Unit);
+
    function Is_Boot_Name (Text : String) return Boolean is
      (Text in "vector-table" | "rp2040-boot2" | "rp2350-image-block"
         | "esp-app-image");

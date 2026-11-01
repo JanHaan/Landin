@@ -18336,7 +18336,9 @@ and a build for Apple silicon may select `armv8.1-a`.
 
 A program reads its level as `compiler.feature.NAME`, a fixed bool fact
 [1500] that holds when the selected level has the feature NAME, spelled as
-in the table. A feature of another family is false rather than refused, so
+in the table. Two features are not a level's: `fp` and `fp_dp` hold when
+the selected device description's float unit has single, and double,
+precision, and no level holds either (D615). A feature of another family is false rather than refused, so
 `fixed if compiler.feature.lse then` needs no architecture test before it,
 and a name no family has is L0305. `compiler.feature` is a member chain the
 grammar already derives; it adds no reserved word and no configuration atom,
@@ -18373,7 +18375,8 @@ calculation uses Zba's `sh1add`, `sh2add` or `sh3add` when its scale fits,
 XTheadBa's `th.addsl` when selected without Zba, and the same shift/add
 sequence at baseline; bounds and overflow checks are unchanged. Beyond that: every level of a family shares one
 layout, one calling convention and one C ABI, so code built at two levels of
-one family links together. A level is not a target. Comparing two
+one family links together. A description's float unit is not a level and
+does change the calling convention (D615). A level is not a target. Comparing two
 descriptions still says which backend and which ABI, and type checking and
 the target-neutral IR do not depend on a level. A name that is no level of the selected
 family is L0009. A build at a level the machine running it lacks is not
@@ -21221,6 +21224,7 @@ they read. The directives are:
 | `compiler.vectors(count)` | an integer | the vector table's whole length in words, the initial SP and reset included |
 | `compiler.interrupt(name, irq)` | an ASCII letter, then letters, digits and underscores, at most 64 bytes; an integer | that external interrupt `irq` is implemented, at absolute slot 16 + `irq` |
 | `compiler.boot(kind)` | a boot image kind | how the image begins |
+| `compiler.float_unit(name)` | `fpv5-d16` | the core's float unit, which changes the C ABI (D615) |
 | `linker.region(name, origin, length, access)` | an ASCII letter, then letters, digits and underscores, at most 32 bytes; two integers; `"rx"`, `"rw"` or `"rwx"` | one memory region |
 | `linker.place(kind, region[, size])` | `"vectors"`, `"text"`, `"rodata"`, `"data"`, `"bss"` or `"stack"`; a region's name; for `"stack"` alone, its size in bytes | where the compiler places that part of the image |
 
@@ -21230,9 +21234,10 @@ directives' order carries no meaning.
 A description is usually two files, which the compiler does not tell
 apart. `interrupts.ldn` holds `compiler.device`, `compiler.core`,
 `compiler.vectors` and the interrupts, and is generated from the device's
-CMSIS-SVD file; `memory.ldn` holds the regions, the placements and
-`compiler.boot`, and is written by the developer, since an SVD says nothing
-of either. A generated `interrupts.ldn` has exactly this text, so that
+CMSIS-SVD file; `memory.ldn` holds the regions, the placements,
+`compiler.boot` and any `compiler.float_unit`, and is written by the
+developer, since an SVD says nothing of the first three and too little of
+the last (D615). A generated `interrupts.ldn` has exactly this text, so that
 whatever generates it, and a reviewer, can compare bytes:
 
 1. Line 1 is `-- Interrupts of the NAME, from its SVD: vendor VENDOR, version
@@ -23741,6 +23746,59 @@ identity; the Cortex-M lanes, which link with the
 pinned archive; and the gate's `outside-user-stock` job, which links
 firmware with Ubuntu's `gcc-arm-none-eabi` while the pinned driver is
 unreachable.
+
+### D615 — A float unit is a fact of a description, and features read it
+
+**The tour said** nothing of floating-point hardware; D255 made a CPU
+feature level a set of instructions that changes no layout and no ABI, and
+D542 made a device a description of its core, memory and vectors. The
+Cortex-M7 of the STM32H753 and QEMU's `mps2-an500` has FPv5-D16, single-
+and double-precision registers whose use changes the C ABI: AAPCS32's VFP
+variant passes floats in them, so code built with the unit does not link
+with code built without it. A level cannot say that, since every level of a
+family shares one ABI (D255), and a chip can have a core without its unit.
+
+**Chosen:** the hand-written half of a description, `memory.ldn`, may hold
+`compiler.float_unit("NAME")`, once, at module level, as every directive of
+D542's table is; `refine svd` does not write it, since an SVD's `fpuPresent`
+says neither the unit nor its precision. The compiler knows float units as
+facts of a core and never of a chip: a `cortex-m7` may have `fpv5-d16`, and
+that is the one unit refine builds. Any other name, or a unit its core
+cannot have, is L0545, whose note says what refine builds and what the core
+may have. A description with a float unit is built at the level whose
+architecture holds the unit, `armv7e-m` for `fpv5-d16`, and at no lower one,
+since the unit's ABI is the build's: `--level=armv7-m` or `armv6-m` is
+L0546, naming the level. D543's lower levels stay for a description with no
+unit.
+
+A program reads the unit as `compiler.feature.fp` and
+`compiler.feature.fp_dp`, fixed bool facts that hold when the selected
+description's unit has single, and double, precision: both for `fpv5-d16`,
+neither for a description without a unit, the constrained reference among
+them, or on a target with no descriptions. This amends D255, whose features
+all came from the level: these two come from the description, and no level
+holds either. A description is selected by import and its directives stand
+outside every fixed arm (D543), so configuration finds it and reads its
+unit before it evaluates any option or fixed condition; the unit's argument
+is a text literal, so no fixed expression can depend on the facts it gives
+and there is no cycle to refuse.
+
+**The alternatives:** a level per unit, `armv7e-m+fp.dp`, which makes a
+level change the ABI and lets a build select a unit its chip lacks; reading
+the unit from the core, which assumes every Cortex-M7 has a double-precision
+unit when ST, NXP and Microchip each sell ones without it or with a
+single-precision one; generating the directive from the SVD, which says
+only that some unit is present; and a feature fact read late, after the
+program's own fixed arms, which would let a declaration be selected by a
+fact whose value changed after it was read.
+
+**Pinned by** `negative/description-float-unit-unknown`,
+`negative/description-float-unit-core`,
+`negative/description-float-unit-level`, and the `cortex ABI` case `device
+descriptions select their profiles`, which holds both refusals, the
+repeated and conditional directive, and the facts read by an option, a
+compiler assertion and a fixed arm of a program whose description has the
+unit, one whose description has none and the reference.
 
 ### D281 — RV64's system call has the standing of `syscall` and `svc`
 

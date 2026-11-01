@@ -1,0 +1,6 @@
+error[L0546]: this description's float unit, fpv5-d16, needs --level=armv7e-m, and this build is at --level=armv7-m
+  --> ../tests/fixtures/negative/description-float-unit-level/program.ldn:3:1
+  |
+3 | compiler.float_unit("fpv5-d16")
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: D615: a float unit changes the C ABI, so a description that has one is built at the level whose architecture holds it; build with --level=armv7e-m

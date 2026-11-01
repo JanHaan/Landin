@@ -102,6 +102,8 @@ L0534  Live     D587: a boot stage outside the device description the program se
 L0535  Live     D587: a boot stage in a description whose boot kind takes none
 L0536  Live     D587: a second boot stage in one description
 L0537  Live     D587: a description whose boot kind begins with a second stage, holding none
+L0545  Live     D615: a float unit refine does not build, or one the description's core cannot have
+L0546  Live     D615: a description with a float unit, built at a level whose architecture lacks it
 L0349  Live     D251: an unused local with an effect-free literal initializer
 L0500  Live     [1550]: the requested output cannot be made with the target, settings or available toolchain
 L0501  Live     [1550]: assembler or linker refusal, or executable output lifecycle failure

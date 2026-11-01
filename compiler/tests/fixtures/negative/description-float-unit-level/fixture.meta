@@ -1,0 +1,9 @@
+class: negative
+summary: D615: a description with a float unit builds at the level that holds it, so a cortex-m7 with fpv5-d16 refuses --level=armv7-m
+program: program.ldn
+constructs: 1990
+targets: cortex-m0
+codes: L0546
+args: --target=cortex-m0 --level=armv7-m ../tests/fixtures/negative/description-float-unit-level/program.ldn
+expect: expected.txt
+status: 1

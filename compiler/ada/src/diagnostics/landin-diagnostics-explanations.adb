@@ -1109,6 +1109,28 @@ package body Landin.Diagnostics.Explanations is
                & "t 252 bytes once assembled, literals included; `devices/"
                & "descriptions/rp2040/boot2.ldn` in the repository is a po"
                & "rt of pico-sdk's generic one.",
+            when Catalogue.Float_Unit_Unsupported =>
+               "A device description names a float unit refine does not "
+               & "build, or one its core cannot have (D615). A float unit "
+               & "is a fact of the core a chip was built with, written in "
+               & "the description's hand-written half as `compiler.float_u"
+               & "nit(""NAME"")`, and refine builds one: `fpv5-d16`, the Cor"
+               & "tex-M7's single- and double-precision FPv5 with sixteen "
+               & "double registers, on a `cortex-m7`. The note says which "
+               & "unit the description's core may have. Write `compiler.fl"
+               & "oat_unit(""fpv5-d16"")` in a Cortex-M7's description, or l"
+               & "eave the directive out: a core with no float unit comput"
+               & "es in software, as every other core refine builds for do"
+               & "es.",
+            when Catalogue.Float_Unit_Level =>
+               "A device description has a float unit, and the request b"
+               & "uilds it at a level whose architecture lacks that unit ("
+               & "D615). A float unit changes the C ABI, single- and doubl"
+               & "e-precision values travel in its registers, so code buil"
+               & "t for the description assumes the unit, and the level th"
+               & "at holds `fpv5-d16` is `armv7e-m`. Build with the level "
+               & "the note names; a lower level of the same core is accept"
+               & "ed only for a description with no float unit.",
             when Catalogue.Unused_Pure_Local =>
                "An immutable local that is never used and is initialized"
                & " by a direct scalar literal, including a negated integer"
@@ -2128,6 +2150,64 @@ package body Landin.Diagnostics.Explanations is
                & """)"
                & LF
                & "linker.region(""RAM"", 0x2000_0000, 256 * 1024, ""rwx"")"
+               & LF
+               & "linker.place(""vectors"", ""FLASH"")"
+               & LF
+               & "linker.place(""text"", ""FLASH"")"
+               & LF
+               & "linker.place(""rodata"", ""FLASH"")"
+               & LF
+               & "linker.place(""data"", ""RAM"")"
+               & LF
+               & "linker.place(""bss"", ""RAM"")"
+               & LF
+               & "linker.place(""stack"", ""RAM"", 4 * 1024)"
+               & LF,
+            when Catalogue.Float_Unit_Unsupported =>
+               "-- refine: --target=cortex-m0 --level=armv7e-m"
+               & LF
+               & "compiler.device(""board"")"
+               & LF
+               & "compiler.core(""cortex-m4"")"
+               & LF
+               & "compiler.float_unit(""fpv5-d16"")"
+               & LF
+               & "compiler.vectors(48)"
+               & LF
+               & "compiler.boot(""vector-table"")"
+               & LF
+               & "linker.region(""FLASH"", 0, 1024 * 1024, ""rx"")"
+               & LF
+               & "linker.region(""RAM"", 0x2000_0000, 128 * 1024, ""rwx"")"
+               & LF
+               & "linker.place(""vectors"", ""FLASH"")"
+               & LF
+               & "linker.place(""text"", ""FLASH"")"
+               & LF
+               & "linker.place(""rodata"", ""FLASH"")"
+               & LF
+               & "linker.place(""data"", ""RAM"")"
+               & LF
+               & "linker.place(""bss"", ""RAM"")"
+               & LF
+               & "linker.place(""stack"", ""RAM"", 4 * 1024)"
+               & LF,
+            when Catalogue.Float_Unit_Level =>
+               "-- refine: --target=cortex-m0 --level=armv7-m"
+               & LF
+               & "compiler.device(""board"")"
+               & LF
+               & "compiler.core(""cortex-m7"")"
+               & LF
+               & "compiler.float_unit(""fpv5-d16"")"
+               & LF
+               & "compiler.vectors(48)"
+               & LF
+               & "compiler.boot(""vector-table"")"
+               & LF
+               & "linker.region(""FLASH"", 0, 1024 * 1024, ""rx"")"
+               & LF
+               & "linker.region(""RAM"", 0x2000_0000, 128 * 1024, ""rwx"")"
                & LF
                & "linker.place(""vectors"", ""FLASH"")"
                & LF

@@ -2938,6 +2938,56 @@ package body Landin.Tests.Cortex_Suite is
         "compiler.device(""plain"")" & LF & "compiler.core(""cortex-m7"")"
         & LF & "compiler.vectors(48)" & LF, Plain_Memory, "L0515",
         Extra => "--firmware-entry=start --level=armv8-m.main");
+      --  D615: a float unit is the core's, needs the level that holds
+      --  it, and is what compiler.feature.fp and fp_dp read, before any
+      --  option or fixed condition of the program.
+      declare
+         M7 : constant String :=
+           "compiler.device(""plain"")" & LF & "compiler.core(""cortex-m7"")"
+           & LF & "compiler.vectors(48)" & LF;
+         Unit : constant String :=
+           "compiler.float_unit(""fpv5-d16"")" & LF;
+         Facts : constant String :=
+           "option double: bool = compiler.feature.fp_dp" & LF
+           & "compiler.assert(double and compiler.feature.fp)" & LF
+           & "fixed if compiler.feature.fp then" & LF
+           & "    picked: u32 = 1" & LF
+           & "end if" & LF
+           & "compiler.assert(compiler.feature.dsp)" & LF;
+      begin
+         Expect ("a cortex-m7 with fpv5-d16 at armv7e-m reads its unit",
+           Facts, M7, Unit & Plain_Memory, "",
+           Extra => "--firmware-entry=start --level=armv7e-m");
+         Expect ("a cortex-m7 without a unit reads none",
+           "compiler.assert(not compiler.feature.fp)" & LF
+           & "compiler.assert(not compiler.feature.fp_dp)",
+           M7, Plain_Memory, "",
+           Extra => "--firmware-entry=start --level=armv7e-m");
+         Expect ("the reference has no float unit",
+           "compiler.assert(not compiler.feature.fp)" & LF
+           & "compiler.assert(not compiler.feature.fp_dp)",
+           "", "", "", Imports => False,
+           Extra => "--firmware-entry=start --level=armv7e-m");
+         Expect ("fpv5-d16 at armv7-m is L0546", "", M7,
+           Unit & Plain_Memory, "L0546",
+           Extra => "--firmware-entry=start --level=armv7-m");
+         Expect ("fpv5-d16 at armv6-m is L0546", "", M7,
+           Unit & Plain_Memory, "L0546");
+         Expect ("an unbuilt float unit is L0545", "", M7,
+           "compiler.float_unit(""fpv5-sp-d16"")" & LF & Plain_Memory,
+           "L0545", Extra => "--firmware-entry=start --level=armv7e-m");
+         Expect ("fpv5-d16 on a cortex-m4 is L0545", "",
+           "compiler.device(""plain"")" & LF & "compiler.core(""cortex-m4"")"
+           & LF & "compiler.vectors(48)" & LF, Unit & Plain_Memory,
+           "L0545", Extra => "--firmware-entry=start --level=armv7e-m");
+         Expect ("a second float unit is L0513", "", M7 & Unit,
+           Unit & Plain_Memory, "L0513",
+           Extra => "--firmware-entry=start --level=armv7e-m");
+         Expect ("a float unit in a fixed arm is L0513", "",
+           M7 & "fixed if true then" & LF & Unit & "end if" & LF,
+           Plain_Memory, "L0513",
+           Extra => "--firmware-entry=start --level=armv7e-m");
+      end;
       Expect ("the reference builds at armv7e-m",
         "link(vector: 20) extern(interrupt) h: () -> none = end h",
         "", "", "", Imports => False,

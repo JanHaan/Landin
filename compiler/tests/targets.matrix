@@ -380,6 +380,9 @@ negative/derived-array-slice-local-field | linux-x86-64, linux-arm64, darwin-arm
 negative/derived-array-slice-wrong-from | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/description-core-mismatch | cortex-m0
 negative/description-directive-outside | cortex-m0
+negative/description-float-unit-core | cortex-m0
+negative/description-float-unit-level | cortex-m0
+negative/description-float-unit-unknown | cortex-m0
 negative/description-regions-overlap | cortex-m0
 negative/description-reserved-boot | cortex-m0
 negative/description-unknown-core | cortex-m0

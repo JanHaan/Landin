@@ -1,0 +1,6 @@
+error[L0545]: this description's core is a cortex-m4, which refine builds with no fpv5-d16 unit
+  --> ../tests/fixtures/negative/description-float-unit-core/program.ldn:3:1
+  |
+3 | compiler.float_unit("fpv5-d16")
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: D615: a float unit is a fact of the core; refine builds "fpv5-d16" on a cortex-m7, and a cortex-m4 with none; remove compiler.float_unit or name the core it is built into
