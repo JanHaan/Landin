@@ -204,7 +204,7 @@ manifest beside them, and its description in `descriptions/stm32h753`.
 
 | Module | Selected registers | Why |
 |---|---|---|
-| `rcc` | AHB1ENR, AHB4ENR, APB1LENR, RSR | the clock enables of DMA1, GPIO ports B and D and USART3, and the reset flags the board's boot frame reports |
+| `rcc` | CR, AHB1ENR, AHB4ENR, APB1LENR, RSR | the D2 domain's clocks-ready flag, the clock enables of DMA1, GPIO ports B and D and USART3, and the reset flags the board's boot frame reports |
 | `pwr` | CSR1, CR3 | the supply configuration RM0433 requires after reset, and the flag that says the voltage levels are valid |
 | `gpiob` | MODER, IDR, BSRR | the board's indicator, LD1 on PB0, driven through the set and reset register and read back; port B is derived from port A |
 | `gpiod` | MODER, AFRH | PD8 and PD9 to alternate function 7; port D is derived from port A |
@@ -235,9 +235,9 @@ RM0433 Rev 9, each citing its section and page: every selected register
 resets to zero but `USART3_ISR`, 0x0000 00C0 in its FIFO-disabled view
 (48.8.10, p. 2091); `GPIOD_MODER`, 0xFFFF FFFF, and `GPIOB_MODER`,
 0xFFFF FEBF (11.4.1, p. 541), which the SVD gets wrong by deriving both
-ports from port A and the policy corrects; `RCC_RSR`, 0x00FE 0000 after a
-power-on reset (8.7.39, p. 450), which the SVD gives as 0 and the policy
-corrects; `PWR_CSR1`, 0x0000 4000 (6.8.2, p. 305), and `PWR_CR3`,
+ports from port A and the policy corrects; `RCC_CR`, 0x0000 0001 (8.7.2,
+p. 383), and `RCC_RSR`, 0x00FE 0000 after a power-on reset (8.7.39,
+p. 450), which the SVD gives as 0x0000 0083 and 0 and the policy corrects; `PWR_CSR1`, 0x0000 4000 (6.8.2, p. 305), and `PWR_CR3`,
 0x0000 0006 (6.8.4, p. 307); and `GPIOB_IDR`, whose pin levels have no
 known reset value (11.4.5, p. 543).
 `interrupts.ldn` has 166 slots and says its one correction in a line of

@@ -21194,6 +21194,181 @@ to fixed inputs with no board, probe or hub on the gate's Python, and
 `scripts/tests/test_board_rp2040.py`, which still holds the RP2040 tool's
 framing, accounting and guard.
 
+### D647 — The STM32H753 board stays on the HSI and configures its supply first
+
+**The tour said** nothing; D560 learnt the STM32H753 for prototype 1's
+UART and DMA and D561 checked a transmit consumer's stores in its image.
+
+**Chosen:** `compiler/tests/board/stm32h753` brings the NUCLEO-H753ZI up as
+RM0433 Rev 9 says. `start` first reads RCC_RSR, VTOR, CPACR and CCR, then
+writes the supply configuration 6.4.1 (p. 262) requires after a power-on
+reset, the LDO's, the H753's only regulator (Table 34, p. 261), in
+PWR_CR3's write-once lower byte (6.8.4, p. 308), and waits for PWR_CSR1's
+ACTVOSRDY; it clears the reset flags with RMVF. It enables the clocks of
+GPIO ports B and D, USART3 and DMA1 as 8.5.11 (p. 372) enables a
+peripheral: the enable written and read back, RCC_CR's D2CKRDY waited for,
+since USART3 and DMA1 are in the D2 domain, and a read of each
+peripheral. PB0, LD1, becomes the indicator, a push-pull output driven
+through GPIOB_BSRR, and PD8 and PD9 USART3's pins on alternate function 7.
+The system clock stays the 64 MHz HSI that reset selects (8.5.6, p. 350),
+every prescaler at one, so USART3's kernel clock is rcc_pclk1 at 64 MHz
+(Figure 53, p. 360) and 115,200 baud is BRR 556, 0.08 percent fast. The
+policy so selects PWR_CSR1 and PWR_CR3, RCC_CR and RCC_RSR, and GPIOB's
+MODER, IDR and BSRR, with three more reviewed reset values: port B's mode
+register, which the SVD derives from port A's (11.4.1, p. 541); RCC_CR's,
+0x0000 0001, which the SVD gives as 0x0000 0083 (8.7.2, p. 383); and
+RCC_RSR's power-on flags, which it gives as zero (8.7.39, p. 450). The
+Cortex-M7's own System Control Space, which the SVD does not describe, is
+the board's `scs` module at the Armv7-M addresses.
+
+**The alternatives:** the 8 MHz HSE the ST-LINK's MCO supplies, which needs
+HSE bypass and a PLL to give a USART clock with a smaller error than the
+HSI's divisor, and so a clock tree the run would also have to check; and
+leaving the supply as reset leaves it, which RM0433 says keeps the system
+in Run*, where RAM writes are not permitted. The compiler-owned reset
+still copies data and clears BSS before `start` runs, which this choice
+does not change; that is a question for the boot kind, not for the board.
+
+**Pinned by** `devices/test.py`'s `Stm32h753Oracles`, which holds the new
+registers to ST's header and to the manual's reset values and access
+types, and `environments/boards/stm32h753/board.py`'s boot verdicts.
+
+### D648 — On the STM32H753 an epoch is taken in laps, each armed by the stream's completion
+
+**The tour said** nothing; D594 is the RP2040's protocol, a live count over
+a channel whose writes wrap at the ring's size.
+
+**Chosen:** USART3 receives through DMA1 stream 0, paced by DMAMUX1's
+channel 0 with usart3_rx_dma, request 45 (Table 124, p. 697), into a
+256-byte ring, keeping D593's public receive contract with its atoms and
+its order of checks. The stream has no ring address, and a circular
+stream reloads its count where no reader can see how often, so the stream
+runs in normal mode, which stops at zero with EN clear (15.3.15, p. 654),
+and an epoch's budget is taken in laps of the ring's size, the last one
+shorter when the budget is not a multiple of it. The stream's
+transfer-complete interrupt arms each next lap from the ring's start until
+the budget is reached; an error leaves the stream disabled and its flag in
+DMA_LISR. A snapshot reads DMA_LISR and DMA_S0NDTR with interrupts masked
+and counts the laps completed and, of the lap armed, what the count says,
+or all of it when its completion is still pending. Stop clears EN and the
+completion interrupt in one write, so that no lap is armed after it, waits
+at most 1000 polls for EN to read 0, which 15.3.16 (p. 654) says it does
+once the transfer in progress completes, and keeps what the count then
+says was transferred; bytes received after the last snapshot before a stop
+are discarded with the epoch. FIFO mode is off, so while a stream is
+exhausted or stopped, or between a lap and the next, the receive data
+register holds one byte and the next is lost; the USART sets ORE (48.5.6,
+p. 2030), and a snapshot reports it as `overrun`, so no byte is lost
+unreported. A lap is re-armed within an interrupt's latency, far inside the
+87 microseconds of a byte at 115,200 baud.
+
+TRBUFF, DMA_SxCR's bit 20, must be set for a stream that serves a USART
+(15.5.5, p. 662). The SVD omits the field, and a policy can move or omit
+a field the SVD gives but not add one, so the generated register writes it
+as zero, as D561's transmit consumer's does; the board's oracle reads the
+stream's configuration over SWD and refuses the run until it is set.
+
+**The alternatives:** a circular stream with laps counted from its
+half-transfer and transfer-complete flags, whose budget no hardware
+enforces and whose snapshot cannot tell a lap from two; a ring as large as
+the budget, which leaves no ring to overrun; the USART's 16-entry FIFO,
+whose hold count RM0433 gives two ways (Table 402, p. 2018, and note 2 of
+p. 2067); and double-buffer mode, which reloads as circular mode does.
+
+**Pinned by** `environments/boards/stm32h753/board.py`: an overrun burst
+discarded and restarted, a burst into an exhausted stream flagged by ORE
+and restarted with the byte the receive register held kept, an exhausted
+epoch restarted with no byte lost, every echoed byte in order, and the
+count read over SWD; and `scripts/tests/test_board_stm32h753.py`'s
+accounting.
+
+### D649 — USART3's own IDLE interrupt is the one delivered at slot 55
+
+**The tour said** nothing; D596 delivered RP2040's IRQ5 by setting it
+pending, since nothing on that board raised it.
+
+**Chosen:** USART3's handler is placed at slot 55, IRQ 39 (Table 147,
+p. 755), and USART3 raises it itself: CR1's IDLEIE is set, and the IDLE
+flag, set one frame after the line falls quiet (48.8.10, p. 2091), wakes
+the application for a lap still in progress, the role RP2040's timer
+played. The handler counts its entries, reads IPSR and clears IDLE; the
+oracle requires it to have run in exception 55 and to run again for each
+later byte. DMA_STR0, slot 27, is the stream's completion.
+
+**The alternatives:** setting IRQ 39 pending through NVIC_ISPR as D596
+did, which shows the slot and not that the peripheral reaches it; and a
+timer's interrupt for the wakeup, which would need TIM2's clocks and
+registers beside an interrupt the USART already raises.
+
+**Pinned by** `environments/boards/stm32h753/board.py`'s USART3 verdict.
+
+### D650 — The STM32H753 board's oracle starts at power-on and its first frame waits for the host
+
+**The tour said** nothing; D595 is the RP2040's oracle.
+
+**Chosen:** `environments/boards/stm32h753/board.py` builds the image at
+`--level=armv7e-m` and checks, from the ELF alone, its 166-word vector
+table at the boot address 0x0800_0000 (2.6, p. 138) and the handlers at
+slots 27 and 55; flashes it with probe-rs over the board's ST-LINK V3,
+`--chip STM32H753ZITx`, and reads the table back; cuts the ST-LINK's USB
+power and restores it, only when the hub's listing shows the ST-LINK's
+serial on that port; finds the ST-LINK's virtual COM port again by the
+same serial once it re-enumerates; and sends one byte, since the firmware
+writes nothing until a byte arrives, which a host could otherwise miss
+while the port comes back. Its expectations come from RM0433 Rev 9 and
+from what the host sent, never from the firmware: RCC_RSR's named flags
+are Table 56's power-on line alone (p. 333), so the run began at power-on
+and no software reset followed; VTOR is the boot address; CCR's IC and DC
+are clear, the cacheless profile read on the chip; PWR_CSR1 is not ready
+before the supply is configured and ready after; `1`, `A` and `0` are
+echoed with PB0's input following them; a ring overrun and a USART
+overrun are each reported and restarted; every other byte is echoed in
+order; and the counters read over SWD without halting equal the last
+frame's. The trace's form is the RP2040 board's.
+
+**The alternatives:** a trace that starts at reset, whose first frame the
+virtual COM port can drop while it re-enumerates; probehive's UART for the
+console, which leaves the board's own USB serial line untested; and an
+oracle from the firmware's constants, which a wrong constant would satisfy.
+
+**Pinned by** `scripts/tests/test_board_stm32h753.py`, which holds the
+boot verdicts, the framing and the accounting to fixed inputs without a
+board.
+
+### D651 — The M7 board's float exercise is checked against the host's IEEE 754
+
+**The tour said** nothing; the M7's float unit is the phase's, and no
+emulator checks a board's float results.
+
+**Chosen:** the application's `floats` module computes f32 and f64
+addition, subtraction, multiplication, division and the six comparisons
+over operands the host sends as bit patterns, four bits a byte written `a`
+to `p`, so the arithmetic is compiled code over values no compiler can
+know; each result returns as its bit pattern. The oracle compares f64
+results with Python's binary64 arithmetic and f32 results with the
+binary64 result of the binary32 operands rounded once to binary32, which
+is correctly rounded for these operations; IEEE 754 fixes no NaN's bits,
+so a NaN matches any NaN, and a division by zero is IEEE 754's, not
+Python's refusal. It reads the linked disassembly of the float routines:
+`vadd`, `vsub`, `vmul`, `vdiv` and `vcmp` of both widths and no software
+float helper pass, software helpers alone are pending, and anything else
+fails. The square root is a hook: a `vsqrt` in an assembly block with a
+float operand, under `fixed if compiler.feature.fp_dp`, once float
+register operands and that feature exist; until its results arrive the
+square root is pending, as CPACR is until the compiler-owned startup
+grants CP10 and CP11. A run with anything pending is `pending`, never
+passed.
+
+**The alternatives:** a fixed table of operands in the image, which the
+folder could compute; comparing NaN bits, which IEEE 754 leaves to the
+implementation and which the host's and the M7's default NaNs differ in;
+and a software square root, which shows nothing of the float unit.
+
+**Pinned by** `scripts/tests/test_board_stm32h753.py`, which holds the
+oracle's arithmetic, its rounding at overflow, underflow and ties, its
+signed zeros and NaNs, its operand encoding and frames, and its reading of
+the instructions, pending and passed, to fixed inputs.
+
 ### D530 — `refine explain` answers a construct and a decision
 
 **The tour said** nothing. Diagnostic notes cite paragraphs and decisions,

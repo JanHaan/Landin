@@ -13,6 +13,7 @@
   "description": "descriptions/stm32h753",
   "selection": {
     "RCC": [
+      "CR",
       "AHB1ENR",
       "AHB4ENR",
       "APB1LENR",
@@ -56,6 +57,11 @@
     ]
   },
   "policies": {
+    "RCC.CR": {
+      "read": "normal",
+      "write": "normal",
+      "reserved": "zero"
+    },
     "RCC.AHB1ENR": {
       "read": "normal",
       "write": "normal",
@@ -203,6 +209,10 @@
     }
   },
   "reset_corrections": {
+    "RCC.CR": {
+      "value": "0x00000001",
+      "source": "RM0433 Rev 9, 8.7.2, p. 383: RCC_CR resets to 0x0000 0001, HSION alone; CSION and HSIKERON are off after reset (p. 385), where the SVD gives 0x0000 0083"
+    },
     "RCC.RSR": {
       "value": "0x00fe0000",
       "source": "RM0433 Rev 9, 8.7.39, p. 450, Table 65: RCC_RSR resets to 0x00FE 0000, by power-on reset only; the SVD gives 0"

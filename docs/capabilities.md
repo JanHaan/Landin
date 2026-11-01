@@ -47,7 +47,12 @@ entry that describes it, and put a new one where a reader would look for it.
   timer, GPIO and interrupt port at the RP2040's own addresses, checked
   against a physical oracle by a developer tool,
   [`board.py`](../environments/boards/rp2040/README.md) (D593-D596); no job
-  runs it. The derived linker script is written as `OUT.ld`, or alone with its
+  runs it. The NUCLEO-H753ZI's port of the same application, its supply,
+  clocks, USART3 received through DMA in laps, PB0's indicator and a float
+  exercise, builds at `--level=armv7e-m` with an oracle of its own,
+  [`board.py`](../environments/boards/stm32h753/README.md) (D647-D651), and
+  no board run of it is recorded yet; the board tools share
+  `environments/boards/common.py` (D646). The derived linker script is written as `OUT.ld`, or alone with its
   limits by `--emit=linker-script` (D589), a developer's own is linked with
   `--linker-script=FILE` and held to a contract (D546), and
   `link(region: ...)` places a declaration in a named region (D547).

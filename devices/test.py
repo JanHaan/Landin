@@ -623,6 +623,7 @@ class CmsisHeader:
 #  macro, the structure and its member, and the prefix its fields' macros
 #  take.  Reviewed by reading stm32h753xx.h, never the SVD.
 H753_REGISTERS = {
+    'RCC.CR': ('RCC_BASE', 'RCC_TypeDef', 'CR', 'RCC_CR'),
     'RCC.AHB1ENR': ('RCC_BASE', 'RCC_TypeDef', 'AHB1ENR', 'RCC_AHB1ENR'),
     'RCC.AHB4ENR': ('RCC_BASE', 'RCC_TypeDef', 'AHB4ENR', 'RCC_AHB4ENR'),
     'RCC.APB1LENR': ('RCC_BASE', 'RCC_TypeDef', 'APB1LENR', 'RCC_APB1LENR'),
@@ -674,6 +675,9 @@ H753_FIELD_SPELLINGS = {
     'TIM2.CCMR1_Input.ICPCS': 'TIM_CCMR1_IC1PSC',
     'USART3.CR1.TXEIE': 'USART_CR1_TXEIE_TXFNFIE',
     'USART3.CR1.RXNEIE': 'USART_CR1_RXNEIE_RXFNEIE',
+    'RCC.CR.RC48ON': 'RCC_CR_HSI48ON',
+    'RCC.CR.RC48RDY': 'RCC_CR_HSI48RDY',
+    'RCC.CR.HSECSSON': 'RCC_CR_CSSHSEON',
 }
 
 
@@ -744,6 +748,9 @@ class Stm32h753Oracles(unittest.TestCase):
             # named bits are Table 56's power-on line, p. 333, PORRSTF,
             # PINRSTF, BORRSTF, D2RSTF, D1RSTF and CPURSTF.  The SVD gives 0.
             'RCC.RSR': 0x00fa0000,
+            # 8.7.2, p. 383: 0x0000 0001, HSION alone; CSION and HSIKERON
+            # are off after reset (p. 385), where the SVD gives 0x0000 0083.
+            'RCC.CR': 0x00000001,
             # 6.8.2, p. 305: ACTVOS reads VOS3, and ACTVOSRDY is clear until
             # the supply configuration is written (6.4.1, p. 262).
             'PWR.CSR1': 0x00004000,
@@ -768,7 +775,7 @@ class Stm32h753Oracles(unittest.TestCase):
                                  expected.get(row['source'], 0))
         rows = {row['source']: row for row in self.rows()}
         for key, given in (('GPIOD.MODER', 0xabffffff), ('GPIOB.MODER', 0xabffffff),
-                           ('RCC.RSR', 0)):
+                           ('RCC.RSR', 0), ('RCC.CR', 0x83)):
             self.assertEqual(rows[key]['svd_reset_value'], given, key)
             self.assertIn('RM0433', rows[key]['reset_correction']['source'], key)
 

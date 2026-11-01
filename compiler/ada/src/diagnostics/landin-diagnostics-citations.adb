@@ -2221,6 +2221,21 @@ package body Landin.Diagnostics.Citations is
             when 646 =>
                "The board tools share one module and keep their own orac"
                & "les",
+            when 647 =>
+               "The STM32H753 board stays on the HSI and configures its "
+               & "supply first",
+            when 648 =>
+               "On the STM32H753 an epoch is taken in laps, each armed b"
+               & "y the stream's completion",
+            when 649 =>
+               "USART3's own IDLE interrupt is the one delivered at slot"
+               & " 55",
+            when 650 =>
+               "The STM32H753 board's oracle starts at power-on and its "
+               & "first frame waits for the host",
+            when 651 =>
+               "The M7 board's float exercise is checked against the hos"
+               & "t's IEEE 754",
             when 530 =>
                "`refine explain` answers a construct and a decision",
             when 599 =>
@@ -3407,6 +3422,16 @@ package body Landin.Diagnostics.Citations is
             when 645 =>
                "Decisions: The toolchain, C and the machine",
             when 646 =>
+               "Decisions: The toolchain, C and the machine",
+            when 647 =>
+               "Decisions: The toolchain, C and the machine",
+            when 648 =>
+               "Decisions: The toolchain, C and the machine",
+            when 649 =>
+               "Decisions: The toolchain, C and the machine",
+            when 650 =>
+               "Decisions: The toolchain, C and the machine",
+            when 651 =>
                "Decisions: The toolchain, C and the machine",
             when 530 =>
                "Decisions: The toolchain, C and the machine",
@@ -4899,6 +4924,23 @@ package body Landin.Diagnostics.Citations is
             when 646 =>
                "https://www.701.dev/spec.html#d646-the-board-tools-share"
                & "-one-module-and-keep-their-own-oracles",
+            when 647 =>
+               "https://www.701.dev/spec.html#d647-the-stm32h753-board-s"
+               & "tays-on-the-hsi-and-configures-its-supply-first",
+            when 648 =>
+               "https://www.701.dev/spec.html#d648-on-the-stm32h753-an-e"
+               & "poch-is-taken-in-laps-each-armed-by-the-stream-s-complet"
+               & "ion",
+            when 649 =>
+               "https://www.701.dev/spec.html#d649-usart3-s-own-idle-int"
+               & "errupt-is-the-one-delivered-at-slot-55",
+            when 650 =>
+               "https://www.701.dev/spec.html#d650-the-stm32h753-board-s"
+               & "-oracle-starts-at-power-on-and-its-first-frame-waits-for"
+               & "-the-host",
+            when 651 =>
+               "https://www.701.dev/spec.html#d651-the-m7-board-s-float-"
+               & "exercise-is-checked-against-the-host-s-ieee-754",
             when 530 =>
                "https://www.701.dev/spec.html#d530-refine-explain-answer"
                & "s-a-construct-and-a-decision",
