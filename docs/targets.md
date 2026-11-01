@@ -215,7 +215,7 @@ ABI, is the same at every level of a family.
 | `freebsd-arm64` | `armv8-a` | `armv8.1-a` | LSE atomic read-modify-write | `.arch` and Clang `-march=` with the selected level |
 | `linux-rv64` | `rv64gc` | `rv64gc_zba`, `rv64gc_xtheadba`, `rv64gc_zba_xtheadba` | `sh1add`/`sh2add`/`sh3add` or `th.addsl` for indexed addresses | selected ISA string passed to GNU tools with LP64D |
 | `darwin-arm64` | `armv8-a` | `armv8.1-a` | LSE `ldadd`/`swp`/`cas`, in the ordering's form, for atomic read-modify-write | `.arch armv8-a` or `.arch armv8.1-a` in the assembly |
-| `cortex-m0` | `armv6-m` | `armv7-m`, `armv7e-m`, `armv8-m.main` | `sdiv`/`udiv` and `mls` for 32-bit division and remainder | default: `.cpu cortex-m0` in assembly and `-mcpu=cortex-m0` for the assembler and linker; higher levels: `.arch` and `-march=` |
+| `cortex-m0` | `armv6-m` | `armv7-m`, `armv7e-m`, `armv8-m.main` | `sdiv`/`udiv` and `mls` for 32-bit division and remainder, and `smull`/`umull`, with `mul` and `mla` for 64 bits, for products; at `armv8-m.main` also `lda`/`stl` and their byte and halfword forms for acquiring loads and releasing stores | default: `.cpu cortex-m0` in assembly and `-mcpu=cortex-m0` for the assembler and linker; higher levels: `.arch` and `-march=` |
 | `synthetic-32` | none | none | nothing | none |
 
 The x86-64 assembler is held to the level at every level, the baseline's
@@ -255,8 +255,10 @@ program says on standard error which levels were confirmed and by what.
 Each lane requires the executable it ran to show the level: the ISA note on
 Linux x86-64; on arm64 the LSE instructions and no exclusive loop, `ldxr`
 or `ldaxr` and `stxr` or `stlxr`, at `armv8.1-a`, and no LSE instruction in the default's image of the same
-fixture; and hardware division and no 32-bit helper on Cortex-M, where
-`armv7-m` runs on QEMU's Cortex-M3.
+fixture; and on Cortex-M no product or 32-bit quotient asked of the runtime
+at a Thumb-2 level, with the instructions a fixture's corpus row names,
+where `armv7-m` runs on QEMU's Cortex-M3 and `armv8-m.main` on its
+Cortex-M33.
 
 ## FreeBSD hosted targets
 
@@ -685,23 +687,23 @@ mapping of the C/C++11 orderings, and is a full compiler memory boundary
 whatever its ordering. In the table `l` and `s` are RV64's load and store at
 the access's width.
 
-| ordering | x86-64 (x86-TSO) | arm64 | RV64 (RVWMO, Table A.6) | Cortex-M0 |
-|---|---|---|---|---|
-| load relaxed | MOV | LDR | `l` | LDR |
-| load acquire | MOV | LDAR | `l`; FENCE R,RW | LDR; DMB SY |
-| load seq_cst | MOV | LDAR | FENCE RW,RW; `l`; FENCE R,RW | LDR; DMB SY |
-| store relaxed | MOV | STR | `s` | STR |
-| store release | MOV | STLR | FENCE RW,W; `s` | DMB SY; STR |
-| store seq_cst | XCHG | STLR | FENCE RW,W; `s` | DMB SY; STR; DMB SY |
-| read-modify-write relaxed | XCHG, LOCK XADD, LOCK CMPXCHG | LDXR/STXR loop, or SWP, LDADD, CAS | AMO, or LR/SC loop | refused |
-| acquire | the same | LDAXR/STXR, or the A form | `.aq` on the AMO or the LR | refused |
-| release | the same | LDXR/STLXR, or the L form | `.rl` on the AMO or the SC | refused |
-| acq_rel | the same | LDAXR/STLXR, or the AL form | `.aqrl` on the AMO; LR `.aq`, SC `.rl` | refused |
-| seq_cst | the same | LDAXR/STLXR, or the AL form | `.aqrl` on the AMO; LR `.aqrl`, SC `.rl` | refused |
-| fence acquire | none | DMB ISHLD | FENCE R,RW | DMB SY |
-| fence release | none | DMB ISH | FENCE RW,W | DMB SY |
-| fence acq_rel | none | DMB ISH | FENCE.TSO | DMB SY |
-| fence seq_cst | MFENCE | DMB ISH | FENCE RW,RW | DMB SY |
+| ordering | x86-64 (x86-TSO) | arm64 | RV64 (RVWMO, Table A.6) | Cortex-M0 | Cortex-M0 at `armv8-m.main` |
+|---|---|---|---|---|---|
+| load relaxed | MOV | LDR | `l` | LDR | LDR |
+| load acquire | MOV | LDAR | `l`; FENCE R,RW | LDR; DMB SY | LDA |
+| load seq_cst | MOV | LDAR | FENCE RW,RW; `l`; FENCE R,RW | LDR; DMB SY | LDA |
+| store relaxed | MOV | STR | `s` | STR | STR |
+| store release | MOV | STLR | FENCE RW,W; `s` | DMB SY; STR | STL |
+| store seq_cst | XCHG | STLR | FENCE RW,W; `s` | DMB SY; STR; DMB SY | STL |
+| read-modify-write relaxed | XCHG, LOCK XADD, LOCK CMPXCHG | LDXR/STXR loop, or SWP, LDADD, CAS | AMO, or LR/SC loop | refused | refused |
+| acquire | the same | LDAXR/STXR, or the A form | `.aq` on the AMO or the LR | refused | refused |
+| release | the same | LDXR/STLXR, or the L form | `.rl` on the AMO or the SC | refused | refused |
+| acq_rel | the same | LDAXR/STLXR, or the AL form | `.aqrl` on the AMO; LR `.aq`, SC `.rl` | refused | refused |
+| seq_cst | the same | LDAXR/STLXR, or the AL form | `.aqrl` on the AMO; LR `.aqrl`, SC `.rl` | refused | refused |
+| fence acquire | none | DMB ISHLD | FENCE R,RW | DMB SY | DMB SY |
+| fence release | none | DMB ISH | FENCE RW,W | DMB SY | DMB SY |
+| fence acq_rel | none | DMB ISH | FENCE.TSO | DMB SY | DMB SY |
+| fence seq_cst | MFENCE | DMB ISH | FENCE RW,RW | DMB SY | DMB SY |
 
 A compare-exchange is lowered by its success ordering, which is never weaker
 than its failure ordering (D227), so its acquiring read serves a failed
@@ -711,7 +713,10 @@ atomic helper at the default `armv8-a` level; at `armv8.1-a` (D255) each
 read-modify-write is one LSE instruction at the access's width, and RV64's
 one- and two-byte read-modify-writes are LR/SC loops on the aligned word that
 holds them, which keep every byte outside the access. ARMv6-M's DMB has only
-the SY option. Retry loops promise no wait-free bound. Scalar volatile
+the SY option, and so has Armv8-M's. At `armv8-m.main` an acquire or
+release takes the access's width, LDAB or LDAH and STLB or STLH for a byte
+or a halfword (D606); `armv7-m` and `armv7e-m` have no such instruction and
+keep the Cortex-M0 column. Retry loops promise no wait-free bound. Scalar volatile
 accesses use exactly one width-matched load/store and no implicit hardware
 fence.
 
@@ -729,7 +734,7 @@ completion, which also does not imply peripheral-command completion. No portable
 The mappings for x86-64, arm64 and Cortex-M0 are those collected in
 [Sewell's C/C++11 mappings to processors](https://www.cl.cam.ac.uk/~pes20/cpp/cpp0xmappings.html),
 x86-TSO's and ARMv8's, and ARMv7's for a core without acquire and release
-instructions; RV64's is Table A.6 of the memory model appendix of
+instructions, ARMv8's again at `armv8-m.main`; RV64's is Table A.6 of the memory model appendix of
 [the RISC-V unprivileged ISA](https://github.com/riscv/riscv-isa-manual/releases).
 
 Official architecture and toolchain references checked on 2026-09-16:
@@ -824,7 +829,7 @@ Outgoing arguments use the planner's aligned stack area plus private r0-r3 stagi
 | Conversion and floating operations | Software IEEE arithmetic/comparison and integer-to-float/float-width helpers. Float-to-integer selection decodes the IEEE carrier and checks range before constructing the integer; bool accepts only its specified domain. Finite narrowing overflow traps. |
 | Calls and values | Direct/indirect entries, value copies, inout places, caller-owned aggregate/multiple results, generic evidence and erased self/table dispatch. Capture r12 immediately after a Landin call; foreign helpers and veneers may clobber it. Every successful Landin return writes zero privately. |
 | Images and checks | Raw packed copies retain every bit. Extraction validates named encodings even when discarded or unchecked; insertion fit, indices and reserved policies retain their guards. Ordinary atoms still exclude zero. |
-| Memory and traps | One aligned LDRB/LDRH/LDR or STRB/STRH/STR per admitted transaction. Atomic orders are conservatively strengthened by DMB SY before and after; compiler barriers emit no hardware operation, device/thread barriers use DMB SY, completion uses DSB SY. Checked failure uses UDF #1. No interrupt masking or helper atomics. |
+| Memory and traps | One aligned LDRB/LDRH/LDR or STRB/STRH/STR per admitted transaction. An atomic takes DMB SY only where its ordering needs one (D499), and at `armv8-m.main` none, its acquire or release being LDA or STL in the access's width (D606); compiler barriers emit no hardware operation, device/thread barriers use DMB SY, completion uses DSB SY. Checked failure uses UDF #1. No interrupt masking or helper atomics. |
 | Stack switching | D450's prepare is inline: it aligns the slice's top down to eight and lays a 48-byte frame whose CONTROL word selects PSP and whose limit word is the slice's base plus D472's 384-byte margin, and traps `stack_exhausted` when the slice cannot hold both. A switch checks nothing: it calls one per-program routine that pushes r4-r7 and the return address, a scratch word and the current limit cell, then CONTROL with r8-r11 above it, stores SP, writes the resumed pointer into MSP or PSP as that frame's CONTROL word says, writes CONTROL with an ISB, pops, and installs the resumed frame's limit in the cell; its CFI is exact at every instruction. In a program that prepares a stack each routine checks its frame against the cell in its prologue, eight instructions with a far branch to the trap, and an interrupt handler keeps the interrupted limit below its frame record and runs with zero in the cell (D471). A prepared stack's first return is a start routine whose CFI leaves the return address undefined. D460 records the layout, D461 the exception frame each fibre's backing holds, D472 the limit. |
 
 The instruction envelope follows the official
@@ -870,8 +875,8 @@ are checked against actual linked code and execution.
 
 | Helper family | Purpose and transport |
 |---|---|
-| `__aeabi_lmul` | low 64-bit product, two core-register pairs; checked selection first proves the product fits |
-| `__aeabi_idivmod`, `__aeabi_uidivmod` | 32-bit quotient in r0 and remainder in r1; not requested at `armv7-m`, which divides in hardware (D255) |
+| `__aeabi_lmul` | low 64-bit product, two core-register pairs; checked selection first proves the product fits; not requested at a Thumb-2 level, which multiplies in hardware (D605) |
+| `__aeabi_idivmod`, `__aeabi_uidivmod` | 32-bit quotient in r0 and remainder in r1; not requested at a Thumb-2 level, which divides in hardware (D255) |
 | `__aeabi_ldivmod`, `__aeabi_uldivmod` | 64-bit quotient in r0/r1 and remainder in r2/r3; also bounds checked multiplication |
 | `__aeabi_fadd/fsub/fmul/fdiv`, `__aeabi_dadd/dsub/dmul/ddiv` | soft IEEE f32/f64 arithmetic in core bit carriers |
 | `__aeabi_fcmp*`, `__aeabi_dcmp*` | ordered/equality predicates; inequality inverts equality |
@@ -892,9 +897,15 @@ with `-lgcc`. Runtime and CPU-library packaging belong to the freestanding
 At `armv7-m` (D255) the emitter names `.arch armv7-m` instead of `.cpu
 cortex-m0`, a 32-bit quotient is SDIV or UDIV and its remainder MLS after it,
 after the same zero-divisor and minimum-over-minus-one guards, and the link
-selects the pinned `thumb/v7-m/nofp/libgcc.a` with `-march=armv7-m`. Every
-other selection above, the r0-r7 selector and the 64-bit helpers, is
-unchanged. Inline assembly keeps the ordinary block's straight-line and
+selects the pinned `thumb/v7-m/nofp/libgcc.a` with `-march=armv7-m`. A
+product of 32 bits or fewer is SMULL or UMULL into r1:r0, a checked one
+compared with its high word as the helper's result was, and a 64-bit one
+UMULL of the low halves with MUL and MLA adding the cross products to its
+high word (D605). `armv7e-m` and `armv8-m.main` select the same, with their
+own `.arch`, `-march=` and multilib, `thumb/v8-m.main/nofp` for the latter,
+and `armv8-m.main` takes LDA and STL for an acquiring load and a releasing
+store (D606). Every other selection above, the r0-r7 selector and the
+64-bit divide helpers, is unchanged. Inline assembly keeps the ordinary block's straight-line and
 register restrictions, but the ARMv6-M instruction allowlist applies only
 at `armv6-m`; at higher levels the assembler checks instructions against
 the selected `.arch`.
@@ -918,7 +929,8 @@ imports none is given the library's `platform/cortex_m/reference`: 32 KiB
 flash and 16 KiB RAM, the top 4 KiB of RAM reserved for stacks, with
 eight-byte-aligned initial MSP `0x20004000`, so static images cannot overlap
 `0x20003000`. RP2040's is `devices/descriptions/rp2040`, imported as
-`descriptions/rp2040` under `--root=devices`.
+`descriptions/rp2040` under `--root=devices`, and RP2350's
+`devices/descriptions/rp2350`.
 The driver refuses a known compiler-framed routine larger than the selected
 stack reservation, counting its saved registers and reserved homes. This
 per-routine check does not bound stack use through calls or interrupt nesting.
@@ -926,7 +938,10 @@ The vector image has the description's word count at its boot address, the
 start of the region it places `vectors` in, after RP2040's 256-byte
 second-stage slot for `rp2040-boot2` (D545), which holds the description's
 `link(boot_stage)` routine and the checksum the driver writes into the
-assembled object (D587, D588). The slots a handler takes are its
+assembled object (D587, D588). An `rp2350-image-block` image's table is
+followed directly by its IMAGE_DEF block in `.embedded_block`, which the
+driver reads back from the assembled object and refuses as L0555 if it is
+not the block D637 gives (D638). The slots a handler takes are its
 core's exceptions and 16 + IRQ for each interrupt the description names, and
 every other slot is zero (D544). There is no VTOR relocation, FPU or
 exclusive-access implementation. D229 owns the typed handlers and
@@ -940,14 +955,15 @@ script is D229's, byte for byte. The driver retains `OUTPUT.s`, `OUTPUT.o`,
 `OUTPUT.ld`, `OUTPUT.map` and the ELF; `--emit=linker-script` writes the
 script alone, with no program to link (D589). `--linker-script=FILE` links with a
 developer's script instead, still writing `OUTPUT.ld`, and then holds the ELF
-to D546's four clauses: the vector table at the boot address, the startup
+to D546's four clauses: the vector table at the boot address, with the
+second stage or the image block its boot kind gives, the startup
 symbols, the stack in a writable region of its size, and each initialized
 image loaded from the text region; a broken one is L0519, naming it.
 With `--build-report=PATH`, a successful firmware executable also reports
 post-link occupied flash and static RAM extents, their limits and remaining
 capacity, the reserved stack size, the selected libgcc archive members, and
 the profile it was built for: device, core, boot kind, vector address and
-length, regions and placements.
+length, regions and placements, and the second stage or the image block.
 The sizes come from ELF load segments; the helper names come from the linker
 map. Assembly-only reports have no linked capacity measurement.
 The assembler uses Cortex-M0/Thumb/soft-float/AAPCS flags and fatal warnings.

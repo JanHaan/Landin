@@ -1688,15 +1688,15 @@ linker.place("stack", "RAM", 4 * 1024)
 ### L0516
 
 A device description selects a boot image kind refine reserves but does not
-build yet (D545): `rp2350-image-block` or `esp-app-image`. This compiler
-builds `vector-table` and `rp2040-boot2` images.
+build yet (D545): `esp-app-image`. This compiler builds `vector-table`,
+`rp2040-boot2` and `rp2350-image-block` images.
 
 ```landin
 -- refine: --target=cortex-m0
 compiler.device("board")
 compiler.core("cortex-m0plus")
 compiler.vectors(48)
-compiler.boot("rp2350-image-block")
+compiler.boot("esp-app-image")
 linker.region("FLASH", 0x1000_0000, 2 * 1024 * 1024, "rx")
 linker.region("RAM", 0x2000_0000, 256 * 1024, "rwx")
 linker.place("vectors", "FLASH")
@@ -1944,3 +1944,15 @@ that refers to it, would make the bytes the boot ROM copies and runs at
 another address differ from the ones summed, and the message names the
 relocation and its symbol. Make the stage shorter, or write it with no
 symbol outside itself and refer to it from nowhere.
+
+### L0555
+
+The assembled image block is not the IMAGE_DEF block an `rp2350-image-block`
+image carries (D638). refine emits the block directly after the vector table
+and reads the `.embedded_block` section of the object the assembler wrote
+before linking it: the section must be the 20 bytes of one block linked to
+itself, its start and end markers, one IMAGE_TYPE item of one word saying an
+Arm executable for RP2350 that runs in Secure state, and the LAST item giving
+that word, with no relocation in it. The message names the part that is
+not. refine writes these words itself, so this is a defect of refine or of the
+assembler it ran rather than of the program; report it with the message.

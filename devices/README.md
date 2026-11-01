@@ -18,7 +18,8 @@ refine --root=devices/generated --root=. --target=cortex-m0 \
     --firmware-entry=start --emit=exe devices/consumers/images -o fixture.elf
 ```
 
-This tree holds two devices: Raspberry Pi's RP2040 and ST's STM32H753. A
+This tree holds three devices: Raspberry Pi's RP2040 and RP2350 and ST's
+STM32H753. A
 description is imported as `descriptions/DEVICE` with `--root=devices`, and
 its register modules as `DEVICE/PERIPHERAL` with `--root=devices/generated`.
 
@@ -56,6 +57,22 @@ checksum (D588). The Cortex-M
 compares what it selects with expectations recorded from those files, and
 the stage's stores with the ones pico-sdk's own source makes.
 
+RP2350's [`memory.ldn`](descriptions/rp2350/memory.ldn) follows pico-sdk
+2.2.0's
+[`memmap_default.ld`](https://github.com/raspberrypi/pico-sdk/blob/2.2.0/src/rp2_common/pico_crt0/rp2350/memmap_default.ld)
+for RP2350 (SHA-256
+`2349d98352370fc22d84d482e53313300e8a52ea42529eced235fa99c109234f`): 512 KiB
+of RAM from `0x20000000` and the scratch banks at `0x20080000` and
+`0x20081000`, the same FLASH template at `0x10000000`, and 4 MiB from the
+Pico 2's
+[`pico2.h`](https://github.com/raspberrypi/pico-sdk/blob/2.2.0/src/boards/include/boards/pico2.h)
+(`6d32916eea833abcef7e7d10321853a5c23eb7366b893aba4d5354d6ddc6b76c`). Its
+stack takes SCRATCH_Y, it describes no float unit (D636), and its boot kind
+is `rp2350-image-block`: no second stage, the vector table at the start of
+flash and, directly after it, the IMAGE_DEF block refine emits and checks
+(D637, D638), which the descriptions lane compares with pico-sdk's
+`embedded_start_block.inc.S` as the pinned GCC assembles it.
+
 
 | Path | What it is |
 |---|---|
@@ -76,9 +93,12 @@ pins each input by the URL it is fetched from and its SHA-256, and
 `$LANDIN_INPUTS`, or `~/.cache/landin/inputs`, as `CACHE/NAME`, verifies it,
 and prints its path. A cached file is verified every time it is used; bytes
 of another hash are refused and never cached. `--offline` uses the cache
-alone. An input marked `"fetch": "by hand"`, RM0433, is one a person puts in
-the cache; the fetcher verifies it when named or with `--all` and never
-downloads it.
+alone. An input marked `"fetch": "by hand"`, RM0433 or the RP2350
+datasheet, is one a person puts in the cache; the fetcher verifies it when
+named or with `--all` and never downloads it. The RP2350 datasheet is served
+to a script, but its URL serves whatever release is current, so no job may
+depend on its hash; it is marked by hand for that reason, and saved as
+`CACHE/rp2350-datasheet/rp2350-datasheet.pdf`.
 
 Such a manual stays supplied by hand: www.st.com resets a script's HTTP/2
 stream and times out over HTTP/1.1, and its terms do not let the tree carry
@@ -94,6 +114,10 @@ pinned Rev 9, the copy wanted is the maintainer's, and no job verifies it.
 | `rp2040/{clocks,dma,io_bank0,m0plus,pads_bank0,resets,sio,timer,uart,vreg_and_chip_reset,watchdog,xosc}.h` | the same commit's `hardware/regs` headers, used only by the oracle | BSD-3-Clause |
 | `rp2040/boot2_generic_03h.S`, `rp2040/exit_from_boot2.S` | the same commit's `boot_stage2/boot2_generic_03h.S` and `boot_stage2/asminclude/boot2_helpers/exit_from_boot2.S`, which `descriptions/rp2040/boot2.ldn` ports and the descriptions lane reads as the stage's oracle | BSD-3-Clause |
 | `rp2040/{addressmap,ssi}.h` | the same commit's `hardware/regs` headers, whose macros that oracle evaluates | BSD-3-Clause |
+| `rp2350/RP2350.svd` | the same commit's `src/rp2350/hardware_regs/RP2350.svd`; device `RP2350`, version `0.1`, SVD schema `1.1` | BSD-3-Clause, Raspberry Pi Ltd 2024 |
+| `rp2350/{addressmap,clocks,dma,intctrl,io_bank0,m33,pads_bank0,powman,resets,sio,ticks,timer,uart,xosc}.h` | the same commit's `hardware/regs` headers for RP2350, used only by the oracle | BSD-3-Clause |
+| `rp2350/embedded_start_block.inc.S`, `rp2350/picobin.h` | the same commit's `pico_crt0/embedded_start_block.inc.S` and `boot_picobin_headers/include/boot/picobin.h`, which the descriptions lane assembles as the image block's oracle | BSD-3-Clause |
+| `rp2350-datasheet/rp2350-datasheet.pdf` | the [RP2350 datasheet](https://datasheets.raspberrypi.com/rp2350/rp2350-datasheet.pdf), release 8, build date 2026-10-01, build version `80d627281ed5`, 11,094,994 bytes, supplied by hand | CC BY-ND 4.0, not redistributed |
 | `stm32h753/STM32H753.svd` | Arm's [STM32H7xx_DFP](https://github.com/Open-CMSIS-Pack/STM32H7xx_DFP) tag `v4.1.3`, commit `4c77d2ffa6e885b6da9d6fe949c2d6070b21fe7d`, the device family pack Keil publishes; device `STM32H753`, version `2.0`, SVD schema `1.1` | Apache-2.0, STMicroelectronics 2024, stated in the file's own header |
 | `stm32h753/stm32h753xx.h` | ST's [cmsis-device-h7](https://github.com/STMicroelectronics/cmsis-device-h7), commit `81db1ec63cdc191fae1565b772da3ea5aa29a683`, used only by the oracle | Apache-2.0, per that repository's licence |
 
@@ -194,6 +218,40 @@ and field with the vendor's own C headers, which refine never reads. The
 gate's `cortex-m` job runs it with the release compiler. The two vendor
 formats may share an upstream database; they are independent of the
 projection, not a claim of independent silicon verification.
+
+## RP2350: the selected surface
+
+The RP2350 is learnt for the first board's port on a Pico 2 (D635): what
+`compiler/tests/board/rp2040` touches, at the RP2350's own addresses. Its
+modules are under `generated/rp2350`, its correspondence and manifest beside
+them, and its description in `descriptions/rp2350`. pico-sdk's SVD names its
+core `CM33`, which refine reads as `cortex-m33`.
+
+| Module | Selected registers | Why |
+|---|---|---|
+| `clocks` | CLK_REF_CTRL, CLK_REF_SELECTED, CLK_SYS_CTRL, CLK_SYS_SELECTED, CLK_PERI_CTRL | the reference and system clocks on the crystal, the peripheral clock enabled, and the glitchless switches' selections |
+| `xosc` | CTRL, STATUS, STARTUP | the 12 MHz crystal; FREQ_RANGE is read as a number, its SVD names beginning with a digit |
+| `resets` | RESET, RESET_DONE | the port's peripherals taken out of reset |
+| `io_bank0` | GPIO0_CTRL, GPIO1_CTRL, GPIO3_CTRL | UART0's pins and the indicator |
+| `pads_bank0` | GPIO0, GPIO1, GPIO3 | their pads, whose ISO bit resets set and IE clear, so bring-up clears one and sets the other; DRIVE is read as a number |
+| `uart0` | UARTDR, UARTFR, UARTIBRD, UARTFBRD, UARTLCR_H, UARTCR, UARTRIS, UARTICR, UARTDMACR | the receive DMA, the divisors, the flags, the overrun and its clear |
+| `dma` | CH0_READ_ADDR, CH0_WRITE_ADDR, CH0_TRANS_COUNT, CH0_CTRL_TRIG, INTR, INTE0, CHAN_ABORT | channel 0, its interrupt and the abort; the control writer admits bits 0 to 25, BUSY being bit 26 on this chip |
+| `timer0` | ALARM0, TIMERAWL, INTR, INTE | the alarm the port interrupts with |
+| `ticks` | TIMER0_CTRL, TIMER0_CYCLES | TIMER0's 1 MHz tick, which the RP2040 took from its watchdog |
+| `sio` | GPIO_IN, GPIO_OUT_SET, GPIO_OUT_CLR, GPIO_OE_SET | the indicator and its read-back |
+| `powman` | CHIP_RESET | the last reset's cause, HAD_POR at bit 16; no writer, since POWMAN takes a password to write |
+| `ppb` | NVIC_ISER0, NVIC_ICPR0, NVIC_ISPR0, VTOR | the M33's interrupt enables and pending bits and the table's address; pico-sdk's header for them is `m33.h` |
+
+The check compares every selected register and field with pico-sdk's
+headers for RP2350, each base with `addressmap.h`, DMA's request values with
+the datasheet's DREQ table (12.6.4.1, Table 1254), and the access policies,
+pad resets and CHIP_RESET with literals reviewed from the datasheet. Where the
+SVD and pico-sdk disagree, the datasheet decides: IRQs 40 and 41 are
+PROC0_IRQ_CTI and PROC1_IRQ_CTI (3.2, Table 95, p. 81), which the SVD omits
+and `intctrl.h` defines, so the policy adds both and `interrupts.ldn` says
+each in a line of its own, with 68 slots and all 52 interrupts named. The
+datasheet's URL serves whatever release is current, so the copy pinned is
+supplied by hand and no job verifies it, as RM0433's is.
 
 ## STM32H753: the selected surface
 

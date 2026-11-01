@@ -20,6 +20,7 @@ class ProbeFailures(unittest.TestCase):
         calls=[]
         lanes=[('abi','execute'),('memory','execute'),('packed','execute'),
                ('packed_native','execute'),('backend_acceptance','execute'),
+               ('backend_acceptance','execute_mainline'),
                ('firmware','execute_suite'),('freestanding','execute_suite'),
                ('devices','execute_suite'),('descriptions','execute_suite'),
                ('driver','execute_suite'),
@@ -42,6 +43,7 @@ class ProbeFailures(unittest.TestCase):
                     side_effect=lambda *args,n=name:calls.append(n)))
             Run(root,root).execute(Path('relative/refine'))
         self.assertEqual(calls,['qemu','peripheral']+[n for n,_ in lanes])
+        self.assertIn('mainline', __import__('run').LANES)
 
     def test_a_stop_at_a_line_is_held_to_that_line(self):
         from firmware import landed
@@ -251,6 +253,24 @@ class ProbeFailures(unittest.TestCase):
                                             ' input .*status oracle.*"refuse" row'):
                     backend_corpus.inventory()
 
+    def test_a_selection_row_names_known_levels(self):
+        import shutil
+        import backend_corpus
+        from unittest.mock import patch
+        name = 'runtime/checked-products-of-arguments'
+        self.assertIn('armv8-m.main', backend_corpus.inventory()[name]['selects'])
+        for selects in ({'routine': 'main'}, {'armv9-m': {'has': ['smull']}},
+                        {'armv7-m': {'holds': ['smull']}}):
+            with tempfile.TemporaryDirectory() as directory:
+                root = Path(directory) / 'cortex-m'
+                shutil.copytree(backend_corpus.COUNTERPARTS, root)
+                record = json.loads((root / 'corpus.json').read_text())
+                record['fixtures'][name]['selects'] = selects
+                (root / 'corpus.json').write_text(json.dumps(record))
+                with patch('backend_corpus.COUNTERPARTS', root):
+                    with self.assertRaisesRegex(RuntimeError, name + ': a row\'s selects'):
+                        backend_corpus.inventory()
+
     def test_an_output_oracle_never_executes_and_the_refusal_says_the_ways_out(self):
         import shutil
         import backend_corpus
@@ -360,24 +380,54 @@ class ProbeFailures(unittest.TestCase):
                 self.assertEqual(fixture_digest.call_count, 1)
 
     def test_a_level_must_change_the_executed_image(self):
-        from backend import LEVELS, levels_of, level_flags
-        from backend_corpus import divide_lowering
-        self.assertEqual(levels_of({'levels': 'x86-64-v3, armv7-m'}), ['armv7-m'])
+        from backend import LEVELS, execute, levels_of, level_flags, recorded
+        from backend_corpus import lowering
+        self.assertEqual(levels_of({'levels': 'x86-64-v3, armv7-m, armv8-m.main'}),
+                         ['armv7-m', 'armv8-m.main'])
         self.assertEqual(level_flags('armv7-m')[0], '-march=armv7-m')
         self.assertNotIn('-mcpu=cortex-m0', level_flags('armv7-m'))
+        self.assertEqual(level_flags('armv8-m.main')[0], '-march=armv8-m.main')
         self.assertEqual(LEVELS['armv7-m']['machine'], 'mps2-an385')
+        self.assertEqual(LEVELS['armv8-m.main']['machine'], 'mps2-an505')
+        self.assertEqual(LEVELS['armv8-m.main']['profile'], 'mps2-an505')
+        row = {'mode': 'execute', 'selects': {
+            'routine': 'main',
+            'armv6-m': {'has': ['bl __aeabi_lmul'], 'lacks': ['smull']},
+            'armv8-m.main': {'has': ['smull', 'mla'], 'lacks': ['bl __aeabi_lmul']}}}
+        main = ('00000010 <main>:\n'
+                '  10:\tfb80 0102 \tsmull\tr0, r1, r0, r2\n'
+                '  14:\tfb01 3302 \tmla\tr3, r1, r2, r3\n'
+                '  18:\tf000 f800 \tbl\t30 <helper>\n')
         with tempfile.TemporaryDirectory() as directory:
             run = Run(Path(directory), HERE)
             listing = Path(directory) / 'disassembly.log'
-            listing.write_text('  10:\tfb90 f1f2 \tsdiv\tr1, r0, r2\n')
-            self.assertEqual(divide_lowering(run)['hardware_divides'], 1)
-            listing.write_text('  10:\tf000 f800 \tbl\t20 <__aeabi_idivmod>\n')
-            with self.assertRaisesRegex(RuntimeError, 'no hardware instruction'):
-                divide_lowering(run)
-            listing.write_text('  10:\tfb90 f1f2 \tsdiv\tr1, r0, r2\n'
-                               '  14:\tf000 f800 \tbl\t20 <__aeabi_uidivmod>\n')
-            with self.assertRaisesRegex(RuntimeError, 'still calls __aeabi_uidivmod'):
-                divide_lowering(run)
+            #  A local label inside main is not a routine of its own.
+            (Path(directory) / 'sections-routines.log').write_text(
+                '00000011 0000000c T main\n00000031 00000002 t helper\n')
+            main = main.replace('  18:', '00000018 <L3_1>:\n  18:')
+            listing.write_text(main + '00000030 <helper>:\n  30:\t4770      \tbx\tlr\n')
+            found = lowering(run, 'runtime/x', row, 'armv8-m.main')
+            self.assertEqual(found['routine'], 'main')
+            self.assertEqual(found['helpers_absent'][0], '__aeabi_lmul')
+            #  The same source at the default has its own lowering to keep.
+            with self.assertRaisesRegex(RuntimeError, 'runtime/x at armv6-m: main lacks'
+                                        ' bl __aeabi_lmul; holds smull'):
+                lowering(run, 'runtime/x', row, 'armv6-m')
+            #  A Thumb-2 image asks for no product anywhere, whatever its row.
+            listing.write_text(main + '00000030 <helper>:\n'
+                               '  30:\tf000 f800 \tbl.w\t40 <__aeabi_lmul>\n')
+            with self.assertRaisesRegex(RuntimeError, 'still calls __aeabi_lmul'):
+                lowering(run, 'runtime/x', {'mode': 'execute'}, 'armv7-m')
+            self.assertEqual(lowering(run, 'runtime/x', {'mode': 'execute'}, 'armv6-m'), {})
+            listing.write_text('00000030 <helper>:\n  30:\t4770      \tbx\tlr\n')
+            (Path(directory) / 'sections-routines.log').write_text(
+                '00000031 00000002 t helper\n')
+            with self.assertRaisesRegex(RuntimeError, 'has no routine main'):
+                lowering(run, 'runtime/x', row, 'armv8-m.main')
+            #  Each machine runs the images of its own map.
+            with self.assertRaisesRegex(RuntimeError, "linked for constrained-reference does"
+                                        " not run on QEMU's mps2-an505"):
+                execute(run, listing, 42, False, level='armv8-m.main', profile=recorded())
 
     def test_image_limit_does_not_hide_codegen_failure(self):
         from unittest.mock import patch
@@ -865,7 +915,7 @@ class ProbeFailures(unittest.TestCase):
         self.assertEqual(run.verdicts['abi'], {'status': 'failed', 'error': 'abi broke'})
         self.assertEqual(run.verdicts['evidence']['status'], 'not run')
         self.assertEqual(run.verdicts['firmware'], {'status': 'passed'})
-        self.assertIn('3 of 13 lanes did not pass', str(failed.exception))
+        self.assertIn('3 of 14 lanes did not pass', str(failed.exception))
 
     def test_a_stack_overrun_is_watched_and_named(self):
         from backend import recorded, session

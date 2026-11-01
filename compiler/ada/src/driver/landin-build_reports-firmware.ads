@@ -10,7 +10,8 @@ package Landin.Build_Reports.Firmware is
    --  STAGE is the source name of the description's second-stage routine
    --  (D587), which the report names beside what it reads of the stage
    --  from the linked image: its length, its slot, and the checksum and
-   --  the address it is written at (D588).
+   --  the address it is written at (D588).  For an image block it reads
+   --  the block's address, length and words (D638).
    procedure Measure
      (Host : Landin.Platform.Filesystem'Class;
       Executable, Link_Map : String;
@@ -27,7 +28,8 @@ package Landin.Build_Reports.Firmware is
    --  D546: the clause of the linker script contract a linked image
    --  breaks, named as the message gives it, or "" when it keeps them all:
    --  1, the vector table at the profile's boot address with its whole
-   --  length and its first two words; 2, every `_landin_firmware_*`
+   --  length and its first two words, and the second stage or the image
+   --  block its boot kind gives; 2, every `_landin_firmware_*`
    --  symbol startup reads; 3, the stack in a writable region, of the
    --  description's size and clear of the image's RAM; 4, each
    --  initialized image's load address in the region text is placed in.

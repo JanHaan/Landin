@@ -1975,7 +1975,6 @@ package body Landin.Stages.Configuration is
       procedure Finish_Profile;
       procedure Finish_Profile is
          use type Firmware.Section_Kind;
-         use type Firmware.Boot_Kind;
          use type Landin.Targets.Byte_Count;
          Complete : Boolean := True;
          Logical : constant String :=
@@ -2127,9 +2126,7 @@ package body Landin.Stages.Configuration is
             Stack_Region : constant Firmware.Region :=
               Firmware.Placed_Region (Built, Firmware.Stack);
          begin
-            if Built.Boot = Firmware.Vector_Table
-              or else Built.Boot = Firmware.RP2040_Boot2
-            then
+            if Firmware.Implemented (Built.Boot) then
                if (Vectors_Region.Origin
                      + Firmware.Boot_Prefix (Built.Boot))
                  mod Firmware.Vector_Alignment (Built) /= 0
@@ -2194,11 +2191,13 @@ package body Landin.Stages.Configuration is
             Complete := False;
             Report_At
               (Bad.Boot_Kind_Reserved, Boot_Site,
-               "refine does not yet build a "
+               "refine does not yet build "
+               & (if Firmware.Spelling (Built.Boot) (1) in 'a' | 'e' | 'i'
+                    | 'o' | 'u' then "an " else "a ")
                & Firmware.Spelling (Built.Boot) & " image",
                "D545: " & Firmware.Spelling (Built.Boot) & " is a reserved"
-               & " boot image kind; this compiler builds ""vector-table"""
-               & " and ""rp2040-boot2"" images");
+               & " boot image kind; this compiler builds ""vector-table"","
+               & " ""rp2040-boot2"" and ""rp2350-image-block"" images");
          end if;
 
          --  D543: the core is the request's, but for the library's

@@ -1,0 +1,53 @@
+--  D606: an atomic store of a one-, two- and four-byte cell at each
+--  ordering a store admits, each read back by a load at an ordering a load
+--  admits.  main holds every access, which the Cortex-M lane reads in the
+--  linked image: at armv8-m.main an acquiring load is LDA, LDAB or LDAH
+--  and a releasing store STL, STLB or STLH, with no DMB, and at armv7-m
+--  each is the plain access beside a DMB.  Each check that fails returns
+--  its own code.
+mut byte: u8 = 0
+mut half: u16 = 0
+mut word: u32 = 0
+
+public main: () -> (code: i32) =
+    code = 0
+    compiler.atomic_store(addr byte, 201, compiler.relaxed)
+    if compiler.atomic_load(addr byte, compiler.acquire) <> 201 then
+        code = 1
+    end if
+    compiler.atomic_store(addr byte, 202, compiler.release)
+    if compiler.atomic_load(addr byte, compiler.seq_cst) <> 202 then
+        code = 2
+    end if
+    compiler.atomic_store(addr byte, 203, compiler.seq_cst)
+    if compiler.atomic_load(addr byte, compiler.relaxed) <> 203 then
+        code = 3
+    end if
+    compiler.atomic_store(addr half, 65001, compiler.relaxed)
+    if compiler.atomic_load(addr half, compiler.acquire) <> 65001 then
+        code = 4
+    end if
+    compiler.atomic_store(addr half, 65002, compiler.release)
+    if compiler.atomic_load(addr half, compiler.seq_cst) <> 65002 then
+        code = 5
+    end if
+    compiler.atomic_store(addr half, 65003, compiler.seq_cst)
+    if compiler.atomic_load(addr half, compiler.relaxed) <> 65003 then
+        code = 6
+    end if
+    compiler.atomic_store(addr word, 4000000001, compiler.relaxed)
+    if compiler.atomic_load(addr word, compiler.acquire) <> 4000000001 then
+        code = 7
+    end if
+    compiler.atomic_store(addr word, 4000000002, compiler.release)
+    if compiler.atomic_load(addr word, compiler.seq_cst) <> 4000000002 then
+        code = 8
+    end if
+    compiler.atomic_store(addr word, 4000000003, compiler.seq_cst)
+    if compiler.atomic_load(addr word, compiler.relaxed) <> 4000000003 then
+        code = 9
+    end if
+    if code == 0 then
+        code = 42
+    end if
+end main

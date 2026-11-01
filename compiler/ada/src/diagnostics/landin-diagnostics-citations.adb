@@ -2026,6 +2026,13 @@ package body Landin.Diagnostics.Citations is
             when 255 =>
                "A build assumes a CPU feature level, and a level changes"
                & " no layout",
+            when 605 =>
+               "A Thumb-2 level multiplies in hardware",
+            when 606 =>
+               "Armv8-M acquires and releases in one instruction",
+            when 607 =>
+               "The Armv8-M corpus runs on a lane description of the AN5"
+               & "05",
             when 256 =>
                "Linux arm64 is the standard AAPCS64, a third C ABI with "
                & "unsigned plain char",
@@ -2267,6 +2274,18 @@ package body Landin.Diagnostics.Citations is
             when 589 =>
                "`--emit=linker-script` writes a profile's derived script"
                & " without a program",
+            when 635 =>
+               "RP2350 is learnt from pico-sdk's SVD for the first board"
+               & "'s port",
+            when 636 =>
+               "RP2350's description is pico-sdk's map for a Pico 2, wit"
+               & "h no float unit",
+            when 637 =>
+               "An `rp2350-image-block` image is its vector table, then "
+               & "one IMAGE_DEF block linked to itself",
+            when 638 =>
+               "refine reads the assembled block back before linking, an"
+               & "d the report records it",
             when 570 =>
                "The depth report closes a call through a table or a func"
                & "tion value",
@@ -3273,6 +3292,12 @@ package body Landin.Diagnostics.Citations is
                "Decisions: The toolchain, C and the machine",
             when 255 =>
                "Decisions: The toolchain, C and the machine",
+            when 605 =>
+               "Decisions: The toolchain, C and the machine",
+            when 606 =>
+               "Decisions: The toolchain, C and the machine",
+            when 607 =>
+               "Decisions: The toolchain, C and the machine",
             when 256 =>
                "Decisions: The toolchain, C and the machine",
             when 265 =>
@@ -3454,6 +3479,14 @@ package body Landin.Diagnostics.Citations is
             when 588 =>
                "Decisions: The toolchain, C and the machine",
             when 589 =>
+               "Decisions: The toolchain, C and the machine",
+            when 635 =>
+               "Decisions: The toolchain, C and the machine",
+            when 636 =>
+               "Decisions: The toolchain, C and the machine",
+            when 637 =>
+               "Decisions: The toolchain, C and the machine",
+            when 638 =>
                "Decisions: The toolchain, C and the machine",
             when 570 =>
                "Decisions: The toolchain, C and the machine",
@@ -4692,6 +4725,15 @@ package body Landin.Diagnostics.Citations is
             when 255 =>
                "https://www.701.dev/spec.html#d255-a-build-assumes-a-cpu"
                & "-feature-level-and-a-level-changes-no-layout",
+            when 605 =>
+               "https://www.701.dev/spec.html#d605-a-thumb-2-level-multi"
+               & "plies-in-hardware",
+            when 606 =>
+               "https://www.701.dev/spec.html#d606-armv8-m-acquires-and-"
+               & "releases-in-one-instruction",
+            when 607 =>
+               "https://www.701.dev/spec.html#d607-the-armv8-m-corpus-ru"
+               & "ns-on-a-lane-description-of-the-an505",
             when 256 =>
                "https://www.701.dev/spec.html#d256-linux-arm64-is-the-st"
                & "andard-aapcs64-a-third-c-abi-with-unsigned-plain-char",
@@ -4977,6 +5019,20 @@ package body Landin.Diagnostics.Citations is
             when 589 =>
                "https://www.701.dev/spec.html#d589-emit-linker-script-wr"
                & "ites-a-profile-s-derived-script-without-a-program",
+            when 635 =>
+               "https://www.701.dev/spec.html#d635-rp2350-is-learnt-from"
+               & "-pico-sdk-s-svd-for-the-first-board-s-port",
+            when 636 =>
+               "https://www.701.dev/spec.html#d636-rp2350-s-description-"
+               & "is-pico-sdk-s-map-for-a-pico-2-with-no-float-unit",
+            when 637 =>
+               "https://www.701.dev/spec.html#d637-an-rp2350-image-block"
+               & "-image-is-its-vector-table-then-one-image-def-block-link"
+               & "ed-to-itself",
+            when 638 =>
+               "https://www.701.dev/spec.html#d638-refine-reads-the-asse"
+               & "mbled-block-back-before-linking-and-the-report-records-i"
+               & "t",
             when 570 =>
                "https://www.701.dev/spec.html#d570-the-depth-report-clos"
                & "es-a-call-through-a-table-or-a-function-value",

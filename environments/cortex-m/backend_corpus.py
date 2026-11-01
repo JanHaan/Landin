@@ -11,8 +11,9 @@ from pathlib import Path
 import re
 import sys
 
-from backend import (BOOT_PREFIX, HERE, LEVELS, ROOT, COUNTERPARTS, DESCRIPTIONS,
-                     MATERIALIZATION, REFERENCE, ImageLimit, build, derived, describe_routines, describe_sizes,
+from backend import (BOOT_PREFIX, BOOT_SUFFIX, HERE, LEVELS, ROOT, COUNTERPARTS, DESCRIPTIONS,
+                     MATERIALIZATION, REFERENCE, THUMB_2, ImageLimit, build, derived,
+                     describe_routines, describe_sizes,
                      execute as qemu, fixture, harness_start, image_contract, image_sizes,
                      level_flags, levels_of, link, measure_overflow, metadata, region)
 from run import CommandFailed, Run, require, workers
@@ -65,6 +66,13 @@ def inventory():
         #  itself: the corpus reads the refused imports from it.
         if (row['mode'] != 'execute' or 'profile_limit' in row) and not namespace_only(row):
             require(bool(row.get('reason')), 'unexplained corpus exclusion: ' + name)
+        if 'selects' in row:
+            require(row['mode'] == 'execute', '%s: only an execute row selects' % name)
+            levels = set(row['selects']) - {'routine'}
+            require(levels and levels <= set(LEVELS)
+                    and all(set(row['selects'][one]) <= {'has', 'lacks'} for one in levels),
+                    '%s: a row\'s selects names a routine and, for M-profile levels %s,'
+                    ' what it has and lacks (see %s)' % (name, ', '.join(LEVELS), RULES))
         if row['mode'] == 'restriction':
             witness = ROOT / row['witness']
             require(witness.is_file(), 'missing restriction witness')
@@ -122,13 +130,14 @@ def first_diagnostic(log):
     return next((line.strip() for line in log.splitlines() if line.startswith('error[')), '')
 
 
-def source_refusal(run, refine, name, row):
+def source_refusal(run, refine, name, row, level='armv6-m'):
     base = ROOT / 'compiler/tests/fixtures' / name
     meta = metadata(base / 'fixture.meta')
     inputs = meta.module_arguments(base)
+    selected = [] if level == 'armv6-m' else ['--level=' + level]
     try:
-        run.command('compile-refusal', [refine, *inputs, '--target=cortex-m0', '--emit=asm',
-                    '-o', run.out / 'refused.s'], timeout=900)
+        run.command('compile-refusal', [refine, *inputs, '--target=cortex-m0', *selected,
+                    '--emit=asm', '-o', run.out / 'refused.s'], timeout=900)
     except RuntimeError:
         command = run.commands[-1]
         require(command.get('exit') == 1 and not command.get('timed_out'),
@@ -271,29 +280,96 @@ def corpus_line(result):
     return text
 
 
-def divide_lowering(run):
-    """What the executed image divides with, read from its disassembly.
+#  The runtime helpers a Thumb-2 image never asks for: a product, which
+#  SMULL, UMULL and MLA make (D605), and a 32-bit quotient, which SDIV and
+#  UDIV make (D255).
+THUMB_2_HELPERS = ('__aeabi_lmul', '__aeabi_idivmod', '__aeabi_uidivmod')
 
-    A level that changed nothing would still pass every status, so the
-    image a higher level ran is required to divide in hardware and to have
-    asked the runtime for no 32-bit quotient: the lowering is shown to have
-    changed in the bytes QEMU executed, not only in the text refine wrote.
+
+def instructions(listing):
+    """Every instruction of an `objdump -d` listing as (address, mnemonic,
+    operands), in order.  A width suffix, `.w` or `.n`, is not part of the
+    mnemonic."""
+    found = []
+    for line in listing.splitlines():
+        fields = line.split('\t')
+        address = re.match(r'^\s*([0-9a-f]+):$', fields[0])
+        if address and len(fields) >= 3:
+            found.append((int(address.group(1), 16), re.sub(r'\.[wn]$', '', fields[2].strip()),
+                          fields[3].strip() if len(fields) > 3 else ''))
+    return found
+
+
+def extents(listing):
+    """Each routine's first address and size, from `nm -S --defined-only`;
+    a Thumb routine's symbol has its low bit set, its first instruction
+    not.  The compiler's local labels inside a routine are no routines."""
+    found = {}
+    for line in listing.splitlines():
+        parts = line.split()
+        if len(parts) == 4 and parts[2] in ('T', 't'):
+            found[parts[3]] = (int(parts[0], 16) & ~1, int(parts[1], 16))
+    return found
+
+
+def holds(body, item):
+    """Whether BODY has ITEM: `bl NAME`, a call of NAME, or a mnemonic."""
+    if item.startswith('bl '):
+        return any(op in ('bl', 'blx') and rest.endswith('<%s>' % item[3:])
+                   for _, op, rest in body)
+    return any(op == item for _, op, _ in body)
+
+
+def lowering(run, name, row, level):
+    """What the executed image selects, read from its linked disassembly.
+
+    A level that changed nothing would still pass every status, so an image
+    a Thumb-2 level ran is required to ask the runtime for no product and no
+    32-bit quotient, and a row's `selects` names a routine, or the whole
+    image without one, and what it must and must not hold at each level:
+    the lowering is shown to have changed in the bytes QEMU executed, not
+    only in the text refine wrote, and its same source at another level to
+    have kept its own.
     """
-    text = (run.out / 'disassembly.log').read_text()
-    divides = len(re.findall(r'\t[su]div\t', text))
-    calls = re.findall(r'\bbl\s+[0-9a-f]+ <(__aeabi_u?idivmod)>', text)
-    require(divides > 0, 'the image divides in no hardware instruction')
-    require(not calls, 'the image still calls ' + ', '.join(sorted(set(calls))))
-    return {'hardware_divides': divides, 'helper_divides': 0}
+    wanted = row.get('selects', {})
+    if level not in THUMB_2 and level not in wanted:
+        return {}
+    image = instructions((run.out / 'disassembly.log').read_text())
+    found = {}
+    if level in THUMB_2:
+        asked = [helper for helper in THUMB_2_HELPERS if holds(image, 'bl ' + helper)]
+        require(not asked, 'the %s image still calls %s' % (level, ', '.join(asked)))
+        found['helpers_absent'] = list(THUMB_2_HELPERS)
+    if level in wanted:
+        routine = wanted.get('routine')
+        body = image
+        if routine:
+            first, size = extents((run.out / 'sections-routines.log').read_text()).get(
+                routine, (0, 0))
+            body = [one for one in image if first <= one[0] < first + size]
+        require(bool(body), '%s: the linked image has no routine %s, which its %s row'
+                ' selects in' % (name, routine, INVENTORY))
+        missing = [item for item in wanted[level].get('has', []) if not holds(body, item)]
+        present = [item for item in wanted[level].get('lacks', []) if holds(body, item)]
+        require(not missing and not present, '%s at %s: %s %s; its %s row says what it'
+                ' selects (see %s)' % (
+                    name, level, routine or 'the image',
+                    '; '.join((['lacks ' + ', '.join(missing)] if missing else [])
+                              + (['holds ' + ', '.join(present)] if present else [])),
+                    INVENTORY, RULES))
+        found.update(routine=routine or 'the whole image', **wanted[level])
+    return found
 
 
 def dominates(profile, reference):
     """Whether every image that fits REFERENCE fits PROFILE: as much flash
-    past its boot prefix and vector table, static RAM and stack, so a
+    past its boot prefix, vector table and boot suffix, static RAM and
+    stack, so a
     program the corpus executed on the reference needs no link of its own
     to show it fits, and only the limited ones are linked again."""
     def room(one):
-        return one['flash_limit'] - BOOT_PREFIX[one['boot']] - 4 * one['vector_words']
+        return (one['flash_limit'] - BOOT_PREFIX[one['boot']] - 4 * one['vector_words']
+                - BOOT_SUFFIX[one['boot']])
     return (room(profile) >= room(reference)
             and profile['static_ram_limit'] >= reference['static_ram_limit']
             and profile['stack_reserved'] >= reference['stack_reserved'])
@@ -348,19 +424,20 @@ def against(parent, profile, result):
     return verdict
 
 
-def profile_verdicts(results, others):
+def profile_verdicts(results, others, own=REFERENCE):
     """Every capacity verdict again against each described profile, linked.
 
-    The reference's are the corpus's own links; each other profile's are
-    `against`'s, for the limited verdicts at the default level, the only
-    ones its core is sure to execute.
+    OWN's, the reference's unless a run at one level ran another, are the
+    corpus's own links; each other profile's are `against`'s, for the
+    limited verdicts at the default level, the only ones its core is sure
+    to execute.
     """
     limited = [r for r in results if r.get('verdict') == 'selected-image-limit']
     def tag(result):
         return '%s %s/%s' % (result['fixture'], result['optimize'], result['specialize'])
     verdicts = {}
-    for device in DESCRIPTIONS:
-        if device == REFERENCE:
+    for device in [own] if own != REFERENCE else DESCRIPTIONS:
+        if device == own:
             mine = [(r, False) for r in limited]
         elif device in others:
             mine = [(r, r['profiles'][device]['fits']) for r in limited
@@ -399,7 +476,7 @@ def observe(output, tools, refine, program, profiles, level='armv6-m', roots=())
                 elf = build(run, refine, inputs, opt, spec, level=level)
             except (ImageLimit, CommandFailed) as error:
                 limit = image_limit(run, {'profile_limit': 'selected-image'}, error,
-                                    derived(run, refine), level)
+                                    derived(run, refine, LEVELS[level]['profile']), level)
                 result.update(status='does not fit', limit=limit)
                 text = corpus_line(dict(limit, fixture=str(path), optimize=opt, specialize=spec))
                 print(text.replace('cortex corpus: ', 'cortex program: ', 1), flush=True)
@@ -430,7 +507,10 @@ def observe(output, tools, refine, program, profiles, level='armv6-m', roots=())
     return results
 
 
-def execute(output, tools, refine, selected=(), profiles=()):
+def execute(output, tools, refine, selected=(), profiles=(), level=None):
+    """Run the corpus: every row at the default level, and each `execute`
+    row at each M-profile level its fixture's `levels:` names, or with
+    LEVEL every row at LEVEL alone, on that level's machine (D607)."""
     rows = inventory()
     profiles = [profile_name(p) for p in profiles]
     known = ['-'.join(p) for p in PROFILES + SPECIALIZATION_PROFILES]
@@ -446,9 +526,11 @@ def execute(output, tools, refine, selected=(), profiles=()):
     #  device's, which a limited verdict is linked again against.
     deriving = Run(output, tools)
     reference = derived(deriving, refine, REFERENCE, output / 'profiles')
+    lanes = {one: derived(deriving, refine, LEVELS[one]['profile'], output / 'profiles')
+             for one in LEVELS}
     others = {}
     for device in DESCRIPTIONS:
-        if device != REFERENCE:
+        if device != REFERENCE and level is None:
             others[device] = derived(deriving, refine, device, output / 'profiles')
             require(dominates(others[device], reference),
                     '%s holds less than the constrained reference somewhere, so a program'
@@ -467,14 +549,18 @@ def execute(output, tools, refine, selected=(), profiles=()):
             modes = [p for p in modes if '-'.join(p) in profiles]
             if selected:
                 require(bool(modes), 'profile is not applicable to the selected fixture')
-        levels = ['armv6-m']
-        if row['mode'] == 'execute':
-            levels += levels_of(meta)
+        if level is not None:
+            levels = [level]
+        else:
+            levels = ['armv6-m']
+            if row['mode'] == 'execute':
+                levels += levels_of(meta)
         work += [(name, row, opt, spec, level)
                  for level in levels for opt, spec in modes]
 
     def one(item):
         name, row, opt, spec, level = item
+        profile = lanes[level]
         out = output / (name.replace('/', '--') + '--' + opt + '-' + spec
                         + ('' if level == 'armv6-m' else '--' + level))
         out.mkdir(parents=True, exist_ok=False)
@@ -487,7 +573,7 @@ def execute(output, tools, refine, selected=(), profiles=()):
                 result.update(verdict='target-restriction', reason=row['reason'],
                               witness_sha256=sha(ROOT / row['witness']))
             elif row['mode'] == 'refuse':
-                result.update(source_refusal(run, refine, name, row))
+                result.update(source_refusal(run, refine, name, row, level))
             else:
                 try:
                     fixture(run, refine, name, opt, spec, level,
@@ -495,10 +581,11 @@ def execute(output, tools, refine, selected=(), profiles=()):
                     result['verdict'] = 'executed'
                     result['image'] = {key: json.loads((out / 'image.json').read_text())[key]
                                        for key in ('regions', 'sections', 'routines')}
-                    if level != 'armv6-m':
-                        result['lowering'] = divide_lowering(run)
+                    selects = lowering(run, name, row, level)
+                    if selects:
+                        result['lowering'] = selects
                 except RuntimeError as error:
-                    result.update(image_limit(run, row, error, reference, level))
+                    result.update(image_limit(run, row, error, profile, level))
                     if level == 'armv6-m':
                         result['profiles'] = {device: against(run, profile, result)
                                               for device, profile in others.items()}
@@ -518,11 +605,14 @@ def execute(output, tools, refine, selected=(), profiles=()):
     for result in results:
         print(corpus_line(result), flush=True)
     #  A run filtered by profile cannot tell a stale limit from one that
-    #  holds at a profile it did not run.
-    stale = [] if profiles else stale_limits(rows, results)
-    summary = {'scope': 'development-filtered' if selected or profiles else 'complete-inventory',
+    #  holds at a profile it did not run, and a run at one level cannot tell
+    #  one that holds at the default: limits are the default run's to judge.
+    stale = [] if profiles or level is not None else stale_limits(rows, results)
+    scope = 'development-filtered' if selected or profiles else 'complete-inventory'
+    summary = {'scope': scope if level is None else scope + ' at ' + level,
                'compiler_sha256': sha(refine), 'results': results, 'stale_limits': stale,
-               'profiles': profile_verdicts(results, others)}
+               'profiles': profile_verdicts(results, others) if level is None else
+               profile_verdicts(results, {}, LEVELS[level]['profile'])}
     for device, verdict in summary['profiles'].items():
         print('cortex corpus capacity against %s: %d of %d limited verdicts still exceed it,'
               ' in %d programs, linked with its derived script'
@@ -539,6 +629,9 @@ def execute(output, tools, refine, selected=(), profiles=()):
               ' the complete inventory' % ', '.join(
                   ['--case ' + one for one in selected] + ['--profile ' + one for one in profiles]),
               flush=True)
+    elif level is not None:
+        print('this corpus run is every row at %s alone; the default run judges its image'
+              ' limits' % level, flush=True)
     return summary
 
 
@@ -546,8 +639,9 @@ def main():
     parser = argparse.ArgumentParser(
         description=__doc__,
         epilog='--program runs a source file or module directory of your own at the corpus\'s'
-               ' profiles on the constrained reference and prints what it returned, or where'
-               ' it trapped, with its image against the map; no oracle is held.')
+               ' profiles on the constrained reference, or with --level on that level\'s'
+               ' machine and map, and prints what it returned, or where it trapped, with its'
+               ' image against the map; no oracle is held.')
     parser.add_argument('--refine', type=Path, required=True)
     parser.add_argument('--tools', type=Path, default=DEFAULT)
     parser.add_argument('--output', type=Path, required=True)
@@ -561,8 +655,11 @@ def main():
                         help='a .ldn file or module directory to run instead of the corpus')
     parser.add_argument('--root', action='append', default=[],
                         help='a module root for --program, passed to refine')
-    parser.add_argument('--level', default='armv6-m', choices=sorted(LEVELS),
-                        help='the M-profile level --program is built and run at')
+    parser.add_argument('--level', choices=sorted(LEVELS),
+                        help='the M-profile level to build and run every row at alone, on'
+                             ' that level\'s machine, or --program at; without it, every row'
+                             ' runs at armv6-m and each execute row at the levels its'
+                             ' fixture\'s levels: names')
     args = parser.parse_args()
     #  A rebuild of this build waits for the lane, rather than replace
     #  refine between two of its compilations.
@@ -582,9 +679,10 @@ def main():
         require(set(chosen) <= set(known), 'unknown profile %s; the profiles are %s'
                 % (', '.join(sorted(set(chosen) - set(known))), ', '.join(known)))
         observe(out, args.tools.resolve(), args.refine.resolve(), args.program,
-                [known[p] for p in chosen] or PROFILES, args.level, args.root)
+                [known[p] for p in chosen] or PROFILES, args.level or 'armv6-m', args.root)
         return
-    execute(out, args.tools.resolve(), args.refine.resolve(), args.case, args.profile)
+    execute(out, args.tools.resolve(), args.refine.resolve(), args.case, args.profile,
+            args.level)
 
 
 if __name__ == '__main__':

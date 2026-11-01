@@ -1,0 +1,10 @@
+--  D605: a u32 product of operands known only at run time that needs 33
+--  bits traps: 2^16 times 2^16 has a high word of one and a low word of
+--  zero, and the high word is what a Thumb-2 level's UMULL is tested by.
+mut left: u32 = 65536
+mut right: u32 = 65536
+
+public main: () -> (code: i32) =
+    _ = left * right
+    code = 42
+end main

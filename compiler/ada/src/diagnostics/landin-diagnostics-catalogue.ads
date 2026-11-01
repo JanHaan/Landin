@@ -265,6 +265,8 @@ package Landin.Diagnostics.Catalogue is
       Linker_Script_Contract,
       --  D588: the assembled second stage, read from its object.
       Boot_Stage_Object,
+      --  D638: the assembled image block, read from its object.
+      Image_Block_Object,
       --  D555-D558: `refine svd`, which reads a vendor's SVD and a
       --  selection policy and replaces the modules it generates.  No
       --  program is refused for any of them.
@@ -1173,6 +1175,16 @@ package Landin.Diagnostics.Catalogue is
          Fixes => No_Fix, Shown_By => Invocation,
          Rule => +("D588: an assembled boot stage that outgrows its slot or"
                    & " that a relocation reaches")),
+      --  D638: about an assembled object, raised by the driver before the
+      --  link, and shown by the cortex ABI cases.
+      Image_Block_Object =>
+        (Code => "L0555", Level => Error, State => Live,
+         Source => False, Bytes => False,
+         Least => 0, Most => 0, Notes => 0,
+         Fixes => No_Fix, Shown_By => Invocation,
+         Rule => +("D638: an assembled image block that is not the IMAGE_DEF"
+                   & " block its boot kind gives, or that a relocation"
+                   & " reaches")),
       --  D558: `refine svd` raises these for an SVD, its policy or its
       --  outputs, and the devices suite owns them. The SVD or the policy is
       --  the source a fault is in, and a fault points at the element or byte

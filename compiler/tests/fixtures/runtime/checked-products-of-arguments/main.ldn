@@ -1,0 +1,98 @@
+--  D605: checked products of operands known only at run time, at each
+--  width, at the edges of what fits: the largest and the smallest, and
+--  the most negative i32 and i64, whose high words are all ones.  Every
+--  operand is a module value, so no product is folded, and main holds
+--  every one: there a Thumb-2 level multiplies in hardware, which the
+--  Cortex-M lane reads in the linked image.  An i32 product of 2^31 has a
+--  zero high word and is still one past the largest; it is multiplied on a
+--  stack of its own, so the panic handler receives its overflow and
+--  resumes main, which finds the product unwritten.  It imports only
+--  core/panic, so firmware runs the same source.  Each check that fails
+--  returns its own code.
+import core/panic
+
+mut backing: [2048]u8 = zeroed
+mut main_saved: usize = 0
+mut fibre_saved: usize = 0
+mut seen: i32 = 6
+mut product: i32 = 0
+
+mut i32_near: i32 = 46340
+mut i32_below: i32 = -46341
+mut i32_half: i32 = 32768
+mut i32_whole: i32 = -65536
+mut i32_minus: i32 = -1
+mut i32_largest: i32 = 2147483647
+mut u32_low: u32 = 65535
+mut u32_high: u32 = 65537
+mut i16_root: i16 = 181
+mut i16_low: i16 = -256
+mut u8_low: u8 = 15
+mut u8_high: u8 = 17
+mut i64_root: i64 = 3037000499
+mut i64_word: i64 = -4294967296
+mut i64_half: i64 = 2147483648
+mut u64_low: u64 = 4294967295
+mut u64_high: u64 = 4294967297
+mut u64_left: u64 = 16045690984503098046
+mut u64_right: u64 = 81985529216486895
+mut i64_left: i64 = 4294967299
+mut i64_right: i64 = 4294967301
+
+public panic_handler: (kind: panic.panic_kind, site: u32) -> noreturn =
+    seen = match kind
+        panic.overflow: if site <> 0 then 42 else 5 end if
+        panic.out_of_range: 1
+        panic.bad_conversion: 3
+        panic.unreachable: 4
+        panic.stack_exhausted: 2
+    end match
+    compiler.stack_switch(addr fibre_saved, main_saved)
+    loop do
+    end loop
+end panic_handler
+
+--  2^16 times 2^15 is 2^31, one past the largest i32.
+overflowing: (argument: usize) -> noreturn =
+    _ = argument
+    product = -i32_whole * i32_half
+    seen = 7
+    compiler.stack_switch(addr fibre_saved, main_saved)
+    compiler.unreachable()
+end overflowing
+
+public main: () -> (code: i32) =
+    code = 0
+    if i32_near * i32_near <> 2147395600 then
+        code = 10
+    elsif i32_below * i32_near <> -2147441940 then
+        code = 11
+    elsif i32_whole * i32_half <> -2147483648 then
+        code = 12
+    elsif i32_minus * -i32_largest <> 2147483647 then
+        code = 13
+    elsif u32_low * u32_high <> 4294967295 then
+        code = 14
+    elsif (u32_low + 1) * u32_low <> 4294901760 then
+        code = 15
+    elsif i16_root * i16_root <> 32761 or i16_low * 128 <> -32768 then
+        code = 16
+    elsif u8_low * u8_high <> 255 then
+        code = 17
+    elsif i64_root * i64_root <> 9223372030926249001 then
+        code = 18
+    elsif i64_word * i64_half <> -9223372036854775807 - 1 then
+        code = 19
+    elsif u64_low * u64_high <> 18446744073709551615 then
+        code = 20
+    elsif u64_left *% u64_right <> 9130636979535641954 then
+        code = 21
+    elsif i64_left *% i64_right <> 34359738383 then
+        code = 22
+    end if
+    if code == 0 then
+        fibre_saved = compiler.stack_prepare(backing[0..<2048], overflowing, 0)
+        compiler.stack_switch(addr main_saved, fibre_saved)
+        code = if product == 0 then seen else 8 end if
+    end if
+end main

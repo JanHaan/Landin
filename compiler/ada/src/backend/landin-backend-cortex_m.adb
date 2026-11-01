@@ -427,6 +427,14 @@ package body Landin.Backend.Cortex_M is
       --  still call it, since no M profile divides 64 bits.
       Has_Divide : constant Boolean :=
         Landin.Targets.Levels.Has (Level, Landin.Targets.Levels.Idiv);
+      --  D605: Thumb-2 multiplies 32 by 32 bits into 64 in one
+      --  instruction, so no product needs `__aeabi_lmul` there.
+      Has_Long_Multiply : constant Boolean :=
+        Landin.Targets.Levels.Has (Level, Landin.Targets.Levels.Thumb2);
+      --  D606: Armv8-M loads with acquire and stores with release in one
+      --  instruction, so an ordered access needs no DMB beside it.
+      Has_Acquire_Release : constant Boolean :=
+        Landin.Targets.Levels.Is_Armv8_M (Level);
       Out_Text : Unbounded.Unbounded_String;
       --  Dense nonzero u32 atom codes, in declaration-identity order; zero
       --  stays available for the successful half of the failing-call
@@ -1411,6 +1419,21 @@ package body Landin.Backend.Cortex_M is
                Emit (".word _landin_firmware_unhandled");
             end if;
          end loop;
+         if Landin.Targets.Firmware.Takes_Image_Block (Profile.Boot) then
+            --  D637: the IMAGE_DEF block, directly after the table, which
+            --  the driver reads back from the object it assembles (D638).
+            Emit (".section .embedded_block,""a"",%progbits");
+            Emit (".balign 4");
+            Emit (".globl _landin_firmware_image_block");
+            Emit (".type _landin_firmware_image_block, %object");
+            Put ("_landin_firmware_image_block:");
+            for Word of Landin.Targets.Firmware.Image_Block loop
+               Emit (".word " & Landin.Backend.Firmware.Hex
+                 (Landin.Targets.Byte_Count (Word)));
+            end loop;
+            Emit (".size _landin_firmware_image_block, . - _landin_firmware_"
+              & "image_block");
+         end if;
       end Emit_Vectors;
 
       procedure Emit_Routine
@@ -3450,6 +3473,23 @@ package body Landin.Backend.Cortex_M is
                         --  The low word is the whole wrapping result.  Thumb
                         --  MULS uses only low registers and writes that word.
                         Emit ("muls r0, r2, r0");
+                     elsif Multiply and then not Wide
+                       and then Has_Long_Multiply
+                     then
+                        --  D605: the whole 64-bit product of the extended
+                        --  operands in r1:r0, as the helper returned it.
+                        Emit ((if Signed then "smull" else "umull")
+                              & " r0, r1, r0, r2");
+                        if Checked then
+                           if Signed then
+                              Emit ("asrs r4, r0, #31");
+                           else
+                              Emit ("movs r4, #0");
+                           end if;
+                           Emit ("cmp r1, r4");
+                           Branch ("ne", Trap);
+                           Check_Fit (Kind (Value));
+                        end if;
                      elsif Multiply then
                         if not Wide then
                            if Signed then
@@ -3514,7 +3554,17 @@ package body Landin.Backend.Cortex_M is
                            Sp_Depth := Sp_Depth - 16;
                            Put (Done & "_multiply:");
                         end if;
-                        Emit ("bl __aeabi_lmul");
+                        if Has_Long_Multiply then
+                           --  D605: the low 64 bits of r1:r0 times r3:r2
+                           --  are the low halves' whole product, with
+                           --  each cross product added to its high word.
+                           Emit ("mul r3, r0, r3");
+                           Emit ("mla r3, r1, r2, r3");
+                           Emit ("umull r0, r1, r0, r2");
+                           Emit ("add r1, r1, r3");
+                        else
+                           Emit ("bl __aeabi_lmul");
+                        end if;
                         if Checked and then not Wide then
                            if Signed then
                               Emit ("asrs r4, r0, #31");
@@ -4436,7 +4486,30 @@ package body Landin.Backend.Cortex_M is
                         --  seq_cst load is followed by DMB, a release store
                         --  preceded by one and a seq_cst store by one on
                         --  each side.  ARMv6-M's DMB has only the SY option.
-                        if M in Atomic_Load | Volatile_Load then
+                        --  D606: on Armv8-M, ARMv8's mapping instead: an
+                        --  acquire or seq_cst load is LDA and a release or
+                        --  seq_cst store STL, in the access's width, and
+                        --  neither has a DMB beside it.
+                        if Has_Acquire_Release
+                          and then M = Atomic_Load
+                          and then Landin.Memory.Acquires (Order)
+                        then
+                           Emit ("lda" & (case Size is
+                                    when Landin.Targets.Byte_1 => "b",
+                                    when Landin.Targets.Byte_2 => "h",
+                                    when others => "")
+                                 & " r0, [r2]");
+                        elsif Has_Acquire_Release
+                          and then M = Atomic_Store
+                          and then Landin.Memory.Releases (Order)
+                        then
+                           Load_Value (Operand (2));
+                           Emit ("stl" & (case Size is
+                                    when Landin.Targets.Byte_1 => "b",
+                                    when Landin.Targets.Byte_2 => "h",
+                                    when others => "")
+                                 & " r0, [r2]");
+                        elsif M in Atomic_Load | Volatile_Load then
                            Memory (False, Size, "r0", "r2");
                            if M = Atomic_Load
                              and then Landin.Memory.Acquires (Order)

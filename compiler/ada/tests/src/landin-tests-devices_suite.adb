@@ -253,6 +253,19 @@ package body Landin.Tests.Devices_Suite is
          & "compiler.interrupt(""UARTA_IRQ"", 2)" & LF
          & "compiler.interrupt(""UARTB_IRQ"", 3)" & LF,
          "D542's generated half, each pair once and in order");
+      --  D635: an SVD's CM33 is a description's cortex-m33.
+      declare
+         M33 : constant String :=
+           Replaced (Svd, "<name>CM7</name>", "<name>CM33</name>");
+      begin
+         Dev.Projection.Project (M33, Policy_For (M33), Made, Problem);
+         Landin.Testing.Check
+           (Item, Problem.Kind = Dev.No_Fault
+              and then Contains
+                (Output_Of (Made, "descriptions/toy1/interrupts.ldn"),
+                 LF & "compiler.core(""cortex-m33"")" & LF),
+            "a CM33 is a cortex-m33: " & US.To_String (Problem.Message));
+      end;
    end A_Device_Becomes_Modules;
 
    procedure Every_Refusal_Is_Named (Item : in out Landin.Testing.Context);
