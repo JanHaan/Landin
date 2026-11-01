@@ -15,7 +15,7 @@ fixed if compiler.feature.fp then
 elsif compiler.arch == cortex_m0 then
     bump: (seed: u32) -> (r: u32) =
         r = assembler.block("adds {r}, {s}, #1",
-            in s: u32 at general = seed, out r: u32 at general)
+                            in s: u32 at general = seed, out r: u32 at general)
     end bump
 else
     bump: (seed: u32) -> (r: u32) =
