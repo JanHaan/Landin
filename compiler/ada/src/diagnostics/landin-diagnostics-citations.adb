@@ -2332,6 +2332,9 @@ package body Landin.Diagnostics.Citations is
             when 615 =>
                "A float unit is a fact of a description, and features re"
                & "ad it",
+            when 616 =>
+               "A float unit selects AAPCS32's VFP variant, for C and fo"
+               & "r Landin",
             when 281 =>
                "RV64's system call has the standing of `syscall` and `sv"
                & "c`",
@@ -3490,6 +3493,8 @@ package body Landin.Diagnostics.Citations is
             when 532 =>
                "Decisions: The core library and the derived programs",
             when 615 =>
+               "Decisions: The core library and the derived programs",
+            when 616 =>
                "Decisions: The core library and the derived programs",
             when 281 =>
                "Decisions: The core library and the derived programs",
@@ -5030,6 +5035,9 @@ package body Landin.Diagnostics.Citations is
             when 615 =>
                "https://www.701.dev/spec.html#d615-a-float-unit-is-a-fac"
                & "t-of-a-description-and-features-read-it",
+            when 616 =>
+               "https://www.701.dev/spec.html#d616-a-float-unit-selects-"
+               & "aapcs32-s-vfp-variant-for-c-and-for-landin",
             when 281 =>
                "https://www.701.dev/spec.html#d281-rv64-s-system-call-ha"
                & "s-the-standing-of-syscall-and-svc",

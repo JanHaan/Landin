@@ -23800,6 +23800,58 @@ repeated and conditional directive, and the facts read by an option, a
 compiler assertion and a fixed arm of a program whose description has the
 unit, one whose description has none and the reference.
 
+### D616 — A float unit selects AAPCS32's VFP variant, for C and for Landin
+
+**The tour said** nothing; docs/targets.md's Cortex-M0 planning passed every
+float in core registers, "soft-float values use core bit carriers", and
+D615 gives a description a unit whose registers the C ABI uses.
+
+**Chosen:** a program whose description has `fpv5-d16` uses the VFP variant
+of [AAPCS32](https://github.com/ARM-software/abi-aa/blob/2025Q4/aapcs32/aapcs32.rst),
+hard float and not `softfp`. In the C convention a VFP candidate is an
+`f32` or `f64`, or a composite of one to four members all of one of those
+types, nested aggregates and arrays included. Each candidate takes the
+lowest-numbered run of free registers of s0-s15 that holds it, a double or
+an aggregate of doubles an even-aligned run, so a single back-fills the
+slot a double's alignment left. Once a candidate finds no such run every
+VFP register is unavailable, the candidate goes to the stack at its own
+alignment, and no later argument takes one, even a single that would fit
+a slot left free. Candidates consume no core register; everything else is
+placed in r0-r3 and on the stack exactly as before, sharing the stack
+with the candidates in argument order. A candidate result is returned in
+s0 or d0, an aggregate in s0-s3 or d0-d3 whatever its size; any other
+composite result keeps its r0 or hidden-address placement. A variadic call
+uses the base PCS throughout, its fixed arguments included. s16-s31, d8 to
+d15, are call-preserved, and s0-s15 and FPSCR's flags are call-clobbered.
+
+The internal Landin convention uses the same bank for its own floats: an
+`f32` or `f64` parameter is placed as the C convention places it, and an
+`f32` or `f64` result is s0 or d0; aggregates, arrays and multiple results
+stay by address in core registers, and r12's outcome is unchanged.
+`Backend.Arm32_ABI` plans both, its locations naming the first single slot
+and how many a candidate takes. C interoperation stays disabled on
+Cortex-M, where `platform/c` stays refused, so the C half is a planner
+contract measured against GCC rather than a convention any source uses.
+
+**The alternatives:** `softfp`, the unit's instructions with the base PCS's
+transport, which links with soft-float objects and moves every float
+through core registers at each call; the internal convention keeping core
+carriers while C uses the bank, which needs a move at every boundary and a
+second planner; and back-filling after a candidate has gone to the stack,
+which AAPCS32 forbids and GCC does not do.
+
+**Pinned by** the `cortex ABI` case `layout and transport contract`, whose
+`vfp.` rows of `compiler/tests/cortex-m.contract` place back-filled
+singles, aggregates of floats and of doubles, a stack fallback that leaves
+s1 free, a variadic call, a composite of five floats and the internal
+convention, and name s16-s31 as preserved; and `environments/cortex-m/abi.py`,
+which compiles a C caller with GCC at `-mcpu=cortex-m7 -mfloat-abi=hard
+-mfpu=fpv5-d16`, runs it on QEMU's `mps2-an500` against hand-written
+endpoints that record r0-r3, s0-s15 and the stack, holds every recorded
+word to those rows, requires the image's `Tag_ABI_VFP_args: VFP registers`
+and requires GCC to save exactly d8-d15 around a body that clobbers every
+VFP register, with sentinels in them surviving it.
+
 ### D281 — RV64's system call has the standing of `syscall` and `svc`
 
 **The tour said** at [1630] that an ordinary block is straight-line code with

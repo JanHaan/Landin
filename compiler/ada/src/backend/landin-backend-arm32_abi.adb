@@ -1,11 +1,13 @@
-with Landin.Types;
+with Landin.Targets.Firmware;
 
 package body Landin.Backend.Arm32_ABI is
 
    package IR renames Landin.IR;
    package Ty renames Landin.Types;
    package T renames Landin.Targets;
+   use type Landin.Targets.Firmware.Float_Unit;
    use type IR.Atom_Set_Id;
+   use type IR.Element_Total;
    use type IR.Opcode;
    use type IR.Parameter_Convention;
    use type Ty.Type_Kind;
@@ -14,6 +16,70 @@ package body Landin.Backend.Arm32_ABI is
    use type T.Target_Facts;
 
    procedure Require_Target (Facts : T.Target_Facts);
+
+   --  D616: whether SHAPE's leaves are all one float type, and how many,
+   --  counting at most five so that a longer run reads as no candidate.
+   procedure Homogeneous
+     (Of_Unit : IR.Unit; Shape : IR.Field_Shape;
+      Base : in out Ty.Type_Kind; Count : in out Natural;
+      Valid : in out Boolean);
+
+   procedure Homogeneous
+     (Of_Unit : IR.Unit; Shape : IR.Field_Shape;
+      Base : in out Ty.Type_Kind; Count : in out Natural;
+      Valid : in out Boolean) is
+   begin
+      if not Valid then
+         return;
+      end if;
+      case Shape.Kind is
+         when IR.Scalar_Field_Shape =>
+            if Shape.Element in Ty.F32 | Ty.F64
+              and then (Base = Ty.No_Value or else Base = Shape.Element)
+            then
+               Base := Shape.Element;
+               Count := Natural'Min (Count + 1, 5);
+            else
+               Valid := False;
+            end if;
+         when IR.Array_Field_Shape =>
+            if Shape.Length > 4 then
+               Valid := False;
+            else
+               for Index in 1 .. Natural (Shape.Length) loop
+                  Homogeneous
+                    (Of_Unit, IR.Array_Element_Shape (Of_Unit, Shape),
+                     Base, Count, Valid);
+               end loop;
+            end if;
+         when IR.Aggregate_Field_Shape =>
+            for Index in 1 .. IR.Aggregate_Field_Count (Of_Unit, Shape) loop
+               Homogeneous
+                 (Of_Unit, IR.Nth_Aggregate_Field (Of_Unit, Shape, Index),
+                  Base, Count, Valid);
+            end loop;
+         when IR.Variant_Field_Shape =>
+            Valid := False;
+      end case;
+      Valid := Valid and then Count <= 4;
+   end Homogeneous;
+
+   function Uses_VFP (Of_Unit : IR.Unit) return Boolean is
+     (IR.Firmware_Profile (Of_Unit).Float
+        /= Landin.Targets.Firmware.No_Float_Unit);
+
+   function VFP_Register
+     (Item : Location; Index : Positive) return String
+   is
+      Double : constant Boolean := Item.Shape.Float_Base = Ty.F64;
+      Number : constant Natural :=
+        (if Double then Item.First_VFP / 2 + Index - 1
+         else Item.First_VFP + Index - 1);
+      Image : constant String := Natural'Image (Number);
+   begin
+      return (if Double then "d" else "s") & Image (Image'First + 1
+                                                  .. Image'Last);
+   end VFP_Register;
 
    procedure Require_Target (Facts : T.Target_Facts) is
    begin
@@ -77,6 +143,10 @@ package body Landin.Backend.Arm32_ABI is
          begin
             Answer.Size := T.Byte_Count (T.Bytes (Size));
             Answer.Alignment := T.Alignment_Of (Facts, Size);
+            if Part.Kind in Ty.F32 | Ty.F64 then
+               Answer.Float_Base := Part.Kind;
+               Answer.Members := 1;
+            end if;
             if Answer.Size < 4 then
                Answer.Extend :=
                  (if Part.Kind in Ty.I8 | Ty.I16 then Sign_Extend
@@ -102,6 +172,17 @@ package body Landin.Backend.Arm32_ABI is
                   raise Compiler_Defect with "empty AAPCS C aggregate";
                end if;
                Check_C (Shape);
+               declare
+                  Base : Ty.Type_Kind := Ty.No_Value;
+                  Count : Natural := 0;
+                  Valid : Boolean := True;
+               begin
+                  Homogeneous (Of_Unit, Shape, Base, Count, Valid);
+                  if Valid and then Count in 1 .. 4 then
+                     Answer.Float_Base := Base;
+                     Answer.Members := Count;
+                  end if;
+               end;
             end if;
          end;
       else
@@ -120,13 +201,24 @@ package body Landin.Backend.Arm32_ABI is
       ABI        : Convention;
       Has_Error  : Boolean := False;
       Maximum    : T.Byte_Count := 16#FFFF_FFFF#;
-      Fixed_Count : Natural := Natural'Last) return Plan
+      Fixed_Count : Natural := Natural'Last;
+      VFP        : Boolean := False) return Plan
    is
       Answer : Plan (Parameters'Length);
       Next_Core : Natural range 0 .. 4 := 0;
       Stack_End : T.Byte_Count := 0;
       Limit : constant T.Byte_Count :=
         T.Byte_Count'Min (Maximum, T.Maximum_Object_Size (Facts));
+      --  D616: a variadic signature keeps the base PCS throughout.
+      Banked : constant Boolean := VFP and then Fixed_Count = Natural'Last;
+      Free : array (0 .. VFP_Slots - 1) of Boolean := [others => True];
+      --  Once a candidate goes to the stack no VFP register is taken.
+      Closed : Boolean := False;
+
+      function Candidate (Shape : Classification) return Boolean
+        is (Banked and then Shape.Members > 0 and then not Shape.Indirect);
+      function Slots (Shape : Classification) return Positive
+        is ((if Shape.Float_Base = Ty.F64 then 2 else 1) * Shape.Members);
    begin
       Require_Target (Facts);
       if ABI = External_C and then (Has_Error or else Results'Length > 1)
@@ -164,7 +256,13 @@ package body Landin.Backend.Arm32_ABI is
                Composite => True, Indirect => True, others => <>);
          end;
       end if;
-      if Answer.Result.Shape.Composite
+      Answer.VFP := Banked;
+      if Candidate (Answer.Result.Shape) then
+         --  An aggregate of up to four floats returns in s0-s3 or d0-d3,
+         --  however wide.
+         Answer.Result.First_VFP := 0;
+         Answer.Result.VFP_Count := Slots (Answer.Result.Shape);
+      elsif Answer.Result.Shape.Composite
         and then (ABI = Internal_Landin or else Answer.Result.Shape.Size > 4)
       then
          Answer.Result.Shape.Indirect := True;
@@ -202,23 +300,49 @@ package body Landin.Backend.Arm32_ABI is
                           else T.Byte_Alignment'Max (4, Item.Shape.Alignment));
             Bytes := T.Align_Up (Bytes, 4);
             Words := Bytes / 4;
-            if Alignment = 8 and then Next_Core mod 2 /= 0 then
-               Next_Core := Next_Core + 1;
-            end if;
-            if Words <= T.Byte_Count (4 - Next_Core) then
-               Item.First_Core := Next_Core;
-               Item.Core_Count := Natural (Words);
-               Next_Core := Next_Core + Item.Core_Count;
+            if Candidate (Item.Shape) then
+               declare
+                  Need : constant Positive := Slots (Item.Shape);
+                  Step : constant Positive :=
+                    (if Item.Shape.Float_Base = Ty.F64 then 2 else 1);
+                  Start : Natural := 0;
+               begin
+                  while not Closed and then Start + Need <= VFP_Slots loop
+                     exit when (for all Slot in Start .. Start + Need - 1 =>
+                                  Free (Slot));
+                     Start := Start + Step;
+                  end loop;
+                  if not Closed and then Start + Need <= VFP_Slots then
+                     Free (Start .. Start + Need - 1) := [others => False];
+                     Item.First_VFP := Start;
+                     Item.VFP_Count := Need;
+                  else
+                     Closed := True;
+                     Item.Stack_At := Stack_Align
+                       (Stack_End, Alignment, Limit);
+                     Item.Stack_Bytes := Bytes;
+                     Stack_End := Stack_Add (Item.Stack_At, Bytes, Limit);
+                  end if;
+               end;
             else
-               if Next_Core < 4 and then Stack_End = 0 then
-                  Item.First_Core := Next_Core;
-                  Item.Core_Count := 4 - Next_Core;
-                  Bytes := Bytes - T.Byte_Count (Item.Core_Count) * 4;
+               if Alignment = 8 and then Next_Core mod 2 /= 0 then
+                  Next_Core := Next_Core + 1;
                end if;
-               Next_Core := 4;
-               Item.Stack_At := Stack_Align (Stack_End, Alignment, Limit);
-               Item.Stack_Bytes := Bytes;
-               Stack_End := Stack_Add (Item.Stack_At, Bytes, Limit);
+               if Words <= T.Byte_Count (4 - Next_Core) then
+                  Item.First_Core := Next_Core;
+                  Item.Core_Count := Natural (Words);
+                  Next_Core := Next_Core + Item.Core_Count;
+               else
+                  if Next_Core < 4 and then Stack_End = 0 then
+                     Item.First_Core := Next_Core;
+                     Item.Core_Count := 4 - Next_Core;
+                     Bytes := Bytes - T.Byte_Count (Item.Core_Count) * 4;
+                  end if;
+                  Next_Core := 4;
+                  Item.Stack_At := Stack_Align (Stack_End, Alignment, Limit);
+                  Item.Stack_Bytes := Bytes;
+                  Stack_End := Stack_Add (Item.Stack_At, Bytes, Limit);
+               end if;
             end if;
          end;
       end loop;

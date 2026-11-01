@@ -574,7 +574,8 @@ package body Landin.Tests.Cortex_Suite is
          Results : IR.Signature_Part_Array := IR.No_Signature_Parts;
          Convention : ABI.Convention := ABI.External_C;
          Error : Boolean := False;
-         Fixed : Natural := Natural'Last);
+         Fixed : Natural := Natural'Last;
+         VFP : Boolean := False);
 
       procedure Row (Name : String; Data : Values) is
       begin
@@ -620,32 +621,41 @@ package body Landin.Tests.Cortex_Suite is
          end;
       end Layout_Row;
 
+      --  D616: a VFP profile row adds each location's first single slot,
+      --  16 for none, and its count of single slots.
       procedure Call_Row
         (Name : String; Parameters : IR.Signature_Part_Array;
          Results : IR.Signature_Part_Array := IR.No_Signature_Parts;
          Convention : ABI.Convention := ABI.External_C;
          Error : Boolean := False;
-         Fixed : Natural := Natural'Last)
+         Fixed : Natural := Natural'Last;
+         VFP : Boolean := False)
       is
          Plan : constant ABI.Plan := ABI.Assign
            (Unit, Parameters, Results, T.Cortex_M, Convention, Error,
-            Fixed_Count => Fixed);
+            Fixed_Count => Fixed, VFP => VFP);
+         function Banks (Item : ABI.Location) return Values
+           is (if VFP then [T.Byte_Count (Item.First_VFP),
+                            T.Byte_Count (Item.VFP_Count)]
+               else [1 .. 0 => 0]);
       begin
-         Row (Name & ".result",
+         Row ((if VFP then "vfp." else "") & Name & ".result",
               [T.Byte_Count (Boolean'Pos (Plan.Result.Shape.Indirect)),
                T.Byte_Count (Plan.Result.First_Core),
                T.Byte_Count (Plan.Result.Core_Count), Plan.Stack_Bytes,
-               T.Byte_Count (Boolean'Pos (Plan.Has_Error))]);
+               T.Byte_Count (Boolean'Pos (Plan.Has_Error))]
+              & Banks (Plan.Result));
          for Index in Plan.Arguments'Range loop
             declare
                Arg : ABI.Location renames Plan.Arguments (Index);
             begin
-               Row (Name & ".arg" & Ada.Strings.Fixed.Trim
-                    (Index'Image, Ada.Strings.Both),
+               Row ((if VFP then "vfp." else "") & Name & ".arg"
+                    & Ada.Strings.Fixed.Trim (Index'Image, Ada.Strings.Both),
                     [T.Byte_Count (Arg.First_Core),
                      T.Byte_Count (Arg.Core_Count),
                      Arg.Stack_At, Arg.Stack_Bytes,
-                     T.Byte_Count (Boolean'Pos (Arg.Shape.Indirect))]);
+                     T.Byte_Count (Boolean'Pos (Arg.Shape.Indirect))]
+                    & Banks (Arg));
             end;
          end loop;
       end Call_Row;
@@ -737,6 +747,33 @@ package body Landin.Tests.Cortex_Suite is
                 [1 => Array_Part (8)], ABI.Internal_Landin, True);
       Call_Row ("multi", [Part (Ty.Usize)],
                 [Part (Ty.U8), Part (Ty.U64)], ABI.Internal_Landin, True);
+      --  D616: the VFP profile.  A single back-fills the gap a double's
+      --  even pair left; aggregates of one float type travel in the bank;
+      --  once one goes to the stack nothing more takes a VFP register, the
+      --  free s1 included; a variadic call keeps the base PCS; the internal
+      --  convention banks its scalars and passes aggregates by address.
+      Call_Row ("mixed", [Part (Ty.F32), Part (Ty.F64), Part (Ty.F32),
+                          Part (Ty.U32), Part (Ty.F64)],
+                [1 => Part (Ty.F32)], VFP => True);
+      Call_Row ("hfa", [C_Record (Unit, 3, Ty.F32),
+                        C_Record (Unit, 2, Ty.F64), Part (Ty.F32)],
+                [1 => C_Record (Unit, 4, Ty.F64)], VFP => True);
+      Call_Row ("spill", [Part (Ty.F32), Part (Ty.F64), Part (Ty.F64),
+                          Part (Ty.F64), Part (Ty.F64), Part (Ty.F64),
+                          Part (Ty.F64), Part (Ty.F64),
+                          C_Record (Unit, 2, Ty.F64), Part (Ty.F32),
+                          Part (Ty.U32)],
+                [1 => Part (Ty.F64)], VFP => True);
+      Call_Row ("varargs", [Part (Ty.F64), Part (Ty.F64), Part (Ty.U32)],
+                [1 => Part (Ty.F64)], Fixed => 1, VFP => True);
+      Call_Row ("large", [C_Record (Unit, 5, Ty.F32), Part (Ty.F32)],
+                [1 => C_Record (Unit, 5, Ty.F32)], VFP => True);
+      Call_Row ("native", [Part (Ty.F64), Part (Ty.Usize), Part (Ty.F32),
+                           Array_Part (8)],
+                [1 => Part (Ty.F64)], ABI.Internal_Landin, True,
+                VFP => True);
+      Row ("vfp.preserved", [ABI.First_Preserved_VFP,
+                             ABI.Last_Preserved_VFP]);
       Host.Read_File ("../tests/cortex-m.contract", Recorded, Status);
       Landin.Testing.Check
         (Item, Status = Landin.Platform.Read_Ok, "contract is retained");
