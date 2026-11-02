@@ -99,7 +99,19 @@ entry that describes it, and put a new one where a reader would look for it.
   `rv32imac`, takes its interrupts through Xh3irq and counts its telemetry
   with an `amoadd.w` (D710), and is checked by an oracle of its own,
   [`board.py`](../environments/boards/rp2350_hazard3/README.md) (D711-D713);
-  no board run of it is recorded yet.
+  no board run of it is recorded yet. The ESP32-C3's and ESP32-C5's ports
+  of the same application receive UART0 by interrupt through each chip's
+  interrupt matrix, a vectored line on the C3 and a CLIC identity on the
+  C5, hold it off by threshold while a 1 ms timer keeps interrupting, and
+  run the level's atomics, stores and loads at `rv32imc` and an AMO and
+  compare-exchanges at `rv32imac` (D720, D721). Their tools,
+  [`esp32c3`](../environments/boards/esp32c3/README.md) and
+  [`esp32c5`](../environments/boards/esp32c5/README.md), read `OUT.bin`
+  apart from refine and the ROM's boot log, refuse an image whose checksum
+  is wrong on the board, and check counters and cells over JTAG
+  (D722-D725); the C5 boots its image from power-on and takes both
+  interrupts, read over JTAG, and no full board run of either is recorded
+  yet.
 - **A float unit** is a fact of a description: a Cortex-M7's
   `compiler.float_unit("fpv5-d16")`, which the STM32H753's has, builds
   hard-float at `armv7e-m` (D615). f32 and f64 arithmetic, negation,

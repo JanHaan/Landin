@@ -2274,6 +2274,22 @@ package body Landin.Diagnostics.Citations is
                & "en from what the host sent",
             when 596 =>
                "IRQ5 is delivered by setting it pending in the NVIC",
+            when 720 =>
+               "The ESP boards' indicators are GPIO10 and GPIO24",
+            when 721 =>
+               "The ESP ports receive by interrupt and hold their lines "
+               & "off by threshold",
+            when 722 =>
+               "The ESP boards' oracle starts at power-on, reads the ROM"
+               & " and the image apart from refine",
+            when 723 =>
+               "The ESP boards' tools share a family module",
+            when 724 =>
+               "The ESP32-C5's power-on boot is read over JTAG, and its "
+               & "ROM's log after a chip-enable reset",
+            when 725 =>
+               "Every board run holds the rig's lock and paces what disc"
+               & "onnects a device",
             when 645 =>
                "The shared command loop takes its indicator and transmit"
                & "ter as function values",
@@ -3621,6 +3637,18 @@ package body Landin.Diagnostics.Citations is
             when 595 =>
                "Decisions: The toolchain, C and the machine",
             when 596 =>
+               "Decisions: The toolchain, C and the machine",
+            when 720 =>
+               "Decisions: The toolchain, C and the machine",
+            when 721 =>
+               "Decisions: The toolchain, C and the machine",
+            when 722 =>
+               "Decisions: The toolchain, C and the machine",
+            when 723 =>
+               "Decisions: The toolchain, C and the machine",
+            when 724 =>
+               "Decisions: The toolchain, C and the machine",
+            when 725 =>
                "Decisions: The toolchain, C and the machine",
             when 645 =>
                "Decisions: The toolchain, C and the machine",
@@ -5262,6 +5290,26 @@ package body Landin.Diagnostics.Citations is
             when 596 =>
                "https://www.701.dev/spec.html#d596-irq5-is-delivered-by-"
                & "setting-it-pending-in-the-nvic",
+            when 720 =>
+               "https://www.701.dev/spec.html#d720-the-esp-boards-indica"
+               & "tors-are-gpio10-and-gpio24",
+            when 721 =>
+               "https://www.701.dev/spec.html#d721-the-esp-ports-receive"
+               & "-by-interrupt-and-hold-their-lines-off-by-threshold",
+            when 722 =>
+               "https://www.701.dev/spec.html#d722-the-esp-boards-oracle"
+               & "-starts-at-power-on-reads-the-rom-and-the-image-apart-fr"
+               & "om-refine",
+            when 723 =>
+               "https://www.701.dev/spec.html#d723-the-esp-boards-tools-"
+               & "share-a-family-module",
+            when 724 =>
+               "https://www.701.dev/spec.html#d724-the-esp32-c5-s-power-"
+               & "on-boot-is-read-over-jtag-and-its-rom-s-log-after-a-chip"
+               & "-enable-reset",
+            when 725 =>
+               "https://www.701.dev/spec.html#d725-every-board-run-holds"
+               & "-the-rig-s-lock-and-paces-what-disconnects-a-device",
             when 645 =>
                "https://www.701.dev/spec.html#d645-the-shared-command-lo"
                & "op-takes-its-indicator-and-transmitter-as-function-value"
