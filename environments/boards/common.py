@@ -213,12 +213,13 @@ class Pace:
     Each waits until SPACING seconds have passed since the last one, by any
     tool on the host, and until the kernel has logged nothing of USB for
     QUIET seconds; any USB error the kernel logged since that last action
-    stops the run instead (D725).  The last action's time is kept in
+    stops the run instead (D725), as does a cascade that is not quiet
+    within LIMIT seconds.  The last action's time is kept in
     STATE beside the rig's lock; KERNEL(seconds) is the kernel's USB lines
     of the last SECONDS, as (unix time, text)."""
     def __init__(self, spacing=120, quiet=60, state=None, kernel=None, clock=time.time,
-                 sleep=time.sleep, report=None):
-        self.spacing, self.quiet = spacing, quiet
+                 sleep=time.sleep, report=None, limit=600):
+        self.spacing, self.quiet, self.limit = spacing, quiet, limit
         self.state = Path(state) if state else RIG_LOCK.with_name('rig.pace')
         self.kernel = kernel or kernel_usb_lines
         self.clock, self.sleep = clock, sleep
@@ -237,8 +238,11 @@ class Pace:
         if trouble:
             raise Failed('the kernel logged USB trouble since the last action; stopping before'
                          ' %s: %s' % (what, trouble[0]))
+        began = self.clock()
         while True:
             now = self.clock()
+            require(now - began < self.limit, 'the kernel kept logging USB lines for %g s;'
+                    ' stopping before %s: a device on the cascade keeps resetting' % (self.limit, what))
             wait = max(last + self.spacing - now, 0)
             recent = [when for when, _ in self.kernel(self.quiet)]
             if recent:
