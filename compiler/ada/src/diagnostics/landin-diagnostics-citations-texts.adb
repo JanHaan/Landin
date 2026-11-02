@@ -25384,7 +25384,13 @@ package body Landin.Diagnostics.Citations.Texts is
                & "d nothing of USB for 60 s, stopping when it logged a USB"
                & " error since that previous action; and after each they w"
                & "ait for the hub to list the board again, `common.wait_fo"
-               & "r_hub`.",
+               & "r_hub`. The probe's Arty, which must never lose power, i"
+               & "s kept off the cascade: every tool finds it by its USB s"
+               & "erial wherever it is, `common.off_cascade`, and switches"
+               & ", downloads or resets nothing while it is absent or on t"
+               & "he cascade whose ports are switched, in place of the ear"
+               & "lier guard that required it on one port of the hub being"
+               & " switched.",
             when 645 =>
                "Chosen: the module names no device. Its `port` is a stru"
                & "ct of two function values ([1000]), `indicate: (on: bool"
