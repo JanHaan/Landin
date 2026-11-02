@@ -1,5 +1,6 @@
 with Landin.Panics;
---  Native RV64 Linux LP64D assembly from verified IR.
+--  Native RISC-V assembly from verified IR: RV64 Linux LP64D and RV32
+--  firmware at XLEN 32 (D671).
 with Ada.Strings.Unbounded;
 
 with Landin.Build_Reports;
@@ -19,6 +20,14 @@ package Landin.Backend.RiscV is
       Facts : Landin.Targets.Target_Facts;
       Options : Landin.Optimization.Options) return Boolean;
 
+   --  One compiler-framed RV32 routine's frame record, saved registers
+   --  and homes must fit the selected firmware stack. This is not a
+   --  call-depth bound.
+   function Frame_Fits_Firmware_Stack
+     (Of_Unit : Landin.IR.Unit;
+      Item : Landin.IR.Item_Id;
+      Facts : Landin.Targets.Target_Facts) return Boolean;
+
    procedure Emit
      (Of_Unit  : Landin.IR.Unit;
       Meanings : Landin.Resolution.Table;
@@ -31,6 +40,7 @@ package Landin.Backend.RiscV is
       Debug : access constant Landin.Debugging.Information := null;
       Panic : access constant Landin.Panics.Plan := null;
       Level : Landin.Targets.Levels.Feature_Level :=
-        Landin.Targets.Levels.Default_Level (Landin.Targets.Linux_RV64));
+        Landin.Targets.Levels.Default_Level (Landin.Targets.Linux_RV64);
+      Firmware_Entry : Landin.IR.Item_Id := Landin.IR.No_Item);
 
 end Landin.Backend.RiscV;

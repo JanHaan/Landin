@@ -1070,7 +1070,9 @@ package body Landin.Backend is
       end loop;
       return Laid_Out
         (Of_Unit, Item, Facts, Slots, Values, Spills (1 .. Count),
-         Layout.Field_Extent_Array'(1 .. Saves => (8, 8)), Maximum);
+         Layout.Field_Extent_Array'(1 .. Saves =>
+           (Targets.Byte_Count (Targets.Bytes (Targets.Pointer_Size (Facts))),
+            Targets.Pointer_Alignment (Facts))), Maximum);
    end Reference_Frame;
 
    ------------------------------------------------------------------
@@ -1647,7 +1649,11 @@ package body Landin.Backend is
             | Landin.Targets.Capabilities.Darwin_Arm64_Mach_O
             | Landin.Targets.Capabilities.Arm64_ELF =>
             return 640;
-         when Landin.Targets.Capabilities.RV64_ELF =>
+         --  D675: RV32's frames are RV64's with every word halved and
+         --  eight-byte homes kept, so RV64's figure holds them with room
+         --  for the libgcc leaf helper a checked frame may call below it.
+         when Landin.Targets.Capabilities.RV64_ELF
+            | Landin.Targets.Capabilities.RV32_ELF =>
             return 768;
          when Landin.Targets.Capabilities.Cortex_M0_ELF =>
             --  D620: the extended exception frame below a checked frame,
@@ -1656,9 +1662,7 @@ package body Landin.Backend is
             return 384 + (if Float
                           then VFP_Exception_Bytes + VFP_Switch_Bytes
                           else 0);
-         --  RV32's figures come with its frames, which nothing emits yet.
-         when Landin.Targets.Capabilities.RV32_ELF
-            | Landin.Targets.Capabilities.No_Backend =>
+         when Landin.Targets.Capabilities.No_Backend =>
             return 0;
       end case;
    end Stack_Limit_Margin;
@@ -1672,10 +1676,10 @@ package body Landin.Backend is
             | Landin.Targets.Capabilities.Darwin_Arm64_Mach_O
             | Landin.Targets.Capabilities.Arm64_ELF
             | Landin.Targets.Capabilities.RV64_ELF
-            | Landin.Targets.Capabilities.Cortex_M0_ELF =>
+            | Landin.Targets.Capabilities.Cortex_M0_ELF
+            | Landin.Targets.Capabilities.RV32_ELF =>
             return 64;
-         when Landin.Targets.Capabilities.RV32_ELF
-            | Landin.Targets.Capabilities.No_Backend =>
+         when Landin.Targets.Capabilities.No_Backend =>
             return 0;
       end case;
    end Unchecked_Stack_Bytes;
@@ -1693,12 +1697,12 @@ package body Landin.Backend is
             return 152;
          when Landin.Targets.Capabilities.Darwin_Arm64_Mach_O
             | Landin.Targets.Capabilities.Arm64_ELF
-            | Landin.Targets.Capabilities.RV64_ELF =>
+            | Landin.Targets.Capabilities.RV64_ELF
+            | Landin.Targets.Capabilities.RV32_ELF =>
             return 144;
          when Landin.Targets.Capabilities.Cortex_M0_ELF =>
             return 188 + (if Float then VFP_Exception_Bytes else 0);
-         when Landin.Targets.Capabilities.RV32_ELF
-            | Landin.Targets.Capabilities.No_Backend =>
+         when Landin.Targets.Capabilities.No_Backend =>
             return 0;
       end case;
    end Handler_Entry_Bytes;
