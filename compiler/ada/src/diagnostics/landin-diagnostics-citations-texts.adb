@@ -25289,11 +25289,13 @@ package body Landin.Diagnostics.Citations.Texts is
                & " which refine emits and seals (D588); until the first bo"
                & "ard it held 256 zero bytes, which the boot ROM's check r"
                & "efused. The firmware build report records the selected d"
-               & "evice, core, boot kind, vector address and length, regio"
-               & "ns and placements beside the capacities, which are the t"
-               & "ext region's length and the data region's less a stack i"
-               & "t holds, for `rp2040-boot2` the stage (D588), and for `r"
-               & "p2350-image-block` the block (D638).",
+               & "evice, core, boot kind, vector address and length, the b"
+               & "ytes the boot kind puts before and after the table as `b"
+               & "oot_prefix` and `boot_suffix`, regions and placements be"
+               & "side the capacities, which are the text region's length "
+               & "and the data region's less a stack it holds, for `rp2040"
+               & "-boot2` the stage (D588), and for `rp2350-image-block` t"
+               & "he block (D638).",
             when 546 =>
                "Chosen: `--linker-script=FILE` links firmware with FILE "
                & "in place of `OUT.ld`, which refine still writes beside t"
