@@ -2608,6 +2608,7 @@ def check_pinned_toolchain(full_run):
 
     out += gate_tool_pin_problems(pins, pins_text, record, record_text)
     out += arm_elf_pin_problems(pins, pins_text, record, record_text)
+    out += riscv_elf_pin_problems(pins, pins_text, record, record_text)
 
     #  A workflow need not install the toolchain itself -- the shared
     #  action and release.yml source pins.sh -- but every one is still a
@@ -2692,6 +2693,52 @@ def arm_elf_pin_problems(pins, pins_text, record, record_text):
         if version in text:
             out.append((path, 1, "%s names the arm-elf archive's %s literally "
                                  "instead of reading it from "
+                                 "environments/pins.sh" % (relative, version)))
+    return out
+
+
+#  The RV32 lanes' GCC and binutils, GNAT's riscv64-elf archive of the
+#  same release (D660), read from the pins by the nix shell.
+RISCV_ELF_READERS = {
+    "flake.nix": ('pin "LANDIN_GNAT_RISCV64_ELF_VERSION"',
+                  'pin "LANDIN_GNAT_RISCV64_ELF_SHA256_${suffix}"'),
+}
+
+
+def riscv_elf_pin_problems(pins, pins_text, record, record_text):
+    """The RV32 lanes' toolchain is pinned once and read everywhere.
+
+    As arm_elf_pin_problems holds the Cortex-M lane's archive: GNAT's
+    riscv64-elf archive is pinned in environments/pins.sh, each host's
+    archive is named in TOOLCHAIN.md, and a reader takes the version and
+    checksum from the pins rather than spelling them itself.
+    """
+    values = dict(re.findall(r"^(LANDIN_\w+)=(\S+)$", pins_text, re.M))
+    version = values.get("LANDIN_GNAT_RISCV64_ELF_VERSION")
+    if version is None:
+        return [(pins, 1, "LANDIN_GNAT_RISCV64_ELF_VERSION is not pinned in "
+                          "environments/pins.sh")]
+    out = []
+    for system in ARM_ELF_SYSTEMS:
+        archive = "gnat-riscv64-elf-%s-%s.tar.gz" % (system, version)
+        if archive not in record_text:
+            out.append((record, 1, "LANDIN_GNAT_RISCV64_ELF_VERSION %s's %s is "
+                                   "not recorded in compiler/ada/TOOLCHAIN.md"
+                        % (version, archive)))
+    for relative, reads in sorted(RISCV_ELF_READERS.items()):
+        path = os.path.join(ROOT, relative)
+        missing = absent([path])
+        if missing:
+            out += missing
+            continue
+        text = io.open(path, encoding="utf-8").read()
+        for read in reads:
+            if read not in text:
+                out.append((path, 1, "%s does not read %s from "
+                                     "environments/pins.sh" % (relative, read)))
+        if "gnat-riscv64-elf-" + version in text:
+            out.append((path, 1, "%s names the riscv64-elf archive's %s "
+                                 "literally instead of reading it from "
                                  "environments/pins.sh" % (relative, version)))
     return out
 
