@@ -2197,6 +2197,8 @@ package body Landin.Diagnostics.Citations is
                "RV32's C transport is the planner's ilp32 at XLEN 32",
             when 678 =>
                "RV32 keeps its firmware text near the size of Thumb's",
+            when 679 =>
+               "No RISC-V epilogue reads below the stack pointer",
             when 523 =>
                "Under `--link=libc` a library is the C driver's `-lNAME`",
             when 524 =>
@@ -3549,6 +3551,8 @@ package body Landin.Diagnostics.Citations is
             when 677 =>
                "Decisions: The toolchain, C and the machine",
             when 678 =>
+               "Decisions: The toolchain, C and the machine",
+            when 679 =>
                "Decisions: The toolchain, C and the machine",
             when 523 =>
                "Decisions: The toolchain, C and the machine",
@@ -5148,6 +5152,9 @@ package body Landin.Diagnostics.Citations is
             when 678 =>
                "https://www.701.dev/spec.html#d678-rv32-keeps-its-firmwa"
                & "re-text-near-the-size-of-thumb-s",
+            when 679 =>
+               "https://www.701.dev/spec.html#d679-no-risc-v-epilogue-re"
+               & "ads-below-the-stack-pointer",
             when 523 =>
                "https://www.701.dev/spec.html#d523-under-link-libc-a-lib"
                & "rary-is-the-c-driver-s-lname",

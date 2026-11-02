@@ -2240,13 +2240,24 @@ package body Landin.Backend.RiscV is
                Emit (".cfi_remember_state");
             end if;
             Restore_Saves;
-            --  D672: the frame record's two words sit just below the CFA.
+            --  D679: the frame record's two words, just below the CFA, are
+            --  read while sp is still below them: sp is raised to the
+            --  record, x8 loaded from it, and only then the record
+            --  released.  Nothing is read below sp at any instruction, so
+            --  an interrupt or a signal taken between them, which stacks
+            --  its own frame at sp, overwrites nothing still to be read.
             Emit (Load_Word & " ra, -" & Image (Word) & "(x8)");
-            Emit ("mv sp, x8");
-            Emit (Load_Word & " x8, -" & Image (2 * Word) & "(x8)");
+            Emit ("addi sp, x8, -16");
             if Debug /= null then
-               Emit (".cfi_def_cfa sp, 0");
+               Emit (".cfi_def_cfa sp, 16");
+            end if;
+            Emit (Load_Word & " x8, " & Image (16 - 2 * Word) & "(sp)");
+            if Debug /= null then
                Emit (".cfi_restore x8");
+            end if;
+            Emit ("addi sp, sp, 16");
+            if Debug /= null then
+               Emit (".cfi_def_cfa_offset 0");
                Emit (".cfi_restore x1");
             end if;
             Emit ("ret");

@@ -24591,6 +24591,18 @@ package body Landin.Diagnostics.Citations.Texts is
                & "Cortex-M0's at `armv6-m` to 1.04 at `--optimize=none` an"
                & "d from 1.69 to 1.02 at the default, and its average fram"
                & "e from about twice Cortex-M0's to 1.1 to 1.35 times it.",
+            when 679 =>
+               "Chosen: at both XLENs the epilogue loads the return addr"
+               & "ess, raises sp only to the frame record, loads x8 from i"
+               & "t at sp and then releases the record, with the CFA moved"
+               & " to sp before x8 changes. Nothing is read below sp at an"
+               & "y instruction. The other backends' epilogues and every o"
+               & "ther sequence that raises sp already read only at or abo"
+               & "ve it: arm64's `mov sp, x29` and post-indexed `ldp`, x86"
+               & "-64's `movq %rbp, %rsp` and `popq`, Cortex-M0's `mov sp,"
+               & " r6` with its loads at sp and sp + 4, the RISC-V switch'"
+               & "s loads after `mv sp, x11`, and an assembly block's set-"
+               & "aside word read before its sixteen bytes are released.",
             when 523 =>
                "Chosen: under `--link=libc`, which Darwin and FreeBSD al"
                & "ways use, each active `linker.library(""NAME"")` reaches t"

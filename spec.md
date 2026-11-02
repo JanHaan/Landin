@@ -21039,6 +21039,34 @@ stack depth at every instruction and is left to a later item.
 inside a profile's 1 MiB regions are JAL's own and whose saves are
 sp-relative, and by the RV32 lanes' corpus fitting the reference's 32 KiB.
 
+### D679 — No RISC-V epilogue reads below the stack pointer
+
+**The tour said** nothing; [1990] says an exception stacks its frame on the
+interrupted stack, and RISC-V Linux has no red zone below sp for a signal
+either. RV64's epilogue loaded the return address, moved sp to the frame
+pointer and then loaded the caller's x8 from 16 bytes below the new sp, so
+an interrupt between the move and the load, which stacks its own frame
+there, replaced x8 with one of the interrupted registers: on a Hazard3
+board the caller's epilogue then returned into the boot ROM.
+
+**Chosen:** at both XLENs the epilogue loads the return address, raises sp
+only to the frame record, loads x8 from it at sp and then releases the
+record, with the CFA moved to sp before x8 changes. Nothing is read below
+sp at any instruction. The other backends' epilogues and every other
+sequence that raises sp already read only at or above it: arm64's `mov sp,
+x29` and post-indexed `ldp`, x86-64's `movq %rbp, %rsp` and `popq`,
+Cortex-M0's `mov sp, r6` with its loads at sp and sp + 4, the RISC-V
+switch's loads after `mv sp, x11`, and an assembly block's set-aside word
+read before its sixteen bytes are released.
+
+**The alternatives:** restoring x8 before ra and sp from a scratch
+register, which takes one more register at every exit; and masking
+interrupts around the epilogue, which a signal on Linux ignores.
+
+**Pinned by** `backend/epilogues read nothing below sp`, which walks RV64's
+and RV32's emitted routines and refuses the old sequence, and the Hazard3
+board run.
+
 ### D523 — Under `--link=libc` a library is the C driver's `-lNAME`
 
 **The tour said** at [1590] that `linker.library` asks the linker for a static

@@ -10017,7 +10017,8 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Check
         (Item, Has (Base, "sw x8, 8(sp)") and then Has (Base, "sw ra, 12(sp)")
            and then Has (Base, "lw ra, -4(x8)")
-           and then Has (Base, "lw x8, -8(x8)")
+           and then Has (Base, "addi sp, x8, -16" & LF & HT
+                         & ".cfi_def_cfa sp, 16" & LF & HT & "lw x8, 8(sp)")
            and then Has (Base, ".cfi_offset x8, -8")
            and then Has (Base, ".cfi_offset x1, -4"),
          "the frame record is two words below the CFA, as its CFI says");
@@ -10061,6 +10062,179 @@ package body Landin.Tests.Backend_Suite is
                                                     & HT & "sw x9"),
          "callee saves are single sp-relative stores");
    end RV32_Lowering_Is_RV64s_At_XLEN_32;
+
+   --  D679: no emitted epilogue reads below the stack pointer.  An
+   --  interrupt or a signal stacks its frame at sp at any instruction, so a
+   --  word read after sp was raised past it may be the handler's.  Each
+   --  backend's text is walked routine by routine: once sp is set from the
+   --  frame pointer, nothing may be read through the frame pointer below
+   --  the new sp, nor through it at all once it is reloaded, nor through
+   --  sp at a negative offset.  The RV64 epilogue that released the frame
+   --  and then loaded x8 from below sp failed this on a Hazard3 board.
+   procedure Epilogues_Read_Nothing_Below_SP
+     (Item : in out Landin.Testing.Context);
+
+   procedure Epilogues_Read_Nothing_Below_SP
+     (Item : in out Landin.Testing.Context)
+   is
+      Source : constant String :=
+        "leaf: (a: u32, b: u32) -> (r: u32) =" & LF
+        & "    r = a + b" & LF
+        & "end leaf" & LF
+        & "public exits: (a: u32) -> (r: u32) =" & LF
+        & "    if a > 3 then" & LF
+        & "        r = leaf(a, 1)" & LF
+        & "        return" & LF
+        & "    end if" & LF
+        & "    r = leaf(a, 2) * 3" & LF
+        & "end exits" & LF;
+
+      --  The first line that breaks the rule, or the empty string.
+      --  Frame is the frame pointer's spelling, Stack sp's, Open the
+      --  instruction prefix that sets sp from the frame pointer and Memory
+      --  the form of an access through Frame at a negative offset.
+      function Fault (Text, Frame : String) return String;
+
+      function Fault (Text, Frame : String) return String is
+         Start : Positive := Text'First;
+         Delta_Known : Boolean := False;
+         Below : Integer := 0;
+         Released : Boolean := False;
+
+         function Has (Line, Part : String) return Boolean
+           is (Ada.Strings.Fixed.Index (Line, Part) /= 0);
+
+         --  The signed offset of Line's access through Base, Integer'Last
+         --  when it has none.
+         function Offset (Line, Base : String) return Integer;
+         function Offset (Line, Base : String) return Integer is
+            At_Base : constant Natural :=
+              Ada.Strings.Fixed.Index (Line, "(" & Base & ")");
+            First : Natural;
+         begin
+            if At_Base = 0 then
+               return Integer'Last;
+            end if;
+            First := At_Base;
+            while First > Line'First
+              and then Line (First - 1) in '0' .. '9' | '-'
+            loop
+               First := First - 1;
+            end loop;
+            if First = At_Base then
+               return 0;
+            end if;
+            return Integer'Value (Line (First .. At_Base - 1));
+         end Offset;
+      begin
+         for Index in Text'Range loop
+            if Text (Index) = LF then
+               declare
+                  Raw : constant String := Text (Start .. Index - 1);
+                  First : Positive := Raw'First;
+               begin
+                  while First <= Raw'Last
+                    and then Raw (First) in ' ' | Character'Val (9)
+                  loop
+                     First := First + 1;
+                  end loop;
+                  declare
+                     Line : constant String := Raw (First .. Raw'Last);
+                  begin
+                     Start := Index + 1;
+                     if Line = "ret" or else Line'Length = 0
+                       or else Line (Line'Last) = ':'
+                     then
+                        Delta_Known := False;
+                        Released := False;
+                     elsif Has (Line, "addi sp, " & Frame & ", ") then
+                        Delta_Known := True;
+                        Below := Integer'Value
+                          (Line (Ada.Strings.Fixed.Index
+                                   (Line, ", ", Ada.Strings.Backward) + 2
+                                 .. Line'Last));
+                     elsif Line = "mv sp, " & Frame then
+                        Delta_Known := True;
+                        Below := 0;
+                     elsif Offset (Line, "sp") < 0 then
+                        return Line;
+                     elsif Offset (Line, Frame) /= Integer'Last then
+                        if Released
+                          or else (Delta_Known
+                                   and then Offset (Line, Frame) < Below)
+                        then
+                           return Line;
+                        end if;
+                        if Delta_Known
+                          and then (Has (Line, "lw " & Frame & ",")
+                                    or else Has (Line, "ld " & Frame & ","))
+                        then
+                           Released := True;
+                        end if;
+                     elsif Delta_Known
+                       and then (Has (Line, "lw " & Frame & ",")
+                                 or else Has (Line, "ld " & Frame & ","))
+                     then
+                        Released := True;
+                     end if;
+                  end;
+               end;
+            end if;
+         end loop;
+         return "";
+      end Fault;
+
+      function Emitted
+        (Facts : Landin.Targets.Target_Facts) return String;
+
+      function Emitted
+        (Facts : Landin.Targets.Target_Facts) return String
+      is
+         Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+         Ran : Natural;
+         Assembly : Ada.Strings.Unbounded.Unbounded_String;
+         Report : Landin.Build_Reports.Report;
+         Info : aliased Landin.Debugging.Information
+           (Landin.Stages.Trees (Work), Landin.Stages.Sources (Work));
+      begin
+         Lower (Work, Source, Ran);
+         Landin.Testing.Check_Equal
+           (Item, Ran, 5, Landin.Targets.Name (Facts) & ": the source lowers");
+         if Landin.Stages.Failed (Work) then
+            return "";
+         end if;
+         Landin.Debugging.Append (Info, Landin.Stages.Source (Work, 1));
+         Landin.Backend.RiscV.Emit
+           (Landin.Stages.Code (Work).all,
+            Landin.Stages.Meanings (Work).all,
+            Landin.Stages.Identities (Work).all, Facts,
+            Landin.Optimization.Reference_Options, Assembly, Report,
+            Debug => Info'Access,
+            Level => Landin.Targets.Levels.Default_Level (Facts));
+         return Ada.Strings.Unbounded.To_String (Assembly);
+      end Emitted;
+
+      Walked : constant array (1 .. 2) of Landin.Targets.Target_Facts :=
+        [Landin.Targets.Linux_RV64, Landin.Targets.RV32];
+      Old_Epilogue : constant String :=
+        "f:" & LF & HT & "ld ra, -8(x8)" & LF & HT & "mv sp, x8" & LF
+        & HT & "ld x8, -16(x8)" & LF & HT & "ret" & LF;
+   begin
+      Landin.Testing.Check
+        (Item, Fault (Old_Epilogue, "x8") = "ld x8, -16(x8)",
+         "the rule refuses RV64's old epilogue, which loaded x8 below sp");
+      for Facts of Walked loop
+         declare
+            Text : constant String := Emitted (Facts);
+         begin
+            Landin.Testing.Check
+              (Item, Text'Length > 0 and then Fault (Text, "x8") = "",
+               Landin.Targets.Name (Facts)
+               & ": no epilogue reads below sp, the first that does: "
+               & Fault (Text, "x8"));
+         end;
+      end loop;
+   end Epilogues_Read_Nothing_Below_SP;
 
    --  R12's gate: RV32's verifier refuses an invalid register.  The block
    --  as lowered verifies; the hardwired zero, the stack, global and
@@ -10844,6 +11018,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "arm64 assembly saves what it declares",
          Arm64_Assembly_Saves_What_It_Declares'Access);
+      Landin.Testing.Register
+        (Into, "backend", "epilogues read nothing below sp",
+         Epilogues_Read_Nothing_Below_SP'Access);
       Landin.Testing.Register
         (Into, "backend", "rv32 lowering is RV64's at XLEN 32",
          RV32_Lowering_Is_RV64s_At_XLEN_32'Access);
