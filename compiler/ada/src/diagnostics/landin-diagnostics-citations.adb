@@ -2175,6 +2175,8 @@ package body Landin.Diagnostics.Citations is
             when 516 =>
                "A naked routine is called through a C import of its symb"
                & "ol",
+            when 670 =>
+               "RV32 assembly reads RV64's text rules at XLEN 32",
             when 523 =>
                "Under `--link=libc` a library is the C driver's `-lNAME`",
             when 524 =>
@@ -3484,6 +3486,8 @@ package body Landin.Diagnostics.Citations is
             when 508 =>
                "Decisions: The toolchain, C and the machine",
             when 516 =>
+               "Decisions: The toolchain, C and the machine",
+            when 670 =>
                "Decisions: The toolchain, C and the machine",
             when 523 =>
                "Decisions: The toolchain, C and the machine",
@@ -5038,6 +5042,9 @@ package body Landin.Diagnostics.Citations is
             when 516 =>
                "https://www.701.dev/spec.html#d516-a-naked-routine-is-ca"
                & "lled-through-a-c-import-of-its-symbol",
+            when 670 =>
+               "https://www.701.dev/spec.html#d670-rv32-assembly-reads-r"
+               & "v64-s-text-rules-at-xlen-32",
             when 523 =>
                "https://www.701.dev/spec.html#d523-under-link-libc-a-lib"
                & "rary-is-the-c-driver-s-lname",

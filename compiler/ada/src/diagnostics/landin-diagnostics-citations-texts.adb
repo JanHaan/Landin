@@ -10169,12 +10169,12 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & LF
                & "| | Cortex-M0 | Hosted x86-64 | Hosted arm64 | RV64 Linu"
-               & "x |"
+               & "x | RV32 |"
                & LF
-               & "| --- | --- | --- | --- | --- |"
+               & "| --- | --- | --- | --- | --- | --- |"
                & LF
                & "| instruction text | ARMv6-M unified | AT&T | GNU or App"
-               & "le arm64 | GNU RISC-V |"
+               & "le arm64 | GNU RISC-V | GNU RISC-V |"
                & LF
                & "| integer operand registers | `r0`"
                & Character'Val (226)
@@ -10193,6 +10193,14 @@ package body Landin.Diagnostics.Citations.Texts is
                & Character'Val (128)
                & Character'Val (147)
                & "`x28` | `x5`"
+               & Character'Val (226)
+               & Character'Val (128)
+               & Character'Val (147)
+               & "`x7`, `x9`"
+               & Character'Val (226)
+               & Character'Val (128)
+               & Character'Val (147)
+               & "`x31` | `x5`"
                & Character'Val (226)
                & Character'Val (128)
                & Character'Val (147)
@@ -10226,6 +10234,18 @@ package body Landin.Diagnostics.Citations.Texts is
                & Character'Val (226)
                & Character'Val (128)
                & Character'Val (147)
+               & "`x31` | `x5`"
+               & Character'Val (226)
+               & Character'Val (128)
+               & Character'Val (147)
+               & "`x7`, `x10`"
+               & Character'Val (226)
+               & Character'Val (128)
+               & Character'Val (147)
+               & "`x17`, `x28`"
+               & Character'Val (226)
+               & Character'Val (128)
+               & Character'Val (147)
                & "`x31` |"
                & LF
                & "| float operand registers | `d0`"
@@ -10244,7 +10264,7 @@ package body Landin.Diagnostics.Citations.Texts is
                & Character'Val (226)
                & Character'Val (128)
                & Character'Val (147)
-               & "`f31` |"
+               & "`f31` | none |"
                & LF
                & "| `float` chooses from | `d0`"
                & Character'Val (226)
@@ -10274,7 +10294,7 @@ package body Landin.Diagnostics.Citations.Texts is
                & Character'Val (226)
                & Character'Val (128)
                & Character'Val (147)
-               & "`f31` |"
+               & "`f31` | none |"
                & LF
                & "| every ordinary block overwrites | `r0`"
                & Character'Val (226)
@@ -10283,7 +10303,7 @@ package body Landin.Diagnostics.Citations.Texts is
                & "`r7`, flags, and with the unit the `float` row and FPSCR"
                & "'s flags | the `general` and `float` rows, flags | the `"
                & "general` and `float` rows, flags | the `general` and `fl"
-               & "oat` rows |"
+               & "oat` rows | the `general` row |"
                & LF
                & "| saved by the routine when a block names one | `d8`"
                & Character'Val (226)
@@ -10309,7 +10329,11 @@ package body Landin.Diagnostics.Citations.Texts is
                & Character'Val (226)
                & Character'Val (128)
                & Character'Val (147)
-               & "`f27` |"
+               & "`f27` | `x9`, `x18`"
+               & Character'Val (226)
+               & Character'Val (128)
+               & Character'Val (147)
+               & "`x27` |"
                & LF
                & "| never named | `r8`"
                & Character'Val (226)
@@ -10318,6 +10342,10 @@ package body Landin.Diagnostics.Citations.Texts is
                & "`r15` and their aliases, `sp`, `lr`, `pc`, `msp`, `psp`,"
                & " `control` | `rsp`, `rbp`, `rip` | `sp`, `fp`, `lr`, `x1"
                & "8`, `x29`, `x30` | `x0`"
+               & Character'Val (226)
+               & Character'Val (128)
+               & Character'Val (147)
+               & "`x4`, `x8` and their aliases | `x0`"
                & Character'Val (226)
                & Character'Val (128)
                & Character'Val (147)
@@ -10338,19 +10366,19 @@ package body Landin.Diagnostics.Citations.Texts is
                & "e routine save and restore it. A discarded output names "
                & "one fixed register. The text writes `{name}` where an op"
                & "erand's register belongs, spelled at the width its type "
-               & "selects (`%eax` or `%rax`, `w9` or `x9`, `r3`; RV64 uses"
-               & " its full-width `xN` name for every enabled integer widt"
-               & "h; a float register is `%xmm3` at both widths, `s3` or `"
-               & "d3` on arm64, `f3` on RV64, and on a Cortex-M float unit"
-               & " `s6` for an `f32` at `d3` and `d3` for an `f64`); `{{` "
-               & "and `}}` are literal braces. Every `{name}` must name an"
-               & " operand, every `general` operand must be written in the"
-               & " text, and every register the text names at any width mu"
-               & "st be declared or overwritten and never be one no block "
-               & "names. Frame pointers, stack pointers, link registers, t"
-               & "he platform register and Cortex-M0's reserved r9 are the"
-               & "refore never named, and no register is reserved by the l"
-               & "anguage beyond them. arm64's `v8`"
+               & "selects (`%eax` or `%rax`, `w9` or `x9`, `r3`; RV64 and "
+               & "RV32 use their full-width `xN` name for every enabled in"
+               & "teger width; a float register is `%xmm3` at both widths,"
+               & " `s3` or `d3` on arm64, `f3` on RV64, and on a Cortex-M "
+               & "float unit `s6` for an `f32` at `d3` and `d3` for an `f6"
+               & "4`); `{{` and `}}` are literal braces. Every `{name}` mu"
+               & "st name an operand, every `general` operand must be writ"
+               & "ten in the text, and every register the text names at an"
+               & "y width must be declared or overwritten and never be one"
+               & " no block names. Frame pointers, stack pointers, link re"
+               & "gisters, the platform register and Cortex-M0's reserved "
+               & "r9 are therefore never named, and no register is reserve"
+               & "d by the language beyond them. arm64's `v8`"
                & Character'Val (226)
                & Character'Val (128)
                & Character'Val (147)
@@ -10367,15 +10395,16 @@ package body Landin.Diagnostics.Citations.Texts is
                & " at whatever width the text names them: `d8`, `s8` and `"
                & "q8` are all `v8`, x86-64's `ymm3` and `zmm3` are `xmm3`,"
                & " and on a Cortex-M float unit `s16` and `s17` are the ha"
-               & "lves of `d8`, one of the eight its routine saves. RV64 o"
-               & "perands use canonical `xN` and `fN` names, while raw tex"
-               & "t may use the ABI's `a`, `t` and `s` aliases and their f"
-               & "loat `fa`, `ft` and `fs` forms. An alias identifies the "
-               & "same register for declaration checks and exclusion from "
-               & "a class, so naming `s1` requires declaring `x9` and nami"
-               & "ng `fs0` requires declaring `f8`. The private failure re"
-               & "gisters are overwritten: a failure outcome is copied out"
-               & " as its call returns and is never live across a block."
+               & "lves of `d8`, one of the eight its routine saves. RV64 a"
+               & "nd RV32 operands use canonical `xN` and `fN` names, whil"
+               & "e raw text may use the ABI's `a`, `t` and `s` aliases an"
+               & "d their float `fa`, `ft` and `fs` forms. An alias identi"
+               & "fies the same register for declaration checks and exclus"
+               & "ion from a class, so naming `s1` requires declaring `x9`"
+               & " and naming `fs0` requires declaring `f8`. The private f"
+               & "ailure registers are overwritten: a failure outcome is c"
+               & "opied out as its call returns and is never live across a"
+               & " block."
                & LF
                & LF
                & "Every block is a conservative read/write, call and trap "
@@ -10395,56 +10424,59 @@ package body Landin.Diagnostics.Citations.Texts is
                & "horizontal tabs and printable characters. A line may end"
                & " in the selected target's own line comment, from its mar"
                & "ker to the end of the line: `@` on Cortex-M0, `//` on ar"
-               & "m64 and `#` on x86-64 and RV64, the spelling that target"
-               & "'s GNU or Apple assembler reads (D597). In an ordinary a"
-               & "nd a naked block alike the comment is removed before any"
-               & " other rule reads the text, so nothing in it is an instr"
-               & "uction, a register, a label or a `{name}` slot, and the "
-               & "emitted assembly does not hold it. Every other comment f"
-               & "orm is refused, naming the target's own: `/*`, another t"
-               & "arget's marker, and on Cortex-M0 and arm64 a line that b"
-               & "egins with `#`. A number is the assembler's syntax and t"
-               & "akes no digit separator; the refusal names the number to"
-               & " write. Directives, statement separators and labels are "
-               & "refused in an ordinary block, which is straight-line: it"
-               & " cannot branch, call, return or change control mode, exc"
-               & "ept that Cortex-M0 `svc` enters the SVC exception handle"
-               & "r at vector 11. That handler decides whether execution r"
-               & "esumes after `svc`; this exception does not admit other "
-               & "control transfers in an ordinary block. At the default `"
-               & "armv6-m` level the accepted spelling is a bounded subset"
-               & " of ARMv6-M unified assembly; its instruction allowlist "
-               & "is an implementation limit, pinned by the machine checks"
-               & ". At the Thumb-2 levels, `armv7-m`, `armv7e-m` and `armv"
-               & "8-m.main`, the checker retains the text and straight-lin"
-               & "e restrictions, and the assembler enforces the selected "
-               & "architecture's instruction set. `UDF` and `BKPT` are ref"
-               & "used in ordinary blocks at every level because they ente"
-               & "r exception handling. Naked blocks additionally admit la"
-               & "bels, branches, BL/BLX/BX, PUSH/POP, UDF and the MSP/PSP"
-               & "/CONTROL system registers, and take no operands. CPS cha"
-               & "nges PRIMASK at every level and may change FAULTMASK at "
-               & "a Thumb-2 level; barrier operands are `sy` or omitted. B"
-               & "ASEPRI and FAULTMASK system registers are available at t"
-               & "hose higher levels. Unsupported system registers remain "
-               & "refused. On hosted x86-64, arm64 and RV64 the checker re"
-               & "fuses control transfer by mnemonic and leaves which inst"
-               & "ructions exist to the platform assembler. The system cal"
-               & "l, x86-64 `syscall`, arm64 `svc` and RV64 `ecall`, retur"
-               & "ns to the next instruction and is not a control transfer"
-               & " there (D281). Unencodable operands and instructions rem"
-               & "ain explicit assembler failures under the pinned flags, "
-               & "never a target upgrade. Assembly must not overwrite comp"
-               & "iler spill or frame storage, saved registers or immutabl"
-               & "e source storage through an indirect address, leave the "
-               & "stack pointer changed, on x86-64 leave the direction fla"
-               & "g set, or leave a float unit's rounding mode or exceptio"
-               & "n flags other than it found them: x86-64's MXCSR, arm64'"
-               & "s FPCR and FPSR, RV64's `fcsr` and a Cortex-M float unit"
-               & "'s FPSCR (D630). An instruction's implicit register effe"
-               & "cts are the programmer's to declare, as `cpuid`'s write "
-               & "of `rbx` is. Arbitrary machine text cannot prove those o"
-               & "bligations."
+               & "m64 and `#` on x86-64, RV64 and RV32, the spelling that "
+               & "target's GNU or Apple assembler reads (D597). In an ordi"
+               & "nary and a naked block alike the comment is removed befo"
+               & "re any other rule reads the text, so nothing in it is an"
+               & " instruction, a register, a label or a `{name}` slot, an"
+               & "d the emitted assembly does not hold it. Every other com"
+               & "ment form is refused, naming the target's own: `/*`, ano"
+               & "ther target's marker, and on Cortex-M0 and arm64 a line "
+               & "that begins with `#`. A number is the assembler's syntax"
+               & " and takes no digit separator; the refusal names the num"
+               & "ber to write. Directives, statement separators and label"
+               & "s are refused in an ordinary block, which is straight-li"
+               & "ne: it cannot branch, call, return or change control mod"
+               & "e, except that Cortex-M0 `svc` enters the SVC exception "
+               & "handler at vector 11. That handler decides whether execu"
+               & "tion resumes after `svc`; this exception does not admit "
+               & "other control transfers in an ordinary block. At the def"
+               & "ault `armv6-m` level the accepted spelling is a bounded "
+               & "subset of ARMv6-M unified assembly; its instruction allo"
+               & "wlist is an implementation limit, pinned by the machine "
+               & "checks. At the Thumb-2 levels, `armv7-m`, `armv7e-m` and"
+               & " `armv8-m.main`, the checker retains the text and straig"
+               & "ht-line restrictions, and the assembler enforces the sel"
+               & "ected architecture's instruction set. `UDF` and `BKPT` a"
+               & "re refused in ordinary blocks at every level because the"
+               & "y enter exception handling. Naked blocks additionally ad"
+               & "mit labels, branches, BL/BLX/BX, PUSH/POP, UDF and the M"
+               & "SP/PSP/CONTROL system registers, and take no operands. C"
+               & "PS changes PRIMASK at every level and may change FAULTMA"
+               & "SK at a Thumb-2 level; barrier operands are `sy` or omit"
+               & "ted. BASEPRI and FAULTMASK system registers are availabl"
+               & "e at those higher levels. Unsupported system registers r"
+               & "emain refused. On hosted x86-64, arm64 and RV64 the chec"
+               & "ker refuses control transfer by mnemonic and leaves whic"
+               & "h instructions exist to the platform assembler. The syst"
+               & "em call, x86-64 `syscall`, arm64 `svc` and RV64 `ecall`,"
+               & " returns to the next instruction and is not a control tr"
+               & "ansfer there (D281). RV32 reads RV64's rule, except that"
+               & " firmware's `wfi` resumes at the next instruction and is"
+               & " admitted, and its `ecall`, an exception that enters the"
+               & " unhandled loop, is refused (D670). Unencodable operands"
+               & " and instructions remain explicit assembler failures und"
+               & "er the pinned flags, never a target upgrade. Assembly mu"
+               & "st not overwrite compiler spill or frame storage, saved "
+               & "registers or immutable source storage through an indirec"
+               & "t address, leave the stack pointer changed, on x86-64 le"
+               & "ave the direction flag set, or leave a float unit's roun"
+               & "ding mode or exception flags other than it found them: x"
+               & "86-64's MXCSR, arm64's FPCR and FPSR, RV64's `fcsr` and "
+               & "a Cortex-M float unit's FPSCR (D630). An instruction's i"
+               & "mplicit register effects are the programmer's to declare"
+               & ", as `cpuid`'s write of `rbx` is. Arbitrary machine text"
+               & " cannot prove those obligations."
                & LF
                & LF
                & "This compiler lowers ordinary assembly on every implemen"
@@ -24357,6 +24389,21 @@ package body Landin.Diagnostics.Citations.Texts is
                & "instructions after the call and each picks its next step"
                & " with a conditional move, or on RV64 a mask, since a hos"
                & "ted body then admitted no label.",
+            when 670 =>
+               "Chosen: RV32 text is checked as RV64's is: at most 4096 "
+               & "ASCII bytes in LF lines, `#` comments, no directive, sep"
+               & "arator or digit separator, and in an ordinary block no l"
+               & "abel and no control transfer by mnemonic; which instruct"
+               & "ions exist is the pinned assembler's to say under the le"
+               & "vel's `-march`. Two mnemonics take firmware's standing r"
+               & "ather than Linux's: `wfi`, which resumes at the next ins"
+               & "truction once an interrupt is taken, is admitted in an o"
+               & "rdinary block, as Cortex-M's is; and `ecall`, which on f"
+               & "irmware is an exception that takes no slot and enters th"
+               & "e unhandled loop, never to return, is refused there, whe"
+               & "re D281 admits it on RV64. A naked body owns its control"
+               & " flow on RV32 as everywhere. [1990]'s table has an RV32 "
+               & "column: RV64's integer rows and no float register.",
             when 523 =>
                "Chosen: under `--link=libc`, which Darwin and FreeBSD al"
                & "ways use, each active `linker.library(""NAME"")` reaches t"

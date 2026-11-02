@@ -1605,6 +1605,83 @@ package body Landin.Tests.Driver_Suite is
          & " RV64");
    end RV32_Checks_And_Does_Not_Yet_Emit;
 
+   --  D670: rv32 reads [1990]'s text rules, at XLEN 32 with no float
+   --  register: a naked spin and an ordinary block that waits for an
+   --  interrupt are admitted; an ordinary jump, an ordinary system call and
+   --  a float operand are refused, each as a diagnostic and none as a
+   --  defect.
+   procedure RV32_Checks_Assembly_Text
+     (Item : in out Landin.Testing.Context);
+
+   procedure RV32_Checks_Assembly_Text
+     (Item : in out Landin.Testing.Context)
+   is
+      function Ran (Text : String) return Landin.Driver.Outcome;
+
+      function Ran (Text : String) return Landin.Driver.Outcome is
+         Host  : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      begin
+         Host.Add_File ("main.ldn", Text);
+         Tools.Set_Result (0, "");
+         return Landin.Driver.Execute
+           (["--target=rv32", "main.ldn"], Host, Tools);
+      end Ran;
+
+      function Says (Result : Landin.Driver.Outcome; Text : String)
+        return Boolean
+        is (Contains (Unbounded.To_String (Result.Report), Text));
+
+      Naked : constant Landin.Driver.Outcome := Ran
+        ("extern(naked) spin: () -> none =" & LF
+         & "    assembler.block(""j spin"")" & LF
+         & "end spin" & LF);
+      Ordinary : constant Landin.Driver.Outcome := Ran
+        ("idle: (n: u32) -> (r: u32) =" & LF
+         & "    assembler.block(""wfi"")" & LF
+         & "    r = assembler.block(""addi {r}, {r}, 1""," & LF
+         & "        inout r: u32 at general = n)" & LF
+         & "end idle" & LF);
+      Jumping : constant Landin.Driver.Outcome := Ran
+        ("away: () -> none =" & LF
+         & "    assembler.block(""j away"")" & LF
+         & "end away" & LF);
+      Calling : constant Landin.Driver.Outcome := Ran
+        ("trap: () -> none =" & LF
+         & "    assembler.block(""ecall"")" & LF
+         & "end trap" & LF);
+      Floating : constant Landin.Driver.Outcome := Ran
+        ("half: (x: f32) -> none =" & LF
+         & "    assembler.block(""fmv.s {v}, {v}"", in v: f32 at f8 = x)"
+         & LF
+         & "end half" & LF);
+   begin
+      Landin.Testing.Check_Equal
+        (Item, Naked.Status, Landin.Driver.Status_Success,
+         "rv32 checks a naked routine's jump: "
+         & Unbounded.To_String (Naked.Report));
+      Landin.Testing.Check_Equal
+        (Item, Ordinary.Status, Landin.Driver.Status_Success,
+         "rv32 admits WFI and a general operand in an ordinary block: "
+         & Unbounded.To_String (Ordinary.Report));
+      Landin.Testing.Check
+        (Item, Jumping.Status = Landin.Driver.Status_Reported
+           and then Says (Jumping, "ordinary assembly is straight-line and"
+                                   & " transfers no control"),
+         "rv32 refuses an ordinary block's jump as a diagnostic: "
+         & Unbounded.To_String (Jumping.Report));
+      Landin.Testing.Check
+        (Item, Calling.Status = Landin.Driver.Status_Reported
+           and then Says (Calling, "transfers no control"),
+         "rv32 refuses an ordinary ecall, an exception that never returns: "
+         & Unbounded.To_String (Calling.Report));
+      Landin.Testing.Check
+        (Item, Floating.Status = Landin.Driver.Status_Reported
+           and then not Says (Floating, "defect"),
+         "rv32 refuses a float operand, having no float register: "
+         & Unbounded.To_String (Floating.Report));
+   end RV32_Checks_Assembly_Text;
+
    --  D255 on Linux arm64: a build that names `armv8-a` is the build that
    --  names no level.  A program with atomics, a `layout(c)` record passed
    --  across the C boundary in both directions and a variadic C call is
@@ -6745,6 +6822,9 @@ package body Landin.Tests.Driver_Suite is
       Landin.Testing.Register
         (Into, "driver", "rv32 checks and does not yet emit",
          RV32_Checks_And_Does_Not_Yet_Emit'Access);
+      Landin.Testing.Register
+        (Into, "driver", "rv32 checks assembly text",
+         RV32_Checks_Assembly_Text'Access);
       Landin.Testing.Register
         (Into, "driver", "the arm64 default is armv8-a",
          The_Arm64_Default_Is_Armv8_A'Access);
