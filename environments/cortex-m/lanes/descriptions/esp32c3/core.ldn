@@ -1,0 +1,11 @@
+-- The rv32imc corpus lane's machine: Espressif QEMU's esp32c3, whose core
+-- executes the corpus built at rv32imc (D695).  This describes an
+-- emulator's map for the lane, not the chip, whose own description is
+-- under devices/, and only the lane's entry-module file,
+-- lanes/lane-esp32c3.ldn, imports it (D619).  It names the core, the trap
+-- table's 32 slots, mcause 0 to 31, and beside this file the memory; no
+-- interrupt is named, since no corpus program takes one.
+
+compiler.device("esp32c3-lane")
+compiler.core("esp-rv32imc")
+compiler.vectors(32)

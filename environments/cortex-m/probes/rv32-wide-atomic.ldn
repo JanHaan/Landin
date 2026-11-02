@@ -1,0 +1,11 @@
+-- The RV32 lanes' eight-byte probe (D695): no RV32 level has an atomic
+-- access of eight bytes, so both lanes require refine to refuse this u64
+-- cell where it is declared and each access at its use (L0344).
+import core/atomic
+
+mut total: atomic.cell(u64) = zeroed
+
+public main: () -> (code: i32) =
+    atomic.store(addr total, 41)
+    code = i32(atomic.load(addr total)) + 1
+end main

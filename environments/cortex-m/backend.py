@@ -14,7 +14,8 @@ import threading
 import time
 
 from run import FLAGS, CommandFailed, Run, gdb_listener, oracle, require, stop
-from setup import DEFAULT, HERE, arm_archive, installed_tools, inventory, sha, supported_host
+from setup import (DEFAULT, HERE, arm_archive, installed_tools, inventory, riscv_archive, sha,
+                   supported_host)
 
 ROOT = HERE.parent.parent
 sys.path.insert(0, str(ROOT / 'compiler/tests'))
@@ -51,14 +52,37 @@ LEVELS = {
     'armv8-m.main': {'flags': ['-march=armv8-m.main'], 'multilib': '/thumb/v8-m.main/nofp/',
                      'attributes': ['Tag_CPU_arch: v8-M.mainline',
                                     'Tag_CPU_arch_profile: Microcontroller'],
-                     'machine': 'mps2-an505', 'profile': 'mps2-an505'},
+                     'machine': 'mps2-an505', 'profile': 'mps2-an505',
+                     'lane': 'mps2-an505'},
     'armv7e-m+fpv5-d16': {
         'flags': ['-mcpu=cortex-m7', '-mfloat-abi=hard', '-mfpu=fpv5-d16'],
         'multilib': '/thumb/v7e-m+dp/hard/',
         'attributes': ['Tag_CPU_arch: v7E-M', 'Tag_CPU_arch_profile: Microcontroller',
                        'Tag_THUMB_ISA_use: Thumb-2', 'Tag_FP_arch: FPv5/FP-D16 for ARMv8',
                        'Tag_ABI_VFP_args: VFP registers'],
-        'machine': 'mps2-an500', 'level': 'armv7e-m', 'profile': 'mps2-an500'},
+        'machine': 'mps2-an500', 'level': 'armv7e-m', 'profile': 'mps2-an500',
+        'lane': 'mps2-an500'},
+    #  The RV32 levels (D695), on Espressif's QEMU: rv32imc, the ESP32-C3's,
+    #  on its esp32c3 machine with the lane's description of its SRAM, and
+    #  rv32imac on sifive_e, an E31, with the RV32 reference's map.  The
+    #  multilib is the one GCC selects from the flags alone, rv32im for
+    #  rv32imc, whose libgcc holds no compressed or atomic instruction.
+    #  `extensions` is every extension the linked image's Tag_RISCV_arch may
+    #  name, as GCC 16 spells them: Zmmul is M's, Zca C's, and Zaamo and
+    #  Zalrsc A's halves.
+    #  The esp32c3 machine's core, `espressif`, has A, F and D, which the
+    #  C3 has not, so the lane removes them, and Zawrs and Zfa with them,
+    #  which QEMU requires: an A instruction there is an illegal one (D696).
+    'rv32imc': {'arch': 'rv32', 'flags': ['-march=rv32imc_zicsr_zifencei'],
+                'cpu': 'espressif,a=false,zawrs=false,f=false,d=false,zfa=false',
+                'multilib': '/rv32im/ilp32/',
+                'extensions': ('i', 'm', 'c', 'zicsr', 'zifencei', 'zmmul', 'zca'),
+                'machine': 'esp32c3', 'profile': 'esp32c3', 'lane': 'esp32c3'},
+    'rv32imac': {'arch': 'rv32', 'flags': ['-march=rv32imac_zicsr_zifencei'],
+                 'multilib': '/rv32imac/ilp32/',
+                 'extensions': ('i', 'm', 'a', 'c', 'zicsr', 'zifencei', 'zmmul', 'zaamo',
+                                'zalrsc', 'zca'),
+                 'machine': 'sifive_e', 'profile': 'riscv-reference', 'lane': 'sifive-e'},
 }
 
 #  The refine levels whose instructions are Thumb-2's, at which no image may
@@ -69,9 +93,32 @@ THUMB_2 = ('armv7-m', 'armv7e-m', 'armv8-m.main')
 LANE_ROOT = HERE / 'lanes'
 
 
+#  What every RV32 compilation and link passes beside the level's -march:
+#  the soft-float ilp32 ABI (D695) and FLAGS' own discipline.
+RV32_FLAGS = ['-mabi=ilp32', '-ffreestanding', '-fno-builtin', '-fno-omit-frame-pointer',
+              '-g3', '-O1', '-Wall', '-Wextra', '-Werror', '-nostdlib']
+
+
+def rv32(level):
+    """Whether LEVEL is an RV32 level, built by riscv64-elf-gcc for --target=rv32."""
+    return LEVELS[level].get('arch') == 'rv32'
+
+
+def target(level):
+    """The --target refine builds LEVEL's programs for."""
+    return 'rv32' if rv32(level) else 'cortex-m0'
+
+
+def tool(run, level, name):
+    """The pinned binutils or GCC program NAME, `gcc` or `objdump`, for LEVEL."""
+    return run.riscv / ('riscv64-elf-' + name) if rv32(level) else run.arm / ('arm-eabi-' + name)
+
+
 def level_flags(level):
     """FLAGS with the processor and float arguments the level selects."""
     require(level in LEVELS, 'unknown Cortex level: ' + level)
+    if rv32(level):
+        return LEVELS[level]['flags'] + RV32_FLAGS
     own = LEVELS[level]['flags']
     replaced = ['-mcpu='] + (['-mfloat-abi='] if any(
         f.startswith('-mfloat-abi=') for f in own) else [])
@@ -89,9 +136,9 @@ def refine_level(level):
 
 
 def lane_of(level):
-    """The lane LEVEL runs on, or None for the constrained reference's map."""
-    profile = LEVELS[level]['profile']
-    return profile if profile in LANE_PROFILES else None
+    """The corpus lane LEVEL runs the whole inventory on, or None for the
+    default run's levels, which run on the constrained reference's map."""
+    return LEVELS[level].get('lane')
 
 
 def lane_inputs(level, inputs):
@@ -99,8 +146,8 @@ def lane_inputs(level, inputs):
     which imports its description, and a module directory's own sources
     in place of the directory, since a rooted request names one entry
     directory or its files (L0002)."""
-    lane = lane_of(level)
-    if lane is None:
+    lane = LEVELS[level]['profile']
+    if lane not in LANE_PROFILES:
         return list(inputs)
     result = ['--root=' + str(LANE_ROOT)]
     for one in inputs:
@@ -179,6 +226,16 @@ def probe_root(device):
     return LANE_ROOT if device in LANE_PROFILES else ROOT / 'devices'
 
 
+#  The RV32 cores a description may name (D695); every other is an M-profile core.
+RV32_CORES = ('sifive-e31', 'esp-rv32imc', 'esp-rv32imac-clic', 'hazard3')
+
+
+def device_target(device):
+    """The --target DEVICE's description is for: rv32 for an RV32 core."""
+    want = {**DESCRIPTIONS, **LANE_PROFILES}[device]
+    return 'rv32' if want['core'] in RV32_CORES else 'cortex-m0'
+
+
 def probe_level(device):
     """The level DEVICE's description builds at: its float unit's, or the
     default for one without (D615)."""
@@ -214,7 +271,8 @@ def derived(run, refine, device=REFERENCE, where=None):
         probe = Run(out, run.tools)
         try:
             probe.command('derive-profile', [
-                refine, 'compile', '--root=' + str(probe_root(device)), '--target=cortex-m0',
+                refine, 'compile', '--root=' + str(probe_root(device)),
+                '--target=' + device_target(device),
                 *probe_level(device), '--emit=linker-script', '--build-report=profile.json',
                 'profile.ldn', '-o', 'profile.ld'], timeout=60)
         except CommandFailed as error:
@@ -338,6 +396,89 @@ def session(run, port, expected, traps, before=(), profile=None, vfp=False):
         'print("R650_GENERATED_QEMU_PASS")', 'end', 'quit', ''])
 
 
+def rv32_session(run, port, expected, traps, before=(), profile=None):
+    """`session`'s counterpart for an RV32 harness image (rv32-start.S).
+
+    The same breakpoints, guard and oracle: a trap is the illegal-instruction
+    exception, mcause 2, the harness's slot 0 records at an `unimp`, in
+    either its compressed form, all zero, or `csrrw x0, cycle, x0`; a
+    return holds a0's byte, sp at the stack top, s0 zero and s1-s11, gp
+    and tp as the harness painted them.
+    """
+    top, bottom, reserved = profile['stack_top'], stack_bottom(profile), profile['stack_reserved']
+    unimp = ('(value("*(unsigned short*)%d" % mepc) == 0'
+             ' or value("*(unsigned int*)%d" % mepc) == 0xc0001073)')
+    if expected is None:
+        finish = [
+            'result = value("*(unsigned int*)&backend_result")',
+            'observed = {"status": result & 255, "result": result,'
+            ' "a1": value("*((unsigned int*)&backend_result+1)"),'
+            ' "trapped": fault == 1, "stopped": where(value("$pc"))}',
+            'if fault:',
+            '    observed["mepc"] = where(mepc)',
+            '    observed["mcause"] = cause',
+            '    observed["unimp"] = ' + unimp,
+            f'with open({str(run.out / "observed.json")!r}, "w") as f: json.dump(observed, f)']
+    elif traps:
+        finish = [
+            'check(fault == 1, "backend_fault is %d, expected 1" % fault)',
+            'check(value("$pc") == value("&backend_fault_done"), "the program did not stop at backend_fault_done")',
+            'check(cause == 2, "mcause is %d, expected 2, an illegal instruction" % cause)',
+            'check(' + unimp + ', "the instruction at mepc is no unimp, the trap instruction")']
+    else:
+        finish = [
+            'check(fault == 0, "backend_fault is %d, expected 0" % fault)',
+            'check(value("$pc") == value("&backend_done"), "the program did not stop at backend_done")',
+            f'check(value("*(unsigned int*)&backend_result") & 255 == {expected}, '
+            f'"the result is %d, expected {expected}" % (value("*(unsigned int*)&backend_result") & 255))',
+            f'check(value("$sp") == {top}, "sp is %#x at return, expected {top:#x}" % value("$sp"))',
+            'check(value("$s0") == 0, "s0 is not zero at return")',
+            'check([value("$s%d" % i) for i in range(1, 12)] == [44,55,66,77,88,99,100,111,122,133,144], '
+            '"a callee-saved register s1-s11 was not preserved")',
+            'check([value("$gp") & 0xffffffff, value("$tp") & 0xffffffff] == [0x9e9e9e9e, 0x7e7e7e7e], '
+            '"gp or tp, which the compiler does not use, changed")']
+    return '\n'.join([
+        'set pagination off', 'set confirm off', 'set architecture riscv:rv32',
+        f'target remote 127.0.0.1:{port}',
+        'break backend_painted', 'continue', 'delete breakpoints', *before,
+        'delete breakpoints',
+        'python', 'import gdb',
+        f'guard = gdb.Breakpoint("*(unsigned char (*)[16]){bottom}", gdb.BP_WATCHPOINT, gdb.WP_WRITE)',
+        'assert guard.type == gdb.BP_HARDWARE_WATCHPOINT, "the stack guard is no hardware watchpoint"',
+        'end',
+        'break backend_done', 'break backend_fault_done', 'continue',
+        'python', 'import json, struct',
+        'def value(expr): return int(gdb.parse_and_eval(expr))',
+        'def where(address):',
+        '    said = gdb.execute("info symbol %#x" % address, to_string=True).strip()',
+        '    line = gdb.execute("info line *%#x" % address, to_string=True).strip()',
+        '    return "%#x (%s; %s)" % (address, said, line.split(" and ends")[0])',
+        'def check(holds, what):',
+        '    if not holds: raise gdb.GdbError("LANDIN-CHECK " + what + "; " + state)',
+        'pc = value("$pc")',
+        'if pc not in (value("&backend_done"), value("&backend_fault_done")):',
+        '    sp = value("$sp")',
+        '    state = "stopped by the write watchpoint on the guard"',
+        f'    check(False, "the stack overran its {reserved}-byte reservation: %s wrote into'
+        f' its lowest 16 bytes at {bottom:#x}, called from %s, with sp %#x and %d bytes of the'
+        f' stack in use" % (where(pc), where(value("$ra")), sp, {top} - sp))',
+        'fault = value("*(unsigned int*)&backend_fault")',
+        'cause = value("*((unsigned int*)&backend_fault+1)")',
+        'mepc = value("*((unsigned int*)&backend_fault+2)")',
+        'state = "fault=%d pc=%s" % (fault, where(value("$pc")))',
+        'if fault:',
+        '    state += " mcause=%d mepc=%s mtval=%#x sp=%#x" % (cause, where(mepc),'
+        ' value("*((unsigned int*)&backend_fault+3)"), value("*((unsigned int*)&backend_fault+4)"))',
+        'print("LANDIN-STATE " + state)',
+        *finish,
+        f'words=list(struct.unpack("<{reserved // 4}I", bytes(gdb.selected_inferior().read_memory({bottom}, {reserved}))))',
+        f'check(words[:4] == [0xa55ac33c]*4, "the stack overran its {reserved}-byte reservation")',
+        f'check(value("$sp") >= {bottom}, "sp is below the stack reservation")',
+        'first=next((i for i,w in enumerate(words) if w != 0xa55ac33c), len(words))',
+        f'with open({str(run.out / "stack-observation.json")!r}, "w") as f: json.dump({{"lowest_changed_word":{bottom}+4*first,"reserved_bytes":{reserved},"is_stack_bound":False}},f)',
+        'print("R650_GENERATED_QEMU_PASS")', 'end', 'quit', ''])
+
+
 def execute(run, elf, expected, traps, before=(), level='armv6-m', profile=None):
     """Run ELF under QEMU and hold it to its oracle; see `session`.
 
@@ -353,9 +494,15 @@ def execute(run, elf, expected, traps, before=(), level='armv6-m', profile=None)
     profile = profile or recorded(machine)
     listener, port, stub = gdb_listener()
     script = run.out / 'backend.gdb'
-    script.write_text(session(run, port, expected, traps, before, profile,
-                              vfp=hard_float(level)))
-    argv = [str(run.bin / 'qemu-system-arm'), '-M', LEVELS[level]['machine'], '-accel',
+    if rv32(level):
+        script.write_text(rv32_session(run, port, expected, traps, before, profile))
+    else:
+        script.write_text(session(run, port, expected, traps, before, profile,
+                                  vfp=hard_float(level)))
+    emulator = (run.espressif / 'qemu-system-riscv32' if rv32(level)
+                else run.bin / 'qemu-system-arm')
+    cpu = ['-cpu', LEVELS[level]['cpu']] if 'cpu' in LEVELS[level] else []
+    argv = [str(emulator), '-M', LEVELS[level]['machine'], *cpu, '-accel',
             'tcg,thread=single', '-display', 'none', '-monitor', 'none',
             '-serial', 'none', '-kernel', str(elf), '-S', *stub]
     record = {'name': 'qemu-backend', 'argv': argv, 'timeout_seconds': 25}
@@ -506,7 +653,7 @@ def datum_symbols(listing):
     return symbols, sizes
 
 
-def check_datum_symbols(run, obj):
+def check_datum_symbols(run, obj, level='armv6-m'):
     """Every module datum is typed and sized in the symbol table, with an
     initial image or without, as the other ELF backends' are, so that its
     extent is read from `nm -S` or readelf rather than from the next
@@ -514,7 +661,7 @@ def check_datum_symbols(run, obj):
     further than the next datum of its section or the section's end, and
     is nonzero unless the section is empty.  Writes `datum-symbols.json`."""
     symbols, sizes = datum_symbols(run.command(
-        'datum-symbols', [run.arm / 'arm-eabi-readelf', '-S', '-s', '-W', obj]))
+        'datum-symbols', [tool(run, level, 'readelf'), '-S', '-s', '-W', obj]))
     faults = []
     for name, symbol in sorted(symbols.items()):
         ends = [other['address'] for other in symbols.values()
@@ -531,13 +678,13 @@ def check_datum_symbols(run, obj):
     return symbols
 
 
-def image_sizes(run, elf, profile, name='sections'):
+def image_sizes(run, elf, profile, name='sections', level='armv6-m'):
     """Each region's use against the limit the profile's build report
     gives, each allocated section's size and each routine's, so where an
     image's bytes go is read from the corpus rather than from hand-run
     tools, overflowing or not.  `FLASH` is the text region and `RAM` the
     static RAM of the data region, whatever the description names them."""
-    listing = run.command(name, [run.arm / 'arm-eabi-size', '-A', elf])
+    listing = run.command(name, [tool(run, level, 'size'), '-A', elf])
     sections = {}
     for line in listing.splitlines():
         parts = line.split()
@@ -545,7 +692,7 @@ def image_sizes(run, elf, profile, name='sections'):
             if parts[0] in ('.isr_vector', '.text', '.data', '.bss') and int(parts[1]):
                 sections[parts[0]] = int(parts[1])
     routines = routine_sizes(run.command(
-        name + '-routines', [run.arm / 'arm-eabi-nm', '-S', '--defined-only', elf]))
+        name + '-routines', [tool(run, level, 'nm'), '-S', '--defined-only', elf]))
     used = load_extents(elf, profile)
     limits = {'FLASH': profile['flash_limit'], 'RAM': profile['static_ram_limit']}
     return {'regions': {part: {'used': used[part], 'limit': limit}
@@ -578,21 +725,22 @@ def describe_sizes(sizes):
 
 
 def harness_start(run, profile, level='armv6-m', name='input-0.o'):
-    """backend-start.S assembled for PROFILE: its table's length and its
-    boot kind's prefix and suffix."""
+    """backend-start.S, or for an RV32 level rv32-start.S, assembled for
+    PROFILE: its table's length and its boot kind's prefix and suffix."""
     obj = run.out / name
     run.command('assemble-start' if name == 'input-0.o' else 'assemble-' + Path(name).stem,
-                [run.arm / 'arm-eabi-gcc', *level_flags(level),
+                [tool(run, level, 'gcc'), *level_flags(level),
                  '-DLANDIN_VECTOR_WORDS=%d' % profile['vector_words'],
                  '-DLANDIN_BOOT_PREFIX=%d' % profile['boot_prefix'],
                  '-DLANDIN_BOOT_SUFFIX=%d' % profile['boot_suffix'],
                  '-DLANDIN_FPU=%d' % hard_float(level),
-                 '-c', HERE / 'probes/backend-start.S', '-o', obj])
+                 '-c', HERE / ('probes/rv32-start.S' if rv32(level) else 'probes/backend-start.S'),
+                 '-o', obj])
     return obj
 
 
 def link(run, objects, script, level, elf, name='assemble-link'):
-    run.command(name, [run.arm / 'arm-eabi-gcc', *level_flags(level),
+    run.command(name, [tool(run, level, 'gcc'), *level_flags(level),
                 '-Wl,-T,' + str(script) + ',--gc-sections,-Map,' + elf.stem + '.map',
                 *objects, '-lgcc', '-o', elf])
 
@@ -619,7 +767,7 @@ def measure_overflow(run, profile, objects=None, level='armv6-m'):
         objects = sorted(run.out.glob('input-*.o'), key=lambda p: int(p.stem.split('-')[1]))
     elf = run.out / 'measure.elf'
     link(run, objects, script, level, elf, 'measure-link')
-    return image_sizes(run, elf, profile, 'measure-sections')
+    return image_sizes(run, elf, profile, 'measure-sections', level)
 
 
 def preflight(assembly):
@@ -652,7 +800,7 @@ def preflight(assembly):
             width = {'.byte': 1, '.short': 2, '.long': 4, '.quad': 8, '.word': 4}
             directive, values = text.split(None, 1)
             total += factor * width[directive] * len(values.split(','))
-        elif text and not text.startswith(('.', '@')) and not text.endswith(':'):
+        elif text and not text.startswith(('.', '@', '#')) and not text.endswith(':'):
             total += factor * 4
         if total > MATERIALIZATION:
             raise ImageLimit('bounded assembly materialization exceeds 8 MiB')
@@ -682,10 +830,19 @@ def image_contract(path, profile=None):
     data = path.read_bytes()
     require(len(data) >= 52 and data[:6] == b'\x7fELF\x01\x01', 'expected little-endian ELF32')
     header = struct.unpack_from('<16sHHIIIIIHHHHHH', data)
-    require(header[1:4] == (2, 40, 1) and header[8] == 52 and header[9] == 32,
+    #  An RV32 image is entered at its entry word, a jump to its reset
+    #  routine, which the derived script places first at the text region's
+    #  origin past any boot prefix, and its table's first slot is a jump,
+    #  `j` (D695).
+    riscv = device_target(profile['device']) == 'rv32'
+    require(header[1:4] == (2, 243 if riscv else 40, 1) and header[8] == 52 and header[9] == 32,
             'unexpected ELF identity or program header')
-    require(header[4] & 1 and flash_lo <= header[4] < flash_hi,
-            'entry loses Thumb identity or flash bound')
+    if riscv:
+        require(header[4] == flash_lo + profile['boot_prefix'],
+                'entry is not the entry word at the text region\'s origin')
+    else:
+        require(header[4] & 1 and flash_lo <= header[4] < flash_hi,
+                'entry loses Thumb identity or flash bound')
     flash_end, ram_end, vectors = flash_lo, ram_lo, False
     table = profile['vector_address']
     for index in range(header[10]):
@@ -708,9 +865,13 @@ def image_contract(path, profile=None):
         if virtual == physical and physical <= table < physical + file_size:
             require(table + 4 * profile['vector_words'] <= physical + file_size,
                     'missing external vectors')
-            require(struct.unpack_from('<II', data, file_at + table - physical)
-                    == (profile['stack_top'], header[4]),
-                    'external initial SP/reset words disagree')
+            if riscv:
+                require(struct.unpack_from('<I', data, file_at + table - physical)[0] & 0xfff
+                        == 0x06f, 'the trap table\'s first slot is no jump')
+            else:
+                require(struct.unpack_from('<II', data, file_at + table - physical)
+                        == (profile['stack_top'], header[4]),
+                        'external initial SP/reset words disagree')
             vectors = True
     require(vectors, 'no external vector load segment')
     return {'flash_load_extent': flash_end - flash_lo, 'ram_static_extent': ram_end - ram_lo,
@@ -731,7 +892,7 @@ def build(run, refine, inputs, optimize, specialize, extra=(), linker=None,
     selected = [] if level == 'armv6-m' else ['--level=' + refine_level(level)]
     assembly = run.out / 'program.s'
     try:
-        run.command('compile', [refine, *lane_inputs(level, inputs), '--target=cortex-m0',
+        run.command('compile', [refine, *lane_inputs(level, inputs), '--target=' + target(level),
                     *selected, '--emit=asm',
                     '--optimize=' + optimize, '--specialize=' + specialize,
                     '-o', assembly, '--build-report=' + str(run.out / 'build.json')],
@@ -747,35 +908,83 @@ def build(run, refine, inputs, optimize, specialize, extra=(), linker=None,
     objects = [harness_start(run, profile, level)]
     for index, source in enumerate([assembly, *extra], start=1):
         obj = run.out / ('input-' + str(index) + '.o')
-        run.command('assemble-' + str(index), [run.arm / 'arm-eabi-gcc', *flags,
+        run.command('assemble-' + str(index), [tool(run, level, 'gcc'), *flags,
                     '-c', source, '-o', obj])
         objects.append(obj)
-    run.command('object-disassembly', [run.arm / 'arm-eabi-objdump', '-dr', objects[1]])
-    check_datum_symbols(run, objects[1])
+    run.command('object-disassembly', [tool(run, level, 'objdump'), '-dr', objects[1]])
+    check_datum_symbols(run, objects[1], level)
     link(run, objects, linker or profile['script'], level, elf)
     image = image_contract(elf, profile)
-    image.update(image_sizes(run, elf, profile))
+    image.update(image_sizes(run, elf, profile, level=level))
     image['profile'] = profile['device']
     (run.out / 'image.json').write_text(json.dumps(image, indent=2)+'\n')
-    attributes = run.command('elf', [run.arm / 'arm-eabi-readelf', '-h', '-A', '-S', elf])
-    require(all(tag in attributes for tag in LEVELS[level]['attributes']),
-            'ELF does not describe the selected ' + level + ' profile')
-    require('Tag_ARM_ISA_use: Yes' not in attributes
-            and ('VFP registers' in attributes) == hard_float(level),
-            'ELF requires an unsupported instruction or floating ABI')
-    run.command('disassembly', [run.arm / 'arm-eabi-objdump', '-dr', elf])
-    run.command('size', [run.arm / 'arm-eabi-size', elf])
-    require(not run.command('undefined', [run.arm / 'arm-eabi-nm', '-u', elf]).strip(),
+    attributes = run.command('elf', [tool(run, level, 'readelf'), '-h', '-A', '-S', elf])
+    disassembly = run.command('disassembly', [tool(run, level, 'objdump'), '-dr', elf])
+    if rv32(level):
+        rv32_image(level, attributes, disassembly)
+    else:
+        require(all(tag in attributes for tag in LEVELS[level]['attributes']),
+                'ELF does not describe the selected ' + level + ' profile')
+        require('Tag_ARM_ISA_use: Yes' not in attributes
+                and ('VFP registers' in attributes) == hard_float(level),
+                'ELF requires an unsupported instruction or floating ABI')
+    run.command('size', [tool(run, level, 'size'), elf])
+    require(not run.command('undefined', [tool(run, level, 'nm'), '-u', elf]).strip(),
             'freestanding test image has unresolved dependencies')
-    library = Path(run.command('libgcc-path', [run.arm / 'arm-eabi-gcc', *flags,
+    library = Path(run.command('libgcc-path', [tool(run, level, 'gcc'), *flags,
                    '-print-libgcc-file-name']).strip()).resolve(strict=True)
-    require(LEVELS[level]['multilib'] in str(library), 'wrong Arm runtime multilib')
+    require(LEVELS[level]['multilib'] in str(library),
+            'wrong %s runtime multilib' % ('RV32' if rv32(level) else 'Arm'))
+    called = r'\bcall (__\w+)' if rv32(level) else r'\bbl (__aeabi_\w+)'
     (run.out / 'helpers.json').write_text(json.dumps({
         'library': str(library), 'sha256': sha(library),
-        'requested': sorted(set(re.findall(r'\bbl (__aeabi_\w+)', assembly.read_text()))),
-        'unresolved': [], 'provenance': 'pinned ' + arm_archive()['file'],
+        'requested': sorted(set(re.findall(called, assembly.read_text()))),
+        'unresolved': [], 'provenance': 'pinned ' + (
+            riscv_archive() if rv32(level) else arm_archive())['file'],
     }, indent=2) + '\n')
     return elf
+
+
+#  The A extension's instructions, as objdump names them: every AMO and
+#  the load-reserved/store-conditional pair (D695).
+A_EXTENSION = re.compile(r'^\s*[0-9a-f]+:\s+[0-9a-f]+(?: [0-9a-f]+)?\s+((?:amo\w+|lr|sc)\.w)\b', re.M)
+
+
+def rv32_extensions(attributes):
+    """The extensions an RV32 ELF's Tag_RISCV_arch names, as single letters
+    and z-names, from `readelf -A`; None when it names no rv32 set."""
+    found = re.search(r'Tag_RISCV_arch: "rv32([a-z0-9_]+)"', attributes)
+    if not found:
+        return None
+    names = set()
+    for part in found.group(1).split('_'):
+        if part.startswith(('z', 's', 'x')):
+            names.add(re.sub(r'\d+p\d+$', '', part))
+        else:
+            names.update(re.findall(r'([a-z])\d+p\d+', part))
+    return names
+
+
+def rv32_image(level, attributes, disassembly):
+    """Hold a linked RV32 image to LEVEL: an ilp32 soft-float RV32 ELF whose
+    Tag_RISCV_arch names no extension beyond the level's, and, at a level
+    without A, no AMO or LR/SC instruction anywhere in the linked bytes,
+    libgcc's included.  The esp32c3 machine's core executes A instructions
+    (D695), so on that lane this is what refuses them."""
+    require(re.search(r'Flags:\s+0x1, RVC, soft-float ABI$', attributes, re.M),
+            'the RV32 image is not the soft-float ilp32 ABI')
+    names = rv32_extensions(attributes)
+    require(names is not None, 'the image carries no rv32 Tag_RISCV_arch')
+    allowed = set(LEVELS[level]['extensions'])
+    faults = []
+    if not names <= allowed:
+        faults.append('its Tag_RISCV_arch names %s, beyond the level'
+                      % ', '.join(sorted(names - allowed)))
+    if 'a' not in allowed:
+        found = sorted(set(A_EXTENSION.findall(disassembly)))
+        if found:
+            faults.append('it holds A-extension instructions: ' + ', '.join(found))
+    require(not faults, 'the %s image is not the level\'s: %s' % (level, '; '.join(faults)))
 
 
 def fixture(run, refine, name, optimize, specialize, level='armv6-m',

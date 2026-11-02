@@ -16,15 +16,15 @@ from backend import (HERE, LEVELS, ROOT, COUNTERPARTS, DESCRIPTIONS,
                      describe_routines, describe_sizes,
                      execute as qemu, fixture, harness_start, image_contract, image_sizes,
                      hard_float, lane_inputs, lane_of, level_flags, levels_of, link,
-                     measure_overflow, metadata, refine_level, region)
+                     measure_overflow, metadata, refine_level, region, device_target, target)
 from run import CommandFailed, Run, require, workers
 from setup import DEFAULT, installed_tools, sha, supported_host
 
 PROFILES = [('none', 'off'), ('size', 'off'), ('size', 'auto'), ('speed', 'auto')]
-#  Each emulator lane the whole inventory also runs on alone, a profile of
-#  descriptions.json's `lanes`, and the key of backend.LEVELS that builds
-#  and runs it there (D607, D619).
-LANES = {LEVELS[key]['profile']: key for key in LEVELS if lane_of(key)}
+#  Each emulator lane the whole inventory also runs on alone, and the key of
+#  backend.LEVELS that builds and runs it there, on a profile of
+#  descriptions.json's `lanes` or on the RV32 reference (D607, D619, D695).
+LANES = {lane_of(key): key for key in LEVELS if lane_of(key)}
 SPECIALIZATION_PROFILES = [('none', 'all'), ('speed', 'all')]
 INVENTORY = 'compiler/tests/cortex-m/corpus.json'
 RULES = 'environments/cortex-m/README.md#the-corpus-inventory'
@@ -166,7 +166,7 @@ def source_refusal(run, refine, name, row, level='armv6-m'):
     inputs = lane_inputs(level, meta.module_arguments(base))
     selected = [] if level == 'armv6-m' else ['--level=' + refine_level(level)]
     try:
-        run.command('compile-refusal', [refine, *inputs, '--target=cortex-m0', *selected,
+        run.command('compile-refusal', [refine, *inputs, '--target=' + target(level), *selected,
                     '--emit=asm', '-o', run.out / 'refused.s'], timeout=900)
     except RuntimeError:
         command = run.commands[-1]
@@ -574,9 +574,14 @@ def observe(output, tools, refine, program, profiles, level='armv6-m', roots=())
             qemu(run, elf, None, False, level=level)
             seen = json.loads((out / 'observed.json').read_text())
             result.update(seen, status='ran')
-            said = ('trapped: HardFault at %s%s' % (seen['stacked_pc'],
-                    ', a udf #1 trap' if seen['udf_1'] else '')
-                    if seen['trapped'] else 'returned %d (r12 %d)' % (seen['status'], seen['r12']))
+            if 'mcause' in seen or 'a1' in seen:
+                said = ('trapped: mcause %d at %s%s' % (seen['mcause'], seen['mepc'],
+                        ', an unimp trap' if seen['unimp'] else '')
+                        if seen['trapped'] else 'returned %d (a1 %d)' % (seen['status'], seen['a1']))
+            else:
+                said = ('trapped: HardFault at %s%s' % (seen['stacked_pc'],
+                        ', a udf #1 trap' if seen['udf_1'] else '')
+                        if seen['trapped'] else 'returned %d (r12 %d)' % (seen['status'], seen['r12']))
             print('cortex program: %s %s/%s %s: %s; %s' % (
                 path.name, opt, spec, said, describe_sizes(result['image']),
                 describe_routines(result['image'])), flush=True)
@@ -616,11 +621,11 @@ def execute(output, tools, refine, selected=(), profiles=(), lane=None):
     #  device's, which a limited verdict is linked again against.
     deriving = Run(output, tools)
     reference = derived(deriving, refine, REFERENCE, output / 'profiles')
-    lanes = {one: derived(deriving, refine, LEVELS[one]['profile'], output / 'profiles')
-             for one in LEVELS}
     others = {}
     for device in DESCRIPTIONS:
-        if device != REFERENCE and lane is None:
+        #  A limited Cortex-M0 verdict is linked again against every other
+        #  M-profile device; an RV32 one is no Cortex-M0 image's (D695).
+        if device != REFERENCE and lane is None and device_target(device) == 'cortex-m0':
             others[device] = derived(deriving, refine, device, output / 'profiles')
             require(dominates(others[device], reference),
                     '%s holds less than the constrained reference somewhere, so a program'
@@ -648,10 +653,13 @@ def execute(output, tools, refine, selected=(), profiles=(), lane=None):
                 levels += levels_of(meta)
         work += [(name, row, opt, spec, level)
                  for level in levels for opt, spec in modes]
+    #  The profile each level the run reaches links with, derived once.
+    maps = {level: derived(deriving, refine, LEVELS[level]['profile'], output / 'profiles')
+            for level in sorted({item[4] for item in work})}
 
     def one(item):
         name, row, opt, spec, level = item
-        profile = lanes[level]
+        profile = maps[level]
         out = output / (name.replace('/', '--') + '--' + opt + '-' + spec
                         + ('' if level == 'armv6-m' else '--' + level))
         out.mkdir(parents=True, exist_ok=False)
