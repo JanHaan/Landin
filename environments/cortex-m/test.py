@@ -1128,7 +1128,7 @@ class ProbeFailures(unittest.TestCase):
             root = Path(directory)
             (root / 'installation.json').write_text('{"lock_sha256":"wrong"}')
             from unittest.mock import patch
-            with patch('run.supported_host'), self.assertRaisesRegex(RuntimeError, 'tool lock mismatch'):
+            with patch('run.supported_host'), self.assertRaisesRegex(RuntimeError, 'installed from another tools.lock.json.*install a fresh --tools root'):
                 Run(root, root).execute()
 
 

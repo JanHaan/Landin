@@ -921,6 +921,17 @@ def build(run, refine, inputs, optimize, specialize, extra=(), linker=None,
     attributes = run.command('elf', [tool(run, level, 'readelf'), '-h', '-A', '-S', elf])
     disassembly = run.command('disassembly', [tool(run, level, 'objdump'), '-dr', elf])
     if rv32(level):
+        #  The program's object was assembled with the level's -march, and
+        #  its own `.attribute arch`, which refine writes, names no
+        #  extension beyond the level's either.
+        declared = rv32_extensions(run.command(
+            'object-attributes', [tool(run, level, 'readelf'), '-A', objects[1]]))
+        require(declared is not None and declared <= set(LEVELS[level]['extensions']),
+                'refine\'s assembly declares %s, beyond %s' % (
+                    ', '.join(sorted((declared or {'no rv32 set'})
+                                     - set(LEVELS[level]['extensions']))), level))
+        image['assembled_with'] = flags[0]
+        (run.out / 'image.json').write_text(json.dumps(image, indent=2)+'\n')
         rv32_image(level, attributes, disassembly)
     else:
         require(all(tag in attributes for tag in LEVELS[level]['attributes']),

@@ -13,7 +13,7 @@ import time
 
 from models import EncodingPeripheral
 from packed import TRACE
-from run import Run, require, stop
+from run import Run, current_lock, require, stop, unchanged
 from setup import DEFAULT, HERE, installed_tools, inventory, sha, supported_host
 
 PROFILES = [('none', 'off'), ('size', 'off'), ('size', 'auto'),
@@ -135,10 +135,9 @@ def main():
     result = {'status': 'failed', 'inputs': inventory(HERE)}
     installed = json.loads((args.tools / 'installation.json').read_text())
     try:
-        require(installed['lock_sha256'] == sha(HERE / 'tools.lock.json'),
-                'tool lock mismatch')
-        require(installed['files'] == {area: inventory(args.tools / area)
-                for area in installed['files']}, 'installed tools changed')
+        current_lock(args.tools, installed)
+        unchanged(args.tools, installed, {area: inventory(args.tools / area)
+                                          for area in installed['files']})
         (out / 'tools.json').write_text(json.dumps(installed, sort_keys=True) + '\n')
         execute(Run(out, args.tools.resolve()), args.refine)
         require(installed['files'] == {area: inventory(args.tools / area)

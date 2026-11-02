@@ -78,6 +78,22 @@ class CommandFailed(RuntimeError):
         self.name, self.log, self.ended = name, log, ended
 
 
+def current_lock(tools, installed):
+    """Refuse an installation made from another tools.lock.json, saying how to replace it."""
+    require(installed['lock_sha256'] == sha(HERE / 'tools.lock.json'),
+            'the tools at %s were installed from another tools.lock.json than this'
+            ' checkout\'s; install a fresh --tools root with setup.py' % tools)
+
+
+def unchanged(tools, installed, found):
+    """Refuse an installation whose files FOUND differ from what setup recorded,
+    naming each area that differs."""
+    differ = sorted(area for area in set(found) | set(installed['files'])
+                    if found.get(area) != installed['files'].get(area))
+    require(not differ, 'installed tools changed since setup recorded them, in %s of %s;'
+            ' install a fresh --tools root with setup.py' % (', '.join(differ), tools))
+
+
 def limit_text(seconds):
     return '%g-second' % seconds
 
@@ -317,13 +333,13 @@ class Run:
         """
         supported_host()
         installed = json.loads((self.tools / 'installation.json').read_text())
-        require(installed['lock_sha256'] == sha(HERE / 'tools.lock.json'), 'tool lock mismatch')
+        current_lock(self.tools, installed)
         require(installed.get('arm') == {key: arm_archive()[key] for key in ('version', 'sha256')},
                 'the installed arm-elf archive is not the one environments/pins.sh pins')
         require(installed.get('riscv') == {key: riscv_archive()[key] for key in ('version', 'sha256')},
                 'the installed riscv64-elf archive is not the one environments/pins.sh pins')
         before = {area: inventory(self.tools / area) for area in AREAS}
-        require(before == installed['files'], 'installed tools changed')
+        unchanged(self.tools, installed, before)
         (self.out / 'tools.json').write_text(json.dumps(installed, sort_keys=True)+'\n')
         for name, tool, expected in [
             ('qemu-version', self.bin / 'qemu-system-arm', '10.0.13'),
