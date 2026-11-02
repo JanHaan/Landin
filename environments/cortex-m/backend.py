@@ -177,6 +177,9 @@ LANE_PROFILES = RECORDS['lanes']
 #  lane of that target runs on: the rv32 reference is the sifive-e lane's.
 PROFILES = {**RECORDS['devices'], **LANE_PROFILES}
 REFERENCE = 'constrained-reference'
+#  Every target's reference, which the library supplies when a program
+#  reaches no description: Cortex-M's and RV32's (D661).
+REFERENCES = (REFERENCE, 'riscv-reference')
 
 #  A profile's facts, as the firmware build report states them, with the
 #  stack top read from the linked image.  `boot_prefix` and `boot_suffix`
@@ -224,7 +227,7 @@ DERIVING = threading.Lock()
 def probe_source(device):
     if device in LANE_PROFILES:
         return 'import descriptions/%s\n' % LANE_PROFILES[device]['module']
-    return '' if device == REFERENCE else 'import descriptions/%s\n' % device
+    return '' if device in REFERENCES else 'import descriptions/%s\n' % device
 
 
 def probe_root(device):
