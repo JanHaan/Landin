@@ -1521,12 +1521,12 @@ package body Landin.Tests.Driver_Suite is
          "a selected level reaches the assembler, linker and report");
    end A_Level_Is_Selected_Within_Its_Family;
 
-   --  D660: rv32 is selected by name, reads its own levels and facts, and
-   --  checks and lowers a program while its backend emits nothing yet.
-   procedure RV32_Checks_And_Does_Not_Yet_Emit
+   --  D660 and D671: rv32 is selected by name, reads its own levels and
+   --  facts, and checks, lowers and emits a program at XLEN 32.
+   procedure RV32_Checks_Lowers_And_Emits
      (Item : in out Landin.Testing.Context);
 
-   procedure RV32_Checks_And_Does_Not_Yet_Emit
+   procedure RV32_Checks_Lowers_And_Emits
      (Item : in out Landin.Testing.Context)
    is
       Program : constant String :=
@@ -1587,13 +1587,9 @@ package body Landin.Tests.Driver_Suite is
       Landin.Testing.Check_Equal
         (Item, Lowered.Status, Landin.Driver.Status_Success,
          "rv32 lowers to IR: " & Unbounded.To_String (Lowered.Report));
-      Landin.Testing.Check
-        (Item, Emitted.Status /= Landin.Driver.Status_Success
-           and then Says (Emitted, "error[L0500]: no backend emits for"
-                                   & " target rv32 yet")
-           and then Says (Emitted, "--emit=ir"),
-         "rv32 refuses to emit assembly until its backend does, and says"
-         & " what still works");
+      Landin.Testing.Check_Equal
+        (Item, Emitted.Status, Landin.Driver.Status_Success,
+         "rv32 emits assembly: " & Unbounded.To_String (Emitted.Report));
       Landin.Testing.Check
         (Item, Says (RV64_Level, "error[L0009]: unknown level for rv32:"
                                  & " rv64gc")
@@ -1603,7 +1599,7 @@ package body Landin.Tests.Driver_Suite is
                                         & " linux-rv64: rv32imc"),
          "L0009 refuses an RV64 or Arm level on rv32 and an RV32 one on"
          & " RV64");
-   end RV32_Checks_And_Does_Not_Yet_Emit;
+   end RV32_Checks_Lowers_And_Emits;
 
    --  D670: rv32 reads [1990]'s text rules, at XLEN 32 with no float
    --  register: a naked spin and an ordinary block that waits for an
@@ -6820,8 +6816,8 @@ package body Landin.Tests.Driver_Suite is
         (Into, "driver", "a level is selected within its family",
          A_Level_Is_Selected_Within_Its_Family'Access);
       Landin.Testing.Register
-        (Into, "driver", "rv32 checks and does not yet emit",
-         RV32_Checks_And_Does_Not_Yet_Emit'Access);
+        (Into, "driver", "rv32 checks, lowers and emits",
+         RV32_Checks_Lowers_And_Emits'Access);
       Landin.Testing.Register
         (Into, "driver", "rv32 checks assembly text",
          RV32_Checks_Assembly_Text'Access);

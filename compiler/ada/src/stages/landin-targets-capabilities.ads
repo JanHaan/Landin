@@ -74,11 +74,10 @@ package Landin.Targets.Capabilities is
 
    function Backend_For (Facts : Target_Facts) return Backend_Kind;
 
-   --  Whether the target's backend emits assembly yet.  RV32's backend is
-   --  named before its emitter exists, so its programs check, configure
-   --  and lower to IR, and the driver refuses to emit them.
+   --  Whether the target's backend emits assembly: every named backend,
+   --  RV32's being RV64's at XLEN 32 (D671).
    function Emits (Facts : Target_Facts) return Boolean
-     is (Backend_For (Facts) not in No_Backend | RV32_ELF);
+     is (Backend_For (Facts) /= No_Backend);
 
    --  D537: how far the backend's addressing of static data reaches, which
    --  bounds the written images of a program with no firmware profile:

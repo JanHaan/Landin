@@ -18829,9 +18829,7 @@ tries NAME alone, and L0500 names both and what installs each. The firmware
 link is Cortex-M's: no start files or libraries but libgcc, collected
 sections, no build ID, relocations kept, the derived script and a map. An
 ordinary block names RV64's integer registers, at XLEN 32, and no float
-register. Until its emitter exists the backend is named and emits nothing:
-`refine check` and `--emit=ir` work, and assembly, an executable or a
-linker script is L0500, which says so and what still works.
+register. Its emitter is RV64's at XLEN 32 (D671).
 
 **The alternatives:** an RV32 level of the `linux-rv64` target, which would
 change the layout and the C ABI with the level and break D255's rule that a
@@ -18844,8 +18842,8 @@ and hard-float `ilp32f`, which no chosen core has.
 descriptions`, `targets/levels are stated per family`, `targets/the
 library and the compiler state D255's levels`, `targets/alignments are
 stated per target`, `toolchain/RV32 names its level and ABI`,
-`driver/linux names every distribution's driver` and `driver/rv32 checks
-and does not yet emit`.
+`driver/linux names every distribution's driver` and `driver/rv32 checks,
+lowers and emits`.
 
 ### D661 — An rv32 program that reaches no description is given the RISC-V reference
 
@@ -18871,7 +18869,7 @@ description of the emulator alone, which the corpus would then hold apart
 from the profile a program with no description gets.
 
 **Pinned by** `targets/RISC-V cores take their own slots` and
-`driver/rv32 checks and does not yet emit`, and by the emulator lane that
+`driver/rv32 checks, lowers and emits`, and by the emulator lane that
 runs on it.
 
 ### D662 — A RISC-V core's interrupt model decides what a slot is
@@ -20793,6 +20791,143 @@ admits an `ecall` that cannot return.
 jump and an ordinary `wfi` and `general` operand and refuses an ordinary
 `j`, an ordinary `ecall` and a float operand as diagnostics, and
 `backend/rv32 verifier refuses invalid registers`.
+
+### D671 — RV32 is RV64's emitter at XLEN 32, with eight-byte values in pairs
+
+**The tour said** nothing of a 32-bit RISC-V emitter. D265 promised that
+RV64's instruction selection would take XLEN from the target and serve RV32
+without inheriting RV64's data model, and the emitter it described had 64
+and `sd` written into it.
+
+**Chosen:** one emitter, `Landin.Backend.RiscV`, asks the target its XLEN
+and selects at it: an immediate, a memory access, an extraction, the
+overflow test's sign bit and every word of a frame, a switch frame, an
+evidence table and a slice image are XLEN wide, and RV32 has no float
+register, no `.option pic`, no thread pointer and no default report, which
+are Linux's. Every value keeps its home in the frame, as on RV64, so an
+eight-byte value is a register pair only while one operation reads or
+writes it: the low word in the register named and the high word in a
+fixed partner, x27 beside the x5 every value passes through and the next
+argument register beside an argument's, so the moves, loads, stores,
+unaligned byte accesses, choices and fills that never look inside a value
+move both words by the same code. x27 is therefore saved by every RV32
+routine, as RV64 saves its fixed scratch registers. The operations that
+look inside an eight-byte integer are selected for the pair x10:x11 and
+x12:x13: addition and subtraction with the carry or borrow recovered by
+`sltu`, the checked forms testing the high word's carry or sign as RV64
+tests its one word; bitwise operations word by word; comparison of the high
+words, signed or not, then of the low words unsigned; shifts split at 32
+with the crossing bits moved by a shift of one and then of 31 less the
+amount, so a shift by zero moves none, and an amount past the width giving
+zero as RV64's does; and negation, extension, narrowing and range checks
+in words. A product is the low 64 bits of M's `mul` and `mulhu` partial
+products, one sequence for both signednesses; a checked product first
+proves that the magnitudes' whole product has no word above 64 bits and
+fits the result's sign, inline. A packed member of an eight-byte carrier
+is shifted and masked as a pair. A quotient and a remainder are libgcc's
+`__divdi3`, `__udivdi3`, `__moddi3` and `__umoddi3`, after the language's
+zero-divisor and minimum-over-minus-one guards, which are the language's
+and not the helper's.
+
+**The alternatives:** a second RV32 emitter, which D265 declined and which
+would hold every lowering twice; lowering eight-byte operations to word
+pairs in the IR, which would make the verified IR depend on a target's
+width; and libgcc's `__muldi3` for every product, which M makes needless.
+
+**Pinned by** the backend cases of the RV32 lowering and the corpus on the
+RV32 lanes.
+
+### D672 — RV32's floats are libgcc's soft float, called as the psABI's ilp32 passes them
+
+**The tour said** that f32 and f64 are IEEE binary32 and binary64 with
+round-to-nearest-even, and nothing of a core without F or D, which every
+RV32 level is (D660).
+
+**Chosen:** an f32 or f64 operation on RV32 is a call of libgcc's helper,
+whose operands and result travel in a0-a3 as the soft-float `ilp32` passes
+them, an f64 as a word pair: `__addsf3` to `__divdf3` for arithmetic,
+`__eqsf2` to `__gedf2` for comparison, whose answer's sign is the relation
+and which an unordered pair fails, so a NaN compares as on RV64,
+`__extendsfdf2` and `__truncdfsf2` between the widths, and `__floatsisf` to
+`__floatundidf` from integers. Negation is the sign bit's flip, as on RV64.
+A conversion to an integer is decoded and truncated toward zero in integer
+words, as on Cortex-M0, so a NaN, an infinity and every value out of the
+type's range trap as RV64's invalid flag does and no helper's
+out-of-range answer is reached; an f64 that rounds to an infinity as an f32
+traps as RV64's overflow flag does, and a float converted to `bool` admits
+the two zeros and positive one. A body that may call a helper has its frame
+checked against the stack's limit as a calling one's is (D471), and the
+build report counts the helpers each routine calls, which opens the depth
+report's graph as Cortex-M0's helpers do.
+
+**The alternatives:** the F and D extensions, which no RV32 level holds;
+inline soft float, which would duplicate libgcc in every program; and
+libgcc's `__fixdfdi` family for conversions to integers, whose answer for
+an out-of-range or NaN operand is not the language's trap.
+
+**Pinned by** the backend cases of the RV32 lowering and the corpus on the
+RV32 lanes.
+
+### D673 — RV32's language convention carries an eight-byte argument in two registers
+
+**The tour said** nothing; RV64's language convention carries each argument
+in the next of a0-a7 and the rest in eight-byte stack words, and an RV32
+register holds four bytes.
+
+**Chosen:** on RV32 each argument takes the next of a0-a7, an eight-byte
+one the next two with its low word first; the first that does not fit, and
+every one after it, takes an eight-byte word of the area at the callee's
+CFA, low word first. A result is a0, or a0:a1, and the failure carrier
+stays x31. At XLEN 64 the rule is RV64's, unchanged.
+
+**The alternatives:** the psABI's `ilp32` with its even-register alignment
+and an argument split between a7 and the stack, which is C's and which the
+language's private convention need not reproduce; and one stack word per
+eight-byte argument, which spills every wide argument.
+
+**Pinned by** the backend cases of the RV32 lowering.
+
+### D674 — Without A the panic latch is claimed as Cortex-M0 claims it
+
+**The tour said** at [1995] that a handler runs once and a second failure
+traps hard; RV64 claims the latch with `lr.w.aq` and `sc.w.rl`, which
+`rv32imc` does not have.
+
+**Chosen:** at a level with A, RV32 claims the latch with RV64's
+reservation loop; at `rv32imc` with a load, a test and a store, as
+Cortex-M0 does on its one core. An interrupt that fails between the load
+and the store may enter the handler a second time, as on Cortex-M0.
+
+**The alternatives:** masking interrupts around the claim, which a handler
+that runs with interrupts masked does not need and which would make the
+latch depend on `mstatus`; and refusing a handler at `rv32imc`.
+
+**Pinned by** the backend cases of the RV32 lowering.
+
+### D675 — RV32's fibres switch in RV64's frame at XLEN 32
+
+**The tour said** at [1995] how a prepared stack is switched to; RV64's
+switch saves the return address, x8, x9, x18-x27 and the LP64D float
+registers with the stack's limit in one 208-byte frame.
+
+**Chosen:** RV32's switch saves the return address, x8, x9 and x18-x27 in
+four-byte words above the limit's word, 64 bytes for the stack's sixteen,
+and no float register, which no RV32 level has; the limit's cell is one
+word in module storage, since firmware has no thread pointer (D497).
+`Capabilities.Stack_Switching` holds for RV32. A prepared stack's first
+frame is the same frame. An interrupt handler is not checked against the
+limit: the compiler's trap entry that calls it keeps zero in the cell while
+it runs. RV32's margin, unchecked area and handler entry are RV64's
+figures: every word of an RV32 frame is half RV64's and an eight-byte home
+the same, which leaves room within RV64's 768-byte margin for the libgcc
+leaf helper a checked frame calls below it.
+
+**The alternatives:** figures measured from RV32's own corpus, which waits
+for its lanes and would only lower a bound that already holds; and a
+switch frame that keeps RV64's eight-byte slots, which wastes half of it.
+
+**Pinned by** `targets/backends are stated per target` and the backend
+cases of the RV32 lowering.
 
 ### D523 — Under `--link=libc` a library is the C driver's `-lNAME`
 

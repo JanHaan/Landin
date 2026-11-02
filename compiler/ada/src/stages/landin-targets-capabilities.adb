@@ -71,14 +71,14 @@ package body Landin.Targets.Capabilities is
             when X86_64 | Arm64 | RV64 | Synthetic_32_Architecture => "");
 
    --  Every native backend emits both: x86-64 for Linux and FreeBSD, arm64
-   --  for Linux, FreeBSD and Darwin, RV64 for Linux, and Cortex-M0, where a
-   --  prepared stack runs on the process stack pointer.  RV32's emitter
-   --  does not emit them yet.
+   --  for Linux, FreeBSD and Darwin, RV64 for Linux, Cortex-M0, where a
+   --  prepared stack runs on the process stack pointer, and RV32, RV64's
+   --  switch at XLEN 32 (D675).
    function Stack_Switching (Facts : Target_Facts) return Boolean is
      (case Backend_For (Facts) is
          when X86_64_ELF | Darwin_Arm64_Mach_O | Arm64_ELF | RV64_ELF
-            | Cortex_M0_ELF => True,
-         when RV32_ELF | No_Backend => False);
+            | Cortex_M0_ELF | RV32_ELF => True,
+         when No_Backend => False);
 
 
    function C_Signatures (Facts : Target_Facts) return Boolean is

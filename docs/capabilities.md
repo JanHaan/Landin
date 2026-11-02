@@ -82,8 +82,9 @@ entry that describes it, and put a new one where a reader would look for it.
   reference's capacities (D661), and lower to IR; a description may name
   `hazard3`, `sifive-e31`, `esp-rv32imc` or `esp-rv32imac-clic`, whose
   interrupt model decides which mcause codes take handlers (D662). Its
-  backend emits nothing yet, and asking for assembly, an executable or a
-  linker script is L0500.
+  backend is RV64's at XLEN 32 (D671): eight-byte integers are register
+  pairs, f32 and f64 are libgcc's soft float, and 64-bit division is
+  libgcc's, with the language's checks unchanged.
 - **A float unit** is a fact of a description: a Cortex-M7's
   `compiler.float_unit("fpv5-d16")`, which the STM32H753's has, builds
   hard-float at `armv7e-m` (D615). f32 and f64 arithmetic, negation,

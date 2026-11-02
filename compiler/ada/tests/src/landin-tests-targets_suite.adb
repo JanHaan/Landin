@@ -234,11 +234,11 @@ package body Landin.Tests.Targets_Suite is
            and then Capabilities.Debug_Format_Of (RV32)
              = Capabilities.ELF_DWARF_Lines
            and then not Capabilities.C_Signatures (RV32)
-           and then not Capabilities.Stack_Switching (RV32)
-           and then not Capabilities.Emits (RV32)
+           and then Capabilities.Stack_Switching (RV32)
+           and then Capabilities.Emits (RV32)
            and then Capabilities.Emits (Cortex_M)
            and then Capabilities.Image_Reach (RV32) = 2 ** 32 - 1,
-         "RV32 is firmware on its own backend, not yet emitting");
+         "RV32 is firmware on its own backend, emitting at XLEN 32");
       declare
          use all type Landin.Memory.Operation;
          IMC  : constant Landin.Targets.Levels.Feature_Level :=
