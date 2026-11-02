@@ -6,6 +6,6 @@
 -- table's 32 slots, mcause 0 to 31, and beside this file the memory; no
 -- interrupt is named, since no corpus program takes one.
 
-compiler.device("esp32c3-lane")
+compiler.device("esp32c3")
 compiler.core("esp-rv32imc")
 compiler.vectors(32)
