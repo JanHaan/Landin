@@ -25721,11 +25721,11 @@ package body Landin.Diagnostics.Citations.Texts is
                & "ch`; after a flash through the Arm side it cycles the po"
                & "wer at once and reads the head back from the cores the n"
                & "ew image booted; and the counters are read as `RP235x_ri"
-               & "scv` alone. A cycle of the Pico 2's port coincided with "
-               & "a reset of that tree, so the tool cycles only when the k"
-               & "ernel has logged no trouble on the port for a minute, an"
-               & "d stops unless the guarded port shows its device again a"
-               & "nd the probe answers `ping` after it.",
+               & "scv` alone. A cycle met by the port failing enumeration "
+               & "reset that tree, so the tool holds the rig's lock, paces"
+               & " each download and cycle as D725 does, and stops unless "
+               & "the guarded port shows its device again and the probe an"
+               & "swers `ping` after a cycle.",
             when 713 =>
                "Chosen: `common.shared_bridge` reuses a bridge listening"
                & " on both of a slot's ports and never stops it, and other"
