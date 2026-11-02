@@ -2698,10 +2698,13 @@ def arm_elf_pin_problems(pins, pins_text, record, record_text):
 
 
 #  The RV32 lanes' GCC and binutils, GNAT's riscv64-elf archive of the
-#  same release (D660), read from the pins by the nix shell.
+#  same release (D660), read from the pins by the nix shell and by the
+#  lanes' installer, which fetches the Linux x86-64 one (D695).
 RISCV_ELF_READERS = {
     "flake.nix": ('pin "LANDIN_GNAT_RISCV64_ELF_VERSION"',
                   'pin "LANDIN_GNAT_RISCV64_ELF_SHA256_${suffix}"'),
+    "environments/cortex-m/setup.py": ('"LANDIN_GNAT_RISCV64_ELF_VERSION"',
+                                       '"LANDIN_GNAT_RISCV64_ELF_SHA256_X86_64_LINUX"'),
 }
 
 

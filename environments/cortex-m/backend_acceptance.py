@@ -1,12 +1,13 @@
 """Mandatory compiler-generated execution lanes, within run.py's pinned tool/evidence boundary."""
 from concurrent.futures import ThreadPoolExecutor
 import json
-from backend import build, derived, execute as qemu
+from backend import build, derived, execute as qemu, rv32
 from backend_corpus import LANES as CORPUS_LANES, execute as corpus
 from backend_controls import frame_control, instruction_controls
 from backend_peripheral import execute as peripheral, dma, byte
 from packed_native import PROFILES
 from run import Run, require, workers
+from rv32_controls import atomics
 from setup import HERE, sha
 
 
@@ -67,9 +68,11 @@ def execute(parent, refine):
 def execute_lane(parent, refine, lane):
     """The whole inventory alone on one emulator lane of backend_corpus.LANES,
     run.py's lane of the same name: QEMU's mps2-an505 at armv8-m.main
-    (D605-D607), or mps2-an500 at armv7e-m with its float unit (D615-D619).
-    Every row's verdict there, its executed images held to what the lane's
-    level and unit select."""
+    (D605-D607), or mps2-an500 at armv7e-m with its float unit (D615-D619),
+    or Espressif's QEMU's esp32c3 at rv32imc and sifive_e at rv32imac
+    (D695), with each RV32 lane's atomics probes.  Every row's verdict
+    there, its executed images held to what the lane's level and unit
+    select."""
     root = parent.out / lane
     root.mkdir()
     refine = refine.resolve(strict=True)
@@ -78,7 +81,9 @@ def execute_lane(parent, refine, lane):
     corpus_out = root / 'corpus'
     corpus_out.mkdir()
     summary = corpus(corpus_out, parent.tools, refine, lane=lane)
+    record = {'status': 'passed', 'compiler_sha256': compiler_hash, 'lane': lane,
+              'level': CORPUS_LANES[lane], 'corpus_rows': len(summary['results'])}
+    if rv32(CORPUS_LANES[lane]):
+        record['atomics'] = atomics(parent, refine, lane)
     require(sha(refine) == compiler_hash, 'compiler changed during embedded execution')
-    (root / 'result.json').write_text(json.dumps({
-        'status': 'passed', 'compiler_sha256': compiler_hash, 'lane': lane,
-        'level': CORPUS_LANES[lane], 'corpus_rows': len(summary['results'])}, indent=2) + '\n')
+    (root / 'result.json').write_text(json.dumps(record, indent=2) + '\n')

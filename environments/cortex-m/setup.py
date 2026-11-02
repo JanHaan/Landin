@@ -15,10 +15,14 @@ import urllib.request
 HERE = Path(__file__).resolve().parent
 DEFAULT = Path.home() / "work/.cortex-m"
 PINS = HERE.parent / "pins.sh"
-#  GCC and binutils are GNAT's arm-elf archive, from the release the
-#  host GNAT comes from, and pinned beside it in environments/pins.sh; the
-#  lock keeps QEMU and the GDB whose Python the sessions run.
+#  GCC and binutils are GNAT's arm-elf archive, and for the RV32 lanes its
+#  riscv64-elf archive, from the release the host GNAT comes from, and
+#  pinned beside it in environments/pins.sh; the lock keeps QEMU, Espressif's
+#  QEMU for the RV32 lanes, and the GDB whose Python the sessions run.
 ARM = "gnat-arm-elf"
+RISCV = "gnat-riscv64-elf"
+#  Where Espressif's QEMU release, one of the lock's archives, is unpacked.
+ESPRESSIF = "qemu-espressif"
 
 
 def pins():
@@ -36,13 +40,23 @@ def arm_archive():
             "sha256": values["LANDIN_GNAT_ARM_ELF_SHA256_X86_64_LINUX"]}
 
 
+def riscv_archive():
+    """The pinned riscv64-elf archive for this host: its URL, file and sha256."""
+    values = pins()
+    version = values["LANDIN_GNAT_RISCV64_ELF_VERSION"]
+    name = "gnat-riscv64-elf-linux64-x86_64-%s.tar.gz" % version
+    return {"url": "%s/gnat-%s/%s" % (values["LANDIN_RELEASES"], version, name),
+            "file": name, "version": version,
+            "sha256": values["LANDIN_GNAT_RISCV64_ELF_SHA256_X86_64_LINUX"]}
+
+
 def sha(path):
     with path.open("rb") as stream:
         return hashlib.file_digest(stream, "sha256").hexdigest()
 
 
 #  What an installation holds, each inventoried whole.
-AREAS = ('root', ARM)
+AREAS = ('root', ARM, RISCV, ESPRESSIF)
 
 
 def inventory(root):
@@ -127,7 +141,9 @@ def installed_tools(path):
     """
     root = Path(path).expanduser().resolve()
     missing = [relative for relative in ('installation.json', ARM + '/bin/arm-eabi-gcc',
-                                         'root/usr/bin/qemu-system-arm', 'root/usr/bin/gdb-multiarch')
+                                         RISCV + '/bin/riscv64-elf-gcc',
+                                         'root/usr/bin/qemu-system-arm', 'root/usr/bin/gdb-multiarch',
+                                         ESPRESSIF + '/bin/qemu-system-riscv32')
                if not (root / relative).is_file()]
     if missing:
         raise SystemExit(
@@ -160,6 +176,23 @@ def compile_gdb_python(root):
         raise RuntimeError('compiling GDB\'s Python failed: ' + completed.stdout + completed.stderr)
 
 
+def fetch(packages, item):
+    """ITEM's archive downloaded into PACKAGES and verified before anything unpacks it."""
+    dest = packages / item['file']
+    with urllib.request.urlopen(item['url'], timeout=60) as src, dest.open('wb') as out:
+        shutil.copyfileobj(src, out)
+    if sha(dest) != item['sha256']:
+        raise RuntimeError('archive hash mismatch: ' + item['file'])
+    return dest
+
+
+def unpack(archive, into, mode):
+    """A release archive's one top directory unpacked as INTO itself."""
+    into.mkdir()
+    subprocess.run(['tar', mode, str(archive), '-C', str(into), '--strip-components=1'],
+                   check=True, timeout=600)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--tools', type=Path, default=DEFAULT)
@@ -172,26 +205,19 @@ def main():
     packages = root / 'downloads'
     packages.mkdir()
     for item in json.loads((HERE / 'tools.lock.json').read_text()):
-        dest = packages / item['file']
-        with urllib.request.urlopen(item['url'], timeout=60) as src, dest.open('wb') as out:
-            shutil.copyfileobj(src, out)
-        if sha(dest) != item['sha256']:
-            raise RuntimeError('archive hash mismatch: ' + item['file'])
-        if item['kind'] != 'deb':
+        dest = fetch(packages, item)
+        if item['kind'] == 'deb':
+            subprocess.run(['dpkg-deb', '-x', str(dest), str(root / 'root')], check=True, timeout=30)
+        elif item['kind'] == 'tar.xz' and item.get('into') == ESPRESSIF:
+            unpack(dest, root / item['into'], '-xJf')
+        else:
             raise RuntimeError('unknown archive kind: ' + item['kind'])
-        subprocess.run(['dpkg-deb', '-x', str(dest), str(root / 'root')], check=True, timeout=30)
-    archive = arm_archive()
-    dest = packages / archive['file']
-    with urllib.request.urlopen(archive['url'], timeout=60) as src, dest.open('wb') as out:
-        shutil.copyfileobj(src, out)
-    if sha(dest) != archive['sha256']:
-        raise RuntimeError('archive hash mismatch: ' + archive['file'])
-    (root / ARM).mkdir()
-    subprocess.run(['tar', '-xzf', str(dest), '-C', str(root / ARM), '--strip-components=1'],
-                   check=True, timeout=600)
+    for area, archive in ((ARM, arm_archive()), (RISCV, riscv_archive())):
+        unpack(fetch(packages, archive), root / area, '-xzf')
     compile_gdb_python(root)
     record = {'lock_sha256': sha(HERE / 'tools.lock.json'),
-              'arm': {key: archive[key] for key in ('version', 'sha256')},
+              'arm': {key: arm_archive()[key] for key in ('version', 'sha256')},
+              'riscv': {key: riscv_archive()[key] for key in ('version', 'sha256')},
               'files': {area: inventory(root / area) for area in AREAS}}
     (root / 'installation.json').write_text(json.dumps(record, sort_keys=True) + '\n')
     print('installed pinned Cortex-M environment at', root)
