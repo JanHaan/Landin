@@ -25384,7 +25384,41 @@ package body Landin.Diagnostics.Citations.Texts is
                & "d nothing of USB for 60 s, stopping when it logged a USB"
                & " error since that previous action; and after each they w"
                & "ait for the hub to list the board again, `common.wait_fo"
-               & "r_hub`.",
+               & "r_hub`. The probe's Arty, which must never lose power, i"
+               & "s kept off the cascade: every tool finds it by its USB s"
+               & "erial wherever it is, `common.off_cascade`, and switches"
+               & ", downloads or resets nothing while it is absent or on t"
+               & "he cascade whose ports are switched, in place of the ear"
+               & "lier guard that required it on one port of the hub being"
+               & " switched.",
+            when 726 =>
+               "Chosen: when the receive interrupt finds RXFIFO_OVF it c"
+               & "ounts the overflow, resets the RX FIFO, `CONF0`'s RXFIFO"
+               & "_RST on the C3 and `CONF0_SYNC`'s on the C5 followed by "
+               & "REG_UPDATE (TRM v1.4, 26.4.2; v1.1, 32.4.2 and 32.6.1), "
+               & "and returns without draining it, as ESP-IDF v6.1's UART "
+               & "driver resets the FIFO on that interrupt; the program th"
+               & "en restarts on the counted loss as before. On both board"
+               & "s, draining after an overflow left the program echoing b"
+               & "ytes it no longer acted on, and once on the C3 jumped to"
+               & " address 0; Espressif's QEMU, which paces its serial inp"
+               & "ut, never overflows and never showed it. With the reset,"
+               & " the threshold scenario's burst is neither echoed nor ke"
+               & "pt, one overflow is counted, and the next request is ans"
+               & "wered.",
+            when 727 =>
+               "Chosen: the stream goes in pieces of 64 bytes, each sent"
+               & " once the one before it has been echoed, and the verdict"
+               & " is unchanged: every byte sent is echoed in order but th"
+               & "e two bursts the scenario discards. The ESP32-C3 runs fr"
+               & "om its reset clock, the crystal divided by two, 20 MHz ("
+               & "TRM v1.4, 6.2.4.1, Table 6.2-2; `SYSTEM_SYSCLK_CONF` rea"
+               & "d 0x000A_8001 on the board), at which the port's per-byt"
+               & "e interrupt and echo do not keep pace with 115200 baud: "
+               & "an unpaced stream was dropped by its receive interrupt, "
+               & "2469 of 3000 bytes, which the port reports as overruns, "
+               & "as it should. The ESP32-C5's record was taken with the s"
+               & "tream at the line's rate, which it kept.",
             when 645 =>
                "Chosen: the module names no device. Its `port` is a stru"
                & "ct of two function values ([1000]), `indicate: (on: bool"

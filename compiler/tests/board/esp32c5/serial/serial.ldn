@@ -80,7 +80,17 @@ public receive: (ring: []mut u8) -> none =
     uart0.int_clr_write(uart0.base, status & receive_bits)
     _ = atomic.sole_add(addr entries, 1)
     if (status & overflow_bit) <> 0 then
+        -- After an overflow the RX FIFO's contents are not the bytes that
+        -- arrived, so they are discarded with the FIFO reset rather than
+        -- drained, as ESP-IDF's UART driver does on RXFIFO_OVF; the
+        -- overflow is counted, and the program restarts on it (D726).
         _ = atomic.sole_add(addr overflows, 1)
+        conf0 := uart0.conf0_sync_read(uart0.base)
+        uart0.conf0_sync_write(uart0.base, conf0 | rxfifo_reset)
+        update()
+        uart0.conf0_sync_write(uart0.base, conf0 & ~rxfifo_reset)
+        update()
+        return
     end if
     size := u32(lenof ring)
     mut p := atomic.load_relaxed(addr produced)

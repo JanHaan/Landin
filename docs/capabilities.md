@@ -116,9 +116,11 @@ entry that describes it, and put a new one where a reader would look for it.
   [`esp32c5`](../environments/boards/esp32c5/README.md), read `OUT.bin`
   apart from refine and the ROM's boot log, refuse an image whose checksum
   is wrong on the board, and check counters and cells over JTAG
-  (D722-D725); the C5 boots its image from power-on and takes both
-  interrupts, read over JTAG, and no full board run of either is recorded
-  yet.
+  (D722-D727). A run of each is recorded, `record.json` beside its tool:
+  booted from power-on, the ROM's log matching the image, a refused
+  checksum, the echo, the indicator, both interrupts, the atomics, a ring
+  overrun, a FIFO overflow under the threshold with the timer still
+  running, and the counters and cells over JTAG.
 - **A float unit** is a fact of a description: a Cortex-M7's
   `compiler.float_unit("fpv5-d16")`, which the STM32H753's has, builds
   hard-float at `armv7e-m` (D615). f32 and f64 arithmetic, negation,

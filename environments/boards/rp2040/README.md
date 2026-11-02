@@ -24,10 +24,12 @@ no hosted runner has the board.
 where those belong to a group, `--hub-group`, `dialout` by default, the tool
 runs `uhubctl` through `/run/wrappers/bin/sg GROUP -c` when the session is
 not in that group, as a session started before its user joined it is not.
-The tool switches only `--port` on `--hub`, and only
-after `uhubctl` shows `--guard-serial` on `--guard-port` of the same hub:
-on the maintainer's rig that is the probe's own Arty A7, whose bitstream is
-held only in SRAM and would be lost with its power. The port is switched off and on in one
+The tool switches only `--port` on `--hub`, and only while
+the device with `--guard-serial`, the probe's own Arty A7, is present and not on
+`--cascade`, the hub cascade the boards are on (`7-2` on the maintainer's
+rig), found by its serial wherever it is plugged in: its bitstream is held
+only in SRAM and would be lost with its power, and every switch on the
+cascade re-enumerates the whole of it (D725). The port is switched off and on in one
 `uhubctl -a cycle`: switching it off re-enumerates the hub's inner hubs, and
 a second call can meet their new device nodes before udev has given them
 the group allowed to switch them.
@@ -38,7 +40,7 @@ the group allowed to switch them.
 python3 environments/boards/rp2040/board.py \
     --refine compiler/ada/build/nix-x86_64-linux/debug/bin/refine \
     --probehive ~/src/probehive --probe-rs PATH/TO/probe-rs --probe 0000:0002:10.42.0.50/0 \
-    --hub 7-2.3.3 --port 1 --guard-port 4 --guard-serial 210319B3E738 \
+    --hub 7-2.3.3 --port 1 --guard-serial 210319B3E738 \
     --indicator-pin IO32 \
     --output NEW_DIRECTORY
 ```

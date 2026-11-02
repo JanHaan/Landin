@@ -22290,7 +22290,12 @@ download, a port switched off or on and the C5's chip-enable reset, with
 `common.Pace`: at least 120 s after the previous one by any tool on the
 host, only after the kernel has logged nothing of USB for 60 s, stopping
 when it logged a USB error since that previous action; and after each they
-wait for the hub to list the board again, `common.wait_for_hub`.
+wait for the hub to list the board again, `common.wait_for_hub`. The
+probe's Arty, which must never lose power, is kept off the cascade: every
+tool finds it by its USB serial wherever it is, `common.off_cascade`, and
+switches, downloads or resets nothing while it is absent or on the cascade
+whose ports are switched, in place of the earlier guard that required it
+on one port of the hub being switched.
 
 **The alternatives:** a lock per hub, which the cascade makes one hub;
 retrying a listing that finds no hub, which hides the trouble the pace
@@ -22298,6 +22303,52 @@ stops at; and the spacing left to whoever runs a tool, which two streams
 did not keep.
 
 **Pinned by** `scripts/tests/test_board_common.py`'s `RigLock` and `Pace`.
+
+### D726 — An ESP port resets its RX FIFO on an overflow and drains nothing of it
+
+**The tour said** nothing; D721's receive interrupt drained what the RX
+FIFO held whatever the interrupt's cause.
+
+**Chosen:** when the receive interrupt finds RXFIFO_OVF it counts the
+overflow, resets the RX FIFO, `CONF0`'s RXFIFO_RST on the C3 and
+`CONF0_SYNC`'s on the C5 followed by REG_UPDATE (TRM v1.4, 26.4.2; v1.1,
+32.4.2 and 32.6.1), and returns without draining it, as ESP-IDF v6.1's UART
+driver resets the FIFO on that interrupt; the program then restarts on the
+counted loss as before. On both boards, draining after an overflow left the
+program echoing bytes it no longer acted on, and once on the C3 jumped to
+address 0; Espressif's QEMU, which paces its serial input, never overflows
+and never showed it. With the reset, the threshold scenario's burst is
+neither echoed nor kept, one overflow is counted, and the next request is
+answered.
+
+**The alternatives:** draining the FIFO as before, which the boards showed
+wrong; and resetting it only in the program's restart, which leaves the
+interrupt to read what the overflow left meanwhile.
+
+**Pinned by** the boards' records' threshold verdicts.
+
+### D727 — The ESP boards' stream is sent a piece at a time, after each piece's echo
+
+**The tour said** nothing; D722's stream sent 3000 bytes at the line's rate,
+as the DMA ports' do.
+
+**Chosen:** the stream goes in pieces of 64 bytes, each sent once the one
+before it has been echoed, and the verdict is unchanged: every byte sent is
+echoed in order but the two bursts the scenario discards. The ESP32-C3 runs
+from its reset clock, the crystal divided by two, 20 MHz (TRM v1.4, 6.2.4.1,
+Table 6.2-2; `SYSTEM_SYSCLK_CONF` read 0x000A_8001 on the board), at which
+the port's per-byte interrupt and echo do not keep pace with 115200 baud:
+an unpaced stream was dropped by its receive interrupt, 2469 of 3000 bytes,
+which the port reports as overruns, as it should. The ESP32-C5's record
+was taken with the stream at the line's rate, which it kept.
+
+**The alternatives:** raising the C3's CPU clock to its PLL, which needs
+the chip's analog PLL bring-up, a second stage's work the RAM-only image
+does not do; and a slower line, which leaves the ROM's 115200 and the other
+boards' rate.
+
+**Pinned by** `environments/boards/esp32c3/record.json`'s stream verdict
+and `scripts/tests/test_board_esp.py`'s `Scenario`.
 
 ### D645 — The shared command loop takes its indicator and transmitter as function values
 

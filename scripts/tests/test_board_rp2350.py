@@ -86,12 +86,17 @@ class Block(unittest.TestCase):
                 BOARD.block_of(data, sections)
 
 
-ARGS = dict(hub='7-2.3.3', port=2, guard_port=4, guard_serial='210319B3E738', off_seconds=0,
+ARGS = dict(hub='7-2.3.3', port=2, guard_serial='210319B3E738', cascade='7-2', off_seconds=0,
             pico_serial=SERIAL, hub_group=None, enumerate_seconds=1.0, probe_rs='probe-rs',
             probe='0000:0002:10.42.0.50/1')
 
 
 class Hub(unittest.TestCase):
+    def setUp(self):
+        patcher = mock.patch.object(BOARD.common, 'device_location', return_value='7-1.4')
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_a_port_holding_no_device_or_the_pico_2_is_switched(self):
         args = SimpleNamespace(**ARGS)
         for status in (QUIET, BOOTSEL):
@@ -99,17 +104,29 @@ class Hub(unittest.TestCase):
             BOARD.power_cycle(hub, args)
             self.assertEqual(hub.calls, ['hub-status', 'power-cycle'])
 
-    def test_a_port_holding_another_device_or_a_hub_without_its_guard_is_not(self):
+    def test_a_port_holding_another_device_is_not(self):
         args = SimpleNamespace(**ARGS)
-        for status in (BOOTSEL.replace(SERIAL, 'SOMEONE-ELSE'),
-                       QUIET.replace('210319B3E738', 'X')):
-            hub = Recorded(**{'hub-status': status})
-            with self.assertRaises(BOARD.Failed):
+        hub = Recorded(**{'hub-status': BOOTSEL.replace(SERIAL, 'SOMEONE-ELSE')})
+        with self.assertRaises(BOARD.Failed):
+            BOARD.power_cycle(hub, args)
+        self.assertEqual(hub.calls, ['hub-status'])
+
+    def test_nothing_is_switched_while_the_arty_is_on_the_cascade_or_absent(self):
+        args = SimpleNamespace(**ARGS)
+        for where in ('7-2.3.3.4', None):
+            hub = Recorded(**{'hub-status': QUIET})
+            with mock.patch.object(BOARD.common, 'device_location', return_value=where), \
+                    self.assertRaises(BOARD.Failed):
                 BOARD.power_cycle(hub, args)
-            self.assertEqual(hub.calls, ['hub-status'])
+            self.assertEqual(hub.calls, [])
 
 
 class Control(unittest.TestCase):
+    def setUp(self):
+        patcher = mock.patch.object(BOARD.common, 'device_location', return_value='7-1.4')
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def control(self, after):
         args = SimpleNamespace(**ARGS)
         head = struct.pack('<%dI' % (BOARD.VECTOR_WORDS + 5),

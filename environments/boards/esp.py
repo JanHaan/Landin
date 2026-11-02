@@ -57,6 +57,7 @@ ATOMICS, REPORT, STALL, MASK = 0x06, 0x11, 0x12, 0x13
 RING = 256              # the application's receive ring
 BURST = 300             # longer than the ring and than the 128-byte FIFO
 WINDOW_MS = 100         # how long STALL and MASK last
+PIECE = 64              # the stream's pieces, each sent after the last's echo
 # What environments/cortex-m/driver.py feeds the synthetic application.
 SHARED = b'1A0'
 # ESP-IDF v6.1's esp_app_format.h: the flash mode DIO, and a size and
@@ -287,8 +288,17 @@ def scenario(console, chip, seed):
             % (masked['k'], WINDOW_MS))
     verdicts['threshold'] = dict(burst=BURST, fifo_overflows=masked['o'], restarts=masked['c'],
                                  timer_interrupts_meanwhile=masked['k'])
-    # A stream at the line's rate, every byte echoed.
-    console.send(bytes(rng.randrange(0x20, 0x7f) for _ in range(3000)))
+    # A stream, every byte echoed: 3000 bytes in pieces of 64, each sent
+    # once the one before it is echoed, so the verdict is the echo's and not
+    # whether the core keeps pace with the line; the C3 runs from its reset
+    # clock, 20 MHz, at which it does not (D727).
+    stream = bytes(rng.randrange(0x20, 0x7f) for _ in range(3000))
+    for at in range(0, len(stream), PIECE):
+        piece = stream[at:at + PIECE]
+        echoed_before = len(echoed(bytes(console.received)))
+        console.send(piece)
+        console.wait(lambda s: len(echoed(s)) >= echoed_before + len(piece), 5,
+                     'the echo of the stream\'s bytes from %d' % at)
     final = report(console, seen); seen += 1
     require(final['c'] == 2 and final['l'] == BURST - RING and final['o'] == 1,
             'the stream lost bytes')
@@ -411,6 +421,9 @@ def restore(probe, image, offset, tries=20):
 def paced(args, what, action):
     """ACTION, which disconnects a device on the rig's hub cascade, spaced
     by args.pace."""
+    # The probe's Arty must never lose power or re-enumerate, so nothing
+    # disturbs the cascade while it is on it (D725).
+    common.off_cascade(args.arty_serial, args.cascade)
     args.pace.before(what)
     try:
         return action()
@@ -553,6 +566,11 @@ def arguments(parser, chip):
                              ' refuse, and one whose SHA-256 is flipped, whose hash it must name')
     parser.add_argument('--control-seconds', type=float, default=3.0,
                         help='how long a control\'s boot log is read for')
+    parser.add_argument('--arty-serial', default='210319B3E738',
+                        help="a device that must be present and off the switched cascade, the"
+                             " probe's Arty on the maintainer's rig, or nothing is done to the hub")
+    parser.add_argument('--cascade', default='7-2',
+                        help='the hub cascade the boards are on, as sysfs names its root')
     parser.add_argument('--spacing', type=float, default=120.0,
                         help='seconds between two actions that disconnect a device on the hub,'
                              ' by any tool on the host (D725)')

@@ -24,16 +24,19 @@ RP2040 board's port (D593-D596) on this chip's own registers (D654).
 | power | the Pico 2's USB port on a hub with per-port power switching, and `uhubctl` with the right to switch it | a power cycle, so the run starts at power-on |
 | the compiler | refine and `arm-eabi-gcc` or `arm-none-eabi-gcc` (D532), as `nix develop` gives them | the image |
 
-The tool switches only `--port` on `--hub`, and only after `uhubctl` shows
-`--guard-serial` on `--guard-port` of the same hub, the probe's Arty on the
-maintainer's rig, as [the RP2040's tool](../rp2040/README.md) does: this
+The tool switches only `--port` on `--hub`, and only while
+the device with `--guard-serial`, the probe's own Arty A7, is present and not on
+`--cascade`, the hub cascade the boards are on (`7-2` on the maintainer's
+rig), found by its serial wherever it is plugged in: its bitstream is held
+only in SRAM and would be lost with its power, and every switch on the
+cascade re-enumerates the whole of it (D725), as [the RP2040's tool](../rp2040/README.md) does: this
 firmware does not enumerate on USB, so the Pico 2's port shows no device of
 its own while it runs. With `--pico-serial`, the port must also show that
 serial whenever it shows a device, which a Pico 2 does in BOOTSEL. The
 port is switched off and on in one `uhubctl -a cycle`, through
 `/run/wrappers/bin/sg GROUP -c`, `--hub-group`, when the session is not in
 the group that may switch it. The defaults are the maintainer's rig: hub
-`7-2.3.3`, port 2, guarded by port 4.
+`7-2.3.3`, port 2, on the cascade `7-2`.
 
 ## Running it
 
@@ -41,7 +44,7 @@ the group that may switch it. The defaults are the maintainer's rig: hub
 python3 environments/boards/rp2350/board.py \
     --refine compiler/ada/build/nix-x86_64-linux/debug/bin/refine \
     --probehive ~/src/probehive --probe-rs PATH/TO/probe-rs --slot 1 \
-    --hub 7-2.3.3 --port 2 --guard-port 4 --guard-serial 210319B3E738 \
+    --hub 7-2.3.3 --port 2 --guard-serial 210319B3E738 \
     --block-control --output NEW_DIRECTORY
 ```
 

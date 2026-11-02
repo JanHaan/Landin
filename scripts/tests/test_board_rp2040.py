@@ -4,6 +4,7 @@ import importlib.util
 from pathlib import Path
 from types import SimpleNamespace
 import unittest
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
 SPEC = importlib.util.spec_from_file_location('board', ROOT / 'environments/boards/rp2040/board.py')
@@ -47,23 +48,19 @@ class Oracle(unittest.TestCase):
         self.assertEqual(BOARD.frames_safe(stream), [('t', {'h': 10})])
         self.assertEqual(BOARD.echo_of(stream), b'abcd')
 
-    def test_a_hub_whose_guarded_port_is_not_the_device_named_is_not_switched(self):
-        args = SimpleNamespace(hub='7-2.3.3', port=1, guard_port=4,
-                               guard_serial='210319B3E738', off_seconds=0)
-        for status in (STATUS.replace('210319B3E738', 'SOMEONE-ELSE'),
-                       STATUS.replace('  Port 4:', '  Port 5:')):
-            hub = Hub(status)
-            with self.assertRaises(BOARD.Failed):
+    def test_the_hub_is_switched_only_while_the_arty_is_off_the_cascade(self):
+        args = SimpleNamespace(hub='7-2.3.3', port=1, guard_serial='210319B3E738',
+                               cascade='7-2', off_seconds=0)
+        for where in ('7-2.3.3.4', None):
+            hub = Hub(STATUS)
+            with mock.patch.object(BOARD.common, 'device_location', return_value=where), \
+                    self.assertRaises(BOARD.Failed):
                 BOARD.power_cycle(hub, args)
-            self.assertEqual(hub.calls, ['hub-status'])
+            self.assertEqual(hub.calls, [])
         hub = Hub(STATUS)
-        with self.assertRaises(BOARD.Failed):
-            BOARD.power_cycle(hub, SimpleNamespace(**{**vars(args), 'port': 4}))
-        self.assertEqual(hub.calls, ['hub-status'])
-        hub = Hub(STATUS)
-        BOARD.power_cycle(hub, args)
+        with mock.patch.object(BOARD.common, 'device_location', return_value='7-1.4'):
+            BOARD.power_cycle(hub, args)
         self.assertEqual(hub.calls, ['hub-status', 'power-cycle'])
-
 
 if __name__ == '__main__':
     unittest.main()

@@ -171,7 +171,7 @@ class Layout(unittest.TestCase):
         self.assertEqual(BOARD.amo_adds('10002760 <telemetry>:\n'), [])
 
 
-ARGS = dict(hub='7-2.3.3', port=2, guard_port=4, guard_serial='210319B3E738', off_seconds=0,
+ARGS = dict(hub='7-2.3.3', port=2, guard_serial='210319B3E738', cascade='7-2', off_seconds=0,
             pico_serial=None, hub_group=None, enumerate_seconds=1.0, boot_seconds=0,
             guard_seconds=0, bootsel_attach=False, probe_host='10.42.0.50',
             probe_rs='probe-rs', probe='0000:0001:127.0.0.1:4442')
@@ -193,6 +193,11 @@ def cycling(**more):
 
 
 class Attach(unittest.TestCase):
+    def setUp(self):
+        patcher = mock.patch.object(BOARD.common, 'device_location', return_value='7-1.4')
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_the_chip_name_follows_the_architecture_that_answers(self):
         args = SimpleNamespace(**ARGS)
         run = Recorded()
@@ -214,7 +219,7 @@ class Attach(unittest.TestCase):
         self.assertEqual(run.calls, ['hub-before-attach', 'attach-RP235x', 'before download',
                                      'flash', 'after download', 'before power cycle',
                                      'hub-status', 'power-cycle', 'after power cycle',
-                                     'hub-after-cycle', 'probe-ping', 'hub-before-attach',
+                                     'probe-ping', 'hub-before-attach',
                                      'reattach-RP235x', 'reattach-RP235x_riscv',
                                      'flash-readback'])
 
@@ -247,15 +252,22 @@ class Attach(unittest.TestCase):
 
 
 class Hub(unittest.TestCase):
-    def test_only_a_hub_whose_guard_holds_the_arty_is_switched(self):
+    def setUp(self):
+        patcher = mock.patch.object(BOARD.common, 'device_location', return_value='7-1.4')
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_only_a_hub_the_arty_is_off_is_switched(self):
         hub = Recorded(**cycling())
         BOARD.power_cycle(hub, paced_args(hub))
         self.assertEqual(hub.calls, ['before power cycle', 'hub-status', 'power-cycle',
-                                     'after power cycle', 'hub-after-cycle', 'probe-ping'])
-        hub = Recorded(**cycling(**{'hub-status': QUIET.replace('210319B3E738', 'X')}))
-        with self.assertRaises(BOARD.Failed):
-            BOARD.power_cycle(hub, paced_args(hub))
-        self.assertEqual(hub.calls, ['before power cycle', 'hub-status', 'after power cycle'])
+                                     'after power cycle', 'probe-ping'])
+        for where in ('7-2.3.3.4', None):
+            hub = Recorded(**cycling())
+            with mock.patch.object(BOARD.common, 'device_location', return_value=where), \
+                    self.assertRaises(BOARD.Failed):
+                BOARD.power_cycle(hub, paced_args(hub))
+            self.assertEqual(hub.calls, [])
 
     def test_a_listing_that_meets_the_tree_gone_is_asked_again(self):
         class Flaky(Recorded):
@@ -269,7 +281,7 @@ class Hub(unittest.TestCase):
             BOARD.power_cycle(hub, paced_args(hub, guard_seconds=5))
         self.assertEqual(hub.calls, ['before power cycle', 'hub-status', 'hub-status',
                                      'hub-status', 'power-cycle', 'after power cycle',
-                                     'hub-after-cycle', 'probe-ping'])
+                                     'probe-ping'])
         hub = Flaky(**cycling())
         with self.assertRaisesRegex(BOARD.Failed, 'hub-status failed'):
             BOARD.power_cycle(hub, paced_args(hub))
@@ -284,10 +296,10 @@ class Hub(unittest.TestCase):
         self.assertEqual(hub.calls, [])
 
     def test_a_cycle_that_loses_the_arty_or_the_probe_stops_the_run(self):
-        gone = QUIET.replace(GUARD, '  Port 4: 0100 power\n')
-        with mock.patch.object(BOARD.time, 'sleep'):
-            hub = Recorded(**cycling(**{'hub-after-cycle': gone}))
-            with self.assertRaisesRegex(BOARD.Failed, 'does not show 210319B3E738'):
+        with mock.patch.object(BOARD.time, 'sleep'), \
+                mock.patch.object(BOARD.common, 'device_location', side_effect=['7-1.4', None]):
+            hub = Recorded(**cycling())
+            with self.assertRaisesRegex(BOARD.Failed, 'after the cycle: no USB device'):
                 BOARD.power_cycle(hub, paced_args(hub))
         hub = Recorded(**cycling(**{'probe-ping': LOST}))
         with self.assertRaisesRegex(BOARD.Failed, 'does not answer ping'):

@@ -1,0 +1,231 @@
+{
+  "status": "passed",
+  "image_sha256": "dd5424bad5e375fbf49e5aa15e1652a2d03b93ae21e94dfe159b0b4e773e1b42",
+  "image_name": "board.elf.bin",
+  "elf_sha256": "3dcf0d4f84b85c4f3d16a8d6a0b77d41a0204fbb6faf774dafceed387dea18b4",
+  "image": {
+    "chip": 23,
+    "revisions": [
+      100,
+      199
+    ],
+    "entry": "0x40800000",
+    "segments": [
+      "0x40800000+0x1c0",
+      "0x408001c0+0x5928",
+      "0x40805ae8+0x68"
+    ],
+    "checksum": "0xa4",
+    "sha256": "e7b732a4e44ef0413be4c9b9c7f9ce5c8d342756b118a0f79dea452bf331855b"
+  },
+  "instructions": [
+    "amoadd.w.aqrl",
+    "lr.w.aq",
+    "sc.w.rl"
+  ],
+  "flash": {
+    "offset": "0x2000",
+    "verified": true
+  },
+  "power_on": {
+    "reset_cause": 1,
+    "boot_reason": 1,
+    "app_state": 2,
+    "timer_events": [
+      6203,
+      6638
+    ],
+    "trap_count": 0
+  },
+  "rom": {
+    "reset": "POWERON",
+    "boot": "SPI_FAST_FLASH_BOOT",
+    "loads": [
+      "0x40800000+0x1c0",
+      "0x408001c0+0x5928",
+      "0x40805ae8+0x68"
+    ],
+    "entry": "0x40800000"
+  },
+  "verdicts": {
+    "boot": {
+      "reset_cause": 1,
+      "mtvec": "0x408001c3",
+      "rom_threshold": 15
+    },
+    "shared": {
+      "input": "1A0",
+      "echo": "1A0",
+      "indicator_after_1": 16777216,
+      "indicator_after_0": 0
+    },
+    "interrupts": {
+      "receive_mcause": "0xb8000011",
+      "timer_mcause": "0xb8000012"
+    },
+    "atomics": {
+      "x": 116,
+      "y": 93,
+      "p": 116,
+      "q": 209,
+      "r": 41,
+      "d": 41,
+      "e": 116,
+      "f": 209
+    },
+    "ring_overrun": {
+      "burst": 300,
+      "ring": 256,
+      "dropped": 44,
+      "restarts": 1
+    },
+    "threshold": {
+      "burst": 300,
+      "fifo_overflows": 1,
+      "restarts": 2,
+      "timer_interrupts_meanwhile": 100
+    },
+    "stream": {
+      "timer_events": 1136,
+      "receive_interrupts": 6630,
+      "echoed": 3014,
+      "sent": 3614
+    }
+  },
+  "jtag": {
+    "trap_count": 0,
+    "handled": 3014,
+    "recoveries": 2,
+    "dropped": 44,
+    "overflows": 1,
+    "entries": 6630,
+    "boot_reason": 1,
+    "word_cell": 41,
+    "byte_cell": 209
+  },
+  "readback": [
+    "0x40800000+0x1c0",
+    "0x408001c0+0x5928"
+  ],
+  "uart_sha256": "97566cbabc64b35bc54c70bc19657f4231c46d44eda696506a96099f716bf19f",
+  "image_control": {
+    "sha256": {
+      "calculated": "e7b732a4e44ef0413be4c9b9c7f9ce5c8d342756b118a0f79dea452bf331855b",
+      "expected": "e7b732a4e44ef0413be4c9b9c7f9ce5c8d342756b118a0f79dea452bf33185a4",
+      "entered": true
+    },
+    "checksum": {
+      "calculated": "0xa4",
+      "stored": "0x5b"
+    }
+  },
+  "sent_sha256": "5ac29a7d385819161814c8f23f97a6a82ba69ae0187502c8fd0c9b77f110ad06",
+  "frames": [
+    {
+      "tag": "b",
+      "r": "00000001",
+      "v": "408001c3",
+      "t": "0000000f"
+    },
+    {
+      "tag": "a",
+      "p": "00000074",
+      "q": "000000d1",
+      "r": "00000029",
+      "d": "00000029",
+      "e": "00000074",
+      "f": "000000d1"
+    },
+    {
+      "tag": "t",
+      "h": "00000bc6",
+      "c": "00000002",
+      "i": "000019e6",
+      "m": "00000470",
+      "p": "b8000011",
+      "q": "b8000012",
+      "k": "00000064",
+      "l": "0000002c",
+      "o": "00000001",
+      "e": "00000cc6",
+      "g": "00000000",
+      "s": "00000002"
+    }
+  ],
+  "commands": [
+    "compile",
+    "symbols",
+    "disassemble",
+    "flash",
+    "hub-wait",
+    "hub-status",
+    "power-off",
+    "hub-wait",
+    "hub-status",
+    "power-off-console",
+    "hub-wait",
+    "hub-wait",
+    "hub-status",
+    "power-on-console",
+    "hub-wait",
+    "hub-status",
+    "power-on",
+    "hub-wait",
+    "hub-wait",
+    "flash",
+    "hub-wait",
+    "hub-status",
+    "power-off",
+    "hub-wait",
+    "hub-status",
+    "power-off-console",
+    "hub-wait",
+    "hub-wait",
+    "hub-status",
+    "power-on-console",
+    "hub-wait",
+    "hub-status",
+    "power-on",
+    "hub-wait",
+    "flash",
+    "hub-wait",
+    "hub-status",
+    "power-off",
+    "hub-wait",
+    "hub-status",
+    "power-off-console",
+    "hub-wait",
+    "hub-wait",
+    "hub-status",
+    "power-on-console",
+    "hub-wait",
+    "hub-status",
+    "power-on",
+    "hub-wait",
+    "jtag-reset-cause",
+    "jtag-boot-reason",
+    "jtag-app-state",
+    "jtag-timer-first",
+    "jtag-timer-second",
+    "jtag-trap-cause",
+    "jtag-trap-pc",
+    "jtag-trap-value",
+    "jtag-trap-sp",
+    "jtag-trap-count",
+    "jtag-trap-cause",
+    "jtag-trap-pc",
+    "jtag-trap-value",
+    "jtag-trap-sp",
+    "jtag-trap-count",
+    "jtag-handled",
+    "jtag-recoveries",
+    "jtag-dropped",
+    "jtag-overflows",
+    "jtag-entries",
+    "jtag-boot_reason",
+    "jtag-word_cell",
+    "jtag-byte_cell",
+    "jtag-readback-40800000",
+    "jtag-readback-408001c0"
+  ]
+}

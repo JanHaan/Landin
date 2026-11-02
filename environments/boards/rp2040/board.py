@@ -104,8 +104,8 @@ def flash(run, args, elf, stage):
 def power_cycle(run, args):
     """The Pico's port, never the guarded one, and only on a hub whose
     guarded port holds the device named."""
-    common.power_cycle(run, args.hub, args.port, args.off_seconds,
-                       keeps=(args.guard_port, args.guard_serial))
+    common.off_cascade(args.guard_serial, args.cascade)
+    common.power_cycle(run, args.hub, args.port, args.off_seconds)
 
 
 def report(console, count):
@@ -247,9 +247,11 @@ def main():
     parser.add_argument('--uart-port', type=int, default=4461)
     parser.add_argument('--hub', default='7-2.3.3', help="the Pico's hub, as uhubctl -l names it")
     parser.add_argument('--port', type=int, default=1, help="the Pico's port on it")
-    parser.add_argument('--guard-port', type=int, default=4, help='a port never switched')
     parser.add_argument('--guard-serial', default='210319B3E738',
-                        help='the serial the guarded port must show, or the hub is not switched')
+                        help="a device that must be present and off the switched cascade, the"
+                             " probe's Arty on the maintainer's rig, or no port is switched")
+    parser.add_argument('--cascade', default='7-2',
+                        help='the hub cascade whose ports are switched, as sysfs names its root')
     parser.add_argument('--off-seconds', type=float, default=1.0)
     parser.add_argument('--hub-group', default='dialout',
                         help="the group that may switch the hub's ports; uhubctl runs through"

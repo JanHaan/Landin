@@ -526,6 +526,33 @@ def port_device(status, port):
     return found.group(1) if found else None
 
 
+def device_location(serial, sysfs=Path('/sys/bus/usb/devices')):
+    """Where the USB device with SERIAL is, its hub path such as 7-1.2, or
+    None."""
+    for entry in sorted(Path(sysfs).glob('*')):
+        if ':' in entry.name:
+            continue
+        try:
+            if (entry / 'serial').read_text().strip() == serial:
+                return entry.name
+        except OSError:
+            continue
+    return None
+
+
+def off_cascade(serial, cascade, sysfs=Path('/sys/bus/usb/devices')):
+    """Require that the device with SERIAL is present and not on the hub
+    cascade at CASCADE, a hub path such as 7-2: a device that must never
+    lose power or re-enumerate, the probe's Arty on the rig, is kept off
+    the cascade whose ports the tools switch (D725).  Returns where it is."""
+    found = device_location(serial, sysfs)
+    require(found is not None, 'no USB device with serial %s: refusing to switch' % serial)
+    require(found != cascade and not found.startswith(cascade + '.'),
+            'the device with serial %s is at %s, on the cascade %s whose ports are switched;'
+            ' refusing to switch' % (serial, found, cascade))
+    return found
+
+
 def power_cycle(hub, location, port, off_seconds, holds=None, keeps=None, holds_if_any=None):
     """Cut PORT of the hub at LOCATION and restore it, in one call.
 
