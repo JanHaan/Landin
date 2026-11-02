@@ -95,7 +95,11 @@ entry that describes it, and put a new one where a reader would look for it.
   and refine writes `OUT.bin` beside the executable and reads it back
   (D683-D685), which the ESP32-C3's ROM boots on Espressif's QEMU.
   `platform/riscv` and `platform/riscv/hazard3` hold the core's CPU
-  operations (D687).
+  operations (D687). The Pico 2's port on its Hazard3 cores, at
+  `rv32imac`, takes its interrupts through Xh3irq and counts its telemetry
+  with an `amoadd.w` (D710), and is checked by an oracle of its own,
+  [`board.py`](../environments/boards/rp2350_hazard3/README.md) (D711-D713);
+  no board run of it is recorded yet.
 - **A float unit** is a fact of a description: a Cortex-M7's
   `compiler.float_unit("fpv5-d16")`, which the STM32H753's has, builds
   hard-float at `armv7e-m` (D615). f32 and f64 arithmetic, negation,
