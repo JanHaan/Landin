@@ -2220,6 +2220,27 @@ package body Landin.Diagnostics.Citations is
             when 562 =>
                "The STM32H753's description is cacheless and keeps DMA o"
                & "ut of the TCMs",
+            when 700 =>
+               "A RISC-V description's core and identity are its policy'"
+               & "s",
+            when 701 =>
+               "An interrupt matrix's sources are a module, not slots",
+            when 702 =>
+               "The ESP32-C3 and ESP32-C5 are learnt from their SVDs, ES"
+               & "P-IDF and their manuals",
+            when 703 =>
+               "An element of a register array is a register",
+            when 704 =>
+               "A reviewed correction may move a register",
+            when 705 =>
+               "A policy may add a peripheral the SVD lacks",
+            when 706 =>
+               "RP2350's Hazard3 cores have a description of their own",
+            when 707 =>
+               "The ESP descriptions are RAM-only images that keep clear"
+               & " of the ROM",
+            when 708 =>
+               "The ESP descriptions stop the watchdogs before reset",
             when 593 =>
                "The first board shares prototype 1's receive contract an"
                & "d command loop, not its device protocol",
@@ -3483,6 +3504,24 @@ package body Landin.Diagnostics.Citations is
             when 561 =>
                "Decisions: The toolchain, C and the machine",
             when 562 =>
+               "Decisions: The toolchain, C and the machine",
+            when 700 =>
+               "Decisions: The toolchain, C and the machine",
+            when 701 =>
+               "Decisions: The toolchain, C and the machine",
+            when 702 =>
+               "Decisions: The toolchain, C and the machine",
+            when 703 =>
+               "Decisions: The toolchain, C and the machine",
+            when 704 =>
+               "Decisions: The toolchain, C and the machine",
+            when 705 =>
+               "Decisions: The toolchain, C and the machine",
+            when 706 =>
+               "Decisions: The toolchain, C and the machine",
+            when 707 =>
+               "Decisions: The toolchain, C and the machine",
+            when 708 =>
                "Decisions: The toolchain, C and the machine",
             when 593 =>
                "Decisions: The toolchain, C and the machine",
@@ -5027,6 +5066,34 @@ package body Landin.Diagnostics.Citations is
             when 562 =>
                "https://www.701.dev/spec.html#d562-the-stm32h753-s-descr"
                & "iption-is-cacheless-and-keeps-dma-out-of-the-tcms",
+            when 700 =>
+               "https://www.701.dev/spec.html#d700-a-risc-v-description-"
+               & "s-core-and-identity-are-its-policy-s",
+            when 701 =>
+               "https://www.701.dev/spec.html#d701-an-interrupt-matrix-s"
+               & "-sources-are-a-module-not-slots",
+            when 702 =>
+               "https://www.701.dev/spec.html#d702-the-esp32-c3-and-esp3"
+               & "2-c5-are-learnt-from-their-svds-esp-idf-and-their-manual"
+               & "s",
+            when 703 =>
+               "https://www.701.dev/spec.html#d703-an-element-of-a-regis"
+               & "ter-array-is-a-register",
+            when 704 =>
+               "https://www.701.dev/spec.html#d704-a-reviewed-correction"
+               & "-may-move-a-register",
+            when 705 =>
+               "https://www.701.dev/spec.html#d705-a-policy-may-add-a-pe"
+               & "ripheral-the-svd-lacks",
+            when 706 =>
+               "https://www.701.dev/spec.html#d706-rp2350-s-hazard3-core"
+               & "s-have-a-description-of-their-own",
+            when 707 =>
+               "https://www.701.dev/spec.html#d707-the-esp-descriptions-"
+               & "are-ram-only-images-that-keep-clear-of-the-rom",
+            when 708 =>
+               "https://www.701.dev/spec.html#d708-the-esp-descriptions-"
+               & "stop-the-watchdogs-before-reset",
             when 593 =>
                "https://www.701.dev/spec.html#d593-the-first-board-share"
                & "s-prototype-1-s-receive-contract-and-command-loop-not-it"

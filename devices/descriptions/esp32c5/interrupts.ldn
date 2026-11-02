@@ -1,0 +1,30 @@
+-- Interrupts of the ESP32-C5, from its SVD: vendor ESPRESSIF SYSTEMS (SHANGHAI) CO., LTD., version 1.
+-- SVD SHA-256 b91f65fb6750184de94db8285a98a18107d2bad100822bea9b183a95a1575264.
+-- Copyright 2025 Espressif Systems (Shanghai) PTE LTD
+-- Licensed under the Apache License, Version 2.0 (the "License");
+-- you may not use this file except in compliance with the License.
+-- You may obtain a copy of the License at
+-- http://www.apache.org/licenses/LICENSE-2.0
+-- Unless required by applicable law or agreed to in writing, software
+-- distributed under the License is distributed on an "AS IS" BASIS,
+-- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+-- See the License for the specific language governing permissions and
+-- limitations under the License.
+-- Generated from the SVD; memory.ldn beside it is written by hand.
+-- The policy adds LP_PERI_TIMEOUT at 19: ESP32-C5 TRM v1.1, 11.5.1, Table 11.5-1, p. 474: source 19 is LP_PERI_TIMEOUT_INTR, which the SVD omits, and IDF v6.1's interrupts.h numbers it 19.
+-- The policy adds BUS_MONITOR at 27: ESP32-C5 TRM v1.1, 11.5.1, Table 11.5-1, p. 474: source 27 is BUS_MONITOR_INTR, which the SVD omits; IDF v6.1's interrupts.h calls it ETS_ASSIST_DEBUG_INTR_SOURCE, and the mapping register is BUS_MONITOR_INTR_MAP in the SVD, the header and the manual alike.
+-- The policy adds HP_PERI_TIMEOUT at 34: ESP32-C5 TRM v1.1, 11.5.1, Table 11.5-1, p. 474: source 34 is HP_PERI_TIMEOUT_INTR, which the SVD omits, and IDF v6.1's interrupts.h numbers it 34.
+-- The policy adds SLC0 at 69: ESP32-C5 TRM v1.1, 11.5.1, Table 11.5-1, p. 475: source 69 is SLC0_INTR, which the SVD omits, and IDF v6.1's interrupts.h numbers it 69.
+-- The policy adds SLC1 at 70: ESP32-C5 TRM v1.1, 11.5.1, Table 11.5-1, p. 475: source 70 is SLC1_INTR, which the SVD omits, and IDF v6.1's interrupts.h numbers it 70.
+-- The policy adds DMA_IN_CH0 at 71: ESP32-C5 TRM v1.1, 11.5.1, Table 11.5-1, p. 475: source 71 is GDMA_IN_CH0_INTR, which the SVD omits, and IDF v6.1's interrupts.h numbers it 71.
+-- The policy adds DMA_IN_CH1 at 72: ESP32-C5 TRM v1.1, 11.5.1, Table 11.5-1, p. 476: source 72 is GDMA_IN_CH1_INTR, which the SVD omits, and IDF v6.1's interrupts.h numbers it 72.
+-- The policy adds DMA_IN_CH2 at 73: ESP32-C5 TRM v1.1, 11.5.1, Table 11.5-1, p. 476: source 73 is GDMA_IN_CH2_INTR, which the SVD omits, and IDF v6.1's interrupts.h numbers it 73.
+-- The policy adds DMA_OUT_CH0 at 74: ESP32-C5 TRM v1.1, 11.5.1, Table 11.5-1, p. 476: source 74 is GDMA_OUT_CH0_INTR, which the SVD omits, and IDF v6.1's interrupts.h numbers it 74.
+-- The policy adds DMA_OUT_CH1 at 75: ESP32-C5 TRM v1.1, 11.5.1, Table 11.5-1, p. 476: source 75 is GDMA_OUT_CH1_INTR, which the SVD omits, and IDF v6.1's interrupts.h numbers it 75.
+-- The policy adds DMA_OUT_CH2 at 76: ESP32-C5 TRM v1.1, 11.5.1, Table 11.5-1, p. 476: source 76 is GDMA_OUT_CH2_INTR, which the SVD omits, and IDF v6.1's interrupts.h numbers it 76.
+-- The policy adds KM at 83: ESP32-C5 TRM v1.1, 11.5.1, Table 11.5-1, p. 476: source 83 is KM_INTR, which the SVD omits, and IDF v6.1's interrupts.h numbers it 83.
+-- Its interrupts are interrupt-matrix sources, not slots: esp32c5/sources.
+
+compiler.device("esp32-c5")
+compiler.core("esp-rv32imac-clic")
+compiler.vectors(48)

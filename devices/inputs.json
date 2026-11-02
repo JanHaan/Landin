@@ -154,6 +154,120 @@
       "url": "https://www.st.com/resource/en/reference_manual/rm0433-stm32h742-stm32h743753-and-stm32h750-value-line-advanced-armbased-32bit-mcus-stmicroelectronics.pdf",
       "sha256": "672a9433d6602da224e5215f571beed2be0e683cb025526f4afe9db61c26b6a0",
       "fetch": "by hand"
+    },
+    "esp32c3/esp32c3.svd": {
+      "url": "https://raw.githubusercontent.com/espressif/svd/be20aa12560889d6125d144cdb48cf615ac17628/svd/esp32c3.svd",
+      "sha256": "9ef33dbff56d807996fd8edfa4aa4ad008b5a861c241d36280caa0dedbbca41a"
+    },
+    "esp32c5/esp32c5.base.svd": {
+      "url": "https://raw.githubusercontent.com/esp-rs/esp-pacs/a96d437ebad40b00854aa3e78011ad7732713a4d/esp32c5/svd/esp32c5.base.svd",
+      "sha256": "b91f65fb6750184de94db8285a98a18107d2bad100822bea9b183a95a1575264"
+    },
+    "esp32c3/reg_base.h": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/soc/esp32c3/register/soc/reg_base.h",
+      "sha256": "75e18db8711449253441d29973056112348041c2a34a5f6847c70d78b9accc07"
+    },
+    "esp32c3/uart_reg.h": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/soc/esp32c3/register/soc/uart_reg.h",
+      "sha256": "279f2eb6dda3111bde3914a2d2ae016169f67ad222e936d9e283d915c1c0cbe6"
+    },
+    "esp32c3/gpio_reg.h": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/soc/esp32c3/register/soc/gpio_reg.h",
+      "sha256": "2370bf72a68bd63065ddb5b8e50bd68f06394c46ac017b17ec4b1596306ea350"
+    },
+    "esp32c3/io_mux_reg.h": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/soc/esp32c3/register/soc/io_mux_reg.h",
+      "sha256": "45fdba9cbb330380211b47506ec5de6afd729ca7ff74c00da2b0a712c4093b78"
+    },
+    "esp32c3/interrupt_core0_reg.h": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/soc/esp32c3/register/soc/interrupt_core0_reg.h",
+      "sha256": "36982baf80fdb76f679ec2ac26c78529f424ca2a6c678d17cfc78b32368b9db3"
+    },
+    "esp32c3/timer_group_reg.h": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/soc/esp32c3/register/soc/timer_group_reg.h",
+      "sha256": "f1404c1ebc50c69a3d0cbc14a2bfb50a3f90bd031bc7c1bc732a2b11db4e8f6a"
+    },
+    "esp32c3/rtc_cntl_reg.h": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/soc/esp32c3/register/soc/rtc_cntl_reg.h",
+      "sha256": "2a7e634b74d399a84c07bc566b65da7c2d5efa6fef75715089adbf6557d80835"
+    },
+    "esp32c3/system_reg.h": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/soc/esp32c3/register/soc/system_reg.h",
+      "sha256": "9514012b8317576fa16a5915d37419f6499f3be0de6e9c53a4ba01de26f3bbd7"
+    },
+    "esp32c3/systimer_reg.h": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/soc/esp32c3/register/soc/systimer_reg.h",
+      "sha256": "15a60c41b09e1980221a2383434e7b0370a751b9782a12a59609b0e5ed2c20b2"
+    },
+    "esp32c3/interrupts.h": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/soc/esp32c3/include/soc/interrupts.h",
+      "sha256": "f4ef283437af82b299cc366077a63dac1265f7f5629c000dd004f65d7c229872"
+    },
+    "esp32c5/reg_base.h": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/soc/esp32c5/register/soc/reg_base.h",
+      "sha256": "b71b182aedcd6b4bb4d4878f5387b5541cd4c3ff511a17ad3c2a8e46cb660233"
+    },
+    "esp32c5/uart_reg.h": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/soc/esp32c5/register/soc/uart_reg.h",
+      "sha256": "01c790eccc82b0af902063139c61548b0981ac7526ca6c5f76b1e7ad3fb63ada"
+    },
+    "esp32c5/gpio_reg.h": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/soc/esp32c5/register/soc/gpio_reg.h",
+      "sha256": "6de60ce09256e4067e49f67ecd8f59119d8357302a582eb6ac7a41c91869d104"
+    },
+    "esp32c5/io_mux_reg.h": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/soc/esp32c5/register/soc/io_mux_reg.h",
+      "sha256": "0bb36cc296042ddb375eea379e21e866e7b169217d0c71d0d46da49c13f6a7da"
+    },
+    "esp32c5/interrupt_matrix_reg.h": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/soc/esp32c5/register/soc/interrupt_matrix_reg.h",
+      "sha256": "036f157d297e7b10cdb72cef7d697ec964ebc8f381187588a549415b7d42b341"
+    },
+    "esp32c5/timer_group_reg.h": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/soc/esp32c5/register/soc/timer_group_reg.h",
+      "sha256": "a6953cec3acc994c45d5a06b65288b0ce73b476ef2e70ec054c4b674421a2a74"
+    },
+    "esp32c5/lp_wdt_reg.h": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/soc/esp32c5/register/soc/lp_wdt_reg.h",
+      "sha256": "30e63946a4d6e39a2c38399974bbc0f299da99495ead5d139812a787926fcc26"
+    },
+    "esp32c5/pcr_reg.h": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/soc/esp32c5/register/soc/pcr_reg.h",
+      "sha256": "050c5eabe196672c096e7dd74b8ace4c95eb60ac00e7357c96d6e5b082341d5b"
+    },
+    "esp32c5/systimer_reg.h": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/soc/esp32c5/register/soc/systimer_reg.h",
+      "sha256": "e9ea0f63c9a911666c0e01dfdad0ee5bd895046330daea46b3f2019ad8bca7ec"
+    },
+    "esp32c5/lp_clkrst_reg.h": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/soc/esp32c5/register/soc/lp_clkrst_reg.h",
+      "sha256": "9f10cfbb4a653e92ec914826d700a54f0e79745471528996b5fda8078e5a7bf4"
+    },
+    "esp32c5/interrupts.h": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/soc/esp32c5/include/soc/interrupts.h",
+      "sha256": "b9c461a3a6a86e77ba2ee0f8db999dc75f098bae31aa4f8ade0fcf7a070def00"
+    },
+    "esp32c5/clic_reg.h": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/soc/esp32c5/include/soc/clic_reg.h",
+      "sha256": "f91719a3abd9524fb34378583fbc36716a1ab99ed055189caa21a948b14fe007"
+    },
+    "esp32c3-trm/esp32-c3_technical_reference_manual_en.pdf": {
+      "url": "https://documentation.espressif.com/esp32-c3_technical_reference_manual_en.pdf",
+      "sha256": "90ef825653e7a2657dc1bb294041aace9f9b69da87d775c2f1b5bd11eb317423",
+      "fetch": "by hand"
+    },
+    "esp32c5-trm/esp32-c5_technical_reference_manual_en.pdf": {
+      "url": "https://documentation.espressif.com/esp32-c5_technical_reference_manual_en.pdf",
+      "sha256": "b2e7944dec0ee8e933042de69eb418da28a959d75afddde660775e9395739240",
+      "fetch": "by hand"
+    },
+    "esp32c3/soc.h": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/soc/esp32c3/include/soc/soc.h",
+      "sha256": "33a8c0e0fd35521f5c78a08c5120b08ddc28ae88c7c43195bfb61ff433e4b1e5"
+    },
+    "esp32c5/soc.h": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/soc/esp32c5/include/soc/soc.h",
+      "sha256": "4daede6506a58ddbf4d8184952d0af1c6220a4a916e2173c058e8e456cbcd3cb"
     }
   }
 }

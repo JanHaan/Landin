@@ -1,4 +1,5 @@
 with Ada.Containers.Indefinite_Ordered_Sets;
+with Ada.Strings.Fixed;
 with GNAT.SHA256;
 
 with Landin.Devices.Policies;
@@ -17,6 +18,7 @@ package body Landin.Devices.Projection is
    use type P.Read_Policy;
    use type P.Write_Policy;
    use type P.Reserved_Policy;
+   use type P.Core_Choice;
 
    LF : constant Character := ASCII.LF;
 
@@ -219,6 +221,14 @@ package body Landin.Devices.Projection is
       Unnamed : US.Unbounded_String;
       Unnamed_Count : Natural := 0;
       First_Unnamed : X.Element := X.No_Element;
+      --  D705: where the policy's added peripherals begin in the text the
+      --  projection reads, which is the SVD's up to there; zero when the
+      --  policy adds none.
+      Added_From : Natural := 0;
+      --  D701: the corrected interrupts, which a core that takes them as
+      --  slots lists in interrupts.ldn and an interrupt matrix's core
+      --  generates as its sources; and the corrections' lines.
+      Description_Text : US.Unbounded_String;
 
       procedure Fail
         (Kind : Fault_Kind; Message : String;
@@ -229,18 +239,27 @@ package body Landin.Devices.Projection is
       procedure Fail
         (Kind : Fault_Kind; Message : String;
          At_Element : X.Element := X.No_Element;
-         At_Text : Boolean := False) is
+         At_Text : Boolean := False)
+      is
+         At_Offset : constant Natural :=
+           (if not X.Is_Present (At_Element) then 0
+            elsif At_Text then X.Text_Offset (Document, At_Element)
+            else X.Offset (Document, At_Element));
+         Added : constant Boolean :=
+           X.Is_Present (At_Element) and then Added_From /= 0
+           and then At_Offset >= Added_From;
       begin
+         --  What the policy adds is the policy's, and has no place in the
+         --  SVD to point at.
          Problem :=
            (Kind => Kind,
-            Within => (if Kind = Invalid_Policy then Policy_Input
-                       else Svd_Input),
-            Offset =>
-              (if not X.Is_Present (At_Element) then 0
-               elsif At_Text then X.Text_Offset (Document, At_Element)
-               else X.Offset (Document, At_Element)),
-            Has_Offset => X.Is_Present (At_Element),
-            Message => US.To_Unbounded_String (Message));
+            Within => (if Kind = Invalid_Policy or else Added
+                       then Policy_Input else Svd_Input),
+            Offset => (if Added then 0 else At_Offset),
+            Has_Offset => X.Is_Present (At_Element) and then not Added,
+            Message => US.To_Unbounded_String
+              ((if Added then "in the policy's peripheral_additions, "
+                else "") & Message));
          raise Refused;
       end Fail;
 
@@ -773,8 +792,108 @@ package body Landin.Devices.Projection is
          Close (Rows, In_Object);
       end Project_Added;
 
+      --  D703: an element of a register array, `NAME%s` with its dim,
+      --  dimIncrement and dimIndex: the index's text and its position.
+      type Element_Of_Array is record
+         Index : US.Unbounded_String;
+         Position : Natural := 0;
+      end record;
+
+      --  Whether Name is an element of the array Item, and which; Item's
+      --  indices are its dimIndex, a range LOW-HIGH, a list A,B,C, or
+      --  0 to dim - 1 without one.
+      function Array_Element
+        (Item : X.Element; Name : String; Found : out Element_Of_Array)
+         return Boolean;
+
+      function Array_Element
+        (Item : X.Element; Name : String; Found : out Element_Of_Array)
+         return Boolean
+      is
+         Template : constant String := Value_Of (Item, "name");
+         Mark : constant Natural := Ada.Strings.Fixed.Index (Template, "%s");
+         Count : Word;
+         Indices : P.Text_Vectors.Vector;
+      begin
+         Found := (others => <>);
+         if Mark = 0
+           or else Ada.Strings.Fixed.Index (Template, "[%s]") /= 0
+           or else not Has (Item, "dim")
+           or else Name'Length <= Template'Length - 2
+         then
+            return False;
+         end if;
+         declare
+            Before : constant String := Template (Template'First .. Mark - 1);
+            After : constant String := Template (Mark + 2 .. Template'Last);
+         begin
+            if Name (Name'First .. Name'First + Before'Length - 1) /= Before
+              or else Name (Name'Last - After'Length + 1 .. Name'Last)
+                /= After
+            then
+               return False;
+            end if;
+            Found.Index := US.To_Unbounded_String
+              (Name (Name'First + Before'Length
+                     .. Name'Last - After'Length));
+         end;
+         Count := Child_Number (Item, "dim", Template & "'s dim");
+         if Count = 0 or else Count > 1024 then
+            Fail (Inconsistent_Device, Template & " has dim "
+                  & Decimal (Count) & ", not 1 to 1024", Child (Item, "dim"));
+         end if;
+         if not Has (Item, "dimIndex") then
+            for Index in 0 .. Count - 1 loop
+               Indices.Append (Decimal (Index));
+            end loop;
+         else
+            declare
+               Said : constant String := Value_Of (Item, "dimIndex");
+               Dash : constant Natural := Ada.Strings.Fixed.Index (Said, "-");
+               First : Positive := Said'First;
+            begin
+               if Dash /= 0
+                 and then Is_Number (Said (Said'First .. Dash - 1))
+                 and then Is_Number (Said (Dash + 1 .. Said'Last))
+                 and then Number (Said (Said'First .. Dash - 1))
+                   <= Number (Said (Dash + 1 .. Said'Last))
+                 and then Number (Said (Dash + 1 .. Said'Last))
+                   - Number (Said (Said'First .. Dash - 1)) < 1024
+               then
+                  for Index in Number (Said (Said'First .. Dash - 1))
+                    .. Number (Said (Dash + 1 .. Said'Last))
+                  loop
+                     Indices.Append (Decimal (Index));
+                  end loop;
+               else
+                  for At_Index in Said'First .. Said'Last + 1 loop
+                     if At_Index > Said'Last or else Said (At_Index) = ','
+                     then
+                        Indices.Append
+                          (Trimmed (Said (First .. At_Index - 1)));
+                        First := At_Index + 1;
+                     end if;
+                  end loop;
+               end if;
+            end;
+         end if;
+         if Word (Indices.Length) /= Count then
+            Fail (Inconsistent_Device, Template & "'s dimIndex gives "
+                  & Decimal (Word (Indices.Length)) & " indices for its dim "
+                  & Decimal (Count), Item);
+         end if;
+         for Index in 1 .. Indices.Last_Index loop
+            if Indices (Index) = US.To_String (Found.Index) then
+               Found.Position := Index - 1;
+               return True;
+            end if;
+         end loop;
+         return False;
+      end Array_Element;
+
       --  The selected register's element in Template, refusing what it
-      --  cannot find by name: a register of a cluster or an array.
+      --  cannot find by name: a register of a cluster.  An element of a
+      --  register array is found as its array (D703).
       function Find_Register
         (Template : X.Element; Name, Key : String) return X.Element;
 
@@ -784,6 +903,7 @@ package body Landin.Devices.Projection is
          Found : X.Element := X.No_Element;
          In_Cluster : Boolean := False;
          Arrays : Natural := 0;
+         Element : Element_Of_Array;
 
          procedure Search_Cluster (Cluster : X.Element);
 
@@ -822,6 +942,17 @@ package body Landin.Devices.Projection is
             end if;
             Current := X.Next_Sibling (Document, Current);
          end loop;
+         if not X.Is_Present (Found) and then Has (Template, "registers") then
+            Current := X.First_Child (Document, Child (Template, "registers"));
+            while X.Is_Present (Current) loop
+               if X.Name (Document, Current) = "register"
+                 and then Array_Element (Current, Name, Element)
+               then
+                  return Current;
+               end if;
+               Current := X.Next_Sibling (Document, Current);
+            end loop;
+         end if;
          if not X.Is_Present (Found) then
             if In_Cluster then
                Fail (Unsupported_Form, Key & " is in a cluster, which"
@@ -830,8 +961,8 @@ package body Landin.Devices.Projection is
             Fail (Not_In_Svd, "the policy selects " & Key & ", which the"
                   & " SVD does not have"
                   & (if Arrays > 0
-                     then "; its arrays (dim) are not expanded, so a"
-                       & " register of one is not found by name"
+                     then "; an element of an array (dim) is named by its"
+                       & " %s and an index its dimIndex gives"
                      else ""), Template);
          end if;
          return Found;
@@ -857,8 +988,15 @@ package body Landin.Devices.Projection is
            Find_Register (Template, Register_Name, Key);
          Offset, Width, Reset_Value, Reset_Mask : Word;
          Known_Mask, Known_Value, Write_Mask : Word;
+         Svd_Offset : Word := 0;
          Alternate : US.Unbounded_String;
          State : Register_State;
+         Element_Name : constant String := Value_Of (Element, "name");
+         Arrayed : Element_Of_Array;
+         Is_Element : constant Boolean :=
+           Element_Name /= Register_Name
+           and then Array_Element (Element, Register_Name, Arrayed);
+         Addition : Natural := 0;
 
          procedure Refuse_Form (Form, Why : String);
 
@@ -875,8 +1013,20 @@ package body Landin.Devices.Projection is
                   & X.Attribute_Name (Document, Element, 1) & "; a register"
                   & " derived from another is not resolved", Element);
          end if;
-         Refuse_Form ("dim", ", an array, which is not expanded");
+         if not Is_Element then
+            Refuse_Form ("dim", ", an array whose name has no %s, which is"
+                         & " not expanded");
+         elsif Has (Element, "alternateRegister") then
+            Fail (Unsupported_Form, Key & " is an element of an array that"
+                  & " is an alternate register, which is not expanded",
+                  Child (Element, "alternateRegister"));
+         end if;
          Refuse_Form ("alternateGroup", ", which refine svd does not read");
+         for Index in 1 .. Chosen.Additions.Last_Index loop
+            if Chosen.Additions (Index).Name = Policy.Peripheral then
+               Addition := Index;
+            end if;
+         end loop;
          Width := Number_Of
            (Inherited ("size", Key, Element, Instance, Template),
             Key & "'s size");
@@ -890,6 +1040,20 @@ package body Landin.Devices.Projection is
          end if;
          Offset := Child_Number (Element, "addressOffset",
                                  Key & "'s addressOffset");
+         if Is_Element then
+            Offset := Offset + Word (Arrayed.Position)
+              * Child_Number (Element, "dimIncrement",
+                              Element_Name & "'s dimIncrement");
+         end if;
+         --  D704: a reviewed offset in place of the SVD's.
+         if Policy.Has_Offset then
+            Svd_Offset := Offset;
+            Offset := Policy.Offset;
+            if Svd_Offset = Offset then
+               Fail (Invalid_Policy, "register_corrections." & Key
+                     & " gives the offset the SVD already gives it");
+            end if;
+         end if;
          if Offset mod 4 /= 0 or else Base + Offset > 16#FFFF_FFFF# then
             Fail (Inconsistent_Device, Key & "'s address is not a"
                   & " word-aligned 32-bit address",
@@ -934,6 +1098,14 @@ package body Landin.Devices.Projection is
             end if;
          end loop;
          Open (Rows, In_Object);
+         if Addition /= 0 then
+            Member (Rows, "addition");
+            Open (Rows, In_Object);
+            Member (Rows, "source");
+            String_Value
+              (Rows, US.To_String (Chosen.Additions (Addition).Source));
+            Close (Rows, In_Object);
+         end if;
          Member (Rows, "address");
          Number_Value (Rows, Base + Offset);
          Member (Rows, "alignment");
@@ -947,6 +1119,15 @@ package body Landin.Devices.Projection is
             String_Value (Rows, Parent_Name);
          else
             Raw (Rows, "null");
+         end if;
+         if Is_Element then
+            Member (Rows, "dim_element");
+            Open (Rows, In_Object);
+            Member (Rows, "array");
+            String_Value (Rows, Element_Name);
+            Member (Rows, "index");
+            String_Value (Rows, US.To_String (Arrayed.Index));
+            Close (Rows, In_Object);
          end if;
          Member (Rows, "fields");
          Open (Rows, In_Array);
@@ -1006,6 +1187,15 @@ package body Landin.Devices.Projection is
          Number_Value (Rows, State.Named_Mask);
          Member (Rows, "offset");
          Number_Value (Rows, Offset);
+         if Policy.Has_Offset then
+            Member (Rows, "offset_correction");
+            Open (Rows, In_Object);
+            Member (Rows, "source");
+            String_Value (Rows, US.To_String (Policy.Offset_Source));
+            Member (Rows, "svd_offset");
+            Number_Value (Rows, Svd_Offset);
+            Close (Rows, In_Object);
+         end if;
          if not State.Omitted.Is_Empty then
             Member (Rows, "omitted_fields");
             Open (Rows, In_Array);
@@ -1238,7 +1428,9 @@ package body Landin.Devices.Projection is
 
       procedure Project_Interrupts;
 
-      --  D542's generated half of the description, from the SVD alone.
+      --  D542's generated half of the description, from the SVD alone, and
+      --  on a core whose SVD interrupts are an interrupt matrix's sources,
+      --  the module of those sources (D701).
       procedure Project_Interrupts is
          Text : US.Unbounded_String;
          Pairs : Interrupt_Vectors.Vector;
@@ -1266,6 +1458,9 @@ package body Landin.Devices.Projection is
          end Line;
 
          Core : constant String := Value_Of (Cpu, "name");
+         Sources : constant Boolean :=
+           Chosen.Core in P.Esp_Rv32imc | P.Esp_Rv32imac_Clic;
+         Module : constant String := US.To_String (Chosen.Prefix) & "/sources";
       begin
          if Vendor /= "" then
             US.Append (Clauses, "vendor " & Vendor);
@@ -1299,13 +1494,20 @@ package body Landin.Devices.Projection is
                end loop;
             end;
          end if;
-         if not X.Is_Present (Cpu) then
+         --  D700: a policy's core is the description's, whatever the SVD's
+         --  cpu says; without one, the cpu is read.
+         if Chosen.Core /= P.From_Svd then
+            null;
+         elsif not X.Is_Present (Cpu) then
             Fail (Inconsistent_Device, "the SVD names no cpu, so the"
-                  & " description's core is not known", Device);
+                  & " description's core is not known; the policy's core"
+                  & " names it", Device);
          elsif Core not in "CM0" | "CM0PLUS" | "CM3" | "CM4" | "CM7" | "CM33"
          then
             Fail (Unsupported_Form, "the SVD's cpu is " & Core & ", which"
-                  & " is none of CM0, CM0PLUS, CM3, CM4, CM7 and CM33",
+                  & " is none of CM0, CM0PLUS, CM3, CM4, CM7 and CM33; a"
+                  & " RISC-V device's policy names its core, hazard3,"
+                  & " esp-rv32imc or esp-rv32imac-clic",
                   Child (Cpu, "name"));
          end if;
          if Has (Cpu, "deviceNumInterrupts") then
@@ -1454,26 +1656,72 @@ package body Landin.Devices.Projection is
                end if;
             end loop;
          end;
+         if Sources then
+            Line ("-- Its interrupts are interrupt-matrix sources, not"
+                  & " slots: " & Module & ".");
+         end if;
          Line ("");
          if not Pairs.Is_Empty then
             Highest := Pairs.Last_Element.Value + 1;
          end if;
-         Line ("compiler.device(""" & Lowered (Name) & """)");
+         Line ("compiler.device(""" & US.To_String (Chosen.Identity)
+               & """)");
          Line ("compiler.core("""
-               & (if Core = "CM0" then "cortex-m0"
+               & (if Chosen.Core /= P.From_Svd then P.Core_Name (Chosen.Core)
+                  elsif Core = "CM0" then "cortex-m0"
                   elsif Core = "CM0PLUS" then "cortex-m0plus"
                   elsif Core = "CM3" then "cortex-m3"
                   elsif Core = "CM4" then "cortex-m4"
                   elsif Core = "CM7" then "cortex-m7"
                   else "cortex-m33") & """)");
+         --  D701: a vectored core's table is its 32 mcause codes, and the
+         --  C5's CLIC's its 48 interrupt identities; neither takes an
+         --  interrupt-matrix source as a slot.
          Line ("compiler.vectors("
-               & Decimal (16 + Word'Max (Declared_Count, Highest)) & ")");
-         for Pair of Pairs loop
-            Line ("compiler.interrupt(""" & US.To_String (Pair.Name)
-                  & """, " & Decimal (Pair.Value) & ")");
-         end loop;
-         Add (US.To_String (Chosen.Description) & "/interrupts.ldn",
-              US.To_String (Text), In_Manifest => False);
+               & (case Chosen.Core is
+                     when P.Esp_Rv32imc => "32",
+                     when P.Esp_Rv32imac_Clic => "48",
+                     when others =>
+                        Decimal (16 + Word'Max (Declared_Count, Highest)))
+               & ")");
+         if not Sources then
+            for Pair of Pairs loop
+               Line ("compiler.interrupt(""" & US.To_String (Pair.Name)
+                     & """, " & Decimal (Pair.Value) & ")");
+            end loop;
+         else
+            declare
+               Lines_Of : US.Unbounded_String;
+               Names : Name_Sets.Set;
+            begin
+               for Notice of Chosen.Notice loop
+                  US.Append (Lines_Of, "-- " & Notice & LF);
+               end loop;
+               US.Append (Lines_Of, "-- The " & Name & "'s interrupt-matrix"
+                          & " sources: each is the number of its map" & LF
+                          & "-- register, which routes it to a CPU"
+                          & " interrupt line; none is a vector slot." & LF);
+               US.Append (Lines_Of, Notes);
+               for Pair of Pairs loop
+                  declare
+                     Spelling : constant String :=
+                       Lowered (US.To_String (Pair.Name));
+                  begin
+                     if Names.Contains (Spelling) then
+                        Fail (Inconsistent_Device, "two of the SVD's"
+                              & " interrupts are both the source "
+                              & Spelling & " once lowercased", Device);
+                     end if;
+                     Names.Insert (Spelling);
+                     US.Append (Lines_Of, "public " & Spelling & ": u32 = "
+                                & Decimal (Pair.Value) & LF);
+                  end;
+               end loop;
+               Add (Module & "/device.ldn", US.To_String (Lines_Of),
+                    In_Manifest => True);
+            end;
+         end if;
+         Description_Text := Text;
       end Project_Interrupts;
 
    begin
@@ -1493,7 +1741,30 @@ package body Landin.Devices.Projection is
                & "; fetch the SVD it names, or review the policy against"
                & " this one and give its hash");
       end if;
-      X.Parse (Document, Svd_Text);
+      --  D705: the peripherals the policy adds are read as if the SVD gave
+      --  them last, so every offset into the SVD stays the SVD's.
+      if Chosen.Additions.Is_Empty then
+         X.Parse (Document, Svd_Text);
+      else
+         declare
+            Closing : constant Natural :=
+              Ada.Strings.Fixed.Index
+                (Svd_Text, "</peripherals>", Ada.Strings.Backward);
+            Added : US.Unbounded_String;
+         begin
+            if Closing = 0 then
+               Fail (Unsupported_Form, "the policy adds peripherals, and"
+                     & " the SVD has no </peripherals> to add them before");
+            end if;
+            for Addition of Chosen.Additions loop
+               US.Append (Added, Addition.Xml);
+            end loop;
+            Added_From := Closing - Svd_Text'First;
+            X.Parse (Document, Svd_Text (Svd_Text'First .. Closing - 1)
+                     & US.To_String (Added)
+                     & Svd_Text (Closing .. Svd_Text'Last));
+         end;
+      end if;
       if not X.Ok (Document) then
          Problem :=
            (Kind => Malformed_Svd, Within => Svd_Input,
@@ -1519,6 +1790,30 @@ package body Landin.Devices.Projection is
                & US.To_String (Chosen.Svd_Version),
                Child (Device, "name"));
       end if;
+      for Addition of Chosen.Additions loop
+         declare
+            Found : X.Element :=
+              (if Has (Device, "peripherals")
+               then X.First_Child (Document, Child (Device, "peripherals"))
+               else X.No_Element);
+            Count : Natural := 0;
+         begin
+            while X.Is_Present (Found) loop
+               if X.Name (Document, Found) = "peripheral"
+                 and then Value_Of (Found, "name")
+                   = US.To_String (Addition.Name)
+               then
+                  Count := Count + 1;
+               end if;
+               Found := X.Next_Sibling (Document, Found);
+            end loop;
+            if Count > 1 then
+               Fail (Invalid_Policy, "peripheral_additions."
+                     & US.To_String (Addition.Name) & " adds a peripheral"
+                     & " the SVD gives");
+            end if;
+         end;
+      end loop;
       Open (Rows, In_Array);
       for Choice of Chosen.Peripherals loop
          Project_Peripheral (Choice);
@@ -1534,6 +1829,7 @@ package body Landin.Devices.Projection is
                & " number", First_Unnamed);
       end if;
       Close (Rows, In_Array);
+      Project_Interrupts;
       Add (US.To_String (Chosen.Correspondence),
            US.To_String (Rows.Text) & LF, In_Manifest => True);
       declare
@@ -1570,7 +1866,8 @@ package body Landin.Devices.Projection is
          --  Add placed it outside the modules' root; it is under it.
          Made.Outputs (Made.Outputs.Last_Index).Path := Made.Manifest;
       end;
-      Project_Interrupts;
+      Add (US.To_String (Chosen.Description) & "/interrupts.ldn",
+           US.To_String (Description_Text), In_Manifest => False);
    exception
       when Refused =>
          Made := (others => <>);
