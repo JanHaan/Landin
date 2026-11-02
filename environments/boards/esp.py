@@ -455,6 +455,11 @@ def run_board(chip, args, console_for, cycle, settle):
         names = common.symbols(run, args.nm, elf)
         _, sections = common.elf_sections(elf)
         chip.expected_mtvec = chip.mtvec(sections, names)
+        commit = subprocess.run(['git', '-C', str(ROOT), 'rev-parse', 'HEAD'],
+                                capture_output=True, text=True).stdout.strip()
+        dirty = subprocess.run(['git', '-C', str(ROOT), 'status', '--porcelain', '--untracked-files=no'],
+                               capture_output=True, text=True).stdout.strip()
+        result.update(source_commit=commit + ('+modified' if dirty else ''))
         result.update(image_sha256=common.sha(path), image_name=path.name,
                       elf_sha256=common.sha(elf),
                       image=dict(chip=image['chip'], revisions=[image['min_revision'],
@@ -532,7 +537,7 @@ def run_board(chip, args, console_for, cycle, settle):
         result['commands'] = run.commands
         common.write_json(args.output / 'result.json', result)
     if args.record and result['status'] == 'passed':
-        kept = ('status', 'image_sha256', 'image_name', 'elf_sha256', 'image', 'instructions',
+        kept = ('status', 'source_commit', 'image_sha256', 'image_name', 'elf_sha256', 'image', 'instructions',
                 'flash', 'power_on', 'rom', 'verdicts', 'jtag', 'readback', 'uart_sha256') + (
                     ('image_control',) if args.image_control else ())
         kept = tuple(k for k in kept if k in result)
