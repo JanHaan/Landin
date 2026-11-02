@@ -243,6 +243,7 @@ class Board:
         self.indicator = self.handled = self.restarts = self.dropped = self.overflows = 0
         self.entries, self.ticks, self.masked_ticks, self.mode = 0, 5, 0, None
         self.previous = [0, 0]
+        self.received += b'ESP-ROM:esp32c5-eco2-20250121\r\nentry 0x40800000\r\n'
         self.frame('b', r=1, v=chip.expected_mtvec)
 
     def frame(self, tag, **fields):
@@ -310,7 +311,7 @@ class Scenario(unittest.TestCase):
                 verdicts, final, atomics = ESP.scenario(board, chip, 1240)
                 self.assertEqual(verdicts['ring_overrun']['dropped'], ESP.BURST - ESP.RING)
                 self.assertEqual(verdicts['threshold']['fifo_overflows'], 1)
-                self.assertEqual(final['h'], len(ESP.echo_of(board.received)))
+                self.assertEqual(final['h'], len(ESP.echo_of(board.received)) - len(b'ESP-ROM:esp32c5-eco2-20250121\r\nentry 0x40800000\r\n'))
                 self.assertEqual(atomics, chip.atomics(verdicts['atomics']['x'],
                                                        verdicts['atomics']['y']))
 
@@ -407,6 +408,27 @@ class PowerOn(unittest.TestCase):
             C5_BOARD.chip_enable_reset(3, 0.1)
 
 
+class Restore(unittest.TestCase):
+    def test_a_download_that_finds_no_probe_is_tried_again(self):
+        tries = []
+
+        class Fake:
+            def download_bin(self, image, offset):
+                tries.append(offset)
+                if len(tries) < 3:
+                    raise COMMON.Failed('flash failed (1)')
+        with mock.patch.object(ESP.time, 'sleep'):
+            ESP.restore(Fake(), 'board.elf.bin', 0x2000)
+        self.assertEqual(tries, [0x2000] * 3)
+
+    def test_it_gives_up_in_the_end(self):
+        class Fake:
+            def download_bin(self, image, offset):
+                raise COMMON.Failed('flash failed (1)')
+        with mock.patch.object(ESP.time, 'sleep'), self.assertRaises(COMMON.Failed):
+            ESP.restore(Fake(), 'board.elf.bin', 0x2000, tries=4)
+
+
 class Recover(unittest.TestCase):
     def test_download_mode_is_esptool_s_usb_jtag_serial_sequence(self):
         calls = []
@@ -471,11 +493,15 @@ HUB = ('Current status for hub 7-2.3.4 [0bda:5411 Generic USB2.1 Hub, USB 2.10, 
 
 
 class Recorded:
-    def __init__(self, status):
+    def __init__(self, status, switched=None):
         self.status, self.calls = status, []
+        self.switched = switched if switched is not None else [
+            'Sent power off request\nNew status for hub 7-2.3.4 [0bda:5411]\n']
 
     def command(self, name, argv, **_):
         self.calls.append((name, argv))
+        if name.startswith('power-'):
+            return self.switched.pop(0) if len(self.switched) > 1 else self.switched[0]
         return self.status
 
 
@@ -497,6 +523,31 @@ class Hub(unittest.TestCase):
                 COMMON.switch_ports(hub, '7-2.3.4', [4, 3], 'off', holds=self.HOLDS,
                                     keeps=(1, '1366:0105'))
             self.assertEqual([n for n, _ in hub.calls], ['hub-status'])
+
+    def test_a_switch_that_finds_no_hub_waits_and_switches_again(self):
+        hub = Recorded(HUB, switched=['', 'New status for hub 7-2.3.4 [0bda:5411]\n'])
+        with mock.patch.object(COMMON.time, 'sleep'):
+            COMMON.switch_ports(hub, '7-2.3.4', [3], 'on', keeps=(1, '1366:0105'))
+        self.assertEqual([n for n, _ in hub.calls],
+                         ['hub-status', 'power-on', 'hub-wait', 'power-on'])
+
+    def test_a_status_read_that_finds_no_hub_is_read_again(self):
+        class Hidden(Recorded):
+            def command(self, name, argv, **kw):
+                if name == 'hub-status' and not any(n == 'hub-status' for n, _ in self.calls):
+                    self.calls.append((name, argv))
+                    return ''
+                return Recorded.command(self, name, argv, **kw)
+        hub = Hidden(HUB)
+        with mock.patch.object(COMMON.time, 'sleep'):
+            COMMON.switch_ports(hub, '7-2.3.4', [3], 'off', holds=self.HOLDS[:1],
+                                keeps=(1, '1366:0105'))
+        self.assertEqual([n for n, _ in hub.calls], ['hub-status', 'hub-status', 'power-off'])
+
+    def test_a_switch_that_never_takes_fails(self):
+        hub = Recorded(HUB, switched=[''])
+        with mock.patch.object(COMMON.time, 'sleep'), self.assertRaises(COMMON.Failed):
+            COMMON.switch_ports(hub, '7-2.3.4', [3], 'on', keeps=(1, '1366:0105'))
 
     def test_the_guarded_port_is_never_switched(self):
         with self.assertRaises(COMMON.Failed):

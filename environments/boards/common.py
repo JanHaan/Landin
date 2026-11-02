@@ -579,7 +579,20 @@ def wait_for_hub(hub, location, shows, seconds, interval=0.5):
         time.sleep(interval)
 
 
-def switch_ports(hub, location, ports, action, holds=(), keeps=None, name=None):
+def listing(hub, location, seconds, interval=0.5):
+    """uhubctl's listing of the hub at LOCATION, once it lists again: the
+    cascade hides every hub while it re-enumerates."""
+    deadline = time.time() + seconds
+    while True:
+        status = hub.command('hub-status', ['uhubctl', '-l', location], check=False)
+        if 'Current status for hub %s ' % location in status:
+            return status
+        require(time.time() < deadline, 'hub %s did not list within %g s' % (location, seconds))
+        time.sleep(interval)
+
+
+def switch_ports(hub, location, ports, action, holds=(), keeps=None, name=None, tries=3,
+                 wait_seconds=20):
     """Switch every port of PORTS of the hub at LOCATION `off` or `on`
     together, in one call: a board fed through two of them, such as a USB
     serial bridge's port beside its debug port, loses all its power, and
@@ -590,7 +603,7 @@ def switch_ports(hub, location, ports, action, holds=(), keeps=None, name=None):
     KEEPS is (port, text), a port that must show TEXT and is never
     switched, as `power_cycle`'s are."""
     require(action in ('off', 'on'), 'no uhubctl action %r' % action)
-    status = hub.command('hub-status', ['uhubctl', '-l', location])
+    status = listing(hub, location, wait_seconds)
     found = hub_ports(status)
     if keeps:
         guard_port, guard_text = keeps
@@ -603,8 +616,18 @@ def switch_ports(hub, location, ports, action, holds=(), keeps=None, name=None):
         require(port in found and text in found[port],
                 'port %d of hub %s does not hold %s; refusing to switch it'
                 % (port, location, text))
-    hub.command(name or 'power-' + action, ['uhubctl', '-l', location, '-p',
-                                             ','.join(str(p) for p in ports), '-a', action])
+    # The cascade may be re-enumerating after the last switch, when uhubctl
+    # finds no hub and switches nothing: wait for it to list again, and
+    # switch again.
+    for attempt in range(tries):
+        switched = hub.command(name or 'power-' + action,
+                               ['uhubctl', '-l', location, '-p', ','.join(str(p) for p in ports),
+                                '-a', action], check=False)
+        if 'New status for hub %s ' % location in switched:
+            return
+        require(attempt < tries - 1, 'uhubctl did not switch port %s of hub %s %s'
+                % (','.join(str(p) for p in ports), location, action))
+        wait_for_hub(hub, location, [keeps] if keeps else [], wait_seconds)
 
 
 class ProbehiveBridge:
