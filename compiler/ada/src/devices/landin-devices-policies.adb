@@ -1,3 +1,5 @@
+with Ada.Strings.Fixed;
+
 with Landin.Json;
 
 package body Landin.Devices.Policies is
@@ -95,6 +97,256 @@ package body Landin.Devices.Policies is
          return 0;
       end Find;
 
+      --  D705: each peripheral a reviewer adds, written as the SVD's own
+      --  XML so that the projection reads it as it reads the SVD's.
+      procedure Read_Additions;
+
+      procedure Read_Additions is
+         Additions : constant J.Value :=
+           J.Member (Document, Root, "peripheral_additions");
+
+         --  A field's bits, [HIGH:LOW] in decimal within 32, as the SVD
+         --  writes a bitRange.
+         function Bits_Of (Said, Where : String) return String;
+
+         function Bits_Of (Said, Where : String) return String is
+            Colon : Natural := 0;
+
+            function Plain (Part : String) return Boolean is
+              (Part'Length in 1 .. 2
+               and then (for all C of Part => C in '0' .. '9'));
+         begin
+            for Index in Said'Range loop
+               if Said (Index) = ':' then
+                  Colon := Index;
+               end if;
+            end loop;
+            if Said'Length < 5 or else Colon = 0
+              or else Said (Said'First) /= '['
+              or else Said (Said'Last) /= ']'
+              or else not Plain (Said (Said'First + 1 .. Colon - 1))
+              or else not Plain (Said (Colon + 1 .. Said'Last - 1))
+              or else Natural'Value (Said (Said'First + 1 .. Colon - 1)) > 31
+              or else Natural'Value (Said (Colon + 1 .. Said'Last - 1))
+                > Natural'Value (Said (Said'First + 1 .. Colon - 1))
+            then
+               Fail (Where & ".bits is '" & Said & "', not [HIGH:LOW] in"
+                 & " decimal within 32 bits");
+            end if;
+            return Said;
+         end Bits_Of;
+
+         function Access_Of (Said, Where : String) return String;
+
+         function Access_Of (Said, Where : String) return String is
+         begin
+            if Said not in "read-write" | "read-only" | "write-only"
+              | "writeOnce" | "read-writeOnce"
+            then
+               Fail (Where & ".access is '" & Said & "', not one of the"
+                 & " SVD's read-write, read-only, write-only, writeOnce or"
+                 & " read-writeOnce");
+            end if;
+            return Said;
+         end Access_Of;
+
+         --  Item's members are among Allowed, which the refusal lists.
+         procedure Only (Item : J.Value; Where, Allowed : String);
+
+         procedure Only (Item : J.Value; Where, Allowed : String) is
+         begin
+            for Member in 1 .. J.Length (Document, Item) loop
+               if Ada.Strings.Fixed.Index
+                   (" " & Allowed & ",",
+                    " " & J.Key (Document, Item, Member) & ",") = 0
+               then
+                  Fail (Where & " has the member '"
+                    & J.Key (Document, Item, Member) & "'; it says "
+                    & Allowed);
+               end if;
+            end loop;
+         end Only;
+
+         --  A register's name, or an array's with one %s, which the
+         --  projection expands as it expands the SVD's (D703).
+         function Is_Register_Name (Name : String) return Boolean;
+
+         function Is_Register_Name (Name : String) return Boolean is
+            At_Index : constant Natural :=
+              Ada.Strings.Fixed.Index (Name, "%s");
+         begin
+            if At_Index = 0 then
+               return Is_Vendor_Name (Name);
+            end if;
+            return Is_Vendor_Name
+              (Name (Name'First .. At_Index - 1)
+               & Name (At_Index + 2 .. Name'Last))
+              and then At_Index > Name'First
+              and then Ada.Strings.Fixed.Index
+                (Name (At_Index + 2 .. Name'Last), "%") = 0;
+         end Is_Register_Name;
+      begin
+         if not J.Is_Present (Additions) then
+            return;
+         elsif not J.Is_Kind (Document, Additions, J.Object_Value) then
+            Fail ("the policy's peripheral_additions is not an object");
+         end if;
+         for Position in 1 .. J.Length (Document, Additions) loop
+            declare
+               Name : constant String := J.Key (Document, Additions, Position);
+               Item : constant J.Value :=
+                 J.Member_Value (Document, Additions, Position);
+               Where : constant String := "peripheral_additions." & Name;
+               Made : Peripheral_Addition;
+               Xml : US.Unbounded_String;
+               Registers : J.Value;
+            begin
+               if not Is_Vendor_Name (Name) then
+                  Fail (Where & " does not name a peripheral: an ASCII"
+                    & " letter, then letters, digits and underscores");
+               elsif not J.Is_Kind (Document, Item, J.Object_Value) then
+                  Fail (Where & " is not an object of base, registers and"
+                    & " source");
+               end if;
+               Only (Item, Where, "base, registers, source");
+               Made.Name := US.To_Unbounded_String (Name);
+               Made.Source := US.To_Unbounded_String
+                 (Member_String (Item, "source", Where));
+               if Made.Source = "" then
+                  Fail (Where & ".source is empty: an addition says where"
+                    & " its reviewer read it");
+               end if;
+               US.Append (Xml, "<peripheral><name>" & Name & "</name>"
+                 & "<baseAddress>"
+                 & Hex8 (Mask_Of (Member_String (Item, "base", Where),
+                                  Where & ".base"))
+                 & "</baseAddress><registers>");
+               Registers := J.Member (Document, Item, "registers");
+               if not J.Is_Kind (Document, Registers, J.Object_Value)
+                 or else J.Length (Document, Registers) = 0
+               then
+                  Fail (Where & ".registers is not an object naming each"
+                    & " register it adds");
+               end if;
+               for Index in 1 .. J.Length (Document, Registers) loop
+                  declare
+                     Register : constant String :=
+                       J.Key (Document, Registers, Index);
+                     Spec : constant J.Value :=
+                       J.Member_Value (Document, Registers, Index);
+                     At_Register : constant String :=
+                       Where & ".registers." & Register;
+                     Arrayed : constant Boolean :=
+                       Ada.Strings.Fixed.Index (Register, "%s") /= 0;
+                     Fields : J.Value;
+                  begin
+                     if not Is_Register_Name (Register) then
+                        Fail (At_Register & " is not a register's name, or"
+                          & " an array's with one %s after its first"
+                          & " letter");
+                     elsif not J.Is_Kind (Document, Spec, J.Object_Value)
+                     then
+                        Fail (At_Register & " is not an object");
+                     end if;
+                     Only (Spec, At_Register,
+                           "offset, access, reset, fields, dim, increment");
+                     if Arrayed /= J.Is_Present
+                         (J.Member (Document, Spec, "dim"))
+                       or else Arrayed /= J.Is_Present
+                         (J.Member (Document, Spec, "increment"))
+                     then
+                        Fail (At_Register & " is an array exactly when its"
+                          & " name has %s, and an array gives dim and"
+                          & " increment");
+                     end if;
+                     US.Append (Xml, "<register><name>" & Register
+                       & "</name>");
+                     if Arrayed then
+                        declare
+                           Count : constant J.Value :=
+                             J.Member (Document, Spec, "dim");
+                        begin
+                           if not J.Is_Integer (Document, Count)
+                             or else J.Integer_Of (Document, Count) not in
+                               1 .. 1024
+                           then
+                              Fail (At_Register & ".dim is not a count from"
+                                & " 1 to 1024");
+                           end if;
+                           US.Append (Xml, "<dim>"
+                             & Decimal (Word (J.Integer_Of (Document, Count)))
+                             & "</dim><dimIncrement>"
+                             & Hex (Mask_Of (Member_String
+                                (Spec, "increment", At_Register),
+                                At_Register & ".increment"))
+                             & "</dimIncrement>");
+                        end;
+                     end if;
+                     US.Append (Xml, "<addressOffset>"
+                       & Hex (Mask_Of (Member_String
+                          (Spec, "offset", At_Register),
+                          At_Register & ".offset"))
+                       & "</addressOffset><size>32</size><access>"
+                       & Access_Of (Member_String
+                          (Spec, "access", At_Register), At_Register)
+                       & "</access><resetValue>"
+                       & Hex8 (Mask_Of (Member_String
+                          (Spec, "reset", At_Register),
+                          At_Register & ".reset"))
+                       & "</resetValue><resetMask>0xffffffff</resetMask>"
+                       & "<fields>");
+                     Fields := J.Member (Document, Spec, "fields");
+                     if not J.Is_Kind (Document, Fields, J.Object_Value)
+                       or else J.Length (Document, Fields) = 0
+                     then
+                        Fail (At_Register & ".fields is not an object"
+                          & " naming each field");
+                     end if;
+                     for Field in 1 .. J.Length (Document, Fields) loop
+                        declare
+                           Field_Name : constant String :=
+                             J.Key (Document, Fields, Field);
+                           Field_Spec : constant J.Value :=
+                             J.Member_Value (Document, Fields, Field);
+                           At_Field : constant String :=
+                             At_Register & ".fields." & Field_Name;
+                        begin
+                           if not Is_Vendor_Name (Field_Name) then
+                              Fail (At_Field & " is not a field's name");
+                           elsif not J.Is_Kind
+                               (Document, Field_Spec, J.Object_Value)
+                           then
+                              Fail (At_Field & " is not an object of bits"
+                                & " and access");
+                           end if;
+                           Only (Field_Spec, At_Field, "bits, access");
+                           US.Append (Xml, "<field><name>" & Field_Name
+                             & "</name><bitRange>"
+                             & Bits_Of (Member_String
+                                (Field_Spec, "bits", At_Field), At_Field)
+                             & "</bitRange>");
+                           if J.Is_Present
+                               (J.Member (Document, Field_Spec, "access"))
+                           then
+                              US.Append (Xml, "<access>"
+                                & Access_Of (Member_String
+                                   (Field_Spec, "access", At_Field),
+                                   At_Field)
+                                & "</access>");
+                           end if;
+                           US.Append (Xml, "</field>");
+                        end;
+                     end loop;
+                     US.Append (Xml, "</fields></register>");
+                  end;
+               end loop;
+               US.Append (Xml, "</registers></peripheral>");
+               Made.Xml := Xml;
+               Into.Additions.Append (Made);
+            end;
+         end loop;
+      end Read_Additions;
+
    begin
       Into := (others => <>);
       Problem := No_Problem;
@@ -121,6 +373,8 @@ package body Landin.Devices.Policies is
               | "selection" | "policies" | "numeric_enums"
               | "reset_mask_overrides" | "reset_corrections"
               | "field_corrections" | "interrupt_corrections"
+              | "identity" | "core" | "register_corrections"
+              | "peripheral_additions"
             then
                Fail ("the policy's member """ & Name & """ is not one"
                  & " refine svd reads; the reviewer's notes go under"
@@ -150,10 +404,49 @@ package body Landin.Devices.Policies is
          Fail ("the policy's svd_sha256 is not 64 lowercase hexadecimal"
            & " digits");
       end if;
-      if not Is_Vendor_Name (US.To_String (Into.Device)) then
+      --  D700: Espressif names its devices with a hyphen, ESP32-C3, which
+      --  no module path holds, so such a policy says its prefix and
+      --  description.
+      if US.Length (Into.Device) = 0
+        or else US.Element (Into.Device, 1) not in 'A' .. 'Z' | 'a' .. 'z'
+        or else (for some C of US.To_String (Into.Device) =>
+                   C not in 'A' .. 'Z' | 'a' .. 'z' | '0' .. '9' | '_'
+                     | '-')
+      then
          Fail ("the policy's device is not a vendor name: an ASCII letter,"
-           & " then letters, digits and underscores");
+           & " then letters, digits, underscores and hyphens");
       end if;
+      Into.Identity := US.To_Unbounded_String
+        (Member_String (Root, "identity", "the policy",
+                        Lowered (US.To_String (Into.Device)),
+                        Required => False));
+      if US.Length (Into.Identity) not in 1 .. 32
+        or else US.Element (Into.Identity, 1) not in 'a' .. 'z'
+        or else (for some C of US.To_String (Into.Identity) =>
+                   C not in 'a' .. 'z' | '0' .. '9' | '-')
+      then
+         Fail ("the description's identity is '"
+           & US.To_String (Into.Identity) & "', which D542 does not admit:"
+           & " lowercase ASCII letters, digits and hyphens, beginning with"
+           & " a letter, at most 32 bytes; the policy's identity names"
+           & " another");
+      end if;
+      declare
+         Said : constant String :=
+           Member_String (Root, "core", "the policy", Required => False);
+      begin
+         if Said = "hazard3" then
+            Into.Core := Hazard3;
+         elsif Said = "esp-rv32imc" then
+            Into.Core := Esp_Rv32imc;
+         elsif Said = "esp-rv32imac-clic" then
+            Into.Core := Esp_Rv32imac_Clic;
+         elsif J.Is_Present (J.Member (Document, Root, "core")) then
+            Fail ("the policy's core is '" & Said & "', not hazard3,"
+              & " esp-rv32imc or esp-rv32imac-clic; a Cortex-M core is the"
+              & " SVD's cpu");
+         end if;
+      end;
       declare
          Notice : constant J.Value := J.Member (Document, Root, "notice");
       begin
@@ -584,6 +877,55 @@ package body Landin.Devices.Policies is
       end;
       declare
          Corrections : constant J.Value :=
+           J.Member (Document, Root, "register_corrections");
+      begin
+         if J.Is_Present (Corrections) then
+            if not J.Is_Kind (Document, Corrections, J.Object_Value) then
+               Fail ("the policy's register_corrections is not an object");
+            end if;
+            for Position in 1 .. J.Length (Document, Corrections) loop
+               declare
+                  Key : constant String :=
+                    J.Key (Document, Corrections, Position);
+                  Index : constant Natural := Find (Key);
+                  Item : constant J.Value :=
+                    J.Member_Value (Document, Corrections, Position);
+                  Where : constant String := "register_corrections." & Key;
+               begin
+                  if Index = 0 then
+                     Fail (Where & " names no selected register");
+                  elsif not J.Is_Kind (Document, Item, J.Object_Value) then
+                     Fail (Where & " is not an object of offset and source");
+                  end if;
+                  for Member in 1 .. J.Length (Document, Item) loop
+                     if J.Key (Document, Item, Member) not in "offset"
+                       | "source"
+                     then
+                        Fail (Where & " has the member '"
+                          & J.Key (Document, Item, Member) & "'; a"
+                          & " correction says offset and source");
+                     end if;
+                  end loop;
+                  Into.Registers (Index).Has_Offset := True;
+                  Into.Registers (Index).Offset :=
+                    Mask_Of (Member_String (Item, "offset", Where),
+                             Where & ".offset");
+                  Into.Registers (Index).Offset_Source :=
+                    US.To_Unbounded_String
+                      (Member_String (Item, "source", Where));
+                  if Into.Registers (Index).Offset mod 4 /= 0 then
+                     Fail (Where & ".offset is not a multiple of four");
+                  elsif Into.Registers (Index).Offset_Source = "" then
+                     Fail (Where & ".source is empty: a correction says"
+                       & " where its reviewer read it");
+                  end if;
+               end;
+            end loop;
+         end if;
+      end;
+      Read_Additions;
+      declare
+         Corrections : constant J.Value :=
            J.Member (Document, Root, "interrupt_corrections");
       begin
          if J.Is_Present (Corrections) then
@@ -672,6 +1014,13 @@ package body Landin.Devices.Policies is
       end loop;
       return 0;
    end Correction_Of;
+
+   function Core_Name (Core : Core_Choice) return String is
+     (case Core is
+         when From_Svd => "",
+         when Hazard3 => "hazard3",
+         when Esp_Rv32imc => "esp-rv32imc",
+         when Esp_Rv32imac_Clic => "esp-rv32imac-clic");
 
    function Is_Numeric (Of_Policy : Policy; Key : String) return Boolean is
      (for some Field of Of_Policy.Numeric => Field = Key);

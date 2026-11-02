@@ -1,0 +1,21 @@
+-- The RP2350's memory for its Hazard3 cores, as pico-sdk 2.2.0 lays it
+-- out for a Raspberry Pi Pico 2: the regions, placements and stack of
+-- devices/descriptions/rp2350, which is the same chip's Arm side (D706).
+-- Written by hand; see devices/README.md for the sources it was checked
+-- against.  The boot ROM looks in the first 4 KiB of flash for an
+-- IMAGE_DEF block whose words say RISC-V; refine emits one there with the
+-- image and the ROM enters the image's start.
+--
+-- Hazard3 has no float unit, and the C ABI is RV32's ilp32.
+
+linker.region("FLASH", 0x1000_0000, 4 * 1024 * 1024, "rx")
+linker.region("RAM", 0x2000_0000, 512 * 1024, "rwx")
+linker.region("SCRATCH_X", 0x2008_0000, 4 * 1024, "rwx")
+linker.region("SCRATCH_Y", 0x2008_1000, 4 * 1024, "rwx")
+compiler.boot("rp2350-image-block")
+linker.place("vectors", "FLASH")
+linker.place("text", "FLASH")
+linker.place("rodata", "FLASH")
+linker.place("data", "RAM")
+linker.place("bss", "RAM")
+linker.place("stack", "SCRATCH_Y", 4 * 1024)

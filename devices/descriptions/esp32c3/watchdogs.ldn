@@ -1,0 +1,43 @@
+-- What the ESP32-C3 runs before compiler-owned reset (D653, D708).
+-- Written by hand from its TRM v1.4 and ESP-IDF v6.1.
+--
+-- A flash boot leaves timer group 0's MWDT and the RTC watchdog running,
+-- each in flash boot protection (12.2.2.4, p. 309), and the super
+-- watchdog wants feeding (12.3, p. 309).  A RAM-only
+-- image has no second stage to stop them, as ESP-IDF's bootloader does in
+-- bootloader_config_wdt and bootloader_super_wdt_auto_feed, so this stage
+-- does: for each MWDT and the RWDT, the write key 0x50D8_3AA1 unlocks it
+-- (12.2.2.3, p. 308), a zero configuration clears its enable and its
+-- flash boot mode, an MWDT's with WDT_CONF_UPDATE_EN, bit 22, set to take
+-- it (Register 11.10, p. 298), and a zero key locks it again; then the super
+-- watchdog's key 0x8F1D_312A unlocks SWD_CONF (12.3.2.2, p. 310), whose
+-- SWD_AUTO_FEED_EN, bit 31, makes it feed itself (Register 9.38,
+-- p. 255).  Addresses are the generated modules' (devices/generated/
+-- esp32c3), each named beside its register.  The stage uses t0 to t2
+-- alone: no stack and no RAM, which reset has not prepared.
+link(boot_stage) extern(naked) watchdogs: () -> none =
+    assembler.block("""
+        li t1, 0x50d83aa1      # TIMG_WDT_WKEY, RTC_CNTL_WDT_WKEY
+        li t2, 0x00400000      # WDT_CONF_UPDATE_EN alone
+        li t0, 0x6001f000      # TIMG0 base
+        sw t1, 0x64(t0)        # TIMG0_WDTWPROTECT: unlock
+        sw t2, 0x48(t0)        # TIMG0_WDTCONFIG0: off, updated
+        sw zero, 0x64(t0)      # TIMG0_WDTWPROTECT: lock
+        li t0, 0x60020000      # TIMG1 base
+        sw t1, 0x64(t0)        # TIMG1_WDTWPROTECT: unlock
+        sw t2, 0x48(t0)        # TIMG1_WDTCONFIG0: off, updated
+        sw zero, 0x64(t0)      # TIMG1_WDTWPROTECT: lock
+        li t0, 0x60008000      # RTC_CNTL base
+        sw t1, 0xa8(t0)        # RTC_CNTL_WDTWPROTECT: unlock
+        sw zero, 0x90(t0)      # RTC_CNTL_WDTCONFIG0: off
+        sw zero, 0xa8(t0)      # RTC_CNTL_WDTWPROTECT: lock
+        li t1, 0x8f1d312a      # RTC_CNTL_SWD_WKEY
+        sw t1, 0xb0(t0)        # RTC_CNTL_SWD_WPROTECT: unlock
+        lw t2, 0xac(t0)        # RTC_CNTL_SWD_CONF
+        li t1, 0x80000000      # SWD_AUTO_FEED_EN
+        or t2, t2, t1
+        sw t2, 0xac(t0)
+        sw zero, 0xb0(t0)      # RTC_CNTL_SWD_WPROTECT: lock
+        j _landin_firmware_reset
+        """)
+end watchdogs
