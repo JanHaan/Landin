@@ -9,6 +9,7 @@ with Landin.Backend.AAPCS64_ABI;
 with Landin.Backend.RiscV_ABI;
 with Landin.Backend.Toolchain;
 with Landin.IR;
+with Landin.Memory;
 with Landin.Platform.Native;
 with Landin.Targets;
 with Landin.Targets.Assembly;
@@ -27,6 +28,8 @@ package body Landin.Tests.Targets_Suite is
    use type Landin.Platform.Write_Status;
    use type Landin.Targets.Capabilities.Backend_Kind;
    use type Landin.Targets.Capabilities.Hosted_System;
+   use type Landin.Targets.Capabilities.Object_Format;
+   use type Landin.Targets.Capabilities.Debug_Format;
 
    LF : constant Character := Character'Val (10);
 
@@ -129,6 +132,25 @@ package body Landin.Tests.Targets_Suite is
         (Item, Architecture_Of (Linux_RV64) = RV64
            and then C_ABI_Of (Linux_RV64) = RiscV_LP64D,
          "RV64 LP64D is explicit, not inherited from equal LP64 widths");
+      --  D660: ILP32's natural alignment keeps an 8-byte scalar at eight
+      --  and the 16-byte long double at sixteen, and the psABI's stack
+      --  stays at sixteen bytes on a 32-bit machine.
+      Check_Description
+        (Item, RV32, "rv32",
+         Pointer_Bits  => 32,
+         Pointer_Align => 4,
+         Stack_Align   => 16,
+         Widest        => 16,
+         Pointer_Bytes => 4);
+      Landin.Testing.Check
+        (Item, Architecture_Of (RV32) = Landin.Targets.RV32
+           and then C_ABI_Of (RV32) = RiscV_ILP32
+           and then Alignment_Of (RV32, Byte_8) = 8
+           and then Maximum_Object_Size (RV32) = 2 ** 32 - 1
+           and then Is_Firmware (RV32) and then Is_Firmware (Cortex_M)
+           and then not Is_Firmware (Linux_RV64)
+           and then not Is_Firmware (Synthetic_32),
+         "RV32 is its own firmware architecture with the ILP32 C ABI");
       Check_Description
         (Item, Synthetic_32, "synthetic-32",
          Pointer_Bits  => 32,
@@ -203,6 +225,33 @@ package body Landin.Tests.Targets_Suite is
            and then Capabilities.Hosted_System_Of (Linux_RV64)
              = Capabilities.Linux,
          "RV64 selects its own ELF backend, Linux runtime and GNU driver");
+      Landin.Testing.Check
+        (Item, Capabilities.Backend_For (RV32) = Capabilities.RV32_ELF
+           and then Capabilities.Triplet (RV32) = "riscv64-elf"
+           and then Capabilities.Hosted_System_Of (RV32)
+             = Capabilities.No_Hosted_System
+           and then Capabilities.Object_Format_Of (RV32) = Capabilities.ELF
+           and then Capabilities.Debug_Format_Of (RV32)
+             = Capabilities.ELF_DWARF_Lines
+           and then not Capabilities.C_Signatures (RV32)
+           and then not Capabilities.Stack_Switching (RV32)
+           and then not Capabilities.Emits (RV32)
+           and then Capabilities.Emits (Cortex_M)
+           and then Capabilities.Image_Reach (RV32) = 2 ** 32 - 1,
+         "RV32 is firmware on its own backend, not yet emitting");
+      Landin.Testing.Check
+        (Item,
+         (for all Width in Byte_1 .. Byte_4 =>
+            Capabilities.Memory_Access
+              (RV32, Landin.Memory.Atomic_Load, Width)
+            and then Capabilities.Memory_Access
+              (RV32, Landin.Memory.Atomic_Store, Width))
+         and then not Capabilities.Memory_Access
+           (RV32, Landin.Memory.Atomic_Load, Byte_8)
+         and then not Capabilities.Memory_Access
+           (RV32, Landin.Memory.Atomic_Add, Byte_4),
+         "RV32 admits aligned one- to four-byte atomics and no eight-byte"
+         & " one");
    end Backends_Are_Stated_Per_Target;
 
    --  The driver and the server select through one mapping, so each
@@ -224,6 +273,7 @@ package body Landin.Tests.Targets_Suite is
            and then Selection.Described ("freebsd-arm64") = FreeBSD_Arm64
            and then Selection.Described ("darwin-arm64") = Darwin_Arm64
            and then Selection.Described ("cortex-m0") = Cortex_M
+           and then Selection.Described ("rv32") = RV32
            and then Selection.Described ("synthetic-32") = Synthetic_32,
          "each described name selects its own constructor");
       Landin.Testing.Check
@@ -239,6 +289,8 @@ package body Landin.Tests.Targets_Suite is
         (Item,
          not Selection.Is_Described ("x86_64-pc-linux-gnu")
            and then not Selection.Is_Described ("cortex-m")
+           and then not Selection.Is_Described ("rv32imc")
+           and then not Selection.Is_Described ("riscv32")
            and then not Selection.Is_Described ("macos-arm64")
            and then not Selection.Is_Described ("aarch64-linux-gnu")
            and then not Selection.Is_Described ("linux-aarch64")
@@ -396,6 +448,29 @@ package body Landin.Tests.Targets_Suite is
          and then L.Belongs_To
                     (L.Level_Named (Darwin_Arm64, "armv8.1-a"), Linux_Arm64),
          "both arm64 descriptions share one level family");
+      --  D660: RV32's microcontroller levels, rv32imc below rv32imac.
+      Landin.Testing.Check_Equal
+        (Item, L.Name (L.Default_Level (RV32)), "rv32imc",
+         "RV32 defaults to rv32imc, which every RV32 core executes");
+      Landin.Testing.Check_Equal
+        (Item, L.Levels_Of (RV32), "rv32imc, rv32imac",
+         "RV32 selects rv32imc and rv32imac");
+      Landin.Testing.Check_Equal
+        (Item, Holds (RV32, "rv32imc"), "i m c zicsr zifencei",
+         "rv32imc has no A, F or D");
+      Landin.Testing.Check_Equal
+        (Item, Holds (RV32, "rv32imac"), "i m a c zicsr zifencei",
+         "rv32imac adds A alone");
+      Landin.Testing.Check
+        (Item, not L.Is_Level_Of (RV32, "rv64gc")
+           and then not L.Is_Level_Of (RV32, "armv6-m")
+           and then not L.Is_Level_Of (RV32, "rv32gc")
+           and then not L.Is_Level_Of (RV32, "rv32i")
+           and then not L.Is_Level_Of (Linux_RV64, "rv32imc")
+           and then not L.Is_Level_Of (Cortex_M, "rv32imac")
+           and then not L.Belongs_To (L.Default_Level (RV32), Linux_RV64)
+           and then not L.Belongs_To (L.Default_Level (Linux_RV64), RV32),
+         "RV32 and RV64 levels stay in their own families");
       Landin.Testing.Check_Equal
         (Item, Holds (Cortex_M, "armv6-m"), "",
          "Armv6-M holds no level feature");
@@ -487,6 +562,12 @@ package body Landin.Tests.Targets_Suite is
             Natural (Alignment_Of (Synthetic_32, Size)),
             Small_Alignment (Size),
             "synthetic-32 alignment of " & Scalar_Size'Image (Size));
+
+         Landin.Testing.Check_Equal
+           (Item,
+            Natural (Alignment_Of (RV32, Size)),
+            Hosted_Alignment (Size),
+            "rv32 alignment of " & Scalar_Size'Image (Size));
       end loop;
    end Alignments_Are_Stated_Per_Target;
 
@@ -1163,8 +1244,6 @@ package body Landin.Tests.Targets_Suite is
 
    procedure Target_Contracts (Item : in out Landin.Testing.Context) is
       package C renames Landin.Targets.Capabilities;
-      use type C.Object_Format;
-      use type C.Debug_Format;
       Unit : Landin.IR.Unit;
    begin
       Landin.Testing.Check
@@ -2079,6 +2158,7 @@ package body Landin.Tests.Targets_Suite is
         (if Family = "x86-64" then Linux_X86_64
          elsif Family = "arm64" then Linux_Arm64
          elsif Family = "M profile" then Cortex_M
+         elsif Family = "RV32" then RV32
          else Linux_RV64);
 
       function Added (Level : String) return String is
@@ -2172,7 +2252,7 @@ package body Landin.Tests.Targets_Suite is
          end loop;
       end;
       Landin.Testing.Check_Equal
-        (Item, Count, 14, "D255's table states fourteen levels");
+        (Item, Count, 16, "D255's table states sixteen levels");
 
       --  The compiler holds exactly the features the table gives a level.
       for Index in 1 .. Count loop
@@ -2225,7 +2305,8 @@ package body Landin.Tests.Targets_Suite is
                Named_Levels := Named_Levels + 1;
                Landin.Testing.Check
                  (Item, Row /= 0
-                    and then Rows (Row).Family /= "M profile",
+                    and then Rows (Row).Family /= "M profile"
+                    and then Rows (Row).Family /= "RV32",
                   "platform/linux's level " & Spelled
                   & " is a hosted level of D255's table");
             end;
@@ -2266,8 +2347,129 @@ package body Landin.Tests.Targets_Suite is
       end;
    end Levels_Agree_With_D255;
 
+   --  D662: the RISC-V cores, each with its family, level, interrupt model
+   --  and the slots it takes, and the table's place past the entry word.
+   procedure RISC_V_Cores_Take_Their_Own_Slots
+     (Item : in out Landin.Testing.Context);
+
+   procedure RISC_V_Cores_Take_Their_Own_Slots
+     (Item : in out Landin.Testing.Context)
+   is
+      package F renames Landin.Targets.Firmware;
+      use type F.Core_Kind;
+      use type F.Interrupt_Model;
+
+      function Profile_Of
+        (Core : F.Core_Kind; Count : Natural; IRQ : Natural)
+        return F.Profile;
+
+      function Profile_Of
+        (Core : F.Core_Kind; Count : Natural; IRQ : Natural)
+        return F.Profile
+      is
+         Result : F.Profile;
+      begin
+         Result.Present := True;
+         Result.Core := Core;
+         Result.Vector_Count := Count;
+         Result.Interrupts (16 + IRQ) := True;
+         Result.Count := 1;
+         Result.Regions (1) :=
+           (Name => F.To_Name ("FLASH"), Origin => 16#2040_0000#,
+            Length => 32 * 1024, Mode => F.Read_Execute);
+         Result.Placed (F.Vectors) := 1;
+         return Result;
+      end Profile_Of;
+
+      E31 : constant F.Profile := Profile_Of (F.SiFive_E31, 16, 0);
+      C3 : constant F.Profile := Profile_Of (F.ESP_RV32IMC, 32, 2);
+      C5 : constant F.Profile := Profile_Of (F.ESP_RV32IMAC_CLIC, 48, 4);
+      H3 : constant F.Profile := Profile_Of (F.Hazard3, 68, 33);
+   begin
+      Landin.Testing.Check
+        (Item,
+         (for all Core in F.Core_Kind =>
+            F.Is_Core_Name (F.Spelling (Core))
+            and then F.Core_Named (F.Spelling (Core)) = Core)
+         and then F.Core_Named ("hazard3") = F.Hazard3
+         and then F.Core_Named ("esp-rv32imac-clic") = F.ESP_RV32IMAC_CLIC
+         and then not F.Is_Core_Name ("esp32c3"),
+         "every core is named by exactly its spelling");
+      Landin.Testing.Check
+        (Item,
+         (for all Core in F.RISC_V_Core =>
+            F.Family (Core) = Landin.Targets.RV32
+            and then Landin.Targets.Levels.Is_Level_Of
+              (RV32, F.Level_Name (Core))
+            and then F.Executes (Core, "rv32imc")
+            and then not F.Executes (Core, "armv6-m"))
+         and then (for all Core in F.Arm_Core =>
+            F.Family (Core) = Landin.Targets.Cortex_M0
+            and then not F.Executes (Core, "rv32imc"))
+         and then F.Level_Name (F.ESP_RV32IMC) = "rv32imc"
+         and then not F.Executes (F.ESP_RV32IMC, "rv32imac")
+         and then F.Executes (F.Hazard3, "rv32imac")
+         and then F.Executes (F.SiFive_E31, "rv32imac")
+         and then F.Executes (F.ESP_RV32IMAC_CLIC, "rv32imac"),
+         "D543: a core executes its family's levels at and below its own");
+      Landin.Testing.Check
+        (Item,
+         F.Model_Of (F.Cortex_M0) = F.NVIC
+         and then F.Model_Of (F.SiFive_E31) = F.Vectored
+         and then F.Model_Of (F.ESP_RV32IMC) = F.Vectored
+         and then F.Model_Of (F.ESP_RV32IMAC_CLIC) = F.CLIC
+         and then F.Model_Of (F.Hazard3) = F.Xh3irq
+         and then F.Vector_Limit (F.SiFive_E31) = 16
+         and then F.Vector_Limit (F.ESP_RV32IMC) = 32
+         and then F.Vector_Limit (F.ESP_RV32IMAC_CLIC) = 48
+         and then F.Vector_Limit (F.Hazard3) = 512
+         and then (for all Core in F.RISC_V_Core =>
+                     not F.May_Have (Core, F.FPv5_D16)),
+         "each RISC-V core has its interrupt model, limit and no float"
+         & " unit");
+      Landin.Testing.Check
+        (Item,
+         F.Admits (E31, 3) and then F.Admits (E31, 7)
+         and then F.Admits (E31, 11) and then not F.Admits (E31, 0)
+         and then not F.Admits (E31, 1) and then not F.Admits (E31, 5)
+         and then not F.Admits (E31, 2) and then not F.Admits (E31, 16),
+         "the E31 takes machine software, timer and external codes alone");
+      Landin.Testing.Check
+        (Item,
+         F.Admits (C3, 1) and then F.Admits (C3, 31)
+         and then F.Admits (C3, 18)
+         and then not F.Admits (C3, 0) and then not F.Admits (C3, 32),
+         "the C3 takes CPU lines 1 to 31, whatever the description names");
+      Landin.Testing.Check
+        (Item,
+         F.Admits (C5, 16) and then F.Admits (C5, 47)
+         and then not F.Admits (C5, 15) and then not F.Admits (C5, 3)
+         and then not F.Admits (C5, 48),
+         "the C5's CLIC takes its CPU lines at ids 16 to 47");
+      Landin.Testing.Check
+        (Item,
+         F.Admits (H3, 3) and then F.Admits (H3, 7)
+         and then not F.Admits (H3, 11) and then F.Admits (H3, 49)
+         and then not F.Admits (H3, 50),
+         "Hazard3 takes 3, 7 and 16 + IRQ for each named IRQ, never 11");
+      Landin.Testing.Check
+        (Item,
+         F.Vector_Address (E31) = 16#2040_0040#
+         and then F.Vector_Alignment (E31) = 64
+         and then F.Vector_Address (C3) = 16#2040_0100#
+         and then F.Vector_Alignment (C3) = 256
+         and then F.Vector_Address (C5) = 16#2040_0100#
+         and then F.Vector_Alignment (C5) = 256
+         and then F.Vector_Address (H3) = 16#2040_0200#
+         and then F.Vector_Alignment (H3) = 512,
+         "a RISC-V table follows the entry word at its own alignment");
+   end RISC_V_Cores_Take_Their_Own_Slots;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "targets", "RISC-V cores take their own slots",
+         RISC_V_Cores_Take_Their_Own_Slots'Access);
       Landin.Testing.Register
         (Into, "targets", "packed image algebra and access plans",
          Packed_Images'Access);

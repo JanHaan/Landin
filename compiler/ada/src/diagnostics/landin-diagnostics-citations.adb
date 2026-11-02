@@ -2040,6 +2040,13 @@ package body Landin.Diagnostics.Citations is
                & "unsigned plain char",
             when 265 =>
                "RV64 Linux uses LP64D and ISA extension sets",
+            when 660 =>
+               "RV32 is a firmware target with ILP32 and its own levels",
+            when 661 =>
+               "An rv32 program that reaches no description is given the"
+               & " RISC-V reference",
+            when 662 =>
+               "A RISC-V core's interrupt model decides what a slot is",
             when 257 =>
                "A build targets the compiler's own host, and another tar"
                & "get is named",
@@ -3357,6 +3364,12 @@ package body Landin.Diagnostics.Citations is
             when 256 =>
                "Decisions: The toolchain, C and the machine",
             when 265 =>
+               "Decisions: The toolchain, C and the machine",
+            when 660 =>
+               "Decisions: The toolchain, C and the machine",
+            when 661 =>
+               "Decisions: The toolchain, C and the machine",
+            when 662 =>
                "Decisions: The toolchain, C and the machine",
             when 257 =>
                "Decisions: The toolchain, C and the machine",
@@ -4839,6 +4852,15 @@ package body Landin.Diagnostics.Citations is
             when 265 =>
                "https://www.701.dev/spec.html#d265-rv64-linux-uses-lp64d"
                & "-and-isa-extension-sets",
+            when 660 =>
+               "https://www.701.dev/spec.html#d660-rv32-is-a-firmware-ta"
+               & "rget-with-ilp32-and-its-own-levels",
+            when 661 =>
+               "https://www.701.dev/spec.html#d661-an-rv32-program-that-"
+               & "reaches-no-description-is-given-the-risc-v-reference",
+            when 662 =>
+               "https://www.701.dev/spec.html#d662-a-risc-v-core-s-inter"
+               & "rupt-model-decides-what-a-slot-is",
             when 257 =>
                "https://www.701.dev/spec.html#d257-a-build-targets-the-c"
                & "ompiler-s-own-host-and-another-target-is-named",

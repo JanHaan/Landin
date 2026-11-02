@@ -16,8 +16,8 @@
 --  architecture first.
 --
 --  Each level is named as the platform's own documents name it: the psABI's
---  `x86-64-v2`, and Arm's and GCC's `armv8.1-a`, `armv7-m` and
---  `armv8-m.main`.
+--  `x86-64-v2`, Arm's and GCC's `armv8.1-a`, `armv7-m` and
+--  `armv8-m.main`, and RISC-V's ISA strings `rv64gc` and `rv32imac`.
 
 package Landin.Targets.Levels is
 
@@ -33,7 +33,8 @@ package Landin.Targets.Levels is
       Lse, Crc32, Rdm,
       --  Armv7-M, Armv7E-M and Armv8-M Mainline
       Thumb2, Idiv, Dsp,
-      --  RV64GC and independent address-generation extensions
+      --  RV64GC, RV32's microcontroller levels and independent
+      --  address-generation extensions
       I, M, A, F, D, C, Zicsr, Zifencei, Zba, Xtheadba);
 
    --  The word a program writes after `compiler.feature.`.
@@ -80,7 +81,8 @@ private
       X86_64_V1, X86_64_V2, X86_64_V3, X86_64_V4,
       Armv8_A, Armv8_1_A,
       Armv6_M, Armv7_M, Armv7E_M, Armv8_M_Main,
-      RV64GC, RV64GC_Zba, RV64GC_Xtheadba, RV64GC_Zba_Xtheadba);
+      RV64GC, RV64GC_Zba, RV64GC_Xtheadba, RV64GC_Zba_Xtheadba,
+      RV32IMC, RV32IMAC);
 
    type Feature_Level is record
       Id : Level_Id;

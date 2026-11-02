@@ -7,7 +7,7 @@ package body Landin.Targets.Selection is
          when 1 => "linux-x86-64", when 2 => "linux-arm64",
          when 3 => "darwin-arm64", when 4 => "freebsd-x86-64",
          when 5 => "freebsd-arm64", when 6 => "linux-rv64",
-         when 7 => "cortex-m0", when 8 => "synthetic-32",
+         when 7 => "cortex-m0", when 8 => "rv32", when 9 => "synthetic-32",
          when others => raise Compiler_Defect);
 
    function Is_Described (Name : String) return Boolean is
@@ -29,6 +29,8 @@ package body Landin.Targets.Selection is
          return Darwin_Arm64;
       elsif Name = "cortex-m0" then
          return Cortex_M;
+      elsif Name = "rv32" then
+         return RV32;
       elsif Name = "synthetic-32" then
          return Synthetic_32;
       else

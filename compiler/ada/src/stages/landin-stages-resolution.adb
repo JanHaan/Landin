@@ -1093,7 +1093,7 @@ package body Landin.Stages.Resolution is
                  is (Syn.Kind (Of_Tree, Operand) = Syn.Name_Reference
                      and then Spelled (Syn.Name (Of_Tree, Operand))
                        in "x86_64" | "arm64" | "rv64" | "cortex_m0"
-                        | "synthetic_32" | "little" | "big" | "debug"
+                        | "rv32" | "synthetic_32" | "little" | "big" | "debug"
                         | "release" | "linux" | "darwin" | "freebsd"
                         | "freestanding");
                Left : constant Syn.Node_Id := Syn.Left_Of (Of_Tree, Node);

@@ -58,6 +58,29 @@ package body Landin.Backend.Toolchain is
       end if;
    end Add_M_Profile;
 
+   --  D660: an RV32 level's ISA with the Zicsr and Zifencei extensions
+   --  the firmware's CSR accesses and fences need, which GCC names apart
+   --  from I since ISA spec 20191213, and the soft-float ILP32 ABI.  The
+   --  pair selects the rv32imc or rv32imac multilib of libgcc.
+   procedure Add_RV32
+     (List : in out Landin.Platform.Path_List;
+      Level : Levels.Feature_Level);
+
+   procedure Add_RV32
+     (List : in out Landin.Platform.Path_List;
+      Level : Levels.Feature_Level) is
+   begin
+      List.Append ("-march=" & Levels.Name (Level) & "_zicsr_zifencei");
+      List.Append ("-mabi=ilp32");
+   end Add_RV32;
+
+   --  The processor arguments of a firmware target's level, and its
+   --  float unit's.
+   procedure Add_Firmware_Machine
+     (List : in out Landin.Platform.Path_List;
+      Level : Levels.Feature_Level; Facts : Landin.Targets.Target_Facts;
+      Float : Landin.Targets.Firmware.Float_Unit);
+
    --  D617: soft float without a unit; with one, hard float and the unit,
    --  which name the libgcc multilib GCC selects, so refine names none.
    procedure Add_Float
@@ -78,6 +101,23 @@ package body Landin.Backend.Toolchain is
       end if;
    end Add_Float;
 
+   procedure Add_Firmware_Machine
+     (List : in out Landin.Platform.Path_List;
+      Level : Levels.Feature_Level; Facts : Landin.Targets.Target_Facts;
+      Float : Landin.Targets.Firmware.Float_Unit) is
+   begin
+      if Landin.Targets.Capabilities.Backend_For (Facts)
+        = Landin.Targets.Capabilities.RV32_ELF
+      then
+         Add_RV32 (List, Level);
+      else
+         Add_M_Profile (List, Level, Facts);
+         List.Append ("-mthumb");
+         Add_Float (List, Float);
+         List.Append ("-mabi=aapcs");
+      end if;
+   end Add_Firmware_Machine;
+
    function Identity_Section
      (Build_Id : String; Facts : Landin.Targets.Target_Facts) return String
    is
@@ -91,7 +131,8 @@ package body Landin.Backend.Toolchain is
          return ".section __TEXT,__landin_id,regular,no_dead_strip" & LF
            & ".ascii """ & Build_Id & """" & LF;
       elsif Landin.Targets.Capabilities.Backend_For (Facts)
-        = Landin.Targets.Capabilities.Cortex_M0_ELF
+        in Landin.Targets.Capabilities.Cortex_M0_ELF
+         | Landin.Targets.Capabilities.RV32_ELF
       then
          --  Build identity belongs to the off-target debugger artifact.
          --  It must not consume the constrained firmware's load image.
@@ -224,6 +265,13 @@ package body Landin.Backend.Toolchain is
          --  D532: the same bare-metal GCC under the name Debian, Ubuntu,
          --  Fedora, Homebrew and Arm's own releases give it.
          Add ("arm-none-eabi-gcc");
+      elsif Named = ""
+        and then Landin.Targets.Capabilities.Backend_For (Facts)
+          = Landin.Targets.Capabilities.RV32_ELF
+      then
+         --  D660: as D532, the bare-metal RISC-V GCC under the name
+         --  Debian's and Ubuntu's gcc-riscv64-unknown-elf gives it.
+         Add ("riscv64-unknown-elf-gcc");
       end if;
       return Result;
    end Driver_Candidates;
@@ -261,6 +309,14 @@ package body Landin.Backend.Toolchain is
            & " `dnf install arm-none-eabi-gcc-cs`; or the GNAT arm-elf"
            & " archive refine is tested with, which gives arm-eabi-gcc),"
            & " or name a driver with --toolchain=NAME" & Without;
+      elsif Landin.Targets.Capabilities.Backend_For (Facts)
+        = Landin.Targets.Capabilities.RV32_ELF
+      then
+         return "install a bare-metal RISC-V GCC (Debian and Ubuntu:"
+           & " `apt install gcc-riscv64-unknown-elf`, which gives"
+           & " riscv64-unknown-elf-gcc; or the GNAT riscv64-elf archive"
+           & " refine is tested with, which gives riscv64-elf-gcc), or name"
+           & " a driver with --toolchain=NAME" & Without;
       elsif Landin.Targets.Capabilities.Hosted_System_Of (Facts)
         = Landin.Targets.Capabilities.Linux
       then
@@ -312,15 +368,10 @@ package body Landin.Backend.Toolchain is
    is
       List : Landin.Platform.Path_List;
    begin
-      if Landin.Targets.Capabilities.Backend_For (Facts)
-        /= Landin.Targets.Capabilities.Cortex_M0_ELF
-      then
-         raise Compiler_Defect with "firmware assembly requires Cortex-M0";
+      if not Landin.Targets.Is_Firmware (Facts) then
+         raise Compiler_Defect with "firmware assembly requires firmware";
       end if;
-      Add_M_Profile (List, Level, Facts);
-      List.Append ("-mthumb");
-      Add_Float (List, Float);
-      List.Append ("-mabi=aapcs");
+      Add_Firmware_Machine (List, Level, Facts, Float);
       List.Append ("-Wa,--fatal-warnings");
       if Debug then
          List.Append ("-Wa,--gdwarf-4");
@@ -382,16 +433,11 @@ package body Landin.Backend.Toolchain is
       then
          raise Compiler_Defect with "target has no linker argument policy";
       end if;
-      if Landin.Targets.Capabilities.Backend_For (Facts)
-        = Landin.Targets.Capabilities.Cortex_M0_ELF
-      then
+      if Landin.Targets.Is_Firmware (Facts) then
          if not Libraries.Is_Empty or else not Directories.Is_Empty then
             raise Compiler_Defect with "unsupported firmware link request";
          end if;
-         Add_M_Profile (List, Level, Facts);
-         List.Append ("-mthumb");
-         Add_Float (List, Float);
-         List.Append ("-mabi=aapcs");
+         Add_Firmware_Machine (List, Level, Facts, Float);
          List.Append ("-nostdlib");
          List.Append ("-nostartfiles");
          List.Append ("-nodefaultlibs");

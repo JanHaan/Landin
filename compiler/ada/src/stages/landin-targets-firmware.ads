@@ -1,5 +1,4 @@
---  Cortex-M firmware profiles, in target bytes, and source assembly
---  admission.
+--  Firmware profiles, in target bytes, and source assembly admission.
 --
 --  A profile is what a device description selects (D542/D543): its core,
 --  its vector table, its memory regions and where each part of the image
@@ -11,10 +10,21 @@
 with Landin.Targets.Levels;
 package Landin.Targets.Firmware is
 
-   --  D543: the library module that describes the constrained reference
-   --  profile, which a Cortex-M program that reaches no other description
-   --  is given.
-   Reference_Module : constant String := "platform/cortex_m/reference";
+   --  D543: the library module that describes a firmware target's
+   --  constrained reference profile, which a program on that target that
+   --  reaches no other description is given: platform/cortex_m/reference
+   --  on Cortex-M and platform/riscv/reference on RV32 (D661).  "" on a
+   --  target that is not firmware.
+   function Reference_Module (Facts : Target_Facts) return String
+     is (case Architecture_Of (Facts) is
+           when Cortex_M0 => "platform/cortex_m/reference",
+           when RV32 => "platform/riscv/reference",
+           when others => "");
+
+   --  Whether LOGICAL is a reference description of any target.
+   function Is_Reference_Module (Logical : String) return Boolean
+     is (Logical in "platform/cortex_m/reference"
+                  | "platform/riscv/reference");
 
    --  A description's name: a device, a region or an interrupt.
    Name_Capacity : constant := 64;
@@ -23,37 +33,105 @@ package Landin.Targets.Firmware is
      with Pre => Text'Length <= Name_Capacity;
    function Spelling (Name : Name_Text) return String;
 
-   --  The six cores a description may name, each with its architecture.
+   --  The ten cores a description may name, each with its family, the
+   --  target that executes it, and its level (D543, D662).
    type Core_Kind is
-     (Cortex_M0, Cortex_M0plus, Cortex_M3, Cortex_M4, Cortex_M7, Cortex_M33);
+     (Cortex_M0, Cortex_M0plus, Cortex_M3, Cortex_M4, Cortex_M7, Cortex_M33,
+      Hazard3, SiFive_E31, ESP_RV32IMC, ESP_RV32IMAC_CLIC);
+   subtype Arm_Core is Core_Kind range Cortex_M0 .. Cortex_M33;
+   subtype RISC_V_Core is Core_Kind range Hazard3 .. ESP_RV32IMAC_CLIC;
    function Is_Core_Name (Text : String) return Boolean;
    function Core_Named (Text : String) return Core_Kind
      with Pre => Is_Core_Name (Text);
    function Spelling (Core : Core_Kind) return String;
+   --  The core with its article, as a sentence names it: "a cortex-m0",
+   --  "an esp-rv32imc".
+   function A_Core (Core : Core_Kind) return String
+     is ((if Core in ESP_RV32IMC | ESP_RV32IMAC_CLIC then "an " else "a ")
+         & Spelling (Core));
+   --  Every core's spelling, quoted, as a note lists them.
+   function Core_Names return String;
+   --  The target architecture whose builds run on CORE.
+   function Family (Core : Core_Kind) return Architecture
+     is (if Core in RISC_V_Core then RV32 else Cortex_M0);
    --  The feature level a core executes, as Landin.Targets.Levels names it.
    function Level_Name (Core : Core_Kind) return String;
    --  D543: whether a build at LEVEL runs on CORE: the core's own level or
-   --  one it holds, armv6-m on every core and armv7-m on every Thumb-2 one.
+   --  one it holds, armv6-m on every Arm core, armv7-m on every Thumb-2
+   --  one, and rv32imc on every RISC-V one.
    function Executes (Core : Core_Kind; Level : String) return Boolean;
    --  The levels Executes admits for CORE, as a note lists them.
    function Lower_Levels (Core : Core_Kind) return String;
    function Is_Armv6_M (Core : Core_Kind) return Boolean
      is (Core in Cortex_M0 | Cortex_M0plus);
-   --  The longest vector table the core's architecture allows, in words:
-   --  ARMv6-M's 16 + 32, ARMv7-M's 16 + 496 and ARMv8-M's 16 + 480.
+
+   --  D662: how the core takes an interrupt, which decides what a slot is.
+   --  On the NVIC a slot is a word of the vector table, 16 + n for
+   --  external interrupt n.  On RISC-V a slot is the mcause interrupt code:
+   --  mtvec's vectored mode on the ESP32-C3's core and the SiFive E31,
+   --  ESP32-C5's CLIC, and Hazard3's Xh3irq, whose external interrupts
+   --  all arrive as code 11 and are resolved through meinext into slot
+   --  16 + IRQ.
+   type Interrupt_Model is (NVIC, Vectored, CLIC, Xh3irq);
+   function Model_Of (Core : Core_Kind) return Interrupt_Model
+     is (case Core is
+           when Arm_Core => NVIC,
+           when Hazard3 => Xh3irq,
+           when SiFive_E31 | ESP_RV32IMC => Vectored,
+           when ESP_RV32IMAC_CLIC => CLIC);
+   --  Whether a description's interrupt n is slot 16 + n.  Under vectored
+   --  mtvec and the CLIC a description names a peripheral source, which
+   --  an interrupt matrix or a PLIC routes to a CPU line, and only the
+   --  line is a slot (D662).
+   function Interrupts_Are_Slots (Core : Core_Kind) return Boolean
+     is (Model_Of (Core) in NVIC | Xh3irq);
+
+   --  The longest vector table the core's architecture allows, in slots:
+   --  ARMv6-M's 16 + 32, ARMv7-M's 16 + 496 and ARMv8-M's 16 + 480; the
+   --  sixteen standard interrupt codes of the SiFive E31, the C3's 32
+   --  CPU lines, the C5's CLIC's 16 + 32, and on Hazard3 the slot set's
+   --  capacity, 16 + 496 of Xh3irq's 512 IRQs (D662).
    function Vector_Limit (Core : Core_Kind) return Positive
-     is (if Is_Armv6_M (Core) then 48
-         elsif Core = Cortex_M33 then 496
-         else 512);
-   --  The architecture's own exception slots a handler may take: NMI,
-   --  HardFault, SVCall, PendSV and SysTick, on ARMv7-M MemManage,
-   --  BusFault, UsageFault and DebugMonitor, and on a cortex-m33 the
-   --  SecureFault its Security Extension raises.
-   --  Slots 0 and 1 are the compiler's initial SP and reset.
+     is (case Core is
+           when Cortex_M0 | Cortex_M0plus => 48,
+           when Cortex_M33 => 496,
+           when Cortex_M3 | Cortex_M4 | Cortex_M7 => 512,
+           when SiFive_E31 => 16,
+           when ESP_RV32IMC => 32,
+           when ESP_RV32IMAC_CLIC => 48,
+           when Hazard3 => 512);
+   --  The core's own slots a handler may take.  On the NVIC the
+   --  architecture's exceptions: NMI, HardFault, SVCall, PendSV and
+   --  SysTick, on ARMv7-M MemManage, BusFault, UsageFault and
+   --  DebugMonitor, and on a cortex-m33 the SecureFault its Security
+   --  Extension raises; slots 0 and 1 are the compiler's initial SP and
+   --  reset.  On RISC-V the interrupt codes the core raises itself (D662):
+   --  the machine software, timer and external interrupts, 3, 7 and 11,
+   --  on the E31; Hazard3's 3 and 7, its 11 being meinext's dispatch; the
+   --  C3's CPU lines 1 to 31; the C5's CLIC's lines 0 to 31 at ids 16 to
+   --  47.  No exception takes a slot.
    function Core_Slot (Core : Core_Kind; Slot : Natural) return Boolean
-     is (Slot in 2 | 3 | 11 | 14 | 15
-         or else (not Is_Armv6_M (Core) and then Slot in 4 .. 6 | 12)
-         or else (Core = Cortex_M33 and then Slot = 7));
+     is (case Core is
+           when Arm_Core =>
+              Slot in 2 | 3 | 11 | 14 | 15
+              or else (not Is_Armv6_M (Core) and then Slot in 4 .. 6 | 12)
+              or else (Core = Cortex_M33 and then Slot = 7),
+           when SiFive_E31 => Slot in 3 | 7 | 11,
+           when Hazard3 => Slot in 3 | 7,
+           when ESP_RV32IMC => Slot in 1 .. 31,
+           when ESP_RV32IMAC_CLIC => Slot in 16 .. 47);
+   --  Core_Slot's slots as a note names them.
+   function Core_Slots_Text (Core : Core_Kind) return String
+     is (case Core is
+           when Cortex_M0 | Cortex_M0plus =>
+              "core slots 2, 3, 11, 14 and 15",
+           when Cortex_M3 | Cortex_M4 | Cortex_M7 =>
+              "core slots 2 to 6, 11, 12, 14 and 15",
+           when Cortex_M33 => "core slots 2 to 7, 11, 12, 14 and 15",
+           when SiFive_E31 => "interrupt codes 3, 7 and 11",
+           when Hazard3 => "interrupt codes 3 and 7",
+           when ESP_RV32IMC => "CPU lines 1 to 31",
+           when ESP_RV32IMAC_CLIC => "CLIC ids 16 to 47");
 
    --  D615: a float unit is a fact of a description, not of a level, since
    --  the unit a chip was built with changes the C ABI.  The compiler knows
@@ -200,8 +278,8 @@ package Landin.Targets.Firmware is
    type Profile is record
       --  False until configuration has selected a description.
       Present : Boolean := False;
-      --  The library's constrained reference, platform/cortex_m/reference,
-      --  which applies at every level of the Cortex-M target (D543).
+      --  The library's constrained reference of the target, which applies
+      --  at every level of it (D543).
       Reference : Boolean := False;
       Device : Name_Text;
       Core : Core_Kind := Cortex_M0;
@@ -221,11 +299,13 @@ package Landin.Targets.Firmware is
    end record;
 
    --  Whether a handler may take absolute slot SLOT: a core slot of the
-   --  description's core or an implemented interrupt, below its count.
+   --  description's core or, where interrupts are slots, an implemented
+   --  interrupt, below its count.
    function Admits (Of_Profile : Profile; Slot : Natural) return Boolean
      is (Of_Profile.Present and then Slot < Of_Profile.Vector_Count
          and then (Core_Slot (Of_Profile.Core, Slot)
-                   or else (Slot >= 16 and then Slot < Slot_Capacity
+                   or else (Interrupts_Are_Slots (Of_Profile.Core)
+                            and then Slot >= 16 and then Slot < Slot_Capacity
                             and then Of_Profile.Interrupts (Slot))));
 
    --  0 when no region has the name.
@@ -237,11 +317,20 @@ package Landin.Targets.Firmware is
      with Pre => Of_Profile.Placed (Section) /= 0;
 
    --  The vector table's bytes and its alignment: its length rounded up to
-   --  a power of two, and no less than 128, which ARMv7-M's VTOR needs.
+   --  a power of two, and no less than 128, which ARMv7-M's VTOR needs; on
+   --  RISC-V no less than what the core's mtvec or mtvt needs (D662): 64
+   --  bytes on the E31 and Hazard3 and under the CLIC, and 256 on the
+   --  ESP32-C3, whose ESP-IDF aligns its table so.
    function Vector_Bytes (Of_Profile : Profile) return Byte_Count
      is (Byte_Count (Of_Profile.Vector_Count) * 4);
    function Vector_Alignment (Of_Profile : Profile) return Byte_Count;
-   --  Where the table is: its region's origin past the boot kind's prefix.
+   --  D662: a RISC-V image begins with one word, the jump to reset that a
+   --  boot ROM or reset vector enters, `_landin_firmware_entry`.
+   Entry_Word_Bytes : constant := 4;
+   --  Where the table is: on the M profile its region's origin past the
+   --  boot kind's prefix, and on RISC-V the first address past that and the
+   --  entry word aligned as the table must be: 64 bytes in on the
+   --  reference.
    function Vector_Address (Of_Profile : Profile) return Byte_Count
      with Pre => Of_Profile.Placed (Vectors) /= 0;
 

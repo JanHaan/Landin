@@ -216,6 +216,7 @@ ABI, is the same at every level of a family.
 | `linux-rv64` | `rv64gc` | `rv64gc_zba`, `rv64gc_xtheadba`, `rv64gc_zba_xtheadba` | `sh1add`/`sh2add`/`sh3add` or `th.addsl` for indexed addresses | selected ISA string passed to GNU tools with LP64D |
 | `darwin-arm64` | `armv8-a` | `armv8.1-a` | LSE `ldadd`/`swp`/`cas`, in the ordering's form, for atomic read-modify-write | `.arch armv8-a` or `.arch armv8.1-a` in the assembly |
 | `cortex-m0` | `armv6-m` | `armv7-m`, `armv7e-m`, `armv8-m.main` | `sdiv`/`udiv` and `mls` for 32-bit division and remainder, and `smull`/`umull`, with `mul` and `mla` for 64 bits, for products; at `armv8-m.main` also `lda`/`stl` and their byte and halfword forms for acquiring loads and releasing stores | default: `.cpu cortex-m0` in assembly and `-mcpu=cortex-m0` for the assembler and linker; higher levels: `.arch` and `-march=` |
+| `rv32` | `rv32imc` | `rv32imac` | nothing yet: the target checks and lowers, and emits nothing (D660) | `-march=LEVEL_zicsr_zifencei` and `-mabi=ilp32` for the assembler and linker |
 | `synthetic-32` | none | none | nothing | none |
 
 The x86-64 assembler is held to the level at every level, the baseline's
@@ -1051,6 +1052,24 @@ flash address. QEMU checks poisoned reset and vector/frame state; a separately
 named synthetic model executes the complete program's GPIO/timer/UART/DMA path.
 Its finite count and drain acknowledgment are synthetic premises, not RP2040
 or microbit peripheral behavior. No target layout, MMIO width or ABI changes.
+
+## RV32 firmware
+
+`Targets.RV32` (`rv32`) is RISC-V microcontroller firmware: little-endian
+ELF32, the psABI's ILP32 soft-float layout with natural alignment, an
+eight-byte `i64` at eight and a 16-byte stack, and `compiler.c_riscv_ilp32`
+(D660). Its levels are `rv32imc`, the default, and `rv32imac`. It is
+firmware as `cortex-m0` is: the program imports a device description, or
+is given `platform/riscv/reference`, QEMU `sifive_e`'s map at the Cortex-M
+reference's capacities (D661), and a description names one of the RISC-V
+cores, `hazard3`, `sifive-e31`, `esp-rv32imc` or `esp-rv32imac-clic`, whose
+interrupt model decides which mcause codes a handler's slot may be (D662).
+The toolchain identity is `riscv64-elf`, GNAT's riscv64-elf archive; with
+no `--toolchain`, a link tries `riscv64-elf-gcc` and then
+`riscv64-unknown-elf-gcc`. The backend is named and does not emit yet:
+`refine check` and `--emit=ir` work, and assembly, executables and linker
+scripts are refused as L0500. C signatures, records and varargs are
+disabled, as on Cortex-M.
 
 ## RV64 Linux
 

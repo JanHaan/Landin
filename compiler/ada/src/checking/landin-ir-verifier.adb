@@ -4118,13 +4118,12 @@ package body Landin.IR.Verifier is
          declare
             Signature : constant Signature_Id := Signature_Id (Position);
          begin
-            --  Interrupt routines are Cortex-M0's; a naked routine is a
+            --  Interrupt routines are firmware's; a naked routine is a
             --  machine entry wherever a backend has registers.
             if Signature_Machine (Of_Unit, Signature)
               /= Landin.Machine.Ordinary
               and then ((Check_Image and then
-                Landin.Targets.Architecture_Of (Facts)
-                  /= Landin.Targets.Cortex_M0
+                not Landin.Targets.Is_Firmware (Facts)
                 and then
                   (Signature_Machine (Of_Unit, Signature)
                      /= Landin.Machine.Naked_Routine
@@ -5140,8 +5139,7 @@ package body Landin.IR.Verifier is
                  or else Attr.Alignment not in
                    0 | 1 | 2 | 4 | 8 | 16 | 32 | 64 | 128 | 256
                  or else (Present and then Check_Image and then
-                   Landin.Targets.Architecture_Of (Facts)
-                     /= Landin.Targets.Cortex_M0)
+                   not Landin.Targets.Is_Firmware (Facts))
                then
                   return (Kind => Routine_Signature_Disagrees,
                           Item => Id, others => <>);

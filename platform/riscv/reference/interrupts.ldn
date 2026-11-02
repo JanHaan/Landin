@@ -1,0 +1,11 @@
+-- The RV32 constrained reference profile's core and interrupt slots, which
+-- apply when an rv32 program imports no device description (D543, D661).
+-- It names no chip and comes from no SVD: the core is the SiFive E31 that
+-- QEMU's sifive_e machine carries, taking machine software, timer and
+-- external interrupts at mcause codes 3, 7 and 11 through vectored mtvec
+-- (D662), so its table has the sixteen standard codes and the description
+-- names no interrupt: an external one arrives at 11 through the PLIC.
+
+compiler.device("riscv-reference")
+compiler.core("sifive-e31")
+compiler.vectors(16)

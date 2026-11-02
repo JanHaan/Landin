@@ -45,15 +45,22 @@ package Landin.Targets.Capabilities is
 
    type Backend_Kind is
      (No_Backend, X86_64_ELF, Darwin_Arm64_Mach_O, Arm64_ELF, RV64_ELF,
-      Cortex_M0_ELF);
+      Cortex_M0_ELF, RV32_ELF);
 
    function Backend_For (Facts : Target_Facts) return Backend_Kind;
+
+   --  Whether the target's backend emits assembly yet.  RV32's backend is
+   --  named before its emitter exists, so its programs check, configure
+   --  and lower to IR, and the driver refuses to emit them.
+   function Emits (Facts : Target_Facts) return Boolean
+     is (Backend_For (Facts) not in No_Backend | RV32_ELF);
 
    --  D537: how far the backend's addressing of static data reaches, which
    --  bounds the written images of a program with no firmware profile:
    --  2 GiB under x86-64's small code model, Darwin's static image and
    --  RV64's AUIPC, 4 GiB under arm64's ADRP on ELF, and the 32-bit address
-   --  space on Cortex-M, whose literal pools hold whole addresses.
+   --  space on Cortex-M, whose literal pools hold whole addresses, and on
+   --  RV32, where AUIPC's 32-bit reach is the whole space.
    function Image_Reach (Facts : Target_Facts) return Byte_Count
      with Pre => Backend_For (Facts) /= No_Backend;
 
@@ -68,7 +75,7 @@ package Landin.Targets.Capabilities is
      with Pre => Backend_For (Facts) /= No_Backend;
 
    --  Whether the backend writes an immutable image that is wholly zero
-   --  into the object, as Cortex-M does into flash, rather than reserving
+   --  into the object, as firmware does into flash, rather than reserving
    --  it as it reserves a mutable one.
    function Writes_Zero_Constants (Facts : Target_Facts) return Boolean;
 
@@ -81,9 +88,10 @@ package Landin.Targets.Capabilities is
 
    function Hosted_System_Of (Facts : Target_Facts) return Hosted_System;
 
-   --  The target's toolchain triplet.  Linux and Cortex-M use it as the
+   --  The target's toolchain triplet.  Linux and firmware use it as the
    --  prefix of their GNU compiler driver: `x86_64-pc-linux-gnu-gcc`,
-   --  `aarch64-linux-gnu-gcc` or `arm-eabi-gcc`.  Darwin carries
+   --  `aarch64-linux-gnu-gcc`, `arm-eabi-gcc` or `riscv64-elf-gcc`, whose
+   --  multilibs build rv32 as well (D660).  Darwin carries
    --  `arm64-apple-darwin` as target metadata but defaults independently
    --  to Apple's `/usr/bin/clang`.
    --

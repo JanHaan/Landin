@@ -77,7 +77,9 @@ package Landin.Backend.Toolchain is
    --  distributions' spellings of the same GCC, then `gcc` when Native
    --  says the target is the compiler's own host.  Cortex-M follows the
    --  pinned `arm-eabi-gcc` with the `arm-none-eabi-gcc` the distributions
-   --  and Arm ship (D532).  Empty exactly when Driver_For is.
+   --  and Arm ship (D532), and RV32 the pinned `riscv64-elf-gcc` with the
+   --  distributions' `riscv64-unknown-elf-gcc` (D660).  Empty exactly
+   --  when Driver_For is.
    function Driver_Candidates
      (Facts : Landin.Targets.Target_Facts;
       Named : String;
@@ -137,7 +139,9 @@ package Landin.Backend.Toolchain is
    --  refuses an instruction the level does not have and the linker selects
    --  the runtime and records the level that the build assumed (D255).  On
    --  x86-64 the assembler is held to the level at the baseline too; on the
-   --  M profile the baseline keeps naming its core, as it always did.
+   --  M profile the baseline keeps naming its core, as it always did; on
+   --  RV32 the level is `-march=LEVEL_zicsr_zifencei` with `-mabi=ilp32`
+   --  at every level (D660).
    --  D617: a Cortex-M description's float unit selects hard float and
    --  the unit for the assembler and the linker, and through them the
    --  libgcc multilib; without one the tools are told soft float.
@@ -170,7 +174,7 @@ package Landin.Backend.Toolchain is
         Landin.Targets.Firmware.No_Float_Unit)
       return Landin.Platform.Path_List
      with Pre => Landin.Targets.Levels.Belongs_To (Level, Facts);
-   --  Script, when given, is a developer's linker script for a Cortex-M
+   --  Script, when given, is a developer's linker script for a firmware
    --  link (D546), passed where the derived OUTPUT.ld would be.
 
    --  The same at the target's default level.

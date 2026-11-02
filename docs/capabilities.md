@@ -19,6 +19,7 @@ entry that describes it, and put a new one where a reader would look for it.
 | `freebsd-x86-64` | hosted executables, emitted on Linux | a FreeBSD VM under KVM | LLDB in the VM |
 | `freebsd-arm64` | hosted executables, emitted on Linux | an emulated FreeBSD VM | LLDB in the VM |
 | `cortex-m0` | ARMv6-M firmware | the pinned QEMU | GDB, lines and functions |
+| `rv32` | RV32 firmware, checked and lowered to IR; no emitter yet | not yet | none yet |
 
 - **FreeBSD** runs in [architecture-specific VMs](../environments/freebsd/README.md)
   with separate runtime, C ABI and debugger verdicts in the gate.
@@ -74,6 +75,15 @@ entry that describes it, and put a new one where a reader would look for it.
   served through its debugger stub. Fifty-five RP2040 registers and
   forty-seven RP2350 registers are checked in as
   [generated device fixtures](../devices/README.md).
+- **RV32** is a firmware target, `--target=rv32`, at `rv32imc` or
+  `rv32imac` with the ILP32 soft-float layout (D660). Its programs check,
+  configure against a device description or the library's
+  `platform/riscv/reference`, QEMU `sifive_e`'s map at the Cortex-M
+  reference's capacities (D661), and lower to IR; a description may name
+  `hazard3`, `sifive-e31`, `esp-rv32imc` or `esp-rv32imac-clic`, whose
+  interrupt model decides which mcause codes take handlers (D662). Its
+  backend emits nothing yet, and asking for assembly, an executable or a
+  linker script is L0500.
 - **A float unit** is a fact of a description: a Cortex-M7's
   `compiler.float_unit("fpv5-d16")`, which the STM32H753's has, builds
   hard-float at `armv7e-m` (D615). f32 and f64 arithmetic, negation,
@@ -117,6 +127,7 @@ them, and [the target contracts](targets.md) say what each selects.
 | arm64 | `armv8-a`, `armv8.1-a` |
 | M profile | `armv6-m`, `armv7-m`, `armv7e-m`, `armv8-m.main` |
 | RV64 | `rv64gc` baseline; `rv64gc_zba` and `rv64gc_xtheadba` add independent address-generation extensions, and `rv64gc_zba_xtheadba` selects both |
+| RV32 | `rv32imc` baseline; `rv32imac` adds A |
 
 - A level changes instructions and never layout or ABI: BMI2 shifts at
   `x86-64-v3`, LSE atomics at `armv8.1-a` on Linux, macOS and FreeBSD,

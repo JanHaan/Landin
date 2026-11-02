@@ -119,7 +119,10 @@ def lane_inputs(level, inputs):
 #  profiles are the descriptions of an emulator's map, not of a chip: each
 #  is Landin source under lanes/ beside this file, recorded as a device is.
 RECORDS = json.loads((HERE / 'descriptions.json').read_text())
-DESCRIPTIONS = RECORDS['devices']
+#  A record with a `target` is another target's, the rv32 reference's
+#  among them (D661), which these Arm lanes neither build nor link.
+DESCRIPTIONS = {name: record for name, record in RECORDS['devices'].items()
+                if record.get('target', 'cortex-m0') == 'cortex-m0'}
 #  No limited verdict is linked again against a lane's map, which is no
 #  device's (D619).
 LANE_PROFILES = RECORDS['lanes']
