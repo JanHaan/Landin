@@ -2372,6 +2372,9 @@ package body Landin.Diagnostics.Citations is
                & "re it waits",
             when 657 =>
                "An ESP image's RAM code is in its text segment",
+            when 658 =>
+               "rv32's bytes are held to every host and to both compiler"
+               & " builds",
             when 635 =>
                "RP2350 is learnt from pico-sdk's SVD for the first board"
                & "'s port",
@@ -3716,6 +3719,8 @@ package body Landin.Diagnostics.Citations is
             when 656 =>
                "Decisions: The toolchain, C and the machine",
             when 657 =>
+               "Decisions: The toolchain, C and the machine",
+            when 658 =>
                "Decisions: The toolchain, C and the machine",
             when 635 =>
                "Decisions: The toolchain, C and the machine",
@@ -5426,6 +5431,9 @@ package body Landin.Diagnostics.Citations is
             when 657 =>
                "https://www.701.dev/spec.html#d657-an-esp-image-s-ram-co"
                & "de-is-in-its-text-segment",
+            when 658 =>
+               "https://www.701.dev/spec.html#d658-rv32-s-bytes-are-held"
+               & "-to-every-host-and-to-both-compiler-builds",
             when 635 =>
                "https://www.701.dev/spec.html#d635-rp2350-is-learnt-from"
                & "-pico-sdk-s-svd-for-the-first-board-s-port",

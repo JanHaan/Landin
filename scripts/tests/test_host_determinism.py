@@ -8,6 +8,7 @@ refusals, and agreeing manifests with real assembly evidence.
 """
 import hashlib
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -108,6 +109,52 @@ class Parts(unittest.TestCase):
                 self.assertEqual(result.returncode, 2, result.stderr)
 
 
+class Workflows(unittest.TestCase):
+    """The workflows' parts emit every target the check names, once."""
+
+    def setUp(self):
+        sys.path.insert(0, str(CHECK.parent))
+        self.addCleanup(sys.path.remove, str(CHECK.parent))
+        import emit_manifest
+        self.check = emit_manifest
+
+    @staticmethod
+    def parts(workflow, job):
+        """{key: [targets of each part]} for JOB's matrix in WORKFLOW."""
+        text = (ROOT / ".github/workflows" / workflow).read_text()
+        body = re.search(r"\n  %s:\n(.*?)(?=\n  [a-z-]+:\n)" % job, text, re.S).group(1)
+        #  The matrix's include list, up to the job's next own key.
+        include = re.search(r"\n +include:\n(.*?)(?=\n    \w)", body, re.S).group(1)
+        found = {}
+        for item in re.split(r"\n +- (?=\w+:)", "\n" + include)[1:]:
+            platform = re.search(r"platform: (\S+)", item)
+            targets = re.search(r"\btargets: (\S+)", item)
+            found.setdefault(platform.group(1) if platform else "", []).append(
+                targets.group(1).split(","))
+        return found
+
+    def assertPartition(self, parts, targets):
+        joined = [t for part in parts for t in part]
+        self.assertEqual(sorted(joined), sorted(targets))
+
+    def test_each_host_emits_every_target_once(self):
+        hosts = self.parts("determinism.yml", "manifest")
+        self.assertEqual(sorted(hosts), ["aarch64-darwin", "aarch64-linux", "x86_64-linux"])
+        for host, parts in hosts.items():
+            with self.subTest(host=host):
+                self.assertPartition(parts, self.check.TARGETS)
+        #  Every host splits its targets alike, so a part is one comparison.
+        self.assertEqual(len({json.dumps(parts) for parts in hosts.values()}), 1)
+
+    def test_the_build_modes_jobs_compare_every_mode_target_once(self):
+        self.assertPartition(self.parts("gate.yml", "build-modes")[""],
+                             self.check.MODE_TARGETS)
+
+    def test_every_firmware_target_is_compared_in_both_build_modes(self):
+        self.assertLessEqual(set(self.check.FIRMWARE_TARGETS),
+                             set(self.check.MODE_TARGETS))
+
+
 class Comparison(unittest.TestCase):
     def test_agreeing_manifests_pass(self):
         result = compare(BASE, dict(BASE))
@@ -153,16 +200,18 @@ class Comparison(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("unexpected emission result", result.stderr)
 
-    def test_written_c_function_refusal_is_confined_to_cortex(self):
+    def test_written_c_function_refusal_is_confined_to_firmware(self):
+        #  Neither firmware target has a C ABI (D660 for rv32).
         for target in ("cortex-m0", "linux-x86-64", "linux-arm64",
                        "darwin-arm64", "freebsd-x86-64", "freebsd-arm64",
-                       "linux-rv64"):
+                       "linux-rv64", "rv32"):
             other = dict(BASE)
             key = (f"written-type-c-function|{target}|debug"
                    "|optimize=size|specialize=auto")
             other[key] = "refused:1"
             result = compare(other, dict(other))
-            self.assertEqual(result.returncode, 0 if target == "cortex-m0" else 1,
+            self.assertEqual(result.returncode,
+                             0 if target in ("cortex-m0", "rv32") else 1,
                              result.stderr)
 
     def test_every_expected_refusal_names_a_positive_fixture(self):
@@ -215,7 +264,7 @@ class Emission(unittest.TestCase):
             'exit 2\n')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(sum(value == "refused:1" for value in manifest.values()), 18)
-        self.assertEqual(sum(len(value) == 64 for value in manifest.values()), 108)
+        self.assertEqual(sum(len(value) == 64 for value in manifest.values()), 126)
 
     def test_every_profile_is_emitted_and_named(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -242,8 +291,9 @@ class Emission(unittest.TestCase):
             self.assertEqual(result.returncode, 1, result.stderr)
             self.assertIn("unexpected emission result", result.stderr)
             manifest = json.loads(out.read_text())
-            self.assertEqual(len(manifest), 7 * 2 * 3 * 3)
-            for target in ("linux-x86-64", "linux-arm64", "darwin-arm64", "cortex-m0", "freebsd-x86-64", "freebsd-arm64", "linux-rv64"):
+            self.assertEqual(len(manifest), 8 * 2 * 3 * 3)
+            for target in ("linux-x86-64", "linux-arm64", "darwin-arm64", "cortex-m0",
+                           "freebsd-x86-64", "freebsd-arm64", "linux-rv64", "rv32"):
                 for mode in ("debug", "release"):
                     for optimize in ("none", "size", "speed"):
                         for specialize in ("off", "auto", "all"):
@@ -260,6 +310,36 @@ class Emission(unittest.TestCase):
                                     controls.encode()).hexdigest())
 
 
+class Levels(unittest.TestCase):
+    """A fixture is compiled at the level its `args` request, on their target."""
+
+    def test_the_level_applies_only_to_the_target_its_args_name(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            area = Path(tmp)
+            fixture = area / "compiler/tests/fixtures/positive/example"
+            fixture.mkdir(parents=True)
+            (fixture / "fixture.meta").write_text(
+                "program: main.ldn\nargs: --target=rv32 --level=rv32imac\n")
+            refine = area / "refine"
+            refine.write_text(
+                "#!" + sys.executable + "\n"
+                "import pathlib, sys\n"
+                "args = sys.argv[1:]\n"
+                "said = [a for a in args if a.startswith(('--target=', '--level='))]\n"
+                "pathlib.Path(args[args.index('-o') + 1]).write_text(' '.join(said))\n")
+            refine.chmod(0o755)
+            out = area / "manifest.json"
+            result = subprocess.run(
+                [sys.executable, str(CHECK), "emit", str(refine), str(area), str(out)],
+                capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            manifest = json.loads(out.read_text())
+            for target in ("rv32", "cortex-m0", "linux-rv64"):
+                said = "--target=" + target + (" --level=rv32imac" if target == "rv32" else "")
+                key = "example|%s|release|optimize=size|specialize=auto" % target
+                self.assertEqual(manifest[key], hashlib.sha256(said.encode()).hexdigest())
+
+
 def modes(debug_body, release_body):
     """Run `modes` over a small corpus with two stub compilers."""
     with tempfile.TemporaryDirectory() as tmp:
@@ -267,13 +347,25 @@ def modes(debug_body, release_body):
         tests = area / "compiler/tests"
         positive = tests / "fixtures/positive/example"
         runtime = tests / "fixtures/runtime/hosted"
+        executed = tests / "fixtures/runtime/executed"
+        replaced = tests / "fixtures/runtime/replaced"
         case = tests / "cortex-m/cases/counterpart"
-        for directory in (positive, runtime, case):
+        for directory in (positive, runtime, executed, replaced, case):
             directory.mkdir(parents=True)
             (directory / "main.ldn").write_text("unused by the stub\n")
         (positive / "fixture.meta").write_text("program: main.ldn\n")
         (runtime / "fixture.meta").write_text(
             "program: main.ldn\ntargets: linux-x86-64, linux-rv64\n")
+        #  The firmware corpus executes one runtime fixture its `targets:`
+        #  does not name, and one only through its counterpart.
+        (executed / "fixture.meta").write_text(
+            "program: main.ldn\ntargets: linux-x86-64\n")
+        (replaced / "fixture.meta").write_text(
+            "program: main.ldn\ntargets: linux-x86-64\n")
+        (tests / "cortex-m/corpus.json").write_text(json.dumps({"fixtures": {
+            "runtime/executed": {"mode": "execute"},
+            "runtime/replaced": {"mode": "execute", "counterpart": "counterpart"},
+            "runtime/hosted": {"mode": "refuse", "codes": ["L0015"]}}}))
         stubs = []
         for name, body in (("debug", debug_body), ("release", release_body)):
             refine = area / name
@@ -298,10 +390,18 @@ class BuildModes(unittest.TestCase):
     def test_agreeing_builds_pass_over_every_source_and_profile(self):
         result = modes(self.SAME, self.SAME)
         self.assertEqual(result.returncode, 0, result.stderr)
-        #  The positive fixture on three targets, the runtime fixture on
-        #  the one of them its record names, the counterpart on Cortex-M;
-        #  each at the four standard profiles.
-        self.assertIn("sources 3  requests 20  emitted 20", result.stdout)
+        #  The positive fixture on four targets; each runtime fixture on
+        #  the one of them its record names, and the one the firmware
+        #  corpus executes on both firmware targets too; the counterpart on
+        #  both firmware targets; each at the four standard profiles.
+        self.assertIn("sources 5  requests 44  emitted 44", result.stdout)
+
+    def test_the_firmware_corpus_reaches_rv32(self):
+        result = modes(self.SAME, self.SAME.replace(
+            "out.write_text(", "out.write_text('x' * ("
+            "where == 'executed' and '--target=rv32' in args) + "))
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("runtime/executed|rv32|", result.stderr)
 
     def test_one_differing_emission_fails_and_is_named(self):
         result = modes(self.SAME, self.SAME.replace(
@@ -316,7 +416,7 @@ class BuildModes(unittest.TestCase):
         refuse = "if where == 'counterpart':\n    print('%s'); sys.exit(1)\n"
         result = modes(refuse % "no" + self.SAME, refuse % "no" + self.SAME)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("refused alike 4", result.stdout)
+        self.assertIn("refused alike 8", result.stdout)
         result = modes(refuse % "no" + self.SAME, refuse % "not so" + self.SAME)
         self.assertEqual(result.returncode, 1)
         self.assertIn("cortex-m/counterpart|cortex-m0", result.stderr)

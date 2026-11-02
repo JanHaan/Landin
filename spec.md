@@ -23447,6 +23447,48 @@ profiles`, which holds the C3's `.ramtext` after `.text` in `:text`; and
 with a `.ramtext` routine, parses `OUT.bin` against the executable's
 segments and boots it through the chip's ROM on Espressif's QEMU.
 
+### D658 — rv32's bytes are held to every host and to both compiler builds
+
+**The tour said** nothing; `scripts/emit_manifest.py`'s host manifest and
+its build-mode comparison named seven targets and three, without `rv32`,
+so nothing held rv32's emitted bytes to being the same on every host or
+from the debug and the release compiler. Each compiled a positive fixture
+at its target's default level whatever its `args` named, and the
+comparison took a runtime fixture only on the targets its `targets:`
+names, which can not name `rv32`: the RV32 lanes run the firmware corpus's
+inventory (D695).
+
+**Chosen:** `rv32` is the eighth target of the host manifest and the
+fourth of the build-mode comparison. A positive fixture whose `args` name
+a target and a `--level` is compiled at that level for that target, as the
+harness compiles it, and at the default for every other, so
+`atomic-read-modify-write-rv32imac` holds rv32imac's read-modify-writes.
+The refusals rv32 shares are listed by name as cortex-m0's are: the C
+fixtures, rv32 having no C ABI (D660); `r630-memory-scalars`, whose
+read-modify-write rv32imc refuses (D690); and `assembly-operand-forms`,
+which has no rv32 arm. The three fixtures whose `args` name rv32 are
+refused by every other target. In the comparison, both firmware targets
+compile every runtime fixture the firmware corpus executes, besides those
+their `targets:` names, and the Cortex-M counterparts; cortex-m0 gains
+those the inventory executes and its `targets:` does not name. Levels
+other than a fixture's own are not swept, on rv32 as on cortex-m0. Each
+host's manifest stays two parts, now of four targets each: the three Linux
+targets, whose every request also compiles `platform/linux`, take the
+debug compiler about fifteen times as long as any other, so rv32 joins
+the part with one of them.
+
+**The alternatives:** every RV32 level for every fixture, which doubles
+rv32's entries to check one feature's code that the level's own fixtures
+already reach; rv32's runtime programs from `targets:`, which names none of
+them; and cortex-m0's comparison left at its `targets:`, which compared
+130 of the 666 runtime fixtures its corpus executes, besides the eleven
+counterparts.
+
+**Pinned by** `scripts/tests/test_host_determinism.py`: `Levels`, the
+firmware corpus's reach in `BuildModes`, and `Workflows`, which holds each
+host's parts in `determinism.yml` and the gate's `build-modes` parts to
+partitioning the check's targets.
+
 ### D635 — RP2350 is learnt from pico-sdk's SVD for the first board's port
 
 **The tour said** nothing of a second Raspberry Pi chip. The first board's
