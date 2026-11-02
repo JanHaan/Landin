@@ -25569,7 +25569,9 @@ package body Landin.Diagnostics.Citations.Texts is
                & ", the epochs, the echo and the SWD counters are held as "
                & "D655 holds the Arm run's. `--block-control` flashes a co"
                & "py whose end marker is flipped, and BOOTSEL must enumera"
-               & "te, as D655's.",
+               & "te, as D655's; it then has to attach in BOOTSEL to flash"
+               & " the image again, which D712 forbids on the probe's own "
+               & "hub, so it runs only with `--bootsel-attach`.",
             when 712 =>
                "Chosen: which of probe-rs's two names reaches an RP2350 "
                & "follows the architecture its cores run when probe-rs att"
@@ -25585,10 +25587,16 @@ package body Landin.Diagnostics.Citations.Texts is
                & "nswering, so that the host retried the port for minutes "
                & "on the rig, reset the hub tree the probe's own USB hangs"
                & " from, and stalled every probe-rs start 85 s in its USB "
-               & "probe listing. So after a flash through the Arm side the"
-               & " tool cycles the power at once, and reads the head back "
-               & "from the cores the new image booted. The counters are re"
-               & "ad as `RP235x_riscv` alone.",
+               & "probe listing. So the tool refuses to attach while the P"
+               & "ico 2 enumerates as BOOTSEL, unless told `--bootsel-atta"
+               & "ch`; after a flash through the Arm side it cycles the po"
+               & "wer at once and reads the head back from the cores the n"
+               & "ew image booted; and the counters are read as `RP235x_ri"
+               & "scv` alone. A cycle of the Pico 2's port coincided with "
+               & "a reset of that tree, so the tool cycles only when the k"
+               & "ernel has logged no trouble on the port for a minute, an"
+               & "d stops unless the guarded port shows its device again a"
+               & "nd the probe answers `ping` after it.",
             when 713 =>
                "Chosen: `common.shared_bridge` reuses a bridge listening"
                & " on both of a slot's ports and never stops it, and other"
