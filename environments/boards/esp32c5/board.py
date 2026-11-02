@@ -90,7 +90,7 @@ def main():
                         help="a port of the bridge's hub never switched")
     parser.add_argument('--console-guard-device', default='E8:3D:C1:F5:C4:EC',
                         help="what that port must show, or the bridge's hub is not switched")
-    parser.add_argument('--enumerate-seconds', type=float, default=20.0,
+    parser.add_argument('--enumerate-seconds', type=float, default=60.0,
                         help="how long the hub may take to list the board again, and its tty"
                              ' to appear')
     parser.add_argument('--reset-seconds', type=float, default=0.1,

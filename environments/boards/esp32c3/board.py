@@ -72,7 +72,7 @@ def main():
                         help='a probehive checkout, to start its bridge when none listens')
     parser.add_argument('--probe-host', default='10.42.0.50')
     parser.add_argument('--slot', type=int, default=2, help="the probehive slot wired to UART0")
-    parser.add_argument('--enumerate-seconds', type=float, default=20.0,
+    parser.add_argument('--enumerate-seconds', type=float, default=60.0,
                         help='how long the hub may take to list the board again')
     parser.add_argument('--uart-port', type=int, default=4461,
                         help="the bridge's slot 0 UART port; slot N's is this plus N")
