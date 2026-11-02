@@ -861,7 +861,9 @@ def image_contract(path, profile=None):
         offset = header[5] + index * 32
         require(offset + 32 <= len(data), 'truncated ELF program header')
         kind, file_at, virtual, physical, file_size, memory_size, _, _ = struct.unpack_from('<8I', data, offset)
-        if kind != 1:
+        #  A derived script's PHDRS leaves a named segment whose sections
+        #  are all empty as a PT_LOAD of no bytes at address zero.
+        if kind != 1 or memory_size == 0:
             continue
         require(file_size <= memory_size and file_at + file_size <= len(data), 'invalid ELF load extent')
         if flash_lo <= virtual < flash_hi:

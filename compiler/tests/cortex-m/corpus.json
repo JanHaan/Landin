@@ -1755,6 +1755,16 @@
       "reason": "Firmware has no standard output to print to. runtime/io-write-format-memory writes through write_format here."
     },
     "runtime/io-write-format-memory": {
+      "lanes": {
+        "esp32c3": {
+          "mode": "limit",
+          "reason": "D698: at size/off, size/auto and speed/auto its stack overran the 4 KiB reservation, in memory_write_some called from memory_write, with 4096 to 4176 bytes in use when the guard was written; at none/off it peaks at 4004 bytes, and Cortex-M0's images peak at 3456 to 3792, so the program sits at the reservation's edge on both architectures."
+        },
+        "sifive-e": {
+          "mode": "limit",
+          "reason": "D698: at size/off, size/auto and speed/auto its stack overran the 4 KiB reservation, in memory_write_some called from memory_write, with 4096 to 4176 bytes in use when the guard was written; at none/off it peaks at 4004 bytes, and Cortex-M0's images peak at 3456 to 3792, so the program sits at the reservation's edge on both architectures."
+        }
+      },
       "mode": "execute"
     },
     "runtime/kqueue-events": {

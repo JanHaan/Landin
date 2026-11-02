@@ -1069,6 +1069,46 @@ no `--toolchain`, a link tries `riscv64-elf-gcc` and then
 `riscv64-unknown-elf-gcc`. C signatures, records and varargs are
 disabled, as on Cortex-M.
 
+A firmware image is compiler-owned text and the program's routines, laid
+out by `Landin.Backend.Firmware` from the profile (D680, D686). Its first
+word, at its vectors' region's origin past the boot kind's prefix, is
+`_landin_firmware_entry`, a `j` to reset or to the description's stage,
+and the table follows at `Firmware.Vector_Address`, one `j` per slot,
+both assembled with no compression and no relaxation. What a slot jumps
+to is the core's interrupt model's (D662, D680):
+
+| model | cores | mtvec | slot N |
+|---|---|---|---|
+| `vectored` | `sifive-e31`, `esp-rv32imc` | the table, mode 1 | the hardware's: a stub `_landin_firmware_slot_N` for an interrupt routine, the routine itself for a naked one; slot 0 takes every exception |
+| `clic` | `esp-rv32imac-clic` | `_landin_firmware_trap`, mode 3 | called from that common entry by mcause's low twelve bits |
+| `xh3irq` | `hazard3` | the table, mode 1 | 11 is `_landin_firmware_external`, which calls slot 16 + IRQ while meinext names one |
+
+A stub saves ra, t0-t6 and a0-a7 below the interrupted sp, 64 bytes or,
+with a stack limit cell, 80, calls the routine, an ordinary frame,
+restores and returns with `mret`; its unwind rules return to mepc. A slot
+no handler takes, and every exception, jumps to
+`_landin_firmware_unhandled`. A naked routine in a dispatched slot is
+L0347. Reset clears mstatus.MIE, writes mtvec, sets sp to
+`_landin_firmware_stack_top`, copies `.data`, `.ramtext` and used
+writable regions and clears `.bss` by the Cortex-M symbols, fences, sets
+MIE and calls the entry.
+
+The derived script is `elf32-littleriscv` with
+`ENTRY(_landin_firmware_entry)`, `.landin_entry` and `.isr_vector` at their
+addresses and the small data sections beside their own, names its
+segments so that neither ELF header is loaded, and asserts the entry
+word, the table and a sixteen-byte stack top. `rp2350-image-block`
+places RISC-V's IMAGE_DEF, image type 0x1101, directly after the table
+(D682), and the driver reads it from the EM_RISCV object. `esp-app-image`
+is RV32's alone (D681): its description's `compiler.esp_image(chip,
+min_revision, max_revision, flash_offset)` gives the chip's facts (D683),
+an entry-word stage runs before reset (D684), and after the link the
+driver writes `OUT.bin`, the ROM's image of the executable's loaded
+segments, and reads it back, `Landin.Driver.ESP_Image` (D685).
+`platform/riscv` holds the critical section over mstatus.MIE, mie's lines,
+`wfi` and the barriers, and `platform/riscv/hazard3` Xh3irq's meiea and
+meifa (D687).
+
 Its backend is the RV64 emitter at XLEN 32 (D671), not a second one. Every
 value keeps its frame home, and an eight-byte value is a register pair only
 while one operation reads or writes it: its low word in the register named

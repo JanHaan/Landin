@@ -34,6 +34,7 @@ reading of the linked instructions.
 import argparse
 import ast
 import binascii
+import hashlib
 import json
 import operator
 from pathlib import Path
@@ -51,11 +52,13 @@ sys.path.insert(0, str(ROOT / 'devices'))
 sys.path.insert(0, str(ROOT / 'scripts'))
 import fetch_inputs  # noqa: E402
 import thumb  # noqa: E402
-#  The Cortex-M devices alone; a record naming another target is that
-#  target's lanes' (D661).
-EXPECTED = {name: record for name, record
-            in json.loads((HERE / 'descriptions.json').read_text())['devices'].items()
+#  The Cortex-M devices, and the RV32 ones, which link with the RV32
+#  toolchain and take their own checks (D680-D686).
+DEVICES = json.loads((HERE / 'descriptions.json').read_text())['devices']
+EXPECTED = {name: record for name, record in DEVICES.items()
             if record.get('target', 'cortex-m0') == 'cortex-m0'}
+RV32_EXPECTED = {name: record for name, record in DEVICES.items()
+                 if record.get('target') == 'rv32'}
 
 PROGRAMS = {
     'rp2040': ('import descriptions/rp2040\n'
@@ -73,6 +76,22 @@ PROGRAMS = {
                   'link(region: "DTCM") mut fast: u32 = 7\n'
                   'mut counted: u32 = 1\n'
                   'start: () -> none = counted += fast end start\n'),
+    'riscv-reference': (
+        'link(vector: 7) extern(interrupt) mtimer: () -> none = end mtimer\n'
+        'mut counted: u32 = 1\n'
+        'start: () -> none = counted += 1 end start\n'),
+    'esp32-c3': ('import descriptions/esp32c3\n'
+                 'link(vector: 1) extern(interrupt) uart0: () -> none = end uart0\n'
+                 'mut counted: u32 = 1\n'
+                 'start: () -> none = counted += 1 end start\n'),
+    'esp32-c5': ('import descriptions/esp32c5\n'
+                 'link(vector: 17) extern(interrupt) uart0: () -> none = end uart0\n'
+                 'mut counted: u32 = 1\n'
+                 'start: () -> none = counted += 1 end start\n'),
+    'rp2350-hazard3': ('import descriptions/rp2350_hazard3\n'
+                       'link(vector: 56) extern(interrupt) cti: () -> none = end cti\n'
+                       'mut counted: u32 = 1\n'
+                       'start: () -> none = counted += 1 end start\n'),
     'constrained-reference': (
         'link(vector: 20) extern(interrupt) irq4: () -> none = end irq4\n'
         'mut counted: u32 = 1\n'
@@ -117,12 +136,14 @@ class Image:
 
 
 def compile_firmware(run, refine, program, extra=(), name='core.elf', check=True,
-                     devices=ROOT / 'devices'):
+                     devices=ROOT / 'devices', rv32=False):
     (run.out / 'app').mkdir(exist_ok=True)
     (run.out / 'app/main.ldn').write_text(program)
-    argv = [refine, '--root=' + str(devices), '--target=cortex-m0',
+    argv = [refine, '--root=' + str(devices),
+            '--target=' + ('rv32' if rv32 else 'cortex-m0'),
             '--firmware-entry=start', '--emit=exe',
-            '--toolchain=' + str(run.arm / 'arm-eabi-gcc'),
+            '--toolchain=' + str(run.riscv / 'riscv64-elf-gcc' if rv32
+                                 else run.arm / 'arm-eabi-gcc'),
             '--build-report=' + name + '.json', *extra, 'app', '-o', name]
     if check:
         run.command('compile-' + name, argv, timeout=60)
@@ -189,6 +210,107 @@ def select(run, refine, device):
             'vector: 20', 'vector: %d' % want['refused_slot']), name='refused.elf', check=False)
         require('error[L0347]' in refused and 'reserved in constrained-reference' in refused,
                 'the reference does not refuse slot %d' % want['refused_slot'])
+    return image
+
+
+def jump_target(word, at):
+    """Where WORD at AT jumps when it is `jal x0`, RISC-V's `j`; else None."""
+    if word & 0x7f != 0x6f or (word >> 7) & 0x1f:
+        return None
+    offset = (((word >> 31) & 1) << 20 | ((word >> 12) & 0xff) << 12
+              | ((word >> 20) & 1) << 11 | ((word >> 21) & 0x3ff) << 1)
+    return (at + offset - ((word >> 31) << 21)) & 0xffffffff
+
+
+def esp_image(run, image, report, want, device):
+    """D683/D685: OUT.bin read here as ESP-IDF's esp_image_header_t,
+    esp_image_segment_header_t, checksum and hash declare it, against the
+    linked ELF's loaded segments and the record's chip facts."""
+    data = (run.out / 'core.elf.bin').read_bytes()
+    facts = want['esp_image']
+    magic, count, mode, size_freq, entry = struct.unpack_from('<BBBBI', data, 0)
+    require(magic == 0xe9, device + ': OUT.bin does not begin with 0xe9')
+    require(entry == image.symbols['_landin_firmware_entry'],
+            '%s: OUT.bin enters at %#x' % (device, entry))
+    wp, chip, legacy, minimum, maximum = struct.unpack_from('<B3xHBHH', data, 8)
+    require((chip, minimum, maximum) == (facts['chip'], facts['min_revision'],
+                                         facts['max_revision']) and data[23] == 1,
+            '%s: OUT.bin names chip %d, revisions %d to %d' % (device, chip, minimum, maximum))
+    loads = [(paddr, image.data[offset:offset + size])
+             for paddr, offset, size in image.segments if size]
+    require(count == len(loads), '%s: OUT.bin holds %d segments, the ELF loads %d'
+            % (device, count, len(loads)))
+    at, checksum = 24, 0xef
+    for address, payload in loads:
+        got_address, length = struct.unpack_from('<II', data, at)
+        padded = payload + b'\0' * (-len(payload) % 4)
+        require((got_address, data[at + 8:at + 8 + length]) == (address, padded),
+                '%s: OUT.bin\'s segment at %#x is not the ELF\'s' % (device, got_address))
+        for byte in padded:
+            checksum ^= byte
+        at += 8 + length
+    at += 15 - at % 16
+    require(data[at] == checksum, device + ': OUT.bin\'s checksum is not its segments\'')
+    require(data[at + 1:] == hashlib.sha256(data[:at + 1]).digest(),
+            device + ': OUT.bin does not end with its SHA-256')
+    require(report['esp_image']['offset'] == facts['offset']
+            and report['esp_image']['sha256'] == hashlib.sha256(data[:at + 1]).hexdigest(),
+            '%s: the build report\'s esp_image is %r' % (device, report['esp_image']))
+
+
+def select_rv32(run, refine, device):
+    """D662, D680-D686: an RV32 device linked by its own toolchain, its
+    entry word, table, slots, block and image held to its record."""
+    want = RV32_EXPECTED[device]
+    image = compile_firmware(run, refine, PROGRAMS[device], ['--level=' + want['level']]
+                             if 'level' in want else ['--level=rv32imac'], rv32=True)
+    report = json.loads((run.out / 'core.elf.json').read_text())['firmware']
+    for key in ('core', 'float_unit', 'boot', 'regions', 'placed', 'vector_address',
+                'vector_words', 'boot_prefix', 'boot_suffix', 'stack_reserved'):
+        require(report[key] == want[key], '%s: the build report says %s %r, and %r is'
+                ' recorded' % (device, key, report[key], want[key]))
+    symbols = image.symbols
+    vectors = want['vector_address']
+    origin = next(r['origin'] for r in want['regions']
+                  if r['name'] == want['placed']['vectors']) + want['boot_prefix']
+    require(symbols['_landin_firmware_entry'] == origin,
+            '%s: the entry word is at %#x' % (device, symbols['_landin_firmware_entry']))
+    stage = '_landin_firmware_reset_stage' if 'reset_stage' in want else '_landin_firmware_reset'
+    require(jump_target(image.word(origin), origin) == symbols[stage],
+            '%s: the entry word does not jump to %s' % (device, stage))
+    require(symbols['_landin_firmware_vectors'] == vectors,
+            '%s: the table is at %#x' % (device, symbols['_landin_firmware_vectors']))
+    require(symbols['_landin_firmware_stack_top'] == want['stack_top'],
+            '%s: the stack top is %#x' % (device, symbols['_landin_firmware_stack_top']))
+    targets = [jump_target(image.word(vectors + 4 * slot), vectors + 4 * slot)
+               for slot in range(want['vector_words'])]
+    unhandled = symbols['_landin_firmware_unhandled']
+    for slot in want.get('reserved_slots', ()):
+        require(targets[slot] == unhandled,
+                '%s: reserved slot %d does not jump to the unhandled loop' % (device, slot))
+    slot = want['handler_slot']
+    handler = symbols[want.get('handler_symbol', 'mtimer')]
+    dispatched = want['core'] == 'esp-rv32imac-clic' or (want['core'] == 'hazard3' and slot >= 16)
+    require(targets[slot] == (handler if dispatched
+                              else symbols['_landin_firmware_slot_%d' % slot]),
+            '%s: slot %d does not reach its handler as its interrupt model enters it'
+            % (device, slot))
+    if want['core'] == 'hazard3':
+        require(targets[11] == symbols['_landin_firmware_external'],
+                device + ': code 11 is not meinext\'s dispatch')
+    if 'image_block' in want:
+        block = want['image_block']
+        require(symbols['_landin_firmware_image_block'] == block['address']
+                and block['address'] + block['bytes'] <= origin + block['window'],
+                device + ': the image block is not where it is recorded')
+        words = [image.word(block['address'] + 4 * i) for i in range(5)]
+        require(words == [0xffffded3, 0x11010142, 0x000001ff, 0, 0xab123579],
+                '%s: the image block is %s, not RISC-V\'s IMAGE_DEF (D682)'
+                % (device, [hex(w) for w in words]))
+    if want['boot'] == 'esp-app-image':
+        esp_image(run, image, report, want, device)
+    else:
+        require(not (run.out / 'core.elf.bin').exists(), device + ' wrote an ESP image')
     return image
 
 
@@ -603,6 +725,12 @@ def execute_suite(parent, refine):
         select(Run(out, parent.tools), refine, device)
         controls.append({'device': device, 'status': 'passed'})
         print('description: ' + device + ' selected and compared', flush=True)
+    for device in RV32_EXPECTED:
+        out = root / device
+        out.mkdir()
+        select_rv32(Run(out, parent.tools), refine, device)
+        controls.append({'device': device, 'target': 'rv32', 'status': 'passed'})
+        print('description: ' + device + ' linked for rv32 and compared', flush=True)
     out = root / 'contract'
     out.mkdir()
     contract(Run(out, parent.tools), refine)

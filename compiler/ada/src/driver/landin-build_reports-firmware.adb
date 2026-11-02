@@ -291,7 +291,10 @@ package body Landin.Build_Reports.Firmware is
                   Memory_Size : constant Landin.Targets.Byte_Count :=
                     Word (Position + 20);
                begin
-                  if Kind = 1 then
+                  --  An empty segment, which an RV32 script's named
+                  --  segments leave when their sections are (D686), loads
+                  --  nothing.
+                  if Kind = 1 and then Memory_Size > 0 then
                      if File_Size > Memory_Size
                        or else File_At > Landin.Targets.Byte_Count
                          (Data'Length)

@@ -103,6 +103,7 @@
         "memory map": "ESP32-C3 TRM v1.4, 3.3.2, Table 3.3-1, pp. 93 and 94: SRAM1 is 384 KiB at 0x40380000 on the instruction bus and at 0x3FC80000 on the data bus, one memory; IRAM 0x40380000 128 KiB, and DRAM 0x3FCA0000 160 KiB, the memory after IRAM's",
         "rom reservation": "https://github.com/espressif/esp-idf/blob/fff9895c82d744c7237be8847347bdd1b07c6643/components/bootloader/subproject/main/ld/esp32c3/bootloader.memory.ld.in, SHA-256 8b6faff8a5bab4e729c9d4bd92ffde3cdf15ae44cb28416868dd088684dfeb69: the ROM's download buffers from 0x3fccae00, its stack from 0x3fcdc710 and its data from 0x3fcde710 to 0x3fce0000, all above both regions",
         "core slots": "esp-rv32imc, a vectored mtvec: slot n is mcause interrupt code n, the CPU interrupt lines 1 to 31 taken and 0 reserved; the SVD's interrupts are interrupt-matrix sources, devices/generated/esp32c3/sources, none of them a slot (D701); UART0, source 21, routed to line 1",
+        "esp image": "ESP-IDF v6.1: esp_app_format.h's esp_chip_id_t names the ESP32-C3 5; components/esp_hw_support/port/esp32c3/Kconfig.hw_support runs images from v0.3 (ECO3), 3, to v1.99, 199; the ROM reads the image at flash offset 0 (D683)",
         "boot": "esp-app-image: a RAM-only image the boot ROM loads from flash offset 0 with no second stage (D683); the entry word at the start of IRAM and the 32-slot table at the next 256-byte boundary, 0x40380100, where ESP-IDF aligns the C3's (D662)"
       },
       "target": "rv32",
@@ -119,6 +120,7 @@
       "vector_words": 32,
       "boot_prefix": 0,
       "boot_suffix": 0,
+      "esp_image": {"offset": 0, "chip": 5, "min_revision": 3, "max_revision": 199},
       "stack_top": 1070366720,
       "stack_reserved": 16384,
       "reserved_slots": [0],
@@ -133,6 +135,7 @@
         "memory map": "ESP32-C5 TRM v1.1, 6.3, Table 6.3-1, p. 239: the HP SRAM is 384 KiB from 0x40800000, one address space; SRAM 0x40800000 312 KiB",
         "rom reservation": "https://github.com/espressif/esp-idf/blob/fff9895c82d744c7237be8847347bdd1b07c6643/components/bootloader/subproject/main/ld/esp32c5/bootloader.memory.ld.in, SHA-256 b957d27c0498894174c35da4a7aaa5f96fd7b9b72cb6356e203eaa2c0d302038: the ROM's download buffers from 0x4084e5a0, its stack from 0x4085c5a0 and its data from 0x4085e5a0 to 0x40860000, all above the region",
         "core slots": "esp-rv32imac-clic: slot n is CLIC interrupt identity n, the CPU's 32 peripheral interrupts 16 to 47 taken (TRM v1.1, 11.5.2, p. 477) and 0 to 15 reserved; the SVD's interrupts are interrupt-matrix sources, devices/generated/esp32c5/sources, none of them a slot (D701); UART0, source 47, routed to identity 17",
+        "esp image": "ESP-IDF v6.1: esp_app_format.h's esp_chip_id_t names the ESP32-C5 23; components/esp_hw_support/port/esp32c5/Kconfig.hw_support runs images from v1.0 (ECO2), 100, to v1.99, 199; the ROM reads the image at flash offset 0x2000 (D683)",
         "boot": "esp-app-image: a RAM-only image the boot ROM loads from flash offset 0x2000 with no second stage (D683); the entry word at the start of SRAM and the 48-slot table at the first boundary of its 192 bytes rounded up to 256 past it, 0x40800100 (D662)"
       },
       "target": "rv32",
@@ -148,6 +151,7 @@
       "vector_words": 48,
       "boot_prefix": 0,
       "boot_suffix": 0,
+      "esp_image": {"offset": 8192, "chip": 23, "min_revision": 100, "max_revision": 199},
       "stack_top": 1082449920,
       "stack_reserved": 16384,
       "reserved_slots": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],

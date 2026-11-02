@@ -84,7 +84,18 @@ entry that describes it, and put a new one where a reader would look for it.
   interrupt model decides which mcause codes take handlers (D662). Its
   backend is RV64's at XLEN 32 (D671): eight-byte integers are register
   pairs, f32 and f64 are libgcc's soft float, and 64-bit division is
-  libgcc's, with the language's checks unchanged.
+  libgcc's, with the language's checks unchanged. An image begins with its
+  entry word and its trap table, a `j` per mcause code: vectored mtvec on
+  the E31 and the ESP32-C3, a common CLIC entry on the ESP32-C5 and
+  Hazard3's meinext dispatch, with a stub that saves the caller-saved
+  registers, calls an `extern(interrupt)` routine and unwinds to mepc
+  (D680, D686). `rp2350-image-block` carries RISC-V's IMAGE_DEF (D682),
+  and `esp-app-image` is built: a description names its chip with
+  `compiler.esp_image`, may stop its watchdogs in a stage before reset,
+  and refine writes `OUT.bin` beside the executable and reads it back
+  (D683-D685), which the ESP32-C3's ROM boots on Espressif's QEMU.
+  `platform/riscv` and `platform/riscv/hazard3` hold the core's CPU
+  operations (D687).
 - **A float unit** is a fact of a description: a Cortex-M7's
   `compiler.float_unit("fpv5-d16")`, which the STM32H753's has, builds
   hard-float at `armv7e-m` (D615). f32 and f64 arithmetic, negation,
@@ -112,8 +123,7 @@ entry that describes it, and put a new one where a reader would look for it.
   ESP32-C5's to ESP-IDF v6.1's headers and their TRMs (D702); RP2350's
   Hazard3 cores have a description of their own (D706). The two ESP
   descriptions are RAM-only images with a stage that stops the watchdogs
-  before reset (D707, D708), which compile once their core and boot kind
-  are built.
+  before reset (D707, D708).
 - **Synthetic-32** is a checking-only target, which no backend emits.
 
 ### CPU feature levels
