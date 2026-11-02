@@ -1,0 +1,72 @@
+--  RV32 machine-mode CPU operations. The saved state is an ordinary
+--  explicit value. Restore it in lexical reverse order; masking does not stop
+--  DMA, exceptions or a debugger.
+--
+--  Everything here is declared on rv32 only (D687), as platform/cortex_m is
+--  on an M-profile target: a program written for every target imports this
+--  module everywhere and calls it from a `fixed if compiler.arch == rv32`
+--  arm.
+
+fixed if compiler.arch == rv32 then
+    --- Clear mstatus.MIE, which masks every machine-mode interrupt, and
+    --- return its previous state. Save the result and pass it to
+    --- `restore_interrupts`, including on early returns.
+    public disable_interrupts: () -> (previous: u32) =
+        previous = assembler.block("csrrci {state}, mstatus, 8",
+                                   out state: u32 at general)
+    end disable_interrupts
+
+    --- Restore a state `disable_interrupts` returned: set mstatus.MIE again
+    --- only if it was set then, which preserves nesting.
+    public restore_interrupts: (previous: u32) -> none =
+        assembler.block("andi {state}, {state}, 8\ncsrs mstatus, {state}",
+                        in state: u32 at general = previous)
+    end restore_interrupts
+
+    --- Read whether machine-mode interrupts are enabled: mstatus.MIE, as
+    --- 8 when they are and 0 when they are not.
+    public interrupt_mask: () -> (current: u32) =
+        current = assembler.block("csrr {state}, mstatus\nandi {state}, {state}, 8",
+                                  out state: u32 at general)
+    end interrupt_mask
+
+    --- Set the bits of LINES in mie, enabling those of the core's own
+    --- interrupts: machine software 0x8, timer 0x80 and external 0x800 on
+    --- the cores with the standard set. A core whose lines an interrupt
+    --- matrix or a CLIC enables, the ESP32-C3's and the ESP32-C5's, is
+    --- enabled through the chip's own registers instead.
+    public enable_lines: (lines: u32) -> none =
+        assembler.block("csrs mie, {bits}", in bits: u32 at general = lines)
+    end enable_lines
+
+    --- Clear the bits of LINES in mie.
+    public disable_lines: (lines: u32) -> none =
+        assembler.block("csrc mie, {bits}", in bits: u32 at general = lines)
+    end disable_lines
+
+    --- Order earlier memory and device accesses before the wait, then wait
+    --- for an interrupt. Wakeups can be spurious, and a pending interrupt
+    --- wakes the core even while mstatus.MIE is clear; recheck the
+    --- condition after waking.
+    public wait_for_interrupt: () -> none =
+        assembler.block("fence iorw, iorw\nwfi")
+    end wait_for_interrupt
+
+    --- Order memory and device accesses (a FENCE). This is not a proof that
+    --- a device operation completed.
+    public device_barrier: () -> none =
+        compiler.device_barrier()
+    end device_barrier
+
+    --- Wait for preceding explicit memory accesses to complete, as far as
+    --- RISC-V's FENCE orders them.
+    public completion_barrier: () -> none =
+        compiler.completion_barrier()
+    end completion_barrier
+
+    --- Prevent compiler memory knowledge from moving across this point. This
+    --- emits no device-completion protocol.
+    public compiler_barrier: () -> none =
+        compiler.compiler_barrier()
+    end compiler_barrier
+end if

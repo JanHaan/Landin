@@ -43,8 +43,13 @@ package body Landin.Modules.Availability is
          --  D267's scope.
          return Landin.Targets.Architecture_Of (Facts) =
            Landin.Targets.Cortex_M0;
+      elsif Logical = "platform/riscv" then
+         --  D687: as platform/cortex_m, its operations are declared on
+         --  rv32 alone, so a shared program imports it everywhere.
+         return True;
       elsif Under (Logical, "platform/riscv") then
-         --  D661: RV32's reference description, on RV32 alone.
+         --  D661: RV32's reference description and Hazard3's controller,
+         --  on RV32 alone.
          return Landin.Targets.Architecture_Of (Facts) =
            Landin.Targets.RV32;
       elsif Under (Logical, "platform/c") then

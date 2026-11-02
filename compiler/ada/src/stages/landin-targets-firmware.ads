@@ -167,16 +167,32 @@ package Landin.Targets.Firmware is
    function Double_Precision (Unit : Float_Unit) return Boolean
      is (Unit = FPv5_D16);
 
-   --  D545's closed set.  The last is a reserved name: a description that
-   --  selects it is refused until the compiler builds that image.
+   --  D680: whether the core's own dispatch, rather than the hardware,
+   --  enters SLOT: every slot under the CLIC, whose common entry reads
+   --  mcause, and on Hazard3 every slot from 16, which meinext names.  A
+   --  dispatched slot calls its handler as a routine, so it takes an
+   --  interrupt routine and no naked one.
+   function Dispatched_Slot (Core : Core_Kind; Slot : Natural) return Boolean
+     is (case Model_Of (Core) is
+           when CLIC => True,
+           when Xh3irq => Slot >= 16,
+           when NVIC | Vectored => False);
+
+   --  D545's closed set.  Every kind is built: `esp-app-image` since
+   --  D683, which ended its reservation (L0516).
    type Boot_Kind is
      (Vector_Table, RP2040_Boot2, RP2350_Image_Block, ESP_App_Image);
    function Is_Boot_Name (Text : String) return Boolean;
    function Boot_Named (Text : String) return Boot_Kind
      with Pre => Is_Boot_Name (Text);
    function Spelling (Boot : Boot_Kind) return String;
-   function Implemented (Boot : Boot_Kind) return Boolean
-     is (Boot in Vector_Table | RP2040_Boot2 | RP2350_Image_Block);
+   --  D681: whether CORE's family boots BOOT: `rp2040-boot2`'s second
+   --  stage is Thumb code and `esp-app-image` is an RV32 ESP32's.
+   function Boots (Core : Core_Kind; Boot : Boot_Kind) return Boolean
+     is (case Boot is
+           when Vector_Table | RP2350_Image_Block => True,
+           when RP2040_Boot2 => Core in Arm_Core,
+           when ESP_App_Image => Core in RISC_V_Core);
    --  The bytes a boot kind reserves at the start of the vectors' region,
    --  before the vector table: RP2040's 256-byte second stage.
    function Boot_Prefix (Boot : Boot_Kind) return Byte_Count
@@ -196,10 +212,12 @@ package Landin.Targets.Firmware is
    --  stage runs on the stack pointer the core loads from the table, may
    --  use neither the stack nor RAM, and ends by branching to
    --  Reset_Symbol; the table's reset word is Reset_Stage_Symbol.
+   --  D684: an `esp-app-image` description may hold one too, which the
+   --  entry word enters before reset, as the ESP32s' watchdogs need.
    function Admits_Stage (Boot : Boot_Kind) return Boolean
-     is (Boot in RP2040_Boot2 | Vector_Table);
+     is (Boot in RP2040_Boot2 | Vector_Table | ESP_App_Image);
    function Stage_Before_Reset (Boot : Boot_Kind) return Boolean
-     is (Boot = Vector_Table);
+     is (Boot in Vector_Table | ESP_App_Image);
    Reset_Symbol : constant String := "_landin_firmware_reset";
    Reset_Stage_Symbol : constant String := "_landin_firmware_reset_stage";
    Stage_Slot : constant := 256;
@@ -227,6 +245,13 @@ package Landin.Targets.Firmware is
    type Block_Words is array (1 .. 5) of Block_Word;
    Image_Block : constant Block_Words :=
      [16#FFFF_DED3#, 16#1021_0142#, 16#0000_01FF#, 0, 16#AB12_3579#];
+   --  D682: on rv32 the image type is 16#1101#, an executable for
+   --  RISC-V, for RP2350, of no stated security, as the boot ROM runs
+   --  Hazard3's images; the other words are the Arm block's.
+   RISC_V_Image_Block : constant Block_Words :=
+     [16#FFFF_DED3#, 16#1101_0142#, 16#0000_01FF#, 0, 16#AB12_3579#];
+   function Image_Block_Of (Core : Core_Kind) return Block_Words
+     is (if Core in RISC_V_Core then RISC_V_Image_Block else Image_Block);
    Image_Block_Bytes : constant := 20;
    Image_Block_Window : constant := 4096;
    --  The bytes a boot kind places directly after the vector table, in
@@ -237,7 +262,31 @@ package Landin.Targets.Firmware is
      is (if Takes_Image_Block (Boot) then Image_Block_Bytes else 0);
    --  "" when BYTES are that block, word for word; otherwise what in them
    --  is not, by the part of the block it is in.
-   function Image_Block_Fault (Bytes : String) return String;
+   function Image_Block_Fault
+     (Bytes : String; Core : Core_Kind := Cortex_M33) return String;
+
+   --  D683: an `esp-app-image` is what an ESP32's ROM loads from flash
+   --  with no second stage: the 0xE9 header, the extended header naming
+   --  the chip and the revisions it runs on, each segment as its load
+   --  address, its length and its bytes, the XOR of every segment byte
+   --  seeded 0xEF in the last byte of a 16-byte boundary, then the
+   --  SHA-256 of all of that.  The chip's facts are the description's
+   --  `compiler.esp_image`; the image and its rules are the boot kind's.
+   function Takes_ESP_Image (Boot : Boot_Kind) return Boolean
+     is (Boot = ESP_App_Image);
+   ESP_Magic : constant := 16#E9#;
+   ESP_Checksum_Seed : constant := 16#EF#;
+   ESP_Header_Bytes : constant := 24;
+   ESP_Segment_Limit : constant := 16;
+   --  The header's flash mode, DIO, and its size and frequency byte, 4 MB
+   --  at 40 MHz: what the ROMs booted the first RAM-only images with.
+   --  Neither reads them to load a RAM image.
+   ESP_Flash_Mode : constant := 2;
+   ESP_Flash_Size_Frequency : constant := 16#20#;
+   --  The extended header's write-protect pin byte: 0xEE, none.
+   ESP_No_WP_Pin : constant := 16#EE#;
+   subtype ESP_Number is Natural range 0 .. 65_535;
+   ESP_Offset_Alignment : constant := 4096;
 
    type Section_Kind is (Vectors, Text, Rodata, Data, BSS, Stack);
    function Is_Section_Name (Word : String) return Boolean;
@@ -296,6 +345,11 @@ package Landin.Targets.Firmware is
       Has_Stage : Boolean := False;
       --  D615: the description's float unit, `compiler.float_unit`.
       Float : Float_Unit := No_Float_Unit;
+      --  D683: `compiler.esp_image`'s chip id, the full minimum and
+      --  maximum revisions, major * 100 + minor, and the flash offset
+      --  the ROM reads the image at.
+      ESP_Chip, ESP_Minimum, ESP_Maximum : ESP_Number := 0;
+      ESP_Offset : Byte_Count := 0;
    end record;
 
    --  Whether a handler may take absolute slot SLOT: a core slot of the

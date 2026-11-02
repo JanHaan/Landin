@@ -1,6 +1,0 @@
-error[L0516]: refine does not yet build an esp-app-image image
-  --> ../tests/fixtures/negative/description-reserved-boot/program.ldn:4:1
-  |
-4 | compiler.boot("esp-app-image")
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  = note: D545: esp-app-image is a reserved boot image kind; this compiler builds "vector-table", "rp2040-boot2" and "rp2350-image-block" images

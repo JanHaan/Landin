@@ -123,7 +123,10 @@ package body Landin.Targets.Firmware is
       return Result;
    end Stage_Checksum;
 
-   function Image_Block_Fault (Bytes : String) return String is
+   function Image_Block_Fault
+     (Bytes : String; Core : Core_Kind := Cortex_M33) return String
+   is
+      Image_Block : constant Block_Words := Image_Block_Of (Core);
       function Hex (Value : Block_Word; Width : Positive := 8) return String;
       function Hex (Value : Block_Word; Width : Positive := 8) return String
       is
@@ -160,8 +163,11 @@ package body Landin.Targets.Firmware is
            & " 0x42, of one word";
       elsif Word (2) / 2 ** 16 /= Image_Block (2) / 2 ** 16 then
          return "the image block's image type is "
-           & Hex (Word (2) / 2 ** 16, 4) & ", not 0x1021: an executable that"
-           & " runs in Secure state, for Arm, for RP2350";
+           & Hex (Word (2) / 2 ** 16, 4) & ", not "
+           & (if Core in RISC_V_Core
+              then "0x1101: an executable for RISC-V, for RP2350"
+              else "0x1021: an executable that runs in Secure state, for"
+                & " Arm, for RP2350");
       elsif Byte (8) /= 16#FF# then
          return "the image block's last item is type " & Hex (Byte (8), 2)
            & ", not LAST, 0xff";

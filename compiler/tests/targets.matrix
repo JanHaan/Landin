@@ -3,7 +3,7 @@
 # Do not edit;
 # regenerate with python3 check.py --coverage.
 # scope | targets
-prototype-1 | cortex-m0
+prototype-1 | cortex-m0, rv32
 prototype-2 | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64
 prototype-3 | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0, rv32, synthetic-32
 prototype-4 | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64
@@ -385,13 +385,14 @@ negative/derived-array-slice-by-value | linux-x86-64, linux-arm64, darwin-arm64,
 negative/derived-array-slice-local | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/derived-array-slice-local-field | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/derived-array-slice-wrong-from | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/description-boot-family | cortex-m0
 negative/description-core-mismatch | cortex-m0
 negative/description-directive-outside | cortex-m0
+negative/description-esp-image-missing | rv32
 negative/description-float-unit-core | cortex-m0
 negative/description-float-unit-level | cortex-m0
 negative/description-float-unit-unknown | cortex-m0
 negative/description-regions-overlap | cortex-m0
-negative/description-reserved-boot | cortex-m0
 negative/description-unknown-core | cortex-m0
 negative/destructured-local-escape | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/directory-name-outlives-read | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -639,6 +640,7 @@ negative/library-at-live-inout | linux-x86-64, linux-arm64, darwin-arm64, synthe
 negative/library-evidence-collision | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/library-platform-cortex-m-hosted | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64
 negative/library-platform-cortex-m-reference-hosted | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64
+negative/library-platform-riscv-hazard3-hosted | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64
 negative/line-leading-minus-continues-the-value | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/line-leading-parenthesis-argument-is-not-declared-yet | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/line-leading-parenthesis-continues-as-a-call | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -1268,6 +1270,7 @@ negative/region-release-live-handle | linux-x86-64, linux-arm64, darwin-arm64, s
 negative/register-class-as-operand-type-is-named | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/remainder-by-zero | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/reset-stage-uses-the-stack | cortex-m0
+negative/reset-stage-uses-the-stack-rv32 | rv32
 negative/reset-stage-without-reset | cortex-m0
 negative/result-aggregate-assignment-name-mismatch | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/result-destructure-duplicate-field | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

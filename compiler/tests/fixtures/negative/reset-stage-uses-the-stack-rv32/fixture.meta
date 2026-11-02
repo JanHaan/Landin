@@ -1,0 +1,9 @@
+class: negative
+summary: D684: an RV32 stage runs from the entry word before reset has set the stack pointer, so it uses no stack
+program: program.ldn
+constructs: 1640, 1990
+targets: rv32
+codes: L0561
+args: --target=rv32 ../tests/fixtures/negative/reset-stage-uses-the-stack-rv32/program.ldn
+expect: expected.txt
+status: 1

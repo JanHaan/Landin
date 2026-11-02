@@ -103,7 +103,7 @@
         "memory map": "ESP32-C3 TRM v1.4, 3.3.2, Table 3.3-1, pp. 93 and 94: SRAM1 is 384 KiB at 0x40380000 on the instruction bus and at 0x3FC80000 on the data bus, one memory; IRAM 0x40380000 128 KiB, and DRAM 0x3FCA0000 160 KiB, the memory after IRAM's",
         "rom reservation": "https://github.com/espressif/esp-idf/blob/fff9895c82d744c7237be8847347bdd1b07c6643/components/bootloader/subproject/main/ld/esp32c3/bootloader.memory.ld.in, SHA-256 8b6faff8a5bab4e729c9d4bd92ffde3cdf15ae44cb28416868dd088684dfeb69: the ROM's download buffers from 0x3fccae00, its stack from 0x3fcdc710 and its data from 0x3fcde710 to 0x3fce0000, all above both regions",
         "core slots": "esp-rv32imc, a vectored mtvec: slot n is mcause interrupt code n, the CPU interrupt lines 1 to 31 taken and 0 reserved; the SVD's interrupts are interrupt-matrix sources, devices/generated/esp32c3/sources, none of them a slot (D701); UART0, source 21, routed to line 1",
-        "boot": "esp-app-image: a RAM-only image the boot ROM loads from flash offset 0 with no second stage; the table at the start of IRAM (D545)"
+        "boot": "esp-app-image: a RAM-only image the boot ROM loads from flash offset 0 with no second stage (D683); the entry word at the start of IRAM and the 32-slot table at the next 256-byte boundary, 0x40380100, where ESP-IDF aligns the C3's (D662)"
       },
       "target": "rv32",
       "core": "esp-rv32imc",
@@ -115,7 +115,7 @@
         {"name": "DRAM", "origin": 1070202880, "length": 163840, "access": "rw"}
       ],
       "placed": {"vectors": "IRAM", "text": "IRAM", "rodata": "IRAM", "data": "DRAM", "bss": "DRAM", "stack": "DRAM"},
-      "vector_address": 1077411840,
+      "vector_address": 1077412096,
       "vector_words": 32,
       "boot_prefix": 0,
       "boot_suffix": 0,
@@ -133,7 +133,7 @@
         "memory map": "ESP32-C5 TRM v1.1, 6.3, Table 6.3-1, p. 239: the HP SRAM is 384 KiB from 0x40800000, one address space; SRAM 0x40800000 312 KiB",
         "rom reservation": "https://github.com/espressif/esp-idf/blob/fff9895c82d744c7237be8847347bdd1b07c6643/components/bootloader/subproject/main/ld/esp32c5/bootloader.memory.ld.in, SHA-256 b957d27c0498894174c35da4a7aaa5f96fd7b9b72cb6356e203eaa2c0d302038: the ROM's download buffers from 0x4084e5a0, its stack from 0x4085c5a0 and its data from 0x4085e5a0 to 0x40860000, all above the region",
         "core slots": "esp-rv32imac-clic: slot n is CLIC interrupt identity n, the CPU's 32 peripheral interrupts 16 to 47 taken (TRM v1.1, 11.5.2, p. 477) and 0 to 15 reserved; the SVD's interrupts are interrupt-matrix sources, devices/generated/esp32c5/sources, none of them a slot (D701); UART0, source 47, routed to identity 17",
-        "boot": "esp-app-image: a RAM-only image the boot ROM loads from flash offset 0x2000 with no second stage; the table at the start of SRAM (D545)"
+        "boot": "esp-app-image: a RAM-only image the boot ROM loads from flash offset 0x2000 with no second stage (D683); the entry word at the start of SRAM and the 48-slot table at the first boundary of its 192 bytes rounded up to 256 past it, 0x40800100 (D662)"
       },
       "target": "rv32",
       "core": "esp-rv32imac-clic",
@@ -144,7 +144,7 @@
         {"name": "SRAM", "origin": 1082130432, "length": 319488, "access": "rwx"}
       ],
       "placed": {"vectors": "SRAM", "text": "SRAM", "rodata": "SRAM", "data": "SRAM", "bss": "SRAM", "stack": "SRAM"},
-      "vector_address": 1082130432,
+      "vector_address": 1082130688,
       "vector_words": 48,
       "boot_prefix": 0,
       "boot_suffix": 0,
@@ -164,13 +164,14 @@
         "flash size": "https://github.com/raspberrypi/pico-sdk/blob/2.2.0/src/boards/include/boards/pico2.h, SHA-256 6d32916eea833abcef7e7d10321853a5c23eb7366b893aba4d5354d6ddc6b76c: PICO_FLASH_SIZE_BYTES (4 * 1024 * 1024)",
         "interrupts": "https://github.com/raspberrypi/pico-sdk/blob/2.2.0/src/rp2350/hardware_regs/include/hardware/regs/intctrl.h, SHA-256 e9c90fb163105a8083578ea1d5430a499eb696a5734e9dbfe3e7c45d303e9b1c: PROC0_IRQ_CTI 40, SPARE_IRQ_5 51, every IRQ of 0 to 51 named; RP2350 Datasheet release 8, 3.2, p. 81: one IRQ table for both kinds of core",
         "core slots": "hazard3, Xh3irq: external IRQ n at slot 16 + n, resolved through meinext, as the NVIC's; its interrupt control is the core's CSRs, which no SVD gives",
-        "layout": "rp2350-image-block on RISC-V: the image's code first, then the trap table and the block inside the first 4 KiB; the table's address and the block's are the boot kind's and are not recorded until an rv32 descriptions lane reads them"
+        "layout": "D662, D682: rp2350-image-block on RISC-V: the entry word at FLASH's origin, then the 68-slot table at the first boundary of its 272 bytes rounded up to a power of two, 512, past it, 0x10000200, then the 20-byte IMAGE_DEF block, image type 0x1101, directly after the table at 0x10000310, inside the first 4 KiB"
       },
       "target": "rv32",
       "core": "hazard3",
       "level": "rv32imac",
       "float_unit": "none",
       "boot": "rp2350-image-block",
+      "image_block": {"address": 268436240, "bytes": 20, "window": 4096},
       "regions": [
         {"name": "FLASH", "origin": 268435456, "length": 4194304, "access": "rx"},
         {"name": "RAM", "origin": 536870912, "length": 524288, "access": "rwx"},
@@ -178,7 +179,10 @@
         {"name": "SCRATCH_Y", "origin": 537399296, "length": 4096, "access": "rwx"}
       ],
       "placed": {"vectors": "FLASH", "text": "FLASH", "rodata": "FLASH", "data": "RAM", "bss": "RAM", "stack": "SCRATCH_Y"},
+      "vector_address": 268435968,
       "vector_words": 68,
+      "boot_prefix": 0,
+      "boot_suffix": 20,
       "stack_top": 537403392,
       "stack_reserved": 4096,
       "handler_slot": 56,

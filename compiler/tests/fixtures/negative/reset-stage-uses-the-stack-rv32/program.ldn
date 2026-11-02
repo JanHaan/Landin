@@ -1,0 +1,16 @@
+compiler.device("board")
+compiler.core("esp-rv32imc")
+compiler.vectors(32)
+compiler.boot("esp-app-image")
+compiler.esp_image(5, 3, 199, 0x0)
+linker.region("SRAM", 0x4038_0000, 256 * 1024, "rwx")
+linker.place("vectors", "SRAM")
+linker.place("text", "SRAM")
+linker.place("rodata", "SRAM")
+linker.place("data", "SRAM")
+linker.place("bss", "SRAM")
+linker.place("stack", "SRAM", 16 * 1024)
+
+link(boot_stage) extern(naked) watchdogs: () -> none =
+    assembler.block("addi sp, sp, -16\nj _landin_firmware_reset")
+end watchdogs

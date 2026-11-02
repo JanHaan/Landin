@@ -8,6 +8,7 @@ with Landin.IR.Shape_Measurement;
 with Landin.Packed;
 with Landin.Memory;
 with Landin.Targets.Packed;
+with Landin.Backend.Firmware;
 with Landin.Backend.Dwarf;
 with Ada.Strings.Fixed;
 with Landin.Targets.Capabilities;
@@ -6812,7 +6813,10 @@ package body Landin.Backend.RiscV is
            "RISC-V emission needs an RV64 or RV32 description";
       end if;
       --  The ELF ISA attribute and toolchain both assume the selected set.
-      Emit (".attribute arch, """ & Landin.Targets.Levels.Name (Level) & """");
+      --  D660: an RV32 level holds Zicsr and Zifencei, as the tools'
+      --  -march says, and the attribute replaces what -march selected.
+      Emit (".attribute arch, """ & Landin.Targets.Levels.Name (Level)
+        & (if Pairs then "_zicsr_zifencei" else "") & """");
       Emit (".option norelax");
       --  Firmware is linked at its addresses, so only RV64 is PIC.
       if not Pairs then
@@ -6846,7 +6850,22 @@ package body Landin.Backend.RiscV is
            (Debug.all, Local_Prefix,
             Mach_O => False));
       end if;
-      --  S3: RV32_Image goes here.
+      --  D680, D686: the firmware image's compiler-owned text.
+      if Firmware_Entry /= Landin.IR.No_Item then
+         Put (Landin.Backend.Firmware.RV32_Image
+           (Of_Unit, Names, Symbol (Firmware_Entry), Symbol'Access,
+            Limit_Cell => (if Prepares then Stack_Limit else ""),
+            Returned =>
+              (if Panic = null
+                 or else Landin.Panics.Handler (Panic.all)
+                   = Landin.IR.No_Item
+               then ""
+               else "li a0, " & Trimmed (Positive'Image
+                 (Landin.Panics.Code (Panic.all, Landin.Panics.Unreachable)))
+                 & LF & "li a1, 0" & LF & "call "
+                 & Symbol (Landin.Panics.Handler (Panic.all))),
+            Debug => Debug /= null));
+      end if;
       for Index in 1 .. Landin.IR.Item_Count (Of_Unit) loop
          declare
             Item : constant Landin.IR.Item_Id := Landin.IR.Item_Id (Index);

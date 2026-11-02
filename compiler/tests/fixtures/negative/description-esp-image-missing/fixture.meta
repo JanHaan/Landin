@@ -1,0 +1,9 @@
+class: negative
+summary: D683: an esp-app-image description names its chip, revisions and flash offset with compiler.esp_image
+program: program.ldn
+constructs: 1990
+targets: rv32
+codes: L0575
+args: --target=rv32 ../tests/fixtures/negative/description-esp-image-missing/program.ldn
+expect: expected.txt
+status: 1

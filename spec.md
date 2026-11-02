@@ -2185,6 +2185,20 @@ and releasing stores (D606). With a float unit (D615) an exception taken in
 a float context stacks the extended frame (D618), and a fibre's context
 holds d8-d15 and FPSCR (D620); without one there is no FPU frame.
 
+On `rv32` (D660) the image begins instead with its entry word,
+`_landin_firmware_entry`, a jump to compiler reset, and the table follows
+at the first address its alignment allows, one jump per slot (D662,
+D686). Reset clears mstatus.MIE, writes mtvec as the core's interrupt
+model needs, sets sp to the stack's top, copies and clears as below,
+fences, sets MIE and calls the entry. A handler is entered through
+compiler-owned code (D680): a stub saves ra, t0-t6 and a0-a7 and calls an
+`extern(interrupt)` routine, which is an ordinary routine, and its unwind
+rules return to mepc; a naked routine is jumped to from a slot the
+hardware enters and owns its `mret`; there is no nesting. A description's
+stage runs from the entry word, before reset (D684), and an `esp-app-image`
+profile's executable is followed by the image its ROM loads, `OUT.bin`
+(D683, D685).
+
 Reset masks configurable interrupts, initializes reserved r9 and the root
 r11 to zero, and, when the description has a float unit (D615), gives CP10
 and CP11 full access in CPACR followed by DSB and ISB, before anything can
@@ -23049,6 +23063,263 @@ before the link; and `environments/cortex-m/descriptions.py`, which reads
 the build report's block, links with a copy of the derived script and
 refuses scripts that move the block past 4 KiB or replace its words, each
 naming clause 1.
+
+### D680 — An RV32 image's traps follow its core's interrupt model
+
+**The tour said** at [1990] how a Cortex-M handler is entered: the core
+stacks the caller-saved registers and enters the routine its vector names.
+A RISC-V core stacks nothing, and D662 made a slot an mcause interrupt code
+whose meaning the core's interrupt model gives.
+
+**Chosen:** compiler-owned code enters every handler, and no handler takes
+an exception: an exception, mcause's interrupt bit clear, reaches the
+unhandled loop. Each model sets mtvec its own way:
+
+- `vectored`, the E31's and the ESP32-C3's: mtvec holds the table in
+  vectored mode, 1, and the core jumps to slot N for interrupt code N and to
+  slot 0 for every exception. Each slot is one `j`: to the unhandled loop,
+  to a naked routine itself, or to a stub of the handler's,
+  `_landin_firmware_slot_N`.
+- `clic`, the ESP32-C5's: mtvec holds `_landin_firmware_trap`, aligned to
+  64 bytes, in CLIC mode, 3, and no interrupt is selectively hardware
+  vectored. The CLIC specification sends every trap of a non-vectored
+  interrupt to mtvec's base, and its interrupt id is mcause's low twelve
+  bits, in its non-vectored mode; the entry saves the registers, reads
+  mcause, and calls slot `id` of the table, whose `j` reaches the handler.
+  ESP-IDF's own vectors set `mtvt` and each interrupt's `shv` instead
+  (`components/riscv/vectors_clic.S`); that needs a write per interrupt the
+  program enables, which the program owns, and a table of addresses
+  beside the table of jumps.
+- `xh3irq`, Hazard3's: mtvec holds the table in vectored mode, and slot 11,
+  the machine external interrupt, jumps to `_landin_firmware_external`,
+  which saves the registers and, while meinext names an IRQ, calls slot
+  16 + IRQ through the table, as pico-sdk's `isr_riscv_machine_external_irq`
+  loops over meinext, which gives the IRQ times four in bits 2 to 10. Bit
+  31, no IRQ, ends the loop.
+
+A slot the profile does not admit, or one no handler takes, jumps to the
+unhandled loop rather than holding zero, which D544 gives the NVIC: a RISC-V
+slot is an instruction, and zero is an illegal one, whose trap would
+overwrite the mcause a debugger reads. An `extern(interrupt)` routine is an
+ordinary routine. Its stub lowers sp by 64 bytes, saves ra, t0-t6 and a0-a7,
+the registers a call may change, calls it and restores them, then `mret`;
+its unwind rules give mepc as the return address, which nothing changes
+until `mret`, so a debugger unwinds from the handler into the interrupted
+code. A naked routine in a hardware-entered slot is jumped to, and owns its
+saves and its `mret`. A slot the core's dispatch enters, every slot under
+the CLIC and slot 16 + IRQ on Hazard3, is called, so a naked routine there
+is L0347, saying to write it `extern(interrupt)`. There is no nesting:
+mstatus.MIE stays clear from the trap to `mret`. When the program prepares
+stacks ([1995]), the stub saves the stack limit's cell, stores zero in it
+while the handler runs and restores it, 80 bytes in all: a handler runs on
+the interrupted stack, which a switch may be moving between, and is not
+checked, as on Cortex-M0.
+
+**The alternatives:** one common entry on every core, which turns the
+vectored cores' hardware dispatch into a second software one; hardware
+vectoring on the CLIC, above; a naked routine in a dispatched slot entered
+with t0 in mscratch, which no reader of a naked body would expect; zero in
+an unhandled slot, above; and nesting, which needs a priority policy no
+description states (a register row).
+
+**Pinned by** the `rv32 firmware` case `traps follow the interrupt model`,
+which holds the table, stubs and entries of each model; the `rv32 firmware`
+case `a naked handler is refused in a dispatched slot`; and the RV32
+emulator lane, which takes the reference's interrupts.
+
+### D681 — A boot kind is read by one family's boot ROM, or by both
+
+**The tour said** nothing; D545's kinds were all Arm's until D662 added
+RISC-V cores.
+
+**Chosen:** `rp2040-boot2` begins with a stage of Thumb code, so only an
+Arm core's description may select it, and `esp-app-image` is what an
+ESP32-C3's or ESP32-C5's ROM loads, so only a RISC-V core's may. `vector-table`
+and `rp2350-image-block` serve both: RP2350 boots either family from
+one block format. A description that selects another family's kind is
+L0576, at its `compiler.boot`, naming the core.
+
+**The alternatives:** leaving the pairing to the board run, which finds
+it only on hardware; and a kind per family and chip, which multiplies names
+the ROMs do not distinguish.
+
+**Pinned by** `negative/description-boot-family`.
+
+### D682 — An RV32 `rp2350-image-block` image begins with its entry word
+
+**The tour said** nothing; D637 laid out the Arm image, whose table's first
+two words the boot ROM reads.
+
+**Chosen:** on `rv32` the image is its entry word, then the table at the
+first address its alignment allows, then the IMAGE_DEF block directly
+after it, still ending in the first 4 KiB. Hazard3's boot ROM, given a
+block with no ENTRY_POINT, enters a RISC-V image at its first byte, which
+is the entry word. The block's IMAGE_TYPE is 0x1101, an executable for
+RISC-V, for RP2350, of no stated security, in the item format D637 cites,
+so its second word is 0x11010142, the word the Pico 2 booted on the rig; D638's read-back and D546's first
+clause check that word on `rv32`, reading an EM_RISCV object.
+
+**The alternatives:** an ENTRY_POINT item, which repeats what the image's
+first byte already says; and the table first, which Hazard3 would execute.
+
+**Pinned by** the `rv32 firmware` cases `descriptions select their
+profiles`, which holds RP2350 Hazard3's table and block addresses, and `an
+image block is read from an rv32 object`.
+
+### D683 — `esp-app-image` is a RAM-only image the ROM loads, its chip the description's
+
+**The tour said** nothing; D545 reserved the name.
+
+**Chosen:** the kind stops being reserved, and L0516 is retired. An
+ESP32-C3's and an ESP32-C5's ROM load an application image from flash into
+RAM and enter it with no second stage, as the rig's spikes showed from
+power-on on both chips, in the format ESP-IDF's `esp_app_format.h` and
+`esp_image_format.h` declare: a header, 0xE9, the segment count, the flash mode and
+the size and frequency byte, and the entry; an extended header naming the
+chip, its minimum and maximum full revisions and that a hash follows; each
+segment as its load address, its length and its bytes; zeros to the last
+byte of a sixteen-byte boundary, which holds the exclusive or of every
+segment byte seeded 0xEF; then the SHA-256 of everything before it. Chip
+id, revisions and offset are the chip's, not the compiler's: a description
+that selects the kind writes `compiler.esp_image(chip, min_revision,
+max_revision, flash_offset)` once, the chip id as `esp_chip_id_t` gives it,
+5 for the C3 and 23 for the C5, the revisions as major * 100 + minor, and
+the offset where its ROM reads, a multiple of 4096, 0 on the C3 and 0x2000
+on the C5. A description of this kind without it, or one of another kind
+with it, is L0575; an argument outside its range is L0399. The image is
+RAM-only: its code runs from SRAM, flash execute-in-place is a register
+row, the flash mode byte is DIO and the size and frequency byte 0x20, which
+neither ROM reads to load a RAM image, and the legacy one-byte minimum
+revision is zero, as the images both ROMs booted on the rig were.
+
+**The alternatives:** chip facts in the compiler, which names devices;
+a directive per fact, four names for one record; flash execution, which
+needs the ROM's cache and MMU set-up, a second stage refine does not write;
+and esptool's own image, which is a tool beside the compiler's output.
+
+**Pinned by** `negative/description-esp-image-missing` and
+`negative/description-boot-family`, and the `rv32 firmware` case
+`descriptions select their profiles`, which holds each refusal of the
+directive.
+
+### D684 — An RV32 description's stage runs from the entry word, before reset
+
+**The tour said** nothing; D653 lets a `vector-table` description hold a
+stage its reset vector enters, and an ESP32's watchdogs must be fed or
+stopped before reset clears a large BSS.
+
+**Chosen:** on `rv32` an `esp-app-image` or `vector-table` description may
+hold one `link(boot_stage)` naked routine, labelled
+`_landin_firmware_reset_stage` in `.text.landin_firmware_reset_stage`, and
+the entry word jumps to it instead of to reset. It runs before reset has
+set the stack pointer, so it may use neither the stack nor RAM, and it
+ends in compiler-owned reset, which it names: a stage that names no
+`_landin_firmware_reset` is L0560, and one that reaches the stack through
+`sp`, `x2` or a compressed instruction that addresses through it, `lwsp`,
+`swsp`, `addi16sp` or `addi4spn`, is L0561, each saying the RISC-V form. Its
+text is read with RISC-V's `#` comments removed (D597).
+
+**The alternatives:** a stage on the ESP image only, which leaves an RV32
+board with a vector-table image nowhere to configure its clocks before
+reset; and stopping the watchdogs in compiler-owned reset, which names a
+chip's registers in the compiler.
+
+**Pinned by** the `rv32 firmware` case `a stage runs before reset`, which
+holds the entry word, the stage's section and L0560 and L0561 on `rv32`.
+
+### D685 — refine writes the ESP application image beside the executable and reads it back
+
+**The tour said** nothing; D683 says what the image is.
+
+**Chosen:** a firmware build of an `esp-app-image` profile links the
+executable as any other, then writes `OUT.bin`, the image of its loaded
+segments with bytes in the file, at their load addresses in the ELF's
+order, entered at `_landin_firmware_entry`. A segment outside every region
+of the description, more than sixteen, or an entry that is not that symbol
+is L0577, naming it. refine then reads the file back and parses it on its
+own, holding its header, extended header, every segment's address, length
+and bytes against the executable's, its padding, checksum and hash, and
+nothing after the hash; a part that is not as made is L0577, and refine
+removes the executable and the image, so no build leaves an image it did
+not check. `OUT.bin` is the image a flasher writes at the description's
+offset, `probe-rs download --binary-format bin --base-address OFFSET`.
+The build report's `esp_image` gives its offset, entry, chip, revisions,
+each segment's address and length, checksum, SHA-256 and length, and
+`--emit=linker-script`'s report its offset, chip and revisions (D589).
+D546's contract gains nothing for the kind: its fourth clause already holds
+each load image in the text region, and the image refine writes is made
+from whatever executable the developer's script linked.
+
+**The alternatives:** leaving the image to esptool, a second tool whose
+output refine could not check; writing the image from refine's own layout
+rather than the linked ELF's, which a developer's script would contradict;
+and trusting the write unread, which D638 already declined for the block.
+
+**Pinned by** the `rv32 firmware` case `an ESP application image is made
+and read back`, which makes the image of a synthetic executable, holds its
+bytes to the format and refuses each part of a corrupted copy, and the
+ESP32-C3 lane, which boots `OUT.bin` through the real ROM.
+
+### D686 — An RV32 image begins with its entry word, and its script says so
+
+**The tour said** at [1990] what Cortex-M's reset does and D545 how its
+script is derived; D662 gave a RISC-V image an entry word.
+
+**Chosen:** the image's first word, at its vectors' region's origin past
+the boot kind's prefix, is `_landin_firmware_entry`, a `j` to reset or to
+the stage, in `.text.landin_entry`, assembled with no compression and no
+relaxation so it stays one word; the table follows at the profile's
+Vector_Address, a `j` per slot, likewise. Compiler-owned reset clears
+mstatus.MIE, writes mtvec as D680 says, sets sp to the stack's top, copies
+`.data`, `.ramtext` and each used writable region and clears `.bss` by the
+same `_landin_firmware_*` symbols as Cortex-M, orders the copies with
+`fence rw, rw` and `fence.i`, sets mstatus.MIE and calls the entry; gp
+stays unused, so no script defines `__global_pointer$`. The derived script
+is `elf32-littleriscv`, `ENTRY(_landin_firmware_entry)`, places
+`.landin_entry` and `.isr_vector` at their addresses, collects the small
+data sections with their own, and asserts the entry word's address and
+size, the table's, and a stack top aligned to sixteen bytes. On `rv32`,
+`--emit=linker-script` writes it without an emitter, so a harness has every
+profile's script before the backend emits. D546 holds a developer's script
+on `rv32` to the same four clauses, the first reading the entry word as a
+jump to reset or the stage, the third the sixteen-byte alignment. D537's
+budget reads the profile as on Cortex-M; a text and data region that are
+the same SRAM, as an ESP32's may be, counts every segment in it as static
+RAM in the report.
+
+**The alternatives:** a reset vector of an address, which RISC-V cores
+do not read; the table first, which the E31's mask ROM and Hazard3's boot
+ROM would execute; and setting gp for relaxation, which saves a word per
+access and gives every image one more register the startup owns.
+
+**Pinned by** the `rv32 firmware` cases `descriptions select their
+profiles` and `the linker script is written without a program`, which hold
+the reference's derived script, and the RV32 emulator lane, which runs the
+corpus on it.
+
+### D687 — `platform/riscv` declares its CPU operations on rv32 alone
+
+**The tour said** at [1480] that `platform/cortex_m` holds the M profile's
+CPU operations; D575 made it declare them only on an M-profile target.
+
+**Chosen:** `platform/riscv` is available on every target and declares, on
+`rv32` alone, `disable_interrupts`, which clears mstatus.MIE with `csrrci`
+and returns its prior state, `restore_interrupts`, which sets it again only
+if it was set, `interrupt_mask`, `enable_lines` and `disable_lines` over
+`mie`, `wait_for_interrupt`, a fence then `wfi`, and the three barriers.
+The critical section is `disable_interrupts` to `restore_interrupts`, as on
+Cortex-M. Its submodule `platform/riscv/hazard3`, on `rv32` alone as D661's
+reference is, writes Xh3irq's core CSRs: `enable_irq` and `disable_irq`
+over meiea and `force_irq` and `clear_forced_irq` over meifa, each IRQ in
+its sixteen-bit window. An ESP32's CPU lines are its interrupt matrix's or
+its CLIC's, which are the chip's generated modules.
+
+**The alternatives:** Hazard3's CSRs in the description, which is
+directives alone; and one module with the controller beside the core's
+operations, which an ESP program would see.
+
+**Pinned by** `negative/library-platform-riscv-hazard3-hosted` and the RV32
+emulator lane's interrupt programs.
 
 ### D570 — The depth report closes a call through a table or a function value
 

@@ -1,0 +1,38 @@
+--  Hazard3's external interrupt controller, Xh3irq, the RP2350's RISC-V
+--  cores' (D687). Its enable, pending and force bits are core CSRs, meiea,
+--  meipa and meifa, each written sixteen IRQs at a time: the low five bits
+--  of the value select the window, IRQ / 16, and bits 16 to 31 are its
+--  sixteen IRQs. The compiler's dispatch reads meinext and calls slot
+--  16 + IRQ (D680); enabling an IRQ is the program's, here. Every routine
+--  takes an IRQ below 512, Xh3irq's limit, and on a core without Xh3irq the
+--  CSRs trap as illegal instructions.
+
+fixed if compiler.arch == rv32 then
+    --- The meiea, meipa or meifa value naming IRQ in its window.
+    window_bit: (irq: u32) -> (bits: u32) =
+        bits = (u32(1) << (u32(16) + (irq & u32(15)))) | ((irq >> u32(4)) & u32(31))
+    end window_bit
+
+    --- Enable external interrupt IRQ in meiea. The core takes it once it is
+    --- pending and mie.MEIE, which `platform/riscv`'s `enable_lines(0x800)`
+    --- sets, and mstatus.MIE are set.
+    public enable_irq: (irq: u32) -> none =
+        assembler.block("csrs 0xbe0, {bits}", in bits: u32 at general = window_bit(irq))
+    end enable_irq
+
+    --- Disable external interrupt IRQ in meiea.
+    public disable_irq: (irq: u32) -> none =
+        assembler.block("csrc 0xbe0, {bits}", in bits: u32 at general = window_bit(irq))
+    end disable_irq
+
+    --- Force IRQ pending through meifa, as if its source had asserted it,
+    --- until `clear_forced_irq`.
+    public force_irq: (irq: u32) -> none =
+        assembler.block("csrs 0xbe2, {bits}", in bits: u32 at general = window_bit(irq))
+    end force_irq
+
+    --- Stop forcing IRQ pending.
+    public clear_forced_irq: (irq: u32) -> none =
+        assembler.block("csrc 0xbe2, {bits}", in bits: u32 at general = window_bit(irq))
+    end clear_forced_irq
+end if

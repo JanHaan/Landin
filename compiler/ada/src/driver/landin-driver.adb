@@ -29,6 +29,7 @@ with Landin.Diagnostics.Text;
 with Landin.Driver.Assembler_Sites;
 with Landin.Driver.Boot_Stage;
 with Landin.Driver.Checking;
+with Landin.Driver.ESP_Image;
 with Landin.Driver.Image_Block;
 with Landin.Driver.Library;
 with Landin.Driver.Loading;
@@ -1172,6 +1173,9 @@ package body Landin.Driver is
          --  An executable's assembly once written, which D362 removes
          --  after the link unless --keep-asm asked for it.
          Intermediate_Assembly : Unbounded.Unbounded_String;
+         --  D685: what the build report records of the ESP application
+         --  image the link was followed by, once written and read back.
+         ESP_Image_Report : Unbounded.Unbounded_String;
          Target_Option_Refused : Boolean := False;
          Policy_Denied : Boolean := False;
 
@@ -2228,6 +2232,84 @@ package body Landin.Driver is
             return Any;
          end Libraries_Missing;
 
+         --  D683, D685: the ESP application image of the executable at
+         --  TARGET_PATH, written as TARGET_PATH.bin and read back before the
+         --  build succeeds.  A refusal removes the executable and any
+         --  image, so no build leaves an image it did not check.
+         procedure Write_ESP_Image (Target_Path : String);
+
+         procedure Write_ESP_Image (Target_Path : String) is
+            Profile : constant Landin.Targets.Firmware.Profile :=
+              Landin.IR.Firmware_Profile (Landin.Stages.Code (Context).all);
+            Image_Path : constant String := Target_Path & ".bin";
+            Executable, Read_Back : Unbounded.Unbounded_String;
+            Read : Landin.Platform.Read_Status;
+            Written : Landin.Platform.Write_Status;
+
+            procedure Restore;
+            procedure Restore is
+               Removed : Landin.Platform.Remove_Status;
+            begin
+               Host.Remove_File (Target_Path, Removed);
+               Host.Remove_File (Image_Path, Removed);
+            end Restore;
+         begin
+            Host.Read_File (Target_Path, Executable, Read);
+            if Read /= Landin.Platform.Read_Ok then
+               Note_Failure
+                 (Code_Toolchain_Failed,
+                  "cannot read the linked executable: " & Target_Path);
+               Restore;
+               return;
+            end if;
+            declare
+               Made : constant Landin.Driver.ESP_Image.Made :=
+                 Landin.Driver.ESP_Image.Make
+                   (Unbounded.To_String (Executable), Profile);
+            begin
+               if Unbounded.Length (Made.Fault) > 0 then
+                  Note_Failure
+                    (Rows.Code (Rows.ESP_Image_Object),
+                     Unbounded.To_String (Made.Fault) & ", so no ESP"
+                     & " application image can hold it (D685)");
+                  Restore;
+                  return;
+               end if;
+               Host.Write_File
+                 (Image_Path, Unbounded.To_String (Made.Image), Written);
+               if Written /= Landin.Platform.Write_Ok then
+                  Note_Failure
+                    (Code_Unwritable, "cannot write: " & Image_Path);
+                  Restore;
+                  return;
+               end if;
+               Host.Read_File (Image_Path, Read_Back, Read);
+               if Read /= Landin.Platform.Read_Ok then
+                  Note_Failure
+                    (Code_Toolchain_Failed,
+                     "cannot read the written image: " & Image_Path);
+                  Restore;
+                  return;
+               end if;
+               declare
+                  Fault : constant String :=
+                    Landin.Driver.ESP_Image.Read_Back_Fault
+                      (Unbounded.To_String (Read_Back),
+                       Unbounded.To_String (Executable), Profile);
+               begin
+                  if Fault /= "" then
+                     Note_Failure
+                       (Rows.Code (Rows.ESP_Image_Object),
+                        Image_Path & " does not read back as the image of "
+                        & Target_Path & ": " & Fault & " (D685)");
+                     Restore;
+                     return;
+                  end if;
+               end;
+               ESP_Image_Report := Made.Report;
+            end;
+         end Write_ESP_Image;
+
          --  The link that finishes an executable from assembly, whether
          --  this request emitted it or named it (D362): the driver chosen,
          --  the prior executable kept aside until a new one exists, and
@@ -2426,7 +2508,10 @@ package body Landin.Driver is
                            declare
                               Fault : constant String := Unbounded.To_String
                                 (Landin.Driver.Image_Block.Fault
-                                   (Unbounded.To_String (Object)));
+                                   (Unbounded.To_String (Object),
+                                    Landin.IR.Firmware_Profile
+                                      (Landin.Stages.Code (Context).all)
+                                      .Core));
                            begin
                               if Fault /= "" then
                                  Note_Failure
@@ -2665,6 +2750,14 @@ package body Landin.Driver is
                         & Unbounded.To_String (Backup));
                   end if;
                end if;
+               if On_Firmware
+                 and then Landin.Targets.Firmware.Takes_ESP_Image
+                   (Landin.IR.Firmware_Profile
+                      (Landin.Stages.Code (Context).all).Boot)
+                 and then not Landin.Stages.Failed (Context)
+               then
+                  Write_ESP_Image (Target_Path);
+               end if;
                Release_Lock;
             exception
                when others =>
@@ -2796,7 +2889,8 @@ package body Landin.Driver is
                        (Host, Product_Path, Product_Path & ".map",
                         Landin.IR.Firmware_Profile
                           (Landin.Stages.Code (Context).all),
-                        Boot_Stage_Routine, Firmware, Valid);
+                        Boot_Stage_Routine, Firmware, Valid,
+                        ESP_Image => Unbounded.To_String (ESP_Image_Report));
                      if not Valid then
                         Note_Failure
                           (Code_Toolchain_Failed,
@@ -2835,6 +2929,12 @@ package body Landin.Driver is
                   Destinations.Append (Product_Path & ".o");
                   Destinations.Append (Product_Path & ".ld");
                   Destinations.Append (Product_Path & ".map");
+                  if Landin.Targets.Firmware.Takes_ESP_Image
+                    (Landin.IR.Firmware_Profile
+                       (Landin.Stages.Code (Context).all).Boot)
+                  then
+                     Destinations.Append (Product_Path & ".bin");
+                  end if;
                end if;
                if Debug_Enabled then
                   for Path of Landin.Backend.Toolchain.Debug_Artifacts
@@ -3014,7 +3114,9 @@ package body Landin.Driver is
 
             --  A backend named before its emitter: the program checks and
             --  lowers to IR, and nothing that would be linked is written.
-            if Emit in Emit_Assembly | Emit_Executable | Emit_Linker_Script
+            --  A profile's script is the description's, which no emitter
+            --  writes (D686).
+            if Emit in Emit_Assembly | Emit_Executable
               and then not Landin.Targets.Capabilities.Emits (Facts)
             then
                Note_No_Toolchain

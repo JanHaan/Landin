@@ -5153,6 +5153,13 @@ package body Landin.IR.Verifier is
                       (Of_Unit, Signature_Of (Of_Unit, Id))
                         not in Landin.Machine.Interrupt_Handler
                           | Landin.Machine.Naked_Routine
+                    --  D680: a dispatched slot calls its handler.
+                    or else (Signature_Machine
+                               (Of_Unit, Signature_Of (Of_Unit, Id))
+                               = Landin.Machine.Naked_Routine
+                             and then Landin.Targets.Firmware.Dispatched_Slot
+                               (Firmware_Profile (Of_Unit).Core,
+                                Attr.Vector))
                   then
                      return (Kind => Routine_Signature_Disagrees,
                              Item => Id, others => <>);
