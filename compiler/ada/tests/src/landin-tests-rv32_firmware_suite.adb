@@ -44,9 +44,11 @@ package body Landin.Tests.RV32_Firmware_Suite is
    end record;
 
    function Script_Of
-     (Description : String; Level : String := "rv32imac") return Written;
+     (Description : String; Level : String := "rv32imac";
+      Program : String := "") return Written;
    function Script_Of
-     (Description : String; Level : String := "rv32imac") return Written
+     (Description : String; Level : String := "rv32imac";
+      Program : String := "") return Written
    is
       Host : Landin.Testing.Fakes.Fake_Filesystem;
       Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
@@ -61,7 +63,7 @@ package body Landin.Tests.RV32_Firmware_Suite is
       Host.Add_Directory ("/w/devices/descriptions/dev");
       Host.Add_File ("/w/app/main.ldn",
         (if Description = "" then "" else "import descriptions/dev" & LF)
-        & "start: () -> none = end start" & LF);
+        & "start: () -> none = end start" & LF & Program);
       if Description /= "" then
          Host.Add_File ("/w/devices/descriptions/dev/dev.ldn", Description);
       end if;
@@ -484,8 +486,105 @@ package body Landin.Tests.RV32_Firmware_Suite is
          "an entry elsewhere is refused");
    end ESP_Image_Is_Made;
 
+   --  D680: a slot the core's dispatch enters calls its handler, so a
+   --  naked routine there is refused; one the hardware enters takes it.
+   procedure Dispatched_Naked (Item : in out Landin.Testing.Context);
+   procedure Dispatched_Naked (Item : in out Landin.Testing.Context) is
+      function Naked_At (Slot : String) return String is
+        ("link(vector: " & Slot & ") extern(naked) h: () -> none =" & LF
+         & "    assembler.block(""mret"")" & LF & "end h" & LF);
+      Handler_At_16 : constant String :=
+        "link(vector: 16) extern(interrupt) h: () -> none = end h" & LF;
+      Timer : constant String := "compiler.interrupt(""TIMER0"", 0)" & LF;
+      Hazard3_Naked : constant Written :=
+        Script_Of (Description ("hazard3", "vector-table", 68, Timer,
+                                "0x1000_0000"), Program => Naked_At ("16"));
+      CLIC_Naked : constant Written :=
+        Script_Of (Description ("esp-rv32imac-clic", "esp-app-image", 48,
+                                "compiler.esp_image(23, 100, 199, 0x2000)"
+                                & LF, "0x4080_0000"),
+                   Program => Naked_At ("17"));
+      Hazard3_Handler : constant Written :=
+        Script_Of (Description ("hazard3", "vector-table", 68, Timer,
+                                "0x1000_0000"), Program => Handler_At_16);
+      E31_Naked : constant Written :=
+        Script_Of (Description ("sifive-e31", "vector-table", 16,
+                                Origin => "0x2040_0000"),
+                   Program => Naked_At ("7"));
+   begin
+      Landin.Testing.Check
+        (Item, Contains (U.To_String (Hazard3_Naked.Said), "error[L0347]")
+           and then Contains (U.To_String (Hazard3_Naked.Said),
+             "vector slot 16 of a hazard3 is called from the compiler's"
+             & " dispatch, so no naked routine takes it")
+           and then Contains (U.To_String (Hazard3_Naked.Said), "meinext"),
+         "Hazard3's slot 16 + IRQ refuses a naked routine: "
+         & U.To_String (Hazard3_Naked.Said));
+      Landin.Testing.Check
+        (Item, Contains (U.To_String (CLIC_Naked.Said), "error[L0347]")
+           and then Contains (U.To_String (CLIC_Naked.Said),
+             "under the CLIC every interrupt enters one common entry"),
+         "a CLIC slot refuses a naked routine: "
+         & U.To_String (CLIC_Naked.Said));
+      Landin.Testing.Check_Equal
+        (Item, Hazard3_Handler.Status, Landin.Driver.Status_Success,
+         "an interrupt routine takes Hazard3's slot 16: "
+         & U.To_String (Hazard3_Handler.Said));
+      Landin.Testing.Check_Equal
+        (Item, E31_Naked.Status, Landin.Driver.Status_Success,
+         "a naked routine takes a slot the E31's hardware enters: "
+         & U.To_String (E31_Naked.Said));
+   end Dispatched_Naked;
+
+   --  D684: an RV32 description's stage ends in reset, which it names,
+   --  and uses no stack, and each refusal says the RISC-V form.
+   procedure Stage_Before_Reset (Item : in out Landin.Testing.Context);
+   procedure Stage_Before_Reset (Item : in out Landin.Testing.Context) is
+      function With_Stage (Text : String) return Written is
+        (Script_Of (Description ("esp-rv32imc", "esp-app-image", 32,
+                                 "compiler.esp_image(5, 3, 199, 0x0)" & LF)
+                    & LF & "link(boot_stage) extern(naked) feed: () -> none ="
+                    & LF & "    assembler.block(""" & Text & """)" & LF
+                    & "end feed" & LF, Level => "rv32imc"));
+      Ends_In_Reset : constant Written := With_Stage
+        ("li t0, 1  # the watchdog's key\nj _landin_firmware_reset");
+      No_Reset : constant Written := With_Stage ("li t0, 1\nj feed");
+      Compressed : constant Written := With_Stage
+        ("c.swsp t0, 0(sp)\nj _landin_firmware_reset");
+      Named_In_A_Comment : constant Written := With_Stage
+        ("li t0, 1  # then j _landin_firmware_reset\nj feed");
+   begin
+      Landin.Testing.Check_Equal
+        (Item, Ends_In_Reset.Status, Landin.Driver.Status_Success,
+         "a stage that ends in reset configures: "
+         & U.To_String (Ends_In_Reset.Said));
+      Landin.Testing.Check
+        (Item, Contains (U.To_String (No_Reset.Said), "error[L0560]")
+           and then Contains (U.To_String (No_Reset.Said),
+             "finish it with j _landin_firmware_reset"),
+         "a stage that does not name reset is L0560 in RISC-V's words: "
+         & U.To_String (No_Reset.Said));
+      Landin.Testing.Check
+        (Item, Contains (U.To_String (Compressed.Said), "error[L0561]")
+           and then Contains (U.To_String (Compressed.Said),
+             "uses the stack, through swsp"),
+         "a compressed store through sp is L0561: "
+         & U.To_String (Compressed.Said));
+      Landin.Testing.Check
+        (Item, Contains (U.To_String (Named_In_A_Comment.Said),
+                         "error[L0560]"),
+         "reset named in a # comment is not named (D597): "
+         & U.To_String (Named_In_A_Comment.Said));
+   end Stage_Before_Reset;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "rv32 firmware", "a naked handler is refused in a dispatched"
+         & " slot", Dispatched_Naked'Access);
+      Landin.Testing.Register
+        (Into, "rv32 firmware", "a stage runs before reset",
+         Stage_Before_Reset'Access);
       Landin.Testing.Register
         (Into, "rv32 firmware", "descriptions select their profiles",
          Profiles_Are_Derived'Access);

@@ -1,0 +1,6 @@
+error[L0561]: this stage runs before reset and uses the stack, through sp
+  --> ../tests/fixtures/negative/reset-stage-uses-the-stack-rv32/program.ldn:14:1
+   |
+14 | link(boot_stage) extern(naked) watchdogs: () -> none =
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: D653, D684: the entry word enters the stage before any memory may be written, before reset has set the stack pointer; keep what it needs in registers

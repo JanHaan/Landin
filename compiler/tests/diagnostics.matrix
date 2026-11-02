@@ -103,7 +103,7 @@ L0537  Live     error   no-fix   true  nonempty    0..0 1     stages            
 L0545  Live     error   no-fix   true  nonempty    0..0 1     stages                              negative/description-float-unit-core,negative/description-float-unit-unknown,test:landin-tests-cortex_suite.adb
 L0546  Live     error   no-fix   true  nonempty    0..0 1     stages                              negative/description-float-unit-level,test:landin-tests-cortex_suite.adb
 L0560  Live     error   no-fix   true  nonempty    0..0 1     stages                              negative/reset-stage-without-reset,test:landin-tests-cortex_suite.adb
-L0561  Live     error   no-fix   true  nonempty    0..0 1     stages                              negative/reset-stage-uses-the-stack,test:landin-tests-cortex_suite.adb
+L0561  Live     error   no-fix   true  nonempty    0..0 1     stages                              negative/reset-stage-uses-the-stack,negative/reset-stage-uses-the-stack-rv32,test:landin-tests-cortex_suite.adb
 L0576  Live     error   no-fix   true  nonempty    0..0 1     stages                              negative/description-boot-family,test:landin-tests-cortex_suite.adb,test:landin-tests-rv32_firmware_suite.adb
 L0575  Live     error   no-fix   true  nonempty    0..0 1     stages                              negative/description-esp-image-missing,test:landin-tests-rv32_firmware_suite.adb
 L0349  Live     warning may-fix  true  nonempty    0..0 1     stages                              negative/unused-pure-local,negative/warning-advisory,positive/r491-contextual-statements,runtime/c-aliases-unsigned-char,runtime/r440-c-aliases,runtime/r491-function-final-values
