@@ -640,8 +640,193 @@ package body Landin.Tests.RV32_Firmware_Suite is
          & U.To_String (Named_In_A_Comment.Said));
    end Stage_Before_Reset;
 
+   --  The assembly an rv32 firmware request writes for a program that
+   --  imports DESCRIPTION, or the reference when it is "", with PROGRAM's
+   --  declarations beside `start`, and what the request said.
+   procedure Assembly_Of
+     (Description, Program : String; Text, Said : out U.Unbounded_String;
+      Level : String := "rv32imac");
+   procedure Assembly_Of
+     (Description, Program : String; Text, Said : out U.Unbounded_String;
+      Level : String := "rv32imac")
+   is
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Args : Landin.Platform.Path_List;
+   begin
+      Host.Add_Firmware_Library;
+      Host.Add_Directory ("/w");
+      Host.Add_Directory ("/w/app");
+      Host.Add_Directory ("/w/devices");
+      Host.Add_Directory ("/w/devices/descriptions");
+      Host.Add_Directory ("/w/devices/descriptions/dev");
+      Host.Add_File ("/w/app/main.ldn",
+        (if Description = "" then "" else "import descriptions/dev" & LF)
+        & "start: () -> none = end start" & LF & Program);
+      if Description /= "" then
+         Host.Add_File ("/w/devices/descriptions/dev/dev.ldn", Description);
+      end if;
+      Args.Append ("--root=/w/devices");
+      Args.Append ("--target=rv32");
+      Args.Append ("--level=" & Level);
+      Args.Append ("--firmware-entry=start");
+      Args.Append ("--debug=lines");
+      Args.Append ("--emit=asm");
+      Args.Append ("-o");
+      Args.Append ("/w/p.s");
+      Args.Append ("/w/app");
+      declare
+         Ran : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute (Args, Host, Tools);
+      begin
+         Said := Ran.Report;
+         Text := U.Null_Unbounded_String;
+         if Host.Exists ("/w/p.s") then
+            Text := U.To_Unbounded_String (Host.Written ("/w/p.s"));
+         end if;
+      end;
+   end Assembly_Of;
+
+   --  The jump slot SLOT of the table in TEXT holds, or "".
+   function Slot_Of (Text : String; Slot : Natural) return String;
+   function Slot_Of (Text : String; Slot : Natural) return String is
+      Start : constant Natural :=
+        Ada.Strings.Fixed.Index (Text, "_landin_firmware_vectors:" & LF);
+      First : Natural;
+      Last : Natural;
+   begin
+      if Start = 0 then
+         return "";
+      end if;
+      First := Start + 26;
+      for Unused in 1 .. Slot loop
+         First := Ada.Strings.Fixed.Index (Text, [1 => LF], First) + 1;
+         if First = 1 then
+            return "";
+         end if;
+      end loop;
+      Last := Ada.Strings.Fixed.Index (Text, [1 => LF], First);
+      return (if Last = 0 then "" else Text (First .. Last - 1));
+   end Slot_Of;
+
+   --  D680, D684, D686: the entry word, the table and the entries each
+   --  interrupt model takes, as the backend writes them.
+   procedure Traps_Follow_The_Model (Item : in out Landin.Testing.Context);
+   procedure Traps_Follow_The_Model (Item : in out Landin.Testing.Context) is
+      Handler : constant String :=
+        "link(vector: SLOT) extern(interrupt) h: () -> none = end h" & LF;
+      function At_Slot (Slot : String) return String is
+        (Handler (Handler'First .. Handler'First + 12) & Slot
+         & Handler (Handler'First + 17 .. Handler'Last));
+      Naked_3 : constant String :=
+        "link(vector: 3) extern(naked) n: () -> none =" & LF
+        & "    assembler.block(""mret"")" & LF & "end n" & LF;
+      Text, Said : U.Unbounded_String;
+
+      procedure Holds (Name, Part : String);
+      procedure Holds (Name, Part : String) is
+      begin
+         Landin.Testing.Check
+           (Item, Contains (U.To_String (Text), Part),
+            Name & " holds " & Part & ": " & U.To_String (Said)
+            & U.To_String (Text));
+      end Holds;
+   begin
+      --  The E31: vectored mtvec, a stub per interrupt routine, a naked
+      --  one jumped to, exceptions and the rest unhandled.
+      Assembly_Of ("", At_Slot ("7") & Naked_3, Text, Said);
+      Holds ("the entry word", "_landin_firmware_entry:" & LF
+        & "j _landin_firmware_reset" & LF);
+      Holds ("the entry word and the table", ".option norvc" & LF);
+      Landin.Testing.Check_Equal
+        (Item, Slot_Of (U.To_String (Text), 0),
+         "j _landin_firmware_unhandled", "an exception is unhandled");
+      Landin.Testing.Check_Equal
+        (Item, Slot_Of (U.To_String (Text), 7), "j _landin_firmware_slot_7",
+         "slot 7 enters its stub");
+      Landin.Testing.Check_Equal
+        (Item, Slot_Of (U.To_String (Text), 11),
+         "j _landin_firmware_unhandled", "a slot with no handler is"
+         & " unhandled");
+      Landin.Testing.Check
+        (Item, Slot_Of (U.To_String (Text), 3) /= ""
+           and then not Contains (Slot_Of (U.To_String (Text), 3),
+                                  "_landin_firmware"),
+         "a naked routine is jumped to from its slot: "
+         & Slot_Of (U.To_String (Text), 3));
+      Landin.Testing.Check_Equal
+        (Item, Slot_Of (U.To_String (Text), 16), ".size _landin_firmware_"
+         & "vectors, . - _landin_firmware_vectors",
+         "the reference's table has 16 slots");
+      Holds ("the stub", "_landin_firmware_slot_7:" & LF);
+      Holds ("the shared tail", "_landin_firmware_interrupt:" & LF);
+      Holds ("the tail's unwind rules", ".cfi_return_column mepc" & LF
+        & ".cfi_def_cfa sp, 0" & LF & ".cfi_same_value mepc" & LF);
+      Holds ("the tail's last save", "sw a7, 60(sp)" & LF);
+      Holds ("the tail's call", "jalr t0" & LF);
+      Holds ("the return", "addi sp, sp, 64" & LF & "mret" & LF);
+      Holds ("reset", "csrci mstatus, 8" & LF
+        & "la t0, _landin_firmware_vectors" & LF & "ori t0, t0, 1" & LF
+        & "csrw mtvec, t0" & LF & "la sp, _landin_firmware_stack_top" & LF);
+      Holds ("reset's end", "fence rw, rw" & LF & "fence.i" & LF
+        & "csrsi mstatus, 8" & LF);
+      Holds ("the unhandled loop", "_landin_firmware_unhandled:" & LF);
+
+      --  Hazard3: slot 11 is meinext's dispatch, which calls slot 16.
+      Assembly_Of (Description ("hazard3", "vector-table", 68,
+                                "compiler.interrupt(""TIMER0"", 0)" & LF,
+                                "0x1000_0000"),
+                   At_Slot ("16"), Text, Said);
+      Landin.Testing.Check_Equal
+        (Item, Slot_Of (U.To_String (Text), 11),
+         "j _landin_firmware_external", "Hazard3's code 11 is its dispatch");
+      Landin.Testing.Check
+        (Item, Slot_Of (U.To_String (Text), 16) /= ""
+           and then not Contains (Slot_Of (U.To_String (Text), 16),
+                                  "_landin_firmware"),
+         "slot 16 is the handler itself, which the dispatch calls: "
+         & Slot_Of (U.To_String (Text), 16));
+      Holds ("the dispatch", "1:" & LF & "csrr t0, 0xbe4" & LF
+        & "bltz t0, 2f" & LF & "li t1, 208" & LF);
+      Holds ("the dispatch's call", "la t1, _landin_firmware_vectors + 64"
+        & LF & "add t0, t0, t1" & LF & "jalr t0" & LF & "j 1b" & LF);
+
+      --  The C5's CLIC: one common entry, in CLIC mode.
+      Assembly_Of (Description ("esp-rv32imac-clic", "esp-app-image", 48,
+                                "compiler.esp_image(23, 100, 199, 0x2000)"
+                                & LF, "0x4080_0000"),
+                   At_Slot ("17"), Text, Said);
+      Holds ("the CLIC entry", ".balign 64" & LF
+        & ".type _landin_firmware_trap, @function" & LF);
+      Holds ("the CLIC's id", "csrr t0, mcause" & LF & "bgez t0, 1f" & LF
+        & "slli t0, t0, 20" & LF & "srli t0, t0, 20" & LF & "li t1, 48"
+        & LF);
+      Holds ("CLIC mode", "la t0, _landin_firmware_trap" & LF
+        & "ori t0, t0, 3" & LF);
+      Landin.Testing.Check
+        (Item, not Contains (U.To_String (Text), "_landin_firmware_slot_"),
+         "no CLIC slot has a stub of its own");
+
+      --  D684: the C3's stage, which the entry word enters.
+      Assembly_Of (Description ("esp-rv32imc", "esp-app-image", 32,
+                                "compiler.esp_image(5, 3, 199, 0x0)" & LF)
+                   & LF & "link(boot_stage) extern(naked) feed: () -> none ="
+                   & LF & "    assembler.block(""j _landin_firmware_reset"")"
+                   & LF & "end feed" & LF, "", Text, Said,
+                   Level => "rv32imc");
+      Holds ("the entry word", "_landin_firmware_entry:" & LF
+        & "j _landin_firmware_reset_stage" & LF);
+      Holds ("the stage's section",
+        ".section .text.landin_firmware_reset_stage,""ax"",@progbits");
+      Holds ("the C3's table", ".balign 4" & LF
+        & ".globl _landin_firmware_vectors" & LF);
+   end Traps_Follow_The_Model;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "rv32 firmware", "traps follow the interrupt model",
+         Traps_Follow_The_Model'Access);
       Landin.Testing.Register
         (Into, "rv32 firmware", "a naked handler is refused in a dispatched"
          & " slot", Dispatched_Naked'Access);
