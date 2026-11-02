@@ -606,7 +606,12 @@ def load_extents(path, profile):
             continue
         if file_size and physical >= text['origin']:
             flash = max(flash, physical + file_size)
-        if data_region['origin'] <= virtual < data_region['origin'] + (1 << 28):
+        #  The enlarged data region ends where the text region begins when
+        #  the text lies above it, as the esp32c3 lane's IRAM does.
+        ceiling = data_region['origin'] + (1 << 28)
+        if text['origin'] > data_region['origin']:
+            ceiling = min(ceiling, text['origin'])
+        if data_region['origin'] <= virtual < ceiling:
             ram = max(ram, virtual + memory_size)
     return {'FLASH': flash - text['origin'], 'RAM': ram - data_region['origin']}
 
@@ -637,7 +642,8 @@ def datum_symbols(listing):
     section's size, from the section table readelf prints first.
 
     A mapping symbol (`$d`, `$t`), a section or a file symbol is not a
-    datum.
+    datum, nor an assembler-local `.L` label, which RISC-V's assembler
+    keeps in the table when a relocation names it and Arm's drops.
     """
     names, sizes, symbols = {}, {}, {}
     for line in listing.splitlines():
@@ -651,7 +657,8 @@ def datum_symbols(listing):
             continue
         _, value, size, kind, _, _, index, name = fields
         section = names.get(index, '')
-        if kind in ('SECTION', 'FILE') or name.startswith('$') or not DATA_SECTION.match(section):
+        if (kind in ('SECTION', 'FILE') or name.startswith(('$', '.L'))
+                or not DATA_SECTION.match(section)):
             continue
         symbols[name] = {'type': kind, 'size': int(size, 0), 'address': int(value, 16),
                          'section': section}
