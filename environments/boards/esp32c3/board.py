@@ -19,7 +19,6 @@ the firmware's own idea of itself; see environments/boards/esp32c3/README.md.
 """
 
 import argparse
-import socket
 import sys
 from pathlib import Path
 
@@ -59,12 +58,6 @@ class C3(esp.Chip):
         return dict(b=x, h=(x << 8) | y, w=(x << 24) | (y << 16) | (y << 8) | x)
 
 
-def listening(port):
-    with socket.socket() as probe:
-        probe.settimeout(0.5)
-        return probe.connect_ex(('127.0.0.1', port)) == 0
-
-
 def main():
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -85,15 +78,16 @@ def main():
     args = parser.parse_args()
     esp.required_tools(args)
     chip = C3()
-    bridge = []
 
     def console_for(run):
         port = args.uart_port + args.slot
-        if not listening(port):
+        if not common.listening(port):
             require(args.probehive, 'no bridge serves port %d: start one or name --probehive'
                     % port)
-            bridge.append(common.ProbehiveBridge(run, args.probehive, args.probe_host,
-                                                 args.slot + 1, 4441, args.uart_port))
+            # One bridge serves every slot of the probe, and is left running
+            # for the next tool (D723).
+            common.shared_bridge(run, args.probehive, args.probe_host, args.slot,
+                                 uart_port=args.uart_port)
         return common.TcpConsole(port)
 
     def settle(run):
@@ -112,11 +106,7 @@ def main():
         settle(run)
         return console, None
 
-    try:
-        return esp.run_board(chip, args, console_for, cycle, settle)
-    finally:
-        for started in bridge:
-            started.close()
+    return esp.run_board(chip, args, console_for, cycle, settle)
 
 
 if __name__ == '__main__':

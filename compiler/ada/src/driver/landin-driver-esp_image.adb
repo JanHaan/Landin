@@ -131,6 +131,37 @@ package body Landin.Driver.ESP_Image is
 
       Entry_Symbol : Address := 0;
       Has_Entry : Boolean := False;
+
+      --  D685: whether an allocated section with bytes in the file begins,
+      --  or ends, at file offset AT, so that a segment holds the image's
+      --  sections and nothing before or after them: not the ELF's own
+      --  headers, which a script may let the linker map.
+      function Section_Edge (At_Offset : Natural; Ending : Boolean)
+        return Boolean;
+      function Section_Edge (At_Offset : Natural; Ending : Boolean)
+        return Boolean
+      is
+         Sections : constant Natural := Natural (Word (32));
+         Size : constant Natural := Natural (Half (46));
+      begin
+         for Index in 0 .. Natural (Half (48)) - 1 loop
+            declare
+               Header : constant Natural := Sections + Index * Size;
+               Offset : constant Natural := Natural (Word (Header + 16));
+               Length : constant Natural := Natural (Word (Header + 20));
+            begin
+               if (Word (Header + 8) / 2) mod 2 = 1
+                 and then Word (Header + 4) /= 8
+                 and then Length > 0
+                 and then (if Ending then Offset + Length = At_Offset
+                           else Offset = At_Offset)
+               then
+                  return True;
+               end if;
+            end;
+         end loop;
+         return False;
+      end Section_Edge;
    begin
       if Data'Length < 52
         or else Data (Data'First .. Data'First + 5)
@@ -161,6 +192,18 @@ package body Landin.Driver.ESP_Image is
                     or else File_Size > Data'Length - File_At
                   then
                      raise Constraint_Error;
+                  elsif not Section_Edge (File_At, Ending => False)
+                    or else not Section_Edge
+                      (File_At + File_Size, Ending => True)
+                  then
+                     Result.Fault := US.To_Unbounded_String
+                       ("the segment loaded at "
+                        & Landin.Backend.Firmware.Hex (Physical) & ", "
+                        & Image (Address (File_Size)) & " bytes, holds"
+                        & " bytes no allocated section does, such as the"
+                        & " ELF's own headers, and the ROM would write them"
+                        & " there");
+                     return Result;
                   elsif not In_Region (Physical, File_Size) then
                      Result.Fault := US.To_Unbounded_String
                        ("the segment loaded at "

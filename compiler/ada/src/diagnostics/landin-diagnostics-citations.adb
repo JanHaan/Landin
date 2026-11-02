@@ -2306,6 +2306,18 @@ package body Landin.Diagnostics.Citations is
             when 655 =>
                "The Pico 2's oracle starts at power-on and refuses a cor"
                & "rupted block on the board",
+            when 710 =>
+               "The Hazard3 port is the Pico 2's, its interrupts through"
+               & " Xh3irq and a counter through an AMO",
+            when 711 =>
+               "The Hazard3 oracle starts at power-on and shows the core"
+               & "s RISC-V, the dispatch and the AMO",
+            when 712 =>
+               "probe-rs is told the RP2350 as the architecture its core"
+               & "s run, and a halted BOOTSEL is never left",
+            when 713 =>
+               "A board tool reuses a probehive bridge, and one it start"
+               & "s outlives it",
             when 530 =>
                "`refine explain` answers a construct and a decision",
             when 599 =>
@@ -3631,6 +3643,14 @@ package body Landin.Diagnostics.Citations is
             when 654 =>
                "Decisions: The toolchain, C and the machine",
             when 655 =>
+               "Decisions: The toolchain, C and the machine",
+            when 710 =>
+               "Decisions: The toolchain, C and the machine",
+            when 711 =>
+               "Decisions: The toolchain, C and the machine",
+            when 712 =>
+               "Decisions: The toolchain, C and the machine",
+            when 713 =>
                "Decisions: The toolchain, C and the machine",
             when 530 =>
                "Decisions: The toolchain, C and the machine",
@@ -5281,6 +5301,21 @@ package body Landin.Diagnostics.Citations is
                "https://www.701.dev/spec.html#d655-the-pico-2-s-oracle-s"
                & "tarts-at-power-on-and-refuses-a-corrupted-block-on-the-b"
                & "oard",
+            when 710 =>
+               "https://www.701.dev/spec.html#d710-the-hazard3-port-is-t"
+               & "he-pico-2-s-its-interrupts-through-xh3irq-and-a-counter-"
+               & "through-an-amo",
+            when 711 =>
+               "https://www.701.dev/spec.html#d711-the-hazard3-oracle-st"
+               & "arts-at-power-on-and-shows-the-cores-risc-v-the-dispatch"
+               & "-and-the-amo",
+            when 712 =>
+               "https://www.701.dev/spec.html#d712-probe-rs-is-told-the-"
+               & "rp2350-as-the-architecture-its-cores-run-and-a-halted-bo"
+               & "otsel-is-never-left",
+            when 713 =>
+               "https://www.701.dev/spec.html#d713-a-board-tool-reuses-a"
+               & "-probehive-bridge-and-one-it-starts-outlives-it",
             when 530 =>
                "https://www.701.dev/spec.html#d530-refine-explain-answer"
                & "s-a-construct-and-a-decision",

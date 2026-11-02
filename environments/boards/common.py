@@ -14,14 +14,17 @@ does not depend on the chip:
   * an ELF32 reader for sections and the bytes loaded at an address, and
     the symbols `nm` lists;
   * `Probe`, probe-rs for one chip through one probe: a probehive slot over
-    its CMSIS-DAP UDP transport, or an ST-LINK named by its serial; reading
-    words, and flashing with verification and a readback;
+    its CMSIS-DAP UDP transport or a bridge's TCP port, or an ST-LINK named
+    by its serial; reading words, and flashing with verification and a
+    readback;
   * the hub's power cycle: one `uhubctl -a cycle` of one port, or ports
     switched off and on together, and a wait for the hub to list again
     after the cascade re-enumerates; each only after
     the hub's listing shows the device the port must hold, or a guarded
     port holding the device that must never lose power, run through
     `sg GROUP -c` when the session is not in the group that may switch it;
+  * probehive's bridge, started for a run or shared between runs and
+    left running;
   * a console over probehive's UART bridge, a TCP port, or over a tty such
     as an ST-LINK's virtual COM port, found by its USB serial or, for a
     bridge with none, by the hub port it is plugged into, and opened, when
@@ -602,14 +605,19 @@ def switch_ports(hub, location, ports, action, holds=(), keeps=None, name=None):
 
 class ProbehiveBridge:
     """probehive's scripts/dap_bridge.py for SLOTS slots, started for a run:
-    slot N's SWD on DEBUG_PORT + N and its UART on UART_PORT + N."""
-    def __init__(self, run, probehive, host, slots=1, debug_port=4441, uart_port=4461):
+    slot N's SWD on DEBUG_PORT + N and its UART on UART_PORT + N.  A bridge
+    started DETACHED is left running when the run ends, for the next tool,
+    which may be another board's on another slot, to reuse."""
+    def __init__(self, run, probehive, host, slots=1, debug_port=4441, uart_port=4461,
+                 detached=False):
         self.path = run.out / 'bridge.log'
         self.log = open(self.path, 'w')
+        self.detached = detached
         self.process = subprocess.Popen([
             sys.executable, str(Path(probehive) / 'scripts/dap_bridge.py'), '--host', host,
             '--slots', str(slots), '--listen', '127.0.0.1:%d' % debug_port,
-            '--uart-listen', '127.0.0.1:%d' % uart_port], stdout=self.log, stderr=subprocess.STDOUT)
+            '--uart-listen', '127.0.0.1:%d' % uart_port], stdout=self.log, stderr=subprocess.STDOUT,
+            stdin=subprocess.DEVNULL, start_new_session=detached)
         deadline = time.time() + 10
         while time.time() < deadline:
             if self.path.read_text().count('listening on') >= 2 * slots:
@@ -619,9 +627,39 @@ class ProbehiveBridge:
         raise Failed('the bridge did not listen within 10 s; see bridge.log')
 
     def close(self):
-        self.process.terminate()
-        self.process.wait(5)
+        if not self.detached:
+            self.process.terminate()
+            self.process.wait(5)
         self.log.close()
+
+
+def listening(port, host='127.0.0.1'):
+    """Whether something accepts a connection on PORT."""
+    try:
+        socket.create_connection((host, port), 1).close()
+        return True
+    except OSError:
+        return False
+
+
+def shared_bridge(run, probehive, host, slot, slots=6, debug_port=4441, uart_port=4461):
+    """A probehive bridge serving SLOT's SWD and UART: the one already
+    listening on both of its ports, never stopped by this run, or else one
+    started detached for all SLOTS of the probe and left running, so that
+    a tool on another slot reuses it rather than meeting a second client
+    of the probe.  Returns (bridge or None, 'reused' or 'started')."""
+    if listening(debug_port + slot) and listening(uart_port + slot):
+        return None, 'reused'
+    require(not listening(debug_port + slot) and not listening(uart_port + slot),
+            'only one of ports %d and %d listens: something else holds them'
+            % (debug_port + slot, uart_port + slot))
+    return ProbehiveBridge(run, probehive, host, slots, debug_port, uart_port,
+                           detached=True), 'started'
+
+
+def bridged(port, host='127.0.0.1'):
+    """probe-rs's selector for a slot through a bridge's TCP port."""
+    return '0000:0001:%s:%d' % (host, port)
 
 
 class ProbehivePins:

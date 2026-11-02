@@ -323,6 +323,47 @@ class Bridges(unittest.TestCase):
                 bridge.close()
 
 
+    def test_a_detached_bridge_outlives_its_run(self):
+        with tempfile.TemporaryDirectory() as root:
+            root = Path(root)
+            (root / 'scripts').mkdir()
+            (root / 'scripts/dap_bridge.py').write_text(
+                'import time\nprint("listening on", flush=True)\nprint("listening on", flush=True)\n'
+                'time.sleep(30)\n')
+            bridge = COMMON.ProbehiveBridge(COMMON.Run(root), root, '10.42.0.50', detached=True)
+            try:
+                bridge.close()
+                self.assertIsNone(bridge.process.poll())
+            finally:
+                bridge.process.kill()
+                bridge.process.wait(5)
+
+    def test_a_bridge_listening_on_both_of_a_slot_s_ports_is_reused(self):
+        servers = [socket.socket() for _ in range(2)]
+        try:
+            for server in servers:
+                server.bind(('127.0.0.1', 0))
+                server.listen()
+            debug, uart = (s.getsockname()[1] for s in servers)
+            self.assertTrue(COMMON.listening(debug))
+            run = Recorded()
+            self.assertEqual(COMMON.shared_bridge(run, '/nonexistent', '10.42.0.50', 1,
+                                                  debug_port=debug - 1, uart_port=uart - 1),
+                             (None, 'reused'))
+            self.assertEqual(run.calls, [])
+            servers[1].close()
+            self.assertFalse(COMMON.listening(uart))
+            with self.assertRaisesRegex(COMMON.Failed, 'only one of ports'):
+                COMMON.shared_bridge(run, '/nonexistent', '10.42.0.50', 1,
+                                     debug_port=debug - 1, uart_port=uart - 1)
+        finally:
+            for server in servers:
+                server.close()
+
+    def test_a_bridge_s_slot_is_named_by_its_tcp_port(self):
+        self.assertEqual(COMMON.bridged(4442), '0000:0001:127.0.0.1:4442')
+
+
 class Records(unittest.TestCase):
     def test_a_record_keeps_the_boot_frames_and_the_last(self):
         result = dict(status='passed', image_sha256='ab', extra=1,

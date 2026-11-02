@@ -1505,6 +1505,14 @@ package body Landin.Backend.RiscV is
            (Candidate : String; Item : Landin.IR.Item_Id) return Boolean
          is
          begin
+            --  D672: firmware's own and libgcc's helpers' names are taken.
+            if Pairs and then
+              (Landin.Targets.Firmware.Is_RV32_Helper (Candidate)
+               or else Ada.Strings.Fixed.Index
+                 (Candidate, "_landin_firmware_") = Candidate'First)
+            then
+               return False;
+            end if;
             --  Held by an item other than this one: every holder of the
             --  spelling, less this item's own allocated and source names.
             return Count (Allocated, Candidate)
