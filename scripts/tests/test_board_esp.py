@@ -531,6 +531,19 @@ class Hub(unittest.TestCase):
         self.assertEqual([n for n, _ in hub.calls],
                          ['hub-status', 'power-on', 'hub-wait', 'power-on'])
 
+    def test_a_status_read_that_finds_no_hub_is_read_again(self):
+        class Hidden(Recorded):
+            def command(self, name, argv, **kw):
+                if name == 'hub-status' and not any(n == 'hub-status' for n, _ in self.calls):
+                    self.calls.append((name, argv))
+                    return ''
+                return Recorded.command(self, name, argv, **kw)
+        hub = Hidden(HUB)
+        with mock.patch.object(COMMON.time, 'sleep'):
+            COMMON.switch_ports(hub, '7-2.3.4', [3], 'off', holds=self.HOLDS[:1],
+                                keeps=(1, '1366:0105'))
+        self.assertEqual([n for n, _ in hub.calls], ['hub-status', 'hub-status', 'power-off'])
+
     def test_a_switch_that_never_takes_fails(self):
         hub = Recorded(HUB, switched=[''])
         with mock.patch.object(COMMON.time, 'sleep'), self.assertRaises(COMMON.Failed):
