@@ -47,7 +47,11 @@ two controls' ROM logs, `uart.bin` (every byte the board sent) and
 the ELF's hashes, the image as read, its A-extension instructions (none),
 each verdict, the counters and cells read over JTAG, the segments read
 back, every frame and the commands with their status and time.
-`--record` writes a passed run's record. The linked ELF holds the name of
+`--record` writes a passed run's record. An image that leaves JTAG
+unanswered, as one whose RAM code the C3 could not fetch did, keeps
+probe-rs from flashing the next one; `--recover` first resets the chip into
+its ROM's download mode through its own USB-Serial-JTAG, whose DTR and RTS
+it turns into a reset with the boot strap held low, as esptool does. The linked ELF holds the name of
 the object refine assembled beside it, so its hash depends on the output's
 name: a record gives the image's name as `image_name`.
 

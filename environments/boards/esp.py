@@ -352,6 +352,28 @@ def objdump(run, args, elf):
     return run.command('disassemble', [args.objdump, '-d', '--no-show-raw-insn', elf])
 
 
+def download_mode(serial, seconds=10.0):
+    """Reset the chip into its ROM's download mode through its own
+    USB-Serial-JTAG, whose CDC-ACM port turns DTR and RTS into a chip reset
+    with the boot strap held low, in esptool's USB-JTAG-serial sequence: a
+    probe then reaches a chip whose image left JTAG unanswered."""
+    console = common.TtyConsole(common.wait_for_tty(serial, seconds), quiet=True)
+    try:
+        common.set_lines(console.fd, rts=False, dtr=False)
+        time.sleep(0.1)
+        common.set_lines(console.fd, dtr=True)
+        common.set_lines(console.fd, rts=False)
+        time.sleep(0.1)
+        common.set_lines(console.fd, rts=True)
+        common.set_lines(console.fd, dtr=False)
+        common.set_lines(console.fd, rts=True)
+        time.sleep(0.1)
+        common.set_lines(console.fd, dtr=False)
+        common.set_lines(console.fd, rts=False)
+    finally:
+        console.close()
+
+
 def paced(args, what, action):
     """ACTION, which disconnects a device on the rig's hub cascade, spaced
     by args.pace."""
@@ -395,6 +417,9 @@ def run_board(chip, args, console_for, cycle, settle):
         # The hardware phase, from the first flash to the last JTAG read,
         # holds the rig's lock.
         lock.acquire()
+        if args.recover:
+            paced(args, 'download mode', lambda: download_mode(args.serial))
+            settle(run)
         if args.image_control:
             controls = {}
             for where, judge in (('checksum', refused_checksum), ('sha256', warned_sha)):
@@ -478,6 +503,9 @@ def arguments(parser, chip):
                              ' by any tool on the host (D725)')
     parser.add_argument('--quiet', type=float, default=60.0,
                         help='seconds the kernel must have logged nothing of USB before one')
+    parser.add_argument('--recover', action='store_true',
+                        help="first reset the chip into its ROM's download mode through its own"
+                             ' USB-Serial-JTAG, for an image that left JTAG unanswered')
     parser.add_argument('--seed', type=int, default=1240)
     parser.add_argument('--record', type=Path, help="also write a passed run's record here")
 

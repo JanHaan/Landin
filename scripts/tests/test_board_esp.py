@@ -396,6 +396,26 @@ class PowerOn(unittest.TestCase):
             C5_BOARD.chip_enable_reset(3, 0.1)
 
 
+class Recover(unittest.TestCase):
+    def test_download_mode_is_esptool_s_usb_jtag_serial_sequence(self):
+        calls = []
+
+        class Line:
+            fd = 5
+
+            def close(self):
+                calls.append('close')
+        with mock.patch.object(COMMON, 'wait_for_tty', return_value='/dev/ttyACM4'), \
+                mock.patch.object(COMMON, 'TtyConsole', return_value=Line()), \
+                mock.patch.object(COMMON, 'set_lines', side_effect=lambda fd, **lines:
+                                  calls.append(tuple(sorted(lines.items())))), \
+                mock.patch.object(ESP.time, 'sleep'):
+            ESP.download_mode('A0:76:4E:42:57:F8')
+        self.assertEqual(calls, [(('dtr', False), ('rts', False)), (('dtr', True),),
+                                 (('rts', False),), (('rts', True),), (('dtr', False),),
+                                 (('rts', True),), (('dtr', False),), (('rts', False),), 'close'])
+
+
 class Tty(unittest.TestCase):
     def tree(self, tmp, layouts):
         sysfs, dev = Path(tmp) / 'class', Path(tmp) / 'dev'
