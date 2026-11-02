@@ -251,7 +251,7 @@ tool, package acquisition, release versioning and self-hosting stay outside
 it, owned by the successor families its register names. Its identities are
 cited in `ROADMAP.md` and nowhere else.
 
-**Next roadmap item: R12.40 — RISC-V microcontrollers (planned).**
+**Next roadmap item: R12.50 — Xtensa, ESP32 and ESP32-S3 (planned).**
 
 ## Versions
 

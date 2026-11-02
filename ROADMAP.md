@@ -1375,7 +1375,7 @@ and SR-614.
 
 ### R12.40 — RISC-V microcontrollers
 
-Status: planned
+Status: complete
 Depends on: R11.40, R12.11, R12.30
 
 RP2350's Hazard3 cores and ESP32-C5 use `rv32imac`; ESP32-C3 uses `rv32imc`
@@ -1396,6 +1396,70 @@ lane checks the `rv32imc` assembler setting and absence of A-extension
 instructions in linked firmware, and requires refusal of exchange, add,
 compare-exchange and eight-byte atomics. The Hazard3 and C5 boards and the
 `rv32imac` emulator lane execute an A-extension read-modify-write operation.
+
+Done: `rv32` is a firmware target with the ilp32 layout and two D255
+levels, `rv32imc`, the default, and `rv32imac` (D660); a program that
+imports no description is given `platform/riscv/reference`, QEMU's
+`sifive_e` map with the Cortex-M reference's capacities (D661), and a
+description names one of four cores, `sifive-e31`, `esp-rv32imc`,
+`esp-rv32imac-clic` and `hazard3`, each with its interrupt model and slots
+(D662). Its code is RV64's emitter at XLEN 32: eight-byte integers in
+register pairs, soft float and 64-bit division through libgcc, word frames,
+Table A.6's atomics, the ilp32 planner held to riscv64-elf-gcc, and RV32
+assembly operands with a verifier refusal of an invalid register
+(D670-D679), linked by GNAT's riscv64-elf GCC or a distribution's
+riscv64-unknown-elf (D660). Its text is 1.02 to 1.04 times Cortex-M0's
+Thumb for the same fixtures (D676-D678), and the epilogue, which read its
+frame record below a released stack pointer at both XLENs until the
+Hazard3's first DMA interrupt landed between the two, reads nothing below
+it (D679). A level's `a` decides the one checking rule a level may: a
+read-modify-write atomic is refused with L0344 at the caller's use at
+`rv32imc` and admitted at `rv32imac`, and an eight-byte one is refused at
+both (D690, D691). An image begins with an entry word and a trap table
+dispatching by mcause, vectored on the E31 and the C3, through one CLIC
+entry on the C5 and through meinext on the Hazard3 (D680-D687), records an
+unhandled trap in five cells (D656), and places RAM code where it can run
+(D657, D688, L0578). `esp-app-image` is built, a RAM-only image at the
+ROM's offset with no second stage, written as `OUT.bin` and read back
+(D683-D685, L0575-L0577), and `rp2350-image-block` carries RISC-V's
+IMAGE_DEF (D682). The ESP32-C3 and ESP32-C5 are learnt from Espressif's
+SVDs, with their watchdogs stopped in a stage before reset, and the
+RP2350's Hazard3 cores from pico-sdk's (D700-D708). Espressif's QEMU,
+pinned in the Cortex-M lock, runs the whole corpus at `rv32imc` on its
+`esp32c3` machine, whose CPU is held to lack A, and at `rv32imac` on
+`sifive_e` with the reference, as the gate's `cortex-m-rv32` job, and boots
+the C3's `OUT.bin` through the chip's own ROM (D695-D698); the host
+determinism manifest and the build-modes comparison hold `rv32`'s bytes
+(D658), and the recorded lowering lowers a fixture at the target it names
+(D659).
+
+The recorded runs are `environments/boards/rp2350_hazard3/record.json`, a
+Pico 2 on its Hazard3 cores at `rv32imac` from power-on, CHIP_RESET
+HAD_POR alone and mtvec vectored at 0x1000_0200, the shared `1A0` echoed
+with GPIO3 set and cleared, IRQ14 forced through meifa into slot 30's
+handler, the overrun and the epochs with two DMA completions taken through
+meinext, 11,202 bytes echoed in order, `amoadd.w` numbering every frame
+and the counters read over SWD equal to the trace's (D710-D713);
+`environments/boards/esp32c3/record.json`, an ESP32-C3 at `rv32imc` from
+power-on, its ROM's log on UART0 loading each segment of the `OUT.bin`
+read apart from refine and entering at its entry, the image holding no A
+instruction, a broken checksum refused by the ROM and our SHA-256 the one
+it computed, the receive and timer interrupts on lines the program routes
+through the interrupt matrix, its admitted atomics checked against the
+oracle, the overrun and the threshold window, and the counters, atomic
+cells and trap record read over JTAG equal to the trace's; and
+`environments/boards/esp32c5/record.json`, the same on an ESP32-C5 at
+`rv32imac` through its CLIC, its power-on read over JTAG and its ROM's log
+taken after a chip-enable reset, with an AMO and two compare-exchanges
+checked (D720-D727). The board tools share a rig lock and pace every
+action that drops a device from the hub, and refuse to switch a port
+unless the probe's Arty, moved off the hub's cascade, is still off it
+(D725). The `check.py` rows SR-254, SR-255, SR-291, SR-323, SR-460 and
+SR-530 keep their activations, since the item changed only `check.py`'s
+pin and target checks; SR-552's, SR-555's and SR-580's, which it reached,
+are restated with the others it reached. It left SR-618 to SR-622, SR-625, SR-635 to
+SR-637, SR-645 to SR-651, SR-655, SR-660, SR-671 to SR-673, SR-680 to
+SR-682, SR-684, SR-685 and SR-690 to SR-694.
 
 ### R12.50 — Xtensa, ESP32 and ESP32-S3
 
