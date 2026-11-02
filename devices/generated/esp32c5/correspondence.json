@@ -587,12 +587,12 @@
     "width": 32
   },
   {
-    "address": 1611202668,
+    "address": 1611202656,
     "alignment": 4,
     "derived_from": null,
     "dim_element": {
       "array": "GPIO%s",
-      "index": "27"
+      "index": "24"
     },
     "fields": [
       {
@@ -753,14 +753,14 @@
     "known_reset_mask": 262143,
     "known_reset_value": 6144,
     "named_mask": 262143,
-    "offset": 108,
+    "offset": 96,
     "policy": {
       "read": "normal",
       "reserved": "zero",
       "write": "normal"
     },
     "register_access": null,
-    "source": "IO_MUX.GPIO27",
+    "source": "IO_MUX.GPIO24",
     "svd_reset_mask": 4294967295,
     "svd_reset_value": 6144,
     "width": 32
@@ -894,12 +894,12 @@
     "width": 32
   },
   {
-    "address": 1611209536,
+    "address": 1611209524,
     "alignment": 4,
     "derived_from": null,
     "dim_element": {
       "array": "FUNC%s_OUT_SEL_CFG",
-      "index": "27"
+      "index": "24"
     },
     "fields": [
       {
@@ -950,14 +950,14 @@
     "known_reset_mask": 4095,
     "known_reset_value": 256,
     "named_mask": 4095,
-    "offset": 2880,
+    "offset": 2868,
     "policy": {
       "read": "normal",
       "reserved": "zero",
       "write": "normal"
     },
     "register_access": null,
-    "source": "GPIO.FUNC27_OUT_SEL_CFG",
+    "source": "GPIO.FUNC24_OUT_SEL_CFG",
     "svd_reset_mask": 4294967295,
     "svd_reset_value": 256,
     "width": 32

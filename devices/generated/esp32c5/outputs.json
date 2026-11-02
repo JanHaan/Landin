@@ -1,9 +1,9 @@
 {
   "esp32c5/clic/device.ldn": "1b3eececf6ab75636f1f3e1d63f4abed54fc093af9edbd506d7b9f3591aa3c98",
-  "esp32c5/correspondence.json": "3b604fd722d5fb8934341a75ecad57c7578ef4fddb180b8e090278011427e5ea",
-  "esp32c5/gpio/device.ldn": "df10b3f4663ec8fc3bb8658b551d8d45fa3432d42338379599274485f5a65292",
+  "esp32c5/correspondence.json": "d824458a5adc815a775cb665c3df50840d1817cfc4d3c3bc3516918bfe80e0c8",
+  "esp32c5/gpio/device.ldn": "36cbb6f4295362349e5f5d1e599d0cb555afa23c42b8f7a042067a2f9706170d",
   "esp32c5/interrupt_core0/device.ldn": "e0be2c2948e1eb2f2f620da0d6dbd988d57c2678dde8c254610232c818fd9511",
-  "esp32c5/io_mux/device.ldn": "26e8ebf42783ed970808fe68cf5e5e3f4f7026ae36534f4ed3badc945b351809",
+  "esp32c5/io_mux/device.ldn": "d2720917ef34745a5bbc5f845cdd540a8b49922ad47b5977d797da722f07e170",
   "esp32c5/lp_clkrst/device.ldn": "e1298c933f83818cae497f93b62088e8d28e230c3d962a8021241fbec77aa30d",
   "esp32c5/lp_wdt/device.ldn": "92c1164522c74137c83f1da089f7b290473c581701e9d0155bd9a58ef3bdbc56",
   "esp32c5/pcr/device.ldn": "411fa71852623d84c48d5bd3302c436edd54cee88915f4fb1c5da470726459b7",

@@ -272,6 +272,8 @@ def main():
     run = common.Run(args.output)
     result = dict(status='failed')
     bridge = console = None
+    # The run holds the rig's lock (D725).
+    lock = common.rig_lock('rp2040 board.py').acquire()
     try:
         elf, stage, crc, names = build(run, args)
         result.update(image_sha256=sha(elf), image_name=elf.name, second_stage_crc32='%08x' % crc,
@@ -302,6 +304,7 @@ def main():
             result['frames'] = common.frame_record(bytes(console.received))
         if bridge:
             bridge.close()
+        lock.release()
         result['commands'] = run.commands
         common.write_json(args.output / 'result.json', result)
     if args.record and result['status'] == 'passed':

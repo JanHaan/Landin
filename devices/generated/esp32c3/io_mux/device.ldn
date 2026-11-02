@@ -6,12 +6,12 @@ compiler.assert(compiler.byte_order == little)
 compiler.assert(sizeof u32 == 4 and alignof u32 == 4)
 public base: usize = 0x60009000
 
-public gpio8_offset: usize = 0x24
-public gpio8_address: usize = 0x60009024
-public gpio8_named_mask: u32 = 0x0000ffff
-public gpio8_reset_mask: u32 = 0x0000ffff
-public gpio8_reset_value: u32 = 0x00000b00
-public gpio8_image: type = layout(packed, u32) struct
+public gpio10_offset: usize = 0x2c
+public gpio10_address: usize = 0x6000902c
+public gpio10_named_mask: u32 = 0x0000ffff
+public gpio10_reset_mask: u32 = 0x0000ffff
+public gpio10_reset_value: u32 = 0x00000b00
+public gpio10_image: type = layout(packed, u32) struct
     f_mcu_oe: u1 at 0..0
     f_slp_sel: u1 at 1..1
     f_mcu_wpd: u1 at 2..2
@@ -24,29 +24,29 @@ public gpio8_image: type = layout(packed, u32) struct
     f_mcu_sel: u3 at 12..14
     f_filter_en: u1 at 15..15
     f_mcu_drv: u2 at 5..6
-end gpio8_image
+end gpio10_image
 
-public gpio8_decode: (raw: u32) -> (image: gpio8_image) =
+public gpio10_decode: (raw: u32) -> (image: gpio10_image) =
     image = zeroed
     bits: ptr mut u32 = ptr(usize(addr image))
     bits.val = raw
-end gpio8_decode
+end gpio10_decode
 
-public gpio8_encode: (image: gpio8_image) -> (raw: u32) =
+public gpio10_encode: (image: gpio10_image) -> (raw: u32) =
     bits: ptr u32 = ptr(usize(addr image))
     raw = bits.val
-end gpio8_encode
+end gpio10_encode
 
-public gpio8_read: (device_base: usize) -> (raw: u32) =
-    port: ptr u32 = ptr(device_base + gpio8_offset)
+public gpio10_read: (device_base: usize) -> (raw: u32) =
+    port: ptr u32 = ptr(device_base + gpio10_offset)
     raw = compiler.register_read(port, compiler.normal_read)
-end gpio8_read
+end gpio10_read
 
-public gpio8_write: (device_base: usize, raw: u32) -> none =
-    port: ptr mut u32 = ptr(device_base + gpio8_offset)
+public gpio10_write: (device_base: usize, raw: u32) -> none =
+    port: ptr mut u32 = ptr(device_base + gpio10_offset)
     compiler.register_write(port, raw, compiler.normal_write,
                             compiler.write_zero, 0x0000ffff)
-end gpio8_write
+end gpio10_write
 
 public gpio20_offset: usize = 0x54
 public gpio20_address: usize = 0x60009054

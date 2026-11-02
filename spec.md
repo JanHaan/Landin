@@ -22087,6 +22087,187 @@ attached through the run.
 
 **Pinned by** `environments/boards/rp2040/board.py`'s IRQ5 verdict.
 
+### D720 — The ESP boards' indicators are GPIO10 and GPIO24
+
+**The tour said** nothing; D702 selected for each ESP board's indicator the
+pin of the board's RGB LED, GPIO8 on the ESP32-C3 and GPIO27 on the
+ESP32-C5. Both are strapping pins, which the ROM samples at power-on to
+choose how it boots (the C3's TRM v1.4, 7.1, Table 7.1-1; the C5's v1.1,
+10.2.1, Table 10.2-1), and an LED loads the pin the oracle reads back.
+
+**Chosen:** the C3's indicator is GPIO10 and the C5's GPIO24, which the
+maintainer chose on the rig: neither is a strapping pin, and each is free
+for a wire to the probe. Each policy selects that pin's IO MUX register and its GPIO
+matrix output selection, `FUNC10_OUT_SEL_CFG` and `FUNC24_OUT_SEL_CFG`, in
+place of the LED pin's, with the C3's MCU_DRV correction moved with it, and
+the modules are regenerated. Amends D702's selections.
+
+**The alternatives:** the LED pins, whose level at power-on the board's
+own LED circuit sets, so a run that left the indicator driven could change
+the next boot; and both, which selects registers no program uses.
+
+**Pinned by** `devices/policies/esp32c3.json` and `esp32c5.json`, and
+`devices/test.py`'s `Esp32c3Oracles` and `Esp32c5Oracles`, which hold the
+pins' addresses and the vendor headers' names for them.
+
+### D721 — The ESP ports receive by interrupt and hold their lines off by threshold
+
+**The tour said** nothing; D593's receive contract was carried by DMA on
+the RP2040, the RP2350 and the STM32H753, and the maintainer left the ESP
+chips' UART DMA as a register row.
+
+**Chosen:** `compiler/tests/board/esp32c3` and `esp32c5` keep the receive
+contract's interface and atoms, and receive UART0 by interrupt: the
+interrupt matrix routes source UART0 to a CPU line, the C3's line 1 at
+priority 1 in its vectored table (TRM v1.4, 1.5), the map register
+holding the line, and the C5's external interrupt 1, CLIC identity 17, at
+level 63 with MNLBITS 3 (TRM v1.1, 2.8.2), the map register holding the
+identity itself, 16 to 47 (11.5.3), each `link(vector: N)` its slot
+(D680). The handler clears the
+interrupt before it drains the RX FIFO into a 256-byte ring, so a byte that
+arrives meanwhile raises it again, drops what the ring cannot hold and
+counts it, and counts each RX FIFO overflow the UART flags; it alone writes
+what it produced and lost, the program alone what it took, each published
+with an atomic store and read with an atomic load, which every RV32 level
+admits (D690). A read that finds either loss count moved fails with
+`overrun` until a restart discards the ring. RXFIFO_FULL fires at one
+byte: on the C5 at a threshold of one, which it compares as at least
+(32.4.2); on the C3 at one, which it compares as more than (26.4.2), with
+the RX timeout taking a lone byte, since Espressif's QEMU compares the C3's
+as at least and at zero never clears it. The ports keep the ROM's UART0
+configuration, 115200 baud on its default pins, and add a 1 ms system-timer
+interrupt above the receive one: the C3's line 2 at priority 2 and the
+C5's identity 18 at level 95. Command 0x13 raises the threshold, the C3's
+`CPU_INT_THRESH` to 2 and the C5's `mintthresh` to 63, for 100 ms by the
+timer's own count, so a burst then overflows the FIFO while the timer
+keeps interrupting. Command 0x06 runs the level's atomics over the two
+bytes before it: on the C3 atomic stores and loads of a byte, a half-word
+and a word around a fence; on the C5 an add and two compare-exchanges of a
+word and an add of a byte. Interrupt-driven receive has no epoch: `budget`
+is checked and `exhausted` is never raised.
+
+**The alternatives:** the chips' GDMA, which is left a row and whose
+UHCI wrapper each chip programs differently; polling the FIFO, which
+leaves the matrix, the CLIC and the threshold untested; masking with
+`mstatus.MIE`, which holds the timer off too and so shows nothing of a
+threshold; and a C5 identity hardware vectored through `mtvt`, which D680
+declined.
+
+**Pinned by** `environments/boards/esp32c3/record.json` and
+`esp32c5/record.json`, and `scripts/tests/test_board_esp.py`'s `Scenario`.
+
+### D722 — The ESP boards' oracle starts at power-on, reads the ROM and the image apart from refine
+
+**The tour said** nothing; D595 and D655 held the Arm boards' runs to
+power-on and their boot ROMs' refusal of a corrupted block.
+
+**Chosen:** each ESP board's tool builds the image with refine and reads
+`OUT.bin` with a reader of its own, written from ESP-IDF v6.1's
+`esp_app_format.h` and `esp_image_format.h`: header, chip, revisions, every
+segment against the ELF's loadable segments, padding, checksum, SHA-256
+and nothing after, and refine's build report against what it read; holds
+the linked disassembly to the level's A extension, none at `rv32imc`, an
+AMO and an LR/SC pair at `rv32imac`; flashes it raw at the description's
+offset with probe-rs, verified; cuts the board's power and reads, from
+power-on, the ROM's log: `rst:0x1 (POWERON)`, a flash boot, one `load:` per
+segment at its address and length, and the header's entry; then the
+scenario (D721), the counters and atomic cells read over JTAG against the
+last frames, and the image's read-only segments read back from SRAM, which
+must be `OUT.bin`'s bytes. Its negative control flashes two copies: one
+whose checksum byte is flipped, which the ROM must refuse, naming the
+image's own checksum as the one it computed, never entering it; and one
+whose SHA-256 is flipped, which both ROMs, without secure boot, name and
+boot anyway (`Attempting to boot anyway...`), so the control requires only
+that the hash the ROM computed is the image's own.
+
+**The alternatives:** refine's own reading of the image, which D685
+already makes and which a reader sharing its mistakes would pass; a
+refused hash as the control, which the ROM without secure boot does not
+give; and burning secure boot's eFuses to get one, which cannot be undone.
+
+**Pinned by** the boards' records and `scripts/tests/test_board_esp.py`'s
+`Image`, `Check`, `Instructions` and `Rom`.
+
+### D723 — The ESP boards' tools share a family module
+
+**The tour said** nothing; D646 put what does not depend on the chip in
+`environments/boards/common.py` and kept each board's build, scenario and
+oracle in its own script.
+
+**Chosen:** the ESP32-C3 and the ESP32-C5 run one port, whose ROMs load
+one image format and write one log, so `environments/boards/esp.py` holds
+their build, image and ROM checks, controls, scenario and JTAG checks, and
+each board's `board.py` gives its chip as facts: identity, revisions,
+offset and origin, the mtvec its core takes, its indicator, its
+interrupts' causes, its level's atomics and what they must leave, the
+cells a probe reads, and its console and power. `common.py` gains what
+any board may use: the ESP image and ROM-log readers, a raw download at an
+offset, ports switched off and on together under the hub's guard, and a
+tty found by its hub port and opened with DTR and RTS inactive. Amends
+D646.
+
+**The alternatives:** a copy of the scenario in each tool, which lets two
+oracles of one port drift; and the family's parts in `common.py`, which
+holds what no chip decides.
+
+**Pinned by** `scripts/tests/test_board_esp.py`.
+
+### D724 — The ESP32-C5's power-on boot is read over JTAG, and its ROM's log after a chip-enable reset
+
+**The tour said** nothing; D595 read a board's trace from power-on on a
+console that is open before the power returns.
+
+**Chosen:** the ESP32-C5-DevKit-Lipo is powered from either of its USB-C
+ports, its chip's own USB-Serial-JTAG and a CH340X bridge on UART0, so
+cutting both cuts all its power, and when they return the chip runs before
+either has enumerated: no console can be open for the ROM's log from
+power-on. The tool cuts both together and restores them, and as soon as
+the USB-Serial-JTAG enumerates reads over JTAG what the chip recorded of
+that boot: LP_CLKRST_RESET_CAUSE's cause 1, the chip reset (TRM v1.1,
+9.1.4, Table 9.1-1), the program's own reading of it in `boot_reason`, its
+`app_state` running and its timer interrupts advancing. Then, with the
+bridge's tty open and DTR inactive, so GPIO28 stays high and the ROM boots
+from flash, RTS alone pulls EN low for 100 ms through the board's
+auto-reset transistors, and the console reads that boot's ROM log, which
+the ROM reports as `rst:0x1 (POWERON)`, and the scenario. The bridge has no
+USB serial, so its tty is found by the hub port it is plugged into. The
+ports' map registers take the CLIC identity, 17 and 18, as themselves
+(11.5.3), unlike the C3's, which take the line.
+
+**The alternatives:** restoring the bridge's port first, which powers the
+chip as the other does; and a scenario without the ROM's log, which leaves
+the image's segments unchecked on the board.
+
+**Pinned by** `environments/boards/esp32c5/record.json` and
+`scripts/tests/test_board_esp.py`'s `PowerOn`.
+
+### D725 — Every board run holds the rig's lock and paces what disconnects a device
+
+**The tour said** nothing; each board tool switched its own hub port when
+it ran.
+
+**Chosen:** on the maintainer's rig every hub of the cascade re-enumerates
+whenever any port is switched or any device on it disconnects, an ESP
+chip's reset after a download among them, so two runs at once disturb each
+other, and several such actions in quick succession once set the kernel
+power-cycling the cascade's ports for most of a minute. Every board tool's
+run therefore holds one host-wide lock, `common.rig_lock`, an exclusive
+flock on `~/.cache/landin/rig.lock` naming its holder, which a run started
+under `flock` on the same file by hand finds held by its parent and goes
+on under; and the ESP tools pace every action that disconnects a device, a
+download, a port switched off or on and the C5's chip-enable reset, with
+`common.Pace`: at least 120 s after the previous one by any tool on the
+host, only after the kernel has logged nothing of USB for 60 s, stopping
+when it logged a USB error since that previous action; and after each they
+wait for the hub to list the board again, `common.wait_for_hub`.
+
+**The alternatives:** a lock per hub, which the cascade makes one hub;
+retrying a listing that finds no hub, which hides the trouble the pace
+stops at; and the spacing left to whoever runs a tool, which two streams
+did not keep.
+
+**Pinned by** `scripts/tests/test_board_common.py`'s `RigLock` and `Pace`.
+
 ### D645 — The shared command loop takes its indicator and transmitter as function values
 
 **The tour said** nothing; D593 shared `compiler/tests/driver/commands`

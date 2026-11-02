@@ -17,21 +17,30 @@ does not depend on the chip:
     its CMSIS-DAP UDP transport or a bridge's TCP port, or an ST-LINK named
     by its serial; reading words, and flashing with verification and a
     readback;
-  * the hub's power cycle: one `uhubctl -a cycle` of one port, only after
+  * the hub's power cycle: one `uhubctl -a cycle` of one port, or ports
+    switched off and on together, and a wait for the hub to list again
+    after the cascade re-enumerates; each only after
     the hub's listing shows the device the port must hold, or a guarded
     port holding the device that must never lose power, run through
     `sg GROUP -c` when the session is not in the group that may switch it;
   * probehive's bridge, started for a run or shared between runs and
     left running;
   * a console over probehive's UART bridge, a TCP port, or over a tty such
-    as an ST-LINK's virtual COM port, found by its USB serial;
-  * the record a passed run writes.
+    as an ST-LINK's virtual COM port, found by its USB serial or, for a
+    bridge with none, by the hub port it is plugged into, and opened, when
+    its modem lines drive a board's reset, with DTR and RTS inactive;
+  * the ESP application image both ESP32 ROMs load, read on its own from
+    its bytes, and the log those ROMs write while they load it;
+  * the record a passed run writes;
+  * the rig's one lock, held by every run's hardware phase, and the pace
+    of the actions that disconnect a device on its hub cascade.
 
 Nothing here touches a board unless a tool calls it, and nothing needs more
 than the standard library, so scripts/tests/test_board_common.py runs it on
 the gate's Python with no board, probe or hub.
 """
 
+import fcntl
 import grp
 import hashlib
 import json
@@ -113,6 +122,152 @@ def ask(console, byte, tag, count, seconds=5):
     return tagged(stream, tag)[count]
 
 
+RIG_LOCK = Path.home() / '.cache/landin/rig.lock'
+
+
+def lock_holders(path, locks='/proc/locks'):
+    """The processes holding a flock on PATH, from LOCKS."""
+    inode = os.stat(path).st_ino
+    holders = set()
+    for line in Path(locks).read_text().splitlines():
+        fields = line.split()
+        # 1: FLOCK  ADVISORY  WRITE PID MAJ:MIN:INODE START END
+        if len(fields) >= 6 and fields[1] == 'FLOCK' and fields[5].rsplit(':', 1)[-1] == str(inode):
+            holders.add(int(fields[4]))
+    return holders
+
+
+def ancestors(pid=None, proc=Path('/proc')):
+    """PID, by default this process, and every process above it."""
+    found, pid = [], os.getpid() if pid is None else pid
+    while pid > 1:
+        found.append(pid)
+        stat = (Path(proc) / str(pid) / 'stat').read_text()
+        pid = int(stat[stat.rindex(')') + 2:].split()[1])
+    return found
+
+
+class RigLock:
+    """The rig's one host-wide lock, an exclusive flock on PATH, held while
+    a run switches power, flashes or reads a board: the hub cascade
+    re-enumerates every inner hub when any port is switched, so two runs
+    at once disturb each other.  While another holds it, WHO waits and
+    says whom for; the holder's name and process are kept in the file.  A
+    run started under `flock PATH` by hand already holds it through its
+    parent, and goes on.  `acquire` and `release`, or a `with` block."""
+    def __init__(self, who, path=RIG_LOCK, report=None, locks='/proc/locks'):
+        self.who, self.path, self.locks = who, Path(path), locks
+        self.report = report or (lambda text: print(text, file=sys.stderr, flush=True))
+        self.file = None
+
+    def acquire(self):
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.file = open(self.path, 'a+')
+        try:
+            fcntl.flock(self.file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            if lock_holders(self.path, self.locks) & set(ancestors()[1:]):
+                self.file.close()
+                self.file = None
+                return self
+            self.file.seek(0)
+            holder = self.file.read().strip() or 'a process that names none'
+            self.report('%s waits for the rig lock %s, held by %s' % (self.who, self.path, holder))
+            fcntl.flock(self.file, fcntl.LOCK_EX)
+        self.file.seek(0)
+        self.file.truncate()
+        self.file.write('%s, process %d, since %s\n'
+                        % (self.who, os.getpid(), time.strftime('%Y-%m-%d %H:%M:%S')))
+        self.file.flush()
+        return self
+
+    def release(self):
+        if self.file:
+            self.file.seek(0)
+            self.file.truncate()
+            self.file.flush()
+            fcntl.flock(self.file, fcntl.LOCK_UN)
+            self.file.close()
+            self.file = None
+
+    def __enter__(self):
+        return self.acquire()
+
+    def __exit__(self, *_):
+        self.release()
+
+
+def rig_lock(who, path=RIG_LOCK, report=None):
+    """The rig lock for WHO, a board tool's name."""
+    return RigLock(who, path, report)
+
+
+USB_TROUBLE = re.compile(r'error -\d+|not accepting address|unable to enumerate|attempt power cycle'
+                         r'|Timeout while waiting for setup device')
+
+
+class Pace:
+    """The spacing of a run's actions that disconnect a USB device on the
+    rig's hub cascade: a download, which ends in the chip's reset, a port
+    switched off or on, or a chip reset through a bridge's modem lines.
+    Each waits until SPACING seconds have passed since the last one, by any
+    tool on the host, and until the kernel has logged nothing of USB for
+    QUIET seconds; any USB error the kernel logged since that last action
+    stops the run instead (D725).  The last action's time is kept in
+    STATE beside the rig's lock; KERNEL(seconds) is the kernel's USB lines
+    of the last SECONDS, as (unix time, text)."""
+    def __init__(self, spacing=120, quiet=60, state=None, kernel=None, clock=time.time,
+                 sleep=time.sleep, report=None):
+        self.spacing, self.quiet = spacing, quiet
+        self.state = Path(state) if state else RIG_LOCK.with_name('rig.pace')
+        self.kernel = kernel or kernel_usb_lines
+        self.clock, self.sleep = clock, sleep
+        self.report = report or (lambda text: print(text, file=sys.stderr, flush=True))
+
+    def last(self):
+        try:
+            return float(self.state.read_text().split()[0])
+        except (OSError, ValueError, IndexError):
+            return 0.0
+
+    def before(self, what):
+        last = self.last()
+        trouble = [text for when, text in self.kernel(max(1, int(self.clock() - last) + 1))
+                   if when >= last and USB_TROUBLE.search(text)]
+        if trouble:
+            raise Failed('the kernel logged USB trouble since the last action; stopping before'
+                         ' %s: %s' % (what, trouble[0]))
+        while True:
+            now = self.clock()
+            wait = max(last + self.spacing - now, 0)
+            recent = [when for when, _ in self.kernel(self.quiet)]
+            if recent:
+                wait = max(wait, max(recent) + self.quiet - now)
+            if wait <= 0:
+                return
+            self.report('%s waits %.0f s for the rig to settle' % (what, wait))
+            self.sleep(min(wait, 30))
+
+    def after(self, what):
+        self.state.parent.mkdir(parents=True, exist_ok=True)
+        self.state.write_text('%f %s\n' % (self.clock(), what))
+
+
+def kernel_usb_lines(seconds):
+    """The kernel's USB lines of the last SECONDS, as (unix time, text)."""
+    found = subprocess.run(['journalctl', '-k', '--since', '-%ds' % seconds, '--no-pager',
+                            '-o', 'short-unix'], capture_output=True, text=True).stdout
+    lines = []
+    for line in found.splitlines():
+        fields = line.split(None, 1)
+        if len(fields) == 2 and re.search(r'\busb\b|xhci', fields[1]):
+            try:
+                lines.append((float(fields[0]), fields[1]))
+            except ValueError:
+                continue
+    return lines
+
+
 class Run:
     """Every command a tool runs, its log under OUT and its record kept."""
     def __init__(self, out):
@@ -168,6 +323,105 @@ def loaded(image, address, size):
     raise Failed('the image loads nothing for %d bytes at %#x' % (size, address))
 
 
+def elf_segments(image):
+    """Each loadable segment of the ELF32 IMAGE with bytes in the file, as
+    (physical address, its bytes, writable)."""
+    data = Path(image).read_bytes()
+    require(data[:4] == b'\x7fELF' and data[4] == 1 and data[5] == 1, 'not an ELF32 LE image')
+    phoff, = struct.unpack_from('<I', data, 0x1c)
+    phentsize, phnum = struct.unpack_from('<HH', data, 0x2a)
+    found = []
+    for i in range(phnum):
+        kind, offset, _, paddr, filesz, _, flags, _ = struct.unpack_from(
+            '<8I', data, phoff + i * phentsize)
+        if kind == 1 and filesz:
+            found.append((paddr, data[offset:offset + filesz], bool(flags & 2)))
+    return found
+
+
+ESP_MAGIC = 0xE9
+ESP_CHECKSUM_SEED = 0xEF
+
+
+def esp_checksum(segments):
+    """The image's checksum byte: every segment byte exclusive-ored into
+    0xEF (ESP-IDF's esp_image_format.h, ESP_ROM_CHECKSUM_INITIAL)."""
+    value = ESP_CHECKSUM_SEED
+    for _, body in segments:
+        for byte in body:
+            value ^= byte
+    return value
+
+
+def esp_image(data):
+    """The ESP application image DATA, read from its bytes alone as ESP-IDF
+    v6.1's esp_app_format.h and esp_image_format.h lay it out, and refused
+    unless every part is as they say: the 8-byte header, magic 0xE9, the
+    segment count, the flash mode, size and frequency byte and the entry;
+    the 16-byte extended header, its chip id, revisions and the hash flag;
+    each segment's 8-byte header and bytes; zero padding to the last byte
+    of a 16-byte boundary, which is the checksum; the SHA-256 of all that,
+    and nothing after it."""
+    require(len(data) >= 24 and data[0] == ESP_MAGIC, 'the image does not begin with 0xE9')
+    count, mode, size_freq, entry = data[1], data[2], data[3], struct.unpack_from('<I', data, 4)[0]
+    wp_pin = data[8]
+    drive = data[9:12]
+    chip, legacy_min, min_rev, max_rev = struct.unpack_from('<HBHH', data, 12)
+    reserved, hash_appended = data[19:23], data[23]
+    require(reserved == bytes(4), 'the extended header\'s reserved bytes are not zero')
+    at, segments = 24, []
+    for _ in range(count):
+        require(at + 8 <= len(data), 'segment %d\'s header runs past the image' % len(segments))
+        address, length = struct.unpack_from('<II', data, at)
+        at += 8
+        require(at + length <= len(data), 'segment at %#x runs past the image' % address)
+        segments.append((address, data[at:at + length]))
+        at += length
+    end = at | 15
+    require(end < len(data), 'the image ends before its checksum')
+    require(data[at:end] == bytes(end - at), 'the padding before the checksum is not zero')
+    checksum = data[end]
+    require(checksum == esp_checksum(segments), 'the checksum is %#04x, not %#04x'
+            % (checksum, esp_checksum(segments)))
+    body = data[:end + 1]
+    require(hash_appended == 1, 'the image says no SHA-256 follows it')
+    require(len(data) == len(body) + 32, 'the image is %d bytes, not %d'
+            % (len(data), len(body) + 32))
+    digest = hashlib.sha256(body).digest()
+    require(data[len(body):] == digest, 'the appended SHA-256 is not the image\'s')
+    return dict(entry=entry, chip=chip, min_revision=min_rev, max_revision=max_rev,
+                legacy_min_revision=legacy_min, flash_mode=mode, size_freq=size_freq,
+                wp_pin=wp_pin, drive=bytes(drive), segments=segments, checksum=checksum,
+                sha256=digest.hex(), bytes=len(data))
+
+
+ROM_RESET = re.compile(r'rst:0x([0-9a-f]+) \(([A-Z_]+)\),boot:0x([0-9a-f]+) \(([A-Z_]+)\)')
+ROM_LOAD = re.compile(r'^load:0x([0-9a-f]+),len:0x([0-9a-f]+)', re.MULTILINE)
+ROM_ENTRY = re.compile(r'^entry 0x([0-9a-f]+)', re.MULTILINE)
+ROM_CHECKSUM = re.compile(r'Checksum failure\. Calculated 0x([0-9a-f]+) stored 0x([0-9a-f]+)')
+ROM_SHA = re.compile(r'SHA-256 comparison failed:\s*Calculated: ([0-9a-f]{64})\s*Expected: ([0-9a-f]{64})')
+
+
+def rom_log(text):
+    """What an ESP32-C3's or ESP32-C5's ROM said while it booted: its reset
+    and boot mode, each segment it loaded, the entry it took, and a
+    checksum or SHA-256 it found wrong, each None when it said nothing of
+    it; only the first boot in TEXT is read."""
+    reset = ROM_RESET.search(text)
+    if reset:
+        following = ROM_RESET.search(text, reset.end())
+        text = text[reset.start():following.start() if following else len(text)]
+    checksum, sha = ROM_CHECKSUM.search(text), ROM_SHA.search(text)
+    entry = ROM_ENTRY.search(text)
+    return dict(
+        reset=(int(reset.group(1), 16), reset.group(2)) if reset else None,
+        boot=(int(reset.group(3), 16), reset.group(4)) if reset else None,
+        loads=[(int(a, 16), int(n, 16)) for a, n in ROM_LOAD.findall(text)],
+        entry=int(entry.group(1), 16) if entry else None,
+        checksum=(int(checksum.group(1), 16), int(checksum.group(2), 16)) if checksum else None,
+        sha=(sha.group(1), sha.group(2)) if sha else None)
+
+
 def parse_nm(listing):
     """`nm`'s listing as {name: address}, for the symbols it gives one."""
     return {f[2]: int(f[0], 16) for f in (l.split() for l in listing.splitlines()) if len(f) == 3}
@@ -203,6 +457,18 @@ class Probe:
         words = [int(w, 16) for w in text.split() if not w.endswith(':')]
         require(len(words) == count, '%s read %d words, not %d' % (name, len(words), count))
         return words
+
+    def download_bin(self, image, base):
+        """Write the raw IMAGE to flash at BASE and verify it, as an ESP
+        image goes where its ROM reads it (D685)."""
+        self.run.command('flash', self.argv('download', '--binary-format', 'bin',
+                                            '--base-address', hex(base), '--verify', image),
+                         timeout=300)
+
+    def read_bytes(self, name, address, size):
+        """SIZE bytes from ADDRESS, a multiple of four, read as words."""
+        words = self.read_words(name, address, size // 4)
+        return struct.pack('<%dI' % len(words), *words)
 
     def flash(self, elf, address, expected, what):
         """Flash ELF and verify it, then read len(EXPECTED) bytes back from
@@ -289,6 +555,52 @@ def power_cycle(hub, location, port, off_seconds, holds=None, keeps=None, holds_
     # given them the group that may switch them.
     hub.command('power-cycle', ['uhubctl', '-l', location, '-p', str(port), '-a', 'cycle',
                                 '-d', '%g' % off_seconds])
+
+
+def wait_for_hub(hub, location, shows, seconds, interval=0.5):
+    """The hub at LOCATION's listing once it lists again and each (port,
+    text) of SHOWS shows its text: switching any port of the rig's hub
+    cascade, or a USB device on it resetting, re-enumerates every hub in
+    it, and a listing taken meanwhile finds no hub."""
+    deadline = time.time() + seconds
+    while True:
+        status = hub.command('hub-wait', ['uhubctl', '-l', location], check=False)
+        ports = hub_ports(status)
+        if all(port in ports and text in ports[port] for port, text in shows):
+            return status
+        if time.time() >= deadline:
+            raise Failed('hub %s did not list %s within %g s' % (
+                location, ', '.join('%s on port %d' % (text, port) for port, text in shows),
+                seconds))
+        time.sleep(interval)
+
+
+def switch_ports(hub, location, ports, action, holds=(), keeps=None, name=None):
+    """Switch every port of PORTS of the hub at LOCATION `off` or `on`
+    together, in one call: a board fed through two of them, such as a USB
+    serial bridge's port beside its debug port, loses all its power, and
+    one port may come back before the other.
+
+    HOLDS is (port, text) pairs, each a switched port whose listing must
+    show TEXT, a serial or a VID:PID, before it is switched off;
+    KEEPS is (port, text), a port that must show TEXT and is never
+    switched, as `power_cycle`'s are."""
+    require(action in ('off', 'on'), 'no uhubctl action %r' % action)
+    status = hub.command('hub-status', ['uhubctl', '-l', location])
+    found = hub_ports(status)
+    if keeps:
+        guard_port, guard_text = keeps
+        require(guard_port in found and guard_text in found[guard_port],
+                'port %d of hub %s does not hold %s; refusing to switch this hub'
+                % (guard_port, location, guard_text))
+        require(guard_port not in ports, 'refusing to switch the guarded port')
+    for port, text in holds if action == 'off' else ():
+        require(port in ports, 'port %d is held but not switched' % port)
+        require(port in found and text in found[port],
+                'port %d of hub %s does not hold %s; refusing to switch it'
+                % (port, location, text))
+    hub.command(name or 'power-' + action, ['uhubctl', '-l', location, '-p',
+                                             ','.join(str(p) for p in ports), '-a', action])
 
 
 class ProbehiveBridge:
@@ -455,14 +767,27 @@ BAUDS = {9600: termios.B9600, 19200: termios.B19200, 38400: termios.B38400,
 
 
 class TtyConsole(Console):
-    """A tty in raw mode at BAUD, 8 data bits, no parity, one stop bit."""
-    def __init__(self, path, baud=115200):
+    """A tty in raw mode at BAUD, 8 data bits, no parity, one stop bit.
+
+    With QUIET, DTR and RTS are made inactive as soon as the tty is open,
+    and stay so when it closes: on a board whose bridge drives its reset and
+    a boot strap from them, as an ESP32 board's auto-reset transistors do,
+    either alone resets the chip or selects its download mode.  Linux raises
+    both together when a tty opens and lowers both together when it
+    closes, and that circuit holds neither line low while both are active,
+    so that moment changes nothing; HUPCL is cleared so the close does not
+    move them."""
+    def __init__(self, path, baud=115200, quiet=False):
         self.path = str(path)
         self.fd = os.open(self.path, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
+        if quiet:
+            quiet_lines(self.fd)
         tty.setraw(self.fd)
         attributes = termios.tcgetattr(self.fd)
         attributes[2] = (attributes[2] & ~(termios.PARENB | termios.CSTOPB | termios.CRTSCTS)
                          | termios.CS8 | termios.CLOCAL | termios.CREAD)
+        if quiet:
+            attributes[2] &= ~termios.HUPCL
         attributes[4] = attributes[5] = BAUDS[baud]
         termios.tcsetattr(self.fd, termios.TCSANOW, attributes)
         termios.tcflush(self.fd, termios.TCIOFLUSH)
@@ -488,6 +813,55 @@ class TtyConsole(Console):
 
     def shut(self):
         os.close(self.fd)
+
+
+def quiet_lines(fd):
+    """DTR and RTS inactive on the tty FD, both in one request."""
+    fcntl.ioctl(fd, termios.TIOCMBIC, struct.pack('I', termios.TIOCM_DTR | termios.TIOCM_RTS))
+
+
+def set_lines(fd, rts=None, dtr=None):
+    """RTS, DTR or both made active (True) or inactive (False) on the tty
+    FD, each named line in its own request."""
+    for line, value in ((termios.TIOCM_RTS, rts), (termios.TIOCM_DTR, dtr)):
+        if value is not None:
+            fcntl.ioctl(fd, termios.TIOCMBIS if value else termios.TIOCMBIC, struct.pack('I', line))
+
+
+def modem_lines(fd):
+    """Which of DTR and RTS are active on the tty FD."""
+    bits, = struct.unpack('I', fcntl.ioctl(fd, termios.TIOCMGET, struct.pack('I', 0)))
+    return dict(dtr=bool(bits & termios.TIOCM_DTR), rts=bool(bits & termios.TIOCM_RTS))
+
+
+def tty_at(location, sysfs=Path('/sys/class/tty'), dev=Path('/dev')):
+    """The tty of the USB device at LOCATION, a hub path such as 7-2.3.4.4,
+    as sysfs places it, or None; with two, the one on the lowest interface.
+    A bridge without a serial of its own is told apart by where it is
+    plugged in."""
+    found = []
+    for entry in sorted(Path(sysfs).glob('*')):
+        device = entry / 'device'
+        if not device.exists():
+            continue
+        # An ACM tty's device is its interface; a usb-serial tty's, a port
+        # beneath it.
+        for interface in (device.resolve(), device.resolve().parent):
+            if interface.parent.name == location and interface.name.startswith(location + ':'):
+                found.append((interface.name, Path(dev) / entry.name))
+                break
+    return min(found)[1] if found else None
+
+
+def wait_for_tty_at(location, seconds, sysfs=Path('/sys/class/tty'), dev=Path('/dev')):
+    """The tty at hub path LOCATION once it appears and can be opened."""
+    deadline = time.time() + seconds
+    while time.time() < deadline:
+        path = tty_at(location, sysfs, dev)
+        if path is not None and os.access(path, os.R_OK | os.W_OK):
+            return path
+        time.sleep(0.05)
+    raise Failed('no tty at USB location %s appeared within %g s' % (location, seconds))
 
 
 def find_tty(serial, sysfs=Path('/sys/class/tty'), dev=Path('/dev')):

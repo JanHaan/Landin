@@ -380,5 +380,121 @@ class Records(unittest.TestCase):
             self.assertTrue((Path(out) / 'r.json').read_text().endswith('}\n'))
 
 
+
+class RigLock(unittest.TestCase):
+    def test_the_holder_is_named_while_held_and_cleared_after(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'rig.lock'
+            with COMMON.RigLock('esp32c3 board.py', path, report=self.fail):
+                self.assertTrue(path.read_text().startswith('esp32c3 board.py, process %d,'
+                                                            % os.getpid()))
+            self.assertEqual(path.read_text(), '')
+
+    def test_a_second_run_waits_and_says_for_whom(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'rig.lock'
+            said, done = [], threading.Event()
+            first = COMMON.RigLock('rp2350 board.py', path).acquire()
+
+            def second():
+                with COMMON.RigLock('esp32c5 board.py', path, report=said.append):
+                    done.set()
+            waiter = threading.Thread(target=second)
+            waiter.start()
+            self.assertFalse(done.wait(0.3))
+            self.assertEqual(len(said), 1)
+            self.assertIn('esp32c5 board.py waits for the rig lock', said[0])
+            self.assertIn('held by rp2350 board.py, process %d' % os.getpid(), said[0])
+            first.release()
+            self.assertTrue(done.wait(5))
+            waiter.join(5)
+
+    def test_a_run_under_its_parent_s_flock_goes_on(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'rig.lock'
+            outer = COMMON.RigLock('flock by hand', path).acquire()
+            locks = Path(tmp) / 'locks'
+            locks.write_text('1: FLOCK  ADVISORY  WRITE %d 00:22:%d 0 EOF\n'
+                             % (os.getppid(), os.stat(path).st_ino))
+            inner = COMMON.RigLock('esp32c3 board.py', path, report=self.fail, locks=locks)
+            inner.acquire()
+            inner.release()
+            outer.release()
+
+    def test_holders_are_read_by_inode(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'rig.lock'
+            path.write_text('')
+            inode = os.stat(path).st_ino
+            locks = Path(tmp) / 'locks'
+            locks.write_text('1: FLOCK  ADVISORY  WRITE 41 00:22:%d 0 EOF\n'
+                             '2: POSIX  ADVISORY  WRITE 42 00:22:%d 0 EOF\n'
+                             '3: FLOCK  ADVISORY  WRITE 43 00:22:%d 0 EOF\n'
+                             % (inode, inode, inode + 1))
+            self.assertEqual(COMMON.lock_holders(path, locks), {41})
+
+    def test_ancestors_begin_with_this_process(self):
+        found = COMMON.ancestors()
+        self.assertEqual(found[0], os.getpid())
+        self.assertEqual(found[1:2], [os.getppid()] if os.getppid() > 1 else [])
+
+
+
+class Pace(unittest.TestCase):
+    """The spacing of actions that disconnect a device on the hub cascade."""
+    def pace(self, tmp, lines, now=1000.0):
+        clock = [now]
+        waited = []
+
+        def sleep(seconds):
+            waited.append(seconds)
+            clock[0] += seconds
+        pace = COMMON.Pace(120, 60, state=Path(tmp) / 'rig.pace',
+                           kernel=lambda seconds: [l for l in lines if l[0] >= clock[0] - seconds],
+                           clock=lambda: clock[0], sleep=sleep, report=lambda text: None)
+        return pace, clock, waited
+
+    def test_a_quiet_rig_long_after_the_last_action_goes_at_once(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            pace, clock, waited = self.pace(tmp, [])
+            pace.before('download')
+            pace.after('download')
+            self.assertEqual(waited, [])
+            self.assertEqual(pace.last(), clock[0])
+
+    def test_the_next_action_waits_for_the_spacing_and_a_quiet_minute(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            lines = [(1010.0, 'usb 7-2.3.4.2: USB disconnect, device number 9')]
+            pace, clock, waited = self.pace(tmp, lines)
+            pace.after('download')
+            clock[0] = 1030.0
+            pace.before('power cycle')
+            self.assertGreaterEqual(clock[0], 1120.0)
+            self.assertTrue(all(w <= 30 for w in waited))
+
+    def test_a_kernel_usb_line_restarts_the_quiet_minute(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            lines = [(1150.0, 'usb 7-2.3.4.3: new full-speed USB device number 12')]
+            pace, clock, _ = self.pace(tmp, lines, now=1160.0)
+            Path(tmp, 'rig.pace').write_text('900.0 download\n')
+            pace.before('power on')
+            self.assertGreaterEqual(clock[0], 1210.0)
+
+    def test_a_usb_error_since_the_last_action_stops_the_run(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            lines = [(1005.0, 'usb 7-2.3: device not accepting address 41, error -71')]
+            pace, _, _ = self.pace(tmp, lines, now=1200.0)
+            Path(tmp, 'rig.pace').write_text('1000.0 download\n')
+            with self.assertRaises(COMMON.Failed):
+                pace.before('power cycle')
+
+    def test_an_error_before_the_last_action_does_not(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            lines = [(990.0, 'usb 7-2-port3: attempt power cycle')]
+            pace, _, _ = self.pace(tmp, lines, now=1200.0)
+            Path(tmp, 'rig.pace').write_text('1000.0 download\n')
+            pace.before('power cycle')
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -109,36 +109,36 @@ public in_read: (device_base: usize) -> (raw: u32) =
     raw = compiler.register_read(port, compiler.normal_read)
 end in_read
 
-public func27_out_sel_cfg_offset: usize = 0xb40
-public func27_out_sel_cfg_address: usize = 0x60091b40
-public func27_out_sel_cfg_named_mask: u32 = 0x00000fff
-public func27_out_sel_cfg_reset_mask: u32 = 0x00000fff
-public func27_out_sel_cfg_reset_value: u32 = 0x00000100
-public func27_out_sel_cfg_image: type = layout(packed, u32) struct
+public func24_out_sel_cfg_offset: usize = 0xb34
+public func24_out_sel_cfg_address: usize = 0x60091b34
+public func24_out_sel_cfg_named_mask: u32 = 0x00000fff
+public func24_out_sel_cfg_reset_mask: u32 = 0x00000fff
+public func24_out_sel_cfg_reset_value: u32 = 0x00000100
+public func24_out_sel_cfg_image: type = layout(packed, u32) struct
     f_func_out_sel: u9 at 0..8
     f_func_out_inv_sel: u1 at 9..9
     f_func_oe_sel: u1 at 10..10
     f_func_oe_inv_sel: u1 at 11..11
-end func27_out_sel_cfg_image
+end func24_out_sel_cfg_image
 
-public func27_out_sel_cfg_decode: (raw: u32) -> (image: func27_out_sel_cfg_image) =
+public func24_out_sel_cfg_decode: (raw: u32) -> (image: func24_out_sel_cfg_image) =
     image = zeroed
     bits: ptr mut u32 = ptr(usize(addr image))
     bits.val = raw
-end func27_out_sel_cfg_decode
+end func24_out_sel_cfg_decode
 
-public func27_out_sel_cfg_encode: (image: func27_out_sel_cfg_image) -> (raw: u32) =
+public func24_out_sel_cfg_encode: (image: func24_out_sel_cfg_image) -> (raw: u32) =
     bits: ptr u32 = ptr(usize(addr image))
     raw = bits.val
-end func27_out_sel_cfg_encode
+end func24_out_sel_cfg_encode
 
-public func27_out_sel_cfg_read: (device_base: usize) -> (raw: u32) =
-    port: ptr u32 = ptr(device_base + func27_out_sel_cfg_offset)
+public func24_out_sel_cfg_read: (device_base: usize) -> (raw: u32) =
+    port: ptr u32 = ptr(device_base + func24_out_sel_cfg_offset)
     raw = compiler.register_read(port, compiler.normal_read)
-end func27_out_sel_cfg_read
+end func24_out_sel_cfg_read
 
-public func27_out_sel_cfg_write: (device_base: usize, raw: u32) -> none =
-    port: ptr mut u32 = ptr(device_base + func27_out_sel_cfg_offset)
+public func24_out_sel_cfg_write: (device_base: usize, raw: u32) -> none =
+    port: ptr mut u32 = ptr(device_base + func24_out_sel_cfg_offset)
     compiler.register_write(port, raw, compiler.normal_write,
                             compiler.write_zero, 0x00000fff)
-end func27_out_sel_cfg_write
+end func24_out_sel_cfg_write

@@ -1,0 +1,76 @@
+-- Bringing the ESP32-C3 up from what its boot ROM leaves when it enters the
+-- image: the watchdogs are already off, which the description's stage did
+-- before reset (D708), and UART0 is at 115200 baud on GPIO20 and GPIO21,
+-- where the ROM wrote its log.  This makes GPIO10 the indicator, an output
+-- through the GPIO matrix whose pad's input reads it back, and starts the
+-- system timer's comparator 0 as a 1 ms period on CPU line 2 (D721).
+-- Values are the ESP32-C3 TRM v1.4's.
+import esp32c3/gpio
+import esp32c3/interrupt_core0
+import esp32c3/io_mux
+import esp32c3/system
+import esp32c3/systimer
+
+-- The indicator, GPIO10: not a strapping pin, and no LED of the board's.
+public indicator: u32 = 0x400
+
+-- The system timer's line and its priority, above the receive line's, so
+-- the threshold that holds the receive line off leaves it running.
+public timer_line: u32 = 2
+public timer_priority: u32 = 2
+-- CNT_CLK is XTAL_CLK / 2.5, 16 MHz (10.4, p. 271): a millisecond.
+public ticks_per_ms: u32 = 16000
+
+public indicator_pin: () -> none =
+    -- IO_MUX_GPIO10 (5.15.2, Register 5.21): MCU_SEL 14:12 = 1, the GPIO
+    -- function; FUN_DRV 11:10 = 2; FUN_IE, bit 9, so IN reads the pad.
+    io_mux.gpio10_write(io_mux.base, 0x1a00)
+    -- GPIO_FUNC10_OUT_SEL 128: GPIO_OUT_REG's and GPIO_ENABLE_REG's bit 10
+    -- drive the pin (5.5.3, p. 165; Register 5.17).
+    gpio.func10_out_sel_cfg_write(gpio.base, 0x80)
+    gpio.out_w1tc_write(gpio.base, indicator)
+    gpio.enable_w1ts_write(gpio.base, indicator)
+end indicator_pin
+
+public timer: () -> none =
+    -- SYSTEM_SYSTIMER_CLK_EN and _RST, bit 29 of PERIP_CLK_EN0 and
+    -- PERIP_RST_EN0 (16.5, Registers 16.3 and 16.5).
+    clocks := system.perip_clk_en0_read(system.base)
+    system.perip_clk_en0_write(system.base, clocks | 0x20000000)
+    resets := system.perip_rst_en0_read(system.base)
+    system.perip_rst_en0_write(system.base, resets & ~0x20000000)
+    -- Period mode (10.5.3): UNIT0 compared, the period loaded, then
+    -- PERIOD_MODE, bit 30, cleared and set; TARGET0_WORK_EN, bit 24, with
+    -- UNIT0_WORK_EN, bit 30, and CLK_EN, bit 31; then its interrupt.
+    systimer.target0_conf_write(systimer.base, ticks_per_ms)
+    systimer.comp0_load_write(systimer.base, 1)
+    systimer.target0_conf_write(systimer.base, ticks_per_ms | 0x40000000)
+    conf := systimer.conf_read(systimer.base)
+    systimer.conf_write(systimer.base, conf | 0xc1000000)
+    systimer.int_clr_write(systimer.base, 1)
+    systimer.int_ena_write(systimer.base, 1)
+    -- The interrupt matrix routes SYSTIMER_TARGET0 to the line, a level
+    -- interrupt at its priority, enabled (1.5.3.2).
+    interrupt_core0.systimer_target0_int_map_write(interrupt_core0.base, timer_line)
+    kind := interrupt_core0.cpu_int_type_read(interrupt_core0.base)
+    interrupt_core0.cpu_int_type_write(interrupt_core0.base, kind & ~(1 << timer_line))
+    interrupt_core0.cpu_int_pri_2_write(interrupt_core0.base, timer_priority)
+    enabled := interrupt_core0.cpu_int_enable_read(interrupt_core0.base)
+    interrupt_core0.cpu_int_enable_write(interrupt_core0.base, enabled | (1 << timer_line))
+end timer
+
+-- UNIT0's low word: UPDATE, bit 30 of UNIT0_OP, latches the count, and
+-- VALUE_VALID, bit 29, says it has (10.5.1, p. 274).
+public now: () -> (ticks: u32) =
+    systimer.unit0_op_write(systimer.base, 0x40000000)
+    while (systimer.unit0_op_read(systimer.base) & 0x20000000) == 0 do
+        continue
+    end while
+    ticks = systimer.unit0_value_lo_read(systimer.base)
+end now
+
+-- The line priority threshold (1.5.2): a line is taken when its priority
+-- is at least this.
+public threshold: (level: u32) -> none =
+    interrupt_core0.cpu_int_thresh_write(interrupt_core0.base, level)
+end threshold
