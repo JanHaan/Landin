@@ -1088,7 +1088,29 @@ with a stack limit cell, 80, calls the routine, an ordinary frame,
 restores and returns with `mret`; its unwind rules return to mepc. A slot
 no handler takes, and every exception, jumps to
 `_landin_firmware_unhandled`. A naked routine in a dispatched slot is
-L0347. Reset clears mstatus.MIE, writes mtvec, sets sp to
+L0347.
+
+The unhandled entry records the trap before it masks interrupts and waits
+(D656), so a trap is named by plain memory reads over any probe, even one
+that cannot read the core's CSRs. Five words of
+`.bss.landin_firmware_trap`, first in `.bss` under the derived script:
+
+| cell | offset | holds |
+|---|---|---|
+| `_landin_firmware_trap_cause` | 0 | mcause: 2 is an illegal instruction, 5 a load access fault, 7 a store access fault |
+| `_landin_firmware_trap_pc` | 4 | mepc, the instruction that trapped |
+| `_landin_firmware_trap_value` | 8 | mtval: the faulting address, or the illegal instruction's encoding |
+| `_landin_firmware_trap_sp` | 12 | the sp the trap interrupted |
+| `_landin_firmware_trap_count` | 16 | traps that reached the entry since reset, written last |
+
+Read them by symbol, `x/5wx &_landin_firmware_trap_cause` in GDB, or at
+the address `riscv64-elf-nm` gives with a probe's own memory read, such as
+`probe-rs read b32 ADDRESS 5`. A count of zero means no trap has reached
+the entry; reset clears the cells, so read them before resetting. The entry
+uses no stack and restores every register but mscratch, so a debugger
+that can read registers sees the interrupted code's. Cortex-M keeps its
+loop: its fault status registers are memory-mapped and its stacked frame
+holds the faulting pc. Reset clears mstatus.MIE, writes mtvec, sets sp to
 `_landin_firmware_stack_top`, copies `.data`, `.ramtext` and used
 writable regions and clears `.bss` by the Cortex-M symbols, fences, sets
 MIE and calls the entry.

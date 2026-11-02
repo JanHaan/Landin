@@ -295,8 +295,13 @@ package body Landin.Backend.Firmware is
          end if;
       end Save;
 
-      procedure Restore (Into : in out US.Unbounded_String);
-      procedure Restore (Into : in out US.Unbounded_String) is
+      --  The frame undone, then mret, or with Returns false nothing
+      --  after it, for the unhandled entry, which records the
+      --  interrupted sp (D656).
+      procedure Restore
+        (Into : in out US.Unbounded_String; Returns : Boolean := True);
+      procedure Restore
+        (Into : in out US.Unbounded_String; Returns : Boolean := True) is
       begin
          if Keeps_Limit then
             Line (Into, "lw t2, " & Cell_Offset & "(sp)");
@@ -308,7 +313,9 @@ package body Landin.Backend.Firmware is
               & "(sp)");
          end loop;
          Line (Into, "addi sp, sp, " & Frame);
-         Line (Into, "mret");
+         if Returns then
+            Line (Into, "mret");
+         end if;
       end Restore;
 
       --  An entry the trap reaches with every register the interrupted
@@ -513,6 +520,7 @@ package body Landin.Backend.Firmware is
          Line (Result, "jalr t0");
          Restore (Result);
          Line (Result, "1:");
+         Restore (Result, Returns => False);
          Line (Result, "j _landin_firmware_unhandled");
          Trap_End (Result, "_landin_firmware_trap");
       elsif Model = Profiles.Xh3irq then
@@ -536,6 +544,7 @@ package body Landin.Backend.Firmware is
          Line (Result, "2:");
          Restore (Result);
          Line (Result, "3:");
+         Restore (Result, Returns => False);
          Line (Result, "j _landin_firmware_unhandled");
          Trap_End (Result, "_landin_firmware_external");
       end if;
@@ -610,6 +619,26 @@ package body Landin.Backend.Firmware is
          Line (Result, ".cfi_def_cfa sp, 0");
          Line (Result, ".cfi_undefined ra");
       end if;
+      --  D656: the trap's record, in cells any probe reads as memory,
+      --  made without the stack, which may be what failed.  t0 waits in
+      --  mscratch and sp, once recorded, carries each CSR; both are
+      --  restored, so every other register is still the interrupted
+      --  code's.  The count is written last: a reader that sees it move
+      --  sees the whole record.
+      Line (Result, "csrw mscratch, t0");
+      Line (Result, "la t0, " & Trap_Cell (Trap_Cause));
+      Line (Result, "sw sp, " & Trap_Offset (Trap_SP) & "(t0)");
+      Line (Result, "csrr sp, mcause");
+      Line (Result, "sw sp, " & Trap_Offset (Trap_Cause) & "(t0)");
+      Line (Result, "csrr sp, mepc");
+      Line (Result, "sw sp, " & Trap_Offset (Trap_PC) & "(t0)");
+      Line (Result, "csrr sp, mtval");
+      Line (Result, "sw sp, " & Trap_Offset (Trap_Value) & "(t0)");
+      Line (Result, "lw sp, " & Trap_Offset (Trap_Count) & "(t0)");
+      Line (Result, "addi sp, sp, 1");
+      Line (Result, "sw sp, " & Trap_Offset (Trap_Count) & "(t0)");
+      Line (Result, "lw sp, " & Trap_Offset (Trap_SP) & "(t0)");
+      Line (Result, "csrr t0, mscratch");
       Line (Result, "csrci mstatus, 8");
       Line (Result, "1:");
       Line (Result, "wfi");
@@ -619,6 +648,15 @@ package body Landin.Backend.Firmware is
       end if;
       Line (Result, ".size _landin_firmware_unhandled, . - _landin_firmware"
         & "_unhandled");
+      Line (Result, ".section .bss.landin_firmware_trap,""aw"",@nobits");
+      Line (Result, ".balign 4");
+      for Cell in Trap_Cell_Kind loop
+         Line (Result, ".globl " & Trap_Cell (Cell));
+         Line (Result, ".type " & Trap_Cell (Cell) & ", @object");
+         Line (Result, ".size " & Trap_Cell (Cell) & ", 4");
+         Line (Result, Trap_Cell (Cell) & ":");
+         Line (Result, ".zero 4");
+      end loop;
       return US.To_String (Result);
    end RV32_Image;
 
@@ -674,8 +712,14 @@ package body Landin.Backend.Firmware is
       --  The end of the last output section in the stack's region, which
       --  must stay below the stack, and the last load image in flash.
       In_Stack_Region : US.Unbounded_String;
+      ESP : constant Boolean := Profiles.Takes_ESP_Image (Profile.Boot);
+      Ramtext : constant String :=
+        "  .ramtext : ALIGN(8) {" & LF
+        & "    _landin_firmware_ramtext_start = .;" & LF
+        & "    *(.ramtext.*)" & LF
+        & "    _landin_firmware_ramtext_end = .;" & LF;
       Last_Load : US.Unbounded_String :=
-        US.To_Unbounded_String (".ramtext");
+        US.To_Unbounded_String (if ESP then ".data" else ".ramtext");
    begin
       for Index in 1 .. Profile.Count loop
          US.Append (Memory, "  "
@@ -686,7 +730,7 @@ package body Landin.Backend.Firmware is
       end loop;
       if Profile.Placed (Profiles.Data) = Stack_At then
          In_Stack_Region := US.To_Unbounded_String
-           (if Profiles.Takes_ESP_Image (Profile.Boot)
+           (if ESP
             then "_landin_firmware_data_end"
             else "_landin_firmware_ramtext_end");
       end if;
@@ -784,6 +828,11 @@ package body Landin.Backend.Firmware is
            else "")
         & "  .text : { *(.text .text.*) } > " & Flash & Segment ("text")
         & LF
+        --  D688, D657: an ESP image's RAM code runs where the ROM loads
+        --  it, with its text and in its segment, so reset's copy is of
+        --  itself.
+        & (if ESP then Ramtext & "  } > " & Flash & Segment ("text") & LF
+           else "")
         & "  .rodata : { *(.rodata .rodata.*"
         & (if RV32 then " .srodata .srodata.*" else "") & ") } > "
         & Placed (Profiles.Rodata)
@@ -799,18 +848,15 @@ package body Landin.Backend.Firmware is
         & "    _landin_firmware_data_end = .;" & LF
         & "  } > " & Data & " AT> " & Flash & Segment ("data") & LF
         & "  _landin_firmware_data_load = LOADADDR(.data);" & LF
-        & "  .ramtext : ALIGN(8) {" & LF
-        & "    _landin_firmware_ramtext_start = .;" & LF
-        & "    *(.ramtext.*)" & LF
-        & "    _landin_firmware_ramtext_end = .;" & LF
-        --  D688: an ESP image's RAM code runs where the ROM loads it, with
-        --  its text, so reset's copy is of itself.
-        & (if Profiles.Takes_ESP_Image (Profile.Boot)
-           then "  } > " & Flash & LF
-           else "  } > " & Data & " AT> " & Flash & LF)
+        & (if ESP then ""
+           else Ramtext & "  } > " & Data & " AT> " & Flash & LF)
         & "  _landin_firmware_ramtext_load = LOADADDR(.ramtext);" & LF
         & "  .bss (NOLOAD) : AT(ADDR(.bss)) ALIGN(8) {" & LF
         & "    _landin_firmware_bss_start = .;" & LF
+        --  D656: the trap record first, at the same address in every
+        --  image of the profile.
+        & (if RV32 then "    KEEP(*(.bss.landin_firmware_trap))" & LF
+           else "")
         & "    *(.bss .bss.*" & (if RV32 then " .sbss .sbss.*" else "")
         & " COMMON)" & LF
         & "    _landin_firmware_bss_end = .;" & LF

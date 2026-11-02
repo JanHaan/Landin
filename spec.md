@@ -2209,7 +2209,9 @@ fences, sets MIE and calls the entry. A handler is entered through
 compiler-owned code (D680): a stub saves ra, t0-t6 and a0-a7 and calls an
 `extern(interrupt)` routine, which is an ordinary routine, and its unwind
 rules return to mepc; a naked routine is jumped to from a slot the
-hardware enters and owns its `mret`; there is no nesting. A description's
+hardware enters and owns its `mret`; there is no nesting. The unhandled
+loop first records mcause, mepc, mtval, the interrupted sp and a count in
+`_landin_firmware_trap_*` cells a probe reads as memory (D656). A description's
 stage runs from the entry word, before reset (D684), and an `esp-app-image`
 profile's executable is followed by the image its ROM loads, `OUT.bin`
 (D683, D685).
@@ -23362,6 +23364,89 @@ write.
 script and limits this way and holds them to
 `environments/cortex-m/descriptions.json`.
 
+### D656 — The RV32 unhandled entry records the trap in memory before it waits
+
+**The tour said** at [1990] that unspecified handlers enter a terminal
+unhandled-exception loop, and D680 sent every RV32 exception there. On the
+ESP32-C3 board a core once stopped in it, its ra in `core/atomic`'s load,
+and the exception could not be named: probe-rs's GDB server reads
+nonsense from these chips' CSRs, and mcause, mepc and mtval are CSRs.
+
+**Chosen:** on `rv32` the unhandled entry records the trap before it masks
+interrupts and waits, in five words of `.bss.landin_firmware_trap`, which
+any probe reads as memory: `_landin_firmware_trap_cause` (mcause),
+`_landin_firmware_trap_pc` (mepc), `_landin_firmware_trap_value` (mtval),
+`_landin_firmware_trap_sp`, the sp the trap interrupted, and
+`_landin_firmware_trap_count`, how many traps have reached it since reset,
+in that order. It uses no stack, which may be what failed: t0 waits in
+mscratch while it holds the record's address, sp is recorded first and
+then carries each CSR, and both are restored, so every register but
+mscratch is still the interrupted code's when the entry waits. The count
+is written last, so a reader that sees it change sees the whole record. The CLIC
+entry and Hazard3's dispatch undo their frame before they jump to the
+entry, so the sp recorded is the interrupted one there too. The derived
+script places the cells first in `.bss`, so they are at
+`_landin_firmware_bss_start` in every image of a profile; a developer's
+script places them wherever it collects `.bss.*`. Reset clears them, so a
+record is read before the next reset.
+
+Cortex-M keeps its loop as it is. What an RV32 core keeps in CSRs, an
+Arm core keeps where every probe reaches it: the fault status and address
+registers of an M3 and later, CFSR, HFSR, MMFAR and BFAR, are
+memory-mapped in the System Control Block, the stacked frame holds the
+faulting pc and xPSR, whose exception number is IPSR's, and sp and the
+core registers are read through the debug port's core register transfer,
+not the CSR reads that failed. An M0 has no fault status register to
+copy.
+
+**The alternatives:** leaving the trap to a debugger's CSR reads, which is
+what failed; a record on the stack, which an overrun or a corrupt sp
+destroys; one record of every register, which the interrupted registers,
+kept as they were, already are to a probe that reads them; scratch cells
+for the registers the entry uses, where mscratch and the recorded sp need
+none; and the same cells on Cortex-M, above.
+
+**Pinned by** the `rv32 firmware` cases `traps follow the interrupt model`,
+which holds the record's text, its cells and each dispatched path's frame
+undone before the jump, and `descriptions select their profiles`, which
+holds the cells first in the derived script's `.bss`; and
+`environments/cortex-m/descriptions.py`, which runs a program writing the
+read-only cycle CSR on Espressif's QEMU, the reference's image on
+`sifive_e` and the ESP32-C3's `OUT.bin` through the chip's ROM on
+`esp32c3`, and requires the cells, read as memory once the entry waits, to
+hold mcause 2, the instruction's address, its encoding, the interrupted sp
+and a count of one, at `.bss`'s first five words, and every register to be
+as the trap left it.
+
+### D657 — An ESP image's RAM code is in its text segment
+
+**The tour said** nothing; D688 placed an `esp-app-image`'s `.ramtext`
+with `.text`, and D686's `PHDRS` names each loaded segment. `.ramtext`
+followed `.data` in the script and named no segment, so the linker put it
+in `.data`'s, whose load addresses are in the text region and whose
+addresses are not: GDB loading the executable warned `Loadable section
+".ramtext" outside of ELF segments`, and a loader that writes a
+segment at its virtual address would have written the RAM code past
+`.data` in the data region rather than where it runs.
+
+**Chosen:** on an `esp-app-image` the script places `.ramtext` directly
+after `.text`, in the `text` segment, so the RAM code is loaded where it
+runs, and `.data` follows it in the text region's load addresses; the
+check that the initialized image fits the text region is of `.data`, the
+last image loaded there. Every other profile places `.ramtext` after
+`.data`, loaded from the text region and copied by reset, as before.
+
+**The alternatives:** a segment of its own, which adds an image segment
+the ROM loads for every program with RAM code; and leaving it in `.data`'s,
+which `OUT.bin` survives only because it is made from the segments' load
+addresses.
+
+**Pinned by** the `rv32 firmware` case `descriptions select their
+profiles`, which holds the C3's `.ramtext` after `.text` in `:text`; and
+`environments/cortex-m/descriptions.py`, which links the C3's program
+with a `.ramtext` routine, parses `OUT.bin` against the executable's
+segments and boots it through the chip's ROM on Espressif's QEMU.
+
 ### D635 — RP2350 is learnt from pico-sdk's SVD for the first board's port
 
 **The tour said** nothing of a second Raspberry Pi chip. The first board's
@@ -23523,7 +23608,7 @@ whose meaning the core's interrupt model gives.
 
 **Chosen:** compiler-owned code enters every handler, and no handler takes
 an exception: an exception, mcause's interrupt bit clear, reaches the
-unhandled loop. Each model sets mtvec its own way:
+unhandled loop, which records it in memory first (D656). Each model sets mtvec its own way:
 
 - `vectored`, the E31's and the ESP32-C3's: mtvec holds the table in
   vectored mode, 1, and the core jumps to slot N for interrupt code N and to
@@ -23791,7 +23876,8 @@ ran it.
 
 **Chosen:** RAM code is placed where code runs. On an `esp-app-image` the
 text region is RAM the ROM has loaded, so `.ramtext` is placed there with
-`.text`, its load address its own, and reset's copy of it is of itself.
+`.text`, its load address its own and its segment `.text`'s (D657), and
+reset's copy of it is of itself.
 Otherwise it is placed in the data region when that region is `"rwx"`,
 loaded from the text region and copied by reset as before. Otherwise there
 is nowhere for it, and a `.ramtext` routine is L0578, naming the data

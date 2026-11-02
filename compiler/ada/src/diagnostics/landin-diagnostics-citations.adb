@@ -2367,6 +2367,11 @@ package body Landin.Diagnostics.Citations is
             when 589 =>
                "`--emit=linker-script` writes a profile's derived script"
                & " without a program",
+            when 656 =>
+               "The RV32 unhandled entry records the trap in memory befo"
+               & "re it waits",
+            when 657 =>
+               "An ESP image's RAM code is in its text segment",
             when 635 =>
                "RP2350 is learnt from pico-sdk's SVD for the first board"
                & "'s port",
@@ -3707,6 +3712,10 @@ package body Landin.Diagnostics.Citations is
             when 588 =>
                "Decisions: The toolchain, C and the machine",
             when 589 =>
+               "Decisions: The toolchain, C and the machine",
+            when 656 =>
+               "Decisions: The toolchain, C and the machine",
+            when 657 =>
                "Decisions: The toolchain, C and the machine",
             when 635 =>
                "Decisions: The toolchain, C and the machine",
@@ -5411,6 +5420,12 @@ package body Landin.Diagnostics.Citations is
             when 589 =>
                "https://www.701.dev/spec.html#d589-emit-linker-script-wr"
                & "ites-a-profile-s-derived-script-without-a-program",
+            when 656 =>
+               "https://www.701.dev/spec.html#d656-the-rv32-unhandled-en"
+               & "try-records-the-trap-in-memory-before-it-waits",
+            when 657 =>
+               "https://www.701.dev/spec.html#d657-an-esp-image-s-ram-co"
+               & "de-is-in-its-text-segment",
             when 635 =>
                "https://www.701.dev/spec.html#d635-rp2350-is-learnt-from"
                & "-pico-sdk-s-svd-for-the-first-board-s-port",

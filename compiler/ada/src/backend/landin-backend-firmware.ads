@@ -48,6 +48,24 @@ package Landin.Backend.Firmware is
    function RV32_Trap_Frame (Keeps_Limit : Boolean) return Natural
      is (if Keeps_Limit then 80 else 64);
 
+   --  D656: the cells the RV32 unhandled entry records a trap in, in
+   --  this order in `.bss.landin_firmware_trap`, a word each: mcause,
+   --  mepc, mtval, the interrupted sp, and how many traps reached it.
+   type Trap_Cell_Kind is (Trap_Cause, Trap_PC, Trap_Value, Trap_SP,
+                           Trap_Count);
+   function Trap_Cell (Cell : Trap_Cell_Kind) return String is
+     (case Cell is
+         when Trap_Cause => "_landin_firmware_trap_cause",
+         when Trap_PC => "_landin_firmware_trap_pc",
+         when Trap_Value => "_landin_firmware_trap_value",
+         when Trap_SP => "_landin_firmware_trap_sp",
+         when Trap_Count => "_landin_firmware_trap_count");
+   function Trap_Offset (Cell : Trap_Cell_Kind) return String is
+     (case Cell is
+         when Trap_Cause => "0", when Trap_PC => "4",
+         when Trap_Value => "8", when Trap_SP => "12",
+         when Trap_Count => "16");
+
    --  An address as a reader compares it with a datasheet: 0x10000100.
    function Hex (Value : Landin.Targets.Byte_Count) return String;
 

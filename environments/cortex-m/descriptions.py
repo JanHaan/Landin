@@ -45,7 +45,7 @@ import subprocess
 import sys
 import time
 
-from run import CommandFailed, Run, require, stop
+from run import CommandFailed, Run, gdb_listener, oracle, require, stop
 from setup import DEFAULT, installed_tools, inventory, sha, supported_host
 
 HERE = Path(__file__).resolve().parent
@@ -276,17 +276,24 @@ def esp_image(run, image, report, want, device):
             '%s: the build report\'s esp_image is %r' % (device, report['esp_image']))
 
 
+def flash_image(run, want, name='core.elf'):
+    """NAME's OUT.bin at its offset of a flash image of the size the
+    machine reads, erased elsewhere, written as flash.bin; its bytes."""
+    data = (run.out / (name + '.bin')).read_bytes()
+    flash = bytearray(b'\xff' * want['rom_boot']['flash_bytes'])
+    offset = want['esp_image']['offset']
+    flash[offset:offset + len(data)] = data
+    (run.out / 'flash.bin').write_bytes(bytes(flash))
+    return data
+
+
 def rom_boot(run, want, device):
     """D685: OUT.bin at its offset of a flash image the machine's real boot
     ROM reads, as on the board: the ROM's log names each segment it loads
     and the entry, which must be the image's, and the program then speaks
     on the same UART."""
     boot = want['rom_boot']
-    data = (run.out / 'core.elf.bin').read_bytes()
-    flash = bytearray(b'\xff' * boot['flash_bytes'])
-    offset = want['esp_image']['offset']
-    flash[offset:offset + len(data)] = data
-    (run.out / 'flash.bin').write_bytes(bytes(flash))
+    data = flash_image(run, want)
     count, entry = data[1], struct.unpack_from('<I', data, 4)[0]
     wanted, at = [], 24
     for _ in range(count):
@@ -381,6 +388,99 @@ def select_rv32(run, refine, device):
     else:
         require(not (run.out / 'core.elf.bin').exists(), device + ' wrote an ESP image')
     return image
+
+
+#  D656: the RV32 devices whose unhandled entry is run on an emulator, and
+#  its machine: the reference's image on sifive_e, and the C3's OUT.bin
+#  through the chip's ROM.
+TRAP_MACHINES = {'riscv-reference': 'sifive_e', 'esp32-c3': 'esp32c3'}
+#  A write to the read-only cycle CSR, an illegal instruction that is not
+#  the compiler's own trap, whose compressed form would leave mtval zero.
+TRAP_PROGRAM = ('start: () -> none =\n'
+                '    assembler.block("csrw cycle, {value}", in value: u32 at general = 0)\n'
+                'end start\n')
+WFI = 0x10500073
+
+
+def trap_record(run, refine, device):
+    """D656: a program that executes an illegal instruction, run on an
+    emulator, leaves mcause 2, its address, its encoding, the interrupted
+    sp and a count of one in the unhandled entry's cells, read as memory
+    once the entry waits, and every register as the trap left it."""
+    want = RV32_EXPECTED[device]
+    machine = TRAP_MACHINES[device]
+    importing = 'import descriptions/esp32c3\n' if device == 'esp32-c3' else ''
+    image = compile_firmware(run, refine, importing + TRAP_PROGRAM,
+                             ['--level=' + want.get('level', 'rv32imac')], name='trap.elf',
+                             rv32=True)
+    listing = run.command('trap-disassembly', [run.riscv / 'riscv64-elf-objdump', '-d',
+                                               run.out / 'trap.elf'])
+    found = re.search(r'^\s*([0-9a-f]+):\s+([0-9a-f]{8})\s+csrw\s+cycle,', listing, re.M)
+    require(found is not None, device + ': the trap program holds no csrw cycle')
+    at, encoding = int(found.group(1), 16), int(found.group(2), 16)
+    cells = ('cause', 'pc', 'value', 'sp', 'count')
+    for offset, cell in enumerate(cells):
+        require(image.symbols['_landin_firmware_trap_' + cell]
+                == image.symbols['_landin_firmware_bss_start'] + 4 * offset,
+                '%s: _landin_firmware_trap_%s is not word %d of .bss' % (device, cell, offset))
+    if machine == 'esp32c3':
+        flash_image(run, want, 'trap.elf')
+        load = ['-drive', 'file=flash.bin,if=mtd,format=raw']
+    else:
+        load = ['-kernel', str(run.out / 'trap.elf')]
+    seen = run.out / 'trap-record.json'
+    script = run.out / 'trap.gdb'
+    listener, port, stub = gdb_listener()
+    #  A hardware breakpoint, since the C3's ROM writes the image after
+    #  the session sets it.
+    script.write_text('\n'.join([
+        'set pagination off', 'set confirm off', 'set architecture riscv:rv32',
+        'target remote 127.0.0.1:%d' % port,
+        'hbreak *_landin_firmware_unhandled', 'continue',
+        'python', 'import gdb, json',
+        'def value(expr): return int(gdb.parse_and_eval(expr)) & 0xffffffff',
+        'names = ["$x%d" % i for i in range(1, 32)]',
+        'entered = [value(n) for n in names]',
+        'for _ in range(64):',
+        '    if value("*(unsigned int*)$pc") == %d: break' % WFI,
+        '    gdb.execute("stepi", to_string=True)',
+        'cells = [value("*(unsigned int*)&_landin_firmware_trap_" + c) for c in %r]'
+        % (cells,),
+        'waiting = [value(n) for n in names]',
+        'with open(%r, "w") as f: json.dump({"entered": entered, "waiting": waiting,'
+        ' "pc": value("$pc"), "cells": cells}, f)' % str(seen),
+        'print("LANDIN_TRAP_RECORD_READ")', 'end', 'quit', '']))
+    argv = [str(run.espressif / 'qemu-system-riscv32'), '-M', machine, '-accel',
+            'tcg,thread=single', '-display', 'none', '-monitor', 'none', '-serial', 'none',
+            *load, '-S', *stub]
+    run.commands.append({'name': 'qemu-trap-record', 'argv': argv})
+    with (run.out / 'qemu-trap-record.log').open('wb') as log:
+        with listener:
+            process = subprocess.Popen(argv, cwd=run.out, env=run.env, stdout=log,
+                                       stderr=log, start_new_session=True,
+                                       pass_fds=(listener.fileno(),))
+        try:
+            require(process.poll() is None, 'QEMU exited before connection')
+            oracle(run.debug('gdb-trap-record', run.out / 'trap.elf', script, timeout=30),
+                   'LANDIN_TRAP_RECORD_READ')
+        finally:
+            stop(process)
+    record = json.loads(seen.read_text())
+    got = dict(zip(cells, record['cells']))
+    require(image.word(record['pc']) == WFI
+            and record['pc'] > image.symbols['_landin_firmware_unhandled'],
+            '%s: the unhandled entry did not reach its wait at wfi: pc %#x'
+            % (device, record['pc']))
+    require(got == {'cause': 2, 'pc': at, 'value': encoding, 'sp': record['entered'][1],
+                    'count': 1},
+            '%s: the trap record is %s, and mcause 2 at %#x, mtval %#x, sp %#x and a count'
+            ' of 1 were made' % (device, {k: hex(v) for k, v in got.items()}, at, encoding,
+                                 record['entered'][1]))
+    require(record['waiting'] == record['entered'],
+            '%s: the unhandled entry changed %s' % (device, ', '.join(
+                'x%d' % (i + 1) for i, (a, b) in enumerate(zip(record['entered'],
+                                                                record['waiting'])) if a != b)))
+    return got
 
 
 def reset_stage(image, want, device, vectors):
@@ -800,6 +900,14 @@ def execute_suite(parent, refine):
         select_rv32(Run(out, parent.tools), refine, device)
         controls.append({'device': device, 'target': 'rv32', 'status': 'passed'})
         print('description: ' + device + ' linked for rv32 and compared', flush=True)
+        if device in TRAP_MACHINES:
+            out = root / (device + '-trap')
+            out.mkdir()
+            cells = trap_record(Run(out, parent.tools), refine, device)
+            controls.append({'device': device, 'trap_record': cells,
+                             'machine': TRAP_MACHINES[device], 'status': 'passed'})
+            print('description: %s recorded its trap on %s'
+                  % (device, TRAP_MACHINES[device]), flush=True)
     out = root / 'contract'
     out.mkdir()
     contract(Run(out, parent.tools), refine)
@@ -821,7 +929,8 @@ def execute_suite(parent, refine):
     print('description: linker script contract held', flush=True)
     require(sha(refine) == compiler_hash, 'compiler changed')
     record = {'status': 'passed', 'compiler_sha256': compiler_hash, 'controls': controls,
-              'scope': 'compile and link; no image is executed'}
+              'scope': 'compile and link; the C3\'s ROM boot and the RV32 trap records'
+                       ' on Espressif\'s QEMU'}
     (root / 'result.json').write_text(json.dumps(record, indent=2) + '\n')
     return record
 
