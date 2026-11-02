@@ -18772,8 +18772,9 @@ layout. Unknown, foreign, incompatible or unimplemented strings are L0009;
 no arbitrary parser acceptance promises backend support. The tools receive
 both the selected `-march` and `-mabi=lp64d`. The ISA set appears in ELF
 attributes and constrains user assembly; it promises no loader refusal.
-Instruction selection uses target XLEN and independent extension sets so a
-future RV32 emitter can share it without inheriting RV64's data model.
+Instruction selection uses target XLEN and independent extension sets, and
+RV32's emitter is this one at XLEN 32 (D671), sharing it without
+inheriting RV64's data model.
 The RISC-V [psABI](https://riscv-non-isa.github.io/riscv-elf-psabi-doc/)
 and [GCC target options](https://gcc.gnu.org/onlinedocs/gcc/RISC-V-Options.html)
 state the ABI and ISA selection. The standard
@@ -20849,8 +20850,9 @@ would hold every lowering twice; lowering eight-byte operations to word
 pairs in the IR, which would make the verified IR depend on a target's
 width; and libgcc's `__muldi3` for every product, which M makes needless.
 
-**Pinned by** the backend cases of the RV32 lowering and the corpus on the
-RV32 lanes.
+**Pinned by** `backend/rv32 lowering is RV64's at XLEN 32`, which holds the
+pairs, `mulhu`, `__udivdi3` and `__umoddi3`, the frame record and the
+absence of every RV64-only form, and the corpus on the RV32 lanes.
 
 ### D672 — RV32's floats are libgcc's soft float, called as the psABI's ilp32 passes them
 
@@ -20873,15 +20875,19 @@ traps as RV64's overflow flag does, and a float converted to `bool` admits
 the two zeros and positive one. A body that may call a helper has its frame
 checked against the stack's limit as a calling one's is (D471), and the
 build report counts the helpers each routine calls, which opens the depth
-report's graph as Cortex-M0's helpers do.
+report's graph as Cortex-M0's helpers do. The helpers' names are reserved
+on RV32 as `__aeabi_` is on Cortex-M0: no link symbol or datum takes one,
+and the emitter gives none to an item.
 
 **The alternatives:** the F and D extensions, which no RV32 level holds;
 inline soft float, which would duplicate libgcc in every program; and
 libgcc's `__fixdfdi` family for conversions to integers, whose answer for
 an out-of-range or NaN operand is not the language's trap.
 
-**Pinned by** the backend cases of the RV32 lowering and the corpus on the
-RV32 lanes.
+**Pinned by** `backend/rv32 lowering is RV64's at XLEN 32`, whose program
+calls `__muldf3`, `__adddf3`, `__ltdf2` and the width conversions and no
+`__fix` helper, `driver/rv32 checks assembly text`, which refuses a
+`link(symbol: "__adddf3")`, and the corpus on the RV32 lanes.
 
 ### D673 — RV32's language convention carries an eight-byte argument in two registers
 
@@ -20900,7 +20906,9 @@ and an argument split between a7 and the stack, which is C's and which the
 language's private convention need not reproduce; and one stack word per
 eight-byte argument, which spills every wide argument.
 
-**Pinned by** the backend cases of the RV32 lowering.
+**Pinned by** `backend/rv32 lowering is RV64's at XLEN 32`, whose eight-byte
+arguments travel in pairs, and the corpus's `stack-arguments-cross-calls` on
+the RV32 lanes.
 
 ### D674 — Without A the panic latch is claimed as Cortex-M0 claims it
 
@@ -20917,7 +20925,9 @@ and the store may enter the handler a second time, as on Cortex-M0.
 that runs with interrupts masked does not need and which would make the
 latch depend on `mstatus`; and refusing a handler at `rv32imc`.
 
-**Pinned by** the backend cases of the RV32 lowering.
+**Pinned by** `runtime/stack-exhausted-reaches-the-handler` on the RV32
+lanes, whose rv32imc lane claims the latch by load and store and whose
+rv32imac lane by LR/SC.
 
 ### D675 — RV32's fibres switch in RV64's frame at XLEN 32
 
@@ -20941,8 +20951,10 @@ leaf helper a checked frame calls below it.
 for its lanes and would only lower a bound that already holds; and a
 switch frame that keeps RV64's eight-byte slots, which wastes half of it.
 
-**Pinned by** `targets/backends are stated per target` and the backend
-cases of the RV32 lowering.
+**Pinned by** `targets/backends are stated per target`, `backend/rv32
+lowering is RV64's at XLEN 32`, whose switch saves s0-s11 and ra in 64
+bytes, and `runtime/stack-switch-frames` and
+`runtime/stack-switch-round-trip` on the RV32 lanes.
 
 ### D676 — RV32 places firmware's items as Cortex-M0 places them
 
@@ -20967,8 +20979,8 @@ region placement where the derived script does not look; and placement
 in the compiler's firmware text, which belongs to the routine that is
 placed.
 
-**Pinned by** the RV32 lanes' firmware programs and the backend cases of
-the RV32 lowering.
+**Pinned by** the RV32 lanes' firmware programs and the ESP descriptions'
+stages before reset.
 
 ### D677 — RV32's C transport is the planner's ilp32 at XLEN 32
 
@@ -21023,8 +21035,9 @@ a branch-shortening pass over each routine, which the assembler already
 performs; and sp-relative homes for every value, which would need the
 stack depth at every instruction and is left to a later item.
 
-**Pinned by** the backend cases of the RV32 lowering, and by the RV32
-lanes' corpus fitting the reference's 32 KiB.
+**Pinned by** `backend/rv32 lowering is RV64's at XLEN 32`, whose jumps
+inside a profile's 1 MiB regions are JAL's own and whose saves are
+sp-relative, and by the RV32 lanes' corpus fitting the reference's 32 KiB.
 
 ### D523 — Under `--link=libc` a library is the C driver's `-lNAME`
 

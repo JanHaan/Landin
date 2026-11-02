@@ -1646,6 +1646,9 @@ package body Landin.Tests.Driver_Suite is
         ("trap: () -> none =" & LF
          & "    assembler.block(""ecall"")" & LF
          & "end trap" & LF);
+      Helper : constant Landin.Driver.Outcome := Ran
+        ("public link(symbol: ""__adddf3"") add: () -> none =" & LF
+         & "end add" & LF);
       Floating : constant Landin.Driver.Outcome := Ran
         ("half: (x: f32) -> none =" & LF
          & "    assembler.block(""fmv.s {v}, {v}"", in v: f32 at f8 = x)"
@@ -1666,6 +1669,11 @@ package body Landin.Tests.Driver_Suite is
                                    & " transfers no control"),
          "rv32 refuses an ordinary block's jump as a diagnostic: "
          & Unbounded.To_String (Jumping.Report));
+      Landin.Testing.Check
+        (Item, Helper.Status = Landin.Driver.Status_Reported
+           and then Says (Helper, "belongs to compiler firmware startup"),
+         "D672: rv32 reserves the libgcc helpers its backend calls: "
+         & Unbounded.To_String (Helper.Report));
       Landin.Testing.Check
         (Item, Calling.Status = Landin.Driver.Status_Reported
            and then Says (Calling, "transfers no control"),

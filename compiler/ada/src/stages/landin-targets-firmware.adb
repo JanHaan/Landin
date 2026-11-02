@@ -489,4 +489,15 @@ package body Landin.Targets.Firmware is
       end;
       return (if Seen then "" else "assembly block must contain instructions");
    end Assembly_Error;
+   function Is_RV32_Helper (Name : String) return Boolean is
+     (Name in "__addsf3" | "__subsf3" | "__mulsf3" | "__divsf3"
+        | "__adddf3" | "__subdf3" | "__muldf3" | "__divdf3"
+        | "__eqsf2" | "__nesf2" | "__ltsf2" | "__lesf2" | "__gtsf2"
+        | "__gesf2" | "__eqdf2" | "__nedf2" | "__ltdf2" | "__ledf2"
+        | "__gtdf2" | "__gedf2" | "__extendsfdf2" | "__truncdfsf2"
+        | "__floatsisf" | "__floatunsisf" | "__floatdisf"
+        | "__floatundisf" | "__floatsidf" | "__floatunsidf"
+        | "__floatdidf" | "__floatundidf" | "__divdi3" | "__udivdi3"
+        | "__moddi3" | "__umoddi3");
+
 end Landin.Targets.Firmware;
