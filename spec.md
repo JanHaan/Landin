@@ -22391,6 +22391,136 @@ the image.
 to the datasheet's table, the corrupted copy, the control's reading of the
 hub and the guard to fixed inputs without a board.
 
+### D710 — The Hazard3 port is the Pico 2's, its interrupts through Xh3irq and a counter through an AMO
+
+**The tour said** nothing; D654 is the Pico 2's port on its Cortex-M33s,
+and the Hazard3 board is to execute an A-extension read-modify-write.
+
+**Chosen:** `compiler/tests/board/rp2350_hazard3` is D654's application
+for `--target=rv32` at `--level=rv32imac` through
+`descriptions/rp2350_hazard3`: the same bring-up, trace, command bytes and
+receive contract, its `bringup`, `report` and `serial` modules the Arm
+port's over `rp2350_hazard3`'s generated modules, which are byte for byte
+the Arm side's (D706), and `platform/riscv`'s critical section and FENCE
+barriers for `platform/cortex_m`'s. Its interrupts are Xh3irq's: TIMER0_IRQ_0,
+DMA_IRQ_0 and USBCTRL_IRQ are enabled in meiea and the external line in
+mie (D687), and the compiler's meinext dispatch calls slots 16, 26 and 30
+(D680). 0x05 forces IRQ14 pending through meifa, Xh3irq's counterpart of
+D596's NVIC_ISPR, with USBCTRL still held in reset, and the handler stops
+forcing it, since meinext names a forced IRQ until its bit is cleared; the
+frame's `p` is the mcause the handler ran under rather than IPSR. The boot
+frame gives mtvec and marchid where the Arm port gave VTOR. Each telemetry
+frame is counted by `core/atomic`'s `add` on a `u32` cell in SRAM, which
+the level's `a` admits (D690) and lowers to `amoadd.w.aqrl`, and the frame
+carries what it returned. The modules are copies rather than shared with
+the Arm port's, because their imports name the other description's
+modules.
+
+**The alternatives:** one set of modules for both ports, which an import
+naming one description's modules cannot be; `atomic.exchange` or
+`compare_exchange`, whose results show less than a count's; an AMO on a
+device register, which Hazard3 refuses as a store fault, since its atomics
+reach only SRAM (3.8.9, MCAUSE, Table 403); and raising IRQ14 from
+USBCTRL, which would need the USB controller out of reset.
+
+**Pinned by** `environments/boards/rp2350_hazard3/board.py`'s verdicts,
+and the application's build at `--level=rv32imac`.
+
+### D711 — The Hazard3 oracle starts at power-on and shows the cores RISC-V, the dispatch and the AMO
+
+**The tour said** nothing; D655 is the Pico 2's oracle on its Arm cores.
+
+**Chosen:** `environments/boards/rp2350_hazard3/board.py` builds the image
+and checks, from the ELF and the build report alone, that its first word
+at 0x1000_0000 is a `jal x0` to compiler-owned reset; that the table is 68
+words at 0x1000_0200, the report's `vector_address`, with slot 11 the
+meinext dispatch, slots 16, 26 and 30 the handlers and every other slot the
+unhandled loop; that the block follows it inside the first 4 KiB, the
+minimum RISC-V IMAGE_DEF, 0x11010142 its IMAGE_TYPE (5.9.5.1, Table 503,
+p. 390); and that the image holds an `amoadd.w` on a counter in SRAM. It
+flashes and reads back the head as D712 says, cycles the power as D655
+does, and reads the trace on slot 1's UART. Its expectations come from the
+datasheet and from what the host sent: CHIP_RESET reads HAD_POR alone;
+marchid reads 0x1b, Hazard3 (3.8.9, Table 440), so the boot ROM switched
+the cores to RISC-V for the block and entered the image; mtvec reads
+0x1000_0201, the table in vectored mode (Table 394), so compiler-owned
+reset ran; IRQ14 runs its handler once under mcause 0x8000_000b, the
+machine external interrupt (Table 403); frame n's `q` is n, and the counter
+read over SWD is the number of frames; and the shared scenario, the
+overruns, the epochs, the echo and the SWD counters are held as D655 holds
+the Arm run's. `--block-control` flashes a copy whose end marker is flipped,
+and BOOTSEL must enumerate, as D655's; it then has to attach in BOOTSEL to
+flash the image again, which D712 forbids on the probe's own hub, so it
+runs only with `--bootsel-attach`.
+
+**The alternatives:** VTOR, which Hazard3 does not have, and the entry
+address the boot ROM jumped to, which no register keeps; mcause's code
+alone, which a table that sent IRQ14 elsewhere would also give, so the
+count is taken from slot 30's own handler; and an AMO's result read only
+over SWD, which a plain load and store would also leave.
+
+**Pinned by** `scripts/tests/test_board_rp2350_hazard3.py`, which holds
+the block to the datasheet's table, the jumps, the table and each
+departure from them, the corrupted copy, the boot frame and the AMO's
+numbering to fixed inputs without a board, and
+`environments/boards/rp2350_hazard3/record.json`.
+
+### D712 — probe-rs is told the RP2350 as the architecture its cores run, and a halted BOOTSEL is never left
+
+**The tour said** nothing; D655 flashes and reads the Pico 2 as `RP235x`.
+
+**Chosen:** which of probe-rs's two names reaches an RP2350 follows the
+architecture its cores run when probe-rs attaches, not the operation:
+while a RISC-V image runs only `RP235x_riscv` does, and `RP235x` meets a
+FAULT from the gated Arm access ports; in BOOTSEL, and after flashing as
+`RP235x`, only `RP235x` does, and `RP235x_riscv`'s debug module times out.
+The Hazard3 tool reads one word as `RP235x`, whose refusal is quick, then
+as `RP235x_riscv`, flashes through whichever answered, and records which.
+probe-rs halts both cores on every `RP235x` attach, and a BOOTSEL halted so
+keeps its USB pull-up and stops answering, so that the host retried the
+port for minutes on the rig, reset the hub tree the probe's own USB hangs
+from, and stalled every probe-rs start 85 s in its USB probe listing. So the
+tool refuses to attach while the Pico 2 enumerates as BOOTSEL, unless told
+`--bootsel-attach`; after a flash through the Arm side it cycles the power
+at once and reads the head back from the cores the new image booted; and
+the counters are read as `RP235x_riscv` alone. A cycle of the Pico 2's
+port coincided with a reset of that tree, so the tool cycles only when
+the kernel has logged no trouble on the port for a minute, and stops
+unless the guarded port shows its device again and the probe answers
+`ping` after it.
+
+**The alternatives:** the name fixed by the image's architecture, which
+fails whenever the chip is in BOOTSEL or was last flashed from it; reading
+back before the power cycle, which leaves the halted BOOTSEL on the bus;
+resetting with probe-rs, which needs the same attach; and leaving the
+negative control on, which ends every run in the state that reset the
+tree.
+
+**Pinned by** `scripts/tests/test_board_rp2350_hazard3.py`'s `Attach`
+and `Hub` cases, and the record's `flashed_as`.
+
+### D713 — A board tool reuses a probehive bridge, and one it starts outlives it
+
+**The tour said** nothing; D646 shares a bridge module between the tools,
+each starting a bridge for its own run and stopping it.
+
+**Chosen:** `common.shared_bridge` reuses a bridge listening on both of a
+slot's ports and never stops it, and otherwise starts one serving every
+slot of the probe, detached, and leaves it running when the run ends: two
+boards' tools on two slots of one probe then share one client of it rather
+than each holding the probe with a bridge of its own. A port of the two
+listening alone is refused, since something else holds it. The Hazard3
+tool reaches the slot's SWD through the bridge's TCP port, so probe-rs and
+the console go through the same client. The RP2040's and the Arm Pico 2's
+tools keep their own bridges.
+
+**The alternatives:** a bridge per run, which a second board's tool on the
+same probe meets as a second client; probe-rs over UDP beside the bridge's
+console, two clients of one slot; and moving the other tools to the shared
+bridge, which their recorded runs would no longer describe.
+
+**Pinned by** `scripts/tests/test_board_common.py`'s `Bridges` cases.
+
 ### D530 — `refine explain` answers a construct and a decision
 
 **The tour said** nothing. Diagnostic notes cite paragraphs and decisions,
