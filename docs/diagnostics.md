@@ -1692,25 +1692,9 @@ linker.place("stack", "RAM", 4 * 1024)
 
 ### L0516
 
-A device description selects a boot image kind refine reserves but does not
-build yet (D545): `esp-app-image`. This compiler builds `vector-table`,
-`rp2040-boot2` and `rp2350-image-block` images.
-
-```landin
--- refine: --target=cortex-m0
-compiler.device("board")
-compiler.core("cortex-m0plus")
-compiler.vectors(48)
-compiler.boot("esp-app-image")
-linker.region("FLASH", 0x1000_0000, 2 * 1024 * 1024, "rx")
-linker.region("RAM", 0x2000_0000, 256 * 1024, "rwx")
-linker.place("vectors", "FLASH")
-linker.place("text", "FLASH")
-linker.place("rodata", "FLASH")
-linker.place("data", "RAM")
-linker.place("bss", "RAM")
-linker.place("stack", "RAM", 4 * 1024)
-```
+Retired. A device description selected `esp-app-image`, a boot image kind
+refine reserved and did not build (D545). D683 builds it, so nothing raises
+this.
 
 ### L0517
 
@@ -2027,7 +2011,9 @@ the initialized data or cleared the zeroed, and the stage ends by entering
 reset, `_landin_firmware_reset`, which it names: nothing else runs reset,
 and a stage that falls off its end traps. Finish it with
 `ldr r0, =_landin_firmware_reset` and `bx r0`, which reach reset from
-anywhere in flash.
+anywhere in flash. On `rv32` the image's entry word enters the stage of an
+`esp-app-image` or `vector-table` description (D684), and the stage ends
+with `j _landin_firmware_reset`.
 
 ```landin
 -- refine: --target=cortex-m0 --level=armv7e-m
@@ -2056,7 +2042,10 @@ before compiler-owned reset, on the stack pointer the core loaded from the
 vector table, and before any memory may be written: a chip such as the
 STM32H753 permits no write to its RAM until its supply is configured. The
 message names the word that reaches the stack, `push`, `pop`, `sp`, `r13`,
-`msp` or `psp`. Keep what the stage needs in registers.
+`msp` or `psp`; on `rv32`, where reset has not yet set the stack pointer
+when the entry word enters the stage (D684), `sp`, `x2` or a compressed
+instruction that addresses through it, `lwsp`, `swsp`, `addi16sp` or
+`addi4spn`. Keep what the stage needs in registers.
 
 ```landin
 -- refine: --target=cortex-m0 --level=armv7e-m
@@ -2077,3 +2066,70 @@ link(boot_stage) extern(naked) supply: () -> none =
     assembler.block("push {r0}\nldr r0, =_landin_firmware_reset\nbx r0")
 end supply
 ```
+
+### L0575
+
+A device description's boot kind and its ESP chip facts disagree (D683).
+An `esp-app-image` names the chip it is for and the revisions it runs on,
+which the ESP32's ROM checks before it loads the image, and where in flash
+the ROM reads it: a description that selects the kind writes
+`compiler.esp_image(chip, min_revision, max_revision, flash_offset)` beside
+`compiler.boot`, with the chip id ESP-IDF's `esp_chip_id_t` gives, the
+revisions as major * 100 + minor, and the offset as a multiple of 4096. A
+description with another boot kind has no use for the directive. Add the
+facts the chip's technical reference manual gives, or remove the directive.
+
+```landin
+-- refine: --target=rv32
+compiler.device("board")
+compiler.core("esp-rv32imc")
+compiler.vectors(32)
+compiler.boot("esp-app-image")
+linker.region("SRAM", 0x4038_0000, 256 * 1024, "rwx")
+linker.place("vectors", "SRAM")
+linker.place("text", "SRAM")
+linker.place("rodata", "SRAM")
+linker.place("data", "SRAM")
+linker.place("bss", "SRAM")
+linker.place("stack", "SRAM", 16 * 1024)
+```
+
+### L0576
+
+A device description selects a boot image kind its core's family does not
+boot (D681). An `rp2040-boot2` image begins with a second stage of Thumb
+code that RP2040's boot ROM enters, so it is an Arm core's; an
+`esp-app-image` is what an ESP32-C3's or ESP32-C5's ROM loads, so it is a
+RISC-V core's. `vector-table` and `rp2350-image-block` serve both families.
+Write the kind the core's boot ROM reads.
+
+```landin
+-- refine: --target=cortex-m0
+compiler.device("board")
+compiler.core("cortex-m0plus")
+compiler.vectors(48)
+compiler.boot("esp-app-image")
+compiler.esp_image(5, 3, 199, 0x0)
+linker.region("FLASH", 0x1000_0000, 2 * 1024 * 1024, "rx")
+linker.region("RAM", 0x2000_0000, 256 * 1024, "rwx")
+linker.place("vectors", "FLASH")
+linker.place("text", "FLASH")
+linker.place("rodata", "FLASH")
+linker.place("data", "RAM")
+linker.place("bss", "RAM")
+linker.place("stack", "RAM", 4 * 1024)
+```
+
+### L0577
+
+The linked executable cannot become the ESP application image an
+`esp-app-image` description asks for, or the image refine wrote does not
+read back as it was made (D685). refine writes `OUT.bin` from the linked
+ELF's loaded segments: every one must lie in a region of the description,
+there may be at most 16, and the image's entry must be
+`_landin_firmware_entry`. After writing it refine reads the file again and
+holds its header, extended header, segments, checksum and SHA-256 to the
+executable; the message names the first that is not. A segment outside the
+description's regions comes from a developer's linker script or an object
+of a developer's own; the read-back is a defect of refine or of the host's
+filesystem, so report it with the message.

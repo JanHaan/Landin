@@ -1,5 +1,3 @@
-with Landin.Targets.Firmware;
-
 package body Landin.Driver.Image_Block is
    package US renames Ada.Strings.Unbounded;
    package Firmware renames Landin.Targets.Firmware;
@@ -25,8 +23,14 @@ package body Landin.Driver.Image_Block is
       return "0x" & Result (First .. Result'Last);
    end Hex;
 
-   function Fault (Object : String) return US.Unbounded_String is
+   function Fault
+     (Object : String;
+      Core : Landin.Targets.Firmware.Core_Kind :=
+        Landin.Targets.Firmware.Cortex_M33)
+      return US.Unbounded_String
+   is
       Data : constant String := Object;
+      RISC_V : constant Boolean := Core in Firmware.RISC_V_Core;
 
       --  The little-endian number of WIDTH bytes at file offset POSITION.
       function Number (Position : Natural; Width : Positive) return Natural;
@@ -96,11 +100,11 @@ package body Landin.Driver.Image_Block is
           /= Character'Val (127) & "ELF" & Character'Val (1)
             & Character'Val (1)
         or else Number (16, 2) /= 1
-        or else Number (18, 2) /= 40
+        or else Number (18, 2) /= (if RISC_V then 243 else 40)
       then
          return US.To_Unbounded_String
-           ("the assembled object is not a 32-bit little-endian Arm"
-            & " relocatable object");
+           ("the assembled object is not a 32-bit little-endian "
+            & (if RISC_V then "RISC-V" else "Arm") & " relocatable object");
       end if;
       Sections := Word (32);
       Entry_Size := Number (46, 2);
@@ -154,7 +158,8 @@ package body Landin.Driver.Image_Block is
          end if;
          return US.To_Unbounded_String
            (Firmware.Image_Block_Fault
-              (Data (Data'First + Offset .. Data'First + Offset + Size - 1)));
+              (Data (Data'First + Offset .. Data'First + Offset + Size - 1),
+               Core));
       end;
    exception
       when Constraint_Error =>

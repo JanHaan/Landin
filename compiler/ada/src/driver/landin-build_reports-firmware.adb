@@ -77,6 +77,15 @@ package body Landin.Build_Reports.Firmware is
                + Firmware.Vector_Bytes (Profile))
              & ",""bytes"":" & Image (Firmware.Image_Block_Bytes) & "}"
            else "")
+        & (if Firmware.Takes_ESP_Image (Profile.Boot)
+           then ",""esp_image"":{""offset"":" & Image (Profile.ESP_Offset)
+             & ",""chip"":" & Image
+               (Landin.Targets.Byte_Count (Profile.ESP_Chip))
+             & ",""min_revision"":" & Image
+               (Landin.Targets.Byte_Count (Profile.ESP_Minimum))
+             & ",""max_revision"":" & Image
+               (Landin.Targets.Byte_Count (Profile.ESP_Maximum)) & "}"
+           else "")
         & "}";
    end Limits;
 
@@ -86,7 +95,8 @@ package body Landin.Build_Reports.Firmware is
       Profile : Landin.Targets.Firmware.Profile;
       Stage : String;
       Result : out US.Unbounded_String;
-      Valid : out Boolean)
+      Valid : out Boolean;
+      ESP_Image : String := "")
    is
       package Firmware renames Landin.Targets.Firmware;
       use type Firmware.Section_Kind;
@@ -249,7 +259,8 @@ package body Landin.Build_Reports.Firmware is
            or else Data (1 .. 6) /= Character'Val (127) & "ELF"
              & Character'Val (1) & Character'Val (1)
            or else Number (16, 2) /= 2
-           or else Number (18, 2) /= 40
+           or else Number (18, 2)
+             /= (if Profile.Core in Firmware.RISC_V_Core then 243 else 40)
            or else Word (20) /= 1
            or else Number (40, 2) /= 52
            or else Number (42, 2) /= 32
@@ -289,11 +300,10 @@ package body Landin.Build_Reports.Firmware is
                      then
                         return;
                      end if;
+                     --  A segment in the data region is static RAM, even
+                     --  where text shares the region, as on an ESP32's
+                     --  SRAM (D685).
                      if Region_Of (Virtual, Memory_Size)
-                       = Profile.Placed (Firmware.Text)
-                     then
-                        null;
-                     elsif Region_Of (Virtual, Memory_Size)
                        = Profile.Placed (Firmware.Data)
                      then
                         if Virtual + Memory_Size > RAM.Origin + RAM_Limit
@@ -302,14 +312,22 @@ package body Landin.Build_Reports.Firmware is
                         end if;
                         RAM_End := Landin.Targets.Byte_Count'Max
                           (RAM_End, Virtual + Memory_Size);
+                     elsif Region_Of (Virtual, Memory_Size)
+                       = Profile.Placed (Firmware.Text)
+                     then
+                        null;
                      elsif Region_Of (Virtual, Memory_Size) = 0 then
                         return;
                      end if;
                      if File_Size > 0 then
+                        --  An ESP32's ROM loads every segment into RAM, so
+                        --  its image is written to writable memory.
                         if Region_Of (Physical, File_Size) = 0
-                          or else Firmware.Writable
-                            (Profile.Regions
-                               (Region_Of (Physical, File_Size)).Mode)
+                          or else (Firmware.Writable
+                                     (Profile.Regions
+                                        (Region_Of (Physical, File_Size)).Mode)
+                                   and then not Firmware.Takes_ESP_Image
+                                     (Profile.Boot))
                         then
                            return;
                         end if;
@@ -438,6 +456,12 @@ package body Landin.Build_Reports.Firmware is
            & ",""bytes"":" & Image (Block_Bytes)
            & ",""words"":[" & US.To_String (Block_Words) & "]}");
       end if;
+      if Firmware.Takes_ESP_Image (Profile.Boot) then
+         if ESP_Image = "" then
+            return;
+         end if;
+         US.Append (Result, ",""esp_image"":{" & ESP_Image & "}");
+      end if;
       US.Append (Result, "}");
       Valid := True;
    exception
@@ -445,6 +469,30 @@ package body Landin.Build_Reports.Firmware is
          Result := US.Null_Unbounded_String;
          Valid := False;
    end Measure;
+   --  Where WORD, at address AT_ADDRESS, jumps, when it is RISC-V's
+   --  `jal x0`, the `j` an RV32 entry word is (D686); otherwise 0.
+   function Jump_Target
+     (Word, At_Address : Landin.Targets.Byte_Count)
+      return Landin.Targets.Byte_Count;
+   function Jump_Target
+     (Word, At_Address : Landin.Targets.Byte_Count)
+      return Landin.Targets.Byte_Count
+   is
+      subtype Count is Landin.Targets.Byte_Count;
+      function Bits (Low, Width : Natural) return Count is
+        ((Word / 2 ** Low) mod 2 ** Width);
+      Offset : constant Count :=
+        Bits (31, 1) * 2 ** 20 + Bits (12, 8) * 2 ** 12
+        + Bits (20, 1) * 2 ** 11 + Bits (21, 10) * 2;
+   begin
+      if Word mod 128 /= 16#6F# or else Bits (7, 5) /= 0 then
+         return 0;
+      end if;
+      --  The offset is 21 bits, two's complement.
+      return (At_Address + Offset + 2 ** 32 - Bits (31, 1) * 2 ** 21)
+        mod 2 ** 32;
+   end Jump_Target;
+
    function Contract_Fault
      (Host : Landin.Platform.Filesystem'Class;
       Executable : String;
@@ -469,6 +517,7 @@ package body Landin.Build_Reports.Firmware is
       ELF : US.Unbounded_String;
       Status : Landin.Platform.Read_Status;
       Symbols : Symbol_Maps.Map;
+      RV32 : constant Boolean := Profile.Core in Firmware.RISC_V_Core;
    begin
       Host.Read_File (Executable, ELF, Status);
       if Status /= Landin.Platform.Read_Ok then
@@ -599,10 +648,10 @@ package body Landin.Build_Reports.Firmware is
            or else Data (1 .. 6) /= Character'Val (127) & "ELF"
              & Character'Val (1) & Character'Val (1)
            or else Number (16, 2) /= 2
-           or else Number (18, 2) /= 40
+           or else Number (18, 2) /= (if RV32 then 243 else 40)
          then
-            return "the linked image is not a 32-bit little-endian Arm"
-              & " executable";
+            return "the linked image is not a 32-bit little-endian "
+              & (if RV32 then "RISC-V" else "Arm") & " executable";
          end if;
          declare
             Sections : constant Natural := Natural (Word (32));
@@ -646,6 +695,9 @@ package body Landin.Build_Reports.Firmware is
          end;
 
          --  Clause 2: the startup symbols.
+         if RV32 then
+            Need ("_landin_firmware_entry");
+         end if;
          Need ("_landin_firmware_reset");
          Need ("_landin_firmware_unhandled");
          Need ("_landin_firmware_vectors");
@@ -704,12 +756,44 @@ package body Landin.Build_Reports.Firmware is
                return "clause 1, the vector table: the image does not hold"
                  & " its" & Landin.Targets.Byte_Count'Image (Bytes)
                  & " bytes at its address";
-            elsif Word (At_File) /= Value ("_landin_firmware_stack_top")
-              or else Word (At_File + 4)
-                /= (Value ("_landin_firmware_reset") / 2) * 2 + 1
+            elsif not RV32
+              and then
+                (Word (At_File) /= Value ("_landin_firmware_stack_top")
+                 or else Word (At_File + 4)
+                   /= (Value ("_landin_firmware_reset") / 2) * 2 + 1)
             then
                return "clause 1, the vector table: its first words are not"
                  & " the initial stack pointer and reset";
+            elsif RV32 then
+               --  D686: the entry word at the image's start, a jump to the
+               --  stage or to reset.
+               declare
+                  Origin : constant Landin.Targets.Byte_Count :=
+                    Firmware.Placed_Region (Profile, Firmware.Vectors).Origin
+                    + Firmware.Boot_Prefix (Profile.Boot);
+                  Entry_File : constant Natural := Loaded
+                    (Origin, Firmware.Entry_Word_Bytes);
+                  Goes_To : constant String :=
+                    (if Profile.Has_Stage
+                       and then Firmware.Stage_Before_Reset (Profile.Boot)
+                     then Firmware.Reset_Stage_Symbol
+                     else Firmware.Reset_Symbol);
+               begin
+                  if Value ("_landin_firmware_entry") /= Origin
+                    or else Entry_File = Natural'Last
+                  then
+                     return "clause 1, the vector table: the entry word is"
+                       & " not at "
+                       & Landin.Backend.Firmware.Hex (Origin)
+                       & ", where the image begins";
+                  elsif not Has (Goes_To)
+                    or else Jump_Target (Word (Entry_File), Origin)
+                      /= Value (Goes_To)
+                  then
+                     return "clause 1, the vector table: the entry word is"
+                       & " not a jump to " & Goes_To;
+                  end if;
+               end;
             elsif Profile.Boot = Firmware.RP2040_Boot2
               and then Value ("_landin_firmware_boot2")
                 /= Firmware.Placed_Region (Profile, Firmware.Vectors).Origin
@@ -798,9 +882,9 @@ package body Landin.Build_Reports.Firmware is
                   and then Within (Bottom, Top - Bottom,
                                    Profile.Regions (Index)));
             end loop;
-            if Top mod 8 /= 0 then
-               return "clause 3, the stack: its top is not aligned to eight"
-                 & " bytes";
+            if Top mod (if RV32 then 16 else 8) /= 0 then
+               return "clause 3, the stack: its top is not aligned to "
+                 & (if RV32 then "sixteen" else "eight") & " bytes";
             elsif not Held then
                return "clause 3, the stack: it does not lie in a writable"
                  & " region of " & Firmware.Spelling (Profile.Device);

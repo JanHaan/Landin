@@ -1,5 +1,6 @@
 with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
+with Landin.Machine;
 
 package body Landin.Backend.Firmware is
    package Profiles renames Landin.Targets.Firmware;
@@ -183,6 +184,440 @@ package body Landin.Backend.Firmware is
         & LF;
    end Startup;
 
+   function RV32_Stage_Label return String is
+     (".section .text.landin_firmware_reset_stage,""ax"",@progbits" & LF
+      & ".balign 4" & LF
+      & ".globl " & Profiles.Reset_Stage_Symbol & LF
+      & Profiles.Reset_Stage_Symbol & ":" & LF);
+
+   function RV32_Image
+     (Of_Unit : Landin.IR.Unit;
+      Names : Landin.Source.Names.Table;
+      Entry_Symbol : String;
+      Symbol : not null access function
+        (Item : Landin.IR.Item_Id) return String;
+      Limit_Cell : String;
+      Returned : String;
+      Debug : Boolean) return String
+   is
+      use type Landin.IR.Item_Id;
+      use type Landin.Machine.Convention;
+      use type Profiles.Interrupt_Model;
+      Profile : constant Profiles.Profile :=
+        Landin.IR.Firmware_Profile (Of_Unit);
+      Used : constant Region_Use := Used_Regions (Of_Unit, Names);
+      Model : constant Profiles.Interrupt_Model :=
+        Profiles.Model_Of (Profile.Core);
+      Keeps_Limit : constant Boolean := Limit_Cell /= "";
+      Frame : constant String :=
+        Number (Landin.Targets.Byte_Count
+          (RV32_Trap_Frame (Keeps_Limit)));
+      Handlers : array (0 .. Profiles.Slot_Capacity - 1)
+        of Landin.IR.Item_Id := [others => Landin.IR.No_Item];
+      Result, Stubs : US.Unbounded_String;
+      --  Whether any slot enters the shared stub tail.
+      Stubbed : Boolean := False;
+
+      procedure Line (Into : in out US.Unbounded_String; Text : String);
+      procedure Line (Into : in out US.Unbounded_String; Text : String) is
+      begin
+         US.Append (Into, Text & LF);
+      end Line;
+
+      function Naked (Item : Landin.IR.Item_Id) return Boolean is
+        (Landin.IR.Signature_Machine
+           (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item))
+         = Landin.Machine.Naked_Routine);
+
+      --  The registers a stub saves, each at its offset in the frame:
+      --  the ones the psABI lets a call change, which the interrupted
+      --  code did not expect to.
+      type Register_List is array (Positive range <>) of access constant
+        String;
+      R_Ra : aliased constant String := "ra";
+      R_T0 : aliased constant String := "t0";
+      R_T1 : aliased constant String := "t1";
+      R_T2 : aliased constant String := "t2";
+      R_T3 : aliased constant String := "t3";
+      R_T4 : aliased constant String := "t4";
+      R_T5 : aliased constant String := "t5";
+      R_T6 : aliased constant String := "t6";
+      R_A0 : aliased constant String := "a0";
+      R_A1 : aliased constant String := "a1";
+      R_A2 : aliased constant String := "a2";
+      R_A3 : aliased constant String := "a3";
+      R_A4 : aliased constant String := "a4";
+      R_A5 : aliased constant String := "a5";
+      R_A6 : aliased constant String := "a6";
+      R_A7 : aliased constant String := "a7";
+      Saved : constant Register_List :=
+        [R_Ra'Access, R_T0'Access, R_T1'Access, R_T2'Access, R_T3'Access,
+         R_T4'Access, R_T5'Access, R_T6'Access, R_A0'Access, R_A1'Access,
+         R_A2'Access, R_A3'Access, R_A4'Access, R_A5'Access, R_A6'Access,
+         R_A7'Access];
+      Cell_Offset : constant String := "64";
+
+      function Offset (Index : Positive) return String is
+        (Number (Landin.Targets.Byte_Count (4 * (Index - 1))));
+
+      --  The frame below the interrupted sp, every register but those
+      --  SKIP names already saved, with the unwind rules that say where
+      --  each went and that the interrupted pc is mepc's.
+      procedure Save
+        (Into : in out US.Unbounded_String; Skip_T0 : Boolean);
+      procedure Save
+        (Into : in out US.Unbounded_String; Skip_T0 : Boolean) is
+      begin
+         if not Skip_T0 then
+            Line (Into, "addi sp, sp, -" & Frame);
+            if Debug then
+               Line (Into, ".cfi_def_cfa_offset " & Frame);
+            end if;
+         end if;
+         for Index in Saved'Range loop
+            if not (Skip_T0 and then Saved (Index).all = "t0") then
+               Line (Into, "sw " & Saved (Index).all & ", " & Offset (Index)
+                 & "(sp)");
+            end if;
+            if Debug then
+               Line (Into, ".cfi_offset " & Saved (Index).all & ", "
+                 & Offset (Index) & " - " & Frame);
+            end if;
+         end loop;
+         --  D680, [1995]: a handler and what it calls are not checked
+         --  against the interrupted context's limit, which a switch may
+         --  be between writing; the cell holds zero while they run.
+         if Keeps_Limit then
+            Line (Into, "la t1, " & Limit_Cell);
+            Line (Into, "lw t2, 0(t1)");
+            Line (Into, "sw t2, " & Cell_Offset & "(sp)");
+            Line (Into, "sw zero, 0(t1)");
+         end if;
+      end Save;
+
+      procedure Restore (Into : in out US.Unbounded_String);
+      procedure Restore (Into : in out US.Unbounded_String) is
+      begin
+         if Keeps_Limit then
+            Line (Into, "lw t2, " & Cell_Offset & "(sp)");
+            Line (Into, "la t1, " & Limit_Cell);
+            Line (Into, "sw t2, 0(t1)");
+         end if;
+         for Index in Saved'Range loop
+            Line (Into, "lw " & Saved (Index).all & ", " & Offset (Index)
+              & "(sp)");
+         end loop;
+         Line (Into, "addi sp, sp, " & Frame);
+         Line (Into, "mret");
+      end Restore;
+
+      --  An entry the trap reaches with every register the interrupted
+      --  code's: its unwind rules begin at the interrupted sp, and its
+      --  return address is mepc, which nothing changes until mret.
+      procedure Trap_Entry
+        (Into : in out US.Unbounded_String; Name : String;
+         Alignment : String := "4");
+      procedure Trap_Entry
+        (Into : in out US.Unbounded_String; Name : String;
+         Alignment : String := "4") is
+      begin
+         Line (Into, ".balign " & Alignment);
+         Line (Into, ".type " & Name & ", @function");
+         Line (Into, Name & ":");
+         if Debug then
+            Line (Into, ".cfi_startproc simple");
+            Line (Into, ".cfi_return_column mepc");
+            Line (Into, ".cfi_def_cfa sp, 0");
+            Line (Into, ".cfi_same_value mepc");
+         end if;
+      end Trap_Entry;
+
+      procedure Trap_End (Into : in out US.Unbounded_String; Name : String);
+      procedure Trap_End (Into : in out US.Unbounded_String; Name : String)
+      is
+      begin
+         if Debug then
+            Line (Into, ".cfi_endproc");
+         end if;
+         Line (Into, ".size " & Name & ", . - " & Name);
+      end Trap_End;
+
+      function Stub_Name (Slot : Natural) return String is
+        ("_landin_firmware_slot_" & Number (Landin.Targets.Byte_Count (Slot)));
+
+      --  What slot SLOT of the table jumps to.
+      function Slot_Target (Slot : Natural) return String is
+        (if Model = Profiles.Xh3irq and then Slot = 11
+         then "_landin_firmware_external"
+         elsif not Profiles.Admits (Profile, Slot)
+           or else Handlers (Slot) = Landin.IR.No_Item
+         then "_landin_firmware_unhandled"
+         elsif Naked (Handlers (Slot))
+           or else Profiles.Dispatched_Slot (Profile.Core, Slot)
+         then Symbol (Handlers (Slot))
+         else Stub_Name (Slot));
+
+      --  The mtvec reset writes: the table, in vectored mode, or under the
+      --  CLIC its common entry, in CLIC mode.
+      Trap_Base : constant String :=
+        (if Model = Profiles.CLIC then "_landin_firmware_trap"
+         else "_landin_firmware_vectors");
+      Trap_Mode : constant String := (if Model = Profiles.CLIC then "3"
+                                      else "1");
+
+      Regions : US.Unbounded_String;
+
+      --  Copy [START, END) from LOAD, a byte at a time, as reset does on
+      --  Cortex-M.
+      procedure Copy (Load, First, Last : String);
+      procedure Copy (Load, First, Last : String) is
+      begin
+         Line (Regions, "la a0, " & Load);
+         Line (Regions, "la a1, " & First);
+         Line (Regions, "la a2, " & Last);
+         Line (Regions, "1:");
+         Line (Regions, "bgeu a1, a2, 2f");
+         Line (Regions, "lbu a3, 0(a0)");
+         Line (Regions, "sb a3, 0(a1)");
+         Line (Regions, "addi a0, a0, 1");
+         Line (Regions, "addi a1, a1, 1");
+         Line (Regions, "j 1b");
+         Line (Regions, "2:");
+      end Copy;
+
+      procedure Clear (First, Last : String);
+      procedure Clear (First, Last : String) is
+      begin
+         Line (Regions, "la a1, " & First);
+         Line (Regions, "la a2, " & Last);
+         Line (Regions, "1:");
+         Line (Regions, "bgeu a1, a2, 2f");
+         Line (Regions, "sb zero, 0(a1)");
+         Line (Regions, "addi a1, a1, 1");
+         Line (Regions, "j 1b");
+         Line (Regions, "2:");
+      end Clear;
+   begin
+      for Index in 1 .. Landin.IR.Item_Count (Of_Unit) loop
+         declare
+            Item : constant Landin.IR.Item_Id := Landin.IR.Item_Id (Index);
+            Slot : constant Natural :=
+              Landin.IR.Placement_Of (Of_Unit, Item).Vector;
+         begin
+            if Slot /= 0 then
+               Handlers (Slot) := Item;
+            end if;
+         end;
+      end loop;
+
+      --  D680: the entry word, a jump the boot ROM or reset vector
+      --  enters, and the table, a jump per slot.  Neither may become a
+      --  compressed jump or move in a relaxation: each is one word.
+      Line (Result, ".section .text.landin_entry,""ax"",@progbits");
+      Line (Result, ".option push");
+      Line (Result, ".option norvc");
+      Line (Result, ".option norelax");
+      Line (Result, ".balign 4");
+      Line (Result, ".globl _landin_firmware_entry");
+      Line (Result, ".type _landin_firmware_entry, @function");
+      Line (Result, "_landin_firmware_entry:");
+      --  D684: a description's stage runs before reset.
+      Line (Result, "j " & (if Profile.Has_Stage
+                               and then Profiles.Stage_Before_Reset
+                                 (Profile.Boot)
+                            then Profiles.Reset_Stage_Symbol
+                            else Profiles.Reset_Symbol));
+      Line (Result, ".size _landin_firmware_entry, 4");
+      Line (Result, ".section .isr_vector,""ax"",@progbits");
+      Line (Result, ".balign " & Number (Profiles.Vector_Alignment (Profile)));
+      Line (Result, ".globl _landin_firmware_vectors");
+      Line (Result, ".type _landin_firmware_vectors, @function");
+      Line (Result, "_landin_firmware_vectors:");
+      for Slot in 0 .. Profile.Vector_Count - 1 loop
+         Line (Result, "j " & Slot_Target (Slot));
+      end loop;
+      Line (Result, ".size _landin_firmware_vectors, . - _landin_firmware_"
+        & "vectors");
+      Line (Result, ".option pop");
+      if Profiles.Takes_Image_Block (Profile.Boot) then
+         --  D637, D682: the IMAGE_DEF block, directly after the table.
+         Line (Result, ".section .embedded_block,""a"",@progbits");
+         Line (Result, ".balign 4");
+         Line (Result, ".globl _landin_firmware_image_block");
+         Line (Result, ".type _landin_firmware_image_block, @object");
+         Line (Result, "_landin_firmware_image_block:");
+         for Word of Profiles.Image_Block_Of (Profile.Core) loop
+            Line (Result, ".word " & Hex (Landin.Targets.Byte_Count (Word)));
+         end loop;
+         Line (Result, ".size _landin_firmware_image_block, . - _landin_"
+           & "firmware_image_block");
+      end if;
+
+      --  The stubs of the slots the hardware enters: t0 carries the
+      --  handler to the shared tail, which saves the rest and calls it.
+      for Slot in 0 .. Profile.Vector_Count - 1 loop
+         if Profiles.Admits (Profile, Slot)
+           and then Handlers (Slot) /= Landin.IR.No_Item
+           and then not Naked (Handlers (Slot))
+           and then not Profiles.Dispatched_Slot (Profile.Core, Slot)
+         then
+            Stubbed := True;
+            Trap_Entry (Stubs, Stub_Name (Slot));
+            Line (Stubs, "addi sp, sp, -" & Frame);
+            if Debug then
+               Line (Stubs, ".cfi_def_cfa_offset " & Frame);
+            end if;
+            Line (Stubs, "sw t0, 4(sp)");
+            if Debug then
+               Line (Stubs, ".cfi_offset t0, 4 - " & Frame);
+            end if;
+            Line (Stubs, "la t0, " & Symbol (Handlers (Slot)));
+            Line (Stubs, "j _landin_firmware_interrupt");
+            Trap_End (Stubs, Stub_Name (Slot));
+         end if;
+      end loop;
+      Line (Result, ".section .text.landin_firmware_trap,""ax"",@progbits");
+      US.Append (Result, US.To_String (Stubs));
+      if Stubbed then
+         --  Entered from a stub with the frame made, t0 saved and the
+         --  handler in t0.
+         Trap_Entry (Result, "_landin_firmware_interrupt");
+         if Debug then
+            Line (Result, ".cfi_def_cfa_offset " & Frame);
+         end if;
+         Save (Result, Skip_T0 => True);
+         Line (Result, "jalr t0");
+         Restore (Result);
+         Trap_End (Result, "_landin_firmware_interrupt");
+      end if;
+      if Model = Profiles.CLIC then
+         --  D680: CLIC mode with no selective hardware vectoring sends
+         --  every trap to mtvec's base: an interrupt's id is mcause's low
+         --  twelve bits, and its slot is called through the table.
+         Trap_Entry (Result, "_landin_firmware_trap", "64");
+         Save (Result, Skip_T0 => False);
+         Line (Result, "csrr t0, mcause");
+         Line (Result, "bgez t0, 1f");
+         Line (Result, "slli t0, t0, 20");
+         Line (Result, "srli t0, t0, 20");
+         Line (Result, "li t1, "
+           & Number (Landin.Targets.Byte_Count (Profile.Vector_Count)));
+         Line (Result, "bgeu t0, t1, 1f");
+         Line (Result, "slli t0, t0, 2");
+         Line (Result, "la t1, _landin_firmware_vectors");
+         Line (Result, "add t0, t0, t1");
+         Line (Result, "jalr t0");
+         Restore (Result);
+         Line (Result, "1:");
+         Line (Result, "j _landin_firmware_unhandled");
+         Trap_End (Result, "_landin_firmware_trap");
+      elsif Model = Profiles.Xh3irq then
+         --  D680: Hazard3's external interrupts all arrive at code 11;
+         --  meinext names the highest-priority one pending and enabled,
+         --  its IRQ times four, or sets bit 31 when there is none.  Each
+         --  is called through slot 16 + IRQ until none is left.
+         Trap_Entry (Result, "_landin_firmware_external");
+         Save (Result, Skip_T0 => False);
+         Line (Result, "1:");
+         Line (Result, "csrr t0, 0xbe4");
+         Line (Result, "bltz t0, 2f");
+         Line (Result, "li t1, "
+           & Number (Landin.Targets.Byte_Count
+               (4 * Natural'Max (Profile.Vector_Count, 16) - 64)));
+         Line (Result, "bgeu t0, t1, 3f");
+         Line (Result, "la t1, _landin_firmware_vectors + 64");
+         Line (Result, "add t0, t0, t1");
+         Line (Result, "jalr t0");
+         Line (Result, "j 1b");
+         Line (Result, "2:");
+         Restore (Result);
+         Line (Result, "3:");
+         Line (Result, "j _landin_firmware_unhandled");
+         Trap_End (Result, "_landin_firmware_external");
+      end if;
+
+      --  D680: reset, which the entry word or the stage enters with every
+      --  register unknown.
+      Copy ("_landin_firmware_data_load", "_landin_firmware_data_start",
+            "_landin_firmware_data_end");
+      Copy ("_landin_firmware_ramtext_load",
+            "_landin_firmware_ramtext_start",
+            "_landin_firmware_ramtext_end");
+      Clear ("_landin_firmware_bss_start", "_landin_firmware_bss_end");
+      --  D547: a writable region a placement uses, after them.
+      for Index in 1 .. Profile.Count loop
+         if Used (Index)
+           and then Profiles.Writable (Profile.Regions (Index).Mode)
+         then
+            declare
+               Name : constant String :=
+                 Profiles.Spelling (Profile.Regions (Index).Name);
+            begin
+               Copy (Region_Symbol (Name, "data_load"),
+                     Region_Symbol (Name, "data_start"),
+                     Region_Symbol (Name, "data_end"));
+               Clear (Region_Symbol (Name, "bss_start"),
+                      Region_Symbol (Name, "bss_end"));
+            end;
+         end if;
+      end loop;
+      Line (Result, ".section .text.landin_reset,""ax"",@progbits");
+      Line (Result, ".balign 4");
+      Line (Result, ".globl " & Profiles.Reset_Symbol);
+      Line (Result, ".type " & Profiles.Reset_Symbol & ", @function");
+      Line (Result, Profiles.Reset_Symbol & ":");
+      if Debug then
+         Line (Result, ".cfi_startproc simple");
+         Line (Result, ".cfi_def_cfa sp, 0");
+         Line (Result, ".cfi_undefined ra");
+      end if;
+      Line (Result, "csrci mstatus, 8");
+      Line (Result, "la t0, " & Trap_Base);
+      Line (Result, "ori t0, t0, " & Trap_Mode);
+      Line (Result, "csrw mtvec, t0");
+      Line (Result, "la sp, _landin_firmware_stack_top");
+      US.Append (Result, US.To_String (Regions));
+      --  The copies are data to every hart's loads and code to its
+      --  fetches only after both fences.
+      Line (Result, "fence rw, rw");
+      Line (Result, "fence.i");
+      Line (Result, "csrsi mstatus, 8");
+      Line (Result, "call " & Entry_Symbol);
+      Line (Result, ".globl _landin_firmware_returned");
+      Line (Result, "_landin_firmware_returned:");
+      if Returned /= "" then
+         Line (Result, Returned);
+      end if;
+      Line (Result, "unimp");
+      Line (Result, "j _landin_firmware_returned");
+      if Debug then
+         Line (Result, ".cfi_endproc");
+      end if;
+      Line (Result, ".size " & Profiles.Reset_Symbol & ", . - "
+        & Profiles.Reset_Symbol);
+      Line (Result, ".section .text.landin_firmware_unhandled,""ax"","
+        & "@progbits");
+      Line (Result, ".balign 4");
+      Line (Result, ".globl _landin_firmware_unhandled");
+      Line (Result, ".type _landin_firmware_unhandled, @function");
+      Line (Result, "_landin_firmware_unhandled:");
+      if Debug then
+         Line (Result, ".cfi_startproc simple");
+         Line (Result, ".cfi_def_cfa sp, 0");
+         Line (Result, ".cfi_undefined ra");
+      end if;
+      Line (Result, "csrci mstatus, 8");
+      Line (Result, "1:");
+      Line (Result, "wfi");
+      Line (Result, "j 1b");
+      if Debug then
+         Line (Result, ".cfi_endproc");
+      end if;
+      Line (Result, ".size _landin_firmware_unhandled, . - _landin_firmware"
+        & "_unhandled");
+      return US.To_String (Result);
+   end RV32_Image;
+
    function Hex (Value : Landin.Targets.Byte_Count) return String is
       Digits_Of : constant String := "0123456789abcdef";
       Result : String (1 .. 16);
@@ -218,6 +653,12 @@ package body Landin.Backend.Firmware is
       Vectors : constant String := Placed (Profiles.Vectors);
       Prefix : constant Landin.Targets.Byte_Count :=
         Profiles.Boot_Prefix (Profile.Boot);
+      --  D680: an RV32 image begins with its entry word, and its table is
+      --  where the core's alignment puts it after that word.
+      RV32 : constant Boolean := Profile.Core in Profiles.RISC_V_Core;
+      Entry_Address : constant String :=
+        "ORIGIN(" & Vectors & ")"
+        & (if Prefix = 0 then "" else " + " & Number (Prefix));
       Memory, Sections : US.Unbounded_String;
       --  The end of the last output section in the stack's region, which
       --  must stay below the stack, and the last load image in flash.
@@ -281,9 +722,13 @@ package body Landin.Backend.Firmware is
             end;
          end if;
       end loop;
-      return "OUTPUT_FORMAT(""elf32-littlearm"")" & LF
-        & "OUTPUT_ARCH(arm)" & LF
-        & "ENTRY(_landin_firmware_reset)" & LF
+      return (if RV32
+              then "OUTPUT_FORMAT(""elf32-littleriscv"")" & LF
+                & "OUTPUT_ARCH(riscv)" & LF
+                & "ENTRY(_landin_firmware_entry)" & LF
+              else "OUTPUT_FORMAT(""elf32-littlearm"")" & LF
+                & "OUTPUT_ARCH(arm)" & LF
+                & "ENTRY(_landin_firmware_reset)" & LF)
         & "MEMORY {" & LF
         & US.To_String (Memory)
         & "}" & LF
@@ -297,21 +742,28 @@ package body Landin.Backend.Firmware is
            then "  .boot2 ORIGIN(" & Vectors & ") : { KEEP(*(.boot2)) } > "
              & Vectors & LF
            else "")
-        & "  .isr_vector ORIGIN(" & Vectors & ")"
-        & (if Prefix = 0 then "" else " + " & Number (Prefix))
+        & (if RV32
+           then "  .landin_entry " & Entry_Address
+             & " : { KEEP(*(.text.landin_entry)) } > " & Vectors & LF
+             & "  .isr_vector "
+             & Number (Profiles.Vector_Address (Profile))
+           else "  .isr_vector " & Entry_Address)
         & " : { KEEP(*(.isr_vector)) } > " & Vectors & LF
         & (if Profiles.Takes_Image_Block (Profile.Boot)
            then "  .embedded_block : { KEEP(*(.embedded_block)) } > "
              & Vectors & LF
            else "")
         & "  .text : { *(.text .text.*) } > " & Flash & LF
-        & "  .rodata : { *(.rodata .rodata.*) } > "
+        & "  .rodata : { *(.rodata .rodata.*"
+        & (if RV32 then " .srodata .srodata.*" else "") & ") } > "
         & Placed (Profiles.Rodata) & LF
-        & "  .ARM.extab : { *(.ARM.extab*) } > " & Flash & LF
-        & "  .ARM.exidx : { *(.ARM.exidx*) } > " & Flash & LF
+        & (if RV32 then ""
+           else "  .ARM.extab : { *(.ARM.extab*) } > " & Flash & LF
+             & "  .ARM.exidx : { *(.ARM.exidx*) } > " & Flash & LF)
         & "  .data : ALIGN(8) {" & LF
         & "    _landin_firmware_data_start = .;" & LF
-        & "    *(.data .data.*)" & LF
+        & "    *(.data .data.*" & (if RV32 then " .sdata .sdata.*" else "")
+        & ")" & LF
         & "    _landin_firmware_data_end = .;" & LF
         & "  } > " & Data & " AT> " & Flash & LF
         & "  _landin_firmware_data_load = LOADADDR(.data);" & LF
@@ -323,7 +775,8 @@ package body Landin.Backend.Firmware is
         & "  _landin_firmware_ramtext_load = LOADADDR(.ramtext);" & LF
         & "  .bss (NOLOAD) : AT(ADDR(.bss)) ALIGN(8) {" & LF
         & "    _landin_firmware_bss_start = .;" & LF
-        & "    *(.bss .bss.* COMMON)" & LF
+        & "    *(.bss .bss.*" & (if RV32 then " .sbss .sbss.*" else "")
+        & " COMMON)" & LF
         & "    _landin_firmware_bss_end = .;" & LF
         & "  } > " & Placed (Profiles.BSS) & LF
         & US.To_String (Sections)
@@ -332,6 +785,12 @@ package body Landin.Backend.Firmware is
         & (if Profile.Boot = Profiles.RP2040_Boot2
            then "ASSERT(SIZEOF(.boot2) == 256, ""the second stage must be"
              & " 256 bytes"")" & LF
+           else "")
+        & (if RV32
+           then "ASSERT(ADDR(.landin_entry) == " & Entry_Address
+             & " && SIZEOF(.landin_entry) == "
+             & Number (Profiles.Entry_Word_Bytes)
+             & ", ""the image must begin with the entry word"")" & LF
            else "")
         & "ASSERT(ADDR(.isr_vector) == "
         & Number (Profiles.Vector_Address (Profile))
@@ -355,7 +814,8 @@ package body Landin.Backend.Firmware is
              & Size_Words (Profiles.Image_Block_Window) & " of the image"")"
              & LF
            else "")
-        & "ASSERT((_landin_firmware_stack_top & 7) == 0, ""unaligne"
+        & "ASSERT((_landin_firmware_stack_top & "
+        & (if RV32 then "15" else "7") & ") == 0, ""unaligne"
         & "d initial stack"")" & LF
         & (if US.Length (In_Stack_Region) = 0 then ""
            else "ASSERT(" & US.To_String (In_Stack_Region)

@@ -22,6 +22,32 @@ package Landin.Backend.Firmware is
       Returned : String := "udf #1";
       Debug : Boolean := False) return String;
 
+   --  D680: an RV32 image's compiler-owned text: the entry word, the trap
+   --  table at the profile's Vector_Address, the interrupt stubs and the
+   --  core's dispatch, reset and the unhandled loop, in GNU RISC-V
+   --  assembly at XLEN 32.  SYMBOL spells an item as the backend does;
+   --  LIMIT_CELL is the stack limit's cell (D471), "" when the program
+   --  prepares no stack; RETURNED runs when the entry returns.
+   function RV32_Image
+     (Of_Unit : Landin.IR.Unit;
+      Names : Landin.Source.Names.Table;
+      Entry_Symbol : String;
+      Symbol : not null access function
+        (Item : Landin.IR.Item_Id) return String;
+      Limit_Cell : String;
+      Returned : String;
+      Debug : Boolean) return String;
+
+   --  D684: what precedes a description's boot stage on RV32, which the
+   --  entry word enters before reset: its section and its label.
+   function RV32_Stage_Label return String;
+
+   --  The bytes an RV32 interrupt stub keeps below the interrupted stack:
+   --  ra, t0-t6 and a0-a7, and with a limit cell its word, padded to the
+   --  sixteen bytes the psABI keeps sp aligned to.
+   function RV32_Trap_Frame (Keeps_Limit : Boolean) return Natural
+     is (if Keeps_Limit then 80 else 64);
+
    --  An address as a reader compares it with a datasheet: 0x10000100.
    function Hex (Value : Landin.Targets.Byte_Count) return String;
 

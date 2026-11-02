@@ -1058,10 +1058,9 @@ package body Landin.Diagnostics.Explanations is
                & "lies when no description is imported, is the one descrip"
                & "tion used at every level.",
             when Catalogue.Boot_Kind_Reserved =>
-               "A device description selects a boot image kind refine re"
-               & "serves but does not build yet (D545): `esp-app-image`. T"
-               & "his compiler builds `vector-table`, `rp2040-boot2` and `"
-               & "rp2350-image-block` images.",
+               "Retired. A device description selected `esp-app-image`, "
+               & "a boot image kind refine reserved and did not build (D54"
+               & "5). D683 builds it, so nothing raises this.",
             when Catalogue.Region_Placement =>
                "A `link(region: ""NAME"")` placement cannot be met (D547):"
                & " the selected description has no region of that name, th"
@@ -1149,7 +1148,10 @@ package body Landin.Diagnostics.Explanations is
                & " `_landin_firmware_reset`, which it names: nothing else "
                & "runs reset, and a stage that falls off its end traps. Fi"
                & "nish it with `ldr r0, =_landin_firmware_reset` and `bx r"
-               & "0`, which reach reset from anywhere in flash.",
+               & "0`, which reach reset from anywhere in flash. On `rv32` "
+               & "the image's entry word enters the stage of an `esp-app-i"
+               & "mage` or `vector-table` description (D684), and the stag"
+               & "e ends with `j _landin_firmware_reset`.",
             when Catalogue.Reset_Stage_Stack =>
                "A `vector-table` description's stage uses the stack (D65"
                & "3). The stage runs before compiler-owned reset, on the s"
@@ -1157,8 +1159,34 @@ package body Landin.Diagnostics.Explanations is
                & "before any memory may be written: a chip such as the STM"
                & "32H753 permits no write to its RAM until its supply is c"
                & "onfigured. The message names the word that reaches the s"
-               & "tack, `push`, `pop`, `sp`, `r13`, `msp` or `psp`. Keep w"
-               & "hat the stage needs in registers.",
+               & "tack, `push`, `pop`, `sp`, `r13`, `msp` or `psp`; on `rv"
+               & "32`, where reset has not yet set the stack pointer when "
+               & "the entry word enters the stage (D684), `sp`, `x2` or a "
+               & "compressed instruction that addresses through it, `lwsp`"
+               & ", `swsp`, `addi16sp` or `addi4spn`. Keep what the stage "
+               & "needs in registers.",
+            when Catalogue.Boot_Kind_Family =>
+               "A device description selects a boot image kind its core'"
+               & "s family does not boot (D681). An `rp2040-boot2` image b"
+               & "egins with a second stage of Thumb code that RP2040's bo"
+               & "ot ROM enters, so it is an Arm core's; an `esp-app-image"
+               & "` is what an ESP32-C3's or ESP32-C5's ROM loads, so it i"
+               & "s a RISC-V core's. `vector-table` and `rp2350-image-bloc"
+               & "k` serve both families. Write the kind the core's boot R"
+               & "OM reads.",
+            when Catalogue.ESP_Image_Facts =>
+               "A device description's boot kind and its ESP chip facts "
+               & "disagree (D683). An `esp-app-image` names the chip it is"
+               & " for and the revisions it runs on, which the ESP32's ROM"
+               & " checks before it loads the image, and where in flash th"
+               & "e ROM reads it: a description that selects the kind writ"
+               & "es `compiler.esp_image(chip, min_revision, max_revision,"
+               & " flash_offset)` beside `compiler.boot`, with the chip id"
+               & " ESP-IDF's `esp_chip_id_t` gives, the revisions as major"
+               & " * 100 + minor, and the offset as a multiple of 4096. A "
+               & "description with another boot kind has no use for the di"
+               & "rective. Add the facts the chip's technical reference ma"
+               & "nual gives, or remove the directive.",
             when Catalogue.Unused_Pure_Local =>
                "An immutable local that is never used and is initialized"
                & " by a direct scalar literal, including a negated integer"
@@ -1330,6 +1358,21 @@ package body Landin.Diagnostics.Explanations is
                & " itself, so this is a defect of refine or of the assembl"
                & "er it ran rather than of the program; report it with the"
                & " message.",
+            when Catalogue.ESP_Image_Object =>
+               "The linked executable cannot become the ESP application "
+               & "image an `esp-app-image` description asks for, or the im"
+               & "age refine wrote does not read back as it was made (D685"
+               & "). refine writes `OUT.bin` from the linked ELF's loaded "
+               & "segments: every one must lie in a region of the descript"
+               & "ion, there may be at most 16, and the image's entry must"
+               & " be `_landin_firmware_entry`. After writing it refine re"
+               & "ads the file again and holds its header, extended header"
+               & ", segments, checksum and SHA-256 to the executable; the "
+               & "message names the first that is not. A segment outside t"
+               & "he description's regions comes from a developer's linker"
+               & " script or an object of a developer's own; the read-back"
+               & " is a defect of refine or of the host's filesystem, so r"
+               & "eport it with the message.",
             when Catalogue.Svd_Malformed =>
                "`refine svd` read an SVD that is not XML in the subset i"
                & "t reads (D555). The message says what was met and the li"
@@ -2028,33 +2071,7 @@ package body Landin.Diagnostics.Explanations is
                & "linker.place(""stack"", ""RAM"", 4 * 1024)"
                & LF,
             when Catalogue.Boot_Kind_Reserved =>
-               "-- refine: --target=cortex-m0"
-               & LF
-               & "compiler.device(""board"")"
-               & LF
-               & "compiler.core(""cortex-m0plus"")"
-               & LF
-               & "compiler.vectors(48)"
-               & LF
-               & "compiler.boot(""esp-app-image"")"
-               & LF
-               & "linker.region(""FLASH"", 0x1000_0000, 2 * 1024 * 1024, ""rx"
-               & """)"
-               & LF
-               & "linker.region(""RAM"", 0x2000_0000, 256 * 1024, ""rwx"")"
-               & LF
-               & "linker.place(""vectors"", ""FLASH"")"
-               & LF
-               & "linker.place(""text"", ""FLASH"")"
-               & LF
-               & "linker.place(""rodata"", ""FLASH"")"
-               & LF
-               & "linker.place(""data"", ""RAM"")"
-               & LF
-               & "linker.place(""bss"", ""RAM"")"
-               & LF
-               & "linker.place(""stack"", ""RAM"", 4 * 1024)"
-               & LF,
+               "",
             when Catalogue.Region_Placement =>
                "",
             when Catalogue.No_Description =>
@@ -2334,6 +2351,61 @@ package body Landin.Diagnostics.Explanations is
                & LF
                & "end supply"
                & LF,
+            when Catalogue.Boot_Kind_Family =>
+               "-- refine: --target=cortex-m0"
+               & LF
+               & "compiler.device(""board"")"
+               & LF
+               & "compiler.core(""cortex-m0plus"")"
+               & LF
+               & "compiler.vectors(48)"
+               & LF
+               & "compiler.boot(""esp-app-image"")"
+               & LF
+               & "compiler.esp_image(5, 3, 199, 0x0)"
+               & LF
+               & "linker.region(""FLASH"", 0x1000_0000, 2 * 1024 * 1024, ""rx"
+               & """)"
+               & LF
+               & "linker.region(""RAM"", 0x2000_0000, 256 * 1024, ""rwx"")"
+               & LF
+               & "linker.place(""vectors"", ""FLASH"")"
+               & LF
+               & "linker.place(""text"", ""FLASH"")"
+               & LF
+               & "linker.place(""rodata"", ""FLASH"")"
+               & LF
+               & "linker.place(""data"", ""RAM"")"
+               & LF
+               & "linker.place(""bss"", ""RAM"")"
+               & LF
+               & "linker.place(""stack"", ""RAM"", 4 * 1024)"
+               & LF,
+            when Catalogue.ESP_Image_Facts =>
+               "-- refine: --target=rv32"
+               & LF
+               & "compiler.device(""board"")"
+               & LF
+               & "compiler.core(""esp-rv32imc"")"
+               & LF
+               & "compiler.vectors(32)"
+               & LF
+               & "compiler.boot(""esp-app-image"")"
+               & LF
+               & "linker.region(""SRAM"", 0x4038_0000, 256 * 1024, ""rwx"")"
+               & LF
+               & "linker.place(""vectors"", ""SRAM"")"
+               & LF
+               & "linker.place(""text"", ""SRAM"")"
+               & LF
+               & "linker.place(""rodata"", ""SRAM"")"
+               & LF
+               & "linker.place(""data"", ""SRAM"")"
+               & LF
+               & "linker.place(""bss"", ""SRAM"")"
+               & LF
+               & "linker.place(""stack"", ""SRAM"", 16 * 1024)"
+               & LF,
             when Catalogue.Unused_Pure_Local =>
                "unused: () -> none ="
                & LF
@@ -2366,6 +2438,8 @@ package body Landin.Diagnostics.Explanations is
             when Catalogue.Boot_Stage_Object =>
                "",
             when Catalogue.Image_Block_Object =>
+               "",
+            when Catalogue.ESP_Image_Object =>
                "",
             when Catalogue.Svd_Malformed =>
                "",
