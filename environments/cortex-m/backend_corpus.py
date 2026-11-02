@@ -80,13 +80,13 @@ def inventory():
         #  lane then holds it to its oracle at every profile.
         for lane, own in row.get('lanes', {}).items():
             require(lane in LANES and bool(own.get('reason')) and (
-                        (row['mode'] == 'execute' and own.get('mode') == 'restriction')
+                        (row['mode'] == 'execute' and own.get('mode') in ('restriction', 'limit'))
                         or (row['mode'] == 'refuse' and own.get('mode') == 'refuse'
                             and bool(own.get('codes')) and own['codes'] != row['codes'])
                         or (row['mode'] == 'refuse' and own.get('mode') == 'execute'
                             and 'codes' not in own)),
                     '%s: a "lanes" entry names a corpus lane (%s) and its reason, with'
-                    ' "mode": "restriction" for an execute row, or for a refuse row'
+                    ' "mode": "restriction" or "limit" for an execute row, or for a refuse row'
                     ' "mode": "refuse" and the lane\'s own "codes", or "mode": "execute"'
                     ' (see %s)' % (name, ', '.join(LANES), RULES))
         meta = metadata(ROOT / 'compiler/tests/fixtures' / name / 'fixture.meta')
@@ -293,6 +293,25 @@ def stale_limits(rows, results):
                          ' targets: (see %s)'
                          % (name, largest['optimize'], largest['specialize'],
                             describe_sizes(largest['image']), INVENTORY, RULES))
+    return stale
+
+
+#  What the harness's session says when the guard's watchpoint stopped a
+#  program: its stack overran the reservation.
+STACK_OVERRUN = 'the stack overran its'
+
+
+def stale_lane_limits(rows, results, lane):
+    """Fixtures whose `lanes` limit on LANE no profile met in this run (D698)."""
+    stale = []
+    for name, row in rows.items():
+        if row.get('lanes', {}).get(lane, {}).get('mode') != 'limit':
+            continue
+        mine = [r for r in results if r['fixture'] == name]
+        if mine and all(r['status'] == 'passed' and r.get('verdict') == 'executed'
+                        for r in mine):
+            stale.append('  %s: every profile fits on %s; remove its "lanes" limit there'
+                         ' from its %s row (see %s)' % (name, lane, INVENTORY, RULES))
     return stale
 
 
@@ -673,7 +692,8 @@ def execute(output, tools, refine, selected=(), profiles=(), lane=None):
                 own = row.get('lanes', {}).get(lane_of(level))
                 result.update(source_refusal(run, refine, name, {**row, **own} if own else row,
                                              level))
-            elif row['mode'] == 'execute' and lane_of(level) in row.get('lanes', {}):
+            elif (row['mode'] == 'execute' and lane_of(level) in row.get('lanes', {})
+                  and row['lanes'][lane_of(level)]['mode'] == 'restriction'):
                 own = row['lanes'][lane_of(level)]
                 try:
                     fixture(run, refine, name, opt, spec, level,
@@ -699,7 +719,16 @@ def execute(output, tools, refine, selected=(), profiles=(), lane=None):
                     if selects:
                         result['lowering'] = selects
                 except RuntimeError as error:
-                    result.update(image_limit(run, row, error, profile, level))
+                    #  D698: a lane's own limit records what that lane's map
+                    #  cannot hold, an image or, at run time, the stack.
+                    own = row.get('lanes', {}).get(lane_of(level), {})
+                    if own.get('mode') == 'limit' and STACK_OVERRUN in str(error):
+                        result.update(verdict='selected-stack-limit', reason=own['reason'],
+                                      observed=str(error).split('; inspect ')[0])
+                    else:
+                        result.update(image_limit(
+                            run, dict(row, profile_limit='selected-image', reason=own['reason'])
+                            if own.get('mode') == 'limit' else row, error, profile, level))
                     if level == 'armv6-m':
                         result['profiles'] = {device: against(run, profile, result)
                                               for device, profile in others.items()}
@@ -721,7 +750,8 @@ def execute(output, tools, refine, selected=(), profiles=(), lane=None):
     #  A run filtered by profile cannot tell a stale limit from one that
     #  holds at a profile it did not run, and a run on one lane cannot tell
     #  one that holds at the default: limits are the default run's to judge.
-    stale = [] if profiles or lane is not None else stale_limits(rows, results)
+    stale = ([] if profiles else stale_limits(rows, results) if lane is None
+             else stale_lane_limits(rows, results, lane))
     scope = 'development-filtered' if selected or profiles else 'complete-inventory'
     summary = {'scope': scope if lane is None else scope + ' on ' + lane,
                'compiler_sha256': sha(refine), 'results': results, 'stale_limits': stale,

@@ -609,6 +609,16 @@ on the reference and the AN505's map, which have no float unit, and the
 M7's FPv5-D16 holds them (D630). A lane run whose refusal differs names the
 entry to write.
 
+An `execute` row may instead carry `"lanes": {"sifive-e": {"mode":
+"limit", "reason": ...}}`, a lane's own capacity limit (D698): on that
+lane a profile whose image overflows the map is recorded with its sizes,
+as `profile_limit` records one on the reference, and so is one whose stack
+the harness's watchpoint stopped past the reservation, with the routine
+that overran it; every other profile runs and must pass, and a lane run in
+which every profile fits fails, naming the stale entry. The RV32 lanes
+carry these where RV32's text or frames outgrow the reference's 32 KiB and
+4 KiB and Thumb's do not, each reason giving the measured overflow.
+
 Firmware gives a program no standard input, arguments, files beside it or
 output, so a fixture whose metadata names `stdin:`, `run_args:`,
 `run_files:` or `run_expect:` cannot be `execute`. The inventory refuses

@@ -17,7 +17,7 @@ elsif compiler.arch == arm64 then
             add {r}, {r}, #7    // {missing} is no slot, and x19 is not written
             """, inout r: u32 at general = value)
     end add_seven
-elsif compiler.arch == rv64 then
+elsif compiler.arch == rv64 or compiler.arch == rv32 then
     add_seven: (value: u32) -> (r: u32) =
         r = assembler.block("""
             # j elsewhere: a line that is only a comment

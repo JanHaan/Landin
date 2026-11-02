@@ -84,6 +84,34 @@ elsif compiler.arch == rv64 then
                             in v: u64 at general = value,
                             out r: u64 at general, out _ at x9)
     end kept
+elsif compiler.arch == rv32 then
+    sum: (a: u64, b: u32) -> (r: u64) =
+        r = u64(assembler.block("add {a}, {a}, {b}",
+                                inout a: u32 at general = u32(a),
+                                in b: u32 at general = b))
+    end sum
+    widen: (small: i8, half: i16, word: u32) -> (a: i64, h: i64, w: u64) =
+        (s, t, u) := assembler.block(
+            "mv {s}, x13\nmv {t}, x14\nmv {u}, x15",
+            out s: i32 at general, out t: i32 at general,
+            out u: u32 at general, in x: i8 at x13 = small,
+            in y: i16 at x14 = half, in z: u32 at x15 = word)
+        a = i64(s)
+        h = i64(t)
+        w = u64(u)
+    end widen
+    narrow: (value: u64) -> (low: u8, word: u16) =
+        (b, w) := assembler.block("mv x10, {v}\nmv x11, {v}",
+                                  in v: u32 at x12 = u32(value & 0xffffffff),
+                                  out b: u8 at x10, out w: u16 at x11)
+        low = b
+        word = w
+    end narrow
+    kept: (value: u64) -> (r: u64) =
+        r = u64(assembler.block("mv x9, {v}\naddi {r}, x9, 1",
+                                in v: u32 at general = u32(value),
+                                out r: u32 at general, out _ at x9))
+    end kept
 else
     sum: (a: u64, b: u32) -> (r: u64) =
         r = a + u64(b)
