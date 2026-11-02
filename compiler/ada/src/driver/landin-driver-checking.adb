@@ -94,8 +94,6 @@ package body Landin.Driver.Checking is
    is
       use type Landin.IR.Item_Id;
       use type Landin.IR.Item_Kind;
-      use type Landin.Targets.Capabilities.Backend_Kind;
-      use type Landin.Targets.Architecture;
       use type Landin.Backend.Images.Excess;
       Facts : constant Landin.Targets.Target_Facts :=
         Landin.Stages.Target (Context);
@@ -108,8 +106,7 @@ package body Landin.Driver.Checking is
    begin
       if Landin.Stages.Failed (Context)
         or else Landin.Panics.Handler (Panic) = Landin.IR.No_Item
-        or else Landin.Targets.Capabilities.Backend_For (Facts)
-          = Landin.Targets.Capabilities.No_Backend
+        or else not Landin.Targets.Capabilities.Emits (Facts)
         or else not Landin.Backend.Dispatch.Prepares_Stacks
           (Landin.Stages.Code (Context).all)
       then
@@ -119,8 +116,7 @@ package body Landin.Driver.Checking is
          Unit : Landin.IR.Unit renames Landin.Stages.Code (Context).all;
       begin
          if Firmware /= ""
-           and then Landin.Targets.Architecture_Of (Facts)
-             = Landin.Targets.Cortex_M0
+           and then Landin.Targets.Is_Firmware (Facts)
          then
             Firmware_Entry := Landin.Backend.Entry_Point.Firmware_Start
               (Unit, Landin.Stages.Meanings (Context).all,

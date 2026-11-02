@@ -211,7 +211,7 @@ package body Landin.Configuration is
            & "`, which a routine body then reads";
       elsif Namespace = "compiler" and then Member
         in "word_size" | "c_sysv_lp64" | "c_darwin_lp64" | "c_aapcs64_lp64"
-         | "c_riscv_lp64d" | "c_runtime"
+         | "c_riscv_lp64d" | "c_riscv_ilp32" | "c_runtime"
       then
          return "D437: compiler." & Member & " is read in fixed"
            & " configuration expressions and module values; a routine"

@@ -488,7 +488,7 @@ package body Landin.Stages.Configuration is
                   elsif Word in "debug" | "release" then
                      return Build_Kind;
                   elsif Word in "x86_64" | "arm64" | "rv64" | "cortex_m0"
-                              | "synthetic_32"
+                              | "rv32" | "synthetic_32"
                   then
                      return Machine;
                   else
@@ -505,7 +505,7 @@ package body Landin.Stages.Configuration is
                      return Truth;
                   elsif Word in "c_sysv_lp64" | "c_darwin_lp64"
                               | "c_aapcs64_lp64" | "c_riscv_lp64d"
-                              | "c_runtime"
+                              | "c_riscv_ilp32" | "c_runtime"
                   then
                      return Truth;
                   elsif Word = "os" then
@@ -545,7 +545,7 @@ package body Landin.Stages.Configuration is
                   Word : constant String := Spelled (Syn.Name (Of_Tree, Node));
                begin
                   if Word not in "x86_64" | "arm64" | "rv64" | "cortex_m0"
-                               | "synthetic_32" | "little" | "big"
+                               | "rv32" | "synthetic_32" | "little" | "big"
                                | "debug" | "release" | "linux" | "darwin"
                                | "freebsd" | "freestanding"
                     and then Option_Index (Syn.Name (Of_Tree, Node)) = 0
@@ -583,7 +583,8 @@ package body Landin.Stages.Configuration is
                  or else Spelled (Syn.Name (Of_Tree, Node))
                    not in "arch" | "os" | "word_size" | "byte_order"
                         | "build_mode" | "c_sysv_lp64" | "c_darwin_lp64"
-                        | "c_aapcs64_lp64" | "c_riscv_lp64d" | "c_runtime"
+                        | "c_aapcs64_lp64" | "c_riscv_lp64d"
+                        | "c_riscv_ilp32" | "c_runtime"
                then
                   Report_Not_Fixed
                     (Of_Tree, Node,
@@ -731,6 +732,9 @@ package body Landin.Stages.Configuration is
                   elsif Word = "cortex_m0" then
                      return (Kind => Machine,
                              Architecture_Value => Landin.Targets.Cortex_M0);
+                  elsif Word = "rv32" then
+                     return (Kind => Machine,
+                             Architecture_Value => Landin.Targets.RV32);
                   elsif Word = "synthetic_32" then
                      return (Kind => Machine, Architecture_Value =>
                                Landin.Targets.Synthetic_32_Architecture);
@@ -772,6 +776,10 @@ package body Landin.Stages.Configuration is
                      return Boolean_Result
                        (Landin.Targets.C_ABI_Of (Target (Context))
                           = Landin.Targets.RiscV_LP64D);
+                  elsif Word = "c_riscv_ilp32" then
+                     return Boolean_Result
+                       (Landin.Targets.C_ABI_Of (Target (Context))
+                          = Landin.Targets.RiscV_ILP32);
                   elsif Word = "c_runtime" then
                      --  Darwin and FreeBSD reach their systems only through
                      --  their C libraries; Linux links one when the request
@@ -1036,8 +1044,8 @@ package body Landin.Stages.Configuration is
                     & " are implicitly available builtin modules",
                   Into => Found);
             elsif Spelled (Syn.Name (Of_Tree, Node))
-              in "x86_64" | "arm64" | "rv64" | "cortex_m0" | "synthetic_32"
-                 | "little" | "big" | "debug" | "release"
+              in "x86_64" | "arm64" | "rv64" | "cortex_m0" | "rv32"
+                 | "synthetic_32" | "little" | "big" | "debug" | "release"
             then
                Report_Configuration_Rule
                  (Bad.Invalid_Option_Declaration, Of_Tree, Node,
@@ -1501,13 +1509,15 @@ package body Landin.Stages.Configuration is
                use type Landin.Source.Span;
                Attr : constant Syn.Machine_Attributes :=
                  Syn.Attributes (Of_Tree, Node);
+               Reference : constant String :=
+                 Firmware.Reference_Module (Target (Context));
                --  Whether the program imports a description of its own,
                --  rather than being given the library's reference.
                Imported : constant Boolean :=
                  Described /= Landin.Modules.No_Module
                  and then Landin.Modules.Logical_Path
                    (Landin.Stages.Modules (Context).all, Described)
-                   /= Firmware.Reference_Module;
+                   /= Reference;
                Naked : constant Boolean :=
                  Syn.Kind (Of_Tree, Node) = Syn.Function_Declaration
                  and then Syn.Machine_Convention (Of_Tree, Node)
@@ -1922,9 +1932,7 @@ package body Landin.Stages.Configuration is
                if not Firmware.Is_Core_Name (Name) then
                   Refuse (Argument (1), "this is not a core refine builds"
                     & " for",
-                    "compiler.core names ""cortex-m0"", ""cortex-m0plus"","
-                    & " ""cortex-m3"", ""cortex-m4"", ""cortex-m7"" or"
-                    & " ""cortex-m33""");
+                    "compiler.core names " & Firmware.Core_Names);
                elsif Core_Site /= No_Site then
                   Repeated (Core_Site);
                else
@@ -2133,11 +2141,24 @@ package body Landin.Stages.Configuration is
                      Size := Integer_Argument (Of_Tree, Argument (3));
                      if Size = -2 then
                         return;
-                     elsif Size <= 0 or else Size mod 8 /= 0 then
+                     elsif Size <= 0
+                       or else Size mod Ty.Folded
+                         (Landin.Targets.Stack_Alignment (Target (Context)))
+                         /= 0
+                     then
+                        --  D660: RV32 keeps the psABI's sixteen.
                         Refuse (Argument (3), "a stack is a positive"
-                          & " multiple of 8 bytes",
-                          "the stack's top stays aligned to eight bytes, as"
-                          & " the AAPCS requires at a call");
+                          & " multiple of"
+                          & Landin.Targets.Byte_Alignment'Image
+                              (Landin.Targets.Stack_Alignment
+                                 (Target (Context)))
+                          & " bytes",
+                          (if Landin.Targets.Architecture_Of
+                                (Target (Context)) = Landin.Targets.RV32
+                           then "the stack's top stays aligned to sixteen"
+                             & " bytes, as the RISC-V psABI requires"
+                           else "the stack's top stays aligned to eight"
+                             & " bytes, as the AAPCS requires at a call"));
                         return;
                      end if;
                   end if;
@@ -2201,7 +2222,8 @@ package body Landin.Stages.Configuration is
          then
             return;
          end if;
-         Built.Reference := Logical = Firmware.Reference_Module;
+         Built.Reference :=
+           Logical = Firmware.Reference_Module (Target (Context));
          if Core_Site = No_Site then
             Missing ("core", "compiler.core(""cortex-m0plus""), naming its"
               & " core");
@@ -2291,15 +2313,30 @@ package body Landin.Stages.Configuration is
             return;
          end if;
 
-         if Built.Vector_Count > Firmware.Vector_Limit (Built.Core) then
+         if Built.Vector_Count > Firmware.Vector_Limit (Built.Core)
+           and then Built.Core in Firmware.Arm_Core
+         then
             Layout (Vectors_Site,
-              "a " & Firmware.Spelling (Built.Core) & " vector table holds"
+              Firmware.A_Core (Built.Core) & " vector table holds"
               & " at most"
               & Positive'Image (Firmware.Vector_Limit (Built.Core))
               & " words",
               Firmware.Level_Name (Built.Core) & " has"
               & Positive'Image (Firmware.Vector_Limit (Built.Core) - 16)
               & " external interrupts at most");
+         elsif Built.Vector_Count > Firmware.Vector_Limit (Built.Core) then
+            Layout (Vectors_Site,
+              Firmware.A_Core (Built.Core) & " takes interrupts"
+              & " at codes below"
+              & Positive'Image (Firmware.Vector_Limit (Built.Core))
+              & ", so its table holds at most"
+              & Positive'Image (Firmware.Vector_Limit (Built.Core))
+              & " slots",
+              "a slot is an mcause interrupt code (D662), and "
+              & Firmware.A_Core (Built.Core) & " takes "
+              & Firmware.Core_Slots_Text (Built.Core)
+              & (if Firmware.Interrupts_Are_Slots (Built.Core)
+                 then " and 16 + IRQ" else ""));
          end if;
          for Item of Interrupts loop
             if 16 + Item.IRQ >= Built.Vector_Count then
@@ -2320,8 +2357,7 @@ package body Landin.Stages.Configuration is
               Firmware.Placed_Region (Built, Firmware.Stack);
          begin
             if Firmware.Implemented (Built.Boot) then
-               if (Vectors_Region.Origin
-                     + Firmware.Boot_Prefix (Built.Boot))
+               if Firmware.Vector_Address (Built)
                  mod Firmware.Vector_Alignment (Built) /= 0
                then
                   Layout (Placed_At (Firmware.Vectors),
@@ -2333,7 +2369,7 @@ package body Landin.Stages.Configuration is
                     "the table is aligned to its length rounded up to a"
                     & " power of two; place vectors in a region whose"
                     & " origin is");
-               elsif Firmware.Boot_Prefix (Built.Boot)
+               elsif Firmware.Vector_Address (Built) - Vectors_Region.Origin
                  + Firmware.Vector_Bytes (Built) > Vectors_Region.Length
                then
                   Layout (Placed_At (Firmware.Vectors),
@@ -2403,16 +2439,18 @@ package body Landin.Stages.Configuration is
          --  D543: the core is the request's, but for the library's
          --  constrained reference, which every level is tested on.
          if Landin.Targets.Architecture_Of (Target (Context))
-           /= Landin.Targets.Cortex_M0
+           /= Firmware.Family (Built.Core)
          then
             Complete := False;
             Report_At
               (Bad.Description_Core_Mismatch, Core_Site,
-               "this description is for a " & Firmware.Spelling (Built.Core)
+               "this description is for " & Firmware.A_Core (Built.Core)
                & ", and this build is for "
                & Landin.Targets.Name (Target (Context)),
-               "D543: build it with --target=cortex-m0 --level="
-               & Firmware.Level_Name (Built.Core)
+               "D543: build it with --target="
+               & (if Built.Core in Firmware.RISC_V_Core
+                  then "rv32" else "cortex-m0")
+               & " --level=" & Firmware.Level_Name (Built.Core)
                & ", or import no description on this target");
          elsif not Built.Reference
            and then not Firmware.Executes
@@ -2421,15 +2459,18 @@ package body Landin.Stages.Configuration is
             Complete := False;
             Report_At
               (Bad.Description_Core_Mismatch, Core_Site,
-               "this description's core is a "
-               & Firmware.Spelling (Built.Core) & ", an "
+               "this description's core is "
+               & Firmware.A_Core (Built.Core) & ", an "
                & Firmware.Level_Name (Built.Core) & " core, and this build"
                & " is at --level="
                & Landin.Targets.Levels.Name (Level (Context))
                & ", which it does not execute",
-               "D543: a " & Firmware.Spelling (Built.Core)
-               & " executes its own level and the M-profile levels below"
-               & " it, --level=" & Firmware.Lower_Levels (Built.Core)
+               "D543: " & Firmware.A_Core (Built.Core)
+               & " executes its own level and the "
+               & (if Built.Core in Firmware.RISC_V_Core
+                  then "RV32" else "M-profile")
+               & " levels below it, --level="
+               & Firmware.Lower_Levels (Built.Core)
                & "; build at one of them");
          elsif Built.Float /= Firmware.No_Float_Unit
            and then not Firmware.May_Have (Built.Core, Built.Float)
@@ -2437,12 +2478,12 @@ package body Landin.Stages.Configuration is
             Complete := False;
             Report_At
               (Bad.Float_Unit_Unsupported, Float_Site,
-               "this description's core is a "
-               & Firmware.Spelling (Built.Core) & ", which refine builds"
+               "this description's core is "
+               & Firmware.A_Core (Built.Core) & ", which refine builds"
                & " with no " & Firmware.Spelling (Built.Float) & " unit",
                "D615: a float unit is a fact of the core; refine builds"
-               & " ""fpv5-d16"" on a cortex-m7, and a "
-               & Firmware.Spelling (Built.Core) & " with "
+               & " ""fpv5-d16"" on a cortex-m7, and "
+               & Firmware.A_Core (Built.Core) & " with "
                & Firmware.Float_Units_Of (Built.Core)
                & "; remove compiler.float_unit or name the core it is"
                & " built into");
@@ -2648,9 +2689,9 @@ package body Landin.Stages.Configuration is
                or else (Syn.Kind (Of_Tree, Operand) = Syn.Name_Reference
                         and then Spelled (Syn.Name (Of_Tree, Operand))
                           in "x86_64" | "arm64" | "rv64" | "cortex_m0"
-                           | "synthetic_32" | "little" | "big" | "debug"
-                           | "release" | "linux" | "darwin" | "freebsd"
-                           | "freestanding"));
+                           | "rv32" | "synthetic_32" | "little" | "big"
+                           | "debug" | "release" | "linux" | "darwin"
+                           | "freebsd" | "freestanding"));
 
          procedure Keep;
          procedure Keep is
@@ -2679,7 +2720,8 @@ package body Landin.Stages.Configuration is
            or else (Is_Compiler_Member (Of_Tree, Node)
                     and then Spelled (Syn.Name (Of_Tree, Node))
                       in "word_size" | "c_sysv_lp64" | "c_darwin_lp64"
-                       | "c_aapcs64_lp64" | "c_riscv_lp64d" | "c_runtime")
+                       | "c_aapcs64_lp64" | "c_riscv_lp64d" | "c_riscv_ilp32"
+                       | "c_runtime")
          then
             Keep;
             return;

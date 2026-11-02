@@ -32,7 +32,6 @@ package body Landin.Driver.Loading is
    use type Landin.Platform.List_Status;
    use type Landin.Platform.Read_Status;
    use type Landin.Syntax.Node_Kind;
-   use type Landin.Targets.Architecture;
    use type Unbounded.Unbounded_String;
 
    package Module_Vectors is new Ada.Containers.Vectors
@@ -781,7 +780,8 @@ package body Landin.Driver.Loading is
       Unknown_Directories : Module_Vectors.Vector;
       Next  : Positive := 1;
       Reference_Description : constant String :=
-        Landin.Targets.Firmware.Reference_Module;
+        Landin.Targets.Firmware.Reference_Module
+          (Landin.Stages.Target (Context));
 
       function Spelling (Name : Landin.Source.Names.Name_Id) return String
         is (Landin.Source.Names.Spelling
@@ -1348,8 +1348,9 @@ package body Landin.Driver.Loading is
          Next := Next + 1;
          --  The implicit module comes after everything the imports reach,
          --  from the library, unless an import already brought it; and on
-         --  Cortex-M, once that is read, the constrained reference
-         --  description when the program reaches no description (D543).
+         --  a firmware target, once that is read, its constrained
+         --  reference description when the program reaches no description
+         --  (D543, D661).
          if Next > Natural (Queue.Length)
            and then Implicit /= ""
            and then Library_Present (Implicit)
@@ -1357,8 +1358,8 @@ package body Landin.Driver.Loading is
             Add_Implicit (Implicit);
          end if;
          if Next > Natural (Queue.Length)
-           and then Landin.Targets.Architecture_Of
-             (Landin.Stages.Target (Context)) = Landin.Targets.Cortex_M0
+           and then Landin.Targets.Is_Firmware
+             (Landin.Stages.Target (Context))
            and then Library_Present (Reference_Description)
            and then not Reaches_Description
          then

@@ -14,7 +14,9 @@ package body Landin.Targets.Capabilities is
       case Architecture_Of (Facts) is
          when X86_64 | Arm64 | RV64 =>
             return True;
-         when Cortex_M0 =>
+         when Cortex_M0 | RV32 =>
+            --  RV32's read-modify-write admission follows Cortex-M0's
+            --  until the level's A extension decides it.
             return Width /= Byte_8
               and then Op not in Atomic_Exchange | Atomic_Add
                 | Atomic_Compare_Exchange;
@@ -25,31 +27,32 @@ package body Landin.Targets.Capabilities is
 
    --  Every native backend emits both: x86-64 for Linux and FreeBSD, arm64
    --  for Linux, FreeBSD and Darwin, RV64 for Linux, and Cortex-M0, where a
-   --  prepared stack runs on the process stack pointer.
+   --  prepared stack runs on the process stack pointer.  RV32's emitter
+   --  does not emit them yet.
    function Stack_Switching (Facts : Target_Facts) return Boolean is
      (case Backend_For (Facts) is
          when X86_64_ELF | Darwin_Arm64_Mach_O | Arm64_ELF | RV64_ELF
             | Cortex_M0_ELF => True,
-         when No_Backend => False);
+         when RV32_ELF | No_Backend => False);
 
 
    function C_Signatures (Facts : Target_Facts) return Boolean is
      (case C_ABI_Of (Facts) is
          when SysV_AMD64_LP64 | Darwin_AAPCS64_LP64 | AAPCS64_LP64
             | RiscV_LP64D => True,
-         when No_C_ABI | Arm_AAPCS32_Soft => False);
+         when No_C_ABI | Arm_AAPCS32_Soft | RiscV_ILP32 => False);
 
    function C_Records (Facts : Target_Facts) return Boolean is
      (case C_ABI_Of (Facts) is
          when SysV_AMD64_LP64 | Darwin_AAPCS64_LP64 | AAPCS64_LP64
             | RiscV_LP64D => True,
-         when No_C_ABI | Arm_AAPCS32_Soft => False);
+         when No_C_ABI | Arm_AAPCS32_Soft | RiscV_ILP32 => False);
 
    function C_Variadic_Calls (Facts : Target_Facts) return Boolean is
      (case C_ABI_Of (Facts) is
          when SysV_AMD64_LP64 | Darwin_AAPCS64_LP64 | AAPCS64_LP64
             | RiscV_LP64D => True,
-         when No_C_ABI | Arm_AAPCS32_Soft => False);
+         when No_C_ABI | Arm_AAPCS32_Soft | RiscV_ILP32 => False);
 
    function Object_Format_Of (Facts : Target_Facts) return Object_Format is
    begin
@@ -59,7 +62,9 @@ package body Landin.Targets.Capabilities is
          return Mach_O;
       elsif Facts = Linux_Arm64 or else Facts = FreeBSD_Arm64 then
          return ELF;
-      elsif Facts = Linux_RV64 or else Facts = Cortex_M then
+      elsif Facts = Linux_RV64 or else Facts = Cortex_M
+        or else Facts = RV32
+      then
          return ELF;
       elsif Facts = Synthetic_32 then
          return No_Object_Format;
@@ -73,7 +78,7 @@ package body Landin.Targets.Capabilities is
          when X86_64_ELF => ELF_DWARF,
          when Darwin_Arm64_Mach_O => Mach_O_DWARF,
          when Arm64_ELF | RV64_ELF => ELF_DWARF,
-         when Cortex_M0_ELF => ELF_DWARF_Lines,
+         when Cortex_M0_ELF | RV32_ELF => ELF_DWARF_Lines,
          when No_Backend => No_Debug_Format);
 
    function Link_Symbol (Facts : Target_Facts; Name : String) return String is
@@ -101,6 +106,8 @@ package body Landin.Targets.Capabilities is
          return RV64_ELF;
       elsif Facts = Cortex_M then
          return Cortex_M0_ELF;
+      elsif Facts = RV32 then
+         return RV32_ELF;
       elsif Facts = Synthetic_32 then
          return No_Backend;
       else
@@ -113,7 +120,7 @@ package body Landin.Targets.Capabilities is
      (case Backend_For (Facts) is
          when X86_64_ELF | Darwin_Arm64_Mach_O | RV64_ELF => 2 ** 31,
          when Arm64_ELF => 2 ** 32,
-         when Cortex_M0_ELF => Maximum_Object_Size (Facts),
+         when Cortex_M0_ELF | RV32_ELF => Maximum_Object_Size (Facts),
          when No_Backend =>
             raise Compiler_Defect with "no backend, so no reach");
 
@@ -123,7 +130,7 @@ package body Landin.Targets.Capabilities is
          when Darwin_Arm64_Mach_O => "a Darwin static image holds",
          when Arm64_ELF => "arm64's ADRP reaches",
          when RV64_ELF => "RV64's AUIPC reaches",
-         when Cortex_M0_ELF => "the 32-bit address space holds",
+         when Cortex_M0_ELF | RV32_ELF => "the 32-bit address space holds",
          when No_Backend =>
             raise Compiler_Defect with "no backend, so no reach");
 
@@ -136,7 +143,7 @@ package body Landin.Targets.Capabilities is
        Reserved    => Maximum_Object_Size (Facts)));
 
    function Writes_Zero_Constants (Facts : Target_Facts) return Boolean is
-     (Backend_For (Facts) = Cortex_M0_ELF);
+     (Backend_For (Facts) in Cortex_M0_ELF | RV32_ELF);
 
    function Hosted_System_Of (Facts : Target_Facts) return Hosted_System is
    begin
@@ -169,6 +176,8 @@ package body Landin.Targets.Capabilities is
          return "riscv64-linux-gnu";
       elsif Facts = Cortex_M then
          return "arm-eabi";
+      elsif Facts = RV32 then
+         return "riscv64-elf";
       elsif Facts = Synthetic_32 then
          return "";
       else

@@ -18422,6 +18422,8 @@ A level is a set of features; the levels and what each holds are:
 | | `rv64gc_zba` | those, and `zba` |
 | | `rv64gc_xtheadba` | baseline, and `xtheadba` |
 | | `rv64gc_zba_xtheadba` | baseline, `zba` and `xtheadba` |
+| RV32 | `rv32imc`, the default | `i`, `m`, `c`, `zicsr`, `zifencei` |
+| | `rv32imac` | those, and `a` |
 
 The x86-64 levels are the [x86-64 psABI](https://gitlab.com/x86-psABIs/x86-64-ABI)'s
 microarchitecture levels; the Arm ones are the architecture versions of the
@@ -18430,7 +18432,9 @@ microarchitecture levels; the Arm ones are the architecture versions of the
 GCC's spelling. RV64 levels are the supported ISA strings of D265; `g`
 expands to I, M, A, F, D, Zicsr and Zifencei, and `c` adds compressed
 instructions. Zba and XTheadBa are independent sets, not successive ranks.
-Synthetic-32 describes no processor and has no level. Each
+RV32's levels are D660's microcontroller ISA strings, `rv32imc` below
+`rv32imac`, each with Zicsr and Zifencei. Synthetic-32 describes no
+processor and has no level. Each
 default is the level every backend emitted for before levels existed, so a
 build that selects none is the build it was. `cortex_m0` names the M-profile
 backend's family, not its core: a build at `armv7-m` is still `cortex-m0`'s
@@ -18760,6 +18764,136 @@ native backend boundary rather than implement it.
 `abi/lp64d-varargs` and `abi/core-io-file-identity`. The recurring RV64 lane
 reports runtime, C ABI, source-debugger and ISA-level verdicts separately;
 none is supplied by an empty selection or an unconfirmed execution level.
+
+### D660 — RV32 is a firmware target with ILP32 and its own levels
+
+**The tour said** nothing of RISC-V microcontrollers. D265 described RV64
+Linux and promised that RV64's instruction selection would serve a future
+RV32 emitter without inheriting RV64's data model; the RISC-V
+microcontrollers, RP2350's Hazard3, ESP32-C3 and ESP32-C5, are RV32.
+
+**Chosen:** `--target=rv32` selects a description of its own,
+`compiler.arch == rv32`: little-endian ELF32, 32-bit pointers aligned to
+four, the RISC-V psABI's ILP32 layout, which is natural alignment with an
+eight-byte `i64`, `u64` and `f64` and a 16-byte long double at sixteen, a
+stack aligned to sixteen bytes as the psABI keeps it even without D or Q,
+and `s0`, `x8`, as the frame pointer. Its C ABI is the soft-float `ilp32`,
+`compiler.c_riscv_ilp32`, a fixed bool fact as D265's `c_riscv_lp64d` is;
+C signatures, records and variadic calls stay disabled, as on Cortex-M.
+`rv32` is firmware only, like `cortex-m0`: no hosted system, a device
+profile, firmware entry, placement, vector slots and a derived script,
+debug lines and no full debugging, and images bounded by the 32-bit
+address space. Every check that was "is this Cortex-M" asks either "is
+this firmware", which `rv32` also is, or "is this Thumb", which it is not:
+the Thumb text rules, the positional `u32` shorthand naming `r0` and the
+`__aeabi_` reservation stay Cortex-M's, and `_landin_firmware_` is
+reserved on both. Aligned one-, two- and four-byte atomic loads and stores
+are admitted at every level and eight-byte atomics at none, and a stack
+placement is a multiple of sixteen bytes.
+
+D255's RV32 family has two levels, `rv32imc`, the default, which every
+RV32 core executes, and `rv32imac`, which adds A; each holds Zicsr and
+Zifencei, which the firmware's CSR accesses and fences need. An RV64 or Arm
+level on `rv32`, or an RV32 level on `linux-rv64`, is L0009.
+`Landin.Targets.RiscV_ISA` names the width a string's prefix gives, so one
+model holds both families. The tools receive `-march=LEVEL_zicsr_zifencei`
+and `-mabi=ilp32`, which select GCC's `rv32im/ilp32` or `rv32imac/ilp32`
+libgcc multilib. As D532 for Cortex-M, `refine` looks for the pinned
+`riscv64-elf-gcc`, GNAT's riscv64-elf archive `16.1.0-1`, and then
+`riscv64-unknown-elf-gcc`, the name Debian's and Ubuntu's
+`gcc-riscv64-unknown-elf` gives the same bare-metal GCC; `--toolchain=NAME`
+tries NAME alone, and L0500 names both and what installs each. The firmware
+link is Cortex-M's: no start files or libraries but libgcc, collected
+sections, no build ID, relocations kept, the derived script and a map. An
+ordinary block names RV64's integer registers, at XLEN 32, and no float
+register. Until its emitter exists the backend is named and emits nothing:
+`refine check` and `--emit=ir` work, and assembly, an executable or a
+linker script is L0500, which says so and what still works.
+
+**The alternatives:** an RV32 level of the `linux-rv64` target, which would
+change the layout and the C ABI with the level and break D255's rule that a
+level changes no layout; a target per chip, which multiplies descriptions
+of one machine; a stack aligned to four, which the psABI does not give;
+and hard-float `ilp32f`, which no chosen core has.
+
+**Pinned by** `targets/descriptions do not follow the host`,
+`targets/backends are stated per target`, `targets/names select their
+descriptions`, `targets/levels are stated per family`, `targets/the
+library and the compiler state D255's levels`, `targets/alignments are
+stated per target`, `toolchain/RV32 names its level and ABI`,
+`driver/linux names every distribution's driver` and `driver/rv32 checks
+and does not yet emit`.
+
+### D661 — An rv32 program that reaches no description is given the RISC-V reference
+
+**The tour said** nothing; D543 gives a Cortex-M program that reaches no
+description the library's `platform/cortex_m/reference`.
+
+**Chosen:** on `rv32` the loader adds `platform/riscv/reference` as D543
+adds the Cortex-M reference, and its submodules are available on `rv32`
+alone (D267). It is a test profile and names no chip: device
+`riscv-reference`, core `sifive-e31`, the core QEMU's `sifive_e` machine
+carries, the Cortex-M reference's capacities in that machine's map, 32 KiB
+of flash at `0x2040_0000`, where its mask ROM enters an image, and the
+16 KiB DTIM at `0x8000_0000`, its upper 4 KiB the stack, and a 16-slot
+table. It is the profile the rv32imac emulator lane executes the corpus on,
+so the corpus's capacity verdicts mean the same on both targets.
+`environments/cortex-m/descriptions.json` records it under `devices` with
+its `target`, which the Arm lanes pass over.
+
+**The alternatives:** no reference, so that every rv32 program imports a
+description, which leaves the freestanding corpus nothing to run on;
+the C3's map, which is a chip's and needs its image format; and a lane
+description of the emulator alone, which the corpus would then hold apart
+from the profile a program with no description gets.
+
+**Pinned by** `targets/RISC-V cores take their own slots` and
+`driver/rv32 checks and does not yet emit`, and by the emulator lane that
+runs on it.
+
+### D662 — A RISC-V core's interrupt model decides what a slot is
+
+**The tour said** at [1990] what a Cortex-M vector slot is; D544 made the
+core and the description decide which slots a handler takes. RISC-V has no
+NVIC: a trap's mcause says which interrupt it is, and the cores refine
+builds for deliver interrupts in three ways.
+
+**Chosen:** a description may name four RISC-V cores, each of family RV32:
+`hazard3` (RP2350), `sifive-e31`, `esp-rv32imc` (ESP32-C3) and
+`esp-rv32imac-clic` (ESP32-C5), at `rv32imac`, `rv32imac`, `rv32imc` and
+`rv32imac`. Each has a closed interrupt model, which decides mtvec's mode:
+`vectored` on the E31 and the C3, `clic` on the C5, and `xh3irq` on
+Hazard3, whose external interrupts all arrive as code 11 and are resolved
+through `meinext`. A slot is the mcause interrupt code; exceptions take no
+slot. The core's own slots are machine software, timer and external, 3, 7
+and 11, on the E31; 3 and 7 on Hazard3, whose 11 is meinext's dispatch;
+the C3's CPU lines 1 to 31; and the C5's CLIC lines 0 to 31 at ids 16 to
+47, ESP-IDF's `CLIC_EXT_INTR_NUM_OFFSET` of 16 with its 32 CPU lines. A
+description's interrupt n is slot 16 + n only under the NVIC and Xh3irq;
+under vectored mtvec and the CLIC a description names peripheral sources,
+which an interrupt matrix or a PLIC routes to a CPU line, and only the
+line is a slot. The table is no longer than 16 slots on the E31, 32 on the
+C3, 48 on the C5, `CLIC_INT_INFO.NUM_INT`, and on Hazard3 the slot set's
+512, 16 + 496 of Xh3irq's IRQs. A RISC-V image begins with one word, the
+jump to reset at `_landin_firmware_entry`, and the table follows at the
+first address its alignment allows: its length rounded up to a power of
+two, and no less than 64 bytes on the E31, Hazard3 and the CLIC, and 256 on
+the C3, as ESP-IDF aligns its table; the reference's is 64 bytes past its
+origin. A RISC-V core has no float unit refine builds, so
+`compiler.float_unit` on one is L0545, and the D543 rule that the core
+caps the level reads the RV32 family, `rv32imc` below `rv32imac`; a RISC-V
+core on `cortex-m0`, or an Arm one on `rv32`, is L0515, naming the target
+its core needs.
+
+**The alternatives:** numbering RISC-V slots as the NVIC's 16 + IRQ on
+every core, which names peripheral sources the C3 and C5 never deliver as
+causes and hides the CPU line a handler really takes; admitting every
+code below the count, which D544 already declined; and one RISC-V core
+kind with the model a description field, which would let a description
+pair a core with an interrupt controller it does not have.
+
+**Pinned by** `targets/RISC-V cores take their own slots` and the
+description checks of `negative/description-unknown-core`.
 
 ### D257 — A build targets the compiler's own host, and another target is named
 
@@ -21973,8 +22107,8 @@ through any module it imports; a description is the module holding
 `compiler.device`, and at most one is in the reached graph. On a Cortex-M
 target, a program that reaches none is given the library's
 `platform/cortex_m/reference`, the constrained profile [1990] fixed written
-as a description, which the loader adds once everything the imports reach
-is read; its sources join the program as any library module's do, and its
+as a description, and on `rv32` `platform/riscv/reference` (D661), which
+the loader adds once everything the imports reach is read; its sources join the program as any library module's do, and its
 directives emit nothing, so the assembly of a program that imports no
 description is what it was. A host whose library lacks it can still check
 and emit a program with no vector or region placement, and refuses one that
@@ -21994,13 +22128,18 @@ table one that may execute, and data, BSS and the stack one that may be
 written; the vector table, aligned to its length rounded up to a power of
 two and no less than 128 bytes, fits its region past the boot kind's
 prefix; the table is no longer than the core's architecture allows, 48
-words on ARMv6-M and 512 on ARMv7-M; each interrupt's slot is inside it;
+words on ARMv6-M and 512 on ARMv7-M, and on a RISC-V core what D662 gives
+it; each interrupt's slot is inside it;
 and the stack fits its region. Those are L0514. `.ramtext` is placed with
 `data`, and every load image in the region `text` is placed in.
 
 A description's core must execute what the request builds: the target is
-`cortex-m0`, and `--level` is the core's own level or a lower M-profile one,
-`armv6-m` below `armv7-m`, and `armv7-m` below both `armv7e-m` and
+its core's family's, `cortex-m0` for an Arm core and `rv32` for a RISC-V
+one (D662), and `--level` is the core's own level or a lower one of its
+family. On `rv32`, `rv32imc` is below `rv32imac`, so an `esp-rv32imc`
+builds at `rv32imc` alone and a `hazard3`, a `sifive-e31` or an
+`esp-rv32imac-clic` at either. On the M profile, `armv6-m` is below
+`armv7-m`, and `armv7-m` below both `armv7e-m` and
 `armv8-m.main`, neither of which holds the other: Armv8-M's DSP instructions
 are an optional extension of its core. So an RP2040, a `cortex-m0plus`,
 builds at the default `armv6-m` and no higher, a `cortex-m4` builds at

@@ -37,7 +37,6 @@ package body Landin.Server.Sessions is
    use type Diag.Severity;
    use type Landin.Source.Source_Id;
    use type Landin.Server.Documents.Document;
-   use type Landin.Targets.Architecture;
    use type Landin.Platform.Read_Status;
 
    --  JSON-RPC's and the protocol's error codes.
@@ -876,10 +875,9 @@ package body Landin.Server.Sessions is
             if J.Is_Kind (Message, Named, J.String_Value) then
                if J.Text (Message, Named) = "" then
                   Add_Error ("firmwareEntry is empty");
-               elsif Landin.Targets.Architecture_Of (Facts)
-                 /= Landin.Targets.Cortex_M0
-               then
-                  Add_Error ("firmwareEntry requires target cortex-m0");
+               elsif not Landin.Targets.Is_Firmware (Facts) then
+                  Add_Error ("firmwareEntry requires a firmware target:"
+                             & " cortex-m0 or rv32");
                else
                   Firmware_Entry :=
                     Unbounded.To_Unbounded_String (J.Text (Message, Named));

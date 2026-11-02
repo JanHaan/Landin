@@ -237,6 +237,49 @@ package body Landin.Tests.Toolchain_Suite is
          "the libc link of arm64 collects unreached sections too");
    end A_Static_Linux_Link_Has_No_C_Runtime;
 
+   --  D660: an RV32 level reaches GCC as its ISA string with Zicsr and
+   --  Zifencei and the soft-float ILP32 ABI, which together select the
+   --  rv32imc or rv32imac multilib, and the firmware link is Cortex-M's
+   --  apart from those: no start files, libgcc, a collected image, no
+   --  build ID and the derived script.
+   procedure RV32_Names_Its_Level_And_ABI
+     (Item : in out Landin.Testing.Context);
+
+   procedure RV32_Names_Its_Level_And_ABI
+     (Item : in out Landin.Testing.Context)
+   is
+      package L renames Landin.Targets.Levels;
+      RV32 : constant Landin.Targets.Target_Facts := Landin.Targets.RV32;
+   begin
+      Landin.Testing.Check_Equal
+        (Item, Landin.Backend.Toolchain.Driver_For (RV32, ""),
+         "riscv64-elf-gcc",
+         "RV32 selects the pinned GNAT riscv64-elf driver");
+      Landin.Testing.Check_Equal
+        (Item, Landin.Platform.Joined
+           (Landin.Backend.Toolchain.Assemble_Arguments
+              ("p.s", "p.o", RV32, Level => L.Default_Level (RV32))),
+         "-march=rv32imc_zicsr_zifencei" & LF & "-mabi=ilp32" & LF
+         & "-Wa,--fatal-warnings" & LF & "-x" & LF & "assembler" & LF
+         & "-c" & LF & "p.s" & LF & "-o" & LF & "p.o" & LF,
+         "rv32imc assembles with fatal warnings and no A extension");
+      Landin.Testing.Check_Equal
+        (Item, Landin.Platform.Joined
+           (Landin.Backend.Toolchain.Link_Arguments
+              ("p.s", "p", "", Facts => RV32,
+               Level => L.Level_Named (RV32, "rv32imac"))),
+         "-march=rv32imac_zicsr_zifencei" & LF & "-mabi=ilp32" & LF
+         & "-nostdlib" & LF & "-nostartfiles" & LF & "-nodefaultlibs" & LF
+         & "p.o" & LF & "-lgcc" & LF
+         & "-Xlinker" & LF & "--gc-sections" & LF
+         & "-Xlinker" & LF & "--build-id=none" & LF
+         & "-Xlinker" & LF & "--emit-relocs" & LF
+         & "-Xlinker" & LF & "-T" & LF & "-Xlinker" & LF & "p.ld" & LF
+         & "-Xlinker" & LF & "-Map" & LF & "-Xlinker" & LF & "p.map" & LF
+         & "-o" & LF & "p" & LF,
+         "rv32imac links its object alone against libgcc by the script");
+   end RV32_Names_Its_Level_And_ABI;
+
    ------------------------------------------------------------------
    --  [1970]'s entry
    ------------------------------------------------------------------
@@ -496,6 +539,9 @@ package body Landin.Tests.Toolchain_Suite is
       Landin.Testing.Register
         (Into, "toolchain", "a static Linux link has no C runtime",
          A_Static_Linux_Link_Has_No_C_Runtime'Access);
+      Landin.Testing.Register
+        (Into, "toolchain", "RV32 names its level and ABI",
+         RV32_Names_Its_Level_And_ABI'Access);
       Landin.Testing.Register
         (Into, "toolchain", "the hosted entry is one shape",
          The_Hosted_Entry_Is_One_Shape'Access);

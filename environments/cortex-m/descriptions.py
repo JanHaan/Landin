@@ -51,7 +51,11 @@ sys.path.insert(0, str(ROOT / 'devices'))
 sys.path.insert(0, str(ROOT / 'scripts'))
 import fetch_inputs  # noqa: E402
 import thumb  # noqa: E402
-EXPECTED = json.loads((HERE / 'descriptions.json').read_text())['devices']
+#  The Cortex-M devices alone; a record naming another target is that
+#  target's lanes' (D661).
+EXPECTED = {name: record for name, record
+            in json.loads((HERE / 'descriptions.json').read_text())['devices'].items()
+            if record.get('target', 'cortex-m0') == 'cortex-m0'}
 
 PROGRAMS = {
     'rp2040': ('import descriptions/rp2040\n'

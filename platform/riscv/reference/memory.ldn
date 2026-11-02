@@ -1,0 +1,15 @@
+-- The RV32 constrained reference profile's memory: the Cortex-M reference's
+-- capacities in QEMU's sifive_e map, 32 KiB of flash at 0x2040_0000, where
+-- the machine's mask ROM enters an image, and the 16 KiB DTIM at
+-- 0x8000_0000, its upper 4 KiB the stack (D661).  This is a test profile,
+-- not a board's map.
+
+linker.region("FLASH", 0x2040_0000, 32 * 1024, "rx")
+linker.region("RAM", 0x8000_0000, 16 * 1024, "rwx")
+compiler.boot("vector-table")
+linker.place("vectors", "FLASH")
+linker.place("text", "FLASH")
+linker.place("rodata", "FLASH")
+linker.place("data", "RAM")
+linker.place("bss", "RAM")
+linker.place("stack", "RAM", 4 * 1024)

@@ -166,10 +166,16 @@ def lane_inputs(level, inputs):
 #  profiles are the descriptions of an emulator's map, not of a chip: each
 #  is Landin source under lanes/ beside this file, recorded as a device is.
 RECORDS = json.loads((HERE / 'descriptions.json').read_text())
-DESCRIPTIONS = RECORDS['devices']
+#  A record with a `target` is another target's, the rv32 reference's
+#  among them (D661), which these Arm lanes neither build nor link.
+DESCRIPTIONS = {name: record for name, record in RECORDS['devices'].items()
+                if record.get('target', 'cortex-m0') == 'cortex-m0'}
 #  No limited verdict is linked again against a lane's map, which is no
 #  device's (D619).
 LANE_PROFILES = RECORDS['lanes']
+#  Every recorded profile by name, another target's among them, which a
+#  lane of that target runs on: the rv32 reference is the sifive-e lane's.
+PROFILES = {**RECORDS['devices'], **LANE_PROFILES}
 REFERENCE = 'constrained-reference'
 
 #  A profile's facts, as the firmware build report states them, with the
@@ -196,7 +202,7 @@ def recorded(device=REFERENCE):
     """DEVICE's profile as descriptions.json records it, apart from the
     compiler, with the capacities a firmware build report derives (D545):
     the text region's length, and the data region's less a stack it holds."""
-    want = {**DESCRIPTIONS, **LANE_PROFILES}[device]
+    want = PROFILES[device]
     profile = {key: want[key] for key in FACTS if key in want}
     profile.update(device=device, stack_top=want['stack_top'], script=None)
     ram = region(profile, 'data')['length']
@@ -226,20 +232,16 @@ def probe_root(device):
     return LANE_ROOT if device in LANE_PROFILES else ROOT / 'devices'
 
 
-#  The RV32 cores a description may name (D695); every other is an M-profile core.
-RV32_CORES = ('sifive-e31', 'esp-rv32imc', 'esp-rv32imac-clic', 'hazard3')
-
-
 def device_target(device):
-    """The --target DEVICE's description is for: rv32 for an RV32 core."""
-    want = {**DESCRIPTIONS, **LANE_PROFILES}[device]
-    return 'rv32' if want['core'] in RV32_CORES else 'cortex-m0'
+    """The --target DEVICE's description is for, which its record's `target`
+    names when it is not cortex-m0 (D661)."""
+    return PROFILES[device].get('target', 'cortex-m0')
 
 
 def probe_level(device):
     """The level DEVICE's description builds at: its float unit's, or the
     default for one without (D615)."""
-    want = {**DESCRIPTIONS, **LANE_PROFILES}[device]
+    want = PROFILES[device]
     return ['--level=' + want['level']] if want['float_unit'] != 'none' else []
 
 

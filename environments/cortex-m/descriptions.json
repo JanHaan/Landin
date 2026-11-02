@@ -1,5 +1,5 @@
 {
-  "comment": "What each device description must select, recorded apart from the compiler and the descriptions: RP2040 and RP2350 from pico-sdk 2.2.0, the STM32H753 from ST's stm32h753xx.h and RM0433, the constrained reference from [1990]. descriptions.py compares every fact of each linked image with these. Under lanes, the same for each lane description, an emulator's map rather than a chip, which the corpus holds its derived profile to (D607, D619).",
+  "comment": "What each device description must select, recorded apart from the compiler and the descriptions: RP2040 and RP2350 from pico-sdk 2.2.0, the STM32H753 from ST's stm32h753xx.h and RM0433, the constrained reference from [1990], and the rv32 reference, which names its target, from D661. descriptions.py compares every fact of each linked image with these. Under lanes, the same for each lane description, an emulator's map rather than a chip, which the corpus holds its derived profile to (D607, D619).",
   "devices": {
     "rp2040": {
       "sources": {
@@ -117,6 +117,28 @@
       "reserved_slots": [4, 5, 6, 7, 8, 9, 10, 12, 13, 21, 42, 43, 44, 45, 46, 47],
       "handler_slot": 20,
       "refused_slot": 21
+    },
+    "riscv-reference": {
+      "sources": {"profile": "D661: the Cortex-M reference's capacities in QEMU's sifive_e map: 32 KiB of flash at 0x20400000, where its mask ROM enters an image, and the 16 KiB DTIM at 0x80000000, the upper 4 KiB the stack; a 16-slot table 64 bytes past the entry word at the flash's origin (D662)",
+                  "slots": "D662: a sifive-e31 takes mcause interrupt codes 3, 7 and 11 alone, through vectored mtvec"},
+      "target": "rv32",
+      "core": "sifive-e31",
+      "float_unit": "none",
+      "boot": "vector-table",
+      "regions": [
+        {"name": "FLASH", "origin": 541065216, "length": 32768, "access": "rx"},
+        {"name": "RAM", "origin": 2147483648, "length": 16384, "access": "rwx"}
+      ],
+      "placed": {"vectors": "FLASH", "text": "FLASH", "rodata": "FLASH", "data": "RAM", "bss": "RAM", "stack": "RAM"},
+      "vector_address": 541065280,
+      "vector_words": 16,
+      "boot_prefix": 0,
+      "boot_suffix": 0,
+      "stack_top": 2147500032,
+      "stack_reserved": 4096,
+      "reserved_slots": [0, 1, 2, 4, 5, 6, 8, 9, 10, 12, 13, 14, 15],
+      "handler_slot": 7,
+      "refused_slot": 5
     }
   },
   "lanes": {
@@ -169,6 +191,7 @@
         "capacities": "the constrained reference's, spec.md [1990], so the lane's limits are the corpus's"
       },
       "module": "esp32c3",
+      "target": "rv32",
       "core": "esp-rv32imc",
       "level": "rv32imc",
       "float_unit": "none",

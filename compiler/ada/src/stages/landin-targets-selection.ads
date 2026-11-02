@@ -17,7 +17,7 @@
 
 package Landin.Targets.Selection is
 
-   Described_Count : constant Positive := 8;
+   Described_Count : constant Positive := 9;
    function Described_Name (Index : Positive) return String
      with Pre => Index <= Described_Count;
 

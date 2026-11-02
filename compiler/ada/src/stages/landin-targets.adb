@@ -91,6 +91,21 @@ package body Landin.Targets is
       Keeps_Frame      => True,
       Widest_Alignment => 8);
 
+   --  D660: the RISC-V psABI's ILP32 is natural alignment throughout, so a
+   --  64-bit scalar aligns to eight, unlike i386's four, and its 16-byte
+   --  long double to sixteen; the stack keeps the psABI's 16 bytes even
+   --  without the D or Q extension that motivated it.
+   function RV32 return Target_Facts is
+     (Label            => Padded ("rv32"),
+      Machine          => RV32,
+      C_ABI            => RiscV_ILP32,
+      Pointer          => 32,
+      Pointer_Align    => 4,
+      Stack_Align      => 16,
+      Order            => Little,
+      Keeps_Frame      => True,
+      Widest_Alignment => 16);
+
    function Synthetic_32 return Target_Facts is
      (Label            => Padded ("synthetic-32"),
       Machine          => Synthetic_32_Architecture,

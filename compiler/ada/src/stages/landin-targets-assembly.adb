@@ -118,12 +118,16 @@ package body Landin.Targets.Assembly is
             elsif Name in "sp" | "fp" | "lr" | "x18" | "x29" | "x30" then
                return Never_Named;
             end if;
-         when RV64 =>
+         --  D660: RV32 names RV64's integer registers at XLEN 32, and
+         --  its soft-float levels have no float register.
+         when RV64 | RV32 =>
             if Number_In (Name, "x", 5, 7)
               or else Number_In (Name, "x", 9, 31)
             then
                return Operand_Register;
-            elsif Number_In (Name, "f", 0, 31) then
+            elsif Has_Float_Registers (Facts, Unit)
+              and then Number_In (Name, "f", 0, 31)
+            then
                return Float_Register;
             elsif Names_Reserved (Facts, Name) then
                return Never_Named;
@@ -147,7 +151,7 @@ package body Landin.Targets.Assembly is
             when Arm64 => Number_In (Name, "x", 0, 17)
               or else Number_In (Name, "v", 0, 7)
               or else Number_In (Name, "v", 16, 31),
-            when RV64 => Number_In (Name, "x", 5, 7)
+            when RV64 | RV32 => Number_In (Name, "x", 5, 7)
               or else Number_In (Name, "x", 10, 17)
               or else Number_In (Name, "x", 28, 31)
               or else Number_In (Name, "f", 0, 7)
@@ -164,7 +168,7 @@ package body Landin.Targets.Assembly is
             when Cortex_M0 => 8,
             when X86_64 => 9,
             when Arm64 => 18,
-            when RV64 => 15,
+            when RV64 | RV32 => 15,
             when Synthetic_32_Architecture => 0);
 
    function General_Register (Facts : Target_Facts; Index : Positive)
@@ -192,7 +196,7 @@ package body Landin.Targets.Assembly is
             end case;
          when Arm64 =>
             return "x" & Number;
-         when RV64 =>
+         when RV64 | RV32 =>
             declare
                Value : constant Natural :=
                  (if Index <= 3 then Index + 4
@@ -208,7 +212,7 @@ package body Landin.Targets.Assembly is
 
    function Register_Width (Facts : Target_Facts) return Bit_Width
      is (case Architecture_Of (Facts) is
-            when Cortex_M0 | Synthetic_32_Architecture => 32,
+            when Cortex_M0 | RV32 | Synthetic_32_Architecture => 32,
             when X86_64 | Arm64 | RV64 => 64);
 
    function Has_Registers (Facts : Target_Facts) return Boolean
@@ -234,6 +238,7 @@ package body Landin.Targets.Assembly is
             when Arm64 => 24,
             when RV64 => 20,
             when Cortex_M0 => (if Unit = No_Float_Unit then 0 else 8),
+            when RV32 => 0,
             when Synthetic_32_Architecture => 0);
 
    function Float_Class_Register
@@ -250,7 +255,7 @@ package body Landin.Targets.Assembly is
                           elsif Index <= 16 then Index + 1
                           else Index + 11),
             when Cortex_M0 => Index - 1,
-            when Synthetic_32_Architecture =>
+            when RV32 | Synthetic_32_Architecture =>
               raise Program_Error with "the target has no float registers");
       Image : constant String := Natural'Image (Number);
       Digits_Of : constant String := Image (Image'First + 1 .. Image'Last);
@@ -272,7 +277,7 @@ package body Landin.Targets.Assembly is
             when Cortex_M0 =>
               (if Landin.Targets.Firmware.Double_Precision (Unit) then 64
                else 32),
-            when Synthetic_32_Architecture =>
+            when RV32 | Synthetic_32_Architecture =>
               raise Program_Error with "the target has no float registers");
 
    function Canonical
@@ -350,7 +355,7 @@ package body Landin.Targets.Assembly is
                   return "v" & Word (Word'First + 1 .. Word'Last);
                end if;
             end loop;
-         when RV64 =>
+         when RV64 | RV32 =>
             if Number_In (Word, "x", 5, 7)
               or else Number_In (Word, "x", 9, 31)
             then
@@ -368,7 +373,9 @@ package body Landin.Targets.Assembly is
                   end;
                end if;
             end loop;
-            if Number_In (Word, "f", 0, 31) then
+            if Architecture_Of (Facts) = RV32 then
+               null;
+            elsif Number_In (Word, "f", 0, 31) then
                return Word;
             elsif RV64_Float_Alias (Word) /= Natural'Last then
                declare
@@ -402,7 +409,7 @@ package body Landin.Targets.Assembly is
                  | "w29" | "x30" | "w30",
             --  LP64D's preserved float registers, f8, f9 and f18-f27, are
             --  declared as its preserved integers are (D630).
-            when RV64 =>
+            when RV64 | RV32 =>
                Number_In (Word, "x", 0, 4) or else Word in "x8"
                  | "zero" | "ra" | "sp" | "gp" | "tp" | "fp" | "s0",
             when Synthetic_32_Architecture => False);
@@ -511,7 +518,7 @@ package body Landin.Targets.Assembly is
          end;
       end if;
       case Architecture_Of (Facts) is
-         when Cortex_M0 | RV64 =>
+         when Cortex_M0 | RV64 | RV32 =>
             return Register;
          when Arm64 =>
             return (if Bits > 32 then Register
@@ -644,7 +651,7 @@ package body Landin.Targets.Assembly is
      is (case On is
             when Cortex_M0 => "@",
             when Arm64 => "//",
-            when X86_64 | RV64 => "#",
+            when X86_64 | RV64 | RV32 => "#",
             when Synthetic_32_Architecture => "");
 
    function Uncommented (On : Architecture; Text : String) return String is
@@ -718,6 +725,7 @@ package body Landin.Targets.Assembly is
             when Arm64 => "arm64",
             when X86_64 => "x86-64",
             when RV64 => "RV64",
+            when RV32 => "RV32",
             when Synthetic_32_Architecture => "synthetic");
       Clean : constant String := Ada.Strings.Fixed.Trim
         (Line, Ada.Strings.Both);

@@ -16,7 +16,7 @@ from backend import (HERE, LEVELS, ROOT, COUNTERPARTS, DESCRIPTIONS,
                      describe_routines, describe_sizes,
                      execute as qemu, fixture, harness_start, image_contract, image_sizes,
                      hard_float, lane_inputs, lane_of, level_flags, levels_of, link,
-                     measure_overflow, metadata, refine_level, region, device_target, target)
+                     measure_overflow, metadata, refine_level, region, target)
 from run import CommandFailed, Run, require, workers
 from setup import DEFAULT, installed_tools, sha, supported_host
 
@@ -623,9 +623,7 @@ def execute(output, tools, refine, selected=(), profiles=(), lane=None):
     reference = derived(deriving, refine, REFERENCE, output / 'profiles')
     others = {}
     for device in DESCRIPTIONS:
-        #  A limited Cortex-M0 verdict is linked again against every other
-        #  M-profile device; an RV32 one is no Cortex-M0 image's (D695).
-        if device != REFERENCE and lane is None and device_target(device) == 'cortex-m0':
+        if device != REFERENCE and lane is None:
             others[device] = derived(deriving, refine, device, output / 'profiles')
             require(dominates(others[device], reference),
                     '%s holds less than the constrained reference somewhere, so a program'

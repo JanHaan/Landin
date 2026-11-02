@@ -51,8 +51,8 @@ LANDIN_GNAT_ARM_ELF_VERSION=16.1.0-1
 
 #  The RV32 lanes' GCC and binutils: GNAT's riscv64-elf archive from the
 #  same release, whose driver is `riscv64-elf-gcc` and whose multilibs
-#  include rv32im/ilp32 and rv32imac/ilp32.  environments/cortex-m/setup.py
-#  installs the Linux x86-64 one beside the arm-elf archive.
+#  hold rv32imc and rv32imac with the ilp32 ABI (D660).  The nix shell
+#  fetches its own system's; the RV32 lane installs the Linux x86-64 one.
 LANDIN_GNAT_RISCV64_ELF_VERSION=16.1.0-1
 
 #  sha256 of each archive, verified before it is unpacked.
@@ -66,6 +66,8 @@ LANDIN_GNAT_ARM_ELF_SHA256_X86_64_LINUX=9e6bb6696de1b84e26a3fbeebd67d5e7c9aad28a
 LANDIN_GNAT_ARM_ELF_SHA256_AARCH64_LINUX=6f09f8efe4f36cc4a8c1f9da1c554bca043722fd11bb8475dbe100f03543b2a3
 LANDIN_GNAT_ARM_ELF_SHA256_AARCH64_DARWIN=10fc8bc6b6a67def53c2497e21b06289bfadf845a609f6a3679cad06c8bbf5d4
 LANDIN_GNAT_RISCV64_ELF_SHA256_X86_64_LINUX=01cb5e97d6b51ed21f677912bc09bd6caca430515d09c8feda171c17b4fa95db
+LANDIN_GNAT_RISCV64_ELF_SHA256_AARCH64_LINUX=e08cbbf929ffcb9ca931ad41d7fd6d9a95a2ab46ad2830daf9e3a4ea11104a32
+LANDIN_GNAT_RISCV64_ELF_SHA256_AARCH64_DARWIN=c4b76df21e1518b9b3ba9a34a515ef951f8a1a333640df2d5f2382e5c23d6df3
 
 #  Installs the pinned toolchain for one platform into $1, verifying each
 #  archive against the checksum above before unpacking it.  A mismatch is

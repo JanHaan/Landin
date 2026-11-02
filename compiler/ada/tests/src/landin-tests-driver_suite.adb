@@ -258,7 +258,8 @@ package body Landin.Tests.Driver_Suite is
          Landin.Driver.Status_Reported);
       Refuse
         ("linux-x86-64", "--firmware-entry=start",
-         "--firmware-entry requires --target=cortex-m0",
+         "--firmware-entry requires a firmware target: --target=cortex-m0"
+         & " or --target=rv32",
          Landin.Driver.Status_Misuse);
       Refuse
         ("linux-x86-64", "--debug=lines",
@@ -1519,6 +1520,90 @@ package body Landin.Tests.Driver_Suite is
            and then Contains (Third, """level"":""x86-64-v3"""),
          "a selected level reaches the assembler, linker and report");
    end A_Level_Is_Selected_Within_Its_Family;
+
+   --  D660: rv32 is selected by name, reads its own levels and facts, and
+   --  checks and lowers a program while its backend emits nothing yet.
+   procedure RV32_Checks_And_Does_Not_Yet_Emit
+     (Item : in out Landin.Testing.Context);
+
+   procedure RV32_Checks_And_Does_Not_Yet_Emit
+     (Item : in out Landin.Testing.Context)
+   is
+      Program : constant String :=
+        "fixed if compiler.arch == rv32 and compiler.c_riscv_ilp32" & LF
+        & "    and compiler.word_size == 32 and compiler.feature.c" & LF
+        & "    and compiler.feature.a == (LEVEL == 1) then" & LF
+        & "    start: () -> none = end start" & LF
+        & "end if" & LF;
+
+      function Ran (Arguments : Landin.Platform.Path_List;
+                    Level : Natural := 0) return Landin.Driver.Outcome;
+
+      function Ran (Arguments : Landin.Platform.Path_List;
+                    Level : Natural := 0) return Landin.Driver.Outcome
+      is
+         Host  : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Text  : constant String := Program;
+         At_Level : constant Natural :=
+           Ada.Strings.Fixed.Index (Text, "LEVEL");
+      begin
+         Host.Add_File
+           ("main.ldn",
+            Text (Text'First .. At_Level - 1)
+            & Ada.Strings.Fixed.Trim (Natural'Image (Level), Ada.Strings.Both)
+            & Text (At_Level + 5 .. Text'Last));
+         Tools.Set_Result (0, "");
+         return Landin.Driver.Execute (Arguments, Host, Tools);
+      end Ran;
+
+      function Says (Result : Landin.Driver.Outcome; Text : String)
+        return Boolean
+        is (Contains (Unbounded.To_String (Result.Report), Text));
+
+      Checked : constant Landin.Driver.Outcome :=
+        Ran (["--target=rv32", "main.ldn"]);
+      Checked_A : constant Landin.Driver.Outcome :=
+        Ran (["--target=rv32", "--level=rv32imac", "main.ldn"], 1);
+      Lowered : constant Landin.Driver.Outcome :=
+        Ran (["--target=rv32", "--emit=ir", "-o", "main.ir", "main.ldn"]);
+      Emitted : constant Landin.Driver.Outcome :=
+        Ran (["--target=rv32", "--emit=asm", "-o", "main.s", "main.ldn"]);
+      RV64_Level : constant Landin.Driver.Outcome :=
+        Ran (["--target=rv32", "--level=rv64gc", "main.ldn"]);
+      Arm_Level : constant Landin.Driver.Outcome :=
+        Ran (["--target=rv32", "--level=armv6-m", "main.ldn"]);
+      RV32_On_RV64 : constant Landin.Driver.Outcome :=
+        Ran (["--target=linux-rv64", "--level=rv32imc",
+              "main.ldn"]);
+   begin
+      Landin.Testing.Check_Equal
+        (Item, Checked.Status, Landin.Driver.Status_Success,
+         "rv32 checks a program at rv32imc, without A: "
+         & Unbounded.To_String (Checked.Report));
+      Landin.Testing.Check_Equal
+        (Item, Checked_A.Status, Landin.Driver.Status_Success,
+         "rv32imac holds A: " & Unbounded.To_String (Checked_A.Report));
+      Landin.Testing.Check_Equal
+        (Item, Lowered.Status, Landin.Driver.Status_Success,
+         "rv32 lowers to IR: " & Unbounded.To_String (Lowered.Report));
+      Landin.Testing.Check
+        (Item, Emitted.Status /= Landin.Driver.Status_Success
+           and then Says (Emitted, "error[L0500]: no backend emits for"
+                                   & " target rv32 yet")
+           and then Says (Emitted, "--emit=ir"),
+         "rv32 refuses to emit assembly until its backend does, and says"
+         & " what still works");
+      Landin.Testing.Check
+        (Item, Says (RV64_Level, "error[L0009]: unknown level for rv32:"
+                                 & " rv64gc")
+           and then Says (Arm_Level, "error[L0009]: unknown level for"
+                                     & " rv32: armv6-m")
+           and then Says (RV32_On_RV64, "error[L0009]: unknown level for"
+                                        & " linux-rv64: rv32imc"),
+         "L0009 refuses an RV64 or Arm level on rv32 and an RV32 one on"
+         & " RV64");
+   end RV32_Checks_And_Does_Not_Yet_Emit;
 
    --  D255 on Linux arm64: a build that names `armv8-a` is the build that
    --  names no level.  A program with atomics, a `layout(c)` record passed
@@ -6657,6 +6742,9 @@ package body Landin.Tests.Driver_Suite is
       Landin.Testing.Register
         (Into, "driver", "a level is selected within its family",
          A_Level_Is_Selected_Within_Its_Family'Access);
+      Landin.Testing.Register
+        (Into, "driver", "rv32 checks and does not yet emit",
+         RV32_Checks_And_Does_Not_Yet_Emit'Access);
       Landin.Testing.Register
         (Into, "driver", "the arm64 default is armv8-a",
          The_Arm64_Default_Is_Armv8_A'Access);

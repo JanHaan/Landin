@@ -282,17 +282,24 @@ bare-metal GCC (D532), so a distribution's links without a flag; the gate's
 | Linux arm64 | `gnat-arm-elf-linux64-aarch64-16.1.0-1.tar.gz` | `6f09f8efe4f36cc4a8c1f9da1c554bca043722fd11bb8475dbe100f03543b2a3` |
 | macOS arm64 | `gnat-arm-elf-darwin-aarch64-16.1.0-1.tar.gz` | `10fc8bc6b6a67def53c2497e21b06289bfadf845a609f6a3679cad06c8bbf5d4` |
 
-The RV32 emulator lanes assemble and link with the same release's
-riscv64-elf archive, whose driver is `riscv64-elf-gcc` and whose rv32im
-and rv32imac ilp32 multilibs the two RV32 levels select. `environments/pins.sh` pins
-it as `LANDIN_GNAT_RISCV64_ELF_VERSION` `16.1.0-1`, for Linux x86-64 only,
-and `environments/cortex-m/setup.py` reads it; the lanes run on
-Espressif's QEMU, locked with its libraries in
-`environments/cortex-m/tools.lock.json`.
+The RV32 target's lanes assemble and link with GNAT's riscv64-elf archive
+from the same release, GCC `16.1.0` with GNU Binutils `2.46.1`, whose
+driver is `riscv64-elf-gcc` (D660). `environments/pins.sh` pins it as
+`LANDIN_GNAT_RISCV64_ELF_VERSION` `16.1.0-1` with a checksum per host,
+which the nix shell reads. Its multilibs include `rv32im/ilp32`, which
+`-march=rv32imc_zicsr_zifencei -mabi=ilp32` selects, and
+`rv32imac/ilp32`. `refine` looks for `riscv64-elf-gcc` and then
+`riscv64-unknown-elf-gcc`, the name Debian's and Ubuntu's
+`gcc-riscv64-unknown-elf` gives the same bare-metal GCC.
+`environments/cortex-m/setup.py` installs the Linux x86-64 one for the RV32
+emulator lanes, which run on Espressif's QEMU, locked with its libraries in
+`environments/cortex-m/tools.lock.json` (D695).
 
 | platform | archive | sha256 |
 |---|---|---|
 | Linux x86-64 | `gnat-riscv64-elf-linux64-x86_64-16.1.0-1.tar.gz` | `01cb5e97d6b51ed21f677912bc09bd6caca430515d09c8feda171c17b4fa95db` |
+| Linux arm64 | `gnat-riscv64-elf-linux64-aarch64-16.1.0-1.tar.gz` | `e08cbbf929ffcb9ca931ad41d7fd6d9a95a2ab46ad2830daf9e3a4ea11104a32` |
+| macOS arm64 | `gnat-riscv64-elf-darwin-aarch64-16.1.0-1.tar.gz` | `c4b76df21e1518b9b3ba9a34a515ef951f8a1a333640df2d5f2382e5c23d6df3` |
 
 
 ## Cortex-M emitted-code runtime
