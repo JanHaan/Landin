@@ -40503,6 +40503,39 @@ package body Landin.Stages.Checking is
                Because => "the declaration it places", Into => Found);
             return;
          end if;
+         if Attr.Vector /= Landin.Source.Empty_Span
+           and then Valid
+           and then Routine
+           and then Syn.Machine_Convention (Of_Tree, Node)
+             = Landin.Machine.Naked_Routine
+           and then Landin.Targets.Firmware.Admits (Profile, Value.Vector)
+           and then Landin.Targets.Firmware.Dispatched_Slot
+             (Profile.Core, Value.Vector)
+         then
+            --  D680: the core's dispatch calls what this slot holds.
+            Bad.Report
+              (Item => Bad.Linkage_Contract,
+               Source => Syn.Source_Of (Of_Tree),
+               Where => Syn.Anchor (Of_Tree, Node),
+               Message => "vector slot"
+                 & Natural'Image (Value.Vector) & " of "
+                 & Landin.Targets.Firmware.A_Core (Profile.Core)
+                 & " is called from the compiler's dispatch, so no naked"
+                 & " routine takes it",
+               Note => "D680: "
+                 & (if Landin.Targets.Firmware."="
+                      (Landin.Targets.Firmware.Model_Of (Profile.Core),
+                       Landin.Targets.Firmware.CLIC)
+                    then "under the CLIC every interrupt enters one common"
+                      & " entry, which reads mcause"
+                    else "Hazard3's external interrupts all arrive at"
+                      & " code 11, whose entry reads meinext")
+                 & ", saves the interrupted registers and calls the"
+                 & " slot's handler; write it extern(interrupt)",
+               Related => Syn.Origin (Of_Tree, Node),
+               Because => "the declaration it places", Into => Found);
+            return;
+         end if;
          if Attr.Vector /= Landin.Source.Empty_Span then
             Valid := Valid and then Routine
               and then Syn.Machine_Convention (Of_Tree, Node)

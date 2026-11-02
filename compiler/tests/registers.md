@@ -319,7 +319,7 @@ model used before the Cortex-M backend existed.
 
 | Scope | Targets |
 | --- | --- |
-| `prototype-1` | cortex-m0 |
+| `prototype-1` | cortex-m0, rv32 |
 | `prototype-2` | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64 |
 | `prototype-3` | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0, rv32, synthetic-32 |
 | `prototype-4` | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64 |

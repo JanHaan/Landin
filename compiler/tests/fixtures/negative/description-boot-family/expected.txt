@@ -1,0 +1,6 @@
+error[L0576]: boot kind esp-app-image is read by a RISC-V core's boot ROM, and this description's core is a cortex-m0plus; the core is at ../tests/fixtures/negative/description-boot-family/program.ldn:2
+  --> ../tests/fixtures/negative/description-boot-family/program.ldn:4:1
+  |
+4 | compiler.boot("esp-app-image")
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: D681: esp-app-image is an ESP32's; write compiler.boot("vector-table"), or the kind the core's boot ROM reads

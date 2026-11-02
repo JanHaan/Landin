@@ -54,6 +54,7 @@ with Landin.Tests.Stack_Report_Suite;
 with Landin.Tests.Stages_Suite;
 with Landin.Tests.Targets_Suite;
 with Landin.Tests.Cortex_Suite;
+with Landin.Tests.RV32_Firmware_Suite;
 with Landin.Tests.Toolchain_Suite;
 with Landin.Tests.Verifier_Suite;
 with Landin.Tests.X86_Optimization_Suite;
@@ -136,6 +137,7 @@ procedure Landin_Tests is
       "stages           ",
       "targets          ",
       "cortex ABI       ",
+      "rv32 firmware    ",
       "toolchain        ",
       "verifier         ",
       "x86 opt          ",
@@ -568,6 +570,7 @@ begin
    Landin.Tests.Stages_Suite.Register (Cases);
    Landin.Tests.Targets_Suite.Register (Cases);
    Landin.Tests.Cortex_Suite.Register (Cases);
+   Landin.Tests.RV32_Firmware_Suite.Register (Cases);
    Landin.Tests.Toolchain_Suite.Register (Cases);
    Landin.Tests.Verifier_Suite.Register (Cases);
    Landin.Tests.X86_Optimization_Suite.Register (Cases);

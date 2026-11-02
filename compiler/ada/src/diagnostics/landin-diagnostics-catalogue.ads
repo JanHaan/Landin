@@ -249,6 +249,10 @@ package Landin.Diagnostics.Catalogue is
       --  D653: a stage the reset vector enters before compiler-owned reset.
       Reset_Stage_Return,
       Reset_Stage_Stack,
+      --  D681, D683: a boot kind another family's ROM reads, and the ESP
+      --  chip's facts without their image or the image without them.
+      Boot_Kind_Family,
+      ESP_Image_Facts,
       --  D251 also admits removing a whole unused, effect-free local.
       Unused_Pure_Local,
       --  The backend and its toolchain.  None is about a frontend
@@ -273,6 +277,8 @@ package Landin.Diagnostics.Catalogue is
       Boot_Stage_Object,
       --  D638: the assembled image block, read from its object.
       Image_Block_Object,
+      --  D685: the ESP application image refine writes, read back.
+      ESP_Image_Object,
       --  D555-D558: `refine svd`, which reads a vendor's SVD and a
       --  selection policy and replaces the modules it generates.  No
       --  program is refused for any of them.
@@ -1015,12 +1021,13 @@ package Landin.Diagnostics.Catalogue is
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("D543: a description whose core is not the request's"
                    & " target and level")),
+      --  Retired by D683, which built the last reserved boot kind.
       Boot_Kind_Reserved =>
-        (Code => "L0516", Level => Error, State => Live,
-         Source => True, Bytes => True,
-         Least => 0, Most => 0, Notes => 1,
+        (Code => "L0516", Level => Error, State => Retired,
+         Source => False, Bytes => False,
+         Least => 0, Most => 0, Notes => 0,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
-         Rule => +"D545: a reserved boot image kind refine does not build"),
+         Rule => +"retired: a reserved boot image kind refine did not build"),
       Region_Placement =>
         (Code => "L0517", Level => Error, State => Live,
          Source => True, Bytes => True,
@@ -1105,6 +1112,21 @@ package Landin.Diagnostics.Catalogue is
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("D653: a vector-table description's stage that uses the"
                    & " stack")),
+      Boot_Kind_Family =>
+        (Code => "L0576", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 0, Most => 0, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("D681: a boot image kind another family's boot ROM"
+                   & " reads")),
+      ESP_Image_Facts =>
+        (Code => "L0575", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 0, Most => 0, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("D683: an esp-app-image description without"
+                   & " compiler.esp_image, or compiler.esp_image without an"
+                   & " esp-app-image")),
       --  D251, as for Mutable_Never_Written.
       Unused_Pure_Local =>
         (Code => "L0349", Level => Warning, State => Live,
@@ -1221,6 +1243,16 @@ package Landin.Diagnostics.Catalogue is
          Rule => +("D638: an assembled image block that is not the IMAGE_DEF"
                    & " block its boot kind gives, or that a relocation"
                    & " reaches")),
+      --  D685: about the image refine writes from the linked executable,
+      --  raised by the driver after the link, and shown by the RV32
+      --  firmware cases.
+      ESP_Image_Object =>
+        (Code => "L0577", Level => Error, State => Live,
+         Source => False, Bytes => False,
+         Least => 0, Most => 0, Notes => 0,
+         Fixes => No_Fix, Shown_By => Invocation,
+         Rule => +("D685: a linked image no ESP application image can hold,"
+                   & " or one whose written bytes do not read back")),
       --  D558: `refine svd` raises these for an SVD, its policy or its
       --  outputs, and the devices suite owns them. The SVD or the policy is
       --  the source a fault is in, and a fault points at the element or byte

@@ -60,7 +60,7 @@ package Landin.Configuration is
    function Is_Description_Member (Namespace, Member : String) return Boolean
      is ((Namespace = "compiler"
           and then Member in "device" | "core" | "vectors" | "interrupt"
-            | "boot" | "float_unit")
+            | "boot" | "float_unit" | "esp_image")
          or else (Namespace = "linker" and then Member in "region" | "place"));
 
    --  Shared explanation for a tool member outside its enabled context.

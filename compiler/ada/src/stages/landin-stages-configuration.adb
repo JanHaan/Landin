@@ -1248,6 +1248,8 @@ package body Landin.Stages.Configuration is
       Device_Site, Core_Site, Vectors_Site, Boot_Site : Site;
       --  D615: the description's compiler.float_unit, if any.
       Float_Site : Site;
+      --  D683: the description's compiler.esp_image, if any.
+      ESP_Site : Site;
       --  D587: the description's `link(boot_stage)` routine, if any.
       Stage_Site : Site;
       Regions_At : Region_Sites := [others => No_Site];
@@ -1635,9 +1637,12 @@ package body Landin.Stages.Configuration is
             return True;
          end if;
          declare
+            RV32 : constant Boolean :=
+              Landin.Targets.Architecture_Of (Target (Context))
+                = Landin.Targets.RV32;
             Lines : constant String :=
               Landin.Targets.Assembly.Uncommented
-                (Landin.Targets.Cortex_M0,
+                (Landin.Targets.Architecture_Of (Target (Context)),
                  Landin.Configuration.Fixed_Text
                    (Source (Context, Syn.Source_Of (Of_Tree.all)),
                     Of_Tree.all, Argument));
@@ -1666,8 +1671,11 @@ package body Landin.Stages.Configuration is
                         end loop;
                         if Word = Firmware.Reset_Symbol then
                            Names_Reset := True;
-                        elsif Lower in "push" | "pop" | "sp" | "r13" | "msp"
-                          | "psp"
+                        elsif (if RV32
+                               then Lower in "sp" | "x2" | "lwsp" | "swsp"
+                                 | "addi16sp" | "addi4spn"
+                               else Lower in "push" | "pop" | "sp" | "r13"
+                                 | "msp" | "psp")
                           and then Ada.Strings.Unbounded.Length (Stack_Word)
                             = 0
                         then
@@ -1685,19 +1693,27 @@ package body Landin.Stages.Configuration is
                  (Bad.Reset_Stage_Stack, Stage_Site,
                   "this stage runs before reset and uses the stack, through "
                   & Ada.Strings.Unbounded.To_String (Stack_Word),
-                  "D653: a vector-table image's stage runs before any"
-                  & " memory may be written, on the stack pointer the core"
-                  & " loaded from the table; keep what it needs in"
-                  & " registers");
+                  (if RV32
+                   then "D653, D684: the entry word enters the stage before"
+                     & " any memory may be written, before reset has set"
+                     & " the stack pointer; keep what it needs in registers"
+                   else "D653: a vector-table image's stage runs before any"
+                     & " memory may be written, on the stack pointer the"
+                     & " core loaded from the table; keep what it needs in"
+                     & " registers"));
                return False;
             elsif not Names_Reset then
                Report_At
                  (Bad.Reset_Stage_Return, Stage_Site,
                   "this stage runs before reset and does not branch to "
                   & Firmware.Reset_Symbol,
-                  "D653: the reset vector enters the stage, and the stage"
-                  & " ends in compiler-owned reset; finish it with ldr r0, ="
-                  & Firmware.Reset_Symbol & " and bx r0");
+                  (if RV32
+                   then "D653, D684: the entry word enters the stage, and"
+                     & " the stage ends in compiler-owned reset; finish it"
+                     & " with j " & Firmware.Reset_Symbol
+                   else "D653: the reset vector enters the stage, and the"
+                     & " stage ends in compiler-owned reset; finish it with"
+                     & " ldr r0, =" & Firmware.Reset_Symbol & " and bx r0"));
                return False;
             end if;
             return True;
@@ -1832,6 +1848,8 @@ package body Landin.Stages.Configuration is
             elsif Member = "interrupt" then "(""NAME"", irq)"
             elsif Member = "boot" then "(""vector-table"")"
             elsif Member = "float_unit" then "(""fpv5-d16"")"
+            elsif Member = "esp_image"
+            then "(chip, min_revision, max_revision, flash_offset)"
             elsif Member = "region"
             then "(""NAME"", origin, length, ""rx"")"
             else "(""text"", ""REGION"")");
@@ -1882,6 +1900,9 @@ package body Landin.Stages.Configuration is
          elsif Member = "place" then
             Lowest := 2;
             Highest := 3;
+         elsif Member = "esp_image" then
+            Lowest := 4;
+            Highest := 4;
          else
             Lowest := 1;
             Highest := 1;
@@ -2041,6 +2062,59 @@ package body Landin.Stages.Configuration is
                else
                   Boot_Site := Here;
                   Built.Boot := Firmware.Boot_Named (Name);
+               end if;
+            end;
+         elsif Member = "esp_image" then
+            declare
+               Chip : constant Ty.Folded :=
+                 Integer_Argument (Of_Tree, Argument (1));
+               Minimum : constant Ty.Folded :=
+                 Integer_Argument (Of_Tree, Argument (2));
+               Maximum : constant Ty.Folded :=
+                 Integer_Argument (Of_Tree, Argument (3));
+               Offset : constant Ty.Folded :=
+                 Integer_Argument (Of_Tree, Argument (4));
+            begin
+               if Chip = -2 or else Minimum = -2 or else Maximum = -2
+                 or else Offset = -2
+               then
+                  null;
+               elsif Chip not in 0 .. Ty.Folded (Firmware.ESP_Number'Last)
+               then
+                  Refuse (Argument (1), "an ESP chip id is 0 to 65535",
+                    "compiler.esp_image's first argument is the image"
+                    & " header's chip id, which ESP-IDF's esp_chip_id_t"
+                    & " gives: 5 for the ESP32-C3");
+               elsif Minimum
+                 not in 0 .. Ty.Folded (Firmware.ESP_Number'Last)
+               then
+                  Refuse (Argument (2), "a chip revision is 0 to 65535",
+                    "compiler.esp_image's revisions are major * 100 +"
+                    & " minor, as ESP-IDF's min_chip_rev_full is: 3 is"
+                    & " v0.3");
+               elsif Maximum < Minimum
+                 or else Maximum > Ty.Folded (Firmware.ESP_Number'Last)
+               then
+                  Refuse (Argument (3), "the maximum revision is below the"
+                    & " minimum or above 65535",
+                    "compiler.esp_image's revisions are major * 100 +"
+                    & " minor, the minimum first: 199 is v1.99");
+               elsif Offset < 0 or else Offset >= 2 ** 32
+                 or else Offset mod Firmware.ESP_Offset_Alignment /= 0
+               then
+                  Refuse (Argument (4), "the flash offset is not a multiple"
+                    & " of 4096 in the 32-bit address space",
+                    "compiler.esp_image's last argument is where the ROM"
+                    & " reads the image in flash: 0x0 on the ESP32-C3,"
+                    & " 0x2000 on the ESP32-C5");
+               elsif ESP_Site /= No_Site then
+                  Repeated (ESP_Site);
+               else
+                  ESP_Site := Here;
+                  Built.ESP_Chip := Firmware.ESP_Number (Chip);
+                  Built.ESP_Minimum := Firmware.ESP_Number (Minimum);
+                  Built.ESP_Maximum := Firmware.ESP_Number (Maximum);
+                  Built.ESP_Offset := Landin.Targets.Byte_Count (Offset);
                end if;
             end;
          elsif Member = "region" then
@@ -2356,27 +2430,25 @@ package body Landin.Stages.Configuration is
             Stack_Region : constant Firmware.Region :=
               Firmware.Placed_Region (Built, Firmware.Stack);
          begin
-            if Firmware.Implemented (Built.Boot) then
-               if Firmware.Vector_Address (Built)
-                 mod Firmware.Vector_Alignment (Built) /= 0
-               then
-                  Layout (Placed_At (Firmware.Vectors),
-                    "the vector table would start at an address not"
-                    & " aligned to its"
-                    & Landin.Targets.Byte_Count'Image
-                        (Firmware.Vector_Alignment (Built))
-                    & " bytes",
-                    "the table is aligned to its length rounded up to a"
-                    & " power of two; place vectors in a region whose"
-                    & " origin is");
-               elsif Firmware.Vector_Address (Built) - Vectors_Region.Origin
-                 + Firmware.Vector_Bytes (Built) > Vectors_Region.Length
-               then
-                  Layout (Placed_At (Firmware.Vectors),
-                    "the vector table does not fit in region "
-                    & Firmware.Spelling (Vectors_Region.Name),
-                    "place vectors in a larger region");
-               end if;
+            if Firmware.Vector_Address (Built)
+              mod Firmware.Vector_Alignment (Built) /= 0
+            then
+               Layout (Placed_At (Firmware.Vectors),
+                 "the vector table would start at an address not"
+                 & " aligned to its"
+                 & Landin.Targets.Byte_Count'Image
+                     (Firmware.Vector_Alignment (Built))
+                 & " bytes",
+                 "the table is aligned to its length rounded up to a"
+                 & " power of two; place vectors in a region whose"
+                 & " origin is");
+            elsif Firmware.Vector_Address (Built) - Vectors_Region.Origin
+              + Firmware.Vector_Bytes (Built) > Vectors_Region.Length
+            then
+               Layout (Placed_At (Firmware.Vectors),
+                 "the vector table does not fit in region "
+                 & Firmware.Spelling (Vectors_Region.Name),
+                 "place vectors in a larger region");
             end if;
             if Built.Stack_Size > Stack_Region.Length then
                Layout (Placed_At (Firmware.Stack),
@@ -2387,8 +2459,7 @@ package body Landin.Stages.Configuration is
          end;
          --  D587: the boot kind says whether the image begins with the
          --  description's second stage.
-         if Firmware.Implemented (Built.Boot)
-           and then Firmware.Takes_Stage (Built.Boot)
+         if Firmware.Takes_Stage (Built.Boot)
            and then Stage_Site = No_Site
          then
             Complete := False;
@@ -2401,8 +2472,7 @@ package body Landin.Stages.Configuration is
                & Natural'Image (Firmware.Stage_Limit) & " bytes once"
                & " assembled, which the boot ROM enters at its first"
                & " instruction");
-         elsif Firmware.Implemented (Built.Boot)
-           and then not Firmware.Admits_Stage (Built.Boot)
+         elsif not Firmware.Admits_Stage (Built.Boot)
            and then Stage_Site /= No_Site
          then
             Complete := False;
@@ -2415,25 +2485,56 @@ package body Landin.Stages.Configuration is
                & " reset; remove this routine, or select a boot kind that"
                & " runs it",
                Related => Boot_Site, Because => "the boot kind");
-         elsif Firmware.Implemented (Built.Boot)
-           and then Firmware.Stage_Before_Reset (Built.Boot)
+         elsif Firmware.Stage_Before_Reset (Built.Boot)
            and then Stage_Site /= No_Site
            and then not Reset_Stage_Holds
          then
             Complete := False;
          end if;
          Built.Has_Stage := Stage_Site /= No_Site;
-         if not Firmware.Implemented (Built.Boot) then
+         --  D681: a boot kind is read by one family's ROMs: RP2040's
+         --  second stage is Thumb code, and an ESP32's application image
+         --  is RISC-V's here.  RP2350's block names either.
+         if not Firmware.Boots (Built.Core, Built.Boot) then
             Complete := False;
             Report_At
-              (Bad.Boot_Kind_Reserved, Boot_Site,
-               "refine does not yet build "
-               & (if Firmware.Spelling (Built.Boot) (1) in 'a' | 'e' | 'i'
-                    | 'o' | 'u' then "an " else "a ")
-               & Firmware.Spelling (Built.Boot) & " image",
-               "D545: " & Firmware.Spelling (Built.Boot) & " is a reserved"
-               & " boot image kind; this compiler builds ""vector-table"","
-               & " ""rp2040-boot2"" and ""rp2350-image-block"" images");
+              (Bad.Boot_Kind_Family, Boot_Site,
+               "boot kind " & Firmware.Spelling (Built.Boot) & " is read by "
+               & (if Built.Core in Firmware.RISC_V_Core
+                  then "an Arm core's boot ROM"
+                  else "a RISC-V core's boot ROM")
+               & ", and this description's core is "
+               & Firmware.A_Core (Built.Core),
+               "D681: " & Firmware.Spelling (Built.Boot) & " is "
+               & (if Built.Core in Firmware.RISC_V_Core
+                  then "RP2040's" else "an ESP32's")
+               & "; write compiler.boot(""vector-table""), or the kind the"
+               & " core's boot ROM reads",
+               Related => Core_Site, Because => "the core");
+         end if;
+         --  D683: the ESP chip's facts go with its image and nowhere else.
+         if Firmware.Takes_ESP_Image (Built.Boot) and then ESP_Site = No_Site
+         then
+            Complete := False;
+            Report_At
+              (Bad.ESP_Image_Facts, Boot_Site,
+               "an esp-app-image names its chip and the revisions it runs"
+               & " on, and this description says neither",
+               "D683: write compiler.esp_image(chip, min_revision,"
+               & " max_revision, flash_offset) beside compiler.boot, as the"
+               & " chip's technical reference manual gives them");
+         elsif not Firmware.Takes_ESP_Image (Built.Boot)
+           and then ESP_Site /= No_Site
+         then
+            Complete := False;
+            Report_At
+              (Bad.ESP_Image_Facts, ESP_Site,
+               "compiler.esp_image describes an esp-app-image, and this"
+               & " description's boot kind is "
+               & Firmware.Spelling (Built.Boot),
+               "D683: remove compiler.esp_image, or write"
+               & " compiler.boot(""esp-app-image"")",
+               Related => Boot_Site, Because => "the boot kind");
          end if;
 
          --  D543: the core is the request's, but for the library's

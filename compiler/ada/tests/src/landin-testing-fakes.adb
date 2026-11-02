@@ -201,21 +201,27 @@ package body Landin.Testing.Fakes is
       Host.Add_Directory (Library & "/platform");
       Host.Add_Directory (Library & "/platform/cortex_m");
       Host.Add_Directory (Library & "/platform/cortex_m/reference");
-      for Which in 1 .. 2 loop
-         declare
-            File : constant String :=
-              (if Which = 1 then "interrupts.ldn" else "memory.ldn");
-         begin
-            Real.Read_File
-              ("../../platform/cortex_m/reference/" & File, Text, Status);
-            if Status /= Landin.Platform.Read_Ok then
-               raise Program_Error with "the checkout's reference"
-                 & " description cannot be read: " & File;
-            end if;
-            Host.Add_File
-              (Library & "/platform/cortex_m/reference/" & File,
-               Ada.Strings.Unbounded.To_String (Text));
-         end;
+      Host.Add_Directory (Library & "/platform/riscv");
+      Host.Add_Directory (Library & "/platform/riscv/reference");
+      --  Both targets' references (D543, D661).
+      for Family in 1 .. 2 loop
+         for Which in 1 .. 2 loop
+            declare
+               File : constant String :=
+                 (if Family = 1 then "cortex_m" else "riscv")
+                 & "/reference/"
+                 & (if Which = 1 then "interrupts.ldn" else "memory.ldn");
+            begin
+               Real.Read_File ("../../platform/" & File, Text, Status);
+               if Status /= Landin.Platform.Read_Ok then
+                  raise Program_Error with "the checkout's reference"
+                    & " description cannot be read: " & File;
+               end if;
+               Host.Add_File
+                 (Library & "/platform/" & File,
+                  Ada.Strings.Unbounded.To_String (Text));
+            end;
+         end loop;
       end loop;
    end Add_Firmware_Library;
 

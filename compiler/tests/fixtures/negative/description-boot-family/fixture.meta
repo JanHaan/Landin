@@ -1,0 +1,9 @@
+class: negative
+summary: D681: an ESP32's application image is a RISC-V core's boot image kind, and an Arm description cannot select it
+program: program.ldn
+constructs: 1990
+targets: cortex-m0
+codes: L0576
+args: --target=cortex-m0 ../tests/fixtures/negative/description-boot-family/program.ldn
+expect: expected.txt
+status: 1
