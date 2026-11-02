@@ -243,6 +243,7 @@ class Board:
         self.indicator = self.handled = self.restarts = self.dropped = self.overflows = 0
         self.entries, self.ticks, self.masked_ticks, self.mode = 0, 5, 0, None
         self.previous = [0, 0]
+        self.received += b'ESP-ROM:esp32c5-eco2-20250121\r\nentry 0x40800000\r\n'
         self.frame('b', r=1, v=chip.expected_mtvec)
 
     def frame(self, tag, **fields):
@@ -310,7 +311,7 @@ class Scenario(unittest.TestCase):
                 verdicts, final, atomics = ESP.scenario(board, chip, 1240)
                 self.assertEqual(verdicts['ring_overrun']['dropped'], ESP.BURST - ESP.RING)
                 self.assertEqual(verdicts['threshold']['fifo_overflows'], 1)
-                self.assertEqual(final['h'], len(ESP.echo_of(board.received)))
+                self.assertEqual(final['h'], len(ESP.echo_of(board.received)) - len(b'ESP-ROM:esp32c5-eco2-20250121\r\nentry 0x40800000\r\n'))
                 self.assertEqual(atomics, chip.atomics(verdicts['atomics']['x'],
                                                        verdicts['atomics']['y']))
 

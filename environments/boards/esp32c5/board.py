@@ -80,10 +80,16 @@ def main():
     parser.add_argument('--port', type=int, default=3, help="the board's JTAG port on the hub")
     parser.add_argument('--serial', default='D0:CF:13:E0:87:F0',
                         help="the USB serial the JTAG port must show before it is switched")
-    parser.add_argument('--console-port', type=int, default=4,
-                        help="the CH340X bridge's port on the same hub")
+    parser.add_argument('--console-hub', default='7-2.4',
+                        help="the CH340X bridge's hub, as uhubctl -l names it")
+    parser.add_argument('--console-port', type=int, default=3,
+                        help="the CH340X bridge's port on its hub")
     parser.add_argument('--console-device', default='1a86:7523',
                         help='what the bridge\'s port must show before it is switched')
+    parser.add_argument('--console-guard-port', type=int, default=4,
+                        help="a port of the bridge's hub never switched")
+    parser.add_argument('--console-guard-device', default='E8:3D:C1:F5:C4:EC',
+                        help="what that port must show, or the bridge's hub is not switched")
     parser.add_argument('--enumerate-seconds', type=float, default=20.0,
                         help="how long the hub may take to list the board again, and its tty"
                              ' to appear')
@@ -91,7 +97,7 @@ def main():
                         help='how long RTS holds EN low for the chip-enable reset')
     args = parser.parse_args()
     esp.required_tools(args)
-    console_location = '%s.%d' % (args.hub, args.console_port)
+    console_location = '%s.%d' % (args.console_hub, args.console_port)
     jtag_location = '%s.%d' % (args.hub, args.port)
 
     def console_for(run):
@@ -112,19 +118,44 @@ def main():
         # what the chip itself recorded, read over JTAG, and the ROM's log
         # is read after a chip-enable reset through RTS with the tty open.
         hub = common.InGroup(run, args.hub_group)
-        both = [args.console_port, args.port]
         guard = (args.guard_port, args.guard_device)
-        esp.paced(args, 'power off', lambda: common.switch_ports(
-            hub, args.hub, both, 'off', keeps=guard,
-            holds=[(args.port, args.serial), (args.console_port, args.console_device)]))
+        console_guard = (args.console_guard_port, args.console_guard_device)
+
+        def off():
+            common.switch_ports(hub, args.hub, [args.port], 'off', keeps=guard,
+                                holds=[(args.port, args.serial)])
+            common.wait_for_hub(hub, args.console_hub, [console_guard], args.enumerate_seconds)
+            common.switch_ports(hub, args.console_hub, [args.console_port], 'off',
+                                keeps=console_guard,
+                                holds=[(args.console_port, args.console_device)],
+                                name='power-off-console')
+
+        def on():
+            common.switch_ports(hub, args.console_hub, [args.console_port], 'on',
+                                keeps=console_guard, name='power-on-console')
+            common.wait_for_hub(hub, args.hub, [guard], args.enumerate_seconds)
+            common.switch_ports(hub, args.hub, [args.port], 'on', keeps=guard)
+        # The two ports are on two hubs, so they are switched one after the
+        # other, each while the other is already off or not yet on: the
+        # board has power from neither between the two offs and the two ons.
+        esp.paced(args, 'power off', off)
         time.sleep(args.off_seconds)
         common.wait_for_hub(hub, args.hub, [guard], args.enumerate_seconds)
-        esp.paced(args, 'power on', lambda: common.switch_ports(hub, args.hub, both, 'on',
-                                                                keeps=guard))
+        common.wait_for_hub(hub, args.console_hub, [console_guard], args.enumerate_seconds)
+        esp.paced(args, 'power on', on)
         settle(run)
         common.wait_for_tty_at(jtag_location, args.enumerate_seconds)
         power_on = power_on_boot(probe, names) if names else None
         console = open_console(run)
+        if names is None:
+            # A control's image: a refused one leaves the ROM resetting the
+            # chip over and over, each time writing its log, which is read
+            # without a reset of the tool's own.
+            try:
+                console.wait(lambda s: b'ESP-ROM' in s, args.control_seconds, 'a ROM log')
+                return console, None
+            except common.Failed:
+                pass
         esp.paced(args, 'chip-enable reset',
                   lambda: chip_enable_reset(console.fd, args.reset_seconds))
         return console, power_on

@@ -214,6 +214,11 @@ def scenario(console, chip, seed):
     rng = random.Random(seed)
     stream = console.wait(lambda s: tagged(s, 'b'), 5, 'the boot frame')
     boot = tagged(stream, 'b')[0]
+    # The echo begins after the boot frame; what came before it is the ROM's.
+    begin = stream.index(b'\x03', stream.index(b'\x02b')) + 2
+
+    def echoed(s):
+        return echo_of(s[begin:])
     require(boot['r'] == POWER_ON, 'the reset cause reads %#x, not the chip reset of a power-on'
             % boot['r'])
     require(boot['v'] == chip.expected_mtvec, 'mtvec reads %#x, not %#x'
@@ -229,7 +234,7 @@ def scenario(console, chip, seed):
     low = report(console, seen); seen += 1
     require(high['g'] == chip.indicator and low['g'] == 0,
             'the indicator read back %#x after 1 and %#x after 0' % (high['g'], low['g']))
-    require(echo_of(console.received).startswith(SHARED[:1] + bytes([REPORT]) + SHARED[1:]),
+    require(echoed(bytes(console.received)).startswith(SHARED[:1] + bytes([REPORT]) + SHARED[1:]),
             'the shared scenario was not echoed')
     verdicts['shared'] = dict(input=SHARED.decode(), echo=SHARED.decode(),
                               indicator_after_1=high['g'], indicator_after_0=low['g'])
@@ -255,7 +260,7 @@ def scenario(console, chip, seed):
     # ring takes 256, the interrupt drops the rest and counts them, the
     # application restarts on the loss, and none of the burst is echoed.
     console.send(bytes([STALL]))
-    console.wait(lambda s: bytes([STALL]) in echo_of(s), 2, 'the echo of STALL')
+    console.wait(lambda s: bytes([STALL]) in echoed(s), 2, 'the echo of STALL')
     burst = bytes(rng.randrange(0x20, 0x7f) for _ in range(BURST))
     console.send(burst, pace=BURST)
     time.sleep(0.3)
@@ -269,7 +274,7 @@ def scenario(console, chip, seed):
     # the timer's, above it, keeps arriving; a burst then overflows the
     # UART's FIFO, which flags it once, and none of it is echoed.
     console.send(bytes([MASK]))
-    console.wait(lambda s: bytes([MASK]) in echo_of(s), 2, 'the echo of MASK')
+    console.wait(lambda s: bytes([MASK]) in echoed(s), 2, 'the echo of MASK')
     flood = bytes(rng.randrange(0x20, 0x7f) for _ in range(BURST))
     console.send(flood, pace=BURST)
     time.sleep(0.3)
@@ -288,7 +293,7 @@ def scenario(console, chip, seed):
     require(final['c'] == 2 and final['l'] == BURST - RING and final['o'] == 1,
             'the stream lost bytes')
     require(final['m'] > masked['m'] > high['m'], 'the timer did not advance')
-    echo = echo_of(console.wait(lambda s: True, 1, 'the stream'))
+    echo = echoed(console.wait(lambda s: True, 1, 'the stream'))
     sent = bytes(console.sent)
     expected_echo = expected_stream(sent, [burst, flood])
     require(echo == expected_echo, 'the echo differs from what was sent, first at byte %d'
@@ -439,21 +444,34 @@ def run_board(chip, args, console_for, cycle, settle):
             settle(run)
         if args.image_control:
             controls = {}
-            for where, judge in (('checksum', refused_checksum), ('sha256', warned_sha)):
+            # The SHA-256 control first: its image boots.  Then the checksum
+            # control, whose refused image leaves the ROM resetting the chip
+            # over and over, each reset dropping its USB-Serial-JTAG from the
+            # hub cascade: the good image is written back the moment the
+            # refusal is read, without waiting for a quiet the loop never
+            # gives (D722, D725).
+            for where, judge in (('sha256', warned_sha), ('checksum', refused_checksum)):
                 bad = run.out / ('%s-flipped.bin' % where)
                 bad.write_bytes(corrupted(data, where))
                 paced(args, 'download', lambda: probe.download_bin(bad, chip.offset))
                 settle(run)
-                console, _ = cycle(run, console_for, probe, None)
-                time.sleep(args.control_seconds)
-                console.close()
+                try:
+                    console, _ = cycle(run, console_for, probe, None)
+                    time.sleep(args.control_seconds)
+                    console.close()
+                finally:
+                    if where == 'checksum':
+                        probe.download_bin(path, chip.offset)
+                        args.pace.after('restore')
                 text = bytes(console.received).decode('latin-1')
                 (run.out / ('rom-%s.log' % where)).write_text(text)
-                controls[where] = judge(text, image)
                 console = None
+                settle(run)
+                controls[where] = judge(text, image)
             result['image_control'] = controls
-        paced(args, 'download', lambda: probe.download_bin(path, chip.offset))
-        settle(run)
+        else:
+            paced(args, 'download', lambda: probe.download_bin(path, chip.offset))
+            settle(run)
         result['flash'] = dict(offset='%#x' % chip.offset, verified=True)
         console, power_on = cycle(run, console_for, probe, names)
         if power_on:
