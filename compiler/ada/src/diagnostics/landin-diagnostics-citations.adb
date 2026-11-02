@@ -2399,6 +2399,8 @@ package body Landin.Diagnostics.Citations is
             when 687 =>
                "`platform/riscv` declares its CPU operations on rv32 alo"
                & "ne",
+            when 688 =>
+               "RAM code runs in a region code runs in, or is refused",
             when 570 =>
                "The depth report closes a call through a table or a func"
                & "tion value",
@@ -3725,6 +3727,8 @@ package body Landin.Diagnostics.Citations is
             when 686 =>
                "Decisions: The toolchain, C and the machine",
             when 687 =>
+               "Decisions: The toolchain, C and the machine",
+            when 688 =>
                "Decisions: The toolchain, C and the machine",
             when 570 =>
                "Decisions: The toolchain, C and the machine",
@@ -5439,6 +5443,9 @@ package body Landin.Diagnostics.Citations is
             when 687 =>
                "https://www.701.dev/spec.html#d687-platform-riscv-declar"
                & "es-its-cpu-operations-on-rv32-alone",
+            when 688 =>
+               "https://www.701.dev/spec.html#d688-ram-code-runs-in-a-re"
+               & "gion-code-runs-in-or-is-refused",
             when 570 =>
                "https://www.701.dev/spec.html#d570-the-depth-report-clos"
                & "es-a-call-through-a-table-or-a-function-value",

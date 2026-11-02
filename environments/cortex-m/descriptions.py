@@ -41,9 +41,11 @@ from pathlib import Path
 import re
 import shutil
 import struct
+import subprocess
 import sys
+import time
 
-from run import CommandFailed, Run, require
+from run import CommandFailed, Run, require, stop
 from setup import DEFAULT, installed_tools, inventory, sha, supported_host
 
 HERE = Path(__file__).resolve().parent
@@ -80,10 +82,19 @@ PROGRAMS = {
         'link(vector: 7) extern(interrupt) mtimer: () -> none = end mtimer\n'
         'mut counted: u32 = 1\n'
         'start: () -> none = counted += 1 end start\n'),
+    #  D688: its RAM code runs in IRAM, with its text; it says so on
+    #  UART0's FIFO once the ROM has entered it (D685).
     'esp32-c3': ('import descriptions/esp32c3\n'
                  'link(vector: 1) extern(interrupt) uart0: () -> none = end uart0\n'
                  'mut counted: u32 = 1\n'
-                 'start: () -> none = counted += 1 end start\n'),
+                 'link(section: ".ramtext.say") say: (byte: u32) -> none =\n'
+                 '    fifo: ptr mut u32 = ptr(0x6000_0000)\n'
+                 '    compiler.volatile_store(fifo, byte)\n'
+                 'end say\n'
+                 'start: () -> none =\n'
+                 '    say(82)\n    say(86)\n    say(51)\n    say(50)\n    say(10)\n'
+                 '    counted += 1\n'
+                 'end start\n'),
     'esp32-c5': ('import descriptions/esp32c5\n'
                  'link(vector: 17) extern(interrupt) uart0: () -> none = end uart0\n'
                  'mut counted: u32 = 1\n'
@@ -117,6 +128,13 @@ class Image:
         self.symbols = {}
         sections = [struct.unpack_from('<IIIIIIIIII', data, shoff + shentsize * i)
                     for i in range(shnum)]
+        self.executable = []
+        names = sections[struct.unpack_from('<H', data, 50)[0]][4] if shnum else 0
+        for header in sections:
+            if header[2] & 4 and header[2] & 2 and header[5]:
+                end = data.index(b'\0', names + header[0])
+                self.executable.append((data[names + header[0]:end].decode(),
+                                        header[3], header[5]))
         for header in sections:
             if header[1] == 2:
                 strings = sections[header[6]][4]
@@ -258,6 +276,50 @@ def esp_image(run, image, report, want, device):
             '%s: the build report\'s esp_image is %r' % (device, report['esp_image']))
 
 
+def rom_boot(run, want, device):
+    """D685: OUT.bin at its offset of a flash image the machine's real boot
+    ROM reads, as on the board: the ROM's log names each segment it loads
+    and the entry, which must be the image's, and the program then speaks
+    on the same UART."""
+    boot = want['rom_boot']
+    data = (run.out / 'core.elf.bin').read_bytes()
+    flash = bytearray(b'\xff' * boot['flash_bytes'])
+    offset = want['esp_image']['offset']
+    flash[offset:offset + len(data)] = data
+    (run.out / 'flash.bin').write_bytes(bytes(flash))
+    count, entry = data[1], struct.unpack_from('<I', data, 4)[0]
+    wanted, at = [], 24
+    for _ in range(count):
+        address, length = struct.unpack_from('<II', data, at)
+        wanted.append('load:0x%08x,len:0x%x' % (address, length))
+        at += 8 + length
+    wanted.append('entry 0x%08x' % entry)
+    uart = run.out / 'uart.log'
+    argv = [str(run.espressif / 'qemu-system-riscv32'), '-M', boot['machine'],
+            '-display', 'none', '-monitor', 'none', '-serial', 'file:' + str(uart),
+            '-drive', 'file=flash.bin,if=mtd,format=raw']
+    run.commands.append({'name': 'qemu-rom-boot', 'argv': argv,
+                         'timeout_seconds': boot['seconds']})
+    process = subprocess.Popen(argv, cwd=run.out, env=run.env, stdout=subprocess.DEVNULL,
+                               stderr=(run.out / 'qemu-rom-boot.log').open('wb'),
+                               start_new_session=True)
+    try:
+        deadline = time.monotonic() + boot['seconds']
+        while time.monotonic() < deadline and process.poll() is None:
+            if uart.exists() and boot['says'] in uart.read_text(errors='replace'):
+                break
+            time.sleep(0.1)
+    finally:
+        stop(process)
+    said = uart.read_text(errors='replace') if uart.exists() else ''
+    lines = [line.strip() for line in said.splitlines()]
+    loaded = [line for line in lines if line.startswith(('load:', 'entry '))]
+    require(loaded == wanted, '%s: the ROM logged %r, and OUT.bin holds %r'
+            % (device, loaded, wanted))
+    require(boot['says'] in lines[lines.index(wanted[-1]) + 1:],
+            '%s: the program did not say %r after the ROM entered it' % (device, boot['says']))
+
+
 def select_rv32(run, refine, device):
     """D662, D680-D686: an RV32 device linked by its own toolchain, its
     entry word, table, slots, block and image held to its record."""
@@ -307,8 +369,15 @@ def select_rv32(run, refine, device):
         require(words == [0xffffded3, 0x11010142, 0x000001ff, 0, 0xab123579],
                 '%s: the image block is %s, not RISC-V\'s IMAGE_DEF (D682)'
                 % (device, [hex(w) for w in words]))
+    for name, address, size in image.executable:
+        require(any(r['origin'] <= address and address + size <= r['origin'] + r['length']
+                    and 'x' in r['access'] for r in want['regions']),
+                '%s: %s at %#x, which holds code, lies in no region code runs in'
+                ' (D688)' % (device, name, address))
     if want['boot'] == 'esp-app-image':
         esp_image(run, image, report, want, device)
+        if 'rom_boot' in want:
+            rom_boot(run, want, device)
     else:
         require(not (run.out / 'core.elf.bin').exists(), device + ' wrote an ESP image')
     return image

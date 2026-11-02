@@ -1,0 +1,9 @@
+--  D688: reset copies RAM code into the data region, and this one's is
+--  "rw", which no code runs in.
+import board
+
+link(section: ".ramtext.fast") fast: () -> none = end fast
+
+start: () -> none =
+    fast()
+end start

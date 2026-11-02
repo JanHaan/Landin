@@ -1,0 +1,15 @@
+--  D688: the ESP32-C3's data region is its SRAM's data-bus alias, which
+--  the core cannot fetch from, and its text region is the same SRAM's
+--  instruction-bus side, which the ROM loads; RAM code is placed there,
+--  with the text, and nothing is copied.
+import devices/descriptions/esp32c3
+
+mut count: u32 = 0
+
+link(section: ".ramtext.handle") handle: () -> none =
+    count = count + 1
+end handle
+
+start: () -> none =
+    handle()
+end start

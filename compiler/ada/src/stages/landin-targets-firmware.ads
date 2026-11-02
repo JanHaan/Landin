@@ -393,6 +393,20 @@ package Landin.Targets.Firmware is
    function Vector_Address (Of_Profile : Profile) return Byte_Count
      with Pre => Of_Profile.Placed (Vectors) /= 0;
 
+   --  D688: the region RAM code, `.ramtext`, runs in, or 0 when the
+   --  profile has none.  An `esp-app-image`'s text region is RAM the ROM
+   --  loads, so its RAM code is placed with its text and nothing is
+   --  copied; otherwise the data region, when code may run there, which
+   --  reset copies it into; otherwise none.
+   function RAM_Code_Region (Of_Profile : Profile) return Region_Count
+     is (if Takes_ESP_Image (Of_Profile.Boot)
+         then Of_Profile.Placed (Text)
+         elsif Of_Profile.Placed (Data) /= 0
+           and then Executable
+             (Of_Profile.Regions (Of_Profile.Placed (Data)).Mode)
+         then Of_Profile.Placed (Data)
+         else 0);
+
    --  The flash an image may use and the RAM static data may use: the
    --  text region's length, and the data region's less the stack when the
    --  stack shares it.

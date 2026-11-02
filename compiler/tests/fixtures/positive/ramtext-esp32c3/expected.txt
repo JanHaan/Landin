@@ -1,0 +1,1 @@
+refine: checked ../tests/fixtures/positive/ramtext-esp32c3 and wrote nothing; run it with `refine run ../tests/fixtures/positive/ramtext-esp32c3`, or build it with `refine compile ../tests/fixtures/positive/ramtext-esp32c3 -o ramtext-esp32c3`

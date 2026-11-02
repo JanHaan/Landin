@@ -2137,3 +2137,14 @@ executable; the message names the first that is not. A segment outside the
 description's regions comes from a developer's linker script or an object
 of a developer's own; the read-back is a defect of refine or of the host's
 filesystem, so report it with the message.
+
+### L0578
+
+A routine placed in RAM, `link(section: ".ramtext.NAME")`, has nowhere to
+run (D688). Reset copies RAM code into the description's data region, so
+that region must be one code runs in, `"rwx"`; an `esp-app-image` places
+its RAM code with its text instead, which the ROM already loaded into RAM.
+A data region that is `"rw"`, as the ESP32-C3's data-bus alias of its
+SRAM is, would hold bytes the core cannot fetch, and the first call would
+fault. Place the routine in `.text`, or in an executable region of the
+description with `link(region: "NAME")`.

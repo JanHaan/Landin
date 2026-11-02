@@ -1,0 +1,9 @@
+class: positive
+summary: D688 a .ramtext routine on the ESP32-C3, whose data region code does not run in, is placed with its text in IRAM
+program: main.ldn
+root: ../../../../..
+args: --target=rv32
+expect: expected.txt
+status: 0
+constructs: 1640, 1990
+targets: rv32

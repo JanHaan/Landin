@@ -1,0 +1,10 @@
+class: negative
+summary: D688 a .ramtext routine is refused where the description's data region is not one code runs in
+program: main.ldn
+root: .
+args: --target=rv32 --level=rv32imac
+expect: expected.txt
+status: 1
+codes: L0578
+constructs: 1640, 1990
+targets: rv32

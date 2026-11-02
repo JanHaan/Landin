@@ -686,7 +686,9 @@ package body Landin.Backend.Firmware is
       end loop;
       if Profile.Placed (Profiles.Data) = Stack_At then
          In_Stack_Region := US.To_Unbounded_String
-           ("_landin_firmware_ramtext_end");
+           (if Profiles.Takes_ESP_Image (Profile.Boot)
+            then "_landin_firmware_data_end"
+            else "_landin_firmware_ramtext_end");
       end if;
       if Profile.Placed (Profiles.BSS) = Stack_At then
          In_Stack_Region := US.To_Unbounded_String
@@ -801,7 +803,11 @@ package body Landin.Backend.Firmware is
         & "    _landin_firmware_ramtext_start = .;" & LF
         & "    *(.ramtext.*)" & LF
         & "    _landin_firmware_ramtext_end = .;" & LF
-        & "  } > " & Data & " AT> " & Flash & LF
+        --  D688: an ESP image's RAM code runs where the ROM loads it, with
+        --  its text, so reset's copy is of itself.
+        & (if Profiles.Takes_ESP_Image (Profile.Boot)
+           then "  } > " & Flash & LF
+           else "  } > " & Data & " AT> " & Flash & LF)
         & "  _landin_firmware_ramtext_load = LOADADDR(.ramtext);" & LF
         & "  .bss (NOLOAD) : AT(ADDR(.bss)) ALIGN(8) {" & LF
         & "    _landin_firmware_bss_start = .;" & LF
