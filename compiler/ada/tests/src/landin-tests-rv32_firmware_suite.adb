@@ -39,7 +39,7 @@ package body Landin.Tests.RV32_Firmware_Suite is
    --  description's text, or none when it is "": the derived script, the
    --  build report, and the diagnostics.
    type Written is record
-      Status : Landin.Driver.Exit_Status;
+      Status : Natural;
       Script, Report, Said : U.Unbounded_String;
    end record;
 
@@ -114,8 +114,6 @@ package body Landin.Tests.RV32_Firmware_Suite is
    --  description of the wrong kind is refused for.
    procedure Profiles_Are_Derived (Item : in out Landin.Testing.Context);
    procedure Profiles_Are_Derived (Item : in out Landin.Testing.Context) is
-      use type Landin.Driver.Exit_Status;
-
       procedure Holds (Name : String; Got : Written; Parts : String);
       --  Each LF-separated line of PARTS is in Got's script or report.
       procedure Holds (Name : String; Got : Written; Parts : String) is
@@ -303,6 +301,10 @@ package body Landin.Tests.RV32_Firmware_Suite is
       function Executable
         (Entry_At : Long_Long_Integer := Origin;
          Symbol_At : Long_Long_Integer := Origin;
+         Second : Long_Long_Integer := Origin + 16#100#) return String;
+      function Executable
+        (Entry_At : Long_Long_Integer := Origin;
+         Symbol_At : Long_Long_Integer := Origin;
          Second : Long_Long_Integer := Origin + 16#100#) return String
       is
          Strings : constant String := NUL & "_landin_firmware_entry" & NUL;
@@ -356,7 +358,8 @@ package body Landin.Tests.RV32_Firmware_Suite is
       Profile.Count := 1;
       Profile.Regions (1) :=
         (Name => Firmware.To_Name ("SRAM"), Origin => Origin,
-         Length => 64 * 1024, Mode => Firmware.Read_Write_Execute);
+         Length => Landin.Targets.Byte_Count (64 * 1024),
+         Mode => Firmware.Read_Write_Execute);
       Profile.ESP_Chip := 5;
       Profile.ESP_Minimum := 3;
       Profile.ESP_Maximum := 199;
@@ -378,8 +381,9 @@ package body Landin.Tests.RV32_Firmware_Suite is
            & Character'Val (1);
          Sum : Natural := 16#EF#;
          Checked : U.Unbounded_String;
+         Payload : constant String := First_Bytes & Second_Bytes;
       begin
-         for C of First_Bytes & Second_Bytes loop
+         for C of Payload loop
             declare
                A : Natural := Sum;
                B : Natural := Character'Pos (C);

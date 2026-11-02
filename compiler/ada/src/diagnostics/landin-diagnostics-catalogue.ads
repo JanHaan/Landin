@@ -1115,14 +1115,14 @@ package Landin.Diagnostics.Catalogue is
       Boot_Kind_Family =>
         (Code => "L0576", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 0, Most => 1, Notes => 1,
+         Least => 0, Most => 0, Notes => 1,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("D681: a boot image kind another family's boot ROM"
                    & " reads")),
       ESP_Image_Facts =>
         (Code => "L0575", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 0, Most => 1, Notes => 1,
+         Least => 0, Most => 0, Notes => 1,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("D683: an esp-app-image description without"
                    & " compiler.esp_image, or compiler.esp_image without an"

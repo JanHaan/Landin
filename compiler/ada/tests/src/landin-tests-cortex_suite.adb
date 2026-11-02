@@ -3107,13 +3107,15 @@ package body Landin.Tests.Cortex_Suite is
       Expect ("a description on a hosted target is L0515", "",
         Plain_Interrupts, Plain_Memory, "L0515", Extra => "",
         Target => "--target=linux-x86-64");
-      Expect ("a reserved boot kind is L0516", "", Plain_Interrupts,
+      Expect ("an ESP32's image kind on an Arm core is L0576", "",
+        Plain_Interrupts,
         "compiler.boot(""esp-app-image"")" & LF
+        & "compiler.esp_image(5, 3, 199, 0x0)" & LF
         & Plain_Memory (Ada.Strings.Fixed.Index
           (Plain_Memory, "linker.place(""vectors""") .. Plain_Memory'Last)
         & "linker.region(""FLASH"", 0x0800_0000, 64 * 1024, ""rx"")" & LF
         & "linker.region(""RAM"", 0x2000_0000, 8 * 1024, ""rw"")" & LF,
-        "L0516");
+        "L0576");
       Expect ("an unknown region placement is L0517",
         "link(region: ""NOWHERE"") x: u32 = 1", Plain_Interrupts,
         Plain_Memory, "L0517");
