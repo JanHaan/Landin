@@ -27,6 +27,7 @@ package body Landin.Tests.Devices_Suite is
    package Dev renames Landin.Devices;
 
    use type Dev.Fault_Kind;
+   use type Dev.Input;
 
    LF : constant Character := ASCII.LF;
 
@@ -338,6 +339,58 @@ package body Landin.Tests.Devices_Suite is
               Dev.Unsupported_Form, "itself derived");
       Expect (Replaced (Svd, "<name>CM7</name>", "<name>CA53</name>"),
               Dev.Unsupported_Form, "none of CM0");
+      --  D700: a RISC-V SVD's cpu says nothing of its interrupts.
+      Expect (Replaced (Svd, "<name>CM7</name>", "<name>RV32IMC</name>"),
+              Dev.Unsupported_Form, "a RISC-V device's policy names its"
+              & " core");
+      Expect (Svd, Dev.Invalid_Policy, "not hazard3, esp-rv32imc or",
+              Policy => Policy_For (Svd, ", ""core"": ""sifive-e31"""));
+      Expect (Svd, Dev.Invalid_Policy, "which D542 does not admit",
+              Policy => Policy_For (Svd, ", ""identity"": ""Toy_1"""));
+      Expect (Replaced (Svd, "<name>TOY1</name>", "<name>TOY 1</name>"),
+              Dev.Invalid_Policy, "not a vendor name",
+              Policy => Replaced (Policy_For (Svd), """device"": ""TOY1""",
+                                  """device"": ""TOY 1"""));
+      --  D704: an offset correction says another offset, aligned, with
+      --  its source.
+      Expect (Svd, Dev.Invalid_Policy, "the offset the SVD already gives",
+              Policy => Policy_For
+                (Svd, ", ""register_corrections"": {""UARTB.CR"":"
+                 & " {""offset"": ""0x00000004"", ""source"": ""p. 1""}}"));
+      Expect (Svd, Dev.Invalid_Policy, "not a multiple of four",
+              Policy => Policy_For
+                (Svd, ", ""register_corrections"": {""UARTB.CR"":"
+                 & " {""offset"": ""0x00000006"", ""source"": ""p. 1""}}"));
+      Expect (Svd, Dev.Invalid_Policy, "names no selected register",
+              Policy => Policy_For
+                (Svd, ", ""register_corrections"": {""UARTB.CR_IN"":"
+                 & " {""offset"": ""0x00000008"", ""source"": ""p. 1""}}"));
+      --  D705: an addition is of what the SVD lacks, in its own words.
+      Expect (Svd, Dev.Invalid_Policy, "adds a peripheral the SVD gives",
+              Policy => Policy_For
+                (Svd, ", ""peripheral_additions"": {""UARTA"": {""base"":"
+                 & " ""0x40001000"", ""source"": ""p. 1"", ""registers"":"
+                 & " {""X"": {""offset"": ""0x0"", ""access"":"
+                 & " ""read-write"", ""reset"": ""0x0"", ""fields"":"
+                 & " {""A"": {""bits"": ""[0:0]""}}}}}}"));
+      Expect (Svd, Dev.Invalid_Policy, "an array exactly when its name",
+              Policy => Policy_For
+                (Svd, ", ""peripheral_additions"": {""NEW"": {""base"":"
+                 & " ""0x50000000"", ""source"": ""p. 1"", ""registers"":"
+                 & " {""X%s"": {""offset"": ""0x0"", ""access"":"
+                 & " ""read-write"", ""reset"": ""0x0"", ""fields"":"
+                 & " {""A"": {""bits"": ""[0:0]""}}}}}}"));
+      Expect (Svd, Dev.Invalid_Policy, "not [HIGH:LOW] in decimal",
+              Policy => Policy_For
+                (Svd, ", ""peripheral_additions"": {""NEW"": {""base"":"
+                 & " ""0x50000000"", ""source"": ""p. 1"", ""registers"":"
+                 & " {""X"": {""offset"": ""0x0"", ""access"":"
+                 & " ""read-write"", ""reset"": ""0x0"", ""fields"":"
+                 & " {""A"": {""bits"": ""[0x1:0]""}}}}}}"));
+      Expect (Svd, Dev.Invalid_Policy, "where its reviewer read it",
+              Policy => Policy_For
+                (Svd, ", ""peripheral_additions"": {""NEW"": {""base"":"
+                 & " ""0x50000000"", ""source"": """", ""registers"": {}}}"));
       Expect (Replaced (Svd, "<bitRange>[0:0]</bitRange>",
                         "<bitRange>[1:0]</bitRange>"),
               Dev.Inconsistent_Device, "overlaps", 29);
@@ -525,6 +578,274 @@ package body Landin.Tests.Devices_Suite is
                             """source"": ""the manual, p. 6"""),
          "and recorded as added, with its source");
    end A_Correction_Is_Recorded;
+
+   procedure A_Policy_Names_The_Core (Item : in out Landin.Testing.Context);
+
+   --  D700, D701: a RISC-V device's core is its policy's, and on a core
+   --  whose SVD interrupts are an interrupt matrix's sources they are a
+   --  module of their own rather than slots.
+   procedure A_Policy_Names_The_Core (Item : in out Landin.Testing.Context)
+   is
+      Made : Dev.Projection.Result;
+      Problem : Dev.Fault;
+      Riscv : constant String :=
+        Replaced (Replaced (Svd, "<name>TOY1</name>", "<name>TOY-1</name>"),
+                  "<name>CM7</name>", "<name>RV32IMC</name>");
+
+      function Riscv_Policy (Rest : String) return String is
+        (Replaced (Policy_For (Riscv, ", ""prefix"": ""toy1"","
+                   & " ""description"": ""descriptions/toy1""" & Rest),
+                   """device"": ""TOY1""", """device"": ""TOY-1"""));
+   begin
+      Dev.Projection.Project
+        (Riscv, Riscv_Policy
+           (", ""core"": ""esp-rv32imc"", ""interrupt_corrections"":"
+            & " {""EXTRA_IRQ"": {""value"": 9, ""source"": ""the manual,"
+            & " p. 3""}}"), Made, Problem);
+      Landin.Testing.Check
+        (Item, Problem.Kind = Dev.No_Fault, US.To_String (Problem.Message));
+      if Problem.Kind /= Dev.No_Fault then
+         return;
+      end if;
+      Landin.Testing.Check_Equal
+        (Item, Output_Of (Made, "descriptions/toy1/interrupts.ldn"),
+         "-- Interrupts of the TOY-1, from its SVD: vendor Example, version"
+         & " 1.0." & LF
+         & "-- SVD SHA-256 " & GNAT.SHA256.Digest (Riscv) & "." & LF
+         & "-- Copyright the vendor." & LF
+         & "-- SPDX-License-Identifier: Apache-2.0" & LF
+         & "-- Generated from the SVD; memory.ldn beside it is written by"
+         & " hand." & LF
+         & "-- The policy adds EXTRA_IRQ at 9: the manual, p. 3." & LF
+         & "-- Its interrupts are interrupt-matrix sources, not slots:"
+         & " toy1/sources." & LF & LF
+         & "compiler.device(""toy-1"")" & LF
+         & "compiler.core(""esp-rv32imc"")" & LF
+         & "compiler.vectors(32)" & LF,
+         "a vectored core's description: its 32 slots and no interrupt");
+      Landin.Testing.Check_Equal
+        (Item, Output_Of (Made, "toy1/sources/device.ldn"),
+         "-- Toy notice." & LF
+         & "-- The TOY-1's interrupt-matrix sources: each is the number of"
+         & " its map" & LF
+         & "-- register, which routes it to a CPU interrupt line; none is a"
+         & " vector slot." & LF
+         & "-- The policy adds EXTRA_IRQ at 9: the manual, p. 3." & LF
+         & "public uarta_irq: u32 = 2" & LF
+         & "public uartb_irq: u32 = 3" & LF
+         & "public extra_irq: u32 = 9" & LF,
+         "the sources, each by its lowercased name, corrections included");
+      Landin.Testing.Check
+        (Item, Contains (Output_Of (Made, "toy1/outputs.json"),
+                         """toy1/sources/device.ldn"": """
+                         & GNAT.SHA256.Digest
+                           (Output_Of (Made, "toy1/sources/device.ldn"))),
+         "and the manifest owns the sources module");
+      Dev.Projection.Project
+        (Riscv, Riscv_Policy (", ""core"": ""esp-rv32imac-clic"""),
+         Made, Problem);
+      Landin.Testing.Check
+        (Item, Problem.Kind = Dev.No_Fault
+         and then Contains
+           (Output_Of (Made, "descriptions/toy1/interrupts.ldn"),
+            "compiler.core(""esp-rv32imac-clic"")" & LF
+            & "compiler.vectors(48)" & LF),
+         "a CLIC core's 48 slots: " & US.To_String (Problem.Message));
+      Dev.Projection.Project
+        (Svd, Policy_For (Svd, ", ""core"": ""hazard3"", ""identity"":"
+                          & " ""toy1-hazard3"""), Made, Problem);
+      Landin.Testing.Check
+        (Item, Problem.Kind = Dev.No_Fault
+         and then Contains
+           (Output_Of (Made, "descriptions/toy1/interrupts.ldn"),
+            LF & "compiler.device(""toy1-hazard3"")" & LF
+            & "compiler.core(""hazard3"")" & LF
+            & "compiler.vectors(20)" & LF
+            & "compiler.interrupt(""UARTA_IRQ"", 2)" & LF)
+         and then Output_Of (Made, "toy1/sources/device.ldn")
+           = "absent: toy1/sources/device.ldn",
+         "Hazard3 takes interrupt n at 16 + n, whatever the cpu says: "
+         & US.To_String (Problem.Message));
+   end A_Policy_Names_The_Core;
+
+   procedure An_Array_Element_Is_A_Register
+     (Item : in out Landin.Testing.Context);
+
+   --  D703: an element of a register array is selected by its name, and
+   --  generated at its array's offset and increment.
+   procedure An_Array_Element_Is_A_Register
+     (Item : in out Landin.Testing.Context)
+   is
+      Made : Dev.Projection.Result;
+      Problem : Dev.Fault;
+      Arrayed : constant String :=
+        Replaced (Svd, "      </registers>" & LF & "    </peripheral>" & LF
+                  & "    <peripheral derivedFrom",
+                  "        <register><name>PIN%s</name><dim>3</dim>"
+                  & "<dimIncrement>0x4</dimIncrement><dimIndex>4-6"
+                  & "</dimIndex><addressOffset>0x10</addressOffset>"
+                  & "<fields><field><name>LVL</name><bitRange>[0:0]"
+                  & "</bitRange><access>read-write</access></field></fields>"
+                  & "</register>" & LF
+                  & "      </registers>" & LF & "    </peripheral>" & LF
+                  & "    <peripheral derivedFrom");
+
+      function Selecting (Text, Name : String) return String is
+        (Replaced
+           (Replaced (Policy_For (Text), """UARTA"": [""CR"", ""CR_IN""]",
+                      """UARTA"": [""CR"", ""CR_IN"", """ & Name & """]"),
+            """UARTB.CR"":", """UARTA." & Name & """: {""read"":"
+            & " ""normal"", ""write"": ""normal"", ""reserved"": ""zero""},"
+            & " ""UARTB.CR"":"));
+   begin
+      Dev.Projection.Project (Arrayed, Selecting (Arrayed, "PIN5"),
+                              Made, Problem);
+      Landin.Testing.Check
+        (Item, Problem.Kind = Dev.No_Fault, US.To_String (Problem.Message));
+      if Problem.Kind /= Dev.No_Fault then
+         return;
+      end if;
+      Landin.Testing.Check
+        (Item, Contains (Output_Of (Made, "toy1/uarta/device.ldn"),
+                         "public pin5_offset: usize = 0x14" & LF
+                         & "public pin5_address: usize = 0x40001014" & LF),
+         "PIN5 is the second of 4-6, at 0x10 + 4");
+      Landin.Testing.Check
+        (Item, Contains (Output_Of (Made, "toy1/correspondence.json"),
+                         """dim_element"": {" & LF
+                         & "      ""array"": ""PIN%s""," & LF
+                         & "      ""index"": ""5""" & LF & "    },"),
+         "and its correspondence names the array and the index");
+      Landin.Testing.Check
+        (Item, not Contains (Output_Of (Made, "toy1/uartb/device.ldn"),
+                             "pin"),
+         "an element is generated only where it is selected");
+      Dev.Projection.Project (Arrayed, Selecting (Arrayed, "PIN7"),
+                              Made, Problem);
+      Landin.Testing.Check
+        (Item, Problem.Kind = Dev.Not_In_Svd
+         and then Contains (US.To_String (Problem.Message),
+                            "an index its dimIndex gives"),
+         "an index the array lacks: " & US.To_String (Problem.Message));
+      declare
+         Short : constant String :=
+           Replaced (Arrayed, "<dimIndex>4-6</dimIndex>",
+                     "<dimIndex>4,5</dimIndex>");
+      begin
+         Dev.Projection.Project (Short, Selecting (Short, "PIN5"),
+                                 Made, Problem);
+         Landin.Testing.Check
+           (Item, Problem.Kind = Dev.Inconsistent_Device
+            and then Contains (US.To_String (Problem.Message),
+                               "gives 2 indices for its dim 3"),
+            "a dimIndex of another count: " & US.To_String (Problem.Message));
+      end;
+      declare
+         Plain : constant String :=
+           Replaced (Arrayed, "<dimIndex>4-6</dimIndex>", "");
+      begin
+         Dev.Projection.Project (Plain, Selecting (Plain, "PIN2"),
+                                 Made, Problem);
+         Landin.Testing.Check
+           (Item, Problem.Kind = Dev.No_Fault
+            and then Contains (Output_Of (Made, "toy1/uarta/device.ldn"),
+                               "public pin2_offset: usize = 0x18" & LF),
+            "without a dimIndex the indices are 0 to dim - 1: "
+            & US.To_String (Problem.Message));
+      end;
+   end An_Array_Element_Is_A_Register;
+
+   procedure A_Policy_Corrects_And_Adds_Registers
+     (Item : in out Landin.Testing.Context);
+
+   --  D704, D705: a reviewed offset in place of the SVD's, and a
+   --  peripheral the SVD lacks, each with its source.
+   procedure A_Policy_Corrects_And_Adds_Registers
+     (Item : in out Landin.Testing.Context)
+   is
+      Made : Dev.Projection.Result;
+      Problem : Dev.Fault;
+      Addition : constant String :=
+        ", ""peripheral_additions"": {""EXTRA"": {""base"": ""0x50000000"","
+        & " ""source"": ""the manual, p. 7"", ""registers"": {""CTRL%s"":"
+        & " {""offset"": ""0x100"", ""dim"": 4, ""increment"": ""0x8"","
+        & " ""access"": ""read-write"", ""reset"": ""0x00000002"","
+        & " ""fields"": {""GO"": {""bits"": ""[0:0]""}, ""BUSY"": {""bits"":"
+        & " ""[1:1]"", ""access"": ""read-only""}}}}}}";
+
+      function Adding (Rest : String) return String is
+        (Replaced
+           (Replaced (Policy_For (Svd, Rest), """UARTB"": [""CR""]",
+                      """UARTB"": [""CR""], ""EXTRA"": [""CTRL2""]"),
+            """UARTB.CR"":", """EXTRA.CTRL2"": {""read"": ""normal"","
+            & " ""write"": ""normal"", ""reserved"": ""zero""},"
+            & " ""UARTB.CR"":"));
+   begin
+      Dev.Projection.Project
+        (Svd, Policy_For
+           (Svd, ", ""register_corrections"": {""UARTB.CR"": {""offset"":"
+            & " ""0x00000008"", ""source"": ""the manual, p. 2""}}"),
+         Made, Problem);
+      Landin.Testing.Check
+        (Item, Problem.Kind = Dev.No_Fault
+         and then Contains (Output_Of (Made, "toy1/uartb/device.ldn"),
+                            "public cr_offset: usize = 0x8" & LF
+                            & "public cr_address: usize = 0x40002008" & LF)
+         and then Contains (Output_Of (Made, "toy1/uarta/device.ldn"),
+                            "public cr_offset: usize = 0x4" & LF)
+         and then Contains (Output_Of (Made, "toy1/correspondence.json"),
+                            """offset_correction"": {" & LF
+                            & "      ""source"": ""the manual, p. 2""," & LF
+                            & "      ""svd_offset"": 4" & LF & "    },"),
+         "a corrected offset is generated and recorded beside the SVD's: "
+         & US.To_String (Problem.Message));
+      Dev.Projection.Project (Svd, Adding (Addition), Made, Problem);
+      Landin.Testing.Check
+        (Item, Problem.Kind = Dev.No_Fault, US.To_String (Problem.Message));
+      if Problem.Kind /= Dev.No_Fault then
+         return;
+      end if;
+      for Expected of Landin.Platform.Path_List'
+        ["public base: usize = 0x50000000" & LF,
+         "public ctrl2_offset: usize = 0x110" & LF
+         & "public ctrl2_address: usize = 0x50000110" & LF
+         & "public ctrl2_named_mask: u32 = 0x00000003" & LF
+         & "public ctrl2_reset_mask: u32 = 0x00000003" & LF
+         & "public ctrl2_reset_value: u32 = 0x00000002" & LF,
+         "    f_go: u1 at 0..0" & LF & "    f_busy: u1 at 1..1" & LF]
+      loop
+         Landin.Testing.Check
+           (Item, Contains (Output_Of (Made, "toy1/extra/device.ldn"),
+                            Expected),
+            "the added peripheral has: " & Expected);
+      end loop;
+      Landin.Testing.Check
+        (Item, Contains (Output_Of (Made, "toy1/correspondence.json"),
+                         "  {" & LF & "    ""addition"": {" & LF
+                         & "      ""source"": ""the manual, p. 7""" & LF
+                         & "    }," & LF & "    ""address"": 1342177552,"),
+         "and its register is recorded as added, with its source");
+      Landin.Testing.Check
+        (Item, Contains (Output_Of (Made, "descriptions/toy1/"
+                                    & "interrupts.ldn"),
+                         "compiler.vectors(20)"),
+         "an addition has no interrupts of its own");
+      declare
+         Overlapping : constant String :=
+           Replaced (Addition, """[1:1]""", """[1:0]""");
+      begin
+         Dev.Projection.Project (Svd, Adding (Overlapping), Made, Problem);
+         Landin.Testing.Check
+           (Item, Problem.Kind = Dev.Inconsistent_Device
+            and then Problem.Within = Dev.Policy_Input
+            and then not Problem.Has_Offset
+            and then Contains (US.To_String (Problem.Message),
+                               "in the policy's peripheral_additions,"
+                               & " EXTRA.CTRL2.BUSY overlaps"),
+            "a fault in what the policy adds is the policy's: "
+            & US.To_String (Problem.Message));
+      end;
+   end A_Policy_Corrects_And_Adds_Registers;
 
    function Content_Of
      (Host : Landin.Testing.Fakes.Fake_Filesystem; Path : String)
@@ -777,6 +1098,15 @@ package body Landin.Tests.Devices_Suite is
       Landin.Testing.Register
         (Into, "devices", "a correction is recorded",
          A_Correction_Is_Recorded'Access);
+      Landin.Testing.Register
+        (Into, "devices", "a policy names the core",
+         A_Policy_Names_The_Core'Access);
+      Landin.Testing.Register
+        (Into, "devices", "an array element is a register",
+         An_Array_Element_Is_A_Register'Access);
+      Landin.Testing.Register
+        (Into, "devices", "a policy corrects and adds registers",
+         A_Policy_Corrects_And_Adds_Registers'Access);
       Landin.Testing.Register
         (Into, "devices", "outputs are replaced whole",
          Outputs_Are_Replaced_Whole'Access);
