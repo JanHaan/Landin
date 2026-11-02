@@ -39,6 +39,7 @@ with Landin.Tokens.Spacing;
 with Landin.Tokens.Text;
 with Landin.Targets;
 with Landin.Targets.Capabilities;
+with Landin.Targets.Levels;
 with Landin.Hosted;
 with Landin.Types;
 
@@ -20852,9 +20853,19 @@ package body Landin.Stages.Checking is
                   Width : constant Landin.Targets.Scalar_Size :=
                     Ty.Storage_Size (Actual.Kind, Facts);
                   Target : constant String := Landin.Targets.Name (Facts);
+                  Assumed : constant Landin.Targets.Levels.Feature_Level :=
+                    Level (Context);
+                  --  D690: what the program can use instead is the
+                  --  target's own critical section, and a level that
+                  --  admits the access when the target has one.
+                  Critical : constant String :=
+                    Landin.Targets.Capabilities.Critical_Section (Facts);
+                  Admitting : constant String :=
+                    Landin.Targets.Capabilities.Levels_Admitting
+                      (Facts, Atomic_Exchange, Width);
                begin
                   if not Landin.Targets.Capabilities.Memory_Access
-                    (Facts, Atomic_Load, Width)
+                    (Facts, Assumed, Atomic_Load, Width)
                   then
                      Bad.Report
                        (Item    => Bad.Memory_Contract,
@@ -20865,32 +20876,33 @@ package body Landin.Stages.Checking is
                         Note    => "D500: keep the value in a cell of four"
                                    & " bytes or fewer, or keep it in plain"
                                    & " storage that every writer and reader"
-                                   & " reaches inside platform/cortex_m's"
-                                   & " critical section,"
-                                   & " disable_interrupts to"
-                                   & " restore_interrupts",
+                                   & " reaches inside " & Critical,
                         Related => Atomic_Required,
                         Because => "the cell's constraint",
                         Into    => Found);
                      return False;
                   elsif not Landin.Targets.Capabilities.Memory_Access
-                    (Facts, Atomic_Exchange, Width)
+                    (Facts, Assumed, Atomic_Exchange, Width)
                   then
                      Bad.Report
                        (Item    => Bad.Memory_Contract,
                         Source  => Application.Source,
                         Where   => Application.Where,
-                        Message => Target & " has no atomic read-modify-"
-                                   & "write, so a cell has no exchange, add"
-                                   & " or compare_exchange there",
+                        Message =>
+                          (if Admitting = "" then Target
+                           else Target & " at "
+                                & Landin.Targets.Levels.Name (Assumed))
+                          & " has no atomic read-modify-write, so a cell"
+                          & " has no exchange, add or compare_exchange"
+                          & " there",
                         Note    => "D500: while one context alone writes"
                                    & " the cell, atomic.sole_add is a"
                                    & " relaxed load and a release store;"
                                    & " where several write it, update"
-                                   & " plain storage inside platform/"
-                                   & "cortex_m's critical section,"
-                                   & " disable_interrupts to"
-                                   & " restore_interrupts",
+                                   & " plain storage inside " & Critical
+                                   & (if Admitting = "" then ""
+                                      else "; D690: a build at "
+                                           & Admitting & " has them"),
                         Related => Atomic_Required,
                         Because => "the cell's constraint",
                         Into    => Found);
@@ -25084,10 +25096,27 @@ package body Landin.Stages.Checking is
                      --  program reaches this call; the rest of the
                      --  contract is still checked here.
                      if not Landin.Targets.Capabilities.Memory_Access
-                       (Facts, Op, Ty.Storage_Size (Scalar, Facts))
+                       (Facts, Level (Context), Op,
+                        Ty.Storage_Size (Scalar, Facts))
                      then
-                        Hold
-                          ("memory operation or width unavailable on target");
+                        declare
+                           Admitting : constant String :=
+                             Landin.Targets.Capabilities.Levels_Admitting
+                               (Facts, Op, Ty.Storage_Size (Scalar, Facts));
+                        begin
+                           --  D690: a level decides only the
+                           --  read-modify-writes, and says which admits one.
+                           if Admitting = "" then
+                              Hold ("memory operation or width unavailable"
+                                    & " on target");
+                           else
+                              Hold ("memory operation unavailable at "
+                                    & Landin.Targets.Levels.Name
+                                        (Level (Context))
+                                    & "; a build at " & Admitting
+                                    & " admits it");
+                           end if;
+                        end;
                      end if;
                      if Register_Read or else Register_Write then
                         declare

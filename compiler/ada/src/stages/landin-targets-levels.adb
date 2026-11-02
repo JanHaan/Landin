@@ -130,6 +130,19 @@ package body Landin.Targets.Levels is
       return Ada.Strings.Unbounded.To_String (Result);
    end Levels_Of;
 
+   function Family_Levels (Facts : Target_Facts) return Level_List is
+      Result : Level_List (1 .. Level_Id'Pos (Level_Id'Last) + 1);
+      Count  : Natural := 0;
+   begin
+      for Id in Level_Id loop
+         if In_Family (Id, Facts) then
+            Count := Count + 1;
+            Result (Count) := (Id => Id);
+         end if;
+      end loop;
+      return Result (1 .. Count);
+   end Family_Levels;
+
    function Name (Level : Feature_Level) return String
      is (Spelled (Level.Id));
 

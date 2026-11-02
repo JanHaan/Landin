@@ -239,19 +239,57 @@ package body Landin.Tests.Targets_Suite is
            and then Capabilities.Emits (Cortex_M)
            and then Capabilities.Image_Reach (RV32) = 2 ** 32 - 1,
          "RV32 is firmware on its own backend, not yet emitting");
-      Landin.Testing.Check
-        (Item,
-         (for all Width in Byte_1 .. Byte_4 =>
-            Capabilities.Memory_Access
-              (RV32, Landin.Memory.Atomic_Load, Width)
-            and then Capabilities.Memory_Access
-              (RV32, Landin.Memory.Atomic_Store, Width))
-         and then not Capabilities.Memory_Access
-           (RV32, Landin.Memory.Atomic_Load, Byte_8)
-         and then not Capabilities.Memory_Access
-           (RV32, Landin.Memory.Atomic_Add, Byte_4),
-         "RV32 admits aligned one- to four-byte atomics and no eight-byte"
-         & " one");
+      declare
+         use all type Landin.Memory.Operation;
+         IMC  : constant Landin.Targets.Levels.Feature_Level :=
+           Landin.Targets.Levels.Level_Named (RV32, "rv32imc");
+         IMAC : constant Landin.Targets.Levels.Feature_Level :=
+           Landin.Targets.Levels.Level_Named (RV32, "rv32imac");
+         subtype Read_Modify_Write is Landin.Memory.Operation
+           with Static_Predicate => Read_Modify_Write in Atomic_Exchange
+             | Atomic_Add | Atomic_Compare_Exchange;
+      begin
+         Landin.Testing.Check
+           (Item,
+            (for all Level of Landin.Targets.Levels.Family_Levels (RV32) =>
+               (for all Width in Byte_1 .. Byte_4 =>
+                  Capabilities.Memory_Access
+                    (RV32, Level, Atomic_Load, Width)
+                  and then Capabilities.Memory_Access
+                    (RV32, Level, Atomic_Store, Width))
+               and then
+                 (for all Op in Landin.Memory.Operation =>
+                    not Capabilities.Memory_Access
+                      (RV32, Level, Op, Byte_8)
+                    or else Op in Landin.Memory.Stack_Operation)),
+            "RV32 admits aligned one- to four-byte atomics and no"
+            & " eight-byte one at every level");
+         Landin.Testing.Check
+           (Item,
+            (for all Op in Read_Modify_Write =>
+               (for all Width in Byte_1 .. Byte_4 =>
+                  not Capabilities.Memory_Access (RV32, IMC, Op, Width)
+                  and then Capabilities.Memory_Access
+                    (RV32, IMAC, Op, Width)))
+            and then Capabilities.Levels_Admitting
+              (RV32, Atomic_Add, Byte_4) = "rv32imac"
+            and then Capabilities.Memory_Access_At_Some_Level
+              (RV32, Atomic_Add, Byte_4)
+            and then not Capabilities.Memory_Access_At_Some_Level
+              (RV32, Atomic_Add, Byte_8),
+            "D690: RV32's read-modify-writes are its level's `a`, the one"
+            & " checking rule a level decides");
+         Landin.Testing.Check
+           (Item,
+            (for all Level of Landin.Targets.Levels.Family_Levels
+               (Cortex_M) =>
+               (for all Op in Read_Modify_Write =>
+                  not Capabilities.Memory_Access (Cortex_M, Level, Op,
+                                                  Byte_4)))
+            and then Capabilities.Levels_Admitting
+              (Cortex_M, Atomic_Add, Byte_4) = "",
+            "D690: no Cortex-M level admits a read-modify-write yet");
+      end;
    end Backends_Are_Stated_Per_Target;
 
    --  The driver and the server select through one mapping, so each

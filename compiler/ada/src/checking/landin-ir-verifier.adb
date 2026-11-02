@@ -7803,9 +7803,10 @@ package body Landin.IR.Verifier is
                                      | Landin.Types.U64
                                    or else Is_Unchecked (Of_Unit, Id, V)
                                    or else (Check_Image and then not
-                                     Landin.Targets.Capabilities.Memory_Access
-                                       (Facts, M, Landin.Types.Storage_Size
-                                         (S, Facts)))
+                                     Landin.Targets.Capabilities
+                                       .Memory_Access_At_Some_Level
+                                         (Facts, M, Landin.Types.Storage_Size
+                                           (S, Facts)))
                                    or else Result_Of (Of_Unit, Id, V) /=
                                      (if Landin.Memory.Returns_Value (M)
                                       then S else Landin.Types.Not_Typed)

@@ -2709,6 +2709,11 @@ package body Landin.Diagnostics.Citations is
             when 510 =>
                "Cortex-M0's missing atomics are refused at the caller's "
                & "use",
+            when 690 =>
+               "RV32's read-modify-writes are its level's, the one check"
+               & "ing rule a level decides",
+            when 691 =>
+               "`core/atomic` on RV32 follows the target and the level",
             when 511 =>
                "The cell's operations, and the single writer's add",
             when 512 =>
@@ -3891,6 +3896,10 @@ package body Landin.Diagnostics.Citations is
             when 509 =>
                "Decisions: The core library and the derived programs",
             when 510 =>
+               "Decisions: The core library and the derived programs",
+            when 690 =>
+               "Decisions: The core library and the derived programs",
+            when 691 =>
                "Decisions: The core library and the derived programs",
             when 511 =>
                "Decisions: The core library and the derived programs",
@@ -5675,6 +5684,13 @@ package body Landin.Diagnostics.Citations is
             when 510 =>
                "https://www.701.dev/spec.html#d510-cortex-m0-s-missing-a"
                & "tomics-are-refused-at-the-caller-s-use",
+            when 690 =>
+               "https://www.701.dev/spec.html#d690-rv32-s-read-modify-wr"
+               & "ites-are-its-level-s-the-one-checking-rule-a-level-decid"
+               & "es",
+            when 691 =>
+               "https://www.701.dev/spec.html#d691-core-atomic-on-rv32-f"
+               & "ollows-the-target-and-the-level",
             when 511 =>
                "https://www.701.dev/spec.html#d511-the-cell-s-operations"
                & "-and-the-single-writer-s-add",

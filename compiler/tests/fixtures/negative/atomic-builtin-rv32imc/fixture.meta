@@ -1,0 +1,8 @@
+class: negative
+summary: D690 D227 RV32's read-modify-write builtins are its level's: at rv32imc compiler.atomic_add is refused saying which level admits it, while the four-byte load and store beside it are admitted
+program: program.ldn
+constructs: 0430, 0850, 1620
+targets: rv32
+codes: L0344
+args: --target=rv32 --level=rv32imc ../tests/fixtures/negative/atomic-builtin-rv32imc/program.ldn
+expect: expected.txt

@@ -1,0 +1,14 @@
+import core/atomic
+
+mut flags: atomic.cell(u8) = zeroed
+mut slots: atomic.cell(u16) = zeroed
+mut events: atomic.cell(u32) = zeroed
+mut word: u32 = 0
+
+public main: () -> (code: i32) =
+    _ = atomic.exchange(addr flags, 1)
+    _ = atomic.add(addr slots, 2)
+    _ = atomic.add_relaxed(addr events, 3)
+    _ = compiler.atomic_add(addr word, 4, compiler.seq_cst)
+    code = i32(atomic.compare_exchange(addr events, 7, 0))
+end main

@@ -6,8 +6,9 @@
 --  meaning "which backend, which ABI": every level of a family shares one
 --  layout, one calling convention and one C ABI, and code built at two
 --  levels of one family links together.  Layout and type checking do not
---  depend on a level; configuration, Cortex assembly text validation,
---  emission and the toolchain can use it.
+--  depend on a level, but for the admission of the atomic
+--  read-modify-writes (D690); configuration, Cortex assembly text
+--  validation, emission and the toolchain can use it.
 --
 --  A level's features are a set rather than a rank.  The x86-64 levels of
 --  the psABI happen to nest, but ARMv8-M's baseline lacks what ARMv7-M has,
@@ -61,6 +62,11 @@ package Landin.Targets.Levels is
 
    --  Every level FACTS can select, in declaration order, comma separated.
    function Levels_Of (Facts : Target_Facts) return String;
+
+   type Level_List is array (Positive range <>) of Feature_Level;
+
+   --  The same levels as values, for a caller that asks something of each.
+   function Family_Levels (Facts : Target_Facts) return Level_List;
 
    function Name (Level : Feature_Level) return String;
 

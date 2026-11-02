@@ -1,4 +1,5 @@
 with Landin.Memory;
+with Landin.Targets.Levels;
 --  Target backend availability.
 --
 --  This is a separate authority from Target_Facts: machine width and
@@ -15,9 +16,33 @@ with Landin.Memory;
 package Landin.Targets.Capabilities is
 
    --  Admitted source contracts, independent of instruction selection.
+   --  The read-modify-writes, exchange, add and compare-exchange, are the
+   --  one checking rule a level decides (D255, D690): RV32 admits them at
+   --  a level with `a` and refuses them below it.  Every other operation
+   --  and width is the target's alone, the same at each of its levels.
    function Memory_Access
+     (Facts : Target_Facts; Level : Landin.Targets.Levels.Feature_Level;
+      Op : Landin.Memory.Operation; Width : Scalar_Size) return Boolean
+     with Pre => Landin.Targets.Levels.Belongs_To (Level, Facts);
+
+   --  Whether some level of the target admits the access: what the
+   --  target-neutral IR is held to, which no level reaches (D690), and
+   --  what a register's volatile access needs, which no level changes.
+   function Memory_Access_At_Some_Level
      (Facts : Target_Facts; Op : Landin.Memory.Operation;
       Width : Scalar_Size) return Boolean;
+
+   --  The levels of the target that admit the access, comma separated, or
+   --  "" when none does: what a refusal at another level offers instead.
+   function Levels_Admitting
+     (Facts : Target_Facts; Op : Landin.Memory.Operation;
+      Width : Scalar_Size) return String;
+
+   --  The critical section a program without an atomic access uses
+   --  instead, as a refusal names it (D500, D690): the firmware platform
+   --  module's, which masks the core's interrupts.  "" on a target with
+   --  every access, which needs none.
+   function Critical_Section (Facts : Target_Facts) return String;
 
    --  D450: whether the target's backend emits compiler.stack_prepare and
    --  compiler.stack_switch.  D450 admits both on every target with a

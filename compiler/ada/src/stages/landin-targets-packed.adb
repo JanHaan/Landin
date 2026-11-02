@@ -32,7 +32,7 @@ package body Landin.Targets.Packed is
       use type Landin.Packed.Access_Form;
    begin
       return Landin.Packed.Plan (Contract, Form).Allowed
-        and then Capabilities.Memory_Access
+        and then Capabilities.Memory_Access_At_Some_Level
           (Facts,
            (if Form = Landin.Packed.Read_Image then Landin.Memory.Volatile_Load
             else Landin.Memory.Volatile_Store), Carrier (Contract.Bits));

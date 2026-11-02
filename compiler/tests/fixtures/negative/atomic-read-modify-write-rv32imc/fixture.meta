@@ -1,0 +1,9 @@
+class: negative
+summary: D690 D510 RV32 at rv32imc, with no `a`, refuses core/atomic's exchange, add, add_relaxed and compare_exchange at the caller's use and a u64 cell where it is written, each once, the read-modify-write refusals naming rv32imac, sole_add and platform/riscv's critical section, while the single writer's operations beside them are accepted
+program: main.ldn
+root: ../../../../..
+args: --target=rv32 --level=rv32imc
+expect: expected.txt
+codes: L0344, L0344, L0344, L0344, L0344
+constructs: 1290, 1620
+targets: rv32
