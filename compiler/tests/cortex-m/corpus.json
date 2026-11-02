@@ -658,16 +658,6 @@
       "reason": "runtime/core-io-buffered-writer flushes through core/io.memory, failing writes included, here."
     },
     "runtime/buffered-writer-format": {
-      "lanes": {
-        "esp32c3": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 48476 bytes of text at none/off, over the reference's 32768 by 15708, where the Cortex-M0 one fits; it overflows at none/off, size/auto, size/off, speed/auto. Measured with the first RV32 emission."
-        },
-        "sifive-e": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 48220 bytes of text at none/off, over the reference's 32768 by 15452, where the Cortex-M0 one fits; it overflows at none/off, size/auto, size/off, speed/auto. Measured with the first RV32 emission."
-        }
-      },
       "mode": "execute"
     },
     "runtime/by-value-records-stay-independent": {
@@ -788,16 +778,6 @@
       "mode": "execute"
     },
     "runtime/clock-manual": {
-      "lanes": {
-        "esp32c3": {
-          "mode": "limit",
-          "reason": "D698: at none/off its stack overran the 4 KiB reservation, in advance, where Cortex-M0's frames fit. Measured with the first RV32 emission."
-        },
-        "sifive-e": {
-          "mode": "limit",
-          "reason": "D698: at none/off its stack overran the 4 KiB reservation, in advance, where Cortex-M0's frames fit. Measured with the first RV32 emission."
-        }
-      },
       "mode": "execute"
     },
     "runtime/clock-system": {
@@ -869,16 +849,6 @@
       "mode": "execute"
     },
     "runtime/core-io-buffered-writer": {
-      "lanes": {
-        "esp32c3": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 40052 bytes of text at none/off, over the reference's 32768 by 7284, where the Cortex-M0 one fits; it overflows at none/off, size/auto, size/off, speed/auto. Measured with the first RV32 emission."
-        },
-        "sifive-e": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 39796 bytes of text at none/off, over the reference's 32768 by 7028, where the Cortex-M0 one fits; it overflows at none/off, size/auto, size/off, speed/auto. Measured with the first RV32 emission."
-        }
-      },
       "mode": "execute"
     },
     "runtime/core-io-erased-system": {
@@ -898,48 +868,18 @@
       "mode": "execute"
     },
     "runtime/core-io-line-reader": {
-      "lanes": {
-        "esp32c3": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 38288 bytes of text at none/off, over the reference's 32768 by 5520, where the Cortex-M0 one fits; it overflows at none/off. Measured with the first RV32 emission."
-        },
-        "sifive-e": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 38032 bytes of text at none/off, over the reference's 32768 by 5264, where the Cortex-M0 one fits; it overflows at none/off. Measured with the first RV32 emission."
-        }
-      },
       "mode": "execute"
     },
     "runtime/core-mem-allocators": {
       "mode": "execute"
     },
     "runtime/core-mem-arena-boundaries": {
-      "lanes": {
-        "esp32c3": {
-          "mode": "limit",
-          "reason": "D698: at none/off its stack overran the 4 KiB reservation, in aligned_offset, where Cortex-M0's frames fit. Measured with the first RV32 emission."
-        },
-        "sifive-e": {
-          "mode": "limit",
-          "reason": "D698: at none/off its stack overran the 4 KiB reservation, in aligned_offset, where Cortex-M0's frames fit. Measured with the first RV32 emission."
-        }
-      },
       "mode": "execute"
     },
     "runtime/core-mem-blocks": {
       "mode": "execute"
     },
     "runtime/core-mem-blocks-alignment": {
-      "lanes": {
-        "esp32c3": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 44880 bytes of text at none/off, over the reference's 32768 by 12112, where the Cortex-M0 one fits; it overflows at none/off, size/auto, size/off, speed/auto. Measured with the first RV32 emission."
-        },
-        "sifive-e": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 44624 bytes of text at none/off, over the reference's 32768 by 11856, where the Cortex-M0 one fits; it overflows at none/off, size/auto, size/off, speed/auto. Measured with the first RV32 emission."
-        }
-      },
       "mode": "execute"
     },
     "runtime/core-mem-dispose-empty": {
@@ -975,16 +915,6 @@
       "mode": "refuse"
     },
     "runtime/core-mem-resize": {
-      "lanes": {
-        "esp32c3": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 36136 bytes of text at none/off, over the reference's 32768 by 3368, where the Cortex-M0 one fits; it overflows at none/off. Measured with the first RV32 emission."
-        },
-        "sifive-e": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 35880 bytes of text at none/off, over the reference's 32768 by 3112, where the Cortex-M0 one fits; it overflows at none/off. Measured with the first RV32 emission."
-        }
-      },
       "mode": "execute"
     },
     "runtime/core-mem-zero-prefix": {
@@ -997,32 +927,12 @@
       "mode": "execute"
     },
     "runtime/core-pool-list-grows": {
-      "lanes": {
-        "esp32c3": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 48408 bytes of text at none/off, over the reference's 32768 by 15640, where the Cortex-M0 one fits; it overflows at none/off, size/auto, size/off, speed/auto. Measured with the first RV32 emission."
-        },
-        "sifive-e": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 48152 bytes of text at none/off, over the reference's 32768 by 15384, where the Cortex-M0 one fits; it overflows at none/off, size/auto, size/off, speed/auto. Measured with the first RV32 emission."
-        }
-      },
       "mode": "execute"
     },
     "runtime/core-pool-resize": {
       "mode": "execute"
     },
     "runtime/core-region-resize": {
-      "lanes": {
-        "esp32c3": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 43400 bytes of text at none/off, over the reference's 32768 by 10632, where the Cortex-M0 one fits; it overflows at none/off, size/auto, size/off, speed/auto. Measured with the first RV32 emission."
-        },
-        "sifive-e": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 43144 bytes of text at none/off, over the reference's 32768 by 10376, where the Cortex-M0 one fits; it overflows at none/off, size/auto, size/off, speed/auto. Measured with the first RV32 emission."
-        }
-      },
       "mode": "execute"
     },
     "runtime/core-sort-context": {
@@ -1042,16 +952,6 @@
       "mode": "execute"
     },
     "runtime/core-text-decimal-widths": {
-      "lanes": {
-        "esp32c3": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 38684 bytes of text at none/off, over the reference's 32768 by 5916, where the Cortex-M0 one fits; it overflows at none/off, size/auto, size/off, speed/auto. Measured with the first RV32 emission."
-        },
-        "sifive-e": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 38164 bytes of text at none/off, over the reference's 32768 by 5396, where the Cortex-M0 one fits; it overflows at none/off. Measured with the first RV32 emission."
-        }
-      },
       "mode": "execute"
     },
     "runtime/core-text-format": {
@@ -1060,29 +960,9 @@
       "reason": "Formatting every library conformance, a program's own, every malformed template, a partway refusal and a growing builder needs about 42 KiB of flash at size/auto, of which the fixture's own routines are 11 KiB, for the frame-home reason runtime/core-text-builder gives. Each profile still attempts execution; runtime/core-text-format-firmware formats within the image with both refusals and requires execution; this image limit is not runtime evidence."
     },
     "runtime/core-text-format-firmware": {
-      "lanes": {
-        "esp32c3": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 34684 bytes of text at none/off, over the reference's 32768 by 1916, where the Cortex-M0 one fits; it overflows at none/off. Measured with the first RV32 emission."
-        },
-        "sifive-e": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 34428 bytes of text at none/off, over the reference's 32768 by 1660, where the Cortex-M0 one fits; it overflows at none/off. Measured with the first RV32 emission."
-        }
-      },
       "mode": "execute"
     },
     "runtime/core-text-parse-signed": {
-      "lanes": {
-        "esp32c3": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 44844 bytes of text at none/off, over the reference's 32768 by 12076, where the Cortex-M0 one fits; it overflows at none/off, size/auto, size/off, speed/auto. Measured with the first RV32 emission."
-        },
-        "sifive-e": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 44320 bytes of text at none/off, over the reference's 32768 by 11552, where the Cortex-M0 one fits; it overflows at none/off, size/auto, size/off, speed/auto. Measured with the first RV32 emission."
-        }
-      },
       "mode": "execute"
     },
     "runtime/core-text-runtime-helpers": {
@@ -1103,16 +983,6 @@
       "mode": "refuse"
     },
     "runtime/core-tree-node-queries": {
-      "lanes": {
-        "esp32c3": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 46176 bytes of text at none/off, over the reference's 32768 by 13408, where the Cortex-M0 one fits; it overflows at none/off, size/auto, size/off, speed/auto. Measured with the first RV32 emission."
-        },
-        "sifive-e": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 45920 bytes of text at none/off, over the reference's 32768 by 13152, where the Cortex-M0 one fits; it overflows at none/off, size/auto, size/off, speed/auto. Measured with the first RV32 emission."
-        }
-      },
       "mode": "execute"
     },
     "runtime/core-tree-provider-failures": {
@@ -1122,29 +992,9 @@
       "mode": "refuse"
     },
     "runtime/core-vec-bytes": {
-      "lanes": {
-        "esp32c3": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 53512 bytes of text at none/off, over the reference's 32768 by 20744, where the Cortex-M0 one fits; it overflows at none/off, size/auto, size/off, speed/auto. Measured with the first RV32 emission."
-        },
-        "sifive-e": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 53256 bytes of text at none/off, over the reference's 32768 by 20488, where the Cortex-M0 one fits; it overflows at none/off, size/auto, size/off, speed/auto. Measured with the first RV32 emission."
-        }
-      },
       "mode": "execute"
     },
     "runtime/core-vec-pointer-storage": {
-      "lanes": {
-        "esp32c3": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 43944 bytes of text at none/off, over the reference's 32768 by 11176, where the Cortex-M0 one fits; it overflows at none/off, size/auto, size/off, speed/auto. Measured with the first RV32 emission."
-        },
-        "sifive-e": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 43688 bytes of text at none/off, over the reference's 32768 by 10920, where the Cortex-M0 one fits; it overflows at none/off, size/auto, size/off, speed/auto. Measured with the first RV32 emission."
-        }
-      },
       "mode": "execute"
     },
     "runtime/core-vec-used-references": {
@@ -1287,16 +1137,6 @@
       "reason": "The memory world's directories with every oracle need about 43 KiB of flash at size/auto, of which the fixture's own main is 17 KiB: the Cortex-M0 backend gives every IR slot, each call's snapshot and aggregate temporary among them, a frame home of its own with no reuse and keeps no value in a register, so main's frame is 2.7 KiB and most of its code moves values between homes. That is register allocation and slot reuse, not the library. Each profile still attempts execution; runtime/directory-memory-firmware lists a directory over core/io.memory within the image and requires execution; this image limit is not runtime evidence."
     },
     "runtime/directory-memory-firmware": {
-      "lanes": {
-        "esp32c3": {
-          "mode": "limit",
-          "reason": "D698: at none/off its stack overran the 4 KiB reservation, in memory_refill, where Cortex-M0's frames fit. Measured with the first RV32 emission."
-        },
-        "sifive-e": {
-          "mode": "limit",
-          "reason": "D698: at none/off its stack overran the 4 KiB reservation, in memory_refill, where Cortex-M0's frames fit. Measured with the first RV32 emission."
-        }
-      },
       "mode": "execute"
     },
     "runtime/directory-missing-path": {
@@ -1564,16 +1404,6 @@
       "reason": "runtime/failure-words gives every phrase on Cortex-M0."
     },
     "runtime/fibre-join-first-failure": {
-      "lanes": {
-        "esp32c3": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 37388 bytes of text at none/off, over the reference's 32768 by 4620, where the Cortex-M0 one fits; it overflows at none/all, none/off, size/auto, size/off, speed/all, speed/auto. Measured with the first RV32 emission."
-        },
-        "sifive-e": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 37132 bytes of text at none/off, over the reference's 32768 by 4364, where the Cortex-M0 one fits; it overflows at none/all, none/off, size/auto, size/off, speed/all, speed/auto. Measured with the first RV32 emission."
-        }
-      },
       "mode": "execute"
     },
     "runtime/fibre-same-source-any-provider": {
@@ -1596,12 +1426,6 @@
       "reason": "runtime/fibre-join-first-failure runs core/fibre's round of turns on Cortex-M0."
     },
     "runtime/file-system-firmware": {
-      "lanes": {
-        "esp32c3": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 32808 bytes of text at none/off, over the reference's 32768 by 40, where the Cortex-M0 one fits; it overflows at none/off. Measured with the first RV32 emission."
-        }
-      },
       "mode": "execute"
     },
     "runtime/first-program": {
@@ -1664,12 +1488,6 @@
       "mode": "execute"
     },
     "runtime/float-operations-by-arguments": {
-      "lanes": {
-        "esp32c3": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 36660 bytes of text at none/off, over the reference's 32768 by 3892, where the Cortex-M0 one fits; it overflows at none/off, size/auto, size/off, speed/auto. Measured with the first RV32 emission."
-        }
-      },
       "mode": "execute"
     },
     "runtime/float-to-bool-conversions": {
@@ -1937,16 +1755,6 @@
       "reason": "Firmware has no standard output to print to. runtime/io-write-format-memory writes through write_format here."
     },
     "runtime/io-write-format-memory": {
-      "lanes": {
-        "esp32c3": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 50444 bytes of text at none/off, over the reference's 32768 by 17676, where the Cortex-M0 one fits; it overflows at none/off, size/auto, size/off, speed/auto. Measured with the first RV32 emission."
-        },
-        "sifive-e": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 50188 bytes of text at none/off, over the reference's 32768 by 17420, where the Cortex-M0 one fits; it overflows at none/off, size/auto, size/off, speed/auto. Measured with the first RV32 emission."
-        }
-      },
       "mode": "execute"
     },
     "runtime/kqueue-events": {
@@ -2014,29 +1822,9 @@
       "reason": "The full map composition exceeds the selected 32 KiB flash profile in every measured optimization profile. Each profile still attempts execution; only measured flash/RAM/stack limits can exclude it. The separate library-shared consumers and library-builtin-evidence require execution; this image limit is not runtime evidence."
     },
     "runtime/library-second-reading": {
-      "lanes": {
-        "esp32c3": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 40008 bytes of text at none/off, over the reference's 32768 by 7240, where the Cortex-M0 one fits; it overflows at none/off, size/auto, size/off, speed/auto. Measured with the first RV32 emission."
-        },
-        "sifive-e": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 39752 bytes of text at none/off, over the reference's 32768 by 6984, where the Cortex-M0 one fits; it overflows at none/off, size/auto, size/off, speed/auto. Measured with the first RV32 emission."
-        }
-      },
       "mode": "execute"
     },
     "runtime/library-second-reading-spill": {
-      "lanes": {
-        "esp32c3": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 44560 bytes of text at none/off, over the reference's 32768 by 11792, where the Cortex-M0 one fits; it overflows at none/off, size/auto, size/off, speed/auto. Measured with the first RV32 emission."
-        },
-        "sifive-e": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 44304 bytes of text at none/off, over the reference's 32768 by 11536, where the Cortex-M0 one fits; it overflows at none/off, size/auto, size/off, speed/auto. Measured with the first RV32 emission."
-        }
-      },
       "mode": "execute"
     },
     "runtime/library-shared-arena": {
@@ -2058,16 +1846,6 @@
       "mode": "execute"
     },
     "runtime/library-shared-fibre": {
-      "lanes": {
-        "esp32c3": {
-          "mode": "limit",
-          "reason": "D698: at none/off its stack overran the 4 KiB reservation, in ended, where Cortex-M0's frames fit. Measured with the first RV32 emission."
-        },
-        "sifive-e": {
-          "mode": "limit",
-          "reason": "D698: at none/off its stack overran the 4 KiB reservation, in ended, where Cortex-M0's frames fit. Measured with the first RV32 emission."
-        }
-      },
       "mode": "execute"
     },
     "runtime/library-shared-io": {
@@ -2098,16 +1876,6 @@
       "mode": "execute"
     },
     "runtime/library-shared-spill": {
-      "lanes": {
-        "esp32c3": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 41008 bytes of text at none/off, over the reference's 32768 by 8240, where the Cortex-M0 one fits; it overflows at none/off, size/auto, size/off, speed/auto. Measured with the first RV32 emission."
-        },
-        "sifive-e": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 40752 bytes of text at none/off, over the reference's 32768 by 7984, where the Cortex-M0 one fits; it overflows at none/off, size/auto, size/off, speed/auto. Measured with the first RV32 emission."
-        }
-      },
       "mode": "execute"
     },
     "runtime/library-shared-text": {
@@ -2120,16 +1888,6 @@
       "mode": "execute"
     },
     "runtime/library-shared-vec": {
-      "lanes": {
-        "esp32c3": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 35936 bytes of text at none/off, over the reference's 32768 by 3168, where the Cortex-M0 one fits; it overflows at none/off. Measured with the first RV32 emission."
-        },
-        "sifive-e": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 35680 bytes of text at none/off, over the reference's 32768 by 2912, where the Cortex-M0 one fits; it overflows at none/off. Measured with the first RV32 emission."
-        }
-      },
       "mode": "execute"
     },
     "runtime/library-system-arguments": {
@@ -2420,29 +2178,9 @@
       "reason": "Every form of address text the fixture reads and writes, with text.format and its two conformances, needs about 47 KiB of flash at size/auto and 56 KiB at none/off, overflowing the 32 KiB profile by 15 and 23 KiB; the address code is about 19 KiB of it, ipv6_octets alone 4.8 KiB, most of it the Cortex-M0 backend's frame homes and copies between them. Each profile still attempts execution; runtime/network-addresses-firmware reads an IPv4, an IPv6 and a zoned address and runtime/network-addresses-written-firmware writes them, each within its image, and both require execution; this image limit is not runtime evidence."
     },
     "runtime/network-addresses-firmware": {
-      "lanes": {
-        "esp32c3": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 35256 bytes of text at none/off, over the reference's 32768 by 2488, where the Cortex-M0 one fits; it overflows at none/off. Measured with the first RV32 emission."
-        },
-        "sifive-e": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 35000 bytes of text at none/off, over the reference's 32768 by 2232, where the Cortex-M0 one fits; it overflows at none/off. Measured with the first RV32 emission."
-        }
-      },
       "mode": "execute"
     },
     "runtime/network-addresses-written-firmware": {
-      "lanes": {
-        "esp32c3": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 39196 bytes of text at none/off, over the reference's 32768 by 6428, where the Cortex-M0 one fits; it overflows at none/off, size/auto, size/off, speed/auto. Measured with the first RV32 emission."
-        },
-        "sifive-e": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 38940 bytes of text at none/off, over the reference's 32768 by 6172, where the Cortex-M0 one fits; it overflows at none/off, size/auto, size/off, speed/auto. Measured with the first RV32 emission."
-        }
-      },
       "mode": "execute"
     },
     "runtime/network-closed-peer": {
@@ -2460,16 +2198,6 @@
       "reason": "Firmware has no network stack here."
     },
     "runtime/network-datagram-memory-firmware": {
-      "lanes": {
-        "esp32c3": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 49404 bytes of text at none/off, over the reference's 32768 by 16636, where the Cortex-M0 one fits; it overflows at none/off, size/auto, size/off, speed/auto. Measured with the first RV32 emission."
-        },
-        "sifive-e": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 49148 bytes of text at none/off, over the reference's 32768 by 16380, where the Cortex-M0 one fits; it overflows at none/off, size/auto, size/off, speed/auto. Measured with the first RV32 emission."
-        }
-      },
       "mode": "execute"
     },
     "runtime/network-echo": {
@@ -2783,55 +2511,15 @@
       "mode": "refuse"
     },
     "runtime/r420-memory-delivery": {
-      "lanes": {
-        "esp32c3": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 40136 bytes of text at none/off, over the reference's 32768 by 7368, where the Cortex-M0 one fits; it overflows at none/off, size/auto, size/off, speed/auto. Measured with the first RV32 emission."
-        },
-        "sifive-e": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 39880 bytes of text at none/off, over the reference's 32768 by 7112, where the Cortex-M0 one fits; it overflows at none/off, size/auto, size/off, speed/auto. Measured with the first RV32 emission."
-        }
-      },
       "mode": "execute"
     },
     "runtime/r420-memory-delivery-diagnostics": {
-      "lanes": {
-        "esp32c3": {
-          "mode": "limit",
-          "reason": "D698: at none/off its stack overran the 4 KiB reservation, in memory_write_some, where Cortex-M0's frames fit. Measured with the first RV32 emission."
-        },
-        "sifive-e": {
-          "mode": "limit",
-          "reason": "D698: at none/off its stack overran the 4 KiB reservation, in memory_write_some, where Cortex-M0's frames fit. Measured with the first RV32 emission."
-        }
-      },
       "mode": "execute"
     },
     "runtime/r420-memory-world": {
-      "lanes": {
-        "esp32c3": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 50096 bytes of text at none/off, over the reference's 32768 by 17328, where the Cortex-M0 one fits; it overflows at none/off, size/auto, size/off, speed/auto. Measured with the first RV32 emission."
-        },
-        "sifive-e": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 49840 bytes of text at none/off, over the reference's 32768 by 17072, where the Cortex-M0 one fits; it overflows at none/off, size/auto, size/off, speed/auto. Measured with the first RV32 emission."
-        }
-      },
       "mode": "execute"
     },
     "runtime/r420-memory-world-boundaries": {
-      "lanes": {
-        "esp32c3": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 51764 bytes of text at none/off, over the reference's 32768 by 18996, where the Cortex-M0 one fits; it overflows at none/off, size/auto, size/off, speed/auto. Measured with the first RV32 emission."
-        },
-        "sifive-e": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 51508 bytes of text at none/off, over the reference's 32768 by 18740, where the Cortex-M0 one fits; it overflows at none/off, size/auto, size/off, speed/auto. Measured with the first RV32 emission."
-        }
-      },
       "mode": "execute"
     },
     "runtime/r420-memory-world-cortex": {
@@ -2914,16 +2602,6 @@
       "mode": "execute"
     },
     "runtime/r420-vec-growth-transaction": {
-      "lanes": {
-        "esp32c3": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 38192 bytes of text at none/off, over the reference's 32768 by 5424, where the Cortex-M0 one fits; it overflows at none/off. Measured with the first RV32 emission."
-        },
-        "sifive-e": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 37936 bytes of text at none/off, over the reference's 32768 by 5168, where the Cortex-M0 one fits; it overflows at none/off. Measured with the first RV32 emission."
-        }
-      },
       "mode": "execute"
     },
     "runtime/r420-vec-large-list": {
@@ -2981,16 +2659,6 @@
       "mode": "refuse"
     },
     "runtime/r440-io-partial-progress": {
-      "lanes": {
-        "esp32c3": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 39932 bytes of text at none/off, over the reference's 32768 by 7164, where the Cortex-M0 one fits; it overflows at none/off, size/auto, size/off, speed/auto. Measured with the first RV32 emission."
-        },
-        "sifive-e": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 39676 bytes of text at none/off, over the reference's 32768 by 6908, where the Cortex-M0 one fits; it overflows at none/off, size/auto, size/off. Measured with the first RV32 emission."
-        }
-      },
       "mode": "execute"
     },
     "runtime/r440-optional-origin-edges": {
@@ -3424,16 +3092,6 @@
       "mode": "execute"
     },
     "runtime/recursive-fibonacci": {
-      "lanes": {
-        "esp32c3": {
-          "mode": "limit",
-          "reason": "D698: at none/off its stack overran the 4 KiB reservation, in fib, where Cortex-M0's frames fit. Measured with the first RV32 emission."
-        },
-        "sifive-e": {
-          "mode": "limit",
-          "reason": "D698: at none/off its stack overran the 4 KiB reservation, in fib, where Cortex-M0's frames fit. Measured with the first RV32 emission."
-        }
-      },
       "mode": "execute"
     },
     "runtime/recursive-module-images-are-laid-out-and-distinct": {
@@ -3458,42 +3116,12 @@
       "mode": "execute"
     },
     "runtime/region-beside-parent": {
-      "lanes": {
-        "esp32c3": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 34384 bytes of text at none/off, over the reference's 32768 by 1616, where the Cortex-M0 one fits; it overflows at none/off. Measured with the first RV32 emission."
-        },
-        "sifive-e": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 34128 bytes of text at none/off, over the reference's 32768 by 1360, where the Cortex-M0 one fits; it overflows at none/off. Measured with the first RV32 emission."
-        }
-      },
       "mode": "execute"
     },
     "runtime/region-bounded-pool": {
-      "lanes": {
-        "esp32c3": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 37408 bytes of text at none/off, over the reference's 32768 by 4640, where the Cortex-M0 one fits; it overflows at none/off. Measured with the first RV32 emission."
-        },
-        "sifive-e": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 37152 bytes of text at none/off, over the reference's 32768 by 4384, where the Cortex-M0 one fits; it overflows at none/off. Measured with the first RV32 emission."
-        }
-      },
       "mode": "execute"
     },
     "runtime/region-ledger-blocks": {
-      "lanes": {
-        "esp32c3": {
-          "mode": "limit",
-          "reason": "D698: at none/off its stack overran the 4 KiB reservation, in arena_alloc, where Cortex-M0's frames fit. Measured with the first RV32 emission."
-        },
-        "sifive-e": {
-          "mode": "limit",
-          "reason": "D698: at none/off its stack overran the 4 KiB reservation, in arena_alloc, where Cortex-M0's frames fit. Measured with the first RV32 emission."
-        }
-      },
       "mode": "execute"
     },
     "runtime/run-environment": {
@@ -3514,16 +3142,6 @@
       "mode": "execute"
     },
     "runtime/run-memory-firmware": {
-      "lanes": {
-        "esp32c3": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 39152 bytes of text at none/off, over the reference's 32768 by 6384, where the Cortex-M0 one fits; it overflows at none/off, size/auto, size/off, speed/auto. Measured with the first RV32 emission."
-        },
-        "sifive-e": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 38896 bytes of text at none/off, over the reference's 32768 by 6128, where the Cortex-M0 one fits; it overflows at none/off, size/auto, size/off, speed/auto. Measured with the first RV32 emission."
-        }
-      },
       "mode": "execute"
     },
     "runtime/run-missing-program": {
@@ -3606,16 +3224,6 @@
       "mode": "execute"
     },
     "runtime/sensors": {
-      "lanes": {
-        "esp32c3": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 34752 bytes of text at none/off, over the reference's 32768 by 1984, where the Cortex-M0 one fits; it overflows at none/off. Measured with the first RV32 emission."
-        },
-        "sifive-e": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 34496 bytes of text at none/off, over the reference's 32768 by 1728, where the Cortex-M0 one fits; it overflows at none/off. Measured with the first RV32 emission."
-        }
-      },
       "mode": "execute"
     },
     "runtime/shared-declarations-evaluate-once": {
@@ -3631,16 +3239,6 @@
       "mode": "execute"
     },
     "runtime/signals-fake-firmware": {
-      "lanes": {
-        "esp32c3": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 54104 bytes of text at none/off, over the reference's 32768 by 21336, where the Cortex-M0 one fits; it overflows at none/all, none/off, size/auto, size/off, speed/all, speed/auto. Measured with the first RV32 emission."
-        },
-        "sifive-e": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 53848 bytes of text at none/off, over the reference's 32768 by 21080, where the Cortex-M0 one fits; it overflows at none/all, none/off, size/auto, size/off, speed/all, speed/auto. Measured with the first RV32 emission."
-        }
-      },
       "mode": "execute"
     },
     "runtime/signals-fake-stop-server": {
@@ -4101,16 +3699,6 @@
       "reason": "Firmware has no standard input. runtime/word-count-memory executes the same counting routine over core/io.memory here."
     },
     "runtime/word-count-memory": {
-      "lanes": {
-        "esp32c3": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 46840 bytes of text at none/off, over the reference's 32768 by 14072, where the Cortex-M0 one fits; it overflows at none/off, size/auto, size/off, speed/auto. Measured with the first RV32 emission."
-        },
-        "sifive-e": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 46320 bytes of text at none/off, over the reference's 32768 by 13552, where the Cortex-M0 one fits; it overflows at none/off, size/auto, size/off, speed/auto. Measured with the first RV32 emission."
-        }
-      },
       "mode": "execute"
     },
     "runtime/word-count-no-input": {
@@ -4167,16 +3755,6 @@
       "mode": "execute"
     },
     "runtime/written-type-text-conversions": {
-      "lanes": {
-        "esp32c3": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 38235 bytes of text at none/off, over the reference's 32768 by 5467, where the Cortex-M0 one fits; it overflows at none/off. Measured with the first RV32 emission."
-        },
-        "sifive-e": {
-          "mode": "limit",
-          "reason": "D698: its RV32 image needs 37979 bytes of text at none/off, over the reference's 32768 by 5211, where the Cortex-M0 one fits; it overflows at none/off. Measured with the first RV32 emission."
-        }
-      },
       "mode": "execute"
     },
     "runtime/written-type-text-invalid-traps": {
