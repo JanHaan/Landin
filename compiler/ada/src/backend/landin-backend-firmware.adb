@@ -663,7 +663,14 @@ package body Landin.Backend.Firmware is
       Entry_Address : constant String :=
         "ORIGIN(" & Vectors & ")"
         & (if Prefix = 0 then "" else " + " & Number (Prefix));
-      Memory, Sections : US.Unbounded_String;
+      Memory, Sections, Segments : US.Unbounded_String;
+      --  D686: an RV32 script names its loaded segments, one an output
+      --  section begins, so that no segment carries the ELF's own headers,
+      --  which a ROM that loads every segment would write where they are
+      --  mapped.  NAME's is " :NAME" on RV32 and "" on Cortex-M, whose
+      --  script stays D229's.
+      function Segment (Name : String) return String is
+        (if RV32 then " :" & Name else "");
       --  The end of the last output section in the stack's region, which
       --  must stay below the stack, and the last load image in flash.
       In_Stack_Region : US.Unbounded_String;
@@ -700,7 +707,8 @@ package body Landin.Backend.Firmware is
                     & "    *(.landin_region." & Name & ".data.*)" & LF
                     & "    " & Region_Symbol (Name, "data_end")
                     & " = .;" & LF
-                    & "  } > " & Name & " AT> " & Flash & LF
+                    & "  } > " & Name & " AT> " & Flash
+                    & Segment ("region_" & Name & "_data") & LF
                     & "  " & Region_Symbol (Name, "data_load")
                     & " = LOADADDR(" & Section & "_data);" & LF
                     & "  " & Section & "_bss (NOLOAD) : AT(ADDR(" & Section
@@ -710,8 +718,11 @@ package body Landin.Backend.Firmware is
                     & "    *(.landin_region." & Name & ".bss.*)" & LF
                     & "    " & Region_Symbol (Name, "bss_end")
                     & " = .;" & LF
-                    & "  } > " & Name & LF);
+                    & "  } > " & Name & Segment ("region_" & Name & "_bss")
+                    & LF);
                   Last_Load := US.To_Unbounded_String (Section & "_data");
+                  US.Append (Segments, "  region_" & Name & "_data PT_LOAD;"
+                    & LF & "  region_" & Name & "_bss PT_LOAD;" & LF);
                   if Index = Stack_At then
                      In_Stack_Region := US.To_Unbounded_String
                        (Region_Symbol (Name, "bss_end"));
@@ -721,7 +732,9 @@ package body Landin.Backend.Firmware is
                     "  " & Section & " : {" & LF
                     & "    *(.landin_region." & Name & ".text.*"
                     & " .landin_region." & Name & ".rodata.*)" & LF
-                    & "  } > " & Name & LF);
+                    & "  } > " & Name & Segment ("region_" & Name) & LF);
+                  US.Append (Segments, "  region_" & Name & " PT_LOAD;"
+                    & LF);
                end if;
             end;
          end if;
@@ -736,6 +749,15 @@ package body Landin.Backend.Firmware is
         & "MEMORY {" & LF
         & US.To_String (Memory)
         & "}" & LF
+        & (if RV32
+           then "PHDRS {" & LF & "  image PT_LOAD;" & LF
+             & "  text PT_LOAD;" & LF
+             & (if Profile.Placed (Profiles.Rodata)
+                   = Profile.Placed (Profiles.Text)
+                then "" else "  rodata PT_LOAD;" & LF)
+             & "  data PT_LOAD;" & LF & "  bss PT_LOAD;" & LF
+             & US.To_String (Segments) & "}" & LF
+           else "")
         & "_landin_firmware_stack_top = ORIGIN(" & Stack & ") + LENGTH("
         & Stack & ");" & LF
         & "_landin_firmware_stack_bottom = _landin_firmware_stack_top - "
@@ -748,7 +770,8 @@ package body Landin.Backend.Firmware is
            else "")
         & (if RV32
            then "  .landin_entry " & Entry_Address
-             & " : { KEEP(*(.text.landin_entry)) } > " & Vectors & LF
+             & " : { KEEP(*(.text.landin_entry)) } > " & Vectors
+             & Segment ("image") & LF
              & "  .isr_vector "
              & Number (Profiles.Vector_Address (Profile))
            else "  .isr_vector " & Entry_Address)
@@ -757,10 +780,13 @@ package body Landin.Backend.Firmware is
            then "  .embedded_block : { KEEP(*(.embedded_block)) } > "
              & Vectors & LF
            else "")
-        & "  .text : { *(.text .text.*) } > " & Flash & LF
+        & "  .text : { *(.text .text.*) } > " & Flash & Segment ("text")
+        & LF
         & "  .rodata : { *(.rodata .rodata.*"
         & (if RV32 then " .srodata .srodata.*" else "") & ") } > "
-        & Placed (Profiles.Rodata) & LF
+        & Placed (Profiles.Rodata)
+        & (if Profile.Placed (Profiles.Rodata) = Profile.Placed (Profiles.Text)
+           then "" else Segment ("rodata")) & LF
         & (if RV32 then ""
            else "  .ARM.extab : { *(.ARM.extab*) } > " & Flash & LF
              & "  .ARM.exidx : { *(.ARM.exidx*) } > " & Flash & LF)
@@ -769,7 +795,7 @@ package body Landin.Backend.Firmware is
         & "    *(.data .data.*" & (if RV32 then " .sdata .sdata.*" else "")
         & ")" & LF
         & "    _landin_firmware_data_end = .;" & LF
-        & "  } > " & Data & " AT> " & Flash & LF
+        & "  } > " & Data & " AT> " & Flash & Segment ("data") & LF
         & "  _landin_firmware_data_load = LOADADDR(.data);" & LF
         & "  .ramtext : ALIGN(8) {" & LF
         & "    _landin_firmware_ramtext_start = .;" & LF
@@ -782,7 +808,7 @@ package body Landin.Backend.Firmware is
         & "    *(.bss .bss.*" & (if RV32 then " .sbss .sbss.*" else "")
         & " COMMON)" & LF
         & "    _landin_firmware_bss_end = .;" & LF
-        & "  } > " & Placed (Profiles.BSS) & LF
+        & "  } > " & Placed (Profiles.BSS) & Segment ("bss") & LF
         & US.To_String (Sections)
         & "  /DISCARD/ : { *(.comment .note.GNU-stack) }" & LF
         & "}" & LF
