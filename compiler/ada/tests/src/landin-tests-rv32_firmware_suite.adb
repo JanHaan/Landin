@@ -168,7 +168,13 @@ package body Landin.Tests.RV32_Firmware_Suite is
         & " 0x20400040"")" & LF
         & "ASSERT((_landin_firmware_stack_top & 15) == 0" & LF
         & """device"":""riscv-reference"",""core"":""sifive-e31""" & LF
-        & """vector_address"":541065280,""vector_words"":16" & LF);
+        & """vector_address"":541065280,""vector_words"":16" & LF
+        --  D656: the trap's record first in .bss.
+        & "    _landin_firmware_bss_start = .;" & LF
+        & "    KEEP(*(.bss.landin_firmware_trap))" & LF
+        --  The reference's RAM code is copied into its RAM, the DTIM.
+        & "    _landin_firmware_ramtext_end = .;" & LF
+        & "  } > RAM AT> FLASH" & LF);
       Landin.Testing.Check
         (Item, not Contains (U.To_String (Script_Of ("").Script), "ARM"),
          "an RV32 script places no Arm unwind table");
@@ -187,6 +193,16 @@ package body Landin.Tests.RV32_Firmware_Suite is
         Script_Of (Description ("esp-rv32imc", "esp-app-image", 32,
                                 ESP_Facts), Level => "rv32imc"),
         "  .isr_vector 1077412096 : { KEEP(*(.isr_vector)) } > SRAM" & LF
+        --  D657: its RAM code directly after its text, in its segment.
+        & "  .text : { *(.text .text.*) } > SRAM :text" & LF
+        & "  .ramtext : ALIGN(8) {" & LF
+        & "    _landin_firmware_ramtext_start = .;" & LF
+        & "    *(.ramtext.*)" & LF
+        & "    _landin_firmware_ramtext_end = .;" & LF
+        & "  } > SRAM :text" & LF
+        & "  .rodata : { *(.rodata .rodata.* .srodata .srodata.*) } > SRAM"
+        & LF
+        & "ASSERT(LOADADDR(.data) + SIZEOF(.data) <=" & LF
         & """boot"":""esp-app-image""" & LF
         & """esp_image"":{""offset"":0,""chip"":5,""min_revision"":3,"
         & """max_revision"":199}" & LF);
@@ -788,6 +804,32 @@ package body Landin.Tests.RV32_Firmware_Suite is
       Holds ("reset's end", "fence rw, rw" & LF & "fence.i" & LF
         & "csrsi mstatus, 8" & LF);
       Holds ("the unhandled loop", "_landin_firmware_unhandled:" & LF);
+      --  D656: the trap's record, made without the stack, every register
+      --  but mscratch restored, the count last, then the wait.
+      Holds ("the trap's record", "_landin_firmware_unhandled:" & LF
+        & ".cfi_startproc simple" & LF & ".cfi_def_cfa sp, 0" & LF
+        & ".cfi_undefined ra" & LF
+        & "csrw mscratch, t0" & LF
+        & "la t0, _landin_firmware_trap_cause" & LF
+        & "sw sp, 12(t0)" & LF
+        & "csrr sp, mcause" & LF & "sw sp, 0(t0)" & LF
+        & "csrr sp, mepc" & LF & "sw sp, 4(t0)" & LF
+        & "csrr sp, mtval" & LF & "sw sp, 8(t0)" & LF
+        & "lw sp, 16(t0)" & LF & "addi sp, sp, 1" & LF
+        & "sw sp, 16(t0)" & LF
+        & "lw sp, 12(t0)" & LF & "csrr t0, mscratch" & LF
+        & "csrci mstatus, 8" & LF & "1:" & LF & "wfi" & LF & "j 1b" & LF);
+      Holds ("the record's cells",
+        ".section .bss.landin_firmware_trap,""aw"",@nobits" & LF
+        & ".balign 4" & LF
+        & ".globl _landin_firmware_trap_cause" & LF
+        & ".type _landin_firmware_trap_cause, @object" & LF
+        & ".size _landin_firmware_trap_cause, 4" & LF
+        & "_landin_firmware_trap_cause:" & LF & ".zero 4" & LF
+        & ".globl _landin_firmware_trap_pc" & LF);
+      Holds ("the count, the last cell",
+        "_landin_firmware_trap_sp:" & LF & ".zero 4" & LF
+        & ".globl _landin_firmware_trap_count" & LF);
 
       --  Hazard3: slot 11 is meinext's dispatch, which calls slot 16.
       Assembly_Of (Description ("hazard3", "vector-table", 68,
@@ -807,6 +849,11 @@ package body Landin.Tests.RV32_Firmware_Suite is
         & "bltz t0, 2f" & LF & "li t1, 208" & LF);
       Holds ("the dispatch's call", "la t1, _landin_firmware_vectors + 64"
         & LF & "add t0, t0, t1" & LF & "jalr t0" & LF & "j 1b" & LF);
+      --  D656: an IRQ past the table reaches the unhandled entry with the
+      --  frame undone, so the record holds the interrupted sp.
+      Holds ("the dispatch's frame undone", "3:" & LF & "lw ra, 0(sp)" & LF);
+      Holds ("the dispatch's way out", "lw a7, 60(sp)" & LF
+        & "addi sp, sp, 64" & LF & "j _landin_firmware_unhandled" & LF);
 
       --  The C5's CLIC: one common entry, in CLIC mode.
       Assembly_Of (Description ("esp-rv32imac-clic", "esp-app-image", 48,
@@ -820,6 +867,10 @@ package body Landin.Tests.RV32_Firmware_Suite is
         & LF);
       Holds ("CLIC mode", "la t0, _landin_firmware_trap" & LF
         & "ori t0, t0, 3" & LF);
+      --  D656: an exception leaves the CLIC entry with its frame undone.
+      Holds ("the CLIC's frame undone", "1:" & LF & "lw ra, 0(sp)" & LF);
+      Holds ("the CLIC's way out", "lw a7, 60(sp)" & LF
+        & "addi sp, sp, 64" & LF & "j _landin_firmware_unhandled" & LF);
       Landin.Testing.Check
         (Item, not Contains (U.To_String (Text), "_landin_firmware_slot_"),
          "no CLIC slot has a stub of its own");

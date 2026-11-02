@@ -89,7 +89,9 @@ entry that describes it, and put a new one where a reader would look for it.
   the E31 and the ESP32-C3, a common CLIC entry on the ESP32-C5 and
   Hazard3's meinext dispatch, with a stub that saves the caller-saved
   registers, calls an `extern(interrupt)` routine and unwinds to mepc
-  (D680, D686). `rp2350-image-block` carries RISC-V's IMAGE_DEF (D682),
+  (D680, D686). An exception's mcause, mepc, mtval and sp are recorded in
+  `_landin_firmware_trap_*` cells any probe reads as memory (D656).
+  `rp2350-image-block` carries RISC-V's IMAGE_DEF (D682),
   and `esp-app-image` is built: a description names its chip with
   `compiler.esp_image`, may stop its watchdogs in a stage before reset,
   and refine writes `OUT.bin` beside the executable and reads it back
