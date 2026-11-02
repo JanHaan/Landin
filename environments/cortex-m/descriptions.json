@@ -2,6 +2,7 @@
   "comment": "What each device description must select, recorded apart from the compiler and the descriptions: RP2040 and RP2350 from pico-sdk 2.2.0, the STM32H753 from ST's stm32h753xx.h and RM0433, the ESP32-C3 and ESP32-C5 from their TRMs and ESP-IDF v6.1, RP2350's Hazard3 side as its Arm side, the constrained reference from [1990], and the rv32 reference, which names its target, from D661. descriptions.py compares every fact of each linked image with these. Under lanes, the same for each lane description, an emulator's map rather than a chip, which the corpus holds its derived profile to (D607, D619).",
   "devices": {
     "rp2040": {
+      "target": "cortex-m0",
       "sources": {
         "memory map": "https://github.com/raspberrypi/pico-sdk/blob/2.2.0/src/rp2_common/pico_crt0/rp2040/memmap_default.ld, SHA-256 d409afb35ec0a8c3edf5ad6935907cb45f225a3cbdfd4c3b8505a7ed92df28dc: RAM 0x20000000 256k, SCRATCH_X 0x20040000 4k, SCRATCH_Y 0x20041000 4k, the 256-byte .boot2 first in FLASH, then the vectors",
         "flash region": "https://github.com/raspberrypi/pico-sdk/blob/2.2.0/src/rp2_common/pico_standard_link/pico_flash_region.template.ld, SHA-256 a8cfe6d5eeea94ae1d67eddbcc8c7f9167de30fbac3b196ee51cc52833e6f22a: FLASH at 0x10000000",
@@ -32,6 +33,7 @@
       "handler_slot": 21
     },
     "rp2350": {
+      "target": "cortex-m0",
       "sources": {
         "memory map": "https://github.com/raspberrypi/pico-sdk/blob/2.2.0/src/rp2_common/pico_crt0/rp2350/memmap_default.ld, SHA-256 2349d98352370fc22d84d482e53313300e8a52ea42529eced235fa99c109234f: RAM 0x20000000 512k, SCRATCH_X 0x20080000 4k, SCRATCH_Y 0x20081000 4k, the vectors first in FLASH and the embedded block after them, asserted to end in the first 4096 bytes",
         "flash region": "https://github.com/raspberrypi/pico-sdk/blob/2.2.0/src/rp2_common/pico_standard_link/pico_flash_region.template.ld, SHA-256 a8cfe6d5eeea94ae1d67eddbcc8c7f9167de30fbac3b196ee51cc52833e6f22a: FLASH at 0x10000000",
@@ -64,6 +66,7 @@
       "placed_datum": {"symbol": "scratch", "region": "SCRATCH_X"}
     },
     "stm32h753": {
+      "target": "cortex-m0",
       "sources": {
         "memory map": "ST's stm32h753xx.h, cmsis-device-h7 commit 81db1ec63cdc191fae1565b772da3ea5aa29a683, SHA-256 4f6def439a9fa94705303fe227d34308048c44bd36263d311aa54cc94f8398f5: D1_AXIFLASH_BASE 0x08000000 to FLASH_END 0x081FFFFF, D1_ITCMRAM_BASE 0 64KB, D1_DTCMRAM_BASE 0x20000000 128KB, D1_AXISRAM_BASE 0x24000000 512KB, D2_AHBSRAM_BASE 0x30000000 288KB as SRAM1 128K, SRAM2 128K and SRAM3 32K, D3_SRAM_BASE 0x38000000 64 KB",
         "interrupts": "the same header's IRQn_Type: external interrupts 0 to 149, and RM0433 Rev 9 Table 147, p. 759, which has WWDG1_RST at 143, where the header has none, and the RAMECC interrupt ECC at 145, which the SVD lacks and the policy adds (D560); USART3_IRQn 39",
@@ -195,6 +198,7 @@
       "handler_symbol": "cti"
     },
     "constrained-reference": {
+      "target": "cortex-m0",
       "sources": {"profile": "spec.md [1990]: 32 KiB flash at zero, 16 KiB RAM at 0x20000000, the upper 4 KiB the stack, a 48-word table at zero, core slots 4-10 and 12-13 and slots 21 and 42-47 zero"},
       "core": "cortex-m0",
       "float_unit": "none",
@@ -239,6 +243,7 @@
   },
   "lanes": {
     "mps2-an505": {
+      "target": "cortex-m0",
       "sources": {
         "boot": "QEMU 10.0.13's mps2-an505, measured with the locked binary: its Cortex-M33 r0p3 resets in Secure state with SAU_CTRL 0, loads SP and PC from VTOR_S 0x10000000, and locks up when the image is linked at 0",
         "memory": "the same measurement: SSRAM1 is 4 MiB at 0x10000000, aliased at 0, and SSRAM2 and 3 4 MiB at 0x38000000, aliased at 0x28000000, each readable, writable and executable from Secure state",
@@ -262,6 +267,7 @@
       "stack_reserved": 4096
     },
     "mps2-an500": {
+      "target": "cortex-m0",
       "sources": {"machine": "QEMU 10.0.13's mps2-an500, measured on the locked binary: a Cortex-M7 r1p2 whose MVFR0 0x10110221 has double precision, VTOR 0, 4 MiB at 0 and 4 MiB at 0x20000000, unmapped space above them reading zero without a fault"},
       "module": "mps2_an500",
       "core": "cortex-m7",

@@ -58,9 +58,9 @@ import thumb  # noqa: E402
 #  toolchain and take their own checks (D680-D686).
 DEVICES = json.loads((HERE / 'descriptions.json').read_text())['devices']
 EXPECTED = {name: record for name, record in DEVICES.items()
-            if record.get('target', 'cortex-m0') == 'cortex-m0'}
+            if record['target'] == 'cortex-m0'}
 RV32_EXPECTED = {name: record for name, record in DEVICES.items()
-                 if record.get('target') == 'rv32'}
+                 if record['target'] == 'rv32'}
 
 PROGRAMS = {
     'rp2040': ('import descriptions/rp2040\n'

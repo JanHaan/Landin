@@ -1054,7 +1054,12 @@ reserved vector word, the handler's word, and a datum placed in its
 `memmap_default.ld`, its flash-region template, its Pico board header, its
 `intctrl.h` and its `boot_stage2.ld`, each by URL and SHA-256, and from
 [1990]; none is read from the descriptions or the compiler, so a wrong or
-absent fact fails. RP2040's slot 21, `USBCTRL_IRQ`, holds its handler, and
+absent fact fails. Every record, under `devices` and under `lanes`, names
+the `target` it is built for, `cortex-m0` or `rv32`, and each reader selects
+its records by that name: the Cortex-M harness and its lanes take the
+`cortex-m0` ones, and the RV32 lanes and checks the `rv32` ones, so a record
+without a target is refused rather than read as an Arm device. RP2040's
+slot 21, `USBCTRL_IRQ`, holds its handler, and
 the reference refuses slot 21 as L0347 and links zero there. RP2350's are
 recorded from pico-sdk's `memmap_default.ld` for RP2350, `pico2.h` and
 `intctrl.h` the same way; its slot 56, PROC0_IRQ_CTI, holds its handler.
