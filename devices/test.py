@@ -67,8 +67,14 @@ def policies():
 
 
 def svd_input(policy):
-    """The lock's name for a policy's SVD."""
-    return policy['prefix'] + '/' + policy['device'] + '.svd'
+    """The lock's name for a policy's SVD: the one SVD it pins with the
+    policy's hash.  Two policies may read one SVD, RP2350's two cores'."""
+    names = [name for name, entry in fetch_inputs.read_lock().items()
+             if name.endswith('.svd') and entry['sha256'] == policy['svd_sha256']]
+    if len(names) != 1:
+        raise AssertionError('the lock pins %d SVDs of the hash %s'
+                             % (len(names), policy['svd_sha256']))
+    return names[0]
 
 
 def tree(directory):
@@ -331,10 +337,16 @@ CORES = {'CM0': 'cortex-m0', 'CM0PLUS': 'cortex-m0plus',
          'CM3': 'cortex-m3', 'CM4': 'cortex-m4', 'CM7': 'cortex-m7',
          'CM33': 'cortex-m33'}
 
+# D701: the two ESP cores' slots, which no interrupt-matrix source takes:
+# a vectored mtvec's 32 mcause codes, and the C5's CLIC's 48 identities.
+SOURCE_CORES = {'esp-rv32imc': 32, 'esp-rv32imac-clic': 48}
 
-def render_d542(raw, corrections=()):
-    """D542's generated half from an SVD's bytes and a policy's interrupt
-    corrections, with nothing of refine's."""
+
+def render_d542(raw, policy):
+    """D542's generated half from an SVD's bytes and its policy's interrupt
+    corrections, core and identity, with nothing of refine's; on an ESP
+    core, also the module of its interrupt-matrix sources (D700, D701),
+    which is None on the others."""
     import xml.etree.ElementTree as ElementTree
 
     def text_of(element, name):
@@ -360,7 +372,7 @@ def render_d542(raw, corrections=()):
             pairs.add((int(text_of(interrupt, 'value'), 0),
                        text_of(interrupt, 'name')))
     notes = []
-    for named_irq, correction in dict(corrections).items():
+    for named_irq, correction in policy.get('interrupt_corrections', {}).items():
         old = sorted(value for value, named in pairs if named == named_irq)
         pairs = {pair for pair in pairs if pair[1] != named_irq}
         olds = ' and '.join(str(value) for value in old)
@@ -373,17 +385,33 @@ def render_d542(raw, corrections=()):
                 ('adds %s at' % named_irq) if not old else
                 ('moves %s from %s to' % (named_irq, olds)),
                 correction['value'], correction['source']))
+    core = policy.get('core') or CORES[text_of(cpu, 'name')]
+    module = policy['prefix'] + '/sources'
     lines += ['-- Generated from the SVD; memory.ldn beside it is written'
-              ' by hand.'] + notes + ['']
+              ' by hand.'] + notes
+    if core in SOURCE_CORES:
+        lines += ['-- Its interrupts are interrupt-matrix sources, not slots: '
+                  + module + '.']
+    lines += ['']
     declared = int(text_of(cpu, 'deviceNumInterrupts') or '0', 0)
-    count = 16 + max(declared, max(value for value, _ in pairs) + 1)
-    lines += ['compiler.device("%s")' % name.lower(),
-              'compiler.core("%s")' % CORES[text_of(cpu, 'name')],
+    count = SOURCE_CORES.get(
+        core, 16 + max(declared, max(value for value, _ in pairs) + 1))
+    lines += ['compiler.device("%s")' % policy.get('identity', name.lower()),
+              'compiler.core("%s")' % core,
               'compiler.vectors(%d)' % count]
-    lines += ['compiler.interrupt("%s", %d)' % (interrupt, value)
-              for value, interrupt in
-              sorted(pairs, key=lambda pair: (pair[0], pair[1].encode()))]
-    return '\n'.join(lines) + '\n'
+    ordered = sorted(pairs, key=lambda pair: (pair[0], pair[1].encode()))
+    if core not in SOURCE_CORES:
+        lines += ['compiler.interrupt("%s", %d)' % (interrupt, value)
+                  for value, interrupt in ordered]
+        return '\n'.join(lines) + '\n', None
+    sources = (['-- ' + line for line in policy['notice']]
+               + ["-- The %s's interrupt-matrix sources: each is the number"
+                  " of its map" % name,
+                  '-- register, which routes it to a CPU interrupt line;'
+                  ' none is a vector slot.'] + notes
+               + ['public %s: u32 = %d' % (interrupt.lower(), value)
+                  for value, interrupt in ordered])
+    return '\n'.join(lines) + '\n', '\n'.join(sources) + '\n'
 
 
 #  How pico-sdk's headers spell each field access, as the SVD gives it.
@@ -459,10 +487,16 @@ class D542Form(unittest.TestCase):
         for name, policy in policies().items():
             with self.subTest(policy=name):
                 raw = fetch_inputs.fetch(svd_input(policy)).read_bytes()
+                description, sources = render_d542(raw, policy)
                 self.assertEqual(
                     (HERE / policy['description'] / 'interrupts.ldn').read_bytes(),
-                    render_d542(raw, policy.get('interrupt_corrections', {}))
-                    .encode('ascii'))
+                    description.encode('ascii'))
+                module = (HERE / policy['modules'] / policy['prefix']
+                          / 'sources' / 'device.ldn')
+                if sources is None:
+                    self.assertFalse(module.exists(), module)
+                else:
+                    self.assertEqual(module.read_bytes(), sources.encode('ascii'))
 
 
 class Rp2040Oracles(unittest.TestCase):
@@ -1074,6 +1108,520 @@ class Stm32h753Oracles(unittest.TestCase):
         # in one.
         for kind in ('data', 'bss', 'stack'):
             self.assertNotIn(places[kind], ('DTCM', 'ITCM'), kind)
+
+
+class IdfHeader:
+    """ESP-IDF's register headers, read for their macros and the comment
+    each field's macros follow: `NAME : ACCESS ;bitpos:[HIGH:LOW] ;default:
+    VALUE ;`, in either of the two spellings IDF's generators have used."""
+
+    FIELD = re.compile(r'(\w+)\s*:\s*([\w/]+)\s*;\s*bitpos:\s*\[(\d+)(?::(\d+))?\]'
+                       r'\s*;\s*default:\s*([^;]*);')
+
+    def __init__(self, *texts):
+        self.lines = []
+        self.macros = {}
+        self.functions = {}
+        for text in texts:
+            for line in re.sub(r'\\\n', ' ', text).splitlines():
+                self.lines.append(line)
+                called = re.match(r'\s*#define\s+(\w+)\(([\w, ]+)\)\s+(.*?)\s*'
+                                  r'(?://.*|/\*.*)?$', line)
+                plain = re.match(r'\s*#define\s+(\w+)\s+(.*?)\s*(?://.*|/\*.*)?$', line)
+                if called:
+                    self.functions[called.group(1)] = (
+                        [p.strip() for p in called.group(2).split(',')], called.group(3))
+                elif plain:
+                    self.macros.setdefault(plain.group(1), plain.group(2))
+
+    def value(self, expression):
+        def call(match):
+            if match.group(1) not in self.functions:
+                return match.group(0)
+            params, body = self.functions[match.group(1)]
+            for param, argument in zip(params, match.group(2).split(',')):
+                body = re.sub(r'\b%s\b' % param, '(%s)' % argument.strip(), body)
+            return '(' + body + ')'
+        text = expression
+        for _ in range(40):
+            text = re.sub(r'\(\((\s*\w+\s*)\)\)', r'(\1)', text)
+            expanded = re.sub(r'\b(\w+)\s*\(([^()]*)\)', call, text)
+            expanded = re.sub(r'\bBIT\((\d+)\)', r'(1 << \1)', expanded)
+            expanded = re.sub(r'\b([A-Za-z_]\w*)\b',
+                              lambda m: '(' + self.macros[m.group(1)] + ')'
+                              if m.group(1) in self.macros else m.group(0), expanded)
+            if expanded == text:
+                break
+            text = expanded
+        text = re.sub(r'\b(0x[0-9a-fA-F]+|\d+)[uUlL]+\b', r'\1', text)
+        if not re.fullmatch(r'[\s0-9a-fA-FxX()+\-*<>|&~]*', text):
+            raise AssertionError('not evaluated: %s, %s' % (expression, text))
+        return eval(text, {})
+
+    def commented(self, register_macro):
+        """Each field the comments in a register's block declare: its access,
+        high and low bits and default."""
+        lines = iter(self.lines)
+        for line in lines:
+            if re.match(r'\s*#define\s+%s\b' % register_macro, line):
+                break
+        else:
+            raise AssertionError('no register ' + register_macro)
+        found = {}
+        for line in lines:
+            if re.match(r'\s*#define\s+\w+_REG\b', line):
+                break
+            match = self.FIELD.search(line)
+            if match:
+                high = int(match.group(3))
+                low = int(match.group(4)) if match.group(4) else high
+                found[match.group(1)] = (match.group(2), high, low, match.group(5).strip())
+        return found
+
+
+def idf_default(text):
+    """A field's default as IDF writes it: 0x1f, 31, or Verilog's 8'h1f."""
+    match = re.fullmatch(r"(\d+)'([bdh])([0-9a-fA-F_]+)", text.strip())
+    if match:
+        return int(match.group(3).replace('_', ''),
+                   {'b': 2, 'd': 10, 'h': 16}[match.group(2)])
+    return int(text.strip().rstrip('uU'), 0)
+
+
+#  How IDF's headers spell a register's macro and a field's, where neither
+#  is the family's prefix, `_`, and the SVD's name.  The IO MUX's pins share
+#  one set of field macros, which the C3 and C5 headers spell by their
+#  sleep-mode and pull names.
+IO_MUX_FIELDS = {'MCU_OE': 'SLP_OE', 'SLP_SEL': 'SLP_SEL', 'MCU_WPD': 'SLP_PD',
+                 'MCU_WPU': 'SLP_PU', 'MCU_IE': 'SLP_IE', 'MCU_DRV': 'SLP_DRV',
+                 'FUN_WPD': 'FUN_PD', 'FUN_WPU': 'FUN_PU', 'FUN_IE': 'FUN_IE',
+                 'FUN_DRV': 'FUN_DRV', 'MCU_SEL': 'MCU_SEL', 'FILTER_EN': 'FILTER_EN'}
+
+
+def compare_with_esp_idf(case, rows, chip, families, names, unshared, resets):
+    """Every selected register and field of ROWS against ESP-IDF's headers
+    for CHIP, which refine never reads: address, each field's position and
+    width, the reset value it promises and the access its policy admits.
+
+    FAMILIES gives each peripheral's header, macro prefix and instance;
+    NAMES (register, field) the header's macro where it spells the field
+    otherwise, a register's own in NAMES[(register, None)]; UNSHARED each
+    (register, field, side) one of the two names and the other lacks,
+    reviewed against the manual; RESETS each (register, field) whose
+    default the manual says the header gives wrongly."""
+    seen = set()
+    for row in rows:
+        key = row['source']
+        peripheral, register = key.split('.')
+        header_file, prefix, instance = families[peripheral]
+        header = IdfHeader(*[fetch_inputs.fetch(chip + '/' + name).read_text()
+                             for name in ('reg_base.h', 'soc.h', header_file)])
+        macro = names.get((key, None), prefix + '_' + register + '_REG')
+        call = re.match(r'(\w+)\((\d+)\)$', macro)
+        with case.subTest(register=key):
+            case.assertEqual(row['width'], 32)
+            case.assertEqual(
+                header.value(macro if call or instance is None
+                             else '%s(%d)' % (macro, instance)), row['address'])
+            commented = ({} if peripheral in ('IO_MUX', 'CLIC')
+                         else header.commented(call.group(1) if call else macro))
+            matched = set()
+            reset_mask = 0
+            reset_value = 0
+            for field in row['fields']:
+                name = names.get((key, field['name']), prefix + '_' + field['name'])
+                if (key, field['name'], 'svd') in unshared:
+                    seen.add((key, field['name'], 'svd'))
+                    case.assertNotIn(name, commented)
+                    continue
+                case.assertEqual(header.value(name + '_S'), field['low'], name)
+                case.assertEqual(header.value(name + '_V'),
+                                 (1 << field['high'] - field['low'] + 1) - 1, name)
+                if name not in commented:
+                    continue
+                matched.add(name)
+                access, high, low, default = commented[name]
+                case.assertEqual((high, low), (field['high'], field['low']), name)
+                if (key, field['name']) in resets:
+                    seen.add((key, field['name']))
+                elif field['mask'] & row['known_reset_mask']:
+                    reset_mask |= field['mask']
+                    reset_value |= idf_default(default) << field['low']
+            case.assertEqual(row['known_reset_value'] & reset_mask, reset_value)
+            for name in sorted(set(commented) - matched):
+                case.assertIn((key, name, 'header'), unshared,
+                              'the header alone has ' + name)
+                seen.add((key, name, 'header'))
+            # A register of read-only fields takes no write, and one of
+            # write-only fields or write triggers no read, but a FIFO.
+            accesses = {commented[name][0] for name in matched}
+            if accesses and accesses <= {'RO'} and register != 'FIFO':
+                case.assertEqual(row['policy']['write'], 'refused')
+            if accesses and accesses <= {'WO', 'WT'}:
+                case.assertEqual(row['policy']['read'], 'refused')
+    case.assertEqual(seen, set(unshared) | set(resets))
+
+
+def sources_of(chip):
+    """The interrupt-matrix sources IDF's interrupts.h numbers, by the
+    name between ETS_ and its _INTR_SOURCE or _SOURCE."""
+    text = fetch_inputs.fetch(chip + '/interrupts.h').read_text()
+    body = text[text.index('typedef enum'):text.index('ETS_MAX_INTR_SOURCE')]
+    found = {}
+    number = -1
+    for name, value in re.findall(r'^\s*ETS_(\w+?)\s*(?:=\s*(\w+))?\s*,', body,
+                                  re.MULTILINE):
+        if value and not value.isdigit():
+            continue
+        number = int(value) if value else number + 1
+        found[re.sub(r'(_INTR)?_SOURCE$', '', name)] = number
+    return found
+
+
+def generated_sources(policy):
+    text = (HERE / policy['modules'] / policy['prefix'] / 'sources'
+            / 'device.ldn').read_text()
+    return {name.upper(): int(value) for name, value in
+            re.findall(r'^public (\w+): u32 = (\d+)$', text, re.MULTILINE)}
+
+
+ESP32C3_FAMILIES = {
+    'UART0': ('uart_reg.h', 'UART', 0), 'SYSTEM': ('system_reg.h', 'SYSTEM', None),
+    'GPIO': ('gpio_reg.h', 'GPIO', None), 'IO_MUX': ('io_mux_reg.h', 'IO_MUX', None),
+    'INTERRUPT_CORE0': ('interrupt_core0_reg.h', 'INTERRUPT_CORE0', None),
+    'SYSTIMER': ('systimer_reg.h', 'SYSTIMER', None),
+    'TIMG0': ('timer_group_reg.h', 'TIMG', 0), 'TIMG1': ('timer_group_reg.h', 'TIMG', 1),
+    'RTC_CNTL': ('rtc_cntl_reg.h', 'RTC_CNTL', None)}
+
+
+class Esp32c3Oracles(unittest.TestCase):
+    """The ESP32-C3's selection against ESP-IDF v6.1's headers and literals
+    reviewed from its Technical Reference Manual, v1.4 (D702)."""
+
+    @classmethod
+    def rows(cls):
+        policy = policies()['esp32c3']
+        return json.loads((HERE / policy['modules'] /
+                           policy['correspondence']).read_text())
+
+    @requires_refine
+    def test_vendor_headers(self):
+        names = {('GPIO.IN', 'DATA_NEXT'): 'GPIO_IN_DATA',
+                 ('UART0.ID', 'REG_UPDATE'): 'UART_UPDATE',
+                 ('UART0.CLKDIV', 'FRAG'): 'UART_CLKDIV_FRAG',
+                 ('SYSTEM.PERIP_CLK_EN0', 'EXT1_CLK_EN'): 'SYSTEM_I2C_EXT1_CLK_EN',
+                 ('SYSTEM.PERIP_RST_EN0', 'EXT1_RST'): 'SYSTEM_I2C_EXT1_RST'}
+        for field, spelled in (('OUT_SEL', 'OUT_SEL'), ('INV_SEL', 'OUT_INV_SEL'),
+                               ('OEN_SEL', 'OEN_SEL'), ('OEN_INV_SEL', 'OEN_INV_SEL')):
+            names[('GPIO.FUNC8_OUT_SEL_CFG', field)] = 'GPIO_FUNC8_' + spelled
+        for pin in ('GPIO8', 'GPIO20', 'GPIO21'):
+            for field, spelled in IO_MUX_FIELDS.items():
+                names[('IO_MUX.' + pin, field)] = spelled
+        compare_with_esp_idf(
+            self, self.rows(), 'esp32c3', ESP32C3_FAMILIES, names,
+            unshared=set(),
+            # 9.8, Registers 9.37 and 9.39, pp. 254 and 255: the RTC
+            # watchdog's and the super watchdog's write protection reset to
+            # zero, as the SVD says; the header gives each its key.
+            resets={('RTC_CNTL.WDTWPROTECT', 'WDT_WKEY'),
+                    ('RTC_CNTL.SWD_WPROTECT', 'SWD_WKEY')})
+
+    @requires_refine
+    def test_sources_against_the_header(self):
+        given = generated_sources(policies()['esp32c3'])
+        expected = dict(sources_of('esp32c3'))
+        # The SVD and the header agree on every source's number; they
+        # spell four otherwise.
+        for svd_name, header_name in (('I2S0', 'I2S0'), ('TWAI0', 'TWAI'),
+                                      ('USB_DEVICE', 'USB_SERIAL_JTAG'),
+                                      ('I2C_MASTER', 'I2C_MASTER'),
+                                      ('SYSTIMER_TARGET0', 'SYSTIMER_TARGET0')):
+            expected[svd_name] = expected.pop(header_name)
+        for name in list(expected):
+            if name.endswith('_LEVEL_INTR'):
+                expected[name[:-len('_INTR')]] = expected.pop(name)
+        for name in ('SYSTIMER_TARGET0_EDGE', 'SYSTIMER_TARGET1_EDGE',
+                     'SYSTIMER_TARGET2_EDGE'):
+            expected.pop(name, None)
+        self.assertEqual(given, expected)
+        self.assertEqual(given['UART0'], 21)
+        self.assertEqual(given['SYSTIMER_TARGET0'], 37)
+
+    def test_literal_contract(self):
+        rows = {r['source']: r for r in self.rows()}
+        self.assertEqual(len(rows), 54)
+        fields = {(key, f['name']): f for key, row in rows.items() for f in row['fields']}
+        # TRM v1.4, 8.3, Table 8.3-1, pp. 204 and 205: UART0's source is 21
+        # and SYSTIMER_TARGET0's 37, so their mapping registers are at 0x54
+        # and 0x94 of the interrupt matrix at 0x600C_2000 (3.3, Table 3.3-3,
+        # p. 99), each a CPU interrupt line in bits 4:0.
+        self.assertEqual(rows['INTERRUPT_CORE0.UART_INTR_MAP']['address'], 0x600c2054)
+        self.assertEqual(rows['INTERRUPT_CORE0.SYSTIMER_TARGET0_INT_MAP']['address'],
+                         0x600c2094)
+        self.assertEqual(fields[('INTERRUPT_CORE0.UART_INTR_MAP', 'UART_INTR_MAP')]['mask'],
+                         0x1f)
+        # 16.5, Registers 16.3 and 16.5, pp. 435 and 437: UART0's clock
+        # enable and reset are bit 2, the system timer's bit 29, and the
+        # one I2S's bit 21, which the policy moves there from bit 4.
+        self.assertEqual(fields[('SYSTEM.PERIP_CLK_EN0', 'UART_CLK_EN')]['mask'], 1 << 2)
+        self.assertEqual(fields[('SYSTEM.PERIP_CLK_EN0', 'SYSTIMER_CLK_EN')]['mask'],
+                         1 << 29)
+        self.assertEqual(fields[('SYSTEM.PERIP_CLK_EN0', 'I2S0_CLK_EN')]['mask'], 1 << 21)
+        self.assertNotIn(('SYSTEM.PERIP_CLK_EN0', 'I2S1_CLK_EN'), fields)
+        # 5.15.2, Register 5.21, p. 187: the IO MUX's pins from 0x0004, so
+        # UART0's GPIO20 and GPIO21 at 0x54 and 0x58 and the indicator's
+        # GPIO8 at 0x24, MCU_SEL in bits 14:12 and MCU_DRV in 6:5.
+        self.assertEqual([rows['IO_MUX.' + pin]['address'] for pin in
+                          ('GPIO8', 'GPIO20', 'GPIO21')],
+                         [0x60009024, 0x60009054, 0x60009058])
+        self.assertEqual(fields[('IO_MUX.GPIO20', 'MCU_SEL')]['mask'], 0x7000)
+        self.assertEqual(fields[('IO_MUX.GPIO20', 'MCU_DRV')]['mask'], 0x60)
+        self.assertEqual(rows['IO_MUX.GPIO20']['dim_element'],
+                         {'array': 'GPIO%s', 'index': '20'})
+        # The watchdogs: a flash boot leaves timer group 0's MWDT and the
+        # RWDT running (12.1, p. 305), each enabled by bit 31 of its first
+        # configuration word, as is timer group 1's; and the super watchdog
+        # is fed automatically by bit 31 of SWD_CONF (12.3.2, p. 309;
+        # Register 9.38, p. 255).
+        for key in ('TIMG0.WDTCONFIG0', 'TIMG1.WDTCONFIG0', 'RTC_CNTL.WDTCONFIG0'):
+            self.assertEqual(fields[(key, 'WDT_EN')]['mask'], 1 << 31, key)
+        self.assertEqual([rows[k]['address'] for k in
+                          ('TIMG0.WDTCONFIG0', 'TIMG0.WDTWPROTECT',
+                           'TIMG1.WDTCONFIG0', 'TIMG1.WDTWPROTECT',
+                           'RTC_CNTL.WDTCONFIG0', 'RTC_CNTL.WDTWPROTECT',
+                           'RTC_CNTL.SWD_CONF', 'RTC_CNTL.SWD_WPROTECT')],
+                         [0x6001f048, 0x6001f064, 0x60020048, 0x60020064,
+                          0x60008090, 0x600080a8, 0x600080ac, 0x600080b0])
+        self.assertEqual(fields[('RTC_CNTL.SWD_CONF', 'SWD_AUTO_FEED_EN')]['mask'],
+                         1 << 31)
+        # An independently reviewed access surface.
+        for key, row in rows.items():
+            read = ('refused' if key in {'UART0.INT_CLR', 'GPIO.OUT_W1TS',
+                                         'GPIO.OUT_W1TC', 'GPIO.ENABLE_W1TS',
+                                         'SYSTIMER.COMP0_LOAD', 'SYSTIMER.INT_CLR',
+                                         'TIMG0.WDTFEED', 'TIMG1.WDTFEED',
+                                         'RTC_CNTL.WDTFEED'}
+                    else 'modify' if key == 'UART0.FIFO' else 'normal')
+            write = ('refused' if key in {
+                'UART0.INT_RAW', 'UART0.INT_ST', 'UART0.STATUS', 'GPIO.IN',
+                'INTERRUPT_CORE0.CPU_INT_EIP_STATUS', 'SYSTIMER.UNIT0_VALUE_HI',
+                'SYSTIMER.UNIT0_VALUE_LO', 'SYSTIMER.INT_RAW', 'SYSTIMER.INT_ST',
+                'RTC_CNTL.RESET_STATE'}
+                     else 'one_clears' if key in {'UART0.INT_CLR', 'SYSTIMER.INT_CLR'}
+                     else 'normal')
+            expected = {'read': read, 'write': write, 'reserved': 'zero'}
+            mask = {'UART0.FIFO': '0x000000ff', 'SYSTIMER.UNIT0_OP': '0x40000000',
+                    'RTC_CNTL.SWD_CONF': '0xfffe0000'}.get(key)
+            if mask:
+                expected['write_mask'] = mask
+            self.assertEqual(row['policy'], expected, key)
+
+
+ESP32C5_FAMILIES = {
+    'UART0': ('uart_reg.h', 'UART', 0), 'PCR': ('pcr_reg.h', 'PCR', None),
+    'GPIO': ('gpio_reg.h', 'GPIO', None), 'IO_MUX': ('io_mux_reg.h', 'IO_MUX', None),
+    'INTERRUPT_CORE0': ('interrupt_matrix_reg.h', 'INTERRUPT_CORE0', None),
+    'CLIC': ('clic_reg.h', 'CLIC', None),
+    'SYSTIMER': ('systimer_reg.h', 'SYSTIMER', None),
+    'TIMG0': ('timer_group_reg.h', 'TIMG', 0), 'TIMG1': ('timer_group_reg.h', 'TIMG', 1),
+    'LP_WDT': ('lp_wdt_reg.h', 'LP_WDT', None),
+    'LP_CLKRST': ('lp_clkrst_reg.h', 'LP_CLKRST', None)}
+
+
+class Esp32c5Oracles(unittest.TestCase):
+    """The ESP32-C5's selection against ESP-IDF v6.1's headers and literals
+    reviewed from its Technical Reference Manual, v1.1 (D702, D704, D705)."""
+
+    @classmethod
+    def rows(cls):
+        policy = policies()['esp32c5']
+        return json.loads((HERE / policy['modules'] /
+                           policy['correspondence']).read_text())
+
+    @requires_refine
+    def test_vendor_headers(self):
+        names = {('GPIO.IN', 'DATA_NEXT'): 'GPIO_IN_DATA_NEXT',
+                 ('CLIC.MCLICCFG', None): 'CLIC_INT_CONFIG_REG',
+                 ('CLIC.CLICINFO', None): 'CLIC_INT_INFO_REG',
+                 ('CLIC.MCLICCFG', 'MNLBITS'): 'CLIC_INT_CONFIG_MNLBITS',
+                 ('CLIC.MCLICCFG', 'NMBITS'): 'CLIC_INT_CONFIG_NMBITS',
+                 ('CLIC.CLICINFO', 'NUM_INTERRUPTS'): 'CLIC_INT_INFO_NUM_INT',
+                 ('CLIC.CLICINFO', 'VERSION'): 'CLIC_INT_INFO_VERSION',
+                 ('CLIC.CLICINFO', 'CLICINTCTLBITS'): 'CLIC_INT_INFO_CTLBITS'}
+        for line in ('17', '18'):
+            key = 'CLIC.CLICINT' + line
+            names[(key, None)] = 'CLIC_INT_CTRL_REG(%s)' % line
+            for field, spelled in (('IP', 'IP'), ('IE', 'IE'), ('SHV', 'ATTR_SHV'),
+                                   ('TRIG', 'ATTR_TRIG'), ('MODE', 'ATTR_MODE')):
+                names[(key, field)] = 'CLIC_INT_' + spelled
+        for field, spelled in (('FUNC_OUT_SEL', 'OUT_SEL'),
+                               ('FUNC_OUT_INV_SEL', 'OUT_INV_SEL'),
+                               ('FUNC_OE_SEL', 'OE_SEL'), ('FUNC_OE_INV_SEL', 'OE_INV_SEL')):
+            names[('GPIO.FUNC27_OUT_SEL_CFG', field)] = 'GPIO_FUNC27_' + spelled
+        for source in ('UART0', 'SYSTIMER_TARGET0'):
+            key = 'INTERRUPT_CORE0.%s_INTR_MAP' % source
+            names[(key, 'PASS_IN_SEC')] = 'INTERRUPT_CORE0_%s_INTR_PASS_IN_SEC' % source
+        unshared = set()
+        for pin in ('GPIO11', 'GPIO12', 'GPIO27'):
+            for field, spelled in IO_MUX_FIELDS.items():
+                names[('IO_MUX.' + pin, field)] = spelled
+            # TRM v1.1, 8.13, Register 8.25, p. 352: a pin's HYS_EN and
+            # HYS_SEL are bits 16 and 17, as the SVD says; the header has no
+            # macro for either.
+            unshared |= {('IO_MUX.' + pin, 'HYS_EN', 'svd'),
+                         ('IO_MUX.' + pin, 'HYS_SEL', 'svd')}
+        # 2.8.2.7, Register 2.67, p. 90: clicintctl[i]'s level and priority
+        # are its bits 7:5, its lower five hardwired to one, where the
+        # header's CLIC_INT_CTL is the whole byte.
+        unshared |= {('CLIC.CLICINT17', 'CTL', 'svd'), ('CLIC.CLICINT18', 'CTL', 'svd')}
+        compare_with_esp_idf(self, self.rows(), 'esp32c5', ESP32C5_FAMILIES, names,
+                             unshared=unshared, resets=set())
+
+    @requires_refine
+    def test_sources_against_the_header(self):
+        given = generated_sources(policies()['esp32c5'])
+        expected = dict(sources_of('esp32c5'))
+        for svd_name, header_name in (('I2S', 'I2S0'), ('GPIO_EXT', 'GPIO_EXT'),
+                                      ('I2C_MASTER', 'I2C_MASTER')):
+            expected[svd_name] = expected.pop(header_name)
+        for name in list(expected):
+            if name.endswith('_LEVEL_INTR'):
+                expected[name[:-len('_INTR')]] = expected.pop(name)
+        # TRM v1.1, 11.5.1, Table 11.5-1, pp. 474 to 476, where the SVD and
+        # the header disagree: source 27 is BUS_MONITOR, which the header
+        # calls ASSIST_DEBUG, and 35 is reserved, which the header calls
+        # MODEM_PERI_TIMEOUT.
+        expected['BUS_MONITOR'] = expected.pop('ASSIST_DEBUG')
+        del expected['MODEM_PERI_TIMEOUT']
+        self.assertEqual(given, expected)
+        self.assertEqual(given['UART0'], 47)
+        self.assertEqual(given['SYSTIMER_TARGET0'], 61)
+
+    def test_literal_contract(self):
+        rows = {r['source']: r for r in self.rows()}
+        self.assertEqual(len(rows), 53)
+        fields = {(key, f['name']): f for key, row in rows.items() for f in row['fields']}
+        # TRM v1.1, 11.6, p. 480: UART0's and SYSTIMER_TARGET0's mapping
+        # registers are at 0x0BC and 0x0F4 of the matrix at 0x6001_0000,
+        # four times their sources, 47 and 61, where the SVD gives 0xB4 and
+        # 0xEC; and 11.5.3, p. 477: a source is routed by writing the CLIC
+        # identity, 16 to 47, into its map register's bits 5:0.
+        for key, offset, svd in (('INTERRUPT_CORE0.UART0_INTR_MAP', 0xbc, 0xb4),
+                                 ('INTERRUPT_CORE0.SYSTIMER_TARGET0_INTR_MAP', 0xf4,
+                                  0xec)):
+            self.assertEqual(rows[key]['address'], 0x60010000 + offset, key)
+            self.assertEqual(rows[key]['offset_correction']['svd_offset'], svd, key)
+        self.assertEqual(fields[('INTERRUPT_CORE0.UART0_INTR_MAP',
+                                 'UART0_INTR_MAP')]['mask'], 0x3f)
+        self.assertTrue(fields[('INTERRUPT_CORE0.UART0_INTR_MAP',
+                                'PASS_IN_SEC')]['correction']['added'])
+        # 2.8.2.6 and 2.8.2.7, pp. 86 to 90: the CLIC's configuration and
+        # information at 0x2080_0000 and 0x2080_0004, and each interrupt's
+        # four bytes at 0x2080_1000 + 4 * i, so the CPU's peripheral lines
+        # 1 and 2 are identities 17 and 18 at 0x2080_1044 and 0x2080_1048;
+        # 48 interrupts, three bits of level and priority.
+        self.assertEqual([rows['CLIC.' + r]['address'] for r in
+                          ('MCLICCFG', 'CLICINFO', 'CLICINT17', 'CLICINT18')],
+                         [0x20800000, 0x20800004, 0x20801044, 0x20801048])
+        self.assertEqual((rows['CLIC.CLICINFO']['known_reset_value'],
+                          rows['CLIC.CLICINT17']['known_reset_value']),
+                         (0x00600030, 0x00c00000))
+        self.assertEqual([fields[('CLIC.CLICINT17', f)]['mask'] for f in
+                          ('IP', 'IE', 'SHV', 'TRIG', 'MODE', 'CTL')],
+                         [0x1, 0x100, 0x10000, 0x60000, 0xc00000, 0xe0000000])
+        self.assertIn('addition', rows['CLIC.CLICINT17'])
+        # 8.13, Register 8.25, p. 352: UART0's GPIO11 and GPIO12 and the
+        # indicator's GPIO27 from the IO MUX at 0x6009_0000.
+        self.assertEqual([rows['IO_MUX.' + pin]['address'] for pin in
+                          ('GPIO11', 'GPIO12', 'GPIO27')],
+                         [0x6009002c, 0x60090030, 0x6009006c])
+        # The watchdogs: a flash boot leaves timer group 0's MWDT and the
+        # RWDT running (16.1, p. 710), each enabled by bit 31 of its first
+        # configuration word (Register 15.10, p. 701; Register 16.1, p. 717),
+        # as is timer group 1's; and the super watchdog is fed automatically
+        # by bit 18 of SWD_CONFIG (Register 16.8, p. 721), which the manual
+        # calls RTC_WDT_ and the SVD and the header LP_WDT_.
+        for key in ('TIMG0.WDTCONFIG0', 'TIMG1.WDTCONFIG0', 'LP_WDT.CONFIG0'):
+            self.assertEqual(fields[(key, 'WDT_EN')]['mask'], 1 << 31, key)
+        self.assertEqual(fields[('LP_WDT.SWD_CONFIG', 'SWD_AUTO_FEED_EN')]['mask'],
+                         1 << 18)
+        self.assertNotIn(('TIMG0.WDTCONFIG0', 'WDT_USE_XTAL'), fields)
+        self.assertEqual([rows[k]['address'] for k in
+                          ('TIMG0.WDTCONFIG0', 'TIMG0.WDTWPROTECT',
+                           'TIMG1.WDTCONFIG0', 'TIMG1.WDTWPROTECT',
+                           'LP_WDT.CONFIG0', 'LP_WDT.WPROTECT',
+                           'LP_WDT.SWD_CONFIG', 'LP_WDT.SWD_WPROTECT')],
+                         [0x60008048, 0x60008064, 0x60009048, 0x60009064,
+                          0x600b1c00, 0x600b1c18, 0x600b1c1c, 0x600b1c20])
+        for key, row in rows.items():
+            read = ('refused' if key in {'UART0.INT_CLR', 'GPIO.OUT_W1TS',
+                                         'GPIO.OUT_W1TC', 'GPIO.ENABLE_W1TS',
+                                         'SYSTIMER.COMP0_LOAD', 'SYSTIMER.INT_CLR',
+                                         'TIMG0.WDTFEED', 'TIMG1.WDTFEED',
+                                         'LP_WDT.FEED'}
+                    else 'modify' if key == 'UART0.FIFO' else 'normal')
+            write = ('refused' if key in {
+                'UART0.INT_RAW', 'UART0.INT_ST', 'UART0.STATUS', 'GPIO.IN',
+                'CLIC.CLICINFO', 'SYSTIMER.UNIT0_VALUE_HI', 'SYSTIMER.UNIT0_VALUE_LO',
+                'SYSTIMER.INT_RAW', 'SYSTIMER.INT_ST', 'LP_CLKRST.RESET_CAUSE'}
+                     else 'one_clears' if key in {'UART0.INT_CLR', 'SYSTIMER.INT_CLR'}
+                     else 'normal')
+            expected = {'read': read, 'write': write, 'reserved': 'zero'}
+            mask = {'UART0.FIFO': '0x000000ff', 'SYSTIMER.UNIT0_OP': '0x40000000',
+                    'LP_WDT.SWD_CONFIG': '0xfffc0000',
+                    'PCR.UART0_CONF': '0x00000003', 'PCR.SYSTIMER_CONF': '0x00000003',
+                    'CLIC.MCLICCFG': '0x0000000f', 'CLIC.CLICINT17': '0xe0070101',
+                    'CLIC.CLICINT18': '0xe0070101'}.get(key)
+            if mask:
+                expected['write_mask'] = mask
+            self.assertEqual(row['policy'], expected, key)
+
+
+class Rp2350Hazard3Oracles(unittest.TestCase):
+    """RP2350's Hazard3 selection: the Arm cores' (D635) without the M33's
+    private bus, from the same SVD, with the Hazard3 core and its own
+    identity (D706)."""
+
+    @requires_refine
+    def test_vendor_headers(self):
+        policy = policies()['rp2350_hazard3']
+        rows = json.loads((HERE / policy['modules'] /
+                           policy['correspondence']).read_text())
+        addresses = fetch_inputs.fetch('rp2350/addressmap.h').read_text()
+        bases = {name: int(value, 0) for name, value in re.findall(
+            r'^#define (\w+)_BASE _u\((0x[0-9a-fA-F]+)\)', addresses, re.MULTILINE)}
+        compare_with_pico_sdk(
+            self, rows, 'rp2350', bases, RP2350_REQUESTS,
+            lambda peripheral: {'UART0': 'UART', 'TIMER0': 'TIMER'}.get(peripheral,
+                                                                       peripheral))
+
+    def test_the_arm_selection_without_its_private_bus(self):
+        arm = policies()['rp2350']
+        hazard3 = policies()['rp2350_hazard3']
+        self.assertEqual(hazard3['svd_sha256'], arm['svd_sha256'])
+        self.assertEqual((hazard3['core'], hazard3['identity']),
+                         ('hazard3', 'rp2350-hazard3'))
+        expected = {k: v for k, v in arm['selection'].items() if k != 'PPB'}
+        self.assertEqual(hazard3['selection'], expected)
+        self.assertEqual(hazard3['policies'],
+                         {k: v for k, v in arm['policies'].items()
+                          if not k.startswith('PPB.')})
+        # Every module the two share is the same text: the core does not
+        # change a register.
+        for peripheral in expected:
+            name = peripheral.lower() + '/device.ldn'
+            self.assertEqual(
+                (HERE / hazard3['modules'] / hazard3['prefix'] / name).read_bytes(),
+                (HERE / arm['modules'] / arm['prefix'] / name).read_bytes(), name)
+        self.assertFalse((HERE / hazard3['modules'] / hazard3['prefix'] / 'ppb')
+                         .exists())
+        text = (DESCRIPTIONS / 'rp2350_hazard3/interrupts.ldn').read_text()
+        # RP2350 Datasheet release 8, 3.2, p. 81: one IRQ table for both
+        # cores' kinds, so Hazard3's IRQ n is the Arm cores' n, and the
+        # Xh3irq core model takes it at slot 16 + n.
+        arm_text = (DESCRIPTIONS / 'rp2350/interrupts.ldn').read_text()
+        self.assertEqual(text.replace('"rp2350-hazard3"', '"rp2350"')
+                         .replace('"hazard3"', '"cortex-m33"'), arm_text)
 
 
 def main():
