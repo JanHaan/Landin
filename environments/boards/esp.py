@@ -352,6 +352,16 @@ def objdump(run, args, elf):
     return run.command('disassemble', [args.objdump, '-d', '--no-show-raw-insn', elf])
 
 
+def paced(args, what, action):
+    """ACTION, which disconnects a device on the rig's hub cascade, spaced
+    by args.pace."""
+    args.pace.before(what)
+    try:
+        return action()
+    finally:
+        args.pace.after(what)
+
+
 def run_board(chip, args, console_for, cycle, settle):
     """The whole run: SETTLE(run) waits for the hub to list the board again
     after a download resets the chip; CONSOLE_FOR(run) opens the console,
@@ -390,7 +400,7 @@ def run_board(chip, args, console_for, cycle, settle):
             for where, judge in (('checksum', refused_checksum), ('sha256', warned_sha)):
                 bad = run.out / ('%s-flipped.bin' % where)
                 bad.write_bytes(corrupted(data, where))
-                probe.download_bin(bad, chip.offset)
+                paced(args, 'download', lambda: probe.download_bin(bad, chip.offset))
                 settle(run)
                 console, _ = cycle(run, console_for, probe, None)
                 time.sleep(args.control_seconds)
@@ -400,7 +410,7 @@ def run_board(chip, args, console_for, cycle, settle):
                 controls[where] = judge(text, image)
                 console = None
             result['image_control'] = controls
-        probe.download_bin(path, chip.offset)
+        paced(args, 'download', lambda: probe.download_bin(path, chip.offset))
         settle(run)
         result['flash'] = dict(offset='%#x' % chip.offset, verified=True)
         console, power_on = cycle(run, console_for, probe, names)
@@ -463,11 +473,17 @@ def arguments(parser, chip):
                              ' refuse, and one whose SHA-256 is flipped, whose hash it must name')
     parser.add_argument('--control-seconds', type=float, default=3.0,
                         help='how long a control\'s boot log is read for')
+    parser.add_argument('--spacing', type=float, default=120.0,
+                        help='seconds between two actions that disconnect a device on the hub,'
+                             ' by any tool on the host (SR-692)')
+    parser.add_argument('--quiet', type=float, default=60.0,
+                        help='seconds the kernel must have logged nothing of USB before one')
     parser.add_argument('--seed', type=int, default=1240)
     parser.add_argument('--record', type=Path, help="also write a passed run's record here")
 
 
 def required_tools(args):
+    args.pace = common.Pace(args.spacing, args.quiet)
     require(args.probe_rs, 'no probe-rs: name one with --probe-rs')
     require(args.nm, 'no riscv64-elf-nm or riscv64-unknown-elf-nm on PATH: name one with --nm')
     require(args.objdump, 'no riscv64-elf-objdump on PATH: name one with --objdump')

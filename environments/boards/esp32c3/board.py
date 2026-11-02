@@ -106,9 +106,9 @@ def main():
         # console is open before the power is cut and reads the ROM's log
         # from power-on.
         console = open_console(run)
-        common.power_cycle(common.InGroup(run, args.hub_group), args.hub, args.port,
-                           args.off_seconds, holds=args.serial,
-                           keeps=(args.guard_port, args.guard_device))
+        esp.paced(args, 'power cycle', lambda: common.power_cycle(
+            common.InGroup(run, args.hub_group), args.hub, args.port, args.off_seconds,
+            holds=args.serial, keeps=(args.guard_port, args.guard_device)))
         settle(run)
         return console, None
 

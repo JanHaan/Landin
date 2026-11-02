@@ -398,5 +398,62 @@ class RigLock(unittest.TestCase):
         self.assertEqual(found[1:2], [os.getppid()] if os.getppid() > 1 else [])
 
 
+
+class Pace(unittest.TestCase):
+    """The spacing of actions that disconnect a device on the hub cascade."""
+    def pace(self, tmp, lines, now=1000.0):
+        clock = [now]
+        waited = []
+
+        def sleep(seconds):
+            waited.append(seconds)
+            clock[0] += seconds
+        pace = COMMON.Pace(120, 60, state=Path(tmp) / 'rig.pace',
+                           kernel=lambda seconds: [l for l in lines if l[0] >= clock[0] - seconds],
+                           clock=lambda: clock[0], sleep=sleep, report=lambda text: None)
+        return pace, clock, waited
+
+    def test_a_quiet_rig_long_after_the_last_action_goes_at_once(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            pace, clock, waited = self.pace(tmp, [])
+            pace.before('download')
+            pace.after('download')
+            self.assertEqual(waited, [])
+            self.assertEqual(pace.last(), clock[0])
+
+    def test_the_next_action_waits_for_the_spacing_and_a_quiet_minute(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            lines = [(1010.0, 'usb 7-2.3.4.2: USB disconnect, device number 9')]
+            pace, clock, waited = self.pace(tmp, lines)
+            pace.after('download')
+            clock[0] = 1030.0
+            pace.before('power cycle')
+            self.assertGreaterEqual(clock[0], 1120.0)
+            self.assertTrue(all(w <= 30 for w in waited))
+
+    def test_a_kernel_usb_line_restarts_the_quiet_minute(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            lines = [(1150.0, 'usb 7-2.3.4.3: new full-speed USB device number 12')]
+            pace, clock, _ = self.pace(tmp, lines, now=1160.0)
+            Path(tmp, 'rig.pace').write_text('900.0 download\n')
+            pace.before('power on')
+            self.assertGreaterEqual(clock[0], 1210.0)
+
+    def test_a_usb_error_since_the_last_action_stops_the_run(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            lines = [(1005.0, 'usb 7-2.3: device not accepting address 41, error -71')]
+            pace, _, _ = self.pace(tmp, lines, now=1200.0)
+            Path(tmp, 'rig.pace').write_text('1000.0 download\n')
+            with self.assertRaises(COMMON.Failed):
+                pace.before('power cycle')
+
+    def test_an_error_before_the_last_action_does_not(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            lines = [(990.0, 'usb 7-2-port3: attempt power cycle')]
+            pace, _, _ = self.pace(tmp, lines, now=1200.0)
+            Path(tmp, 'rig.pace').write_text('1000.0 download\n')
+            pace.before('power cycle')
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -29,7 +29,8 @@ does not depend on the chip:
   * the ESP application image both ESP32 ROMs load, read on its own from
     its bytes, and the log those ROMs write while they load it;
   * the record a passed run writes;
-  * the rig's one lock, held by every run's hardware phase.
+  * the rig's one lock, held by every run's hardware phase, and the pace
+    of the actions that disconnect a device on its hub cascade.
 
 Nothing here touches a board unless a tool calls it, and nothing needs more
 than the standard library, so scripts/tests/test_board_common.py runs it on
@@ -196,6 +197,72 @@ class RigLock:
 def rig_lock(who, path=RIG_LOCK, report=None):
     """The rig lock for WHO, a board tool's name."""
     return RigLock(who, path, report)
+
+
+USB_TROUBLE = re.compile(r'error -\d+|not accepting address|unable to enumerate|attempt power cycle'
+                         r'|Timeout while waiting for setup device')
+
+
+class Pace:
+    """The spacing of a run's actions that disconnect a USB device on the
+    rig's hub cascade: a download, which ends in the chip's reset, a port
+    switched off or on, or a chip reset through a bridge's modem lines.
+    Each waits until SPACING seconds have passed since the last one, by any
+    tool on the host, and until the kernel has logged nothing of USB for
+    QUIET seconds; any USB error the kernel logged since that last action
+    stops the run instead (SR-692).  The last action's time is kept in
+    STATE beside the rig's lock; KERNEL(seconds) is the kernel's USB lines
+    of the last SECONDS, as (unix time, text)."""
+    def __init__(self, spacing=120, quiet=60, state=None, kernel=None, clock=time.time,
+                 sleep=time.sleep, report=None):
+        self.spacing, self.quiet = spacing, quiet
+        self.state = Path(state) if state else RIG_LOCK.with_name('rig.pace')
+        self.kernel = kernel or kernel_usb_lines
+        self.clock, self.sleep = clock, sleep
+        self.report = report or (lambda text: print(text, file=sys.stderr, flush=True))
+
+    def last(self):
+        try:
+            return float(self.state.read_text().split()[0])
+        except (OSError, ValueError, IndexError):
+            return 0.0
+
+    def before(self, what):
+        last = self.last()
+        trouble = [text for when, text in self.kernel(max(1, int(self.clock() - last) + 1))
+                   if when >= last and USB_TROUBLE.search(text)]
+        if trouble:
+            raise Failed('the kernel logged USB trouble since the last action; stopping before'
+                         ' %s: %s' % (what, trouble[0]))
+        while True:
+            now = self.clock()
+            wait = max(last + self.spacing - now, 0)
+            recent = [when for when, _ in self.kernel(self.quiet)]
+            if recent:
+                wait = max(wait, max(recent) + self.quiet - now)
+            if wait <= 0:
+                return
+            self.report('%s waits %.0f s for the rig to settle' % (what, wait))
+            self.sleep(min(wait, 30))
+
+    def after(self, what):
+        self.state.parent.mkdir(parents=True, exist_ok=True)
+        self.state.write_text('%f %s\n' % (self.clock(), what))
+
+
+def kernel_usb_lines(seconds):
+    """The kernel's USB lines of the last SECONDS, as (unix time, text)."""
+    found = subprocess.run(['journalctl', '-k', '--since', '-%ds' % seconds, '--no-pager',
+                            '-o', 'short-unix'], capture_output=True, text=True).stdout
+    lines = []
+    for line in found.splitlines():
+        fields = line.split(None, 1)
+        if len(fields) == 2 and re.search(r'\busb\b|xhci', fields[1]):
+            try:
+                lines.append((float(fields[0]), fields[1]))
+            except ValueError:
+                continue
+    return lines
 
 
 class Run:

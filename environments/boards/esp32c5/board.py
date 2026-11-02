@@ -114,16 +114,19 @@ def main():
         hub = common.InGroup(run, args.hub_group)
         both = [args.console_port, args.port]
         guard = (args.guard_port, args.guard_device)
-        common.switch_ports(hub, args.hub, both, 'off', keeps=guard,
-                            holds=[(args.port, args.serial), (args.console_port, args.console_device)])
+        esp.paced(args, 'power off', lambda: common.switch_ports(
+            hub, args.hub, both, 'off', keeps=guard,
+            holds=[(args.port, args.serial), (args.console_port, args.console_device)]))
         time.sleep(args.off_seconds)
         common.wait_for_hub(hub, args.hub, [guard], args.enumerate_seconds)
-        common.switch_ports(hub, args.hub, both, 'on', keeps=guard)
+        esp.paced(args, 'power on', lambda: common.switch_ports(hub, args.hub, both, 'on',
+                                                                keeps=guard))
         settle(run)
         common.wait_for_tty_at(jtag_location, args.enumerate_seconds)
         power_on = power_on_boot(probe, names) if names else None
         console = open_console(run)
-        chip_enable_reset(console.fd, args.reset_seconds)
+        esp.paced(args, 'chip-enable reset',
+                  lambda: chip_enable_reset(console.fd, args.reset_seconds))
         return console, power_on
 
     return esp.run_board(C5(), args, console_for, cycle, settle)
