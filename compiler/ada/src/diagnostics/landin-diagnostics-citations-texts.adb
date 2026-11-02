@@ -23299,12 +23299,12 @@ package body Landin.Diagnostics.Citations.Texts is
                & "=lp64d`. The ISA set appears in ELF attributes and const"
                & "rains user assembly; it promises no loader refusal. Inst"
                & "ruction selection uses target XLEN and independent exten"
-               & "sion sets so a future RV32 emitter can share it without "
-               & "inheriting RV64's data model. The RISC-V psABI and GCC t"
-               & "arget options state the ABI and ISA selection. The stand"
-               & "ard Zba ISA and XTheadBa specification state the address"
-               & " instructions. Linux's generic stat and glibc record sta"
-               & "te the hosted record layout.",
+               & "sion sets, and RV32's emitter is this one at XLEN 32 (D6"
+               & "71), sharing it without inheriting RV64's data model. Th"
+               & "e RISC-V psABI and GCC target options state the ABI and "
+               & "ISA selection. The standard Zba ISA and XTheadBa specifi"
+               & "cation state the address instructions. Linux's generic s"
+               & "tat and glibc record state the hosted record layout.",
             when 660 =>
                "Chosen: `--target=rv32` selects a description of its own"
                & ", `compiler.arch == rv32`: little-endian ELF32, 32-bit p"

@@ -18772,8 +18772,9 @@ layout. Unknown, foreign, incompatible or unimplemented strings are L0009;
 no arbitrary parser acceptance promises backend support. The tools receive
 both the selected `-march` and `-mabi=lp64d`. The ISA set appears in ELF
 attributes and constrains user assembly; it promises no loader refusal.
-Instruction selection uses target XLEN and independent extension sets so a
-future RV32 emitter can share it without inheriting RV64's data model.
+Instruction selection uses target XLEN and independent extension sets, and
+RV32's emitter is this one at XLEN 32 (D671), sharing it without
+inheriting RV64's data model.
 The RISC-V [psABI](https://riscv-non-isa.github.io/riscv-elf-psabi-doc/)
 and [GCC target options](https://gcc.gnu.org/onlinedocs/gcc/RISC-V-Options.html)
 state the ABI and ISA selection. The standard
