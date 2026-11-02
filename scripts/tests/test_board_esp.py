@@ -493,11 +493,15 @@ HUB = ('Current status for hub 7-2.3.4 [0bda:5411 Generic USB2.1 Hub, USB 2.10, 
 
 
 class Recorded:
-    def __init__(self, status):
+    def __init__(self, status, switched=None):
         self.status, self.calls = status, []
+        self.switched = switched if switched is not None else [
+            'Sent power off request\nNew status for hub 7-2.3.4 [0bda:5411]\n']
 
     def command(self, name, argv, **_):
         self.calls.append((name, argv))
+        if name.startswith('power-'):
+            return self.switched.pop(0) if len(self.switched) > 1 else self.switched[0]
         return self.status
 
 
@@ -519,6 +523,18 @@ class Hub(unittest.TestCase):
                 COMMON.switch_ports(hub, '7-2.3.4', [4, 3], 'off', holds=self.HOLDS,
                                     keeps=(1, '1366:0105'))
             self.assertEqual([n for n, _ in hub.calls], ['hub-status'])
+
+    def test_a_switch_that_finds_no_hub_waits_and_switches_again(self):
+        hub = Recorded(HUB, switched=['', 'New status for hub 7-2.3.4 [0bda:5411]\n'])
+        with mock.patch.object(COMMON.time, 'sleep'):
+            COMMON.switch_ports(hub, '7-2.3.4', [3], 'on', keeps=(1, '1366:0105'))
+        self.assertEqual([n for n, _ in hub.calls],
+                         ['hub-status', 'power-on', 'hub-wait', 'power-on'])
+
+    def test_a_switch_that_never_takes_fails(self):
+        hub = Recorded(HUB, switched=[''])
+        with mock.patch.object(COMMON.time, 'sleep'), self.assertRaises(COMMON.Failed):
+            COMMON.switch_ports(hub, '7-2.3.4', [3], 'on', keeps=(1, '1366:0105'))
 
     def test_the_guarded_port_is_never_switched(self):
         with self.assertRaises(COMMON.Failed):

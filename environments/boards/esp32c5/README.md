@@ -35,13 +35,22 @@ GPIO28 stays high and the ROM boots from flash again, and the console reads
 that boot's log and the scenario. The ROM reports a chip-enable reset as a
 power-on reset, `rst:0x1`, which the oracle requires (D724).
 
-The tool switches only `--port` and `--console-port` on `--hub`, together,
-and only after `uhubctl` shows `--serial` and `--console-device` on them
-and `--guard-device` on `--guard-port`, the J-Link on the maintainer's rig,
-which is never switched; after every switch and download it waits for the
-hub to list the board again (D725). The run holds the rig's lock. The
-defaults are the maintainer's rig: hub `7-2.3.4`, the JTAG on port 3,
-guarded by port 1.
+The tool switches only `--port` on `--hub` and `--console-port` on
+`--console-hub`, and only after `uhubctl` shows `--serial` on the first,
+`--console-device` on the second, and on each hub its guarded port, which
+is never switched: `--guard-device` on `--guard-port`, the Renesas board's
+J-Link, and `--console-guard-device` on `--console-guard-port`, the
+ESP32-S3's USB-Serial-JTAG. Both are switched off, then both on, each
+switch paced and followed by a wait for the hub to list again; a switch
+made while the cascade re-enumerates finds no hub and is made again
+(D725). The run holds the rig's lock. The defaults are the maintainer's
+rig: the JTAG on hub `7-2.3.4` port 3 (front port 6), guarded by port 1
+(front port 8), and the CH340X on hub `7-2.4` port 3 (front port 12),
+guarded by port 4 (front port 11). The S3's own CH340 on `7-2.4` port 2 and
+the classic ESP32's on `7-2.3.4` port 4 show the same `1a86:7523` and no
+serial, so the bridge is told apart by its port alone; before its first
+run it was confirmed to be the C5's by its ROM banner,
+`ESP-ROM:esp32c5-eco2-20250121`.
 
 ## Running it
 

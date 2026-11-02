@@ -25,11 +25,15 @@ with every board's [`../common.py`](../common.py) (D646).
 
 The tool switches only `--port` on `--hub`, and only after `uhubctl` shows
 `--serial` on it and `--guard-device` on `--guard-port` of the same hub, the
-J-Link on the maintainer's rig, which is never switched. The port is cut
-and restored in one `uhubctl -a cycle`, through
-`/run/wrappers/bin/sg GROUP -c`, `--hub-group`, when the session is not in
-the group that may switch it. The defaults are the maintainer's rig: hub
-`7-2.3.4`, port 2, guarded by port 1.
+J-Link on the maintainer's rig, which is never switched. The port is
+switched off and on again, each through `/run/wrappers/bin/sg GROUP -c`,
+`--hub-group`, when the session is not in the group that may switch it,
+and each switch is paced and followed by a wait for the hub to list the
+board again, since every switch re-enumerates the rig's hub cascade (D725);
+a switch made while the cascade re-enumerates finds no hub and is made
+again. The run holds the rig's lock. The defaults are the maintainer's rig:
+hub `7-2.3.4`, port 2 (front port 7), guarded by port 1 (the Renesas
+board's J-Link, front port 8), and probehive slot 2's UART, port 4463.
 
 ## Running it
 

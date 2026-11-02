@@ -579,7 +579,8 @@ def wait_for_hub(hub, location, shows, seconds, interval=0.5):
         time.sleep(interval)
 
 
-def switch_ports(hub, location, ports, action, holds=(), keeps=None, name=None):
+def switch_ports(hub, location, ports, action, holds=(), keeps=None, name=None, tries=3,
+                 wait_seconds=20):
     """Switch every port of PORTS of the hub at LOCATION `off` or `on`
     together, in one call: a board fed through two of them, such as a USB
     serial bridge's port beside its debug port, loses all its power, and
@@ -603,8 +604,18 @@ def switch_ports(hub, location, ports, action, holds=(), keeps=None, name=None):
         require(port in found and text in found[port],
                 'port %d of hub %s does not hold %s; refusing to switch it'
                 % (port, location, text))
-    hub.command(name or 'power-' + action, ['uhubctl', '-l', location, '-p',
-                                             ','.join(str(p) for p in ports), '-a', action])
+    # The cascade may be re-enumerating after the last switch, when uhubctl
+    # finds no hub and switches nothing: wait for it to list again, and
+    # switch again.
+    for attempt in range(tries):
+        listing = hub.command(name or 'power-' + action,
+                              ['uhubctl', '-l', location, '-p', ','.join(str(p) for p in ports),
+                               '-a', action], check=False)
+        if 'New status for hub %s ' % location in listing:
+            return
+        require(attempt < tries - 1, 'uhubctl did not switch port %s of hub %s %s'
+                % (','.join(str(p) for p in ports), location, action))
+        wait_for_hub(hub, location, [keeps] if keeps else [], wait_seconds)
 
 
 class ProbehiveBridge:

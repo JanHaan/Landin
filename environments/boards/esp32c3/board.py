@@ -20,6 +20,7 @@ the firmware's own idea of itself; see environments/boards/esp32c3/README.md.
 
 import argparse
 import sys
+import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -100,9 +101,14 @@ def main():
         # console is open before the power is cut and reads the ROM's log
         # from power-on.
         console = open_console(run)
-        esp.paced(args, 'power cycle', lambda: common.power_cycle(
-            common.InGroup(run, args.hub_group), args.hub, args.port, args.off_seconds,
-            holds=args.serial, keeps=(args.guard_port, args.guard_device)))
+        hub = common.InGroup(run, args.hub_group)
+        guard = (args.guard_port, args.guard_device)
+        esp.paced(args, 'power off', lambda: common.switch_ports(
+            hub, args.hub, [args.port], 'off', holds=[(args.port, args.serial)], keeps=guard))
+        time.sleep(args.off_seconds)
+        common.wait_for_hub(hub, args.hub, [guard], args.enumerate_seconds)
+        esp.paced(args, 'power on', lambda: common.switch_ports(hub, args.hub, [args.port], 'on',
+                                                                keeps=guard))
         settle(run)
         return console, None
 
