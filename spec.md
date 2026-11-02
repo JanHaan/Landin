@@ -24825,6 +24825,96 @@ inventory's `lanes` entries, `environments/cortex-m/descriptions.json`'s
 `lanes` record that the derived profile is held to, and
 `environments/cortex-m/test.py`'s lane controls.
 
+### D695 — Espressif's QEMU carries both RV32 corpus lanes, under the Arm lanes' harness
+
+**The tour said** nothing; the corpus ran only on Arm lanes, each a QEMU
+machine with a description of its map (D607, D619), and RV32 had no
+emulator lane.
+
+**Chosen:** one pinned emulator, Espressif's QEMU `esp-develop-9.2.2-20260417`,
+locked by URL and SHA-256 in `environments/cortex-m/tools.lock.json` with
+the Debian 13 libraries its binary's `NEEDED` entries reach, carries both
+levels: `rv32imc` on its `esp32c3` machine, on the lane description
+`environments/cortex-m/lanes/descriptions/esp32c3` (the reference's
+capacities in SRAM1: 32 KiB of text at 0x4038_0000, 16 KiB of data at the
+data alias 0x3FC8_8000, the stack its top 4 KiB, 32 slots), and
+`rv32imac` on `sifive_e`, an E31, on the RV32 reference's map. GCC and
+Binutils are GNAT's riscv64-elf archive of the host GNAT's release, pinned
+in `environments/pins.sh`. Each image is loaded with `-kernel`, which on
+`esp32c3` starts the ELF at its entry without the ROM. The harness start,
+`probes/rv32-start.S`, supplies what refine's RV32 firmware script places:
+the entry word at the text origin jumping to `_landin_firmware_reset`, and
+the vectored trap table at the profile's vector address, read from the
+build report. Its reset paints s1-s11, gp and tp; a return must give them
+back with sp at the top and s0 zero, and a trap is mcause 2 at an `unimp`,
+which slot 0 records. The session is the Arm one's, a hardware watchpoint
+guarding the stack's lowest 16 bytes, which QEMU's RISC-V stub provides.
+`run.py`'s lanes `esp32c3` and `sifive-e` are the two corpora, and with
+`rv32-controls` the gate's third Cortex-M part, `rv32`.
+
+**The alternatives:** upstream QEMU, which has `sifive_e` but no ESP32-C3
+and would be a second emulator to pin for the C3's map and boot; Debian's
+`qemu-system-misc`, which has neither the C3 nor Espressif's ROM; semihosting
+exit as the oracle, which both machines provide but which reports a status
+and nothing of the registers or the stack the Arm session already holds;
+and the C3's own description as the lane's map, whose ROM-booted image is
+the firmware programs', not the corpus's.
+
+**Pinned by** `environments/cortex-m/backend.py`'s `rv32imc` and
+`rv32imac` levels, `descriptions.json`'s `esp32c3` lane record,
+`run.py`'s `rv32` part and the gate's `cortex-m` matrix, and
+`environments/cortex-m/test.py`'s `RV32Lanes`.
+
+### D696 — The rv32imc lane refuses the A extension statically and in its core
+
+**The tour said** nothing; the `rv32imc` level has no A, and the C3 has
+none.
+
+**Chosen:** the `esp32c3` machine's own core, measured with the locked
+binary, executes `amoadd.w` and LR/SC, its misa 0x401411ad naming A, F and
+D, so it cannot show their absence by itself. The lane therefore removes
+them, `-cpu espressif,a=false,zawrs=false,f=false,d=false,zfa=false`
+(QEMU requires Zawrs and Zfa to go with A and F), after which misa reads
+0x40141184 and an AMO is an illegal instruction, mcause 2. And every image
+at `rv32imc` is held, before it runs, to `-march=rv32imc_zicsr_zifencei`,
+to refine's own `.attribute arch` and the linked image's `Tag_RISCV_arch`
+naming no extension beyond the level's, and to no AMO, `lr.w` or `sc.w`
+anywhere in its linked disassembly, libgcc's `rv32im` multilib included.
+`rv32-controls` shows both: the same A program the image check refuses
+traps at its first AMO on the lane's core.
+
+**The alternatives:** the static check alone, which holds only what the
+disassembly shows and nothing a path never reached by objdump's linear
+sweep would execute; the core alone, which says nothing of a path the
+corpus does not execute; and a machine faithful to the C3's ISA by
+default, which no pinned QEMU has.
+
+**Pinned by** `environments/cortex-m/backend.py`'s `rv32_image` and the
+`rv32imc` level's `cpu`, and `rv32_controls.py`'s `a-extension-traps`
+control.
+
+### D697 — Each RV32 lane holds its level's atomics with probes of its own
+
+**The tour said** nothing; `runtime/atomic-read-modify-write` is refused
+on every RV32 level by its u64 cell, so no corpus row executes a
+read-modify-write there, and on Cortex-M0 D510 refuses the rest.
+
+**Chosen:** two probes beside the harness. `probes/rv32-read-modify-write.ldn`
+is that fixture's exchanges, adds and compare-exchanges of u8, u16 and u32
+without its u64 cell: on `sifive-e` at `rv32imac` it executes to 42 and
+its image must hold an AMO and an LR/SC pair; on `esp32c3` at `rv32imc`
+refine must refuse it with L0344 alone at every exchange, add and
+compare-exchange. `probes/rv32-wide-atomic.ldn`'s u64 cell must be refused
+with L0344 where it is declared on both. They run after each lane's corpus.
+
+**The alternatives:** a new shared runtime fixture, which every hosted
+lane would run again for nothing it does not already show; and a
+`selects` entry on the existing row, which refuses on both levels and so
+has no image to select in.
+
+**Pinned by** `environments/cortex-m/rv32_controls.py`'s `atomics`, which
+`backend_acceptance.py`'s `execute_lane` runs for an RV32 lane.
+
 ### D620 — A fibre's context on a float unit holds d8-d15 and FPSCR
 
 **The tour said** nothing; D460's switch saved forty-eight bytes, D461's
