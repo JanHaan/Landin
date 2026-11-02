@@ -1066,10 +1066,29 @@ cores, `hazard3`, `sifive-e31`, `esp-rv32imc` or `esp-rv32imac-clic`, whose
 interrupt model decides which mcause codes a handler's slot may be (D662).
 The toolchain identity is `riscv64-elf`, GNAT's riscv64-elf archive; with
 no `--toolchain`, a link tries `riscv64-elf-gcc` and then
-`riscv64-unknown-elf-gcc`. The backend is named and does not emit yet:
-`refine check` and `--emit=ir` work, and assembly, executables and linker
-scripts are refused as L0500. C signatures, records and varargs are
+`riscv64-unknown-elf-gcc`. C signatures, records and varargs are
 disabled, as on Cortex-M.
+
+Its backend is the RV64 emitter at XLEN 32 (D671), not a second one. Every
+value keeps its frame home, and an eight-byte value is a register pair only
+while one operation reads or writes it: its low word in the register named
+and its high word in x27 beside x5, or in the next argument register
+beside an argument's, so moves, loads and stores need nothing new.
+Arithmetic, comparison, shifts, range checks, conversions and packed
+members of eight-byte carriers are selected for x10:x11 and x12:x13: a
+product inline from M's `mul` and `mulhu`, a checked one proved inline, a
+quotient or remainder through libgcc's `__divdi3` family behind the
+language's guards. f32 and f64 are libgcc's soft float, called with the
+`ilp32` convention, and a conversion to an integer is decoded in words, as
+on Cortex-M0 (D672). An eight-byte language argument takes two registers
+(D673). Frames keep x8 as the CFA, the return address at CFA−4 and the
+caller's frame at CFA−8; a routine saves only the callee-saved registers
+its text names, each with one sp-relative store, and inside a profile's
+1 MiB regions jumps and branches are the short forms (D678). Without A the
+panic latch is a load and a store (D674), and a fibre switches in a 64-byte
+frame of words (D675). Items take the sections their placements name, as
+on Cortex-M0 (D676), and `--debug=lines` writes Cortex-M0's line tables.
+The C planner's `ilp32` mode places what GCC's does (D677).
 
 ## RV64 Linux
 

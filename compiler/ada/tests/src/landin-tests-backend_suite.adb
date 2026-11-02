@@ -43,6 +43,7 @@ with Landin.Stages.Lowering;
 with Landin.Stages.Resolution;
 with Landin.Stages.Syntax;
 with Landin.Targets;
+with Landin.Targets.Firmware;
 with Landin.Targets.Levels;
 with Landin.Types;
 
@@ -9883,6 +9884,184 @@ package body Landin.Tests.Backend_Suite is
       end;
    end Arm64_Assembly_Saves_What_It_Declares;
 
+   --  D671-D678: RV32 is the RISC-V emitter at XLEN 32.  One program of
+   --  eight-byte integers, floats, eight-byte arguments, atomics, an
+   --  assembly block and a fibre switch emits at both levels with no
+   --  RV64-only instruction, pairs and libgcc helpers where an eight-byte
+   --  value or a float is looked inside, a four-byte frame record with its
+   --  CFI, read-modify-write atomics only where A is, and near jumps and
+   --  pruned saves inside a profile's regions.
+   procedure RV32_Lowering_Is_RV64s_At_XLEN_32
+     (Item : in out Landin.Testing.Context);
+
+   procedure RV32_Lowering_Is_RV64s_At_XLEN_32
+     (Item : in out Landin.Testing.Context)
+   is
+      package L renames Landin.Targets.Levels;
+      Source : constant String :=
+        "wide: (a: i64, b: u64, s: u64) -> (r: i64) =" & LF
+        & "    r = a * 3 + i64(b / 7) - i64(b % 5) + (a << i64(s))" & LF
+        & "        + (a >> 2)" & LF
+        & "end wide" & LF
+        & "compare: (a: u64, b: u64, c: i64, d: i64) -> (r: bool) =" & LF
+        & "    r = a < b and c >= d" & LF
+        & "end compare" & LF
+        & "floats: (x: f64, y: f32) -> (r: i32) =" & LF
+        & "    z: f64 = x * f64(y) + 1.5" & LF
+        & "    if z < x then" & LF
+        & "        r = i32(z)" & LF
+        & "    else" & LF
+        & "        r = i32(f32(z))" & LF
+        & "    end if" & LF
+        & "end floats" & LF
+        & "caller: () -> (r: i64) =" & LF
+        & "    r = wide(1, 2, 3)" & LF
+        & "end caller" & LF
+        & "counter: (p: ptr mut u32) -> (r: u32) =" & LF
+        & "    compiler.atomic_store(p, 1, compiler.release)" & LF
+        & "    r = compiler.atomic_load(p, compiler.acquire)" & LF
+        & "end counter" & LF
+        & "bump: (n: u32) -> (r: u32) =" & LF
+        & "    r = assembler.block(""addi {r}, {r}, 1""," & LF
+        & "        inout r: u32 at general = n)" & LF
+        & "end bump" & LF
+        & "body: (argument: usize) -> noreturn =" & LF
+        & "    _ = argument" & LF
+        & "    compiler.unreachable()" & LF
+        & "end body" & LF
+        & "fibre: (memory: []mut u8, save: ptr mut usize) -> none =" & LF
+        & "    top := compiler.stack_prepare(memory, body, 0)" & LF
+        & "    compiler.stack_switch(save, top)" & LF
+        & "end fibre" & LF;
+
+      function Emitted
+        (Level : String; Profiled : Boolean; Text : String := Source)
+         return String;
+
+      function Emitted
+        (Level : String; Profiled : Boolean; Text : String := Source)
+         return String
+      is
+         Work : Landin.Stages.Compilation := Landin.Stages.Create
+           (Landin.Targets.RV32, L.Level_Named (Landin.Targets.RV32, Level));
+         Ran : Natural;
+         Assembly : Ada.Strings.Unbounded.Unbounded_String;
+         Report : Landin.Build_Reports.Report;
+         Info : aliased Landin.Debugging.Information
+           (Landin.Stages.Trees (Work), Landin.Stages.Sources (Work));
+      begin
+         Lower (Work, Text, Ran);
+         Landin.Testing.Check_Equal
+           (Item, Ran, 5, Level & ": the program lowers for rv32");
+         if Landin.Stages.Failed (Work) then
+            return "";
+         end if;
+         if Profiled then
+            declare
+               Profile : Landin.Targets.Firmware.Profile;
+            begin
+               Profile.Present := True;
+               Profile.Count := 1;
+               Profile.Regions (1).Origin := 16#2040_0000#;
+               Profile.Regions (1).Length := 32 * 1024;
+               IR.Set_Firmware_Profile
+                 (Landin.Stages.Code (Work).all, Profile);
+            end;
+         end if;
+         Landin.Debugging.Append (Info, Landin.Stages.Source (Work, 1));
+         Landin.Backend.RiscV.Emit
+           (Landin.Stages.Code (Work).all,
+            Landin.Stages.Meanings (Work).all,
+            Landin.Stages.Identities (Work).all, Landin.Targets.RV32,
+            Landin.Optimization.Reference_Options, Assembly, Report,
+            Debug => Info'Access,
+            Level => L.Level_Named (Landin.Targets.RV32, Level));
+         declare
+            Helpers : Natural := 0;
+         begin
+            for Index in 1 .. Landin.Build_Reports.Routine_Count (Report) loop
+               Helpers := Helpers + Landin.Build_Reports.Nth_Routine
+                 (Report, Index).Helper_Calls;
+            end loop;
+            Landin.Testing.Check
+              (Item, Helpers > 0,
+               Level & ": the report counts the libgcc helpers called");
+         end;
+         return Ada.Strings.Unbounded.To_String (Assembly);
+      end Emitted;
+
+      Base : constant String := Emitted ("rv32imc", Profiled => False);
+      Near : constant String := Emitted ("rv32imc", Profiled => True);
+      With_A : constant String := Emitted
+        ("rv32imac", Profiled => False,
+         Text => Source
+          & "bumped: (p: ptr mut u32, q: ptr mut u8) -> (r: u32) =" & LF
+          & "    r = compiler.atomic_add(p, 1, compiler.seq_cst)" & LF
+          & "        + u32(compiler.atomic_exchange(q, 1, compiler.acquire))"
+          & LF
+          & "end bumped" & LF);
+
+      function Has (Text, Part : String) return Boolean
+        is (Ada.Strings.Fixed.Index (Text, Part) /= 0);
+      HT : constant String := [1 => Character'Val (9)];
+   begin
+      Landin.Testing.Check
+        (Item, Base'Length > 0
+           and then not Has (Base, HT & "sd ")
+           and then not Has (Base, HT & "ld ")
+           and then not Has (Base, "sext.w") and then not Has (Base, ", 63")
+           and then not Has (Base, ".option pic")
+           and then not Has (Base, "%tprel") and then not Has (Base, ".quad ")
+           and then not Has (Base, "fmv.") and then not Has (Base, "fadd"),
+         "rv32 emits no RV64-only instruction, relocation or float register");
+      Landin.Testing.Check
+        (Item, Has (Base, "sw x8, 8(sp)") and then Has (Base, "sw ra, 12(sp)")
+           and then Has (Base, "lw ra, -4(x8)")
+           and then Has (Base, "lw x8, -8(x8)")
+           and then Has (Base, ".cfi_offset x8, -8")
+           and then Has (Base, ".cfi_offset x1, -4"),
+         "the frame record is two words below the CFA, as its CFI says");
+      Landin.Testing.Check
+        (Item, Has (Base, "sltu x6, x14, x10")
+           and then Has (Base, "mulhu")
+           and then Has (Base, "call __udivdi3")
+           and then Has (Base, "call __umoddi3")
+           and then Has (Base, "sll x11, x10, x29"),
+         "eight-byte arithmetic is selected as pairs, a quotient by libgcc");
+      Landin.Testing.Check
+        (Item, Has (Base, "call __muldf3") and then Has (Base, "call __adddf3")
+           and then Has (Base, "call __extendsfdf2")
+           and then Has (Base, "call __truncdfsf2")
+           and then Has (Base, "call __ltdf2")
+           and then not Has (Base, "__fix"),
+         "floats are libgcc's soft float, a conversion to an integer decoded");
+      Landin.Testing.Check
+        (Item, Has (Base, "mv x10, x5") or else Has (Base, "lw x11, "),
+         "an eight-byte argument travels in a register pair");
+      Landin.Testing.Check
+        (Item, not Has (Base, "lr.w") and then not Has (Base, "sc.w")
+           and then not Has (Base, "amo")
+           and then Has (Base, "fence rw, w")
+           and then Has (Base, "fence r, rw"),
+         "rv32imc fences its loads and stores and holds no A instruction");
+      Landin.Testing.Check
+        (Item, Has (With_A, "amoadd.w.aqrl") and then Has (With_A, "lr.w.aq")
+           and then Has (With_A, "sc.w") and then not Has (With_A, "amoadd.d"),
+         "rv32imac adds with an AMO and exchanges a byte through LR/SC");
+      Landin.Testing.Check
+        (Item, Has (Base, "addi sp, sp, -64")
+           and then Has (Base, "sw x27, 12(sp)")
+           and then not Has (Base, "fsd"),
+         "the switch saves s0-s11 and ra in a 64-byte word frame");
+      Landin.Testing.Check
+        (Item, Has (Base, "lla x26, ") and then not Has (Near, "lla x26, "),
+         "inside a profile's 1 MiB regions a jump is JAL's own");
+      Landin.Testing.Check
+        (Item, Has (Near, "(sp)") and then not Has (Near, "0(x5)" & LF
+                                                    & HT & "sw x9"),
+         "callee saves are single sp-relative stores");
+   end RV32_Lowering_Is_RV64s_At_XLEN_32;
+
    --  R12's gate: RV32's verifier refuses an invalid register.  The block
    --  as lowered verifies; the hardwired zero, the stack, global and
    --  thread pointers, the frame pointer, a name past the bank and a float
@@ -10665,6 +10844,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "arm64 assembly saves what it declares",
          Arm64_Assembly_Saves_What_It_Declares'Access);
+      Landin.Testing.Register
+        (Into, "backend", "rv32 lowering is RV64's at XLEN 32",
+         RV32_Lowering_Is_RV64s_At_XLEN_32'Access);
       Landin.Testing.Register
         (Into, "backend", "rv32 verifier refuses invalid registers",
          RV32_Verifier_Refuses_Invalid_Registers'Access);
