@@ -64,8 +64,8 @@ package Landin.Backend is
         Landin.Targets.Byte_Count'Last) return Frame
      with Pre => Landin.IR.Holds (Of_Unit, Item);
 
-   --  The same reference frame with Saves eight-byte homes after it, for
-   --  callee-saved registers a routine saves itself.
+   --  The same reference frame with Saves pointer-sized homes after it,
+   --  for callee-saved registers a routine saves itself.
    function Laid_Out
      (Of_Unit : Landin.IR.Unit;
       Item    : Landin.IR.Item_Id;

@@ -2177,6 +2177,20 @@ package body Landin.Diagnostics.Citations is
                & "ol",
             when 670 =>
                "RV32 assembly reads RV64's text rules at XLEN 32",
+            when 671 =>
+               "RV32 is RV64's emitter at XLEN 32, with eight-byte value"
+               & "s in pairs",
+            when 672 =>
+               "RV32's floats are libgcc's soft float, called as the psA"
+               & "BI's ilp32 passes them",
+            when 673 =>
+               "RV32's language convention carries an eight-byte argumen"
+               & "t in two registers",
+            when 674 =>
+               "Without A the panic latch is claimed as Cortex-M0 claims"
+               & " it",
+            when 675 =>
+               "RV32's fibres switch in RV64's frame at XLEN 32",
             when 523 =>
                "Under `--link=libc` a library is the C driver's `-lNAME`",
             when 524 =>
@@ -3488,6 +3502,16 @@ package body Landin.Diagnostics.Citations is
             when 516 =>
                "Decisions: The toolchain, C and the machine",
             when 670 =>
+               "Decisions: The toolchain, C and the machine",
+            when 671 =>
+               "Decisions: The toolchain, C and the machine",
+            when 672 =>
+               "Decisions: The toolchain, C and the machine",
+            when 673 =>
+               "Decisions: The toolchain, C and the machine",
+            when 674 =>
+               "Decisions: The toolchain, C and the machine",
+            when 675 =>
                "Decisions: The toolchain, C and the machine",
             when 523 =>
                "Decisions: The toolchain, C and the machine",
@@ -5045,6 +5069,21 @@ package body Landin.Diagnostics.Citations is
             when 670 =>
                "https://www.701.dev/spec.html#d670-rv32-assembly-reads-r"
                & "v64-s-text-rules-at-xlen-32",
+            when 671 =>
+               "https://www.701.dev/spec.html#d671-rv32-is-rv64-s-emitte"
+               & "r-at-xlen-32-with-eight-byte-values-in-pairs",
+            when 672 =>
+               "https://www.701.dev/spec.html#d672-rv32-s-floats-are-lib"
+               & "gcc-s-soft-float-called-as-the-psabi-s-ilp32-passes-them",
+            when 673 =>
+               "https://www.701.dev/spec.html#d673-rv32-s-language-conve"
+               & "ntion-carries-an-eight-byte-argument-in-two-registers",
+            when 674 =>
+               "https://www.701.dev/spec.html#d674-without-a-the-panic-l"
+               & "atch-is-claimed-as-cortex-m0-claims-it",
+            when 675 =>
+               "https://www.701.dev/spec.html#d675-rv32-s-fibres-switch-"
+               & "in-rv64-s-frame-at-xlen-32",
             when 523 =>
                "https://www.701.dev/spec.html#d523-under-link-libc-a-lib"
                & "rary-is-the-c-driver-s-lname",

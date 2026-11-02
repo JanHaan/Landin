@@ -44,10 +44,20 @@ package body Landin.Backend.RiscV is
    use type Landin.Types.Type_Kind;
 
    use type Landin.Targets.Target_Facts;
+   use type Landin.Targets.Architecture;
    use type Landin.Machine.Convention;
    use type Landin.Layouts.Policy;
 
    LF : constant Character := Character'Val (10);
+
+   --  D265's XLEN, the one fact this emitter asks of its target beyond the
+   --  layout every backend reads: 64 on RV64 and 32 on RV32 (D671).  At 32
+   --  an eight-byte value is a register pair, the low word in the register
+   --  named and the high word in its partner.
+   function XLEN (Facts : Landin.Targets.Target_Facts)
+     return RiscV_Instructions.Machine_Width
+     is (if Landin.Targets.Architecture_Of (Facts) = Landin.Targets.RV32
+         then 32 else 64);
 
    --  `Image` leads with a blank for a non-negative number and assembly
    --  is bytes, so the blank is a byte.  Landin.IR.Dump's trim, for the
@@ -129,13 +139,18 @@ package body Landin.Backend.RiscV is
           else "x" & Trimmed (Natural'Image (Number))));
 
    function Declared
-     (Of_Unit : Landin.IR.Unit; Item : Landin.IR.Item_Id) return Saved_Set;
+     (Of_Unit : Landin.IR.Unit; Item : Landin.IR.Item_Id;
+      Facts : Landin.Targets.Target_Facts) return Saved_Set;
 
+   --  At XLEN 32 x27 is the high word's scratch (D671), saved as the other
+   --  fixed scratch homes are.
    function Declared
-     (Of_Unit : Landin.IR.Unit; Item : Landin.IR.Item_Id) return Saved_Set
+     (Of_Unit : Landin.IR.Unit; Item : Landin.IR.Item_Id;
+      Facts : Landin.Targets.Target_Facts) return Saved_Set
    is
       Result : Saved_Set := [9 | 18 .. 26 => True, others => False];
    begin
+      Result (27) := XLEN (Facts) = 32;
       for Index in 1 .. Landin.IR.Value_Count (Of_Unit, Item) loop
          declare
             Value : constant Landin.IR.Value_Id := Landin.IR.Value_Id (Index);
@@ -204,7 +219,7 @@ package body Landin.Backend.RiscV is
       Result.Values := Location_Vectors.To_Vector
         (Value_Location'(others => <>),
          Ada.Containers.Count_Type (Value_Count));
-      Result.Saves := Declared (Of_Unit, Item);
+      Result.Saves := Declared (Of_Unit, Item, Facts);
       if Options.Optimize = Landin.Optimization.None then
          for Index in 1 .. Value_Count loop
             declare
@@ -370,8 +385,11 @@ package body Landin.Backend.RiscV is
          Values : Spill_Assignments renames Values_Data.Data.all;
          Spills : Landin.Targets.Layouts.Field_Extent_Array renames
            Spills_Data.Data.all;
+         Word : constant Landin.Targets.Byte_Count :=
+           Landin.Targets.Byte_Count (XLEN (Facts) / 8);
          Save_Homes : constant Landin.Targets.Layouts.Field_Extent_Array
-           (1 .. Saves) := [others => (8, 8)];
+           (1 .. Saves) := [others => (Word, Landin.Targets.Byte_Alignment
+                                                (Word))];
       begin
          for Index in Values'Range loop
             declare
@@ -545,6 +563,31 @@ package body Landin.Backend.RiscV is
       when Stack_Limit_Exceeded => return False;
    end Frame_Is_Addressable;
 
+   function Frame_Fits_Firmware_Stack
+     (Of_Unit : Landin.IR.Unit;
+      Item : Landin.IR.Item_Id;
+      Facts : Landin.Targets.Target_Facts) return Boolean
+   is
+      Stack : constant Landin.Targets.Byte_Count :=
+        Landin.IR.Firmware_Profile (Of_Unit).Stack_Size;
+   begin
+      if Landin.IR.Is_External (Of_Unit, Item)
+        or else Landin.IR.Signature_Machine
+          (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item))
+            = Landin.Machine.Naked_Routine
+      then
+         return True;
+      end if;
+      --  The frame the emitter lays out at the reference options, which
+      --  give every value its own home and so bound every other's.
+      return Stack >= 16
+        and then Extent (Routine_Frame
+          (Of_Unit, Item, Facts, Landin.Optimization.Reference_Options,
+           16#7fff_ffff#)) <= Stack - 16;
+   exception
+      when Stack_Limit_Exceeded => return False;
+   end Frame_Fits_Firmware_Stack;
+
    procedure Emit
      (Of_Unit  : Landin.IR.Unit;
       Meanings : Landin.Resolution.Table;
@@ -557,7 +600,8 @@ package body Landin.Backend.RiscV is
       Debug : access constant Landin.Debugging.Information := null;
       Panic : access constant Landin.Panics.Plan := null;
       Level : Landin.Targets.Levels.Feature_Level :=
-        Landin.Targets.Levels.Default_Level (Landin.Targets.Linux_RV64))
+        Landin.Targets.Levels.Default_Level (Landin.Targets.Linux_RV64);
+      Firmware_Entry : Landin.IR.Item_Id := Landin.IR.No_Item)
    is
       Output : Unbounded.Unbounded_String;
       --  Dense nonzero u32 atom codes, in declaration-identity order; zero
@@ -565,6 +609,19 @@ package body Landin.Backend.RiscV is
       --  carrier.
       Atoms_Ranked : constant Atom_Codes := Ranked (Of_Unit);
       Serial : Natural := 0;
+
+      --  D671: the machine's width, whether an eight-byte value is a
+      --  register pair, and the word a pointer, a saved register and a
+      --  frame record's half are moved at.
+      Width : constant RiscV_Instructions.Machine_Width := XLEN (Facts);
+      Pairs : constant Boolean := Width = 32;
+      Word : constant Positive := Natural (Width) / 8;
+      Load_Word : constant String := (if Pairs then "lw" else "ld");
+      Store_Word : constant String := (if Pairs then "sw" else "sd");
+      Word_Directive : constant String :=
+        (if Pairs then ".long" else ".quad");
+      Atomics : constant Boolean :=
+        Landin.Targets.Levels.Has (Level, Landin.Targets.Levels.A);
 
       procedure Put (Line : String);
       procedure Emit (Instruction : String);
@@ -586,6 +643,7 @@ package body Landin.Backend.RiscV is
       procedure Frame_Address
         (Offset : Landin.Targets.Byte_Count; Register : String := "x9");
       procedure Reserve (Bytes : Landin.Targets.Byte_Count);
+      function High (Register : String) return String;
       procedure Copy_Bytes (Bytes : Landin.Targets.Byte_Count);
       procedure Zero_Bytes (Bytes : Landin.Targets.Byte_Count);
       procedure Move_Words
@@ -663,8 +721,19 @@ package body Landin.Backend.RiscV is
       procedure Immediate (Register : String; Value : Pattern) is
       begin
          Emit (RiscV_Instructions.Immediate
-           (Reg (Register), RiscV_Instructions.Pattern (Value), 64));
+           (Reg (Register), RiscV_Instructions.Pattern (Value), Width));
       end Immediate;
+
+      --  D671: an eight-byte value's high word at XLEN 32 is x27 beside
+      --  the x5 every value passes through, and the next argument
+      --  register beside an argument's or a helper's.
+      function High (Register : String) return String is
+        (if Register = "x5" then "x27"
+         elsif Register = "x10" then "x11"
+         elsif Register = "x12" then "x13"
+         elsif Register = "x14" then "x15"
+         elsif Register = "x16" then "x17"
+         else raise Compiler_Defect with "no RV32 word pair at " & Register);
 
       procedure Add_Offset
         (Register : String; Offset : Landin.Targets.Byte_Count) is
@@ -702,8 +771,19 @@ package body Landin.Backend.RiscV is
       procedure Memory
         (Store : Boolean; Size : Held_Size; Register, Base : String) is
       begin
-         Emit (RiscV_Instructions.Memory
-           (Store, Size, Reg (Register), Reg (Base), 64));
+         if Pairs and then Size = Landin.Targets.Byte_8 then
+            --  The high word first, so a pair loaded through its own low
+            --  register still reads its base.
+            Emit (RiscV_Instructions.Memory
+              (Store, Landin.Targets.Byte_4, Reg (High (Register)),
+               Reg (Base), Width, 4));
+            Emit (RiscV_Instructions.Memory
+              (Store, Landin.Targets.Byte_4, Reg (Register), Reg (Base),
+               Width));
+         else
+            Emit (RiscV_Instructions.Memory
+              (Store, Size, Reg (Register), Reg (Base), Width));
+         end if;
       end Memory;
 
       --  D410: a scalar of a byte-packed C record may sit at any address,
@@ -713,30 +793,47 @@ package body Landin.Backend.RiscV is
       procedure Byte_Memory
         (Store : Boolean; Size : Held_Size; Register, Base : String)
       is
+         --  Count bytes of one register at At bytes past Base.
+         procedure Bytes_Of (Value : String; Count, At_Byte : Natural);
+
+         procedure Bytes_Of (Value : String; Count, At_Byte : Natural) is
+         begin
+            if Store then
+               for Index in 0 .. Count - 1 loop
+                  if Index = 0 then
+                     Emit ("sb " & Value & ", "
+                       & Trimmed (Natural'Image (At_Byte)) & "(" & Base
+                       & ")");
+                  else
+                     Emit ("srli x7, " & Value & ", "
+                       & Trimmed (Natural'Image (8 * Index)));
+                     Emit ("sb x7, " & Trimmed (Natural'Image
+                       (At_Byte + Index)) & "(" & Base & ")");
+                  end if;
+               end loop;
+            else
+               Emit ("lbu " & Value & ", "
+                 & Trimmed (Natural'Image (At_Byte + Count - 1)) & "("
+                 & Base & ")");
+               for Index in reverse 0 .. Count - 2 loop
+                  Emit ("slli " & Value & ", " & Value & ", 8");
+                  Emit ("lbu x7, " & Trimmed (Natural'Image
+                    (At_Byte + Index)) & "(" & Base & ")");
+                  Emit ("or " & Value & ", " & Value & ", x7");
+               end loop;
+            end if;
+         end Bytes_Of;
+
          Count : constant Positive := Landin.Targets.Bytes (Size);
       begin
          if Count = 1 then
             Memory (Store, Size, Register, Base);
-         elsif Store then
-            for Index in 0 .. Count - 1 loop
-               if Index = 0 then
-                  Emit ("sb " & Register & ", 0(" & Base & ")");
-               else
-                  Emit ("srli x7, " & Register & ", "
-                    & Trimmed (Natural'Image (8 * Index)));
-                  Emit ("sb x7, " & Trimmed (Natural'Image (Index))
-                    & "(" & Base & ")");
-               end if;
-            end loop;
+         elsif Pairs and then Count = 8 then
+            --  D671: a pair's words in turn, the high one at four.
+            Bytes_Of (High (Register), 4, 4);
+            Bytes_Of (Register, 4, 0);
          else
-            Emit ("lbu " & Register & ", "
-              & Trimmed (Natural'Image (Count - 1)) & "(" & Base & ")");
-            for Index in reverse 0 .. Count - 2 loop
-               Emit ("slli " & Register & ", " & Register & ", 8");
-               Emit ("lbu x7, " & Trimmed (Natural'Image (Index))
-                 & "(" & Base & ")");
-               Emit ("or " & Register & ", " & Register & ", x7");
-            end loop;
+            Bytes_Of (Register, Count, 0);
          end if;
       end Byte_Memory;
 
@@ -756,9 +853,19 @@ package body Landin.Backend.RiscV is
         (Store : Boolean; Size : Held_Size; Register : String;
          Offset : Landin.Targets.Byte_Count) is
       begin
-         if Offset <= 2032 then
+         if Offset <= 2032 and then Pairs
+           and then Size = Landin.Targets.Byte_8
+         then
             Emit (RiscV_Instructions.Memory
-              (Store, Size, Reg (Register), 8, 64, -Integer (Offset + 16)));
+              (Store, Landin.Targets.Byte_4, Reg (High (Register)), 8,
+               Width, -Integer (Offset + 16) + 4));
+            Emit (RiscV_Instructions.Memory
+              (Store, Landin.Targets.Byte_4, Reg (Register), 8, Width,
+               -Integer (Offset + 16)));
+         elsif Offset <= 2032 then
+            Emit (RiscV_Instructions.Memory
+              (Store, Size, Reg (Register), 8, Width,
+               -Integer (Offset + 16)));
          else
             Frame_Address (Offset, (if Register = "x9" then "x18" else "x9"));
             Memory (Store, Size, Register,
@@ -965,25 +1072,27 @@ package body Landin.Backend.RiscV is
             Emit ("xor x25, x21, " & Destination);
          end if;
          Emit ("and x24, x24, x25");
-         Emit ("srli x24, x24, 63");
+         Emit ("srli x24, x24, " & Image (Natural (Width) - 1));
          Emit ("mv x20, " & Destination);
          Emit ("li x21, 0");
       end Add_Sub;
 
       procedure Extract
         (Destination, Source : String; First, Bits : Natural;
-         Signed : Boolean := False) is
+         Signed : Boolean := False)
+      is
+         XLEN_Bits : constant Natural := Natural (Width);
       begin
-         if First + Bits < 64 then
+         if First + Bits < XLEN_Bits then
             Emit ("slli " & Destination & ", " & Source & ", "
-              & Image (64 - First - Bits));
+              & Image (XLEN_Bits - First - Bits));
          else
             Emit ("mv " & Destination & ", " & Source);
          end if;
-         if Bits < 64 then
+         if Bits < XLEN_Bits then
             Emit ((if Signed then "srai " else "srli ")
               & Destination & ", " & Destination & ", "
-              & Image (64 - Bits));
+              & Image (XLEN_Bits - Bits));
          end if;
       end Extract;
 
@@ -1147,11 +1256,14 @@ package body Landin.Backend.RiscV is
       Stack_Start : constant String := Routine_Prefix & "stack_start";
       Stack_Entered : constant String :=
         Local_Prefix & "landin_stack_entered";
-      Stack_Saved : constant := 25;
-      Stack_Frame_Bytes : constant := 208;
+      --  D675: at XLEN 32 the frame is the return address, x8, x9 and
+      --  x18 to x27 in four-byte words with the limit's word below them,
+      --  64 bytes for the stack's alignment, and no float register.
+      Stack_Saved : constant Positive := (if Pairs then 13 else 25);
+      Stack_Frame_Bytes : constant Positive := (if Pairs then 64 else 208);
 
       function Stack_Save_Offset (Index : Positive) return Natural
-        is (Stack_Frame_Bytes - 8 * Index);
+        is (Stack_Frame_Bytes - Word * Index);
 
       --  The Nth saved register's number within its bank, whether it is a
       --  float register, and its DWARF register number.
@@ -1370,7 +1482,7 @@ package body Landin.Backend.RiscV is
 
       function Is_Exported_Item (Item : Landin.IR.Item_Id) return Boolean
         is (Landin.Backend.Is_Exported
-              (Of_Unit, Meanings, Item, Hosted_Entry, Landin.IR.No_Item));
+              (Of_Unit, Meanings, Item, Hosted_Entry, Firmware_Entry));
 
       --  Labels carry the item, because a Block_Id restarts at 1 in the
       --  next item and two blocks named `.L1` would be one label.
@@ -1458,9 +1570,14 @@ package body Landin.Backend.RiscV is
       procedure Emit_Routine (Item : Landin.IR.Item_Id) is
          --  D471's checks, unless the routine runs before its thread has
          --  a thread pointer (D504).
+         --  An interrupt handler is unchecked: the compiler's trap entry
+         --  that calls it keeps zero in the cell while it runs (D675).
          Checks : constant Boolean := Prepares
            and then not Landin.Backend.Runs_Before_Thread_Pointer
-             (Facts, Symbol (Item));
+             (Facts, Symbol (Item))
+           and then Landin.IR.Signature_Machine
+             (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item))
+               /= Landin.Machine.Interrupt_Handler;
          Path_Layouts : Landin.IR.Shape_Measurement.Layout_Cache;
          Plan : constant Allocation_Plan :=
            Allocate (Of_Unit, Item, Facts, Options);
@@ -1484,10 +1601,53 @@ package body Landin.Backend.RiscV is
          Edges : Edge_Vectors.Vector;
          --  D467: the largest area the body reserves below its frame.
          Deepest_Area : Landin.Targets.Byte_Count := 0;
+         --  D672: the libgcc helpers the body calls at XLEN 32.
+         Helpers_Called : Natural := 0;
          --  D471: whether a stack limit check branches to this routine's
          --  own stack_exhausted trap, laid out after the others.
          Limit_Trapped : Boolean := False;
          Limit_Trap : constant String := Label (Item, 1) & "_stack_limit";
+
+         --  D672: whether the body may call a libgcc helper at XLEN 32,
+         --  which runs below the frame as any callee does, so the frame is
+         --  checked as a calling one's is.
+         function Calls_Helper return Boolean;
+
+         function Calls_Helper return Boolean is
+         begin
+            if not Pairs then
+               return False;
+            end if;
+            for Index in 1 .. Landin.IR.Value_Count (Of_Unit, Item) loop
+               declare
+                  Value : constant Landin.IR.Value_Id :=
+                    Landin.IR.Value_Id (Index);
+                  Op : constant Landin.IR.Opcode :=
+                    Landin.IR.Op_Of (Of_Unit, Item, Value);
+                  Result_Kind : constant Landin.Types.Type_Kind :=
+                    Landin.IR.Result_Of (Of_Unit, Item, Value);
+               begin
+                  if Op in Landin.IR.Add | Landin.IR.Subtract
+                    | Landin.IR.Multiply | Landin.IR.Divide
+                    | Landin.IR.Remainder | Landin.IR.Conversion
+                    | Landin.IR.Equal_To | Landin.IR.Not_Equal_To
+                    | Landin.IR.Less_Than | Landin.IR.Less_Or_Equal
+                    | Landin.IR.Greater_Than | Landin.IR.Greater_Or_Equal
+                    and then (Result_Kind in Landin.Types.Float_Name
+                      or else Landin.IR.Result_Of
+                        (Of_Unit, Item,
+                         Landin.IR.Nth_Operand (Of_Unit, Item, Value, 1))
+                          in Landin.Types.Float_Name
+                      or else (Op in Landin.IR.Divide | Landin.IR.Remainder
+                               and then Size_Of (Result_Kind, Facts)
+                                 = Landin.Targets.Byte_8))
+                  then
+                     return True;
+                  end if;
+               end;
+            end loop;
+            return False;
+         end Calls_Helper;
 
          --  D471: go to the limit trap when the stack pointer less Bytes is
          --  below the current stack's limit, before anything is written
@@ -1510,7 +1670,7 @@ package body Landin.Backend.RiscV is
                Emit ("sub x5, sp, x5");
             end if;
             Limit_Base ("x6");
-            Emit ("ld x6, " & Limit_Offset & "(x6)");
+            Emit (Load_Word & " x6, " & Limit_Offset & "(x6)");
             Put (Character'Val (9) & "bgeu x5, x6, " & Fits);
             Put (Character'Val (9) & "lla x7, " & Limit_Trap);
             Put (Character'Val (9) & "jr x7");
@@ -1627,7 +1787,7 @@ package body Landin.Backend.RiscV is
                   Bits : constant Natural := 8 * Natural
                     (Landin.Targets.Bytes (Size_Of_Value (Value)));
                begin
-                  if Bits = 64 then
+                  if Bits >= Natural (Width) then
                      Emit ("mv " & Destination & ", " & Register);
                   else
                      Extract (Destination, Register, 0, Bits);
@@ -1659,6 +1819,7 @@ package body Landin.Backend.RiscV is
          is
          begin
             if Scalar in Landin.Types.I8 | Landin.Types.I16 | Landin.Types.I32
+              and then Landin.Types.Width (Scalar, Facts) < Width
             then
                Extract (Register, Register, 0,
                  Natural (Landin.Types.Width (Scalar, Facts)), Signed => True);
@@ -1671,13 +1832,89 @@ package body Landin.Backend.RiscV is
             Bits : constant Natural :=
               Natural (Landin.Types.Width (Scalar, Facts));
          begin
-            if Bits < 64 then
+            if Bits < Natural (Width) then
                Extract ("x30", Register, 0, Bits,
                  Signed => Landin.Types.Is_Signed (Scalar));
                Compare ("x30", Register);
                Branch ("ne", Trap);
             end if;
          end Check_Fit;
+
+         --  D673: the language convention's carrier of each argument of a
+         --  call or parameter of a routine.  In order, each takes the next
+         --  of a0-a7, or at XLEN 32 an eight-byte value the next two, low
+         --  word first; the first that does not fit, and every one after
+         --  it, takes an eight-byte word of the area at the callee's CFA.
+         --  At XLEN 64 that is the Nth in a(N-1) and the ninth on at sp.
+         type Carrier is record
+            --  a0's ordinal from one, or zero for a stack word.
+            Register : Natural := 0;
+            Stack_At : Landin.Targets.Byte_Count := 0;
+            Pair : Boolean := False;
+         end record;
+         type Carrier_Array is array (Positive range <>) of Carrier;
+         type Pair_Flags is array (Positive range <>) of Boolean;
+
+         function Carriers (Wide : Pair_Flags) return Carrier_Array;
+
+         function Carriers (Wide : Pair_Flags) return Carrier_Array is
+            Result : Carrier_Array (Wide'Range);
+            Next : Natural := 0;
+            Spilled : Boolean := False;
+            Words : Natural := 0;
+         begin
+            for Index in Wide'Range loop
+               Result (Index).Pair := Wide (Index);
+               if not Spilled
+                 and then Next + (if Wide (Index) then 2 else 1) <= 8
+               then
+                  Result (Index).Register := Next + 1;
+                  Next := Next + (if Wide (Index) then 2 else 1);
+               else
+                  Spilled := True;
+                  Result (Index).Stack_At :=
+                    Landin.Targets.Byte_Count (Words) * 8;
+                  Words := Words + 1;
+               end if;
+            end loop;
+            return Result;
+         end Carriers;
+
+         --  The area a call's stack carriers take, aligned to sixteen.
+         function Carrier_Bytes (Places : Carrier_Array)
+           return Landin.Targets.Byte_Count;
+
+         function Carrier_Bytes (Places : Carrier_Array)
+           return Landin.Targets.Byte_Count
+         is
+            Bytes : Landin.Targets.Byte_Count := 0;
+         begin
+            for Place of Places loop
+               if Place.Register = 0 then
+                  Bytes := Landin.Targets.Byte_Count'Max
+                    (Bytes, Place.Stack_At + 8);
+               end if;
+            end loop;
+            return Stack_Align (Bytes, 16, 16#7fff_ffff#);
+         end Carrier_Bytes;
+
+         function Argument_Register (Ordinal : Positive) return String
+           is ("x" & Image (Ordinal + 9));
+
+         --  An eight-byte value's two words into two named registers.
+         procedure Load_Pair
+           (Value : Landin.IR.Value_Id; Low, High_Word : String);
+
+         procedure Load_Pair
+           (Value : Landin.IR.Value_Id; Low, High_Word : String)
+         is
+            Offset : constant Landin.Targets.Byte_Count :=
+              Value_Offset (Layout, Value);
+         begin
+            Frame_Memory
+              (False, Landin.Targets.Byte_4, High_Word, Offset - 4);
+            Frame_Memory (False, Landin.Targets.Byte_4, Low, Offset);
+         end Load_Pair;
 
          --  The declared registers' homes, in register order.
          function Save_Home
@@ -1703,7 +1940,8 @@ package body Landin.Backend.RiscV is
             for Number in Saves'Range loop
                if Saves (Number) then
                   Frame_Address (Save_Home (Number), "x5");
-                  Emit ((if Number in Saved_Float then "fld " else "ld ")
+                  Emit ((if Number in Saved_Float then "fld "
+                         else Load_Word & " ")
                         & Saved_Name (Number) & ", 0(x5)");
                   if Debug /= null then
                      Emit (".cfi_restore "
@@ -1719,9 +1957,10 @@ package body Landin.Backend.RiscV is
                Emit (".cfi_remember_state");
             end if;
             Restore_Saves;
-            Emit ("ld ra, -8(x8)");
+            --  D672: the frame record's two words sit just below the CFA.
+            Emit (Load_Word & " ra, -" & Image (Word) & "(x8)");
             Emit ("mv sp, x8");
-            Emit ("ld x8, -16(x8)");
+            Emit (Load_Word & " x8, -" & Image (2 * Word) & "(x8)");
             if Debug /= null then
                Emit (".cfi_def_cfa sp, 0");
                Emit (".cfi_restore x8");
@@ -2582,8 +2821,10 @@ package body Landin.Backend.RiscV is
               (if Candidate in 5 .. 7 | 28 .. 31
                then Waiting (Candidate) else True))
             then
+               --  RV32 has no float register to set the integer aside in.
                for Candidate in 0 .. 31 loop
-                  if Candidate in 0 .. 7 | 10 .. 17 | 28 .. 31
+                  if not Pairs
+                    and then Candidate in 0 .. 7 | 10 .. 17 | 28 .. 31
                     and then not Float_Held (Candidate)
                   then
                      Aside_Float := Candidate;
@@ -2598,7 +2839,8 @@ package body Landin.Backend.RiscV is
                      Aside := Index;
                      if Aside_Float = Natural'Last then
                         Emit ("addi sp, sp, -16");
-                        Emit ("sd " & Register (Index) & ", 0(sp)");
+                        Emit (Store_Word & " " & Register (Index)
+                              & ", 0(sp)");
                      else
                         Emit ("fmv.d.x f"
                               & Trimmed (Natural'Image (Aside_Float))
@@ -2626,7 +2868,7 @@ package body Landin.Backend.RiscV is
                   Waiting (Natural'Value (Held (Held'First + 1 .. Held'Last)))
                     := True;
                   if Aside_Float = Natural'Last then
-                     Emit ("ld " & Held & ", 0(sp)");
+                     Emit (Load_Word & " " & Held & ", 0(sp)");
                      Emit ("addi sp, sp, 16");
                   else
                      Emit ("fmv.x.d " & Held & ", f"
@@ -2752,7 +2994,7 @@ package body Landin.Backend.RiscV is
                Storage_Address (Storage, Field, "x6", Which, Payload, Nested);
                if Scale = 1 and then Shift > 0 then
                   Emit (RiscV_Instructions.Indexed_Address
-                    (6, 6, 29, 30, Shift, 64,
+                    (6, 6, 29, 30, Shift, Width,
                      Landin.Targets.Levels.Has
                        (Level, Landin.Targets.Levels.Zba),
                      Landin.Targets.Levels.Has (Level,
@@ -2766,7 +3008,764 @@ package body Landin.Backend.RiscV is
                      Below));
                end if;
             end Index_Address;
+
+            --  D671 and D672: at XLEN 32, every operation on an eight-byte
+            --  integer and every float operation; the rest is the shared
+            --  selection's.  An eight-byte operand is the pair x10:x11 or
+            --  x12:x13, where libgcc's helpers take and return them, and a
+            --  float is libgcc's soft float, as the psABI's ilp32 passes it.
+            procedure Pair_Instruction (Handled : out Boolean);
+
+            --  x10:x11 shifted by x12, already in 0 .. 63, with x28 and x29
+            --  as scratch.  Below 32 the crossing bits move through a shift
+            --  by one and then by 31 - n, so a shift by zero moves none.
+            procedure Shift_Pair (Left : Boolean; Signed : Boolean := False);
+
+            procedure Shift_Pair (Left : Boolean; Signed : Boolean := False)
+            is
+               Small : constant String := Fresh;
+               Done : constant String := Fresh;
+            begin
+               Emit ("li x28, 32");
+               Put (Character'Val (9) & "bltu x12, x28, " & Small);
+               Emit ("addi x29, x12, -32");
+               if Left then
+                  Emit ("sll x11, x10, x29");
+                  Emit ("li x10, 0");
+               else
+                  Emit ((if Signed then "sra" else "srl")
+                        & " x10, x11, x29");
+                  Emit ((if Signed then "srai x11, x11, 31" else "li x11, 0"));
+               end if;
+               Put (Character'Val (9) & "j " & Done);
+               Put (Small & ":");
+               Emit ("li x29, 31");
+               Emit ("sub x29, x29, x12");
+               if Left then
+                  Emit ("srli x28, x10, 1");
+                  Emit ("srl x28, x28, x29");
+                  Emit ("sll x11, x11, x12");
+                  Emit ("or x11, x11, x28");
+                  Emit ("sll x10, x10, x12");
+               else
+                  Emit ("slli x28, x11, 1");
+                  Emit ("sll x28, x28, x29");
+                  Emit ("srl x10, x10, x12");
+                  Emit ("or x10, x10, x28");
+                  Emit ((if Signed then "sra" else "srl") & " x11, x11, x12");
+               end if;
+               Put (Done & ":");
+            end Shift_Pair;
+
+            --  At XLEN 32 a narrower packed member of an eight-byte value
+            --  type has a zero high word, and one stored has none.
+            procedure Clear_High (Which : Landin.IR.Value_Id);
+            procedure Clear_High (Which : Landin.IR.Value_Id) is
+            begin
+               if Pairs and then Size_Of_Value (Which) = Landin.Targets.Byte_8
+               then
+                  Emit ("li x27, 0");
+               end if;
+            end Clear_High;
+
+            procedure Narrow_High (Which : Landin.IR.Value_Id);
+            procedure Narrow_High (Which : Landin.IR.Value_Id) is
+            begin
+               if Pairs and then Size_Of_Value (Which) = Landin.Targets.Byte_8
+               then
+                  Emit ("bnez x27, " & Trap (Landin.Panics.Bad_Conversion));
+               end if;
+            end Narrow_High;
+
+            --  D671: a packed member of an eight-byte carrier at XLEN 32,
+            --  the carrier's address in x6 and the member's first bit in
+            --  x30, as the shared selection's single register does it.
+            procedure Packed_Pair
+              (Bits : Natural; Atoms : Landin.IR.Atom_Set_Id;
+               Writing : Boolean);
+            procedure Packed_Pair
+              (Bits : Natural; Atoms : Landin.IR.Atom_Set_Id;
+               Writing : Boolean)
+            is
+               Ones : constant Pattern :=
+                 (if Bits = 64 then Pattern'Last else 2 ** Bits - 1);
+               function Input return Landin.IR.Value_Id
+                 is (if Op = Landin.IR.Store_Element then Operand (2)
+                     else Operand (1));
+            begin
+               if not Writing then
+                  Memory (False, Landin.Targets.Byte_8, "x10", "x6");
+                  Emit ("mv x12, x30");
+                  Shift_Pair (False);
+                  Immediate ("x7", Ones and 16#FFFF_FFFF#);
+                  Emit ("and x10, x10, x7");
+                  Immediate ("x7", Ones / 2 ** 32);
+                  Emit ("and x11, x11, x7");
+                  Emit ("mv x5, x10");
+                  Emit ("mv x27, x11");
+                  Packed_Atom (Atoms, Encode => False);
+                  Store_Value (Value, Atom_Validated => True);
+                  return;
+               end if;
+               Load_Value (Input);
+               Packed_Atom (Atoms, Encode => True);
+               Emit ("mv x10, x5");
+               Emit ((if Size_Of_Value (Input) = Landin.Targets.Byte_8
+                      then "mv x11, x27" else "li x11, 0"));
+               if Bits < 64 then
+                  Immediate ("x7", (not Ones) and 16#FFFF_FFFF#);
+                  Emit ("and x7, x10, x7");
+                  Immediate ("x14", (not Ones) / 2 ** 32);
+                  Emit ("and x14, x11, x14");
+                  Emit ("or x7, x7, x14");
+                  Emit ("bnez x7, " & Trap (Landin.Panics.Bad_Conversion));
+               end if;
+               Emit ("mv x16, x10");
+               Emit ("mv x17, x11");
+               Immediate ("x10", Ones and 16#FFFF_FFFF#);
+               Immediate ("x11", Ones / 2 ** 32);
+               Emit ("mv x12, x30");
+               Shift_Pair (True);
+               Emit ("not x14, x10");
+               Emit ("not x15, x11");
+               Emit ("mv x10, x16");
+               Emit ("mv x11, x17");
+               Emit ("mv x12, x30");
+               Shift_Pair (True);
+               Memory (False, Landin.Targets.Byte_8, "x16", "x6");
+               Emit ("and x16, x16, x14");
+               Emit ("and x17, x17, x15");
+               Emit ("or x16, x16, x10");
+               Emit ("or x17, x17, x11");
+               Memory (True, Landin.Targets.Byte_8, "x16", "x6");
+            end Packed_Pair;
+
+            procedure Pair_Instruction (Handled : out Boolean) is
+               function Wide (Which : Landin.IR.Value_Id) return Boolean
+                 is (Size_Of_Value (Which) = Landin.Targets.Byte_8);
+               function Is_Float (Scalar : Landin.Types.Scalar_Name)
+                 return Boolean is (Scalar in Landin.Types.Float_Name);
+               function Mode (Scalar : Landin.Types.Scalar_Name)
+                 return String
+                 is (if Scalar = Landin.Types.F32 then "sf" else "df");
+               function Signed_Integer (Scalar : Landin.Types.Scalar_Name)
+                 return Boolean
+                 is (Scalar in Landin.Types.Integer_Name
+                     and then Landin.Types.Is_Signed (Scalar));
+
+               procedure Helper (Name : String);
+               procedure Helper (Name : String) is
+               begin
+                  Emit ("call " & Name);
+                  Helpers_Called := Helpers_Called + 1;
+               end Helper;
+
+               --  Operand Which as the pair Low:High or, narrower, in Low
+               --  with its high word its extension.
+               procedure Load_Wide (Which : Positive; Low : String);
+               procedure Load_Wide (Which : Positive; Low : String) is
+                  Scalar : constant Landin.Types.Scalar_Name :=
+                    Kind (Operand (Which));
+               begin
+                  Load_Value (Operand (Which), Low);
+                  if not Wide (Operand (Which)) then
+                     Extend (Low, Scalar);
+                     Emit ((if Signed_Integer (Scalar)
+                            then "srai " & High (Low) & ", " & Low & ", 31"
+                            else "li " & High (Low) & ", 0"));
+                  end if;
+               end Load_Wide;
+
+               --  A float's two operands where its helper takes them.
+               procedure Load_Floats (Scalar : Landin.Types.Scalar_Name);
+               procedure Load_Floats (Scalar : Landin.Types.Scalar_Name) is
+               begin
+                  Load_Value (Operand (1), "x10");
+                  Load_Value
+                    (Operand (2), (if Scalar = Landin.Types.F32 then "x11"
+                                   else "x12"));
+               end Load_Floats;
+
+               --  Whether X < Y for the pairs named, into x5.
+               procedure Less
+                 (X_Low, X_High, Y_Low, Y_High : String; Signed : Boolean);
+               procedure Less
+                 (X_Low, X_High, Y_Low, Y_High : String; Signed : Boolean) is
+               begin
+                  Emit ((if Signed then "slt" else "sltu") & " x6, " & X_High
+                        & ", " & Y_High);
+                  Emit ("xor x7, " & X_High & ", " & Y_High);
+                  Emit ("seqz x7, x7");
+                  Emit ("sltu x28, " & X_Low & ", " & Y_Low);
+                  Emit ("and x7, x7, x28");
+                  Emit ("or x5, x6, x7");
+               end Less;
+
+               --  x10:x11 negated, with x6 as scratch.
+               procedure Negate;
+               procedure Negate is
+               begin
+                  Emit ("snez x6, x10");
+                  Emit ("neg x10, x10");
+                  Emit ("neg x11, x11");
+                  Emit ("sub x11, x11, x6");
+               end Negate;
+
+               --  The pair x14:x15 or x16:x17 made its magnitude.
+               procedure Magnitude (Low, High_Word : String);
+               procedure Magnitude (Low, High_Word : String) is
+                  Done : constant String := Fresh;
+               begin
+                  Put (Character'Val (9) & "bgez " & High_Word & ", " & Done);
+                  Emit ("snez x6, " & Low);
+                  Emit ("neg " & Low & ", " & Low);
+                  Emit ("neg " & High_Word & ", " & High_Word);
+                  Emit ("sub " & High_Word & ", " & High_Word & ", x6");
+                  Put (Done & ":");
+               end Magnitude;
+
+               --  The high word of x10's value extended to Into, against
+               --  x11; then the low word's own fit.
+               procedure Fit_Narrow (Into : Landin.Types.Scalar_Name);
+               procedure Fit_Narrow (Into : Landin.Types.Scalar_Name) is
+               begin
+                  Emit ((if Signed_Integer (Into) then "srai x6, x10, 31"
+                         else "li x6, 0"));
+                  Emit ("bne x11, x6, " & Trap);
+                  Check_Fit ("x10", Into);
+               end Fit_Narrow;
+            begin
+               Handled := True;
+               case Op is
+                  when Landin.IR.Number =>
+                     if not Wide (Value) then
+                        Handled := False;
+                        return;
+                     end if;
+                     declare
+                        Number : Pattern := Pattern
+                          (Landin.IR.Number_Of (Of_Unit, Item, Value));
+                     begin
+                        if Kind (Value) not in Landin.Types.Float_Name
+                          and then Landin.IR.Is_Negated (Of_Unit, Item, Value)
+                        then
+                           Number := 0 - Number;
+                        end if;
+                        Immediate ("x5", Number and 16#FFFF_FFFF#);
+                        Immediate ("x27", Number / 2 ** 32);
+                        Store_Value (Value);
+                     end;
+
+                  when Landin.IR.Negation | Landin.IR.Complement =>
+                     if not Wide (Value) then
+                        Handled := False;
+                        return;
+                     end if;
+                     Load_Value (Operand (1), "x10");
+                     if Op = Landin.IR.Complement then
+                        Emit ("not x10, x10");
+                        Emit ("not x11, x11");
+                     elsif Is_Float (Kind (Value)) then
+                        Immediate ("x6", 2 ** 31);
+                        Emit ("xor x11, x11, x6");
+                     else
+                        Emit ("mv x14, x11");
+                        Emit ("or x7, x10, x11");
+                        Negate;
+                        if not Unchecked then
+                           if Signed_Integer (Kind (Value)) then
+                              --  Only the minimum is its own negation.
+                              Emit ("and x6, x14, x11");
+                              Emit ("bltz x6, " & Trap);
+                           else
+                              Emit ("bnez x7, " & Trap);
+                           end if;
+                        end if;
+                     end if;
+                     Store_Value (Value, "x10");
+
+                  when Landin.IR.Add | Landin.IR.Subtract
+                     | Landin.IR.Multiply | Landin.IR.Divide
+                     | Landin.IR.Remainder | Landin.IR.Wrapping_Add
+                     | Landin.IR.Wrapping_Subtract
+                     | Landin.IR.Wrapping_Multiply
+                     | Landin.IR.Bitwise_And | Landin.IR.Bitwise_Or
+                     | Landin.IR.Bitwise_Xor | Landin.IR.Shift_Left
+                     | Landin.IR.Shift_Right =>
+                     if Is_Float (Kind (Value)) then
+                        Load_Floats (Kind (Value));
+                        Helper ("__" & (case Op is
+                           when Landin.IR.Add => "add",
+                           when Landin.IR.Subtract => "sub",
+                           when Landin.IR.Multiply => "mul",
+                           when Landin.IR.Divide => "div",
+                           when others => raise Compiler_Defect with
+                             "invalid float operation")
+                           & Mode (Kind (Value)) & "3");
+                        Store_Value (Value, "x10");
+                        return;
+                     elsif not Wide (Value) then
+                        Handled := False;
+                        return;
+                     end if;
+                     declare
+                        Signed : constant Boolean :=
+                          Landin.Types.Is_Signed (Kind (Value));
+                        Checked : constant Boolean := not Unchecked
+                          and then Op in Landin.IR.Add | Landin.IR.Subtract
+                            | Landin.IR.Multiply;
+                        Done : constant String := Fresh;
+                     begin
+                        Load_Value (Operand (1), "x10");
+                        Load_Value (Operand (2), "x12");
+                        case Op is
+                           when Landin.IR.Add | Landin.IR.Wrapping_Add =>
+                              Emit ("add x14, x10, x12");
+                              Emit ("sltu x6, x14, x10");
+                              Emit ("add x15, x11, x13");
+                              if Checked and then not Signed then
+                                 Emit ("sltu x7, x15, x11");
+                              end if;
+                              Emit ("add x15, x15, x6");
+                              if Checked and then not Signed then
+                                 Emit ("sltu x6, x15, x6");
+                                 Emit ("or x7, x7, x6");
+                                 Emit ("bnez x7, " & Trap);
+                              elsif Checked then
+                                 Emit ("xor x6, x11, x15");
+                                 Emit ("xor x7, x13, x15");
+                                 Emit ("and x6, x6, x7");
+                                 Emit ("bltz x6, " & Trap);
+                              end if;
+                           when Landin.IR.Subtract
+                              | Landin.IR.Wrapping_Subtract =>
+                              Emit ("sub x14, x10, x12");
+                              Emit ("sltu x6, x10, x12");
+                              if Checked and then not Signed then
+                                 Emit ("sltu x7, x11, x13");
+                              end if;
+                              Emit ("sub x15, x11, x13");
+                              if Checked and then not Signed then
+                                 Emit ("sltu x16, x15, x6");
+                              end if;
+                              Emit ("sub x15, x15, x6");
+                              if Checked and then not Signed then
+                                 Emit ("or x7, x7, x16");
+                                 Emit ("bnez x7, " & Trap);
+                              elsif Checked then
+                                 Emit ("xor x6, x11, x13");
+                                 Emit ("xor x7, x11, x15");
+                                 Emit ("and x6, x6, x7");
+                                 Emit ("bltz x6, " & Trap);
+                              end if;
+                           when Landin.IR.Bitwise_And | Landin.IR.Bitwise_Or
+                              | Landin.IR.Bitwise_Xor =>
+                              declare
+                                 Name : constant String :=
+                                   (if Op = Landin.IR.Bitwise_And then "and"
+                                    elsif Op = Landin.IR.Bitwise_Or then "or"
+                                    else "xor");
+                              begin
+                                 Emit (Name & " x14, x10, x12");
+                                 Emit (Name & " x15, x11, x13");
+                              end;
+                           when Landin.IR.Multiply
+                              | Landin.IR.Wrapping_Multiply =>
+                              if Checked then
+                                 --  D672: the magnitudes' whole product has
+                                 --  no word above the low 64 bits, then
+                                 --  fits the result's sign.
+                                 Emit ("mv x14, x10");
+                                 Emit ("mv x15, x11");
+                                 Emit ("mv x16, x12");
+                                 Emit ("mv x17, x13");
+                                 if Signed then
+                                    Magnitude ("x14", "x15");
+                                    Magnitude ("x16", "x17");
+                                 end if;
+                                 Emit ("snez x6, x15");
+                                 Emit ("snez x7, x17");
+                                 Emit ("and x6, x6, x7");
+                                 Emit ("bnez x6, " & Trap);
+                                 Emit ("mulhu x6, x14, x17");
+                                 Emit ("bnez x6, " & Trap);
+                                 Emit ("mulhu x6, x15, x16");
+                                 Emit ("bnez x6, " & Trap);
+                                 Emit ("mul x6, x14, x17");
+                                 Emit ("mul x7, x15, x16");
+                                 Emit ("add x6, x6, x7");
+                                 Emit ("mulhu x7, x14, x16");
+                                 Emit ("add x28, x7, x6");
+                                 Emit ("sltu x6, x28, x6");
+                                 Emit ("bnez x6, " & Trap);
+                                 if Signed then
+                                    Emit ("xor x29, x11, x13");
+                                    Put (Character'Val (9) & "bltz x29, "
+                                         & Done & "_negative");
+                                    Emit ("bltz x28, " & Trap);
+                                    Put (Character'Val (9) & "j " & Done
+                                         & "_fits");
+                                    Put (Done & "_negative:");
+                                    Immediate ("x30", 2 ** 31);
+                                    Put (Character'Val (9) & "bltu x28, x30, "
+                                         & Done & "_fits");
+                                    Emit ("bne x28, x30, " & Trap);
+                                    Emit ("mul x6, x14, x16");
+                                    Emit ("bnez x6, " & Trap);
+                                    Put (Done & "_fits:");
+                                 end if;
+                              end if;
+                              --  The low 64 bits of the product, which
+                              --  are both signednesses' wrapping result.
+                              Emit ("mul x14, x10, x12");
+                              Emit ("mulhu x15, x10, x12");
+                              Emit ("mul x6, x10, x13");
+                              Emit ("add x15, x15, x6");
+                              Emit ("mul x6, x11, x12");
+                              Emit ("add x15, x15, x6");
+                           when Landin.IR.Divide | Landin.IR.Remainder =>
+                              Emit ("or x6, x12, x13");
+                              Emit ("beqz x6, " & Trap);
+                              if Signed and then Op = Landin.IR.Divide then
+                                 Emit ("and x6, x12, x13");
+                                 Emit ("li x7, -1");
+                                 Put (Character'Val (9) & "bne x6, x7, "
+                                      & Done & "_divide");
+                                 Immediate ("x7", 2 ** 31);
+                                 Put (Character'Val (9) & "bne x11, x7, "
+                                      & Done & "_divide");
+                                 Emit ("beqz x10, " & Trap);
+                                 Put (Done & "_divide:");
+                              end if;
+                              Helper ("__" & (if Signed then "" else "u")
+                                & (if Op = Landin.IR.Divide then "div"
+                                   else "mod") & "di3");
+                              Emit ("mv x14, x10");
+                              Emit ("mv x15, x11");
+                           when Landin.IR.Shift_Left
+                              | Landin.IR.Shift_Right =>
+                              if Signed then
+                                 Emit ("bltz x13, " & Trap);
+                              end if;
+                              Put (Character'Val (9) & "bnez x13, " & Done
+                                   & "_zero");
+                              Emit ("li x6, 64");
+                              Put (Character'Val (9) & "bgeu x12, x6, " & Done
+                                   & "_zero");
+                              Shift_Pair (Op = Landin.IR.Shift_Left, Signed);
+                              Emit ("mv x14, x10");
+                              Emit ("mv x15, x11");
+                              Put (Character'Val (9) & "j " & Done);
+                              Put (Done & "_zero:");
+                              Emit ("li x14, 0");
+                              Emit ("li x15, 0");
+                           when others =>
+                              raise Compiler_Defect with
+                                "invalid integer operation";
+                        end case;
+                        Put (Done & ":");
+                        Emit ("mv x10, x14");
+                        Emit ("mv x11, x15");
+                        Store_Value (Value, "x10");
+                     end;
+
+                  when Landin.IR.Equal_To | Landin.IR.Not_Equal_To
+                     | Landin.IR.Less_Than | Landin.IR.Less_Or_Equal
+                     | Landin.IR.Greater_Than | Landin.IR.Greater_Or_Equal =>
+                     declare
+                        Scalar : constant Landin.Types.Scalar_Name :=
+                          Kind (Operand (1));
+                     begin
+                        if Is_Float (Scalar) then
+                           --  libgcc's comparisons answer an int whose sign
+                           --  holds the relation and which every unordered
+                           --  pair fails.
+                           Load_Floats (Scalar);
+                           Helper ("__" & (case Op is
+                              when Landin.IR.Equal_To => "eq",
+                              when Landin.IR.Not_Equal_To => "ne",
+                              when Landin.IR.Less_Than => "lt",
+                              when Landin.IR.Less_Or_Equal => "le",
+                              when Landin.IR.Greater_Than => "gt",
+                              when others => "ge")
+                              & Mode (Scalar) & "2");
+                           case Op is
+                              when Landin.IR.Equal_To =>
+                                 Emit ("seqz x5, x10");
+                              when Landin.IR.Not_Equal_To =>
+                                 Emit ("snez x5, x10");
+                              when Landin.IR.Less_Than =>
+                                 Emit ("slti x5, x10, 0");
+                              when Landin.IR.Less_Or_Equal =>
+                                 Emit ("slti x5, x10, 1");
+                              when Landin.IR.Greater_Than =>
+                                 Emit ("sgtz x5, x10");
+                              when others =>
+                                 Emit ("slti x5, x10, 0");
+                                 Emit ("xori x5, x5, 1");
+                           end case;
+                        elsif Wide (Operand (1)) then
+                           Load_Value (Operand (1), "x10");
+                           Load_Value (Operand (2), "x12");
+                           case Op is
+                              when Landin.IR.Equal_To
+                                 | Landin.IR.Not_Equal_To =>
+                                 Emit ("xor x6, x10, x12");
+                                 Emit ("xor x7, x11, x13");
+                                 Emit ("or x6, x6, x7");
+                                 Emit ((if Op = Landin.IR.Equal_To
+                                        then "seqz" else "snez")
+                                       & " x5, x6");
+                              when Landin.IR.Less_Than
+                                 | Landin.IR.Greater_Or_Equal =>
+                                 Less ("x10", "x11", "x12", "x13",
+                                       Signed_Integer (Scalar));
+                              when others =>
+                                 Less ("x12", "x13", "x10", "x11",
+                                       Signed_Integer (Scalar));
+                           end case;
+                           if Op in Landin.IR.Greater_Or_Equal
+                             | Landin.IR.Less_Or_Equal
+                           then
+                              Emit ("xori x5, x5, 1");
+                           end if;
+                        else
+                           Handled := False;
+                           return;
+                        end if;
+                        Store_Value (Value);
+                     end;
+
+                  when Landin.IR.Range_Check =>
+                     if not Wide (Value) then
+                        Handled := False;
+                        return;
+                     end if;
+                     Load_Value (Operand (1), "x10");
+                     for Upper in Boolean loop
+                        --  An edge at the type's own extreme passes every
+                        --  value, so it is not tested.
+                        if (if Upper
+                            then Landin.IR.Range_Upper (Of_Unit, Item, Value)
+                                 < Landin.Types.Highest (Kind (Value), Facts)
+                            else Landin.IR.Range_Lower (Of_Unit, Item, Value)
+                                 > Landin.Types.Lowest (Kind (Value), Facts))
+                        then
+                           declare
+                              Bound : constant Pattern := To_Pattern
+                                ((if Upper
+                                  then Landin.IR.Range_Upper
+                                    (Of_Unit, Item, Value)
+                                  else Landin.IR.Range_Lower
+                                    (Of_Unit, Item, Value)), 64);
+                              Compare_High : constant String :=
+                                (if Landin.Types.Is_Signed (Kind (Value))
+                                 then "blt " else "bltu ");
+                              Next : constant String := Fresh;
+                           begin
+                              Immediate ("x12", Bound and 16#FFFF_FFFF#);
+                              Immediate ("x13", Bound / 2 ** 32);
+                              if Upper then
+                                 Emit (Compare_High & "x13, x11, " & Trap);
+                                 Put (Character'Val (9) & "bne x11, x13, "
+                                      & Next);
+                                 Emit ("bltu x12, x10, " & Trap);
+                              else
+                                 Emit (Compare_High & "x11, x13, " & Trap);
+                                 Put (Character'Val (9) & "bne x11, x13, "
+                                      & Next);
+                                 Emit ("bltu x10, x12, " & Trap);
+                              end if;
+                              Put (Next & ":");
+                           end;
+                        end if;
+                     end loop;
+                     Store_Value (Value, "x10");
+
+                  when Landin.IR.Conversion | Landin.IR.Pointer_Address
+                     | Landin.IR.Code_Address =>
+                     declare
+                        From : constant Landin.Types.Scalar_Name :=
+                          Kind (Operand (1));
+                        Into : constant Landin.Types.Scalar_Name :=
+                          Kind (Value);
+                        Done : constant String := Fresh;
+                     begin
+                        if not (Is_Float (From) or else Is_Float (Into)
+                                or else Wide (Operand (1))
+                                or else Wide (Value))
+                        then
+                           Handled := False;
+                           return;
+                        end if;
+                        if Is_Float (From) and then Is_Float (Into) then
+                           Load_Value (Operand (1), "x10");
+                           if From /= Into then
+                              Helper (if From = Landin.Types.F32
+                                      then "__extendsfdf2"
+                                      else "__truncdfsf2");
+                              if Into = Landin.Types.F32 then
+                                 --  A finite f64 that rounds to an
+                                 --  infinity overflowed; a NaN or an
+                                 --  infinity converts as itself.
+                                 Immediate ("x6", 16#7F80_0000#);
+                                 Emit ("and x7, x10, x6");
+                                 Put (Character'Val (9) & "bne x7, x6, "
+                                      & Done);
+                                 Load_Value (Operand (1), "x12");
+                                 Immediate ("x6", 16#7FF0_0000#);
+                                 Emit ("and x7, x13, x6");
+                                 Emit ("bne x7, x6, " & Trap);
+                              end if;
+                           end if;
+                        elsif Is_Float (Into) then
+                           Load_Value (Operand (1), "x10");
+                           if not Wide (Operand (1)) then
+                              Extend ("x10", From);
+                           end if;
+                           Helper ("__float"
+                             & (if Signed_Integer (From) then "" else "un")
+                             & (if Wide (Operand (1)) then "di" else "si")
+                             & Mode (Into));
+                        elsif Is_Float (From) and then Into = Landin.Types.Bool
+                        then
+                           --  Both zeros are false, positive one is true,
+                           --  and every other value, a NaN among them,
+                           --  fails.
+                           Load_Value (Operand (1), "x10");
+                           if From = Landin.Types.F32 then
+                              Emit ("slli x6, x10, 1");
+                              Put (Character'Val (9) & "beqz x6, " & Done
+                                   & "_zero");
+                              Immediate ("x6", 16#3F80_0000#);
+                              Emit ("bne x10, x6, " & Trap);
+                           else
+                              Emit ("slli x6, x11, 1");
+                              Emit ("or x6, x6, x10");
+                              Put (Character'Val (9) & "beqz x6, " & Done
+                                   & "_zero");
+                              Emit ("bnez x10, " & Trap);
+                              Immediate ("x6", 16#3FF0_0000#);
+                              Emit ("bne x11, x6, " & Trap);
+                           end if;
+                           Emit ("li x10, 1");
+                           Put (Character'Val (9) & "j " & Done);
+                           Put (Done & "_zero:");
+                           Emit ("li x10, 0");
+                        elsif Is_Float (From) then
+                           --  D672: the significand decoded and truncated
+                           --  toward zero in integer words, as Cortex-M0
+                           --  does, with no helper's out-of-range answer.
+                           declare
+                              Fraction : constant Natural :=
+                                (if From = Landin.Types.F32 then 23 else 52);
+                              Into_Signed : constant Boolean :=
+                                Signed_Integer (Into);
+                           begin
+                              Load_Value (Operand (1), "x10");
+                              Emit ("mv x14, " & (if From = Landin.Types.F32
+                                                  then "x10" else "x11"));
+                              Emit ("srli x6, x14, " & (if From
+                                = Landin.Types.F32 then "23" else "20"));
+                              Immediate ("x7", (if From = Landin.Types.F32
+                                                then 255 else 2047));
+                              Emit ("and x6, x6, x7");
+                              Emit ("beq x6, x7, " & Trap);
+                              Emit ("addi x6, x6, -" & (if From
+                                = Landin.Types.F32 then "127" else "1023"));
+                              Put (Character'Val (9) & "bltz x6, " & Done
+                                   & "_zero");
+                              Emit ("li x7, 64");
+                              Emit ("bgeu x6, x7, " & Trap);
+                              if From = Landin.Types.F32 then
+                                 Immediate ("x7", 16#7F_FFFF#);
+                                 Emit ("and x10, x10, x7");
+                                 Immediate ("x7", 16#80_0000#);
+                                 Emit ("or x10, x10, x7");
+                                 Emit ("li x11, 0");
+                              else
+                                 Immediate ("x7", 16#F_FFFF#);
+                                 Emit ("and x11, x11, x7");
+                                 Immediate ("x7", 16#10_0000#);
+                                 Emit ("or x11, x11, x7");
+                              end if;
+                              Emit ("li x7, " & Image (Fraction));
+                              Put (Character'Val (9) & "bltu x6, x7, " & Done
+                                   & "_right");
+                              Emit ("sub x12, x6, x7");
+                              Shift_Pair (True);
+                              Put (Character'Val (9) & "j " & Done & "_sign");
+                              Put (Done & "_right:");
+                              Emit ("sub x12, x7, x6");
+                              Shift_Pair (False);
+                              Put (Done & "_sign:");
+                              Put (Character'Val (9) & "bgez x14, " & Done
+                                   & "_positive");
+                              if Into_Signed then
+                                 Immediate ("x6", 2 ** 31);
+                                 Emit ("bltu x6, x11, " & Trap);
+                                 Put (Character'Val (9) & "bne x11, x6, "
+                                      & Done & "_negate");
+                                 Emit ("bnez x10, " & Trap);
+                                 Put (Done & "_negate:");
+                                 Negate;
+                              else
+                                 Emit ("or x6, x10, x11");
+                                 Emit ("bnez x6, " & Trap);
+                              end if;
+                              Put (Character'Val (9) & "j " & Done & "_fit");
+                              Put (Done & "_positive:");
+                              if Into_Signed then
+                                 Emit ("bltz x11, " & Trap);
+                              end if;
+                              Put (Character'Val (9) & "j " & Done & "_fit");
+                              Put (Done & "_zero:");
+                              Emit ("li x10, 0");
+                              Emit ("li x11, 0");
+                              Put (Done & "_fit:");
+                              if not Wide (Value) then
+                                 Fit_Narrow (Into);
+                              end if;
+                           end;
+                        else
+                           Load_Wide (1, "x10");
+                           if Into = Landin.Types.Bool then
+                              Emit ("bnez x11, " & Trap);
+                              Emit ("li x6, 1");
+                              Emit ("bltu x6, x10, " & Trap);
+                           elsif not Unchecked
+                             and then Into in Landin.Types.Integer_Name
+                           then
+                              if From in Landin.Types.Integer_Name
+                                and then Landin.Types.Is_Signed (From)
+                                  /= Landin.Types.Is_Signed (Into)
+                              then
+                                 Emit ("bltz x11, " & Trap);
+                              end if;
+                              if not Wide (Value) then
+                                 Fit_Narrow (Into);
+                              end if;
+                           end if;
+                        end if;
+                        Put (Done & ":");
+                        Store_Value (Value, "x10");
+                     end;
+
+                  when others =>
+                     Handled := False;
+               end case;
+            end Pair_Instruction;
          begin
+            if Pairs then
+               declare
+                  Handled : Boolean;
+               begin
+                  Pair_Instruction (Handled);
+                  if Handled then
+                     return;
+                  end if;
+               end;
+            end if;
             case Op is
                when Landin.IR.Assembly =>
                   Assembly_Block (Value);
@@ -2875,12 +3874,14 @@ package body Landin.Backend.RiscV is
                         Emit ("sub x6, x6, x5");
                         Emit ("li x7, " & Trimmed
                           (Landin.Targets.Byte_Count'Image
-                             (Stack_Frame_Bytes + Limit_Margin)));
+                             (Landin.Targets.Byte_Count (Stack_Frame_Bytes)
+                              + Limit_Margin)));
                         Emit ("blt x6, x7, " & Trap);
                         Emit ("add x5, x5, x6");
                         Emit ("addi x5, x5, -" & Image (Stack_Frame_Bytes));
-                        for Index in 1 .. Stack_Frame_Bytes / 8 - 1 loop
-                           Emit ("sd zero, " & Image (8 * Index) & "(x5)");
+                        for Index in 1 .. Stack_Frame_Bytes / Word - 1 loop
+                           Emit (Store_Word & " zero, " & Image (Word * Index)
+                                 & "(x5)");
                         end loop;
                         --  The base is the frame's top less the aligned
                         --  length.
@@ -2888,16 +3889,16 @@ package body Landin.Backend.RiscV is
                         Emit ("sub x7, x7, x6");
                         Emit ("addi x7, x7, " & Trimmed
                           (Landin.Targets.Byte_Count'Image (Limit_Margin)));
-                        Emit ("sd x7, 0(x5)");
+                        Emit (Store_Word & " x7, 0(x5)");
                         Load_Value (Operand (3), "x7");
-                        Emit ("sd x7, " & Image (Stack_Save_Offset (3))
-                              & "(x5)");
+                        Emit (Store_Word & " x7, "
+                              & Image (Stack_Save_Offset (3)) & "(x5)");
                         Load_Value (Operand (4), "x7");
-                        Emit ("sd x7, " & Image (Stack_Save_Offset (4))
-                              & "(x5)");
+                        Emit (Store_Word & " x7, "
+                              & Image (Stack_Save_Offset (4)) & "(x5)");
                         Emit ("lla x7, " & Stack_Entered);
-                        Emit ("sd x7, " & Image (Stack_Save_Offset (1))
-                              & "(x5)");
+                        Emit (Store_Word & " x7, "
+                              & Image (Stack_Save_Offset (1)) & "(x5)");
                         Stack_Used := True;
                         Store_Value (Value, "x5");
                      elsif M = Stack_Switch then
@@ -2927,6 +3928,19 @@ package body Landin.Backend.RiscV is
                            when others => Emit ("fence iorw, iorw");
                         end case;
                      else
+                        --  D690: the checker admits no eight-byte atomic on
+                        --  RV32 and no read-modify-write at a level without
+                        --  A, so one that reaches here is a defect.  An
+                        --  eight-byte volatile access is its two words.
+                        if Pairs and then ((Bytes > Word and then M not in
+                            Volatile_Load | Volatile_Store)
+                          or else (not Atomics and then M not in
+                            Atomic_Load | Volatile_Load | Atomic_Store
+                              | Volatile_Store))
+                        then
+                           raise Compiler_Defect with
+                             "an atomic RV32 does not admit at this level";
+                        end if;
                         Load_Value (Operand (1), "x6");
                         if Bytes > 1 then
                            Emit ("andi x18, x6, " & Image (Bytes - 1));
@@ -2976,7 +3990,7 @@ package body Landin.Backend.RiscV is
                                      when Release => ".rl",
                                      when Acq_Rel | Seq_Cst => ".aqrl")
                                 & " x5, x7, (x6)");
-                              if Bytes = 4 then
+                              if Bytes = 4 and then not Pairs then
                                  Extract ("x5", "x5", 0, 32);
                               end if;
                            else
@@ -3001,7 +4015,7 @@ package body Landin.Backend.RiscV is
                               if Bytes < 4 then
                                  Emit ("srl x5, x20, x19");
                                  Emit ("and x5, x5, x22");
-                              elsif Bytes = 4 then
+                              elsif Bytes = 4 and then not Pairs then
                                  Extract ("x5", "x20", 0, 32);
                               else
                                  Emit ("mv x5, x20");
@@ -3083,17 +4097,28 @@ package body Landin.Backend.RiscV is
                              (Landin.IR.Field_Of (Of_Unit, Item, Value)),
                            "x6", Nested => Landin.IR.Path_Of
                              (Of_Unit, Item, Value));
+                        if Pairs and then Landin.Targets.Packed.Carrier
+                          (Shape.Packing.Storage) = Landin.Targets.Byte_8
+                        then
+                           Emit ("li x30, " & Image (Shape.Packing.First));
+                           Packed_Pair
+                             (Shape.Packing.Bits, Shape.Atoms,
+                              Op = Landin.IR.Store_Field);
+                           return;
+                        end if;
                         if Op = Landin.IR.Load_Field then
                            Memory (False, Landin.Targets.Packed.Carrier
                              (Shape.Packing.Storage), "x5", "x6");
                            Extract ("x5", "x5", Shape.Packing.First,
                              Shape.Packing.Bits);
                            Packed_Atom (Shape.Atoms, Encode => False);
+                           Clear_High (Value);
                            Store_Value (Value, Atom_Validated => True);
                         else
                            Load_Value (Operand (1));
                            Packed_Atom (Shape.Atoms, Encode => True);
-                           if Shape.Packing.Bits < 64 then
+                           Narrow_High (Operand (1));
+                           if Shape.Packing.Bits < Natural (Width) then
                               Emit ("srli x7, x5, " & Trimmed
                                 (Natural'Image (Shape.Packing.Bits)));
                               Emit ("bnez x7, "
@@ -3156,6 +4181,17 @@ package body Landin.Backend.RiscV is
                           (Natural'Image (Shape.Packing.First)));
                         Storage_Address
                           (Place, Field, "x6", Nested => Nested);
+                        if Pairs and then Landin.Targets.Packed.Carrier
+                          (Shape.Packing.Storage) = Landin.Targets.Byte_8
+                        then
+                           Emit ("mv x30, x29");
+                           Packed_Pair
+                             (Shape.Packing.Bits,
+                              Landin.IR.Array_Element_Shape
+                                (Of_Unit, Shape).Atoms,
+                              Op = Landin.IR.Store_Element);
+                           return;
+                        end if;
                         Immediate ("x28", (if Shape.Packing.Bits = 64
                           then Pattern'Last else
                             2 ** Shape.Packing.Bits - 1));
@@ -3166,11 +4202,13 @@ package body Landin.Backend.RiscV is
                            Emit ("and x5, x5, x28");
                            Packed_Atom (Landin.IR.Array_Element_Shape
                              (Of_Unit, Shape).Atoms, Encode => False);
+                           Clear_High (Value);
                            Store_Value (Value, Atom_Validated => True);
                         else
                            Load_Value (Operand (2));
                            Packed_Atom (Landin.IR.Array_Element_Shape
                              (Of_Unit, Shape).Atoms, Encode => True);
+                           Narrow_High (Operand (2));
                            Emit ("not x18, " & "x28");
                            Emit ("and x7, x5, x18");
                            Emit ("bnez x7, "
@@ -3581,6 +4619,8 @@ package body Landin.Backend.RiscV is
                        is (Landin.IR.Op_Of (Of_Unit, Item, Which)
                              = Landin.IR.Number
                            and then Kind (Value) in Landin.Types.Integer_Name
+                           and then not (Pairs and then Size_Of_Value (Value)
+                                           = Landin.Targets.Byte_8)
                            and then Landin.IR.Number_Of
                              (Of_Unit, Item, Which) = Of_Value
                            and then (Of_Value = 0
@@ -3743,17 +4783,20 @@ package body Landin.Backend.RiscV is
                   if Landin.IR.Evidence_Is_Erased
                     (Of_Unit, Landin.IR.Evidence_Of (Of_Unit, Item, Value))
                   then
-                     Emit ("ld x5, 8(x5)");
+                     Emit (Load_Word & " x5, " & Trimmed
+                       (Landin.Targets.Byte_Count'Image
+                          (Landin.Targets.Any_Table_Offset (Facts)))
+                       & "(x5)");
                   end if;
                   Add_Offset ("x5", Landin.Targets.Evidence_Function_Offset
                     (Facts, Landin.IR.Evidence_Entry_Of (Of_Unit, Item,
                       Value)));
-                  Emit ("ld x5, 0(x5)");
+                  Emit (Load_Word & " x5, 0(x5)");
                   Store_Value (Value);
                when Landin.IR.Evidence_Self =>
                   Load_Value (Landin.IR.Nth_Operand (Of_Unit, Item, Operand
                     (1), 1));
-                  Emit ("ld x5, 0(x5)");
+                  Emit (Load_Word & " x5, 0(x5)");
                   Store_Value (Value);
                when Landin.IR.Failure_Test =>
                   Load_Value (Operand (1));
@@ -3772,12 +4815,20 @@ package body Landin.Backend.RiscV is
                      Offset : constant Natural := (if Indirect then 1 else 0);
                      Count : constant Natural :=
                        Landin.IR.Operand_Count (Of_Unit, Item, Value) - Offset;
+                     Places : constant Carrier_Array := Carriers
+                       ([for Index in 1 .. Count =>
+                           Pairs and then Size_Of_Value
+                             (Operand (Index + Offset))
+                               = Landin.Targets.Byte_8]);
                      Bytes : constant Landin.Targets.Byte_Count :=
-                       Stack_Align (Landin.Targets.Byte_Count
-                         (Natural'Max (8, Count) - 8) * 8, 16, 16#7fff_ffff#);
+                       Carrier_Bytes (Places);
                   begin
                      if Landin.IR.Signature_Uses_C_ABI (Of_Unit, Signature)
                      then
+                        if Pairs then
+                           raise Compiler_Defect with
+                             "RV32 checks no C signature (D660)";
+                        end if;
                         C_Call (Value);
                         return;
                      end if;
@@ -3788,23 +4839,37 @@ package body Landin.Backend.RiscV is
                      Deepest_Area :=
                        Landin.Targets.Byte_Count'Max (Deepest_Area, Bytes);
                      for Index in 1 .. Count loop
-                        if Index <= 8 then
-                           Load_Value (Operand (Index + Offset), "x"
-                             & Trimmed (Natural'Image (Index + 9)));
+                        if Places (Index).Pair
+                          and then Places (Index).Register /= 0
+                        then
+                           Load_Pair (Operand (Index + Offset),
+                             Argument_Register (Places (Index).Register),
+                             Argument_Register
+                               (Places (Index).Register + 1));
+                        elsif Places (Index).Register /= 0 then
+                           Load_Value (Operand (Index + Offset),
+                             Argument_Register (Places (Index).Register));
                         else
                            Load_Value (Operand (Index + Offset));
                            declare
                               Stack_At : constant Landin.Targets.Byte_Count :=
-                                Landin.Targets.Byte_Count (Index - 9) * 8;
+                                Places (Index).Stack_At;
+                              Base : constant String :=
+                                (if Stack_At <= 2040 then "sp" else "x6");
+                              Into : constant Landin.Targets.Byte_Count :=
+                                (if Stack_At <= 2040 then Stack_At else 0);
                            begin
-                              if Stack_At <= 2047 then
-                                 Emit ("sd x5, " & Trimmed
-                                 (Landin.Targets.Byte_Count'Image (Stack_At))
-                                 & "(sp)");
-                              else
+                              if Stack_At > 2040 then
                                  Emit ("mv x6, sp");
                                  Add_Offset ("x6", Stack_At);
-                                 Emit ("sd x5, 0(x6)");
+                              end if;
+                              Emit (Store_Word & " x5, " & Trimmed
+                                (Landin.Targets.Byte_Count'Image (Into))
+                                & "(" & Base & ")");
+                              if Places (Index).Pair then
+                                 Emit ("sw x27, " & Trimmed
+                                   (Landin.Targets.Byte_Count'Image
+                                      (Into + 4)) & "(" & Base & ")");
                               end if;
                            end;
                         end if;
@@ -3966,13 +5031,16 @@ package body Landin.Backend.RiscV is
                 (Item => Item, Naked => True, others => <>));
             return;
          end if;
+         --  D672: the frame record is the caller's x8 and the return
+         --  address in the two words just below the CFA, in a sixteen-byte
+         --  header that keeps the stack's alignment at either XLEN.
          Emit ("addi sp, sp, -16");
-         Emit ("sd x8, 0(sp)");
-         Emit ("sd ra, 8(sp)");
+         Emit (Store_Word & " x8, " & Image (16 - 2 * Word) & "(sp)");
+         Emit (Store_Word & " ra, " & Image (16 - Word) & "(sp)");
          if Debug /= null then
             Emit (".cfi_def_cfa_offset 16");
-            Emit (".cfi_offset x8, -16");
-            Emit (".cfi_offset x1, -8");
+            Emit (".cfi_offset x8, -" & Image (2 * Word));
+            Emit (".cfi_offset x1, -" & Image (Word));
          end if;
          Emit ("addi x8, sp, 16");
          if Debug /= null then
@@ -3993,8 +5061,9 @@ package body Landin.Backend.RiscV is
             if Panic /= null and then Item = Landin.Panics.Handler (Panic.all)
             then
                Limit_Base ("x5");
-               Emit ("sd zero, " & Limit_Offset & "(x5)");
+               Emit (Store_Word & " zero, " & Limit_Offset & "(x5)");
             elsif not Landin.Backend.Call_Free (Of_Unit, Item)
+              or else Calls_Helper
               or else Extent (Layout) > Unchecked_Bytes
             then
                Check_Limit (Extent (Layout));
@@ -4004,7 +5073,8 @@ package body Landin.Backend.RiscV is
          for Number in Saves'Range loop
             if Saves (Number) then
                Frame_Address (Save_Home (Number), "x5");
-               Emit ((if Number in Saved_Float then "fsd " else "sd ")
+               Emit ((if Number in Saved_Float then "fsd "
+                      else Store_Word & " ")
                      & Saved_Name (Number) & ", 0(x5)");
                if Debug /= null then
                   --  The home sits below the CFA and saved-frame header.
@@ -4022,15 +5092,25 @@ package body Landin.Backend.RiscV is
                Claimed : constant String := Fresh;
             begin
                Address ("x18", Local_Prefix & "landin_panic_active");
-               Put (Retry & ":");
-               Emit ("lr.w.aq x19, (x18)");
-               --  The five-instruction reservation loop uses only direct
-               --  local branches. Its busy escape leaves the loop before
-               --  the possibly distant hard-trap jump.
-               Put (Character'Val (9) & "bnez x19, " & Busy);
-               Emit ("li x19, 1");
-               Emit ("sc.w.rl x9, x19, (x18)");
-               Put (Character'Val (9) & "bnez x9, " & Retry);
+               if Atomics then
+                  Put (Retry & ":");
+                  Emit ("lr.w.aq x19, (x18)");
+                  --  The five-instruction reservation loop uses only
+                  --  direct local branches. Its busy escape leaves the
+                  --  loop before the possibly distant hard-trap jump.
+                  Put (Character'Val (9) & "bnez x19, " & Busy);
+                  Emit ("li x19, 1");
+                  Emit ("sc.w.rl x9, x19, (x18)");
+                  Put (Character'Val (9) & "bnez x9, " & Retry);
+               else
+                  --  D674: a level without A claims the latch as
+                  --  Cortex-M0 does, with a load, a test and a store on
+                  --  its one hart.
+                  Emit ("lw x19, 0(x18)");
+                  Put (Character'Val (9) & "bnez x19, " & Busy);
+                  Emit ("li x19, 1");
+                  Emit ("sw x19, 0(x18)");
+               end if;
                Emit ("j " & Claimed);
                Put (Busy & ":");
                Emit ("j " & Hard_Trap);
@@ -4038,113 +5118,153 @@ package body Landin.Backend.RiscV is
             end;
          end if;
          if Is_C_Item (Item) then
+            if Pairs then
+               raise Compiler_Defect with "RV32 checks no C signature (D660)";
+            end if;
             C_Entry;
          else
-            for Index in 1 .. Landin.IR.Parameter_Count (Of_Unit, Item) loop
-               declare
-                  Slot : constant Landin.IR.Slot_Id := Landin.IR.Nth_Parameter
-                    (Of_Unit, Item, Index);
-                  Aggregate : constant Boolean := Landin.IR.Is_Aggregate
-                    (Of_Unit, Item, Slot)
-                    or else Landin.IR.Is_Array (Of_Unit, Item, Slot);
-                  Home : constant Landin.IR.Slot_Id :=
-                    Landin.IR.In_Place_Home (Of_Unit, Item, Slot);
+            declare
+               Parameters : constant Natural :=
+                 Landin.IR.Parameter_Count (Of_Unit, Item);
 
-                  --  The unit a shaped slot moves by.  The carrier
-                  --  addresses storage aligned for this shape (docs/ir.md)
-                  --  and the slot is fresh, so an aligned whole-unit
-                  --  extent moves by words.
-                  function Width_Of
-                    (Shaped : Landin.IR.Slot_Id;
-                     Bytes : Landin.Targets.Byte_Count)
-                     return Landin.Targets.Byte_Count;
+               function Wide (Index : Positive) return Boolean is
+                 (Pairs and then
+                    (declare
+                       Slot : constant Landin.IR.Slot_Id :=
+                         Landin.IR.Nth_Parameter (Of_Unit, Item, Index);
+                     begin
+                       not Landin.IR.Is_Aggregate (Of_Unit, Item, Slot)
+                       and then not Landin.IR.Is_Array (Of_Unit, Item, Slot)
+                       and then Size_Of (Landin.IR.Type_Of
+                                           (Of_Unit, Item, Slot), Facts)
+                         = Landin.Targets.Byte_8));
 
-                  function Width_Of
-                    (Shaped : Landin.IR.Slot_Id;
-                     Bytes : Landin.Targets.Byte_Count)
-                     return Landin.Targets.Byte_Count
-                  is
-                     Size : Landin.Targets.Byte_Count;
-                     Alignment : Landin.Targets.Byte_Alignment;
+               Places : constant Carrier_Array := Carriers
+                 ([for Index in 1 .. Parameters => Wide (Index)]);
+            begin
+               for Index in 1 .. Parameters loop
+                  declare
+                     Slot : constant Landin.IR.Slot_Id :=
+                       Landin.IR.Nth_Parameter (Of_Unit, Item, Index);
+                     Aggregate : constant Boolean := Landin.IR.Is_Aggregate
+                       (Of_Unit, Item, Slot)
+                       or else Landin.IR.Is_Array (Of_Unit, Item, Slot);
+                     Home : constant Landin.IR.Slot_Id :=
+                       Landin.IR.In_Place_Home (Of_Unit, Item, Slot);
+
+                     --  The unit a shaped slot moves by.  The carrier
+                     --  addresses storage aligned for this shape (docs/ir.md)
+                     --  and the slot is fresh, so an aligned whole-unit
+                     --  extent moves by words.
+                     function Width_Of
+                       (Shaped : Landin.IR.Slot_Id;
+                        Bytes : Landin.Targets.Byte_Count)
+                        return Landin.Targets.Byte_Count;
+
+                     function Width_Of
+                       (Shaped : Landin.IR.Slot_Id;
+                        Bytes : Landin.Targets.Byte_Count)
+                        return Landin.Targets.Byte_Count
+                     is
+                        Size : Landin.Targets.Byte_Count;
+                        Alignment : Landin.Targets.Byte_Alignment;
+                     begin
+                        Landin.Backend.Aggregate_Extent
+                          (Of_Unit, Item, Shaped, Facts, Size, Alignment);
+                        if Alignment >= 8 and then Bytes mod 8 = 0
+                          and then not Pairs
+                        then
+                           return 8;
+                        elsif Alignment >= 4 and then Bytes mod 4 = 0 then
+                           return 4;
+                        end if;
+                        return 1;
+                     end Width_Of;
                   begin
-                     Landin.Backend.Aggregate_Extent
-                       (Of_Unit, Item, Shaped, Facts, Size, Alignment);
-                     if Alignment >= 8 and then Bytes mod 8 = 0 then
-                        return 8;
-                     elsif Alignment >= 4 and then Bytes mod 4 = 0 then
-                        return 4;
+                     if Places (Index).Pair then
+                        if Places (Index).Register /= 0 then
+                           Emit ("mv x5, " & Argument_Register
+                             (Places (Index).Register));
+                           Emit ("mv x27, " & Argument_Register
+                             (Places (Index).Register + 1));
+                        else
+                           Emit ("mv x6, x8");
+                           Add_Offset ("x6", Places (Index).Stack_At);
+                           Emit ("lw x27, 4(x6)");
+                           Emit ("lw x5, 0(x6)");
+                        end if;
+                        Store_Slot (Slot, "x5");
+                        goto Next_Parameter;
+                     elsif Places (Index).Register /= 0 then
+                        Emit ("mv x6, " & Argument_Register
+                          (Places (Index).Register));
+                     else
+                        Emit ("mv x6, x8");
+                        Add_Offset ("x6", Places (Index).Stack_At);
+                        Emit (Load_Word & " x6, 0(x6)");
                      end if;
-                     return 1;
-                  end Width_Of;
-               begin
-                  if Index <= 8 then
-                     Emit ("mv x6, x" & Trimmed (Natural'Image (Index + 9)));
-                  else
-                     Emit ("mv x6, x8");
-                     Add_Offset ("x6", Landin.Targets.Byte_Count (Index
-                       - 9) * 8);
-                     Emit ("ld x6, 0(x6)");
-                  end if;
-                  if Aggregate then
-                     declare
-                        Zero_Label : constant String := Fresh;
-                        Done_Label : constant String := Fresh;
-                        Bytes : constant Landin.Targets.Byte_Count :=
-                          Whole_Clear_Extent
-                            ((Kind => Landin.IR.Frame_Slot, Slot => Slot), 0,
-                             Landin.IR.No_Path_Steps);
-                        Width : constant Landin.Targets.Byte_Count :=
-                          Width_Of (Slot, Bytes);
-                     begin
-                        Frame_Address (Slot_Offset (Layout, Slot), "x5");
-                        Emit ("beqz x6, " & Zero_Label);
-                        if Width > 1 then
-                           Move_Words (Bytes, Width, Copy => True);
-                        else
-                           Copy_Bytes (Bytes);
-                        end if;
-                        Emit ("j " & Done_Label);
-                        Put (Zero_Label & ":");
-                        if Width > 1 then
-                           Move_Words (Bytes, Width, Copy => False);
-                        else
-                           Zero_Bytes (Bytes);
-                        end if;
-                        Put (Done_Label & ":");
-                     end;
-                  else
-                     Store_Slot (Slot, "x6");
-                  end if;
-
-                  --  Landin.IR.In_Place's parameter is an address slot,
-                  --  stored above like a scalar, through which the body
-                  --  reads its caller's storage.  D97's zero carrier still
-                  --  clears the parameter's own home, which the parameter
-                  --  then addresses.
-                  if Home /= Landin.IR.No_Slot then
-                     declare
-                        Done_Label : constant String := Fresh;
-                        Bytes : constant Landin.Targets.Byte_Count :=
-                          Whole_Clear_Extent
-                            ((Kind => Landin.IR.Frame_Slot, Slot => Home), 0,
-                             Landin.IR.No_Path_Steps);
-                        Width : constant Landin.Targets.Byte_Count :=
-                          Width_Of (Home, Bytes);
-                     begin
-                        Emit ("bnez x6, " & Done_Label);
-                        Frame_Address (Slot_Offset (Layout, Home), "x5");
-                        if Width > 1 then
-                           Move_Words (Bytes, Width, Copy => False);
-                        else
-                           Zero_Bytes (Bytes);
-                        end if;
-                        Frame_Address (Slot_Offset (Layout, Home), "x6");
+                     if Aggregate then
+                        declare
+                           Zero_Label : constant String := Fresh;
+                           Done_Label : constant String := Fresh;
+                           Bytes : constant Landin.Targets.Byte_Count :=
+                             Whole_Clear_Extent
+                               ((Kind => Landin.IR.Frame_Slot, Slot => Slot),
+                                0, Landin.IR.No_Path_Steps);
+                           Width : constant Landin.Targets.Byte_Count :=
+                             Width_Of (Slot, Bytes);
+                        begin
+                           Frame_Address (Slot_Offset (Layout, Slot), "x5");
+                           Emit ("beqz x6, " & Zero_Label);
+                           if Width > 1 then
+                              Move_Words (Bytes, Width, Copy => True);
+                           else
+                              Copy_Bytes (Bytes);
+                           end if;
+                           Emit ("j " & Done_Label);
+                           Put (Zero_Label & ":");
+                           if Width > 1 then
+                              Move_Words (Bytes, Width, Copy => False);
+                           else
+                              Zero_Bytes (Bytes);
+                           end if;
+                           Put (Done_Label & ":");
+                        end;
+                     else
                         Store_Slot (Slot, "x6");
-                        Put (Done_Label & ":");
-                     end;
-                  end if;
-               end;
-            end loop;
+                     end if;
+
+                     --  Landin.IR.In_Place's parameter is an address slot,
+                     --  stored above like a scalar, through which the body
+                     --  reads its caller's storage.  D97's zero carrier still
+                     --  clears the parameter's own home, which the parameter
+                     --  then addresses.
+                     if Home /= Landin.IR.No_Slot then
+                        declare
+                           Done_Label : constant String := Fresh;
+                           Bytes : constant Landin.Targets.Byte_Count :=
+                             Whole_Clear_Extent
+                               ((Kind => Landin.IR.Frame_Slot, Slot => Home),
+                                0, Landin.IR.No_Path_Steps);
+                           Width : constant Landin.Targets.Byte_Count :=
+                             Width_Of (Home, Bytes);
+                        begin
+                           Emit ("bnez x6, " & Done_Label);
+                           Frame_Address (Slot_Offset (Layout, Home), "x5");
+                           if Width > 1 then
+                              Move_Words (Bytes, Width, Copy => False);
+                           else
+                              Zero_Bytes (Bytes);
+                           end if;
+                           Frame_Address (Slot_Offset (Layout, Home), "x6");
+                           Store_Slot (Slot, "x6");
+                           Put (Done_Label & ":");
+                        end;
+                     end if;
+                     <<Next_Parameter>>
+                  end;
+               end loop;
+            end;
          end if;
          for Block in 1 .. Landin.IR.Block_Count (Of_Unit, Item) loop
             Put (Label (Item, Landin.IR.Block_Id (Block)) & ":");
@@ -4245,6 +5365,7 @@ package body Landin.Backend.RiscV is
               Calls_Panic => not Edges.Is_Empty
                 or else (Limit_Trapped and then Panic /= null
                          and then Landin.Panics.Calls_Out (Panic.all)),
+              Helper_Calls => Helpers_Called,
               others => <>));
       end Emit_Routine;
 
@@ -5034,9 +6155,9 @@ package body Landin.Backend.RiscV is
                              else " + " & Trimmed
                                (Landin.Targets.Byte_Count'Image (Offset))));
                   begin
-                     Emit (".quad " & Base);
+                     Emit (Word_Directive & " " & Base);
                      Emit
-                       (".quad "
+                       (Word_Directive & " "
                         & Trimmed (Landin.Types.Folded'Image (Image.Value)));
                   end;
                end;
@@ -5556,10 +6677,10 @@ package body Landin.Backend.RiscV is
                     else " + " & Trimmed
                       (Landin.Targets.Byte_Count'Image (Offset))));
          begin
-            Emit (".quad " & Base);
+            Emit (Word_Directive & " " & Base);
          end;
          Emit
-           (".quad "
+           (Word_Directive & " "
             & Trimmed
                 (Landin.IR.Element_Total'Image
                    (Landin.IR.Slice_Image_Length (Of_Unit, Item))));
@@ -5600,16 +6721,20 @@ package body Landin.Backend.RiscV is
 
    begin
       if Landin.Targets.Capabilities.Backend_For (Facts)
-          /= Landin.Targets.Capabilities.RV64_ELF
+          not in Landin.Targets.Capabilities.RV64_ELF
+               | Landin.Targets.Capabilities.RV32_ELF
         or else not Landin.Targets.Levels.Belongs_To (Level, Facts)
       then
          raise Compiler_Defect with
-           "RV64 emission needs an RV64 description";
+           "RISC-V emission needs an RV64 or RV32 description";
       end if;
       --  The ELF ISA attribute and toolchain both assume the selected set.
       Emit (".attribute arch, """ & Landin.Targets.Levels.Name (Level) & """");
       Emit (".option norelax");
-      Emit (".option pic");
+      --  Firmware is linked at its addresses, so only RV64 is PIC.
+      if not Pairs then
+         Emit (".option pic");
+      end if;
       Validate_Linkage;
       Allocate_Symbols;
       if Panic /= null and then Landin.Panics.Handler (Panic.all)
@@ -5627,6 +6752,7 @@ package body Landin.Backend.RiscV is
            (Debug.all, Local_Prefix,
             Mach_O => False));
       end if;
+      --  S3: RV32_Image goes here.
       for Index in 1 .. Landin.IR.Item_Count (Of_Unit) loop
          declare
             Item : constant Landin.IR.Item_Id := Landin.IR.Item_Id (Index);
@@ -5753,25 +6879,25 @@ package body Landin.Backend.RiscV is
                      Field_Extent
                        (Of_Unit, Landin.IR.Evidence_Represented (Of_Unit, Id),
                         Facts, Bytes, Alignment);
-                     Emit (".balign 8");
+                     Emit (".balign " & Image (Word));
                      Put (Evidence_Symbol (Id) & ":");
                      if Alias_Next then
                         Put (Evidence_Symbol
                           (Landin.IR.Evidence_Id (Index + 1)) & ":");
                      end if;
-                     Emit (".quad " & Trimmed (Landin.Targets.Byte_Count'Image
-                       (Bytes)));
-                     Emit (".quad " & Trimmed
+                     Emit (Word_Directive & " " & Trimmed
+                       (Landin.Targets.Byte_Count'Image (Bytes)));
+                     Emit (Word_Directive & " " & Trimmed
                        (Landin.Targets.Byte_Alignment'Image (Alignment)));
                      for Entry_Index in 1 .. Landin.IR.Evidence_Entry_Count
                        (Of_Unit, Id) loop
                         --  D374: an entry nothing can project is a zero word.
                         if Is_Kept (Kept, Id, Entry_Index) then
-                           Emit (".quad " & Symbol
+                           Emit (Word_Directive & " " & Symbol
                              (Landin.IR.Evidence_Entry_Target (Of_Unit, Id,
                                Entry_Index)));
                         else
-                           Emit (".quad 0");
+                           Emit (Word_Directive & " 0");
                         end if;
                      end loop;
                   end if;
@@ -5820,24 +6946,26 @@ package body Landin.Backend.RiscV is
             Emit (".cfi_def_cfa_offset " & Image (Stack_Frame_Bytes));
          end if;
          for Index in 1 .. Stack_Saved loop
-            Emit ((if Stack_Float (Index) then "fsd f" else "sd x")
+            Emit ((if Stack_Float (Index) then "fsd f"
+                   else Store_Word & " x")
                   & Image (Stack_Register (Index)) & ", "
                   & Image (Stack_Save_Offset (Index)) & "(sp)");
             if Debug /= null then
                Emit (".cfi_offset " & Image (Stack_Dwarf (Index)) & ", -"
-                     & Image (8 * Index));
+                     & Image (Word * Index));
             end if;
          end loop;
          Limit_Base ("x5");
          Emit ("addi x5, x5, " & Limit_Offset);
-         Emit ("ld x6, 0(x5)");
-         Emit ("sd x6, 0(sp)");
-         Emit ("sd sp, 0(x10)");
+         Emit (Load_Word & " x6, 0(x5)");
+         Emit (Store_Word & " x6, 0(sp)");
+         Emit (Store_Word & " sp, 0(x10)");
          Emit ("mv sp, x11");
-         Emit ("ld x6, 0(sp)");
-         Emit ("sd x6, 0(x5)");
+         Emit (Load_Word & " x6, 0(sp)");
+         Emit (Store_Word & " x6, 0(x5)");
          for Index in reverse 1 .. Stack_Saved loop
-            Emit ((if Stack_Float (Index) then "fld f" else "ld x")
+            Emit ((if Stack_Float (Index) then "fld f"
+                   else Load_Word & " x")
                   & Image (Stack_Register (Index)) & ", "
                   & Image (Stack_Save_Offset (Index)) & "(sp)");
             if Debug /= null then
@@ -5897,9 +7025,9 @@ package body Landin.Backend.RiscV is
          else
             Emit (".pushsection .bss.landin_stack_limit,""aw"",@nobits");
          end if;
-         Emit (".balign 8");
+         Emit (".balign " & Image (Word));
          Put (Stack_Limit & ":");
-         Emit (".zero 8");
+         Emit (".zero " & Image (Word));
          Emit (".popsection");
       end if;
       --  D361's writer: Linux's write system call to descriptor 2, with the
@@ -5907,6 +7035,9 @@ package body Landin.Backend.RiscV is
       --  keeps a frame record, as every routine here does, and does not
       --  return: the terminal instruction follows.
       if Reports.Count > 0 then
+         if Pairs then
+            raise Compiler_Defect with "firmware writes no default report";
+         end if;
          Emit (".section .text.landin_trap_report,""ax"",@progbits");
          Emit (".p2align 2");
          Emit (".type " & Reporter & ", @function");
