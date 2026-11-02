@@ -430,7 +430,9 @@ failure injector as capabilities.
   relaxed family and the single writer's `sole_add`, a load and a store,
   on every target. Cortex-M0 refuses a `u64` cell and a read-modify-write
   where the program uses it, naming `sole_add` and the critical section
-  (D500, D510, D511).
+  (D500, D510, D511); RV32 refuses a `u64` cell at both levels and a
+  read-modify-write at `rv32imc`, naming `rv32imac`, which admits it, the
+  one checking rule a level decides (D690, D691).
 
 ### Services
 

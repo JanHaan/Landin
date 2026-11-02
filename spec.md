@@ -17284,12 +17284,12 @@ ARMv6-M has no exclusive instruction pair. It does not silently substitute
 interrupt masking, an unavailable `libatomic` helper, or a stronger core.
 The Cortex-M backend emits that admitted subset. Synthetic-32
 admits no memory intrinsics.
-The planned ESP32-C3 RV32IMC target likewise has no hardware
-read-modify-write atomics. When implemented, it must admit aligned one-,
-two- and four-byte atomic loads/stores and thread fences, and statically
-refuse exchange, add, compare-exchange and eight-byte atomic accesses with
-L0344. It gains no implicit `libatomic` or interrupt-masking fallback. This
-records the planned target contract; ESP32-C3 support is not enabled today.
+RV32 admits aligned one-, two- and four-byte atomic loads/stores and
+thread fences at every level, and refuses every eight-byte atomic access
+with L0344: no RV32 core has one. Its exchange, add and compare-exchange
+are its level's (D690): admitted at `rv32imac`, whose A extension has
+them, and refused with L0344 at `rv32imc`, which the ESP32-C3 executes.
+It gains no implicit `libatomic` or interrupt-masking fallback.
 Device addresses must use volatile accesses, never CPU atomics. Even a CPU
 instruction that is atomic in RAM says nothing about peripheral bus semantics.
 
@@ -18462,10 +18462,14 @@ level model and that library source to it, so the three cannot drift apart
 unseen.
 
 A level changes which instructions the backend selects, which Cortex assembly
-text the checker admits, and which instructions the toolchain accepts, and
-nothing else. The Cortex text check uses the level so its default-only
-instruction allowlist does not refuse valid instructions of higher levels;
-type checking and IR do not depend on it.
+text the checker admits, which instructions the toolchain accepts, and
+whether D227's read-modify-write builtins are admitted, and nothing else. The Cortex text check uses the level so its default-only
+instruction allowlist does not refuse valid instructions of higher levels.
+The admission of exchange, add and compare-exchange is the one checking
+rule a level decides (D690): RV32 admits them at a level holding `a` and
+refuses them below it, with L0344, and on every other target the level
+leaves it as the target has it. No other type check depends on a level,
+and the IR does not.
 The assembler is held to the level at
 every level, the default included, so an `assembler.block` can use no
 instruction the build does not assume. At `x86-64-v3` a variable shift of 32 or
@@ -18491,8 +18495,9 @@ sequence at baseline; bounds and overflow checks are unchanged. Beyond that: eve
 layout, one calling convention and one C ABI, so code built at two levels of
 one family links together. A description's float unit is not a level and
 does change the calling convention (D615). A level is not a target. Comparing two
-descriptions still says which backend and which ABI, and type checking and
-the target-neutral IR do not depend on a level. A name that is no level of the selected
+descriptions still says which backend and which ABI, and type checking,
+but for that one admission, and the target-neutral IR do not depend on a
+level. A name that is no level of the selected
 family is L0009. A build at a level the machine running it lacks is not
 detected by the program; on Linux x86-64 the executable carries the level
 in its ISA note and the loader refuses it. Linux arm64 and RV64 Linux emit no loader-enforced ISA-level
@@ -18612,7 +18617,8 @@ orders more than C11's seq_cst asks; D522 took each architecture's
 published mapping, and ARMv8's has none. A feature in D255's table that
 names them, which every Armv8-M level would hold and no declaration would
 be selected by. Read-modify-write through `ldaex` and `stlex` stays
-refused at every level (D510), since checking does not depend on a level.
+refused at every level (D510): D690 lets a level decide that admission,
+and no Thumb-2 level's exclusives are lowered yet.
 
 **Pinned by** `backend/atomics are fenced as their orderings ask`, which
 holds each ordering's access at `armv8-m.main` to its instruction, and
@@ -28679,7 +28685,8 @@ single-writer update and `platform/cortex_m`'s critical section.
 **Chosen:** `core/atomic` gives each of `u8`, `u16`, `u32` and `u64` a
 conformance to its concept `scalar` and to `exchangeable`, which refines it,
 only where the target carries those accesses: under `fixed if compiler.arch
-<> cortex_m0` for `u64` and for every `exchangeable`. A cell's type is
+<> cortex_m0` for `u64` and for every `exchangeable`, which D691 extends to
+RV32 and its levels. A cell's type is
 constrained by `scalar`, and its exchange, add, relaxed add and
 compare-exchange by `exchangeable`, so on Cortex-M0 the missing conformance
 is found where the program writes the cell's type or calls the operation,
@@ -28691,7 +28698,8 @@ it, naming a cell of four bytes or fewer and the critical section; when it
 has the accesses but no read-modify-write, that a cell has no exchange, add
 or compare-exchange there, naming `atomic.sole_add` and the critical
 section. Which refusal it is comes from the target's own admission of the
-builtins (D227), not from a list of targets. Any other type is L0318 at its
+builtins (D227), at the build's level since D690, not from a list of
+targets. Any other type is L0318 at its
 use, its note saying a cell holds a `u8`, `u16`, `u32` or `u64`. The
 concept is recognized by the module that declares it, as [0610]'s
 `core/text.position` is.
@@ -28711,6 +28719,89 @@ cell refused once each; `negative/atomic-cell-holds-unsigned-scalars`, a
 signed, a bool and a `usize` cell refused on Linux x86-64; and the
 Cortex-M corpus's refusal of `runtime/atomic-read-modify-write` with
 L0344 at every use.
+
+### D690 — RV32's read-modify-writes are its level's, the one checking rule a level decides
+
+**The tour said** at [1620] that a core without read-modify-write has none,
+and D227 refuses exchange, add and compare-exchange with L0344 where the
+target has none. D255 kept every type check independent of the level, so a
+target's admission of the builtins could not differ between two of its
+levels; RV32's two, `rv32imc` and `rv32imac` (D660), differ in exactly the
+A extension that has them.
+
+**Chosen:** the admission of D227's exchange, add and compare-exchange is
+the one checking rule a level decides. RV32 admits them at a level holding
+`a` and refuses them with L0344 below it; one-, two- and four-byte loads,
+stores and fences are admitted at every RV32 level, and every eight-byte
+atomic access is refused at every RV32 level, a fact of the target. On every
+other target the level changes no admission: Cortex-M0 refuses the
+read-modify-writes at each of its levels, since no Thumb-2 level's
+exclusives are lowered yet, and the hosted targets admit them at each. The
+checker reads the build's level, which `refine check`, `refine compile`
+and every other command take as `--level` and `refine lsp` as its `level`
+option, so an editor shows the refusal the build makes. The verified IR is
+held to what some level of its target admits, not to the build's level,
+so the target-neutral IR still depends on no level; a read-modify-write
+that reaches RV32's backend at `rv32imc` has passed a checker that refused
+it, and is the compiler's defect. A builtin refused at the build's level but
+admitted at another says so: "memory operation unavailable at rv32imc; a
+build at rv32imac admits it". The A extension's AMOs and LR/SC are four
+bytes wide; how the one- and two-byte read-modify-writes are lowered over
+the aligned word is the backend's.
+
+**The alternatives:** a target per level, `rv32imac` beside `rv32`, which
+D255 declined for every family; admitting the read-modify-writes at
+`rv32imc` through interrupt masking or `libatomic`, which D227 forbids;
+refusing them at every RV32 level as Cortex-M0 does, which leaves the A
+extension of the RP2350's Hazard3 and the ESP32-C5 unused; and holding the
+IR verifier to the level too, which would thread a level through every
+optimization pass to recheck what the checker already refused. All were
+declined.
+
+**Pinned by** `targets/backends are stated per target`, which holds RV32's
+admission at both levels, eight bytes at neither, and no Cortex-M level's
+read-modify-write; `negative/atomic-builtin-rv32imc`, a builtin add refused
+at `rv32imc` naming `rv32imac` beside an admitted load and store; the server
+sessions `atomic-level-rv32imc` and `atomic-level-rv32imac`, the same
+program refused and accepted through the server's `level`; and the fixtures
+D691 lists.
+
+### D691 — `core/atomic` on RV32 follows the target and the level
+
+**The tour said** nothing; D510 conditions `core/atomic`'s `u64` and
+`exchangeable` conformances on `compiler.arch <> cortex_m0` and names
+`platform/cortex_m`'s critical section in the refusal.
+
+**Chosen:** `u64`'s conformances to `scalar` and `exchangeable` are under
+`fixed if compiler.arch <> cortex_m0 and compiler.arch <> rv32`, since no
+target with an eight-byte atomic lacks the read-modify-writes; `u8`, `u16`
+and `u32`'s conformances to `exchangeable` are under `fixed if compiler.arch
+<> cortex_m0 and (compiler.arch <> rv32 or compiler.feature.a)`, which reads
+as D690's admission. D510's refusal at the caller's use is unchanged in
+kind, and what it names comes from the target and its level: the critical
+section of the target's platform module, `platform/riscv`'s
+`disable_interrupts` to `restore_interrupts` on RV32 as `platform/cortex_m`'s
+on Cortex-M0; and, when another level of the target admits the
+read-modify-write, the target and the build's level in the message, "rv32
+at rv32imc has no atomic read-modify-write", and that level at the end of
+the note, after `atomic.sole_add` and the critical section.
+
+**The alternatives:** a fixed fact naming whether the build has
+read-modify-write, `compiler.atomic_rmw`, which states one module's
+condition as a language fact beside `compiler.feature.a`, which already
+says it; the bodies on every target with the builtins' own refusal left
+standing inside the library, which D510 declined; and a note that lists
+RV32's levels, which would go stale beside the level model. All were
+declined.
+
+**Pinned by** `negative/atomic-read-modify-write-rv32imc`, exchange, add,
+add_relaxed and compare_exchange refused at `rv32imc` beside an accepted
+`sole_add`, and a `u64` cell refused once; `negative/atomic-eight-byte-cell-rv32imac`,
+a module and a local `u64` cell refused once each at `rv32imac` beside a
+`u32` cell's accepted read-modify-writes; `positive/atomic-read-modify-write-rv32imac`,
+every read-modify-write of a `u8`, `u16` and `u32` cell and a builtin add
+admitted at `rv32imac`; and the RV32 corpus's rows for
+`runtime/atomic-read-modify-write`.
 
 ### D511 — The cell's operations, and the single writer's add
 
