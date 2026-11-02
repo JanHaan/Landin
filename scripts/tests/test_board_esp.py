@@ -408,6 +408,27 @@ class PowerOn(unittest.TestCase):
             C5_BOARD.chip_enable_reset(3, 0.1)
 
 
+class Restore(unittest.TestCase):
+    def test_a_download_that_finds_no_probe_is_tried_again(self):
+        tries = []
+
+        class Fake:
+            def download_bin(self, image, offset):
+                tries.append(offset)
+                if len(tries) < 3:
+                    raise COMMON.Failed('flash failed (1)')
+        with mock.patch.object(ESP.time, 'sleep'):
+            ESP.restore(Fake(), 'board.elf.bin', 0x2000)
+        self.assertEqual(tries, [0x2000] * 3)
+
+    def test_it_gives_up_in_the_end(self):
+        class Fake:
+            def download_bin(self, image, offset):
+                raise COMMON.Failed('flash failed (1)')
+        with mock.patch.object(ESP.time, 'sleep'), self.assertRaises(COMMON.Failed):
+            ESP.restore(Fake(), 'board.elf.bin', 0x2000, tries=4)
+
+
 class Recover(unittest.TestCase):
     def test_download_mode_is_esptool_s_usb_jtag_serial_sequence(self):
         calls = []

@@ -395,6 +395,19 @@ def download_mode(serial, seconds=10.0):
         console.close()
 
 
+def restore(probe, image, offset, tries=20):
+    """Write IMAGE back over a refused one while the ROM resets the chip
+    over and over: each reset drops the USB-Serial-JTAG for a moment, so a
+    download that finds no probe tries again."""
+    for attempt in range(tries):
+        try:
+            return probe.download_bin(image, offset)
+        except Failed:
+            if attempt == tries - 1:
+                raise
+            time.sleep(1)
+
+
 def paced(args, what, action):
     """ACTION, which disconnects a device on the rig's hub cascade, spaced
     by args.pace."""
@@ -461,7 +474,7 @@ def run_board(chip, args, console_for, cycle, settle):
                     console.close()
                 finally:
                     if where == 'checksum':
-                        probe.download_bin(path, chip.offset)
+                        restore(probe, path, chip.offset)
                         args.pace.after('restore')
                 text = bytes(console.received).decode('latin-1')
                 (run.out / ('rom-%s.log' % where)).write_text(text)
