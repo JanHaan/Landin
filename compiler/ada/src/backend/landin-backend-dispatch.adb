@@ -6,6 +6,8 @@ with Landin.Targets.Capabilities;
 
 package body Landin.Backend.Dispatch is
 
+   use type Landin.Targets.Capabilities.Backend_Kind;
+
    function Frame_Limit (Facts : Landin.Targets.Target_Facts) return String is
      (case Landin.Targets.Capabilities.Backend_For (Facts) is
          when Landin.Targets.Capabilities.X86_64_ELF =>
@@ -17,7 +19,8 @@ package body Landin.Backend.Dispatch is
             "signed 32-bit frame budget of the RV64 backend",
          when Landin.Targets.Capabilities.Cortex_M0_ELF =>
             "32-bit address budget of the Cortex-M backend",
-         when Landin.Targets.Capabilities.No_Backend =>
+         when Landin.Targets.Capabilities.RV32_ELF
+           | Landin.Targets.Capabilities.No_Backend =>
             "frame encoding of an unavailable backend");
 
    function Frame_Is_Addressable
@@ -40,6 +43,9 @@ package body Landin.Backend.Dispatch is
          when Landin.Targets.Capabilities.Cortex_M0_ELF =>
             return Landin.Backend.Cortex_M.Frame_Is_Addressable
               (Of_Unit, Item, Facts, Options);
+         --  RV32's frames are its emitter's; until it exists the driver
+         --  writes no more than IR, which no frame encoding bounds.
+         when Landin.Targets.Capabilities.RV32_ELF => return True;
          when Landin.Targets.Capabilities.No_Backend => return False;
       end case;
    end Frame_Is_Addressable;
@@ -49,8 +55,10 @@ package body Landin.Backend.Dispatch is
       Item : Landin.IR.Item_Id;
       Facts : Landin.Targets.Target_Facts) return Boolean is
    begin
-      return Landin.Backend.Cortex_M.Frame_Fits_Firmware_Stack
-        (Of_Unit, Item, Facts);
+      return Landin.Targets.Capabilities.Backend_For (Facts)
+          /= Landin.Targets.Capabilities.Cortex_M0_ELF
+        or else Landin.Backend.Cortex_M.Frame_Fits_Firmware_Stack
+          (Of_Unit, Item, Facts);
    end Frame_Fits_Firmware_Stack;
 
    --  Each figure is the emitted code's own, read from its backend:
@@ -110,7 +118,8 @@ package body Landin.Backend.Dispatch is
                     Report_Foreign => False,
                     Limit_Margin => Margin, Unchecked => Unchecked,
                     Handler_Entry => Before);
-         when Landin.Targets.Capabilities.No_Backend =>
+         when Landin.Targets.Capabilities.RV32_ELF
+           | Landin.Targets.Capabilities.No_Backend =>
             return (others => <>);
       end case;
    end Stack_Facts_Of;
@@ -153,6 +162,9 @@ package body Landin.Backend.Dispatch is
             Landin.Backend.Cortex_M.Emit
               (Of_Unit, Meanings, Names, Facts, Options, Assembly, Report,
                Hosted_Entry, Debug, Firmware_Entry, Panic, Level);
+         when Landin.Targets.Capabilities.RV32_ELF =>
+            --  The driver refuses before it asks.
+            raise Compiler_Defect with "rv32 has no assembly emitter yet";
          when Landin.Targets.Capabilities.No_Backend =>
             raise Compiler_Defect with "target has no assembly emitter";
       end case;

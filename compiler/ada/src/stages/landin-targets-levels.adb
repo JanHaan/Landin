@@ -7,6 +7,8 @@ package body Landin.Targets.Levels is
    subtype Arm64_Level is Level_Id range Armv8_A .. Armv8_1_A;
    subtype M_Profile_Level is Level_Id range Armv6_M .. Armv8_M_Main;
    subtype RV64_Level is Level_Id range RV64GC .. RV64GC_Zba_Xtheadba;
+   subtype RV32_Level is Level_Id range RV32IMC .. RV32IMAC;
+   subtype RISC_V_Level is Level_Id range RV64GC .. RV32IMAC;
 
    function Spelling (Of_Feature : Feature) return String
      is (case Of_Feature is
@@ -67,6 +69,7 @@ package body Landin.Targets.Levels is
                     when Arm64 => Armv8_A,
                     when RV64 => RV64GC,
                     when Cortex_M0 => Armv6_M,
+                    when RV32 => RV32IMC,
                     when Synthetic_32_Architecture => No_Level)));
 
    function Spelled (Id : Level_Id) return String
@@ -85,7 +88,9 @@ package body Landin.Targets.Levels is
             when RV64GC => "rv64gc",
             when RV64GC_Zba => "rv64gc_zba",
             when RV64GC_Xtheadba => "rv64gc_xtheadba",
-            when RV64GC_Zba_Xtheadba => "rv64gc_zba_xtheadba");
+            when RV64GC_Zba_Xtheadba => "rv64gc_zba_xtheadba",
+            when RV32IMC => "rv32imc",
+            when RV32IMAC => "rv32imac");
 
    function In_Family (Id : Level_Id; Facts : Target_Facts) return Boolean
      is (case Architecture_Of (Facts) is
@@ -93,6 +98,7 @@ package body Landin.Targets.Levels is
             when Arm64 => Id in Arm64_Level,
             when RV64 => Id in RV64_Level,
             when Cortex_M0 => Id in M_Profile_Level,
+            when RV32 => Id in RV32_Level,
             when Synthetic_32_Architecture => False);
 
    function Is_Level_Of (Facts : Target_Facts; Name : String) return Boolean
@@ -144,7 +150,7 @@ package body Landin.Targets.Levels is
          when Dsp =>
             return Level.Id = Armv7E_M;
          when I | M | A | F | D | C | Zicsr | Zifencei | Zba | Xtheadba =>
-            return Level.Id in RV64_Level
+            return Level.Id in RISC_V_Level
               and then RiscV_ISA.Has
                 (RiscV_ISA.Named (Name (Level)),
                  RiscV_ISA.Extension'Val

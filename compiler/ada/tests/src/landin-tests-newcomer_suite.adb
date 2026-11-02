@@ -126,6 +126,25 @@ package body Landin.Tests.Newcomer_Suite is
                 (Landin.Targets.Cortex_M, "", False),
               "arm-eabi-gcc"),
          "Cortex-M's advice names both spellings' sources");
+      --  D660: as D532, the pinned GNAT riscv64-elf driver, then the
+      --  distributions' name for the same bare-metal GCC.
+      Landin.Testing.Check_Equal
+        (Item, Listed (Landin.Targets.RV32, "", False),
+         "riscv64-elf-gcc" & LF & "riscv64-unknown-elf-gcc" & LF,
+         "RV32 tries the pinned name, then the distributions'");
+      Landin.Testing.Check_Equal
+        (Item, Listed (Landin.Targets.RV32, "my-rv-gcc", False),
+         "my-rv-gcc" & LF, "a named RV32 driver is the only one tried");
+      Landin.Testing.Check
+        (Item, Contains
+           (Landin.Backend.Toolchain.Install_Advice
+              (Landin.Targets.RV32, "", False),
+            "apt install gcc-riscv64-unknown-elf")
+           and then Contains
+             (Landin.Backend.Toolchain.Install_Advice
+                (Landin.Targets.RV32, "", False),
+              "riscv64-elf-gcc"),
+         "RV32's advice names both spellings' sources");
       Landin.Testing.Check
         (Item, Contains
            (Landin.Backend.Toolchain.Install_Advice
@@ -144,6 +163,7 @@ package body Landin.Tests.Newcomer_Suite is
       Says_What_Needs_None (Landin.Targets.Linux_Arm64);
       Says_What_Needs_None (Landin.Targets.Darwin_Arm64);
       Says_What_Needs_None (Landin.Targets.Cortex_M);
+      Says_What_Needs_None (Landin.Targets.RV32);
    end Linux_Names_Every_Distribution_Driver;
 
    procedure A_Stock_Driver_Links (Item : in out Landin.Testing.Context);

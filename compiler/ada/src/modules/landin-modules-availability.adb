@@ -43,6 +43,10 @@ package body Landin.Modules.Availability is
          --  D267's scope.
          return Landin.Targets.Architecture_Of (Facts) =
            Landin.Targets.Cortex_M0;
+      elsif Under (Logical, "platform/riscv") then
+         --  D661: RV32's reference description, on RV32 alone.
+         return Landin.Targets.Architecture_Of (Facts) =
+           Landin.Targets.RV32;
       elsif Under (Logical, "platform/c") then
          case Landin.Targets.C_ABI_Of (Facts) is
             when Landin.Targets.SysV_AMD64_LP64
@@ -51,7 +55,8 @@ package body Landin.Modules.Availability is
                | Landin.Targets.RiscV_LP64D =>
                return Landin.Targets.Capabilities.C_Signatures (Facts);
             when Landin.Targets.No_C_ABI
-               | Landin.Targets.Arm_AAPCS32_Soft => return False;
+               | Landin.Targets.Arm_AAPCS32_Soft
+               | Landin.Targets.RiscV_ILP32 => return False;
          end case;
       end if;
       return True;
@@ -66,6 +71,8 @@ package body Landin.Modules.Availability is
            & " Linux, Darwin or FreeBSD";
       elsif Under (Logical, "platform/cortex_m") then
          return "D267: " & Logical & " requires an M-profile target";
+      elsif Under (Logical, "platform/riscv") then
+         return "D267: " & Logical & " requires the rv32 target";
       else
          return "D267: platform/c requires an enabled LP64 C ABI";
       end if;

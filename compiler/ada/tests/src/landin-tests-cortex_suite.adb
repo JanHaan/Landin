@@ -3960,7 +3960,7 @@ package body Landin.Tests.Cortex_Suite is
          Landin.Testing.Check
            (Item, Hosted.Status /= Landin.Driver.Status_Success
               and then Contains (U.To_String (Hosted.Report),
-                "it needs --target=cortex-m0 (D589)"),
+                "it needs --target=cortex-m0 or --target=rv32 (D589)"),
             "a hosted target has no firmware profile to write");
       end;
    end Script_Without_Program;

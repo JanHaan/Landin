@@ -165,7 +165,7 @@ package body Landin.Driver is
       & " target-selected native toolchain" & LF
       & "targets described: linux-x86-64, linux-arm64, darwin-arm64, "
       & "freebsd-x86-64, freebsd-arm64, linux-rv64, "
-      & "cortex-m0, synthetic-32" & LF
+      & "cortex-m0, rv32, synthetic-32" & LF
       & "levels of linux-x86-64: "
       & Landin.Targets.Levels.Levels_Of (Landin.Targets.Linux_X86_64) & LF
       & "levels of linux-arm64: "
@@ -179,7 +179,9 @@ package body Landin.Driver is
       & "levels of linux-rv64: "
       & Landin.Targets.Levels.Levels_Of (Landin.Targets.Linux_RV64) & LF
       & "levels of cortex-m0: "
-      & Landin.Targets.Levels.Levels_Of (Landin.Targets.Cortex_M) & LF);
+      & Landin.Targets.Levels.Levels_Of (Landin.Targets.Cortex_M) & LF
+      & "levels of rv32: "
+      & Landin.Targets.Levels.Levels_Of (Landin.Targets.RV32) & LF);
 
    --  The command catalogue's own overview: one text for `refine`,
    --  `refine --help` and a request the driver is handed with nothing in it.
@@ -1290,7 +1292,7 @@ package body Landin.Driver is
              [new String'("linux-x86-64"), new String'("linux-arm64"),
               new String'("darwin-arm64"), new String'("freebsd-x86-64"),
               new String'("freebsd-arm64"), new String'("linux-rv64"),
-              new String'("cortex-m0"),
+              new String'("cortex-m0"), new String'("rv32"),
               new String'("synthetic-32")];
 
 
@@ -2240,9 +2242,8 @@ package body Landin.Driver is
          is
             Report_Path : constant String :=
               Unbounded.To_String (Build_Report_Path);
-            Cortex : constant Boolean :=
-              Landin.Targets.Architecture_Of (Facts)
-                = Landin.Targets.Cortex_M0;
+            On_Firmware : constant Boolean :=
+              Landin.Targets.Is_Firmware (Facts);
             Written : Landin.Platform.Write_Status;
          begin
             declare
@@ -2332,7 +2333,7 @@ package body Landin.Driver is
                --  rather than an unhandled exception at the top of
                --  `refine`.
                begin
-                  if Cortex then
+                  if On_Firmware then
                      Host.Write_File
                        (Product_Path & ".ld",
                         Landin.Backend.Firmware.Linker_Script
@@ -2631,7 +2632,7 @@ package body Landin.Driver is
                     (Code_Toolchain_Failed,
                      Driver & " left executable output aliasing its prior"
                      & " backup at " & Target_Path);
-               elsif Cortex and then Script_Seen
+               elsif On_Firmware and then Script_Seen
                  and then Landin.Build_Reports.Firmware.Contract_Fault
                    (Host, Target_Path,
                     Landin.IR.Firmware_Profile
@@ -2716,9 +2717,8 @@ package body Landin.Driver is
                   (Landin.Stages.Code (Context).all) > 0);
             Destinations : Landin.Platform.Path_List;
             Source_Paths : Landin.Platform.Path_List;
-            Cortex : constant Boolean :=
-              Landin.Targets.Architecture_Of (Facts)
-                = Landin.Targets.Cortex_M0;
+            On_Firmware : constant Boolean :=
+              Landin.Targets.Is_Firmware (Facts);
             Firmware_Entry : Landin.IR.Item_Id := Landin.IR.No_Item;
 
             function Conflicts_With (Path : String) return Boolean is
@@ -2786,12 +2786,12 @@ package body Landin.Driver is
                Valid : Boolean := True;
             begin
                if Report_Seen and then not Landin.Stages.Failed (Context) then
-                  if Cortex and then Emit = Emit_Linker_Script then
+                  if On_Firmware and then Emit = Emit_Linker_Script then
                      Firmware := Unbounded.To_Unbounded_String
                        (Landin.Build_Reports.Firmware.Limits
                           (Landin.IR.Firmware_Profile
                              (Landin.Stages.Code (Context).all)));
-                  elsif Cortex and then Emit = Emit_Executable then
+                  elsif On_Firmware and then Emit = Emit_Executable then
                      Landin.Build_Reports.Firmware.Measure
                        (Host, Product_Path, Product_Path & ".map",
                         Landin.IR.Firmware_Profile
@@ -2831,7 +2831,7 @@ package body Landin.Driver is
             end if;
             if Emit = Emit_Executable then
                Destinations.Append (Product_Path);
-               if Cortex then
+               if On_Firmware then
                   Destinations.Append (Product_Path & ".o");
                   Destinations.Append (Product_Path & ".ld");
                   Destinations.Append (Product_Path & ".map");
@@ -2934,7 +2934,7 @@ package body Landin.Driver is
                end if;
             end loop;
 
-            if Cortex and then not Firmware_Seen
+            if On_Firmware and then not Firmware_Seen
               and then Emit = Emit_Assembly
             then
                for Index in 1 .. Landin.IR.Item_Count
@@ -2951,7 +2951,9 @@ package body Landin.Driver is
                   end if;
                end loop;
             end if;
-            if Cortex and then (Emit = Emit_Executable or Firmware_Seen) then
+            if On_Firmware
+              and then (Emit = Emit_Executable or Firmware_Seen)
+            then
                Firmware_Entry := Landin.Backend.Entry_Point.Firmware_Start
                  (Landin.Stages.Code (Context).all,
                   Landin.Stages.Meanings (Context).all,
@@ -2971,7 +2973,8 @@ package body Landin.Driver is
                     (Rows.Code (Rows.No_Description),
                      "firmware needs a device profile, and the program"
                      & " selects none: import the device's description, or"
-                     & " name a library holding platform/cortex_m/reference"
+                     & " name a library holding "
+                     & Landin.Targets.Firmware.Reference_Module (Facts)
                      & " with --library=DIR (D543)");
                   return;
                end if;
@@ -3009,6 +3012,19 @@ package body Landin.Driver is
                return;
             end if;
 
+            --  A backend named before its emitter: the program checks and
+            --  lowers to IR, and nothing that would be linked is written.
+            if Emit in Emit_Assembly | Emit_Executable | Emit_Linker_Script
+              and then not Landin.Targets.Capabilities.Emits (Facts)
+            then
+               Note_No_Toolchain
+                 ("no backend emits for target "
+                  & Landin.Targets.Name (Facts) & " yet",
+                  "check it with `refine check`, or lower it with"
+                  & " --emit=ir");
+               return;
+            end if;
+
             --  D589: the profile's derived script, as a firmware build
             --  would write it beside its image, and nothing linked.
             if Emit = Emit_Linker_Script then
@@ -3019,9 +3035,9 @@ package body Landin.Driver is
                     (Rows.Code (Rows.No_Description),
                      "a linker script is a device profile's, and the"
                      & " program selects none: import the device's"
-                     & " description, or name a library holding"
-                     & " platform/cortex_m/reference with --library=DIR"
-                     & " (D543)");
+                     & " description, or name a library holding "
+                     & Landin.Targets.Firmware.Reference_Module (Facts)
+                     & " with --library=DIR (D543)");
                   return;
                elsif Dry_Run then
                   Unbounded.Append (Result.Output,
@@ -3055,7 +3071,8 @@ package body Landin.Driver is
                   package Images renames Landin.Backend.Images;
                   use type Images.Excess;
                   Firmware : constant Boolean :=
-                    Cortex and then (Emit = Emit_Executable or Firmware_Seen);
+                    On_Firmware
+                    and then (Emit = Emit_Executable or Firmware_Seen);
                   Budget : constant Landin.Targets.Image_Budget :=
                     (if Firmware then Landin.Targets.Firmware.Budget
                        (Landin.IR.Firmware_Profile
@@ -3115,7 +3132,7 @@ package body Landin.Driver is
             --  [1970]'s entry is required before anything is written, so a
             --  program that could never be linked does not leave a file
             --  behind on the way to saying so.
-            if Emit = Emit_Executable and then not Cortex
+            if Emit = Emit_Executable and then not On_Firmware
               and then Landin.Backend.Entry_Point.Hosted_Main
                          (Landin.Stages.Code (Context).all,
                           Landin.Stages.Meanings (Context).all,
@@ -3125,7 +3142,7 @@ package body Landin.Driver is
             then
                Note_No_Entry;
                return;
-            elsif Emit = Emit_Assembly and then not Cortex
+            elsif Emit = Emit_Assembly and then not On_Firmware
               and then Public_Main_Not_Entry
             then
                Note_No_Entry;
@@ -3445,7 +3462,7 @@ package body Landin.Driver is
                                 (Landin.Stages.Configurations (Context).all,
                                  Index));
                         end loop;
-                        if Cortex then
+                        if On_Firmware then
                            Plan_Tool
                           (Landin.Backend.Toolchain.Assemble_Arguments
                              (Assembly_Path, Product_Path & ".o", Facts,
@@ -3466,7 +3483,7 @@ package body Landin.Driver is
                            Directories => Search_Directories,
                            Float => Landin.IR.Firmware_Profile
                              (Landin.Stages.Code (Context).all).Float));
-                        if not Keep_Assembly and then not Cortex
+                        if not Keep_Assembly and then not On_Firmware
                           and then not Emit_Map
                         then
                            Unbounded.Append (Result.Output,
@@ -3485,7 +3502,7 @@ package body Landin.Driver is
                     (Code_Unwritable, "cannot write: " & Assembly_Path);
                   return;
                end if;
-               if Emit = Emit_Executable and then not Cortex
+               if Emit = Emit_Executable and then not On_Firmware
                  and then not Keep_Assembly and then not Emit_Map
                then
                   Intermediate_Assembly :=
@@ -3528,8 +3545,7 @@ package body Landin.Driver is
             Evidence : Landin.Build_Reports.Report;
          begin
             if Firmware_Seen
-              and then Landin.Targets.Architecture_Of (Facts)
-                = Landin.Targets.Cortex_M0
+              and then Landin.Targets.Is_Firmware (Facts)
               and then Landin.Backend.Entry_Point.Firmware_Start
                 (Landin.Stages.Code (Context).all,
                  Landin.Stages.Meanings (Context).all,
@@ -3543,8 +3559,7 @@ package body Landin.Driver is
             --  What compiling it would refuse before the link, a check
             --  refuses too: a `public main` that is not the entry, and a
             --  static link's C symbol.
-            if Landin.Targets.Architecture_Of (Facts)
-                 /= Landin.Targets.Cortex_M0
+            if not Landin.Targets.Is_Firmware (Facts)
               and then Public_Main_Not_Entry
             then
                Note_No_Entry;
@@ -3609,13 +3624,12 @@ package body Landin.Driver is
               (if Unbounded.Length (Output) > 0
                then Unbounded.To_String (Output)
                else Default_Executable);
-            Cortex : constant Boolean :=
-              Landin.Targets.Architecture_Of (Facts)
-                = Landin.Targets.Cortex_M0;
+            On_Firmware : constant Boolean :=
+              Landin.Targets.Is_Firmware (Facts);
             Destinations : Landin.Platform.Path_List;
          begin
             Destinations.Append (Product);
-            if Cortex then
+            if On_Firmware then
                Destinations.Append (Product & ".o");
                Destinations.Append (Product & ".ld");
                Destinations.Append (Product & ".map");
@@ -3634,15 +3648,16 @@ package body Landin.Driver is
                return;
             end if;
             --  D524: `-L` is refused wherever a library is.
-            if not Search_Options.Is_Empty and then (Cortex or Static_Link)
+            if not Search_Options.Is_Empty
+              and then (On_Firmware or Static_Link)
             then
                Note_No_Toolchain
-                 ((if Cortex then "firmware links no library"
+                 ((if On_Firmware then "firmware links no library"
                    else "a static link of " & Landin.Targets.Name (Facts)
                      & " links no C library")
                   & ", so it searches no directory: -L "
                   & Search_Options.First_Element,
-                  (if Cortex then "remove -L"
+                  (if On_Firmware then "remove -L"
                    else "link with --link=libc, which keeps C's runtime"
                      & " and library"));
                return;
@@ -3664,7 +3679,7 @@ package body Landin.Driver is
                begin
                   Unbounded.Append (Result.Output,
                     "write " & Landin.Json.Quoted (Product) & LF);
-                  if Cortex then
+                  if On_Firmware then
                      Plan_Tool
                        (Landin.Backend.Toolchain.Assemble_Arguments
                           (Operand, Product & ".o", Facts,
@@ -3991,14 +4006,13 @@ package body Landin.Driver is
            and then Rejected.Is_Empty
          then
             declare
-               Cortex : constant Boolean :=
-                 Landin.Targets.Architecture_Of (Facts)
-                   = Landin.Targets.Cortex_M0;
+               On_Firmware : constant Boolean :=
+                 Landin.Targets.Is_Firmware (Facts);
             begin
                if Emit /= Emit_Nothing and then Debug_Enabled and then
                  (Landin.Targets.Capabilities.Debug_Format_Of (Facts)
                     = Landin.Targets.Capabilities.No_Debug_Format
-                  or else Lines_Debug /= Cortex)
+                  or else Lines_Debug /= On_Firmware)
                then
                   Note_No_Toolchain
                     ((if Landin.Targets.Capabilities.Debug_Format_Of (Facts)
@@ -4010,34 +4024,37 @@ package body Landin.Driver is
                      (if Landin.Targets.Capabilities.Debug_Format_Of (Facts)
                             = Landin.Targets.Capabilities.No_Debug_Format
                       then "describe a target with a backend, or drop --emit"
-                      elsif Cortex then "use --debug=lines or --debug=none"
+                      elsif On_Firmware
+                      then "use --debug=lines or --debug=none"
                       else "use --debug=full or --debug=none"));
                   Target_Option_Refused := True;
-               elsif Firmware_Seen and then not Cortex then
+               elsif Firmware_Seen and then not On_Firmware then
                   Bad_Use := True;
                   Note_Failure
                     (Code_Unknown_Option,
-                     "--firmware-entry requires --target=cortex-m0");
+                     "--firmware-entry requires a firmware target:"
+                     & " --target=cortex-m0 or --target=rv32");
                   Target_Option_Refused := True;
-               elsif Emit = Emit_Linker_Script and then not Cortex then
+               elsif Emit = Emit_Linker_Script and then not On_Firmware then
                   Bad_Use := True;
                   Note_Failure
                     (Code_Unknown_Option,
                      "--emit=linker-script writes a firmware profile's"
                      & " derived linker script, and "
                      & Landin.Targets.Name (Facts) & " has no firmware"
-                     & " profile: it needs --target=cortex-m0 (D589)");
+                     & " profile: it needs --target=cortex-m0 or"
+                     & " --target=rv32 (D589)");
                   Target_Option_Refused := True;
                elsif Script_Seen
-                 and then (not Cortex or else Emit /= Emit_Executable
+                 and then (not On_Firmware or else Emit /= Emit_Executable
                            or else not Firmware_Seen)
                then
                   Bad_Use := True;
                   Note_Failure
                     (Code_Unknown_Option,
                      "--linker-script links firmware: it needs"
-                     & " --target=cortex-m0, --firmware-entry=NAME and"
-                     & " --emit=exe (D546)");
+                     & " --target=cortex-m0 or --target=rv32,"
+                     & " --firmware-entry=NAME and --emit=exe (D546)");
                   Target_Option_Refused := True;
                elsif Link_Seen
                  and then Landin.Targets.Capabilities.Hosted_System_Of (Facts)
@@ -4225,9 +4242,7 @@ package body Landin.Driver is
             then
                if Emit = Emit_Executable then
                   Note_No_Entry
-                    (For_Firmware =>
-                       Landin.Targets.Architecture_Of (Facts)
-                         = Landin.Targets.Cortex_M0);
+                    (For_Firmware => Landin.Targets.Is_Firmware (Facts));
                elsif Emit = Emit_Assembly then
                   Bad_Use := True;
                   Note_Failure

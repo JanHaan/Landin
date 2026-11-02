@@ -7648,7 +7648,10 @@ def check_discussion_targets(full_run):
         with io.open(os.path.join(forms, name), encoding="utf-8") as stream:
             text = stream.read()
         for line, items in dropdown_options(text):
-            targets = [item for item in items if TARGET_SHAPED.match(item)]
+            #  A described name counts whatever its shape: `rv32` has no
+            #  hyphen.
+            targets = [item for item in items
+                       if TARGET_SHAPED.match(item) or item in described]
             if not targets:
                 continue
             offered += 1
