@@ -301,14 +301,18 @@ package body Landin.Tests.RV32_Firmware_Suite is
       --  A 32-bit RISC-V executable entered at ENTRY_AT, whose symbol
       --  `_landin_firmware_entry` is at SYMBOL_AT, loading First_Bytes at
       --  the origin and Second_Bytes at SECOND, and a BSS segment.
+      --  When HEADERS, the first segment begins at the file's start, as
+      --  a linker that maps the ELF's headers lays it out.
       function Executable
         (Entry_At : Long_Long_Integer := Origin;
          Symbol_At : Long_Long_Integer := Origin;
-         Second : Long_Long_Integer := Origin + 16#100#) return String;
+         Second : Long_Long_Integer := Origin + 16#100#;
+         Headers : Boolean := False) return String;
       function Executable
         (Entry_At : Long_Long_Integer := Origin;
          Symbol_At : Long_Long_Integer := Origin;
-         Second : Long_Long_Integer := Origin + 16#100#) return String
+         Second : Long_Long_Integer := Origin + 16#100#;
+         Headers : Boolean := False) return String
       is
          Strings : constant String := NUL & "_landin_firmware_entry" & NUL;
          Symbols : constant String := Bytes (0, 16)
@@ -329,8 +333,9 @@ package body Landin.Tests.RV32_Firmware_Suite is
          is (Word (1) & N (Offset) & Word (Address) & Word (Address)
              & N (File_Size) & N (Memory_Size) & Word (5) & Word (4));
          function Section
-           (Kind_Of, Offset, Length, Link, Size_Of : Natural) return String
-         is (Word (0) & N (Kind_Of) & Word (0) & Word (0) & N (Offset)
+           (Kind_Of, Offset, Length, Link, Size_Of : Natural;
+            Flags : Natural := 0) return String
+         is (Word (0) & N (Kind_Of) & N (Flags) & Word (0) & N (Offset)
              & N (Length) & N (Link) & Word (1) & Word (4) & N (Size_Of));
       begin
          return Character'Val (127) & "ELF" & Character'Val (1)
@@ -338,8 +343,12 @@ package body Landin.Tests.RV32_Firmware_Suite is
            & Bytes (2, 2) & Bytes (243, 2) & Word (1) & Word (Entry_At)
            & N (Programs) & N (Sections) & Word (0)
            & Bytes (52, 2) & Bytes (32, 2) & Bytes (3, 2) & Bytes (40, 2)
-           & Bytes (3, 2) & Bytes (0, 2)
-           & Segment (At_First, Origin, First_Bytes'Length, 8)
+           & Bytes (5, 2) & Bytes (0, 2)
+           & (if Headers
+              then Segment (0, Origin - Long_Long_Integer (At_First),
+                            At_First + First_Bytes'Length,
+                            At_First + 8)
+              else Segment (At_First, Origin, First_Bytes'Length, 8))
            & Segment (At_Second, Second, Second_Bytes'Length, 16)
            & Segment (0, Origin + 16#1000#, 0, 64)
            & First_Bytes & NUL
@@ -348,7 +357,9 @@ package body Landin.Tests.RV32_Firmware_Suite is
            & Symbols
            & Bytes (0, 40)
            & Section (2, At_Symbols, Symbols'Length, 2, 16)
-           & Section (3, At_Strings, Strings'Length, 0, 0);
+           & Section (3, At_Strings, Strings'Length, 0, 0)
+           & Section (1, At_First, First_Bytes'Length, 0, 0, Flags => 6)
+           & Section (1, At_Second, Second_Bytes'Length, 0, 0, Flags => 2);
       end Executable;
 
       Profile : Firmware.Profile;
@@ -485,6 +496,12 @@ package body Landin.Tests.RV32_Firmware_Suite is
            (Executable (Entry_At => Origin + 4), Profile).Fault),
            "entry is 0x40380004, not _landin_firmware_entry at 0x40380000"),
          "an entry elsewhere is refused");
+      Landin.Testing.Check
+        (Item, Contains (U.To_String (Landin.Driver.ESP_Image.Make
+           (Executable (Headers => True), Profile).Fault),
+           "holds bytes no allocated section does, such as the ELF's own"
+           & " headers"),
+         "a segment that maps the ELF's headers is refused");
 
       --  The driver writes OUT.bin after the link and reads it back, and
       --  an executable no image can hold is L0577, leaving neither file.
@@ -806,6 +823,24 @@ package body Landin.Tests.RV32_Firmware_Suite is
       Landin.Testing.Check
         (Item, not Contains (U.To_String (Text), "_landin_firmware_slot_"),
          "no CLIC slot has a stub of its own");
+
+      --  D680, [1995]: with prepared stacks the stub keeps the limit's
+      --  cell at zero while the handler runs, in an 80-byte frame.
+      Assembly_Of ("", At_Slot ("7")
+        & "mut stack: [256]u8 = zeroed" & LF
+        & "first: (argument: usize) -> noreturn =" & LF
+        & "    loop do" & LF & "    end loop" & LF & "end first" & LF
+        & "public go: () -> none =" & LF
+        & "    _ = compiler.stack_prepare(stack[0..<128], first,"
+        & " usize(addr stack[128]))" & LF
+        & "end go" & LF, Text, Said);
+      Holds ("the larger frame", "_landin_firmware_slot_7:" & LF
+        & ".cfi_startproc simple" & LF & ".cfi_return_column mepc" & LF
+        & ".cfi_def_cfa sp, 0" & LF & ".cfi_same_value mepc" & LF
+        & "addi sp, sp, -80" & LF);
+      Holds ("the cell kept", "landin_stack_limit" & LF & "lw t2, 0(t1)" & LF
+        & "sw t2, 64(sp)" & LF & "sw zero, 0(t1)" & LF);
+      Holds ("the cell restored", "lw t2, 64(sp)" & LF);
 
       --  D684: the C3's stage, which the entry word enters.
       Assembly_Of (Description ("esp-rv32imc", "esp-app-image", 32,

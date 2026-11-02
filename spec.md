@@ -23190,7 +23190,11 @@ with it, is L0575; an argument outside its range is L0399. The image is
 RAM-only: its code runs from SRAM, flash execute-in-place is a register
 row, the flash mode byte is DIO and the size and frequency byte 0x20, which
 neither ROM reads to load a RAM image, and the legacy one-byte minimum
-revision is zero, as the images both ROMs booted on the rig were.
+revision is zero, as the images both ROMs booted on the rig were. The
+C3's ROM refuses an image whose checksum is wrong, and with secure boot
+off only warns of a wrong SHA-256 and boots it, so the hash is evidence
+the image is whole rather than a gate the ROM keeps; refine's read-back
+(D685) holds both.
 
 **The alternatives:** chip facts in the compiler, which names devices;
 a directive per fact, four names for one record; flash execution, which
@@ -23234,9 +23238,11 @@ holds the entry word, the stage's section and L0560 and L0561 on `rv32`.
 **Chosen:** a firmware build of an `esp-app-image` profile links the
 executable as any other, then writes `OUT.bin`, the image of its loaded
 segments with bytes in the file, at their load addresses in the ELF's
-order, entered at `_landin_firmware_entry`. A segment outside every region
-of the description, more than sixteen, or an entry that is not that symbol
-is L0577, naming it. refine then reads the file back and parses it on its
+order, entered at `_landin_firmware_entry`. A segment that does not begin
+and end with the linked image's allocated sections, as one carrying the
+ELF's headers does, a segment outside every region of the description,
+more than sixteen, or an entry that is not that symbol is L0577, naming
+it. refine then reads the file back and parses it on its
 own, holding its header, extended header, every segment's address, length
 and bytes against the executable's, its padding, checksum and hash, and
 nothing after the hash; a part that is not as made is L0577, and refine
@@ -23277,7 +23283,9 @@ same `_landin_firmware_*` symbols as Cortex-M, orders the copies with
 stays unused, so no script defines `__global_pointer$`. The derived script
 is `elf32-littleriscv`, `ENTRY(_landin_firmware_entry)`, places
 `.landin_entry` and `.isr_vector` at their addresses, collects the small
-data sections with their own, and asserts the entry word's address and
+data sections with their own, names its loaded segments in a `PHDRS`
+block that maps neither the ELF header nor the program headers, so that
+no segment carries bytes that are not the program's, and asserts the entry word's address and
 size, the table's, and a stack top aligned to sixteen bytes. On `rv32`,
 `--emit=linker-script` writes it without an emitter, so a harness has every
 profile's script before the backend emits. D546 holds a developer's script
