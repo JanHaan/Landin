@@ -1,0 +1,86 @@
+-- Bringing the ESP32-C5 up from what its boot ROM leaves when it enters the
+-- image: the watchdogs are already off, which the description's stage did
+-- before reset (D708), and UART0 is at 115200 baud on GPIO11 and GPIO12,
+-- where the ROM wrote its log.  This makes GPIO24 the indicator, an output
+-- through the GPIO matrix whose pad's input reads it back, gives the CLIC
+-- three level bits, and starts the system timer's comparator 0 as a 1 ms
+-- period on external interrupt 2 (D721).  Values are the ESP32-C5 TRM
+-- v1.1's.
+import esp32c5/clic
+import esp32c5/gpio
+import esp32c5/interrupt_core0
+import esp32c5/io_mux
+import esp32c5/pcr
+import esp32c5/systimer
+
+-- The indicator, GPIO24: not a strapping pin, and no LED of the board's.
+public indicator: u32 = 0x0100_0000
+
+-- The system timer's external interrupt, CLIC identity 18, and its
+-- CLICINTCTL, 010, level 95, above the receive interrupt's 63, so the
+-- threshold that holds the receive interrupt off leaves it running
+-- (2.8.2.5, Table 2.8-2).
+public timer_line: u32 = 2
+timer_level_bits: u32 = 2
+-- CNT_CLK is 16 MHz on average (14.4, p. 663): a millisecond.
+public ticks_per_ms: u32 = 16000
+
+public indicator_pin: () -> none =
+    -- IO_MUX_GPIO24 (Register 8.25): MCU_SEL 14:12 = 1, the GPIO function;
+    -- FUN_DRV 11:10 = 2; FUN_IE, bit 9, so IN reads the pad.
+    io_mux.gpio24_write(io_mux.base, 0x1a00)
+    -- GPIO_FUNC24_OUT_SEL 256: GPIO_OUT_REG's and GPIO_ENABLE_REG's bit 24
+    -- drive the pin (8.5.2, p. 310; Register 8.22).
+    gpio.func24_out_sel_cfg_write(gpio.base, 0x100)
+    gpio.out_w1tc_write(gpio.base, indicator)
+    gpio.enable_w1ts_write(gpio.base, indicator)
+end indicator_pin
+
+-- MNLBITS 3: CLICINTCTL's three implemented bits are all level, none
+-- priority (2.8.2.5, Table 2.8-2).
+public levels: () -> none =
+    clic.mcliccfg_write(clic.base, 3)
+end levels
+
+public timer: () -> none =
+    -- PCR_SYSTIMER_CLK_EN, bit 0, set and PCR_SYSTIMER_RST_EN, bit 1,
+    -- clear (Register 9.26); its function clock is the crystal, enabled at
+    -- reset (Register 9.27).
+    pcr.systimer_conf_write(pcr.base, 1)
+    -- Period mode (14.7.3): UNIT0 compared, the period loaded, then
+    -- PERIOD_MODE, bit 30, cleared and set; TARGET0_WORK_EN, bit 24, with
+    -- UNIT0_WORK_EN, bit 30, and CLK_EN, bit 31; then its interrupt.
+    systimer.target0_conf_write(systimer.base, ticks_per_ms)
+    systimer.comp0_load_write(systimer.base, 1)
+    systimer.target0_conf_write(systimer.base, ticks_per_ms | 0x40000000)
+    conf := systimer.conf_read(systimer.base)
+    systimer.conf_write(systimer.base, conf | 0xc1000000)
+    systimer.int_clr_write(systimer.base, 1)
+    systimer.int_ena_write(systimer.base, 1)
+    -- The interrupt matrix routes SYSTIMER_TARGET0 to the external
+    -- interrupt, and its CLIC word makes it a positive level interrupt at
+    -- its level, enabled (11.5.3; 2.8.2.6).
+    interrupt_core0.systimer_target0_intr_map_write(interrupt_core0.base, timer_line)
+    clic.clicint18_write(clic.base, (timer_level_bits << 29) | 0x100)
+end timer
+
+-- UNIT0's low word: UPDATE, bit 30 of UNIT0_OP, latches the count, and
+-- VALUE_VALID, bit 29, says it has (14.7.1).
+public now: () -> (ticks: u32) =
+    systimer.unit0_op_write(systimer.base, 0x40000000)
+    while (systimer.unit0_op_read(systimer.base) & 0x20000000) == 0 do
+        continue
+    end while
+    ticks = systimer.unit0_value_lo_read(systimer.base)
+end now
+
+-- mintthresh.TH, CSR 0x347 (Register 2.17): an interrupt is taken while
+-- its level is above the larger of this and mintstatus.MIL.
+public threshold: (level: u32) -> none =
+    assembler.block("csrw 0x347, {level}", in level: u32 at general = level)
+end threshold
+
+-- What mintthresh holds.
+public threshold_now: () -> (level: u32) =
+    level = assembler.block("csrr {level}, 0x347", out level: u32 at general)
+end threshold_now

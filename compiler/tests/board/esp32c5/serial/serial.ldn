@@ -1,0 +1,204 @@
+-- The prototype-1 receive contract on the ESP32-C5: UART0 on GPIO11 and
+-- GPIO12, as the boot ROM left it at 115200 baud, received by an
+-- interrupt on CLIC identity 17, external interrupt 1, into a ring (D721).  Its public interface and
+-- its atoms are the synthetic driver's (compiler/tests/driver), as every
+-- board's are (D593); the device protocol is this chip's, and an interrupt
+-- moves the bytes where the other boards' DMA does.
+--
+-- The receive interrupt, `receive`, runs on external interrupt 1, which
+-- the interrupt matrix routes UART0 to, at the CLIC's lowest level but one: it moves what the RX FIFO holds
+-- into the ring while the ring has room and drops the rest, counting them,
+-- and it counts each RX FIFO overflow the UART flags.  It alone writes
+-- `produced`, `dropped` and `overflows`; the program alone writes `taken`.
+-- Each is published with an atomic store and read with an atomic load, the
+-- four-byte accesses every RV32 level admits (D690), so neither side reads
+-- the other's count torn or before the bytes it counts.  A read that finds
+-- either loss count moved fails with `overrun`, and stays failed until a
+-- restart discards what the ring holds: no byte is lost unreported.
+import core/atomic
+import esp32c5/clic
+import esp32c5/interrupt_core0
+import esp32c5/uart0
+import platform/riscv
+
+public busy: atom
+public bad_baud: atom
+public buffer_empty: atom
+public buffer_too_big: atom
+public bad_buffer: atom
+public overrun: atom
+public transfer_error: atom
+public exhausted: atom
+public stop_timeout: atom
+public receive_error: type = overrun | transfer_error | exhausted | stop_timeout
+
+public rx: type = struct
+    buf: []u8
+    consumed: u32
+    -- The loss counts the last restart accepted.
+    dropped_seen: u32
+    overflows_seen: u32
+    active: bool
+    lost: bool
+end rx
+
+-- The external interrupt UART0 is routed to, which the CLIC takes as
+-- identity 16 + 1 and the program's handler at slot 17 (TRM v1.1, 2.8.2.3,
+-- Table 2.8-1), and its CLICINTCTL, whose three implemented bits are all
+-- level at MNLBITS 3: 001, level 63 (2.8.2.5, Table 2.8-2).
+public line: u32 = 1
+public level_bits: u32 = 1
+public level: u32 = 63
+
+-- UART_INT_* bits (Register 32.3): RXFIFO_FULL 0, RXFIFO_OVF 4.
+full_bit: u32 = 0x01
+overflow_bit: u32 = 0x10
+receive_bits: u32 = 0x11
+-- CONF0_SYNC's RXFIFO_RST, bit 22 (Register 32.9).
+rxfifo_reset: u32 = 0x400000
+
+mut produced: atomic.cell(u32) = zeroed
+mut taken: atomic.cell(u32) = zeroed
+mut dropped: atomic.cell(u32) = zeroed
+mut overflows: atomic.cell(u32) = zeroed
+mut entries: atomic.cell(u32) = zeroed
+
+-- What the receive interrupt has counted, for the trace and the probe.
+public bytes_dropped: () -> (count: u32) = count = atomic.load(addr dropped) end bytes_dropped
+public fifo_overflows: () -> (count: u32) = count = atomic.load(addr overflows) end fifo_overflows
+public interrupts: () -> (count: u32) = count = atomic.load(addr entries) end interrupts
+
+-- The receive interrupt's body, for the handler at the line's slot, given
+-- the ring `open` was given.  RXFIFO_FULL is raised while the FIFO holds
+-- at least its threshold, one (32.4.2; Register 32.10), so a lone byte is
+-- taken.  The interrupt is cleared before the FIFO is drained, so a byte
+-- that arrives meanwhile raises it again, and nothing that arrives is left
+-- waiting for the next byte.
+public receive: (ring: []mut u8) -> none =
+    status := uart0.int_st_read(uart0.base)
+    uart0.int_clr_write(uart0.base, status & receive_bits)
+    _ = atomic.sole_add(addr entries, 1)
+    if (status & overflow_bit) <> 0 then
+        _ = atomic.sole_add(addr overflows, 1)
+    end if
+    size := u32(lenof ring)
+    mut p := atomic.load_relaxed(addr produced)
+    limit := atomic.load(addr taken) +% size
+    mut lost: u32 = 0
+    -- UART_RXFIFO_CNT, STATUS bits 7:0 (Register 32.21).
+    mut count := uart0.status_read(uart0.base) & 0xff
+    while count > 0 do
+        byte := u8(uart0.fifo_read(uart0.base) & 0xff)
+        if p <> limit then
+            ring[usize(p & (size - 1))] = byte
+            p = p +% 1
+        else
+            lost = lost +% 1
+        end if
+        count -= 1
+    end while
+    atomic.store(addr produced, p)
+    if lost <> 0 then _ = atomic.sole_add(addr dropped, lost) end if
+end receive
+
+update: () -> none =
+    uart0.reg_update_write(uart0.base, 1)
+    while (uart0.reg_update_read(uart0.base) & 1) <> 0 do
+        continue
+    end while
+end update
+
+public open: (rate: u32, budget: u32, escaping buf: []mut u8)
+             -> (r: rx from buf) ! busy | bad_baud | buffer_empty | buffer_too_big | bad_buffer =
+    size := lenof buf
+    fail buffer_empty when size == 0
+    fail buffer_too_big when size > 256
+    fail bad_buffer when size < 2 or (size & (size - 1)) <> 0
+    fail bad_buffer when budget < u32(size) or budget > 65535
+    -- The boot ROM leaves UART0 at 115200 baud on its pins (D721).
+    fail bad_baud when rate <> 115200
+    -- The line is the receiver's alone: one already enabled is busy.
+    fail busy when (clic.clicint17_read(clic.base) & 0x100) <> 0
+    -- CONF1's RXFIFO_FULL_THRHD, bits 7:0, is one; the rest as they were.
+    conf1 := uart0.conf1_read(uart0.base)
+    uart0.conf1_write(uart0.base, (conf1 & 0xffffff00) | 1)
+    -- Whatever the RX FIFO held from before is discarded.  CONF0_SYNC
+    -- reaches the UART's core clock domain when REG_UPDATE is set, which
+    -- the UART clears once it has (32.6.1; Register 32.36).
+    conf0 := uart0.conf0_sync_read(uart0.base)
+    uart0.conf0_sync_write(uart0.base, conf0 | rxfifo_reset)
+    update()
+    uart0.conf0_sync_write(uart0.base, conf0 & ~rxfifo_reset)
+    update()
+    uart0.int_clr_write(uart0.base, 0xfffff)
+    atomic.store(addr produced, 0)
+    atomic.store(addr taken, 0)
+    -- The interrupt matrix routes source UART0 to the external interrupt,
+    -- not delegated (11.5.3, 11.5.4), and its CLIC word makes it a
+    -- positive level interrupt, not hardware vectored, at its level, and
+    -- enables it (2.8.2.6, Registers 2.64 to 2.67).
+    saved := riscv.disable_interrupts()
+    interrupt_core0.uart0_intr_map_write(interrupt_core0.base, line)
+    clic.clicint17_write(clic.base, (level_bits << 29) | 0x100)
+    uart0.int_ena_write(uart0.base, receive_bits)
+    riscv.device_barrier()
+    riscv.restore_interrupts(saved)
+    r = (buf: buf, consumed: 0, dropped_seen: atomic.load(addr dropped),
+         overflows_seen: atomic.load(addr overflows), active: true, lost: false)
+end open
+
+snapshot: (inout r: rx) -> (count: usize) ! overrun =
+    have := atomic.load(addr produced) -% r.consumed
+    if atomic.load(addr dropped) <> r.dropped_seen
+      or atomic.load(addr overflows) <> r.overflows_seen
+      or have > u32(lenof r.buf)
+    then
+        r.lost = true
+    end if
+    fail overrun when r.lost
+    count = usize(have)
+end snapshot
+
+public available: (inout r: rx) -> (count: usize) ! receive_error =
+    count = try snapshot(r)
+end available
+
+public read: (inout r: rx, out_buf: []mut u8) -> (count: usize) ! receive_error =
+    have := try snapshot(r)
+    count = have
+    if lenof out_buf < count then count = lenof out_buf end if
+    backing := r.buf
+    capacity := lenof backing
+    -- snapshot bounds count by the ring; capacity is a nonzero power of
+    -- two and i < 256. No arithmetic wraps.
+    unchecked begin
+        for i in 0..<count do
+            out_buf[i] = backing[(usize(r.consumed) + i) & (capacity - 1)]
+        end for
+    end unchecked
+    r.consumed = r.consumed +% u32(count)
+    atomic.store(addr taken, r.consumed)
+end read
+
+-- Receiving stops when UART0 no longer raises its interrupt; bytes keep
+-- arriving in the FIFO, which holds 128 and flags the rest lost (32.4.2).
+public stop: (inout r: rx) -> none ! stop_timeout =
+    r.active = false
+    uart0.int_ena_write(uart0.base, 0)
+    riscv.device_barrier()
+end stop
+
+-- Discards unread bytes deliberately; may be called after an overrun.
+public restart: (inout r: rx) -> none ! stop_timeout | transfer_error =
+    try stop(r)
+    saved := riscv.disable_interrupts()
+    r.consumed = atomic.load(addr produced)
+    atomic.store(addr taken, r.consumed)
+    r.dropped_seen = atomic.load(addr dropped)
+    r.overflows_seen = atomic.load(addr overflows)
+    r.lost = false
+    r.active = true
+    uart0.int_ena_write(uart0.base, receive_bits)
+    riscv.device_barrier()
+    riscv.restore_interrupts(saved)
+end restart
