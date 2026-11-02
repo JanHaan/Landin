@@ -1,5 +1,5 @@
 {
-  "comment": "What each device description must select, recorded apart from the compiler and the descriptions: RP2040 and RP2350 from pico-sdk 2.2.0, the STM32H753 from ST's stm32h753xx.h and RM0433, the ESP32-C3 and ESP32-C5 from their TRMs and ESP-IDF v6.1, RP2350's Hazard3 side as its Arm side, the constrained reference from [1990]. descriptions.py compares every fact of each linked image with these. Under lanes, the same for each lane description, an emulator's map rather than a chip, which the corpus holds its derived profile to (D607, D619).",
+  "comment": "What each device description must select, recorded apart from the compiler and the descriptions: RP2040 and RP2350 from pico-sdk 2.2.0, the STM32H753 from ST's stm32h753xx.h and RM0433, the ESP32-C3 and ESP32-C5 from their TRMs and ESP-IDF v6.1, the constrained reference from [1990]. descriptions.py compares every fact of each linked image with these. Under lanes, the same for each lane description, an emulator's map rather than a chip, which the corpus holds its derived profile to (D607, D619).",
   "devices": {
     "rp2040": {
       "sources": {
@@ -154,32 +154,6 @@
       "reset_stage": {"source": "ESP32-C5 TRM v1.1, 16.2.2.3 and 16.2.2.4, p. 714: a flash boot leaves timer group 0's MWDT and the RWDT running in flash boot protection, and the key 0x50D83AA1 unlocks each; Register 15.10, p. 701: an MWDT's WDT_CONF_UPDATE_EN at bit 22; 16.3.2.2, p. 715: the super watchdog's key, the same; Register 16.8, p. 721: SWD_CONFIG resets to 0x12C0 0000, its SWD_AUTO_FEED_EN at bit 18. TIMG0 0x60008000, TIMG1 0x60009000 and LP_WDT 0x600B1C00 from ESP-IDF v6.1's reg_base.h",
                       "reads": [[1611340828, 314572800]],
                       "accesses": [["w", 1610645604, 4, 1356348065], ["w", 1610645576, 4, 4194304], ["w", 1610645604, 4, 0], ["w", 1610649700, 4, 1356348065], ["w", 1610649672, 4, 4194304], ["w", 1610649700, 4, 0], ["w", 1611340824, 4, 1356348065], ["w", 1611340800, 4, 0], ["w", 1611340824, 4, 0], ["w", 1611340832, 4, 1356348065], ["r", 1611340828, 4, 314572800], ["w", 1611340828, 4, 314834944], ["w", 1611340832, 4, 0]]}
-    },
-    "rp2350-hazard3": {
-      "sources": {
-        "memory map": "https://github.com/raspberrypi/pico-sdk/blob/2.2.0/src/rp2_common/pico_crt0/rp2350/memmap_default.ld, SHA-256 2349d98352370fc22d84d482e53313300e8a52ea42529eced235fa99c109234f: RAM 0x20000000 512k, SCRATCH_X 0x20080000 4k, SCRATCH_Y 0x20081000 4k, rp2350's map",
-        "flash region": "https://github.com/raspberrypi/pico-sdk/blob/2.2.0/src/rp2_common/pico_standard_link/pico_flash_region.template.ld, SHA-256 a8cfe6d5eeea94ae1d67eddbcc8c7f9167de30fbac3b196ee51cc52833e6f22a: FLASH at 0x10000000",
-        "flash size": "https://github.com/raspberrypi/pico-sdk/blob/2.2.0/src/boards/include/boards/pico2.h, SHA-256 6d32916eea833abcef7e7d10321853a5c23eb7366b893aba4d5354d6ddc6b76c: PICO_FLASH_SIZE_BYTES (4 * 1024 * 1024)",
-        "interrupts": "https://github.com/raspberrypi/pico-sdk/blob/2.2.0/src/rp2350/hardware_regs/include/hardware/regs/intctrl.h, SHA-256 e9c90fb163105a8083578ea1d5430a499eb696a5734e9dbfe3e7c45d303e9b1c: PROC0_IRQ_CTI 40, SPARE_IRQ_5 51, every IRQ of 0 to 51 named; RP2350 Datasheet release 8, 3.2, p. 81: one IRQ table for both kinds of core",
-        "core slots": "hazard3, Xh3irq: external IRQ n at slot 16 + n, resolved through meinext, as the NVIC's; its interrupt control is the core's CSRs, which no SVD gives",
-        "layout": "rp2350-image-block on RISC-V: the image's code first, then the trap table and the block inside the first 4 KiB, whose addresses the boot kind decides and descriptions.py reads from the build report"
-      },
-      "core": "hazard3",
-      "level": "rv32imac",
-      "float_unit": "none",
-      "boot": "rp2350-image-block",
-      "regions": [
-        {"name": "FLASH", "origin": 268435456, "length": 4194304, "access": "rx"},
-        {"name": "RAM", "origin": 536870912, "length": 524288, "access": "rwx"},
-        {"name": "SCRATCH_X", "origin": 537395200, "length": 4096, "access": "rwx"},
-        {"name": "SCRATCH_Y", "origin": 537399296, "length": 4096, "access": "rwx"}
-      ],
-      "placed": {"vectors": "FLASH", "text": "FLASH", "rodata": "FLASH", "data": "RAM", "bss": "RAM", "stack": "SCRATCH_Y"},
-      "vector_words": 68,
-      "stack_top": 537403392,
-      "stack_reserved": 4096,
-      "handler_slot": 56,
-      "handler_symbol": "cti"
     },
     "constrained-reference": {
       "sources": {"profile": "spec.md [1990]: 32 KiB flash at zero, 16 KiB RAM at 0x20000000, the upper 4 KiB the stack, a 48-word table at zero, core slots 4-10 and 12-13 and slots 21 and 42-47 zero"},

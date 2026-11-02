@@ -18,8 +18,9 @@ refine --root=devices/generated --root=. --target=cortex-m0 \
     --firmware-entry=start --emit=exe devices/consumers/images -o fixture.elf
 ```
 
-This tree holds three devices: Raspberry Pi's RP2040 and RP2350 and ST's
-STM32H753. A
+This tree holds five devices: Raspberry Pi's RP2040 and RP2350, ST's
+STM32H753 and Espressif's ESP32-C3 and ESP32-C5, and six descriptions,
+RP2350's Hazard3 cores having one of their own. A
 description is imported as `descriptions/DEVICE` with `--root=devices`, and
 its register modules as `DEVICE/PERIPHERAL` with `--root=devices/generated`.
 
@@ -79,7 +80,7 @@ flash and, directly after it, the IMAGE_DEF block refine emits and checks
 | [`inputs.json`](inputs.json) | the lock: each vendor input's URL and SHA-256 |
 | [`policies/`](policies) | one selection policy per device |
 | [`generated/`](generated) | the register modules, correspondences and manifests `refine svd` writes |
-| [`descriptions/`](descriptions) | each device's description: the generated `interrupts.ldn`, the hand-written `memory.ldn`, RP2040's second stage, `boot2.ldn`, and the STM32H753's stage before reset, `supply.ldn` |
+| [`descriptions/`](descriptions) | each device's description: the generated `interrupts.ldn`, the hand-written `memory.ldn`, RP2040's second stage, `boot2.ldn`, and the stages before reset, the STM32H753's `supply.ldn` and the ESP chips' `watchdogs.ldn` |
 | [`notices/`](notices) | the licences the generated files are derived under |
 | [`consumers/`](consumers) | firmware that uses the generated modules |
 | [`test.py`](test.py) | the offline checks, and with `--refine` the regeneration and the vendor-header oracles |
@@ -120,6 +121,11 @@ pinned Rev 9, the copy wanted is the maintainer's, and no job verifies it.
 | `rp2350-datasheet/rp2350-datasheet.pdf` | the [RP2350 datasheet](https://datasheets.raspberrypi.com/rp2350/rp2350-datasheet.pdf), release 8, build date 2026-10-01, build version `80d627281ed5`, 11,094,994 bytes, supplied by hand | CC BY-ND 4.0, not redistributed |
 | `stm32h753/STM32H753.svd` | Arm's [STM32H7xx_DFP](https://github.com/Open-CMSIS-Pack/STM32H7xx_DFP) tag `v4.1.3`, commit `4c77d2ffa6e885b6da9d6fe949c2d6070b21fe7d`, the device family pack Keil publishes; device `STM32H753`, version `2.0`, SVD schema `1.1` | Apache-2.0, STMicroelectronics 2024, stated in the file's own header |
 | `stm32h753/stm32h753xx.h` | ST's [cmsis-device-h7](https://github.com/STMicroelectronics/cmsis-device-h7), commit `81db1ec63cdc191fae1565b772da3ea5aa29a683`, used only by the oracle | Apache-2.0, per that repository's licence |
+| `esp32c3/esp32c3.svd` | Espressif's [svd](https://github.com/espressif/svd) repository, commit `be20aa12560889d6125d144cdb48cf615ac17628`, its newest; device `ESP32-C3`, version `18` | Apache-2.0, Espressif Systems 2024, stated in the file's own header |
+| `esp32c5/esp32c5.base.svd` | Espressif's Rust team's [esp-pacs](https://github.com/esp-rs/esp-pacs), commit `a96d437ebad40b00854aa3e78011ad7732713a4d`, `esp32c5/svd/esp32c5.base.svd`; device `ESP32-C5`, version `1` | Apache-2.0, Espressif Systems 2025, stated in the file's own header |
+| `esp32c3/*.h`, `esp32c5/*.h` | [ESP-IDF](https://github.com/espressif/esp-idf) v6.1, commit `fff9895c82d744c7237be8847347bdd1b07c6643`: each chip's `reg_base.h`, `soc.h`, `interrupts.h` and the selected peripherals' `*_reg.h`, and the C5's `clic_reg.h`, used only by the oracle | Apache-2.0, or MIT where a file says so |
+| `esp32c3-trm/esp32-c3_technical_reference_manual_en.pdf` | the [ESP32-C3 TRM](https://documentation.espressif.com/esp32-c3_technical_reference_manual_en.pdf), version 1.4, created 2026-03-26, 9,623,028 bytes, supplied by hand | Espressif's terms, not redistributed |
+| `esp32c5-trm/esp32-c5_technical_reference_manual_en.pdf` | the [ESP32-C5 TRM](https://documentation.espressif.com/esp32-c5_technical_reference_manual_en.pdf), version 1.1, created 2026-04-24, 14,650,675 bytes, supplied by hand | Espressif's terms, not redistributed |
 
 ST also publishes the STM32H7 SVDs from st.com under its own licence
 agreement, SLA0048, which admits derivative representations for developing
@@ -153,7 +159,9 @@ reviewer's notes and is not read.
 | Member | Says |
 |---|---|
 | `schema` | `2` |
-| `device`, `svd_version` | the SVD's `device/name` and `version`, which must match |
+| `device`, `svd_version` | the SVD's `device/name` and `version`, which must match; a name with a hyphen, Espressif's, gives its `prefix` and `description` |
+| `identity` | the description's `compiler.device`; default the device's name in lowercase (D700) |
+| `core` | `hazard3`, `esp-rv32imc` or `esp-rv32imac-clic`, the description's core, which no RISC-V SVD's cpu says; without it the cpu must be a Cortex-M (D700) |
 | `svd_sha256` | the SHA-256 of the SVD the policy was reviewed against; another file is L0527 |
 | `notice` | the lines each module begins with, after `-- `: provenance and the licence |
 | `modules` | the import root under `--out-dir`; default `.` |
@@ -167,6 +175,8 @@ reviewer's notes and is not read.
 | `reset_corrections` | a reviewed reset `value` and the `source` it was read from, where the SVD is wrong |
 | `field_corrections` | for a `PERIPHERAL.REGISTER.FIELD`, its reviewed `bits` as `[HIGH:LOW]`, or `omit: true`, or, for a field the SVD lacks, `add: true` with its `bits` and its `access` in the SVD's words (D652), and the `source` |
 | `interrupt_corrections` | for an interrupt's name, the `value` it is added or moved to, or `omit: true`, and the `source`; `interrupts.ldn` says each in a line (D542) |
+| `register_corrections` | for a selected register, its reviewed `offset` and the `source` (D704) |
+| `peripheral_additions` | a peripheral the SVD lacks: its `base`, `source` and `registers`, each with its `offset`, `access`, `reset` and `fields` of `bits` and an optional `access`, and an array's `dim` and `increment`; read as if the SVD gave it (D705) |
 
 A refused read or write leaves no accessor, so a program that tries one is
 refused by name resolution. `modify` reads with one volatile load, for a FIFO
@@ -180,10 +190,18 @@ peripheral, the peripheral that is derived from, and the device. A derived
 peripheral takes its parent's registers and keeps its own base, once. An
 alternate register is generated at the address it shares. A field lies where
 its `bitRange`, `bitOffset` and `bitWidth`, or `lsb` and `msb` say, and may
-or may not enumerate its values. Arrays, clusters, derived registers and
-fields, alternate groups, default enumerated values and widths other than 32
-are refused by name (L0528), and what cannot be generated as described, such
-as overlapping fields, is L0529.
+or may not enumerate its values. An element of a register array, `NAME%s`,
+is selected by its name with one of the array's indices and generated at its
+own offset (D703). Arrays of fields and peripherals, clusters, derived
+registers and fields, alternate groups, default enumerated values and widths
+other than 32 are refused by name (L0528), and what cannot be generated as
+described, such as overlapping fields, is L0529.
+
+On the two ESP cores the SVD's interrupts are the interrupt matrix's
+sources, not slots: `interrupts.ldn` holds the core's 32 or 48 slots and no
+interrupt, and the sources are a module of their own, `PREFIX/sources`, of
+`public NAME: u32 = N`, the number of each source's mapping register
+(D701).
 
 Each module exports `base`, and for each register `_offset`, `_address`,
 `_named_mask`, `_reset_mask`, `_reset_value`, `_image`, `_decode` and
@@ -210,14 +228,73 @@ python3 devices/test.py --refine "$(command -v refine)"   # fetches and regenera
 
 Offline, the test holds the lock and the policies to the same SVD hashes,
 every generated file to its manifest's hash, and every module to its notice.
-With `--refine` it fetches the inputs, regenerates both devices twice into
-fresh directories and requires every byte to be the checked-in one, puts back
+With `--refine` it fetches the inputs, regenerates every policy's files twice
+into fresh directories and requires every byte to be the checked-in one, puts
+back
 a changed output and removes a deselected one, refuses each unsupported form
 in a mutated, rehashed SVD with its code, and compares every selected register
 and field with the vendor's own C headers, which refine never reads. The
 gate's `cortex-m` job runs it with the release compiler. The two vendor
 formats may share an upstream database; they are independent of the
 projection, not a claim of independent silicon verification.
+
+## ESP32-C3 and ESP32-C5: the selected surface
+
+The two ESP chips are learnt for prototype 1's board application (D702):
+UART0's echo with interrupt-driven receive, an indicator, a millisecond
+wakeup and every watchdog a flash boot leaves running. Their modules are
+under `generated/esp32c3` and `generated/esp32c5`, their descriptions in
+`descriptions/esp32c3` and `descriptions/esp32c5`, identities `esp32-c3`
+and `esp32-c5`. The C3's SVD is Espressif's own; Espressif's repository
+has no C5, whose SVD is the copy in esp-pacs, Espressif's Rust team's,
+which corrects it in place and so is the vendor's and not a third party's.
+
+| Module | C3 | C5 | Why |
+|---|---|---|---|
+| `system` / `pcr` | PERIP_CLK_EN0, PERIP_RST_EN0 | UART0_CONF, UART0_SCLK_CONF, SYSTIMER_CONF, SYSTIMER_FUNC_CLK_CONF | UART0's and the system timer's clocks and resets |
+| `io_mux` | GPIO8, GPIO20, GPIO21 | GPIO11, GPIO12, GPIO27 | UART0's pins, IO MUX function 0, and the indicator, each the board's RGB LED's data pin |
+| `gpio` | OUT_W1TS, OUT_W1TC, ENABLE_W1TS, IN, FUNC8_OUT_SEL_CFG | the same, FUNC27_OUT_SEL_CFG | the indicator through the GPIO matrix and its read-back |
+| `uart0` | FIFO, INT_RAW, INT_ST, INT_ENA, INT_CLR, CLKDIV, STATUS, CONF0, CONF1, CLK_CONF, ID | FIFO, INT_RAW, INT_ST, INT_ENA, INT_CLR, CLKDIV_SYNC, STATUS, CONF0_SYNC, CONF1, CLK_CONF, REG_UPDATE | the FIFO, the divisor, the interrupts and their clear, and the register update the core clock domain needs |
+| `interrupt_core0` | UART_INTR_MAP, SYSTIMER_TARGET0_INT_MAP, CPU_INT_ENABLE, CPU_INT_TYPE, CPU_INT_CLEAR, CPU_INT_EIP_STATUS, CPU_INT_PRI_1, CPU_INT_PRI_2, CPU_INT_THRESH | UART0_INTR_MAP, SYSTIMER_TARGET0_INTR_MAP | the routing of UART0 and the system timer to a CPU line, on the C3 its lines' enables, types, priorities and threshold |
+| `clic` | | MCLICCFG, CLICINFO, CLICINT17, CLICINT18 | the C5's lines are its CLIC's identities 16 to 47, enabled and prioritized there (D705) |
+| `systimer` | CONF, UNIT0_OP, UNIT0_VALUE_HI, UNIT0_VALUE_LO, TARGET0_HI, TARGET0_LO, TARGET0_CONF, COMP0_LOAD, INT_ENA, INT_RAW, INT_CLR, INT_ST | the same | a millisecond wakeup from target 0 |
+| `timg0`, `timg1` | WDTCONFIG0, WDTFEED, WDTWPROTECT | the same | each group's MWDT |
+| `rtc_cntl` / `lp_wdt` | RESET_STATE, WDTCONFIG0, WDTFEED, WDTWPROTECT, SWD_CONF, SWD_WPROTECT | CONFIG0, FEED, WPROTECT, SWD_CONFIG, SWD_WPROTECT | the RTC watchdog, the super watchdog and, on the C3, the last reset's cause |
+| `lp_clkrst` | | RESET_CAUSE | the C5's last reset's cause |
+| `sources` | the 62 sources | the 84 sources, the policy's thirteen among them | each source's number, to route it by name (D701) |
+
+The check compares every selected register's address and every field's
+place, width, reset and access with ESP-IDF v6.1's headers, through a
+reviewed table of the names they spell otherwise, and the sources with
+`interrupts.h`. Where the SVD and the headers disagree each chip's TRM
+decides, and the policy corrects the SVD with section and page: on the C3
+the one I2S's clock and reset bits, and each pin's sleep drive, MCU_DRV,
+which the SVD omits; on the C5 the interrupt matrix's mapping registers
+from MSPI's on, which the SVD puts eight bytes low, UART0's at 0x0BC rather
+than 0xB4 (D704), their delegation bit 8, the timer groups' reserved bit 21,
+thirteen sources the SVD omits, and the CLIC, which no SVD has and the
+policy adds from the manual's 2.8.2 (D705). The literals reviewed from the
+manuals, the watchdogs' keys and bits among them, stay in `test.py`.
+
+The descriptions are RAM-only `esp-app-image`s (D707). The C3's SRAM1 is
+one memory on two buses; its `memory.ldn` puts code in its first 128 KiB
+through the instruction bus and data in the 160 KiB after it through the
+data bus, so the two do not alias, and the C5's SRAM is one address space;
+each ends below what the ROM uses while it loads the image, as ESP-IDF's
+`bootloader.memory.ld.in` gives it. Each holds `watchdogs.ldn`, a stage
+before reset (D653, D708) that stops both MWDTs and the RTC watchdog and
+sets the super watchdog to feed itself, with registers alone, which the
+check evaluates store by store.
+
+## RP2350's Hazard3 cores
+
+`policies/rp2350_hazard3.json` reads RP2350's pinned SVD again for its
+Hazard3 cores (D706): the Arm selection without the M33's private bus, with
+the core `hazard3` and the identity `rp2350-hazard3`. Its modules, under
+`generated/rp2350_hazard3`, are byte for byte the Arm side's, and its
+description, `descriptions/rp2350_hazard3`, has the same 68 slots and the
+Pico 2's map. Hazard3's interrupt control is its own CSRs, which no SVD
+describes.
 
 ## RP2350: the selected surface
 
