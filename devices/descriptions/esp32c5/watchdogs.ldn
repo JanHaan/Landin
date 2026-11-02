@@ -1,0 +1,45 @@
+-- What the ESP32-C5 runs before compiler-owned reset (D653, D708).
+-- Written by hand from its TRM v1.1 and ESP-IDF v6.1.
+--
+-- A flash boot leaves timer group 0's MWDT and the RTC watchdog running,
+-- each in flash boot protection (16.2.2.4, p. 714), and the super
+-- watchdog wants feeding (16.3, p. 714).  A RAM-only image has no second
+-- stage to stop them, as ESP-IDF's bootloader does in
+-- bootloader_config_wdt and bootloader_super_wdt_auto_feed, so this stage
+-- does: for each MWDT and the RWDT, the write key 0x50D8_3AA1 unlocks it
+-- (16.2.2.3, p. 714), a zero configuration clears its enable and its
+-- flash boot mode, an MWDT's with WDT_CONF_UPDATE_EN, bit 22, set to take
+-- it (Register 15.10, p. 701), and a zero key locks it again; then the
+-- same key unlocks the super watchdog's SWD_CONFIG (16.3.2.2, p. 715),
+-- whose SWD_AUTO_FEED_EN, bit 18, makes it feed itself (Register 16.8,
+-- p. 721).  The manual calls the low-power watchdogs' registers RTC_WDT_,
+-- the SVD and ESP-IDF LP_WDT_.  Addresses are the generated modules'
+-- (devices/generated/esp32c5), each named beside its register.  The
+-- stage uses t0 to t2 alone: no stack and no RAM, which reset has not
+-- prepared.
+link(boot_stage) extern(naked) watchdogs: () -> none =
+    assembler.block("""
+        li t1, 0x50d83aa1      # TIMG_WDT_WKEY, LP_WDT_WKEY, LP_WDT_SWD_WKEY
+        li t2, 0x00400000      # WDT_CONF_UPDATE_EN alone
+        li t0, 0x60008000      # TIMG0 base
+        sw t1, 0x64(t0)        # TIMG0_WDTWPROTECT: unlock
+        sw t2, 0x48(t0)        # TIMG0_WDTCONFIG0: off, updated
+        sw zero, 0x64(t0)      # TIMG0_WDTWPROTECT: lock
+        li t0, 0x60009000      # TIMG1 base
+        sw t1, 0x64(t0)        # TIMG1_WDTWPROTECT: unlock
+        sw t2, 0x48(t0)        # TIMG1_WDTCONFIG0: off, updated
+        sw zero, 0x64(t0)      # TIMG1_WDTWPROTECT: lock
+        li t0, 0x600b1c00      # LP_WDT base
+        sw t1, 0x18(t0)        # LP_WDT_WPROTECT: unlock
+        sw zero, 0x00(t0)      # LP_WDT_CONFIG0: off
+        sw zero, 0x18(t0)      # LP_WDT_WPROTECT: lock
+        sw t1, 0x20(t0)        # LP_WDT_SWD_WPROTECT: unlock
+        lw t2, 0x1c(t0)        # LP_WDT_SWD_CONFIG
+        li t1, 0x00040000      # SWD_AUTO_FEED_EN
+        or t2, t2, t1
+        sw t2, 0x1c(t0)
+        sw zero, 0x20(t0)      # LP_WDT_SWD_WPROTECT: lock
+        la t0, _landin_firmware_reset
+        jr t0
+        """)
+end watchdogs

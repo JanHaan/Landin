@@ -1,0 +1,22 @@
+-- The ESP32-C5's memory for a RAM-only image, which the boot ROM loads
+-- from flash offset 0x2000 and enters with no second stage (D707).
+-- Written by hand; see devices/README.md for the sources it was checked
+-- against.
+--
+-- The HP SRAM is one address space, 384 KiB from 0x4080_0000, where the
+-- core fetches, reads and writes alike (TRM v1.1, 6.3, Table 6.3-1,
+-- p. 239).  The description takes its first 312 KiB, which end below
+-- 0x4084_E5A0, where the ROM's download buffers, its stack and its own
+-- data begin (ESP-IDF v6.1's bootloader.memory.ld.in): the ROM loads the
+-- image without writing a byte of it.
+--
+-- The image runs from SRAM: no flash is mapped and no cache is enabled.
+
+linker.region("SRAM", 0x4080_0000, 312 * 1024, "rwx")
+compiler.boot("esp-app-image")
+linker.place("vectors", "SRAM")
+linker.place("text", "SRAM")
+linker.place("rodata", "SRAM")
+linker.place("data", "SRAM")
+linker.place("bss", "SRAM")
+linker.place("stack", "SRAM", 16 * 1024)

@@ -1623,6 +1623,174 @@ class Rp2350Hazard3Oracles(unittest.TestCase):
         self.assertEqual(text.replace('"rp2350-hazard3"', '"rp2350"')
                          .replace('"hazard3"', '"cortex-m33"'), arm_text)
 
+    def test_the_pico_2_map(self):
+        # The Hazard3 description is the Arm one's map, regions, placements
+        # and boot kind, line for line; only its comments differ.
+        def directives(device):
+            return [line for line in (DESCRIPTIONS / device / 'memory.ldn')
+                    .read_text().splitlines() if line and not line.startswith('--')]
+        self.assertEqual(directives('rp2350_hazard3'), directives('rp2350'))
+        self.assertFalse((DESCRIPTIONS / 'rp2350_hazard3' / 'watchdogs.ldn').exists())
+
+
+def stage_stores(text):
+    """The device stores a boot stage written in RV32 assembly makes, in
+    order, from its li, la, lw, or, sw and jr alone: (address, value), a
+    value read back and modified being ('|', address, mask); and where it
+    jumps.  It refuses any other instruction, so a stage this cannot read
+    is not taken as checked."""
+    body = re.search(r'assembler\.block\("""(.*?)"""\)', text, re.S).group(1)
+    registers = {'zero': 0}
+    stores = []
+    for line in body.splitlines():
+        line = line.split('#')[0].strip()
+        if not line:
+            continue
+        op, _, rest = line.partition(' ')
+        args = [a.strip() for a in rest.split(',')]
+        if op == 'li':
+            registers[args[0]] = int(args[1], 0)
+        elif op == 'la':
+            registers[args[0]] = ('symbol', args[1])
+        elif op in ('sw', 'lw'):
+            offset, base = re.fullmatch(r'(0x[0-9a-f]+|\d+)\((\w+)\)', args[1]).groups()
+            address = registers[base] + int(offset, 0)
+            if op == 'sw':
+                stores.append((address, registers[args[0]]))
+            else:
+                registers[args[0]] = ('read', address)
+        elif op == 'or':
+            registers[args[0]] = ('|', registers[args[1]][1], registers[args[2]])
+        elif op == 'jr':
+            return stores, registers[args[0]]
+        else:
+            raise AssertionError('the stage has %s, which this does not read' % op)
+    raise AssertionError('the stage does not jump')
+
+
+def check_watchdog_stage(case, device, expected):
+    """A description's watchdog stage: one naked boot-stage routine that
+    makes EXPECTED's stores and nothing else, reaches neither the stack
+    nor RAM, and ends in compiler-owned reset (D653, D708)."""
+    text = (DESCRIPTIONS / device / 'watchdogs.ldn').read_text()
+    case.assertEqual(len(re.findall(r'^link\(boot_stage\) extern\(naked\) \w+: '
+                                    r'\(\) -> none =$', text, re.M)), 1)
+    body = re.search(r'assembler\.block\("""(.*?)"""\)', text, re.S).group(1)
+    code = '\n'.join(line.split('#')[0] for line in body.splitlines())
+    case.assertFalse(re.search(r'\b(sp|x2|fp|s0|gp|tp|ra|call|ret)\b', code), code)
+    case.assertEqual(set(re.findall(r'\b(t\d|a\d|s\d+|x\d+)\b', code)), {'t0', 't1', 't2'})
+    stores, target = stage_stores(text)
+    case.assertEqual(target, ('symbol', '_landin_firmware_reset'))
+    case.assertEqual(stores, expected)
+
+
+class EspDescriptions(unittest.TestCase):
+    """The two ESP descriptions' hand-written halves: their memory against
+    the TRMs' maps and the ROM's reservations, and their watchdog stages
+    against the generated addresses and the TRMs' keys (D707, D708)."""
+
+    @staticmethod
+    def described(device):
+        text = (DESCRIPTIONS / device / 'memory.ldn').read_text()
+
+        def number(expression):
+            value = 1
+            for factor in expression.split('*'):
+                value *= int(factor.strip().replace('_', ''), 0)
+            return value
+
+        regions = {name: (number(origin), number(length), access)
+                   for name, origin, length, access in re.findall(
+                       r'^linker\.region\("(\w+)", ([^,]+), ([^,]+), "(\w+)"\)$',
+                       text, re.MULTILINE)}
+        places = dict(re.findall(r'^linker\.place\("(\w+)", "(\w+)"', text, re.M))
+        return text, regions, places
+
+    def test_the_c3_memory(self):
+        text, regions, places = self.described('esp32c3')
+        kib = 1024
+        self.assertEqual(regions, {'IRAM': (0x40380000, 128 * kib, 'rx'),
+                                   'DRAM': (0x3fca0000, 160 * kib, 'rw')})
+        self.assertIn('compiler.boot("esp-app-image")\n', text)
+        self.assertEqual(places, {'vectors': 'IRAM', 'text': 'IRAM', 'rodata': 'IRAM',
+                                  'data': 'DRAM', 'bss': 'DRAM', 'stack': 'DRAM'})
+        # TRM v1.4, 3.3.2, Table 3.3-1, pp. 93 and 94: SRAM1 is 384 KiB at
+        # 0x4038_0000 on the instruction bus and 0x3FC8_0000 on the data bus.
+        # Read as data-bus addresses, the two regions are inside it and
+        # apart, and end below 0x3FCC_AE00, where ESP-IDF v6.1's
+        # bootloader.memory.ld.in says the ROM's buffers, stack and data
+        # begin.
+        alias = 0x40380000 - 0x3fc80000
+        iram, dram = regions['IRAM'], regions['DRAM']
+        spans = sorted([(iram[0] - alias, iram[0] - alias + iram[1]),
+                        (dram[0], dram[0] + dram[1])])
+        self.assertLessEqual(spans[0][1], spans[1][0])
+        self.assertGreaterEqual(spans[0][0], 0x3fc80000)
+        self.assertLessEqual(spans[1][1], 0x3fccae00)
+
+    def test_the_c5_memory(self):
+        text, regions, places = self.described('esp32c5')
+        # TRM v1.1, 6.3, Table 6.3-1, p. 239: the HP SRAM is 384 KiB from
+        # 0x4080_0000, one address space; the ROM's begin at 0x4084_E5A0.
+        self.assertEqual(regions, {'SRAM': (0x40800000, 312 * 1024, 'rwx')})
+        self.assertLessEqual(0x40800000 + 312 * 1024, 0x4084e5a0)
+        self.assertIn('compiler.boot("esp-app-image")\n', text)
+        self.assertEqual(set(places.values()), {'SRAM'})
+
+    def test_the_watchdog_stages(self):
+        def rows(name):
+            policy = policies()[name]
+            return {r['source']: r['address'] for r in json.loads(
+                (HERE / policy['modules'] / policy['correspondence']).read_text())}
+
+        # TRM v1.4, 12.2.2.3, p. 308, and v1.1, 16.2.2.3, p. 714: the
+        # watchdogs' write key; v1.4, 12.3.2.2, p. 310, the C3's super
+        # watchdog's own, and v1.1, 16.3.2.2, p. 715, the C5's, which is the
+        # same key as its other watchdogs'.  Bit 22 of an MWDT's first
+        # configuration word takes the configuration (Registers 11.10,
+        # p. 298, and 15.10, p. 701).
+        key, update = 0x50d83aa1, 1 << 22
+        for device, rwdt, swd, swd_protect, swd_key, auto_feed in (
+                ('esp32c3', 'RTC_CNTL.WDT', 'RTC_CNTL.SWD_CONF',
+                 'RTC_CNTL.SWD_WPROTECT', 0x8f1d312a, 1 << 31),
+                ('esp32c5', 'LP_WDT.', 'LP_WDT.SWD_CONFIG',
+                 'LP_WDT.SWD_WPROTECT', 0x50d83aa1, 1 << 18)):
+            with self.subTest(device=device):
+                at = rows(device)
+                expected = []
+                for group in ('TIMG0', 'TIMG1'):
+                    expected += [(at[group + '.WDTWPROTECT'], key),
+                                 (at[group + '.WDTCONFIG0'], update),
+                                 (at[group + '.WDTWPROTECT'], 0)]
+                protect, config = at[rwdt + 'WPROTECT'], at[rwdt + 'CONFIG0']
+                expected += [(protect, key), (config, 0), (protect, 0),
+                             (at[swd_protect], swd_key),
+                             (at[swd], ('|', at[swd], auto_feed)),
+                             (at[swd_protect], 0)]
+                check_watchdog_stage(self, device, expected)
+
+    def test_the_recorded_facts(self):
+        # environments/cortex-m/descriptions.json records each description
+        # apart from the compiler, from the manuals; its regions, its
+        # placements and its stage's stores are the descriptions' own.
+        recorded = json.loads((ROOT / 'environments/cortex-m/descriptions.json')
+                              .read_text())['devices']
+        for device, identity in (('esp32c3', 'esp32-c3'), ('esp32c5', 'esp32-c5')):
+            with self.subTest(device=device):
+                want = recorded[identity]
+                _, regions, places = self.described(device)
+                self.assertEqual({r['name']: (r['origin'], r['length'], r['access'])
+                                  for r in want['regions']}, regions)
+                self.assertEqual(want['placed'], places)
+                stores, _ = stage_stores(
+                    (DESCRIPTIONS / device / 'watchdogs.ldn').read_text())
+                answers = dict(want['reset_stage']['reads'])
+                written = [(address, value if not isinstance(value, tuple)
+                            else answers[value[1]] | value[2])
+                           for address, value in stores]
+                self.assertEqual(written, [(a[1], a[3]) for a in
+                                           want['reset_stage']['accesses'] if a[0] == 'w'])
+
 
 def main():
     global REFINE, REQUIRE, TOOLCHAIN

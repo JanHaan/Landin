@@ -1,0 +1,26 @@
+-- The ESP32-C3's memory for a RAM-only image, which the boot ROM loads
+-- from flash offset 0 and enters with no second stage (D707).  Written by
+-- hand; see devices/README.md for the sources it was checked against.
+--
+-- SRAM1's 384 KiB are one memory at two addresses: the instruction bus's
+-- 0x4038_0000 and the data bus's 0x3FC8_0000, 0x70_0000 apart (TRM v1.4,
+-- 3.3.2, Table 3.3-1, pp. 93 and 94).  Code takes the first 128 KiB
+-- through the instruction bus and data the 160 KiB from 0x3FCA_0000,
+-- which is the memory after the code's, so neither region reaches the
+-- other's bytes.  Both end below 0x3FCC_AE00, where the ROM's download
+-- buffers, its stack and its own data begin (ESP-IDF v6.1's
+-- bootloader.memory.ld.in): the ROM loads the image without writing a
+-- byte of it.  The 16 KiB below 0x4038_0000 are the instruction cache's
+-- and are not described.
+--
+-- The image runs from SRAM: no flash is mapped and no cache is enabled.
+
+linker.region("IRAM", 0x4038_0000, 128 * 1024, "rx")
+linker.region("DRAM", 0x3FCA_0000, 160 * 1024, "rw")
+compiler.boot("esp-app-image")
+linker.place("vectors", "IRAM")
+linker.place("text", "IRAM")
+linker.place("rodata", "IRAM")
+linker.place("data", "DRAM")
+linker.place("bss", "DRAM")
+linker.place("stack", "DRAM", 16 * 1024)
