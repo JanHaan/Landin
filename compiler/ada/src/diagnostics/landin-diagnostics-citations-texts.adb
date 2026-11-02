@@ -24899,7 +24899,12 @@ package body Landin.Diagnostics.Citations.Texts is
                & "P-IDF v6.1's `bootloader.memory.ld.in`), so the ROM load"
                & "s the image without writing it. No flash is mapped and n"
                & "o cache enabled. The C3's lowest 16 KiB of instruction-b"
-               & "us SRAM are its cache's and are not described.",
+               & "us SRAM are its cache's and are not described. Each name"
+               & "s its image header's chip facts in `compiler.esp_image`:"
+               & " chip id 5 and 23, ESP-IDF's `esp_chip_id_t`; revisions "
+               & "from ESP-IDF v6.1's default minimum, the C3's v0.3 and t"
+               & "he C5's v1.0, to v1.99; and the flash offset the ROM rea"
+               & "ds, 0 and 0x2000.",
             when 708 =>
                "Chosen: each ESP description holds `watchdogs.ldn`, one "
                & "`link(boot_stage)` naked routine in RV32 assembly: for b"

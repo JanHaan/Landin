@@ -10,10 +10,16 @@
 -- data begin (ESP-IDF v6.1's bootloader.memory.ld.in): the ROM loads the
 -- image without writing a byte of it.
 --
+-- The image header names the chip, ESP-IDF v6.1's esp_app_format.h's
+-- esp_chip_id_t, 23, and the revisions it runs on, ESP-IDF v6.1's
+-- defaults in components/esp_hw_support/port/esp32c5/Kconfig.hw_support:
+-- from v1.0 (ECO2), 100, to v1.99, 199; the ROM reads it at flash offset 0x2000.
+--
 -- The image runs from SRAM: no flash is mapped and no cache is enabled.
 
 linker.region("SRAM", 0x4080_0000, 312 * 1024, "rwx")
 compiler.boot("esp-app-image")
+compiler.esp_image(23, 100, 199, 0x2000)
 linker.place("vectors", "SRAM")
 linker.place("text", "SRAM")
 linker.place("rodata", "SRAM")

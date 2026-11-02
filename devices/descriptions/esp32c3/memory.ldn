@@ -13,11 +13,17 @@
 -- byte of it.  The 16 KiB below 0x4038_0000 are the instruction cache's
 -- and are not described.
 --
+-- The image header names the chip, ESP-IDF v6.1's esp_app_format.h's
+-- esp_chip_id_t, 5, and the revisions it runs on, ESP-IDF v6.1's
+-- defaults in components/esp_hw_support/port/esp32c3/Kconfig.hw_support:
+-- from v0.3 (ECO3), 3, to v1.99, 199; the ROM reads it at flash offset 0.
+--
 -- The image runs from SRAM: no flash is mapped and no cache is enabled.
 
 linker.region("IRAM", 0x4038_0000, 128 * 1024, "rx")
 linker.region("DRAM", 0x3FCA_0000, 160 * 1024, "rw")
 compiler.boot("esp-app-image")
+compiler.esp_image(5, 3, 199, 0x0)
 linker.place("vectors", "IRAM")
 linker.place("text", "IRAM")
 linker.place("rodata", "IRAM")

@@ -1635,7 +1635,7 @@ class Rp2350Hazard3Oracles(unittest.TestCase):
 
 def stage_stores(text):
     """The device stores a boot stage written in RV32 assembly makes, in
-    order, from its li, la, lw, or, sw and jr alone: (address, value), a
+    order, from its li, la, lw, or, sw, j and jr alone: (address, value), a
     value read back and modified being ('|', address, mask); and where it
     jumps.  It refuses any other instruction, so a stage this cannot read
     is not taken as checked."""
@@ -1663,6 +1663,8 @@ def stage_stores(text):
             registers[args[0]] = ('|', registers[args[1]][1], registers[args[2]])
         elif op == 'jr':
             return stores, registers[args[0]]
+        elif op == 'j':
+            return stores, ('symbol', args[0])
         else:
             raise AssertionError('the stage has %s, which this does not read' % op)
     raise AssertionError('the stage does not jump')
@@ -1712,6 +1714,9 @@ class EspDescriptions(unittest.TestCase):
         self.assertEqual(regions, {'IRAM': (0x40380000, 128 * kib, 'rx'),
                                    'DRAM': (0x3fca0000, 160 * kib, 'rw')})
         self.assertIn('compiler.boot("esp-app-image")\n', text)
+        # esp_app_format.h's chip id 5; ESP-IDF's default revisions, v0.3
+        # to v1.99; the ROM reads the image at flash offset 0.
+        self.assertIn('compiler.esp_image(5, 3, 199, 0x0)\n', text)
         self.assertEqual(places, {'vectors': 'IRAM', 'text': 'IRAM', 'rodata': 'IRAM',
                                   'data': 'DRAM', 'bss': 'DRAM', 'stack': 'DRAM'})
         # TRM v1.4, 3.3.2, Table 3.3-1, pp. 93 and 94: SRAM1 is 384 KiB at
@@ -1735,6 +1740,8 @@ class EspDescriptions(unittest.TestCase):
         self.assertEqual(regions, {'SRAM': (0x40800000, 312 * 1024, 'rwx')})
         self.assertLessEqual(0x40800000 + 312 * 1024, 0x4084e5a0)
         self.assertIn('compiler.boot("esp-app-image")\n', text)
+        # Chip id 23; revisions v1.0 to v1.99; flash offset 0x2000.
+        self.assertIn('compiler.esp_image(23, 100, 199, 0x2000)\n', text)
         self.assertEqual(set(places.values()), {'SRAM'})
 
     def test_the_watchdog_stages(self):

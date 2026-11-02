@@ -164,7 +164,7 @@
         "flash size": "https://github.com/raspberrypi/pico-sdk/blob/2.2.0/src/boards/include/boards/pico2.h, SHA-256 6d32916eea833abcef7e7d10321853a5c23eb7366b893aba4d5354d6ddc6b76c: PICO_FLASH_SIZE_BYTES (4 * 1024 * 1024)",
         "interrupts": "https://github.com/raspberrypi/pico-sdk/blob/2.2.0/src/rp2350/hardware_regs/include/hardware/regs/intctrl.h, SHA-256 e9c90fb163105a8083578ea1d5430a499eb696a5734e9dbfe3e7c45d303e9b1c: PROC0_IRQ_CTI 40, SPARE_IRQ_5 51, every IRQ of 0 to 51 named; RP2350 Datasheet release 8, 3.2, p. 81: one IRQ table for both kinds of core",
         "core slots": "hazard3, Xh3irq: external IRQ n at slot 16 + n, resolved through meinext, as the NVIC's; its interrupt control is the core's CSRs, which no SVD gives",
-        "layout": "rp2350-image-block on RISC-V: the image's code first, then the trap table and the block inside the first 4 KiB; the table's address and the block's are the boot kind's and are not recorded until an rv32 lane reads them (SR-670)"
+        "layout": "rp2350-image-block on RISC-V: the image's code first, then the trap table and the block inside the first 4 KiB; the table's address and the block's are the boot kind's and are not recorded until an rv32 descriptions lane reads them"
       },
       "target": "rv32",
       "core": "hazard3",

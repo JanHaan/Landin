@@ -21623,7 +21623,11 @@ everything. Each ends below the ROM's download buffers, stack and data,
 from 0x3FCC_AE00 and 0x4084_E5A0 (ESP-IDF v6.1's
 `bootloader.memory.ld.in`), so the ROM loads the image without writing
 it. No flash is mapped and no cache enabled. The C3's lowest 16 KiB of
-instruction-bus SRAM are its cache's and are not described.
+instruction-bus SRAM are its cache's and are not described. Each names
+its image header's chip facts in `compiler.esp_image`: chip id 5 and 23,
+ESP-IDF's `esp_chip_id_t`; revisions from ESP-IDF v6.1's default minimum,
+the C3's v0.3 and the C5's v1.0, to v1.99; and the flash offset the ROM
+reads, 0 and 0x2000.
 
 **The alternatives:** one `rwx` region on the C3's instruction bus, which
 data accesses through the instruction bus do not take; overlapping
