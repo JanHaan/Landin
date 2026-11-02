@@ -3159,6 +3159,46 @@ package body Landin.Backend.RiscV is
                end if;
             end Narrow_High;
 
+            --  Packed_Atom for the pair x5:x27, whose encodings may be all
+            --  64 bits, comparing through x7 so the member's bit offset in
+            --  x30 survives.
+            procedure Pair_Atom
+              (Set_Id : Landin.IR.Atom_Set_Id; Encode : Boolean);
+            procedure Pair_Atom
+              (Set_Id : Landin.IR.Atom_Set_Id; Encode : Boolean)
+            is
+               Done : constant String := Fresh;
+            begin
+               if Set_Id = Landin.IR.No_Atom_Set then
+                  return;
+               end if;
+               for Index in 1 .. Landin.IR.Atom_Count (Of_Unit, Set_Id) loop
+                  declare
+                     Next : constant String := Fresh;
+                     Code : constant Pattern := Pattern (Atom_Code
+                       (Atoms_Ranked,
+                        Landin.IR.Nth_Atom (Of_Unit, Set_Id, Index)));
+                     Raw : constant Pattern := Pattern
+                       (Landin.IR.Nth_Encoding (Of_Unit, Set_Id, Index));
+                     Compared : constant Pattern :=
+                       (if Encode then Code else Raw);
+                     Answer : constant Pattern :=
+                       (if Encode then Raw else Code);
+                  begin
+                     Immediate ("x7", Compared and 16#FFFF_FFFF#);
+                     Put (Character'Val (9) & "bne x5, x7, " & Next);
+                     Immediate ("x7", Compared / 2 ** 32);
+                     Put (Character'Val (9) & "bne x27, x7, " & Next);
+                     Immediate ("x5", Answer and 16#FFFF_FFFF#);
+                     Immediate ("x27", Answer / 2 ** 32);
+                     Emit ("j " & Done);
+                     Put (Next & ":");
+                  end;
+               end loop;
+               Emit ("j " & Trap (Landin.Panics.Bad_Conversion));
+               Put (Done & ":");
+            end Pair_Atom;
+
             --  D671: a packed member of an eight-byte carrier at XLEN 32,
             --  the carrier's address in x6 and the member's first bit in
             --  x30, as the shared selection's single register does it.
@@ -3185,15 +3225,17 @@ package body Landin.Backend.RiscV is
                   Emit ("and x11, x11, x7");
                   Emit ("mv x5, x10");
                   Emit ("mv x27, x11");
-                  Packed_Atom (Atoms, Encode => False);
+                  Pair_Atom (Atoms, Encode => False);
                   Store_Value (Value, Atom_Validated => True);
                   return;
                end if;
                Load_Value (Input);
-               Packed_Atom (Atoms, Encode => True);
+               if Size_Of_Value (Input) /= Landin.Targets.Byte_8 then
+                  Emit ("li x27, 0");
+               end if;
+               Pair_Atom (Atoms, Encode => True);
                Emit ("mv x10, x5");
-               Emit ((if Size_Of_Value (Input) = Landin.Targets.Byte_8
-                      then "mv x11, x27" else "li x11, 0"));
+               Emit ("mv x11, x27");
                if Bits < 64 then
                   Immediate ("x7", (not Ones) and 16#FFFF_FFFF#);
                   Emit ("and x7, x10, x7");
