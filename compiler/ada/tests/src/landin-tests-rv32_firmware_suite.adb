@@ -1,6 +1,7 @@
 with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 with GNAT.SHA256;
+with Landin.Diagnostics;
 with Landin.Driver;
 with Landin.Driver.ESP_Image;
 with Landin.Driver.Image_Block;
@@ -524,7 +525,9 @@ package body Landin.Tests.RV32_Firmware_Suite is
             begin
                if Outside then
                   Landin.Testing.Check
-                    (Item, Contains (Said, "error[L0577]")
+                    (Item, Landin.Diagnostics.Count (Ran.Found) > 0
+                       and then Landin.Diagnostics.Code
+                         (Landin.Diagnostics.Get (Ran.Found, 1)) = "L0577"
                        and then Contains (Said, "the segment loaded at"
                          & " 0x403d0000, 16 bytes, lies in no region of dev")
                        and then not Host.Exists ("/w/p.elf")

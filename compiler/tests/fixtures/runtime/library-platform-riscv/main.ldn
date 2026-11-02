@@ -1,0 +1,36 @@
+--  platform/riscv's critical section, nested, on rv32: masking clears
+--  mstatus.MIE, a nested mask returns it already clear, and restoring in
+--  reverse order gives back exactly the state the program started with,
+--  whether reset left interrupts enabled or not.  The module declares
+--  nothing on the other targets (D687), so the program imports it
+--  everywhere and calls it from the rv32 arm.
+import platform/riscv
+
+fixed if compiler.arch == rv32 then
+    nested_masks_restore: () -> (ok: bool) =
+        before: u32 = riscv.interrupt_mask()
+        outer: u32 = riscv.disable_interrupts()
+        inner: u32 = riscv.disable_interrupts()
+        masked: u32 = riscv.interrupt_mask()
+        riscv.compiler_barrier()
+        riscv.restore_interrupts(inner)
+        still: u32 = riscv.interrupt_mask()
+        riscv.restore_interrupts(outer)
+        after: u32 = riscv.interrupt_mask()
+        riscv.device_barrier()
+        riscv.completion_barrier()
+        ok = outer == before and inner == 0 and masked == 0 and still == 0
+             and after == before
+    end nested_masks_restore
+else
+    nested_masks_restore: () -> (ok: bool) =
+        ok = true
+    end nested_masks_restore
+end if
+
+public main: () -> (code: i32) =
+    code = 1
+    if nested_masks_restore() then
+        code = 42
+    end if
+end main

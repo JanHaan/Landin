@@ -1,0 +1,9 @@
+class: positive
+summary: D687 platform/riscv/hazard3 enables and forces a Hazard3 IRQ through its meiea and meifa windows and opens the external line through platform/riscv
+program: main.ldn
+root: ../../../../..
+args: --target=rv32 --level=rv32imac
+expect: expected.txt
+status: 0
+constructs: 1480, 1630
+targets: rv32

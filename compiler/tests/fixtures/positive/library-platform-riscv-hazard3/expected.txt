@@ -1,0 +1,1 @@
+refine: checked ../tests/fixtures/positive/library-platform-riscv-hazard3 and wrote nothing; run it with `refine run ../tests/fixtures/positive/library-platform-riscv-hazard3`, or build it with `refine compile ../tests/fixtures/positive/library-platform-riscv-hazard3 -o library-platform-riscv-hazard3`
