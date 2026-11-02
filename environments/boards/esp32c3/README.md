@@ -13,6 +13,12 @@ and the gate does not run it, since no hosted runner has the board. What
 it shares with the ESP32-C5's tool is [`../esp.py`](../esp.py) (D723), and
 with every board's [`../common.py`](../common.py) (D646).
 
+The console is UART0 and not the board's USB-C, though that is a serial
+port too: the USB-C is the chip's own USB-Serial-JTAG, which drops off the
+bus whenever the chip resets or loses power, so a port opened on it misses
+everything the ROM prints at boot, the account of the image it loaded that
+the oracle checks first.
+
 ## What it needs
 
 | What | Which | Why |
