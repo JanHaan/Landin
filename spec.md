@@ -21509,12 +21509,21 @@ completion interrupt in one write, so that no lap is armed after it, waits
 at most 1000 polls for EN to read 0, which 15.3.16 (p. 654) says it does
 once the transfer in progress completes, and keeps what the count then
 says was transferred; bytes received after the last snapshot before a stop
-are discarded with the epoch. FIFO mode is off, so while a stream is
-exhausted or stopped, or between a lap and the next, the receive data
-register holds one byte and the next is lost; the USART sets ORE (48.5.6,
-p. 2030), and a snapshot reports it as `overrun`, so no byte is lost
-unreported. A lap is re-armed within an interrupt's latency, far inside the
-87 microseconds of a byte at 115,200 baud.
+are discarded with the epoch. USART3 runs in FIFO mode (48.5.4, p. 2023),
+for its transmitter: the shared loop echoes each byte as it is read, and
+with FIFO mode off the transmit data register is the only byte of slack,
+so the work between two reads idled the line and the echo fell behind the
+line it echoes. The first board run found that: a 4,094-byte stream at
+line rate fell more than the ring behind after some 2,600 bytes and was
+discarded as an overrun. With its 16-entry TXFIFO the line stays busy
+across that work. While a stream is exhausted or stopped, or between a lap
+and the next, the receiver then holds 17 bytes, the RXFIFO's 16 (Table
+402, p. 2018) and one in the receive data register, the 17th setting no
+ORE (48.5.4, p. 2023; note 2 of p. 2067), and the next is lost; the USART
+sets ORE (48.5.6, p. 2030), and a snapshot reports it as `overrun`, so no
+byte is lost unreported. The board run held 17. A lap is re-armed within
+an interrupt's latency, far inside the 87 microseconds of a byte at
+115,200 baud.
 
 TRBUFF, DMA_SxCR's bit 20, is set, since RM0433 says it must be for a
 stream that serves a USART (15.5.5, p. 662); the SVD omits the field, and
@@ -21524,34 +21533,41 @@ configuration over SWD and refuses a run without it.
 **The alternatives:** a circular stream with laps counted from its
 half-transfer and transfer-complete flags, whose budget no hardware
 enforces and whose snapshot cannot tell a lap from two; a ring as large as
-the budget, which leaves no ring to overrun; the USART's 16-entry FIFO,
-whose hold count RM0433 gives two ways (Table 402, p. 2018, and note 2 of
-p. 2067); and double-buffer mode, which reloads as circular mode does.
+the budget, which leaves no ring to overrun; FIFO mode off, which a board
+run refused as above; a second stream transmitting the echo, which adds a
+ring and a protocol beside the shared loop for what the TXFIFO gives; and
+double-buffer mode, which reloads as circular mode does.
 
 **Pinned by** `environments/boards/stm32h753/board.py`: an overrun burst
 discarded and restarted, a burst into an exhausted stream flagged by ORE
-and restarted with the byte the receive register held kept, an exhausted
+and restarted with the 17 bytes the receiver held kept, an exhausted
 epoch restarted with no byte lost, every echoed byte in order, and the
 count read over SWD; and `scripts/tests/test_board_stm32h753.py`'s
 accounting.
 
-### D649 — USART3's own IDLE interrupt is the one delivered at slot 55
+### D649 — USART3's own IDLE interrupt is the one delivered at slot 55, and SysTick wakes a stream in progress
 
 **The tour said** nothing; D596 delivered RP2040's IRQ5 by setting it
 pending, since nothing on that board raised it.
 
 **Chosen:** USART3's handler is placed at slot 55, IRQ 39 (Table 147,
 p. 755), and USART3 raises it itself: CR1's IDLEIE is set, and the IDLE
-flag, set one frame after the line falls quiet (48.8.10, p. 2091), wakes
-the application for a lap still in progress, the role RP2040's timer
-played. The handler counts its entries, reads IPSR and clears IDLE; the
-oracle requires it to have run in exception 55 and to run again for each
-later byte. DMA_STR0, slot 27, is the stream's completion.
+flag, set one frame after the line falls quiet (48.8.9, p. 2085), wakes
+the application when a burst ends. The handler counts its entries, reads
+IPSR and clears IDLE; the oracle requires it to have run in exception 55
+and to run again for each later byte. DMA_STR0, slot 27, is the stream's
+completion. IDLE alone is no wakeup for a stream that never falls quiet:
+the first board run's application slept from one lap's end to the next,
+found the ring full each time it woke, and discarded it as an overrun, 262
+bytes in every 327. So SysTick interrupts every millisecond, slot 15, the
+role RP2040's timer played, and the stall counts its interrupts; the
+oracle requires them to advance.
 
 **The alternatives:** setting IRQ 39 pending through NVIC_ISPR as D596
-did, which shows the slot and not that the peripheral reaches it; and a
-timer's interrupt for the wakeup, which would need TIM2's clocks and
-registers beside an interrupt the USART already raises.
+did, which shows the slot and not that the peripheral reaches it; TIM2
+for the millisecond, which needs its clocks and registers where the core's
+own timer needs none; and the stream's half-transfer interrupt, which
+leaves a partial lap unread until 128 bytes have arrived.
 
 **Pinned by** `environments/boards/stm32h753/board.py`'s USART3 verdict.
 

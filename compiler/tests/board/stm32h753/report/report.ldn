@@ -6,9 +6,9 @@ import stm32h753/usart3
 
 digits: [16]u8 = [48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 97, 98, 99, 100, 101, 102]
 
--- USART_ISR's TXE, bit 7, is set while the transmit data register is
--- empty (48.8.10, p. 2091); a byte written otherwise would be lost.  The
--- echo goes out through this too.
+-- USART_ISR's TXFNF, bit 7, is set while the transmit FIFO is not full
+-- (48.8.9, p. 2085); a byte written otherwise would be lost.  The echo goes
+-- out through this too.
 public put: (byte: u8) -> none =
     while (usart3.isr_read(usart3.base) & 0x80) == 0 do
         continue

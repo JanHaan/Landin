@@ -56,10 +56,11 @@ START = b'S'
 REPORT, STALL, F32, F64 = 0x11, 0x12, 0x14, 0x15
 BUDGET = 4096           # the application's DMA epoch
 RING = 256              # its receive ring
-# With FIFO mode off, USART3's receive data register holds the one byte
-# that arrives while nothing reads it, and ORE flags the next as lost
-# (RM0433 48.5.6, p. 2030).
-HELD = 1
+# In FIFO mode USART3's receiver holds 17 bytes while nothing reads it:
+# its RXFIFO's 16 (Table 402, p. 2018) and one in the receive data
+# register, the 17th not setting ORE (48.5.4, p. 2023; note 2, p. 2067).
+# ORE flags the next as lost (48.5.6, p. 2030).
+HELD = 17
 VECTORS = 0x08000000    # the boot address, BOOT_ADD0's reset value (2.6, p. 138)
 VECTOR_WORDS = 166      # 16 and the 150 interrupts of Table 147, p. 759
 DMA_SLOT = 16 + 11      # DMA_STR0 (Table 147, p. 754)
@@ -409,6 +410,7 @@ def scenario(console, seed):
     final = report(console)
     require(final['c'] == 3 and final['d'] == 2, 'the last epoch restarted the ring')
     require(final['w'] > after['w'] > high['w'], 'the stream did not keep lapping the ring')
+    require(final['m'] > after['m'] > high['m'], 'SysTick did not advance')
     echo = echo_of(console.wait(lambda s: True, 1, 'the stream'))
     sent = bytes(console.sent)
     expect = discarded(sent, [(sent.index(burst), len(burst)),
@@ -548,6 +550,8 @@ def main():
             (args.output / 'sent.bin').write_bytes(bytes(console.sent))
             result['uart_sha256'] = hashlib.sha256(bytes(console.received)).hexdigest()
             result['frames'] = common.frame_record(bytes(console.received))
+            result['echo_gaps'] = common.gaps(bytes(console.sent),
+                                              echo_of(bytes(console.received)))
         result['commands'] = run.commands
         common.write_json(args.output / 'result.json', result)
     if args.record and result['status'] == 'passed':

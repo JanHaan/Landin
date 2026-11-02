@@ -2238,7 +2238,7 @@ package body Landin.Diagnostics.Citations is
                & "y the stream's completion",
             when 649 =>
                "USART3's own IDLE interrupt is the one delivered at slot"
-               & " 55",
+               & " 55, and SysTick wakes a stream in progress",
             when 650 =>
                "The STM32H753 board's oracle starts at power-on and its "
                & "first frame waits for the host",
@@ -5035,7 +5035,8 @@ package body Landin.Diagnostics.Citations is
                & "ion",
             when 649 =>
                "https://www.701.dev/spec.html#d649-usart3-s-own-idle-int"
-               & "errupt-is-the-one-delivered-at-slot-55",
+               & "errupt-is-the-one-delivered-at-slot-55-and-systick-wakes"
+               & "-a-stream-in-progress",
             when 650 =>
                "https://www.701.dev/spec.html#d650-the-stm32h753-board-s"
                & "-oracle-starts-at-power-on-and-its-first-frame-waits-for"

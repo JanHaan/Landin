@@ -484,6 +484,26 @@ def wait_for_tty(serial, seconds, sysfs=Path('/sys/class/tty'), dev=Path('/dev')
     raise Failed('no tty for USB serial %s appeared within %g s' % (serial, seconds))
 
 
+def gaps(sent, echo, probe=8):
+    """Where ECHO, which should be SENT with spans left out, leaves them
+    out: (offset in SENT, length) for each, found by resuming at the next
+    PROBE bytes of the echo; the last is open, length None, when the echo
+    no longer follows SENT.  A run that fails on its counters keeps these,
+    so where it lost bytes is read from its result, not worked out by hand."""
+    found, i, j = [], 0, 0
+    while i < len(sent) and j < len(echo):
+        if sent[i] == echo[j]:
+            i, j = i + 1, j + 1
+            continue
+        k = sent.find(echo[j:j + probe], i)
+        if k < 0:
+            found.append((i, None))
+            break
+        found.append((i, k - i))
+        i = k
+    return found
+
+
 def record(result, kept, sent, commands, keep_tags):
     """A passed run's record: RESULT's KEPT entries, the hash of what was
     SENT, the frames tagged one of KEEP_TAGS and the last frame, and the
