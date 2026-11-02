@@ -16,7 +16,9 @@ does not depend on the chip:
   * `Probe`, probe-rs for one chip through one probe: a probehive slot over
     its CMSIS-DAP UDP transport, or an ST-LINK named by its serial; reading
     words, and flashing with verification and a readback;
-  * the hub's power cycle: one `uhubctl -a cycle` of one port, only after
+  * the hub's power cycle: one `uhubctl -a cycle` of one port, or ports
+    switched off and on together, and a wait for the hub to list again
+    after the cascade re-enumerates; each only after
     the hub's listing shows the device the port must hold, or a guarded
     port holding the device that must never lose power, run through
     `sg GROUP -c` when the session is not in the group that may switch it;
@@ -483,6 +485,24 @@ def power_cycle(hub, location, port, off_seconds, holds=None, keeps=None, holds_
     # given them the group that may switch them.
     hub.command('power-cycle', ['uhubctl', '-l', location, '-p', str(port), '-a', 'cycle',
                                 '-d', '%g' % off_seconds])
+
+
+def wait_for_hub(hub, location, shows, seconds, interval=0.5):
+    """The hub at LOCATION's listing once it lists again and each (port,
+    text) of SHOWS shows its text: switching any port of the rig's hub
+    cascade, or a USB device on it resetting, re-enumerates every hub in
+    it, and a listing taken meanwhile finds no hub."""
+    deadline = time.time() + seconds
+    while True:
+        status = hub.command('hub-wait', ['uhubctl', '-l', location], check=False)
+        ports = hub_ports(status)
+        if all(port in ports and text in ports[port] for port, text in shows):
+            return status
+        if time.time() >= deadline:
+            raise Failed('hub %s did not list %s within %g s' % (
+                location, ', '.join('%s on port %d' % (text, port) for port, text in shows),
+                seconds))
+        time.sleep(interval)
 
 
 def switch_ports(hub, location, ports, action, holds=(), keeps=None, name=None):

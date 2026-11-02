@@ -352,8 +352,10 @@ def objdump(run, args, elf):
     return run.command('disassemble', [args.objdump, '-d', '--no-show-raw-insn', elf])
 
 
-def run_board(chip, args, console_for, cycle):
-    """The whole run: CONSOLE_FOR(run) opens the console, before the power
+def run_board(chip, args, console_for, cycle, settle):
+    """The whole run: SETTLE(run) waits for the hub to list the board again
+    after a download resets the chip; CONSOLE_FOR(run) opens the console,
+    before the power
     is cut where the console survives it; CYCLE(run, open_console, probe,
     names) cuts and restores the power and returns the console, which has
     read or will read the ROM's log, and what it found of the power-on
@@ -389,6 +391,7 @@ def run_board(chip, args, console_for, cycle):
                 bad = run.out / ('%s-flipped.bin' % where)
                 bad.write_bytes(corrupted(data, where))
                 probe.download_bin(bad, chip.offset)
+                settle(run)
                 console, _ = cycle(run, console_for, probe, None)
                 time.sleep(args.control_seconds)
                 console.close()
@@ -398,6 +401,7 @@ def run_board(chip, args, console_for, cycle):
                 console = None
             result['image_control'] = controls
         probe.download_bin(path, chip.offset)
+        settle(run)
         result['flash'] = dict(offset='%#x' % chip.offset, verified=True)
         console, power_on = cycle(run, console_for, probe, names)
         if power_on:

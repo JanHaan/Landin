@@ -22106,9 +22106,11 @@ chips' UART DMA as a register row.
 **Chosen:** `compiler/tests/board/esp32c3` and `esp32c5` keep the receive
 contract's interface and atoms, and receive UART0 by interrupt: the
 interrupt matrix routes source UART0 to a CPU line, the C3's line 1 at
-priority 1 in its vectored table (TRM v1.4, 1.5) and the C5's external
-interrupt 1, CLIC identity 17, at level 63 with MNLBITS 3 (TRM v1.1,
-2.8.2), each `link(vector: N)` its slot (D680). The handler clears the
+priority 1 in its vectored table (TRM v1.4, 1.5), the map register
+holding the line, and the C5's external interrupt 1, CLIC identity 17, at
+level 63 with MNLBITS 3 (TRM v1.1, 2.8.2), the map register holding the
+identity itself, 16 to 47 (11.5.3), each `link(vector: N)` its slot
+(D680). The handler clears the
 interrupt before it drains the RX FIFO into a 256-byte ring, so a byte that
 arrives meanwhile raises it again, drops what the ring cannot hold and
 counts it, and counts each RX FIFO overflow the UART flags; it alone writes

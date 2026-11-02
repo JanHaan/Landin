@@ -84,8 +84,9 @@ def main():
                         help="the CH340X bridge's port on the same hub")
     parser.add_argument('--console-device', default='1a86:7523',
                         help='what the bridge\'s port must show before it is switched')
-    parser.add_argument('--enumerate-seconds', type=float, default=10.0,
-                        help="how long the bridge's tty and the JTAG port may take to appear")
+    parser.add_argument('--enumerate-seconds', type=float, default=20.0,
+                        help="how long the hub may take to list the board again, and its tty"
+                             ' to appear')
     parser.add_argument('--reset-seconds', type=float, default=0.1,
                         help='how long RTS holds EN low for the chip-enable reset')
     args = parser.parse_args()
@@ -100,6 +101,11 @@ def main():
         require(not lines['dtr'] and not lines['rts'], 'the tty left %s active' % lines)
         return console
 
+    def settle(run):
+        common.wait_for_hub(common.InGroup(run, args.hub_group), args.hub,
+                            [(args.port, args.serial), (args.guard_port, args.guard_device)],
+                            args.enumerate_seconds)
+
     def cycle(run, open_console, probe, names):
         # Both USB-C ports power the board, so the chip is running before
         # either port has enumerated: the boot from power-on is shown by
@@ -111,14 +117,16 @@ def main():
         common.switch_ports(hub, args.hub, both, 'off', keeps=guard,
                             holds=[(args.port, args.serial), (args.console_port, args.console_device)])
         time.sleep(args.off_seconds)
+        common.wait_for_hub(hub, args.hub, [guard], args.enumerate_seconds)
         common.switch_ports(hub, args.hub, both, 'on', keeps=guard)
+        settle(run)
         common.wait_for_tty_at(jtag_location, args.enumerate_seconds)
         power_on = power_on_boot(probe, names) if names else None
         console = open_console(run)
         chip_enable_reset(console.fd, args.reset_seconds)
         return console, power_on
 
-    return esp.run_board(C5(), args, console_for, cycle)
+    return esp.run_board(C5(), args, console_for, cycle, settle)
 
 
 # LP_CLKRST_RESET_CAUSE (the C5's TRM v1.1, Register 9.90): the cause in

@@ -4,7 +4,7 @@
 -- where the ROM wrote its log.  This makes GPIO24 the indicator, an output
 -- through the GPIO matrix whose pad's input reads it back, gives the CLIC
 -- three level bits, and starts the system timer's comparator 0 as a 1 ms
--- period on external interrupt 2 (D721).  Values are the ESP32-C5 TRM
+-- period on CLIC identity 18 (D721).  Values are the ESP32-C5 TRM
 -- v1.1's.
 import esp32c5/clic
 import esp32c5/gpio
@@ -16,11 +16,12 @@ import esp32c5/systimer
 -- The indicator, GPIO24: not a strapping pin, and no LED of the board's.
 public indicator: u32 = 0x0100_0000
 
--- The system timer's external interrupt, CLIC identity 18, and its
+-- The system timer's CLIC identity, 18, which the interrupt matrix's
+-- mapping register takes as itself (11.5.3), and its
 -- CLICINTCTL, 010, level 95, above the receive interrupt's 63, so the
 -- threshold that holds the receive interrupt off leaves it running
 -- (2.8.2.5, Table 2.8-2).
-public timer_line: u32 = 2
+public timer_identity: u32 = 18
 timer_level_bits: u32 = 2
 -- CNT_CLK is 16 MHz on average (14.4, p. 663): a millisecond.
 public ticks_per_ms: u32 = 16000
@@ -57,10 +58,10 @@ public timer: () -> none =
     systimer.conf_write(systimer.base, conf | 0xc1000000)
     systimer.int_clr_write(systimer.base, 1)
     systimer.int_ena_write(systimer.base, 1)
-    -- The interrupt matrix routes SYSTIMER_TARGET0 to the external
-    -- interrupt, and its CLIC word makes it a positive level interrupt at
+    -- The interrupt matrix routes SYSTIMER_TARGET0 to the identity, and
+    -- its CLIC word makes it a positive level interrupt at
     -- its level, enabled (11.5.3; 2.8.2.6).
-    interrupt_core0.systimer_target0_intr_map_write(interrupt_core0.base, timer_line)
+    interrupt_core0.systimer_target0_intr_map_write(interrupt_core0.base, timer_identity)
     clic.clicint18_write(clic.base, (timer_level_bits << 29) | 0x100)
 end timer
 

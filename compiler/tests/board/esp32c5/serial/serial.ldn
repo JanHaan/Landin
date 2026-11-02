@@ -5,8 +5,8 @@
 -- board's are (D593); the device protocol is this chip's, and an interrupt
 -- moves the bytes where the other boards' DMA does.
 --
--- The receive interrupt, `receive`, runs on external interrupt 1, which
--- the interrupt matrix routes UART0 to, at the CLIC's lowest level but one: it moves what the RX FIFO holds
+-- The receive interrupt, `receive`, runs on CLIC identity 17, which the
+-- interrupt matrix routes UART0 to, at the CLIC's lowest level but one: it moves what the RX FIFO holds
 -- into the ring while the ring has room and drops the rest, counting them,
 -- and it counts each RX FIFO overflow the UART flags.  It alone writes
 -- `produced`, `dropped` and `overflows`; the program alone writes `taken`.
@@ -42,11 +42,12 @@ public rx: type = struct
     lost: bool
 end rx
 
--- The external interrupt UART0 is routed to, which the CLIC takes as
--- identity 16 + 1 and the program's handler at slot 17 (TRM v1.1, 2.8.2.3,
--- Table 2.8-1), and its CLICINTCTL, whose three implemented bits are all
--- level at MNLBITS 3: 001, level 63 (2.8.2.5, Table 2.8-2).
-public line: u32 = 1
+-- The CLIC identity UART0 is routed to, external interrupt 1, which the
+-- interrupt matrix's mapping register takes as itself, 16 to 47 (TRM v1.1,
+-- 11.5.3), and the program's handler at slot 17 (2.8.2.3, Table 2.8-1);
+-- and its CLICINTCTL, whose three implemented bits are all level at
+-- MNLBITS 3: 001, level 63 (2.8.2.5, Table 2.8-2).
+public identity: u32 = 17
 public level_bits: u32 = 1
 public level: u32 = 63
 
@@ -68,7 +69,7 @@ public bytes_dropped: () -> (count: u32) = count = atomic.load(addr dropped) end
 public fifo_overflows: () -> (count: u32) = count = atomic.load(addr overflows) end fifo_overflows
 public interrupts: () -> (count: u32) = count = atomic.load(addr entries) end interrupts
 
--- The receive interrupt's body, for the handler at the line's slot, given
+-- The receive interrupt's body, for the handler at the identity's slot, given
 -- the ring `open` was given.  RXFIFO_FULL is raised while the FIFO holds
 -- at least its threshold, one (32.4.2; Register 32.10), so a lone byte is
 -- taken.  The interrupt is cleared before the FIFO is drained, so a byte
@@ -117,7 +118,7 @@ public open: (rate: u32, budget: u32, escaping buf: []mut u8)
     fail bad_buffer when budget < u32(size) or budget > 65535
     -- The boot ROM leaves UART0 at 115200 baud on its pins (D721).
     fail bad_baud when rate <> 115200
-    -- The line is the receiver's alone: one already enabled is busy.
+    -- The identity is the receiver's alone: one already enabled is busy.
     fail busy when (clic.clicint17_read(clic.base) & 0x100) <> 0
     -- CONF1's RXFIFO_FULL_THRHD, bits 7:0, is one; the rest as they were.
     conf1 := uart0.conf1_read(uart0.base)
@@ -133,12 +134,12 @@ public open: (rate: u32, budget: u32, escaping buf: []mut u8)
     uart0.int_clr_write(uart0.base, 0xfffff)
     atomic.store(addr produced, 0)
     atomic.store(addr taken, 0)
-    -- The interrupt matrix routes source UART0 to the external interrupt,
-    -- not delegated (11.5.3, 11.5.4), and its CLIC word makes it a
+    -- The interrupt matrix routes source UART0 to the identity, not
+    -- delegated (11.5.3, 11.5.4), and its CLIC word makes it a
     -- positive level interrupt, not hardware vectored, at its level, and
     -- enables it (2.8.2.6, Registers 2.64 to 2.67).
     saved := riscv.disable_interrupts()
-    interrupt_core0.uart0_intr_map_write(interrupt_core0.base, line)
+    interrupt_core0.uart0_intr_map_write(interrupt_core0.base, identity)
     clic.clicint17_write(clic.base, (level_bits << 29) | 0x100)
     uart0.int_ena_write(uart0.base, receive_bits)
     riscv.device_barrier()
