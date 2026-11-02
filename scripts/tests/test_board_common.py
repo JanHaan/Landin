@@ -488,6 +488,14 @@ class Pace(unittest.TestCase):
             with self.assertRaises(COMMON.Failed):
                 pace.before('power cycle')
 
+    def test_a_cascade_that_never_goes_quiet_stops_the_run(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            pace, clock, _ = self.pace(tmp, [])
+            pace.kernel = lambda seconds: [(clock[0] - 1, 'usb 7-2.3.4.2: USB disconnect')]
+            with self.assertRaises(COMMON.Failed):
+                pace.before('download')
+            self.assertLess(clock[0], 1000.0 + 600 + 31)
+
     def test_an_error_before_the_last_action_does_not(self):
         with tempfile.TemporaryDirectory() as tmp:
             lines = [(990.0, 'usb 7-2-port3: attempt power cycle')]
