@@ -11,7 +11,7 @@ from pathlib import Path
 import re
 import sys
 
-from backend import (BOOT_PREFIX, BOOT_SUFFIX, HERE, LEVELS, ROOT, COUNTERPARTS, DESCRIPTIONS,
+from backend import (HERE, LEVELS, ROOT, COUNTERPARTS, DESCRIPTIONS,
                      MATERIALIZATION, REFERENCE, THUMB_2, ImageLimit, build, derived,
                      describe_routines, describe_sizes,
                      execute as qemu, fixture, harness_start, image_contract, image_sizes,
@@ -455,8 +455,8 @@ def dominates(profile, reference):
     program the corpus executed on the reference needs no link of its own
     to show it fits, and only the limited ones are linked again."""
     def room(one):
-        return (one['flash_limit'] - BOOT_PREFIX[one['boot']] - 4 * one['vector_words']
-                - BOOT_SUFFIX[one['boot']])
+        return (one['flash_limit'] - one['boot_prefix'] - 4 * one['vector_words']
+                - one['boot_suffix'])
     return (room(profile) >= room(reference)
             and profile['static_ram_limit'] >= reference['static_ram_limit']
             and profile['stack_reserved'] >= reference['stack_reserved'])

@@ -125,18 +125,14 @@ DESCRIPTIONS = RECORDS['devices']
 LANE_PROFILES = RECORDS['lanes']
 REFERENCE = 'constrained-reference'
 
-#  What each boot image kind (D545) puts before the vector table in its
-#  region, which the harness start supplies as zero bytes: the closed set
-#  refine builds.
-BOOT_PREFIX = {'vector-table': 0, 'rp2040-boot2': 256, 'rp2350-image-block': 0}
-#  The bytes each boot image kind places directly after its vector table:
-#  RP2350's IMAGE_DEF block (D637).
-BOOT_SUFFIX = {'vector-table': 0, 'rp2040-boot2': 0, 'rp2350-image-block': 20}
-
 #  A profile's facts, as the firmware build report states them, with the
-#  stack top read from the linked image.
+#  stack top read from the linked image.  `boot_prefix` and `boot_suffix`
+#  are the bytes its boot image kind puts before and after the vector
+#  table (D545), which the harness start supplies as zeros: the report is
+#  where the harness learns a boot kind's layout.
 FACTS = ('device', 'boot', 'float_unit', 'regions', 'placed', 'vector_address',
-         'vector_words', 'flash_limit', 'static_ram_limit', 'stack_reserved')
+         'vector_words', 'boot_prefix', 'boot_suffix', 'flash_limit',
+         'static_ram_limit', 'stack_reserved')
 
 
 def region(profile, part):
@@ -226,8 +222,6 @@ def derived(run, refine, device=REFERENCE, where=None):
         report = json.loads((out / 'profile.json').read_text())['firmware']
         profile = {key: report[key] for key in FACTS}
         profile.update(stack_top=report['stack_top'], script=str(out / 'profile.ld'))
-        require(profile['boot'] in BOOT_PREFIX,
-                '%s: the harness supplies no %s boot prefix' % (device, profile['boot']))
         want = recorded(device)
         differ = sorted(k for k in FACTS + ('stack_top',) if profile[k] != want[k])
         require(not differ, '%s: refine derives %s other than descriptions.json records'
@@ -590,8 +584,8 @@ def harness_start(run, profile, level='armv6-m', name='input-0.o'):
     run.command('assemble-start' if name == 'input-0.o' else 'assemble-' + Path(name).stem,
                 [run.arm / 'arm-eabi-gcc', *level_flags(level),
                  '-DLANDIN_VECTOR_WORDS=%d' % profile['vector_words'],
-                 '-DLANDIN_BOOT_PREFIX=%d' % BOOT_PREFIX[profile['boot']],
-                 '-DLANDIN_BOOT_SUFFIX=%d' % BOOT_SUFFIX[profile['boot']],
+                 '-DLANDIN_BOOT_PREFIX=%d' % profile['boot_prefix'],
+                 '-DLANDIN_BOOT_SUFFIX=%d' % profile['boot_suffix'],
                  '-DLANDIN_FPU=%d' % hard_float(level),
                  '-c', HERE / 'probes/backend-start.S', '-o', obj])
     return obj

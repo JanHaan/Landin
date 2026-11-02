@@ -151,6 +151,12 @@ package Landin.Targets.Firmware is
      [16#FFFF_DED3#, 16#1021_0142#, 16#0000_01FF#, 0, 16#AB12_3579#];
    Image_Block_Bytes : constant := 20;
    Image_Block_Window : constant := 4096;
+   --  The bytes a boot kind places directly after the vector table, in
+   --  the same region: RP2350's IMAGE_DEF block.  With Boot_Prefix, what
+   --  the build report says of the kind's layout (D545), so a harness
+   --  linking its own start learns it there.
+   function Boot_Suffix (Boot : Boot_Kind) return Byte_Count
+     is (if Takes_Image_Block (Boot) then Image_Block_Bytes else 0);
    --  "" when BYTES are that block, word for word; otherwise what in them
    --  is not, by the part of the block it is in.
    function Image_Block_Fault (Bytes : String) return String;

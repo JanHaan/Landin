@@ -995,8 +995,11 @@ imports the device's description (D589), which writes the script and its
 limits with no program to link ([the corpus inventory](#the-corpus-inventory)),
 so its capacity verdicts against those three devices are links against
 their maps, not measurements from sizes; none runs there. The harness start
-supplies each boot kind's prefix and the 20 bytes RP2350's places after the
-table, as zeros, since those images are linked and never booted.
+supplies, as zeros, the bytes the build report's `boot_prefix` and
+`boot_suffix` say each boot kind puts before and after the table, 256
+before RP2040's and 20 after RP2350's, since those images are linked and
+never booted; `descriptions.json` records the same two figures for each
+profile apart from the compiler.
 
 ## Complete derived driver
 

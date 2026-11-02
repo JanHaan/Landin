@@ -28,6 +28,8 @@ package body Landin.Build_Reports.Firmware is
         & """,""vector_address"":" & Image (Firmware.Vector_Address (Profile))
         & ",""vector_words"":" & Image
           (Landin.Targets.Byte_Count (Profile.Vector_Count))
+        & ",""boot_prefix"":" & Image (Firmware.Boot_Prefix (Profile.Boot))
+        & ",""boot_suffix"":" & Image (Firmware.Boot_Suffix (Profile.Boot))
         & ",""regions"":[");
       for Index in 1 .. Profile.Count loop
          US.Append (Result, (if Index = 1 then "" else ",")

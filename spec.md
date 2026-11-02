@@ -22092,7 +22092,9 @@ routine (D587), and the slot, its 252-byte limit and its checksum are the
 boot kind's, which refine emits and seals (D588); until the first board it
 held 256 zero bytes, which the boot ROM's check refused. The firmware build
 report records the selected device, core, boot kind, vector address and
-length, regions and placements beside the capacities, which are the text
+length, the bytes the boot kind puts before and after the table as
+`boot_prefix` and `boot_suffix`, regions and placements beside the
+capacities, which are the text
 region's length and the data region's less a stack it holds, for
 `rp2040-boot2` the stage (D588), and for `rp2350-image-block` the block
 (D638).
