@@ -19,7 +19,7 @@ entry that describes it, and put a new one where a reader would look for it.
 | `freebsd-x86-64` | hosted executables, emitted on Linux | a FreeBSD VM under KVM | LLDB in the VM |
 | `freebsd-arm64` | hosted executables, emitted on Linux | an emulated FreeBSD VM | LLDB in the VM |
 | `cortex-m0` | ARMv6-M firmware | the pinned QEMU | GDB, lines and functions |
-| `rv32` | RV32 firmware, checked and lowered to IR; no emitter yet | not yet | none yet |
+| `rv32` | RV32IMC and RV32IMAC firmware, ilp32 | Espressif's QEMU, `sifive_e` and `esp32c3` | lines with `--debug=lines`; no gate session |
 
 - **FreeBSD** runs in [architecture-specific VMs](../environments/freebsd/README.md)
   with separate runtime, C ABI and debugger verdicts in the gate.
