@@ -475,7 +475,7 @@ def arguments(parser, chip):
                         help='how long a control\'s boot log is read for')
     parser.add_argument('--spacing', type=float, default=120.0,
                         help='seconds between two actions that disconnect a device on the hub,'
-                             ' by any tool on the host (SR-692)')
+                             ' by any tool on the host (D725)')
     parser.add_argument('--quiet', type=float, default=60.0,
                         help='seconds the kernel must have logged nothing of USB before one')
     parser.add_argument('--seed', type=int, default=1240)

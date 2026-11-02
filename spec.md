@@ -22199,6 +22199,62 @@ holds what no chip decides.
 
 **Pinned by** `scripts/tests/test_board_esp.py`.
 
+### D724 — The ESP32-C5's power-on boot is read over JTAG, and its ROM's log after a chip-enable reset
+
+**The tour said** nothing; D595 read a board's trace from power-on on a
+console that is open before the power returns.
+
+**Chosen:** the ESP32-C5-DevKit-Lipo is powered from either of its USB-C
+ports, its chip's own USB-Serial-JTAG and a CH340X bridge on UART0, so
+cutting both cuts all its power, and when they return the chip runs before
+either has enumerated: no console can be open for the ROM's log from
+power-on. The tool cuts both together and restores them, and as soon as
+the USB-Serial-JTAG enumerates reads over JTAG what the chip recorded of
+that boot: LP_CLKRST_RESET_CAUSE's cause 1, the chip reset (TRM v1.1,
+9.1.4, Table 9.1-1), the program's own reading of it in `boot_reason`, its
+`app_state` running and its timer interrupts advancing. Then, with the
+bridge's tty open and DTR inactive, so GPIO28 stays high and the ROM boots
+from flash, RTS alone pulls EN low for 100 ms through the board's
+auto-reset transistors, and the console reads that boot's ROM log, which
+the ROM reports as `rst:0x1 (POWERON)`, and the scenario. The bridge has no
+USB serial, so its tty is found by the hub port it is plugged into. The
+ports' map registers take the CLIC identity, 17 and 18, as themselves
+(11.5.3), unlike the C3's, which take the line.
+
+**The alternatives:** restoring the bridge's port first, which powers the
+chip as the other does; and a scenario without the ROM's log, which leaves
+the image's segments unchecked on the board.
+
+**Pinned by** `environments/boards/esp32c5/record.json` and
+`scripts/tests/test_board_esp.py`'s `PowerOn`.
+
+### D725 — Every board run holds the rig's lock and paces what disconnects a device
+
+**The tour said** nothing; each board tool switched its own hub port when
+it ran.
+
+**Chosen:** on the maintainer's rig every hub of the cascade re-enumerates
+whenever any port is switched or any device on it disconnects, an ESP
+chip's reset after a download among them, so two runs at once disturb each
+other, and several such actions in quick succession once set the kernel
+power-cycling the cascade's ports for most of a minute. Every board tool's
+run therefore holds one host-wide lock, `common.rig_lock`, an exclusive
+flock on `~/.cache/landin/rig.lock` naming its holder, which a run started
+under `flock` on the same file by hand finds held by its parent and goes
+on under; and the ESP tools pace every action that disconnects a device, a
+download, a port switched off or on and the C5's chip-enable reset, with
+`common.Pace`: at least 120 s after the previous one by any tool on the
+host, only after the kernel has logged nothing of USB for 60 s, stopping
+when it logged a USB error since that previous action; and after each they
+wait for the hub to list the board again, `common.wait_for_hub`.
+
+**The alternatives:** a lock per hub, which the cascade makes one hub;
+retrying a listing that finds no hub, which hides the trouble the pace
+stops at; and the spacing left to whoever runs a tool, which two streams
+did not keep.
+
+**Pinned by** `scripts/tests/test_board_common.py`'s `RigLock` and `Pace`.
+
 ### D645 — The shared command loop takes its indicator and transmitter as function values
 
 **The tour said** nothing; D593 shared `compiler/tests/driver/commands`

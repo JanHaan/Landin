@@ -210,7 +210,7 @@ class Pace:
     Each waits until SPACING seconds have passed since the last one, by any
     tool on the host, and until the kernel has logged nothing of USB for
     QUIET seconds; any USB error the kernel logged since that last action
-    stops the run instead (SR-692).  The last action's time is kept in
+    stops the run instead (D725).  The last action's time is kept in
     STATE beside the rig's lock; KERNEL(seconds) is the kernel's USB lines
     of the last SECONDS, as (unix time, text)."""
     def __init__(self, spacing=120, quiet=60, state=None, kernel=None, clock=time.time,

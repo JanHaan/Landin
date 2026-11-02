@@ -340,7 +340,7 @@ def main():
     run = common.Run(args.output)
     result = dict(status='failed')
     bridge = console = None
-    # The run holds the rig's lock (D723).
+    # The run holds the rig's lock (D725).
     lock = common.rig_lock('rp2350 board.py').acquire()
     try:
         elf, head, names = build(run, args)

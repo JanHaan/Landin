@@ -39,7 +39,7 @@ The tool switches only `--port` and `--console-port` on `--hub`, together,
 and only after `uhubctl` shows `--serial` and `--console-device` on them
 and `--guard-device` on `--guard-port`, the J-Link on the maintainer's rig,
 which is never switched; after every switch and download it waits for the
-hub to list the board again (SR-692). The run holds the rig's lock. The
+hub to list the board again (D725). The run holds the rig's lock. The
 defaults are the maintainer's rig: hub `7-2.3.4`, the JTAG on port 3,
 guarded by port 1.
 
