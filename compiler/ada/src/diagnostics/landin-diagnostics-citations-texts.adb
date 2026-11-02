@@ -28199,6 +28199,20 @@ package body Landin.Diagnostics.Citations.Texts is
                & "ide-atomic.ldn`'s u64 cell must be refused with L0344 wh"
                & "ere it is declared on both. They run after each lane's c"
                & "orpus.",
+            when 698 =>
+               "Chosen: an `execute` row's `lanes` entry may be `""mode"":"
+               & " ""limit""` with its reason. On that lane a profile whose "
+               & "link overflows the map is a `selected-image-limit` with "
+               & "its measured sizes, as `profile_limit` makes one on the "
+               & "reference, and a profile whose stack the harness's guard"
+               & " stopped past the reservation is a `selected-stack-limit"
+               & "` naming the routine that overran it; every other profil"
+               & "e executes and must pass, and a whole lane run in which "
+               & "every profile of the row executes fails, naming the stal"
+               & "e entry. The RV32 lanes carry one wherever an RV32 image"
+               & "'s text outgrows the reference's 32 KiB, or its frames t"
+               & "he 4 KiB stack, at a profile where the Cortex-M0 image f"
+               & "its, each reason giving the measured overflow.",
             when 620 =>
                "Chosen: with a float unit the switch also pushes d8-d15 "
                & "below the limit word and FPSCR with a word above it belo"

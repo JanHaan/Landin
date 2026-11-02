@@ -1,0 +1,16 @@
+--  Hazard3's interrupt controller (D687): an IRQ enabled in meiea and
+--  forced pending through meifa, then the core's external line opened in
+--  mie, which the compiler's meinext dispatch then serves at slot 16 + IRQ.
+import platform/riscv
+import platform/riscv/hazard3
+
+public raise_irq: (irq: u32) -> none =
+    hazard3.enable_irq(irq)
+    hazard3.force_irq(irq)
+    riscv.enable_lines(0x800)
+end raise_irq
+
+public lower_irq: (irq: u32) -> none =
+    hazard3.clear_forced_irq(irq)
+    hazard3.disable_irq(irq)
+end lower_irq

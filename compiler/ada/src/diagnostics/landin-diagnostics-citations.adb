@@ -2478,6 +2478,9 @@ package body Landin.Diagnostics.Citations is
             when 697 =>
                "Each RV32 lane holds its level's atomics with probes of "
                & "its own",
+            when 698 =>
+               "A corpus lane records its own capacity limits, image and"
+               & " stack",
             when 620 =>
                "A fibre's context on a float unit holds d8-d15 and FPSCR",
             when 621 =>
@@ -3756,6 +3759,8 @@ package body Landin.Diagnostics.Citations is
             when 696 =>
                "Decisions: The core library and the derived programs",
             when 697 =>
+               "Decisions: The core library and the derived programs",
+            when 698 =>
                "Decisions: The core library and the derived programs",
             when 620 =>
                "Decisions: The core library and the derived programs",
@@ -5479,6 +5484,9 @@ package body Landin.Diagnostics.Citations is
             when 697 =>
                "https://www.701.dev/spec.html#d697-each-rv32-lane-holds-"
                & "its-level-s-atomics-with-probes-of-its-own",
+            when 698 =>
+               "https://www.701.dev/spec.html#d698-a-corpus-lane-records"
+               & "-its-own-capacity-limits-image-and-stack",
             when 620 =>
                "https://www.701.dev/spec.html#d620-a-fibre-s-context-on-"
                & "a-float-unit-holds-d8-d15-and-fpscr",
