@@ -1,0 +1,116 @@
+{
+  "status": "passed",
+  "image_sha256": "05233ac8391ff321d8e5136ecd60254a26cd7a4464631afea6c4b28a718d1d45",
+  "image_name": "board.elf",
+  "image_block": [
+    "ffffded3",
+    "11010142",
+    "000001ff",
+    "00000000",
+    "ab123579"
+  ],
+  "amoadd": [
+    {
+      "address": "10001fbc",
+      "function": "add_u32"
+    }
+  ],
+  "flashed_as": "RP235x_riscv",
+  "flash_readback": "matches",
+  "verdicts": {
+    "boot": {
+      "chip_reset": 65536,
+      "marchid": 27,
+      "mtvec": 268435969,
+      "clk_ref_selected": 4
+    },
+    "shared": {
+      "input": "1A0",
+      "echo": "1A0",
+      "indicator_after_1": 8,
+      "indicator_after_0": 0
+    },
+    "irq14": {
+      "entries": 1,
+      "mcause": 2147483659
+    },
+    "overrun": {
+      "burst": 300,
+      "recoveries": 1
+    },
+    "epochs": {
+      "flagged_burst": 100,
+      "held_by_fifo": 32,
+      "restarts": 3,
+      "dma_completions": 2,
+      "timer_events": 2176,
+      "echoed": 11202,
+      "sent": 11570
+    },
+    "amoadd": {
+      "frames": 7,
+      "results": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ]
+    }
+  },
+  "swd": {
+    "handled": 11202,
+    "recoveries": 3,
+    "dma_events": 2,
+    "usb_events": 1,
+    "reports": 7,
+    "trans_count": 1094
+  },
+  "uart_sha256": "691ed99be6fa4f0b0e8cba1169892e5cb6cf89e889db0c1c6c6e19345833c3ed",
+  "sent_sha256": "3a6430d0d00409998e00628e83e9da34755ad2497ef15efcd3708acbec4419bd",
+  "frames": [
+    {
+      "tag": "b",
+      "r": "00010000",
+      "v": "10000201",
+      "a": "0000001b",
+      "k": "00000004"
+    },
+    {
+      "tag": "t",
+      "h": "00002bc2",
+      "c": "00000003",
+      "d": "00000002",
+      "m": "00000880",
+      "u": "00000001",
+      "p": "8000000b",
+      "n": "00000446",
+      "e": "00000bba",
+      "g": "00000000",
+      "s": "00000002",
+      "q": "00000006"
+    }
+  ],
+  "commands": [
+    "compile",
+    "symbols",
+    "disassembly",
+    "hub-before-attach",
+    "attach-RP235x",
+    "attach-RP235x_riscv",
+    "flash",
+    "flash-readback",
+    "hub-status",
+    "power-cycle",
+    "hub-after-cycle",
+    "probe-ping",
+    "swd-handled",
+    "swd-recoveries",
+    "swd-dma_events",
+    "swd-usb_events",
+    "swd-reports",
+    "swd-trans-count"
+  ]
+}
