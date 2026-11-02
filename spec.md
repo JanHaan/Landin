@@ -22327,6 +22327,29 @@ interrupt to read what the overflow left meanwhile.
 
 **Pinned by** the boards' records' threshold verdicts.
 
+### D727 — The ESP boards' stream is sent a piece at a time, after each piece's echo
+
+**The tour said** nothing; D722's stream sent 3000 bytes at the line's rate,
+as the DMA ports' do.
+
+**Chosen:** the stream goes in pieces of 64 bytes, each sent once the one
+before it has been echoed, and the verdict is unchanged: every byte sent is
+echoed in order but the two bursts the scenario discards. The ESP32-C3 runs
+from its reset clock, the crystal divided by two, 20 MHz (TRM v1.4, 6.2.4.1,
+Table 6.2-2; `SYSTEM_SYSCLK_CONF` read 0x000A_8001 on the board), at which
+the port's per-byte interrupt and echo do not keep pace with 115200 baud:
+an unpaced stream was dropped by its receive interrupt, 2469 of 3000 bytes,
+which the port reports as overruns, as it should. The ESP32-C5's record
+was taken with the stream at the line's rate, which it kept.
+
+**The alternatives:** raising the C3's CPU clock to its PLL, which needs
+the chip's analog PLL bring-up, a second stage's work the RAM-only image
+does not do; and a slower line, which leaves the ROM's 115200 and the other
+boards' rate.
+
+**Pinned by** `environments/boards/esp32c3/record.json`'s stream verdict
+and `scripts/tests/test_board_esp.py`'s `Scenario`.
+
 ### D645 — The shared command loop takes its indicator and transmitter as function values
 
 **The tour said** nothing; D593 shared `compiler/tests/driver/commands`

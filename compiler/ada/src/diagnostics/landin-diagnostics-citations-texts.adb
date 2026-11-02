@@ -25406,6 +25406,19 @@ package body Landin.Diagnostics.Citations.Texts is
                & " the threshold scenario's burst is neither echoed nor ke"
                & "pt, one overflow is counted, and the next request is ans"
                & "wered.",
+            when 727 =>
+               "Chosen: the stream goes in pieces of 64 bytes, each sent"
+               & " once the one before it has been echoed, and the verdict"
+               & " is unchanged: every byte sent is echoed in order but th"
+               & "e two bursts the scenario discards. The ESP32-C3 runs fr"
+               & "om its reset clock, the crystal divided by two, 20 MHz ("
+               & "TRM v1.4, 6.2.4.1, Table 6.2-2; `SYSTEM_SYSCLK_CONF` rea"
+               & "d 0x000A_8001 on the board), at which the port's per-byt"
+               & "e interrupt and echo do not keep pace with 115200 baud: "
+               & "an unpaced stream was dropped by its receive interrupt, "
+               & "2469 of 3000 bytes, which the port reports as overruns, "
+               & "as it should. The ESP32-C5's record was taken with the s"
+               & "tream at the line's rate, which it kept.",
             when 645 =>
                "Chosen: the module names no device. Its `port` is a stru"
                & "ct of two function values ([1000]), `indicate: (on: bool"
