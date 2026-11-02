@@ -39913,7 +39913,12 @@ package body Landin.Stages.Checking is
                (Landin.Targets.Architecture_Of (Facts)
                   = Landin.Targets.Cortex_M0
                 and then Ada.Strings.Fixed.Head (Spelled (Symbol), 8)
-                  = "__aeabi_"))
+                  = "__aeabi_")
+             or else
+               (Landin.Targets.Architecture_Of (Facts)
+                  = Landin.Targets.RV32
+                and then Landin.Targets.Firmware.Is_RV32_Helper
+                  (Spelled (Symbol))))
          then
             Reject ("this symbol belongs to compiler firmware startup");
             return;
@@ -40276,6 +40281,10 @@ package body Landin.Stages.Checking is
                      (Name, "_landin_firmware_") /= Name'First
                    and then Ada.Strings.Fixed.Index
                      (Name, "__aeabi_") /= Name'First
+                   and then not
+                     (Landin.Targets.Architecture_Of (Facts)
+                        = Landin.Targets.RV32
+                      and then Landin.Targets.Firmware.Is_RV32_Helper (Name))
                  else Name (Name'First) in 'a' .. 'z' | 'A' .. 'Z'
                                          | '_' | '.' | '$'
                    and then (for all C of Name =>

@@ -24509,7 +24509,9 @@ package body Landin.Diagnostics.Citations.Texts is
                & "against the stack's limit as a calling one's is (D471), "
                & "and the build report counts the helpers each routine cal"
                & "ls, which opens the depth report's graph as Cortex-M0's "
-               & "helpers do.",
+               & "helpers do. The helpers' names are reserved on RV32 as `"
+               & "__aeabi_` is on Cortex-M0: no link symbol or datum takes"
+               & " one, and the emitter gives none to an item.",
             when 673 =>
                "Chosen: on RV32 each argument takes the next of a0-a7, a"
                & "n eight-byte one the next two with its low word first; t"

@@ -220,6 +220,11 @@ package Landin.Targets.Firmware is
      is (Boot in Vector_Table | ESP_App_Image);
    Reset_Symbol : constant String := "_landin_firmware_reset";
    Reset_Stage_Symbol : constant String := "_landin_firmware_reset_stage";
+
+   --  D672: the libgcc helpers RV32's emitter calls for soft float and
+   --  64-bit division, which no program's symbol may take, as Cortex-M0's
+   --  `__aeabi_` ones are reserved.
+   function Is_RV32_Helper (Name : String) return Boolean;
    Stage_Slot : constant := 256;
    Stage_Limit : constant := 252;
 
