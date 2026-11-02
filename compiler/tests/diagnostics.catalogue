@@ -108,6 +108,7 @@ L0560  Live     D653: a vector-table description's stage that does not name comp
 L0561  Live     D653: a vector-table description's stage that uses the stack
 L0576  Live     D681: a boot image kind another family's boot ROM reads
 L0575  Live     D683: an esp-app-image description without compiler.esp_image, or compiler.esp_image without an esp-app-image
+L0578  Live     D688: a .ramtext routine in a profile whose data region code does not run in
 L0349  Live     D251: an unused local with an effect-free literal initializer
 L0500  Live     [1550]: the requested output cannot be made with the target, settings or available toolchain
 L0501  Live     [1550]: assembler or linker refusal, or executable output lifecycle failure

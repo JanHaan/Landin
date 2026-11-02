@@ -2418,7 +2418,8 @@ region: text)`.
 Only supplied attributes apply, and duplicate attributes/annotations are
 errors. Section names are at most 80 ASCII letters, digits, underscores or
 dots, with a nonempty suffix. Functions select `.text.*` (flash) or
-`.ramtext.*` (RAM execution with a flash load image); immutable data selects
+`.ramtext.*` (RAM execution with a flash load image, in a region code runs
+in, D688); immutable data selects
 `.rodata.*`, mutable data `.data.*` or `.bss.*`. An explicit BSS initializer
 must be `zeroed` or the integer literal `0`. Compiler `.landin_` section names
 are reserved. Alignment is a decimal power of two from 1 through 256 and is
@@ -23425,6 +23426,41 @@ operations, which an ESP program would see.
 
 **Pinned by** `negative/library-platform-riscv-hazard3-hosted` and the RV32
 emulator lane's interrupt programs.
+
+### D688 — RAM code runs in a region code runs in, or is refused
+
+**The tour said** at [1640] that `.ramtext.*` is RAM execution with a
+flash load image, and D545 placed `.ramtext` in the data region, loaded
+from the text region, whatever the data region's access. The ESP32-C3's
+description places data in its SRAM's data-bus alias, `"rw"`, from which
+the core cannot fetch, so a `.ramtext` routine linked there faulted at its
+first call, and Espressif's QEMU, which does not enforce the bus split,
+ran it.
+
+**Chosen:** RAM code is placed where code runs. On an `esp-app-image` the
+text region is RAM the ROM has loaded, so `.ramtext` is placed there with
+`.text`, its load address its own, and reset's copy of it is of itself.
+Otherwise it is placed in the data region when that region is `"rwx"`,
+loaded from the text region and copied by reset as before. Otherwise there
+is nowhere for it, and a `.ramtext` routine is L0578, naming the data
+region and saying to place the routine in `.text` or, with
+`link(region: "NAME")`, in an executable region; a region placement
+already needs a region code runs in (D547). Every Cortex-M description
+the repository holds has an executable data region, so none of their
+images changes.
+
+**The alternatives:** a description directive naming the region RAM code
+goes in, which every description with an executable data region would
+have to repeat; placing it in the text region on every profile, which on
+a flash text region is not RAM; and leaving the access a description gives
+unread, which put code where the C3 cannot fetch it.
+
+**Pinned by** `positive/ramtext-esp32c3`, `negative/ramtext-data-not-executable`
+and `environments/cortex-m/descriptions.py`, which links an ESP32-C3
+program with a `.ramtext` routine, requires every executable section of
+every RV32 description's image to lie in a region code runs in, and boots
+the C3's `OUT.bin` through the chip's ROM on Espressif's QEMU, holding the
+ROM's logged segments and entry to the image's.
 
 ### D570 — The depth report closes a call through a table or a function value
 

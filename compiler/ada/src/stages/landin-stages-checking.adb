@@ -40405,6 +40405,34 @@ package body Landin.Stages.Checking is
                end if;
             end;
          end if;
+         if Value.Section /= Landin.Source.Names.No_Name
+           and then Valid
+           and then Routine
+           and then Profile.Present
+           and then Starts (Landin.Source.Names.Spelling
+                              (Spellings.all, Value.Section), ".ramtext.")
+           and then Landin.Targets.Firmware.RAM_Code_Region (Profile) = 0
+         then
+            --  D688: RAM code runs where the core can fetch it.
+            Bad.Report
+              (Item => Bad.RAM_Code_Unplaceable,
+               Source => Syn.Source_Of (Of_Tree),
+               Where => Syn.Anchor (Of_Tree, Node),
+               Message => "this routine is RAM code, and "
+                 & Landin.Targets.Firmware.Spelling (Profile.Device)
+                 & "'s data region, "
+                 & Landin.Targets.Firmware.Spelling
+                     (Landin.Targets.Firmware.Placed_Region
+                        (Profile, Landin.Targets.Firmware.Data).Name)
+                 & ", is not one code runs in",
+               Note => "D688: .ramtext runs in the data region, which reset"
+                 & " copies it into, so that region must be ""rwx""; place"
+                 & " the routine in .text, or in an executable RAM region"
+                 & " with link(region: ""NAME"")",
+               Related => Syn.Origin (Of_Tree, Node),
+               Because => "the declaration it places", Into => Found);
+            return;
+         end if;
          if (Attr.Vector /= Landin.Source.Empty_Span
              or else Attr.Region /= Landin.Source.Empty_Span)
            and then Valid

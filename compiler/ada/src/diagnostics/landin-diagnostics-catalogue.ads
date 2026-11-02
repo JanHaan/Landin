@@ -253,6 +253,8 @@ package Landin.Diagnostics.Catalogue is
       --  chip's facts without their image or the image without them.
       Boot_Kind_Family,
       ESP_Image_Facts,
+      --  D688: RAM code in a profile with no RAM code runs in.
+      RAM_Code_Unplaceable,
       --  D251 also admits removing a whole unused, effect-free local.
       Unused_Pure_Local,
       --  The backend and its toolchain.  None is about a frontend
@@ -1119,6 +1121,13 @@ package Landin.Diagnostics.Catalogue is
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("D681: a boot image kind another family's boot ROM"
                    & " reads")),
+      RAM_Code_Unplaceable =>
+        (Code => "L0578", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 1, Most => 1, Notes => 1,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("D688: a .ramtext routine in a profile whose data region"
+                   & " code does not run in")),
       ESP_Image_Facts =>
         (Code => "L0575", Level => Error, State => Live,
          Source => True, Bytes => True,

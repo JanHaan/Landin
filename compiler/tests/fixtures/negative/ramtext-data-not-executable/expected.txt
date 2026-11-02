@@ -1,0 +1,10 @@
+error[L0578]: this routine is RAM code, and board's data region, RAM, is not one code runs in
+  --> ../tests/fixtures/negative/ramtext-data-not-executable/main.ldn:5:32
+  |
+5 | link(section: ".ramtext.fast") fast: () -> none = end fast
+  |                                ^^^^
+  --> ../tests/fixtures/negative/ramtext-data-not-executable/main.ldn:5:1
+  |
+5 | link(section: ".ramtext.fast") fast: () -> none = end fast
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the declaration it places
+  = note: D688: .ramtext runs in the data region, which reset copies it into, so that region must be "rwx"; place the routine in .text, or in an executable RAM region with link(region: "NAME")

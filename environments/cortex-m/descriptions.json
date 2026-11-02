@@ -103,6 +103,7 @@
         "memory map": "ESP32-C3 TRM v1.4, 3.3.2, Table 3.3-1, pp. 93 and 94: SRAM1 is 384 KiB at 0x40380000 on the instruction bus and at 0x3FC80000 on the data bus, one memory; IRAM 0x40380000 128 KiB, and DRAM 0x3FCA0000 160 KiB, the memory after IRAM's",
         "rom reservation": "https://github.com/espressif/esp-idf/blob/fff9895c82d744c7237be8847347bdd1b07c6643/components/bootloader/subproject/main/ld/esp32c3/bootloader.memory.ld.in, SHA-256 8b6faff8a5bab4e729c9d4bd92ffde3cdf15ae44cb28416868dd088684dfeb69: the ROM's download buffers from 0x3fccae00, its stack from 0x3fcdc710 and its data from 0x3fcde710 to 0x3fce0000, all above both regions",
         "core slots": "esp-rv32imc, a vectored mtvec: slot n is mcause interrupt code n, the CPU interrupt lines 1 to 31 taken and 0 reserved; the SVD's interrupts are interrupt-matrix sources, devices/generated/esp32c3/sources, none of them a slot (D701); UART0, source 21, routed to line 1",
+        "rom boot": "D685: Espressif's QEMU esp-develop-9.2.2-20260417 esp32c3 machine runs the chip's own ROM, which loads OUT.bin from a 4 MiB flash and logs each segment and the entry on UART0",
         "esp image": "ESP-IDF v6.1: esp_app_format.h's esp_chip_id_t names the ESP32-C3 5; components/esp_hw_support/port/esp32c3/Kconfig.hw_support runs images from v0.3 (ECO3), 3, to v1.99, 199; the ROM reads the image at flash offset 0 (D683)",
         "boot": "esp-app-image: a RAM-only image the boot ROM loads from flash offset 0 with no second stage (D683); the entry word at the start of IRAM and the 32-slot table at the next 256-byte boundary, 0x40380100, where ESP-IDF aligns the C3's (D662)"
       },
@@ -121,6 +122,7 @@
       "boot_prefix": 0,
       "boot_suffix": 0,
       "esp_image": {"offset": 0, "chip": 5, "min_revision": 3, "max_revision": 199},
+      "rom_boot": {"machine": "esp32c3", "flash_bytes": 4194304, "seconds": 30, "says": "RV32"},
       "stack_top": 1070366720,
       "stack_reserved": 16384,
       "reserved_slots": [0],

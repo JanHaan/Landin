@@ -1191,6 +1191,17 @@ package body Landin.Diagnostics.Explanations is
                & "description with another boot kind has no use for the di"
                & "rective. Add the facts the chip's technical reference ma"
                & "nual gives, or remove the directive.",
+            when Catalogue.RAM_Code_Unplaceable =>
+               "A routine placed in RAM, `link(section: "".ramtext.NAME"")"
+               & "`, has nowhere to run (D688). Reset copies RAM code into"
+               & " the description's data region, so that region must be o"
+               & "ne code runs in, `""rwx""`; an `esp-app-image` places its "
+               & "RAM code with its text instead, which the ROM already lo"
+               & "aded into RAM. A data region that is `""rw""`, as the ESP3"
+               & "2-C3's data-bus alias of its SRAM is, would hold bytes t"
+               & "he core cannot fetch, and the first call would fault. Pl"
+               & "ace the routine in `.text`, or in an executable region o"
+               & "f the description with `link(region: ""NAME"")`.",
             when Catalogue.Unused_Pure_Local =>
                "An immutable local that is never used and is initialized"
                & " by a direct scalar literal, including a negated integer"
@@ -2410,6 +2421,8 @@ package body Landin.Diagnostics.Explanations is
                & LF
                & "linker.place(""stack"", ""SRAM"", 16 * 1024)"
                & LF,
+            when Catalogue.RAM_Code_Unplaceable =>
+               "",
             when Catalogue.Unused_Pure_Local =>
                "unused: () -> none ="
                & LF
