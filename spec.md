@@ -23489,6 +23489,35 @@ firmware corpus's reach in `BuildModes`, and `Workflows`, which holds each
 host's parts in `determinism.yml` and the gate's `build-modes` parts to
 partitioning the check's targets.
 
+### D659 — The lowering record lowers a fixture where the harness compiles it
+
+**The tour said** nothing; `compiler/tests/lowering.ir` lowered every
+positive fixture at linux-x86-64. A fixture whose `targets:` leaves
+linux-x86-64 out is compiled by the harness only for its own target, and
+lowered at x86-64 it either failed, as `library-platform-riscv-hazard3`
+did with L0015 and `ramtext-esp32c3` with L0515, or recorded a program the
+harness never compiles: `assembly-comments-naked`'s naked routine is
+gated to cortex-m0 and was absent from its section.
+
+**Chosen:** such a fixture is lowered at the target its `args` name with
+`--target=`, or else at the first its `targets:` names, and at the level
+its `args` name with `--level=`, or else at that target's default. Its
+section's second line, after `file`, says `target NAME level LEVEL`; a
+section without one was lowered at linux-x86-64 at its default level, as
+every fixture that admits x86-64 still is.
+
+**The alternatives:** excluding those fixtures from the record, which
+leaves rv32's and cortex-m0's lowering of them unrecorded while the record
+still claims every positive fixture; lowering every fixture at every
+target it admits, which multiplies a record that holds the lowering, not
+the target, many times over for code the backends' own corpora reach; and
+a header naming one target per record, which a corpus of several cannot
+say.
+
+**Pinned by** `lowering/the recorded corpus is current`, whose record has
+the four `target` sections: `assembly-comments-naked` at cortex-m0
+armv6-m, the two rv32imac fixtures and `ramtext-esp32c3` at rv32imc.
+
 ### D635 — RP2350 is learnt from pico-sdk's SVD for the first board's port
 
 **The tour said** nothing of a second Raspberry Pi chip. The first board's

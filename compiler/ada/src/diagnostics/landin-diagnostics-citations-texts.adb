@@ -26257,6 +26257,15 @@ package body Landin.Diagnostics.Citations.Texts is
                & "ets, whose every request also compiles `platform/linux`,"
                & " take the debug compiler about fifteen times as long as "
                & "any other, so rv32 joins the part with one of them.",
+            when 659 =>
+               "Chosen: such a fixture is lowered at the target its `arg"
+               & "s` name with `--target=`, or else at the first its `targ"
+               & "ets:` names, and at the level its `args` name with `--le"
+               & "vel=`, or else at that target's default. Its section's s"
+               & "econd line, after `file`, says `target NAME level LEVEL`"
+               & "; a section without one was lowered at linux-x86-64 at i"
+               & "ts default level, as every fixture that admits x86-64 st"
+               & "ill is.",
             when 635 =>
                "Chosen: the RP2350 is learnt by `refine svd` from pico-s"
                & "dk's `src/rp2350/hardware_regs/RP2350.svd` at the commit"

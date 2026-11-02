@@ -160,7 +160,7 @@ package body Landin.Driver is
       & LF
       & "target-neutral IR: lowered and verified" & LF
       & "backends: linux-x86-64, linux-arm64, darwin-arm64, "
-      & "freebsd-x86-64, freebsd-arm64, linux-rv64 and cortex-m0"
+      & "freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0 and rv32"
       & " assembly" & LF
       & "executable output: assembled and linked by a"
       & " target-selected native toolchain" & LF

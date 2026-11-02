@@ -8,7 +8,8 @@ GDB and hands it each session's unchanged script.
 A session must not be able to see the one before it, or a definition left by
 one program's script could satisfy another's assertion.  Before every session
 the server restores the Python `__main__` namespace it started with, discards
-breakpoints, disconnects and loads the session's own executable; the script
+breakpoints, disconnects, forgets the architecture the last target reported
+and the last script set, and loads the session's own executable; the script
 then connects to its own fresh emulator.  Each session's output, including
 GDB and Python errors, goes to its own log, which the caller's oracle reads
 exactly as it read a batch GDB's output.  A session that times out or leaves
@@ -130,7 +131,13 @@ def serve(gdb=None):
         namespace = vars(__main__)
         namespace.clear()
         namespace.update(pristine)
-        for command in ('delete breakpoints', 'disconnect'):
+        #  GDB keeps the description the last target reported after it
+        #  disconnects, and a script's `set architecture` after its session,
+        #  so an RV32 executable loaded after an Arm session was refused as
+        #  "Architecture of file not recognized"; unsetting the description's
+        #  file discards the reported one.
+        for command in ('delete breakpoints', 'disconnect', 'unset tdesc filename',
+                        'set architecture auto'):
             try:
                 gdb.execute(command, to_string=True)
             except gdb.error:

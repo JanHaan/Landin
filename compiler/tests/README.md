@@ -1206,7 +1206,9 @@ the first thing it demanded.
 
 `compiler/tests/lowering.ir` is generated: `./scripts/test.sh --record`
 writes it by lowering every positive fixture and rendering the Unit with
-`Landin.IR.Dump`. `compiler/tests/layout.targets` is written by the same
+`Landin.IR.Dump`, at linux-x86-64, or, for a fixture whose `targets:`
+leaves that out, at the target and level its `args` name, which a
+`target` line after its `file` line records (D659). `compiler/tests/layout.targets` is written by the same
 command, and records what `Landin.Targets` says scalar and aggregate shapes
 measure, align to and offset their fields by on each described target. Its D74
 rows also work the tag-first variant part and one containing aggregate on each
