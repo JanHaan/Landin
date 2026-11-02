@@ -166,10 +166,17 @@ def lane_inputs(level, inputs):
 #  profiles are the descriptions of an emulator's map, not of a chip: each
 #  is Landin source under lanes/ beside this file, recorded as a device is.
 RECORDS = json.loads((HERE / 'descriptions.json').read_text())
-#  A record with a `target` is another target's, the rv32 reference's
-#  among them (D661), which these Arm lanes neither build nor link.
+#  Every record names the target it is built for; the Arm lanes take the
+#  `cortex-m0` ones, and an `rv32` record, the rv32 reference's among them
+#  (D661), is the RV32 lanes'.  A record naming neither is refused here
+#  rather than read as an Arm device.
+for _section in ('devices', 'lanes'):
+    for _name, _record in RECORDS[_section].items():
+        require(_record.get('target') in ('cortex-m0', 'rv32'),
+                'descriptions.json: %s %s names no target, cortex-m0 or rv32'
+                % (_section, _name))
 DESCRIPTIONS = {name: record for name, record in RECORDS['devices'].items()
-                if record.get('target', 'cortex-m0') == 'cortex-m0'}
+                if record['target'] == 'cortex-m0'}
 #  No limited verdict is linked again against a lane's map, which is no
 #  device's (D619).
 LANE_PROFILES = RECORDS['lanes']
@@ -238,7 +245,7 @@ def probe_root(device):
 def device_target(device):
     """The --target DEVICE's description is for, which its record's `target`
     names when it is not cortex-m0 (D661)."""
-    return PROFILES[device].get('target', 'cortex-m0')
+    return PROFILES[device]['target']
 
 
 def probe_level(device):
