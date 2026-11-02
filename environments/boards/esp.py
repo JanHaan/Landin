@@ -298,6 +298,7 @@ def scenario(console, chip, seed):
             % (final['h'], len(expected_echo)))
     verdicts['stream'] = dict(timer_events=final['m'], receive_interrupts=final['i'],
                               echoed=len(echo), sent=len(sent))
+    final = dict(final, r=boot['r'])
     return verdicts, final, atomics
 
 
@@ -317,7 +318,7 @@ def cross_check(probe, chip, names, final, atomics):
     frames: the probe reads what the firmware counted, not what it said."""
     read = {}
     for name, key in (('handled', 'h'), ('recoveries', 'c'), ('dropped', 'l'),
-                      ('overflows', 'o'), ('entries', 'i')):
+                      ('overflows', 'o'), ('entries', 'i'), ('boot_reason', 'r')):
         read[name] = probe.read_words('jtag-' + name, names[name], 1)[0]
         require(read[name] == final[key], '%s reads %d over JTAG, %d in the frame'
                 % (name, read[name], final[key]))
@@ -353,15 +354,18 @@ def objdump(run, args, elf):
 
 def run_board(chip, args, console_for, cycle):
     """The whole run: CONSOLE_FOR(run) opens the console, before the power
-    is cut where the console survives it; CYCLE(run, open_console) cuts
-    and restores the power and returns the console, opening it with
-    OPEN_CONSOLE where it must wait for the power."""
+    is cut where the console survives it; CYCLE(run, open_console, probe,
+    names) cuts and restores the power and returns the console, which has
+    read or will read the ROM's log, and what it found of the power-on
+    boot itself, or None; NAMES is None for a control, whose image does not
+    run."""
     args.output = args.output.resolve()
     args.output.mkdir(parents=True)
     run = common.Run(args.output)
     result = dict(status='failed')
     console = None
     probe = common.Probe(run, args.probe_rs, chip.probe_chip, args.probe)
+    lock = common.rig_lock('%s board.py' % chip.name)
     try:
         elf, path, made = build(run, args, chip)
         data = path.read_bytes()
@@ -376,13 +380,16 @@ def run_board(chip, args, console_for, cycle):
                                  segments=['%#x+%#x' % (a, len(b)) for a, b in image['segments']],
                                  checksum='%#04x' % image['checksum'], sha256=image['sha256']),
                       instructions=instructions(chip, objdump(run, args, elf)))
+        # The hardware phase, from the first flash to the last JTAG read,
+        # holds the rig's lock.
+        lock.acquire()
         if args.image_control:
             controls = {}
             for where, judge in (('checksum', refused_checksum), ('sha256', warned_sha)):
                 bad = run.out / ('%s-flipped.bin' % where)
                 bad.write_bytes(corrupted(data, where))
                 probe.download_bin(bad, chip.offset)
-                console = cycle(run, console_for)
+                console, _ = cycle(run, console_for, probe, None)
                 time.sleep(args.control_seconds)
                 console.close()
                 text = bytes(console.received).decode('latin-1')
@@ -392,7 +399,9 @@ def run_board(chip, args, console_for, cycle):
             result['image_control'] = controls
         probe.download_bin(path, chip.offset)
         result['flash'] = dict(offset='%#x' % chip.offset, verified=True)
-        console = cycle(run, console_for)
+        console, power_on = cycle(run, console_for, probe, names)
+        if power_on:
+            result['power_on'] = power_on
         stream = console.wait(lambda s: tagged(s, 'b'), 10, 'the ROM log and the boot frame')
         text = stream[:stream.index(b'\x02')].decode('latin-1')
         (run.out / 'rom.log').write_text(text)
@@ -406,6 +415,7 @@ def run_board(chip, args, console_for, cycle):
     except (Failed, subprocess.TimeoutExpired, OSError) as error:
         result['failure'] = str(error)
     finally:
+        lock.release()
         if console:
             console.close()
             (args.output / 'uart.bin').write_bytes(bytes(console.received))
@@ -416,8 +426,9 @@ def run_board(chip, args, console_for, cycle):
         common.write_json(args.output / 'result.json', result)
     if args.record and result['status'] == 'passed':
         kept = ('status', 'image_sha256', 'image_name', 'elf_sha256', 'image', 'instructions',
-                'flash', 'rom', 'verdicts', 'jtag', 'readback', 'uart_sha256') + (
+                'flash', 'power_on', 'rom', 'verdicts', 'jtag', 'readback', 'uart_sha256') + (
                     ('image_control',) if args.image_control else ())
+        kept = tuple(k for k in kept if k in result)
         common.write_json(args.record, common.record(
             result, kept, (args.output / 'sent.bin').read_bytes(), run.commands, ('b', 'a')))
     print('board %s: %s%s' % (result['status'], args.output,

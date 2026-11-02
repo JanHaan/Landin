@@ -26,7 +26,8 @@ does not depend on the chip:
     its modem lines drive a board's reset, with DTR and RTS inactive;
   * the ESP application image both ESP32 ROMs load, read on its own from
     its bytes, and the log those ROMs write while they load it;
-  * the record a passed run writes.
+  * the record a passed run writes;
+  * the rig's one lock, held by every run's hardware phase.
 
 Nothing here touches a board unless a tool calls it, and nothing needs more
 than the standard library, so scripts/tests/test_board_common.py runs it on
@@ -113,6 +114,86 @@ def ask(console, byte, tag, count, seconds=5):
     stream = console.wait(lambda s: len(tagged(s, tag)) > count, seconds,
                           '%r frame %d' % (tag, count + 1))
     return tagged(stream, tag)[count]
+
+
+RIG_LOCK = Path.home() / '.cache/landin/rig.lock'
+
+
+def lock_holders(path, locks='/proc/locks'):
+    """The processes holding a flock on PATH, from LOCKS."""
+    inode = os.stat(path).st_ino
+    holders = set()
+    for line in Path(locks).read_text().splitlines():
+        fields = line.split()
+        # 1: FLOCK  ADVISORY  WRITE PID MAJ:MIN:INODE START END
+        if len(fields) >= 6 and fields[1] == 'FLOCK' and fields[5].rsplit(':', 1)[-1] == str(inode):
+            holders.add(int(fields[4]))
+    return holders
+
+
+def ancestors(pid=None, proc=Path('/proc')):
+    """PID, by default this process, and every process above it."""
+    found, pid = [], os.getpid() if pid is None else pid
+    while pid > 1:
+        found.append(pid)
+        stat = (Path(proc) / str(pid) / 'stat').read_text()
+        pid = int(stat[stat.rindex(')') + 2:].split()[1])
+    return found
+
+
+class RigLock:
+    """The rig's one host-wide lock, an exclusive flock on PATH, held while
+    a run switches power, flashes or reads a board: the hub cascade
+    re-enumerates every inner hub when any port is switched, so two runs
+    at once disturb each other.  While another holds it, WHO waits and
+    says whom for; the holder's name and process are kept in the file.  A
+    run started under `flock PATH` by hand already holds it through its
+    parent, and goes on.  `acquire` and `release`, or a `with` block."""
+    def __init__(self, who, path=RIG_LOCK, report=None, locks='/proc/locks'):
+        self.who, self.path, self.locks = who, Path(path), locks
+        self.report = report or (lambda text: print(text, file=sys.stderr, flush=True))
+        self.file = None
+
+    def acquire(self):
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.file = open(self.path, 'a+')
+        try:
+            fcntl.flock(self.file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            if lock_holders(self.path, self.locks) & set(ancestors()[1:]):
+                self.file.close()
+                self.file = None
+                return self
+            self.file.seek(0)
+            holder = self.file.read().strip() or 'a process that names none'
+            self.report('%s waits for the rig lock %s, held by %s' % (self.who, self.path, holder))
+            fcntl.flock(self.file, fcntl.LOCK_EX)
+        self.file.seek(0)
+        self.file.truncate()
+        self.file.write('%s, process %d, since %s\n'
+                        % (self.who, os.getpid(), time.strftime('%Y-%m-%d %H:%M:%S')))
+        self.file.flush()
+        return self
+
+    def release(self):
+        if self.file:
+            self.file.seek(0)
+            self.file.truncate()
+            self.file.flush()
+            fcntl.flock(self.file, fcntl.LOCK_UN)
+            self.file.close()
+            self.file = None
+
+    def __enter__(self):
+        return self.acquire()
+
+    def __exit__(self, *_):
+        self.release()
+
+
+def rig_lock(who, path=RIG_LOCK, report=None):
+    """The rig lock for WHO, a board tool's name."""
+    return RigLock(who, path, report)
 
 
 class Run:
@@ -612,6 +693,14 @@ class TtyConsole(Console):
 def quiet_lines(fd):
     """DTR and RTS inactive on the tty FD, both in one request."""
     fcntl.ioctl(fd, termios.TIOCMBIC, struct.pack('I', termios.TIOCM_DTR | termios.TIOCM_RTS))
+
+
+def set_lines(fd, rts=None, dtr=None):
+    """RTS, DTR or both made active (True) or inactive (False) on the tty
+    FD, each named line in its own request."""
+    for line, value in ((termios.TIOCM_RTS, rts), (termios.TIOCM_DTR, dtr)):
+        if value is not None:
+            fcntl.ioctl(fd, termios.TIOCMBIS if value else termios.TIOCMBIC, struct.pack('I', line))
 
 
 def modem_lines(fd):

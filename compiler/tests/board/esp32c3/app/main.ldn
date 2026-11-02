@@ -32,6 +32,8 @@ mut uart_cause: u32 = 0
 mut timer_cause: u32 = 0
 mut masked_ticks: u32 = 0
 mut app_state: u32 = 0
+-- The reset cause start read, which the probe reads beside the boot frame.
+mut boot_reason: u32 = 0
 -- The atomics' cells, which the probe reads beside the frame.
 mut byte_cell: atomic.cell(u8) = zeroed
 mut half_cell: atomic.cell(u16) = zeroed
@@ -132,6 +134,7 @@ start: () -> noreturn =
     -- compiler-owned reset set.
     reason := rtc_cntl.reset_state_read(rtc_cntl.base) & 0x3f
     vector := assembler.block("csrr {value}, mtvec", out value: u32 at general)
+    boot_reason = reason
     bringup.indicator_pin()
     bringup.threshold(serial.priority)
     bringup.timer()

@@ -513,6 +513,8 @@ def main():
     run = common.Run(args.output)
     result = dict(status='failed')
     console = None
+    # The run holds the rig's lock (D723).
+    lock = common.rig_lock('stm32h753 board.py').acquire()
     try:
         elf, table, names, image = build(run, args)
         result.update(image_sha256=common.sha(elf), image_name=elf.name, image=image)
@@ -552,6 +554,7 @@ def main():
             result['frames'] = common.frame_record(bytes(console.received))
             result['echo_gaps'] = common.gaps(bytes(console.sent),
                                               echo_of(bytes(console.received)))
+        lock.release()
         result['commands'] = run.commands
         common.write_json(args.output / 'result.json', result)
     if args.record and result['status'] == 'passed':

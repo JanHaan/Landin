@@ -94,14 +94,15 @@ def main():
                                                  args.slot + 1, 4441, args.uart_port))
         return common.TcpConsole(port)
 
-    def cycle(run, open_console):
+    def cycle(run, open_console, probe, names):
         # The probehive UART is powered apart from the board, so the
-        # console is open before the power is cut and reads the ROM's log.
+        # console is open before the power is cut and reads the ROM's log
+        # from power-on.
         console = open_console(run)
         common.power_cycle(common.InGroup(run, args.hub_group), args.hub, args.port,
                            args.off_seconds, holds=args.serial,
                            keeps=(args.guard_port, args.guard_device))
-        return console
+        return console, None
 
     try:
         return esp.run_board(chip, args, console_for, cycle)

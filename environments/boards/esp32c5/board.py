@@ -13,11 +13,17 @@ USB-Serial-JTAG, which probe-rs reaches, and a CH340X bridge on UART0,
 GPIO11 transmitting and GPIO12 receiving, whose DTR and RTS drive EN and
 the GPIO28 boot strap through the board's auto-reset transistors.  The
 bridge has no USB serial of its own, so its tty is found by the hub port
-it is plugged into, and it is opened with DTR and RTS inactive.  Both
-ports are cut, so the board loses all its power; the steps are
-environments/boards/esp.py's, and the oracle is written from what the host
-sent, the ESP32-C5 TRM v1.1 and ESP-IDF v6.1's image format; see
-environments/boards/esp32c5/README.md.
+it is plugged into, and it is opened with DTR and RTS inactive.
+
+Either port powers the board, so both are cut and restored together, and
+the chip runs before either has enumerated: the boot from power-on is
+shown by what the chip recorded, its reset cause and the application's own
+reading of it, running and counting, read over JTAG; then, with the tty
+open, RTS alone pulls EN low, a chip-enable reset with GPIO28 high, and the
+ROM's log of that boot, which it reports as a power-on reset, is read
+(D724).  The other steps are environments/boards/esp.py's, and the oracle
+is written from what the host sent, the ESP32-C5 TRM v1.1 and ESP-IDF
+v6.1's image format; see environments/boards/esp32c5/README.md.
 """
 
 import argparse
@@ -78,40 +84,78 @@ def main():
                         help="the CH340X bridge's port on the same hub")
     parser.add_argument('--console-device', default='1a86:7523',
                         help='what the bridge\'s port must show before it is switched')
-    parser.add_argument('--console-first', action='store_true',
-                        help="restore the bridge's port first and open its tty before the"
-                             " board's port, for a board that the bridge's port does not power")
     parser.add_argument('--enumerate-seconds', type=float, default=10.0,
-                        help="how long the bridge's tty may take to appear")
+                        help="how long the bridge's tty and the JTAG port may take to appear")
+    parser.add_argument('--reset-seconds', type=float, default=0.1,
+                        help='how long RTS holds EN low for the chip-enable reset')
     args = parser.parse_args()
     esp.required_tools(args)
-    location = '%s.%d' % (args.hub, args.console_port)
+    console_location = '%s.%d' % (args.hub, args.console_port)
+    jtag_location = '%s.%d' % (args.hub, args.port)
 
     def console_for(run):
-        path = common.wait_for_tty_at(location, args.enumerate_seconds)
+        path = common.wait_for_tty_at(console_location, args.enumerate_seconds)
         console = common.TtyConsole(path, quiet=True)
         lines = common.modem_lines(console.fd)
         require(not lines['dtr'] and not lines['rts'], 'the tty left %s active' % lines)
         return console
 
-    def cycle(run, open_console):
+    def cycle(run, open_console, probe, names):
+        # Both USB-C ports power the board, so the chip is running before
+        # either port has enumerated: the boot from power-on is shown by
+        # what the chip itself recorded, read over JTAG, and the ROM's log
+        # is read after a chip-enable reset through RTS with the tty open.
         hub = common.InGroup(run, args.hub_group)
         both = [args.console_port, args.port]
-        holds = [(args.port, args.serial), (args.console_port, args.console_device)]
-        common.switch_ports(hub, args.hub, both, 'off', holds=holds,
-                            keeps=(args.guard_port, args.guard_device))
+        guard = (args.guard_port, args.guard_device)
+        common.switch_ports(hub, args.hub, both, 'off', keeps=guard,
+                            holds=[(args.port, args.serial), (args.console_port, args.console_device)])
         time.sleep(args.off_seconds)
-        if args.console_first:
-            common.switch_ports(hub, args.hub, [args.console_port], 'on',
-                                keeps=(args.guard_port, args.guard_device), name='power-on-console')
-            console = open_console(run)
-            common.switch_ports(hub, args.hub, [args.port], 'on',
-                                keeps=(args.guard_port, args.guard_device))
-            return console
-        common.switch_ports(hub, args.hub, both, 'on', keeps=(args.guard_port, args.guard_device))
-        return open_console(run)
+        common.switch_ports(hub, args.hub, both, 'on', keeps=guard)
+        common.wait_for_tty_at(jtag_location, args.enumerate_seconds)
+        power_on = power_on_boot(probe, names) if names else None
+        console = open_console(run)
+        chip_enable_reset(console.fd, args.reset_seconds)
+        return console, power_on
 
     return esp.run_board(C5(), args, console_for, cycle)
+
+
+# LP_CLKRST_RESET_CAUSE (the C5's TRM v1.1, Register 9.90): the cause in
+# bits 4:0, 0x01 the chip reset a power-on is (9.1.4, Table 9.1-1).
+RESET_CAUSE = 0x600b0410
+
+
+def power_on_boot(probe, names):
+    """The boot from power-on, read over JTAG before anything resets the
+    chip again: the reset cause the program read first, the chip's own
+    register, the application running and its timer advancing."""
+    cause = probe.read_words('jtag-reset-cause', RESET_CAUSE, 1)[0] & 0x1f
+    reason = probe.read_words('jtag-boot-reason', names['boot_reason'], 1)[0]
+    state = probe.read_words('jtag-app-state', names['app_state'], 1)[0]
+    first = probe.read_words('jtag-timer-first', names['timer_events'], 1)[0]
+    time.sleep(0.2)
+    second = probe.read_words('jtag-timer-second', names['timer_events'], 1)[0]
+    require(cause == esp.POWER_ON and reason == esp.POWER_ON,
+            'after power-on the reset cause reads %#x and the program read %#x, not 0x1'
+            % (cause, reason))
+    require(state == 2, 'the application is in state %d, not 2: running' % state)
+    require(second > first, 'the timer did not advance: %d, then %d' % (first, second))
+    return dict(reset_cause=cause, boot_reason=reason, app_state=state,
+                timer_events=[first, second])
+
+
+def chip_enable_reset(fd, seconds):
+    """EN low through RTS alone, DTR inactive, so GPIO28 stays high and the
+    ROM boots from flash: the board's auto-reset transistors pull EN low
+    only while RTS is active and DTR is not."""
+    lines = common.modem_lines(fd)
+    require(not lines['dtr'], 'DTR is active; GPIO28 would select download mode')
+    common.set_lines(fd, rts=True)
+    time.sleep(seconds)
+    common.set_lines(fd, rts=False)
+
+
 
 
 if __name__ == '__main__':

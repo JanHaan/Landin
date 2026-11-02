@@ -339,5 +339,64 @@ class Records(unittest.TestCase):
             self.assertTrue((Path(out) / 'r.json').read_text().endswith('}\n'))
 
 
+
+class RigLock(unittest.TestCase):
+    def test_the_holder_is_named_while_held_and_cleared_after(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'rig.lock'
+            with COMMON.RigLock('esp32c3 board.py', path, report=self.fail):
+                self.assertTrue(path.read_text().startswith('esp32c3 board.py, process %d,'
+                                                            % os.getpid()))
+            self.assertEqual(path.read_text(), '')
+
+    def test_a_second_run_waits_and_says_for_whom(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'rig.lock'
+            said, done = [], threading.Event()
+            first = COMMON.RigLock('rp2350 board.py', path).acquire()
+
+            def second():
+                with COMMON.RigLock('esp32c5 board.py', path, report=said.append):
+                    done.set()
+            waiter = threading.Thread(target=second)
+            waiter.start()
+            self.assertFalse(done.wait(0.3))
+            self.assertEqual(len(said), 1)
+            self.assertIn('esp32c5 board.py waits for the rig lock', said[0])
+            self.assertIn('held by rp2350 board.py, process %d' % os.getpid(), said[0])
+            first.release()
+            self.assertTrue(done.wait(5))
+            waiter.join(5)
+
+    def test_a_run_under_its_parent_s_flock_goes_on(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'rig.lock'
+            outer = COMMON.RigLock('flock by hand', path).acquire()
+            locks = Path(tmp) / 'locks'
+            locks.write_text('1: FLOCK  ADVISORY  WRITE %d 00:22:%d 0 EOF\n'
+                             % (os.getppid(), os.stat(path).st_ino))
+            inner = COMMON.RigLock('esp32c3 board.py', path, report=self.fail, locks=locks)
+            inner.acquire()
+            inner.release()
+            outer.release()
+
+    def test_holders_are_read_by_inode(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'rig.lock'
+            path.write_text('')
+            inode = os.stat(path).st_ino
+            locks = Path(tmp) / 'locks'
+            locks.write_text('1: FLOCK  ADVISORY  WRITE 41 00:22:%d 0 EOF\n'
+                             '2: POSIX  ADVISORY  WRITE 42 00:22:%d 0 EOF\n'
+                             '3: FLOCK  ADVISORY  WRITE 43 00:22:%d 0 EOF\n'
+                             % (inode, inode, inode + 1))
+            self.assertEqual(COMMON.lock_holders(path, locks), {41})
+
+    def test_ancestors_begin_with_this_process(self):
+        found = COMMON.ancestors()
+        self.assertEqual(found[0], os.getpid())
+        self.assertEqual(found[1:2], [os.getppid()] if os.getppid() > 1 else [])
+
+
 if __name__ == '__main__':
     unittest.main()

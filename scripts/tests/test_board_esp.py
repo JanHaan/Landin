@@ -31,7 +31,8 @@ def load(name, path):
 COMMON = load('common', 'environments/boards/common.py')
 ESP = load('esp', 'environments/boards/esp.py')
 C3 = load('board_esp32c3', 'environments/boards/esp32c3/board.py').C3()
-C5 = load('board_esp32c5', 'environments/boards/esp32c5/board.py').C5()
+C5_BOARD = load('board_esp32c5', 'environments/boards/esp32c5/board.py')
+C5 = C5_BOARD.C5()
 
 
 def elf32(entry, segments):
@@ -337,20 +338,62 @@ class Scenario(unittest.TestCase):
 
 class Probe(unittest.TestCase):
     def test_counters_and_cells_are_read_from_their_words(self):
-        counters = dict(handled=9, recoveries=2, dropped=44, overflows=1, entries=7)
+        counters = dict(handled=9, recoveries=2, dropped=44, overflows=1, entries=7, boot_reason=1)
         words = {0x3fca04c0: 0x417e0041, 0x3fca04e4: 0x417e7e41}
 
         class Fake:
             def read_words(self, name, address, count):
                 return [counters.get(name[len('jtag-'):], words.get(address))]
         names = dict(counters, byte_cell=0x3fca04c0, half_cell=0x3fca04c2, word_cell=0x3fca04e4)
-        final = dict(h=9, c=2, l=44, o=1, i=7)
+        final = dict(h=9, c=2, l=44, o=1, i=7, r=1)
         atomics = dict(b=0x41, h=0x417e, w=0x417e7e41)
         read = ESP.cross_check(Fake(), C3, names, final, atomics)
         self.assertEqual((read['byte_cell'], read['half_cell'], read['word_cell']),
                          (0x41, 0x417e, 0x417e7e41))
         with self.assertRaises(COMMON.Failed):
             ESP.cross_check(Fake(), C3, names, dict(final, i=8), atomics)
+
+
+class PowerOn(unittest.TestCase):
+    NAMES = dict(boot_reason=0x10, app_state=0x14, timer_events=0x18)
+
+    class Fake:
+        def __init__(self, words):
+            self.words = words
+
+        def read_words(self, name, address, count):
+            value = self.words[address]
+            return [value.pop(0) if isinstance(value, list) else value]
+
+    def board(self, cause=1, reason=1, state=2, timer=(5, 9)):
+        return self.Fake({C5_BOARD.RESET_CAUSE: 0x20 | cause, 0x10: reason, 0x14: state,
+                          0x18: list(timer)})
+
+    def test_a_running_application_after_a_power_on_passes(self):
+        with mock.patch.object(C5_BOARD.time, 'sleep'):
+            found = C5_BOARD.power_on_boot(self.board(), self.NAMES)
+        self.assertEqual((found['reset_cause'], found['boot_reason']), (1, 1))
+
+    def test_another_cause_a_halted_application_or_a_stopped_timer_fails(self):
+        for board in (self.board(cause=0x0c), self.board(reason=0x0c), self.board(state=1),
+                      self.board(timer=(9, 9))):
+            with mock.patch.object(C5_BOARD.time, 'sleep'), self.assertRaises(COMMON.Failed):
+                C5_BOARD.power_on_boot(board, self.NAMES)
+
+    def test_the_chip_enable_reset_is_rts_alone(self):
+        calls = []
+        with mock.patch.object(COMMON.fcntl, 'ioctl', side_effect=lambda fd, request, arg:
+                               calls.append((request, arg)) or struct.pack('I', 0)), \
+                mock.patch.object(C5_BOARD.time, 'sleep'):
+            C5_BOARD.chip_enable_reset(3, 0.1)
+        rts = struct.pack('I', COMMON.termios.TIOCM_RTS)
+        self.assertEqual(calls[1:], [(COMMON.termios.TIOCMBIS, rts), (COMMON.termios.TIOCMBIC, rts)])
+
+    def test_no_reset_while_dtr_is_active(self):
+        dtr = struct.pack('I', COMMON.termios.TIOCM_DTR)
+        with mock.patch.object(COMMON.fcntl, 'ioctl', return_value=dtr), \
+                self.assertRaises(COMMON.Failed):
+            C5_BOARD.chip_enable_reset(3, 0.1)
 
 
 class Tty(unittest.TestCase):
