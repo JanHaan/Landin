@@ -2327,6 +2327,28 @@ package body Landin.Diagnostics.Citations is
             when 638 =>
                "refine reads the assembled block back before linking, an"
                & "d the report records it",
+            when 680 =>
+               "An RV32 image's traps follow its core's interrupt model",
+            when 681 =>
+               "A boot kind is read by one family's boot ROM, or by both",
+            when 682 =>
+               "An RV32 `rp2350-image-block` image begins with its entry"
+               & " word",
+            when 683 =>
+               "`esp-app-image` is a RAM-only image the ROM loads, its c"
+               & "hip the description's",
+            when 684 =>
+               "An RV32 description's stage runs from the entry word, be"
+               & "fore reset",
+            when 685 =>
+               "refine writes the ESP application image beside the execu"
+               & "table and reads it back",
+            when 686 =>
+               "An RV32 image begins with its entry word, and its script"
+               & " says so",
+            when 687 =>
+               "`platform/riscv` declares its CPU operations on rv32 alo"
+               & "ne",
             when 570 =>
                "The depth report closes a call through a table or a func"
                & "tion value",
@@ -3582,6 +3604,22 @@ package body Landin.Diagnostics.Citations is
             when 637 =>
                "Decisions: The toolchain, C and the machine",
             when 638 =>
+               "Decisions: The toolchain, C and the machine",
+            when 680 =>
+               "Decisions: The toolchain, C and the machine",
+            when 681 =>
+               "Decisions: The toolchain, C and the machine",
+            when 682 =>
+               "Decisions: The toolchain, C and the machine",
+            when 683 =>
+               "Decisions: The toolchain, C and the machine",
+            when 684 =>
+               "Decisions: The toolchain, C and the machine",
+            when 685 =>
+               "Decisions: The toolchain, C and the machine",
+            when 686 =>
+               "Decisions: The toolchain, C and the machine",
+            when 687 =>
                "Decisions: The toolchain, C and the machine",
             when 570 =>
                "Decisions: The toolchain, C and the machine",
@@ -5197,6 +5235,31 @@ package body Landin.Diagnostics.Citations is
                "https://www.701.dev/spec.html#d638-refine-reads-the-asse"
                & "mbled-block-back-before-linking-and-the-report-records-i"
                & "t",
+            when 680 =>
+               "https://www.701.dev/spec.html#d680-an-rv32-image-s-traps"
+               & "-follow-its-core-s-interrupt-model",
+            when 681 =>
+               "https://www.701.dev/spec.html#d681-a-boot-kind-is-read-b"
+               & "y-one-family-s-boot-rom-or-by-both",
+            when 682 =>
+               "https://www.701.dev/spec.html#d682-an-rv32-rp2350-image-"
+               & "block-image-begins-with-its-entry-word",
+            when 683 =>
+               "https://www.701.dev/spec.html#d683-esp-app-image-is-a-ra"
+               & "m-only-image-the-rom-loads-its-chip-the-description-s",
+            when 684 =>
+               "https://www.701.dev/spec.html#d684-an-rv32-description-s"
+               & "-stage-runs-from-the-entry-word-before-reset",
+            when 685 =>
+               "https://www.701.dev/spec.html#d685-refine-writes-the-esp"
+               & "-application-image-beside-the-executable-and-reads-it-ba"
+               & "ck",
+            when 686 =>
+               "https://www.701.dev/spec.html#d686-an-rv32-image-begins-"
+               & "with-its-entry-word-and-its-script-says-so",
+            when 687 =>
+               "https://www.701.dev/spec.html#d687-platform-riscv-declar"
+               & "es-its-cpu-operations-on-rv32-alone",
             when 570 =>
                "https://www.701.dev/spec.html#d570-the-depth-report-clos"
                & "es-a-call-through-a-table-or-a-function-value",

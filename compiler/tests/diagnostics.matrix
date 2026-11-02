@@ -9,7 +9,7 @@ L0004  Live     error   no-fix   false empty-ok    0..0 0     driver            
 L0005  Live     error   no-fix   false empty-ok    0..0 0     driver                              test:landin-tests-devices_suite.adb,test:landin-tests-driver_suite.adb
 L0006  Live     error   may-fix  true  nonempty    0..0 1     driver,stages                       negative/import-without-a-root-is-refused-there,negative/misspelt-module-is-offered-its-directory,negative/module-not-found,test:landin-tests-driver_suite.adb,test:landin-tests-server_suite.adb
 L0007  Live     error   no-fix   false empty-ok    0..0 1     driver                              negative/module-directory-invalid,test:landin-tests-driver_suite.adb
-L0015  Live     error   no-fix   true  nonempty    0..0 1     driver,stages                       negative/library-platform-cortex-m-reference-hosted,test:landin-tests-driver_suite.adb
+L0015  Live     error   no-fix   true  nonempty    0..0 1     driver,stages                       negative/library-platform-cortex-m-reference-hosted,negative/library-platform-riscv-hazard3-hosted,test:landin-tests-driver_suite.adb
 L0016  Live     warning no-fix   true  nonempty    0..0 1     driver                              negative/root-holding-library-module-is-told,test:landin-tests-newcomer_suite.adb,test:landin-tests-server_suite.adb
 L0532  Live     error   no-fix   true  nonempty    0..0 1     driver                              negative/empty-first-directory-hides-a-later-root,test:landin-tests-driver_suite.adb
 L0008  Live     error   no-fix   true  empty-ok    0..0 1     driver                              test:landin-tests-driver_suite.adb
@@ -92,7 +92,7 @@ L0399  Live     error   no-fix   true  nonempty    0..0 1     stages            
 L0513  Live     error   no-fix   true  nonempty    0..0 1     stages                              negative/description-directive-outside,test:landin-tests-cortex_suite.adb
 L0514  Live     error   no-fix   true  nonempty    0..0 1     stages                              negative/description-regions-overlap,test:landin-tests-cortex_suite.adb
 L0515  Live     error   no-fix   true  nonempty    0..0 1     stages                              negative/description-core-mismatch,test:landin-tests-cortex_suite.adb
-L0516  Retired  error   no-fix   false empty-ok    0..0 0     -                                   negative/description-reserved-boot,test:landin-tests-cortex_suite.adb
+L0516  Retired  error   no-fix   false empty-ok    0..0 0     -                                   test:landin-tests-cortex_suite.adb
 L0517  Live     error   no-fix   true  nonempty    0..0 1     stages                              negative/region-placement-unknown,test:landin-tests-cortex_suite.adb
 L0518  Live     error   no-fix   false empty-ok    0..0 1     driver,stages                       test:landin-tests-cortex_suite.adb
 L0533  Live     error   no-fix   true  nonempty    0..0 1     stages                              negative/boot-stage-not-naked,test:landin-tests-cortex_suite.adb
@@ -104,8 +104,8 @@ L0545  Live     error   no-fix   true  nonempty    0..0 1     stages            
 L0546  Live     error   no-fix   true  nonempty    0..0 1     stages                              negative/description-float-unit-level,test:landin-tests-cortex_suite.adb
 L0560  Live     error   no-fix   true  nonempty    0..0 1     stages                              negative/reset-stage-without-reset,test:landin-tests-cortex_suite.adb
 L0561  Live     error   no-fix   true  nonempty    0..0 1     stages                              negative/reset-stage-uses-the-stack,test:landin-tests-cortex_suite.adb
-L0576  Live     error   no-fix   true  nonempty    0..1 1     stages                              -
-L0575  Live     error   no-fix   true  nonempty    0..1 1     stages                              -
+L0576  Live     error   no-fix   true  nonempty    0..1 1     stages                              negative/description-boot-family
+L0575  Live     error   no-fix   true  nonempty    0..1 1     stages                              negative/description-esp-image-missing
 L0349  Live     warning may-fix  true  nonempty    0..0 1     stages                              negative/unused-pure-local,negative/warning-advisory,positive/r491-contextual-statements,runtime/c-aliases-unsigned-char,runtime/r440-c-aliases,runtime/r491-function-final-values
 L0500  Live     error   no-fix   false empty-ok    0..0 1     driver                              test:landin-tests-cortex_suite.adb,test:landin-tests-driver_suite.adb,test:landin-tests-server_suite.adb
 L0501  Live     error   no-fix   false empty-ok    0..0 0     driver                              test:landin-tests-commands_suite.adb,test:landin-tests-driver_suite.adb
@@ -120,7 +120,7 @@ L0509  Live     error   no-fix   true  nonempty    0..0 1     driver            
 L0519  Live     error   no-fix   false empty-ok    0..0 1     driver                              test:landin-tests-cortex_suite.adb
 L0538  Live     error   no-fix   false empty-ok    0..0 0     driver                              test:landin-tests-cortex_suite.adb
 L0555  Live     error   no-fix   false empty-ok    0..0 0     driver                              test:landin-tests-cortex_suite.adb
-L0577  Live     error   no-fix   false empty-ok    0..0 0     -                                   -
+L0577  Live     error   no-fix   false empty-ok    0..0 0     driver                              -
 L0525  Live     error   no-fix   true  empty-ok    0..0 0     driver                              test:landin-tests-devices_suite.adb
 L0526  Live     error   no-fix   true  empty-ok    0..0 0     driver                              test:landin-tests-devices_suite.adb
 L0527  Live     error   no-fix   true  empty-ok    0..0 0     driver                              test:landin-tests-devices_suite.adb

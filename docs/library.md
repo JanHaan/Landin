@@ -2626,3 +2626,27 @@ Waiting can wake spuriously. Barriers do not prove completion of a device
 protocol or supply a DMA lifetime discipline.
 
 [Executable example](../environments/cortex-m/probes/core-cpu.ldn)
+
+## platform/riscv
+
+RV32 machine-mode interrupt masking, the core's own interrupt lines,
+waiting and memory barriers, declared on `rv32` alone.
+
+Save the state from `disable_interrupts` and restore it, including on
+early returns: `restore_interrupts` sets mstatus.MIE again only if it was
+set. `enable_lines` and `disable_lines` write `mie`, the machine software,
+timer and external interrupts on the cores that have them; an ESP32's CPU
+lines are enabled through its interrupt matrix or CLIC, which are the
+chip's generated modules.
+
+Waiting can wake spuriously. Barriers do not prove completion of a device
+protocol or supply a DMA lifetime discipline.
+
+## platform/riscv/hazard3
+
+Hazard3's external interrupt controller, the RP2350's RISC-V cores':
+`enable_irq` and `disable_irq` write meiea, and `force_irq` and
+`clear_forced_irq` write meifa, which makes an IRQ pending as if its source
+had asserted it. The compiler's dispatch reads meinext and calls slot
+16 + IRQ; enabling the IRQ, and `mie`'s external line through
+`platform/riscv`, is the program's.

@@ -1,0 +1,6 @@
+error[L0575]: an esp-app-image names its chip and the revisions it runs on, and this description says neither
+  --> ../tests/fixtures/negative/description-esp-image-missing/program.ldn:4:1
+  |
+4 | compiler.boot("esp-app-image")
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: D683: write compiler.esp_image(chip, min_revision, max_revision, flash_offset) beside compiler.boot, as the chip's technical reference manual gives them
