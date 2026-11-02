@@ -38,8 +38,9 @@ checked source
 
 The same IR feeds four native emitters across seven assembly targets:
 x86-64 emits Linux and FreeBSD hosted executables, shared arm64 emits Linux,
-Darwin and FreeBSD hosted executables, RV64 emits Linux hosted executables,
-and Cortex-M0 emits firmware. The IR is expressed without machine registers,
+Darwin and FreeBSD hosted executables, RISC-V emits Linux hosted
+executables on RV64 and firmware on RV32 at XLEN 32, and Cortex-M0 emits
+firmware. The IR is expressed without machine registers,
 stack offsets or instruction encodings. Each backend
 translates its operations into machine instructions and supplies the calling
 convention and object-format details.
@@ -714,11 +715,13 @@ operation that reads it last has run, which takes 36 per cent off the
 runtime corpus's frame bytes at both. It does not promote SSA values into
 persistent registers. Neutral
 specialization and simplification still run before emission. The explicit
-LP64D planner assigns C carriers without putting register banks or stack
-positions into the IR. XLEN-specific instruction helpers select baseline
-and address-generation operations from independent Zba and XTheadBa sets,
-so those helpers can serve a future RV32 backend without importing RV64's
-layout or ABI.
+LP64D and ilp32 planner assigns C carriers without putting register banks
+or stack positions into the IR. The emitter asks the target its XLEN and
+serves RV32 at 32 (D671): an eight-byte value is a register pair only
+while one operation looks inside it, so the IR does not depend on the
+machine's width, and RV32 takes neither RV64's layout nor its ABI.
+Instruction helpers select baseline and address-generation operations
+from independent Zba and XTheadBa sets.
 
 The shared `Backend.Dwarf` encoder uses neutral source identities and
 `Backend.Debug_Locations` availability. Each backend owns its section policy

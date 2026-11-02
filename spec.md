@@ -2006,6 +2006,21 @@ same registers, and only caller-clobbered floating registers may be named
 without float operands. C signature, C record and outgoing
 variadic-call capabilities are enabled explicitly for this ABI.
 
+RV32 firmware's C ABI is the RISC-V psABI's soft-float `ilp32` (D660,
+D677): little-endian, 32-bit pointers, `int` and `long`, and no
+floating-point registers, so `f32` is one integer word and `f64` two.
+Scalar alignment is natural, an eight-byte scalar at eight, and the stack
+is kept 16-byte aligned. Arguments use a0–a7 in four-byte words: a value
+of up to eight bytes, scalar or C record, takes one or two, low word first,
+and splits between a7 and the stack when one register is left; a larger C
+record passes a pointer to a caller-owned copy, and a larger result comes
+back through a hidden pointer in a0. Stack arguments occupy four-byte
+words, aligned to their own alignment up to sixteen. An unnamed eight-byte
+argument takes an even register pair. Every Landin frame keeps x8 as the
+entry CFA, the saved return address at CFA−4 and the previous frame pointer
+at CFA−8. The planner holds this convention to GCC's (D677); C signatures,
+records and variadic calls stay disabled on RV32, as on Cortex-M.
+
 
 A final `, ...` after at least one fixed parameter marks a variadic C
 signature. It is not [0960]'s `! ...`. Variadic calls use only positional
@@ -20929,6 +20944,88 @@ switch frame that keeps RV64's eight-byte slots, which wastes half of it.
 **Pinned by** `targets/backends are stated per target` and the backend
 cases of the RV32 lowering.
 
+### D676 — RV32 places firmware's items as Cortex-M0 places them
+
+**The tour said** at [1640] what `link(section: ...)`, `keep` and an
+alignment ask of an item, D547 what `link(region: ...)` does, and [1990]
+how Cortex-M0's image honours them; RV64 has no firmware and gave every item its own input
+section whatever it asked.
+
+**Chosen:** at XLEN 32 an item's input section is the one its placement
+names, as on Cortex-M0: a region's, `.landin_region.REGION.KIND.landin_N`,
+whose kind says whether the region runs or reads it in place, copies it
+from its load image or clears it; an explicit section, retained with `R`
+when the item or any item naming the same section keeps it; or its own,
+with the placement's alignment after the directive. An immutable datum is
+read-only data. A description's stage before reset (D653) is
+`.text.landin_firmware_reset_stage` under the reset word's symbol, which
+the compiler's entry word enters. An item that asks for nothing keeps
+RV64's section.
+
+**The alternatives:** RV64's sections everywhere, which would leave a
+region placement where the derived script does not look; and placement
+in the compiler's firmware text, which belongs to the routine that is
+placed.
+
+**Pinned by** the RV32 lanes' firmware programs and the backend cases of
+the RV32 lowering.
+
+### D677 — RV32's C transport is the planner's ilp32 at XLEN 32
+
+**The tour said** at [1975] that a C signature follows the platform's C
+ABI, and D660 named RV32's as the psABI's soft-float `ilp32`, with C
+signatures disabled on RV32 as on Cortex-M.
+
+**Chosen:** `Landin.Backend.RiscV_ABI` plans `ilp32` as the integer
+calling convention LP64D already holds, at the target's XLEN: four-byte
+carriers in a0-a7, then four-byte words of the outgoing area, an argument
+aligned there to its own alignment up to sixteen; a scalar or record of up
+to eight bytes in one or two registers, low word first, split between a7
+and the area when one register is left; a larger record by address, and a
+larger result through a hidden pointer in a0; a variadic eight-byte value
+in an even pair; and no float bank, so an f32 is a word and an f64 two.
+The planner is held to GCC by direct checks, as D616 held the M7's: each
+row is where `riscv64-elf-gcc` 16.1 at `-march=rv32imc -mabi=ilp32` reads
+or writes the same C signature's arguments and results. Executable C
+interoperation stays disabled, as on Cortex-M.
+
+**The alternatives:** a planner of its own for `ilp32`, which would hold
+the shared rules twice; and leaving RV32 unplanned until C signatures are
+enabled, which would leave the ABI the description names unmeasured.
+
+**Pinned by** `backend plans/RISC-V ilp32 carriers`.
+
+### D678 — RV32 keeps its firmware text near the size of Thumb's
+
+**The tour said** nothing. RV64's selection saved every fixed scratch
+register at every routine through a computed address and reached every
+label through a full PC-relative jump, so RV32 images were about 1.8 times
+Cortex-M0's and a corpus that fits 32 KiB in Thumb did not.
+
+**Chosen:** at XLEN 32 a routine saves and restores its callee-saved
+registers at the frame's stack pointer, where each is one compressible
+instruction, and only those its text names, by number or, in an assembly
+block, by ABI alias; their homes stay in the frame. Where every region of
+the profile is at most 1 MiB, a jump is `j` and a branch is written as
+itself, which GNU as lengthens with a JAL past 4 KiB, since a routine is
+one input section within one region. A word loaded from the home the line
+before stored it from is not loaded again. A dead value's home is reused at
+every objective, as Cortex-M0 reuses it, where RV64 gives each value its own
+home at `--optimize=none`, since firmware's stack is a few KiB.
+
+Over a representative 24 fixtures, the runtime corpus's largest among
+them, RV32's `.text` went from 1.66 times Cortex-M0's at `armv6-m` to 1.04
+at `--optimize=none` and from 1.69 to 1.02 at the default, and its average
+frame from about twice Cortex-M0's to 1.1 to 1.35 times it.
+
+**The alternatives:** RV64's forms, which are correct and twice the size;
+a branch-shortening pass over each routine, which the assembler already
+performs; and sp-relative homes for every value, which would need the
+stack depth at every instruction and is left to a later item.
+
+**Pinned by** the backend cases of the RV32 lowering, and by the RV32
+lanes' corpus fitting the reference's 32 KiB.
+
 ### D523 — Under `--link=libc` a library is the C driver's `-lNAME`
 
 **The tour said** at [1590] that `linker.library` asks the linker for a static
@@ -25776,6 +25873,34 @@ has no image to select in.
 
 **Pinned by** `environments/cortex-m/rv32_controls.py`'s `atomics`, which
 `backend_acceptance.py`'s `execute_lane` runs for an RV32 lane.
+
+### D698 — A corpus lane records its own capacity limits, image and stack
+
+**The tour said** nothing; a corpus row's `profile_limit` records an image
+the reference's map cannot hold, judged at every profile, and a lane's
+`lanes` entry could only restrict a row outright, requiring every profile
+to fail there (D619).
+
+**Chosen:** an `execute` row's `lanes` entry may be `"mode": "limit"` with
+its reason. On that lane a profile whose link overflows the map is a
+`selected-image-limit` with its measured sizes, as `profile_limit` makes
+one on the reference, and a profile whose stack the harness's guard
+stopped past the reservation is a `selected-stack-limit` naming the routine
+that overran it; every other profile executes and must pass, and a whole
+lane run in which every profile of the row executes fails, naming the stale
+entry. The RV32 lanes carry one wherever an RV32 image's text outgrows the
+reference's 32 KiB, or its frames the 4 KiB stack, at a profile where the
+Cortex-M0 image fits, each reason giving the measured overflow.
+
+**The alternatives:** a lane `restriction`, which requires every profile
+to fail and so is stale wherever only the unoptimised profile overflows,
+as most of these do; a `profile_limit` on the row, which would claim the
+reference's map cannot hold an image that Cortex-M0 executes there; and
+larger RV32 maps, which would leave the 32 KiB end of the range untested
+on RV32 (D661).
+
+**Pinned by** `environments/cortex-m/backend_corpus.py`'s lane `limit`
+handling and `stale_lane_limits`, and the inventory's `lanes` entries.
 
 ### D620 — A fibre's context on a float unit holds d8-d15 and FPSCR
 

@@ -177,6 +177,9 @@ LANE_PROFILES = RECORDS['lanes']
 #  lane of that target runs on: the rv32 reference is the sifive-e lane's.
 PROFILES = {**RECORDS['devices'], **LANE_PROFILES}
 REFERENCE = 'constrained-reference'
+#  Every target's reference, which the library supplies when a program
+#  reaches no description: Cortex-M's and RV32's (D661).
+REFERENCES = (REFERENCE, 'riscv-reference')
 
 #  A profile's facts, as the firmware build report states them, with the
 #  stack top read from the linked image.  `boot_prefix` and `boot_suffix`
@@ -224,7 +227,7 @@ DERIVING = threading.Lock()
 def probe_source(device):
     if device in LANE_PROFILES:
         return 'import descriptions/%s\n' % LANE_PROFILES[device]['module']
-    return '' if device == REFERENCE else 'import descriptions/%s\n' % device
+    return '' if device in REFERENCES else 'import descriptions/%s\n' % device
 
 
 def probe_root(device):
@@ -603,7 +606,12 @@ def load_extents(path, profile):
             continue
         if file_size and physical >= text['origin']:
             flash = max(flash, physical + file_size)
-        if data_region['origin'] <= virtual < data_region['origin'] + (1 << 28):
+        #  The enlarged data region ends where the text region begins when
+        #  the text lies above it, as the esp32c3 lane's IRAM does.
+        ceiling = data_region['origin'] + (1 << 28)
+        if text['origin'] > data_region['origin']:
+            ceiling = min(ceiling, text['origin'])
+        if data_region['origin'] <= virtual < ceiling:
             ram = max(ram, virtual + memory_size)
     return {'FLASH': flash - text['origin'], 'RAM': ram - data_region['origin']}
 
@@ -634,7 +642,8 @@ def datum_symbols(listing):
     section's size, from the section table readelf prints first.
 
     A mapping symbol (`$d`, `$t`), a section or a file symbol is not a
-    datum.
+    datum, nor an assembler-local `.L` label, which RISC-V's assembler
+    keeps in the table when a relocation names it and Arm's drops.
     """
     names, sizes, symbols = {}, {}, {}
     for line in listing.splitlines():
@@ -648,7 +657,8 @@ def datum_symbols(listing):
             continue
         _, value, size, kind, _, _, index, name = fields
         section = names.get(index, '')
-        if kind in ('SECTION', 'FILE') or name.startswith('$') or not DATA_SECTION.match(section):
+        if (kind in ('SECTION', 'FILE') or name.startswith(('$', '.L'))
+                or not DATA_SECTION.match(section)):
             continue
         symbols[name] = {'type': kind, 'size': int(size, 0), 'address': int(value, 16),
                          'section': section}
