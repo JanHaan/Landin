@@ -2646,7 +2646,9 @@ SHELL_TREE_SITTER_READS = ('pin "LANDIN_TREE_SITTER_VERSION"',
 
 
 #  The Cortex-M lane's GCC and binutils, read from the pins by the
-#  nix shell and the lane's installer, and never written in either.
+#  nix shell and the lane's installer, and never written in either; and
+#  the RV32 lanes', the same release's riscv64-elf archive, which only the
+#  installer reads, for Linux x86-64.
 ARM_ELF_SYSTEMS = ("linux64-x86_64", "linux64-aarch64", "darwin-aarch64")
 ARM_ELF_READERS = {
     "flake.nix": ('pin "LANDIN_GNAT_ARM_ELF_VERSION"',
@@ -2654,31 +2656,44 @@ ARM_ELF_READERS = {
     "environments/cortex-m/setup.py": ('"LANDIN_GNAT_ARM_ELF_VERSION"',
                                        '"LANDIN_GNAT_ARM_ELF_SHA256_X86_64_LINUX"'),
 }
+RISCV_ELF_SYSTEMS = ("linux64-x86_64",)
+RISCV_ELF_READERS = {
+    "environments/cortex-m/setup.py": ('"LANDIN_GNAT_RISCV64_ELF_VERSION"',
+                                       '"LANDIN_GNAT_RISCV64_ELF_SHA256_X86_64_LINUX"'),
+}
 
 
 def arm_elf_pin_problems(pins, pins_text, record, record_text):
-    """The Cortex-M lane's toolchain is pinned once and read everywhere.
+    """The Cortex-M and RV32 lanes' toolchains are pinned once and read everywhere.
 
-    GNAT's arm-elf archive is pinned in environments/pins.sh beside the
-    host GNAT, recorded in TOOLCHAIN.md, and fetched by the nix shell and
-    environments/cortex-m/setup.py; a reader that names the version itself
-    installs whatever it was last edited to say.
+    GNAT's arm-elf and riscv64-elf archives are pinned in
+    environments/pins.sh beside the host GNAT, recorded in TOOLCHAIN.md, and
+    fetched by the nix shell and environments/cortex-m/setup.py; a reader
+    that names the version itself installs whatever it was last edited to
+    say.
     """
+    return (elf_pin_problems(pins, pins_text, record, record_text, "arm-elf",
+                             "LANDIN_GNAT_ARM_ELF_VERSION", ARM_ELF_SYSTEMS, ARM_ELF_READERS)
+            + elf_pin_problems(pins, pins_text, record, record_text, "riscv64-elf",
+                               "LANDIN_GNAT_RISCV64_ELF_VERSION", RISCV_ELF_SYSTEMS,
+                               RISCV_ELF_READERS))
+
+
+def elf_pin_problems(pins, pins_text, record, record_text, kind, pin, systems, readers):
+    """One GNAT bare-metal archive's pin, record and readers."""
     values = dict(re.findall(r"^(LANDIN_\w+)=(\S+)$", pins_text, re.M))
-    version = values.get("LANDIN_GNAT_ARM_ELF_VERSION")
+    version = values.get(pin)
     if version is None:
-        return [(pins, 1, "LANDIN_GNAT_ARM_ELF_VERSION is not pinned in "
-                          "environments/pins.sh")]
+        return [(pins, 1, "%s is not pinned in environments/pins.sh" % pin)]
     out = []
     #  The version alone also spells the host GNAT's archives, so the record
-    #  must name each arm-elf archive by its file.
-    for system in ARM_ELF_SYSTEMS:
-        archive = "gnat-arm-elf-%s-%s.tar.gz" % (system, version)
+    #  must name each archive by its file.
+    for system in systems:
+        archive = "gnat-%s-%s-%s.tar.gz" % (kind, system, version)
         if archive not in record_text:
-            out.append((record, 1, "LANDIN_GNAT_ARM_ELF_VERSION %s's %s is not "
-                                   "recorded in compiler/ada/TOOLCHAIN.md"
-                        % (version, archive)))
-    for relative, reads in sorted(ARM_ELF_READERS.items()):
+            out.append((record, 1, "%s %s's %s is not recorded in "
+                                   "compiler/ada/TOOLCHAIN.md" % (pin, version, archive)))
+    for relative, reads in sorted(readers.items()):
         path = os.path.join(ROOT, relative)
         missing = absent([path])
         if missing:
@@ -2690,9 +2705,9 @@ def arm_elf_pin_problems(pins, pins_text, record, record_text):
                 out.append((path, 1, "%s does not read %s from "
                                      "environments/pins.sh" % (relative, read)))
         if version in text:
-            out.append((path, 1, "%s names the arm-elf archive's %s literally "
+            out.append((path, 1, "%s names the %s archive's %s literally "
                                  "instead of reading it from "
-                                 "environments/pins.sh" % (relative, version)))
+                                 "environments/pins.sh" % (relative, kind, version)))
     return out
 
 
