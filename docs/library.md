@@ -2642,6 +2642,8 @@ chip's generated modules.
 Waiting can wake spuriously. Barriers do not prove completion of a device
 protocol or supply a DMA lifetime discipline.
 
+[Executable example](../compiler/tests/fixtures/runtime/library-platform-riscv/main.ldn)
+
 ## platform/riscv/hazard3
 
 Hazard3's external interrupt controller, the RP2350's RISC-V cores':
@@ -2650,3 +2652,5 @@ Hazard3's external interrupt controller, the RP2350's RISC-V cores':
 had asserted it. The compiler's dispatch reads meinext and calls slot
 16 + IRQ; enabling the IRQ, and `mie`'s external line through
 `platform/riscv`, is the program's.
+
+[Executable example](../compiler/tests/fixtures/positive/library-platform-riscv-hazard3/main.ldn)
