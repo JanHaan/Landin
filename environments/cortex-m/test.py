@@ -8,6 +8,13 @@ import threading
 import unittest
 
 from run import HERE, Run, oracle
+from setup import AREAS, arm_archive, riscv_archive
+
+#  Every version a supervised run requires its tools to print, in one
+#  answer a mocked `Run.command` gives every version query.
+VERSIONS = '10.0.13 (GNAT-FSF-builds) %s 2.46.1 16.3 9.2.2 (esp_develop_9.2.2_20260417)' % (
+    arm_archive()['version'].rsplit('-', 1)[0])
+assert riscv_archive()['version'] == arm_archive()['version'], 'one GCC version answers both'
 
 
 class ProbeFailures(unittest.TestCase):
@@ -16,9 +23,10 @@ class ProbeFailures(unittest.TestCase):
         import importlib
         from unittest.mock import patch
         from run import HERE
-        from setup import arm_archive, sha
+        from setup import arm_archive, riscv_archive, sha
         calls=[]
         lanes=[('abi','execute'),('memory','execute'),('packed','execute'),
+               ('rv32_controls','execute_suite'),
                ('packed_native','execute'),('backend_acceptance','execute'),
                ('backend_acceptance','execute_lane'),
                ('firmware','execute_suite'),('freestanding','execute_suite'),
@@ -30,12 +38,11 @@ class ProbeFailures(unittest.TestCase):
             (root/'installation.json').write_text(json.dumps({
                 'lock_sha256':sha(HERE/'tools.lock.json'),
                 'arm':{key:arm_archive()[key] for key in ('version','sha256')},
-                'files':{'root':{},'gnat-arm-elf':{}}}))
+                'riscv':{key:riscv_archive()[key] for key in ('version','sha256')},
+                'files':{area:{} for area in AREAS}}))
             stack.enter_context(patch('run.supported_host'))
             stack.enter_context(patch('run.inventory',return_value={}))
-            stack.enter_context(patch.object(Run,'command',return_value=
-                '10.0.13 (GNAT-FSF-builds) %s 2.46.1 16.3'
-                % arm_archive()['version'].rsplit('-', 1)[0]))
+            stack.enter_context(patch.object(Run,'command',return_value=VERSIONS))
             stack.enter_context(patch.object(Run,'qemu',side_effect=lambda:calls.append('qemu')))
             stack.enter_context(patch.object(Run,'peripheral',side_effect=lambda:calls.append('peripheral')))
             #  Each corpus lane is execute_lane given its own name.
@@ -48,8 +55,8 @@ class ProbeFailures(unittest.TestCase):
         names = [n for n,_ in lanes]
         at = names.index('backend_acceptance') + 1
         self.assertEqual(calls, ['qemu','peripheral'] + names[:at]
-                         + ['mps2-an505', 'mps2-an500'] + names[at+1:])
-        self.assertEqual(sorted(CORPUS_LANES), ['mps2-an500', 'mps2-an505'])
+                         + ['mps2-an505', 'mps2-an500', 'esp32c3', 'sifive-e'] + names[at+1:])
+        self.assertEqual(sorted(CORPUS_LANES), ['esp32c3', 'mps2-an500', 'mps2-an505', 'sifive-e'])
         self.assertTrue(set(CORPUS_LANES) <= set(__import__('run').LANES))
 
     def test_a_stop_at_a_line_is_held_to_that_line(self):
@@ -991,8 +998,9 @@ class ProbeFailures(unittest.TestCase):
         from contextlib import ExitStack
         from unittest.mock import patch
         from run import LANES, selection
-        from setup import arm_archive, sha
+        from setup import arm_archive, riscv_archive, sha
         self.assertEqual(selection(['evidence']), ['driver', 'evidence'])
+        self.assertEqual(selection(['sifive-e']), ['rv32-controls', 'sifive-e'])
         self.assertEqual(selection(None), list(LANES))
         with self.assertRaisesRegex(RuntimeError, 'unknown lane nowhere; the lanes are cpu'):
             selection(['nowhere'])
@@ -1006,12 +1014,11 @@ class ProbeFailures(unittest.TestCase):
             (root/'installation.json').write_text(json.dumps({
                 'lock_sha256': sha(HERE/'tools.lock.json'),
                 'arm': {key: arm_archive()[key] for key in ('version', 'sha256')},
-                'files': {'root': {}, 'gnat-arm-elf': {}}}))
+                'riscv': {key: riscv_archive()[key] for key in ('version', 'sha256')},
+                'files': {area: {} for area in AREAS}}))
             stack.enter_context(patch('run.supported_host'))
             stack.enter_context(patch('run.inventory', return_value={}))
-            stack.enter_context(patch.object(Run, 'command', return_value=
-                '10.0.13 (GNAT-FSF-builds) %s 2.46.1 16.3'
-                % arm_archive()['version'].rsplit('-', 1)[0]))
+            stack.enter_context(patch.object(Run, 'command', return_value=VERSIONS))
             stack.enter_context(patch.object(Run, 'lane', lane))
             run = Run(root, root)
             with self.assertRaises(RuntimeError) as failed:
@@ -1024,10 +1031,10 @@ class ProbeFailures(unittest.TestCase):
         self.assertNotIn('seconds', run.verdicts['evidence'])
         self.assertEqual(sorted(run.verdicts['firmware']), ['seconds', 'status'])
         self.assertEqual(run.verdicts['firmware']['status'], 'passed')
-        self.assertIn('3 of 15 lanes did not pass', str(failed.exception))
+        self.assertIn('3 of %d lanes did not pass' % len(LANES), str(failed.exception))
 
     def test_the_gate_parts_are_every_lane_once(self):
-        """The gate's two Cortex-M jobs are not FILTERED only because their
+        """The gate's three Cortex-M jobs are not FILTERED only because their
         parts are every lane, each once, and each part holds what its lanes
         need; and the workflow's matrix runs exactly run.py's parts."""
         import re
@@ -1121,8 +1128,161 @@ class ProbeFailures(unittest.TestCase):
             root = Path(directory)
             (root / 'installation.json').write_text('{"lock_sha256":"wrong"}')
             from unittest.mock import patch
-            with patch('run.supported_host'), self.assertRaisesRegex(RuntimeError, 'tool lock mismatch'):
+            with patch('run.supported_host'), self.assertRaisesRegex(RuntimeError, 'installed from another tools.lock.json.*install a fresh --tools root'):
                 Run(root, root).execute()
+
+
+class RV32Lanes(unittest.TestCase):
+    """The RV32 lanes' plumbing (D695), without an emulator or a toolchain."""
+
+    def test_the_rv32_levels_build_for_rv32_with_their_own_tools(self):
+        from backend import LEVELS, level_flags, lane_inputs, rv32, target, tool
+        run = Run(Path('/out'), Path('/tools'))
+        for level, march, machine, lane in (
+                ('rv32imc', '-march=rv32imc_zicsr_zifencei', 'esp32c3', 'esp32c3'),
+                ('rv32imac', '-march=rv32imac_zicsr_zifencei', 'sifive_e', 'sifive-e')):
+            with self.subTest(level=level):
+                self.assertTrue(rv32(level))
+                self.assertEqual(target(level), 'rv32')
+                flags = level_flags(level)
+                self.assertEqual(flags[0], march)
+                self.assertIn('-mabi=ilp32', flags)
+                self.assertFalse([f for f in flags if f.startswith(('-mcpu', '-mthumb'))])
+                self.assertEqual(tool(run, level, 'gcc'),
+                                 Path('/tools/gnat-riscv64-elf/bin/riscv64-elf-gcc'))
+                self.assertEqual((LEVELS[level]['machine'], LEVELS[level]['lane']),
+                                 (machine, lane))
+        #  The esp32c3 machine's core loses A, F and D, which the C3 has not;
+        #  sifive_e's E31 is rv32imac as it is.
+        self.assertEqual(LEVELS['rv32imc']['cpu'].split(',')[0], 'espressif')
+        for off in ('a=false', 'f=false', 'd=false'):
+            self.assertIn(off, LEVELS['rv32imc']['cpu'].split(','))
+        self.assertNotIn('cpu', LEVELS['rv32imac'])
+        self.assertEqual(target('armv6-m'), 'cortex-m0')
+        self.assertEqual(tool(run, 'armv6-m', 'nm'), Path('/tools/gnat-arm-elf/bin/arm-eabi-nm'))
+        #  The esp32c3 lane compiles with its entry-module file; sifive-e is
+        #  the RV32 reference's map, which a program reaching no
+        #  description is given.
+        self.assertTrue(lane_inputs('rv32imc', ['a.ldn'])[-1].endswith('lanes/lane-esp32c3.ldn'))
+        self.assertEqual(lane_inputs('rv32imac', ['a.ldn']), ['a.ldn'])
+        self.assertEqual(run.espressif, Path('/tools/qemu-espressif/bin'))
+        self.assertIn('/tools/root/usr/lib/x86_64-linux-gnu/pulseaudio',
+                      run.env['LD_LIBRARY_PATH'].split(':'))
+
+    def test_the_esp32c3_lane_record_is_its_description(self):
+        from backend import LANE_PROFILES, LANE_ROOT, device_target, region
+        record = LANE_PROFILES['esp32c3']
+        self.assertEqual(device_target('esp32c3'), 'rv32')
+        text, data = region(record, 'text'), region(record, 'data')
+        #  The table at the first 256-byte boundary past the entry word,
+        #  where the C3's mtvec, which ignores its low eight bits, can point.
+        self.assertEqual(record['vector_address'], text['origin'] + 0x100)
+        self.assertEqual(record['vector_address'] % 256, 0)
+        #  DRAM is SRAM1's data alias, 0x70_0000 below its instruction
+        #  address: the data never shares a byte with the text.
+        self.assertGreaterEqual(data['origin'] + 0x700000, text['origin'] + text['length'])
+        self.assertEqual(record['stack_top'], data['origin'] + data['length'])
+        source = (LANE_ROOT / 'descriptions/esp32c3/core.ldn').read_text()
+        self.assertIn('compiler.core("esp-rv32imc")', source)
+        self.assertIn('compiler.vectors(%d)' % record['vector_words'], source)
+        memory = (LANE_ROOT / 'descriptions/esp32c3/memory.ldn').read_text()
+        for one in record['regions']:
+            self.assertIn('linker.region("%s", 0x%s, %d * 1024, "%s")' % (
+                one['name'], '%04X_%04X' % divmod(one['origin'], 0x10000),
+                one['length'] // 1024, one['access']), memory)
+        self.assertIn('import descriptions/esp32c3', (LANE_ROOT / 'lane-esp32c3.ldn').read_text())
+
+    def test_an_image_is_held_to_its_levels_extensions(self):
+        from backend import rv32_extensions, rv32_image
+        imc = ('  Flags:                             0x1, RVC, soft-float ABI\n'
+               '  Tag_RISCV_arch: "rv32i2p1_m2p0_c2p0_zicsr2p0_zifencei2p0_zmmul1p0_zca1p0"\n')
+        imac = imc.replace('m2p0_c2p0', 'm2p0_a2p1_c2p0').replace(
+            'zmmul1p0_zca1p0', 'zmmul1p0_zaamo1p0_zalrsc1p0_zca1p0')
+        self.assertEqual(rv32_extensions(imc),
+                         {'i', 'm', 'c', 'zicsr', 'zifencei', 'zmmul', 'zca'})
+        self.assertIn('zalrsc', rv32_extensions(imac))
+        plain = '20400000:\t00000297          \tauipc\tt0,0x0\n'
+        atomic = plain + ('2040001c:\t0072ae2f          \tamoadd.w\tt3,t2,(t0)\n'
+                          '20400020:\t1002aeaf          \tlr.w.aq\tt4,(t0)\n')
+        rv32_image('rv32imc', imc, plain)
+        rv32_image('rv32imac', imac, atomic)
+        with self.assertRaisesRegex(RuntimeError, 'names a, zaamo, zalrsc, beyond the level;'
+                                    ' it holds A-extension instructions: amoadd.w, lr.w'):
+            rv32_image('rv32imc', imac, atomic)
+        #  A tag that says nothing of A does not excuse the instructions.
+        with self.assertRaisesRegex(RuntimeError, 'A-extension instructions: amoadd.w, lr.w'):
+            rv32_image('rv32imc', imc, atomic)
+        with self.assertRaisesRegex(RuntimeError, 'soft-float'):
+            rv32_image('rv32imc', imc.replace('soft-float', 'double-float'), plain)
+
+    def test_the_rv32_session_holds_the_rv32_oracle(self):
+        from backend import LANE_PROFILES, rv32_session
+        profile = dict(LANE_PROFILES['esp32c3'], device='esp32c3')
+        with tempfile.TemporaryDirectory() as directory:
+            run = Run(Path(directory), HERE)
+            returned = rv32_session(run, 1234, 42, False, profile=profile)
+            trapped = rv32_session(run, 1234, 0, True, profile=profile)
+        bottom = profile['stack_top'] - profile['stack_reserved']
+        self.assertLess(returned.index('break backend_painted'),
+                        returned.index('*(unsigned char (*)[16])%d' % bottom))
+        self.assertIn('BP_HARDWARE_WATCHPOINT', returned)
+        self.assertIn('[44,55,66,77,88,99,100,111,122,133,144]', returned)
+        self.assertIn('value("$s0") == 0', returned)
+        self.assertIn('0x9e9e9e9e, 0x7e7e7e7e', returned)
+        self.assertIn('check(value("$sp") == %d' % profile['stack_top'], returned)
+        self.assertIn('cause == 2', trapped)
+        self.assertIn('0xc0001073', trapped)
+        #  No Arm register is asked for.
+        self.assertNotRegex(returned + trapped, r'\$(r\d|lr\b|control|msp|psp)')
+
+    def test_the_control_script_keeps_the_rv32_contract(self):
+        from backend import LANE_PROFILES
+        from rv32_controls import CONTROLS, control_script
+        script = control_script(dict(LANE_PROFILES['esp32c3'], device='esp32c3'))
+        self.assertIn('ENTRY(_landin_firmware_entry)', script)
+        body = script[script.index('.text : {'):]
+        self.assertLess(body.index('.text.landin_entry'), body.index('. = 256;'))
+        self.assertLess(body.index('. = 256;'), body.index('KEEP(*(.isr_vector))'))
+        self.assertLess(body.index('KEEP(*(.isr_vector))'), body.index('.text.landin_reset'))
+        for symbol in ('data_load', 'data_start', 'data_end', 'ramtext_load', 'ramtext_start',
+                       'ramtext_end', 'bss_start', 'bss_end', 'stack_bottom', 'stack_top'):
+            self.assertIn('_landin_firmware_%s =' % symbol, script)
+        start = (HERE / 'probes/rv32-start.S').read_text()
+        for name in ('.text.landin_entry', '.text.landin_reset', '.isr_vector',
+                     '_landin_firmware_entry', '_landin_firmware_reset', 'backend_painted',
+                     'backend_done', 'backend_fault_done'):
+            self.assertIn(name, start)
+        #  Only rv32imac assembles the A-extension control.
+        self.assertEqual(CONTROLS['read-modify-write'][1], ('rv32imac',))
+        self.assertEqual(CONTROLS['a-extension-traps'][1], ('rv32imc',))
+        self.assertEqual({level for _, levels, _ in CONTROLS.values() for level in levels},
+                         {'rv32imc', 'rv32imac'})
+
+    def test_the_lock_unpacks_espressif_qemu_into_its_own_area(self):
+        from setup import AREAS, ESPRESSIF, riscv_archive
+        lock = json.loads((HERE / 'tools.lock.json').read_text())
+        self.assertEqual({item['kind'] for item in lock}, {'deb', 'tar.xz'})
+        archives = [item for item in lock if item['kind'] == 'tar.xz']
+        self.assertEqual([item['into'] for item in archives], [ESPRESSIF])
+        self.assertIn(ESPRESSIF, AREAS)
+        self.assertIn('esp_develop_9.2.2_20260417', archives[0]['file'])
+        for item in lock:
+            self.assertRegex(item['sha256'], '^[0-9a-f]{64}$')
+        files = [item['file'] for item in lock]
+        self.assertEqual(len(files), len(set(files)), 'a lock entry is repeated')
+        archive = riscv_archive()
+        self.assertEqual(archive['file'],
+                         'gnat-riscv64-elf-linux64-x86_64-%s.tar.gz' % archive['version'])
+        self.assertTrue(archive['url'].endswith('/gnat-%s/%s' % (archive['version'], archive['file'])))
+
+    def test_the_atomics_probes_name_every_refused_use(self):
+        from rv32_controls import READ_MODIFY_WRITE, REFUSED_USES, WIDE
+        source = READ_MODIFY_WRITE.read_text()
+        self.assertNotIn('u64', source)
+        for use in ('atomic.exchange(', 'atomic.add(', 'atomic.compare_exchange('):
+            self.assertIn(use, source)
+        self.assertTrue(all(use.startswith('atomic.') for use in REFUSED_USES))
+        self.assertIn('atomic.cell(u64)', WIDE.read_text())
 
 
 if __name__ == '__main__':

@@ -10,7 +10,7 @@ and `platform/cortex_m`/`core/panic` consumers run through that compiler-owned f
 
 | Component | Exact selection |
 |---|---|
-| Probe host | native Linux x86-64 with glibc 2.38 or later, `dpkg-deb` and `tar`; the gate runs it on GitHub's `ubuntu-24.04` |
+| Probe host | native Linux x86-64 with glibc 2.38 or later, `dpkg-deb`, `tar` and `xz`; the gate runs it on GitHub's `ubuntu-24.04` |
 | CPU/startup lane | QEMU 10.0.13, Debian `1:10.0.13+ds-0+deb13u1`, `-M microbit -accel tcg,thread=single` |
 | Armv7-M corpus lane | the same QEMU binary, `-M mps2-an385`: a Cortex-M3, for corpus fixtures whose `levels:` name `armv7-m` (D255) |
 | Armv8-M corpus lane | the same QEMU binary, `-M mps2-an505`: a Cortex-M33 r0p3 in Secure state, for the whole corpus at `armv8-m.main` in `run.py`'s `mps2-an505` lane and for fixtures whose `levels:` name it, on the lane description `lanes/descriptions/mps2_an505` (D607, D619); libgcc from `thumb/v8-m.main/nofp` |
@@ -21,12 +21,25 @@ and `platform/cortex_m`/`core/panic` consumers run through that compiler-owned f
 | Assembler/linker | GNU Binutils 2.46.1, from the same archive |
 | Debugger | `gdb-multiarch` 16.3, Debian `16.3-1`, loopback QEMU remote stub |
 | Probe options | `-mcpu=cortex-m0 -mthumb -mfloat-abi=soft -mabi=aapcs -ffreestanding -fno-builtin -fno-omit-frame-pointer -g3 -O1 -nostdlib`; warnings are errors |
+| RV32 emulator | Espressif's QEMU `esp-develop-9.2.2-20260417`, the release's Linux x86-64 `qemu-system-riscv32` archive, unpacked into the tool root's `qemu-espressif` (D695) |
+| rv32imc corpus lane | `-M esp32c3 -cpu espressif,a=false,zawrs=false,f=false,d=false,zfa=false`: the ESP32-C3 machine with its core's A, F and D removed, which the C3 has not (D696), for the whole corpus at `rv32imc` in `run.py`'s `esp32c3` lane, on the lane description `lanes/descriptions/esp32c3` |
+| rv32imac corpus lane | `-M sifive_e`: a SiFive E31, rv32imac, for the whole corpus at `rv32imac` in `run.py`'s `sifive-e` lane, on the RV32 reference's map, 32 KiB of flash at `0x2040_0000` and the 16 KiB DTIM at `0x8000_0000` |
+| RV32 compiler | `riscv64-elf-gcc` 16.1.0 with Binutils 2.46.1, GNAT's riscv64-elf archive `16.1.0-1`, pinned in `environments/pins.sh`; libgcc from `rv32im/ilp32` at rv32imc and `rv32imac/ilp32` at rv32imac |
+| RV32 options | `-march=rv32imc_zicsr_zifencei` or `-march=rv32imac_zicsr_zifencei`, then `-mabi=ilp32 -ffreestanding -fno-builtin -fno-omit-frame-pointer -g3 -O1 -nostdlib`; warnings are errors |
 
 `tools.lock.json` pins URLs and SHA-256 for every downloaded package: QEMU
 and GDB, and the whole Debian 13 runtime closure they load, down to
 the libraries and embedded Python 3.13 a Debian 13 base image would have
-supplied. GCC and binutils come from the arm-elf archive whose version and
-checksum `environments/pins.sh` holds beside the host GNAT's; its GDB is
+supplied, and Espressif's QEMU release archive with the Debian libraries it
+loads: SDL2 and the sound, X11 and Wayland libraries SDL2 links, and
+libgcrypt, 36 packages chosen by following each binary's `NEEDED` entries
+rather than the packages' dependencies, which would add Mesa and LLVM that
+nothing loads. Debian's libpulse finds its common library through a
+`RUNPATH` under `/usr`, so the lanes put the tool root's
+`lib/x86_64-linux-gnu/pulseaudio` on `LD_LIBRARY_PATH` beside the library
+directory itself. GCC and binutils come from the arm-elf and riscv64-elf
+archives whose version and checksums `environments/pins.sh` holds beside
+the host GNAT's; the arm-elf GDB is
 built without the Python the debugger sessions run, so GDB stays Debian's.
 The installer verifies archives before extraction. Each probe verifies the
 installation inventory and versions before execution, checks it again afterward,
@@ -209,20 +222,24 @@ run fails afterwards, naming each lane that did not pass. `--lane NAME`,
 repeated, runs only those lanes, and the lanes they need: `evidence`
 compares its images with the `driver` lane's, so `--lane evidence` runs
 both, and a lane whose prerequisite failed is reported as not run. The
-lanes are `cpu`, `peripheral`, `abi`, `memory`, `packed`, `packed-native`,
-`backend`, `mps2-an505`, `mps2-an500`, `firmware`, `freestanding`,
-`devices`, `descriptions`, `driver` and `evidence`; `mps2-an505` and
-`mps2-an500` are the corpus again on those lanes. A run that selects lanes says `FILTERED` in its last line
+lanes are `cpu`, `peripheral`, `abi`, `memory`, `packed`, `rv32-controls`,
+`packed-native`, `backend`, `mps2-an505`, `mps2-an500`, `esp32c3`,
+`sifive-e`, `firmware`, `freestanding`, `devices`, `descriptions`, `driver`
+and `evidence`; `mps2-an505`, `mps2-an500`, `esp32c3` and `sifive-e` are the
+corpus again on those lanes, and the two RV32 ones need `rv32-controls`
+(see [RV32 lanes](#rv32-lanes)). A run that selects lanes says `FILTERED` in its last line
 and its `result.json`, and is not the gate's run.
 
-The gate runs every lane in two jobs, one for each of `run.py`'s two
+The gate runs every lane in three jobs, one for each of `run.py`'s
 parts, because one job running all of them risked its hour on a four-CPU
-runner. `--part=NAME` runs one part:
+runner, and two more whole corpora would put `corpus` at that risk again.
+`--part=NAME` runs one part:
 
 | part | lanes | gate job |
 |---|---|---|
 | `programs` | `cpu`, `peripheral`, `abi`, `memory`, `packed`, `packed-native`, `firmware`, `freestanding`, `devices`, `descriptions`, `driver`, `evidence` | `cortex-m-programs` |
 | `corpus` | `backend`, `mps2-an505`, `mps2-an500` | `cortex-m-corpus` |
+| `rv32` | `rv32-controls`, `esp32c3`, `sifive-e` | `cortex-m-rv32` |
 
 The parts together are every lane, each exactly once, and each part holds
 the lanes its lanes need, so a part is not `FILTERED`: its `result.json`
@@ -246,6 +263,32 @@ NIXPKGS_ALLOW_UNFREE=1 nix-shell -p steam-run python3 --run \
   "TMPDIR=$HOME/.cache/landin/tmp steam-run python3 environments/cortex-m/run.py \
    --tools $HOME/.cache/landin/cortex-m --refine $PWD/compiler/ada/build/nix-x86_64-linux/debug/bin/refine \
    --output $HOME/.cache/landin/NEW-DIRECTORY"
+```
+
+Setup runs the same way, with `dpkg-deb` and `xz`, which NixOS does not put
+on the path, added to the shell steam-run inherits its path from:
+
+```sh
+NIXPKGS_ALLOW_UNFREE=1 nix-shell -p steam-run python3 dpkg xz --run \
+  "TMPDIR=$HOME/.cache/landin/tmp steam-run python3 environments/cortex-m/setup.py \
+   --tools $HOME/.cache/landin/NEW-TOOL-ROOT"
+```
+
+Both emulators run there, QEMU's `qemu-system-arm` and, for the RV32
+lanes, Espressif's `qemu-system-riscv32`, with `gdb-multiarch` for both;
+`--part=rv32` or `--lane rv32-controls` takes the same route.
+
+To run an emulator or GDB by hand, to try a machine, give it the tool
+root's libraries as the lanes do: they are found only through
+`LD_LIBRARY_PATH`, and Debian's libpulse, which Espressif's QEMU loads
+through SDL2, looks for its own common library in a `pulseaudio`
+directory beside them:
+
+```sh
+T=$HOME/.cache/landin/TOOL-ROOT L=$T/root/usr/lib/x86_64-linux-gnu
+NIXPKGS_ALLOW_UNFREE=1 nix-shell -p steam-run --run \
+  "LD_LIBRARY_PATH=$L:$L/pulseaudio steam-run \
+   $T/qemu-espressif/bin/qemu-system-riscv32 -M help"
 ```
 
 Every lane refuses these three hosts before it builds anything and prints
@@ -735,6 +778,67 @@ the freestanding core and `noreturn`, the checked-in device fixtures and the
 complete driver each have their own lane below. General SVD generation stays
 with its companion tool. No scheduler, interrupt-masking abstraction, C source
 expansion or new DMA ownership model is introduced.
+
+## RV32 lanes
+
+Two lanes run the whole corpus on Espressif's QEMU, one machine for each
+RV32 level (D695): `esp32c3` at `rv32imc`, the ESP32-C3's level, and
+`sifive-e` at `rv32imac` on QEMU's SiFive E31. `backend_corpus.py --lane
+esp32c3` or `--lane sifive-e` runs the inventory there as it does on the
+Arm lanes, every row with its own disposition and a row's `lanes` entry
+where its verdict differs on that lane; `run.py`'s lanes of the same names
+are those runs, followed by the lane's atomics probes.
+
+| lane | machine and core | map | level |
+|---|---|---|---|
+| `esp32c3` | `esp32c3`, its `espressif` core with `a=false,zawrs=false,f=false,d=false,zfa=false` | `lanes/descriptions/esp32c3`: 32 KiB of SRAM1 as instruction memory at `0x4038_0000`, 16 KiB of its data alias at `0x3FC8_8000` with the stack in the top 4 KiB, a 32-slot table at `0x4038_0100`, the C3's 256-byte mtvec alignment | `rv32imc` |
+| `sifive-e` | `sifive_e`, an E31, rv32imac | the RV32 reference, `platform/riscv/reference`, which a program reaching no description is given: 32 KiB of flash at `0x2040_0000` and the 16 KiB DTIM at `0x8000_0000` | `rv32imac` |
+
+Each image is loaded with `-kernel`. On `sifive_e` the mask ROM jumps to
+`0x2040_0000`; on `esp32c3` QEMU starts the ELF at its entry without the
+ROM, so booting through the ROM from refine's `OUT.bin` is the firmware
+programs', not the corpus's. Both machines take the same harness:
+`probes/rv32-start.S` supplies what refine's RV32 firmware script places,
+the entry word `_landin_firmware_entry` first at the text origin jumping
+to `_landin_firmware_reset`, and the vectored trap table in `.isr_vector`
+at the profile's vector address, which the build report gives. The reset
+clears `mstatus.MIE`, points `mtvec` at the table in vectored mode, copies
+data, clears BSS, paints the stack, and paints s1-s11, gp and tp before it
+calls `main`; s0 is zero, the end of a frame chain. Slot 0 records an
+exception's mcause, mepc, mtval and sp, and any interrupt reaching its own
+slot loops there. The GDB session is the Arm one's: a hardware write
+watchpoint on the stack's lowest 16 bytes, then `backend_done` with the
+status byte, sp at the top and every painted register as it was, or
+`backend_fault_done` with mcause 2 at an `unimp`, compressed or not, for a
+trap.
+
+Every RV32 image is held to its level before it runs: an ilp32 soft-float
+ELF whose `Tag_RISCV_arch` names no extension beyond the level's, and at
+`rv32imc` no AMO and no LR/SC anywhere in the linked disassembly, libgcc's
+included, assembled with `-march=rv32imc_zicsr_zifencei`. The `esp32c3`
+machine's own core has A, F and D, so the lane removes them with `-cpu`:
+an A instruction there is an illegal instruction, as on the C3 (D696).
+
+`rv32-controls` needs no compiler. It links hand-written mains,
+`probes/rv32-controls.S`, with the harness by a script written from each
+lane's recorded profile, and runs them on both machines: a return through a
+frame, a trap at `unimp`, a stack overrun the watchpoint must stop, on
+`sifive-e` an executed `amoadd.w`, `amoswap.w` and LR/SC loop, and on
+`esp32c3` the same A program, which the image check must refuse and the
+core must trap at its first AMO. The two corpus lanes need it, so a
+harness that cannot tell these apart stops them before any corpus program.
+
+The atomics probes follow each corpus (D697). On `sifive-e`,
+`probes/rv32-read-modify-write.ldn`, the exchanges, adds and
+compare-exchanges of `runtime/atomic-read-modify-write` without its u64
+cell, executes and returns 42, and its image must hold an AMO and an LR/SC
+pair. On `esp32c3` refine must refuse that probe with L0344 alone at every
+exchange, add and compare-exchange; on both, `probes/rv32-wide-atomic.ldn`'s
+u64 cell is refused where it is declared, since no RV32 level has an
+eight-byte atomic access.
+
+The directory is still named `cortex-m` and holds the RV32 lanes beside
+the Arm ones; the register records that rather than a rename.
 
 ## Compiler-owned firmware
 

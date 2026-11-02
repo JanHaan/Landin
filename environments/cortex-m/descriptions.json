@@ -269,6 +269,30 @@
       "boot_suffix": 0,
       "stack_top": 541065216,
       "stack_reserved": 65536
+    },
+    "esp32c3": {
+      "sources": {
+        "machine": "Espressif QEMU esp-develop-9.2.2-20260417's esp32c3, measured with the locked binary: -kernel loads an ELF and starts it at its entry without the ROM, semihosting and the GDB stub work, and SRAM1 is one array read as instruction memory at 0x40380000 and as data memory at 0x3fc80000; its core executes A-extension instructions, misa reading 0x401411ad, so the lane refuses them in the image (D695)",
+        "layout": "the RV32 firmware script's: the entry word at the text region's origin and the trap table at the first 256-byte boundary past it, since the C3 core's mtvec ignores its low 8 bits (D695)",
+        "capacities": "the constrained reference's, spec.md [1990], so the lane's limits are the corpus's"
+      },
+      "module": "esp32c3",
+      "target": "rv32",
+      "core": "esp-rv32imc",
+      "level": "rv32imc",
+      "float_unit": "none",
+      "boot": "vector-table",
+      "regions": [
+        {"name": "IRAM", "origin": 1077411840, "length": 32768, "access": "rx"},
+        {"name": "DRAM", "origin": 1070104576, "length": 16384, "access": "rwx"}
+      ],
+      "placed": {"vectors": "IRAM", "text": "IRAM", "rodata": "IRAM", "data": "DRAM", "bss": "DRAM", "stack": "DRAM"},
+      "vector_address": 1077412096,
+      "vector_words": 32,
+      "boot_prefix": 0,
+      "boot_suffix": 0,
+      "stack_top": 1070120960,
+      "stack_reserved": 4096
     }
   }
 }

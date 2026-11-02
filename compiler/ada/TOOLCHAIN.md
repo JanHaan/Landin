@@ -291,6 +291,9 @@ which the nix shell reads. Its multilibs include `rv32im/ilp32`, which
 `rv32imac/ilp32`. `refine` looks for `riscv64-elf-gcc` and then
 `riscv64-unknown-elf-gcc`, the name Debian's and Ubuntu's
 `gcc-riscv64-unknown-elf` gives the same bare-metal GCC.
+`environments/cortex-m/setup.py` installs the Linux x86-64 one for the RV32
+emulator lanes, which run on Espressif's QEMU, locked with its libraries in
+`environments/cortex-m/tools.lock.json` (D695).
 
 | platform | archive | sha256 |
 |---|---|---|

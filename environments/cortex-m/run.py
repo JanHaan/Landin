@@ -18,7 +18,8 @@ import threading
 import time
 
 from gdb_server import GdbServer
-from setup import AREAS, DEFAULT, HERE, arm_archive, installed_tools, inventory, sha, supported_host
+from setup import (AREAS, DEFAULT, ESPRESSIF, HERE, RISCV, arm_archive, installed_tools,
+                   inventory, riscv_archive, sha, supported_host)
 
 #  The GDB every session on one thread shares; `Run.debug` starts it.  One
 #  per thread, because a GDB serves one session at a time and the corpus
@@ -77,6 +78,22 @@ class CommandFailed(RuntimeError):
         self.name, self.log, self.ended = name, log, ended
 
 
+def current_lock(tools, installed):
+    """Refuse an installation made from another tools.lock.json, saying how to replace it."""
+    require(installed['lock_sha256'] == sha(HERE / 'tools.lock.json'),
+            'the tools at %s were installed from another tools.lock.json than this'
+            ' checkout\'s; install a fresh --tools root with setup.py' % tools)
+
+
+def unchanged(tools, installed, found):
+    """Refuse an installation whose files FOUND differ from what setup recorded,
+    naming each area that differs."""
+    differ = sorted(area for area in set(found) | set(installed['files'])
+                    if found.get(area) != installed['files'].get(area))
+    require(not differ, 'installed tools changed since setup recorded them, in %s of %s;'
+            ' install a fresh --tools root with setup.py' % (', '.join(differ), tools))
+
+
 def limit_text(seconds):
     return '%g-second' % seconds
 
@@ -105,9 +122,14 @@ class Run:
         self.out, self.tools = output, tools
         self.commands = []
         self.env = dict(os.environ, LC_ALL='C', LANG='C')
-        self.env['LD_LIBRARY_PATH'] = str(tools / 'root/usr/lib/x86_64-linux-gnu')
+        #  Debian's libpulse, which Espressif's QEMU loads through SDL,
+        #  finds its own common library through a RUNPATH under /usr.
+        libraries = tools / 'root/usr/lib/x86_64-linux-gnu'
+        self.env['LD_LIBRARY_PATH'] = '%s:%s' % (libraries, libraries / 'pulseaudio')
         self.bin = tools / 'root/usr/bin'
         self.arm = tools / 'gnat-arm-elf/bin'
+        self.riscv = tools / RISCV / 'bin'
+        self.espressif = tools / ESPRESSIF / 'bin'
 
     def debug(self, name, elf, script, timeout=20):
         """One debugger session, recorded like a command.
@@ -311,17 +333,24 @@ class Run:
         """
         supported_host()
         installed = json.loads((self.tools / 'installation.json').read_text())
-        require(installed['lock_sha256'] == sha(HERE / 'tools.lock.json'), 'tool lock mismatch')
+        current_lock(self.tools, installed)
         require(installed.get('arm') == {key: arm_archive()[key] for key in ('version', 'sha256')},
                 'the installed arm-elf archive is not the one environments/pins.sh pins')
+        require(installed.get('riscv') == {key: riscv_archive()[key] for key in ('version', 'sha256')},
+                'the installed riscv64-elf archive is not the one environments/pins.sh pins')
         before = {area: inventory(self.tools / area) for area in AREAS}
-        require(before == installed['files'], 'installed tools changed')
+        unchanged(self.tools, installed, before)
         (self.out / 'tools.json').write_text(json.dumps(installed, sort_keys=True)+'\n')
         for name, tool, expected in [
             ('qemu-version', self.bin / 'qemu-system-arm', '10.0.13'),
             ('gcc-version', self.arm / 'arm-eabi-gcc',
              '(GNAT-FSF-builds) ' + arm_archive()['version'].rsplit('-', 1)[0]),
             ('binutils-version', self.arm / 'arm-eabi-as', '2.46.1'),
+            ('riscv-gcc-version', self.riscv / 'riscv64-elf-gcc',
+             '(GNAT-FSF-builds) ' + riscv_archive()['version'].rsplit('-', 1)[0]),
+            ('riscv-binutils-version', self.riscv / 'riscv64-elf-as', '2.46.1'),
+            ('espressif-qemu-version', self.espressif / 'qemu-system-riscv32',
+             '9.2.2 (esp_develop_9.2.2_20260417)'),
             ('gdb-version', self.bin / 'gdb-multiarch', '16.3')]:
             require(expected in self.command(name, [tool, '--version']), name + ' mismatch')
         selected = selection(lanes)
@@ -377,7 +406,10 @@ class Run:
         elif name == 'backend':
             from backend_acceptance import execute as backend_execute
             backend_execute(self, refine)
-        elif name in ('mps2-an505', 'mps2-an500'):
+        elif name == 'rv32-controls':
+            from rv32_controls import execute_suite as rv32_execute
+            rv32_execute(self)
+        elif name in ('mps2-an505', 'mps2-an500', 'esp32c3', 'sifive-e'):
             from backend_acceptance import execute_lane
             execute_lane(self, refine, name)
         elif name == 'firmware':
@@ -405,26 +437,33 @@ class Run:
 #  selecting it alone runs both.  `mps2-an505` and `mps2-an500` are the
 #  whole corpus again on those emulator lanes (backend_corpus.LANES): at
 #  armv8-m.main on the AN505's Cortex-M33, and at armv7e-m with FPv5-D16 on
-#  the AN500's Cortex-M7.
-LANES = ('cpu', 'peripheral', 'abi', 'memory', 'packed', 'packed-native', 'backend',
-         'mps2-an505', 'mps2-an500', 'firmware', 'freestanding', 'devices', 'descriptions',
-         'driver', 'evidence')
-NEEDS = {'evidence': ('driver',)}
+#  the AN500's Cortex-M7.  `esp32c3` and `sifive-e` are the whole corpus
+#  on Espressif's QEMU at rv32imc and rv32imac (D695), each after
+#  `rv32-controls`, which shows the RV32 harness judging hand-written
+#  programs on both machines and needs no compiler.
+LANES = ('cpu', 'peripheral', 'abi', 'memory', 'packed', 'rv32-controls', 'packed-native',
+         'backend', 'mps2-an505', 'mps2-an500', 'esp32c3', 'sifive-e', 'firmware',
+         'freestanding', 'devices', 'descriptions', 'driver', 'evidence')
+NEEDS = {'evidence': ('driver',), 'esp32c3': ('rv32-controls',),
+         'sifive-e': ('rv32-controls',)}
 NEEDS_REFINE = set(LANES[LANES.index('packed-native'):])
 
-#  The gate's two Cortex-M jobs, `cortex-m-programs` and `cortex-m-corpus`,
-#  each run one part, so neither is FILTERED: together they are every lane
-#  above, each exactly once, and each part holds the lanes its lanes need,
-#  which test.py holds them to.  `corpus` is the three whole-corpus lanes,
-#  the M0's `backend` and the M33's and M7's again; `programs` is the rest,
-#  the probes, the firmware and device programs and the debug evidence.
-#  At LANDIN_CORTEX_JOBS=6 on a 32-CPU host they took 694 and 708 seconds,
-#  and all of them 1,306 in one run, which on a four-CPU runner put one job
-#  at risk of the gate's hour.
+#  The gate's three Cortex-M jobs, `cortex-m-programs`, `cortex-m-corpus`
+#  and `cortex-m-rv32`, each run one part, so none is FILTERED: together
+#  they are every lane above, each exactly once, and each part holds the
+#  lanes its lanes need, which test.py holds them to.  `corpus` is the three
+#  whole-corpus lanes, the M0's `backend` and the M33's and M7's again;
+#  `rv32` the RV32 controls and the two RV32 whole corpora (D695), a job of
+#  their own, since two more corpora would put `corpus` past the gate's
+#  hour; `programs` is the rest, the probes, the firmware and device
+#  programs and the debug evidence.  At LANDIN_CORTEX_JOBS=6 on a 32-CPU
+#  host the first two took 694 and 708 seconds, and all of them 1,306 in
+#  one run, which on a four-CPU runner put one job at risk of that hour.
 PARTS = {'programs': ('cpu', 'peripheral', 'abi', 'memory', 'packed', 'packed-native',
                       'firmware', 'freestanding', 'devices', 'descriptions', 'driver',
                       'evidence'),
-         'corpus': ('backend', 'mps2-an505', 'mps2-an500')}
+         'corpus': ('backend', 'mps2-an505', 'mps2-an500'),
+         'rv32': ('rv32-controls', 'esp32c3', 'sifive-e')}
 
 
 def selection(lanes):
@@ -450,7 +489,7 @@ def main():
                         help='run only this lane, and the lanes it needs; repeat for more.'
                              ' A run that selects lanes is FILTERED and is not the gate\'s')
     chosen.add_argument('--part', choices=PARTS,
-                        help='run one part of every lane, as one of the gate\'s two Cortex-M'
+                        help='run one part of every lane, as one of the gate\'s three Cortex-M'
                              ' jobs does: %s.  The parts together are every lane, so a part'
                              ' is not FILTERED' % '; '.join(
                                  '%s is %s' % (name, ', '.join(lanes))

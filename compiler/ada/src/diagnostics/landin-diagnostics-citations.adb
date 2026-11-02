@@ -2447,6 +2447,15 @@ package body Landin.Diagnostics.Citations is
             when 619 =>
                "QEMU's mps2-an500 is the M7's emulator lane, selected by"
                & " a description",
+            when 695 =>
+               "Espressif's QEMU carries both RV32 corpus lanes, under t"
+               & "he Arm lanes' harness",
+            when 696 =>
+               "The rv32imc lane refuses the A extension statically and "
+               & "in its core",
+            when 697 =>
+               "Each RV32 lane holds its level's atomics with probes of "
+               & "its own",
             when 620 =>
                "A fibre's context on a float unit holds d8-d15 and FPSCR",
             when 621 =>
@@ -3696,6 +3705,12 @@ package body Landin.Diagnostics.Citations is
             when 618 =>
                "Decisions: The core library and the derived programs",
             when 619 =>
+               "Decisions: The core library and the derived programs",
+            when 695 =>
+               "Decisions: The core library and the derived programs",
+            when 696 =>
+               "Decisions: The core library and the derived programs",
+            when 697 =>
                "Decisions: The core library and the derived programs",
             when 620 =>
                "Decisions: The core library and the derived programs",
@@ -5379,6 +5394,15 @@ package body Landin.Diagnostics.Citations is
             when 619 =>
                "https://www.701.dev/spec.html#d619-qemu-s-mps2-an500-is-"
                & "the-m7-s-emulator-lane-selected-by-a-description",
+            when 695 =>
+               "https://www.701.dev/spec.html#d695-espressif-s-qemu-carr"
+               & "ies-both-rv32-corpus-lanes-under-the-arm-lanes-harness",
+            when 696 =>
+               "https://www.701.dev/spec.html#d696-the-rv32imc-lane-refu"
+               & "ses-the-a-extension-statically-and-in-its-core",
+            when 697 =>
+               "https://www.701.dev/spec.html#d697-each-rv32-lane-holds-"
+               & "its-level-s-atomics-with-probes-of-its-own",
             when 620 =>
                "https://www.701.dev/spec.html#d620-a-fibre-s-context-on-"
                & "a-float-unit-holds-d8-d15-and-fpscr",
