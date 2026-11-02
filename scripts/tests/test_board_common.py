@@ -504,5 +504,33 @@ class Pace(unittest.TestCase):
             pace.before('power cycle')
 
 
+
+class Cascade(unittest.TestCase):
+    def tree(self, tmp, devices):
+        for name, serial in devices.items():
+            (Path(tmp) / name).mkdir()
+            if serial:
+                (Path(tmp) / name / 'serial').write_text(serial + '\n')
+        return Path(tmp)
+
+    def test_a_device_is_found_by_its_serial(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sysfs = self.tree(tmp, {'7-2.3.4.2': 'A0:76', '7-2.3.4.2:1.0': None,
+                                    '9-1.2': '210319B3E738', 'usb7': '0000:42:00.3'})
+            self.assertEqual(COMMON.device_location('210319B3E738', sysfs), '9-1.2')
+            self.assertIsNone(COMMON.device_location('NOBODY', sysfs))
+
+    def test_only_a_device_present_and_off_the_cascade_passes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sysfs = self.tree(tmp, {'9-1.2': 'ARTY'})
+            self.assertEqual(COMMON.off_cascade('ARTY', '7-2', sysfs), '9-1.2')
+            self.assertEqual(COMMON.off_cascade('ARTY', '9-1.20', sysfs), '9-1.2')
+            for cascade in ('9-1', '9-1.2'):
+                with self.assertRaises(COMMON.Failed):
+                    COMMON.off_cascade('ARTY', cascade, sysfs)
+            with self.assertRaises(COMMON.Failed):
+                COMMON.off_cascade('GONE', '7-2', sysfs)
+
+
 if __name__ == '__main__':
     unittest.main()

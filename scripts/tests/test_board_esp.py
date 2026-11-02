@@ -429,6 +429,21 @@ class Restore(unittest.TestCase):
             ESP.restore(Fake(), 'board.elf.bin', 0x2000, tries=4)
 
 
+class Paced(unittest.TestCase):
+    def test_nothing_is_done_while_the_arty_is_on_the_cascade(self):
+        done = []
+        pace = mock.Mock()
+        args = SimpleNamespace(arty_serial='210319B3E738', cascade='7-2', pace=pace)
+        with mock.patch.object(COMMON, 'device_location', return_value='7-2.3.3.4'), \
+                self.assertRaises(COMMON.Failed):
+            ESP.paced(args, 'download', lambda: done.append(1))
+        self.assertEqual((done, pace.before.called), ([], False))
+        with mock.patch.object(COMMON, 'device_location', return_value='9-1.2'):
+            ESP.paced(args, 'download', lambda: done.append(1))
+        self.assertEqual(done, [1])
+        pace.after.assert_called_once_with('download')
+
+
 class Recover(unittest.TestCase):
     def test_download_mode_is_esptool_s_usb_jtag_serial_sequence(self):
         calls = []

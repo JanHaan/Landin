@@ -22290,7 +22290,12 @@ download, a port switched off or on and the C5's chip-enable reset, with
 `common.Pace`: at least 120 s after the previous one by any tool on the
 host, only after the kernel has logged nothing of USB for 60 s, stopping
 when it logged a USB error since that previous action; and after each they
-wait for the hub to list the board again, `common.wait_for_hub`.
+wait for the hub to list the board again, `common.wait_for_hub`. The
+probe's Arty, which must never lose power, is kept off the cascade: every
+tool finds it by its USB serial wherever it is, `common.off_cascade`, and
+switches, downloads or resets nothing while it is absent or on the cascade
+whose ports are switched, in place of the earlier guard that required it
+on one port of the hub being switched.
 
 **The alternatives:** a lock per hub, which the cascade makes one hub;
 retrying a listing that finds no hub, which hides the trouble the pace

@@ -325,17 +325,17 @@ def power_cycle(run, args):
     enumeration reset the whole hub tree above it on the rig (D712); and
     after the cycle the guarded port must show its device again and the
     probe answer on the network, or the run stops."""
+    common.off_cascade(args.guard_serial, args.cascade)
     paced(args, 'power cycle', lambda: common.power_cycle(
         Listings(run, args.guard_seconds), args.hub, args.port, args.off_seconds,
-        keeps=(args.guard_port, args.guard_serial), holds_if_any=args.pico_serial))
+        holds_if_any=args.pico_serial))
     deadline = time.time() + args.guard_seconds
     while True:
-        status = run.command('hub-after-cycle', ['uhubctl', '-l', args.hub], check=False)
-        guard = common.hub_ports(status).get(args.guard_port, '')
-        if args.guard_serial in guard:
+        try:
+            common.off_cascade(args.guard_serial, args.cascade)
             break
-        require(time.time() < deadline, 'after the cycle port %d of hub %s does not show %s;'
-                ' stopping' % (args.guard_port, args.hub, args.guard_serial))
+        except Failed as error:
+            require(time.time() < deadline, 'after the cycle: %s; stopping' % error)
         time.sleep(0.5)
     answer = run.command('probe-ping', ['ping', '-c', '1', '-W', '2', args.probe_host], check=False)
     require(' 0% packet loss' in answer,
@@ -514,9 +514,11 @@ def main():
     parser.add_argument('--port', type=int, default=2, help="the Pico 2's port on it")
     parser.add_argument('--pico-serial', help="the Pico 2's USB serial, which its port must show"
                         " whenever it shows a device; this firmware does not enumerate")
-    parser.add_argument('--guard-port', type=int, default=4, help='a port never switched')
+    parser.add_argument('--cascade', default='7-2',
+                        help='the hub cascade whose ports are switched, as sysfs names its root')
     parser.add_argument('--guard-serial', default='210319B3E738',
-                        help='the serial the guarded port must show, or the hub is not switched')
+                        help="a device that must be present and off the switched cascade, the"
+                             " probe's Arty on the maintainer's rig, or no port is switched")
     parser.add_argument('--off-seconds', type=float, default=1.0)
     parser.add_argument('--block-control', action='store_true',
                         help='first flash an image whose block is corrupted and require the boot ROM'

@@ -159,8 +159,8 @@ def power_cycle(run, args):
     guarded port holds the device named, and, with --pico-serial, only
     while the port holds that Pico 2 or no USB device at all: a Pico 2
     running this firmware does not enumerate."""
+    common.off_cascade(args.guard_serial, args.cascade)
     common.power_cycle(run, args.hub, args.port, args.off_seconds,
-                       keeps=(args.guard_port, args.guard_serial),
                        holds_if_any=args.pico_serial)
 
 
@@ -309,9 +309,11 @@ def main():
     parser.add_argument('--port', type=int, default=2, help="the Pico 2's port on it")
     parser.add_argument('--pico-serial', help="the Pico 2's USB serial, which its port must show"
                         " whenever it shows a device; this firmware does not enumerate")
-    parser.add_argument('--guard-port', type=int, default=4, help='a port never switched')
     parser.add_argument('--guard-serial', default='210319B3E738',
-                        help='the serial the guarded port must show, or the hub is not switched')
+                        help="a device that must be present and off the switched cascade, the"
+                             " probe's Arty on the maintainer's rig, or no port is switched")
+    parser.add_argument('--cascade', default='7-2',
+                        help='the hub cascade whose ports are switched, as sysfs names its root')
     parser.add_argument('--off-seconds', type=float, default=1.0)
     parser.add_argument('--block-control', action='store_true',
                         help='first flash an image whose block is corrupted and require the boot ROM'

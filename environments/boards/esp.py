@@ -411,6 +411,9 @@ def restore(probe, image, offset, tries=20):
 def paced(args, what, action):
     """ACTION, which disconnects a device on the rig's hub cascade, spaced
     by args.pace."""
+    # The probe's Arty must never lose power or re-enumerate, so nothing
+    # disturbs the cascade while it is on it (D725).
+    common.off_cascade(args.arty_serial, args.cascade)
     args.pace.before(what)
     try:
         return action()
@@ -553,6 +556,11 @@ def arguments(parser, chip):
                              ' refuse, and one whose SHA-256 is flipped, whose hash it must name')
     parser.add_argument('--control-seconds', type=float, default=3.0,
                         help='how long a control\'s boot log is read for')
+    parser.add_argument('--arty-serial', default='210319B3E738',
+                        help="a device that must be present and off the switched cascade, the"
+                             " probe's Arty on the maintainer's rig, or nothing is done to the hub")
+    parser.add_argument('--cascade', default='7-2',
+                        help='the hub cascade the boards are on, as sysfs names its root')
     parser.add_argument('--spacing', type=float, default=120.0,
                         help='seconds between two actions that disconnect a device on the hub,'
                              ' by any tool on the host (D725)')

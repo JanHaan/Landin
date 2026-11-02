@@ -32,9 +32,12 @@ stopped; otherwise the tool starts one serving every slot of the probe,
 `--bridge-slots`, and leaves it running when it ends, so that another
 board's tool on another slot finds it (D713). `result.json` says which.
 
-The tool switches only `--port` on `--hub`, and only after `uhubctl` shows
-`--guard-serial` on `--guard-port` of the same hub, the probe's Arty on the
-maintainer's rig, as [the Pico 2's Arm tool](../rp2350/README.md) does. On
+The tool switches only `--port` on `--hub`, and only while
+the device with `--guard-serial`, the probe's own Arty A7, is present and not on
+`--cascade`, the hub cascade the boards are on (`7-2` on the maintainer's
+rig), found by its serial wherever it is plugged in: its bitstream is held
+only in SRAM and would be lost with its power, and every switch on the
+cascade re-enumerates the whole of it (D725), as [the Pico 2's Arm tool](../rp2350/README.md) does. On
 the rig such a cycle coincided with a reset of the whole hub tree above it,
 the Arty's USB among it, while the kernel was failing to enumerate the
 port. So the tool holds the rig's lock, `~/.cache/landin/rig.lock`, from
@@ -42,12 +45,12 @@ its first step on the rig to its last, and spaces each download and cycle
 from every other tool's on the host, by `--spacing` seconds and until the
 kernel has logged nothing of USB for `--quiet` seconds, stopping on any
 USB trouble the kernel logged since the last such action (D725). After
-the cycle it waits `--guard-seconds` for the guarded port to show its
-device again and pings `--probe-host`, and stops if either is missing. A
+the cycle it waits `--guard-seconds` for that device to be present again,
+still off the cascade, and pings `--probe-host`, and stops if either is missing. A
 listing of the hub that meets the tree re-enumerating is asked again until
 `--guard-seconds` have passed.
-The defaults are the maintainer's rig: hub `7-2.3.3`, port 2, guarded by
-port 4.
+The defaults are the maintainer's rig: hub `7-2.3.3`, port 2, on the
+cascade `7-2`.
 
 ## Which chip probe-rs is told
 
@@ -87,7 +90,7 @@ rig it does not run at present.
 python3 environments/boards/rp2350_hazard3/board.py \
     --refine compiler/ada/build/nix-x86_64-linux/debug/bin/refine \
     --probehive ~/src/probehive --probe-rs PATH/TO/probe-rs --slot 1 \
-    --hub 7-2.3.3 --port 2 --guard-port 4 --guard-serial 210319B3E738 \
+    --hub 7-2.3.3 --port 2 --guard-serial 210319B3E738 \
     --output NEW_DIRECTORY
 ```
 
