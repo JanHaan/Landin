@@ -593,7 +593,7 @@ process ignores SIGPIPE and gives its children the default back.
 ## Code generation
 
 - **Determinism.** Target code and the build report are byte-identical
-  whatever the build directory, environment or order, on all seven targets;
+  whatever the build directory, environment or order, on all eight targets;
   the hosted linked image is not claimed.
 - **Switches.** D209 to D211 specify compact numeric-array arithmetic,
   explicit `layout(optimal)` field placement and optional evidence-proved

@@ -44,8 +44,8 @@ and a debug and a release build of one tree once disagreed on the bytes of
 every program that decoded text by codepoint, because Ada leaves the order
 of a call's actuals open and the two builds emitted two of them in opposite
 orders.  `modes` is that half: both builds compile the positive and runtime
-corpora, and the Cortex-M counterparts, at the four standard profiles, and
-every result has to agree.
+corpora, the firmware corpus and the Cortex-M counterparts, at the four
+standard profiles, and every result has to agree.
 
     emit REFINE ROOT OUT.json     write this host's manifest
     compare A.json B.json [...]   require every manifest to agree
@@ -67,7 +67,7 @@ import build_lock  # noqa: E402
 import fixture_meta  # noqa: E402
 
 TARGETS = ("linux-x86-64", "linux-arm64", "darwin-arm64", "cortex-m0",
-           "freebsd-x86-64", "freebsd-arm64", "linux-rv64")
+           "freebsd-x86-64", "freebsd-arm64", "linux-rv64", "rv32")
 MODES = ("debug", "release")
 OPTIMIZATIONS = ("none", "size", "speed")
 SPECIALIZATIONS = ("off", "auto", "all")
@@ -123,6 +123,39 @@ REFUSAL_PAIRS = {
     ("r630-memory-scalars", "cortex-m0"),
     ("r660-machine-directives", "cortex-m0"),
     ("written-type-c-function", "cortex-m0"),
+    #  rv32 has no C ABI either (D660), so it refuses what cortex-m0 does
+    #  for that reason, and r630-memory-scalars' read-modify-write at its
+    #  default rv32imc (D690).  assembly-operand-forms has no rv32 arm, and
+    #  its last arm's u64 operand is wider than an rv32 register.
+    ("assembly-operand-forms", "rv32"),
+    ("c-packed-records", "rv32"),
+    ("external-scalar-c-boundary", "rv32"),
+    ("fixed-conditional-cross-file-forward", "rv32"),
+    ("fixed-conditional-generic-activity", "rv32"),
+    ("fixed-conditional-nested-inactive", "rv32"),
+    ("fixed-conditional-selects-declarations", "rv32"),
+    ("from-c", "rv32"),
+    ("hosted-initializer-normalized", "rv32"),
+    ("r440-array-callback-type-argument", "rv32"),
+    ("r440-c-aliases", "rv32"),
+    ("r440-c-layout-recursive-callback", "rv32"),
+    ("r440-c-signatures", "rv32"),
+    ("r440-checker-recursive-callback-contexts", "rv32"),
+    ("r440-checker-recursive-contexts", "rv32"),
+    ("r440-compatible-link-declarations", "rv32"),
+    ("r440-external-float", "rv32"),
+    ("r491-generic-pointee-layout", "rv32"),
+    ("r491-symbolic-c-layout", "rv32"),
+    ("r630-memory-scalars", "rv32"),
+    ("written-type-c-function", "rv32"),
+} | {
+    #  A fixture whose `args` name rv32 is a description's or a platform
+    #  module's, which every other target refuses (L0515, L0015); one at
+    #  rv32imac uses the read-modify-write cortex-m0 has none of (L0344).
+    (fixture, target)
+    for fixture in ("atomic-read-modify-write-rv32imac",
+                    "library-platform-riscv-hazard3", "ramtext-esp32c3")
+    for target in TARGETS if target != "rv32"
 }
 BASE_EXPECTED_REFUSALS = {
     "%s|%s|%s" % (fixture, target, mode)
@@ -177,13 +210,28 @@ def operands(fixture):
     return meta.module_arguments(".")
 
 
+def levels(fixture):
+    """{target: level} for the level FIXTURE's `args` request (D658).
+
+    A fixture is compiled for every target at its default level, except
+    the one its `args` name with a `--level`, which is compiled at that
+    level as the harness compiles it: a level decides which code is
+    emitted, so the default would leave the level's code unchecked.
+    """
+    args = fixture_meta.read(fixture, strict=False).args
+    target = [a.split("=", 1)[1] for a in args if a.startswith("--target=")]
+    level = [a.split("=", 1)[1] for a in args if a.startswith("--level=")]
+    return {target[-1]: level[-1]} if target and level else {}
+
+
 def compile_one(job):
     """Compile one entry in its own directory, including any sidecars."""
-    key, refine, fixture, sources, target, mode, optimize, specialize, asm = job
+    key, refine, fixture, sources, target, level, mode, optimize, specialize, asm = job
     asm.parent.mkdir()
     #  cwd and operands preserve the source-path spelling on every host.
     result = subprocess.run(
-        [str(refine), "--target=" + target, "--build-mode=" + mode,
+        [str(refine), "--target=" + target]
+        + (["--level=" + level] if level else []) + ["--build-mode=" + mode,
          "--optimize=" + optimize, "--specialize=" + specialize, "--emit=asm",
          "-o", str(asm)] + sources,
         capture_output=True, cwd=fixture)
@@ -207,6 +255,7 @@ def emit(refine, root, out, workers=None, targets=TARGETS):
         jobs = []
         for fixture in fixtures:
             sources = operands(fixture)
+            level = levels(fixture)
             for target in targets:
                 for mode in MODES:
                     for optimize in OPTIMIZATIONS:
@@ -215,7 +264,8 @@ def emit(refine, root, out, workers=None, targets=TARGETS):
                                    f"optimize={optimize}|specialize={specialize}")
                             asm = Path(tmp) / str(len(jobs)) / "out.s"
                             jobs.append((key, refine, fixture, sources, target,
-                                         mode, optimize, specialize, asm))
+                                         level.get(target), mode, optimize,
+                                         specialize, asm))
         with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
             # Preserve inventory order regardless of completion order.
             for key, value in pool.map(compile_one, jobs):
@@ -295,19 +345,32 @@ def compare(paths):
 
 
 #  The build-mode comparison: the request is fixed, so only the compiler's
-#  own build differs.  One target per backend; the standard profiles are the
+#  own build differs.  One target per backend, and each firmware target,
+#  whose program is a different image; the standard profiles are the
 #  runtime corpus's own, so each pair is one the harness also executes.
-MODE_TARGETS = ("linux-x86-64", "linux-arm64", "cortex-m0")
+MODE_TARGETS = ("linux-x86-64", "linux-arm64", "cortex-m0", "rv32")
+#  The targets the firmware corpus runs its inventory on (D658).
+FIRMWARE_TARGETS = ("cortex-m0", "rv32")
 STANDARD_PROFILES = (("none", "off"), ("size", "off"), ("size", "auto"),
                      ("speed", "auto"))
 def mode_entries(root, targets):
-    """(name, directory, operands, targets) for each source compared.
+    """(name, directory, operands, targets, levels) for each source compared.
 
-    A positive fixture is compiled for every target, a runtime fixture for
-    the targets its `targets:` names, and a Cortex-M counterpart, which has
-    no fixture record, for Cortex-M.
+    A positive fixture is compiled for every target, at the level its `args`
+    request on the target they name; a runtime fixture for the targets its
+    `targets:` names and for each firmware target the firmware corpus
+    executes it on, which is every `execute` row of its inventory, since
+    no `targets:` names rv32; and a Cortex-M counterpart, which has no
+    fixture record and replaces its row's fixture there, for each firmware
+    target.
     """
     tests = Path(root).resolve() / "compiler/tests"
+    firmware = tuple(t for t in targets if t in FIRMWARE_TARGETS)
+    executed = set()
+    if firmware:
+        rows = json.loads((tests / "cortex-m/corpus.json").read_text())["fixtures"]
+        executed = {name for name, row in rows.items()
+                    if row["mode"] == "execute" and "counterpart" not in row}
     entries = []
     for kind in ("positive", "runtime"):
         for fixture in sorted(p for p in (tests / "fixtures" / kind).iterdir()
@@ -316,26 +379,29 @@ def mode_entries(root, targets):
             if kind == "runtime":
                 #  `targets:` spells each as `--target` does.
                 named = fixture_meta.read(fixture, strict=False).targets
-                wanted = tuple(t for t in targets if t in named)
+                corpus = "runtime/" + fixture.name in executed
+                wanted = tuple(t for t in targets if t in named
+                               or (corpus and t in firmware))
             if wanted:
                 entries.append((kind + "/" + fixture.name, fixture,
-                                operands(fixture), wanted))
-    if "cortex-m0" in targets:
+                                operands(fixture), wanted, levels(fixture)))
+    if firmware:
         for case in sorted(p for p in (tests / "cortex-m/cases").iterdir()
                            if p.is_dir()):
             entries.append(("cortex-m/" + case.name, case, ["main.ldn"],
-                            ("cortex-m0",)))
+                            firmware, {}))
     return entries
 
 
 def emit_both(job):
     """One request through both compilers: each result, then the key."""
-    key, compilers, directory, sources, target, optimize, specialize, tmp = job
+    key, compilers, directory, sources, target, level, optimize, specialize, tmp = job
     results = []
     for n, refine in enumerate(compilers):
         asm = Path(tmp) / ("%d.s" % n)
         result = subprocess.run(
-            [str(refine), "--target=" + target, "--optimize=" + optimize,
+            [str(refine), "--target=" + target]
+            + (["--level=" + level] if level else []) + ["--optimize=" + optimize,
              "--specialize=" + specialize, "--emit=asm", "-o", str(asm)]
             + sources, capture_output=True, cwd=directory)
         if result.returncode != 0 or not asm.exists():
@@ -359,7 +425,7 @@ def modes(debug, release, root, workers=None, targets=MODE_TARGETS):
     disagree, emitted, refused = [], 0, 0
     with tempfile.TemporaryDirectory() as tmp:
         jobs = []
-        for name, directory, sources, wanted in entries:
+        for name, directory, sources, wanted, level in entries:
             for target in wanted:
                 for optimize, specialize in STANDARD_PROFILES:
                     key = (f"{name}|{target}|"
@@ -367,7 +433,7 @@ def modes(debug, release, root, workers=None, targets=MODE_TARGETS):
                     scratch = Path(tmp) / str(len(jobs))
                     scratch.mkdir()
                     jobs.append((key, compilers, directory, sources, target,
-                                 optimize, specialize, scratch))
+                                 level.get(target), optimize, specialize, scratch))
         with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
             for key, (first, second) in pool.map(emit_both, jobs):
                 if first != second:

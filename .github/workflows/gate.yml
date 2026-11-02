@@ -449,8 +449,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          #  A Linux target takes the two compilers about seven times as
+          #  long as a firmware target, so each part has one of each (D658).
           - part: 1
-            targets: linux-x86-64
+            targets: linux-x86-64,rv32
           - part: 2
             targets: linux-arm64,cortex-m0
     env:
