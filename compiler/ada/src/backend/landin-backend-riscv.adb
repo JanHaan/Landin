@@ -1,4 +1,6 @@
 with Ada.Containers.Vectors;
+with Ada.Containers.Hashed_Sets;
+with Landin.Targets.Firmware;
 with Landin.Provenance;
 with Landin.Layouts;
 with Landin.Machine;
@@ -1122,6 +1124,85 @@ package body Landin.Backend.RiscV is
       Allocated_Symbols : array
         (1 .. Positive'Max (1, Landin.IR.Item_Count (Of_Unit))) of
           Unbounded.Unbounded_String;
+
+      --  D676: firmware's placements.  A later item may retain a section
+      --  an earlier item selected.
+      package Section_Sets is new Ada.Containers.Hashed_Sets
+        (Element_Type        => Landin.Source.Names.Name_Id,
+         Hash                => Landin.Source.Names.Hash,
+         Equivalent_Elements => Landin.Source.Names."=");
+      Retained_Sections : Section_Sets.Set;
+
+      --  An item's input section: on RV64 always its own, and at XLEN 32
+      --  the one its placement names, as Cortex-M0's: a region's, which
+      --  says what the region does with it, an explicit section, retained
+      --  when the item keeps it, or its own, with the placement's
+      --  alignment after it.  Kind is RV64's: text, rodata, data or bss.
+      function Item_Section
+        (Item : Landin.IR.Item_Id; Kind, Name : String;
+         Push : Boolean := False) return String;
+
+      function Item_Section
+        (Item : Landin.IR.Item_Id; Kind, Name : String;
+         Push : Boolean := False) return String
+      is
+         Attr : constant Landin.Machine.Placement :=
+           Landin.IR.Placement_Of (Of_Unit, Item);
+      begin
+         if not Pairs or else
+           (Attr.Region = Landin.Source.Names.No_Name
+            and then Attr.Section = Landin.Source.Names.No_Name
+            and then not Attr.Keep and then Attr.Alignment = 0)
+         then
+            return (if Push
+                    then ELF_Spelling.Push_Item_Section
+                      (Kind, Name, Positive (Item))
+                    else ELF_Spelling.Item_Section
+                      (Kind, Name, Positive (Item)));
+         end if;
+         declare
+            function Region_Section return String;
+            function Region_Section return String is
+               Region : constant String :=
+                 Landin.Source.Names.Spelling (Names, Attr.Region);
+               Profile : constant Landin.Targets.Firmware.Profile :=
+                 Landin.IR.Firmware_Profile (Of_Unit);
+               Writable : constant Boolean :=
+                 Landin.Targets.Firmware.Writable
+                   (Profile.Regions (Landin.Targets.Firmware.Region_Named
+                      (Profile, Region)).Mode);
+            begin
+               return ".landin_region." & Region & "."
+                 & (if Kind = "bss" then "bss"
+                    elsif Writable then "data"
+                    else Kind) & ".landin_" & Trimmed (Item'Image);
+            end Region_Section;
+            Section : constant String :=
+              (if Attr.Region /= Landin.Source.Names.No_Name
+               then Region_Section
+               elsif Attr.Section = Landin.Source.Names.No_Name
+               then "." & Kind & ".landin_" & Trimmed (Item'Image)
+               else Landin.Source.Names.Spelling (Names, Attr.Section));
+            Retained : constant Boolean := Attr.Keep or else
+              (Attr.Section /= Landin.Source.Names.No_Name
+               and then Retained_Sections.Contains (Attr.Section));
+            BSS : constant Boolean :=
+              Ada.Strings.Fixed.Index (Section, ".bss.") = Section'First
+              or else (Attr.Region /= Landin.Source.Names.No_Name
+                and then Ada.Strings.Fixed.Index (Section, ".bss.") /= 0);
+            Flags : constant String :=
+              (if Kind = "text" then "ax"
+               elsif Kind = "rodata" then "a" else "aw");
+         begin
+            return (if Push then ".pushsection " else ".section ")
+              & Section & ",""" & Flags & (if Retained then "R" else "")
+              & """,@" & (if BSS then "nobits" else "progbits")
+              & (if Attr.Alignment /= 0
+                 then LF & Character'Val (9) & ".balign "
+                   & Trimmed (Attr.Alignment'Image)
+                 else "");
+         end;
+      end Item_Section;
 
       function Is_C_Item (Item : Landin.IR.Item_Id) return Boolean
         is (Landin.IR.Signature_Of (Of_Unit, Item) /= Landin.IR.No_Signature
@@ -4508,7 +4589,8 @@ package body Landin.Backend.RiscV is
                               Emit ("mul x5, x5, x6");
                               if Checked then
                                  if Signed then
-                                    Emit ("srai x28, x5, 63");
+                                    Emit ("srai x28, x5, "
+                                          & Image (Natural (Width) - 1));
                                     Compare ("x7", "x28");
                                     Branch ("ne", Trap);
                                  else
@@ -4542,7 +4624,8 @@ package body Landin.Backend.RiscV is
                               Emit ("xor x5, x5, x6");
                            when Landin.IR.Shift_Left | Landin.IR.Shift_Right =>
                               if Signed then
-                                 Extract ("x18", "x6", 63, 1);
+                                 Extract ("x18", "x6",
+                                          Natural (Width) - 1, 1);
                                  Emit ("bnez x18, " & Trap);
                               end if;
                               Compare ("x6", Trimmed (Natural'Image
@@ -4908,7 +4991,7 @@ package body Landin.Backend.RiscV is
                      C_Result (Value);
                   elsif Result in Landin.Types.Scalar_Name then
                      Load_Value (Operand (1), "x10");
-                     if Item = Hosted_Entry then
+                     if Item = Hosted_Entry and then not Pairs then
                         --  The no-argument language entry returns libc's
                         --  C int, whose LP64D carrier is sign-extended to
                         --  XLEN even when the language bit carrier is not.
@@ -6503,9 +6586,9 @@ package body Landin.Backend.RiscV is
          --  a zero-count space directive that GNU as diagnoses.
          --  D496: a thread's instances are laid out by the system from the
          --  image's TLS segment, every one zeroed.
-         Emit (ELF_Spelling.Push_Item_Section
-           ((if Landin.Backend.In_Thread_Storage (Of_Unit, Facts, Item)
-             then "tbss" else "bss"), "datum", Positive (Item)));
+         Emit (Item_Section
+           (Item, (if Landin.Backend.In_Thread_Storage (Of_Unit, Facts, Item)
+                   then "tbss" else "bss"), "datum", Push => True));
          Emit (".balign "
            & Trimmed (Landin.Targets.Byte_Alignment'Image (Alignment)));
          Emit (ELF_Spelling.Object_Type (Symbol (Item)));
@@ -6737,6 +6820,17 @@ package body Landin.Backend.RiscV is
       end if;
       Validate_Linkage;
       Allocate_Symbols;
+      for Index in 1 .. Landin.IR.Item_Count (Of_Unit) loop
+         declare
+            Attr : constant Landin.Machine.Placement :=
+              Landin.IR.Placement_Of (Of_Unit, Landin.IR.Item_Id (Index));
+         begin
+            if Attr.Keep and then Attr.Section /= Landin.Source.Names.No_Name
+            then
+               Retained_Sections.Include (Attr.Section);
+            end if;
+         end;
+      end loop;
       if Panic /= null and then Landin.Panics.Handler (Panic.all)
         /= Landin.IR.No_Item
       then
@@ -6761,8 +6855,23 @@ package body Landin.Backend.RiscV is
               and then not Landin.IR.Is_External (Of_Unit, Item)
             then
                --  Every routine and datum is its own input section, so
-               --  --gc-sections drops what nothing retained reaches.
-               Emit (ELF_Spelling.Item_Section ("text", "routine", Index));
+               --  --gc-sections drops what nothing retained reaches.  D653:
+               --  a description's stage before reset is the table's reset
+               --  word's, wherever the text lies.
+               if Pairs
+                 and then Landin.IR.Placement_Of (Of_Unit, Item).Boot_Stage
+                 and then Landin.Targets.Firmware.Stage_Before_Reset
+                   (Landin.IR.Firmware_Profile (Of_Unit).Boot)
+               then
+                  Emit (".section .text.landin_firmware_reset_stage,""ax"","
+                        & "@progbits");
+                  Emit (".balign 4");
+                  Emit (".globl "
+                        & Landin.Targets.Firmware.Reset_Stage_Symbol);
+                  Put (Landin.Targets.Firmware.Reset_Stage_Symbol & ":");
+               else
+                  Emit (Item_Section (Item, "text", "routine"));
+               end if;
                Emit_Routine (Item);
             end if;
          end;
@@ -6776,12 +6885,15 @@ package body Landin.Backend.RiscV is
          begin
             if Landin.IR.Kind_Of (Of_Unit, Item) = Landin.IR.Datum then
                if Landin.IR.Is_Read_Only (Of_Unit, Item) then
-                  Emit (ELF_Spelling.Item_Section ("rodata", "datum", Index));
+                  Emit (Item_Section (Item, "rodata", "datum"));
                   Emit_Array_Image_Datum (Item);
                elsif Is_All_Zero (Item) then
                   null;
                else
-                  Emit (ELF_Spelling.Item_Section ("data", "datum", Index));
+                  Emit (Item_Section
+                    (Item, (if Pairs and then Landin.IR.Is_Immutable
+                              (Of_Unit, Item) then "rodata" else "data"),
+                     "datum"));
                   if Landin.IR.Result_Of (Of_Unit, Item) =
                     Landin.Types.Aggregate
                   then
@@ -7076,7 +7188,12 @@ package body Landin.Backend.RiscV is
               (Reports.Text (Index)));
          end loop;
       end if;
-      if Debug /= null then
+      --  Firmware's debugging is lines, as Cortex-M0's is (D660).
+      if Debug /= null and then Pairs then
+         Unbounded.Append (Output, Dwarf.Line_Sections
+           (Of_Unit, Meanings, Names, Facts, Debug.all,
+            Local_Prefix, Symbol'Access));
+      elsif Debug /= null then
          Unbounded.Append (Output,
            ELF_Debug_Sections
              (Of_Unit, Meanings, Names, Facts, Options, Debug.all,
