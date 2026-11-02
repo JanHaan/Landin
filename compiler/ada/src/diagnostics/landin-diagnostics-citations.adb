@@ -2292,6 +2292,9 @@ package body Landin.Diagnostics.Citations is
             when 725 =>
                "Every board run holds the rig's lock and paces what disc"
                & "onnects a device",
+            when 726 =>
+               "An ESP port resets its RX FIFO on an overflow and drains"
+               & " nothing of it",
             when 645 =>
                "The shared command loop takes its indicator and transmit"
                & "ter as function values",
@@ -3666,6 +3669,8 @@ package body Landin.Diagnostics.Citations is
             when 724 =>
                "Decisions: The toolchain, C and the machine",
             when 725 =>
+               "Decisions: The toolchain, C and the machine",
+            when 726 =>
                "Decisions: The toolchain, C and the machine",
             when 645 =>
                "Decisions: The toolchain, C and the machine",
@@ -5340,6 +5345,9 @@ package body Landin.Diagnostics.Citations is
             when 725 =>
                "https://www.701.dev/spec.html#d725-every-board-run-holds"
                & "-the-rig-s-lock-and-paces-what-disconnects-a-device",
+            when 726 =>
+               "https://www.701.dev/spec.html#d726-an-esp-port-resets-it"
+               & "s-rx-fifo-on-an-overflow-and-drains-nothing-of-it",
             when 645 =>
                "https://www.701.dev/spec.html#d645-the-shared-command-lo"
                & "op-takes-its-indicator-and-transmitter-as-function-value"

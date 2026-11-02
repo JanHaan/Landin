@@ -22304,6 +22304,29 @@ did not keep.
 
 **Pinned by** `scripts/tests/test_board_common.py`'s `RigLock` and `Pace`.
 
+### D726 — An ESP port resets its RX FIFO on an overflow and drains nothing of it
+
+**The tour said** nothing; D721's receive interrupt drained what the RX
+FIFO held whatever the interrupt's cause.
+
+**Chosen:** when the receive interrupt finds RXFIFO_OVF it counts the
+overflow, resets the RX FIFO, `CONF0`'s RXFIFO_RST on the C3 and
+`CONF0_SYNC`'s on the C5 followed by REG_UPDATE (TRM v1.4, 26.4.2; v1.1,
+32.4.2 and 32.6.1), and returns without draining it, as ESP-IDF v6.1's UART
+driver resets the FIFO on that interrupt; the program then restarts on the
+counted loss as before. On both boards, draining after an overflow left the
+program echoing bytes it no longer acted on, and once on the C3 jumped to
+address 0; Espressif's QEMU, which paces its serial input, never overflows
+and never showed it. With the reset, the threshold scenario's burst is
+neither echoed nor kept, one overflow is counted, and the next request is
+answered.
+
+**The alternatives:** draining the FIFO as before, which the boards showed
+wrong; and resetting it only in the program's restart, which leaves the
+interrupt to read what the overflow left meanwhile.
+
+**Pinned by** the boards' records' threshold verdicts.
+
 ### D645 — The shared command loop takes its indicator and transmitter as function values
 
 **The tour said** nothing; D593 shared `compiler/tests/driver/commands`
