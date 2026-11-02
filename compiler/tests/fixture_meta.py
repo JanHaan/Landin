@@ -39,7 +39,8 @@ CLASSES = ("unit", "positive", "negative", "runtime", "abi", "debugger",
 
 #  The names a fixture's `targets:` may hold: `refine --target=`'s own.
 TARGETS = ("linux-x86-64", "linux-arm64", "linux-rv64", "darwin-arm64",
-           "cortex-m0", "freebsd-x86-64", "freebsd-arm64", "synthetic-32")
+           "cortex-m0", "rv32", "freebsd-x86-64", "freebsd-arm64",
+           "synthetic-32")
 
 #  Each target's CPU feature levels (D255), as `Landin.Targets.Levels`
 #  spells them; the first is the default.  A lane runs only its own
@@ -51,13 +52,14 @@ FAMILIES = {
     "rv64": ("rv64gc", "rv64gc_zba", "rv64gc_xtheadba",
              "rv64gc_zba_xtheadba"),
     "m-profile": ("armv6-m", "armv7-m", "armv7e-m", "armv8-m.main"),
+    "rv32": ("rv32imc", "rv32imac"),
     "none": (),
 }
 FAMILY_OF = {
     "linux-x86-64": "x86-64", "freebsd-x86-64": "x86-64",
     "linux-arm64": "arm64", "darwin-arm64": "arm64",
     "freebsd-arm64": "arm64", "linux-rv64": "rv64",
-    "cortex-m0": "m-profile", "synthetic-32": "none",
+    "cortex-m0": "m-profile", "rv32": "rv32", "synthetic-32": "none",
 }
 PRODUCT_LEVELS = frozenset(level for levels in FAMILIES.values()
                            for level in levels)
