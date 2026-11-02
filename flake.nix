@@ -116,6 +116,7 @@
           releases = pin "LANDIN_RELEASES";
           gnatVersion = pin "LANDIN_GNAT_VERSION";
           armElfVersion = pin "LANDIN_GNAT_ARM_ELF_VERSION";
+          riscvElfVersion = pin "LANDIN_GNAT_RISCV64_ELF_VERSION";
           gprbuildVersion = pin "LANDIN_GPRBUILD_VERSION";
 
           #  The archives are prebuilt, so on Linux they need their
@@ -196,6 +197,17 @@
             version = armElfVersion;
             url = "${releases}/gnat-${armElfVersion}/gnat-arm-elf-${armElfSystem}-${armElfVersion}.tar.gz";
             sha256 = pin "LANDIN_GNAT_ARM_ELF_SHA256_${suffix}";
+          };
+
+          #  The RV32 lanes' GCC and binutils, GNAT's riscv64-elf archive
+          #  from the same release, whose driver is `riscv64-elf-gcc` and
+          #  whose rv32imc and rv32imac multilibs firmware links against;
+          #  the shell alone carries it, as it carries arm-elf (D660).
+          gnatRiscvElf = fromArchive {
+            pname = "landin-gnat-riscv64-elf";
+            version = riscvElfVersion;
+            url = "${releases}/gnat-${riscvElfVersion}/gnat-riscv64-elf-${armElfSystem}-${riscvElfVersion}.tar.gz";
+            sha256 = pin "LANDIN_GNAT_RISCV64_ELF_SHA256_${suffix}";
           };
 
           #  The pinned Linux archive bundles its own binutils, and the
@@ -655,6 +667,7 @@
               gnat
               gprbuild
               gnatArmElf
+              gnatRiscvElf
               pkgs.python3 #  check.py and docs/site/render_html.py
               #  The structural editor grammar's corpus, highlight/test.sh
               #  --integration, at the gate's pinned version.

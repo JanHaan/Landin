@@ -1616,13 +1616,12 @@ package body Landin.Stages.Checking is
          if Syn.Machine_Convention (Of_Tree, Node)
            /= Landin.Machine.Ordinary
          then
-            --  Interrupt routines are Cortex-M0's.  A naked routine is a
+            --  Interrupt routines are firmware's.  A naked routine is a
             --  machine entry on every target with registers: firmware's
             --  vectors, and a hosted program's process entry, which no
             --  caller enters with a frame.
             Supported :=
-              (Landin.Targets.Architecture_Of (Facts)
-                 = Landin.Targets.Cortex_M0
+              (Landin.Targets.Is_Firmware (Facts)
                or else
                  (Syn.Machine_Convention (Of_Tree, Node)
                     = Landin.Machine.Naked_Routine
@@ -39878,10 +39877,14 @@ package body Landin.Stages.Checking is
             return;
          end if;
 
-         if Landin.Targets.Architecture_Of (Facts) = Landin.Targets.Cortex_M0
+         if Landin.Targets.Is_Firmware (Facts)
            and then (Ada.Strings.Fixed.Head (Spelled (Symbol), 17)
              = "_landin_firmware_"
-             or else Ada.Strings.Fixed.Head (Spelled (Symbol), 8) = "__aeabi_")
+             or else
+               (Landin.Targets.Architecture_Of (Facts)
+                  = Landin.Targets.Cortex_M0
+                and then Ada.Strings.Fixed.Head (Spelled (Symbol), 8)
+                  = "__aeabi_"))
          then
             Reject ("this symbol belongs to compiler firmware startup");
             return;
@@ -40230,8 +40233,7 @@ package body Landin.Stages.Checking is
             Symbol : constant Landin.Source.Names.Name_Id :=
               Landin.Source.Names.Intern (Spellings.all, Name);
             Cortex : constant Boolean :=
-              Landin.Targets.Architecture_Of (Facts)
-                = Landin.Targets.Cortex_M0;
+              Landin.Targets.Is_Firmware (Facts);
             --  D416: a hosted datum takes [1975]'s external name shape,
             --  as a routine does, but never the hosted entry's `main`;
             --  Cortex data keep [1640]'s identifiers and reserved names.
@@ -40336,8 +40338,7 @@ package body Landin.Stages.Checking is
          if not Attr.Present then
             return;
          end if;
-         Valid := Landin.Targets.Architecture_Of (Facts)
-           = Landin.Targets.Cortex_M0;
+         Valid := Landin.Targets.Is_Firmware (Facts);
          if Value.Alignment /= 0 then
             Valid := Valid and then Value.Alignment in
               1 | 2 | 4 | 8 | 16 | 32 | 64 | 128 | 256;
@@ -40387,9 +40388,10 @@ package body Landin.Stages.Checking is
                Message => "this placement needs a device profile, and the"
                  & " program selects none",
                Note => "D543: import the device's description; with none,"
-                 & " the library's platform/cortex_m/reference applies, and"
-                 & " this library holds none: name one that does with"
-                 & " --library=DIR",
+                 & " the library's "
+                 & Landin.Targets.Firmware.Reference_Module (Facts)
+                 & " applies, and this library holds none: name one that"
+                 & " does with --library=DIR",
                Into => Found);
             return;
          end if;
@@ -40440,7 +40442,9 @@ package body Landin.Stages.Checking is
              in Landin.Machine.Interrupt_Handler
                | Landin.Machine.Naked_Routine
            and then Value.Vector < Landin.Targets.Firmware.Slot_Capacity
-           and then Value.Vector not in 0 | 1
+           and then (Value.Vector not in 0 | 1
+                     or else Profile.Core
+                       in Landin.Targets.Firmware.RISC_V_Core)
            and then not Landin.Targets.Firmware.Admits
              (Profile, Value.Vector)
          then
@@ -40453,15 +40457,19 @@ package body Landin.Stages.Checking is
                  & Natural'Image (Value.Vector) & " is reserved in "
                  & Landin.Targets.Firmware.Spelling (Profile.Device)
                  & ", so no handler takes it",
-               Note => "[1990]/D544: a "
-                 & Landin.Targets.Firmware.Spelling (Profile.Core)
+               Note => "[1990]/D544: "
+                 & Landin.Targets.Firmware.A_Core (Profile.Core)
                  & " takes handlers at "
-                 & (if Landin.Targets.Firmware.Is_Armv6_M (Profile.Core)
-                    then "core slots 2, 3, 11, 14 and 15"
-                    else "core slots 2 to 6, 11, 12, 14 and 15")
-                 & " and at 16 + IRQ for each interrupt the description"
-                 & " names; its" & Natural'Image (Profile.Vector_Count)
-                 & "-word table holds every other slot as zero",
+                 & Landin.Targets.Firmware.Core_Slots_Text (Profile.Core)
+                 & (if Landin.Targets.Firmware.Interrupts_Are_Slots
+                      (Profile.Core)
+                    then " and at 16 + IRQ for each interrupt the"
+                      & " description names"
+                    else "")
+                 & "; its" & Natural'Image (Profile.Vector_Count)
+                 & (if Profile.Core in Landin.Targets.Firmware.Arm_Core
+                    then "-word table holds every other slot as zero"
+                    else "-slot table leaves every other slot unhandled"),
                Related => Syn.Origin (Of_Tree, Node),
                Because => "the declaration it places", Into => Found);
             return;
@@ -40491,7 +40499,10 @@ package body Landin.Stages.Checking is
             Bad.Report
               (Item => Bad.Linkage_Contract, Source => Syn.Source_Of (Of_Tree),
                Where => Syn.Anchor (Of_Tree, Node),
-               Message => "invalid or conflicting Cortex-M0 placement",
+               Message => "invalid or conflicting "
+                 & (if Landin.Targets.Architecture_Of (Facts)
+                      = Landin.Targets.RV32
+                    then "RV32" else "Cortex-M0") & " placement",
                Note => "[1640]: sections use .text.*, .ramtext.*, .rodata.*,"
                  & " .data.* or .bss.*; alignment is a decimal power of"
                  & " two through 256; decimal vectors require a unique"

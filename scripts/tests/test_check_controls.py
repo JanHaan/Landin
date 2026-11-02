@@ -1777,6 +1777,12 @@ class DiscussionTargets(unittest.TestCase):
                            'when 7 => "cortex-m0"', 'when 7 => "cortex-m33"')
         self.assertTrue(any("cortex-m33" in why for why in said))
 
+    def test_a_dropped_target_without_a_hyphen_is_reported(self):
+        #  `rv32` is not shaped as the others are, and is a target all the
+        #  same.
+        said = self.broken(self.FORM, "        - rv32\n", "")
+        self.assertTrue(any("the compiler describes" in why for why in said))
+
     def test_the_checking_only_target_is_not_offered(self):
         said = self.broken(self.FORM, "        - cortex-m0\n",
                            "        - cortex-m0\n        - synthetic-32\n")

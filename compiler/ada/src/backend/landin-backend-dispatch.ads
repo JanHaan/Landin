@@ -21,6 +21,8 @@ package Landin.Backend.Dispatch is
       Facts   : Landin.Targets.Target_Facts;
       Options : Landin.Optimization.Options) return Boolean;
 
+   --  Whether a firmware routine's frame fits its profile's stack, as
+   --  Cortex-M measures it; RV32's emitter measures its own.
    function Frame_Fits_Firmware_Stack
      (Of_Unit : Landin.IR.Unit;
       Item : Landin.IR.Item_Id;

@@ -2,14 +2,12 @@ with Ada.Containers.Vectors;
 with Landin.IR.Effects;
 with Landin.IR.Verifier;
 with Landin.Machine;
-with Landin.Targets.Capabilities;
 
 package body Landin.IR.Inlining is
    use type Landin.Machine.Convention;
    use type Landin.Machine.Placement;
    use type Landin.Optimization.Objective;
    use type Landin.Types.Magnitude;
-   use type Landin.Targets.Capabilities.Backend_Kind;
 
    package Natural_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Natural);
@@ -1704,8 +1702,7 @@ package body Landin.IR.Inlining is
       end Expand_Item;
    begin
       if Objective /= Landin.Optimization.Speed
-        or else Landin.Targets.Capabilities.Backend_For (Facts)
-          = Landin.Targets.Capabilities.Cortex_M0_ELF
+        or else Landin.Targets.Is_Firmware (Facts)
         or else Items = 0
       then
          return;

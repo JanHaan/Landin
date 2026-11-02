@@ -58,6 +58,7 @@ body:
         - freebsd-arm64
         - linux-rv64
         - cortex-m0
+        - rv32
         - Not target-specific
     validations:
       required: true

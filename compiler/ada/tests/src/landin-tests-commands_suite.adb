@@ -839,7 +839,8 @@ package body Landin.Tests.Commands_Suite is
          Landin.Testing.Check
            (Item, Hosted.Status = Landin.Driver.Status_Misuse
                   and then Contains (US.To_String (Hosted.Report),
-                    "--firmware-entry requires --target=cortex-m0"),
+                    "--firmware-entry requires a firmware target:"
+                    & " --target=cortex-m0 or --target=rv32"),
             "a hosted target refuses it as compile does");
       end;
       declare

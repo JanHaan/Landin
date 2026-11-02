@@ -1,5 +1,6 @@
 with Ada.Characters.Handling;
 with Ada.Strings.Fixed;
+with Ada.Strings.Unbounded;
 with Landin.Targets.Assembly;
 
 package body Landin.Targets.Firmware is
@@ -16,16 +17,17 @@ package body Landin.Targets.Firmware is
      (Name.Text (1 .. Name.Length));
 
    function Is_Core_Name (Text : String) return Boolean is
-     (Text in "cortex-m0" | "cortex-m0plus" | "cortex-m3" | "cortex-m4"
-        | "cortex-m7" | "cortex-m33");
+     (for some Core in Core_Kind => Spelling (Core) = Text);
 
    function Core_Named (Text : String) return Core_Kind is
-     (if Text = "cortex-m0" then Cortex_M0
-      elsif Text = "cortex-m0plus" then Cortex_M0plus
-      elsif Text = "cortex-m3" then Cortex_M3
-      elsif Text = "cortex-m4" then Cortex_M4
-      elsif Text = "cortex-m7" then Cortex_M7
-      else Cortex_M33);
+   begin
+      for Core in Core_Kind loop
+         if Spelling (Core) = Text then
+            return Core;
+         end if;
+      end loop;
+      raise Compiler_Defect with "no core is spelled " & Text;
+   end Core_Named;
 
    function Spelling (Core : Core_Kind) return String is
      (case Core is
@@ -34,29 +36,56 @@ package body Landin.Targets.Firmware is
         when Cortex_M3 => "cortex-m3",
         when Cortex_M4 => "cortex-m4",
         when Cortex_M7 => "cortex-m7",
-        when Cortex_M33 => "cortex-m33");
+        when Cortex_M33 => "cortex-m33",
+        when Hazard3 => "hazard3",
+        when SiFive_E31 => "sifive-e31",
+        when ESP_RV32IMC => "esp-rv32imc",
+        when ESP_RV32IMAC_CLIC => "esp-rv32imac-clic");
+
+   function Core_Names return String is
+      Result : Ada.Strings.Unbounded.Unbounded_String;
+   begin
+      for Core in Core_Kind loop
+         Ada.Strings.Unbounded.Append
+           (Result,
+            (if Core = Core_Kind'First then ""
+             elsif Core = Core_Kind'Last then " or "
+             else ", ")
+            & '"' & Spelling (Core) & '"');
+      end loop;
+      return Ada.Strings.Unbounded.To_String (Result);
+   end Core_Names;
 
    function Level_Name (Core : Core_Kind) return String is
      (case Core is
         when Cortex_M0 | Cortex_M0plus => "armv6-m",
         when Cortex_M3 => "armv7-m",
         when Cortex_M4 | Cortex_M7 => "armv7e-m",
-        when Cortex_M33 => "armv8-m.main");
+        when Cortex_M33 => "armv8-m.main",
+        when ESP_RV32IMC => "rv32imc",
+        when Hazard3 | SiFive_E31 | ESP_RV32IMAC_CLIC => "rv32imac");
 
    --  ARMv7E-M and ARMv8-M Mainline each hold all of ARMv7-M, and neither
    --  holds the other: Armv8-M's DSP instructions are an optional extension
    --  of the core, so a cortex-m33 is not assumed to have them.
+   --  rv32imac holds all of rv32imc.
    function Executes (Core : Core_Kind; Level : String) return Boolean is
-     (Level = "armv6-m"
-      or else (Level = "armv7-m" and then not Is_Armv6_M (Core))
-      or else Level = Level_Name (Core));
+     (Level = Level_Name (Core)
+      or else (if Core in RISC_V_Core
+               then Level = "rv32imc"
+               else Level = "armv6-m"
+                    or else (Level = "armv7-m"
+                             and then not Is_Armv6_M (Core))));
 
    function Lower_Levels (Core : Core_Kind) return String is
      (case Core is
         when Cortex_M0 | Cortex_M0plus => "armv6-m alone",
         when Cortex_M3 => "armv7-m or armv6-m",
         when Cortex_M4 | Cortex_M7 => "armv7e-m, armv7-m or armv6-m",
-        when Cortex_M33 => "armv8-m.main, armv7-m or armv6-m");
+        when Cortex_M33 => "armv8-m.main, armv7-m or armv6-m",
+        when ESP_RV32IMC => "rv32imc alone",
+        when Hazard3 | SiFive_E31 | ESP_RV32IMAC_CLIC =>
+           "rv32imac or rv32imc");
 
    function Float_Unit_Named (Text : String) return Float_Unit is
      (if Text = "fpv5-d16" then FPv5_D16 else No_Float_Unit);
@@ -192,7 +221,11 @@ package body Landin.Targets.Firmware is
      (Of_Profile.Regions (Of_Profile.Placed (Section)));
 
    function Vector_Alignment (Of_Profile : Profile) return Byte_Count is
-      Result : Byte_Count := 128;
+      Result : Byte_Count :=
+        (case Of_Profile.Core is
+           when Arm_Core => 128,
+           when SiFive_E31 | Hazard3 | ESP_RV32IMAC_CLIC => 64,
+           when ESP_RV32IMC => 256);
    begin
       while Result < Vector_Bytes (Of_Profile) loop
          Result := Result * 2;
@@ -201,8 +234,13 @@ package body Landin.Targets.Firmware is
    end Vector_Alignment;
 
    function Vector_Address (Of_Profile : Profile) return Byte_Count is
-     (Placed_Region (Of_Profile, Vectors).Origin
-      + Boot_Prefix (Of_Profile.Boot));
+     (if Of_Profile.Core in Arm_Core
+      then Placed_Region (Of_Profile, Vectors).Origin
+           + Boot_Prefix (Of_Profile.Boot)
+      else Align_Up
+        (Placed_Region (Of_Profile, Vectors).Origin
+         + Boot_Prefix (Of_Profile.Boot) + Entry_Word_Bytes,
+         Byte_Alignment (Vector_Alignment (Of_Profile))));
 
    function Flash_Capacity (Of_Profile : Profile) return Byte_Count is
      (if Of_Profile.Placed (Text) = 0 then 0
