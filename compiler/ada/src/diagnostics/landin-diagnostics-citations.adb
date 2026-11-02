@@ -2191,6 +2191,12 @@ package body Landin.Diagnostics.Citations is
                & " it",
             when 675 =>
                "RV32's fibres switch in RV64's frame at XLEN 32",
+            when 676 =>
+               "RV32 places firmware's items as Cortex-M0 places them",
+            when 677 =>
+               "RV32's C transport is the planner's ilp32 at XLEN 32",
+            when 678 =>
+               "RV32 keeps its firmware text near the size of Thumb's",
             when 523 =>
                "Under `--link=libc` a library is the C driver's `-lNAME`",
             when 524 =>
@@ -3537,6 +3543,12 @@ package body Landin.Diagnostics.Citations is
             when 674 =>
                "Decisions: The toolchain, C and the machine",
             when 675 =>
+               "Decisions: The toolchain, C and the machine",
+            when 676 =>
+               "Decisions: The toolchain, C and the machine",
+            when 677 =>
+               "Decisions: The toolchain, C and the machine",
+            when 678 =>
                "Decisions: The toolchain, C and the machine",
             when 523 =>
                "Decisions: The toolchain, C and the machine",
@@ -5127,6 +5139,15 @@ package body Landin.Diagnostics.Citations is
             when 675 =>
                "https://www.701.dev/spec.html#d675-rv32-s-fibres-switch-"
                & "in-rv64-s-frame-at-xlen-32",
+            when 676 =>
+               "https://www.701.dev/spec.html#d676-rv32-places-firmware-"
+               & "s-items-as-cortex-m0-places-them",
+            when 677 =>
+               "https://www.701.dev/spec.html#d677-rv32-s-c-transport-is"
+               & "-the-planner-s-ilp32-at-xlen-32",
+            when 678 =>
+               "https://www.701.dev/spec.html#d678-rv32-keeps-its-firmwa"
+               & "re-text-near-the-size-of-thumb-s",
             when 523 =>
                "https://www.701.dev/spec.html#d523-under-link-libc-a-lib"
                & "rary-is-the-c-driver-s-lname",

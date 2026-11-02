@@ -428,8 +428,12 @@ package body Landin.Backend.Firmware is
                             then Profiles.Reset_Stage_Symbol
                             else Profiles.Reset_Symbol));
       Line (Result, ".size _landin_firmware_entry, 4");
+      --  The script places the table at Vector_Address, which is aligned
+      --  as the core needs.  The section asks only for its words', since
+      --  RISC-V's assembler pads an executable section to its alignment,
+      --  and a table shorter than that would outgrow its asserted size.
       Line (Result, ".section .isr_vector,""ax"",@progbits");
-      Line (Result, ".balign " & Number (Profiles.Vector_Alignment (Profile)));
+      Line (Result, ".balign 4");
       Line (Result, ".globl _landin_firmware_vectors");
       Line (Result, ".type _landin_firmware_vectors, @function");
       Line (Result, "_landin_firmware_vectors:");

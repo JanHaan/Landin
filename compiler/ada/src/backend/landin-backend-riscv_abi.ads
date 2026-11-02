@@ -1,6 +1,7 @@
---  Explicit RV64 Linux LP64D C transport. Target facts supply physical
---  layout, not the choice of convention: calling this package is that
---  choice. Placements never enter target-neutral IR.
+--  Explicit RISC-V C transport: RV64 Linux's LP64D and RV32's soft-float
+--  ilp32 (D677), the one integer convention at the target's XLEN. Target
+--  facts supply physical layout, not the choice of convention: calling
+--  this package is that choice. Placements never enter target-neutral IR.
 with Landin.IR;
 with Landin.Targets;
 with Landin.Types;
