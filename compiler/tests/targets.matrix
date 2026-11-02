@@ -3,7 +3,7 @@
 # Do not edit;
 # regenerate with python3 check.py --coverage.
 # scope | targets
-prototype-1 | cortex-m0
+prototype-1 | cortex-m0, rv32
 prototype-2 | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64
 prototype-3 | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0, synthetic-32
 prototype-4 | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64
