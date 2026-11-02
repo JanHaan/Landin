@@ -1,0 +1,9 @@
+class: negative
+summary: D690 D510 RV32 at rv32imac has read-modify-writes and still no eight-byte atomic access, so a u64 cell is refused where the program writes it, in a module binding and in a made local alike, naming the smaller cell and platform/riscv's critical section, while a u32 cell's exchange, add and compare_exchange beside them are accepted
+program: main.ldn
+root: ../../../../..
+args: --target=rv32 --level=rv32imac
+expect: expected.txt
+codes: L0344, L0344
+constructs: 1290, 1620
+targets: rv32

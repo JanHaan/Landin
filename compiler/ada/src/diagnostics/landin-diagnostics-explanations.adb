@@ -905,11 +905,15 @@ package body Landin.Diagnostics.Explanations is
                & LF
                & "A `core/atomic` cell the target's atomics cannot carry i"
                & "s refused the same way where the program uses it (D510):"
-               & " on Cortex-M0 a `u64` cell, and a cell's `exchange`, `ad"
-               & "d`, `add_relaxed` and `compare_exchange`. A cell one con"
-               & "text alone writes adds with `atomic.sole_add`, a load an"
-               & "d a store; state several contexts write takes `platform/"
-               & "cortex_m`'s critical section.",
+               & " on Cortex-M0 and RV32 a `u64` cell, and on Cortex-M0 an"
+               & "d RV32 at `rv32imc` a cell's `exchange`, `add`, `add_rel"
+               & "axed` and `compare_exchange`. On RV32 the read-modify-wr"
+               & "ites are the level's (D690): build at `rv32imac`, with `"
+               & "--level=rv32imac` or the language server's `level`, wher"
+               & "e the core has the A extension. A cell one context alone"
+               & " writes adds with `atomic.sole_add`, a load and a store;"
+               & " state several contexts write takes `platform/cortex_m`'"
+               & "s or `platform/riscv`'s critical section.",
             when Catalogue.Machine_Entry_Contract =>
                "An interrupt or naked routine is used outside its machin"
                & "e-entry contract [1570]. The machine convention is Corte"

@@ -11,18 +11,19 @@
 --  shared goes through the operations here and the cell's address, so
 --  pass a cell by pointer and never copy one that another context uses.
 --
---  Cortex-M0 has no atomic read-modify-write and no eight-byte atomic
---  access (D227), so on it `u64` has no conformance to `scalar` and no
---  scalar one to `exchangeable`, and the compiler refuses a cell over u64,
---  and an exchange, add or compare-exchange, at the caller's use (D510).
---  What it has instead is `sole_add`, a relaxed load and a release store,
+--  Cortex-M0 and RV32 have no eight-byte atomic access, and Cortex-M0 and
+--  RV32 at a level without `a` no atomic read-modify-write (D227, D690),
+--  so there `u64` has no conformance to `scalar` and no scalar one to
+--  `exchangeable`, and the compiler refuses a cell over u64, and an
+--  exchange, add or compare-exchange, at the caller's use (D510).  What
+--  they have instead is `sole_add`, a relaxed load and a release store,
 --  correct while one context alone writes the cell, which every target
---  has; and platform/cortex_m's critical section for state several
---  contexts write.
+--  has; and platform/cortex_m's or platform/riscv's critical section for
+--  state several contexts write.
 
 --- The scalars a cell can hold, with the accesses every target admits for
 --- them: u8, u16 and u32 everywhere, and u64 where the target has eight-byte
---- atomics, which Cortex-M0 has not.  The entries are the cell's
+--- atomics, which Cortex-M0 and RV32 have not.  The entries are the cell's
 --- operations' own, over the scalar's address; use the operations below.
 public scalar: type = concept (item: type)
     load: (cell: ptr item) -> (value: item)
@@ -34,7 +35,7 @@ end scalar
 
 --- The scalars whose cells also take a read-modify-write: each of u8, u16,
 --- u32 and u64 where the target has atomic read-modify-write, which
---- Cortex-M0 has not.
+--- Cortex-M0 has not, nor RV32 at a level without `a`.
 public exchangeable: type = concept (item: type) is scalar
     exchange: (cell: ptr mut item, value: item) -> (previous: item)
     add: (cell: ptr mut item, value: item) -> (previous: item)
@@ -101,9 +102,10 @@ u32 is scalar (load: load_u32, load_relaxed: load_relaxed_u32,
                store: store_u32, store_relaxed: store_relaxed_u32,
                sole_add: sole_add_u32)
 
---  Cortex-M0 has neither the eight-byte accesses nor any read-modify-write
---  (D227): what it lacks has no conformance there, and D510 refuses its use.
-fixed if compiler.arch <> cortex_m0 then
+--  Cortex-M0 and RV32 have no eight-byte access (D227): u64 has no
+--  conformance there, and D510 refuses its use.  Every target with one has
+--  the read-modify-writes too.
+fixed if compiler.arch <> cortex_m0 and compiler.arch <> rv32 then
     load_u64: (cell: ptr u64) -> (value: u64) =
         value = compiler.atomic_load(cell, compiler.acquire)
     end load_u64
@@ -123,6 +125,31 @@ fixed if compiler.arch <> cortex_m0 then
     u64 is scalar (load: load_u64, load_relaxed: load_relaxed_u64,
                    store: store_u64, store_relaxed: store_relaxed_u64,
                    sole_add: sole_add_u64)
+    exchange_u64: (cell: ptr mut u64, value: u64) -> (previous: u64) =
+        previous = compiler.atomic_exchange(cell, value, compiler.acq_rel)
+    end exchange_u64
+    add_u64: (cell: ptr mut u64, value: u64) -> (previous: u64) =
+        previous = compiler.atomic_add(cell, value, compiler.acq_rel)
+    end add_u64
+    add_relaxed_u64: (cell: ptr mut u64, value: u64) -> (previous: u64) =
+        previous = compiler.atomic_add(cell, value, compiler.relaxed)
+    end add_relaxed_u64
+    compare_exchange_u64: (cell: ptr mut u64, expected: u64, desired: u64)
+                          -> (observed: u64) =
+        observed = compiler.atomic_compare_exchange(cell, expected, desired,
+                                                    compiler.acq_rel,
+                                                    compiler.acquire)
+    end compare_exchange_u64
+    u64 is exchangeable (exchange: exchange_u64, add: add_u64,
+                         add_relaxed: add_relaxed_u64,
+                         compare_exchange: compare_exchange_u64)
+end if
+
+--  Cortex-M0 has no read-modify-write, and RV32 has one at a level with
+--  `a` (D690): u8, u16 and u32 are exchangeable wherever the target and
+--  the build's level have one, and D510 refuses their use elsewhere.
+fixed if compiler.arch <> cortex_m0
+  and (compiler.arch <> rv32 or compiler.feature.a) then
     exchange_u8: (cell: ptr mut u8, value: u8) -> (previous: u8) =
         previous = compiler.atomic_exchange(cell, value, compiler.acq_rel)
     end exchange_u8
@@ -168,21 +195,6 @@ fixed if compiler.arch <> cortex_m0 then
                                                     compiler.acq_rel,
                                                     compiler.acquire)
     end compare_exchange_u32
-    exchange_u64: (cell: ptr mut u64, value: u64) -> (previous: u64) =
-        previous = compiler.atomic_exchange(cell, value, compiler.acq_rel)
-    end exchange_u64
-    add_u64: (cell: ptr mut u64, value: u64) -> (previous: u64) =
-        previous = compiler.atomic_add(cell, value, compiler.acq_rel)
-    end add_u64
-    add_relaxed_u64: (cell: ptr mut u64, value: u64) -> (previous: u64) =
-        previous = compiler.atomic_add(cell, value, compiler.relaxed)
-    end add_relaxed_u64
-    compare_exchange_u64: (cell: ptr mut u64, expected: u64, desired: u64)
-                          -> (observed: u64) =
-        observed = compiler.atomic_compare_exchange(cell, expected, desired,
-                                                    compiler.acq_rel,
-                                                    compiler.acquire)
-    end compare_exchange_u64
     u8 is exchangeable (exchange: exchange_u8, add: add_u8,
                         add_relaxed: add_relaxed_u8,
                         compare_exchange: compare_exchange_u8)
@@ -192,9 +204,6 @@ fixed if compiler.arch <> cortex_m0 then
     u32 is exchangeable (exchange: exchange_u32, add: add_u32,
                          add_relaxed: add_relaxed_u32,
                          compare_exchange: compare_exchange_u32)
-    u64 is exchangeable (exchange: exchange_u64, add: add_u64,
-                         add_relaxed: add_relaxed_u64,
-                         compare_exchange: compare_exchange_u64)
 end if
 
 cell_value: type (item: type) = struct

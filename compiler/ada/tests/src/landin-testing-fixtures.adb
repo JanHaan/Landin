@@ -11,13 +11,13 @@ package body Landin.Testing.Fixtures is
 
    Metadata_Name : constant String := "fixture.meta";
 
-   --  Linux and FreeBSD x86-64 and arm64, macOS arm64, Cortex-M and
+   --  Linux and FreeBSD x86-64 and arm64, macOS arm64, Cortex-M, RV32 and
    --  the synthetic 32-bit layout target are the fixture descriptions.
    --  A fixture may name only these, because naming a target nothing
    --  describes is how a fixture quietly stops applying to anything.
    function Is_Named_Target (Name : String) return Boolean is
      (Name in "linux-x86-64" | "linux-arm64" | "linux-rv64"
-            | "darwin-arm64" | "cortex-m0"
+            | "darwin-arm64" | "cortex-m0" | "rv32"
             | "freebsd-x86-64" | "freebsd-arm64" | "synthetic-32");
 
    --  Whether a `targets:` list names LABEL.

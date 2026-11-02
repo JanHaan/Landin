@@ -1,0 +1,1 @@
+refine: checked ../tests/fixtures/positive/atomic-read-modify-write-rv32imac and wrote nothing; run it with `refine run ../tests/fixtures/positive/atomic-read-modify-write-rv32imac`, or build it with `refine compile ../tests/fixtures/positive/atomic-read-modify-write-rv32imac -o atomic-read-modify-write-rv32imac`
