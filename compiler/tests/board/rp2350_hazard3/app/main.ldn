@@ -1,0 +1,192 @@
+-- The prototype-1 application on a Raspberry Pi Pico 2's Hazard3 cores:
+-- the Pico 2 port (compiler/tests/board/rp2350, D654) with its interrupts
+-- through Xh3irq rather than the NVIC, and a counter kept by a
+-- read-modify-write, which environments/boards/rp2350_hazard3/board.py
+-- checks against its physical oracle (D710, D711).  The echo and the
+-- indicator are the shared commands.handle, run by the synthetic
+-- application in the emulator and the other boards too.  It runs in
+-- machine mode on core 0, built at --level=rv32imac.
+--
+-- Three bytes are also commands, after their echo: 0x05 forces IRQ14,
+-- USBCTRL_IRQ, pending through meifa, which slot 30's handler counts;
+-- 0x11 asks for a telemetry frame, numbered by an amoadd.w; and 0x12 stops
+-- reading for 100 ms, so that a burst sent then overruns the ring.
+import bringup
+import commands
+import core/atomic
+import descriptions/rp2350_hazard3
+import platform/riscv
+import platform/riscv/hazard3
+import report
+import rp2350_hazard3/clocks
+import rp2350_hazard3/dma
+import rp2350_hazard3/powman
+import rp2350_hazard3/sio
+import rp2350_hazard3/timer0
+import serial
+
+link(align: 256)
+mut rx_storage: [256]u8 = zeroed
+mut notification: u32 = 0
+mut handled: u32 = 0
+mut recoveries: u32 = 0
+mut dma_events: u32 = 0
+mut timer_events: u32 = 0
+mut usb_events: u32 = 0
+mut usb_cause: u32 = 0
+mut app_state: u32 = 0
+-- How many telemetry frames were sent, counted by atomic.add, whose
+-- amoadd.w returns what the counter held: each frame carries that.
+mut reports: atomic.cell(u32) = zeroed
+
+-- Pico's indicator, GPIO3, through SIO's set and clear aliases.
+indicate: (on: bool) -> none =
+    if on then
+        sio.gpio_out_set_write(sio.base, bringup.indicator)
+    else
+        sio.gpio_out_clr_write(sio.base, bringup.indicator)
+    end if
+end indicate
+
+transmit: (byte: u8) -> none = report.put(byte) end transmit
+
+port: commands.port = (indicate: indicate, transmit: transmit)
+-- An epoch ends after 4096 bytes, so a long stream also exhausts and
+-- restarts the ring; the UART's 32-byte FIFO holds what arrives meanwhile.
+budget: u32 = 4096
+
+-- TIMER0_IRQ_0 is IRQ0, slot 16; DMA_IRQ_0 IRQ10, slot 26; USBCTRL_IRQ
+-- IRQ14, slot 30 (3.2, Table 95): Xh3irq's IRQ n at 16 + n, which the
+-- compiler's meinext dispatch calls (D680).
+timer_irq_number: u32 = 0
+dma_irq_number: u32 = 10
+usb_irq_number: u32 = 14
+-- mie.MEIE, the machine external interrupt every Xh3irq IRQ arrives as.
+external_line: u32 = 0x800
+
+link(vector: 16)
+extern(interrupt) timer_irq: () -> none =
+    timer0.intr_write(timer0.base, 1)
+    timer_events = timer_events +% 1
+    notification = 1
+    riscv.completion_barrier()
+end timer_irq
+
+-- A forced IRQ stays pending until meifa's bit is cleared, and meinext
+-- would name it again: the handler stops forcing it.
+link(vector: 30)
+extern(interrupt) usb_irq: () -> none =
+    hazard3.clear_forced_irq(usb_irq_number)
+    usb_events = usb_events +% 1
+    usb_cause = assembler.block("csrr {cause}, mcause", out cause: u32 at general)
+    riscv.completion_barrier()
+end usb_irq
+
+link(vector: 26)
+extern(interrupt) dma_irq: () -> none =
+    pending := dma.intr_read(dma.base)
+    if (pending & 1) <> 0 then
+        notification = 1
+        dma_events = dma_events +% 1
+    end if
+    dma.intr_write(dma.base, pending & 1)
+    riscv.completion_barrier()
+end dma_irq
+
+take_events: () -> none =
+    saved := riscv.disable_interrupts()
+    defer riscv.restore_interrupts(saved)
+    notification = 0
+end take_events
+
+telemetry: (r: serial.rx) -> none =
+    sequence := atomic.add(addr reports, 1)
+    report.open_frame(116)
+    report.field(104, handled)
+    report.field(99, recoveries)
+    report.field(100, dma_events)
+    report.field(109, timer_events)
+    report.field(117, usb_events)
+    report.field(112, usb_cause)
+    report.field(110, dma.ch0_trans_count_read(dma.base) & 0x0fffffff)
+    report.field(101, r.consumed)
+    report.field(103, sio.gpio_in_read(sio.base) & bringup.indicator)
+    report.field(115, app_state)
+    report.field(113, sequence)
+    report.close_frame()
+end telemetry
+
+stall: () -> none =
+    began := timer0.timerawl_read(timer0.base)
+    while timer0.timerawl_read(timer0.base) -% began < 100_000 do
+        continue
+    end while
+end stall
+
+halt: (status: u32) -> noreturn =
+    app_state = status
+    report.open_frame(104)
+    report.field(115, status)
+    report.close_frame()
+    loop do riscv.wait_for_interrupt() end loop
+end halt
+
+start: () -> noreturn =
+    -- Read before anything resets it: which reset this was, from POWMAN's
+    -- CHIP_RESET (6.4); the trap vector compiler-owned reset wrote, the
+    -- table in vectored mode; and the core's marchid.
+    reason := powman.chip_reset_read(powman.base)
+    vectors := assembler.block("csrr {value}, mtvec", out value: u32 at general)
+    architecture := assembler.block("csrr {value}, marchid", out value: u32 at general)
+    bringup.crystal()
+    bringup.peripherals()
+    mut receiver := serial.open(115200, budget, rx_storage[0..<256]) else (problem)
+        _ = problem
+        halt(1)
+    end
+    report.open_frame(98)
+    report.field(114, reason)
+    report.field(118, vectors)
+    report.field(97, architecture)
+    report.field(107, clocks.clk_ref_selected_read(clocks.base))
+    report.close_frame()
+    mut scratch: [64]u8 = zeroed
+    -- The alarm raises TIMER0_IRQ_0 only with its INTE bit set.  Xh3irq:
+    -- each IRQ enabled in meiea, and the external line in mie.
+    timer0.inte_write(timer0.base, 1)
+    hazard3.enable_irq(timer_irq_number)
+    hazard3.enable_irq(dma_irq_number)
+    hazard3.enable_irq(usb_irq_number)
+    riscv.enable_lines(external_line)
+    app_state = 2
+    loop do
+        -- An alarm fires only when the counter equals it, so one armed for a
+        -- time already past waits for the 32-bit wrap, 71 minutes; the time
+        -- is checked again after arming, as pico-sdk does.
+        target := timer0.timerawl_read(timer0.base) +% 1000
+        timer0.alarm0_write(timer0.base, target)
+        take_events()
+        if timer0.timerawl_read(timer0.base) -% target < 0x8000_0000 then
+            notification = 1
+        end if
+        n := serial.read(receiver, scratch[0..<64]) else (error)
+            if error == serial.stop_timeout then halt(3) end if
+            recoveries = recoveries +% 1
+            serial.restart(receiver) else (problem)
+                _ = problem
+                halt(3)
+            end
+            continue
+        end
+        handled = handled +% commands.handle(scratch[0..<n], port)
+        for byte in scratch[0..<n] do
+            if byte == 5 then hazard3.force_irq(usb_irq_number) end if
+            if byte == 17 then telemetry(receiver) end if
+            if byte == 18 then stall() end if
+        end for
+        if n == 64 then continue end if
+        saved := riscv.disable_interrupts()
+        if notification == 0 then riscv.wait_for_interrupt() end if
+        riscv.restore_interrupts(saved)
+    end loop
+end start
