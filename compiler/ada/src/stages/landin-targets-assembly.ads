@@ -197,7 +197,8 @@ package Landin.Targets.Assembly is
    --  The refusal of a separated number, naming the number to write.
    function Separator_Refusal (Number : String) return String;
 
-   --  [1990]'s uniform text rules on a hosted target, or the empty string:
+   --  [1990]'s uniform text rules on a hosted target and on RV32, or the
+   --  empty string:
    --  at most 4096 ASCII bytes in LF lines, instructions and no directive,
    --  statement separator or label, and straight-line control.  Each
    --  line's comment is removed first (D597).  A naked body's text may
@@ -206,6 +207,6 @@ package Landin.Targets.Assembly is
    function Text_Error
      (Facts : Target_Facts; Text : String; Naked : Boolean := False)
       return String
-     with Pre => Architecture_Of (Facts) in X86_64 | Arm64 | RV64;
+     with Pre => Architecture_Of (Facts) in X86_64 | Arm64 | RV64 | RV32;
 
 end Landin.Targets.Assembly;

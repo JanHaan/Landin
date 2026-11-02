@@ -846,7 +846,7 @@ package body Landin.Targets.Assembly is
                        | "braaz" | "brabz" | "blraa" | "blrab" | "blraaz"
                        | "blrabz" | "retaa" | "retab" | "eretaa" | "eretab"
                      or else Starts ("b."),
-                  when RV64 =>
+                  when RV64 | RV32 =>
                      Starts ("b") or else Starts ("j")
                      or else Starts ("c.b") or else Starts ("c.j")
                      --  `ecall` is the system call, which x86-64's
@@ -854,7 +854,16 @@ package body Landin.Targets.Assembly is
                      --  kernel returns to the next instruction.
                      or else Mnemonic in "call" | "tail" | "ret"
                        | "ebreak" | "sret" | "mret" | "uret" | "dret"
-                       | "wfi" | "c.ebreak",
+                       | "c.ebreak"
+                     --  D670: firmware waits for an interrupt in an
+                     --  ordinary block, as Cortex-M's does: WFI resumes
+                     --  at the next instruction once the handler returns.
+                     --  Its `ecall` is an exception, which takes no slot
+                     --  and enters the unhandled loop, never to return.
+                     or else (Architecture_Of (Facts) = RV64
+                              and then Mnemonic = "wfi")
+                     or else (Architecture_Of (Facts) = RV32
+                              and then Mnemonic = "ecall"),
                   when others => False)
             then
                return "ordinary assembly is straight-line and transfers no"

@@ -2280,16 +2280,16 @@ discard [1020] and D244 treat that value as they treat a call's.
 
 A register is a name the selected target's table answers for, never text:
 
-| | Cortex-M0 | Hosted x86-64 | Hosted arm64 | RV64 Linux |
-| --- | --- | --- | --- | --- |
-| instruction text | ARMv6-M unified | AT&T | GNU or Apple arm64 | GNU RISC-V |
-| integer operand registers | `r0`–`r7` | `rax` `rbx` `rcx` `rdx` `rsi` `rdi` `r8`–`r15` | `x0`–`x17`, `x19`–`x28` | `x5`–`x7`, `x9`–`x31` |
-| `general` chooses from | `r0`–`r7` | `rax` `rcx` `rdx` `rsi` `rdi` `r8`–`r11` | `x0`–`x17` | `x5`–`x7`, `x10`–`x17`, `x28`–`x31` |
-| float operand registers | `d0`–`d15` with an FPv5-D16 unit (D615), else none | `xmm0`–`xmm15` | `v0`–`v31` | `f0`–`f31` |
-| `float` chooses from | `d0`–`d7` with the unit | `xmm0`–`xmm15` | `v0`–`v7`, `v16`–`v31` | `f0`–`f7`, `f10`–`f17`, `f28`–`f31` |
-| every ordinary block overwrites | `r0`–`r7`, flags, and with the unit the `float` row and FPSCR's flags | the `general` and `float` rows, flags | the `general` and `float` rows, flags | the `general` and `float` rows |
-| saved by the routine when a block names one | `d8`–`d15` with the unit | `rbx`, `r12`–`r15` | `x19`–`x28`, `v8`–`v15` | `x9`, `x18`–`x27`, `f8`, `f9`, `f18`–`f27` |
-| never named | `r8`–`r15` and their aliases, `sp`, `lr`, `pc`, `msp`, `psp`, `control` | `rsp`, `rbp`, `rip` | `sp`, `fp`, `lr`, `x18`, `x29`, `x30` | `x0`–`x4`, `x8` and their aliases |
+| | Cortex-M0 | Hosted x86-64 | Hosted arm64 | RV64 Linux | RV32 |
+| --- | --- | --- | --- | --- | --- |
+| instruction text | ARMv6-M unified | AT&T | GNU or Apple arm64 | GNU RISC-V | GNU RISC-V |
+| integer operand registers | `r0`–`r7` | `rax` `rbx` `rcx` `rdx` `rsi` `rdi` `r8`–`r15` | `x0`–`x17`, `x19`–`x28` | `x5`–`x7`, `x9`–`x31` | `x5`–`x7`, `x9`–`x31` |
+| `general` chooses from | `r0`–`r7` | `rax` `rcx` `rdx` `rsi` `rdi` `r8`–`r11` | `x0`–`x17` | `x5`–`x7`, `x10`–`x17`, `x28`–`x31` | `x5`–`x7`, `x10`–`x17`, `x28`–`x31` |
+| float operand registers | `d0`–`d15` with an FPv5-D16 unit (D615), else none | `xmm0`–`xmm15` | `v0`–`v31` | `f0`–`f31` | none |
+| `float` chooses from | `d0`–`d7` with the unit | `xmm0`–`xmm15` | `v0`–`v7`, `v16`–`v31` | `f0`–`f7`, `f10`–`f17`, `f28`–`f31` | none |
+| every ordinary block overwrites | `r0`–`r7`, flags, and with the unit the `float` row and FPSCR's flags | the `general` and `float` rows, flags | the `general` and `float` rows, flags | the `general` and `float` rows | the `general` row |
+| saved by the routine when a block names one | `d8`–`d15` with the unit | `rbx`, `r12`–`r15` | `x19`–`x28`, `v8`–`v15` | `x9`, `x18`–`x27`, `f8`, `f9`, `f18`–`f27` | `x9`, `x18`–`x27` |
+| never named | `r8`–`r15` and their aliases, `sp`, `lr`, `pc`, `msp`, `psp`, `control` | `rsp`, `rbp`, `rip` | `sp`, `fp`, `lr`, `x18`, `x29`, `x30` | `x0`–`x4`, `x8` and their aliases | `x0`–`x4`, `x8` and their aliases |
 
 A fixed register is its full-width name; `general` and `float` are the two
 classes, spelled the same on every target, and each asks the compiler to
@@ -2301,8 +2301,8 @@ block may overwrite the overwritten row; a register the routine saves must be
 declared, as an operand or as `out _ at register`, which is what makes the
 routine save and restore it. A discarded output names one fixed register.
 The text writes `{name}` where an operand's register belongs, spelled at the
-width its type selects (`%eax` or `%rax`, `w9` or `x9`, `r3`; RV64 uses
-its full-width `xN` name for every enabled integer width; a float register
+width its type selects (`%eax` or `%rax`, `w9` or `x9`, `r3`; RV64 and RV32
+use their full-width `xN` name for every enabled integer width; a float register
 is `%xmm3` at both widths, `s3` or `d3` on arm64, `f3` on RV64, and on a
 Cortex-M float unit `s6` for an `f32` at `d3` and `d3` for an `f64`); `{{`
 and `}}` are literal braces. Every `{name}` must name an operand, every `general`
@@ -2315,7 +2315,7 @@ AAPCS64 preserves, and RV64's `f8`, `f9` and `f18`–`f27` (`fs0`–`fs11`)
 are declared as the saved integer registers are, at whatever width the text
 names them: `d8`, `s8` and `q8` are all `v8`, x86-64's `ymm3` and `zmm3`
 are `xmm3`, and on a Cortex-M float unit `s16` and `s17` are the halves of
-`d8`, one of the eight its routine saves. RV64 operands use canonical `xN` and `fN` names, while raw text
+`d8`, one of the eight its routine saves. RV64 and RV32 operands use canonical `xN` and `fN` names, while raw text
 may use the ABI's `a`, `t` and `s` aliases and their float `fa`, `ft` and
 `fs` forms. An alias identifies the same register for declaration checks
 and exclusion from a class, so naming `s1` requires declaring `x9` and
@@ -2335,7 +2335,7 @@ external-writer obligations remain.
 The text is at most 4096 decoded ASCII bytes, using LF, horizontal tabs and
 printable characters. A line may end in the selected target's own line
 comment, from its marker to the end of the line: `@` on Cortex-M0, `//` on
-arm64 and `#` on x86-64 and RV64, the spelling that target's GNU or Apple
+arm64 and `#` on x86-64, RV64 and RV32, the spelling that target's GNU or Apple
 assembler reads (D597). In an ordinary and a naked block alike the comment
 is removed before any other rule reads the text, so nothing in it is an
 instruction, a register, a label or a `{name}` slot, and the emitted assembly
@@ -2363,7 +2363,10 @@ are available at those higher levels. Unsupported system registers remain
 refused. On hosted x86-64, arm64 and RV64 the checker refuses control transfer
 by mnemonic and leaves which instructions exist to the platform assembler.
 The system call, x86-64 `syscall`, arm64 `svc` and RV64 `ecall`, returns to
-the next instruction and is not a control transfer there (D281). Unencodable operands and instructions remain explicit assembler
+the next instruction and is not a control transfer there (D281). RV32
+reads RV64's rule, except that firmware's `wfi` resumes at the next
+instruction and is admitted, and its `ecall`, an exception that enters the
+unhandled loop, is refused (D670). Unencodable operands and instructions remain explicit assembler
 failures under the pinned flags, never a target upgrade. Assembly must not
 overwrite compiler spill or frame storage, saved registers or immutable
 source storage through an indirect address, leave the stack pointer changed,
@@ -20739,6 +20742,37 @@ body, which the trampoline still does without.
 **Pinned by** every static Linux fixture of `hosted/thread`, among them
 `runtime/thread-creation-and-join-order-writes`, on x86-64, arm64 and
 RV64.
+
+### D670 — RV32 assembly reads RV64's text rules at XLEN 32
+
+**The tour said** nothing of RV32 assembly, and [1990] stated its text
+rules for the hosted targets and Cortex-M0. D660 gave an ordinary RV32 block
+RV64's integer registers at XLEN 32 and no float register, but left the
+text rules to Cortex-M0's allowlist or the hosted check, and the hosted
+check's precondition named only x86-64, arm64 and RV64, so any RV32 block
+was an internal defect.
+
+**Chosen:** RV32 text is checked as RV64's is: at most 4096 ASCII bytes in
+LF lines, `#` comments, no directive, separator or digit separator, and in
+an ordinary block no label and no control transfer by mnemonic; which
+instructions exist is the pinned assembler's to say under the level's
+`-march`. Two mnemonics take firmware's standing rather than Linux's: `wfi`,
+which resumes at the next instruction once an interrupt is taken, is
+admitted in an ordinary block, as Cortex-M's is; and `ecall`, which on
+firmware is an exception that takes no slot and enters the unhandled loop,
+never to return, is refused there, where D281 admits it on RV64. A naked
+body owns its control flow on RV32 as everywhere. [1990]'s table has an
+RV32 column: RV64's integer rows and no float register.
+
+**The alternatives:** Cortex-M0's bounded allowlist, which RV32 has no need
+of because GNU as enforces the level's instruction set as it does for
+Thumb-2; and RV64's rule unchanged, which refuses the idle loop's `wfi` and
+admits an `ecall` that cannot return.
+
+**Pinned by** `driver/rv32 checks assembly text`, which admits a naked
+jump and an ordinary `wfi` and `general` operand and refuses an ordinary
+`j`, an ordinary `ecall` and a float operand as diagnostics, and
+`backend/rv32 verifier refuses invalid registers`.
 
 ### D523 — Under `--link=libc` a library is the C driver's `-lNAME`
 
