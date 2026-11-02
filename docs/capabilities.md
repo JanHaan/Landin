@@ -84,7 +84,12 @@ entry that describes it, and put a new one where a reader would look for it.
   interrupt model decides which mcause codes take handlers (D662). Its
   backend is RV64's at XLEN 32 (D671): eight-byte integers are register
   pairs, f32 and f64 are libgcc's soft float, and 64-bit division is
-  libgcc's, with the language's checks unchanged.
+  libgcc's, with the language's checks unchanged. The Pico 2's port on its
+  Hazard3 cores, at `rv32imac`, takes its interrupts through Xh3irq and
+  counts its telemetry with an `amoadd.w` (D710), and is checked by an
+  oracle of its own,
+  [`board.py`](../environments/boards/rp2350_hazard3/README.md) (D711-D713);
+  no board run of it is recorded yet.
 - **A float unit** is a fact of a description: a Cortex-M7's
   `compiler.float_unit("fpv5-d16")`, which the STM32H753's has, builds
   hard-float at `armv7e-m` (D615). f32 and f64 arithmetic, negation,
