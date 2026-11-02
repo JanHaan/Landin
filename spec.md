@@ -25769,6 +25769,34 @@ has no image to select in.
 **Pinned by** `environments/cortex-m/rv32_controls.py`'s `atomics`, which
 `backend_acceptance.py`'s `execute_lane` runs for an RV32 lane.
 
+### D698 — A corpus lane records its own capacity limits, image and stack
+
+**The tour said** nothing; a corpus row's `profile_limit` records an image
+the reference's map cannot hold, judged at every profile, and a lane's
+`lanes` entry could only restrict a row outright, requiring every profile
+to fail there (D619).
+
+**Chosen:** an `execute` row's `lanes` entry may be `"mode": "limit"` with
+its reason. On that lane a profile whose link overflows the map is a
+`selected-image-limit` with its measured sizes, as `profile_limit` makes
+one on the reference, and a profile whose stack the harness's guard
+stopped past the reservation is a `selected-stack-limit` naming the routine
+that overran it; every other profile executes and must pass, and a whole
+lane run in which every profile of the row executes fails, naming the stale
+entry. The RV32 lanes carry one wherever an RV32 image's text outgrows the
+reference's 32 KiB, or its frames the 4 KiB stack, at a profile where the
+Cortex-M0 image fits, each reason giving the measured overflow.
+
+**The alternatives:** a lane `restriction`, which requires every profile
+to fail and so is stale wherever only the unoptimised profile overflows,
+as most of these do; a `profile_limit` on the row, which would claim the
+reference's map cannot hold an image that Cortex-M0 executes there; and
+larger RV32 maps, which would leave the 32 KiB end of the range untested
+on RV32 (D661).
+
+**Pinned by** `environments/cortex-m/backend_corpus.py`'s lane `limit`
+handling and `stale_lane_limits`, and the inventory's `lanes` entries.
+
 ### D620 — A fibre's context on a float unit holds d8-d15 and FPSCR
 
 **The tour said** nothing; D460's switch saved forty-eight bytes, D461's
