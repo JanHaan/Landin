@@ -9883,6 +9883,76 @@ package body Landin.Tests.Backend_Suite is
       end;
    end Arm64_Assembly_Saves_What_It_Declares;
 
+   --  R12's gate: RV32's verifier refuses an invalid register.  The block
+   --  as lowered verifies; the hardwired zero, the stack, global and
+   --  thread pointers, the frame pointer, a name past the bank and a float
+   --  register, which no RV32 level has, are each refused once written
+   --  into its operand, while RV64 still admits the float register.
+   procedure RV32_Verifier_Refuses_Invalid_Registers
+     (Item : in out Landin.Testing.Context);
+
+   procedure RV32_Verifier_Refuses_Invalid_Registers
+     (Item : in out Landin.Testing.Context)
+   is
+      use type IR.Verifier.Fault_Kind;
+      use type IR.Opcode;
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.RV32);
+      Ran : Natural;
+      type Name_Access is access constant String;
+      X0  : aliased constant String := "x0";
+      X2  : aliased constant String := "x2";
+      X3  : aliased constant String := "x3";
+      X4  : aliased constant String := "x4";
+      X8  : aliased constant String := "x8";
+      X32 : aliased constant String := "x32";
+      SP  : aliased constant String := "sp";
+      F8  : aliased constant String := "f8";
+      Refused : constant array (1 .. 8) of Name_Access :=
+        [X0'Access, X2'Access, X3'Access, X4'Access, X8'Access,
+         X32'Access, SP'Access, F8'Access];
+   begin
+      Lower
+        (Work, "f: (v: u32) -> (r: u32) =" & LF
+         & "    r = assembler.block(""addi {r}, {r}, 1""," & LF
+         & "        inout r: u32 at general = v, out _ at x9)" & LF
+         & "end f" & LF, Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
+      if Landin.Stages.Failed (Work) then
+         return;
+      end if;
+      declare
+         Code : constant not null access IR.Unit :=
+           Landin.Stages.Code (Work);
+         Block : IR.Value_Id := IR.No_Value;
+      begin
+         for V in 1 .. IR.Value_Count (Code.all, 1) loop
+            if IR.Op_Of (Code.all, 1, IR.Value_Id (V)) = IR.Assembly then
+               Block := IR.Value_Id (V);
+            end if;
+         end loop;
+         Landin.Testing.Check
+           (Item, IR.Verifier.Check (Code.all, Landin.Targets.RV32).Kind
+                    = IR.Verifier.Nothing_Wrong,
+            "the lowered RV32 block verifies");
+         for Name of Refused loop
+            IR.Testing_Support.Overwrite_Assembly_Operand
+              (Code.all, 1, Block, 2,
+               IR.Operand_At
+                 (IR.Discarded, Landin.Source.Names.No_Name, Name.all,
+                  Landin.Types.Not_Typed));
+            Landin.Testing.Check
+              (Item, IR.Verifier.Check (Code.all, Landin.Targets.RV32).Kind
+                       = IR.Verifier.Assembly_Register_Refused,
+               "the RV32 verifier refuses " & Name.all);
+         end loop;
+         Landin.Testing.Check
+           (Item, IR.Verifier.Check (Code.all, Landin.Targets.Linux_RV64)
+                    .Kind = IR.Verifier.Nothing_Wrong,
+            "RV64's verifier admits the f8 that RV32's refuses");
+      end;
+   end RV32_Verifier_Refuses_Invalid_Registers;
+
    procedure Arm64_Conditional_Reach
      (Item : in out Landin.Testing.Context);
 
@@ -10595,6 +10665,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "arm64 assembly saves what it declares",
          Arm64_Assembly_Saves_What_It_Declares'Access);
+      Landin.Testing.Register
+        (Into, "backend", "rv32 verifier refuses invalid registers",
+         RV32_Verifier_Refuses_Invalid_Registers'Access);
       Landin.Testing.Register
         (Into, "backend", "arm64 exits share one epilogue",
          Arm64_Exits_Share_One_Epilogue'Access);

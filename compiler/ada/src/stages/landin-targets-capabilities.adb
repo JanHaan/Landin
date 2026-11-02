@@ -1,8 +1,10 @@
+with Ada.Strings.Unbounded;
+
 package body Landin.Targets.Capabilities is
 
    function Memory_Access
-     (Facts : Target_Facts; Op : Landin.Memory.Operation;
-      Width : Scalar_Size) return Boolean
+     (Facts : Target_Facts; Level : Landin.Targets.Levels.Feature_Level;
+      Op : Landin.Memory.Operation; Width : Scalar_Size) return Boolean
    is
       use all type Landin.Memory.Operation;
    begin
@@ -14,16 +16,59 @@ package body Landin.Targets.Capabilities is
       case Architecture_Of (Facts) is
          when X86_64 | Arm64 | RV64 =>
             return True;
-         when Cortex_M0 | RV32 =>
-            --  RV32's read-modify-write admission follows Cortex-M0's
-            --  until the level's A extension decides it.
+         when Cortex_M0 =>
+            --  ARMv6-M has no exclusive pair, and no Thumb-2 level's is
+            --  lowered yet, so no level admits a read-modify-write.
             return Width /= Byte_8
               and then Op not in Atomic_Exchange | Atomic_Add
                 | Atomic_Compare_Exchange;
+         when RV32 =>
+            --  A's AMOs and LR/SC are four bytes wide; the narrower
+            --  read-modify-writes are their masked word.
+            return Width /= Byte_8
+              and then (Op not in Atomic_Exchange | Atomic_Add
+                          | Atomic_Compare_Exchange
+                        or else Landin.Targets.Levels.Has
+                          (Level, Landin.Targets.Levels.A));
          when Synthetic_32_Architecture =>
             return False;
       end case;
    end Memory_Access;
+
+   function Memory_Access_At_Some_Level
+     (Facts : Target_Facts; Op : Landin.Memory.Operation;
+      Width : Scalar_Size) return Boolean
+   is
+     (for some Level of Landin.Targets.Levels.Family_Levels (Facts) =>
+         Memory_Access (Facts, Level, Op, Width));
+
+   function Levels_Admitting
+     (Facts : Target_Facts; Op : Landin.Memory.Operation;
+      Width : Scalar_Size) return String
+   is
+      Result : Ada.Strings.Unbounded.Unbounded_String;
+   begin
+      for Level of Landin.Targets.Levels.Family_Levels (Facts) loop
+         if Memory_Access (Facts, Level, Op, Width) then
+            if Ada.Strings.Unbounded.Length (Result) > 0 then
+               Ada.Strings.Unbounded.Append (Result, ", ");
+            end if;
+            Ada.Strings.Unbounded.Append
+              (Result, Landin.Targets.Levels.Name (Level));
+         end if;
+      end loop;
+      return Ada.Strings.Unbounded.To_String (Result);
+   end Levels_Admitting;
+
+   function Critical_Section (Facts : Target_Facts) return String
+     is (case Architecture_Of (Facts) is
+            when Cortex_M0 =>
+               "platform/cortex_m's critical section, disable_interrupts to"
+               & " restore_interrupts",
+            when RV32 =>
+               "platform/riscv's critical section, disable_interrupts to"
+               & " restore_interrupts",
+            when X86_64 | Arm64 | RV64 | Synthetic_32_Architecture => "");
 
    --  Every native backend emits both: x86-64 for Linux and FreeBSD, arm64
    --  for Linux, FreeBSD and Darwin, RV64 for Linux, and Cortex-M0, where a

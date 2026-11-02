@@ -258,11 +258,11 @@ package body Landin.Tests.IR_Optimization_Suite is
            IR.Verifier.Nothing_Wrong, "unimplemented target refuses events");
       for Width in Scalar_Size loop
          Landin.Testing.Check
-           (Item, Capabilities.Memory_Access
+           (Item, Capabilities.Memory_Access_At_Some_Level
              (Cortex_M, Atomic_Load, Width) = (Width in Byte_1 .. Byte_4),
             "M0 load boundary is independent of hosted width");
          Landin.Testing.Check
-           (Item, not Capabilities.Memory_Access
+           (Item, not Capabilities.Memory_Access_At_Some_Level
              (Cortex_M, Atomic_Add, Width), "M0 has no hidden RMW fallback");
       end loop;
    end Memory_Events;

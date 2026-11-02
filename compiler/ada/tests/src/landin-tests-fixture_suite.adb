@@ -1357,6 +1357,7 @@ package body Landin.Tests.Fixture_Suite is
          elsif Name = "freebsd-arm64" then Landin.Targets.FreeBSD_Arm64
          elsif Name = "linux-rv64" then Landin.Targets.Linux_RV64
          elsif Name = "cortex-m0" then Landin.Targets.Cortex_M
+         elsif Name = "rv32" then Landin.Targets.RV32
          else Landin.Targets.Synthetic_32);
 
       --  A field as fixture-meta.cases renders it.

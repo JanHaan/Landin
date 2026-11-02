@@ -1,0 +1,10 @@
+error[L0344]: memory operation unavailable at rv32imc; a build at rv32imac admits it
+  --> ../tests/fixtures/negative/atomic-builtin-rv32imc/program.ldn:4:9
+  |
+4 |     _ = compiler.atomic_add(p, 1, compiler.relaxed)
+  |         ^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/atomic-builtin-rv32imc/program.ldn:4:9
+  |
+4 |     _ = compiler.atomic_add(p, 1, compiler.relaxed)
+  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this memory operation
+  = note: [1620]/D227: a memory intrinsic's arguments state its whole contract, and each must be one the intrinsic takes

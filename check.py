@@ -6693,8 +6693,7 @@ def check_coverage_registers(full_run):
     allowed = set()
     known_targets = {"linux-x86-64", "linux-arm64", "darwin-arm64",
                      "freebsd-x86-64", "freebsd-arm64", "linux-rv64", "cortex-m0",
-                     "rv32",
-                     "synthetic-32"}
+                     "rv32", "synthetic-32"}
     if scopes is None:
         out.append((REGISTERS, 1, "the target applicability register is absent"))
     else:

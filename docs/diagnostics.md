@@ -1320,10 +1320,14 @@ imported routine nothing calls refuses nothing, and a module compiled with no
 `main` reaches everything it holds.
 
 A `core/atomic` cell the target's atomics cannot carry is refused the same
-way where the program uses it (D510): on Cortex-M0 a `u64` cell, and a
-cell's `exchange`, `add`, `add_relaxed` and `compare_exchange`. A cell one
-context alone writes adds with `atomic.sole_add`, a load and a store; state
-several contexts write takes `platform/cortex_m`'s critical section.
+way where the program uses it (D510): on Cortex-M0 and RV32 a `u64` cell,
+and on Cortex-M0 and RV32 at `rv32imc` a cell's `exchange`, `add`,
+`add_relaxed` and `compare_exchange`. On RV32 the read-modify-writes are the
+level's (D690): build at `rv32imac`, with `--level=rv32imac` or the language
+server's `level`, where the core has the A extension. A cell one context
+alone writes adds with `atomic.sole_add`, a load and a store; state several
+contexts write takes `platform/cortex_m`'s or `platform/riscv`'s critical
+section.
 
 ### L0345
 

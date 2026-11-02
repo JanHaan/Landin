@@ -1,0 +1,5 @@
+f: (p: ptr mut u32) -> none =
+    compiler.atomic_store(p, compiler.atomic_load(p, compiler.acquire) +% 1,
+                          compiler.release)
+    _ = compiler.atomic_add(p, 1, compiler.relaxed)
+end f
