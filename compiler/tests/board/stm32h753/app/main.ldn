@@ -34,6 +34,7 @@ mut recoveries: u32 = 0
 mut dma_entries: u32 = 0
 mut usart_entries: u32 = 0
 mut usart_exception: u32 = 0
+mut timer_events: u32 = 0
 mut app_state: u32 = 0
 -- The float operands still to come, the exercise they are for, 4 or 8
 -- bytes each, and the four words they fill, most significant first.
@@ -68,8 +69,16 @@ extern(interrupt) dma_irq: () -> none =
     cortex_m.completion_barrier()
 end dma_irq
 
+-- SysTick, every millisecond, the wakeup for a lap still in progress
+-- while the line is never quiet long enough for IDLE (D649).
+link(vector: 15)
+extern(interrupt) tick_irq: () -> none =
+    timer_events = timer_events +% 1
+    notification = 1
+end tick_irq
+
 -- USART3's, IRQ 39 (Table 147, p. 755), raised by its IDLE flag one frame
--- after the line falls quiet: the wakeup for a lap still in progress.
+-- after the line falls quiet.
 link(vector: 55)
 extern(interrupt) usart3_irq: () -> none =
     usart_entries = usart_entries +% 1
@@ -98,6 +107,7 @@ telemetry: (r: serial.rx) -> none =
     report.field(100, serial.epochs())
     report.field(119, serial.laps())
     report.field(107, dma_entries)
+    report.field(109, timer_events)
     report.field(117, usart_entries)
     report.field(112, usart_exception)
     report.field(110, dma1.s0ndtr_read(dma1.base))
@@ -150,6 +160,14 @@ wide: (key: u8, value: u64) -> none =
     report.field(key + 1, u32(value & 0xffff_ffff))
 end wide
 
+-- Stop reading for 100 ms of SysTick's interrupts.
+stall: () -> none =
+    began := timer_events
+    while timer_events -% began < 100 do
+        cortex_m.wait_for_interrupt()
+    end while
+end stall
+
 halt: (status: u32) -> noreturn =
     app_state = status
     report.open_frame(104)
@@ -180,6 +198,7 @@ start: () -> noreturn =
     end
     scs.enable_interrupt(11)
     scs.enable_interrupt(39)
+    scs.start_ticks(bringup.cycles_ms)
     app_state = 2
     mut waiting: usize = 0
     loop do
@@ -219,7 +238,7 @@ start: () -> noreturn =
             elsif byte == 17 then
                 telemetry(receiver)
             elsif byte == 18 then
-                scs.wait_ms(100, bringup.cycles_ms)
+                stall()
             elsif byte == 20 or byte == 21 then
                 operand_width = if byte == 20 then 4 else 8 end if
                 operand_digits = operand_width * 4

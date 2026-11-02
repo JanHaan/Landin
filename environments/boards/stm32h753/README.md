@@ -47,8 +47,9 @@ python3 environments/boards/stm32h753/board.py \
 The output holds the image, its build report, its disassembly and every
 command's log, `uart.bin` (every byte the board sent) and `sent.bin` (every
 byte the host sent), and `result.json`: the image's hash, what its float
-routines were found to use, each verdict, every frame and the commands
-with their status and time. Its status is `passed`, `failed` with the first
+routines were found to use, each verdict, every frame, `echo_gaps`, where
+the echo left out sent bytes, as offset and length, and the commands with
+their status and time. Its status is `passed`, `failed` with the first
 refusal, or `pending`, naming what the float unit still lacks: the image's
 float routines calling software helpers, the compiler-owned startup not
 granting CP10 and CP11, or the square root not yet sent. A pending run is
@@ -65,7 +66,7 @@ writes nothing until a byte has arrived: the host sends `S` first.
 | Tag | When | Fields |
 |---|---|---|
 | `b` | once, after the first byte | `r` RCC_RSR as read first in `start`, `v` VTOR, `a` CPACR and `c` CCR then, `q` PWR_CR3 and `y` PWR_CSR1, as the description's stage left them before reset, `w` the bytes that had arrived |
-| `t` | after each 0x11 | `h` bytes handled, `c` ring restarts, `d` epochs the stream completed, `w` its laps, `k` DMA_STR0 entries, `u` USART3 entries, `p` the exception number USART3's handler ran in, `n` DMA1_S0NDTR, `e` bytes consumed in this epoch, `g` PB0's input, `s` the application's state |
+| `t` | after each 0x11 | `h` bytes handled, `c` ring restarts, `d` epochs the stream completed, `w` its laps, `k` DMA_STR0 entries, `m` SysTick interrupts, `u` USART3 entries, `p` the exception number USART3's handler ran in, `n` DMA1_S0NDTR, `e` bytes consumed in this epoch, `g` PB0's input, `s` the application's state |
 | `f` | after 0x14 and 16 operand bytes | f32 results as bit patterns: `a` sum, `s` difference, `m` product, `d` quotient, `c` the comparisons, `q` the square root once it is sent |
 | `F` | after 0x15 and 32 operand bytes | the same for f64, each result's high word under its key and its low word under the next letter: `a` and `b`, `s` and `t`, `m` and `n`, `d` and `e`, `q` and `r`; `c` the comparisons |
 | `h` | when the application halts | `s` its status |
@@ -84,10 +85,10 @@ greater or equal 16, greater 32.
 | flash after flashing | the vector table, read back over SWD, equal to the image's |
 | the boot frame | RCC_RSR's named flags are Table 56's power-on line alone (p. 333), so the run began at power-on and no software reset followed; VTOR is the boot address; CCR's IC and DC are clear, the cacheless profile read on the chip; PWR_CR3 holds the LDO supply the description's stage wrote before reset, and PWR_CSR1 reads VOS3 with ACTVOSRDY set, the voltage levels valid (6.4.1, p. 262; 6.8.2, p. 305; 6.8.4, p. 308; D653); one byte, the host's, had arrived; CPACR's CP10 and CP11 granting the float unit, pending until the compiler-owned startup grants them |
 | the shared scenario | `1`, `A` and `0`, the bytes the emulator lane's application is fed, echoed, with PB0's input 1 after `1` and 0 after `0` |
-| USART3's interrupt | its handler at slot 55 entered in exception 55, raised by the USART's own IDLE flag, and entered again for each later byte |
+| USART3's interrupt | its handler at slot 55 entered in exception 55, raised by the USART's own IDLE flag, and entered again for each later byte; SysTick, every millisecond, advancing |
 | an overrun | after 0x12, a 300-byte burst into the 256-byte ring is discarded, never echoed, and the ring restarts once |
-| an epoch ended by STALL | the 4096-byte epoch filled, its last byte STALL, then 100 bytes while the stream is exhausted and nothing reads: the receive data register holds the first, ORE flags the rest lost (48.5.6, p. 2030), the application restarts on that overrun, and only that byte is echoed |
-| an epoch exhausted | the next epoch filled to its 4096 bytes: one epoch completed, one restart, nothing lost, and the byte that waited in the receive register meanwhile the next epoch's first |
+| an epoch ended by STALL | the 4096-byte epoch filled, its last byte STALL, then 100 bytes while the stream is exhausted and nothing reads: the receiver holds the first 17, 16 in its RXFIFO and one in the receive data register (48.5.4, p. 2023; Table 402, p. 2018), ORE flags the rest lost (48.5.6, p. 2030), the application restarts on that overrun, and only those 17 are echoed |
+| an epoch exhausted | the next epoch filled to its 4096 bytes: one epoch completed, one restart, nothing lost, and the byte that waited in the receiver meanwhile the next epoch's first |
 | the stream | every byte sent echoed in order but those discarded above, `h` their count, and the stream lapping the ring |
 | the float exercise | f32 and f64 results for special and seeded operands equal IEEE 754's bit for bit, any NaN matching any NaN: f64 from the host's binary64 arithmetic, f32 from the binary64 result of binary32 operands rounded once to binary32, which is correctly rounded for these operations |
 | the counters | `handled`, `recoveries`, `dma_entries`, `usart_entries` and DMA1_S0NDTR, read over SWD without halting the core, equal the last frame's |

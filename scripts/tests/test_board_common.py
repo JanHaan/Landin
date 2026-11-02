@@ -82,6 +82,13 @@ class Framing(unittest.TestCase):
         self.assertEqual(COMMON.echo_of(stream), b'abcd')
         self.assertEqual(COMMON.tagged(stream, 't'), [{'h': 10}])
 
+    def test_an_echo_s_gaps_are_where_it_leaves_the_sent_bytes(self):
+        sent = bytes(range(40, 120))
+        echo = sent[:5] + sent[15:30] + sent[31:]
+        self.assertEqual(COMMON.gaps(sent, echo), [(5, 10), (30, 1)])
+        self.assertEqual(COMMON.gaps(sent, sent), [])
+        self.assertEqual(COMMON.gaps(sent, sent[:3] + b'\x00' * 9), [(3, None)])
+
     def test_a_result_writes_each_field_as_eight_digits(self):
         self.assertEqual(COMMON.frame_record(b'\x02b r=00fa0000 v=08000000\x03\n'),
                          [dict(tag='b', r='00fa0000', v='08000000')])

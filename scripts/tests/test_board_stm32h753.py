@@ -128,7 +128,13 @@ class Accounting(unittest.TestCase):
         sent = b'S1\x11A0\x11\x12' + b'B' * 300 + b'\x11' + b'C' * 10 + b'\x12' + b'D' * 100 + b'\x11'
         burst, lost = sent.index(b'B'), sent.index(b'D')
         expect = BOARD.discarded(sent, [(lost + BOARD.HELD, 100 - BOARD.HELD), (burst, 300)])
-        self.assertEqual(expect, b'S1\x11A0\x11\x12\x11' + b'C' * 10 + b'\x12D\x11')
+        self.assertEqual(expect, b'S1\x11A0\x11\x12\x11' + b'C' * 10 + b'\x12' + b'D' * 17 + b'\x11')
+
+    def test_the_receiver_holds_its_fifo_and_its_data_register(self):
+        # RM0433 Rev 9, Table 402, p. 2018: a 16-entry RXFIFO; 48.5.4,
+        # p. 2023, and note 2 of p. 2067: one more in USART_RDR before the
+        # next sets ORE.
+        self.assertEqual(BOARD.HELD, 16 + 1)
 
     def test_the_float_exercise_fits_in_the_epoch_it_runs_in(self):
         used = 1 + 1000 + 1

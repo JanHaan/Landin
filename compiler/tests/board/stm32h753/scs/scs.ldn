@@ -16,8 +16,8 @@ public cpacr_fpu: u32 = 0x00f00000
 -- NVIC_ISER0, one enable bit an interrupt, 32 to a word (B3.4.4).
 iser_address: usize = 0xe000e100
 -- SysTick's control and status, reload and current value (B3.3.3 to
--- B3.3.5): ENABLE is bit 0, CLKSOURCE bit 2, the processor's clock, and
--- COUNTFLAG bit 16, which a read clears.
+-- B3.3.5): ENABLE is bit 0, TICKINT bit 1 and CLKSOURCE bit 2, the
+-- processor's clock.
 systick_csr: usize = 0xe000e010
 systick_rvr: usize = 0xe000e014
 systick_cvr: usize = 0xe000e018
@@ -48,16 +48,12 @@ public exception_number: () -> (number: u32) =
     number = assembler.block("mrs {number}, ipsr", out number: u32 at general)
 end exception_number
 
--- Busy-wait MS milliseconds of a processor clock of CYCLES cycles a
--- millisecond, counting SysTick's wraps; SysTick is left stopped.
-public wait_ms: (ms: u32, cycles: u32) -> none =
+-- SysTick interrupting every CYCLES processor cycles: ENABLE, TICKINT,
+-- bit 1, and CLKSOURCE, the processor's clock (B3.3.3).  Its exception is
+-- 15, the vector table's slot 15.
+public start_ticks: (cycles: u32) -> none =
     store(systick_csr, 0)
     store(systick_rvr, cycles - 1)
     store(systick_cvr, 0)
-    store(systick_csr, 5)
-    mut left := ms
-    while left > 0 do
-        if (load(systick_csr) & 0x00010000) <> 0 then left -= 1 end if
-    end while
-    store(systick_csr, 0)
-end wait_ms
+    store(systick_csr, 7)
+end start_ticks

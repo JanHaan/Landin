@@ -20,12 +20,15 @@
 -- not transferred.  Bytes received after the last snapshot before a stop
 -- are discarded with the epoch.
 --
--- While an epoch is exhausted or stopped, or between a lap and the next,
--- USART3's receive data register holds one byte, FIFO mode being off, and
--- the next is lost: the USART sets ORE (48.5.6, p. 2030), and a snapshot
--- reports that as an overrun, so no byte is lost unreported.  USART3's
--- IDLE interrupt, raised one frame after the line falls quiet, wakes the
--- program for a lap still in progress.
+-- USART3 runs in FIFO mode (48.5.4, p. 2023), so its transmitter holds
+-- 16 bytes and the echo keeps the line busy across the work between two
+-- reads (D648).  While an epoch is exhausted or stopped, or between a lap
+-- and the next, the receiver holds 17 bytes, 16 in its RXFIFO and one in
+-- the receive data register (48.5.4, p. 2023; Table 402, p. 2018; note 2,
+-- p. 2067), and the next is lost: the USART sets ORE (48.5.6, p. 2030),
+-- and a snapshot reports that as an overrun, so no byte is lost
+-- unreported.  The program wakes for a lap still in progress on SysTick's
+-- millisecond and on USART3's IDLE interrupt (D649).
 --
 -- TRBUFF, DMA_SxCR's bit 20, is set, as RM0433 says it must be for a
 -- stream that serves a USART (15.5.5, p. 662); the SVD omits the field and
@@ -66,7 +69,7 @@ errors: u32 = 0x0d
 -- DMA_SxCR (15.5.5, p. 662): EN 0 and TCIE 4.
 enable: u32 = 0x01
 complete_interrupt: u32 = 0x10
--- USART_ISR and USART_ICR (48.8.10, p. 2091; 48.8.11, p. 2096): ORE and
+-- USART_ISR and USART_ICR (48.8.9, p. 2085; 48.8.11, p. 2096): ORE and
 -- ORECF, bit 3, and IDLE and IDLECF, bit 4.
 uart_overrun: u32 = 0x08
 uart_idle: u32 = 0x10
@@ -147,8 +150,9 @@ public open: (rate: u32, budget: u32, escaping buf: []mut u8)
       or (dma1.lisr_read(dma1.base) & errors) <> 0
     -- 64 MHz / 115200 = 555.6, oversampling by 16: BRR 556 (48.5.7,
     -- p. 2034), written while UE is clear, as CR3 is.  CR3's DMAR, bit 6,
-    -- receives through DMA; CR1's UE 0, RE 2, TE 3 and IDLEIE 4, with FIFO
-    -- mode off (48.8.2, p. 2070).
+    -- receives through DMA; CR1's UE 0, RE 2, TE 3, IDLEIE 4 and FIFOEN 29,
+    -- which may be written only with UE clear, here in the same write
+    -- (48.8.1, p. 2067).
     usart3.brr_write(usart3.base, 556)
     mut control3 := usart3.cr3_decode(0)
     control3.f_dmar = 1
@@ -158,6 +162,7 @@ public open: (rate: u32, budget: u32, escaping buf: []mut u8)
     control1.f_re = 1
     control1.f_te = 1
     control1.f_idleie = 1
+    control1.f_fifoen = 1
     usart3.cr1_write(usart3.base, usart3.cr1_encode(control1))
     usart3.icr_write(usart3.base, uart_overrun | uart_idle)
     -- DMAMUX1's channel 0 serves DMA1 stream 0 (17.3.2, p. 696).
