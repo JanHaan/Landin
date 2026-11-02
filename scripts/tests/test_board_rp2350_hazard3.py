@@ -39,6 +39,18 @@ FIRMWARE = dict(vector_address=BOARD.TABLE, vector_words=BOARD.VECTOR_WORDS,
                 image_block=dict(address=BOARD.TABLE + 4 * BOARD.VECTOR_WORDS))
 
 
+class Paced:
+    """A pace that records each action it spaces."""
+    def __init__(self, calls=None):
+        self.calls = calls if calls is not None else []
+
+    def before(self, what):
+        self.calls.append('before ' + what)
+
+    def after(self, what):
+        self.calls.append('after ' + what)
+
+
 class Recorded:
     """A tool's commands: every call kept, each name answered, and each
     status recorded as Run records it."""
@@ -165,15 +177,16 @@ ARGS = dict(hub='7-2.3.3', port=2, guard_port=4, guard_serial='210319B3E738', of
             probe_rs='probe-rs', probe='0000:0001:127.0.0.1:4442')
 PING = '1 packets transmitted, 1 received, 0% packet loss, time 0ms\n'
 LOST = '1 packets transmitted, 0 received, 100% packet loss, time 0ms\n'
-# The kernel's own lines for the Pico 2's port, as the rig logged them.
-TROUBLE = ('Nov 02 15:12:27 epycmicro kernel: usb 7-2.3.3.2: device descriptor read/64, error -110\n'
-           'Nov 02 15:12:43 epycmicro kernel: usb 7-2.3.3-port2: attempt power cycle\n')
-CALM = ('Nov 02 15:18:27 epycmicro kernel: usb 7-2.3.4.4: ch341-uart converter now attached\n'
-        'Nov 02 15:18:27 epycmicro kernel: usb 7-2.3.3.4: Product: Digilent USB Device\n')
+
+
+def paced_args(run, **more):
+    """ARGS with a pace that records into RUN's calls."""
+    return SimpleNamespace(**dict(ARGS, pace=Paced(run.calls), **more))
+
 
 def cycling(**more):
     """The answers a clean guarded cycle gets."""
-    answers = {'kernel-before-cycle': CALM, 'hub-status': QUIET, 'hub-after-cycle': QUIET,
+    answers = {'hub-status': QUIET, 'hub-after-cycle': QUIET,
                'probe-ping': PING, 'hub-before-attach': QUIET}
     answers.update(more)
     return answers
@@ -192,27 +205,29 @@ class Attach(unittest.TestCase):
             BOARD.attached(run, args, 'attach')
 
     def test_a_flash_through_the_arm_side_boots_the_image_before_reading_back(self):
-        args = SimpleNamespace(**ARGS)
         head = struct.pack('<2I', 0x3900006f, 0)
         run = Recorded(statuses={'reattach-RP235x': 1}, **cycling(**{
             'flash-readback': '0x10000000: 3900006f 00000000'}))
+        args = paced_args(run)
         with mock.patch.object(BOARD.time, 'sleep'):
             self.assertEqual(BOARD.flash(run, args, 'board.elf', head), 'RP235x')
-        self.assertEqual(run.calls, ['hub-before-attach', 'attach-RP235x', 'flash',
-                                     'kernel-before-cycle', 'hub-status', 'power-cycle',
+        self.assertEqual(run.calls, ['hub-before-attach', 'attach-RP235x', 'before download',
+                                     'flash', 'after download', 'before power cycle',
+                                     'hub-status', 'power-cycle', 'after power cycle',
                                      'hub-after-cycle', 'probe-ping', 'hub-before-attach',
                                      'reattach-RP235x', 'reattach-RP235x_riscv',
                                      'flash-readback'])
 
     def test_a_flash_through_the_risc_v_side_reads_back_at_once(self):
-        args = SimpleNamespace(**ARGS)
         head = struct.pack('<2I', 0x3900006f, 0)
         run = Recorded(statuses={'attach-RP235x': 1},
                        **cycling(**{'flash-readback': '0x10000000: 3900006f 00000001'}))
+        args = paced_args(run)
         with self.assertRaisesRegex(BOARD.Failed, 'flash does not hold'):
             BOARD.flash(run, args, 'board.elf', head)
         self.assertEqual(run.calls, ['hub-before-attach', 'attach-RP235x', 'attach-RP235x_riscv',
-                                     'flash', 'flash-readback'])
+                                     'before download', 'flash', 'after download',
+                                     'flash-readback'])
 
     def test_nothing_attaches_while_the_pico_2_is_in_bootsel(self):
         args = SimpleNamespace(**ARGS)
@@ -233,15 +248,14 @@ class Attach(unittest.TestCase):
 
 class Hub(unittest.TestCase):
     def test_only_a_hub_whose_guard_holds_the_arty_is_switched(self):
-        args = SimpleNamespace(**ARGS)
         hub = Recorded(**cycling())
-        BOARD.power_cycle(hub, args)
-        self.assertEqual(hub.calls, ['kernel-before-cycle', 'hub-status', 'power-cycle',
-                                     'hub-after-cycle', 'probe-ping'])
+        BOARD.power_cycle(hub, paced_args(hub))
+        self.assertEqual(hub.calls, ['before power cycle', 'hub-status', 'power-cycle',
+                                     'after power cycle', 'hub-after-cycle', 'probe-ping'])
         hub = Recorded(**cycling(**{'hub-status': QUIET.replace('210319B3E738', 'X')}))
         with self.assertRaises(BOARD.Failed):
-            BOARD.power_cycle(hub, args)
-        self.assertEqual(hub.calls, ['kernel-before-cycle', 'hub-status'])
+            BOARD.power_cycle(hub, paced_args(hub))
+        self.assertEqual(hub.calls, ['before power cycle', 'hub-status', 'after power cycle'])
 
     def test_a_listing_that_meets_the_tree_gone_is_asked_again(self):
         class Flaky(Recorded):
@@ -252,32 +266,32 @@ class Hub(unittest.TestCase):
                 return answer
         hub = Flaky(**cycling())
         with mock.patch.object(BOARD.time, 'sleep'):
-            BOARD.power_cycle(hub, SimpleNamespace(**dict(ARGS, guard_seconds=5)))
-        self.assertEqual(hub.calls, ['kernel-before-cycle', 'hub-status', 'hub-status',
-                                     'hub-status', 'power-cycle', 'hub-after-cycle',
-                                     'probe-ping'])
+            BOARD.power_cycle(hub, paced_args(hub, guard_seconds=5))
+        self.assertEqual(hub.calls, ['before power cycle', 'hub-status', 'hub-status',
+                                     'hub-status', 'power-cycle', 'after power cycle',
+                                     'hub-after-cycle', 'probe-ping'])
         hub = Flaky(**cycling())
         with self.assertRaisesRegex(BOARD.Failed, 'hub-status failed'):
-            BOARD.power_cycle(hub, SimpleNamespace(**ARGS))
+            BOARD.power_cycle(hub, paced_args(hub))
 
-    def test_a_port_the_kernel_failed_to_enumerate_is_not_switched(self):
-        self.assertEqual(len(BOARD.kernel_trouble(TROUBLE, '7-2.3.3', 2)), 2)
-        self.assertEqual(BOARD.kernel_trouble(TROUBLE, '7-2.3.3', 3), [])
-        self.assertEqual(BOARD.kernel_trouble(CALM, '7-2.3.3', 2), [])
-        hub = Recorded(**cycling(**{'kernel-before-cycle': CALM + TROUBLE}))
-        with self.assertRaisesRegex(BOARD.Failed, 'failed to enumerate port 2'):
-            BOARD.power_cycle(hub, SimpleNamespace(**ARGS))
-        self.assertEqual(hub.calls, ['kernel-before-cycle'])
+    def test_a_pace_that_refuses_stops_the_cycle_before_the_hub_is_read(self):
+        class Refusing(Paced):
+            def before(self, what):
+                raise BOARD.Failed('the kernel logged USB trouble since the last action')
+        hub = Recorded(**cycling())
+        with self.assertRaisesRegex(BOARD.Failed, 'USB trouble'):
+            BOARD.power_cycle(hub, SimpleNamespace(**dict(ARGS, pace=Refusing())))
+        self.assertEqual(hub.calls, [])
 
     def test_a_cycle_that_loses_the_arty_or_the_probe_stops_the_run(self):
-        args = SimpleNamespace(**ARGS)
         gone = QUIET.replace(GUARD, '  Port 4: 0100 power\n')
         with mock.patch.object(BOARD.time, 'sleep'):
+            hub = Recorded(**cycling(**{'hub-after-cycle': gone}))
             with self.assertRaisesRegex(BOARD.Failed, 'does not show 210319B3E738'):
-                BOARD.power_cycle(Recorded(**cycling(**{'hub-after-cycle': gone})), args)
+                BOARD.power_cycle(hub, paced_args(hub))
         hub = Recorded(**cycling(**{'probe-ping': LOST}))
         with self.assertRaisesRegex(BOARD.Failed, 'does not answer ping'):
-            BOARD.power_cycle(hub, args)
+            BOARD.power_cycle(hub, paced_args(hub))
 
 
 class Console:

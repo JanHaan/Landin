@@ -271,7 +271,8 @@ def flash(run, args, elf, head, what="the image's entry word, table and block"):
     image's cores."""
     probe = attached(run, args, 'attach')
     flashed_as = probe.chip
-    run.command('flash', probe.argv('download', '--verify', elf), timeout=300)
+    paced(args, 'download', lambda: run.command('flash', probe.argv('download', '--verify', elf),
+                                                timeout=300))
     if flashed_as == ARM_CHIP:
         power_cycle(common.InGroup(run, args.hub_group), args)
         time.sleep(args.boot_seconds)
@@ -280,19 +281,6 @@ def flash(run, args, elf, head, what="the image's entry word, table and block"):
     back = struct.pack('<%dI' % count, *probe.read_words('flash-readback', FLASH, count))
     require(back == head, 'flash does not hold %s' % what)
     return flashed_as
-
-
-# What the kernel logs for a device on a port it cannot enumerate, and its
-# own recovery of that port.
-KERNEL_TROUBLE = ('error', 'unable to enumerate', 'not accepting', 'attempt power cycle')
-
-
-def kernel_trouble(log, hub, port):
-    """The lines of LOG, the kernel's, reporting trouble enumerating PORT of
-    the hub at HUB, as `usb HUB.PORT:` or `usb HUB-portPORT:` names it."""
-    names = ('usb %s.%d:' % (hub, port), 'usb %s-port%d:' % (hub, port))
-    return [line for line in log.splitlines()
-            if any(n in line for n in names) and any(w in line for w in KERNEL_TROUBLE)]
 
 
 class Listings:
@@ -316,23 +304,30 @@ class Listings:
                 time.sleep(0.5)
 
 
+def paced(args, what, action):
+    """ACTION, which may disconnect a device on the rig's hub cascade,
+    spaced by args.pace from every other such action on the host."""
+    args.pace.before(what)
+    try:
+        return action()
+    finally:
+        args.pace.after(what)
+
+
 def power_cycle(run, args):
     """The Pico 2's port, never the guarded one, only on a hub whose
     guarded port holds the device named, and, with --pico-serial, only
     while the port holds that Pico 2 or no USB device at all: a Pico 2
-    running this firmware does not enumerate.  A port the kernel has failed
-    to enumerate in the last minute is not switched, since such a cycle
-    reset the whole hub tree above it on the rig (D712); and after the
-    cycle the guarded port must show its device again and the probe answer
-    on the network, or the run stops."""
-    log = run.command('kernel-before-cycle', ['journalctl', '-k', '--since', '-60s', '--no-pager'],
-                      check=False)
-    trouble = kernel_trouble(log, args.hub, args.port)
-    require(not trouble, 'the kernel failed to enumerate port %d of hub %s in the last minute;'
-            ' not switching it: %s' % (args.port, args.hub, trouble[-1] if trouble else ''))
-    common.power_cycle(Listings(run, args.guard_seconds), args.hub, args.port, args.off_seconds,
-                       keeps=(args.guard_port, args.guard_serial),
-                       holds_if_any=args.pico_serial)
+    running this firmware does not enumerate.  The cycle is paced with
+    every other tool's actions on the rig, and waits until the kernel has
+    logged nothing of USB for a while, stopping on any trouble it logged
+    since the last action (D725), since a cycle met by a port failing
+    enumeration reset the whole hub tree above it on the rig (D712); and
+    after the cycle the guarded port must show its device again and the
+    probe answer on the network, or the run stops."""
+    paced(args, 'power cycle', lambda: common.power_cycle(
+        Listings(run, args.guard_seconds), args.hub, args.port, args.off_seconds,
+        keeps=(args.guard_port, args.guard_serial), holds_if_any=args.pico_serial))
     deadline = time.time() + args.guard_seconds
     while True:
         status = run.command('hub-after-cycle', ['uhubctl', '-l', args.hub], check=False)
@@ -534,6 +529,11 @@ def main():
                              ' only for a Pico 2 on a hub that does not carry the probe')
     parser.add_argument('--guard-seconds', type=float, default=15.0,
                         help="how long the guarded port may take to show its device after a cycle")
+    parser.add_argument('--spacing', type=float, default=120,
+                        help='the least time between two actions that may disconnect a USB device'
+                             ' on the rig, by any tool')
+    parser.add_argument('--quiet', type=float, default=60,
+                        help='how long the kernel must have logged nothing of USB before one')
     parser.add_argument('--enumerate-seconds', type=float, default=10.0,
                         help='how long BOOTSEL may take to enumerate after the power cycle')
     parser.add_argument('--hub-group', default='dialout',
@@ -556,11 +556,14 @@ def main():
     args.probehive_build = (args.probehive_build or args.probehive / 'build/slots_ci').resolve()
     args.output = args.output.resolve()
     args.output.mkdir(parents=True)
+    args.pace = common.Pace(args.spacing, args.quiet)
     run = common.Run(args.output)
     result = dict(status='failed')
-    bridge = console = None
+    bridge = console = lock = None
     try:
         elf, head, names, adds = build(run, args)
+        # Every step from here reaches the rig, which one run holds at a time.
+        lock = common.rig_lock('rp2350_hazard3 board.py').acquire()
         result.update(image_sha256=sha(elf), image_name=elf.name,
                       image_block=['%08x' % w for w in IMAGE_DEF],
                       amoadd=[dict(address=a, function=f) for a, f in adds])
@@ -591,6 +594,8 @@ def main():
         if bridge:
             # Detached: left running for the next tool.
             bridge.close()
+        if lock:
+            lock.release()
         result['commands'] = run.commands
         common.write_json(args.output / 'result.json', result)
     if args.record and result['status'] == 'passed':

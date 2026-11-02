@@ -22774,11 +22774,11 @@ from, and stalled every probe-rs start 85 s in its USB probe listing. So the
 tool refuses to attach while the Pico 2 enumerates as BOOTSEL, unless told
 `--bootsel-attach`; after a flash through the Arm side it cycles the power
 at once and reads the head back from the cores the new image booted; and
-the counters are read as `RP235x_riscv` alone. A cycle of the Pico 2's
-port coincided with a reset of that tree, so the tool cycles only when
-the kernel has logged no trouble on the port for a minute, and stops
-unless the guarded port shows its device again and the probe answers
-`ping` after it.
+the counters are read as `RP235x_riscv` alone. A cycle met by the
+port failing enumeration reset that tree, so the tool holds the rig's
+lock, paces each download and cycle as D725 does, and stops unless the
+guarded port shows its device again and the probe answers `ping` after
+a cycle.
 
 **The alternatives:** the name fixed by the image's architecture, which
 fails whenever the chip is in BOOTSEL or was last flashed from it; reading

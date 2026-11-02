@@ -37,10 +37,15 @@ The tool switches only `--port` on `--hub`, and only after `uhubctl` shows
 maintainer's rig, as [the Pico 2's Arm tool](../rp2350/README.md) does. On
 the rig such a cycle coincided with a reset of the whole hub tree above it,
 the Arty's USB among it, while the kernel was failing to enumerate the
-port, so the tool reads `journalctl -k` first and does not switch a port
-the kernel logged trouble on in the last minute; after the cycle it waits
-`--guard-seconds` for the guarded port to show its device again and pings
-`--probe-host`, and stops if either is missing.
+port. So the tool holds the rig's lock, `~/.cache/landin/rig.lock`, from
+its first step on the rig to its last, and spaces each download and cycle
+from every other tool's on the host, by `--spacing` seconds and until the
+kernel has logged nothing of USB for `--quiet` seconds, stopping on any
+USB trouble the kernel logged since the last such action (D725). After
+the cycle it waits `--guard-seconds` for the guarded port to show its
+device again and pings `--probe-host`, and stops if either is missing. A
+listing of the hub that meets the tree re-enumerating is asked again until
+`--guard-seconds` have passed.
 The defaults are the maintainer's rig: hub `7-2.3.3`, port 2, guarded by
 port 4.
 
