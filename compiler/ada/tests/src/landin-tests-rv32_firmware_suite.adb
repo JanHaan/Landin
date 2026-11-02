@@ -484,6 +484,66 @@ package body Landin.Tests.RV32_Firmware_Suite is
            (Executable (Entry_At => Origin + 4), Profile).Fault),
            "entry is 0x40380004, not _landin_firmware_entry at 0x40380000"),
          "an entry elsewhere is refused");
+
+      --  The driver writes OUT.bin after the link and reads it back, and
+      --  an executable no image can hold is L0577, leaving neither file.
+      for Outside in Boolean loop
+         declare
+            Host : Landin.Testing.Fakes.Fake_Filesystem;
+            Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+            Args : Landin.Platform.Path_List;
+            Linked : constant String :=
+              (if Outside then Executable (Second => Origin + 16#5_0000#)
+               else Executable);
+         begin
+            Host.Add_Firmware_Library;
+            Host.Add_Directory ("/w");
+            Host.Add_Directory ("/w/app");
+            Host.Add_Directory ("/w/devices");
+            Host.Add_Directory ("/w/devices/descriptions");
+            Host.Add_Directory ("/w/devices/descriptions/dev");
+            Host.Add_File ("/w/app/main.ldn",
+              "import descriptions/dev" & LF
+              & "start: () -> none = end start" & LF);
+            Host.Add_File ("/w/devices/descriptions/dev/dev.ldn",
+              Description ("esp-rv32imc", "esp-app-image", 32,
+                           "compiler.esp_image(5, 3, 199, 0x0)" & LF));
+            Tools.Set_Result (0, "");
+            Tools.Set_Output_Content (Linked);
+            Args.Append ("--root=/w/devices");
+            Args.Append ("--target=rv32");
+            Args.Append ("--firmware-entry=start");
+            Args.Append ("--emit=exe");
+            Args.Append ("-o");
+            Args.Append ("/w/p.elf");
+            Args.Append ("/w/app");
+            declare
+               Ran : constant Landin.Driver.Outcome :=
+                 Landin.Driver.Execute (Args, Host, Tools);
+               Said : constant String := U.To_String (Ran.Report);
+            begin
+               if Outside then
+                  Landin.Testing.Check
+                    (Item, Contains (Said, "error[L0577]")
+                       and then Contains (Said, "the segment loaded at"
+                         & " 0x403d0000, 16 bytes, lies in no region of dev")
+                       and then not Host.Exists ("/w/p.elf")
+                       and then not Host.Exists ("/w/p.elf.bin"),
+                     "a segment outside the description is L0577, and no"
+                     & " executable or image is left: " & Said);
+               else
+                  Landin.Testing.Check_Equal
+                    (Item, Ran.Status, Landin.Driver.Status_Success, Said);
+                  Landin.Testing.Check
+                    (Item, Host.Exists ("/w/p.elf.bin")
+                       and then Host.Written ("/w/p.elf.bin")
+                         = U.To_String (Landin.Driver.ESP_Image.Make
+                             (Linked, Profile).Image),
+                     "the driver writes the image beside the executable");
+               end if;
+            end;
+         end;
+      end loop;
    end ESP_Image_Is_Made;
 
    --  D680: a slot the core's dispatch enters calls its handler, so a
