@@ -313,10 +313,26 @@ def expected_stream(sent, discarded):
     return bytes(out + sent[at:])
 
 
+# What compiler-owned unhandled entry records before its loop, count last
+# (D656): a trap no handler owns, readable over JTAG memory reads.
+TRAP_CELLS = ('cause', 'pc', 'value', 'sp', 'count')
+
+
+def trap_cells(probe, names):
+    """The five trap cells as JTAG reads them, count last."""
+    return {cell: probe.read_words('jtag-trap-' + cell, names['_landin_firmware_trap_' + cell], 1)[0]
+            for cell in TRAP_CELLS}
+
+
 def cross_check(probe, chip, names, final, atomics):
     """The counters and atomic cells as JTAG reads them, against the last
-    frames: the probe reads what the firmware counted, not what it said."""
-    read = {}
+    frames: the probe reads what the firmware counted, not what it said;
+    and no trap reached the unhandled entry."""
+    trap = trap_cells(probe, names)
+    require(trap['count'] == 0, 'the unhandled entry took %d trap(s), the last mcause %#x at %#x,'
+            ' mtval %#x, sp %#x' % (trap['count'], trap['cause'], trap['pc'], trap['value'],
+                                     trap['sp']))
+    read = {'trap_count': 0}
     for name, key in (('handled', 'h'), ('recoveries', 'c'), ('dropped', 'l'),
                       ('overflows', 'o'), ('entries', 'i'), ('boot_reason', 'r')):
         read[name] = probe.read_words('jtag-' + name, names[name], 1)[0]
@@ -400,6 +416,7 @@ def run_board(chip, args, console_for, cycle, settle):
     console = None
     probe = common.Probe(run, args.probe_rs, chip.probe_chip, args.probe)
     lock = common.rig_lock('%s board.py' % chip.name)
+    names = None
     try:
         elf, path, made = build(run, args, chip)
         data = path.read_bytes()
@@ -453,6 +470,13 @@ def run_board(chip, args, console_for, cycle, settle):
         result['status'] = 'passed'
     except (Failed, subprocess.TimeoutExpired, OSError) as error:
         result['failure'] = str(error)
+        if lock.file and names:
+            # A failed run keeps what the unhandled entry recorded, if the
+            # probe still reaches the chip.
+            try:
+                result['trap'] = {k: '%#x' % v for k, v in trap_cells(probe, names).items()}
+            except (Failed, subprocess.TimeoutExpired, OSError) as reading:
+                result['trap'] = 'unread: %s' % reading
     finally:
         lock.release()
         if console:
