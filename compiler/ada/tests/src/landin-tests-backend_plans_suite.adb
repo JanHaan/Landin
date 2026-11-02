@@ -1,4 +1,5 @@
 with Ada.Assertions;
+with Ada.Strings.Unbounded;
 
 with Landin.Backend;
 with Landin.Backend.C_ABI;
@@ -967,6 +968,224 @@ package body Landin.Tests.Backend_Plans_Suite is
       end;
    end RiscV_Carriers;
 
+   --  D677: the ilp32 mode, held to what riscv64-elf-gcc 16.1 does at
+   --  -march=rv32imc -mabi=ilp32 for the same C signatures, read from its
+   --  assembly: each row is where GCC's callee reads, or its caller
+   --  writes, each argument and result.
+   procedure RiscV_ILP32_Carriers (Item : in out Landin.Testing.Context);
+
+   procedure RiscV_ILP32_Carriers (Item : in out Landin.Testing.Context) is
+      package ABI renames Backend.RiscV_ABI;
+      use type ABI.Carrier_Class;
+      use type IR.Signature_Part_Array;
+      Unit : IR.Unit;
+      Site : Landin.Provenance.Origin;
+      Facts : constant Targets.Target_Facts := Targets.RV32;
+      Rec12, Rec3, Rec8, Float_Pair, Rec16 : IR.Nominal_Type_Id;
+
+      function Part (Kind : Landin.Types.Type_Kind) return IR.Signature_Part
+        is (Kind => Kind, others => <>);
+      function Record_Part (Nominal : IR.Nominal_Type_Id)
+        return IR.Signature_Part
+        is (Kind => Landin.Types.Aggregate, Nominal => Nominal,
+            others => <>);
+      function Shape_Of (Kinds : Landin.Types.Type_Kind; Count : Positive)
+        return IR.Field_Shape_Array
+        is [1 .. Count => (Element => Kinds, others => <>)];
+
+      --  Where one carrier of a location is: its a-register's ordinal
+      --  from one, or zero and its offset in the outgoing area.
+      type Where is record
+         Register : Natural := 0;
+         Stack_At : Targets.Byte_Count := 0;
+      end record;
+      type Wheres is array (Positive range <>) of Where;
+
+      function Matches (Place : ABI.Location; Expected : Wheres)
+        return Boolean
+        is (Place.Shape.Count = Expected'Length
+            and then (for all Index in 1 .. Place.Shape.Count =>
+                        Place.Parts (Index).Register
+                          = Expected (Expected'First + Index - 1).Register
+                        and then (Place.Parts (Index).Register /= 0
+                                  or else Place.Parts (Index).Stack_At
+                                    = Expected (Expected'First + Index - 1)
+                                        .Stack_At)
+                        and then Place.Shape.Parts (Index).Class
+                          = ABI.Integer_Class));
+
+      --  The plan as a row, for a failure's message.
+      function Dump (Plan : ABI.Plan) return String;
+      function Dump (Plan : ABI.Plan) return String is
+         Text : Ada.Strings.Unbounded.Unbounded_String;
+         procedure Add (Place : ABI.Location);
+         procedure Add (Place : ABI.Location) is
+         begin
+            for Index in 1 .. Place.Shape.Count loop
+               Ada.Strings.Unbounded.Append
+                 (Text, (if Place.Parts (Index).Register /= 0
+                         then " a" & Natural'Image
+                           (Place.Parts (Index).Register - 1)
+                         else " sp+" & Targets.Byte_Count'Image
+                           (Place.Parts (Index).Stack_At)));
+            end loop;
+            Ada.Strings.Unbounded.Append (Text, " |");
+         end Add;
+      begin
+         Add (Plan.Result);
+         for Place of Plan.Arguments loop
+            Add (Place);
+         end loop;
+         return Ada.Strings.Unbounded.To_String (Text)
+           & Targets.Byte_Count'Image (Plan.Stack_Bytes);
+      end Dump;
+
+      function A (Ordinal : Positive) return Where is (Ordinal, 0);
+      function S (Offset : Targets.Byte_Count) return Where is (0, Offset);
+
+      procedure Expect
+        (Name : String; Plan : ABI.Plan; Arguments : Wheres;
+         Result : Wheres; Stack_Bytes : Targets.Byte_Count);
+
+      --  Arguments lists every argument's carriers in turn, a two-word
+      --  argument's two rows together.
+      procedure Expect
+        (Name : String; Plan : ABI.Plan; Arguments : Wheres;
+         Result : Wheres; Stack_Bytes : Targets.Byte_Count)
+      is
+         Row : Positive := Arguments'First;
+         Fits : Boolean := Matches (Plan.Result, Result)
+           and then Plan.Stack_Bytes = Stack_Bytes;
+      begin
+         for Index in Plan.Arguments'Range loop
+            declare
+               Count : constant Natural := Plan.Arguments (Index).Shape.Count;
+            begin
+               if Row + Count - 1 > Arguments'Last then
+                  Fits := False;
+                  exit;
+               end if;
+               Fits := Fits and then Matches
+                 (Plan.Arguments (Index), Arguments (Row .. Row + Count - 1));
+               Row := Row + Count;
+            end;
+         end loop;
+         Landin.Testing.Check
+           (Item, Fits and then Row = Arguments'Last + 1,
+            "ilp32 places " & Name & " as GCC does:" & Dump (Plan));
+      end Expect;
+   begin
+      Prepare (Item, Unit, Site);
+      Rec12 := IR.Add_Nominal_Type (Unit, 1);
+      IR.Set_Nominal_Shape
+        (Unit, Rec12,
+         [(Element => Landin.Types.U8, others => <>),
+          (Element => Landin.Types.U32, others => <>),
+          (Element => Landin.Types.U8, others => <>)], Landin.Layouts.C);
+      Rec3 := IR.Add_Nominal_Type (Unit, 1);
+      IR.Set_Nominal_Shape
+        (Unit, Rec3, Shape_Of (Landin.Types.U8, 3), Landin.Layouts.C);
+      Rec8 := IR.Add_Nominal_Type (Unit, 1);
+      IR.Set_Nominal_Shape
+        (Unit, Rec8, Shape_Of (Landin.Types.U32, 2), Landin.Layouts.C);
+      Float_Pair := IR.Add_Nominal_Type (Unit, 1);
+      IR.Set_Nominal_Shape
+        (Unit, Float_Pair, Shape_Of (Landin.Types.F32, 2), Landin.Layouts.C);
+      Rec16 := IR.Add_Nominal_Type (Unit, 1);
+      IR.Set_Nominal_Shape
+        (Unit, Rec16, Shape_Of (Landin.Types.U32, 4), Landin.Layouts.C);
+
+      --  An eight-byte scalar takes the next two registers, with no
+      --  even-register alignment for a fixed argument.
+      Expect ("gap",
+        ABI.Assign (Unit, [Part (Landin.Types.U32), Part (Landin.Types.U64),
+                           Part (Landin.Types.U32)],
+                    Part (Landin.Types.No_Value), Facts),
+        [A (1), A (2), A (3), A (4)], [1 .. 0 => <>], 0);
+      --  One register left: the low word in a7, the high on the stack.
+      Expect ("split",
+        ABI.Assign (Unit, IR.Signature_Part_Array'
+                            [1 .. 7 => Part (Landin.Types.U32)]
+                          & Part (Landin.Types.U64) & Part (Landin.Types.U32),
+                    Part (Landin.Types.No_Value), Facts),
+        [A (1), A (2), A (3), A (4), A (5), A (6), A (7), A (8), S (0),
+         S (4)], [1 .. 0 => <>], 16);
+      Expect ("splitrec",
+        ABI.Assign (Unit, IR.Signature_Part_Array'
+                            [1 .. 7 => Part (Landin.Types.U32)]
+                          & Record_Part (Rec8) & Part (Landin.Types.U32),
+                    Part (Landin.Types.No_Value), Facts),
+        [A (1), A (2), A (3), A (4), A (5), A (6), A (7), A (8), S (0),
+         S (4)], [1 .. 0 => <>], 16);
+      --  Stack words are four bytes, an f64 aligned to eight.
+      Expect ("stack",
+        ABI.Assign (Unit, IR.Signature_Part_Array'
+                            [1 .. 8 => Part (Landin.Types.U32)]
+                          & Part (Landin.Types.I8) & Part (Landin.Types.F64)
+                          & Part (Landin.Types.U16),
+                    Part (Landin.Types.No_Value), Facts),
+        [A (1), A (2), A (3), A (4), A (5), A (6), A (7), A (8), S (0),
+         S (8), S (12), S (16)], [1 .. 0 => <>], 32);
+      --  A record over eight bytes comes back through a0.
+      declare
+         Plan : constant ABI.Plan := ABI.Assign
+           (Unit, [Part (Landin.Types.U32), Part (Landin.Types.U64),
+                   Part (Landin.Types.U32)], Record_Part (Rec12), Facts);
+      begin
+         Landin.Testing.Check
+           (Item, Plan.Result.Shape.Indirect
+              and then Plan.Result.Parts (1).Register = 1,
+            "ilp32 returns a twelve-byte record through a0, as GCC does");
+         Expect ("sret's arguments", Plan,
+           [A (2), A (3), A (4), A (5)], [1 => A (1)], 0);
+      end;
+      --  Small records and soft floats are integer words.
+      Expect ("small",
+        ABI.Assign (Unit, [Part (Landin.Types.I8), Part (Landin.Types.U16),
+                           Part (Landin.Types.F32), Record_Part (Rec3),
+                           Record_Part (Rec8)], Record_Part (Rec3), Facts),
+        [A (1), A (2), A (3), A (4), A (5), A (6)], [1 => A (1)], 0);
+      Expect ("floats",
+        ABI.Assign (Unit, [Part (Landin.Types.F32), Part (Landin.Types.F64),
+                           Record_Part (Float_Pair), Part (Landin.Types.U32)],
+                    Part (Landin.Types.F64), Facts),
+        [A (1), A (2), A (3), A (4), A (5), A (6)], [A (1), A (2)], 0);
+      Expect ("ret64",
+        ABI.Assign (Unit, IR.No_Signature_Parts, Part (Landin.Types.U64),
+                    Facts),
+        [1 .. 0 => <>], [A (1), A (2)], 0);
+      --  A sixteen-byte record goes by address, and comes back by one.
+      declare
+         Plan : constant ABI.Plan := ABI.Assign
+           (Unit, [Record_Part (Rec16), Part (Landin.Types.U32)],
+            Record_Part (Rec16), Facts);
+      begin
+         Landin.Testing.Check
+           (Item, Plan.Result.Shape.Indirect
+              and then Plan.Arguments (1).Shape.Indirect
+              and then Plan.Arguments (1).Shape.Parts (1).Bytes = 4,
+            "ilp32 passes and returns a sixteen-byte record by address");
+         Expect ("big's arguments", Plan, [A (2), A (3)], [1 => A (1)], 0);
+      end;
+      --  A variadic eight-byte value takes an even pair.
+      Expect ("varargs",
+        ABI.Assign (Unit, [Part (Landin.Types.U32), Part (Landin.Types.I32),
+                           Part (Landin.Types.F64), Part (Landin.Types.U32)],
+                    Part (Landin.Types.No_Value), Facts, Fixed_Count => 1),
+        [A (1), A (2), A (3), A (4), A (5)], [1 .. 0 => <>], 0);
+      Expect ("varargs pair",
+        ABI.Assign (Unit, [Part (Landin.Types.U32), Part (Landin.Types.U64)],
+                    Part (Landin.Types.No_Value), Facts, Fixed_Count => 1),
+        [A (1), A (3), A (4)], [1 .. 0 => <>], 0);
+      Landin.Testing.Check
+        (Item, ABI.Classify (Unit, Part (Landin.Types.F64), Facts).Count = 2
+           and then ABI.Classify (Unit, Part (Landin.Types.F64), Facts)
+             .Parts (2).Offset = 4
+           and then ABI.Classify (Unit, Part (Landin.Types.Usize), Facts)
+             .Parts (1).Bytes = 4,
+         "ilp32 carries an f64 as two words and a pointer as one");
+   end RiscV_ILP32_Carriers;
+
    procedure RiscV_Selection (Item : in out Landin.Testing.Context);
 
    procedure RiscV_Selection (Item : in out Landin.Testing.Context) is
@@ -1033,6 +1252,9 @@ package body Landin.Tests.Backend_Plans_Suite is
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "backend plans", "RISC-V ilp32 carriers",
+         RiscV_ILP32_Carriers'Access);
       Landin.Testing.Register
         (Into, "backend plans", "RISC-V LP64D carriers",
          RiscV_Carriers'Access);

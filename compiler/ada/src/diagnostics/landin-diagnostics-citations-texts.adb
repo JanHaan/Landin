@@ -9765,6 +9765,37 @@ package body Landin.Diagnostics.Citations.Texts is
                & "c-call capabilities are enabled explicitly for this ABI."
                & LF
                & LF
+               & "RV32 firmware's C ABI is the RISC-V psABI's soft-float `"
+               & "ilp32` (D660, D677): little-endian, 32-bit pointers, `in"
+               & "t` and `long`, and no floating-point registers, so `f32`"
+               & " is one integer word and `f64` two. Scalar alignment is "
+               & "natural, an eight-byte scalar at eight, and the stack is"
+               & " kept 16-byte aligned. Arguments use a0"
+               & Character'Val (226)
+               & Character'Val (128)
+               & Character'Val (147)
+               & "a7 in four-byte words: a value of up to eight bytes, sca"
+               & "lar or C record, takes one or two, low word first, and s"
+               & "plits between a7 and the stack when one register is left"
+               & "; a larger C record passes a pointer to a caller-owned c"
+               & "opy, and a larger result comes back through a hidden poi"
+               & "nter in a0. Stack arguments occupy four-byte words, alig"
+               & "ned to their own alignment up to sixteen. An unnamed eig"
+               & "ht-byte argument takes an even register pair. Every Land"
+               & "in frame keeps x8 as the entry CFA, the saved return add"
+               & "ress at CFA"
+               & Character'Val (226)
+               & Character'Val (136)
+               & Character'Val (146)
+               & "4 and the previous frame pointer at CFA"
+               & Character'Val (226)
+               & Character'Val (136)
+               & Character'Val (146)
+               & "8. The planner holds this convention to GCC's (D677); C "
+               & "signatures, records and variadic calls stay disabled on "
+               & "RV32, as on Cortex-M."
+               & LF
+               & LF
                & "A final `, ...` after at least one fixed parameter marks"
                & " a variadic C signature. It is not [0960]'s `! ...`. Var"
                & "iadic calls use only positional arguments, including the"
@@ -24508,6 +24539,56 @@ package body Landin.Diagnostics.Citations.Texts is
                & "lf RV64's and an eight-byte home the same, which leaves "
                & "room within RV64's 768-byte margin for the libgcc leaf h"
                & "elper a checked frame calls below it.",
+            when 676 =>
+               "Chosen: at XLEN 32 an item's input section is the one it"
+               & "s placement names, as on Cortex-M0: a region's, `.landin"
+               & "_region.REGION.KIND.landin_N`, whose kind says whether t"
+               & "he region runs or reads it in place, copies it from its "
+               & "load image or clears it; an explicit section, retained w"
+               & "ith `R` when the item or any item naming the same sectio"
+               & "n keeps it; or its own, with the placement's alignment a"
+               & "fter the directive. An immutable datum is read-only data"
+               & ". A description's stage before reset (D653) is `.text.la"
+               & "ndin_firmware_reset_stage` under the reset word's symbol"
+               & ", which the compiler's entry word enters. An item that a"
+               & "sks for nothing keeps RV64's section.",
+            when 677 =>
+               "Chosen: `Landin.Backend.RiscV_ABI` plans `ilp32` as the "
+               & "integer calling convention LP64D already holds, at the t"
+               & "arget's XLEN: four-byte carriers in a0-a7, then four-byt"
+               & "e words of the outgoing area, an argument aligned there "
+               & "to its own alignment up to sixteen; a scalar or record o"
+               & "f up to eight bytes in one or two registers, low word fi"
+               & "rst, split between a7 and the area when one register is "
+               & "left; a larger record by address, and a larger result th"
+               & "rough a hidden pointer in a0; a variadic eight-byte valu"
+               & "e in an even pair; and no float bank, so an f32 is a wor"
+               & "d and an f64 two. The planner is held to GCC by direct c"
+               & "hecks, as D616 held the M7's: each row is where `riscv64"
+               & "-elf-gcc` 16.1 at `-march=rv32imc -mabi=ilp32` reads or "
+               & "writes the same C signature's arguments and results. Exe"
+               & "cutable C interoperation stays disabled, as on Cortex-M.",
+            when 678 =>
+               "Chosen: at XLEN 32 a routine saves and restores its call"
+               & "ee-saved registers at the frame's stack pointer, where e"
+               & "ach is one compressible instruction, and only those its "
+               & "text names, by number or, in an assembly block, by ABI a"
+               & "lias; their homes stay in the frame. Where every region "
+               & "of the profile is at most 1 MiB, a jump is `j` and a bra"
+               & "nch is written as itself, which GNU as lengthens with a "
+               & "JAL past 4 KiB, since a routine is one input section wit"
+               & "hin one region. A word loaded from the home the line bef"
+               & "ore stored it from is not loaded again. A dead value's h"
+               & "ome is reused at every objective, as Cortex-M0 reuses it"
+               & ", where RV64 gives each value its own home at `--optimiz"
+               & "e=none`, since firmware's stack is a few KiB."
+               & LF
+               & LF
+               & "Over a representative 24 fixtures, the runtime corpus's "
+               & "largest among them, RV32's `.text` went from 1.66 times "
+               & "Cortex-M0's at `armv6-m` to 1.04 at `--optimize=none` an"
+               & "d from 1.69 to 1.02 at the default, and its average fram"
+               & "e from about twice Cortex-M0's to 1.1 to 1.35 times it.",
             when 523 =>
                "Chosen: under `--link=libc`, which Darwin and FreeBSD al"
                & "ways use, each active `linker.library(""NAME"")` reaches t"

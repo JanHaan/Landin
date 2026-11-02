@@ -9,12 +9,25 @@ package body Landin.Backend.RiscV_ABI is
    use type Landin.Targets.C_ABI_Kind;
    use type Landin.Types.Type_Kind;
 
+   --  D677: the psABI's integer calling convention at the target's XLEN,
+   --  which LP64D and ilp32 share: XLEN-word carriers, a scalar or record
+   --  of up to two of them in registers or split between a7 and the
+   --  stack, a larger one by address.  Only LP64D has the float bank.
+   function Word (Facts : Landin.Targets.Target_Facts)
+     return Landin.Targets.Byte_Count
+     is (Landin.Targets.Byte_Count
+           (Landin.Targets.Pointer_Width (Facts) / 8));
+
    function Classify
      (Of_Unit : Landin.IR.Unit; Part : Landin.IR.Signature_Part;
       Facts : Landin.Targets.Target_Facts;
       Floating : Boolean := True) return Classification
    is
       Answer : Classification;
+      XLEN_Bytes : constant Landin.Targets.Byte_Count := Word (Facts);
+      --  ilp32 is soft float: every float is an integer word (D677).
+      Banked : constant Boolean := Floating
+        and then Landin.Targets.C_ABI_Of (Facts) = Landin.Targets.RiscV_LP64D;
       Leaves : Carrier_Array;
       Count : Natural := 0;
       Float_Count : Natural := 0;
@@ -98,19 +111,23 @@ package body Landin.Backend.RiscV_ABI is
          end case;
       end Visit;
    begin
-      if Landin.Targets.C_ABI_Of (Facts) /= Landin.Targets.RiscV_LP64D
-        or else Landin.Targets.Pointer_Width (Facts) /= 64
+      if not ((Landin.Targets.C_ABI_Of (Facts) = Landin.Targets.RiscV_LP64D
+               and then Landin.Targets.Pointer_Width (Facts) = 64)
+              or else
+              (Landin.Targets.C_ABI_Of (Facts) = Landin.Targets.RiscV_ILP32
+               and then Landin.Targets.Pointer_Width (Facts) = 32))
         or else Landin.Targets.Stack_Alignment (Facts) /= 16
       then
-         raise Compiler_Defect with "LP64D transport requires RV64 layout";
+         raise Compiler_Defect with
+           "RISC-V C transport requires LP64D or ilp32 layout";
       end if;
       if Part.Kind = Landin.Types.No_Value then
          return Answer;
       elsif Part.Convention = Landin.IR.Inout_Place
         or else Part.Kind = Landin.Types.Function_Value
       then
-         Answer.Size := 8;
-         Answer.Alignment := 8;
+         Answer.Size := XLEN_Bytes;
+         Answer.Alignment := Landin.Targets.Byte_Alignment (XLEN_Bytes);
       elsif Part.Kind in Landin.Types.Scalar_Name then
          declare
             Held : constant Landin.Targets.Scalar_Size :=
@@ -119,7 +136,7 @@ package body Landin.Backend.RiscV_ABI is
             Answer.Size := Landin.Targets.Byte_Count
               (Landin.Targets.Bytes (Held));
             Answer.Alignment := Landin.Targets.Alignment_Of (Facts, Held);
-            if Floating and then Part.Kind in Landin.Types.Float_Name then
+            if Banked and then Part.Kind in Landin.Types.Float_Name then
                Answer.Count := 1;
                Answer.Parts (1) := (Float_Class, 0, Answer.Size, Part.Kind);
                return Answer;
@@ -139,7 +156,7 @@ package body Landin.Backend.RiscV_ABI is
             Answer.Aggregate := True;
             Field_Extent
               (Of_Unit, Shape, Facts, Answer.Size, Answer.Alignment);
-            if Floating then
+            if Banked then
                Visit (Shape, 0);
                if Flattened and then Float_Count > 0 then
                   Answer.Count := Count;
@@ -151,20 +168,23 @@ package body Landin.Backend.RiscV_ABI is
       else
          raise Compiler_Defect with "unsupported RISC-V C carrier";
       end if;
-      if Answer.Size > 16 then
+      if Answer.Size > 2 * XLEN_Bytes then
          Answer.Indirect := True;
          Answer.Count := 1;
-         Answer.Parts (1) := (Integer_Class, 0, 8, Landin.Types.Usize);
+         Answer.Parts (1) :=
+           (Integer_Class, 0, XLEN_Bytes, Landin.Types.Usize);
       else
-         Answer.Count := Natural ((Answer.Size + 7) / 8);
+         Answer.Count := Natural
+           ((Answer.Size + XLEN_Bytes - 1) / XLEN_Bytes);
          for Index in 1 .. Answer.Count loop
             declare
                Offset : constant Landin.Targets.Byte_Count :=
-                 Landin.Targets.Byte_Count (Index - 1) * 8;
+                 Landin.Targets.Byte_Count (Index - 1) * XLEN_Bytes;
             begin
                Answer.Parts (Index) :=
                  (Integer_Class, Offset,
-                  Landin.Targets.Byte_Count'Min (8, Answer.Size - Offset),
+                  Landin.Targets.Byte_Count'Min
+                    (XLEN_Bytes, Answer.Size - Offset),
                   (if Answer.Aggregate then Landin.Types.No_Value
                    else Part.Kind));
             end;
@@ -183,6 +203,7 @@ package body Landin.Backend.RiscV_ABI is
       Fixed_Count : Natural := Natural'Last) return Plan
    is
       Answer : Plan (Parameters'Length);
+      XLEN_Bytes : constant Landin.Targets.Byte_Count := Word (Facts);
       Stack_End : Landin.Targets.Byte_Count := 0;
       Variadic_Stack : Boolean := False;
       Result_GP, Result_FP : Natural := 0;
@@ -227,8 +248,10 @@ package body Landin.Backend.RiscV_ABI is
                Item.Shape := Classify (Of_Unit, Written, Facts, False);
                Uses_FP := False;
             end if;
+            --  A variadic 2 x XLEN-aligned value takes an even pair.
             if Variadic and then not Item.Shape.Indirect
-              and then Item.Shape.Alignment = 16
+              and then Landin.Targets.Byte_Count (Item.Shape.Alignment)
+                = 2 * XLEN_Bytes
               and then Answer.GP_Used mod 2 /= 0
             then
                Answer.GP_Used := Answer.GP_Used + 1;
@@ -247,10 +270,11 @@ package body Landin.Backend.RiscV_ABI is
                      Stack_End := Stack_Align
                        (Stack_End, Landin.Targets.Byte_Alignment'Min
                          (16, Landin.Targets.Byte_Alignment'Max
-                            (8, Item.Shape.Alignment)), Maximum);
+                            (Landin.Targets.Byte_Alignment (XLEN_Bytes),
+                             Item.Shape.Alignment)), Maximum);
                   end if;
                   Item.Parts (Part).Stack_At := Stack_End;
-                  Stack_End := Stack_Add (Stack_End, 8, Maximum);
+                  Stack_End := Stack_Add (Stack_End, XLEN_Bytes, Maximum);
                   if Variadic then
                      Variadic_Stack := True;
                   end if;

@@ -223,7 +223,11 @@ package body Landin.Backend.RiscV is
         (Value_Location'(others => <>),
          Ada.Containers.Count_Type (Value_Count));
       Result.Saves := Declared (Of_Unit, Item, Facts);
-      if Options.Optimize = Landin.Optimization.None then
+      --  D678: firmware's stack is small, so RV32 reuses a dead value's
+      --  home at every objective, as Cortex-M0 does.
+      if Options.Optimize = Landin.Optimization.None
+        and then XLEN (Facts) = 64
+      then
          for Index in 1 .. Value_Count loop
             declare
                Kind : constant Landin.Types.Type_Kind := Landin.IR.Result_Of
@@ -367,7 +371,9 @@ package body Landin.Backend.RiscV is
    is
       Saves : constant Natural := Save_Count (Plan.Saves);
    begin
-      if Options.Optimize = Landin.Optimization.None then
+      if Options.Optimize = Landin.Optimization.None
+        and then XLEN (Facts) = 64
+      then
          if Saves = 0 then
             return Laid_Out (Of_Unit, Item, Facts, Maximum);
          end if;
@@ -626,6 +632,28 @@ package body Landin.Backend.RiscV is
       Atomics : constant Boolean :=
         Landin.Targets.Levels.Has (Level, Landin.Targets.Levels.A);
 
+      --  D678: firmware's text lies in its profile's regions, and a
+      --  routine is one input section in one of them, so where every
+      --  region is at most 1 MiB a routine's jump is JAL's own and its
+      --  branch the assembler's, which GNU as lengthens past 4 KiB with
+      --  a JAL around it.  RV64's text has no such bound.
+      function Regions_Within_Reach return Boolean;
+      function Regions_Within_Reach return Boolean is
+         Profile : constant Landin.Targets.Firmware.Profile :=
+           Landin.IR.Firmware_Profile (Of_Unit);
+      begin
+         if not Profile.Present then
+            return False;
+         end if;
+         for Index in 1 .. Profile.Count loop
+            if Profile.Regions (Index).Length > 2 ** 20 then
+               return False;
+            end if;
+         end loop;
+         return True;
+      end Regions_Within_Reach;
+      Near : constant Boolean := Pairs and then Regions_Within_Reach;
+
       procedure Put (Line : String);
       procedure Emit (Instruction : String);
       function Fresh return String;
@@ -654,9 +682,13 @@ package body Landin.Backend.RiscV is
          Width : Landin.Targets.Byte_Count;
          Copy  : Boolean);
 
+      --  The line Put wrote last, for Frame_Memory's reload test.
+      Last_Line : Unbounded.Unbounded_String;
+
       procedure Put (Line : String) is
       begin
          Unbounded.Append (Output, Line & LF);
+         Last_Line := Unbounded.To_Unbounded_String (Line);
       end Put;
 
       --  A platform directive, which on some object formats is nothing.
@@ -689,7 +721,9 @@ package body Landin.Backend.RiscV is
             elsif Mnemonic = "blez" then "bgtz"
             elsif Mnemonic = "bgtz" then "blez" else "");
       begin
-         if Mnemonic = "j" then
+         if Near and then (Mnemonic = "j" or else Inverse /= "") then
+            Put (Character'Val (9) & Instruction);
+         elsif Mnemonic = "j" then
             Put (Character'Val (9) & "lla x26, "
               & Instruction (Space + 1 .. Instruction'Last));
             Put (Character'Val (9) & "jr x26");
@@ -866,6 +900,17 @@ package body Landin.Backend.RiscV is
               (Store, Landin.Targets.Byte_4, Reg (Register), 8, Width,
                -Integer (Offset + 16)));
          elsif Offset <= 2032 then
+            --  D678: at XLEN 32 a word loaded from the home the line before
+            --  stored it to is already in its register; a narrower one may
+            --  not be, since a store keeps only its low bytes.
+            if Pairs and then not Store and then Size = Landin.Targets.Byte_4
+              and then Unbounded.To_String (Last_Line) = Character'Val (9)
+                & RiscV_Instructions.Memory
+                    (True, Size, Reg (Register), 8, Width,
+                     -Integer (Offset + 16))
+            then
+               return;
+            end if;
             Emit (RiscV_Instructions.Memory
               (Store, Size, Reg (Register), 8, Width,
                -Integer (Offset + 16)));
@@ -1690,6 +1735,143 @@ package body Landin.Backend.RiscV is
          Limit_Trapped : Boolean := False;
          Limit_Trap : constant String := Label (Item, 1) & "_stack_limit";
 
+         --  Where this routine's text begins in the output.
+         Routine_Start : constant Natural := Unbounded.Length (Output);
+
+         --  D678: at XLEN 32 a callee-saved register the routine's text
+         --  never otherwise names, by its number or, in an assembly
+         --  block's text, by its ABI alias, is neither saved nor
+         --  restored, nor described.  Its home stays in the frame.
+         procedure Prune_Saves;
+
+         procedure Prune_Saves is
+            Text : constant String := Unbounded.Slice
+              (Output, Routine_Start + 1, Unbounded.Length (Output));
+            Kept : Unbounded.Unbounded_String;
+            Named : array (0 .. 31) of Boolean := [others => False];
+            Start : Positive := Text'First;
+
+            function Is_Digit (C : Character) return Boolean
+              is (C in '0' .. '9');
+            function Word_Character (C : Character) return Boolean
+              is (C in 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '_' | '.');
+
+            --  The callee-saved register a save, restore or its unwind
+            --  description names, or zero for any other line.
+            function Saved_Line (Line : String) return Natural;
+            function Saved_Line (Line : String) return Natural is
+               --  The register number after Prefix, ended by a comma or,
+               --  for an unwind restore, by the line's end.
+               function Number_After (Prefix : String) return Natural;
+               function Number_After (Prefix : String) return Natural is
+                  First : constant Integer := Line'First + Prefix'Length;
+                  Last : Natural := First - 1;
+               begin
+                  if Line'Length <= Prefix'Length
+                    or else Line (Line'First .. First - 1) /= Prefix
+                  then
+                     return 0;
+                  end if;
+                  while Last < Line'Last and then Is_Digit (Line (Last + 1))
+                  loop
+                     Last := Last + 1;
+                  end loop;
+                  if Last < First
+                    or else (Last < Line'Last and then Line (Last + 1) /= ',')
+                  then
+                     return 0;
+                  end if;
+                  return Natural'Value (Line (First .. Last));
+               end Number_After;
+               Tab : constant String := [1 => Character'Val (9)];
+            begin
+               if Line'Length > 4
+                 and then Line (Line'Last - 3 .. Line'Last) = "(sp)"
+               then
+                  return Natural'Max
+                    (Number_After (Tab & "sw x"), Number_After (Tab & "lw x"));
+               end if;
+               return Natural'Max
+                 (Number_After (Tab & ".cfi_offset "),
+                  Number_After (Tab & ".cfi_restore "));
+            end Saved_Line;
+
+            procedure Mark (Line : String);
+            procedure Mark (Line : String) is
+               Index : Natural := Line'First;
+            begin
+               while Index <= Line'Last loop
+                  if (Index = Line'First
+                      or else not Word_Character (Line (Index - 1)))
+                    and then Line (Index) in 'x' | 's'
+                    and then Index < Line'Last
+                    and then Is_Digit (Line (Index + 1))
+                  then
+                     declare
+                        Last : Natural := Index + 1;
+                     begin
+                        while Last < Line'Last
+                          and then Is_Digit (Line (Last + 1))
+                        loop
+                           Last := Last + 1;
+                        end loop;
+                        if Last = Line'Last
+                          or else not Word_Character (Line (Last + 1))
+                        then
+                           declare
+                              Value : constant Natural :=
+                                Natural'Value (Line (Index + 1 .. Last));
+                           begin
+                              if Line (Index) = 'x' and then Value <= 31 then
+                                 Named (Value) := True;
+                              elsif Line (Index) = 's' and then Value = 1 then
+                                 Named (9) := True;
+                              elsif Line (Index) = 's'
+                                and then Value in 2 .. 11
+                              then
+                                 Named (Value + 16) := True;
+                              end if;
+                           end;
+                        end if;
+                        Index := Last + 1;
+                     end;
+                  else
+                     Index := Index + 1;
+                  end if;
+               end loop;
+            end Mark;
+
+            function Dropped (Line : String) return Boolean is
+              (Saved_Line (Line) in 9 | 18 .. 27
+               and then not Named (Saved_Line (Line)));
+         begin
+            if not Pairs then
+               return;
+            end if;
+            for Pass in 1 .. 2 loop
+               Start := Text'First;
+               for Index in Text'Range loop
+                  if Text (Index) = LF then
+                     declare
+                        Line : constant String := Text (Start .. Index - 1);
+                     begin
+                        if Pass = 1 then
+                           if Saved_Line (Line) = 0 then
+                              Mark (Line);
+                           end if;
+                        elsif not Dropped (Line) then
+                           Unbounded.Append (Kept, Line & LF);
+                        end if;
+                     end;
+                     Start := Index + 1;
+                  end if;
+               end loop;
+            end loop;
+            Unbounded.Replace_Slice
+              (Output, Routine_Start + 1, Unbounded.Length (Output),
+               Unbounded.To_String (Kept));
+         end Prune_Saves;
+
          --  D672: whether the body may call a libgcc helper at XLEN 32,
          --  which runs below the frame as any callee does, so the frame is
          --  checked as a calling one's is.
@@ -2020,11 +2202,22 @@ package body Landin.Backend.RiscV is
          procedure Restore_Saves is
          begin
             for Number in Saves'Range loop
-               if Saves (Number) then
+               if Saves (Number) and then Pairs
+                 and then Extent (Layout) - Save_Home (Number) <= 2047
+               then
+                  --  D678: at the frame's sp, which nothing below the frame
+                  --  has moved at an exit, one compressible load.
+                  Emit (Load_Word & " " & Saved_Name (Number) & ", "
+                        & Trimmed (Landin.Targets.Byte_Count'Image
+                            (Extent (Layout) - Save_Home (Number)))
+                        & "(sp)");
+               elsif Saves (Number) then
                   Frame_Address (Save_Home (Number), "x5");
                   Emit ((if Number in Saved_Float then "fld "
                          else Load_Word & " ")
                         & Saved_Name (Number) & ", 0(x5)");
+               end if;
+               if Saves (Number) then
                   if Debug /= null then
                      Emit (".cfi_restore "
                            & Trimmed (Natural'Image (Number)));
@@ -3159,6 +3352,46 @@ package body Landin.Backend.RiscV is
                end if;
             end Narrow_High;
 
+            --  Packed_Atom for the pair x5:x27, whose encodings may be all
+            --  64 bits, comparing through x7 so the member's bit offset in
+            --  x30 survives.
+            procedure Pair_Atom
+              (Set_Id : Landin.IR.Atom_Set_Id; Encode : Boolean);
+            procedure Pair_Atom
+              (Set_Id : Landin.IR.Atom_Set_Id; Encode : Boolean)
+            is
+               Done : constant String := Fresh;
+            begin
+               if Set_Id = Landin.IR.No_Atom_Set then
+                  return;
+               end if;
+               for Index in 1 .. Landin.IR.Atom_Count (Of_Unit, Set_Id) loop
+                  declare
+                     Next : constant String := Fresh;
+                     Code : constant Pattern := Pattern (Atom_Code
+                       (Atoms_Ranked,
+                        Landin.IR.Nth_Atom (Of_Unit, Set_Id, Index)));
+                     Raw : constant Pattern := Pattern
+                       (Landin.IR.Nth_Encoding (Of_Unit, Set_Id, Index));
+                     Compared : constant Pattern :=
+                       (if Encode then Code else Raw);
+                     Answer : constant Pattern :=
+                       (if Encode then Raw else Code);
+                  begin
+                     Immediate ("x7", Compared and 16#FFFF_FFFF#);
+                     Put (Character'Val (9) & "bne x5, x7, " & Next);
+                     Immediate ("x7", Compared / 2 ** 32);
+                     Put (Character'Val (9) & "bne x27, x7, " & Next);
+                     Immediate ("x5", Answer and 16#FFFF_FFFF#);
+                     Immediate ("x27", Answer / 2 ** 32);
+                     Emit ("j " & Done);
+                     Put (Next & ":");
+                  end;
+               end loop;
+               Emit ("j " & Trap (Landin.Panics.Bad_Conversion));
+               Put (Done & ":");
+            end Pair_Atom;
+
             --  D671: a packed member of an eight-byte carrier at XLEN 32,
             --  the carrier's address in x6 and the member's first bit in
             --  x30, as the shared selection's single register does it.
@@ -3185,15 +3418,17 @@ package body Landin.Backend.RiscV is
                   Emit ("and x11, x11, x7");
                   Emit ("mv x5, x10");
                   Emit ("mv x27, x11");
-                  Packed_Atom (Atoms, Encode => False);
+                  Pair_Atom (Atoms, Encode => False);
                   Store_Value (Value, Atom_Validated => True);
                   return;
                end if;
                Load_Value (Input);
-               Packed_Atom (Atoms, Encode => True);
+               if Size_Of_Value (Input) /= Landin.Targets.Byte_8 then
+                  Emit ("li x27, 0");
+               end if;
+               Pair_Atom (Atoms, Encode => True);
                Emit ("mv x10, x5");
-               Emit ((if Size_Of_Value (Input) = Landin.Targets.Byte_8
-                      then "mv x11, x27" else "li x11, 0"));
+               Emit ("mv x11, x27");
                if Bits < 64 then
                   Immediate ("x7", (not Ones) and 16#FFFF_FFFF#);
                   Emit ("and x7, x10, x7");
@@ -5155,11 +5390,20 @@ package body Landin.Backend.RiscV is
          end if;
          Reserve (Extent (Layout));
          for Number in Saves'Range loop
-            if Saves (Number) then
+            if Saves (Number) and then Pairs
+              and then Extent (Layout) - Save_Home (Number) <= 2047
+            then
+               Emit (Store_Word & " " & Saved_Name (Number) & ", "
+                     & Trimmed (Landin.Targets.Byte_Count'Image
+                         (Extent (Layout) - Save_Home (Number)))
+                     & "(sp)");
+            elsif Saves (Number) then
                Frame_Address (Save_Home (Number), "x5");
                Emit ((if Number in Saved_Float then "fsd "
                       else Store_Word & " ")
                      & Saved_Name (Number) & ", 0(x5)");
+            end if;
+            if Saves (Number) then
                if Debug /= null then
                   --  The home sits below the CFA and saved-frame header.
                   Emit (".cfi_offset " & Trimmed (Natural'Image (Number))
@@ -5438,6 +5682,7 @@ package body Landin.Backend.RiscV is
             Emit (".cfi_endproc");
          end if;
          Platform_Directive (ELF_Spelling.Size_To_Here (Symbol (Item)));
+         Prune_Saves;
          Landin.Build_Reports.Append (Report,
            Landin.Build_Reports.Routine_Statistics'
              (Item => Item, Frame_Bytes => Extent (Layout),
