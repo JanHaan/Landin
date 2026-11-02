@@ -98,8 +98,13 @@ entry that describes it, and put a new one where a reader would look for it.
   operations (D687). The Pico 2's port on its Hazard3 cores, at
   `rv32imac`, takes its interrupts through Xh3irq and counts its telemetry
   with an `amoadd.w` (D710), and is checked by an oracle of its own,
-  [`board.py`](../environments/boards/rp2350_hazard3/README.md) (D711-D713);
-  no board run of it is recorded yet. The ESP32-C3's and ESP32-C5's ports
+  [`board.py`](../environments/boards/rp2350_hazard3/README.md) (D711-D713).
+  Its recorded run on a Pico 2 boots from power-on into the cores' RISC-V
+  mode, takes TIMER0's, DMA's and a forced USBCTRL interrupt through the
+  meinext dispatch, numbers its seven telemetry frames by the results of
+  its `amoadd.w`, and echoes 11,202 bytes in order with the counters read
+  over SWD equal to the trace's; its negative control, a corrupted block,
+  is not run on the maintainer's rig. The ESP32-C3's and ESP32-C5's ports
   of the same application receive UART0 by interrupt through each chip's
   interrupt matrix, a vectored line on the C3 and a CLIC identity on the
   C5, hold it off by threshold while a 1 ms timer keeps interrupting, and
