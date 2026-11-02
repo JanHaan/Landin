@@ -252,8 +252,8 @@ which corrects it in place and so is the vendor's and not a third party's.
 | Module | C3 | C5 | Why |
 |---|---|---|---|
 | `system` / `pcr` | PERIP_CLK_EN0, PERIP_RST_EN0 | UART0_CONF, UART0_SCLK_CONF, SYSTIMER_CONF, SYSTIMER_FUNC_CLK_CONF | UART0's and the system timer's clocks and resets |
-| `io_mux` | GPIO8, GPIO20, GPIO21 | GPIO11, GPIO12, GPIO27 | UART0's pins, IO MUX function 0, and the indicator, each the board's RGB LED's data pin |
-| `gpio` | OUT_W1TS, OUT_W1TC, ENABLE_W1TS, IN, FUNC8_OUT_SEL_CFG | the same, FUNC27_OUT_SEL_CFG | the indicator through the GPIO matrix and its read-back |
+| `io_mux` | GPIO10, GPIO20, GPIO21 | GPIO11, GPIO12, GPIO24 | UART0's pins, IO MUX function 0, and the board port's indicator, a pin free of the strapping pins and the boards' LEDs (D720) |
+| `gpio` | OUT_W1TS, OUT_W1TC, ENABLE_W1TS, IN, FUNC10_OUT_SEL_CFG | the same, FUNC24_OUT_SEL_CFG | the indicator through the GPIO matrix and its read-back |
 | `uart0` | FIFO, INT_RAW, INT_ST, INT_ENA, INT_CLR, CLKDIV, STATUS, CONF0, CONF1, CLK_CONF, ID | FIFO, INT_RAW, INT_ST, INT_ENA, INT_CLR, CLKDIV_SYNC, STATUS, CONF0_SYNC, CONF1, CLK_CONF, REG_UPDATE | the FIFO, the divisor, the interrupts and their clear, and the register update the core clock domain needs |
 | `interrupt_core0` | UART_INTR_MAP, SYSTIMER_TARGET0_INT_MAP, CPU_INT_ENABLE, CPU_INT_TYPE, CPU_INT_CLEAR, CPU_INT_EIP_STATUS, CPU_INT_PRI_1, CPU_INT_PRI_2, CPU_INT_THRESH | UART0_INTR_MAP, SYSTIMER_TARGET0_INTR_MAP | the routing of UART0 and the system timer to a CPU line, on the C3 its lines' enables, types, priorities and threshold |
 | `clic` | | MCLICCFG, CLICINFO, CLICINT17, CLICINT18 | the C5's lines are its CLIC's identities 16 to 47, enabled and prioritized there (D705) |

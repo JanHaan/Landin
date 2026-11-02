@@ -18,7 +18,7 @@
       "PERIP_RST_EN0"
     ],
     "IO_MUX": [
-      "GPIO8",
+      "GPIO10",
       "GPIO20",
       "GPIO21"
     ],
@@ -27,7 +27,7 @@
       "OUT_W1TC",
       "ENABLE_W1TS",
       "IN",
-      "FUNC8_OUT_SEL_CFG"
+      "FUNC10_OUT_SEL_CFG"
     ],
     "UART0": [
       "FIFO",
@@ -97,7 +97,7 @@
       "write": "normal",
       "reserved": "zero"
     },
-    "IO_MUX.GPIO8": {
+    "IO_MUX.GPIO10": {
       "read": "normal",
       "write": "normal",
       "reserved": "zero"
@@ -132,7 +132,7 @@
       "write": "refused",
       "reserved": "zero"
     },
-    "GPIO.FUNC8_OUT_SEL_CFG": {
+    "GPIO.FUNC10_OUT_SEL_CFG": {
       "read": "normal",
       "write": "normal",
       "reserved": "zero"
@@ -387,7 +387,7 @@
       "omit": true,
       "source": "ESP32-C3 TRM v1.4, 16.5, Register 16.5, p. 437: SYSTEM_PERIP_RST_EN0_REG's I2S0_RST is bit 21 and bit 4 is reserved, as IDF v6.1's system_reg.h says; the chip has one I2S, whose reset bit 21 is"
     },
-    "IO_MUX.GPIO8.MCU_DRV": {
+    "IO_MUX.GPIO10.MCU_DRV": {
       "add": true,
       "bits": "[6:5]",
       "access": "read-write",

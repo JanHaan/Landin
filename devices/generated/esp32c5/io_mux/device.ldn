@@ -94,12 +94,12 @@ public gpio12_write: (device_base: usize, raw: u32) -> none =
                             compiler.write_zero, 0x0003ffff)
 end gpio12_write
 
-public gpio27_offset: usize = 0x6c
-public gpio27_address: usize = 0x6009006c
-public gpio27_named_mask: u32 = 0x0003ffff
-public gpio27_reset_mask: u32 = 0x0003ffff
-public gpio27_reset_value: u32 = 0x00001800
-public gpio27_image: type = layout(packed, u32) struct
+public gpio24_offset: usize = 0x60
+public gpio24_address: usize = 0x60090060
+public gpio24_named_mask: u32 = 0x0003ffff
+public gpio24_reset_mask: u32 = 0x0003ffff
+public gpio24_reset_value: u32 = 0x00001800
+public gpio24_image: type = layout(packed, u32) struct
     f_mcu_oe: u1 at 0..0
     f_slp_sel: u1 at 1..1
     f_mcu_wpd: u1 at 2..2
@@ -114,26 +114,26 @@ public gpio27_image: type = layout(packed, u32) struct
     f_filter_en: u1 at 15..15
     f_hys_en: u1 at 16..16
     f_hys_sel: u1 at 17..17
-end gpio27_image
+end gpio24_image
 
-public gpio27_decode: (raw: u32) -> (image: gpio27_image) =
+public gpio24_decode: (raw: u32) -> (image: gpio24_image) =
     image = zeroed
     bits: ptr mut u32 = ptr(usize(addr image))
     bits.val = raw
-end gpio27_decode
+end gpio24_decode
 
-public gpio27_encode: (image: gpio27_image) -> (raw: u32) =
+public gpio24_encode: (image: gpio24_image) -> (raw: u32) =
     bits: ptr u32 = ptr(usize(addr image))
     raw = bits.val
-end gpio27_encode
+end gpio24_encode
 
-public gpio27_read: (device_base: usize) -> (raw: u32) =
-    port: ptr u32 = ptr(device_base + gpio27_offset)
+public gpio24_read: (device_base: usize) -> (raw: u32) =
+    port: ptr u32 = ptr(device_base + gpio24_offset)
     raw = compiler.register_read(port, compiler.normal_read)
-end gpio27_read
+end gpio24_read
 
-public gpio27_write: (device_base: usize, raw: u32) -> none =
-    port: ptr mut u32 = ptr(device_base + gpio27_offset)
+public gpio24_write: (device_base: usize, raw: u32) -> none =
+    port: ptr mut u32 = ptr(device_base + gpio24_offset)
     compiler.register_write(port, raw, compiler.normal_write,
                             compiler.write_zero, 0x0003ffff)
-end gpio27_write
+end gpio24_write

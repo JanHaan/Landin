@@ -22,14 +22,14 @@
     "IO_MUX": [
       "GPIO11",
       "GPIO12",
-      "GPIO27"
+      "GPIO24"
     ],
     "GPIO": [
       "OUT_W1TS",
       "OUT_W1TC",
       "ENABLE_W1TS",
       "IN",
-      "FUNC27_OUT_SEL_CFG"
+      "FUNC24_OUT_SEL_CFG"
     ],
     "UART0": [
       "FIFO",
@@ -122,7 +122,7 @@
       "write": "normal",
       "reserved": "zero"
     },
-    "IO_MUX.GPIO27": {
+    "IO_MUX.GPIO24": {
       "read": "normal",
       "write": "normal",
       "reserved": "zero"
@@ -147,7 +147,7 @@
       "write": "refused",
       "reserved": "zero"
     },
-    "GPIO.FUNC27_OUT_SEL_CFG": {
+    "GPIO.FUNC24_OUT_SEL_CFG": {
       "read": "normal",
       "write": "normal",
       "reserved": "zero"

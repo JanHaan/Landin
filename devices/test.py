@@ -1313,8 +1313,8 @@ class Esp32c3Oracles(unittest.TestCase):
                  ('SYSTEM.PERIP_RST_EN0', 'EXT1_RST'): 'SYSTEM_I2C_EXT1_RST'}
         for field, spelled in (('OUT_SEL', 'OUT_SEL'), ('INV_SEL', 'OUT_INV_SEL'),
                                ('OEN_SEL', 'OEN_SEL'), ('OEN_INV_SEL', 'OEN_INV_SEL')):
-            names[('GPIO.FUNC8_OUT_SEL_CFG', field)] = 'GPIO_FUNC8_' + spelled
-        for pin in ('GPIO8', 'GPIO20', 'GPIO21'):
+            names[('GPIO.FUNC10_OUT_SEL_CFG', field)] = 'GPIO_FUNC10_' + spelled
+        for pin in ('GPIO10', 'GPIO20', 'GPIO21'):
             for field, spelled in IO_MUX_FIELDS.items():
                 names[('IO_MUX.' + pin, field)] = spelled
         compare_with_esp_idf(
@@ -1370,10 +1370,10 @@ class Esp32c3Oracles(unittest.TestCase):
         self.assertNotIn(('SYSTEM.PERIP_CLK_EN0', 'I2S1_CLK_EN'), fields)
         # 5.15.2, Register 5.21, p. 187: the IO MUX's pins from 0x0004, so
         # UART0's GPIO20 and GPIO21 at 0x54 and 0x58 and the indicator's
-        # GPIO8 at 0x24, MCU_SEL in bits 14:12 and MCU_DRV in 6:5.
+        # GPIO10 at 0x2c, MCU_SEL in bits 14:12 and MCU_DRV in 6:5.
         self.assertEqual([rows['IO_MUX.' + pin]['address'] for pin in
-                          ('GPIO8', 'GPIO20', 'GPIO21')],
-                         [0x60009024, 0x60009054, 0x60009058])
+                          ('GPIO10', 'GPIO20', 'GPIO21')],
+                         [0x6000902c, 0x60009054, 0x60009058])
         self.assertEqual(fields[('IO_MUX.GPIO20', 'MCU_SEL')]['mask'], 0x7000)
         self.assertEqual(fields[('IO_MUX.GPIO20', 'MCU_DRV')]['mask'], 0x60)
         self.assertEqual(rows['IO_MUX.GPIO20']['dim_element'],
@@ -1457,12 +1457,12 @@ class Esp32c5Oracles(unittest.TestCase):
         for field, spelled in (('FUNC_OUT_SEL', 'OUT_SEL'),
                                ('FUNC_OUT_INV_SEL', 'OUT_INV_SEL'),
                                ('FUNC_OE_SEL', 'OE_SEL'), ('FUNC_OE_INV_SEL', 'OE_INV_SEL')):
-            names[('GPIO.FUNC27_OUT_SEL_CFG', field)] = 'GPIO_FUNC27_' + spelled
+            names[('GPIO.FUNC24_OUT_SEL_CFG', field)] = 'GPIO_FUNC24_' + spelled
         for source in ('UART0', 'SYSTIMER_TARGET0'):
             key = 'INTERRUPT_CORE0.%s_INTR_MAP' % source
             names[(key, 'PASS_IN_SEC')] = 'INTERRUPT_CORE0_%s_INTR_PASS_IN_SEC' % source
         unshared = set()
-        for pin in ('GPIO11', 'GPIO12', 'GPIO27'):
+        for pin in ('GPIO11', 'GPIO12', 'GPIO24'):
             for field, spelled in IO_MUX_FIELDS.items():
                 names[('IO_MUX.' + pin, field)] = spelled
             # TRM v1.1, 8.13, Register 8.25, p. 352: a pin's HYS_EN and
@@ -1531,10 +1531,10 @@ class Esp32c5Oracles(unittest.TestCase):
                          [0x1, 0x100, 0x10000, 0x60000, 0xc00000, 0xe0000000])
         self.assertIn('addition', rows['CLIC.CLICINT17'])
         # 8.13, Register 8.25, p. 352: UART0's GPIO11 and GPIO12 and the
-        # indicator's GPIO27 from the IO MUX at 0x6009_0000.
+        # indicator's GPIO24 from the IO MUX at 0x6009_0000.
         self.assertEqual([rows['IO_MUX.' + pin]['address'] for pin in
-                          ('GPIO11', 'GPIO12', 'GPIO27')],
-                         [0x6009002c, 0x60090030, 0x6009006c])
+                          ('GPIO11', 'GPIO12', 'GPIO24')],
+                         [0x6009002c, 0x60090030, 0x60090060])
         # The watchdogs: a flash boot leaves timer group 0's MWDT and the
         # RWDT running (16.1, p. 710), each enabled by bit 31 of its first
         # configuration word (Register 15.10, p. 701; Register 16.1, p. 717),

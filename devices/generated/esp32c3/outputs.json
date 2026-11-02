@@ -1,8 +1,8 @@
 {
-  "esp32c3/correspondence.json": "a2d88ca2178ef478673c2feab0f42c226b0be78f4ae520957ded709df7d02d73",
-  "esp32c3/gpio/device.ldn": "9d82e810e1ee39fc708d684cddbadd32fc39ccd25b3cad0f700e6424923beb29",
+  "esp32c3/correspondence.json": "c18cfaa9ae628bccc0b04162c60b0953391be83aecb8b7e57cb2ba1b3a6e477c",
+  "esp32c3/gpio/device.ldn": "c16f6300c27b549b34d8c59e1e0d9c74d5525636889b357eb4da78c020d527d8",
   "esp32c3/interrupt_core0/device.ldn": "38ec5b6d997d21bf5ee8b2e840bc59fcc4f17c44e9137feda870396a4bf7bccb",
-  "esp32c3/io_mux/device.ldn": "64a1e7f513bc595365e9586f509241a96da8e221cf88dcc0c6b3d3f1ad5e139c",
+  "esp32c3/io_mux/device.ldn": "d763ff023ca02e830c0a1ea70930b6997548de654c6698f8a182cca65b791395",
   "esp32c3/rtc_cntl/device.ldn": "60b2796c75bfb06a349ce3b097ba959ed495bb1215d89cfab45e39e30fd305f8",
   "esp32c3/sources/device.ldn": "560e78460e95c0d70eb87953705e5cc33f3bc9b4597cfe21d090ec54bc1f15b0",
   "esp32c3/system/device.ldn": "234d9529bed1fe5b5883adf175665b4cf598badb99923a39fdf7ffff6f073df6",
