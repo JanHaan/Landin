@@ -133,8 +133,11 @@ def block_control(run, args, elf, head):
     deadline = time.time() + args.enumerate_seconds
     device = None
     while time.time() < deadline:
-        device = common.port_device(hub.command('hub-after-corrupt',
-                                                ['uhubctl', '-l', args.hub]), args.port)
+        #  common.listing retries a listing refused while udev regroups the
+        #  re-enumerated hubs' nodes, as every poll after a cycle may be.
+        device = common.port_device(
+            common.listing(hub, args.hub, max(1.0, deadline - time.time()),
+                           name='hub-after-corrupt'), args.port)
         if device and device.startswith(BOOTSEL):
             break
         time.sleep(0.5)

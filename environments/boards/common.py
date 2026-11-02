@@ -606,12 +606,14 @@ def wait_for_hub(hub, location, shows, seconds, interval=0.5):
         time.sleep(interval)
 
 
-def listing(hub, location, seconds, interval=0.5):
+def listing(hub, location, seconds, interval=0.5, name='hub-status'):
     """uhubctl's listing of the hub at LOCATION, once it lists again: the
-    cascade hides every hub while it re-enumerates."""
+    cascade hides every hub while it re-enumerates, and a listing taken
+    while udev regroups the new nodes is refused for permissions.  NAME is
+    the step the listing is logged under."""
     deadline = time.time() + seconds
     while True:
-        status = hub.command('hub-status', ['uhubctl', '-l', location], check=False)
+        status = hub.command(name, ['uhubctl', '-l', location], check=False)
         if 'Current status for hub %s ' % location in status:
             return status
         require(time.time() < deadline, 'hub %s did not list within %g s' % (location, seconds))
