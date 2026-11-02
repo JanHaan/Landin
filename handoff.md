@@ -251,7 +251,7 @@ tool, package acquisition, release versioning and self-hosting stay outside
 it, owned by the successor families its register names. Its identities are
 cited in `ROADMAP.md` and nowhere else.
 
-**Next roadmap item: R12.30 — Thumb-2, Cortex-M33 and M7 (planned).**
+**Next roadmap item: R12.40 — RISC-V microcontrollers (planned).**
 
 ## Versions
 

@@ -1289,7 +1289,7 @@ SWD equal to the trace's. It left SR-556, SR-569 to SR-571 and SR-573.
 
 ### R12.30 — Thumb-2, Cortex-M33 and M7
 
-Status: planned
+Status: complete
 Depends on: R12.20, R12.11
 
 The ARMv7-M and ARMv8-M instruction sets and the M7's hardware floating
@@ -1323,6 +1323,55 @@ disassembly must locate the selected instruction in the fixture's compiled
 function. The same source at default `armv6-m` must retain its baseline
 lowering without that instruction. This evidence supplements the M7 float,
 ABI and assembly-operand requirements above.
+
+Done: `armv8-m.main` is D255's fourth M-profile level, without the optional
+DSP extension, beside the `cortex-m33` core, which executes it, `armv7-m` and
+`armv6-m`. At every Thumb-2 level a 32-bit product is `smull` or `umull` and
+a 64-bit one `umull` with `mla` (D605), and at `armv8-m.main` an acquiring
+load or releasing store is `lda` or `stl` (D606); the Cortex-M corpus finds
+each in its fixture's linked function, and the same source's `bl
+__aeabi_lmul` and `ldr` with `dmb` at `armv6-m` and `armv7-m`. QEMU's
+`mps2-an505` and `mps2-an500` run the whole runtime corpus beside the M0's,
+each through a lane description in Landin source (D607, D619), as the gate's
+`cortex-m-corpus` job. The M7's FPv5-D16 is a description's
+`compiler.float_unit`, which `compiler.feature.fp` and `fp_dp` read (D615): a
+build with it uses AAPCS32's VFP variant for C and for Landin, its planner
+held to GCC's hard-float build (D616); its float arithmetic, comparisons and
+conversions are VFP instructions and call no helper (D617); reset enables CP10
+and CP11, handlers take the extended frame (D618) and a fibre's context keeps
+d8-d15 and FPSCR (D620). The linked image reads `Tag_ABI_VFP_args: VFP
+registers`, and a soft-float object is refused at its link. The STM32H753's
+description has the unit, and its consumer's device accesses are the board's
+to check (D621). Assembly operands take f32 and f64 in the class `float` on
+x86-64, arm64, RV64 and the M7, a block declaring each callee-saved float
+register it names, and a square root runs on each (D630). RP2350 is learnt
+from pico-sdk's SVD (D635, D636), and `rp2350-image-block` is built: one
+IMAGE_DEF linked to itself after the vector table, read back from the object
+and held to the first 4 KiB (D637, D638). A reviewed correction may add a
+field the SVD lacks, as the H753's DMA needs TRBUFF (D652), and a
+vector-table description may hold a stage that runs before reset, where the
+H753's configures its supply before RAM is written (D653). The board tools
+share `environments/boards/common.py`, and the shared command loop names no
+device (D645, D646).
+
+The recorded runs are `environments/boards/rp2350/record.json`, a Pico 2 on
+its Cortex-M33 at `armv8-m.main` from power-on, CHIP_RESET HAD_POR alone and
+VTOR 0x1000_0000, its image refused into USB BOOTSEL when the block's end
+marker is corrupted, the shared `1A0` echoed with GPIO3 set and cleared, IRQ14
+in exception 30, an overrun and the epochs with the UART's 32 bytes kept,
+11,202 bytes echoed in order and the counters read over SWD equal to the
+trace's (D654, D655); and `environments/boards/stm32h753/record.json`, a
+NUCLEO-H753ZI at `armv7e-m` with its float unit from power-on, through the
+supply stage with ACTVOSRDY set, CPACR granting CP10 and CP11 and CCR's caches
+off, the shared scenario on LD1, USART3's handler in exception 55, an overrun
+and the epochs with the receiver holding 17 bytes, 52 f32 and 52 f64 operand
+pairs whose sums, differences, products, quotients, comparisons and square
+roots, compiled to VFP instructions, match the host's IEEE arithmetic, and the
+counters read over SWD equal to the trace's (D647-D651). SR-510's activation
+stands, since the item changed the fibre stack's margin and not its
+documentation. It left SR-574, SR-575, SR-577, SR-578, SR-580 to SR-586,
+SR-590 to SR-596, SR-600, SR-602, SR-603, SR-605 to SR-608, SR-610, SR-613
+and SR-614.
 
 ### R12.40 — RISC-V microcontrollers
 
