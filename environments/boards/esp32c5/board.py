@@ -152,8 +152,11 @@ def power_on_boot(probe, names):
             % (cause, reason))
     require(state == 2, 'the application is in state %d, not 2: running' % state)
     require(second > first, 'the timer did not advance: %d, then %d' % (first, second))
+    trap = esp.trap_cells(probe, names)
+    require(trap['count'] == 0, 'the unhandled entry took a trap: mcause %#x at %#x'
+            % (trap['cause'], trap['pc']))
     return dict(reset_cause=cause, boot_reason=reason, app_state=state,
-                timer_events=[first, second])
+                timer_events=[first, second], trap_count=0)
 
 
 def chip_enable_reset(fd, seconds):

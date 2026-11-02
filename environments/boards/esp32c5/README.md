@@ -104,7 +104,7 @@ level for 100 ms (D721).
 | a ring overrun | after 0x12, a 300-byte burst into the 256-byte ring: 44 bytes dropped, one restart, none of the burst echoed |
 | a FIFO overflow | after 0x13, a 300-byte burst while mintthresh holds the receive interrupt off: one RX FIFO overflow, a second restart, none of it echoed, and 99 to 101 timer interrupts in the 100 ms window, since the timer's level is above the threshold |
 | the stream | 3000 more bytes, and every byte sent echoed in order but the two bursts, `h` their count, and the timer advancing |
-| the counters | `handled`, `recoveries`, `dropped`, `overflows`, `entries` and `boot_reason`, and the two atomic cells, read over JTAG after the scenario, equal the last frames |
+| the counters | `handled`, `recoveries`, `dropped`, `overflows`, `entries` and `boot_reason`, and the two atomic cells, read over JTAG after the scenario, equal the last frames; and `_landin_firmware_trap_count` reads 0: no trap reached the unhandled entry (D656), whose five cells a failed run's result keeps |
 | SRAM | the image's read-only segments, read over JTAG, are OUT.bin's bytes: what the ROM loaded is the image |
 
 What the emulator lane and the boards share is

@@ -343,8 +343,11 @@ class Probe(unittest.TestCase):
 
         class Fake:
             def read_words(self, name, address, count):
-                return [counters.get(name[len('jtag-'):], words.get(address))]
-        names = dict(counters, byte_cell=0x3fca04c0, half_cell=0x3fca04c2, word_cell=0x3fca04e4)
+                return [counters.get(name[len('jtag-'):], words.get(address, 0))]
+        trap = dict(('_landin_firmware_trap_' + c, 0x3fca0100 + 4 * i)
+                    for i, c in enumerate(ESP.TRAP_CELLS))
+        names = dict(counters, byte_cell=0x3fca04c0, half_cell=0x3fca04c2, word_cell=0x3fca04e4,
+                     **trap)
         final = dict(h=9, c=2, l=44, o=1, i=7, r=1)
         atomics = dict(b=0x41, h=0x417e, w=0x417e7e41)
         read = ESP.cross_check(Fake(), C3, names, final, atomics)
@@ -352,10 +355,16 @@ class Probe(unittest.TestCase):
                          (0x41, 0x417e, 0x417e7e41))
         with self.assertRaises(COMMON.Failed):
             ESP.cross_check(Fake(), C3, names, dict(final, i=8), atomics)
+        words[0x3fca0110], words[0x3fca0100], words[0x3fca0104] = 1, 2, 0x40380294
+        with self.assertRaises(COMMON.Failed) as refused:
+            ESP.cross_check(Fake(), C3, names, final, atomics)
+        self.assertIn('mcause 0x2 at 0x40380294', str(refused.exception))
 
 
 class PowerOn(unittest.TestCase):
-    NAMES = dict(boot_reason=0x10, app_state=0x14, timer_events=0x18)
+    NAMES = dict(boot_reason=0x10, app_state=0x14, timer_events=0x18,
+                 **{'_landin_firmware_trap_' + c: 0x20 + 4 * i
+                    for i, c in enumerate(('cause', 'pc', 'value', 'sp', 'count'))})
 
     class Fake:
         def __init__(self, words):
@@ -366,8 +375,10 @@ class PowerOn(unittest.TestCase):
             return [value.pop(0) if isinstance(value, list) else value]
 
     def board(self, cause=1, reason=1, state=2, timer=(5, 9)):
-        return self.Fake({C5_BOARD.RESET_CAUSE: 0x20 | cause, 0x10: reason, 0x14: state,
-                          0x18: list(timer)})
+        words = {C5_BOARD.RESET_CAUSE: 0x20 | cause, 0x10: reason, 0x14: state,
+                 0x18: list(timer)}
+        words.update({0x20 + 4 * i: 0 for i in range(5)})
+        return self.Fake(words)
 
     def test_a_running_application_after_a_power_on_passes(self):
         with mock.patch.object(C5_BOARD.time, 'sleep'):
