@@ -1,5 +1,6 @@
 {
   "status": "passed",
+  "source_commit": "1f41447dac07f29fbe3375ed5d15ad01db11cf4c",
   "image_sha256": "07e5d9c10d64a5e84c4795e6034ef9d2cdc124d677c81f2343648a4b91cfaa45",
   "image_name": "board.elf.bin",
   "elf_sha256": "bdc468cdcced3529506127d57166e3dc9cc241c644b63a260f6b46d2db753a0a",
@@ -68,8 +69,8 @@
       "timer_interrupts_meanwhile": 100
     },
     "stream": {
-      "timer_events": 3886,
-      "receive_interrupts": 4743,
+      "timer_events": 3884,
+      "receive_interrupts": 4742,
       "echoed": 3014,
       "sent": 3614
     }
@@ -80,7 +81,7 @@
     "recoveries": 2,
     "dropped": 44,
     "overflows": 1,
-    "entries": 4743,
+    "entries": 4742,
     "boot_reason": 1,
     "byte_cell": 116,
     "half_cell": 29789,
@@ -90,7 +91,7 @@
     "0x40380000+0x180",
     "0x40380180+0x5ba8"
   ],
-  "uart_sha256": "8a0447193234b74f55792f8a46f917349739d8b417eea2162a34ab4368aa9079",
+  "uart_sha256": "f3199303dc7bc38083f999f39cc3eab089d4d2dd47710e96fe4373d7966c121e",
   "image_control": {
     "sha256": {
       "calculated": "13ca5808d0f351c817d2cf80709f7d1be3f96b2a044c5fec2f97c0c75da880cd",
@@ -119,8 +120,8 @@
       "tag": "t",
       "h": "00000bc6",
       "c": "00000002",
-      "i": "00001287",
-      "m": "00000f2e",
+      "i": "00001286",
+      "m": "00000f2c",
       "p": "80000001",
       "q": "80000002",
       "k": "00000064",
