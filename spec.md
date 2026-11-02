@@ -21395,6 +21395,275 @@ capacity verdicts are those of `backend_corpus.py`'s `profiles`, measured
 from each limited image's sizes and frames, as RP2040's are, because the
 corpus links with the reference's probe map.
 
+### D700 — A RISC-V description's core and identity are its policy's
+
+**The tour said** nothing; D542 took the core from the SVD's `cpu/name`,
+of which six Cortex-M spellings are read, and the identity from its
+`device/name` in lowercase. Espressif's SVDs name their cpu `RV32IMC` and
+`RV32IMAC`, which say nothing of the interrupt model a description's
+slots follow, and name the device with a hyphen, `ESP32-C3`, which D556's
+vendor names refused. RP2350's SVD says `CM33`, and its Hazard3 cores read
+the same file.
+
+**Chosen:** a policy may give `core`, one of `hazard3`, `esp-rv32imc` and
+`esp-rv32imac-clic`, which `interrupts.ldn` then names whatever the SVD's
+cpu says, and `identity`, the description's `compiler.device`, in D542's
+form, where the SVD's name is not the one wanted; an SVD whose cpu is none
+of the six Cortex-M names and a policy that names no core is L0528, saying
+the policy names it. A policy's `device` may hold hyphens, as the SVD's
+does; such a policy gives its `prefix` and `description`, which module
+paths hold. Amends D542's step 5 and D556. `sifive-e31`, the fourth named RISC-V
+core, has no SVD to learn and no policy names it.
+
+**The alternatives:** reading `RV32IMC` as `esp-rv32imc`, which turns an
+ISA string into an interrupt controller and would read every vendor's
+RV32IMC the same; a second SVD for Hazard3, which nobody publishes; and
+the identity `rp2350` for both of RP2350's descriptions, which two records
+of `descriptions.json` cannot share.
+
+**Pinned by** the `devices` suite's `a policy names the core` and `every
+refusal is named`, `devices/policies/esp32c3.json`, `esp32c5.json` and
+`rp2350_hazard3.json`, and `devices/test.py`'s `D542Form`.
+
+### D701 — An interrupt matrix's sources are a module, not slots
+
+**The tour said** nothing; D542's `compiler.interrupt(name, irq)` is an
+external interrupt at slot 16 + irq, which is what an NVIC and Hazard3's
+Xh3irq take. On the ESP32-C3 and ESP32-C5 the SVD's `<interrupt>` values
+are the interrupt matrix's sources: each names a mapping register, which
+routes the source to a CPU interrupt line, and only the lines are slots
+(the C3's lines 1 to 31, the C5's CLIC identities 16 to 47, as their
+cores' interrupt models say).
+
+**Chosen:** on `esp-rv32imc` and `esp-rv32imac-clic`, `interrupts.ldn`
+keeps D542's lines 1 to 4, its corrections' lines among them, adds after
+them `-- Its interrupts are interrupt-matrix sources, not slots:
+PREFIX/sources.`, and holds `compiler.device`, `compiler.core` and
+`compiler.vectors(N)`, N the core's slots, 32 for a vectored mtvec's
+mcause codes and 48 for the C5's CLIC, and no `compiler.interrupt`. The
+sources, as the policy's corrections leave them, are generated as the
+module `PREFIX/sources`, beside the register modules and in their
+manifest: the policy's notice, two lines saying what a source is, the
+corrections' lines, and `public NAME: u32 = N` for each, NAME the
+interrupt's name in lowercase, ordered as D542 orders interrupts. A
+program routes UART0 by writing a line into the register at
+`interrupt_core0` offset four times `sources.uart0`. On every other core
+D542's form is unchanged. Amends D542's steps 5 and 6.
+
+**The alternatives:** listing the sources as `compiler.interrupt` at
+16 + n, which gives slots the core does not have; dropping the sources,
+which leaves a program to copy numbers out of a header; and generating
+them into the description, whose directives are the compiler's and not a
+program's names.
+
+**Pinned by** the `devices` suite's `a policy names the core`, which holds
+both texts, `devices/test.py`'s `D542Form`, which renders both from the
+SVD apart from refine, and the oracles' `test_sources_against_the_header`.
+
+### D702 — The ESP32-C3 and ESP32-C5 are learnt from their SVDs, ESP-IDF and their manuals
+
+**The tour said** nothing; prototype 1's board application is to run on
+the ESP32-C3 and ESP32-C5.
+
+**Chosen:** the C3 is learnt from `espressif/svd` at
+`be20aa12560889d6125d144cdb48cf615ac17628`, Espressif's repository of
+SVDs and its newest commit, and the C5 from `esp-rs/esp-pacs` at
+`a96d437ebad40b00854aa3e78011ad7732713a4d`, `esp32c5/svd/esp32c5.base.svd`,
+since Espressif's repository has no C5. esp-pacs is Espressif's own Rust
+team's, whose commits correct the base file in place, so it is the
+vendor's copy and not D560's declined third-party collection; its policy
+says `modified from it`. ESP-IDF v6.1, commit
+`fff9895c82d744c7237be8847347bdd1b07c6643`, is each chip's oracle: its
+`reg_base.h`, `soc.h`, the selected peripherals' `*_reg.h`, `interrupts.h`
+and the C5's `clic_reg.h`. Where the SVD and the headers disagree, each
+chip's Technical Reference Manual decides, the C3's v1.4 and the C5's
+v1.1, pinned by hash and supplied by hand since their URLs serve the
+current version, and the policy carries its correction with section and
+page. Where both agree, the SVD stands even where the manual reserves a
+bit. The C3's corrections: its one I2S's clock and reset bits are 21, not
+4, and the I2S1 bits the SVD puts at 21 are omitted (16.5, Registers 16.3
+and 16.5); and each selected pin's MCU_DRV, bits 6:5, is added (Register
+5.21). The C5's: the interrupt matrix's mapping registers from MSPI's on
+are eight bytes higher than the SVD puts them, UART0's at 0x0BC and
+SYSTIMER_TARGET0's at 0x0F4 (11.6, p. 480; D704); each mapping register's
+PASS_IN_SEC, bit 8, is added (11.7, p. 485); the timer groups' WDT_USE_XTAL
+is omitted (Register 15.10); thirteen sources the SVD omits and the manual
+and the header number alike are added, and BUS_MONITOR at 27, which the
+header calls ASSIST_DEBUG (Table 11.5-1); and the CLIC is added (D705).
+Where the manual agrees with the SVD the check names the header's
+disagreement: the C3's RTC and super watchdog keys reset to zero, and the
+C5's pin hysteresis bits exist. The selections are what the boards' port
+touches: UART0, its pins and an indicator, the clock and reset gates of
+UART0 and the system timer, UART0's and the system timer's routing, the
+C3's line enables, types, priorities 1 and 2 and threshold, the C5's CLIC
+configuration and identities 17 and 18, the system timer for a
+millisecond wakeup, every watchdog a flash boot leaves running, and the
+last reset's cause. Generated modules carry Apache-2.0's notice, in the
+tree as `devices/notices/LICENSE-Apache-2.0.espressif`.
+
+**The alternatives:** a third party's C5 SVD; esp-pacs's patched SVD,
+which its build generates and nobody publishes at a fixed URL; taking the
+headers' reading wherever it disagrees, which would have given the C5's
+UART0 the SVD's wrong address and none of the manual's reservations; and
+selecting every register of each peripheral, which the board does not
+touch and no reviewer reads.
+
+**Pinned by** `devices/test.py`'s `Esp32c3Oracles` and `Esp32c5Oracles`,
+which compare every selected register's address and every field's place,
+width, reset and access with the headers, the sources with
+`interrupts.h`, and the reviewed literals with the manuals.
+
+### D703 — An element of a register array is a register
+
+**The tour said** nothing; D557 refused `dim` arrays, which neither
+earlier device needed. Espressif's SVDs give the IO MUX's pins and the
+GPIO matrix's selections as `NAME%s` arrays, which the boards' port
+selects.
+
+**Chosen:** a policy selects an element of a register array by its name,
+the array's `%s` replaced by one of its indices: those `dimIndex` gives,
+as a range `LOW-HIGH` or a list `A,B,C`, or 0 to dim - 1 without one. It
+is generated as a register of its own at the array's offset plus its
+position times `dimIncrement`, and the correspondence records it as a
+`dim_element` with the array's name and the index. A `dimIndex` whose
+count is not `dim` is L0529; an index the array lacks, L0530, saying how
+an element is named; an array whose name has no `%s` or is written
+`[%s]`, an element that is an alternate, and arrays of fields, clusters or
+peripherals stay L0528. Amends D557.
+
+**The alternatives:** expanding every element of a selected array, which
+generates sixty registers to touch three; and selecting the array by its
+`%s` name, which no module can spell.
+
+**Pinned by** the `devices` suite's `an array element is a register`, and
+the C3's and C5's IO MUX pins and GPIO selections.
+
+### D704 — A reviewed correction may move a register
+
+**The tour said** nothing; D556's corrections move fields, add or remove
+interrupts and correct resets. The C5's SVD omits two mapping registers
+and puts each one after them eight bytes low, UART0's among them.
+
+**Chosen:** `register_corrections` gives a selected register's `offset`,
+a multiple of four, and the `source` it was read from; the register is
+generated there and the correspondence records the SVD's offset beside
+the source. An offset the SVD already gives, an unaligned one and one of
+an unselected register are each L0526.
+
+**The alternatives:** correcting the SVD's file, which D559 pins by hash;
+and a field or interrupt correction, which cannot move a register.
+
+**Pinned by** the `devices` suite's `a policy corrects and adds
+registers` and `every refusal is named`, and `Esp32c5Oracles`.
+
+### D705 — A policy may add a peripheral the SVD lacks
+
+**The tour said** nothing. The C5's CLIC, whose per-interrupt words enable,
+prioritize and trigger its lines, is in no SVD: ESP-IDF's `clic_reg.h`
+and the manual's 2.8.2 describe it.
+
+**Chosen:** `peripheral_additions` gives a peripheral by name, its `base`,
+its `source`, and its `registers`, each with its `offset`, `access`,
+`reset` and `fields`, each field its `bits` and an optional `access`, and
+a register array's `dim` and `increment`. refine writes each as the SVD's
+own XML and reads it as if the SVD gave it last, so it is selected,
+generated and refused as any of the SVD's, and the correspondence records
+each of its registers with the addition's source. A fault in what the
+policy adds is placed in the policy, not the SVD. Adding a peripheral the
+SVD gives, a member outside those, and an array without both `dim` and
+`increment` are L0526. The C5's policy adds `CLIC` at 0x2080_0000:
+`MCLICCFG`, `CLICINFO`, and `CLICINT%s`, each interrupt's four bytes as
+one word, which the manual says word accesses reach atomically (2.8.2.6,
+p. 86), with CTL as its three implemented bits; `mintthresh` is a CSR and
+not added.
+
+**The alternatives:** leaving the CLIC to the board's own stores, which a
+reviewer of the modules cannot see; a hand-written module beside the
+generated ones, which nothing compares with the manual; and a
+byte-register view, which D557's 32-bit registers do not take.
+
+**Pinned by** the `devices` suite's `a policy corrects and adds
+registers` and `every refusal is named`, and `Esp32c5Oracles`, which holds
+the CLIC to `clic_reg.h` and the manual's 2.8.2.7.
+
+### D706 — RP2350's Hazard3 cores have a description of their own
+
+**The tour said** nothing; D635 learnt RP2350 for its M33s.
+
+**Chosen:** `devices/policies/rp2350_hazard3.json` reads the same pinned
+SVD as `rp2350.json` and selects the same registers but the M33's private
+bus, `PPB`, whose NVIC and VTOR Hazard3 does not have; its core is
+`hazard3` and its identity `rp2350-hazard3`. Its modules are under
+`generated/rp2350_hazard3`, byte for byte the Arm side's, and its
+description, `descriptions/rp2350_hazard3`, has the same 68 slots and
+interrupts, Hazard3's Xh3irq taking IRQ n at 16 + n as the NVIC does,
+and the Pico 2's map of D636, `rp2350-image-block`. Hazard3's interrupt
+control is its own CSRs, which no SVD describes.
+
+**The alternatives:** one description for both kinds of core, which D543
+cannot select by target; and reusing `rp2350`'s modules, which offers a
+Hazard3 program the M33's NVIC.
+
+**Pinned by** `devices/test.py`'s `Rp2350Hazard3Oracles`.
+
+### D707 — The ESP descriptions are RAM-only images that keep clear of the ROM
+
+**The tour said** nothing; `esp-app-image` is a RAM-only image the ROM
+loads with no second stage, as the maintainer chose.
+
+**Chosen:** the C3's SRAM1 is one memory at two addresses, 0x4038_0000 on
+the instruction bus and 0x3FC8_0000 on the data bus (TRM v1.4, 3.3.2,
+Table 3.3-1). Its description puts code, the trap table and read-only
+data in `IRAM`, the first 128 KiB through the instruction bus, and data,
+BSS and a 16 KiB stack in `DRAM`, the 160 KiB from 0x3FCA_0000, the
+memory after IRAM's, so neither region reaches the other's bytes. The
+C5's HP SRAM is one address space, 384 KiB from 0x4080_0000 (TRM v1.1,
+6.3, Table 6.3-1), and its description's `SRAM` takes 312 KiB of it for
+everything. Each ends below the ROM's download buffers, stack and data,
+from 0x3FCC_AE00 and 0x4084_E5A0 (ESP-IDF v6.1's
+`bootloader.memory.ld.in`), so the ROM loads the image without writing
+it. No flash is mapped and no cache enabled. The C3's lowest 16 KiB of
+instruction-bus SRAM are its cache's and are not described. Each names
+its image header's chip facts in `compiler.esp_image`: chip id 5 and 23,
+ESP-IDF's `esp_chip_id_t`; revisions from ESP-IDF v6.1's default minimum,
+the C3's v0.3 and the C5's v1.0, to v1.99; and the flash offset the ROM
+reads, 0 and 0x2000.
+
+**The alternatives:** one `rwx` region on the C3's instruction bus, which
+data accesses through the instruction bus do not take; overlapping
+aliases, which lets data overwrite code; and the whole SRAM, which the
+ROM's own data would share while it loads.
+
+**Pinned by** `devices/test.py`'s `EspDescriptions`, which holds the
+regions to the manuals and the reservations, and `descriptions.json`.
+
+### D708 — The ESP descriptions stop the watchdogs before reset
+
+**The tour said** nothing; D653 lets a description hold a stage its reset
+enters first, which `esp-app-image` admits too, and a flash boot
+leaves timer group 0's MWDT and the RTC watchdog running and the super
+watchdog unfed, which ESP-IDF's second stage would deal with.
+
+**Chosen:** each ESP description holds `watchdogs.ldn`, one
+`link(boot_stage)` naked routine in RV32 assembly: for both timer groups'
+MWDTs and the RTC watchdog it writes the key 0x50D8_3AA1, a zero
+configuration, which clears the enable and flash boot mode, an MWDT's
+with WDT_CONF_UPDATE_EN set to take it, and a zero key; then the super
+watchdog's key, 0x8F1D_312A on the C3 and the same 0x50D8_3AA1 on the C5,
+SWD_AUTO_FEED_EN set in its configuration read back, and a zero key, as
+ESP-IDF's `bootloader_super_wdt_auto_feed` does; and it enters
+`_landin_firmware_reset`. It uses t0 to t2 alone, no stack and no RAM.
+Timer group 1's MWDT is stopped too, though the ROM does not start it.
+
+**The alternatives:** feeding the watchdogs from the program, which ties
+every program to them; stopping them in compiler-owned reset, which is
+the target's and not the chip's; and leaving the super watchdog fed by
+nothing.
+
+**Pinned by** `devices/test.py`'s `EspDescriptions`, which reads each
+stage's stores and holds them to the generated addresses and the
+manuals' keys, and `descriptions.json`'s `reset_stage`.
+
 ### D593 — The first board shares prototype 1's receive contract and command loop, not its device protocol
 
 **The tour said** nothing of a board. The derived driver of prototype 1

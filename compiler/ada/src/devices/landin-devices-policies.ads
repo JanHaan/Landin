@@ -7,7 +7,9 @@
 --  go; the selected peripherals and their registers in order; each
 --  selected register's read, write and reserved-bit policy; the fields
 --  whose vendor enumeration is read as a plain number; and the reviewed
---  corrections of what the SVD says a register resets to.  A member it
+--  corrections of what the SVD says a register resets to or where it
+--  lies; the description's identity and core where the SVD does not say
+--  them; and peripherals the SVD lacks.  A member it
 --  does not know is refused, except `provenance`, which is the reviewer's
 --  and is not read.
 
@@ -37,6 +39,11 @@ package Landin.Devices.Policies is
       Has_Reset_Value : Boolean := False;
       Reset_Value : Word := 0;
       Reset_Source : US.Unbounded_String;
+      --  A reviewed offset, replacing the SVD's, and where the reviewer
+      --  read it (D704).
+      Has_Offset : Boolean := False;
+      Offset : Word := 0;
+      Offset_Source : US.Unbounded_String;
    end record;
 
    package Choice_Vectors is new Ada.Containers.Vectors
@@ -83,8 +90,31 @@ package Landin.Devices.Policies is
    package Interrupt_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Interrupt_Correction);
 
+   --  A peripheral the SVD lacks, which a reviewed policy adds with the
+   --  source it was read from (D705).  Its registers are written as the
+   --  SVD's own XML, which the projection reads as if the SVD gave them.
+   type Peripheral_Addition is record
+      Name : US.Unbounded_String;
+      Source : US.Unbounded_String;
+      Xml : US.Unbounded_String;
+   end record;
+
+   package Addition_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Peripheral_Addition);
+
+   --  The interrupt model of the core a policy names (D700, D701): an NVIC
+   --  or Hazard3's Xh3irq takes interrupt n at slot 16 + n, and a core
+   --  whose SVD interrupts are an interrupt matrix's sources takes none of
+   --  them as a slot.
+   type Core_Choice is
+     (From_Svd, Hazard3, Esp_Rv32imc, Esp_Rv32imac_Clic);
+
    type Policy is record
       Device : US.Unbounded_String;
+      --  The description's identity, when it is not the SVD's device name
+      --  in lowercase, and its core, when the SVD's cpu does not say it.
+      Identity : US.Unbounded_String;
+      Core : Core_Choice := From_Svd;
       Svd_Version : US.Unbounded_String;
       Svd_Sha256 : US.Unbounded_String;
       --  Each line follows `-- ` at the head of every register module.
@@ -106,7 +136,12 @@ package Landin.Devices.Policies is
       Fields : Correction_Vectors.Vector;
       --  The interrupts' reviewed corrections, in the policy's order.
       Interrupts : Interrupt_Vectors.Vector;
+      --  The peripherals a reviewer adds, in the policy's order.
+      Additions : Addition_Vectors.Vector;
    end record;
+
+   --  The text a policy's core is written as in a description.
+   function Core_Name (Core : Core_Choice) return String;
 
    procedure Read
      (Text : String; Into : out Policy; Problem : out Fault);
