@@ -12,6 +12,7 @@ a check reads content-addressed inputs the real files are copied and then
 broken in one place, because a recorded sha256 cannot be invented.
 """
 import json
+import os
 import re
 import subprocess
 import sys
@@ -708,6 +709,29 @@ class CodeRules(unittest.TestCase):
             path.write_text("# example\n\n" + program + shared + shared)
             self.assertTrue(any("'value' declared 2 times" in why
                                 for _, why in checker.check(path)))
+
+    def test_a_single_file_gets_the_rules_the_full_run_gives_it(self):
+        #  docs/from-c.md's blocks are files the test program compiles, and
+        #  one names a parameter `at`, which only the full language
+        #  reserves.  The full run never reads that page under these rules,
+        #  so naming it alone must not either; a language file named alone
+        #  still gets them.
+        import contextlib
+        import io
+        here = Path.cwd()
+        try:
+            for named, verdict, status in (
+                    ("docs/from-c.md", "left to the full run", 0),
+                    ("prototype-2-parser.md", "clean", 0)):
+                with self.subTest(named=named):
+                    printed = io.StringIO()
+                    with contextlib.redirect_stdout(printed):
+                        said = checker.main(["check.py", named])
+                    self.assertEqual(said, status, printed.getvalue())
+                    self.assertIn(verdict, printed.getvalue())
+                    self.assertNotIn("keyword", printed.getvalue())
+        finally:
+            os.chdir(here)
 
     def test_numbered_code_keeps_source_positions(self):
         problems = checker.check_numbered_code(

@@ -8,7 +8,7 @@ are tedious to re-check by hand after every edit. It resolves files next
 to itself, so it works from anywhere.
 
     python3 check.py            # all files
-    python3 check.py FILE...    # only these
+    python3 check.py FILE...    # these, if they are language files or ROADMAP.md
 """
 import collections
 from functools import lru_cache
@@ -9735,14 +9735,25 @@ def main(argv):
         return 2
 
     total = 0
+    unchecked = 0
     for path in paths:
-        base = os.path.basename(path)
-        if base == ROADMAP:
+        #  A file gets the per-file rules the full run gives it and no
+        #  others.  Those rules are the language files' and the roadmap's;
+        #  every other document is checked against its fixtures, pages and
+        #  sources by the full run alone.  Reading docs/from-c.md under the
+        #  language files' rules once refused `at` as a name in a block the
+        #  test program compiles, a file the full run calls clean.
+        relative = os.path.normpath(
+            os.path.relpath(os.path.realpath(path), os.path.realpath(ROOT)))
+        if relative == ROADMAP:
             problems = check_roadmap(path)
-        elif base in LANGUAGE_FILES:
+        elif relative in LANGUAGE_FILES:
             problems = check(path)
         else:
-            problems = check(path)
+            print("%-30s %s" % (path, "has no per-file rules; the full run,"
+                                " python3 check.py, checks it"))
+            unchecked += 1
+            continue
         total += len(problems)
         print("%-30s %s" % (path, "clean" if not problems else
                             "%d problem(s)" % len(problems)))
@@ -9823,7 +9834,10 @@ def main(argv):
         total += 1
         print("%-30s %5d  %s" % (path, line, why))
 
-    print("\n%s" % ("all clean" if not total else "%d problem(s)" % total))
+    left = ("; %d file(s) left to the full run" % unchecked
+            if unchecked else "")
+    print("\n%s%s" % ("all clean" if not total else "%d problem(s)" % total,
+                       left))
     return 1 if total else 0
 
 
