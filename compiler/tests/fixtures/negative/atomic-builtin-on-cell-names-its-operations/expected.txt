@@ -1,0 +1,10 @@
+error[L0344]: memory access needs an unsigned scalar pointer without a subtype, not `ptr mut atomic.cell(u32)`
+  --> ../tests/fixtures/negative/atomic-builtin-on-cell-names-its-operations/main.ldn:10:27
+   |
+10 |     compiler.atomic_store(addr word_cell, word, compiler.seq_cst)
+   |                           ^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/atomic-builtin-on-cell-names-its-operations/main.ldn:10:5
+   |
+10 |     compiler.atomic_store(addr word_cell, word, compiler.seq_cst)
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this memory operation
+  = note: D500: an atomic cell is read and written by its own operations, `atomic.load(addr cell)` and `atomic.store(addr cell, value)` among them; a memory builtin takes a pointer to a plain u8, u16, u32 or u64

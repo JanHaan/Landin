@@ -1367,39 +1367,6 @@ package body Landin.Driver is
               & Landin.Diagnostics.Suggestions.Nth (Offered, 1) & "?";
          end Nearest_Target;
 
-         --  The known option nearest an unknown one, or "".
-         function Nearest_Option (Stem : String) return String;
-
-         function Nearest_Option (Stem : String) return String is
-            Offered : Landin.Diagnostics.Suggestions.Ranking;
-         begin
-            --  What other compilers spell these, which no edit distance
-            --  reaches.
-            if Stem in "--version" | "-v" | "-V" then
-               return "--identify";
-            elsif Stem = "-g" then
-               return "--debug=full";
-            elsif Stem in "--check" | "--format" then
-               return "`refine fmt --check` (checking needs no option)";
-            elsif Stem = "-O" or else Starts_With (Stem, "-O") then
-               return "--optimize";
-            end if;
-            Landin.Diagnostics.Suggestions.Consider
-              (Offered, Stem, "--help");
-            Landin.Diagnostics.Suggestions.Consider
-              (Offered, Stem, "--identify");
-            for Flag in Landin.Commands.Catalogue.Option loop
-               if Landin.Commands.Catalogue.Compilation_Option (Flag) then
-                  Landin.Diagnostics.Suggestions.Consider
-                    (Offered, Stem, Landin.Commands.Catalogue.Name (Flag));
-               end if;
-            end loop;
-            if Landin.Diagnostics.Suggestions.Count (Offered) = 0 then
-               return "";
-            end if;
-            return Landin.Diagnostics.Suggestions.Nth (Offered, 1);
-         end Nearest_Option;
-
          function Option_Problem (Option : String) return String is
             Equals : constant Natural :=
               Ada.Strings.Fixed.Index (Option, "=");
@@ -1420,7 +1387,9 @@ package body Landin.Driver is
                if Times_Written (Stem) > 1 then
                   return Landin.Commands.Catalogue.Given_Twice (Stem);
                elsif Equals /= 0 and then Value = "" then
-                  return Stem & " needs a value after `=`";
+                  return Stem & " needs a value after `=`"
+                    & Landin.Commands.Catalogue.Value_Choices
+                        (Landin.Commands.Catalogue.Named_Option (Stem));
                elsif Equals /= 0 then
                   return Landin.Commands.Catalogue.Value_Problem
                     (Landin.Commands.Catalogue.Named_Option (Stem), Value);
@@ -1430,7 +1399,8 @@ package body Landin.Driver is
                return Stem & " is not used this way";
             end if;
             declare
-               Near : constant String := Nearest_Option (Stem);
+               Near : constant String :=
+                 Landin.Commands.Catalogue.Nearest_Option (Stem);
             begin
                return "unknown option: " & Option
                  & (if Near /= "" then "; did you mean " & Near & "?"
@@ -3706,6 +3676,15 @@ package body Landin.Driver is
                Note_No_Entry;
                return;
             end if;
+            Result.Without_Entry :=
+              Landin.Targets.Capabilities.Hosted_System_Of (Facts)
+                /= Landin.Targets.Capabilities.No_Hosted_System
+              and then Landin.Backend.Entry_Point.Hosted_Main
+                (Landin.Stages.Code (Context).all,
+                 Landin.Stages.Meanings (Context).all,
+                 Landin.Stages.Modules (Context).all,
+                 Landin.Stages.Identities (Context).all)
+                   = Landin.IR.No_Item;
             if Static_Link
               and then Refused_Static_Link
                 (Executable => True, Checking => True)

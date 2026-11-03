@@ -1,4 +1,4 @@
-error[L0318]: this concrete type has no conformance to `scalar`
+error[L0318]: `i32` has no conformance to `atomic.scalar`
   --> ../tests/fixtures/negative/atomic-cell-holds-unsigned-scalars/main.ldn:3:13
   |
 3 | mut signed: atomic.cell(i32) = zeroed
@@ -8,7 +8,7 @@ error[L0318]: this concrete type has no conformance to `scalar`
 215 | public cell: type (item: type is scalar) = cell_value(item)
     |                                  ^^^^^^ the constraint declared here
   = note: D500: an atomic cell holds a u8, u16, u32 or u64
-error[L0318]: this concrete type has no conformance to `scalar`
+error[L0318]: `bool` has no conformance to `atomic.scalar`
   --> ../tests/fixtures/negative/atomic-cell-holds-unsigned-scalars/main.ldn:4:11
   |
 4 | mut flag: atomic.cell(bool) = zeroed
@@ -18,7 +18,7 @@ error[L0318]: this concrete type has no conformance to `scalar`
 215 | public cell: type (item: type is scalar) = cell_value(item)
     |                                  ^^^^^^ the constraint declared here
   = note: D500: an atomic cell holds a u8, u16, u32 or u64
-error[L0318]: this concrete type has no conformance to `scalar`
+error[L0318]: `usize` has no conformance to `atomic.scalar`
   --> ../tests/fixtures/negative/atomic-cell-holds-unsigned-scalars/main.ldn:5:11
   |
 5 | mut size: atomic.cell(usize) = zeroed

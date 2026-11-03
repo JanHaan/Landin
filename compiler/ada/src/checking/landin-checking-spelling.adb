@@ -50,18 +50,57 @@ package body Landin.Checking.Spelling is
       return US.To_String (Text);
    end Atoms_Text;
 
-   function Nominal_Text (From : Tables; Id : Nominal_Type_Id) return String
+   function Declaration_Text
+     (From   : Tables;
+      Id     : Res.Declaration_Id;
+      Within : Landin.Source.Source_Id := Landin.Source.No_Source)
+      return String
+   is
+      Qualifier : constant String :=
+        Res.Qualifier_From
+          (From.Meanings.all, From.Spellings.all, Id, Within);
+   begin
+      return (if Qualifier = "" then "" else Qualifier & ".")
+        & Spelled (From, Res.Name_Of (From.Meanings.all, Id));
+   end Declaration_Text;
+
+   function Concept_Name
+     (From   : Tables;
+      Id     : Concept_Id;
+      Within : Landin.Source.Source_Id := Landin.Source.No_Source)
+      return String
+     --  The compiler's one concept is declared by no source.
+     is (if Is_Compiler_Concept (From.Types.all, Id) then "zeroable"
+         else Declaration_Text
+           (From, Concept_Declaration (From.Types.all, Id), Within));
+
+   function Nominal_Text
+     (From   : Tables;
+      Id     : Nominal_Type_Id;
+      Within : Landin.Source.Source_Id := Landin.Source.No_Source)
+      return String
    is
       Types : Table renames From.Types.all;
    begin
       if Is_Pointer_Union (Types, Id) then
          return "(" & Atoms_Text (From, Union_Atoms (Types, Id))
-           & " | " & Reference_Text (From, Union_Pointer (Types, Id)) & ")";
+           & " | " & Reference_Text (From, Union_Pointer (Types, Id), Within)
+           & ")";
       end if;
       declare
+         Template : constant Res.Declaration_Id := Template_Of (Types, Id);
+         --  Outside its module a private type is written by its public
+         --  alias, whose formals are its own in order.
+         Written : constant Res.Declaration_Id :=
+           (if not Res.Is_Public (From.Meanings.all, Template)
+              and then Public_Alias_Of (Types, Template) /= No_Declaration
+              and then Res.Qualifier_From
+                (From.Meanings.all, From.Spellings.all, Template, Within)
+                  /= ""
+            then Public_Alias_Of (Types, Template)
+            else Template);
          Text : US.Unbounded_String := US.To_Unbounded_String
-           (Spelled (From, Res.Name_Of
-              (From.Meanings.all, Template_Of (Types, Id))));
+           (Declaration_Text (From, Written, Within));
          Count : constant Natural := Instance_Actual_Count (Types, Id);
       begin
          for Position in 1 .. Count loop
@@ -80,11 +119,14 @@ package body Landin.Checking.Spelling is
                         US.Append (Text, Ty.Spelling (Scalar_Of (Types, Key)));
                      when Nominal_Actual_Type =>
                         US.Append
-                          (Text, Nominal_Text (From, Nominal_Of (Types, Key)));
+                          (Text,
+                           Nominal_Text
+                             (From, Nominal_Of (Types, Key), Within));
                      when Reference_Actual_Type =>
                         US.Append
                           (Text,
-                           Reference_Text (From, Reference_Of (Types, Key)));
+                           Reference_Text
+                             (From, Reference_Of (Types, Key), Within));
                      when Atom_Set_Actual_Type =>
                         US.Append
                           (Text, Atoms_Text (From, Atom_Set_Of (Types, Key)));
@@ -101,7 +143,11 @@ package body Landin.Checking.Spelling is
       end;
    end Nominal_Text;
 
-   function Shape_Text (From : Tables; Shape : Field_Shape) return String is
+   function Shape_Text
+     (From   : Tables;
+      Shape  : Field_Shape;
+      Within : Landin.Source.Source_Id := Landin.Source.No_Source)
+      return String is
    begin
       case Shape.Kind is
          when Scalar_Field =>
@@ -112,54 +158,63 @@ package body Landin.Checking.Spelling is
             end if;
             return Ty.Spelling (Shape.Element);
          when Reference_Field =>
-            return Reference_Text (From, Shape.Reference);
+            return Reference_Text (From, Shape.Reference, Within);
          when Aggregate_Field =>
-            return Nominal_Text (From, Shape.Nominal);
+            return Nominal_Text (From, Shape.Nominal, Within);
          when Fixed_Array_Field =>
             return "[" & Ada.Strings.Fixed.Trim
               (Element_Count'Image (Shape.Length), Ada.Strings.Both) & "]"
-              & Shape_Text (From, Array_Field_Element (From.Types.all, Shape));
+              & Shape_Text
+                  (From, Array_Field_Element (From.Types.all, Shape), Within);
          when Variant_Field =>
             return "variant";
       end case;
    end Shape_Text;
 
-   function Concept_Text (From : Tables; Id : Concept_Id) return String is
-     ("any " & Spelled (From, Res.Name_Of
-        (From.Meanings.all, Concept_Declaration (From.Types.all, Id))));
+   function Concept_Text
+     (From : Tables; Id : Concept_Id; Within : Landin.Source.Source_Id)
+      return String
+     is ("any " & Concept_Name (From, Id, Within));
 
    function Referent_Text
-     (From : Tables; Item : Reference_Descriptor) return String is
+     (From   : Tables;
+      Item   : Reference_Descriptor;
+      Within : Landin.Source.Source_Id := Landin.Source.No_Source)
+      return String is
    begin
       case Item.Referent is
          when Ty.Scalar_Name =>
             return Ty.Spelling (Item.Referent);
          when Ty.Aggregate =>
-            return Nominal_Text (From, Item.Nominal);
+            return Nominal_Text (From, Item.Nominal, Within);
          when Ty.Atom_Value =>
             return Atoms_Text (From, Item.Atoms);
          when Ty.Pointer_Value | Ty.Slice_Value =>
-            return Reference_Text (From, Item.Reference);
+            return Reference_Text (From, Item.Reference, Within);
          --  An erased referent records its concept, not a reference.
          when Ty.Any_Value =>
-            return Concept_Text (From, Item.Concept);
+            return Concept_Text (From, Item.Concept, Within);
          when Ty.Function_Value =>
             return "function";
          when Ty.Fixed_Array =>
             return "[" & Ada.Strings.Fixed.Trim
               (Element_Count'Image (Item.Length), Ada.Strings.Both) & "]"
               & (if Item.Element_Nominal /= No_Nominal_Type
-                 then Nominal_Text (From, Item.Element_Nominal)
+                 then Nominal_Text (From, Item.Element_Nominal, Within)
                  elsif Item.Element_Shape.Kind /= Scalar_Field
                    or else Item.Element_Shape.Atoms /= No_Atom_Set
-                 then Shape_Text (From, Item.Element_Shape)
+                 then Shape_Text (From, Item.Element_Shape, Within)
                  else Ty.Spelling (Item.Element));
          when others =>
             return "_";
       end case;
    end Referent_Text;
 
-   function Reference_Text (From : Tables; Id : Reference_Id) return String
+   function Reference_Text
+     (From   : Tables;
+      Id     : Reference_Id;
+      Within : Landin.Source.Source_Id := Landin.Source.No_Source)
+      return String
    is
       Item : constant Reference_Descriptor :=
         Descriptor_Of (From.Types.all, Id);
@@ -167,15 +222,25 @@ package body Landin.Checking.Spelling is
       if Item.View in Ty.Text_View then
          return Ty.Spelling (Item.View);
       end if;
+      --  D189: a pointer with one atom for its empty case is the union a
+      --  program writes as that atom and the pointer.
+      if Item.Kind = Ty.Pointer_Value
+        and then Item.Empty_Atom /= No_Declaration
+      then
+         return "(" & Spelled
+           (From, Res.Name_Of (From.Meanings.all, Item.Empty_Atom))
+           & " | ptr " & (if Item.Mutable then "mut " else "")
+           & Referent_Text (From, Item, Within) & ")";
+      end if;
       case Item.Kind is
          when Ty.Pointer_Value =>
             return "ptr " & (if Item.Mutable then "mut " else "")
-              & Referent_Text (From, Item);
+              & Referent_Text (From, Item, Within);
          when Ty.Slice_Value =>
             return "[]" & (if Item.Mutable then "mut " else "")
-              & Referent_Text (From, Item);
+              & Referent_Text (From, Item, Within);
          when Ty.Any_Value =>
-            return Concept_Text (From, Item.Concept);
+            return Concept_Text (From, Item.Concept, Within);
          when others =>
             return "_";
       end case;

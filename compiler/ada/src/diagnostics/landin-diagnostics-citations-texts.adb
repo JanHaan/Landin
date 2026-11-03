@@ -20975,6 +20975,15 @@ package body Landin.Diagnostics.Citations.Texts is
                & "ource still, so a generic routine nothing calls is not r"
                & "efused for any of them. [1290] says so, and [1350] says "
                & "that its rule is a generic type's.",
+            when 881 =>
+               "Chosen: when the missing concept refines others, L0318's"
+               & " note names, after [1290]'s rule, each refined concept t"
+               & "he type does conform to, in the order the concept's decl"
+               & "aration lists them: ""`fibre.whole` conforms to `fibre.sc"
+               & "heduler`, which `fibre.turns` refines, and not to `fibre"
+               & ".turns` itself"". A type that conforms to none of them, a"
+               & " concept with no parents, and a key with more than one i"
+               & "nput are noted as before.",
             when 139 =>
                "Chosen: `fixed if expression then declaration* (elsif ex"
                & "pression then declaration*)* (else declaration*)? end if"
@@ -21497,6 +21506,30 @@ package body Landin.Diagnostics.Citations.Texts is
                & "d from the one table the configuration stage and name re"
                & "solution both ask, so an atom a later target adds is ref"
                & "used without a second edit.",
+            when 880 =>
+               "Chosen: a refusal names a type or a concept as the sourc"
+               & "e it is reported in would write it. A declaration of tha"
+               & "t source's own module, or one a selected import binds, i"
+               & "s its name alone; one of a module the source imports is "
+               & "qualified by the name the import binds, the module's las"
+               & "t path segment or the alias an `as` gives (D201); one of"
+               & " a module the source does not import is qualified by the"
+               & " last segment, as an import would bind it. Outside its m"
+               & "odule, a private type is written by the first public ali"
+               & "as of its module, in declaration order, whose type is th"
+               & "e private one applied to the alias's own formals in orde"
+               & "r, so `cell_value(u32)` is `atomic.cell(u32)`. A pointer"
+               & " with one atom for its empty case is `(atom | ptr T)` (D"
+               & "189). A type whose identity is not yet interned, as one "
+               & "refused while its own actual is being built, keeps the w"
+               & "ords ""this concrete type"". The rule is one spelling, `La"
+               & "ndin.Checking.Spelling`, which every refusal of the shap"
+               & "e reads: L0318's missing conformance, L0319's erased pro"
+               & "vider, L0342's list of concepts, L0344's refused pointer"
+               & " and L0348's missing iterable conformance. A spelling ma"
+               & "de for no source, as the language server's hover and a p"
+               & "ointer union's interned name are, is unqualified, as bef"
+               & "ore.",
             when 267 =>
                "Chosen: `core/*` is the shared freestanding library. Eve"
                & "ry public interface of core/cmp, core/diag, core/fault, "
@@ -27120,6 +27153,40 @@ package body Landin.Diagnostics.Citations.Texts is
                & "job; D840 holds a runtime fixture naming rv32 to a corpu"
                & "s row those lanes execute, so the lane named is one that"
                & " runs it.",
+            when 882 =>
+               "Chosen: L0344's refusal of a pointer names the pointer a"
+               & "s the program writes it (D880), ""..., not `ptr mut atomi"
+               & "c.cell(u32)`"", and when its pointee is a type of `core/a"
+               & "tomic`, its note says the cell is read and written by it"
+               & "s own operations, `atomic.load(addr cell)` and `atomic.s"
+               & "tore(addr cell, value)` among them, qualified as the sou"
+               & "rce imports the module, and that a builtin takes a point"
+               & "er to a plain `u8`, `u16`, `u32` or `u64`. Every other r"
+               & "efused pointer keeps D227's note.",
+            when 883 =>
+               "Chosen: when a hosted check finds no [1970] entry, the l"
+               & "ine says it checked the source as a module and what a pr"
+               & "ogram needs instead: ""refine: checked FILE as a module a"
+               & "nd wrote nothing; a program to run or build needs `publi"
+               & "c main: () -> (code: i32)`"", with ""no program"" for ""noth"
+               & "ing"" when the check wrote a report it was asked for. A f"
+               & "irmware target's line is D731's, since its entry is name"
+               & "d by `--firmware-entry`, and a source with an entry keep"
+               & "s D731's line. The answer is the check's own, so it is t"
+               & "he same on every host.",
+            when 884 =>
+               "Chosen: an option without its value, given at the end or"
+               & " as `--debug=`, is refused naming the values it takes, """
+               & "--debug needs a value; it takes none, full or lines""; an"
+               & " option whose value is a name or a path is refused as be"
+               & "fore. An unknown option is answered by one function of t"
+               & "he catalogue, which the commands and the driver both ask"
+               & ": another compiler's spelling is answered with the optio"
+               & "n it means, `-g0` with `--debug=none`, `-g1` with `--deb"
+               & "ug=lines` and every other `-g` with `--debug=full`, `-O`"
+               & " with `--optimize` and `--version` with `--identify`, an"
+               & "d otherwise the nearest compilation option. `-g` is not "
+               & "accepted as an alias.",
             when 151 =>
                "Chosen: the repository-owned `core/mem` module declares "
                & "a private parameterized nominal `raw(item)` with an allo"

@@ -1,0 +1,9 @@
+class: negative
+summary: D500 a memory builtin given a pointer to a core/atomic cell is L0344 naming the pointer's type as written and the cell's own load and store
+program: main.ldn
+root: ../../../../..
+args: --target=linux-x86-64
+expect: expected.txt
+codes: L0344
+constructs: 1620
+targets: linux-x86-64

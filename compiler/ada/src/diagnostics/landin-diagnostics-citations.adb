@@ -1925,6 +1925,9 @@ package body Landin.Diagnostics.Citations is
             when 771 =>
                "A generic routine's body is checked for each instance a "
                & "call makes",
+            when 881 =>
+               "A missing composed conformance names the concepts it ref"
+               & "ines that the type has",
             when 139 =>
                "Fixed conditionals select module declarations without ex"
                & "ecution",
@@ -1973,6 +1976,9 @@ package body Landin.Diagnostics.Citations is
                & "nding every thread reads",
             when 855 =>
                "An option takes no configuration atom's name",
+            when 880 =>
+               "A refusal spells a type and a concept as the program rea"
+               & "ding it writes them",
             when 267 =>
                "Library source namespaces declare target availability",
             when 575 =>
@@ -2509,6 +2515,15 @@ package body Landin.Diagnostics.Citations is
             when 842 =>
                "The harness names the RV32 lanes for a fixture naming rv"
                & "32",
+            when 882 =>
+               "A memory builtin given an atomic cell names the cell's o"
+               & "perations",
+            when 883 =>
+               "The bare form says a source with no entry was checked as"
+               & " a module",
+            when 884 =>
+               "A missing option value names the values, and `-g` is ans"
+               & "wered rather than accepted",
             when 151 =>
                "Raw storage is a private library state machine",
             when 152 =>
@@ -3473,6 +3488,8 @@ package body Landin.Diagnostics.Citations is
                "Decisions: Concepts, generics and runtime dispatch",
             when 771 =>
                "Decisions: Concepts, generics and runtime dispatch",
+            when 881 =>
+               "Decisions: Concepts, generics and runtime dispatch",
             when 139 =>
                "Decisions: Modules and compile time",
             when 150 =>
@@ -3508,6 +3525,8 @@ package body Landin.Diagnostics.Citations is
             when 772 =>
                "Decisions: Modules and compile time",
             when 855 =>
+               "Decisions: Modules and compile time",
+            when 880 =>
                "Decisions: Modules and compile time",
             when 267 =>
                "Decisions: The toolchain, C and the machine",
@@ -3920,6 +3939,12 @@ package body Landin.Diagnostics.Citations is
             when 841 =>
                "Decisions: The toolchain, C and the machine",
             when 842 =>
+               "Decisions: The toolchain, C and the machine",
+            when 882 =>
+               "Decisions: The toolchain, C and the machine",
+            when 883 =>
+               "Decisions: The toolchain, C and the machine",
+            when 884 =>
                "Decisions: The toolchain, C and the machine",
             when 151 =>
                "Decisions: The core library and the derived programs",
@@ -5062,6 +5087,10 @@ package body Landin.Diagnostics.Citations is
             when 771 =>
                "https://www.701.dev/spec.html#d771-a-generic-routine-s-b"
                & "ody-is-checked-for-each-instance-a-call-makes",
+            when 881 =>
+               "https://www.701.dev/spec.html#d881-a-missing-composed-co"
+               & "nformance-names-the-concepts-it-refines-that-the-type-ha"
+               & "s",
             when 139 =>
                "https://www.701.dev/spec.html#d139-fixed-conditionals-se"
                & "lect-module-declarations-without-execution",
@@ -5118,6 +5147,9 @@ package body Landin.Diagnostics.Citations is
             when 855 =>
                "https://www.701.dev/spec.html#d855-an-option-takes-no-co"
                & "nfiguration-atom-s-name",
+            when 880 =>
+               "https://www.701.dev/spec.html#d880-a-refusal-spells-a-ty"
+               & "pe-and-a-concept-as-the-program-reading-it-writes-them",
             when 267 =>
                "https://www.701.dev/spec.html#d267-library-source-namesp"
                & "aces-declare-target-availability",
@@ -5766,6 +5798,16 @@ package body Landin.Diagnostics.Citations is
             when 842 =>
                "https://www.701.dev/spec.html#d842-the-harness-names-the"
                & "-rv32-lanes-for-a-fixture-naming-rv32",
+            when 882 =>
+               "https://www.701.dev/spec.html#d882-a-memory-builtin-give"
+               & "n-an-atomic-cell-names-the-cell-s-operations",
+            when 883 =>
+               "https://www.701.dev/spec.html#d883-the-bare-form-says-a-"
+               & "source-with-no-entry-was-checked-as-a-module",
+            when 884 =>
+               "https://www.701.dev/spec.html#d884-a-missing-option-valu"
+               & "e-names-the-values-and-g-is-answered-rather-than-accepte"
+               & "d",
             when 151 =>
                "https://www.701.dev/spec.html#d151-raw-storage-is-a-priv"
                & "ate-library-state-machine",

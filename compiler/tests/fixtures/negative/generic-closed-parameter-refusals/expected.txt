@@ -26,7 +26,7 @@ error[L0304]: an array literal takes no shape from a slice parameter whose eleme
   = note: the tour describes it at [0520]
   = note: this is a recorded source-form boundary
   = note: instead, bind it with the element type it means, `values: [2]E = [...]`, and pass the name
-error[L0342]: `any(pointer)` has more than one exact runtime concept: `u32` conforms to `formattable`, `equatable`, `hashable` and `ordered`
+error[L0342]: `any(pointer)` has more than one exact runtime concept: `u32` conforms to `text.formattable`, `cmp.equatable`, `cmp.hashable` and `cmp.ordered`
   --> ../tests/fixtures/negative/generic-closed-parameter-refusals/main.ldn:27:16
    |
 27 |     values := [any(addr a), any(addr b)]

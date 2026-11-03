@@ -76,6 +76,16 @@ package Landin.Commands.Catalogue is
    --  beside a request that prints and compiles nothing.
    function Given_Twice (Stem : String) return String;
    function Value_Problem (Flag : Option; Value : String) return String;
+
+   --  The values a valued option takes, "; it takes none, full or lines",
+   --  or "" for one whose value is a name or a path, so a refusal of a
+   --  missing value says what to write.
+   function Value_Choices (Flag : Option) return String;
+
+   --  What to offer for an option nobody defined, or "": the option meant
+   --  by another compiler's spelling, `--debug=full` for `-g`, and
+   --  otherwise the nearest compilation option.  Both readers ask it.
+   function Nearest_Option (Stem : String) return String;
    function Informational_Problem (Asked : String) return String;
 
    function Usage (Command : Action := Overview) return String;

@@ -1,6 +1,7 @@
 with Ada.Exceptions;
 with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
+with Landin.Backend.Entry_Point;
 with Landin.Build_Identity;
 with Landin.Commands.Bindings;
 with Landin.Commands.Catalogue;
@@ -191,7 +192,10 @@ package body Landin.Commands is
               and then Text (Text'First) = '-'
             then
                if not C.Known_Option (Stem) then
-                  Refuse ("unknown option: " & Text);
+                  Refuse ("unknown option: " & Text
+                    & (if C.Nearest_Option (Stem) = "" then ""
+                       else "; did you mean " & C.Nearest_Option (Stem)
+                            & "?"));
                else
                   declare
                      Flag : constant C.Option := C.Named_Option (Stem);
@@ -984,6 +988,16 @@ package body Landin.Commands is
                  (if US.Length (Named) = 0 then "" else " ")
                  & Shell_Word (Text));
             end loop;
+            --  A module with no entry is not a program either command
+            --  would build, so the line says what makes it one instead.
+            if Result.Without_Entry then
+               US.Append (Result.Report, "refine: checked "
+                 & US.To_String (Named) & " as a module and wrote "
+                 & (if Reported then "no program" else "nothing")
+                 & "; a program to run or build needs `"
+                 & Landin.Backend.Entry_Point.Required_Shape & "`" & LF);
+               return Result;
+            end if;
             US.Append (Result.Report, "refine: checked "
               & US.To_String (Named) & " and wrote "
               & (if Reported then "no program; " else "nothing; ")

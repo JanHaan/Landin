@@ -1,0 +1,10 @@
+error[L0342]: `any(pointer)` has more than one exact runtime concept: `thing` conforms to `display` and `text.formattable`
+  --> ../tests/fixtures/negative/any-construction-qualifies-library-concepts/main.ldn:29:15
+   |
+29 |     erased := any(addr item)
+   |               ^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/any-construction-qualifies-library-concepts/main.ldn:29:19
+   |
+29 |     erased := any(addr item)
+   |                   ^^^^^^^^^ the erased pointer
+  = note: [1380]: write the `any C` context that names one of them: a binding `name: any C = any(...)`, a list `name: [N]any C = [...]`, or a parameter of either type

@@ -1,4 +1,4 @@
-error[L0318]: this concrete type has no conformance to `outlet`
+error[L0318]: `cell` has no conformance to `outlet`
   --> ../tests/fixtures/negative/erased-construction-without-conformance/program.ldn:18:10
    |
 18 |     send(any(addr storage))

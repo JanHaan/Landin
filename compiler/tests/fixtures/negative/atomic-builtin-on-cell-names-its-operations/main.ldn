@@ -1,0 +1,12 @@
+--  D500: a core/atomic cell is a struct reached through its own
+--  operations, so a memory builtin given a pointer to one is refused, and
+--  the refusal names the cell's type and the operations that read and
+--  write it.
+import core/atomic
+
+public main: () -> (code: i32) =
+    mut word_cell: atomic.cell(u32) = zeroed
+    word: u32 = 1
+    compiler.atomic_store(addr word_cell, word, compiler.seq_cst)
+    code = i32(atomic.load(addr word_cell))
+end main

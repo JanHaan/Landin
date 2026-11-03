@@ -1685,6 +1685,19 @@ package Landin.Checking is
           Post => Landin.Source.Names."="
                     (Union_Spelling (Into, Id), Name);
 
+   --  The public name a program outside a private type's module writes
+   --  for it: the first public alias of that module, in declaration order,
+   --  whose type is the private one applied to the alias's own formals in
+   --  order, so `cell` for core/atomic's `cell_value` and `host` for
+   --  hosted/blocking's `blocking_value`.  The checker notes each one it
+   --  finds; No_Declaration for a type with none.
+   function Public_Alias_Of
+     (Of_Table : Table; Template : Declaration_Id) return Declaration_Id;
+
+   procedure Note_Public_Alias
+     (Into : in out Table; Template, Alias : Declaration_Id)
+     with Pre => Template /= No_Declaration and then Alias /= No_Declaration;
+
    --  The generic-struct checker can reconstruct a formal binding tuple from
    --  only its canonical nominal identity.  Traversal is bounded
    --  by the stored count and returns the same opaque keys accepted above.
@@ -2678,6 +2691,12 @@ private
       Hash            => Hash_Concept_Declaration,
       Equivalent_Keys => "=");
 
+   package Public_Alias_Maps is new Ada.Containers.Hashed_Maps
+     (Key_Type        => Declaration_Id,
+      Element_Type    => Declaration_Id,
+      Hash            => Hash_Concept_Declaration,
+      Equivalent_Keys => "=");
+
    package Concept_Id_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Concept_Id);
 
@@ -3012,6 +3031,8 @@ private
       Concepts : Concept_Vectors.Vector;
       --  Source declarations only; the compiler concept occupies position 1.
       Concept_Index : Concept_Maps.Map;
+      --  Each private template's public alias, by the template.
+      Public_Aliases : Public_Alias_Maps.Map;
       Conformances : Conformance_Vectors.Vector;
       --  The earliest row of each exactly spelled key, and in order every
       --  row whose key has no exact spelling.

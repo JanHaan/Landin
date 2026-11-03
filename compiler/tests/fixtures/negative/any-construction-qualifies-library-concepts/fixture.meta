@@ -1,0 +1,9 @@
+class: negative
+summary: L0342's list of a pointee's concepts spells each as the program writes it, a library concept with its module's import name
+program: main.ldn
+root: ../../../../..
+args: --target=linux-x86-64
+expect: expected.txt
+codes: L0342
+constructs: 1370, 1380
+targets: linux-x86-64

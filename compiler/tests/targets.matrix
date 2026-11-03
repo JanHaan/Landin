@@ -129,6 +129,7 @@ negative/anonymous-function-captures-local | linux-x86-64, linux-arm64, darwin-a
 negative/any-comparison-refused | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/any-concept-identity-mismatch | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/any-construction-needs-context | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/any-construction-qualifies-library-concepts | linux-x86-64
 negative/any-entry-not-bound-value | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/any-entry-not-object-safe | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/any-frame-origin-escape | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -230,6 +231,7 @@ negative/atom-union-as-a-type-argument-needs-a-name | linux-x86-64, linux-arm64,
 negative/atom-union-in-a-slice-needs-a-name | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/atom-union-measured-by-sizeof-needs-a-name | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/atom-union-member-not-atom | linux-x86-64, linux-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
+negative/atomic-builtin-on-cell-names-its-operations | linux-x86-64
 negative/atomic-builtin-rv32imc | rv32
 negative/atomic-cell-holds-unsigned-scalars | linux-x86-64
 negative/atomic-eight-byte-cell-cortex-m0 | cortex-m0
@@ -492,6 +494,7 @@ negative/foreign-elseif-is-named | linux-x86-64, linux-arm64, darwin-arm64, synt
 negative/foreign-fn-is-named | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/foreign-postfix-increment-is-named | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/foreign-star-pointer-is-named | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/format-float-names-its-type | linux-x86-64
 negative/frame-origin-loop-carried | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/frame-origin-loop-carried-three-steps | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/frame-origin-return | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

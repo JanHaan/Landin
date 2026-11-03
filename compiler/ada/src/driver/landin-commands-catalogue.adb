@@ -1,4 +1,5 @@
 with Ada.Strings.Fixed;
+with Landin.Diagnostics.Suggestions;
 with Landin.Diagnostics.Warning_Policy;
 
 package body Landin.Commands.Catalogue is
@@ -336,11 +337,51 @@ package body Landin.Commands.Catalogue is
       return US.To_String (Text);
    end Spoken;
 
+   function Value_Choices (Flag : Option) return String is
+     (if Values (Flag) = "" then ""
+      else "; it takes " & Spoken (Values (Flag)));
+
    function Value_Problem (Flag : Option; Value : String) return String is
-     (if Value = "" then Name (Flag) & " needs a value"
+     (if Value = "" then Name (Flag) & " needs a value" & Value_Choices (Flag)
       else Name (Flag) & " does not take `" & Value & "`"
-        & (if Values (Flag) = "" then ""
-           else "; it takes " & Spoken (Values (Flag))));
+        & Value_Choices (Flag));
+
+   function Nearest_Option (Stem : String) return String is
+      Offered : Landin.Diagnostics.Suggestions.Ranking;
+   begin
+      --  What other compilers spell these, which no edit distance
+      --  reaches.  A C compiler's `-g0` has no debug information and its
+      --  `-g1` line tables alone; every other `-g` is the whole of it.
+      if Stem in "--version" | "-v" | "-V" then
+         return "--identify";
+      elsif Stem = "-g0" then
+         return "--debug=none";
+      elsif Stem = "-g1" then
+         return "--debug=lines";
+      elsif Stem'Length >= 2
+        and then Stem (Stem'First .. Stem'First + 1) = "-g"
+      then
+         return "--debug=full";
+      elsif Stem in "--check" | "--format" then
+         return "`refine fmt --check` (checking needs no option)";
+      elsif Stem'Length >= 2
+        and then Stem (Stem'First .. Stem'First + 1) = "-O"
+      then
+         return "--optimize";
+      end if;
+      Landin.Diagnostics.Suggestions.Consider (Offered, Stem, "--help");
+      Landin.Diagnostics.Suggestions.Consider (Offered, Stem, "--identify");
+      for Flag in Option loop
+         if Compilation_Option (Flag) then
+            Landin.Diagnostics.Suggestions.Consider
+              (Offered, Stem, Name (Flag));
+         end if;
+      end loop;
+      if Landin.Diagnostics.Suggestions.Count (Offered) = 0 then
+         return "";
+      end if;
+      return Landin.Diagnostics.Suggestions.Nth (Offered, 1);
+   end Nearest_Option;
 
    function Informational_Problem (Asked : String) return String is
      (Asked & " prints and compiles nothing, so it takes no compilation"

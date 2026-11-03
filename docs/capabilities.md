@@ -211,8 +211,9 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   compiler's own host. A bare `refine program.ldn` checks and says that it
   wrote nothing, naming the commands that run and build what it checked,
   with the options that chose it, `run` for a hosted target and `compile`
-  with a firmware entry for a firmware target; `-q` silences that
-  line.
+  with a firmware entry for a firmware target, or, for a hosted source with
+  no `main`, that it checked a module and what a program needs; `-q`
+  silences that line.
 - The default target is the compiler's own host; cross-compilation names a
   `--target`. Bare source requests and `--emit=asm|exe` remain
   compatibility spellings, and `build` is reserved for future project

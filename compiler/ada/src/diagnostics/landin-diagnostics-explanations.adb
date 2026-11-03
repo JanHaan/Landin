@@ -20,7 +20,12 @@ package body Landin.Diagnostics.Explanations is
                & " that would overwrite a source or another output, or `re"
                & "fine explain` with a code no catalogue row holds. `refin"
                & "e --help` lists the options. The status is 2, which says"
-               & " the request and not a program was wrong."
+               & " the request and not a program was wrong. An option with"
+               & "out its value is told the values it takes, `--debug need"
+               & "s a value; it takes none, full or lines`, and an unknown"
+               & " one the nearest option, or the one another compiler's s"
+               & "pelling means here: `-g` is `--debug=full`, `-g1` `--deb"
+               & "ug=lines` and `-g0` `--debug=none`."
                & LF
                & LF
                & "An option that belongs to a command is written after it."
@@ -595,10 +600,13 @@ package body Landin.Diagnostics.Explanations is
                & "give one type `distinct` identity.",
             when Catalogue.Unsatisfied_Constraint =>
                "A type given for a formal lacks a conformance the formal"
-               & " requires [1290]. An `any C` provides C and every concep"
-               & "t C refines, and no other (D492): erase the provider as "
-               & "an `any` of the wanted concept where it is made. Its add"
-               & "ress is not erased again; pass the `any C` itself.",
+               & " requires [1290]. The refusal names the type and the con"
+               & "cept as the program writes them, `f64` and `text.formatt"
+               & "able`, and for a concept that refines others, those the "
+               & "type does conform to. An `any C` provides C and every co"
+               & "ncept C refines, and no other (D492): erase the provider"
+               & " as an `any` of the wanted concept where it is made. Its"
+               & " address is not erased again; pass the `any C` itself.",
             when Catalogue.Compiler_Conformance_Reserved =>
                "The compiler owns `zeroable` and its conformances, and t"
                & "he conformance by which an `any C` provides C and the co"
@@ -960,6 +968,13 @@ package body Landin.Diagnostics.Explanations is
                & " a builtin in an imported routine nothing calls refuses "
                & "nothing, and a module compiled with no `main` reaches ev"
                & "erything it holds."
+               & LF
+               & LF
+               & "A pointer the operation does not take is named as the pr"
+               & "ogram writes its type. A `core/atomic` cell is not a sca"
+               & "lar: it is read and written by its own operations, `atom"
+               & "ic.load` and `atomic.store` among them, and the refusal "
+               & "of a builtin given one names them."
                & LF
                & LF
                & "A `core/atomic` cell the target's atomics cannot carry i"

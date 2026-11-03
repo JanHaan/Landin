@@ -17714,12 +17714,61 @@ package body Landin.Stages.Checking is
       function Erased_Closure_Holds
         (Root, Wanted : Landin.Checking.Concept_Id) return Boolean;
 
+      --  A concept and a type as a person reading WITHIN writes them:
+      --  `text.formattable` and `ptr mut fibre.whole` in a program that
+      --  imports those modules, so a refusal names what its reader wrote.
       function Concept_Spelling
-        (Of_Concept : Landin.Checking.Concept_Id) return String
-      is (Spelled (Res.Name_Of
-            (Meanings.all,
-             Landin.Checking.Concept_Declaration
-               (Types.all, Of_Concept))));
+        (Of_Concept : Landin.Checking.Concept_Id;
+         Within     : Landin.Source.Source_Id) return String
+      is (Spelling.Concept_Name
+            ((Types => Types, Meanings => Meanings, Spellings => Spellings),
+             Of_Concept, Within));
+
+      --  "_" for a type whose identity is not interned yet, as a
+      --  constraint refused while its own actual is still being built.
+      function Type_Spelling
+        (Of_Type : Type_Descriptor;
+         Within  : Landin.Source.Source_Id) return String
+      is (if (Of_Type.Kind = Ty.Aggregate
+                and then not Landin.Checking.Holds
+                  (Types.all, Of_Type.Nominal))
+            or else (Of_Type.Kind in Ty.Pointer_Value | Ty.Slice_Value
+                     and then not Landin.Checking.Holds
+                       (Types.all, Of_Type.Reference))
+            or else (Of_Type.Kind = Ty.Atom_Value
+                     and then not Landin.Checking.Holds
+                       (Types.all, Of_Type.Atoms))
+            or else (Of_Type.Kind = Ty.Any_Value
+                     and then not Landin.Checking.Holds
+                       (Types.all, Of_Type.Concept))
+            or else (Of_Type.Kind = Ty.Fixed_Array
+                     and then Of_Type.Element_Nominal
+                       /= Landin.Checking.No_Nominal_Type
+                     and then not Landin.Checking.Holds
+                       (Types.all, Of_Type.Element_Nominal))
+          then "_"
+          else Spelling.Referent_Text
+            ((Types => Types, Meanings => Meanings, Spellings => Spellings),
+             (Referent        => Of_Type.Kind,
+              Nominal         => Of_Type.Nominal,
+              Length          => Of_Type.Length,
+              Element         => Of_Type.Element,
+              Element_Nominal => Of_Type.Element_Nominal,
+              Element_Shape   => Of_Type.Element_Shape,
+              Reference       => Of_Type.Reference,
+              Signature       => Of_Type.Signature,
+              Concept         => Of_Type.Concept,
+              Atoms           => Of_Type.Atoms,
+              others          => <>),
+             Within));
+
+      --  "`T`", or OTHERWISE for a type with no spelling.
+      function Named_Type
+        (Of_Type   : Type_Descriptor;
+         Within    : Landin.Source.Source_Id;
+         Otherwise : String := "this concrete type") return String
+      is (if Type_Spelling (Of_Type, Within) = "_" then Otherwise
+          else "`" & Type_Spelling (Of_Type, Within) & "`");
 
       function Erased_Closure_Holds
         (Root, Wanted : Landin.Checking.Concept_Id) return Boolean
@@ -19650,9 +19699,12 @@ package body Landin.Stages.Checking is
                            Source  => Syn.Source_Of (Of_Tree),
                            Where   => Syn.Where (Of_Tree, Node),
                            Message => "`any "
-                                      & Concept_Spelling (Target.Concept)
+                                      & Concept_Spelling
+                                          (Target.Concept,
+                                           Syn.Source_Of (Of_Tree))
                                       & "` already provides `"
-                                      & Concept_Spelling (Concept)
+                                      & Concept_Spelling
+                                          (Concept, Syn.Source_Of (Of_Tree))
                                       & "` through its own table",
                            Note    => "D492: the compiler supplies the"
                                       & " conformance by which an erased"
@@ -19837,8 +19889,72 @@ package body Landin.Stages.Checking is
            Concept_For (Of_Tree, Constraint);
          Existing : Landin.Checking.Conformance_Id :=
            Landin.Checking.No_Conformance;
+         --  Whoever reads the refusal reads it where the type was given.
+         Reader : constant Landin.Source.Source_Id := Application.Source;
+
+         --  "`f64` has no conformance to `text.formattable`".
+         function Lacks return String
+           is (Named_Type (Actual, Reader) & " has no conformance to `"
+               & Concept_Spelling (Concept, Reader) & "`");
+
+         --  For a concept that refines others, the ones the type does
+         --  conform to, which say why a composed concept is missing:
+         --  "; `fibre.whole` conforms to `fibre.scheduler`, which
+         --  `fibre.turns` refines, and not to `fibre.turns` itself".
+         function Parents_Held return String;
 
          function Parents_Hold return Boolean;
+
+         function Parents_Held return String is
+            Held : Ada.Strings.Unbounded.Unbounded_String;
+            Count : Natural := 0;
+         begin
+            if Landin.Checking.Actual_Count (Inputs) /= 0
+              or else Landin.Checking.Is_Compiler_Concept (Types.all, Concept)
+            then
+               return "";
+            end if;
+            declare
+               Declaration : constant Res.Declaration_Id :=
+                 Landin.Checking.Concept_Declaration (Types.all, Concept);
+               Concept_Tree : constant not null access constant Syn.Tree :=
+                 Tree_For (Res.Source_Of (Meanings.all, Declaration));
+               Concept_Node : constant Syn.Node_Id :=
+                 Res.Node_Of (Meanings.all, Declaration);
+            begin
+               for Parent in 1 .. Syn.Concept_Parent_Count
+                 (Concept_Tree.all, Concept_Node)
+               loop
+                  declare
+                     Refined : constant Landin.Checking.Concept_Id :=
+                       Concept_For
+                         (Concept_Tree.all,
+                          Syn.Nth_Concept_Parent
+                            (Concept_Tree.all, Concept_Node, Parent));
+                  begin
+                     if Refined /= Landin.Checking.No_Concept
+                       and then Landin.Checking.Find_Conformance
+                         (Types.all, Refined, Actual_For (Actual),
+                          Landin.Checking.Empty_Actuals)
+                           /= Landin.Checking.No_Conformance
+                     then
+                        Count := Count + 1;
+                        Ada.Strings.Unbounded.Append
+                          (Held,
+                           (if Count = 1 then "" else ", ")
+                           & "`" & Concept_Spelling (Refined, Reader) & "`");
+                     end if;
+                  end;
+               end loop;
+            end;
+            if Count = 0 then
+               return "";
+            end if;
+            return "; " & Named_Type (Actual, Reader) & " conforms to "
+              & Ada.Strings.Unbounded.To_String (Held) & ", which `"
+              & Concept_Spelling (Concept, Reader) & "` refines, and not to `"
+              & Concept_Spelling (Concept, Reader) & "` itself";
+         end Parents_Held;
 
          function Parents_Hold return Boolean is
             Good : Boolean := True;
@@ -19954,8 +20070,7 @@ package body Landin.Stages.Checking is
                  (Item    => Bad.Unsatisfied_Constraint,
                   Source  => Application.Source,
                   Where   => Application.Where,
-                  Message => "this concrete type has no conformance to `"
-                             & Spelled (Syn.Name (Of_Tree, Constraint)) & "`",
+                  Message => Lacks,
                   Note    => "[1290]: every constrained type actual must"
                              & " have one whole-program conformance",
                   Related => (if Required_At.Source = Landin.Source.No_Source
@@ -20923,8 +21038,7 @@ package body Landin.Stages.Checking is
               (Item    => Bad.Unsatisfied_Constraint,
                Source  => Application.Source,
                Where   => Application.Where,
-               Message => "this concrete type has no conformance to `"
-                          & Spelled (Syn.Name (Of_Tree, Constraint)) & "`",
+               Message => Lacks,
                Note    => "D500: an atomic cell holds a u8, u16, u32 or"
                           & " u64",
                Related => (if Required_At.Source = Landin.Source.No_Source
@@ -20943,20 +21057,20 @@ package body Landin.Stages.Checking is
             Where   => Application.Where,
             Message =>
               (if Actual.Kind = Ty.Any_Value
-               then "`any " & Concept_Spelling (Actual.Concept)
-                    & "` provides `" & Concept_Spelling (Actual.Concept)
+               then "`any " & Concept_Spelling (Actual.Concept, Reader)
+                    & "` provides `"
+                    & Concept_Spelling (Actual.Concept, Reader)
                     & "` and the concepts it refines, not `"
-                    & Spelled (Syn.Name (Of_Tree, Constraint)) & "`"
-               else "this concrete type has no conformance to `"
-                    & Spelled (Syn.Name (Of_Tree, Constraint)) & "`"),
+                    & Concept_Spelling (Concept, Reader) & "`"
+               else Lacks),
             Note    =>
               (if Actual.Kind = Ty.Any_Value
                then "D492: an erased value provides its own concept's"
                     & " closure; erase the provider as `any "
-                    & Spelled (Syn.Name (Of_Tree, Constraint))
+                    & Concept_Spelling (Concept, Reader)
                     & "` where it is made"
                else "[1290]: every constrained type actual must have one"
-                    & " whole-program conformance"),
+                    & " whole-program conformance" & Parents_Held),
             Related => (if Required_At.Source = Landin.Source.No_Source
                               then Syn.Origin (Of_Tree, Constraint)
                               else Required_At),
@@ -21200,7 +21314,8 @@ package body Landin.Stages.Checking is
          if Concept = Landin.Checking.No_Concept then
             if not Quiet_Missing then
                Report
-                 ("this type has no [1320] iterable conformance",
+                 (Named_Type (Actual, Syn.Source_Of (Of_Tree), "this type")
+                  & " has no [1320] iterable conformance",
                   "[1150]: a struct or `any C` traversal uses the named"
                   & " iterable evidence");
             end if;
@@ -21434,7 +21549,8 @@ package body Landin.Stages.Checking is
          if Matches = 0 then
             if not Quiet_Missing then
                Report
-                 ("this type has no [1320] iterable conformance",
+                 (Named_Type (Actual, Syn.Source_Of (Of_Tree), "this type")
+                  & " has no [1320] iterable conformance",
                   "[1150]: a struct or `any C` traversal selects one exact"
                   & " Cur and Item pair");
             end if;
@@ -24784,15 +24900,22 @@ package body Landin.Stages.Checking is
                   --  The refusal is said at the argument that breaks the
                   --  contract, or at the intrinsic's name when the whole
                   --  call does, beside the call.
+                  Contract_Note : constant String :=
+                    "[1620]/D227: a memory intrinsic's arguments state its"
+                    & " whole contract, and each must be one the intrinsic"
+                    & " takes";
                   function Refuse
-                    (Message : String; At_Node : Syn.Node_Id := Syn.No_Node)
+                    (Message : String; At_Node : Syn.Node_Id := Syn.No_Node;
+                     Note : String := Contract_Note)
                      return Ty.Type_Kind;
                   procedure Report_Into
                     (Message : String; At_Node : Syn.Node_Id;
-                     Into : in out Landin.Diagnostics.Diagnostic_List);
+                     Into : in out Landin.Diagnostics.Diagnostic_List;
+                     Note : String := Contract_Note);
                   procedure Report_Into
                     (Message : String; At_Node : Syn.Node_Id;
-                     Into : in out Landin.Diagnostics.Diagnostic_List) is
+                     Into : in out Landin.Diagnostics.Diagnostic_List;
+                     Note : String := Contract_Note) is
                   begin
                      Bad.Report
                        (Item => Bad.Memory_Contract,
@@ -24803,17 +24926,16 @@ package body Landin.Stages.Checking is
                             then Syn.Callee_Of (Of_Tree, Node)
                             else At_Node)),
                         Message => Message,
-                        Note => "[1620]/D227: a memory intrinsic's arguments"
-                                & " state its whole contract, and each must"
-                                & " be one the intrinsic takes",
+                        Note => Note,
                         Related => Syn.Origin (Of_Tree, Node),
                         Because => "this memory operation", Into => Into);
                   end Report_Into;
                   function Refuse
-                    (Message : String; At_Node : Syn.Node_Id := Syn.No_Node)
+                    (Message : String; At_Node : Syn.Node_Id := Syn.No_Node;
+                     Note : String := Contract_Note)
                      return Ty.Type_Kind is
                   begin
-                     Report_Into (Message, At_Node, Found);
+                     Report_Into (Message, At_Node, Found, Note);
                      return Kept (Ty.Ill_Typed);
                   end Refuse;
                   --  D564: a target's refusal, held against the call until
@@ -25087,9 +25209,53 @@ package body Landin.Stages.Checking is
                                 or else Ref.Referent not in
                                   Ty.U8 | Ty.U16 | Ty.U32 | Ty.U64
                               then
-                                 return Refuse
-                                   ("memory access needs an unsigned scalar"
-                                    & " pointer without a subtype", Arg);
+                                 declare
+                                    Reader : constant Landin.Source.Source_Id
+                                      := Syn.Source_Of (Of_Tree);
+                                    --  D500: a core/atomic cell is a
+                                    --  struct, reached through its own
+                                    --  operations rather than a builtin.
+                                    Cell : constant Res.Declaration_Id :=
+                                      (if Ref.Nominal
+                                            = Landin.Checking.No_Nominal_Type
+                                       then Res.No_Declaration
+                                       else Landin.Checking.Template_Of
+                                         (Types.all, Ref.Nominal));
+                                    In_Atomic : constant Boolean :=
+                                      Cell /= Res.No_Declaration
+                                      and then Res.Module_Path_Of
+                                        (Meanings.all, Cell) = "core/atomic";
+                                    Qualifier : constant String :=
+                                      (if not In_Atomic then ""
+                                       else Res.Qualifier_From
+                                         (Meanings.all, Spellings.all, Cell,
+                                          Reader));
+                                    Dotted : constant String :=
+                                      (if Qualifier = "" then ""
+                                       else Qualifier & ".");
+                                 begin
+                                    return Refuse
+                                      ("memory access needs an unsigned"
+                                       & " scalar pointer without a subtype,"
+                                       & " not `" & Spelling.Reference_Text
+                                         ((Types => Types,
+                                           Meanings => Meanings,
+                                           Spellings => Spellings),
+                                          Landin.Checking.Reference_Of
+                                            (Types.all, Of_Tree, Arg),
+                                          Reader) & "`",
+                                       Arg,
+                                       (if not In_Atomic then Contract_Note
+                                        else "D500: an atomic cell is read"
+                                          & " and written by its own"
+                                          & " operations, `" & Dotted
+                                          & "load(addr cell)` and `"
+                                          & Dotted
+                                          & "store(addr cell, value)` among"
+                                          & " them; a memory builtin takes a"
+                                          & " pointer to a plain u8, u16,"
+                                          & " u32 or u64"));
+                                 end;
                               elsif Landin.Memory.Writes (Op)
                                 and then not Ref.Mutable
                               then
@@ -26334,12 +26500,8 @@ package body Landin.Stages.Checking is
                                  end if;
                                  Last_Concept :=
                                    Ada.Strings.Unbounded.To_Unbounded_String
-                                     ("`" & Spelled
-                                        (Res.Name_Of
-                                           (Meanings.all,
-                                            Landin.Checking
-                                              .Concept_Declaration
-                                                (Types.all, Concept)))
+                                     ("`" & Concept_Spelling
+                                        (Concept, Syn.Source_Of (Of_Tree))
                                       & "`");
                               end if;
                            end;
@@ -26348,7 +26510,7 @@ package body Landin.Stages.Checking is
                           (Spelling.Referent_Text
                              ((Types => Types, Meanings => Meanings,
                                Spellings => Spellings),
-                              Descriptor));
+                              Descriptor, Syn.Source_Of (Of_Tree)));
                      end;
                   end if;
                   if Count = 1 then
@@ -41271,6 +41433,82 @@ package body Landin.Stages.Checking is
 
       Landin.Checking.Prepare
         (Types.all, Trees.all, Meanings.all, Spellings.all);
+
+      --  A private type's public alias, the name a refusal outside its
+      --  module spells it by: `public host: type = blocking_value`, or
+      --  `public cell: type (item: type) = cell_value(item)`, whose
+      --  arguments are its own formals in order.
+      for Id in Res.Declaration_Id'(1)
+                .. Res.Declaration_Id (Res.Declaration_Count (Meanings.all))
+      loop
+         if Res.Sort_Of (Meanings.all, Id) = Res.Module_Type
+           and then Res.Is_Public (Meanings.all, Id)
+           and then Landin.Configuration.Is_Active
+             (Configurations (Context).all, Res.Source_Of (Meanings.all, Id),
+              Res.Node_Of (Meanings.all, Id))
+         then
+            declare
+               Of_Tree : constant not null access constant Syn.Tree :=
+                 Tree_For (Res.Source_Of (Meanings.all, Id));
+               Declaration : constant Syn.Node_Id :=
+                 Res.Node_Of (Meanings.all, Id);
+               Written : constant Syn.Node_Id :=
+                 Syn.Declared_Type (Of_Tree.all, Declaration);
+               Formals : constant Natural :=
+                 Syn.Type_Formal_Count (Of_Tree.all, Declaration);
+               Applied : Syn.Node_Id := Written;
+               In_Order : Boolean := Formals = 0;
+            begin
+               if Written /= Syn.No_Node
+                 and then Syn.Kind (Of_Tree.all, Written)
+                   = Syn.Type_Application
+               then
+                  Applied := Syn.Applied_Type (Of_Tree.all, Written);
+                  In_Order := Syn.Type_Argument_Count (Of_Tree.all, Written)
+                    = Formals;
+                  for Index in 1 .. Formals loop
+                     exit when not In_Order;
+                     declare
+                        Argument : constant Syn.Node_Id :=
+                          Syn.Nth_Type_Argument
+                            (Of_Tree.all, Written, Index);
+                     begin
+                        In_Order :=
+                          Res.Verdict_Of (Meanings.all, Of_Tree.all, Argument)
+                            = Res.Bound
+                          and then Res.Bound_To
+                            (Meanings.all, Of_Tree.all, Argument)
+                            = Declaration_At
+                                (Syn.Source_Of (Of_Tree.all),
+                                 Syn.Nth_Type_Formal
+                                   (Of_Tree.all, Declaration, Index));
+                     end;
+                  end loop;
+               end if;
+               if In_Order and then Applied /= Syn.No_Node
+                 and then Syn.Kind (Of_Tree.all, Applied)
+                   in Syn.Type_Name | Syn.Type_Reference
+                 and then Res.Verdict_Of (Meanings.all, Of_Tree.all, Applied)
+                   = Res.Bound
+               then
+                  declare
+                     Target : constant Res.Declaration_Id :=
+                       Res.Bound_To (Meanings.all, Of_Tree.all, Applied);
+                  begin
+                     if Res.Sort_Of (Meanings.all, Target) = Res.Module_Type
+                       and then not Res.Is_Public (Meanings.all, Target)
+                       and then Res."="
+                         (Res.Scope_Of (Meanings.all, Target),
+                          Res.Scope_Of (Meanings.all, Id))
+                     then
+                        Landin.Checking.Note_Public_Alias
+                          (Types.all, Target, Id);
+                     end if;
+                  end;
+               end if;
+            end;
+         end if;
+      end loop;
 
       --  First intern every active concept identity, then validate and
       --  register concrete source conformances.  This order is whole-program
