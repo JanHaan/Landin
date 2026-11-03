@@ -99,7 +99,11 @@ option, an option without its value or repeated where it may not be, or a
 combination the driver refuses, such as `--emit` with no source, an output
 that would overwrite a source or another output, or `refine explain` with a
 code no catalogue row holds. `refine --help` lists the options. The status is
-2, which says the request and not a program was wrong.
+2, which says the request and not a program was wrong. An option without its
+value is told the values it takes, `--debug needs a value; it takes none,
+full or lines`, and an unknown one the nearest option, or the one another
+compiler's spelling means here: `-g` is `--debug=full`, `-g1`
+`--debug=lines` and `-g0` `--debug=none`.
 
 An option that belongs to a command is written after it. One written before
 its command, or with no command at all, is refused naming the commands it

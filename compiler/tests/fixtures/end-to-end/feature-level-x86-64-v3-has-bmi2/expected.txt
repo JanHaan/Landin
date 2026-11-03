@@ -1,1 +1,1 @@
-refine: checked ../tests/fixtures/end-to-end/feature-level-x86-64-v3-has-bmi2/main.ldn and wrote nothing; run it with `refine run --target=linux-x86-64 --level=x86-64-v3 ../tests/fixtures/end-to-end/feature-level-x86-64-v3-has-bmi2/main.ldn`, or build it with `refine compile --target=linux-x86-64 --level=x86-64-v3 ../tests/fixtures/end-to-end/feature-level-x86-64-v3-has-bmi2/main.ldn -o main`
+refine: checked ../tests/fixtures/end-to-end/feature-level-x86-64-v3-has-bmi2/main.ldn as a module and wrote nothing; a program to run or build needs `public main: () -> (code: i32)`

@@ -1133,6 +1133,22 @@ package body Landin.Tests.Commands_Suite is
              "main.ldn"],
             ["--target=linux-x86-64", "--target=linux-arm64", "main.ldn"],
             Cat.Given_Twice ("--target"));
+      --  A missing value is answered with the values, and a C compiler's
+      --  `-g` with the option that gives what it asked for.
+      Same (["compile", "main.ldn", "--debug"], ["main.ldn", "--debug="],
+            "--debug needs a value");
+      Same (["compile", "main.ldn", "--debug"], ["main.ldn", "--debug="],
+            "; it takes none, full or lines");
+      Same (["compile", "-g", "main.ldn"], ["-g", "main.ldn"],
+            "unknown option: -g; did you mean --debug=full?");
+      Same (["compile", "-g1", "main.ldn"], ["-g1", "main.ldn"],
+            "unknown option: -g1; did you mean --debug=lines?");
+      Same (["compile", "-g0", "main.ldn"], ["-g0", "main.ldn"],
+            "unknown option: -g0; did you mean --debug=none?");
+      Landin.Testing.Check_Equal
+        (Item, Cat.Value_Problem (Cat.Debug, ""),
+         "--debug needs a value; it takes none, full or lines",
+         "a missing value names the values");
       Landin.Testing.Check_Equal
         (Item, Landin.Driver.Usage, Cat.Usage,
          "the driver's usage is the catalogue's overview");
@@ -1252,6 +1268,20 @@ package body Landin.Tests.Commands_Suite is
             "refine: checked firmware.ldn and wrote nothing; build it with"
             & " `refine compile --target=cortex-m0 --firmware-entry=start"
             & " firmware.ldn -o firmware`" & ASCII.LF);
+      --  A module with no `main` is not offered to `run` or `compile`,
+      --  which would refuse it; the line says what it lacks.
+      Host.Add_File ("lib.ldn",
+        "public lib: () -> (n: u32) =" & ASCII.LF & "    n = 1"
+        & ASCII.LF & "end lib" & ASCII.LF);
+      Said (["lib.ldn"],
+            "refine: checked lib.ldn as a module and wrote nothing; a"
+            & " program to run or build needs `public main: () -> (code:"
+            & " i32)`" & ASCII.LF);
+      Said (["--target=linux-arm64", "lib.ldn",
+             "--build-report=report.json"],
+            "refine: checked lib.ldn as a module and wrote no program; a"
+            & " program to run or build needs `public main: () -> (code:"
+            & " i32)`" & ASCII.LF);
       Host.Add_File ("my game.ldn", Source);
       Said (["my game.ldn"],
             "refine: checked 'my game.ldn' and wrote nothing; run it with"

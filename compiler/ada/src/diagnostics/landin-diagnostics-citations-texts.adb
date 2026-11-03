@@ -26959,6 +26959,30 @@ package body Landin.Diagnostics.Citations.Texts is
                & "rce imports the module, and that a builtin takes a point"
                & "er to a plain `u8`, `u16`, `u32` or `u64`. Every other r"
                & "efused pointer keeps D227's note.",
+            when 883 =>
+               "Chosen: when a hosted check finds no [1970] entry, the l"
+               & "ine says it checked the source as a module and what a pr"
+               & "ogram needs instead: ""refine: checked FILE as a module a"
+               & "nd wrote nothing; a program to run or build needs `publi"
+               & "c main: () -> (code: i32)`"", with ""no program"" for ""noth"
+               & "ing"" when the check wrote a report it was asked for. A f"
+               & "irmware target's line is D731's, since its entry is name"
+               & "d by `--firmware-entry`, and a source with an entry keep"
+               & "s D731's line. The answer is the check's own, so it is t"
+               & "he same on every host.",
+            when 884 =>
+               "Chosen: an option without its value, given at the end or"
+               & " as `--debug=`, is refused naming the values it takes, """
+               & "--debug needs a value; it takes none, full or lines""; an"
+               & " option whose value is a name or a path is refused as be"
+               & "fore. An unknown option is answered by one function of t"
+               & "he catalogue, which the commands and the driver both ask"
+               & ": another compiler's spelling is answered with the optio"
+               & "n it means, `-g0` with `--debug=none`, `-g1` with `--deb"
+               & "ug=lines` and every other `-g` with `--debug=full`, `-O`"
+               & " with `--optimize` and `--version` with `--identify`, an"
+               & "d otherwise the nearest compilation option. `-g` is not "
+               & "accepted as an alias.",
             when 151 =>
                "Chosen: the repository-owned `core/mem` module declares "
                & "a private parameterized nominal `raw(item)` with an allo"

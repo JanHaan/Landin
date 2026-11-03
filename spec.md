@@ -24680,6 +24680,61 @@ operations to find them again.
 
 **Pinned by** `negative/atomic-builtin-on-cell-names-its-operations`.
 
+### D883 — The bare form says a source with no entry was checked as a module
+
+**D731 said** that bare `refine FILE` closes by naming `refine run` and
+`refine compile` for what it checked. For a hosted source with no
+`public main`, a library module or a program still being written, both
+commands it named refused the same file as L0502.
+
+**Chosen:** when a hosted check finds no [1970] entry, the line says it
+checked the source as a module and what a program needs instead: "refine:
+checked FILE as a module and wrote nothing; a program to run or build needs
+`public main: () -> (code: i32)`", with "no program" for "nothing" when the
+check wrote a report it was asked for. A firmware target's line is D731's,
+since its entry is named by `--firmware-entry`, and a source with an entry
+keeps D731's line. The answer is the check's own, so it is the same on every
+host.
+
+**The alternatives:** dropping the line for a module, which leaves the
+reader who expected an executable without a word; and keeping D731's
+commands with a warning that they will refuse, which names two commands
+that cannot work.
+
+**Pinned by** the commands case `the bare form says it only checked`, with a
+module and a module checked with a report, and the re-recorded closing lines
+of the `end-to-end/feature-level-*` fixtures on hosted targets, whose
+sources have no `main`.
+
+### D884 — A missing option value names the values, and `-g` is answered rather than accepted
+
+**D565 said** that the catalogue writes the sentence for a value an option
+does not take, naming the values it does. A missing value was "--debug
+needs a value" with no values, and `-g`, which a C programmer writes first,
+was "unknown option: -g" from the commands, though the driver's own parse
+already suggested `--debug=full` for it.
+
+**Chosen:** an option without its value, given at the end or as `--debug=`,
+is refused naming the values it takes, "--debug needs a value; it takes
+none, full or lines"; an option whose value is a name or a path is refused
+as before. An unknown option is answered by one function of the catalogue,
+which the commands and the driver both ask: another compiler's spelling is
+answered with the option it means, `-g0` with `--debug=none`, `-g1` with
+`--debug=lines` and every other `-g` with `--debug=full`, `-O` with
+`--optimize` and `--version` with `--identify`, and otherwise the nearest
+compilation option. `-g` is not accepted as an alias.
+
+**The alternatives:** accepting `-g` as `--debug=full`, as `-LDIR` is
+accepted for `-L DIR` (D524), which was declined: a C compiler's `-g`
+takes levels and formats, `-g3` and `-gdwarf-4` among them, that `--debug`
+does not, and an alias that takes some of them invites the rest; and
+suggesting in the commands' parse alone, which leaves the driver's callers
+with a second answer.
+
+**Pinned by** the commands case `option requirements are one`, which holds
+the commands' parse and the driver to the same answers for a missing
+`--debug` value, `-g`, `-g1` and `-g0`.
+
 ## DECISIONS: THE CORE LIBRARY AND THE DERIVED PROGRAMS
 
 These were taken while writing `core` and the derived programs, and most

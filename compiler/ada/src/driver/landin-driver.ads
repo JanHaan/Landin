@@ -58,6 +58,9 @@ package Landin.Driver is
       Launch_Program   : Ada.Strings.Unbounded.Unbounded_String;
       Launch_Arguments : Landin.Platform.Path_List;
       Launch_Directory : Ada.Strings.Unbounded.Unbounded_String;
+      --  A check of a hosted program that found no [1970] entry: a module
+      --  that neither `refine run` nor `refine compile` would build.
+      Without_Entry : Boolean := False;
    end record;
 
    --  Host and Tools are the only ways this reaches a disk or a process,

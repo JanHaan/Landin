@@ -20,7 +20,12 @@ package body Landin.Diagnostics.Explanations is
                & " that would overwrite a source or another output, or `re"
                & "fine explain` with a code no catalogue row holds. `refin"
                & "e --help` lists the options. The status is 2, which says"
-               & " the request and not a program was wrong."
+               & " the request and not a program was wrong. An option with"
+               & "out its value is told the values it takes, `--debug need"
+               & "s a value; it takes none, full or lines`, and an unknown"
+               & " one the nearest option, or the one another compiler's s"
+               & "pelling means here: `-g` is `--debug=full`, `-g1` `--deb"
+               & "ug=lines` and `-g0` `--debug=none`."
                & LF
                & LF
                & "An option that belongs to a command is written after it."

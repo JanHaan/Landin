@@ -2472,6 +2472,12 @@ package body Landin.Diagnostics.Citations is
             when 882 =>
                "A memory builtin given an atomic cell names the cell's o"
                & "perations",
+            when 883 =>
+               "The bare form says a source with no entry was checked as"
+               & " a module",
+            when 884 =>
+               "A missing option value names the values, and `-g` is ans"
+               & "wered rather than accepted",
             when 151 =>
                "Raw storage is a private library state machine",
             when 152 =>
@@ -3853,6 +3859,10 @@ package body Landin.Diagnostics.Citations is
             when 791 =>
                "Decisions: The toolchain, C and the machine",
             when 882 =>
+               "Decisions: The toolchain, C and the machine",
+            when 883 =>
+               "Decisions: The toolchain, C and the machine",
+            when 884 =>
                "Decisions: The toolchain, C and the machine",
             when 151 =>
                "Decisions: The core library and the derived programs",
@@ -5653,6 +5663,13 @@ package body Landin.Diagnostics.Citations is
             when 882 =>
                "https://www.701.dev/spec.html#d882-a-memory-builtin-give"
                & "n-an-atomic-cell-names-the-cell-s-operations",
+            when 883 =>
+               "https://www.701.dev/spec.html#d883-the-bare-form-says-a-"
+               & "source-with-no-entry-was-checked-as-a-module",
+            when 884 =>
+               "https://www.701.dev/spec.html#d884-a-missing-option-valu"
+               & "e-names-the-values-and-g-is-answered-rather-than-accepte"
+               & "d",
             when 151 =>
                "https://www.701.dev/spec.html#d151-raw-storage-is-a-priv"
                & "ate-library-state-machine",
