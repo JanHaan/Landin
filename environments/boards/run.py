@@ -8,14 +8,18 @@ Arguments after -- go to the board tool. The rigpi tool owns the rig lock
 and all hardware operations. Remote files are retained with their paths in
 transfer.json; local output retains the prepared bundle, source, command
 logs and the board run's complete output, including failed runs.
+--record LOCAL_PATH retrieves the board tool's passed record without
+replacing an existing local file. RAM records cannot be named record.json.
 """
 import argparse
 import json
+import os
 from pathlib import Path
 import re
 import shlex
 import subprocess
 import sys
+import tempfile
 import time
 
 HERE = Path(__file__).resolve().parent
@@ -42,8 +46,17 @@ def execute(args, board_args=()):
     # another image/mode or replace the retained output path.
     reserved = ('--bundle', '--mode', '--output', '--refine', '--record')
     for value in board_args:
-        if any(value == key or value.startswith(key + '=') for key in reserved):
+        option = value.split('=', 1)[0]
+        # argparse in the board tools also accepts option abbreviations.
+        if option.startswith('--') and any(key.startswith(option) for key in reserved):
             raise bundle.Invalid('%s is controlled by the wrapper' % value)
+    record = getattr(args, 'record', None)
+    if record is not None:
+        record = Path(record).expanduser().absolute()
+        if args.mode == 'ram' and record.name == 'record.json':
+            raise bundle.Invalid('RAM evidence is separate: use --record=ram-record.json')
+        if record.exists() or record.is_symlink():
+            raise bundle.Invalid('refusing to replace existing record: %s' % record)
     output = args.output.resolve()
     bundle.check_output(output, build.ROOT)
     output.mkdir(parents=True, exist_ok=False)
@@ -74,16 +87,52 @@ def execute(args, board_args=()):
     tool = remote + '/prepared/source/environments/boards/' + args.board + '/board.py'
     command = ['python3', tool, '--mode=' + args.mode,
                '--bundle=' + remote + '/prepared/bundle', '--output=' + remote + '/result'] + list(board_args)
+    remote_record = remote + ('/ram-record.json' if args.mode == 'ram' else '/record.json')
+    if record is not None:
+        command.append('--record=' + remote_record)
     status = transport(ssh + [shlex.join(command)], output / 'remote-run.log')
     copied = transport(scp + ['-r', args.host + ':' + remote + '/result', output / 'rigpi'],
                        output / 'retrieve.log')
+    record_failed = False
+    if record is not None:
+        transfer.update(record_path=str(record), record_status='skipped')
+        if status == 0:
+            try:
+                incoming = output / 'record-transfer'
+                incoming.mkdir()
+                staged_record = incoming / Path(remote_record).name
+                retrieved = transport(scp + [args.host + ':' + remote_record, staged_record],
+                                      output / 'record-retrieve.log')
+                transfer['record_retrieval_status'] = retrieved
+                if retrieved:
+                    raise bundle.Invalid('record copy failed; see record-retrieve.log')
+                if staged_record.is_symlink() or not staged_record.is_file():
+                    raise bundle.Invalid('record copy produced no regular record file')
+                data = staged_record.read_bytes()
+                kept = json.loads(data)
+                if not isinstance(kept, dict) or kept.get('status') != 'passed' or kept.get('mode') != args.mode:
+                    raise bundle.Invalid('the retrieved record is not a passed %s run' % args.mode)
+                record.parent.mkdir(parents=True, exist_ok=True)
+                # Publish complete bytes with an exclusive link on the same
+                # filesystem. A raced-in destination is never replaced, and a
+                # failed write never leaves a partial record under its name.
+                with tempfile.NamedTemporaryFile(dir=record.parent, prefix='.landin-record-') as destination:
+                    destination.write(data)
+                    destination.flush()
+                    os.link(destination.name, record)
+                transfer['record_status'] = 'written'
+            except (OSError, ValueError) as error:
+                record_failed = True
+                transfer.update(record_status='failed', record_error=str(error))
     transfer.update(exit_status=status, retrieval_status=copied,
                     elapsed_seconds=round(time.monotonic() - started, 3))
     (output / 'transfer.json').write_text(json.dumps(transfer, indent=2) + '\n')
     print('%s %s: %s; results %s; remote %s:%s' %
-          (args.board, args.mode, 'passed' if status == 0 and copied == 0 else 'failed',
+          (args.board, args.mode, 'passed' if status == 0 and copied == 0 and not record_failed else 'failed',
            output, args.host, remote))
-    return status if status else int(copied != 0)
+    if record_failed:
+        print('record failed: ' + transfer['record_error'])
+    return status if status else int(copied != 0 or record_failed)
 
 
 def main(argv=None):
@@ -98,6 +147,7 @@ def main(argv=None):
     parser.add_argument('--mode', choices=('ram', 'boot'), default='ram')
     parser.add_argument('--refine', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--record', type=Path, help="copy the tool's passed record to a new local file")
     parser.add_argument('--host', default='jan@10.42.0.60')
     parser.add_argument('--identity', type=Path, default=Path('~/.ssh/epycmicro-2026-09-17'))
     args = parser.parse_args(arguments)
