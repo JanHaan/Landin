@@ -201,6 +201,31 @@ class PlumbingControls(unittest.TestCase):
                         Path(scratch) / "area")
         self.assertIn("assembly is not deterministic", str(raised.exception))
 
+    def link(self, image_of):
+        """`linked_image` over a fake link: one assembly, the given images."""
+        calls = {"n": 0}
+
+        def linking(refine, source, output, **kwargs):
+            calls["n"] += 1
+            Path(output).write_bytes(image_of(calls["n"]))
+            Path(str(output) + ".s").write_bytes(b"\t.file \"landin\"\n")
+
+        with tempfile.TemporaryDirectory() as scratch:
+            with unittest.mock.patch.object(CHECK, "compile", linking):
+                return CHECK.linked_image(
+                    Path("refine"), Path("main.ldn"), "linux-x86-64",
+                    Path(scratch) / "area", "probe")
+
+    def test_two_links_of_one_assembly_must_be_one_image(self):
+        #  The six bytes of a driver's `ccXXXXXX.o`, as they were before
+        #  D810, are no longer a residue to report but a failure.
+        with self.assertRaises(CHECK.Failure) as raised:
+            self.link(lambda n: b"\x7fELF image cc%s.o"
+                      % (b"y2kgoE", b"od9j6R")[n - 1])
+        self.assertIn("differ in 6 image bytes", str(raised.exception))
+        self.assertEqual(self.link(lambda n: b"\x7fELF image")["image_bytes"],
+                         len(b"\x7fELF image"))
+
 
 class ContractControls(unittest.TestCase):
     def test_every_target_declares_a_debug_flag(self):

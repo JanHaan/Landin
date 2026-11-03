@@ -142,6 +142,23 @@ package body Landin.Backend.Toolchain is
       return "";
    end Identity_Section;
 
+   function File_Symbol (Facts : Landin.Targets.Target_Facts) return String
+   is
+   begin
+      if Landin.Targets.Capabilities.Hosted_System_Of (Facts)
+        = Landin.Targets.Capabilities.No_Hosted_System
+        or else Landin.Targets.Capabilities.Backend_For (Facts)
+          = Landin.Targets.Capabilities.Darwin_Arm64_Mach_O
+      then
+         --  Mach-O has no file symbol and ld64 makes none; a firmware
+         --  link reads the object refine assembled, named for its output.
+         return "";
+      end if;
+      --  The name is a constant rather than a source's, because assembly
+      --  without debugging records nothing about where it was built.
+      return Character'Val (9) & ".file ""landin""" & Character'Val (10);
+   end File_Symbol;
+
    function Debug_Artifacts
      (Output : String; Facts : Landin.Targets.Target_Facts;
       Host : Landin.Platform.Filesystem'Class)

@@ -531,16 +531,23 @@ and in what order they run.
 | source/panic map (`*.sources.json`) | equivalent closures with source-path spelling fixed; also compilation directory fixed when `--debug` is set | caller-spelled paths, a library file's as `/landin-library/` and its module path wherever the library is (D422), a build identity hashed over the file entries and assembly, and the SHA-256 of the final assembly |
 | `--debug=full`, `--debug=lines` assembly | equivalent closures with the compilation directory and source spelling fixed | DWARF `comp_dir` and `.file`, a library file's under `/landin-library/` (D422), and the build identity hashed over them |
 | Cortex-M device fixture ELF, object, assembly, linker script and linker map | paired builds with fixed source-path spelling in [`devices.py`](../environments/cortex-m/devices.py) | — |
-| hosted linked executable | **not claimed** | the platform driver's own temporary object name |
+| hosted linked executable without `--debug` | equivalent closures with the output file name and the host's toolchain fixed | a file symbol named `landin` on an ELF target (D810) |
 
-The last row is measured, not assumed. On the pinned Linux toolchain two links
-of one unchanged assembly differ in six bytes, in the same directory and from
-the same command, because `x86_64-pc-linux-gnu-gcc` writes its random
-temporary object name (`ccXXXXXX.o`) into the symbol table, and the Linux
-arm64 driver does the same. Darwin's came out identical, which is one
-toolchain's tidiness rather than a contract. The gate therefore checks that the assembly the link consumed was byte-identical and
-reports the image residue; a reproducible hosted image belongs to the
-release readiness successor.
+The last row was measured before it was claimed. On the pinned Linux
+toolchain two links of one unchanged assembly differed in six bytes, in the
+same directory and from the same command: the GNU driver assembles to a
+temporary object with a random name (`ccXXXXXX.o`), and GNU ld gives an input
+without a file symbol one named after its object, and the Linux arm64 driver
+did the same. D810 names the file symbol in the assembly of every
+hosted ELF target, so the linker has nothing to name, and the gate requires
+both the assembly the link consumed and the image to be byte-identical, linked
+in two directories. Darwin's object has no file symbol and its image came out
+identical before; the output's name stays fixed there because Apple's linker
+signs the image and names it in the signature. The image is the platform
+driver's work, so it is claimed on one host's toolchain and not across hosts,
+and with `--debug` it records the compilation directory as the debug assembly
+does. Firmware is assembled by refine into an object named for its output,
+which the Cortex-M device check below builds twice.
 
 The debug row is a declared record and not a defect: `comp_dir` and `.file`
 are how a debugger finds source, and the panic map resolves an off-target

@@ -26640,6 +26640,21 @@ package body Landin.Diagnostics.Citations.Texts is
                & "pt counts wherever the call is, and on a hosted Linux ta"
                & "rget the vDSO's clock, a foreign call, still opens a tas"
                & "k that may reach it.",
+            when 810 =>
+               "Chosen: the assembly of every hosted ELF target ends wit"
+               & "h `.file ""landin""`, the toolchain adapter's line, so the"
+               & " object carries a file symbol and the linker makes none."
+               & " The name is a constant, not a source's, because assembl"
+               & "y without debugging records nothing about where it was b"
+               & "uilt. A Darwin object has no file symbol and ld64 makes "
+               & "none, and a firmware link reads the object refine assemb"
+               & "led itself, named for its output, so neither changes. A "
+               & "linked hosted image without `--debug` is then the same b"
+               & "ytes for equivalent closures with the output's name fixe"
+               & "d, on one host's toolchain; Darwin's linker names the ou"
+               & "tput in the signature it gives the image. An assembly op"
+               & "erand (D362) is linked as it is written, so its own `.fi"
+               & "le`, or its want of one, is its author's.",
             when 151 =>
                "Chosen: the repository-owned `core/mem` module declares "
                & "a private parameterized nominal `raw(item)` with an allo"

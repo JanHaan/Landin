@@ -2,6 +2,7 @@ with Landin.Backend.X86_64;
 with Landin.Backend.Arm64;
 with Landin.Backend.RiscV;
 with Landin.Backend.Cortex_M;
+with Landin.Backend.Toolchain;
 with Landin.Targets.Capabilities;
 
 package body Landin.Backend.Dispatch is
@@ -178,6 +179,11 @@ package body Landin.Backend.Dispatch is
          when Landin.Targets.Capabilities.No_Backend =>
             raise Compiler_Defect with "target has no assembly emitter";
       end case;
+      --  D810: the assembler puts the file symbol first in the object
+      --  wherever the directive stands, so it follows the emitter's text
+      --  rather than being spliced in front of it.
+      Ada.Strings.Unbounded.Append
+        (Assembly, Landin.Backend.Toolchain.File_Symbol (Facts));
    end Emit;
 
 end Landin.Backend.Dispatch;
