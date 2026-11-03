@@ -12,7 +12,8 @@ import shutil
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE_ROOTS = ('environments/boards', 'compiler/tests/board',
                 'compiler/tests/driver', 'devices', 'core', 'hosted', 'platform')
-IGNORED = {'__pycache__', '.git', 'build'}
+SOURCE_FILES = ('flake.nix', 'flake.lock', 'environments/pins.sh')
+IGNORED = {'__pycache__', '.git', 'build', 'target'}
 
 
 class Invalid(ValueError):
@@ -31,6 +32,11 @@ def source_files(root=ROOT):
     """All source inputs, including uncommitted and new files in these roots."""
     root = Path(root).resolve()
     files = []
+    for name in SOURCE_FILES:
+        path = root / name
+        if path.is_symlink() or not path.is_file():
+            raise Invalid('missing or symlinked source pin: %s' % path)
+        files.append(name)
     for name in SOURCE_ROOTS:
         directory = root / name
         if not directory.is_dir():
