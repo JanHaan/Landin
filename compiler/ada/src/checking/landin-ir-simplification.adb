@@ -1,14 +1,12 @@
 with Ada.Containers.Generic_Array_Sort;
 with Ada.Containers.Vectors;
-with Ada.Finalization;
-with Ada.Unchecked_Deallocation;
-with System.Storage_Elements;
 with Interfaces;
 with Landin.IR.Control_Flow;
 with Landin.IR.Dominance;
 with Landin.IR.Effects;
 with Landin.IR.Rewriting;
 with Landin.IR.Scalar_Replacement;
+with Landin.IR.Scratch_Arrays;
 with Landin.IR.Shape_Measurement;
 with Landin.IR.Verifier;
 with Landin.Source.Names;
@@ -16,69 +14,10 @@ with Landin.Targets.Layouts;
 
 package body Landin.IR.Simplification is
    use type Interfaces.Unsigned_64;
-   use type System.Storage_Elements.Storage_Count;
    use type Landin.Optimization.Objective;
    use type Landin.Targets.Bit_Width;
    subtype Bits is Interfaces.Unsigned_64;
    subtype Integer_Value is Landin.Types.Folded;
-
-   function Checked_Scratch_Bytes
-     (Count : Natural; Width : System.Storage_Elements.Storage_Count)
-      return System.Storage_Elements.Storage_Count;
-
-   function Checked_Scratch_Bytes
-     (Count : Natural; Width : System.Storage_Elements.Storage_Count)
-      return System.Storage_Elements.Storage_Count
-   is
-      use System.Storage_Elements;
-   begin
-      if Width /= 0 and then Storage_Count (Count)
-        > Storage_Count'Last / Width
-      then
-         raise Storage_Error with
-           "simplifier scratch size is not representable";
-      end if;
-      return Storage_Count (Count) * Width;
-   end Checked_Scratch_Bytes;
-
-   generic
-      type Element is private;
-      Initial : Element;
-   package Scratch_Arrays is
-      type Elements is array (Positive range <>) of Element;
-      type Elements_Access is access Elements;
-      type Owner is new Ada.Finalization.Limited_Controlled with record
-         Data : Elements_Access := null;
-      end record;
-      overriding procedure Finalize (Value : in out Owner);
-      function Create (Count : Natural) return Owner;
-   end Scratch_Arrays;
-
-   package body Scratch_Arrays is
-      procedure Free is new Ada.Unchecked_Deallocation
-        (Object => Elements, Name => Elements_Access);
-
-      overriding procedure Finalize (Value : in out Owner) is
-      begin
-         Free (Value.Data);
-      end Finalize;
-
-      function Create (Count : Natural) return Owner is
-         Bytes : constant System.Storage_Elements.Storage_Count :=
-           Checked_Scratch_Bytes
-             (Count, Element'Object_Size / System.Storage_Unit);
-      begin
-         pragma Unreferenced (Bytes);
-         return Result : Owner do
-            --  Initialize in owned heap storage, without an input-sized
-            --  aggregate or return temporary on the compiler's stack.
-            Result.Data := new Elements (1 .. Count);
-            for Held of Result.Data.all loop
-               Held := Initial;
-            end loop;
-         end return;
-      end Create;
-   end Scratch_Arrays;
 
    package Flags is new Scratch_Arrays (Boolean, False);
    package Values is new Scratch_Arrays (Value_Id, No_Value);

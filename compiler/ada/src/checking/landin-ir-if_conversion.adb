@@ -1,9 +1,8 @@
 with Ada.Containers.Vectors;
-with Ada.Finalization;
-with Ada.Unchecked_Deallocation;
 with Landin.IR.Control_Flow;
 with Landin.IR.Effects;
 with Landin.IR.Rewriting;
+with Landin.IR.Scratch_Arrays;
 with Landin.IR.Verifier;
 
 package body Landin.IR.If_Conversion is
@@ -16,36 +15,6 @@ package body Landin.IR.If_Conversion is
    Arm_Limit : constant := 6;
    Choice_Limit : constant := 4;
    Thread_Limit : constant := 8;
-
-   generic
-      type Element is private;
-      Initial : Element;
-   package Scratch_Arrays is
-      type Elements is array (Positive range <>) of Element;
-      type Elements_Access is access Elements;
-      type Owner is new Ada.Finalization.Limited_Controlled with record
-         Data : Elements_Access := null;
-      end record;
-      overriding procedure Finalize (Value : in out Owner);
-      function Create (Count : Natural) return Owner;
-   end Scratch_Arrays;
-
-   package body Scratch_Arrays is
-      procedure Free is new Ada.Unchecked_Deallocation
-        (Object => Elements, Name => Elements_Access);
-
-      overriding procedure Finalize (Value : in out Owner) is
-      begin
-         Free (Value.Data);
-      end Finalize;
-
-      function Create (Count : Natural) return Owner is
-      begin
-         return Result : Owner do
-            Result.Data := new Elements'(1 .. Count => Initial);
-         end return;
-      end Create;
-   end Scratch_Arrays;
 
    package Flags is new Scratch_Arrays (Boolean, False);
    package Counts is new Scratch_Arrays (Natural, 0);
