@@ -121,6 +121,8 @@ module.exports = grammar({
     [$.identifier_list, $.destructured_field],
     [$.identifier_list, $.loop_statement, $.while_statement, $.for_statement, $.destructured_field, $.field_value],
     [$.identifier_list, $.variant_part],
+    // `at` after a field's type: its offset, or the next field's name.
+    [$.field],
     // `link(` begins a link attribute or calls something named `link`; the
     // attribute's own labels decide.
     [$.link_symbol, $.indexed_expression],
@@ -376,9 +378,14 @@ module.exports = grammar({
       ')',
     ),
     // D233: several field names may share one type, `at` position included.
-    field: $ => seq(field('name', $.identifier_list), ':', field('type', $._declared_type),
+    field: $ => seq(
+      field('name', choice($.identifier_list, alias($._at_field_names, $.identifier_list))),
+      ':', field('type', $._declared_type),
       optional(seq('at', $._expression,
                    optional(seq('..', $._expression))))),
+    // A field may be named `at`.  After another field's type the lexer
+    // offers the offset clause's word, and the `:` or `,` after it decides.
+    _at_field_names: $ => seq(alias('at', $.identifier), repeat(seq(',', $.identifier))),
     variant_part: $ => seq(
       field('name', $._declaration_name), ':', 'variant',
       $.variant_case, repeat(seq('|', $.variant_case)),

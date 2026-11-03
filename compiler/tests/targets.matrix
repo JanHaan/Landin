@@ -457,6 +457,7 @@ negative/flexible-member-by-value | linux-x86-64, linux-arm64, darwin-arm64, fre
 negative/flexible-member-placement | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/float-literal-not-enabled | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/float-literal-overflows-context | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/float-literal-rounded-before-conversion | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/float-literal-without-fraction | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/float-remainder-is-integer-only | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/float-runs-into-a-name | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -1587,6 +1588,7 @@ positive/divisor-is-not-known | linux-x86-64, linux-arm64, darwin-arm64, freebsd
 positive/else-none-ignores-a-failure | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 positive/external-scalar-c-boundary | linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64
 positive/feature-level-selects-declarations | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+positive/field-named-at | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 positive/fixed-array-bound-expression | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 positive/fixed-array-bound-zero | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 positive/fixed-conditional-cross-file-forward | linux-x86-64, darwin-arm64, synthetic-32, freebsd-x86-64
