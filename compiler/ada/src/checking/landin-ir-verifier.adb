@@ -3502,19 +3502,10 @@ package body Landin.IR.Verifier is
          then
             return (Kind => Operand_Runs_Overlap, others => <>);
          elsif not Run_Fits
-           (Code.Variadic_Types, Natural (Of_Unit.Signature_Parts.Length))
-         then
-            return (Kind => Signature_Runs_Overlap, others => <>);
-         elsif not Run_Fits
            (Code.Assembly_Run, Natural (Of_Unit.Assembly_Operands.Length))
            or else (Code.Assembly_Run.Count /= 0 and then Code.Op /= Assembly)
          then
             return (Kind => Assembly_Operand_Malformed, others => <>);
-         elsif Code.Variadic_Types.Count /= 0 then
-            --  The baseline transports promoted scalar actual kinds.  A
-            --  descriptor run must not silently enable aggregate transport
-            --  before lowering and the backend consume it together.
-            return (Kind => Signature_Part_Malformed, others => <>);
          elsif not Run_Fits (Code.Nested, Natural (Of_Unit.Paths.Length))
            or else not Run_Fits
              (Code.Source_Nested, Natural (Of_Unit.Paths.Length))

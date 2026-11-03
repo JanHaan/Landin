@@ -931,7 +931,6 @@ package body Landin.IR.Simplification is
            is (Code.Op in Unary_Kind | Binary_Kind | Conversion | Range_Check
                  | Storage_Address | Place_Address | Pointer_Address
                  | Slice_Address
-               and then Code.Variadic_Types.Count = 0
                and then Code.Assembly_Run.Count = 0
                and then Code.Source_Nested.Count = 0
                and then Code.Below_Element.Count = 0
@@ -948,7 +947,6 @@ package body Landin.IR.Simplification is
          function Normal (Code : Instruction) return Instruction
            is (Code with delta Site => Landin.Provenance.No_Origin,
                  In_Block => No_Block, First_Arg => 0,
-                 Variadic_Types => (others => <>),
                  Assembly_Run => (others => <>),
                  Source_Nested => (others => <>),
                  Below_Element => (others => <>),

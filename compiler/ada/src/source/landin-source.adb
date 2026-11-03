@@ -102,9 +102,6 @@ package body Landin.Source is
    function Length (Item : Snapshot) return Byte_Offset
      is (Byte_Offset (Item.Bytes.all'Length));
 
-   function Full_Span (Item : Snapshot) return Span
-     is (First => 0, Last => Length (Item));
-
    function Slice (Item : Snapshot; Where : Span) return String is
       First : constant Integer := Integer (Where.First) + 1;
       Last  : constant Integer := Integer (Where.Last);

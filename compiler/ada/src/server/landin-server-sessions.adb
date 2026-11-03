@@ -380,7 +380,7 @@ package body Landin.Server.Sessions is
             By_Path : Path_Maps.Map;
          begin
             --  The URI map iterates in key order.  Its first document at a
-            --  path is the one URI_For and Version_Of would both select.
+            --  path is the one URI_For would select.
             for Held of Store.Open loop
                declare
                   Path : constant String := Unbounded.To_String (Held.Path);

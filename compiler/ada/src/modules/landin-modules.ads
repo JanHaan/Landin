@@ -79,9 +79,6 @@ package Landin.Modules is
    function Directory_Path (Of_Table : Table; Id : Module_Id) return String
      with Pre => Contains (Of_Table, Id);
 
-   function Root_Ordinal (Of_Table : Table; Id : Module_Id) return Natural
-     with Pre => Contains (Of_Table, Id);
-
    --  A module the loader adds that no import names: the static Linux
    --  program's platform/linux, and D543's reference description.  It is
    --  part of the program, and no editor has a document of it open, so

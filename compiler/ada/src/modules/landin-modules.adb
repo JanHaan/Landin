@@ -80,9 +80,6 @@ package body Landin.Modules is
      is (Unbounded.To_String
            (Of_Table.Modules.Element (Positive (Id)).Directory));
 
-   function Root_Ordinal (Of_Table : Table; Id : Module_Id) return Natural
-     is (Of_Table.Modules.Element (Positive (Id)).Root_Index);
-
    procedure Mark_Implicit (Into : in out Table; Id : Module_Id) is
    begin
       Into.Modules (Positive (Id)).Implicit := True;

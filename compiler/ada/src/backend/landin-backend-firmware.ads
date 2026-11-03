@@ -38,10 +38,6 @@ package Landin.Backend.Firmware is
       Returned : String;
       Debug : Boolean) return String;
 
-   --  D684: what precedes a description's boot stage on RV32, which the
-   --  entry word enters before reset: its section and its label.
-   function RV32_Stage_Label return String;
-
    --  The bytes an RV32 interrupt stub keeps below the interrupted stack:
    --  ra, t0-t6 and a0-a7, and with a limit cell its word, padded to the
    --  sixteen bytes the psABI keeps sp aligned to.

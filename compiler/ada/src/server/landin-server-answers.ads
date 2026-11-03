@@ -30,11 +30,6 @@ package Landin.Server.Answers is
    --  encoding it chose.
    function Capabilities (Unit : Positions.Encoding) return String;
 
-   --  The version of the open document held at Path, or -1 for none.
-   function Version_Of
-     (Store : Landin.Server.Documents.Store; Path : String)
-      return Long_Long_Integer;
-
    --  Report positions grouped by primary source in publication order.
    package Diagnostic_Indexes is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Positive);

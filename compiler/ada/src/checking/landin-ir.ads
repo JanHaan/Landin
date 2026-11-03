@@ -2664,18 +2664,6 @@ package Landin.IR is
    --  The descriptor a direct or indirect call consumes.  This is distinct
    --  from Signature_Of on a function-valued call result, which answers the
    --  nested result descriptor.
-   --  Optional promoted tail descriptors.  No descriptors is compatible
-   --  with the scalar-tail path that reads each actual's Result_Of kind.
-   function Call_Variadic_Types_Are_Valid
-     (Of_Unit : Unit; Item : Item_Id; Call : Value_Id) return Boolean;
-
-   function Call_Variadic_Count
-     (Of_Unit : Unit; Item : Item_Id; Call : Value_Id) return Natural;
-
-   function Nth_Call_Variadic_Type
-     (Of_Unit : Unit; Item : Item_Id; Call : Value_Id; Index : Positive)
-      return Signature_Part;
-
    function Call_Signature
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Signature_Id
      with Pre => Holds (Of_Unit, Item, Value)
@@ -3976,8 +3964,7 @@ package Landin.IR is
       Callee : Item_Id;
       Result : Landin.Types.Type_Kind;
       Site   : Landin.Provenance.Origin;
-      Failure : Slot_Id := No_Slot;
-      Variadic_Types : Signature_Part_Array := No_Signature_Parts)
+      Failure : Slot_Id := No_Slot)
       return Value_Id
      with Pre  => Is_Emitting (Into, Item)
                   and then Holds (Into, Callee)
@@ -3994,8 +3981,7 @@ package Landin.IR is
       Signature : Signature_Id;
       Result    : Landin.Types.Type_Kind;
       Site      : Landin.Provenance.Origin;
-      Failure   : Slot_Id := No_Slot;
-      Variadic_Types : Signature_Part_Array := No_Signature_Parts)
+      Failure   : Slot_Id := No_Slot)
       return Value_Id
      with Pre  => Is_Emitting (Into, Item)
                   and then Holds (Into, Signature)
@@ -4237,7 +4223,6 @@ private
                       Landin.Provenance.No_Origin;
       In_Block    : Block_Id                  := No_Block;
       First_Arg   : Natural                   := 0;
-      Variadic_Types : Run;
       --  [1630]: a block's operands, laid end to end in Assembly_Operands.
       Assembly_Run : Run;
       Args        : Natural                   := 0;
