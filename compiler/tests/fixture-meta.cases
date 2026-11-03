@@ -19,7 +19,9 @@
 # A key's field is its value as written.  The others: `status`, the status
 # a program must return, and `status@LEVEL` at that level; `traps`, `yes`
 # or `no`; `stream`; `profile-count`; `codes-normalized`; `levels@TARGET`,
-# the levels TARGET's lane builds at; `source-arguments`, what refine is
+# the levels TARGET's lane builds at; `c-args@TARGET`, the `c-args` as
+# TARGET's lane passes them, spelled by compiler/tests/c-args.targets;
+# `source-arguments`, what refine is
 # run with, `module-arguments`, its source operands, and
 # `program-arguments`, what the compiled program is run with -- each a
 # space-separated list, the fixture directory written F/CLASS/NAME.
@@ -374,6 +376,21 @@ fixture abi/no-peers
 | constructs: 0300
 | targets: linux-x86-64
 problem an ABI fixture needs c-sources
+end
+
+case a wrapped C function is spelled for each lane's linker
+fixture abi/wraps-open
+| class: abi
+| summary: interposes on open
+| profiles: standard
+| program: program.ldn
+| c-sources: wrap.c
+| c-args: -pthread -Wl,--wrap=open -Wl,--wrap=close
+| constructs: 1600
+| targets: darwin-arm64, freebsd-x86-64
+field c-args = -pthread -Wl,--wrap=open -Wl,--wrap=close
+field c-args@freebsd-x86-64 = -pthread -Wl,--wrap=open -Wl,--wrap=close
+field c-args@darwin-arm64 = -pthread -Wl,-alias,___wrap_open,_open -Wl,-alias,___wrap_close,_close
 end
 
 case a trap has no status, and its report needs a trap

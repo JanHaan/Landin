@@ -65,6 +65,41 @@ PRODUCT_LEVELS = frozenset(level for levels in FAMILIES.values()
                            for level in levels)
 
 
+#  How a fixture's `c-args` are spelled for a target whose linker does not
+#  take the GNU spelling, read from the file the test program reads too.
+C_ARGS_TARGETS = HERE / "c-args.targets"
+
+
+def c_args_spellings(text=None):
+    """The lines of `c-args.targets`: (target, written prefix, passed)."""
+    if text is None:
+        text = C_ARGS_TARGETS.read_text(encoding="utf-8")
+    found = []
+    for line in text.split("\n"):
+        words = line.split()
+        if not words or words[0].startswith("#"):
+            continue
+        if len(words) != 3 or not words[1].endswith("NAME"):
+            raise ValueError("c-args.targets: a line no reader takes: " + line)
+        found.append((words[0], words[1][:-len("NAME")], words[2]))
+    return found
+
+
+def spelled_c_args(arguments, target, spellings=None):
+    """ARGUMENTS as TARGET's lane passes them (c-args.targets)."""
+    if spellings is None:
+        spellings = c_args_spellings()
+    passed = []
+    for argument in arguments:
+        for named, written, spelling in spellings:
+            if (named == target and argument.startswith(written)
+                    and len(argument) > len(written)):
+                argument = spelling.replace("NAME", argument[len(written):])
+                break
+        passed.append(argument)
+    return passed
+
+
 class FixtureError(ValueError):
     """A fixture whose metadata the harness would refuse, with each fault."""
 
@@ -206,6 +241,16 @@ class Metadata(dict):
         """The archive each `c-archives` source becomes, relative to the
         work copy, in their order."""
         return [archive_of(one) for one in self.c_archives]
+
+    @property
+    def c_args(self):
+        """The `c-args`, one argument per whitespace-separated word, as
+        the test program splits them."""
+        return self.get("c-args", "").split()
+
+    def c_args_for(self, target, spellings=None):
+        """The `c-args` as TARGET's lane passes them to its C driver."""
+        return spelled_c_args(self.c_args, target, spellings)
 
     @property
     def library_directories(self):

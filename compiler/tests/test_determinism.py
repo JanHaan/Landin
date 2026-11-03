@@ -43,19 +43,20 @@ identity derived from it and in nothing else.  An instruction that moved with
 the build directory fails here, which is the whole point of checking a
 boundary instead of excusing it.
 
-What is deliberately NOT claimed: bit-identity of a linked HOSTED image.
-The hosted parity claim says "identical assembly and behavior", and the measured
-reason that wording is right is recorded in `linked_image` below: on the
-pinned Linux toolchain two links of one unchanged assembly differ in six
-bytes, in the same directory, from the same command, because the GNU driver
-writes its own random temporary object name into the symbol table.  That is
-the driver's artifact.  Landin's side -- the assembly the link consumes -- is
-checked to be identical, the residue is reported rather than excused, and a
-reproducible hosted image is transferred rather than promised.  On Darwin the
-same comparison happened to come out identical; one toolchain being tidier is
-not a contract.  Nothing here claims determinism across compiler versions,
-across differing pins, across differing build options -- an option is an
-input, not an equivalence -- or any timing reproducibility.
+A linked HOSTED image without `--debug` is claimed too, under Tier 1's
+relation narrowed by a fixed output file name and the host's own toolchain:
+the image is the platform driver's, so it is claimed on one host and not
+across hosts.  It was not always: on the pinned Linux toolchain two links
+of one unchanged assembly differed in six bytes, in the same directory, from
+the same command, because the GNU driver assembles to a temporary object
+with a random name and GNU ld gave an input without a file symbol one named
+after that object.  D810 names the file symbol in the assembly, so
+`linked_image` below now requires both the assembly the link consumed and the
+image to be identical.  The output's name is fixed because Darwin's linker
+signs the image and names it in that signature.  Nothing here claims
+determinism across compiler versions, across differing pins, across
+differing build options -- an option is an input, not an equivalence -- or
+any timing reproducibility.
 
 The host is the one freedom this file cannot exercise, because one machine
 cannot disagree with itself.  It is checked from two instead:
@@ -393,19 +394,17 @@ def caller_mapped_paths(refine: Path, source: Path, target: str, area: Path):
 
 
 def linked_image(refine: Path, source, target: str, area: Path, label: str):
-    """The assembly handed to the platform linker, and what the link adds.
+    """The assembly handed to the platform linker, and the image it makes.
 
     Landin's side of `--emit=exe` is the assembly; the object and the image
     are the platform driver's.  D362 removes that assembly after the link,
-    so `--keep-asm` asks for the very file the link consumed.  Measured on the pinned toolchains, that
-    matters: `x86_64-pc-linux-gnu-gcc` records its own random temporary
-    object name (`ccXXXXXX.o`) in the symbol table, so two Linux links of
-    one unchanged assembly differ in those bytes -- in the same directory,
-    on the same host, from the same command.  It is the driver's artifact
-    and not a build-directory effect, so a reproducible hosted image is not
-    claimed here.  What is claimed, and checked, is that the assembly the
-    link consumed was byte-identical, and the residue is reported so a
-    growth in it is visible rather than silent.
+    so `--keep-asm` asks for the very file the link consumed, and it must be
+    byte-identical.  So must the image, linked in two directories under one
+    output name: before D810 `x86_64-pc-linux-gnu-gcc` left its own random
+    temporary object name (`ccXXXXXX.o`) in the symbol table, so two Linux
+    links of one unchanged assembly differed in those bytes, in the same
+    directory, on the same host, from the same command.  The differing
+    bytes are still counted, so a failure says how far apart the images are.
     """
     alpha, beta = area / "link-a", area / "link-b-longer"
     alpha.mkdir(parents=True)
@@ -425,8 +424,12 @@ def linked_image(refine: Path, source, target: str, area: Path, label: str):
     residue = (0 if images[0] == images[1] else
                sum(a != b for a, b in zip(images[0], images[1]))
                + abs(len(images[0]) - len(images[1])))
+    require(residue == 0,
+            label + f": two links of one assembly differ in {residue} image"
+            " bytes")
     return {"assembly_sha256": hashlib.sha256(assemblies[0]).hexdigest(),
-            "image_bytes": len(images[0]), "link_residue_bytes": residue}
+            "image_sha256": hashlib.sha256(images[0]).hexdigest(),
+            "image_bytes": len(images[0])}
 
 
 def main() -> int:
@@ -503,10 +506,8 @@ def main() -> int:
                     linked += 1
                 except Failure as failure:
                     failures.append(str(failure))
-            residues = sorted({m["link_residue_bytes"]
-                               for m in record["linked"].values()})
-            print(f"determinism: {native} link consumed {linked} identical "
-                  f"assemblies; image residue bytes {residues}", flush=True)
+            print(f"determinism: {native} linked {linked} identical images "
+                  f"from identical assemblies", flush=True)
 
     record["status"] = "failed" if failures else "passed"
     record["failures"] = failures

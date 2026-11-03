@@ -604,7 +604,8 @@ process ignores SIGPIPE and gives its children the default back.
 
 - **Determinism.** Target code and the build report are byte-identical
   whatever the build directory, environment or order, on all eight targets;
-  the hosted linked image is not claimed.
+  a hosted linked image without `--debug` is too, on one host's toolchain
+  and under one output name (D810).
 - **Switches.** D209 to D211 specify compact numeric-array arithmetic,
   explicit `layout(optimal)` field placement and optional evidence-proved
   specialization, which are independent switches. The driver selects

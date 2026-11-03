@@ -69,6 +69,8 @@ package Landin.Backend.Dispatch is
    --  selected handler runs on a prepared stack's margin (D474).
    function Prepares_Stacks (Of_Unit : Landin.IR.Unit) return Boolean;
 
+   --  The target's emitter's assembly, followed by the file symbol the
+   --  toolchain adapter gives a hosted ELF program (D810).
    procedure Emit
      (Of_Unit  : Landin.IR.Unit;
       Meanings : Landin.Resolution.Table;

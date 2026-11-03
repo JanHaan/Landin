@@ -57,6 +57,8 @@ def field(meta, key):
         return " ".join(meta.levels_for(tail))
     if at and head == "status":
         return str(meta.status_at(tail))
+    if at and head == "c-args":
+        return " ".join(meta.c_args_for(tail))
     rendered = {
         "status": lambda: str(meta.status),
         "traps": lambda: "yes" if meta.traps else "no",

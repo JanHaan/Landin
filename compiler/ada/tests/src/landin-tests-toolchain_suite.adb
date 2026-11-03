@@ -519,8 +519,44 @@ package body Landin.Tests.Toolchain_Suite is
          "Darwin looks for a stub and a dylib before the archive");
    end Libraries_And_Directories_Reach_The_Driver;
 
+   --  D810: a hosted ELF program's assembly names its own file symbol, so
+   --  GNU ld does not name one after the driver's temporary object; Mach-O
+   --  has none to name, and firmware links the object refine assembled.
+   procedure A_Hosted_ELF_Program_Names_Its_File
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Hosted_ELF_Program_Names_Its_File
+     (Item : in out Landin.Testing.Context)
+   is
+      type Facts_List is
+        array (Positive range <>) of Landin.Targets.Target_Facts;
+      Named : constant String :=
+        Character'Val (9) & ".file ""landin""" & LF;
+   begin
+      for Facts of Facts_List'
+        (Landin.Targets.Linux_X86_64, Landin.Targets.Linux_Arm64,
+         Landin.Targets.Linux_RV64, Landin.Targets.FreeBSD_X86_64,
+         Landin.Targets.FreeBSD_Arm64)
+      loop
+         Landin.Testing.Check_Equal
+           (Item, Landin.Backend.Toolchain.File_Symbol (Facts), Named,
+            Landin.Targets.Name (Facts) & " names its file symbol");
+      end loop;
+      for Facts of Facts_List'
+        (Landin.Targets.Darwin_Arm64, Landin.Targets.Cortex_M,
+         Landin.Targets.RV32, Landin.Targets.Synthetic_32)
+      loop
+         Landin.Testing.Check_Equal
+           (Item, Landin.Backend.Toolchain.File_Symbol (Facts), "",
+            Landin.Targets.Name (Facts) & " names none");
+      end loop;
+   end A_Hosted_ELF_Program_Names_Its_File;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "toolchain", "a hosted ELF program names its file",
+         A_Hosted_ELF_Program_Names_Its_File'Access);
       Landin.Testing.Register
         (Into, "toolchain", "file operands keep their identity",
          File_Operands_Keep_Their_Identity'Access);

@@ -374,6 +374,93 @@ package body Landin.Testing.Fixtures is
    function C_Args (Item : Fixture) return String
      is (Unbounded.To_String (Item.C_Options));
 
+   function C_Args_For
+     (Item : Fixture; Target, Spellings : String)
+      return Landin.Platform.Path_List
+   is
+      Result : Landin.Platform.Path_List;
+
+      --  Argument as Spellings' line Line spells it for Target, or ""
+      --  when the line is not Target's or does not match it.
+      function Spelled (Argument, Line : String) return String;
+
+      function Spelled (Argument, Line : String) return String is
+         Parts : constant Landin.Platform.Path_List := Words (Line);
+      begin
+         if Parts.Is_Empty
+           or else Ada.Strings.Fixed.Head (Parts.First_Element, 1) = "#"
+         then
+            return "";
+         elsif Natural (Parts.Length) /= 3
+           or else Parts.Element (2)'Length < 4
+           or else Ada.Strings.Fixed.Tail (Parts.Element (2), 4) /= "NAME"
+         then
+            raise Program_Error
+              with "c-args.targets: a line no reader takes: " & Line;
+         end if;
+         declare
+            Pattern : constant String := Parts.Element (2);
+            Written : constant String :=
+              Pattern (Pattern'First .. Pattern'Last - 4);
+            Passed  : constant String := Parts.Element (3);
+            Text    : Unbounded.Unbounded_String;
+            First   : Positive := Passed'First;
+         begin
+            if Parts.First_Element /= Target
+              or else Argument'Length <= Written'Length
+              or else Argument
+                (Argument'First .. Argument'First + Written'Length - 1)
+                /= Written
+            then
+               return "";
+            end if;
+            for Index in Passed'Range loop
+               if Index >= First and then Index + 3 <= Passed'Last
+                 and then Passed (Index .. Index + 3) = "NAME"
+               then
+                  Unbounded.Append (Text, Passed (First .. Index - 1));
+                  Unbounded.Append
+                    (Text, Argument
+                       (Argument'First + Written'Length .. Argument'Last));
+                  First := Index + 4;
+               end if;
+            end loop;
+            Unbounded.Append (Text, Passed (First .. Passed'Last));
+            return Unbounded.To_String (Text);
+         end;
+      end Spelled;
+   begin
+      for Argument of Words (C_Args (Item)) loop
+         declare
+            Chosen  : Unbounded.Unbounded_String :=
+              Unbounded.To_Unbounded_String (Argument);
+            Matched : Boolean := False;
+            First   : Integer := Spellings'First;
+         begin
+            for Index in Spellings'First .. Spellings'Last + 1 loop
+               if Index > Spellings'Last
+                 or else Spellings (Index) = ASCII.LF
+               then
+                  declare
+                     Made : constant String :=
+                       Spelled (Argument, Spellings (First .. Index - 1));
+                  begin
+                     --  Every line is read, so a malformed one is refused
+                     --  wherever it stands; the first that matches wins.
+                     First := Index + 1;
+                     if Made /= "" and then not Matched then
+                        Chosen := Unbounded.To_Unbounded_String (Made);
+                        Matched := True;
+                     end if;
+                  end;
+               end if;
+            end loop;
+            Result.Append (Unbounded.To_String (Chosen));
+         end;
+      end loop;
+      return Result;
+   end C_Args_For;
+
    function C_Shared (Item : Fixture) return String
      is (Unbounded.To_String (Item.C_Libraries));
 

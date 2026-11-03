@@ -58,6 +58,15 @@ package Landin.Backend.Toolchain is
    function Identity_Section
      (Build_Id : String; Facts : Landin.Targets.Target_Facts) return String;
 
+   --  D810: the file symbol a hosted ELF program's assembly names itself
+   --  by, `.file "landin"`, one line ending in a line feed, and nothing on
+   --  Darwin or firmware.  The GNU driver assembles to a temporary object
+   --  with a random name, and GNU ld gives an input without a file symbol
+   --  one named after its object, so without this the image carried the
+   --  driver's `ccXXXXXX.o` and no two links of one assembly were the
+   --  same bytes.
+   function File_Symbol (Facts : Landin.Targets.Target_Facts) return String;
+
    --  Auxiliary native-debug outputs and bundle containment, so the driver
    --  can protect source inputs without knowing a platform's packaging.
    function Debug_Artifacts

@@ -2449,6 +2449,9 @@ package body Landin.Diagnostics.Citations is
             when 770 =>
                "A public machine-convention routine's own spelling is he"
                & "ld to the link-name rule",
+            when 810 =>
+               "A hosted ELF program's assembly names its file symbol `l"
+               & "andin`",
             when 151 =>
                "Raw storage is a private library state machine",
             when 152 =>
@@ -3814,6 +3817,8 @@ package body Landin.Diagnostics.Citations is
             when 570 =>
                "Decisions: The toolchain, C and the machine",
             when 770 =>
+               "Decisions: The toolchain, C and the machine",
+            when 810 =>
                "Decisions: The toolchain, C and the machine",
             when 151 =>
                "Decisions: The core library and the derived programs",
@@ -5587,6 +5592,9 @@ package body Landin.Diagnostics.Citations is
                "https://www.701.dev/spec.html#d770-a-public-machine-conv"
                & "ention-routine-s-own-spelling-is-held-to-the-link-name-r"
                & "ule",
+            when 810 =>
+               "https://www.701.dev/spec.html#d810-a-hosted-elf-program-"
+               & "s-assembly-names-its-file-symbol-landin",
             when 151 =>
                "https://www.701.dev/spec.html#d151-raw-storage-is-a-priv"
                & "ate-library-state-machine",

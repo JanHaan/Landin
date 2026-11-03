@@ -48,6 +48,8 @@ package body Landin.Tests.Fixture_Execution_Suite is
    use type Landin.Targets.Capabilities.Hosted_System;
 
    Fixture_Root : constant String := "../tests/fixtures";
+   --  How a fixture's `c-args` are spelled for each lane's linker.
+   C_Args_Spellings : constant String := "../tests/c-args.targets";
    Selected     : Landin.Platform.Path_List;
 
    package Lanes renames Landin.Testing.Lanes;
@@ -382,33 +384,6 @@ package body Landin.Tests.Fixture_Execution_Suite is
       return (if Last >= Path'First
               then Path (Path'First .. Last) else "");
    end Output_Directory;
-
-   --  Arguments are whitespace-separated.  A fixture that needs an
-   --  argument containing a space needs a richer format, and saying so is
-   --  better than quietly splitting it.
-   function Split (Text : String) return Landin.Platform.Path_List;
-
-   function Split (Text : String) return Landin.Platform.Path_List is
-      Result : Landin.Platform.Path_List;
-      First  : Integer := Text'First;
-   begin
-      for Index in Text'Range loop
-         if Text (Index) in ' ' | ASCII.HT | ASCII.LF | ASCII.VT
-           | ASCII.FF | ASCII.CR
-         then
-            if Index > First then
-               Result.Append (Text (First .. Index - 1));
-            end if;
-            First := Index + 1;
-         end if;
-      end loop;
-
-      if First <= Text'Last then
-         Result.Append (Text (First .. Text'Last));
-      end if;
-
-      return Result;
-   end Split;
 
    --  What refine is run with for a fixture's report: its `args`, and for
    --  a rooted fixture the module arguments its `root` gives after them,
@@ -2770,11 +2745,21 @@ package body Landin.Tests.Fixture_Execution_Suite is
       if Landin.Targets.Architecture_Of (Facts) = Landin.Targets.X86_64 then
          Landin.Platform.Add (Driver_Arguments, "-no-pie");
       end if;
+      --  Spelled for this lane's linker as every Python lane spells them.
       declare
-         Options : constant Landin.Platform.Path_List :=
-           Split (C_Args (Case_Item));
+         Spellings : Unbounded.Unbounded_String;
       begin
-         for Argument of Options loop
+         Host.Read_File (C_Args_Spellings, Spellings, Read);
+         if Read /= Landin.Platform.Read_Ok then
+            Landin.Testing.Fail
+              (Item, Label & ": " & C_Args_Spellings & " is unreadable ("
+               & Landin.Platform.Read_Status'Image (Read) & ")");
+            return;
+         end if;
+         for Argument of C_Args_For
+           (Case_Item, Landin.Targets.Name (Facts),
+            Unbounded.To_String (Spellings))
+         loop
             Landin.Platform.Add (Driver_Arguments, Argument);
          end loop;
       end;

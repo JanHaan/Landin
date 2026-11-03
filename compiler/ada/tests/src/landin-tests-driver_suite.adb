@@ -1749,8 +1749,9 @@ package body Landin.Tests.Driver_Suite is
    --  across the C boundary in both directions and a variadic C call is
    --  emitted and linked both ways, and the assembly, the tool invocation
    --  and the build report must be the same bytes, so the two agree in
-   --  every instruction and in the ABI they lower to.  The linked image is
-   --  not compared: its driver writes a temporary object name into it.
+   --  every instruction and in the ABI they lower to.  The link is a fake
+   --  tool's, so there is no image to compare; compiler/tests/
+   --  test_determinism.py compares real ones.
    procedure The_Arm64_Default_Is_Armv8_A
      (Item : in out Landin.Testing.Context);
 
@@ -1822,6 +1823,9 @@ package body Landin.Tests.Driver_Suite is
            and then Contains (Plain, """level"":""armv8-a"""),
          "the default is armv8-a in the assembly, the assembler and the"
          & " report");
+      Landin.Testing.Check
+        (Item, Contains (Plain, HT & ".file ""landin""" & LF),
+         "the assembly the driver links names its file symbol (D810)");
       Landin.Testing.Check_Equal
         (Item, Named, Plain,
          "naming armv8-a is building without a level, byte for byte");

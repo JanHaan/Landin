@@ -1321,6 +1321,8 @@ package body Landin.Tests.Fixture_Suite is
       Path   : constant String := "../tests/fixture-meta.cases";
       Text   : Unbounded.Unbounded_String;
       Read   : Landin.Platform.Read_Status;
+      --  compiler/tests/c-args.targets, which `c-args@TARGET` reads.
+      Spellings : Unbounded.Unbounded_String;
       Cases  : Natural := 0;
 
       --  The case being gathered.
@@ -1384,6 +1386,9 @@ package body Landin.Tests.Fixture_Suite is
                     (Levels_Of_Family (Fixture, Facts_Named (Tail)));
                elsif Head = "status" then
                   return Image (Status_At (Fixture, Tail));
+               elsif Head = "c-args" then
+                  return Joined (C_Args_For
+                    (Fixture, Tail, Unbounded.To_String (Spellings)));
                end if;
             end;
          elsif Key = "status" then
@@ -1557,6 +1562,11 @@ package body Landin.Tests.Fixture_Suite is
       Host.Read_File (Path, Text, Read);
       if Read /= Landin.Platform.Read_Ok then
          Landin.Testing.Fail (Item, Path & " is unreadable");
+         return;
+      end if;
+      Host.Read_File ("../tests/c-args.targets", Spellings, Read);
+      if Read /= Landin.Platform.Read_Ok then
+         Landin.Testing.Fail (Item, "../tests/c-args.targets is unreadable");
          return;
       end if;
 

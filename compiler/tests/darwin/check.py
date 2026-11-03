@@ -9,7 +9,6 @@ from pathlib import Path
 import platform
 import resource
 import re
-import shlex
 import signal
 import subprocess
 import sys
@@ -357,10 +356,10 @@ def main(argv=None):
                     run.command(["/usr/bin/clang", "-arch", "arm64", "-c", assembly, "-o", object_file],
                                 label + "-assemble", cwd)
                     companions = [base / part.strip() for part in meta["c-sources"].split(",")]
-                    c_args = shlex.split(meta.get("c-args", ""))
+                    #  Spelled for Apple's linker as the test program spells
+                    #  them (compiler/tests/c-args.targets).
+                    c_args = meta.c_args_for("darwin-arm64")
                     if args.parity:
-                        c_args = [arg.replace("-Wl,--wrap=", "-Wl,-alias,___wrap_") + ",_" + arg.split("=")[1]
-                                  if arg.startswith("-Wl,--wrap=") else arg for arg in c_args]
                         objects = []
                         for index, companion in enumerate(companions):
                             peer_object = directory / (label + f"-peer-{index}.o")

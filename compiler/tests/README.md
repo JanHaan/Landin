@@ -821,6 +821,20 @@ whitespace-separated argument-vector suffix; no shell interprets it. Both keys
 belong only to ABI fixtures, duplicate keys or C source paths are faults, and C
 source files in `with` are faults.
 
+`c-args` are written once, as GCC and GNU ld read them, and LLVM's lld reads
+the same. A target whose linker spells an argument another way says so in
+[`c-args.targets`](c-args.targets), one line per spelling: the target, the
+argument as written ending in `NAME`, which stands for the symbol it names,
+and the argument that target's lane passes, with `NAME` replaced by that
+symbol. Today it has one line, for Darwin, whose ld64 has no `--wrap`:
+`-Wl,--wrap=open` is passed as `-Wl,-alias,___wrap_open,_open`, which makes
+`_open` the wrapper as `--wrap` would. An argument no line names is passed
+as written. The test program reads the file through
+`Landin.Testing.Fixtures.C_Args_For` and every Python lane, Darwin's parity
+run among them, through `fixture_meta`'s `c_args_for`, so a fixture's Darwin
+verdict does not depend on which runner gives it. `fixture-meta.cases`'
+`c-args@TARGET` fields hold both readers to the same spelling.
+
 `c-shared` names C sources the harness builds into shared objects for the
 program to load while it runs, as `platform/posix.open_library` does. Its
 entries follow `c-sources`' path rules, and no two may share a stem, which
@@ -848,7 +862,7 @@ this exact order:
 ```text
 <assembly> <c-sources in metadata order>
 -std=c11 -Wall -Wextra -Werror -no-pie
-<c-args in metadata order> -o <executable>
+<c-args in metadata order, spelled for the target> -o <executable>
 ```
 
 The resulting executable may get `main` from Landin or from a C companion.

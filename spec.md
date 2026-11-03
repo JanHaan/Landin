@@ -24365,6 +24365,44 @@ declined.
 public naked routine's spelling; and `runtime/assembly-naked-labels`, D516's
 pair with the routine naming its symbol, still admitted.
 
+### D810 — A hosted ELF program's assembly names its file symbol `landin`
+
+**The tour said** at [1550] that Landin emits deterministic assembly and
+relies on the platform's assembler and linker, and an executable was linked
+by handing that assembly to the GNU driver, which assembles it to a
+temporary object with a random name, `ccXXXXXX.o`. The assembly named no
+file symbol, and GNU ld gives an input that has local symbols and no file
+symbol one named after its object, so two links of one assembly, from the
+same command in the same directory, differed in those six bytes on Linux
+x86-64 and arm64, and no hosted image could be reproduced.
+
+**Chosen:** the assembly of every hosted ELF target ends with `.file
+"landin"`, the toolchain adapter's line, so the object carries a file
+symbol and the linker makes none. The name is a constant, not a source's,
+because assembly without debugging records nothing about where it was
+built. A Darwin object has no file symbol and ld64 makes none, and a
+firmware link reads the object refine assembled itself, named for its
+output, so neither changes. A linked hosted image without `--debug` is then
+the same bytes for equivalent closures with the output's name fixed, on one
+host's toolchain; Darwin's linker names the output in the signature it
+gives the image. An assembly operand (D362) is linked as it is written, so
+its own `.file`, or its want of one, is its author's.
+
+**The alternatives:** assembling to an object refine names before linking,
+which runs a second tool for every executable and only moves the name, to
+the output's, which then lands in the image; the source's name, which would
+put a path's spelling into assembly that records none; stripping or
+rewriting the image after the link, which makes the image refine's work
+rather than the platform's; and discarding local symbols, which takes
+routine names from a debugger. All were declined.
+
+**Pinned by** `compiler/tests/test_determinism.py`, which links two runtime
+programs in two directories on each gate host that runs it and requires
+the images, as well as the assembly they were linked from, to be the same
+bytes, and its control `two links of one assembly must be one image`; the
+toolchain case `a hosted ELF program names its file`; and the driver case
+`the arm64 default is armv8-a`, which finds the line in the linked assembly.
+
 ## DECISIONS: THE CORE LIBRARY AND THE DERIVED PROGRAMS
 
 These were taken while writing `core` and the derived programs, and most
