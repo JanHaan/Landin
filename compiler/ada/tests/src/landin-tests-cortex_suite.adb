@@ -1675,12 +1675,20 @@ package body Landin.Tests.Cortex_Suite is
       Landin.Testing.Check_Equal
         (Item, U.To_String (Result),
          "{""flash_used"":784,""flash_limit"":32768,"
-         & """flash_remaining"":31984,""static_ram_used"":40,"
+         & """flash_remaining"":31984,""code_used"":784,"
+         & """ram_layout_used"":0,""load_segments"":["
+         & "{""address"":0,""runtime_address"":0,""file_bytes"":192,"
+         & """memory_bytes"":192},{""address"":512,"
+         & """runtime_address"":512,""file_bytes"":100,"
+         & """memory_bytes"":100},{""address"":768,"
+         & """runtime_address"":536870920,""file_bytes"":16,"
+         & """memory_bytes"":32}],""static_ram_used"":40,"
          & """static_ram_limit"":12288,""static_ram_remaining"":12248,"
          & """stack_reserved"":4096,""runtime_members"":"
          & "[""_muldi3.o"",""_udivsi3.o""],"
          & """device"":""constrained-reference"",""core"":""cortex-m0"","
-         & """float_unit"":""none"","
+         & """float_unit"":""none"",""layout"":""boot"","
+         & """described_boot"":""vector-table"","
          & """boot"":""vector-table"",""vector_address"":0,"
          & """vector_words"":48,""boot_prefix"":0,""boot_suffix"":0,"
          & """regions"":[{""name"":""FLASH"","
@@ -1688,7 +1696,8 @@ package body Landin.Tests.Cortex_Suite is
          & "{""name"":""RAM"",""origin"":536870912,""length"":16384,"
          & """access"":""rwx""}],""placed"":{""vectors"":""FLASH"","
          & """text"":""FLASH"",""rodata"":""FLASH"",""data"":""RAM"","
-         & """bss"":""RAM"",""stack"":""RAM""}}",
+         & """bss"":""RAM"",""stack"":""RAM""},"
+         & """code_limit"":32768,""ram_layout_limit"":12288}",
          "occupied extents include gaps and archive members are sorted");
 
       Host.Add_Firmware_Library;
@@ -2853,6 +2862,26 @@ package body Landin.Tests.Cortex_Suite is
         Checkout ("devices/descriptions/rp2350/memory.ldn");
       Code, Assembly : U.Unbounded_String;
    begin
+      Try ("", RP2040_Interrupts, RP2040_Memory, Code, Assembly,
+           Extra => "--firmware-entry=start --firmware-layout=ram",
+           Stage => RP2040_Stage);
+      Landin.Testing.Check_Equal
+        (Item, U.To_String (Code), "", "RP2040 derives its RAM layout");
+      Landin.Testing.Check
+        (Item, not Contains (U.To_String (Assembly), ".boot2")
+           and then not Contains (U.To_String (Assembly),
+             "_landin_firmware_boot2:")
+           and then Vector_Word (U.To_String (Assembly), 1)
+             = "_landin_firmware_reset",
+         "RAM runs skip RP2040's flash setup stage");
+      Expect ("RAM cannot load a named flash region",
+        "link(region: ""FLASH"") helper: () -> none = end helper",
+        RP2040_Interrupts, RP2040_Memory, "L0517",
+        Extra => "--firmware-entry=start --firmware-layout=ram",
+        Stage => RP2040_Stage);
+      Expect ("RAM requires an executable writable description region", "",
+        Plain_Interrupts, Plain_Memory, "L0514",
+        Extra => "--firmware-entry=start --firmware-layout=ram");
       --  RP2040 by its identity: USBCTRL_IRQ's slot 21 holds the handler,
       --  the second stage comes first and the table follows it.
       Try ("link(vector: 21) extern(interrupt) usb: () -> none = end usb",
@@ -3972,8 +4001,99 @@ package body Landin.Tests.Cortex_Suite is
       end;
    end Script_Without_Program;
 
+   --  D900: a RAM build derives placement and never copies itself.
+   procedure RAM_Layout (Item : in out Landin.Testing.Context);
+   procedure RAM_Layout (Item : in out Landin.Testing.Context) is
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Args : Landin.Platform.Path_List;
+   begin
+      Host.Add_Firmware_Library;
+      Host.Add_File ("p.ldn", "start: () -> none = end start");
+      Args.Append ("--target=cortex-m0");
+      Args.Append ("--firmware-layout=ram");
+      Args.Append ("--firmware-entry=start");
+      Args.Append ("--build-report=p.json");
+      Args.Append ("--emit=asm");
+      Args.Append ("-o");
+      Args.Append ("p.s");
+      Args.Append ("p.ldn");
+      declare
+         Ran : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute (Args, Host, Tools);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Ran.Status, Landin.Driver.Status_Success,
+            U.To_String (Ran.Report));
+         Landin.Testing.Check
+           (Item, not Contains (Host.Written ("p.s"),
+                    "ldr r0, =_landin_firmware_data_load")
+              and then not Contains (Host.Written ("p.s"),
+                    "ldr r0, =_landin_firmware_ramtext_load")
+              and then Contains (Host.Written ("p.s"),
+                    "ldr r1, =_landin_firmware_bss_start"),
+            "RAM reset clears BSS without copying the loaded image");
+         Landin.Testing.Check
+           (Item, Contains (Host.Written ("p.json"), """layout"":""ram""")
+              and then Contains (Host.Written ("p.json"),
+                """vector_address"":536870912")
+              and then Contains (Host.Written ("p.json"),
+                """ram_layout_limit"":12288"),
+            "the report names RAM layout, vectors and capacity");
+      end;
+      Args.Clear;
+      Args.Append ("--target=cortex-m0");
+      Args.Append ("--firmware-layout=ram");
+      Args.Append ("--emit=linker-script");
+      Args.Append ("-o");
+      Args.Append ("p.ld");
+      Args.Append ("p.ldn");
+      declare
+         Ran : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute (Args, Host, Tools);
+         Script : constant String := Host.Written ("p.ld");
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Ran.Status, Landin.Driver.Status_Success,
+            U.To_String (Ran.Report));
+         Landin.Testing.Check
+           (Item, Contains (Script, ".isr_vector ORIGIN(RAM)")
+              and then Contains (Script, ".text : { *(.text .text.*) } > RAM")
+              and then not Contains (Script, " AT>")
+              and then Contains (Script, "--firmware-layout=boot")
+              and then Contains (Script, "_landin_firmware_stack_bottom"),
+            "RAM script places all bytes in SRAM and retains stack checks");
+      end;
+      Host.Add_File ("big.ldn",
+        "link(keep) image: [16385]u8 = [of 1] "
+        & "start: () -> none = end start");
+      Args.Clear;
+      Args.Append ("--target=cortex-m0");
+      Args.Append ("--firmware-layout=ram");
+      Args.Append ("--firmware-entry=start");
+      Args.Append ("--emit=asm");
+      Args.Append ("-o");
+      Args.Append ("big.s");
+      Args.Append ("big.ldn");
+      declare
+         Ran : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute (Args, Host, Tools);
+      begin
+         Landin.Testing.Check
+           (Item, Ran.Status /= Landin.Driver.Status_Success
+              and then Contains (U.To_String (Ran.Report), "the RAM of")
+              and then Contains (U.To_String (Ran.Report),
+                   "--firmware-layout=boot")
+              and then not Host.Exists ("big.s"),
+            "RAM capacity refusal names the board boot check before emission");
+      end;
+   end RAM_Layout;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "cortex ABI", "RAM layout derives SRAM placement",
+         RAM_Layout'Access);
       Landin.Testing.Register
         (Into, "cortex ABI", "device descriptions select their profiles",
          Device_Descriptions'Access);

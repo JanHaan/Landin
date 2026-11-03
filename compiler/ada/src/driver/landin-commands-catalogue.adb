@@ -66,6 +66,7 @@ package body Landin.Commands.Catalogue is
          when Panic_Map => "--panic-map", when Toolchain => "--toolchain",
          when Linker => "--linker", when Link => "--link",
          when Firmware_Entry => "--firmware-entry",
+         when Firmware_Layout => "--firmware-layout",
          when Linker_Script => "--linker-script",
          when Build_Report => "--build-report",
          when Stage_Report => "--stage-report", when Dry_Run => "--dry-run",
@@ -113,6 +114,7 @@ package body Landin.Commands.Catalogue is
          when Link =>
            "Linux link: static (default) alone, or libc with C's runtime",
          when Firmware_Entry => "Select the Cortex-M firmware entry routine",
+         when Firmware_Layout => "Firmware layout: boot (default), ram",
          when Linker_Script =>
            "Link firmware with FILE, checked against the contract",
          when Build_Report => "Write deterministic build evidence JSON",
@@ -153,6 +155,7 @@ package body Landin.Commands.Catalogue is
          when Warn | Allow | Deny => "CODE|all",
          when Color => "auto|always|never",
          when Diagnostics => "human|short|json",
+         when Firmware_Layout => "boot|ram",
          when Build_Mode => "debug|release",
          when Optimize => "none|size|speed",
          when Specialize => "off|auto|all",
@@ -176,7 +179,7 @@ package body Landin.Commands.Catalogue is
           when Check => Flag in Target | Level | Root | Library
             | Library_Directory | Build_Option | Build_Mode | Optimize
             | Specialize | Link
-            | Firmware_Entry | Build_Report | Stage_Report
+            | Firmware_Entry | Firmware_Layout | Build_Report | Stage_Report
             | Warnings | Warn | Allow | Deny,
           when Compile => Flag in Target .. Depfile
             or else Flag in Warnings .. Deny,
@@ -241,6 +244,7 @@ package body Landin.Commands.Catalogue is
             return Landin.Diagnostics.Warning_Policy.Valid_Selector (Text);
          when Color => return Text in "auto" | "always" | "never";
          when Diagnostics => return Text in "human" | "short" | "json";
+         when Firmware_Layout => return Text in "boot" | "ram";
          when Build_Mode => return Text in "debug" | "release";
          when Optimize => return Text in "none" | "size" | "speed";
          when Specialize => return Text in "off" | "auto" | "all";
@@ -276,7 +280,8 @@ package body Landin.Commands.Catalogue is
 
    function Needs (Flag : Option) return Requirement is
      (case Flag is
-         when Optimize | Specialize | Build_Report | Firmware_Entry | Link =>
+         when Optimize | Specialize | Build_Report | Firmware_Entry
+            | Firmware_Layout | Link =>
             A_Source,
          when Debug | Panic_Map | Stack_Report => Machine_Code,
          when Keep_Asm => An_Executable,

@@ -352,7 +352,13 @@ package Landin.Targets.Firmware is
      with Pack;
    type Placements is array (Section_Kind) of Region_Count;
 
+   type Layout_Kind is (Boot_Layout, RAM_Layout);
+   function Spelling (Layout : Layout_Kind) return String
+     is (if Layout = RAM_Layout then "ram" else "boot");
+
    type Profile is record
+      Layout : Layout_Kind := Boot_Layout;
+      Described_Boot : Boot_Kind := Vector_Table;
       --  False until configuration has selected a description.
       Present : Boolean := False;
       --  The library's constrained reference of the target, which applies
@@ -379,6 +385,21 @@ package Landin.Targets.Firmware is
       ESP_Chip, ESP_Minimum, ESP_Maximum : ESP_Number := 0;
       ESP_Offset : Byte_Count := 0;
    end record;
+
+   --  D900: select one layout after validating the description. ESP SRAM
+   --  retains its instruction window; otherwise prefer executable data,
+   --  then writable text, then the first rwx region. Zero means none.
+   function RAM_Text_Region (Of_Profile : Profile) return Region_Count;
+   function For_Layout
+     (Of_Profile : Profile; Layout : Layout_Kind) return Profile;
+   function RAM_Only (Of_Profile : Profile) return Boolean
+     is (Of_Profile.Layout = RAM_Layout
+         or else Takes_ESP_Image (Of_Profile.Boot));
+   function RAM_Region (Of_Profile : Profile; Index : Region_Index)
+      return Boolean
+     is (Writable (Of_Profile.Regions (Index).Mode)
+         or else (Of_Profile.Described_Boot = ESP_App_Image
+                  and then Index = Of_Profile.Placed (Text)));
 
    --  Whether a handler may take absolute slot SLOT: a core slot of the
    --  description's core or, where interrupts are slots, an implemented
@@ -410,7 +431,7 @@ package Landin.Targets.Firmware is
    --  boot ROM or reset vector enters, `_landin_firmware_entry`.
    Entry_Word_Bytes : constant := 4;
    --  Where the table is: on the M profile its region's origin past the
-   --  boot kind's prefix, and on RISC-V the first address past that and the
+   --  boot kind's prefix, aligned up for RAM, and on RISC-V past that and the
    --  entry word aligned as the table must be: 64 bytes in on the
    --  reference.
    function Vector_Address (Of_Profile : Profile) return Byte_Count
@@ -422,7 +443,7 @@ package Landin.Targets.Firmware is
    --  copied; otherwise the data region, when code may run there, which
    --  reset copies it into; otherwise none.
    function RAM_Code_Region (Of_Profile : Profile) return Region_Count
-     is (if Takes_ESP_Image (Of_Profile.Boot)
+     is (if RAM_Only (Of_Profile)
          then Of_Profile.Placed (Text)
          elsif Of_Profile.Placed (Data) /= 0
            and then Executable
@@ -434,6 +455,7 @@ package Landin.Targets.Firmware is
    --  text region's length, and the data region's less the stack when the
    --  stack shares it.
    function Flash_Capacity (Of_Profile : Profile) return Byte_Count;
+   function RAM_Capacity (Of_Profile : Profile) return Byte_Count;
    function Static_RAM_Capacity (Of_Profile : Profile) return Byte_Count;
 
    --  D537: a profile's capacities as the image budget takes them.  The

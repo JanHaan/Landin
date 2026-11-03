@@ -281,6 +281,11 @@ package body Landin.Tests.Commands_Suite is
       Misuse (["--target=linux-x86-64", "--version"]);
       Misuse (["compile", "--target=linux-x86-64", "--target=linux-arm64"]);
       Misuse (["compile", "--optimize=fast", "a.ldn"]);
+      Misuse (["compile", "--firmware-layout=flash", "a.ldn"]);
+      Misuse (["compile", "--target=linux-x86-64", "--firmware-layout=ram",
+               "a.ldn"]);
+      Misuse (["compile", "--firmware-layout=ram", "--firmware-layout=ram",
+               "a.ldn"]);
       Misuse (["--quiet", "compile", "--verbose", "a.ldn"]);
       Misuse (["compile", "--output"]);
       Misuse (["build", "--help"]);
@@ -1123,6 +1128,10 @@ package body Landin.Tests.Commands_Suite is
       Same (["compile", "--emit=asm", "--keep-asm", "main.ldn", "-o", "a.s"],
             ["--emit=asm", "--keep-asm", "main.ldn", "-o", "a.s"],
             Cat.Requirement_Problem (Cat.Keep_Asm, Cat.Emit_Asm, True));
+      Same (["compile", "--target=cortex-m0", "--firmware-layout=ram"],
+            ["--target=cortex-m0", "--firmware-layout=ram"],
+            Cat.Requirement_Problem
+              (Cat.Firmware_Layout, Cat.Emit_Exe, False));
       Same (["compile", "--optimize=speed"],
             ["--emit=exe", "--optimize=speed"],
             Cat.Requirement_Problem (Cat.Optimize, Cat.Emit_Exe, False));

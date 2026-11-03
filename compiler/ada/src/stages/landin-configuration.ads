@@ -47,6 +47,11 @@ package Landin.Configuration is
    type Table is private;
 
    type Build_Mode is (Debug, Release);
+   procedure Set_Firmware_Layout
+     (Into : in out Table; Layout : Landin.Targets.Firmware.Layout_Kind);
+   function Firmware_Layout (In_Table : Table)
+      return Landin.Targets.Firmware.Layout_Kind;
+
    procedure Set_Mode (Into : in out Table; Mode : Build_Mode);
    function Mode (In_Table : Table) return Build_Mode;
 
@@ -325,6 +330,8 @@ private
       Searched : Libraries.Vector;
       Declared : Option_Sites.Vector;
       Selected_Mode : Build_Mode := Debug;
+      Selected_Layout : Landin.Targets.Firmware.Layout_Kind :=
+        Landin.Targets.Firmware.Boot_Layout;
       C_Runtime_Linked : Boolean := False;
       Selected_Profile : Landin.Targets.Firmware.Profile;
    end record;

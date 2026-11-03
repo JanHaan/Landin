@@ -273,12 +273,57 @@ package body Landin.Targets.Firmware is
 
    function Vector_Address (Of_Profile : Profile) return Byte_Count is
      (if Of_Profile.Core in Arm_Core
-      then Placed_Region (Of_Profile, Vectors).Origin
-           + Boot_Prefix (Of_Profile.Boot)
+      then (if Of_Profile.Layout = RAM_Layout
+            then Align_Up
+              (Placed_Region (Of_Profile, Vectors).Origin,
+               Byte_Alignment (Vector_Alignment (Of_Profile)))
+            else Placed_Region (Of_Profile, Vectors).Origin
+              + Boot_Prefix (Of_Profile.Boot))
       else Align_Up
         (Placed_Region (Of_Profile, Vectors).Origin
          + Boot_Prefix (Of_Profile.Boot) + Entry_Word_Bytes,
          Byte_Alignment (Vector_Alignment (Of_Profile))));
+
+   function RAM_Text_Region (Of_Profile : Profile) return Region_Count is
+   begin
+      if Of_Profile.Boot = ESP_App_Image then
+         return Of_Profile.Placed (Text);
+      end if;
+      if Of_Profile.Placed (Data) /= 0
+        and then Placed_Region (Of_Profile, Data).Mode = Read_Write_Execute
+      then
+         return Of_Profile.Placed (Data);
+      elsif Of_Profile.Placed (Text) /= 0
+        and then Placed_Region (Of_Profile, Text).Mode = Read_Write_Execute
+      then
+         return Of_Profile.Placed (Text);
+      end if;
+      for Index in 1 .. Of_Profile.Count loop
+         if Of_Profile.Regions (Index).Mode = Read_Write_Execute then
+            return Index;
+         end if;
+      end loop;
+      return 0;
+   end RAM_Text_Region;
+
+   function For_Layout
+     (Of_Profile : Profile; Layout : Layout_Kind) return Profile
+   is
+      Result : Profile := Of_Profile;
+      Code : constant Region_Count := RAM_Text_Region (Of_Profile);
+   begin
+      Result.Layout := Layout;
+      Result.Described_Boot := Of_Profile.Boot;
+      if Layout = RAM_Layout and then Code /= 0 then
+         Result.Boot := Vector_Table;
+         Result.Has_Stage := Of_Profile.Has_Stage
+           and then Of_Profile.Boot /= RP2040_Boot2;
+         Result.Placed (Vectors) := Code;
+         Result.Placed (Text) := Code;
+         Result.Placed (Rodata) := Code;
+      end if;
+      return Result;
+   end For_Layout;
 
    function Flash_Capacity (Of_Profile : Profile) return Byte_Count is
      (if Of_Profile.Placed (Text) = 0 then 0
@@ -290,8 +335,21 @@ package body Landin.Targets.Firmware is
       then Placed_Region (Of_Profile, Data).Length - Of_Profile.Stack_Size
       else Placed_Region (Of_Profile, Data).Length);
 
+   function RAM_Capacity (Of_Profile : Profile) return Byte_Count is
+      Total : Byte_Count := 0;
+   begin
+      for Index in 1 .. Of_Profile.Count loop
+         if RAM_Region (Of_Profile, Index) then
+            Total := Total + Of_Profile.Regions (Index).Length;
+         end if;
+      end loop;
+      return Total - Of_Profile.Stack_Size;
+   end RAM_Capacity;
+
    function Budget (Of_Profile : Profile) return Image_Budget is
-     ((Initialized => Flash_Capacity (Of_Profile),
+     ((Initialized => (if Of_Profile.Layout = RAM_Layout
+                       then RAM_Capacity (Of_Profile)
+                       else Flash_Capacity (Of_Profile)),
        Writable    => (if Of_Profile.Placed (Data) = 0 then 0
                        else Placed_Region (Of_Profile, Data).Length),
        Reserved    => Maximum_Object_Size (Cortex_M)));
