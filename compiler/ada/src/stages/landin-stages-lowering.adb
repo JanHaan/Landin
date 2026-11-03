@@ -13934,8 +13934,12 @@ package body Landin.Stages.Lowering is
                   end if;
                end Write;
 
-            begin
-               if Final_Value then
+               --  A block's final value, written into its consumer's
+               --  destination or into a temporary made for it.
+               procedure Lower_Final_Value;
+
+               procedure Lower_Final_Value is
+               begin
                   declare
                      Held : constant Ty.Type_Kind := Type_At (Of_Tree, Stmt);
                      Target : IR.Slot_Id := Destination;
@@ -14123,153 +14127,133 @@ package body Landin.Stages.Lowering is
                           "a block value has no lowerable shape";
                      end if;
                   end;
-               else
-                  case Syn.Kind (Of_Tree, Stmt) is
-                  when Syn.Binding =>
-                     declare
-                        Id : constant Res.Declaration_Id :=
-                          Declaration_At (Syn.Source_Of (Of_Tree), Stmt);
-                        Where : constant IR.Slot_Id :=
-                          Slot_For (Of_Tree, Stmt, Id);
-                        Value : constant Syn.Node_Id :=
-                          Syn.Value_Of (Of_Tree, Stmt);
-                     begin
-                        if Value = Syn.No_Node then
-                           null;
-                        elsif Landin.Checking.Type_Of (Types.all, Id)
-                                in Ty.Slice_Value | Ty.Any_Value
-                        then
-                           Lower_Slice_Into
-                             (Of_Tree, Value, Scope, Where);
-                        elsif Landin.Checking.Type_Of (Types.all, Id)
-                                = Ty.Fixed_Array
-                        then
-                           if Syn.Kind (Of_Tree, Value)
-                                in Syn.If_Statement | Syn.Match_Statement
-                                   | Syn.Bare_Block | Syn.Loop_Statement
-                                   | Syn.While_Statement | Syn.For_Statement
-                           then
-                              case Syn.Kind (Of_Tree, Value) is
-                                 when Syn.If_Statement =>
-                                    Lower_If
-                                      (Of_Tree, Value, Scope, Result, Where);
-                                 when Syn.Match_Statement =>
-                                    Lower_Match
-                                      (Of_Tree, Value, Scope, Result, Where);
-                                 when Syn.Bare_Block =>
-                                    Lower_Bare_Block
-                                      (Of_Tree, Value, Scope, Result, Where);
-                                 when Syn.Loop_Statement
-                                    | Syn.While_Statement
-                                    | Syn.For_Statement =>
-                                    Lower_Loop
-                                      (Of_Tree, Value, Scope, Result, Where);
-                                 when others =>
-                                    raise Landin.Compiler_Defect;
-                              end case;
-                           elsif Syn.Kind (Of_Tree, Value)
-                                   in Syn.Call | Syn.Labeled_Application
-                                      | Syn.Try_Expression
-                             and then not Is_Struct_Construction
-                               (Of_Tree, Value)
-                           then
-                              Lower_Stored_Expression
-                                (Of_Tree, Value, Scope, Where);
-                           elsif Syn.Kind (Of_Tree, Value)
-                                   in Syn.Array_Literal
-                                      | Syn.Mixed_Array_Repetition
-                                      | Syn.Array_Repetition
-                             and then Neutral_Element
-                               (Of_Tree, Value).Kind /= IR.Scalar_Field_Shape
-                           then
-                              --  A compound child is constructed in storage,
-                              --  not lowered as a scalar expression or call.
-                              Write_Array_Value
-                                (Value, (Kind => IR.Frame_Slot, Slot => Where),
-                                 Field => 0);
-                           elsif Syn.Kind (Of_Tree, Value)
-                                   = Syn.Array_Literal
-                           then
-                              --  D23/D25: a literal has exactly the finite
-                              --  element run the source wrote.  Lower and
-                              --  store each one immediately, preserving
-                              --  [0410]'s left-to-right evaluation in the
-                              --  existing compact array slot.
-                              for Position in
-                                1 .. Syn.Element_Count (Of_Tree, Value)
-                              loop
-                                 declare
-                                    Held : constant IR.Value_Id :=
-                                      Lower_Expression
-                                        (Of_Tree,
-                                         Syn.Nth_Element
-                                           (Of_Tree, Value, Position),
-                                         Scope);
-                                 begin
-                                    exit when Current = IR.No_Block;
-                                    IR.Emit_Store_Slot_Field
-                                      (Unit.all, Filling, Where,
-                                       IR.Part_Position (Position), Held,
-                                       Site);
-                                 end;
-                              end loop;
-                           elsif Syn.Kind (Of_Tree, Value)
-                                   = Syn.Mixed_Array_Repetition
-                           then
-                              --  D36 stores the prefix as it is evaluated,
-                              --  then evaluates one suffix pattern and fills
-                              --  from the first part after that prefix.
-                              for Position in
-                                1 .. Syn.Element_Count (Of_Tree, Value)
-                              loop
-                                 declare
-                                    Held : constant IR.Value_Id :=
-                                      Lower_Expression
-                                        (Of_Tree,
-                                         Syn.Nth_Element
-                                           (Of_Tree, Value, Position),
-                                         Scope);
-                                 begin
-                                    exit when Current = IR.No_Block;
-                                    IR.Emit_Store_Slot_Field
-                                      (Unit.all, Filling, Where,
-                                       IR.Part_Position (Position), Held,
-                                       Site);
-                                 end;
-                              end loop;
+               end Lower_Final_Value;
 
-                              if Current /= IR.No_Block then
-                                 declare
-                                    Held : constant IR.Value_Id :=
-                                      Lower_Expression
-                                        (Of_Tree,
-                                         Syn.Repeated_Element
-                                           (Of_Tree, Value), Scope);
-                                 begin
-                                    if Current /= IR.No_Block then
-                                       IR.Emit_Array_Fill
-                                         (Unit.all, Filling,
-                                          Destination =>
-                                            IR.Storage'
-                                              (Kind => IR.Frame_Slot,
-                                               Slot => Where),
-                                          First => IR.Part_Position
-                                            (Syn.Element_Count
-                                               (Of_Tree, Value) + 1),
-                                          Value => Held,
-                                          Site  => Site);
-                                    end if;
-                                 end;
-                              end if;
-                           elsif Syn.Kind (Of_Tree, Value)
-                                   = Syn.Array_Repetition
-                           then
+               --  A binding's initializer, lowered into the slot its
+               --  declaration owns; a binding with none writes nothing.
+               procedure Lower_Binding_Statement;
+
+               procedure Lower_Binding_Statement is
+               begin
+                  declare
+                     Id : constant Res.Declaration_Id :=
+                       Declaration_At (Syn.Source_Of (Of_Tree), Stmt);
+                     Where : constant IR.Slot_Id :=
+                       Slot_For (Of_Tree, Stmt, Id);
+                     Value : constant Syn.Node_Id :=
+                       Syn.Value_Of (Of_Tree, Stmt);
+                  begin
+                     if Value = Syn.No_Node then
+                        null;
+                     elsif Landin.Checking.Type_Of (Types.all, Id)
+                             in Ty.Slice_Value | Ty.Any_Value
+                     then
+                        Lower_Slice_Into
+                          (Of_Tree, Value, Scope, Where);
+                     elsif Landin.Checking.Type_Of (Types.all, Id)
+                             = Ty.Fixed_Array
+                     then
+                        if Syn.Kind (Of_Tree, Value)
+                             in Syn.If_Statement | Syn.Match_Statement
+                                | Syn.Bare_Block | Syn.Loop_Statement
+                                | Syn.While_Statement | Syn.For_Statement
+                        then
+                           case Syn.Kind (Of_Tree, Value) is
+                              when Syn.If_Statement =>
+                                 Lower_If
+                                   (Of_Tree, Value, Scope, Result, Where);
+                              when Syn.Match_Statement =>
+                                 Lower_Match
+                                   (Of_Tree, Value, Scope, Result, Where);
+                              when Syn.Bare_Block =>
+                                 Lower_Bare_Block
+                                   (Of_Tree, Value, Scope, Result, Where);
+                              when Syn.Loop_Statement
+                                 | Syn.While_Statement
+                                 | Syn.For_Statement =>
+                                 Lower_Loop
+                                   (Of_Tree, Value, Scope, Result, Where);
+                              when others =>
+                                 raise Landin.Compiler_Defect;
+                           end case;
+                        elsif Syn.Kind (Of_Tree, Value)
+                                in Syn.Call | Syn.Labeled_Application
+                                   | Syn.Try_Expression
+                          and then not Is_Struct_Construction
+                            (Of_Tree, Value)
+                        then
+                           Lower_Stored_Expression
+                             (Of_Tree, Value, Scope, Where);
+                        elsif Syn.Kind (Of_Tree, Value)
+                                in Syn.Array_Literal
+                                   | Syn.Mixed_Array_Repetition
+                                   | Syn.Array_Repetition
+                          and then Neutral_Element
+                            (Of_Tree, Value).Kind /= IR.Scalar_Field_Shape
+                        then
+                           --  A compound child is constructed in storage,
+                           --  not lowered as a scalar expression or call.
+                           Write_Array_Value
+                             (Value, (Kind => IR.Frame_Slot, Slot => Where),
+                              Field => 0);
+                        elsif Syn.Kind (Of_Tree, Value)
+                                = Syn.Array_Literal
+                        then
+                           --  D23/D25: a literal has exactly the finite
+                           --  element run the source wrote.  Lower and
+                           --  store each one immediately, preserving
+                           --  [0410]'s left-to-right evaluation in the
+                           --  existing compact array slot.
+                           for Position in
+                             1 .. Syn.Element_Count (Of_Tree, Value)
+                           loop
                               declare
                                  Held : constant IR.Value_Id :=
                                    Lower_Expression
                                      (Of_Tree,
-                                      Syn.Repeated_Element (Of_Tree, Value),
+                                      Syn.Nth_Element
+                                        (Of_Tree, Value, Position),
                                       Scope);
+                              begin
+                                 exit when Current = IR.No_Block;
+                                 IR.Emit_Store_Slot_Field
+                                   (Unit.all, Filling, Where,
+                                    IR.Part_Position (Position), Held,
+                                    Site);
+                              end;
+                           end loop;
+                        elsif Syn.Kind (Of_Tree, Value)
+                                = Syn.Mixed_Array_Repetition
+                        then
+                           --  D36 stores the prefix as it is evaluated,
+                           --  then evaluates one suffix pattern and fills
+                           --  from the first part after that prefix.
+                           for Position in
+                             1 .. Syn.Element_Count (Of_Tree, Value)
+                           loop
+                              declare
+                                 Held : constant IR.Value_Id :=
+                                   Lower_Expression
+                                     (Of_Tree,
+                                      Syn.Nth_Element
+                                        (Of_Tree, Value, Position),
+                                      Scope);
+                              begin
+                                 exit when Current = IR.No_Block;
+                                 IR.Emit_Store_Slot_Field
+                                   (Unit.all, Filling, Where,
+                                    IR.Part_Position (Position), Held,
+                                    Site);
+                              end;
+                           end loop;
+
+                           if Current /= IR.No_Block then
+                              declare
+                                 Held : constant IR.Value_Id :=
+                                   Lower_Expression
+                                     (Of_Tree,
+                                      Syn.Repeated_Element
+                                        (Of_Tree, Value), Scope);
                               begin
                                  if Current /= IR.No_Block then
                                     IR.Emit_Array_Fill
@@ -14278,139 +14262,1149 @@ package body Landin.Stages.Lowering is
                                          IR.Storage'
                                            (Kind => IR.Frame_Slot,
                                             Slot => Where),
-                                       First => 1, Value => Held,
-                                       Site => Site);
+                                       First => IR.Part_Position
+                                         (Syn.Element_Count
+                                            (Of_Tree, Value) + 1),
+                                       Value => Held,
+                                       Site  => Site);
                                  end if;
                               end;
-                           elsif Syn.Kind (Of_Tree, Value)
-                                   = Syn.Zeroed_Literal
-                           then
-                              --  D28: clear the complete compact slot at
-                              --  runtime with one extent-independent
-                              --  operation.
-                              IR.Emit_Array_Clear
-                                (Unit.all, Filling,
-                                 Destination =>
-                                   IR.Storage'
-                                     (Kind => IR.Frame_Slot, Slot => Where),
-                                 Site        => Site);
-                           else
-                              Write_Array_Value
-                                (Value, (Kind => IR.Frame_Slot, Slot => Where),
-                                 Field => 0);
                            end if;
-                        elsif Landin.Checking.Type_Of (Types.all, Id)
-                                = Ty.Aggregate
+                        elsif Syn.Kind (Of_Tree, Value)
+                                = Syn.Array_Repetition
                         then
-                           if Syn.Kind (Of_Tree, Value)
-                                in Syn.If_Statement | Syn.Match_Statement
-                                   | Syn.Bare_Block | Syn.Loop_Statement
-                                   | Syn.While_Statement | Syn.For_Statement
-                           then
-                              case Syn.Kind (Of_Tree, Value) is
-                                 when Syn.If_Statement =>
-                                    Lower_If
-                                      (Of_Tree, Value, Scope, Result, Where);
-                                 when Syn.Match_Statement =>
-                                    Lower_Match
-                                      (Of_Tree, Value, Scope, Result, Where);
-                                 when Syn.Bare_Block =>
-                                    Lower_Bare_Block
-                                      (Of_Tree, Value, Scope, Result, Where);
-                                 when Syn.Loop_Statement
-                                    | Syn.While_Statement
-                                    | Syn.For_Statement =>
-                                    Lower_Loop
-                                      (Of_Tree, Value, Scope, Result, Where);
-                                 when others =>
-                                    raise Landin.Compiler_Defect;
-                              end case;
-                           elsif Syn.Kind (Of_Tree, Value)
-                                   in Syn.Call | Syn.Labeled_Application
-                                      | Syn.Try_Expression
-                             and then not Is_Struct_Construction
-                               (Of_Tree, Value)
-                           then
-                              Lower_Stored_Expression
-                                (Of_Tree, Value, Scope, Where);
-                           elsif Is_Union_Nominal
-                             (Landin.Checking.Nominal_Of (Types.all, Id))
-                           then
-                              --  [0480]/[1870]: an atom, a pointer or a
-                              --  narrower union widens; a union is copied.
-                              Write_Shaped_Value
-                                (Of_Tree, Value, Scope,
-                                 Neutral_Body
-                                   (Landin.Checking.Nominal_Of
-                                      (Types.all, Id)),
-                                 Stored_At
-                                   ((Kind => IR.Frame_Slot, Slot => Where)));
-                           elsif Is_Struct_Construction (Of_Tree, Value) then
-                              Write_Struct_Literal
-                                (Value,
-                                 Landin.Checking.Nominal_Of (Types.all, Id),
-                                 (Kind => IR.Frame_Slot, Slot => Where));
-                           elsif Syn.Kind (Of_Tree, Value)
-                                = Syn.Zeroed_Literal
-                           then
-                              --  D57: one whole-storage clear writes the
-                              --  complete padded image of the fresh aggregate
-                              --  slot; field zero identifies the whole cell.
-                              IR.Emit_Array_Clear
-                                (Unit.all, Filling,
-                                 Destination =>
-                                   IR.Storage'
-                                     (Kind => IR.Frame_Slot, Slot => Where),
-                                 Site => Site);
-                           else
-                              --  D55 copies a nominal aggregate field by
-                              --  field.  D128 applies the same rule to the
-                              --  ordered fields of an anonymous result shape.
-                              declare
-                                 Shape : constant
-                                   Landin.Checking.Signature_Id :=
-                                     Landin.Checking.Result_Shape_Of
-                                       (Types.all, Id);
-                                 Wrote : constant
-                                   Landin.Checking.Nominal_Type_Id :=
-                                   Landin.Checking.Nominal_Of (Types.all, Id);
-                                 Destination : constant IR.Storage :=
-                                   (Kind => IR.Frame_Slot, Slot => Where);
-                              begin
-                                 if Shape /= Landin.Checking.No_Signature then
-                                    declare
-                                       Source : constant IR.Storage :=
-                                         Rooted_Storage (Of_Tree, Value);
-                                    begin
-                                       for Field in
-                                         1 .. Landin.Checking
-                                                .Signature_Result_Count
-                                                  (Types.all, Shape)
-                                       loop
-                                          Copy_Result_Field
-                                            (Shape, Source, Destination,
-                                             Field);
-                                       end loop;
-                                    end;
-                                 else
-                                    Copy_Aggregate_Value
-                                      (Wrote, Value, Destination);
-                                 end if;
-                              end;
-                           end if;
-                        else
                            declare
                               Held : constant IR.Value_Id :=
                                 Lower_Expression
-                                  (Of_Tree, Value, Scope);
+                                  (Of_Tree,
+                                   Syn.Repeated_Element (Of_Tree, Value),
+                                   Scope);
                            begin
                               if Current /= IR.No_Block then
+                                 IR.Emit_Array_Fill
+                                   (Unit.all, Filling,
+                                    Destination =>
+                                      IR.Storage'
+                                        (Kind => IR.Frame_Slot,
+                                         Slot => Where),
+                                    First => 1, Value => Held,
+                                    Site => Site);
+                              end if;
+                           end;
+                        elsif Syn.Kind (Of_Tree, Value)
+                                = Syn.Zeroed_Literal
+                        then
+                           --  D28: clear the complete compact slot at
+                           --  runtime with one extent-independent
+                           --  operation.
+                           IR.Emit_Array_Clear
+                             (Unit.all, Filling,
+                              Destination =>
+                                IR.Storage'
+                                  (Kind => IR.Frame_Slot, Slot => Where),
+                              Site        => Site);
+                        else
+                           Write_Array_Value
+                             (Value, (Kind => IR.Frame_Slot, Slot => Where),
+                              Field => 0);
+                        end if;
+                     elsif Landin.Checking.Type_Of (Types.all, Id)
+                             = Ty.Aggregate
+                     then
+                        if Syn.Kind (Of_Tree, Value)
+                             in Syn.If_Statement | Syn.Match_Statement
+                                | Syn.Bare_Block | Syn.Loop_Statement
+                                | Syn.While_Statement | Syn.For_Statement
+                        then
+                           case Syn.Kind (Of_Tree, Value) is
+                              when Syn.If_Statement =>
+                                 Lower_If
+                                   (Of_Tree, Value, Scope, Result, Where);
+                              when Syn.Match_Statement =>
+                                 Lower_Match
+                                   (Of_Tree, Value, Scope, Result, Where);
+                              when Syn.Bare_Block =>
+                                 Lower_Bare_Block
+                                   (Of_Tree, Value, Scope, Result, Where);
+                              when Syn.Loop_Statement
+                                 | Syn.While_Statement
+                                 | Syn.For_Statement =>
+                                 Lower_Loop
+                                   (Of_Tree, Value, Scope, Result, Where);
+                              when others =>
+                                 raise Landin.Compiler_Defect;
+                           end case;
+                        elsif Syn.Kind (Of_Tree, Value)
+                                in Syn.Call | Syn.Labeled_Application
+                                   | Syn.Try_Expression
+                          and then not Is_Struct_Construction
+                            (Of_Tree, Value)
+                        then
+                           Lower_Stored_Expression
+                             (Of_Tree, Value, Scope, Where);
+                        elsif Is_Union_Nominal
+                          (Landin.Checking.Nominal_Of (Types.all, Id))
+                        then
+                           --  [0480]/[1870]: an atom, a pointer or a
+                           --  narrower union widens; a union is copied.
+                           Write_Shaped_Value
+                             (Of_Tree, Value, Scope,
+                              Neutral_Body
+                                (Landin.Checking.Nominal_Of
+                                   (Types.all, Id)),
+                              Stored_At
+                                ((Kind => IR.Frame_Slot, Slot => Where)));
+                        elsif Is_Struct_Construction (Of_Tree, Value) then
+                           Write_Struct_Literal
+                             (Value,
+                              Landin.Checking.Nominal_Of (Types.all, Id),
+                              (Kind => IR.Frame_Slot, Slot => Where));
+                        elsif Syn.Kind (Of_Tree, Value)
+                             = Syn.Zeroed_Literal
+                        then
+                           --  D57: one whole-storage clear writes the
+                           --  complete padded image of the fresh aggregate
+                           --  slot; field zero identifies the whole cell.
+                           IR.Emit_Array_Clear
+                             (Unit.all, Filling,
+                              Destination =>
+                                IR.Storage'
+                                  (Kind => IR.Frame_Slot, Slot => Where),
+                              Site => Site);
+                        else
+                           --  D55 copies a nominal aggregate field by
+                           --  field.  D128 applies the same rule to the
+                           --  ordered fields of an anonymous result shape.
+                           declare
+                              Shape : constant
+                                Landin.Checking.Signature_Id :=
+                                  Landin.Checking.Result_Shape_Of
+                                    (Types.all, Id);
+                              Wrote : constant
+                                Landin.Checking.Nominal_Type_Id :=
+                                Landin.Checking.Nominal_Of (Types.all, Id);
+                              Destination : constant IR.Storage :=
+                                (Kind => IR.Frame_Slot, Slot => Where);
+                           begin
+                              if Shape /= Landin.Checking.No_Signature then
+                                 declare
+                                    Source : constant IR.Storage :=
+                                      Rooted_Storage (Of_Tree, Value);
+                                 begin
+                                    for Field in
+                                      1 .. Landin.Checking
+                                             .Signature_Result_Count
+                                               (Types.all, Shape)
+                                    loop
+                                       Copy_Result_Field
+                                         (Shape, Source, Destination,
+                                          Field);
+                                    end loop;
+                                 end;
+                              else
+                                 Copy_Aggregate_Value
+                                   (Wrote, Value, Destination);
+                              end if;
+                           end;
+                        end if;
+                     else
+                        declare
+                           Held : constant IR.Value_Id :=
+                             Lower_Expression
+                               (Of_Tree, Value, Scope);
+                        begin
+                           if Current /= IR.No_Block then
+                              IR.Emit_Store
+                                (Unit.all, Filling, Where, Held, Site);
+                           end if;
+                        end;
+                     end if;
+                  end;
+               end Lower_Binding_Statement;
+
+               --  An assignment, plain or compound.
+               procedure Lower_Assignment_Statement;
+
+               procedure Lower_Assignment_Statement is
+               begin
+                  --  [0390]/[0410]: form the destination address and read
+                  --  its old scalar value before the right-hand side.
+                  --  Both are retained in frame slots because that value
+                  --  may cross blocks.  The final indirect store therefore
+                  --  cannot re-evaluate an index or pointer expression.
+                  if Syn.Assignment_Operation (Of_Tree, Stmt)
+                       /= Landin.Tokens.Plain_Assignment
+                    and then Type_At
+                      (Of_Tree, Syn.Target_Of (Of_Tree, Stmt))
+                        = Ty.Fixed_Array
+                  then
+                     declare
+                        Place : constant Syn.Node_Id :=
+                          Syn.Target_Of (Of_Tree, Stmt);
+                        Shape : constant IR.Field_Shape :=
+                          Neutral_Value_Shape (Of_Tree, Place);
+                        Reached : constant Stored_Place :=
+                          Lower_Stored_Place (Of_Tree, Place, Scope);
+                     begin
+                        if Current /= IR.No_Block then
+                           declare
+                              Destination : constant IR.Storage :=
+                                Addressed_Storage (Reached, Shape, Site);
+                           begin
+                              Write_Array_Arithmetic
+                                (Of_Tree, Stmt, Scope, Shape,
+                                 Stored_At (Destination));
+                           end;
+                        end if;
+                     end;
+                  elsif Syn.Assignment_Operation (Of_Tree, Stmt)
+                       /= Landin.Tokens.Plain_Assignment
+                    and then Distinct_Scalar_Base
+                      (Of_Tree, Syn.Target_Of (Of_Tree, Stmt))
+                        in Ty.Scalar_Name
+                  then
+                     --  D427: `x op= y` over a distinct type of an
+                     --  unsigned base is `x = x op y` with the place
+                     --  reached once: its one representation child is
+                     --  read, combined with the base's operator and
+                     --  written back.
+                     declare
+                        Place : constant Syn.Node_Id :=
+                          Syn.Target_Of (Of_Tree, Stmt);
+                        Held : constant Ty.Scalar_Name :=
+                          Distinct_Scalar_Base (Of_Tree, Place);
+                        Shape : constant IR.Field_Shape :=
+                          Neutral_Value_Shape (Of_Tree, Place);
+                        Reached : constant Stored_Place :=
+                          Lower_Stored_Place (Of_Tree, Place, Scope);
+                     begin
+                        if Current /= IR.No_Block then
+                           declare
+                              Saved : constant IR.Slot_Id :=
+                                Shaped_Temporary (Shape, Site);
+                           begin
+                              Copy_Shaped_Storage
+                                (Reached,
+                                 Stored_At
+                                   ((Kind => IR.Frame_Slot,
+                                     Slot => Saved)),
+                                 Shape, Site);
+                              declare
+                                 Right : constant IR.Value_Id :=
+                                   Lower_Expression
+                                     (Of_Tree,
+                                      Syn.Value_Of (Of_Tree, Stmt),
+                                      Scope);
+                              begin
+                                 if Current /= IR.No_Block then
+                                    Store_Shaped_Scalar
+                                      (Child_Place (Reached, 1),
+                                       IR.Nth_Aggregate_Field
+                                         (Unit.all, Shape, 1),
+                                       IR.Emit_Binary
+                                         (Unit.all, Filling,
+                                          Update_Opcode
+                                            (Syn.Assignment_Operation
+                                               (Of_Tree, Stmt)),
+                                          IR.Emit_Load_Slot_Field
+                                            (Unit.all, Filling, Saved,
+                                             1, Held, Site),
+                                          Right, Held, Site),
+                                       Site);
+                                 end if;
+                              end;
+                           end;
+                        end if;
+                     end;
+                  elsif Syn.Assignment_Operation (Of_Tree, Stmt)
+                       /= Landin.Tokens.Plain_Assignment
+                  then
+                     declare
+                        Place : constant Syn.Node_Id :=
+                          Syn.Target_Of (Of_Tree, Stmt);
+                        Held : constant Ty.Scalar_Name :=
+                          Scalar_At (Of_Tree, Place);
+                        Dynamic : constant Boolean :=
+                          Has_Computed_Index (Of_Tree, Place)
+                          or else Has_Reference_Storage
+                            (Of_Tree, Place);
+                     begin
+                        if Current /= IR.No_Block then
+                           declare
+                              procedure Finish_Update
+                                (Was          : IR.Value_Id;
+                                 Address_Slot : IR.Slot_Id := IR.No_Slot);
+
+                              procedure Finish_Update
+                                (Was          : IR.Value_Id;
+                                 Address_Slot : IR.Slot_Id := IR.No_Slot)
+                              is
+                                 Saved : constant IR.Slot_Id :=
+                                   IR.Add_Slot
+                                     (Unit.all, Filling, Held,
+                                      Res.No_Declaration, Site);
+                              begin
                                  IR.Emit_Store
-                                   (Unit.all, Filling, Where, Held, Site);
+                                   (Unit.all, Filling, Saved, Was, Site);
+                                 declare
+                                    Right : constant IR.Value_Id :=
+                                      Lower_Expression
+                                        (Of_Tree,
+                                         Syn.Value_Of (Of_Tree, Stmt),
+                                         Scope);
+                                 begin
+                                    if Current /= IR.No_Block then
+                                       declare
+                                          Left : constant IR.Value_Id :=
+                                            IR.Emit_Load
+                                              (Unit.all, Filling, Saved,
+                                               Site);
+                                          Result : constant IR.Value_Id :=
+                                            Checked_Update
+                                              (Of_Tree, Stmt,
+                                               IR.Emit_Binary
+                                                 (Unit.all, Filling,
+                                                  Update_Opcode
+                                                    (Syn
+                                                       .Assignment_Operation
+                                                         (Of_Tree, Stmt)),
+                                                  Left, Right, Held,
+                                                  Site));
+                                       begin
+                                          if Address_Slot = IR.No_Slot then
+                                             Write (Place, Result);
+                                          else
+                                             IR.Emit_Store_Indirect
+                                               (Unit.all, Filling,
+                                                Address_Slot, Result, Site);
+                                          end if;
+                                       end;
+                                    end if;
+                                 end;
+                              end Finish_Update;
+                           begin
+                              if Dynamic then
+                                 declare
+                                    Reached : constant Stored_Place :=
+                                      Lower_Stored_Place
+                                        (Of_Tree, Place, Scope);
+                                 begin
+                                    if Current /= IR.No_Block then
+                                       declare
+                                          Address : constant IR.Storage :=
+                                            Addressed_Storage
+                                              (Reached,
+                                               Neutral_Value_Shape
+                                                 (Of_Tree, Place), Site);
+                                          Was : constant IR.Value_Id :=
+                                            IR.Emit_Load_Indirect
+                                              (Unit.all, Filling,
+                                               Address.Address, Site);
+                                       begin
+                                          Finish_Update
+                                            (Was, Address.Address);
+                                       end;
+                                    end if;
+                                 end;
+                              else
+                                 Finish_Update
+                                   (Read_Place (Place, IR.No_Value));
                               end if;
                            end;
                         end if;
                      end;
+
+                  --  D76's direct part assignment is contextual and its
+                  --  target is Not_Typed rather than a general aggregate
+                  --  value.  Lower it before the ordinary whole-struct
+                  --  branch asks the place for an aggregate body.
+                  elsif Syn.Kind
+                       (Of_Tree, Syn.Target_Of (Of_Tree, Stmt))
+                       = Syn.Member_Selection
+                    and then Landin.Checking.Type_Of
+                      (Types.all, Of_Tree,
+                       Syn.Target_Of (Of_Tree, Stmt)) = Ty.Not_Typed
+                  then
+                     declare
+                        Place : constant Syn.Node_Id :=
+                          Syn.Target_Of (Of_Tree, Stmt);
+                        --  D126: the variant part may sit below the
+                        --  name; Wrote is the body that declares it and
+                        --  Base/Steps is the run that reaches it.
+                        Holder : constant Syn.Node_Id :=
+                          Syn.Target_Of (Of_Tree, Place);
+                        Referenced : constant Boolean :=
+                          Has_Reference_Storage (Of_Tree, Holder);
+                        Computed : constant Boolean :=
+                          Has_Computed_Index (Of_Tree, Holder)
+                          or else Referenced;
+                        Named : constant Syn.Node_Id :=
+                          (if Computed then Syn.No_Node
+                           else Chain_Root (Of_Tree, Place));
+                        Wrote : constant Landin.Checking.Nominal_Type_Id :=
+                          Landin.Checking.Nominal_Of
+                            (Types.all, Of_Tree, Holder);
+                        Field : constant Positive := Positive
+                          (Landin.Checking.Field_Index
+                             (Types.all, Of_Tree, Place));
+                        --  A computed element is first retained as whole
+                        --  holder storage.  A shaped temporary preserves
+                        --  every sibling while the ordinary variant
+                        --  operation evaluates its payload in source order.
+                        Reached : constant Natural :=
+                          (if Computed then 0
+                           else Chain_Base (Of_Tree, Place));
+                        Walked : constant IR.Path_Step_Array :=
+                          (if Computed then IR.No_Path_Steps
+                           else Chain_Steps (Of_Tree, Place));
+                        Base : constant Positive :=
+                          (if Computed then Field
+                           else Positive (Leaf_Base (Reached, Walked)));
+                        Steps : constant IR.Path_Step_Array :=
+                          (if Computed then IR.No_Path_Steps
+                           else Leaf_Steps (Reached, Walked));
+                     begin
+                        pragma Assert
+                          (Landin.Checking.Field_Kind_Of
+                             (Types.all, Wrote, Field)
+                             = Landin.Checking.Variant_Field);
+                        if Referenced then
+                           --  Capture the holder once, then select and
+                           --  write its actual variant part. A whole
+                           --  holder copy would overwrite sibling effects
+                           --  performed by payload expressions (D76).
+                           declare
+                              Reached_Place : constant Stored_Place :=
+                                Lower_Stored_Place
+                                  (Of_Tree, Holder, Scope);
+                           begin
+                              if Current /= IR.No_Block then
+                                 declare
+                                    Into : constant IR.Storage :=
+                                      Addressed_Storage
+                                        (Reached_Place,
+                                         Neutral_Body (Wrote), Site);
+                                 begin
+                                    Write_Variant_Value
+                                      (Syn.Value_Of (Of_Tree, Stmt),
+                                       Wrote, Field, Into, Base => Field);
+                                 end;
+                              end if;
+                           end;
+                        elsif Computed then
+                           declare
+                              Holder_Place : constant Stored_Place :=
+                                Lower_Stored_Place
+                                  (Of_Tree, Holder, Scope);
+                           begin
+                              if Current /= IR.No_Block then
+                                 declare
+                                    Shape : constant IR.Field_Shape :=
+                                      Neutral_Body (Wrote);
+                                    Into : constant IR.Storage :=
+                                      Addressed_Storage
+                                        (Holder_Place, Shape, Site);
+                                    Temporary : constant IR.Slot_Id :=
+                                      IR.Add_Aggregate_Slot
+                                        (Unit.all, Filling,
+                                         Res.No_Declaration, Site,
+                                         Nominal_For (Wrote));
+                                    Temp_Storage : constant IR.Storage :=
+                                      (Kind => IR.Frame_Slot,
+                                       Slot => Temporary);
+                                 begin
+                                    for Part in
+                                      1 .. Landin.Checking
+                                             .Layout_Field_Count
+                                               (Types.all, Wrote)
+                                    loop
+                                       Add_Stored_Field
+                                         (Wrote, Part,
+                                          Slot => Temporary);
+                                    end loop;
+                                    declare
+                                       Temp : constant Stored_Place :=
+                                         (Place => Temp_Storage,
+                                          Base => 0,
+                                          Steps => Stored_Path_Vectors
+                                            .Empty_Vector);
+                                       Temp_Address : constant IR.Storage :=
+                                         Addressed_Storage
+                                           (Temp, Shape, Site);
+                                    begin
+                                       IR.Emit_Array_Copy
+                                         (Unit.all, Filling, Into,
+                                          Temp_Address, Site);
+                                       Write_Variant_Value
+                                         (Syn.Value_Of (Of_Tree, Stmt),
+                                          Wrote, Field, Temp_Storage,
+                                          Base => Base, Steps => Steps);
+                                       if Current /= IR.No_Block then
+                                          IR.Emit_Array_Copy
+                                            (Unit.all, Filling,
+                                             Temp_Address, Into, Site);
+                                       end if;
+                                    end;
+                                 end;
+                              end if;
+                           end;
+                        else
+                           Write_Variant_Value
+                             (Syn.Value_Of (Of_Tree, Stmt), Wrote, Field,
+                              Storage_For (Of_Tree, Named),
+                              Base => Base, Steps => Steps);
+                        end if;
+                     end;
+
+                  elsif Landin.Checking.Type_Of
+                    (Types.all, Of_Tree,
+                     Syn.Target_Of (Of_Tree, Stmt))
+                       in Ty.Slice_Value | Ty.Any_Value
+                  then
+                     declare
+                        Place : constant Syn.Node_Id :=
+                          Syn.Target_Of (Of_Tree, Stmt);
+                        From : constant Syn.Node_Id :=
+                          Syn.Value_Of (Of_Tree, Stmt);
+                        Destination : constant Stored_Place :=
+                          Lower_Stored_Place (Of_Tree, Place, Scope);
+                     begin
+                        if Destination.Place.Kind = IR.Frame_Slot
+                          and then Destination.Base = 0
+                          and then Destination.Steps.Is_Empty
+                        then
+                           Lower_Slice_Into
+                             (Of_Tree, From, Scope,
+                              Destination.Place.Slot);
+                        else
+                           declare
+                              Temporary : constant IR.Slot_Id :=
+                                IR.Add_Array_Slot
+                                  (Unit.all, Filling, Ty.Usize, 2,
+                                   Res.No_Declaration, Site);
+                           begin
+                              Lower_Slice_Into
+                                (Of_Tree, From, Scope, Temporary);
+                              IR.Emit_Array_Copy
+                                (Unit.all, Filling,
+                                 (Kind => IR.Frame_Slot,
+                                  Slot => Temporary),
+                                 Destination.Place, Site,
+                                 Destination_Field => Destination.Base,
+                                 Destination_Nested =>
+                                   Stored_Steps (Destination));
+                           end;
+                        end if;
+                     end;
+
+                  --  [0480]/[1870]: a pointer union place.  [0410] reaches
+                  --  the place first; the value, which may widen, is then
+                  --  built in its own cell and copied whole, so a source
+                  --  that reads the place still sees its old contents.
+                  elsif Landin.Checking.Type_Of
+                       (Types.all, Of_Tree,
+                        Syn.Target_Of (Of_Tree, Stmt)) = Ty.Aggregate
+                    and then Is_Union_Nominal
+                      (Landin.Checking.Nominal_Of
+                         (Types.all, Of_Tree,
+                          Syn.Target_Of (Of_Tree, Stmt)))
+                  then
+                     declare
+                        Place : constant Syn.Node_Id :=
+                          Syn.Target_Of (Of_Tree, Stmt);
+                        Shape : constant IR.Field_Shape :=
+                          Neutral_Value_Shape (Of_Tree, Place);
+                        Reached : constant Stored_Place :=
+                          Lower_Stored_Place (Of_Tree, Place, Scope);
+                     begin
+                        if Current /= IR.No_Block then
+                           declare
+                              Temporary : constant IR.Slot_Id :=
+                                Shaped_Temporary (Shape, Site);
+                              Built : constant Stored_Place :=
+                                Stored_At
+                                  ((Kind => IR.Frame_Slot,
+                                    Slot => Temporary));
+                           begin
+                              Write_Shaped_Value
+                                (Of_Tree, Syn.Value_Of (Of_Tree, Stmt),
+                                 Scope, Shape, Built);
+                              if Current /= IR.No_Block then
+                                 Copy_Shaped_Storage
+                                   (Built, Reached, Shape, Site);
+                              end if;
+                           end;
+                        end if;
+                     end;
+
+                  --  D128's anonymous result aggregate is structural and
+                  --  always occupies one direct inferred local slot.  A
+                  --  call or control value constructs there; another whole
+                  --  result is copied field by named field.
+                  elsif Landin.Checking.Type_Of
+                       (Types.all, Of_Tree,
+                        Syn.Target_Of (Of_Tree, Stmt)) = Ty.Aggregate
+                    and then Landin.Checking.Result_Shape_Of
+                      (Types.all, Of_Tree,
+                       Syn.Target_Of (Of_Tree, Stmt))
+                        /= Landin.Checking.No_Signature
+                  then
+                     declare
+                        Place : constant Syn.Node_Id :=
+                          Syn.Target_Of (Of_Tree, Stmt);
+                        From : constant Syn.Node_Id :=
+                          Syn.Value_Of (Of_Tree, Stmt);
+                        Shape : constant Landin.Checking.Signature_Id :=
+                          Landin.Checking.Result_Shape_Of
+                            (Types.all, Of_Tree, Place);
+                        Destination : constant IR.Storage :=
+                          Storage_For (Of_Tree, Place);
+                     begin
+                        pragma Assert
+                          (Destination.Kind = IR.Frame_Slot);
+                        if Syn.Kind (Of_Tree, From)
+                             in Syn.Call | Syn.Labeled_Application
+                                | Syn.Try_Expression | Syn.If_Statement
+                                | Syn.Match_Statement | Syn.Bare_Block
+                                | Syn.Loop_Statement | Syn.While_Statement
+                                | Syn.For_Statement
+                        then
+                           Lower_Stored_Expression
+                             (Of_Tree, From, Scope, Destination.Slot);
+                        else
+                           declare
+                              Source : constant IR.Storage :=
+                                Storage_For (Of_Tree, From);
+                           begin
+                              for Field in
+                                1 .. Landin.Checking.Signature_Result_Count
+                                       (Types.all, Shape)
+                              loop
+                                 Copy_Result_Field
+                                   (Shape, Source, Destination, Field);
+                              end loop;
+                           end;
+                        end if;
+                     end;
+
+                  --  [0710]'s copy visits the same fields in [0750]'s
+                  --  order: a scalar is one field read and write, and
+                  --  D54 copies an array field with D50's compact
+                  --  operation.  No whole-struct opcode says more.
+                  elsif Landin.Checking.Type_Of
+                       (Types.all, Of_Tree,
+                        Syn.Target_Of (Of_Tree, Stmt)) = Ty.Aggregate
+                  then
+                     declare
+                        Place : constant Syn.Node_Id :=
+                          Syn.Target_Of (Of_Tree, Stmt);
+                        From : constant Syn.Node_Id :=
+                          Syn.Value_Of (Of_Tree, Stmt);
+                        Dynamic : constant Boolean :=
+                          Has_Computed_Index (Of_Tree, Place)
+                          or else Has_Reference_Storage
+                            (Of_Tree, Place);
+                        Named : constant Syn.Node_Id :=
+                          (if Dynamic then Syn.No_Node
+                           else Chain_Root (Of_Tree, Place));
+                        Parent_Field : constant Natural :=
+                          (if Dynamic then 0
+                           else Rooted_Base (Of_Tree, Place));
+                        Parent_Steps : constant IR.Path_Step_Array :=
+                          (if Dynamic then IR.No_Path_Steps
+                           else Rooted_Steps (Of_Tree, Place));
+                        Destination : constant IR.Storage :=
+                          (if Dynamic
+                           then (Kind => IR.Frame_Slot,
+                                 Slot => IR.No_Slot)
+                           else Storage_For (Of_Tree, Named));
+                     begin
+                        if Dynamic then
+                           declare
+                              Reached : constant Stored_Place :=
+                                Lower_Stored_Place
+                                  (Of_Tree, Place, Scope);
+                              Wrote : constant
+                                Landin.Checking.Nominal_Type_Id :=
+                                Landin.Checking.Nominal_Of
+                                  (Types.all, Of_Tree, Place);
+                           begin
+                              if Current /= IR.No_Block then
+                                 declare
+                                    Shape : constant IR.Field_Shape :=
+                                      Neutral_Body (Wrote);
+                                    Into : constant IR.Storage :=
+                                      Addressed_Storage
+                                        (Reached, Shape, Site);
+                                 begin
+                                    if Syn.Kind (Of_Tree, From)
+                                         in Syn.Call | Syn.Try_Expression
+                                            | Syn.If_Statement
+                                            | Syn.Match_Statement
+                                            | Syn.Bare_Block
+                                            | Syn.Struct_Literal
+                                            | Syn.Labeled_Application
+                                            | Syn.Zeroed_Literal
+                                            | Syn.Loop_Statement
+                                            | Syn.While_Statement
+                                            | Syn.For_Statement
+                                    then
+                                       declare
+                                          Temporary : constant IR.Slot_Id :=
+                                            Add_Value_Temporary
+                                              (Of_Tree, From);
+                                          Temporary_Storage : constant
+                                            IR.Storage :=
+                                              (Kind => IR.Frame_Slot,
+                                               Slot => Temporary);
+                                       begin
+                                          case Syn.Kind
+                                            (Of_Tree, From)
+                                          is
+                                             when Syn.Call
+                                                | Syn.Try_Expression
+                                                | Syn.If_Statement
+                                                | Syn.Match_Statement
+                                                | Syn.Bare_Block
+                                                | Syn.Loop_Statement
+                                                | Syn.While_Statement
+                                                | Syn.For_Statement =>
+                                                Lower_Stored_Expression
+                                                  (Of_Tree, From, Scope,
+                                                   Temporary);
+                                             when Syn.Struct_Literal
+                                                | Syn.Labeled_Application =>
+                                                if Is_Struct_Construction
+                                                  (Of_Tree, From)
+                                                then
+                                                   Write_Struct_Literal
+                                                     (From, Wrote,
+                                                      Temporary_Storage);
+                                                else
+                                                   Lower_Stored_Expression
+                                                     (Of_Tree, From, Scope,
+                                                      Temporary);
+                                                end if;
+                                             when Syn.Zeroed_Literal =>
+                                                IR.Emit_Array_Clear
+                                                  (Unit.all, Filling,
+                                                   Temporary_Storage,
+                                                   Site);
+                                             when others =>
+                                                raise
+                                                  Landin.Compiler_Defect;
+                                          end case;
+                                          if Current /= IR.No_Block then
+                                             declare
+                                                Temp : Stored_Place :=
+                                                  (Place =>
+                                                     Temporary_Storage,
+                                                   Base => 0,
+                                                   Steps =>
+                                                     Stored_Path_Vectors
+                                                       .Empty_Vector);
+                                                From_Address : constant
+                                                  IR.Storage :=
+                                                    Addressed_Storage
+                                                      (Temp, Shape, Site);
+                                             begin
+                                                IR.Emit_Array_Copy
+                                                  (Unit.all, Filling,
+                                                   From_Address, Into,
+                                                   Site);
+                                             end;
+                                          end if;
+                                       end;
+                                    else
+                                       Copy_Aggregate_Value
+                                         (Wrote, From, Into);
+                                    end if;
+                                 end;
+                              end if;
+                           end;
+                        elsif Syn.Kind (Of_Tree, From)
+                             in Syn.If_Statement | Syn.Match_Statement
+                                | Syn.Bare_Block | Syn.Loop_Statement
+                                | Syn.While_Statement | Syn.For_Statement
+                        then
+                           declare
+                              Wrote : constant
+                                Landin.Checking.Nominal_Type_Id :=
+                                Landin.Checking.Nominal_Of
+                                  (Types.all, Of_Tree, Place);
+                              Temporary : constant IR.Slot_Id :=
+                                IR.Add_Aggregate_Slot
+                                  (Unit.all, Filling,
+                                   Res.No_Declaration, Site,
+                                   Nominal_For (Wrote));
+                              Source : constant IR.Storage :=
+                                (Kind => IR.Frame_Slot,
+                                 Slot => Temporary);
+                           begin
+                              for Field in
+                                1 .. Landin.Checking.Layout_Field_Count
+                                       (Types.all, Wrote)
+                              loop
+                                 Add_Stored_Field
+                                   (Wrote, Field, Slot => Temporary);
+                              end loop;
+
+                              case Syn.Kind (Of_Tree, From) is
+                                 when Syn.If_Statement =>
+                                    Lower_If
+                                      (Of_Tree, From, Scope, Result,
+                                       Temporary);
+                                 when Syn.Match_Statement =>
+                                    Lower_Match
+                                      (Of_Tree, From, Scope, Result,
+                                       Temporary);
+                                 when Syn.Bare_Block =>
+                                    Lower_Bare_Block
+                                      (Of_Tree, From, Scope, Result,
+                                       Temporary);
+                                 when Syn.Loop_Statement
+                                    | Syn.While_Statement
+                                    | Syn.For_Statement =>
+                                    Lower_Loop
+                                      (Of_Tree, From, Scope, Result,
+                                       Temporary);
+                                 when others =>
+                                    raise Landin.Compiler_Defect;
+                              end case;
+
+                              if Current /= IR.No_Block then
+                                 if IR.Layout_Of
+                                   (Unit.all, Neutral_Body (Wrote))
+                                     = Landin.Layouts.Packed
+                                 then
+                                    Copy_Shaped_Storage
+                                      (Stored_At (Source),
+                                       Stored_At (Destination,
+                                         Parent_Field, Parent_Steps),
+                                       Neutral_Body (Wrote), Site);
+                                 else
+                                    for Field in
+                                      1 .. Landin.Checking.
+                                        Layout_Field_Count
+                                          (Types.all, Wrote)
+                                    loop
+                                       Copy_Field
+                                         (Wrote, Source, Destination, Field,
+                                          Destination_Base => Parent_Field,
+                                          Destination_Steps =>
+                                            Parent_Steps);
+                                    end loop;
+                                 end if;
+                              end if;
+                           end;
+                        elsif Syn.Kind (Of_Tree, From)
+                                in Syn.Call | Syn.Labeled_Application
+                                   | Syn.Try_Expression
+                          and then not Is_Struct_Construction
+                            (Of_Tree, From)
+                        then
+                           if Destination.Kind = IR.Frame_Slot then
+                              if Syn.Kind (Of_Tree, From)
+                                   /= Syn.Try_Expression
+                              then
+                                 declare
+                                    Ignored : constant IR.Value_Id :=
+                                      Lower_Call
+                                        (Of_Tree, From, Scope,
+                                         Destination => Destination.Slot,
+                                         Destination_Field => Parent_Field,
+                                         Destination_Steps => Parent_Steps);
+                                 begin
+                                    pragma Unreferenced (Ignored);
+                                 end;
+                              else
+                                 declare
+                                    Ignored : constant IR.Value_Id :=
+                                      Lower_Call
+                                        (Of_Tree,
+                                         Syn.Operand_Of (Of_Tree, From),
+                                         Scope,
+                                         Destination => Destination.Slot,
+                                         Destination_Field => Parent_Field,
+                                         Destination_Steps => Parent_Steps,
+                                         Propagate => True);
+                                 begin
+                                    pragma Unreferenced (Ignored);
+                                 end;
+                              end if;
+                           else
+                              --  The internal call convention writes a
+                              --  stored aggregate into a caller-owned
+                              --  frame slot.  An inout aggregate may be
+                              --  indirect, so receive the result in an
+                              --  ordinary temporary before copying its
+                              --  fields to the selected destination.
+                              declare
+                                 Wrote : constant
+                                   Landin.Checking.Nominal_Type_Id :=
+                                   Landin.Checking.Nominal_Of
+                                     (Types.all, Of_Tree, Place);
+                                 Shape : constant IR.Field_Shape :=
+                                   Neutral_Body (Wrote);
+                                 Temporary : constant IR.Slot_Id :=
+                                   Add_Value_Temporary (Of_Tree, From);
+                                 Temp_Place : constant Stored_Place :=
+                                   (Place =>
+                                      (Kind => IR.Frame_Slot,
+                                       Slot => Temporary),
+                                    Base => 0,
+                                    Steps => Stored_Path_Vectors
+                                      .Empty_Vector);
+                                 Into_Place : Stored_Place :=
+                                   (Place => Destination,
+                                    Base => Parent_Field,
+                                    Steps => Stored_Path_Vectors
+                                      .Empty_Vector);
+                              begin
+                                 for Step of Parent_Steps loop
+                                    Into_Place.Steps.Append (Step);
+                                 end loop;
+                                 Lower_Stored_Expression
+                                   (Of_Tree, From, Scope, Temporary);
+                                 if Current /= IR.No_Block then
+                                    declare
+                                       Source : constant IR.Storage :=
+                                         Addressed_Storage
+                                           (Temp_Place, Shape, Site);
+                                       Into : constant IR.Storage :=
+                                         Addressed_Storage
+                                           (Into_Place, Shape, Site);
+                                    begin
+                                       IR.Emit_Array_Copy
+                                         (Unit.all, Filling, Source, Into,
+                                          Site);
+                                    end;
+                                 end if;
+                              end;
+                           end if;
+                        elsif Is_Struct_Construction (Of_Tree, From) then
+                           Write_Struct_Literal
+                             (From,
+                              Landin.Checking.Nominal_Of
+                                (Types.all, Of_Tree, Place),
+                              Destination,
+                              Base  => Parent_Field,
+                              Steps => Parent_Steps);
+                        elsif Syn.Kind (Of_Tree, From) = Syn.Zeroed_Literal
+                        then
+                           --  D58 clears a direct aggregate and D91 clears
+                           --  one ordinary child. The field identity stays
+                           --  neutral until the backend places it.
+                           IR.Emit_Array_Clear
+                             (Unit.all, Filling, Destination, Site,
+                              Field => Parent_Field,
+                              Nested => Parent_Steps);
+                        else
+                           Copy_Aggregate_Value
+                             (Landin.Checking.Nominal_Of
+                                (Types.all, Of_Tree, Place),
+                              From, Destination,
+                              Destination_Base => Parent_Field,
+                              Destination_Steps => Parent_Steps);
+                        end if;
+                     end;
+                  elsif Landin.Checking.Type_Of
+                          (Types.all, Of_Tree,
+                           Syn.Target_Of (Of_Tree, Stmt)) = Ty.Fixed_Array
+                  then
+                     declare
+                        Value : constant Syn.Node_Id :=
+                          Syn.Value_Of (Of_Tree, Stmt);
+                        Place : constant Syn.Node_Id :=
+                          Syn.Target_Of (Of_Tree, Stmt);
+                        Dynamic : constant Boolean :=
+                          Has_Computed_Index (Of_Tree, Place)
+                          or else Has_Reference_Storage
+                            (Of_Tree, Place);
+                     begin
+                        if Dynamic then
+                           declare
+                              Reached : constant Stored_Place :=
+                                Lower_Stored_Place
+                                  (Of_Tree, Place, Scope);
+                           begin
+                              if Current /= IR.No_Block then
+                                 declare
+                                    Shape : constant IR.Field_Shape :=
+                                      Neutral_Value_Shape (Of_Tree, Place);
+                                    Into : constant IR.Storage :=
+                                      Addressed_Storage
+                                        (Reached, Shape, Site);
+                                 begin
+                                    if Syn.Kind (Of_Tree, Value)
+                                         in Syn.Call | Syn.Try_Expression
+                                            | Syn.If_Statement
+                                            | Syn.Match_Statement
+                                            | Syn.Bare_Block
+                                            | Syn.Loop_Statement
+                                            | Syn.While_Statement
+                                            | Syn.For_Statement
+                                    then
+                                       declare
+                                          Temporary : constant IR.Slot_Id :=
+                                            Add_Value_Temporary
+                                              (Of_Tree, Value);
+                                       begin
+                                          Lower_Stored_Expression
+                                            (Of_Tree, Value, Scope,
+                                             Temporary);
+                                          if Current /= IR.No_Block then
+                                             IR.Emit_Array_Copy
+                                               (Unit.all, Filling,
+                                                Source =>
+                                                  (Kind => IR.Frame_Slot,
+                                                   Slot => Temporary),
+                                                Destination => Into,
+                                                Site => Site);
+                                          end if;
+                                       end;
+                                    else
+                                       Write_Array_Value
+                                         (Value, Into, Field => 0);
+                                    end if;
+                                 end;
+                              end if;
+                           end;
+                        else
+                           declare
+                              Named : constant Syn.Node_Id :=
+                                Chain_Root (Of_Tree, Place);
+                              Field : constant Natural :=
+                                Rooted_Base (Of_Tree, Place);
+                              Child_Steps : constant IR.Path_Step_Array :=
+                                Rooted_Steps (Of_Tree, Place);
+                              Destination : constant IR.Storage :=
+                                Storage_For (Of_Tree, Named);
+                           begin
+                              if Syn.Kind (Of_Tree, Value)
+                                   in Syn.If_Statement
+                                      | Syn.Match_Statement
+                                      | Syn.Bare_Block
+                                      | Syn.Loop_Statement
+                                      | Syn.While_Statement
+                                      | Syn.For_Statement
+                              then
+                                 declare
+                                    Temporary : constant IR.Slot_Id :=
+                                      Add_Value_Temporary (Of_Tree, Value);
+                                 begin
+                                    Lower_Stored_Expression
+                                      (Of_Tree, Value, Scope, Temporary);
+
+                                    if Current /= IR.No_Block then
+                                       IR.Emit_Array_Copy
+                                         (Unit.all, Filling,
+                                          Source =>
+                                            (Kind => IR.Frame_Slot,
+                                             Slot => Temporary),
+                                          Destination => Destination,
+                                          Site => Site,
+                                          Destination_Field => Field,
+                                          Destination_Nested =>
+                                            Child_Steps);
+                                    end if;
+                                 end;
+                              elsif Syn.Kind (Of_Tree, Value)
+                                      in Syn.Call | Syn.Try_Expression
+                              then
+                                 pragma Assert
+                                   (Destination.Kind in IR.Frame_Slot);
+                                 declare
+                                    Actual_Call : constant Syn.Node_Id :=
+                                      (if Syn.Kind (Of_Tree, Value)
+                                            = Syn.Call
+                                       then Value
+                                       else Syn.Operand_Of
+                                         (Of_Tree, Value));
+                                    Ignored : constant IR.Value_Id :=
+                                      Lower_Call
+                                        (Of_Tree, Actual_Call, Scope,
+                                         Destination => Destination.Slot,
+                                         Destination_Field => Field,
+                                         Destination_Steps => Child_Steps,
+                                         Propagate =>
+                                           Syn.Kind (Of_Tree, Value)
+                                             = Syn.Try_Expression);
+                                 begin
+                                    pragma Unreferenced (Ignored);
+                                 end;
+                              else
+                                 --  D49--D53/D65 and D90 share one
+                                 --  field-qualified lowering rule for each
+                                 --  contextual array value.
+                                 Write_Array_Value
+                                   (Value, Destination, Field,
+                                    Path => Child_Steps);
+                              end if;
+                           end;
+                        end if;
+                     end;
+                  else
+                     declare
+                        Place : constant Syn.Node_Id :=
+                          Syn.Target_Of (Of_Tree, Stmt);
+                        Address_Slot : constant IR.Slot_Id :=
+                          Reference_Address_For (Place);
+                        Index : constant IR.Value_Id :=
+                          (if Current = IR.No_Block
+                              or else Address_Slot /= IR.No_Slot
+                           then IR.No_Value else Index_For (Place));
+                        Saved_Index : IR.Slot_Id := IR.No_Slot;
+                     begin
+                        --  The right-hand side can cross blocks through a
+                        --  short circuit.  Save the already-evaluated
+                        --  destination index before it runs, then reload it
+                        --  in the block where the store is emitted.
+                        if Current /= IR.No_Block
+                          and then Index /= IR.No_Value
+                        then
+                           Saved_Index :=
+                             IR.Add_Slot
+                               (Unit.all, Filling, Ty.Usize,
+                                Res.No_Declaration, Site);
+                           IR.Emit_Store
+                             (Unit.all, Filling, Saved_Index, Index, Site);
+                        end if;
+
+                        if Current /= IR.No_Block then
+                           declare
+                              Value : constant IR.Value_Id :=
+                                Lower_Expression
+                                  (Of_Tree,
+                                   Syn.Value_Of (Of_Tree, Stmt), Scope);
+                           begin
+                              if Current /= IR.No_Block then
+                                 declare
+                                    Carried_Index : constant IR.Value_Id :=
+                                      (if Saved_Index = IR.No_Slot
+                                       then IR.No_Value
+                                       else IR.Emit_Load
+                                              (Unit.all, Filling,
+                                               Saved_Index, Site));
+                                 begin
+                                    Write
+                                      (Place, Value, Carried_Index,
+                                       Address_Slot);
+                                 end;
+                              end if;
+                           end;
+                        end if;
+                     end;
+                  end if;
+               end Lower_Assignment_Statement;
+
+            begin
+               if Final_Value then
+                  Lower_Final_Value;
+               else
+                  case Syn.Kind (Of_Tree, Stmt) is
+                  when Syn.Binding =>
+                     Lower_Binding_Statement;
 
                   when Syn.Destructuring_Binding =>
                      declare
@@ -14488,975 +15482,7 @@ package body Landin.Stages.Lowering is
                      end;
 
                   when Syn.Assignment =>
-                     --  [0390]/[0410]: form the destination address and read
-                     --  its old scalar value before the right-hand side.
-                     --  Both are retained in frame slots because that value
-                     --  may cross blocks.  The final indirect store therefore
-                     --  cannot re-evaluate an index or pointer expression.
-                     if Syn.Assignment_Operation (Of_Tree, Stmt)
-                          /= Landin.Tokens.Plain_Assignment
-                       and then Type_At
-                         (Of_Tree, Syn.Target_Of (Of_Tree, Stmt))
-                           = Ty.Fixed_Array
-                     then
-                        declare
-                           Place : constant Syn.Node_Id :=
-                             Syn.Target_Of (Of_Tree, Stmt);
-                           Shape : constant IR.Field_Shape :=
-                             Neutral_Value_Shape (Of_Tree, Place);
-                           Reached : constant Stored_Place :=
-                             Lower_Stored_Place (Of_Tree, Place, Scope);
-                        begin
-                           if Current /= IR.No_Block then
-                              declare
-                                 Destination : constant IR.Storage :=
-                                   Addressed_Storage (Reached, Shape, Site);
-                              begin
-                                 Write_Array_Arithmetic
-                                   (Of_Tree, Stmt, Scope, Shape,
-                                    Stored_At (Destination));
-                              end;
-                           end if;
-                        end;
-                     elsif Syn.Assignment_Operation (Of_Tree, Stmt)
-                          /= Landin.Tokens.Plain_Assignment
-                       and then Distinct_Scalar_Base
-                         (Of_Tree, Syn.Target_Of (Of_Tree, Stmt))
-                           in Ty.Scalar_Name
-                     then
-                        --  D427: `x op= y` over a distinct type of an
-                        --  unsigned base is `x = x op y` with the place
-                        --  reached once: its one representation child is
-                        --  read, combined with the base's operator and
-                        --  written back.
-                        declare
-                           Place : constant Syn.Node_Id :=
-                             Syn.Target_Of (Of_Tree, Stmt);
-                           Held : constant Ty.Scalar_Name :=
-                             Distinct_Scalar_Base (Of_Tree, Place);
-                           Shape : constant IR.Field_Shape :=
-                             Neutral_Value_Shape (Of_Tree, Place);
-                           Reached : constant Stored_Place :=
-                             Lower_Stored_Place (Of_Tree, Place, Scope);
-                        begin
-                           if Current /= IR.No_Block then
-                              declare
-                                 Saved : constant IR.Slot_Id :=
-                                   Shaped_Temporary (Shape, Site);
-                              begin
-                                 Copy_Shaped_Storage
-                                   (Reached,
-                                    Stored_At
-                                      ((Kind => IR.Frame_Slot,
-                                        Slot => Saved)),
-                                    Shape, Site);
-                                 declare
-                                    Right : constant IR.Value_Id :=
-                                      Lower_Expression
-                                        (Of_Tree,
-                                         Syn.Value_Of (Of_Tree, Stmt),
-                                         Scope);
-                                 begin
-                                    if Current /= IR.No_Block then
-                                       Store_Shaped_Scalar
-                                         (Child_Place (Reached, 1),
-                                          IR.Nth_Aggregate_Field
-                                            (Unit.all, Shape, 1),
-                                          IR.Emit_Binary
-                                            (Unit.all, Filling,
-                                             Update_Opcode
-                                               (Syn.Assignment_Operation
-                                                  (Of_Tree, Stmt)),
-                                             IR.Emit_Load_Slot_Field
-                                               (Unit.all, Filling, Saved,
-                                                1, Held, Site),
-                                             Right, Held, Site),
-                                          Site);
-                                    end if;
-                                 end;
-                              end;
-                           end if;
-                        end;
-                     elsif Syn.Assignment_Operation (Of_Tree, Stmt)
-                          /= Landin.Tokens.Plain_Assignment
-                     then
-                        declare
-                           Place : constant Syn.Node_Id :=
-                             Syn.Target_Of (Of_Tree, Stmt);
-                           Held : constant Ty.Scalar_Name :=
-                             Scalar_At (Of_Tree, Place);
-                           Dynamic : constant Boolean :=
-                             Has_Computed_Index (Of_Tree, Place)
-                             or else Has_Reference_Storage
-                               (Of_Tree, Place);
-                        begin
-                           if Current /= IR.No_Block then
-                              declare
-                                 procedure Finish_Update
-                                   (Was          : IR.Value_Id;
-                                    Address_Slot : IR.Slot_Id := IR.No_Slot);
-
-                                 procedure Finish_Update
-                                   (Was          : IR.Value_Id;
-                                    Address_Slot : IR.Slot_Id := IR.No_Slot)
-                                 is
-                                    Saved : constant IR.Slot_Id :=
-                                      IR.Add_Slot
-                                        (Unit.all, Filling, Held,
-                                         Res.No_Declaration, Site);
-                                 begin
-                                    IR.Emit_Store
-                                      (Unit.all, Filling, Saved, Was, Site);
-                                    declare
-                                       Right : constant IR.Value_Id :=
-                                         Lower_Expression
-                                           (Of_Tree,
-                                            Syn.Value_Of (Of_Tree, Stmt),
-                                            Scope);
-                                    begin
-                                       if Current /= IR.No_Block then
-                                          declare
-                                             Left : constant IR.Value_Id :=
-                                               IR.Emit_Load
-                                                 (Unit.all, Filling, Saved,
-                                                  Site);
-                                             Result : constant IR.Value_Id :=
-                                               Checked_Update
-                                                 (Of_Tree, Stmt,
-                                                  IR.Emit_Binary
-                                                    (Unit.all, Filling,
-                                                     Update_Opcode
-                                                       (Syn
-                                                          .Assignment_Operation
-                                                            (Of_Tree, Stmt)),
-                                                     Left, Right, Held,
-                                                     Site));
-                                          begin
-                                             if Address_Slot = IR.No_Slot then
-                                                Write (Place, Result);
-                                             else
-                                                IR.Emit_Store_Indirect
-                                                  (Unit.all, Filling,
-                                                   Address_Slot, Result, Site);
-                                             end if;
-                                          end;
-                                       end if;
-                                    end;
-                                 end Finish_Update;
-                              begin
-                                 if Dynamic then
-                                    declare
-                                       Reached : constant Stored_Place :=
-                                         Lower_Stored_Place
-                                           (Of_Tree, Place, Scope);
-                                    begin
-                                       if Current /= IR.No_Block then
-                                          declare
-                                             Address : constant IR.Storage :=
-                                               Addressed_Storage
-                                                 (Reached,
-                                                  Neutral_Value_Shape
-                                                    (Of_Tree, Place), Site);
-                                             Was : constant IR.Value_Id :=
-                                               IR.Emit_Load_Indirect
-                                                 (Unit.all, Filling,
-                                                  Address.Address, Site);
-                                          begin
-                                             Finish_Update
-                                               (Was, Address.Address);
-                                          end;
-                                       end if;
-                                    end;
-                                 else
-                                    Finish_Update
-                                      (Read_Place (Place, IR.No_Value));
-                                 end if;
-                              end;
-                           end if;
-                        end;
-
-                     --  D76's direct part assignment is contextual and its
-                     --  target is Not_Typed rather than a general aggregate
-                     --  value.  Lower it before the ordinary whole-struct
-                     --  branch asks the place for an aggregate body.
-                     elsif Syn.Kind
-                          (Of_Tree, Syn.Target_Of (Of_Tree, Stmt))
-                          = Syn.Member_Selection
-                       and then Landin.Checking.Type_Of
-                         (Types.all, Of_Tree,
-                          Syn.Target_Of (Of_Tree, Stmt)) = Ty.Not_Typed
-                     then
-                        declare
-                           Place : constant Syn.Node_Id :=
-                             Syn.Target_Of (Of_Tree, Stmt);
-                           --  D126: the variant part may sit below the
-                           --  name; Wrote is the body that declares it and
-                           --  Base/Steps is the run that reaches it.
-                           Holder : constant Syn.Node_Id :=
-                             Syn.Target_Of (Of_Tree, Place);
-                           Referenced : constant Boolean :=
-                             Has_Reference_Storage (Of_Tree, Holder);
-                           Computed : constant Boolean :=
-                             Has_Computed_Index (Of_Tree, Holder)
-                             or else Referenced;
-                           Named : constant Syn.Node_Id :=
-                             (if Computed then Syn.No_Node
-                              else Chain_Root (Of_Tree, Place));
-                           Wrote : constant Landin.Checking.Nominal_Type_Id :=
-                             Landin.Checking.Nominal_Of
-                               (Types.all, Of_Tree, Holder);
-                           Field : constant Positive := Positive
-                             (Landin.Checking.Field_Index
-                                (Types.all, Of_Tree, Place));
-                           --  A computed element is first retained as whole
-                           --  holder storage.  A shaped temporary preserves
-                           --  every sibling while the ordinary variant
-                           --  operation evaluates its payload in source order.
-                           Reached : constant Natural :=
-                             (if Computed then 0
-                              else Chain_Base (Of_Tree, Place));
-                           Walked : constant IR.Path_Step_Array :=
-                             (if Computed then IR.No_Path_Steps
-                              else Chain_Steps (Of_Tree, Place));
-                           Base : constant Positive :=
-                             (if Computed then Field
-                              else Positive (Leaf_Base (Reached, Walked)));
-                           Steps : constant IR.Path_Step_Array :=
-                             (if Computed then IR.No_Path_Steps
-                              else Leaf_Steps (Reached, Walked));
-                        begin
-                           pragma Assert
-                             (Landin.Checking.Field_Kind_Of
-                                (Types.all, Wrote, Field)
-                                = Landin.Checking.Variant_Field);
-                           if Referenced then
-                              --  Capture the holder once, then select and
-                              --  write its actual variant part. A whole
-                              --  holder copy would overwrite sibling effects
-                              --  performed by payload expressions (D76).
-                              declare
-                                 Reached_Place : constant Stored_Place :=
-                                   Lower_Stored_Place
-                                     (Of_Tree, Holder, Scope);
-                              begin
-                                 if Current /= IR.No_Block then
-                                    declare
-                                       Into : constant IR.Storage :=
-                                         Addressed_Storage
-                                           (Reached_Place,
-                                            Neutral_Body (Wrote), Site);
-                                    begin
-                                       Write_Variant_Value
-                                         (Syn.Value_Of (Of_Tree, Stmt),
-                                          Wrote, Field, Into, Base => Field);
-                                    end;
-                                 end if;
-                              end;
-                           elsif Computed then
-                              declare
-                                 Holder_Place : constant Stored_Place :=
-                                   Lower_Stored_Place
-                                     (Of_Tree, Holder, Scope);
-                              begin
-                                 if Current /= IR.No_Block then
-                                    declare
-                                       Shape : constant IR.Field_Shape :=
-                                         Neutral_Body (Wrote);
-                                       Into : constant IR.Storage :=
-                                         Addressed_Storage
-                                           (Holder_Place, Shape, Site);
-                                       Temporary : constant IR.Slot_Id :=
-                                         IR.Add_Aggregate_Slot
-                                           (Unit.all, Filling,
-                                            Res.No_Declaration, Site,
-                                            Nominal_For (Wrote));
-                                       Temp_Storage : constant IR.Storage :=
-                                         (Kind => IR.Frame_Slot,
-                                          Slot => Temporary);
-                                    begin
-                                       for Part in
-                                         1 .. Landin.Checking
-                                                .Layout_Field_Count
-                                                  (Types.all, Wrote)
-                                       loop
-                                          Add_Stored_Field
-                                            (Wrote, Part,
-                                             Slot => Temporary);
-                                       end loop;
-                                       declare
-                                          Temp : constant Stored_Place :=
-                                            (Place => Temp_Storage,
-                                             Base => 0,
-                                             Steps => Stored_Path_Vectors
-                                               .Empty_Vector);
-                                          Temp_Address : constant IR.Storage :=
-                                            Addressed_Storage
-                                              (Temp, Shape, Site);
-                                       begin
-                                          IR.Emit_Array_Copy
-                                            (Unit.all, Filling, Into,
-                                             Temp_Address, Site);
-                                          Write_Variant_Value
-                                            (Syn.Value_Of (Of_Tree, Stmt),
-                                             Wrote, Field, Temp_Storage,
-                                             Base => Base, Steps => Steps);
-                                          if Current /= IR.No_Block then
-                                             IR.Emit_Array_Copy
-                                               (Unit.all, Filling,
-                                                Temp_Address, Into, Site);
-                                          end if;
-                                       end;
-                                    end;
-                                 end if;
-                              end;
-                           else
-                              Write_Variant_Value
-                                (Syn.Value_Of (Of_Tree, Stmt), Wrote, Field,
-                                 Storage_For (Of_Tree, Named),
-                                 Base => Base, Steps => Steps);
-                           end if;
-                        end;
-
-                     elsif Landin.Checking.Type_Of
-                       (Types.all, Of_Tree,
-                        Syn.Target_Of (Of_Tree, Stmt))
-                          in Ty.Slice_Value | Ty.Any_Value
-                     then
-                        declare
-                           Place : constant Syn.Node_Id :=
-                             Syn.Target_Of (Of_Tree, Stmt);
-                           From : constant Syn.Node_Id :=
-                             Syn.Value_Of (Of_Tree, Stmt);
-                           Destination : constant Stored_Place :=
-                             Lower_Stored_Place (Of_Tree, Place, Scope);
-                        begin
-                           if Destination.Place.Kind = IR.Frame_Slot
-                             and then Destination.Base = 0
-                             and then Destination.Steps.Is_Empty
-                           then
-                              Lower_Slice_Into
-                                (Of_Tree, From, Scope,
-                                 Destination.Place.Slot);
-                           else
-                              declare
-                                 Temporary : constant IR.Slot_Id :=
-                                   IR.Add_Array_Slot
-                                     (Unit.all, Filling, Ty.Usize, 2,
-                                      Res.No_Declaration, Site);
-                              begin
-                                 Lower_Slice_Into
-                                   (Of_Tree, From, Scope, Temporary);
-                                 IR.Emit_Array_Copy
-                                   (Unit.all, Filling,
-                                    (Kind => IR.Frame_Slot,
-                                     Slot => Temporary),
-                                    Destination.Place, Site,
-                                    Destination_Field => Destination.Base,
-                                    Destination_Nested =>
-                                      Stored_Steps (Destination));
-                              end;
-                           end if;
-                        end;
-
-                     --  [0480]/[1870]: a pointer union place.  [0410] reaches
-                     --  the place first; the value, which may widen, is then
-                     --  built in its own cell and copied whole, so a source
-                     --  that reads the place still sees its old contents.
-                     elsif Landin.Checking.Type_Of
-                          (Types.all, Of_Tree,
-                           Syn.Target_Of (Of_Tree, Stmt)) = Ty.Aggregate
-                       and then Is_Union_Nominal
-                         (Landin.Checking.Nominal_Of
-                            (Types.all, Of_Tree,
-                             Syn.Target_Of (Of_Tree, Stmt)))
-                     then
-                        declare
-                           Place : constant Syn.Node_Id :=
-                             Syn.Target_Of (Of_Tree, Stmt);
-                           Shape : constant IR.Field_Shape :=
-                             Neutral_Value_Shape (Of_Tree, Place);
-                           Reached : constant Stored_Place :=
-                             Lower_Stored_Place (Of_Tree, Place, Scope);
-                        begin
-                           if Current /= IR.No_Block then
-                              declare
-                                 Temporary : constant IR.Slot_Id :=
-                                   Shaped_Temporary (Shape, Site);
-                                 Built : constant Stored_Place :=
-                                   Stored_At
-                                     ((Kind => IR.Frame_Slot,
-                                       Slot => Temporary));
-                              begin
-                                 Write_Shaped_Value
-                                   (Of_Tree, Syn.Value_Of (Of_Tree, Stmt),
-                                    Scope, Shape, Built);
-                                 if Current /= IR.No_Block then
-                                    Copy_Shaped_Storage
-                                      (Built, Reached, Shape, Site);
-                                 end if;
-                              end;
-                           end if;
-                        end;
-
-                     --  D128's anonymous result aggregate is structural and
-                     --  always occupies one direct inferred local slot.  A
-                     --  call or control value constructs there; another whole
-                     --  result is copied field by named field.
-                     elsif Landin.Checking.Type_Of
-                          (Types.all, Of_Tree,
-                           Syn.Target_Of (Of_Tree, Stmt)) = Ty.Aggregate
-                       and then Landin.Checking.Result_Shape_Of
-                         (Types.all, Of_Tree,
-                          Syn.Target_Of (Of_Tree, Stmt))
-                           /= Landin.Checking.No_Signature
-                     then
-                        declare
-                           Place : constant Syn.Node_Id :=
-                             Syn.Target_Of (Of_Tree, Stmt);
-                           From : constant Syn.Node_Id :=
-                             Syn.Value_Of (Of_Tree, Stmt);
-                           Shape : constant Landin.Checking.Signature_Id :=
-                             Landin.Checking.Result_Shape_Of
-                               (Types.all, Of_Tree, Place);
-                           Destination : constant IR.Storage :=
-                             Storage_For (Of_Tree, Place);
-                        begin
-                           pragma Assert
-                             (Destination.Kind = IR.Frame_Slot);
-                           if Syn.Kind (Of_Tree, From)
-                                in Syn.Call | Syn.Labeled_Application
-                                   | Syn.Try_Expression | Syn.If_Statement
-                                   | Syn.Match_Statement | Syn.Bare_Block
-                                   | Syn.Loop_Statement | Syn.While_Statement
-                                   | Syn.For_Statement
-                           then
-                              Lower_Stored_Expression
-                                (Of_Tree, From, Scope, Destination.Slot);
-                           else
-                              declare
-                                 Source : constant IR.Storage :=
-                                   Storage_For (Of_Tree, From);
-                              begin
-                                 for Field in
-                                   1 .. Landin.Checking.Signature_Result_Count
-                                          (Types.all, Shape)
-                                 loop
-                                    Copy_Result_Field
-                                      (Shape, Source, Destination, Field);
-                                 end loop;
-                              end;
-                           end if;
-                        end;
-
-                     --  [0710]'s copy visits the same fields in [0750]'s
-                     --  order: a scalar is one field read and write, and
-                     --  D54 copies an array field with D50's compact
-                     --  operation.  No whole-struct opcode says more.
-                     elsif Landin.Checking.Type_Of
-                          (Types.all, Of_Tree,
-                           Syn.Target_Of (Of_Tree, Stmt)) = Ty.Aggregate
-                     then
-                        declare
-                           Place : constant Syn.Node_Id :=
-                             Syn.Target_Of (Of_Tree, Stmt);
-                           From : constant Syn.Node_Id :=
-                             Syn.Value_Of (Of_Tree, Stmt);
-                           Dynamic : constant Boolean :=
-                             Has_Computed_Index (Of_Tree, Place)
-                             or else Has_Reference_Storage
-                               (Of_Tree, Place);
-                           Named : constant Syn.Node_Id :=
-                             (if Dynamic then Syn.No_Node
-                              else Chain_Root (Of_Tree, Place));
-                           Parent_Field : constant Natural :=
-                             (if Dynamic then 0
-                              else Rooted_Base (Of_Tree, Place));
-                           Parent_Steps : constant IR.Path_Step_Array :=
-                             (if Dynamic then IR.No_Path_Steps
-                              else Rooted_Steps (Of_Tree, Place));
-                           Destination : constant IR.Storage :=
-                             (if Dynamic
-                              then (Kind => IR.Frame_Slot,
-                                    Slot => IR.No_Slot)
-                              else Storage_For (Of_Tree, Named));
-                        begin
-                           if Dynamic then
-                              declare
-                                 Reached : constant Stored_Place :=
-                                   Lower_Stored_Place
-                                     (Of_Tree, Place, Scope);
-                                 Wrote : constant
-                                   Landin.Checking.Nominal_Type_Id :=
-                                   Landin.Checking.Nominal_Of
-                                     (Types.all, Of_Tree, Place);
-                              begin
-                                 if Current /= IR.No_Block then
-                                    declare
-                                       Shape : constant IR.Field_Shape :=
-                                         Neutral_Body (Wrote);
-                                       Into : constant IR.Storage :=
-                                         Addressed_Storage
-                                           (Reached, Shape, Site);
-                                    begin
-                                       if Syn.Kind (Of_Tree, From)
-                                            in Syn.Call | Syn.Try_Expression
-                                               | Syn.If_Statement
-                                               | Syn.Match_Statement
-                                               | Syn.Bare_Block
-                                               | Syn.Struct_Literal
-                                               | Syn.Labeled_Application
-                                               | Syn.Zeroed_Literal
-                                               | Syn.Loop_Statement
-                                               | Syn.While_Statement
-                                               | Syn.For_Statement
-                                       then
-                                          declare
-                                             Temporary : constant IR.Slot_Id :=
-                                               Add_Value_Temporary
-                                                 (Of_Tree, From);
-                                             Temporary_Storage : constant
-                                               IR.Storage :=
-                                                 (Kind => IR.Frame_Slot,
-                                                  Slot => Temporary);
-                                          begin
-                                             case Syn.Kind
-                                               (Of_Tree, From)
-                                             is
-                                                when Syn.Call
-                                                   | Syn.Try_Expression
-                                                   | Syn.If_Statement
-                                                   | Syn.Match_Statement
-                                                   | Syn.Bare_Block
-                                                   | Syn.Loop_Statement
-                                                   | Syn.While_Statement
-                                                   | Syn.For_Statement =>
-                                                   Lower_Stored_Expression
-                                                     (Of_Tree, From, Scope,
-                                                      Temporary);
-                                                when Syn.Struct_Literal
-                                                   | Syn.Labeled_Application =>
-                                                   if Is_Struct_Construction
-                                                     (Of_Tree, From)
-                                                   then
-                                                      Write_Struct_Literal
-                                                        (From, Wrote,
-                                                         Temporary_Storage);
-                                                   else
-                                                      Lower_Stored_Expression
-                                                        (Of_Tree, From, Scope,
-                                                         Temporary);
-                                                   end if;
-                                                when Syn.Zeroed_Literal =>
-                                                   IR.Emit_Array_Clear
-                                                     (Unit.all, Filling,
-                                                      Temporary_Storage,
-                                                      Site);
-                                                when others =>
-                                                   raise
-                                                     Landin.Compiler_Defect;
-                                             end case;
-                                             if Current /= IR.No_Block then
-                                                declare
-                                                   Temp : Stored_Place :=
-                                                     (Place =>
-                                                        Temporary_Storage,
-                                                      Base => 0,
-                                                      Steps =>
-                                                        Stored_Path_Vectors
-                                                          .Empty_Vector);
-                                                   From_Address : constant
-                                                     IR.Storage :=
-                                                       Addressed_Storage
-                                                         (Temp, Shape, Site);
-                                                begin
-                                                   IR.Emit_Array_Copy
-                                                     (Unit.all, Filling,
-                                                      From_Address, Into,
-                                                      Site);
-                                                end;
-                                             end if;
-                                          end;
-                                       else
-                                          Copy_Aggregate_Value
-                                            (Wrote, From, Into);
-                                       end if;
-                                    end;
-                                 end if;
-                              end;
-                           elsif Syn.Kind (Of_Tree, From)
-                                in Syn.If_Statement | Syn.Match_Statement
-                                   | Syn.Bare_Block | Syn.Loop_Statement
-                                   | Syn.While_Statement | Syn.For_Statement
-                           then
-                              declare
-                                 Wrote : constant
-                                   Landin.Checking.Nominal_Type_Id :=
-                                   Landin.Checking.Nominal_Of
-                                     (Types.all, Of_Tree, Place);
-                                 Temporary : constant IR.Slot_Id :=
-                                   IR.Add_Aggregate_Slot
-                                     (Unit.all, Filling,
-                                      Res.No_Declaration, Site,
-                                      Nominal_For (Wrote));
-                                 Source : constant IR.Storage :=
-                                   (Kind => IR.Frame_Slot,
-                                    Slot => Temporary);
-                              begin
-                                 for Field in
-                                   1 .. Landin.Checking.Layout_Field_Count
-                                          (Types.all, Wrote)
-                                 loop
-                                    Add_Stored_Field
-                                      (Wrote, Field, Slot => Temporary);
-                                 end loop;
-
-                                 case Syn.Kind (Of_Tree, From) is
-                                    when Syn.If_Statement =>
-                                       Lower_If
-                                         (Of_Tree, From, Scope, Result,
-                                          Temporary);
-                                    when Syn.Match_Statement =>
-                                       Lower_Match
-                                         (Of_Tree, From, Scope, Result,
-                                          Temporary);
-                                    when Syn.Bare_Block =>
-                                       Lower_Bare_Block
-                                         (Of_Tree, From, Scope, Result,
-                                          Temporary);
-                                    when Syn.Loop_Statement
-                                       | Syn.While_Statement
-                                       | Syn.For_Statement =>
-                                       Lower_Loop
-                                         (Of_Tree, From, Scope, Result,
-                                          Temporary);
-                                    when others =>
-                                       raise Landin.Compiler_Defect;
-                                 end case;
-
-                                 if Current /= IR.No_Block then
-                                    if IR.Layout_Of
-                                      (Unit.all, Neutral_Body (Wrote))
-                                        = Landin.Layouts.Packed
-                                    then
-                                       Copy_Shaped_Storage
-                                         (Stored_At (Source),
-                                          Stored_At (Destination,
-                                            Parent_Field, Parent_Steps),
-                                          Neutral_Body (Wrote), Site);
-                                    else
-                                       for Field in
-                                         1 .. Landin.Checking.
-                                           Layout_Field_Count
-                                             (Types.all, Wrote)
-                                       loop
-                                          Copy_Field
-                                            (Wrote, Source, Destination, Field,
-                                             Destination_Base => Parent_Field,
-                                             Destination_Steps =>
-                                               Parent_Steps);
-                                       end loop;
-                                    end if;
-                                 end if;
-                              end;
-                           elsif Syn.Kind (Of_Tree, From)
-                                   in Syn.Call | Syn.Labeled_Application
-                                      | Syn.Try_Expression
-                             and then not Is_Struct_Construction
-                               (Of_Tree, From)
-                           then
-                              if Destination.Kind = IR.Frame_Slot then
-                                 if Syn.Kind (Of_Tree, From)
-                                      /= Syn.Try_Expression
-                                 then
-                                    declare
-                                       Ignored : constant IR.Value_Id :=
-                                         Lower_Call
-                                           (Of_Tree, From, Scope,
-                                            Destination => Destination.Slot,
-                                            Destination_Field => Parent_Field,
-                                            Destination_Steps => Parent_Steps);
-                                    begin
-                                       pragma Unreferenced (Ignored);
-                                    end;
-                                 else
-                                    declare
-                                       Ignored : constant IR.Value_Id :=
-                                         Lower_Call
-                                           (Of_Tree,
-                                            Syn.Operand_Of (Of_Tree, From),
-                                            Scope,
-                                            Destination => Destination.Slot,
-                                            Destination_Field => Parent_Field,
-                                            Destination_Steps => Parent_Steps,
-                                            Propagate => True);
-                                    begin
-                                       pragma Unreferenced (Ignored);
-                                    end;
-                                 end if;
-                              else
-                                 --  The internal call convention writes a
-                                 --  stored aggregate into a caller-owned
-                                 --  frame slot.  An inout aggregate may be
-                                 --  indirect, so receive the result in an
-                                 --  ordinary temporary before copying its
-                                 --  fields to the selected destination.
-                                 declare
-                                    Wrote : constant
-                                      Landin.Checking.Nominal_Type_Id :=
-                                      Landin.Checking.Nominal_Of
-                                        (Types.all, Of_Tree, Place);
-                                    Shape : constant IR.Field_Shape :=
-                                      Neutral_Body (Wrote);
-                                    Temporary : constant IR.Slot_Id :=
-                                      Add_Value_Temporary (Of_Tree, From);
-                                    Temp_Place : constant Stored_Place :=
-                                      (Place =>
-                                         (Kind => IR.Frame_Slot,
-                                          Slot => Temporary),
-                                       Base => 0,
-                                       Steps => Stored_Path_Vectors
-                                         .Empty_Vector);
-                                    Into_Place : Stored_Place :=
-                                      (Place => Destination,
-                                       Base => Parent_Field,
-                                       Steps => Stored_Path_Vectors
-                                         .Empty_Vector);
-                                 begin
-                                    for Step of Parent_Steps loop
-                                       Into_Place.Steps.Append (Step);
-                                    end loop;
-                                    Lower_Stored_Expression
-                                      (Of_Tree, From, Scope, Temporary);
-                                    if Current /= IR.No_Block then
-                                       declare
-                                          Source : constant IR.Storage :=
-                                            Addressed_Storage
-                                              (Temp_Place, Shape, Site);
-                                          Into : constant IR.Storage :=
-                                            Addressed_Storage
-                                              (Into_Place, Shape, Site);
-                                       begin
-                                          IR.Emit_Array_Copy
-                                            (Unit.all, Filling, Source, Into,
-                                             Site);
-                                       end;
-                                    end if;
-                                 end;
-                              end if;
-                           elsif Is_Struct_Construction (Of_Tree, From) then
-                              Write_Struct_Literal
-                                (From,
-                                 Landin.Checking.Nominal_Of
-                                   (Types.all, Of_Tree, Place),
-                                 Destination,
-                                 Base  => Parent_Field,
-                                 Steps => Parent_Steps);
-                           elsif Syn.Kind (Of_Tree, From) = Syn.Zeroed_Literal
-                           then
-                              --  D58 clears a direct aggregate and D91 clears
-                              --  one ordinary child. The field identity stays
-                              --  neutral until the backend places it.
-                              IR.Emit_Array_Clear
-                                (Unit.all, Filling, Destination, Site,
-                                 Field => Parent_Field,
-                                 Nested => Parent_Steps);
-                           else
-                              Copy_Aggregate_Value
-                                (Landin.Checking.Nominal_Of
-                                   (Types.all, Of_Tree, Place),
-                                 From, Destination,
-                                 Destination_Base => Parent_Field,
-                                 Destination_Steps => Parent_Steps);
-                           end if;
-                        end;
-                     elsif Landin.Checking.Type_Of
-                             (Types.all, Of_Tree,
-                              Syn.Target_Of (Of_Tree, Stmt)) = Ty.Fixed_Array
-                     then
-                        declare
-                           Value : constant Syn.Node_Id :=
-                             Syn.Value_Of (Of_Tree, Stmt);
-                           Place : constant Syn.Node_Id :=
-                             Syn.Target_Of (Of_Tree, Stmt);
-                           Dynamic : constant Boolean :=
-                             Has_Computed_Index (Of_Tree, Place)
-                             or else Has_Reference_Storage
-                               (Of_Tree, Place);
-                        begin
-                           if Dynamic then
-                              declare
-                                 Reached : constant Stored_Place :=
-                                   Lower_Stored_Place
-                                     (Of_Tree, Place, Scope);
-                              begin
-                                 if Current /= IR.No_Block then
-                                    declare
-                                       Shape : constant IR.Field_Shape :=
-                                         Neutral_Value_Shape (Of_Tree, Place);
-                                       Into : constant IR.Storage :=
-                                         Addressed_Storage
-                                           (Reached, Shape, Site);
-                                    begin
-                                       if Syn.Kind (Of_Tree, Value)
-                                            in Syn.Call | Syn.Try_Expression
-                                               | Syn.If_Statement
-                                               | Syn.Match_Statement
-                                               | Syn.Bare_Block
-                                               | Syn.Loop_Statement
-                                               | Syn.While_Statement
-                                               | Syn.For_Statement
-                                       then
-                                          declare
-                                             Temporary : constant IR.Slot_Id :=
-                                               Add_Value_Temporary
-                                                 (Of_Tree, Value);
-                                          begin
-                                             Lower_Stored_Expression
-                                               (Of_Tree, Value, Scope,
-                                                Temporary);
-                                             if Current /= IR.No_Block then
-                                                IR.Emit_Array_Copy
-                                                  (Unit.all, Filling,
-                                                   Source =>
-                                                     (Kind => IR.Frame_Slot,
-                                                      Slot => Temporary),
-                                                   Destination => Into,
-                                                   Site => Site);
-                                             end if;
-                                          end;
-                                       else
-                                          Write_Array_Value
-                                            (Value, Into, Field => 0);
-                                       end if;
-                                    end;
-                                 end if;
-                              end;
-                           else
-                              declare
-                                 Named : constant Syn.Node_Id :=
-                                   Chain_Root (Of_Tree, Place);
-                                 Field : constant Natural :=
-                                   Rooted_Base (Of_Tree, Place);
-                                 Child_Steps : constant IR.Path_Step_Array :=
-                                   Rooted_Steps (Of_Tree, Place);
-                                 Destination : constant IR.Storage :=
-                                   Storage_For (Of_Tree, Named);
-                              begin
-                                 if Syn.Kind (Of_Tree, Value)
-                                      in Syn.If_Statement
-                                         | Syn.Match_Statement
-                                         | Syn.Bare_Block
-                                         | Syn.Loop_Statement
-                                         | Syn.While_Statement
-                                         | Syn.For_Statement
-                                 then
-                                    declare
-                                       Temporary : constant IR.Slot_Id :=
-                                         Add_Value_Temporary (Of_Tree, Value);
-                                    begin
-                                       Lower_Stored_Expression
-                                         (Of_Tree, Value, Scope, Temporary);
-
-                                       if Current /= IR.No_Block then
-                                          IR.Emit_Array_Copy
-                                            (Unit.all, Filling,
-                                             Source =>
-                                               (Kind => IR.Frame_Slot,
-                                                Slot => Temporary),
-                                             Destination => Destination,
-                                             Site => Site,
-                                             Destination_Field => Field,
-                                             Destination_Nested =>
-                                               Child_Steps);
-                                       end if;
-                                    end;
-                                 elsif Syn.Kind (Of_Tree, Value)
-                                         in Syn.Call | Syn.Try_Expression
-                                 then
-                                    pragma Assert
-                                      (Destination.Kind in IR.Frame_Slot);
-                                    declare
-                                       Actual_Call : constant Syn.Node_Id :=
-                                         (if Syn.Kind (Of_Tree, Value)
-                                               = Syn.Call
-                                          then Value
-                                          else Syn.Operand_Of
-                                            (Of_Tree, Value));
-                                       Ignored : constant IR.Value_Id :=
-                                         Lower_Call
-                                           (Of_Tree, Actual_Call, Scope,
-                                            Destination => Destination.Slot,
-                                            Destination_Field => Field,
-                                            Destination_Steps => Child_Steps,
-                                            Propagate =>
-                                              Syn.Kind (Of_Tree, Value)
-                                                = Syn.Try_Expression);
-                                    begin
-                                       pragma Unreferenced (Ignored);
-                                    end;
-                                 else
-                                    --  D49--D53/D65 and D90 share one
-                                    --  field-qualified lowering rule for each
-                                    --  contextual array value.
-                                    Write_Array_Value
-                                      (Value, Destination, Field,
-                                       Path => Child_Steps);
-                                 end if;
-                              end;
-                           end if;
-                        end;
-                     else
-                        declare
-                           Place : constant Syn.Node_Id :=
-                             Syn.Target_Of (Of_Tree, Stmt);
-                           Address_Slot : constant IR.Slot_Id :=
-                             Reference_Address_For (Place);
-                           Index : constant IR.Value_Id :=
-                             (if Current = IR.No_Block
-                                 or else Address_Slot /= IR.No_Slot
-                              then IR.No_Value else Index_For (Place));
-                           Saved_Index : IR.Slot_Id := IR.No_Slot;
-                        begin
-                           --  The right-hand side can cross blocks through a
-                           --  short circuit.  Save the already-evaluated
-                           --  destination index before it runs, then reload it
-                           --  in the block where the store is emitted.
-                           if Current /= IR.No_Block
-                             and then Index /= IR.No_Value
-                           then
-                              Saved_Index :=
-                                IR.Add_Slot
-                                  (Unit.all, Filling, Ty.Usize,
-                                   Res.No_Declaration, Site);
-                              IR.Emit_Store
-                                (Unit.all, Filling, Saved_Index, Index, Site);
-                           end if;
-
-                           if Current /= IR.No_Block then
-                              declare
-                                 Value : constant IR.Value_Id :=
-                                   Lower_Expression
-                                     (Of_Tree,
-                                      Syn.Value_Of (Of_Tree, Stmt), Scope);
-                              begin
-                                 if Current /= IR.No_Block then
-                                    declare
-                                       Carried_Index : constant IR.Value_Id :=
-                                         (if Saved_Index = IR.No_Slot
-                                          then IR.No_Value
-                                          else IR.Emit_Load
-                                                 (Unit.all, Filling,
-                                                  Saved_Index, Site));
-                                    begin
-                                       Write
-                                         (Place, Value, Carried_Index,
-                                          Address_Slot);
-                                    end;
-                                 end if;
-                              end;
-                           end if;
-                        end;
-                     end if;
+                     Lower_Assignment_Statement;
 
                   when Syn.Increment | Syn.Decrement =>
                      --  [1900]: `inc` says what `x += 1` says, which is a
