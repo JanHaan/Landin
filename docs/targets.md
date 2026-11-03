@@ -936,7 +936,10 @@ declares `Tag_ABI_FP_number_model` IEEE 754 and `Tag_ABI_VFP_args` VFP
 registers, the tools are told `-mfloat-abi=hard -mfpu=fpv5-d16`, and GCC
 selects `thumb/v7e-m+dp/hard/libgcc.a` from them; the linker then refuses a
 soft-float object that declares a number model, and a libgcc helper object,
-which declares none, leaves the image's attribute standing (D617). Only the
+which declares none, leaves the image's attribute standing (D617). Without
+a unit the assembly declares the same number model and `Tag_ABI_VFP_args`
+0, the base variant, as GCC's soft-float objects do, so it and a
+hard-float object refuse each other in either link order (D780). Only the
 64-bit integer conversions and divisions still call libgcc there. A framed
 routine holding an assembly block keeps d8-d15 in its frame with VSTM and
 VLDM, between its homes and its staging, where D471's check covers them. Inline assembly keeps the ordinary block's straight-line and

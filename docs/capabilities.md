@@ -127,8 +127,10 @@ entry that describes it, and put a new one where a reader would look for it.
   comparison and conversion are VFP instructions with no software helper,
   floats travel in s0-s15 under AAPCS32's VFP variant for C and Landin
   alike (D616, D617), reset grants the unit and handlers take its extended
-  frames (D618), and a fibre's switch keeps d8-d15 and FPSCR (D620). The
-  C half of the convention is a planner contract measured against GCC on
+  frames (D618), and a fibre's switch keeps d8-d15 and FPSCR (D620). An
+  object built with a unit and one built without declare their float
+  attributes as GCC's do, so the linker refuses to mix them in either
+  order (D780). The C half of the convention is a planner contract measured against GCC on
   QEMU's `mps2-an500`; C interoperation stays disabled on Cortex-M. The
   whole runtime corpus also runs there, on a lane described in Landin
   source (D619).
