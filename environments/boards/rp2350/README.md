@@ -38,7 +38,7 @@ port is switched off and on in one `uhubctl -a cycle`, through
 the group that may switch it. The defaults are the maintainer's rig: hub
 `7-2.3.3`, port 2, on the cascade `7-2`.
 
-How the tool switches, paces and waits is [`../pico2.py`](../pico2.py)'s,
+How the tool switches, paces, waits and flashes is [`../pico2.py`](../pico2.py)'s,
 which [the Hazard3 tool](../rp2350_hazard3/README.md) shares, since both run
 the same board on the same port (D832). The run holds the rig's lock,
 `~/.cache/landin/rig.lock`, from its first step on the rig to its last; it
@@ -54,7 +54,12 @@ to attach while the port shows BOOTSEL, 2e8a:000f, unless told
 `--bootsel-attach`, which `--block-control` needs, since it flashes the
 good image again from BOOTSEL; after a flash from BOOTSEL it cycles the
 power at once, unpaced, gives the boot ROM `--boot-seconds`, and reads the
-head back from the image, never from BOOTSEL.
+head back from the image, never from BOOTSEL. probe-rs is told the chip as
+the architecture its cores run when it attaches, `RP235x` or
+`RP235x_riscv`, as [the Hazard3 tool's table](../rp2350_hazard3/README.md#which-chip-probe-rs-is-told)
+gives it: a board that tool left running its RISC-V image meets `RP235x`
+with a FAULT, so it is flashed as `RP235x_riscv` and power-cycled into this
+image before the head is read back; `result.json`'s `flashed_as` says which.
 
 ## Running it
 

@@ -23121,8 +23121,13 @@ hub to list
 again, and to show the device the port must hold when it holds one, the
 STM32H753's ST-LINK; a listing that finds no hub at all no longer passes
 for one that shows nothing. The two Pico 2 tools share `pico2.py`, which
-switches, paces and waits for both: neither attaches while the port shows
-BOOTSEL unless told `--bootsel-attach`, which their block controls need;
+switches, paces, waits and flashes for both: each attaches as the
+architecture the cores run, as D712 has the Hazard3 tool do, so the Arm
+tool, which met a FAULT as `RP235x` on a board the Hazard3 tool had left
+running its RISC-V image, flashes such a board as `RP235x_riscv` and boots
+its image by a power cycle before reading the head back; neither
+attaches while the port shows BOOTSEL unless told `--bootsel-attach`,
+which their block controls need;
 after a flash from BOOTSEL the power is cycled at once, unpaced but
 recorded so the next action is spaced from it, since the pace's two
 minutes would leave the halted boot ROM on the bus that D712 found

@@ -66,7 +66,7 @@ import common  # noqa: E402
 import pico2  # noqa: E402
 from common import (Failed, echo_of, elf_sections, frames_safe,  # noqa: E402,F401
                     require, sha, symbols)
-from pico2 import BOOTSEL, paced  # noqa: E402,F401
+from pico2 import ARM_CHIP, BOOTSEL, RISCV_CHIP, attached, paced  # noqa: E402,F401
 
 # The board's command bytes, which it also echoes.
 USBCTRL, REPORT, STALL = 0x05, 0x11, 0x12
@@ -105,8 +105,6 @@ SRAM = (0x20000000, 0x20082000)
 SLOT = 1
 # What environments/cortex-m/driver.py feeds the synthetic application.
 SHARED = b'1A0'
-# probe-rs's names for the chip as each architecture's cores run it (D712).
-ARM_CHIP, RISCV_CHIP = 'RP235x', 'RP235x_riscv'
 
 
 def jal_target(word, at):
@@ -222,27 +220,6 @@ def block_control(run, args, elf, head):
                 enumerated=device)
 
 
-def attached(run, args, name, bootsel_allowed=None):
-    """probe-rs for the Pico 2 as the architecture its cores run now: the
-    boot ROM runs on Arm in BOOTSEL and after probe-rs has flashed as
-    RP235x, and there RP235x_riscv's debug module times out; a RISC-V image
-    gates the Arm cores' access ports, and RP235x meets a FAULT (D712).
-    RP235x is tried first, since its refusal is the quick one.  Neither is
-    tried while the chip is in BOOTSEL, unless BOOTSEL_ALLOWED, by default
-    --bootsel-attach; the probe returned says in `from_bootsel` whether it
-    was."""
-    from_bootsel = pico2.refuse_bootsel(common.InGroup(run, args.hub_group), args,
-                                        bootsel_allowed)
-    for chip in ARM_CHIP, RISCV_CHIP:
-        attempt = common.Probe(run, args.probe_rs, chip, args.probe)
-        run.command('%s-%s' % (name, chip), attempt.argv('read', 'b32', hex(FLASH), '1'),
-                    timeout=60, check=False)
-        if run.commands[-1]['status'] == 0:
-            attempt.from_bootsel = bool(from_bootsel)
-            return attempt
-    raise Failed('neither %s nor %s reaches the Pico 2; see %s-*.log' % (ARM_CHIP, RISCV_CHIP, name))
-
-
 def running(run, args):
     """probe-rs for the RISC-V image the Pico 2 booted, never another chip:
     what it reads is read from the cores the image runs on."""
@@ -250,32 +227,10 @@ def running(run, args):
 
 
 def flash(run, args, elf, head, what="the image's entry word, table and block"):
-    """Flash ELF and verify it through the architecture the cores run when
-    the probe attaches, and read HEAD back; returns the chip it flashed as.
-
-    Flashed through the Arm side, probe-rs leaves the cores halted, and
-    the image is booted by a power cycle before the head is read back from
-    its cores.  When the chip was in BOOTSEL it was enumerated on USB, and
-    halted its USB stops answering: the host then retries the port for
-    minutes, and on the rig reset the hub chain the probe's own USB hangs
-    from, while every probe-rs start waited 85 s listing USB probes.  So
-    that cycle is taken at once rather than paced, and the head is never
-    read back from BOOTSEL (D712)."""
-    hub = common.InGroup(run, args.hub_group)
-    probe = attached(run, args, 'attach')
-    flashed_as = probe.chip
-    paced(args, 'download', lambda: run.command('flash', probe.argv('download', '--verify', elf),
-                                                timeout=300))
-    if flashed_as == ARM_CHIP:
-        power_cycle(hub, args, at_once=probe.from_bootsel)
-        time.sleep(args.boot_seconds)
-        probe = attached(run, args, 'reattach', bootsel_allowed=False)
-    else:
-        pico2.settle(hub, args)
-    count = len(head) // 4
-    back = struct.pack('<%dI' % count, *probe.read_words('flash-readback', FLASH, count))
-    require(back == head, 'flash does not hold %s' % what)
-    return flashed_as
+    """Flash ELF through the architecture the cores run when the probe
+    attaches and read HEAD back from the RISC-V image's cores, as
+    pico2.flash does; returns the chip it flashed as."""
+    return pico2.flash(run, args, elf, head, RISCV_CHIP, what)
 
 
 def power_cycle(run, args, at_once=False):

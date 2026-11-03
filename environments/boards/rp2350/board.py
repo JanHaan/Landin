@@ -143,29 +143,13 @@ def probe(run, args):
 
 
 def flash(run, args, elf, head, what="the image's vector table and block"):
-    """Flash ELF and verify it, then read HEAD back.
-
-    probe-rs halts both cores on every attach as RP235x.  Flashed from
-    BOOTSEL, the boot ROM was enumerated on USB and is left halted, so
-    its USB stops answering: the host then retries the port for minutes,
-    and on the rig reset the hub tree above it.  So the power is cycled at
-    once, the boot ROM enters what was flashed, and the head is read back
-    from the image it entered, never from BOOTSEL (D712)."""
-    hub = common.InGroup(run, args.hub_group)
-    from_bootsel = pico2.refuse_bootsel(hub, args)
-    swd = probe(run, args)
-    pico2.paced(args, 'download', lambda: run.command(
-        'flash', swd.argv('download', '--verify', elf), timeout=300))
-    if from_bootsel:
-        power_cycle(hub, args, at_once=True)
-        time.sleep(args.boot_seconds)
-        pico2.refuse_bootsel(hub, args, allowed=False)
-    else:
-        pico2.settle(hub, args)
-    count = len(head) // 4
-    back = struct.pack('<%dI' % count, *swd.read_words('flash-readback', VECTORS, count))
-    require(back == head, 'flash does not hold %s' % what)
-    return back
+    """Flash ELF through the architecture the cores run when the probe
+    attaches, and read HEAD back from the Arm image's cores, as pico2.flash
+    does: a board the Hazard3 tool left running a RISC-V image refuses
+    RP235x with a FAULT, and is flashed as RP235x_riscv and power-cycled
+    into this image; one in BOOTSEL is power-cycled at once (D712, D832).
+    Returns the chip it flashed as."""
+    return pico2.flash(run, args, elf, head, pico2.ARM_CHIP, what)
 
 
 def power_cycle(run, args, at_once=False):
@@ -348,7 +332,7 @@ def main():
         result.update(image_sha256=sha(elf), image_name=elf.name, image_block=['%08x' % w for w in IMAGE_DEF])
         if args.block_control:
             result['block_control'] = block_control(run, args, elf, head)
-        flash(run, args, elf, head)
+        result['flashed_as'] = flash(run, args, elf, head)
         result['flash_readback'] = 'matches'
         pins = (common.ProbehivePins(run, args.probehive, args.probehive_build, args.indicator_pin)
                 if args.indicator_pin else None)

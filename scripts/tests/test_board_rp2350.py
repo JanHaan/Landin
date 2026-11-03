@@ -47,12 +47,14 @@ class Paced:
 
 
 class Recorded:
-    """A tool's commands: every call kept, each name answered."""
-    def __init__(self, **answers):
-        self.answers, self.calls = answers, []
+    """A tool's commands: every call kept, each name answered, and each
+    status recorded as Run records it."""
+    def __init__(self, statuses=None, **answers):
+        self.answers, self.statuses, self.calls, self.commands = answers, statuses or {}, [], []
 
     def command(self, name, argv, **_):
         self.calls.append(name)
+        self.commands.append(dict(name=name, status=self.statuses.get(name, 0)))
         answer = self.answers.get(name, '')
         if isinstance(answer, list):
             return answer.pop(0) if len(answer) > 1 else answer[0]
@@ -184,8 +186,8 @@ class Control(unittest.TestCase):
     def test_a_refused_block_leaves_the_board_in_bootsel(self):
         run, verdict = self.control([QUIET, BOOTSEL])
         self.assertEqual(verdict['enumerated'], '2e8a:000f Raspberry Pi RP2350 ' + SERIAL)
-        self.assertEqual(run.calls, ['hub-before-attach', 'before download', 'flash',
-                                     'after download', 'hub-wait', 'flash-readback',
+        self.assertEqual(run.calls, ['hub-before-attach', 'attach-RP235x', 'before download',
+                                     'flash', 'after download', 'hub-wait', 'flash-readback',
                                      'before power cycle', 'hub-status', 'power-cycle',
                                      'after power cycle', 'hub-wait', 'probe-ping',
                                      'hub-after-corrupt', 'hub-after-corrupt'])
@@ -207,11 +209,28 @@ class Control(unittest.TestCase):
         run = Recorded(**answers(**{'hub-before-attach': [BOOTSEL, QUIET],
                                     'flash-readback': self.readback(head)}))
         with mock.patch.object(BOARD.time, 'sleep'):
-            BOARD.flash(run, paced_args(run, bootsel_attach=True), 'board.elf', head)
-        self.assertEqual(run.calls, ['hub-before-attach', 'before download', 'flash',
-                                     'after download', 'hub-status', 'power-cycle',
+            self.assertEqual(BOARD.flash(run, paced_args(run, bootsel_attach=True),
+                                         'board.elf', head), 'RP235x')
+        self.assertEqual(run.calls, ['hub-before-attach', 'attach-RP235x', 'before download',
+                                     'flash', 'after download', 'hub-status', 'power-cycle',
                                      'after power cycle at once', 'hub-wait', 'probe-ping',
-                                     'hub-before-attach', 'flash-readback'])
+                                     'hub-before-attach', 'reattach-RP235x', 'flash-readback'])
+
+    def test_a_board_left_running_a_risc_v_image_is_flashed_through_its_side(self):
+        # D712: a RISC-V image gates the Arm access ports, so RP235x meets a
+        # FAULT; the Arm image is flashed as RP235x_riscv, booted by a paced
+        # cycle and read back from the Arm cores.
+        head = self.head()
+        run = Recorded(statuses={'attach-RP235x': 1},
+                       **answers(**{'flash-readback': self.readback(head)}))
+        with mock.patch.object(BOARD.time, 'sleep'):
+            self.assertEqual(BOARD.flash(run, paced_args(run), 'board.elf', head),
+                             'RP235x_riscv')
+        self.assertEqual(run.calls, ['hub-before-attach', 'attach-RP235x', 'attach-RP235x_riscv',
+                                     'before download', 'flash', 'after download',
+                                     'before power cycle', 'hub-status', 'power-cycle',
+                                     'after power cycle', 'hub-wait', 'probe-ping',
+                                     'hub-before-attach', 'reattach-RP235x', 'flash-readback'])
 
     def test_nothing_attaches_while_the_pico_2_is_in_bootsel(self):
         run = Recorded(**answers(**{'hub-before-attach': BOOTSEL}))
