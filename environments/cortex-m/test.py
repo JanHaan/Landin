@@ -490,7 +490,7 @@ class ProbeFailures(unittest.TestCase):
         import backend_corpus
         record = json.loads((HERE.parent.parent / 'compiler/tests/cortex-m/corpus.json').read_text())
         name = 'runtime/r420-map-arena'
-        self.assertEqual(record['fixtures'][name]['lanes']['mps2-an500']['mode'], 'restriction')
+        self.assertEqual(record['fixtures'][name]['mode'], 'execute')
         original = backend_corpus.COUNTERPARTS
         with tempfile.TemporaryDirectory() as directory:
             broken = Path(directory)
@@ -502,7 +502,8 @@ class ProbeFailures(unittest.TestCase):
                     shutil.copytree(source, target)
                 else:
                     target.write_text(source.read_text())
-            del record['fixtures'][name]['lanes']['mps2-an500']['reason']
+            #  A restriction of an execute row on a lane, without its reason.
+            record['fixtures'][name]['lanes'] = {'mps2-an500': {'mode': 'restriction'}}
             (broken / 'corpus.json').write_text(json.dumps(record))
             backend_corpus.COUNTERPARTS = broken
             try:

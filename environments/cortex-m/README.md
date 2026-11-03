@@ -574,7 +574,7 @@ The same installed tool inventory is verified before and after all lanes.
 `backend/corpus` retains the complete shared runtime/ABI inventory from
 `compiler/tests/cortex-m/corpus.json`. Every ordinary runtime case uses the
 four inherited profiles; specialization cases add none/all and speed/all.
-Eleven explicit 32-bit/architecture counterparts retain the original hosted
+Fourteen explicit 32-bit/architecture counterparts retain the original hosted
 sources and independent numeric expectations. `counterparts.json` records
 exact reviewed textual differences, checked before execution. Missing/new
 fixtures or counterpart drift fail the supervisor. Compiler-verdict and
@@ -615,9 +615,8 @@ An `execute` row may also carry `"lanes": {"mps2-an500": {"mode":
 "restriction", "reason": ...}}`, a corpus lane's own disposition of it
 (D619), which may name either lane. The lane still runs the program and
 requires it to fail, so a restriction that no longer holds fails the lane,
-naming the row; three 64-bit-sized fixtures, which the reference's map
-never held and so no Cortex-M lane ran before the M7's, have one, until
-each has a 32-bit counterpart. A `refuse` row may carry `"lanes":
+naming the row. No row has one now: the three 64-bit-sized `r420-` fixtures
+that had one run as 32-bit counterparts instead. A `refuse` row may carry `"lanes":
 {"mps2-an505": {"mode": "refuse", "codes": [...], "reason": ...}}`, the
 codes that lane's level and map refuse it with where they differ from the
 reference's. It may instead carry `"lanes": {"mps2-an500": {"mode":
