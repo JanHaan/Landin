@@ -79,7 +79,9 @@ Prepare that environment before holding the rig lock:
 nix develop /home/jan/src/probehive#gpio -c true
 ```
 
-The matching probehive change is local until separately published. Source
+The matching probehive change, commit
+`4f69b8269a664cf1e1c47b2b40365b482e9f30ec` on `landin-ram-gpio`, is local
+until separately published. Source
 and runtime files must match the loaded bitstream. Loading a bitstream is
 an explicit rig operation; a run never switches the Arty's power.
 
@@ -106,8 +108,9 @@ Add `--record NEW_LOCAL_PATH` before `--` to retrieve a successful tool's
 record without replacing an existing file. Use `ram-record.json` for RAM
 evidence; a build never produces hardware records.
 
-The warm helper halts the executing core, retires an active exception,
-stops the port's DMA and interrupt sources, parks the other RP core,
+The warm helper halts the executing core, retires Arm and C5 handlers,
+resets Hazard3 interrupt state, stops the port's DMA and interrupt sources,
+parks the other RP core,
 validates the supported clock/cache baseline, loads SRAM and checks its
 readback, prepares vectors, stack and entry, and resumes compiler startup.
 It has no flash-programming or system-reset operation. STM32 supply is

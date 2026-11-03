@@ -23036,8 +23036,9 @@ can deliberately enter BOOTSEL before catching reset.
 **Chosen:** board tools default to `--mode=ram`, distinct from explicit
 `--mode=boot`. A pinned probe-rs session helper halts and reinitializes the
 supported board-port state without flash programming or a system reset.
-It retires active exceptions, stops application DMA and interrupt sources
-before replacing SRAM, parks the other RP core, checks the supported clock
+It retires active Arm and C5 handlers, resets Hazard3's interrupt context,
+enable/force windows and priorities, and stops application DMA and interrupt
+sources before replacing SRAM. It parks the other RP core, checks the supported clock
 and cache baseline and configures the STM32 supply before writing RAM.
 Before hardware access the tool checks the helper's offline description
 against its compiled source identity and pinned probe-rs revision. It
