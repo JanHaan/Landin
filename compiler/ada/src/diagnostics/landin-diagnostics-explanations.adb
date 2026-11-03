@@ -249,7 +249,9 @@ package body Landin.Diagnostics.Explanations is
                & "tatements, then `end` (D860). A type alone after `->`, a"
                & "nother language's unnamed result, is refused naming the "
                & "return with a name, `-> (result: i32)`, and the function"
-               & " is still closed by its own `end` (D861).",
+               & " is still closed by its own `end`; so are named returns "
+               & "written without their parentheses, `-> code: i32` (D861)"
+               & ".",
             when Catalogue.Unclosed_Construct =>
                "A construct opened and its `end` never arrived [1800]. T"
                & "he second label shows where it opened; close it there.",

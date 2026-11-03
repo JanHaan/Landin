@@ -19413,7 +19413,9 @@ no `:` or `,` follows, with `ptr` or with `[`, is refused there as L0103, "a ret
 as typed", whose note writes the named form, `(result: i32)` when the type
 is one name and `(result: type)` otherwise. The type is read as one return's,
 so the body opens at `=` and the function is closed by its own `end`: one
-report.
+report. Named returns written without their parentheses, `-> code: i32`,
+were the same two reports, and are one, L0103, "named returns are written in
+parentheses", the list read as though they were there.
 
 **The alternatives:** a fix that writes `(result: i32)`, which would also
 have to rename every use the body makes, since the body cannot name a result

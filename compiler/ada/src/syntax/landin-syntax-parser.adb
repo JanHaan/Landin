@@ -7216,6 +7216,7 @@ package body Landin.Syntax.Parser is
             is
                Start   : constant Landin.Source.Span := Here;
                Results : Slot_Vectors.Vector;
+               Unparenthesised : Boolean := False;
             begin
                Returns_At := Start;
 
@@ -7275,7 +7276,23 @@ package body Landin.Syntax.Parser is
                   end;
                end if;
 
-               if not Expect
+               --  Named returns written without their parentheses,
+               --  `-> code: i32`: said once, and read as the list they
+               --  were meant to be, so the body still opens at `=`.
+               if Peek = Tok.Identifier
+                 and then Kind_At (Past_Names (1)) = Tok.Colon
+               then
+                  Unparenthesised := True;
+                  Complain
+                    (Item    => Syn.Token_Expected,
+                     Where   => Here,
+                     Message => "named returns are written in parentheses",
+                     Note    => "[1800]: a function's returns are named"
+                                & " in parentheses, as in `(code: i32)`,"
+                                & " or written `none`",
+                     Related => Declared_At,
+                     Because => "declared here");
+               elsif not Expect
                         (Wanted  => Tok.Left_Paren,
                          Message => "returns are named, or `none`",
                          Note    => "[1800]: a function's returns are named"
@@ -7376,7 +7393,9 @@ package body Landin.Syntax.Parser is
                   Advance;
                end loop;
 
-               if not Expect
+               if Unparenthesised then
+                  null;
+               elsif not Expect
                         (Wanted  => Tok.Right_Paren,
                          Message => "the named returns close with `)`",
                          Note    => "[1800]: a function's returns are named"

@@ -366,7 +366,8 @@ so a second statement under an arm is refused at its first token, naming the
 bare block that holds several, `case: begin`, the statements, then `end`
 (D860). A type alone after `->`, another language's unnamed result, is
 refused naming the return with a name, `-> (result: i32)`, and the function
-is still closed by its own `end` (D861).
+is still closed by its own `end`; so are named returns written without their
+parentheses, `-> code: i32` (D861).
 
 ```landin
 extern(c) bad: (...) -> none

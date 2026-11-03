@@ -23696,7 +23696,10 @@ package body Landin.Diagnostics.Citations.Texts is
                & "ult: i32)` when the type is one name and `(result: type)"
                & "` otherwise. The type is read as one return's, so the bo"
                & "dy opens at `=` and the function is closed by its own `e"
-               & "nd`: one report.",
+               & "nd`: one report. Named returns written without their par"
+               & "entheses, `-> code: i32`, were the same two reports, and"
+               & " are one, L0103, ""named returns are written in parenthes"
+               & "es"", the list read as though they were there.",
             when 862 =>
                "Chosen: an import whose path is a text or raw literal is"
                & " refused at the literal as L0100, ""an import's module pa"
