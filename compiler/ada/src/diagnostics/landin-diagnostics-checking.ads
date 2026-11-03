@@ -40,7 +40,9 @@
 --  out to name, which is a fact no reading of the bytes could supply --
 --  `u8(x)` is a perfectly good `call` production.  So it carries [1830]'s
 --  two notes, the construct and its standing, and it is not a misspelling
---  and must never be reported as one.
+--  and must never be reported as one.  A refusal that knows the form to
+--  write instead gives it as Route, a third note after those two, rather
+--  than in its message (D761).
 --
 --  Recursive_Nominal_Value is D137's finite-layout rule, distinct from
 --  Cyclic_Type_Alias: an alias cycle reaches no type, while a nominal cycle
@@ -186,6 +188,7 @@ package Landin.Diagnostics.Checking is
       Related : Landin.Provenance.Origin := Landin.Provenance.No_Origin;
       Because : String := "";
       Refused : Refused_Use := Struct_Value;
+      Route   : String := "";
       Fixes   : Fix_List := No_Fixes;
       Into    : in out Diagnostic_List);
 

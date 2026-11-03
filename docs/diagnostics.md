@@ -604,7 +604,8 @@ end f
 
 A known form used where the language does not permit it [1830], found once
 the checker knows what the form means. The report names the specific rule;
-its two notes give the tour paragraph and the form's standing.
+its two notes give the tour paragraph and the form's standing, and a third,
+where the checker knows one, the form to write instead (D761).
 
 For a variant [0680]-[0690] (D75/D76/D241), its part belongs to the
 enclosing struct and has no standalone value. Match the part to inspect its
@@ -619,7 +620,7 @@ destination, an inferred binding, or the argument of a read-only slice
 parameter, which it lends a slice of storage made in the caller's frame for
 the call. A generic routine's slice parameter gives one only when its element
 type names no formal (D419); where the element type is a formal, deduced
-from the arguments, the report names the binding to pass instead,
+from the arguments, the third note names the binding to pass instead,
 `values := [...]`, or `values: [N]E = [...]` when an element such as
 `any(addr x)` needs a context, which an inferred binding does not give.
 

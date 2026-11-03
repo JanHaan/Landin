@@ -4332,8 +4332,8 @@ def catalogue_rows():
              if n.strip()]
     fields = {"Code": "code", "Level": "level", "State": "state",
               "Source": "source", "Bytes": "nonempty", "Least": "minimum",
-              "Most": "maximum", "Notes": "notes", "Fixes": "fixes",
-              "Shown_By": "shown_by"}
+              "Most": "maximum", "Notes": "notes", "Route": "route",
+              "Fixes": "fixes", "Shown_By": "shown_by"}
     read = {}
     pieces = re.split(r"(?:^|,)\s*(\w+) =>\s*\(", table.group(1))
     for name, body in zip(pieces[1::2], pieces[2::2]):
@@ -4350,7 +4350,7 @@ def catalogue_rows():
     for name in order:
         row = dict(code="?", level="?", state="?", rule="?", source="?",
                    nonempty="?", minimum="?", maximum="?", notes="?",
-                   fixes="?", shown_by="?")
+                   route="?", fixes="?", shown_by="?")
         row.update(read.get(name, {"name": name}))
         rows.append(row)
     return rows
@@ -6797,13 +6797,18 @@ def diagnostic_matrix_dump():
         maximum = row["maximum"]
         if not maximum.isdigit():
             maximum = row["minimum"]
+        #  A code that admits a route note after its fixed ones (D761)
+        #  carries one more at most, as an interval like its labels'.
+        notes = row["notes"]
+        if row["route"] == "True" and notes.isdigit():
+            notes = "%s..%d" % (notes, int(notes) + 1)
         lines.append("%-6s %-8s %-7s %-8s %-5s %-11s %s..%s %-5s %-35s %s" %
                      (row["code"], row["state"], row["level"].lower(),
                       row["fixes"].lower().replace("_", "-"),
                       row["source"].lower(),
                       ("nonempty" if row["nonempty"] == "True"
                        else "empty-ok"), row["minimum"], maximum,
-                      row["notes"], ",".join(sorted(set(emitters))) or "-",
+                      notes, ",".join(sorted(set(emitters))) or "-",
                       ",".join(sorted(set(evidence))) or "-"))
     return "\n".join(lines) + "\n"
 

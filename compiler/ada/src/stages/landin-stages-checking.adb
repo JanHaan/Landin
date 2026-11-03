@@ -12972,7 +12972,10 @@ package body Landin.Stages.Checking is
                               Message =>
                                 "an array literal takes no shape from a"
                                 & " slice parameter whose element type"
-                                & " names a generic formal; "
+                                & " names a generic formal",
+                              Refused => Bad.Array_Value,
+                              Route   =>
+                                "instead, "
                                 & (if Has_Contextual_Element
                                      (Caller_Tree, Argument)
                                    then "bind it with the element type it"
@@ -12984,7 +12987,6 @@ package body Landin.Stages.Checking is
                                    else "bind it, `" & Name
                                         & " := [...]`,")
                                 & " and pass the name",
-                              Refused => Bad.Array_Value,
                               Into    => Found);
                         end;
                         Landin.Checking.Refuse
@@ -23069,10 +23071,10 @@ package body Landin.Stages.Checking is
                     (Item    => Bad.Unsupported_Use,
                      Source  => Syn.Source_Of (Of_Tree),
                      Where   => Syn.Where (Of_Tree, Node),
-                     Message => "a match alias of an array is not copied;"
-                                & " copy the matched struct or index the"
-                                & " alias",
+                     Message => "a match alias of an array is not copied",
                      Refused => Bad.Array_Value,
+                     Route   => "instead, copy the matched struct or index"
+                                & " the alias",
                      Into    => Found);
                   return Kept (Ty.Ill_Typed);
                elsif Held = Ty.Fixed_Array then
@@ -32451,8 +32453,9 @@ package body Landin.Stages.Checking is
                      Source  => Syn.Source_Of (Of_Tree),
                      Where   => Syn.Where (Of_Tree, Node),
                      Message => "a construction is a value, not a"
-                                & " statement; discard one with `_ =`",
+                                & " statement",
                      Refused => Bad.Struct_Value,
+                     Route   => "instead, discard one with `_ =`",
                      Into    => Found);
                   Landin.Checking.Refuse (Types.all, Of_Tree, Node);
                   return;

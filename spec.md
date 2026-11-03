@@ -19266,6 +19266,36 @@ which a reader at the report has not yet run.
 `scripts/tests/test_check_controls.py`, and every recorded negative report the change
 rewrote.
 
+### D761 — A refusal whose notes are fixed facts says its route in a third note
+
+**The discrepancy:** L0304, the checker's half of [1830], carries two notes
+every occurrence must have, the tour paragraph and the form's standing, and
+the catalogue held every code to one exact count of notes. A refusal that
+knew the form to write instead, the binding a generic slice parameter's
+literal needs (D419), the copy a match alias of an array needs, or the `_ =`
+a construction statement needs, could carry it only in its message, after a
+semicolon, where the report's first line became a sentence and a half.
+
+**Chosen:** a catalogue row says, beside its count of notes, whether an
+occurrence may carry one more: the route, the form to write instead, after
+the fixed notes. L0304 is the one row that admits it, and every reporting
+package holds a diagnostic to the count or the count and the route. The
+message says what was refused and the route note what to write, beginning
+`instead,`. Every other code has a note of its own to say its route in, and
+the catalogue suite refuses a route on any row but L0304's.
+
+**The alternatives:** keeping the route in the message, which every such
+refusal did and which is what made the message long; making the route a
+`help` line, which is a fix an editor applies, and a route that names a
+binding to introduce elsewhere is not an edit the refusal knows how to make;
+and an interval of notes for every row, a second number on 128 rows for one
+that needs it.
+
+**Pinned by** `negative/array-lent-refusals`,
+`negative/generic-closed-parameter-refusals`,
+`negative/r720-match-alias-array-not-copied` and the catalogue suite's
+`rows are whole`.
+
 ### D383 — `refine check` takes what `compile` takes about the program
 
 **The discrepancy:** `check` and `compile` read one program, and only

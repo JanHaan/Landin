@@ -29,7 +29,7 @@ package body Landin.Diagnostics.Modules is
       for One of Fixes loop
          Add_Fix (Made, One);
       end loop;
-      if Rows.Required_Notes (Row) /= Note_Count (Made)
+      if not Rows.Admits_Notes (Row, Note_Count (Made))
         or else Label_Count (Made) < Rows.Minimum_Secondaries (Row)
         or else Label_Count (Made) > Rows.Maximum_Secondaries (Row)
       then

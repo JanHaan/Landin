@@ -48,7 +48,7 @@ package body Landin.Diagnostics.Resolution is
 
       --  The row this code carries is checked against the diagnostic just
       --  built, exactly as Landin.Diagnostics.Syntactic does.
-      if Rows.Required_Notes (Named) /= Note_Count (Built)
+      if not Rows.Admits_Notes (Named, Note_Count (Built))
         or else Label_Count (Built) < Rows.Minimum_Secondaries (Named)
         or else Label_Count (Built) > Rows.Maximum_Secondaries (Named)
       then
