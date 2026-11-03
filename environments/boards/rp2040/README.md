@@ -1,70 +1,78 @@
 # The first board: a Raspberry Pi Pico
 
-The prototype-1 board port, `compiler/tests/board/rp2040`, built by refine
-for the Pico's RP2040 through `devices/descriptions/rp2040`, flashed, and
-booted from power-on with nothing attached to its core. `board.py` builds
-the image, flashes it, switches the Pico's power and checks what the board
-writes on its UART against a physical oracle written from what the host
-sent and from the RP2040 datasheet (D595). It is a developer tool: no
-compiler feature runs it or needs it, and the gate does not run it, since
-no hosted runner has the board.
+Start with the [board guide](../README.md) for the rig rules, pinned
+tools, offline builds and the build-on-epycmicro/run-on-rigpi command.
+
+`compiler/tests/board/rp2040` targets RP2040 through
+`devices/descriptions/rp2040`, using `--target=cortex-m0`.
+`board.py` defaults to `--mode=ram`: the loader halts the running core,
+applies the explicit warm reinitialization contract, writes and verifies
+SRAM, sets the stack and vector/trap entry and resumes. This does not
+reset through the ROM, write flash or cycle power, and does not prove a
+cold reset. The resident flash image stays in place. `--mode=boot` is the
+separate flash and cold-start check.
+
+The port uses UART0 on GPIO0/1, DMA channel 0, GPIO3 as its indicator,
+TIMER_IRQ_0 and USBCTRL_IRQ. Its physical oracle follows the RP2040
+datasheet (D595). The boot check additionally exercises the flash second
+stage and its CRC (D594).
 
 ## What it needs
 
 | What | Which | Why |
 |---|---|---|
 | the board | a Raspberry Pi Pico H, its SWD on the 3-pin debug connector, GPIO0 (UART0 TX) to the probe's UART RX and GPIO1 (UART0 RX) to its TX, powered from its USB port | the RP2040 and its 2 MiB W25Q16JV flash, as the description lays them out |
-| a probe | a [probehive](https://github.com/JanHaan/probehive) SWD slot, slot 0 by default, `--slot`, and a checkout of it, whose `scripts/dap_bridge.py` serves slot N's UART as TCP port 4461 + N; a bridge already listening on the slot's ports is reused and left running, and otherwise the tool starts one for every slot of the probe, `--bridge-slots`, and leaves it running for the next tool | SWD to flash and read back, and the UART the trace comes over |
-| probe-rs | one that reaches the slot as `--probe` names it: the CMSIS-DAP UDP transport the default `0000:0002:10.42.0.50/0` asks for is a pull request to probe-rs, and upstream's TCP transport reaches a bridge as `0000:0001:HOST:PORT` | flashing, verifying and reading memory |
-| the indicator's wire | optionally, GPIO3 (the Pico's pin 5) wired to one of the probe's GPIO, named with `--indicator-pin`; IO32 on the maintainer's rig. probehive's `scripts/gpio.py` reads it, with the LiteX its `nix develop` carries, a shell that on a host that has not built it builds probehive's FPGA toolchain first: open it once, `nix develop PROBEHIVE -c true`, before the first run, which otherwise refuses after 300 s, before it holds the rig | the indicator's level on the wire, not only as its pad reads it back |
-| power | the Pico's USB port on a hub with per-port power switching, and `uhubctl` with the right to switch it | a power cycle, so the run starts at power-on |
+| a probe | a [probehive](https://github.com/JanHaan/probehive) SWD slot, slot 0 by default, `--slot`, and a checkout of it, whose `scripts/dap_bridge.py` serves slot N's UART as TCP port 4461 + N; a bridge already listening on the slot's ports is reused and left running, and otherwise the tool starts one for every slot of the probe, `--bridge-slots`, and leaves it running for the next tool | direct SWD debug and the independent UART trace |
+| probe-rs | the pinned fork in the [board guide](../README.md), reaching slot 0 directly as `0000:0002:10.42.0.50/0` by default; `--probe` overrides it | memory access and explicit boot flashing |
+| the indicator's wire | optionally, GPIO3 (Pico pin 5) to IO32 on the maintainer's rig, named with `--indicator-pin`; `scripts/gpio.py` runs in `nix develop PROBEHIVE#gpio`, the light LiteX shell available on x86_64 and arm64 Linux | the physical wire level, in addition to pad readback |
+| power | the Pico's USB port on a hub with per-port power switching, and `uhubctl` with the right to switch it | power cycling for explicit boot checks |
 | the compiler | refine and `arm-eabi-gcc` or `arm-none-eabi-gcc` (D532), as `nix develop` gives them | the image |
+| the RAM loader | `landin-ram-run`, named with `--ram-loader`, built from the pinned probe-rs library | one warm halt/load/resume session |
 
-`uhubctl` needs write access to the hub's port `disable` files; on a host
-where those belong to a group, `--hub-group`, `dialout` by default, the tool
-runs `uhubctl` through `/run/wrappers/bin/sg GROUP -c` when the session is
-not in that group, as a session started before its user joined it is not.
-The tool switches only `--port` on `--hub`, and only while
-the device with `--guard-serial`, the probe's own Arty A7, is present and not on
-`--cascade`, the hub cascade the boards are on (by default the one `0bda:5411`
-hub whose parent is not one, wherever it is attached, D833), found by its serial wherever it is plugged in: its bitstream is held
-only in SRAM and would be lost with its power, and on the cascade's earlier
-port a switch re-enumerated the whole of it (D725). The port is switched off and on in one
-`uhubctl -a cycle`: on that port switching it off re-enumerated the hub's inner hubs, and
-a second call could meet their new device nodes before udev had given them
-the group allowed to switch them. The run holds the rig's lock,
-`~/.cache/landin/rig.lock`, from its build to its last read; its download
-and its cycle each stop on any USB trouble the kernel logged since the last
-such action by any tool on the host, since on that port even a download to
-the Pico, which enumerates nothing, was followed by the whole cascade
-disconnecting; and after the download and after the cycle the tool waits,
-up to `--hub-seconds`, for the hub to list again (D725, D832).
-No action waits for a fixed time: on the cascade's present port a switch
-drops only the device on the port switched, back within seconds, and
-`--spacing` and `--quiet`, a time between two actions and one the kernel
-must have logged nothing of USB for, are options, none by default. `--hub`
-is named as `uhubctl -l` names
-it, or relative to the cascade's root; the default is the maintainer's rig:
-hub `.3.3`, port 1.
+Build tools are needed on the build host; consuming a checked bundle on
+rigpi uses its matching tool sources and prepared metadata. Hardware work
+holds the common rig lock, `~/.cache/landin/rig.lock`, after the build and
+through final readback/restoration. Preserve the USB guard, protected Arty
+and shared pacing state described in the [board guide](../README.md).
+
+Boot power uses hub `.3.3`, port 1 by default. The Arty named by
+`--guard-serial` must be present outside `--cascade` before any switch;
+its bitstream is held in SRAM. The Pico's indicator wire is GPIO3 to IO32
+on the maintainer's rig.
+
+Direct UDP debug completes before the tool opens the UART socket, and
+the socket closes before debug readback. The bridge remains available for
+UART service between runs; it does not own the native debug session.
 
 ## Running it
 
+Run this raw command on the rig host from the matching source snapshot.
+Prepare `RAM_BUNDLE` on the build host as the [board guide](../README.md)
+describes; the rig host needs no refine or cross-binutils when consuming it.
+
 ```sh
 python3 environments/boards/rp2040/board.py \
-    --refine compiler/ada/build/nix-x86_64-linux/debug/bin/refine \
-    --probehive ~/src/probehive --probe-rs PATH/TO/probe-rs --probe 0000:0002:10.42.0.50/0 \
-    --hub .3.3 --port 1 --guard-serial 210319B3E738 \
-    --indicator-pin IO32 \
-    --output NEW_DIRECTORY
+    --mode=ram --bundle=RAM_BUNDLE --ram-loader=PATH/TO/landin-ram-run \
+    --probe-rs=PATH/TO/probe-rs \
+    --probehive /home/jan/src/probehive \
+    --output=NEW_DIRECTORY
 ```
 
-The output holds the image, its build report and every command's log, the
-bridge's log when it started one, `uart.bin` (every byte the board sent) and `sent.bin` (every
-byte the host sent), and `result.json`: the image's and the second stage's
-hashes, the stage's CRC, whether the bridge was reused, each verdict, every frame and the commands with
-their status and time. The run the item recorded is
-[`record.json`](record.json), whose image was built as `board.elf`; it
-predates the record's `image_name`. The linked ELF holds the name of the object refine assembled beside it, so its hash depends on the output's name: a record gives the name as `image_name`, and a reader rebuilding the image to check the hash builds it under that name.
+For a boot check, replace the mode and bundle with `--mode=boot` and
+`--bundle=BOOT_BUNDLE`, omit `--ram-loader`, and provide
+`--fixed-image=PATH/TO/fixed.elf` if the bundle does not already carry it.
+The fixed image is the quiet resident program restored and cold-started
+afterward, subject to the USB stop guard. A failed restoration is a failed
+check; a USB fault stops further hardware actions and requires the
+operator's recovery.
+
+The output retains the ELF, build report, command logs, `uart.bin`,
+`sent.bin`, elapsed time and `result.json`, including `mode`, the warm-load
+report or the boot/restoration evidence, and the physical oracle verdicts.
+Use `mode` and `warm_load` to identify RAM evidence. Keep passed RAM runs in
+`ram-record.json` with `--record`; `record.json` remains boot evidence.
+ELF hashes depend on the output basename; rebuild a recorded image using
+its `image_name` (`board.elf` for the legacy RP2040 record).
 
 ## The trace
 
@@ -74,9 +82,16 @@ host never sends STX or ETX.
 
 | Tag | When | Fields |
 |---|---|---|
-| `b` | once, after the clocks, the resets and the receiver are set up | `r` CHIP_RESET as read first in `start`, `v` VTOR then, `k` CLK_REF_SELECTED |
+| `b` | for each startup ACK, after peripheral initialization | `r` CHIP_RESET as read first in `start`, `v` VTOR then, `k` CLK_REF_SELECTED |
+| `r` | after GO and a fresh DMA epoch | no fields; application readiness |
 | `t` | after each 0x11 | `h` bytes handled, `c` ring restarts, `d` DMA completions, `m` timer interrupts, `u` USBCTRL_IRQ entries, `p` the exception number it ran in, `n` DMA channel 0's TRANS_COUNT, `e` bytes consumed in this epoch, `g` the indicator's pad read back, `s` the application's state |
 | `h` | when the application halts | `s` its status |
+
+Before application traffic, the host sends ACK (0x06), retrying until
+it receives `b`, then GO (0x07). The firmware consumes the complete
+handshake without echo, restarts its 4096-byte DMA epoch and emits `r`.
+Only after `r` does the host send application bytes. `sent.bin` keeps
+all ACKs and GO; echo and handled-count checks exclude that prefix.
 
 Three bytes are commands after their echo: 0x05 sets IRQ5 pending in the
 NVIC (D596), 0x11 asks for a `t` frame, and 0x12 stops reading for 100 ms.
@@ -85,16 +100,18 @@ NVIC (D596), 0x11 asks for a `t` frame, and 0x12 stops reading for 100 ms.
 
 | Checked | Against |
 |---|---|
-| the ELF's `.boot2` | 256 bytes at 0x1000_0000, not empty, its last word the CRC-32 of the first 252 as the boot ROM computes it (datasheet 2.8.1.3.1) |
-| vector word 21 | the USBCTRL_IRQ handler's address, Thumb bit set |
-| flash after flashing | its first 256 bytes, read back over SWD, equal to the image's |
-| the boot frame | CHIP_RESET is HAD_POR alone, so the run began at power-on; VTOR is 0x1000_0100, which only the second stage writes, so the ROM entered the flashed stage and the stage entered compiler-owned reset; clk_ref is on the crystal |
+| the warm RAM entry | the helper validates SRAM-only load segments, writes and reads them back, establishes the vector/trap base, stack and entry, and reports `flash_written: false`; the physical scenario then checks device behavior |
+| the startup frame (RAM mode) | the vector/trap base equals the loaded ELF table and clk_ref selects the crystal; reset-cause bits are observed without a power-on assertion |
+| the ELF's `.boot2` (boot artifact) | 256 bytes at 0x1000_0000, not empty, its last word the CRC-32 of the first 252 as the boot ROM computes it (datasheet 2.8.1.3.1) |
+| vector word 21 (boot artifact) | the USBCTRL_IRQ handler's address, Thumb bit set |
+| flash after flashing (boot only) | its first 256 bytes, read back over SWD, equal to the image's |
+| the boot frame (boot mode) | CHIP_RESET is HAD_POR alone, so the run began at power-on; VTOR is 0x1000_0100, which only the second stage writes, so the ROM entered the flashed stage and the stage entered compiler-owned reset; clk_ref is on the crystal |
 | the shared scenario | `1`, `A` and `0`, the bytes the emulator lane's application is fed, echoed, with `g` 8 after `1` and 0 after `0`, and with `--indicator-pin` the wire high after `1` and low after `0`; the probe's pin is pulled up when nothing drives it, so low is what shows the Pico driving it |
 | IRQ5 | one entry, in exception 21 |
 | an overrun | after 0x12, a 300-byte burst into the 256-byte ring is discarded, never echoed, and the ring restarts once |
 | an epoch ended by STALL | the 4096-byte epoch filled, its last byte STALL, then 100 bytes while the channel is exhausted and nothing reads: the UART's 32-byte FIFO holds the first 32, it flags the rest lost, the application restarts on that overrun, and only those 32 are echoed |
 | an epoch exhausted | the next epoch filled to its 4096 bytes: one DMA completion, one restart, nothing lost, and the byte that waited in the FIFO meanwhile the next epoch's first |
-| the stream | every byte sent echoed in order but those discarded above, `h` their count, and the timer advancing |
+| the stream | every application byte echoed in order but those discarded above, `h` their count, and the timer advancing |
 | the counters | `handled`, `recoveries`, `dma_events`, `usb_events` and TRANS_COUNT, read over SWD without halting the core, equal the last frame's |
 
 What the emulator lane and the board share is

@@ -1,127 +1,97 @@
 # The RP2350 board on its Hazard3 cores: a Raspberry Pi Pico 2
 
-The prototype-1 board port on the Pico 2's RISC-V cores,
-`compiler/tests/board/rp2350_hazard3`, built by refine for `--target=rv32`
-at `--level=rv32imac` through `devices/descriptions/rp2350_hazard3`,
-flashed, and booted from power-on with nothing attached to its cores. It
-is [the Pico 2's Arm port](../rp2350/README.md) (D654) with its
-interrupts through Hazard3's Xh3irq rather than the NVIC, and with a
-counter kept by an `amoadd.w`, an A-extension read-modify-write (D710).
-The port is its `app` alone: its `bringup`, `report` and `serial` are the
-Arm port's, under `compiler/tests/board/rp2350`, which the tool names as a
-root after the port's own, over the chip's modules, `rp2350/PERIPHERAL`
-(D831). `board.py` builds the image, flashes it, switches the Pico 2's
-power and checks what the board writes on its UART against a physical
-oracle written from what the host sent and from the RP2350 datasheet,
-release 8 (D711). It is a developer tool: no compiler feature runs it or
-needs it, and the gate does not run it, since no hosted runner has the
-board. What it shares with the other boards' tools is
-[`../common.py`](../common.py) (D646).
+Start with the [board guide](../README.md) for the rig rules, pinned
+tools, offline builds and the build-on-epycmicro/run-on-rigpi command.
+
+`compiler/tests/board/rp2350_hazard3` targets RP2350 Hazard3 through
+`devices/descriptions/rp2350_hazard3`, using `--target=rv32` at `--level=rv32imac`.
+`board.py` defaults to `--mode=ram`: the loader halts the running core,
+applies the explicit warm reinitialization contract, writes and verifies
+SRAM, sets the stack and vector/trap entry and resumes. This does not
+reset through the ROM, write flash or cycle power, and does not prove a
+cold reset. The resident flash image stays in place. `--mode=boot` is the
+separate flash and cold-start check.
+
+The port uses Hazard3's Xh3irq dispatch and an `amoadd.w` counter
+(D710, D711). Its `app` shares `bringup`, `report` and `serial` with the
+Arm port under `compiler/tests/board/rp2350`, named as a second root over
+the chip's generated `rp2350/PERIPHERAL` modules (D831). The oracle follows
+the RP2350 datasheet, release 8. The boot check additionally exercises the
+RISC-V IMAGE_DEF block.
 
 ## What it needs
 
 | What | Which | Why |
 |---|---|---|
 | the board | a Raspberry Pi Pico 2 H, its SWD on the 3-pin debug connector, GPIO0 (UART0 TX) to slot 1's UART RX and GPIO1 (UART0 RX) to its TX, powered from its USB port | the RP2350 and its 4 MiB flash, as the description lays them out |
-| a probe | a [probehive](https://github.com/JanHaan/probehive) SWD slot, slot 1 by default, `--slot`, and a checkout of probehive, whose `scripts/dap_bridge.py` serves slot N's SWD as TCP port 4441 + N and its UART as 4461 + N | SWD to flash and read back, and the UART the trace comes over |
-| probe-rs | one with the CMSIS-DAP TCP transport, `0000:0001:127.0.0.1:PORT`, and the `RP235x` and `RP235x_riscv` targets | flashing, verifying and reading memory |
-| the indicator's wire | optionally, GPIO3 wired to one of the probe's GPIO, named with `--indicator-pin`; probehive's `scripts/gpio.py` reads it, with the LiteX its `nix develop` carries, a shell that on a host that has not built it builds probehive's FPGA toolchain first: open it once, `nix develop PROBEHIVE -c true`, before the first run, which otherwise refuses after 300 s, before it holds the rig | the indicator's level on the wire, not only as its pad reads it back |
-| power | the Pico 2's USB port on a hub with per-port power switching, and `uhubctl` with the right to switch it | a power cycle, so the run starts at power-on |
+| a probe | a [probehive](https://github.com/JanHaan/probehive) SWD slot, slot 1 by default; direct UDP debug and `scripts/dap_bridge.py` for slot N's UART on TCP port 4461 + N | debug access and the UART trace |
+| probe-rs | the pinned fork in the [board guide](../README.md), reaching slot 1 directly as `0000:0002:10.42.0.50/1` by default; `--probe` overrides it | memory access and explicit boot flashing |
+| the indicator's wire | optionally, GPIO3 to a probe GPIO, named with `--indicator-pin`; `scripts/gpio.py` runs in `nix develop PROBEHIVE#gpio`, the light LiteX shell available on x86_64 and arm64 Linux | the physical wire level, in addition to pad readback |
+| power | the Pico 2's USB port on a hub with per-port power switching, and `uhubctl` with the right to switch it | power cycling for explicit boot checks |
 | the compiler | refine and `riscv64-elf-gcc` or `riscv64-unknown-elf-gcc` (D660), with that toolchain's `nm` and `objdump`, as `nix develop` gives them | the image, and the symbols and the `amoadd.w` it is checked for |
+| the RAM loader | `landin-ram-run`, named with `--ram-loader`, built from the pinned probe-rs library | one warm halt/load/resume session |
 
-The tool reaches the slot through the bridge alone, so probe-rs and the
-console share the slot's one CMSIS-DAP client rather than meeting as two.
-A bridge already listening on both of the slot's ports is reused and never
-stopped; otherwise the tool starts one serving every slot of the probe,
-`--bridge-slots`, and leaves it running when it ends, so that another
-board's tool on another slot finds it (D713). `result.json` says which.
+Build tools are needed on the build host; consuming a checked bundle on
+rigpi uses its matching tool sources and prepared metadata. Hardware work
+holds the common rig lock, `~/.cache/landin/rig.lock`, after the build and
+through final readback/restoration. Preserve the USB guard, protected Arty
+and shared pacing state described in the [board guide](../README.md).
 
-The tool switches only `--port` on `--hub`, and only while
-the device with `--guard-serial`, the probe's own Arty A7, is present and not on
-`--cascade`, the hub cascade the boards are on (by default the one `0bda:5411`
-hub whose parent is not one, wherever it is attached, D833), found by its serial wherever it is plugged in: its bitstream is held
-only in SRAM and would be lost with its power, and on the cascade's earlier
-port a switch re-enumerated the whole of it (D725), as [the Pico 2's Arm tool](../rp2350/README.md) does. On
-the rig such a cycle coincided with a reset of the whole hub tree above it,
-the Arty's USB among it, while the kernel was failing to enumerate the
-port. So the tool holds the rig's lock, `~/.cache/landin/rig.lock`, from
-its first step on the rig to its last, and stops before each download and
-cycle on any USB trouble the kernel logged since the last such action by
-any tool on the host (D725). No action waits for a fixed time: on the
-cascade's present port a switch drops only the device on the port
-switched, back within seconds, and `--spacing` and `--quiet`, a time
-between two actions and one the kernel must have logged nothing of USB
-for, are options, none by default. After
-the cycle it waits `--guard-seconds` for that device to be present again,
-still off the cascade, and pings `--probe-host`, and stops if either is missing. A
-listing of the hub that meets it re-enumerating is asked again until
-`--guard-seconds` have passed, and after each download and cycle the tool
-waits as long for the hub to list again. How it switches, paces and waits
-is [`../pico2.py`](../pico2.py)'s, which [the Arm tool](../rp2350/README.md)
-shares (D832).
-`--hub` is named as `uhubctl -l` names it, or relative to the cascade's
-root; the defaults are the maintainer's rig: hub `.3.3`, port 2.
+The usual development connection is SWD slot 1 and hub `.3.3`, port 2.
+Boot checks require an explicitly named hub outside `--cascade`; the
+default development hub is refused for them.
+
+Direct UDP debug completes before the tool opens the UART socket, and
+the socket closes before debug readback. The bridge remains available for
+UART service between runs; it does not own the native debug session.
+
+Never attach a probe while the Pico 2 enumerates as BOOTSEL, `2e8a:000f`.
+Install and verify the quiet fixed image by UF2 off the cascade first.
+The current probe-based corrupted-image control is refused: it would
+require attaching again in BOOTSEL. `--bootsel-attach` cannot bypass the
+guard. Boot and any future malformed-image checks stay off the cascade.
 
 ## Which chip probe-rs is told
 
-probe-rs names the RP2350 twice, and which one reaches it follows the
-architecture its cores run when probe-rs attaches, not the operation
-(D712):
-
-| The chip is | `RP235x` | `RP235x_riscv` |
-|---|---|---|
-| running a RISC-V image, after its boot ROM switched the cores | a FAULT from the Arm access ports | reads, writes and flashes |
-| in BOOTSEL, its boot ROM on Arm | reads, writes and flashes | a debug module timeout |
-| just flashed as `RP235x` | reads | a debug module timeout |
-
-So the tool reads one word as `RP235x` first, whose refusal is quick, then
-as `RP235x_riscv`, and flashes through whichever answered. Every probe-rs
-attach as `RP235x` halts both cores. A Pico 2 in BOOTSEL halted that way
-keeps its USB pull-up but stops answering, and the host then retries the
-port for minutes: on the maintainer's rig the kernel power-cycled the
-port itself every two minutes, the whole hub tree above it reset with the
-probe's own USB, and every probe-rs start spent 85 s in its USB probe
-listing. So the tool refuses to attach while the Pico 2's port shows
-BOOTSEL, 2e8a:000f, unless told `--bootsel-attach`; if it ever does, cycle
-the port once and wait for it to stop enumerating before anything else.
-After flashing through the Arm side the tool cycles the power, gives the
-boot ROM `--boot-seconds`, and reads the head back from the cores the new
-image runs on, never from BOOTSEL. probe-rs's own `RP235x` reset, which every download makes to load its
-flash algorithm, reboots the chip into BOOTSEL for 30 ms and resets it
-again with the reset caught, so the boot ROM's USB device stays on the bus
-with its core halted; on 2026-11-03 the host's retries of such a device
-hung its xHCI controller. So after every download as `RP235x` the tool
-cycles the power at once, unpaced, before it waits for the hub or lets
-any probe-rs attach or read (D832). The block
-control's corrupted image is read back only when it was flashed as
-`RP235x_riscv`, whose halted hart enumerates nothing, before a paced
-cycle. The counters are read as
-`RP235x_riscv` alone, from the cores the image booted on.
-
-The negative control ends in BOOTSEL and must then flash the image
-again, which is that attach, so `--block-control` needs `--bootsel-attach`
-and belongs on a hub that does not carry the probe. On the maintainer's
-rig it does not run at present.
+The target follows the architecture already running on the board (D712):
+`RP235x` for Arm and `RP235x_riscv` for Hazard3. A running RISC-V image
+can make the Arm access ports fault; the RISC-V debug module does not
+answer while the ROM is in Arm BOOTSEL. That state never permits an
+attach. Prepare the fixed image for the intended architecture before a
+RAM run; warm entry does not establish an architecture switch through
+the ROM. Boot flashing selects the architecture that currently answers,
+then cold-starts the image. `result.json` records `flashed_as` only for
+the boot check. Counters for this port are read as `RP235x_riscv`.
 
 ## Running it
 
+Run this raw command on the rig host from the matching source snapshot.
+Prepare `RAM_BUNDLE` on the build host as the [board guide](../README.md)
+describes; the rig host needs no refine or cross-binutils when consuming it.
+
 ```sh
 python3 environments/boards/rp2350_hazard3/board.py \
-    --refine compiler/ada/build/nix-x86_64-linux/debug/bin/refine \
-    --probehive ~/src/probehive --probe-rs PATH/TO/probe-rs --slot 1 \
-    --hub .3.3 --port 2 --guard-serial 210319B3E738 \
-    --output NEW_DIRECTORY
+    --mode=ram --bundle=RAM_BUNDLE --ram-loader=PATH/TO/landin-ram-run \
+    --probe-rs=PATH/TO/probe-rs \
+    --probehive /home/jan/src/probehive \
+    --output=NEW_DIRECTORY
 ```
 
-The output holds the image, its build report, its disassembly and every
-command's log, the bridge's log when it started one, `uart.bin` (every
-byte the board sent) and `sent.bin` (every byte the host sent), and
-`result.json`: the image's hash, its block, where its `amoadd.w` is, which
-chip it was flashed as, whether the bridge was reused, the block control's
-verdict, each verdict, every frame and the commands with their status and
-time. `--record` writes a passed run's record. The linked ELF holds the
-name of the object refine assembled beside it, so its hash depends on the
-output's name: a record gives the name as `image_name`.
+For a boot check, replace the mode and bundle with `--mode=boot` and
+`--bundle=BOOT_BUNDLE`, omit `--ram-loader`, and provide
+`--fixed-image=PATH/TO/fixed.elf` if the bundle does not already carry it.
+The fixed image is the quiet resident program restored and cold-started
+afterward, subject to the USB stop guard. Name the off-cascade `--hub` and its
+`--port` explicitly. A failed restoration is a failed check; a USB fault
+stops further hardware actions and requires the operator's recovery.
+
+The output retains the ELF, build report, command logs, `uart.bin`,
+`sent.bin`, elapsed time and `result.json`, including `mode`, the warm-load
+report or the boot/restoration evidence, and the physical oracle verdicts.
+Use `mode` and `warm_load` to identify RAM evidence. Keep passed RAM runs in
+`ram-record.json` with `--record`; `record.json` remains boot evidence.
+ELF hashes depend on the output basename; rebuild a recorded image using
+its `image_name`.
 
 ## The trace
 
@@ -131,9 +101,16 @@ then ETX and LF. The host never sends STX or ETX.
 
 | Tag | When | Fields |
 |---|---|---|
-| `b` | once, after the clocks, the resets, the pads and the receiver are set up | `r` POWMAN's CHIP_RESET as read first in `start`, `v` mtvec then, `a` marchid, `k` CLK_REF_SELECTED |
+| `b` | for each startup ACK, after peripheral initialization | `r` POWMAN's CHIP_RESET as read first in `start`, `v` mtvec then, `a` marchid, `k` CLK_REF_SELECTED |
+| `r` | after GO and a fresh DMA epoch | no fields; application readiness |
 | `t` | after each 0x11 | `h` bytes handled, `c` ring restarts, `d` DMA completions, `m` timer interrupts, `u` USBCTRL_IRQ entries, `p` the mcause it ran under, `n` DMA channel 0's TRANS_COUNT count, `e` bytes consumed in this epoch, `g` the indicator's pad read back, `s` the application's state, `q` what the `amoadd.w` that counted this frame returned |
 | `h` | when the application halts | `s` its status |
+
+Before application traffic, the host sends ACK (0x06), retrying until
+it receives `b`, then GO (0x07). The firmware consumes the complete
+handshake without echo, restarts its 4096-byte DMA epoch and emits `r`.
+Only after `r` does the host send application bytes. `sent.bin` keeps
+all ACKs and GO; echo and handled-count checks exclude that prefix.
 
 Three bytes are commands after their echo: 0x05 forces IRQ14,
 USBCTRL_IRQ, pending through meifa with USBCTRL held in reset, and its
@@ -144,20 +121,22 @@ reading for 100 ms.
 
 | Checked | Against |
 |---|---|
-| the ELF | EM_RISCV; its first word, at 0x1000_0000 where the boot ROM enters a RISC-V image, a `jal x0` to `_landin_firmware_reset` |
-| the ELF's trap table | 68 words at 0x1000_0200, the build report's `vector_address`, 512-aligned as D662 aligns 272 bytes; slot 11, the machine external interrupt, a jump to the meinext dispatch, slots 16, 26 and 30, TIMER0_IRQ_0, DMA_IRQ_0 and USBCTRL_IRQ (3.2, Table 95, p. 81), jumps to their handlers, and every other slot a jump to the unhandled loop |
-| the ELF's block | directly after the table and inside the first 4 KiB, at the report's address, the minimum RISC-V IMAGE_DEF (5.9.5.1, Table 503, p. 390): the start and end markers (5.1.5.1, p. 329), IMAGE_TYPE a RISC-V executable for RP2350, LAST and a link to itself |
+| the warm RAM entry | the helper validates SRAM-only load segments, writes and reads them back, establishes the vector/trap base, stack and entry, and reports `flash_written: false`; the physical scenario then checks device behavior |
+| the startup frame (RAM mode) | the vector/trap base equals the loaded ELF table and clk_ref selects the crystal; reset-cause bits are observed without a power-on assertion; marchid identifies Hazard3 |
+| the ELF (boot artifact) | EM_RISCV; its first word, at 0x1000_0000 where the boot ROM enters a RISC-V image, a `jal x0` to `_landin_firmware_reset` |
+| the ELF's trap table (boot artifact) | 68 words at 0x1000_0200, the build report's `vector_address`, 512-aligned as D662 aligns 272 bytes; slot 11, the machine external interrupt, a jump to the meinext dispatch, slots 16, 26 and 30, TIMER0_IRQ_0, DMA_IRQ_0 and USBCTRL_IRQ (3.2, Table 95, p. 81), jumps to their handlers, and every other slot a jump to the unhandled loop |
+| the ELF's block (boot artifact) | directly after the table and inside the first 4 KiB, at the report's address, the minimum RISC-V IMAGE_DEF (5.9.5.1, Table 503, p. 390): the start and end markers (5.1.5.1, p. 329), IMAGE_TYPE a RISC-V executable for RP2350, LAST and a link to itself |
 | the read-modify-write | an `amoadd.w` in the image's disassembly, on a counter in SRAM, where Hazard3's atomics reach (3.8.9, MCAUSE, Table 403) |
-| the block control, with `--block-control` | a copy whose end marker is flipped, flashed and power-cycled, is refused by the boot ROM, which enumerates as USB BOOTSEL, 2e8a:000f (5.6.1, Table 470, p. 370); the good image is then flashed again |
-| flash after flashing | the entry word, the table and the block, read back over SWD, equal to the image's |
-| the boot frame | CHIP_RESET is HAD_POR alone (6.4, p. 429), so the run began at power-on; marchid is 0x1b, Hazard3 (3.8.9, Table 440), so the boot ROM switched the cores to RISC-V and entered this image; mtvec is the table in vectored mode, 0x1000_0201 (Table 394), so compiler-owned reset ran; clk_ref is on the crystal |
+| the malformed block (boot-only, currently refused by the tool) | a corrupted IMAGE_DEF must be refused by the ROM; testing it requires off-cascade physical UF2 recovery, because probe attachment in BOOTSEL is forbidden |
+| flash after flashing (boot only) | the entry word, the table and the block, read back over SWD, equal to the image's |
+| the boot frame (boot mode) | CHIP_RESET is HAD_POR alone (6.4, p. 429), so the run began at power-on; marchid is 0x1b, Hazard3 (3.8.9, Table 440), so the boot ROM switched the cores to RISC-V and entered this image; mtvec is the table in vectored mode, 0x1000_0201 (Table 394), so compiler-owned reset ran; clk_ref is on the crystal |
 | the shared scenario | `1`, `A` and `0`, the bytes the emulator lane's application is fed, echoed, with `g` 8 after `1` and 0 after `0`, and with `--indicator-pin` the wire high after `1` and low after `0` |
 | IRQ14 | one entry, under mcause 0x8000_000b, the machine external interrupt (Table 403), which meinext resolved to slot 30 |
 | the `amoadd.w` | frame n's `q` is n, every frame the host asked for counted once, and the counter read over SWD is the number of frames |
 | an overrun | after 0x12, a 300-byte burst into the 256-byte ring is discarded, never echoed, and the ring restarts once |
 | an epoch ended by STALL | the 4096-byte epoch filled, its last byte STALL, then 100 bytes while the channel is exhausted and nothing reads: the UART's 32-byte FIFO holds the first 32, it flags the rest lost, the application restarts on that overrun, and only those 32 are echoed |
 | an epoch exhausted | the next epoch filled to its 4096 bytes: one DMA completion, one restart, nothing lost |
-| the stream | every byte sent echoed in order but those discarded above, `h` their count, and the timer advancing |
+| the stream | every application byte echoed in order but those discarded above, `h` their count, and the timer advancing |
 | the counters | `handled`, `recoveries`, `dma_events`, `usb_events`, `reports` and TRANS_COUNT's count, read over SWD as `RP235x_riscv` once the scenario has ended, equal the last frame's |
 
 What the emulator lane and the boards share is

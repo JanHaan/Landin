@@ -1,91 +1,93 @@
 # The STM32 board: a NUCLEO-H753ZI
 
-The prototype-1 board port, `compiler/tests/board/stm32h753`, built by
-refine for the NUCLEO-H753ZI's STM32H753 at `--level=armv7e-m` through
-`devices/descriptions/stm32h753`, flashed, and booted from power-on.
-`board.py` builds the image, flashes it through the board's own ST-LINK
-V3, switches the board's power and checks what the board writes on USART3,
-the ST-LINK's virtual COM port, against a physical oracle written from what
-the host sent, from RM0433 Rev 9 and from IEEE 754 as the host computes it
-(D650). It is a developer tool: no compiler feature runs it or needs it,
-and the gate does not run it, since no hosted runner has the board. What it
-shares with the RP2040's tool is [`../common.py`](../common.py) (D646).
+Start with the [board guide](../README.md) for the rig rules, pinned
+tools, offline builds and the build-on-epycmicro/run-on-rigpi command.
+
+`compiler/tests/board/stm32h753` targets STM32H753 through
+`devices/descriptions/stm32h753`, using `--target=cortex-m0` at `--level=armv7e-m`.
+`board.py` defaults to `--mode=ram`: the loader halts the running core,
+applies the explicit warm reinitialization contract, writes and verifies
+SRAM, sets the stack and vector/trap entry and resumes. This does not
+reset through the ROM, write flash or cycle power, and does not prove a
+cold reset. The resident flash image stays in place. `--mode=boot` is the
+separate flash and cold-start check.
+
+The port uses the board's ST-LINK V3 for debug and its virtual COM
+port for USART3 on PD8/PD9; PB0 drives LD1. Its physical oracle follows
+RM0433 Rev 9 and IEEE 754 arithmetic computed on the host (D650).
+The warm contract requires HSI as the system clock and disabled caches;
+the helper verifies the supply before loading SRAM. A boot check also
+exercises the description's supply stage and the power-on flags.
 
 ## What it needs
 
 | What | Which | Why |
 |---|---|---|
 | the board | a NUCLEO-H753ZI, powered from its ST-LINK's USB port, LD1 on PB0 | the STM32H753, its USART3 on PD8 and PD9 wired to the ST-LINK's virtual COM port |
-| probe-rs | one that reaches an ST-LINK V3, named by `--probe`, `0483:374e:SERIAL` by default with `--serial`'s serial | flashing, verifying and reading memory with `--chip STM32H753ZITx` |
+| probe-rs | one that reaches an ST-LINK V3, named by `--probe`, `0483:374e:SERIAL` by default with `--serial`'s serial | debug memory access and explicit boot flashing with `--chip STM32H753ZITx` |
 | the ST-LINK's firmware | one probe-rs supports, a V3 firmware whose JTAG API version is 3 or later, which ST's STLinkUpgrade (STSW-LINK007) installs | probe-rs refuses an older one when it opens the probe, with "The firmware on the probe is outdated"; the maintainer's rig shipped with V3J2M1 and runs V3.J18.M12, installed with STSW-LINK007 3.18.12's `java -jar STLinkUpgrade.jar -sn SERIAL -update`, which needs write access to the probe's bootloader, 0483:374d, as well |
 | access | read and write on the ST-LINK's USB device node, which probe-rs opens, and on the tty of its virtual COM port, for example a udev rule for `0483:374e` that gives both to a group the session is in | without it probe-rs cannot open the ST-LINK, whose node a host without a rule leaves `root:root 0664` |
-| power | the ST-LINK's USB port on a hub with per-port power switching, and `uhubctl` with the right to switch it | a power cycle, so the run starts at power-on |
+| power | the ST-LINK's USB port on a hub with per-port power switching, and `uhubctl` with the right to switch it | power cycling for explicit boot checks |
 | the compiler | refine and `arm-eabi-gcc` or `arm-none-eabi-gcc` (D532) with its `nm`, `objdump` and `readelf`, as `nix develop` gives them | the image and the checks of its instructions |
 | the manual | RM0433 Rev 9, as `devices/inputs.json` pins it | where the oracle's expectations are read from; the tool does not read it |
+| the RAM loader | `landin-ram-run`, named with `--ram-loader`, built from the pinned probe-rs library | one warm halt/load/resume session |
 
-The ST-LINK's USB serial names three things: the probe probe-rs opens, the
-tty of its virtual COM port, found under `/sys/class/tty` by the serial of
-the USB device it belongs to, and the hub port that is switched. The tool
-switches only `--port` on `--hub`, and only after `uhubctl` shows that serial
-on that port and while the device with `--guard-serial`, the probe's Arty
-on the maintainer's rig, is present and not on `--cascade`; the port is
-switched off and on in one `uhubctl -a cycle`. The port's switch and the
-virtual COM port's tty belong to a group, `--hub-group`, `dialout` by
-default, and a session started before its user joined that group is not in
-it, so the tool then runs itself again through `/run/wrappers/bin/sg GROUP
--c` (D836). On the maintainer's rig the ST-LINK's
-hub is one of a cascade the other boards share, which on its earlier port
-re-enumerated whole, the ST-LINK and every other board's USB device with
-it, whenever any port of it was switched or any device on it reset (D725).
-So the run holds the rig's lock, `~/.cache/landin/rig.lock`, from its
-build to its last read; its download and its cycle each stop on any USB
-trouble the kernel logged since the last such action by any tool on the
-host; and after the download and after the cycle the tool waits, up to
-`--hub-seconds`, for the hub to list the ST-LINK on its port again (D832).
-No action waits for a fixed time: on the cascade's present port a switch
-drops only the device on the port switched, back within seconds, and
-`--spacing` and `--quiet`, a time between two actions and one the kernel
-must have logged nothing of USB for, are options, none by default. `--hub`
-is named as `uhubctl -l` names it, or relative to the
-cascade's root, which `--cascade` names and which is found by default as
-the one `0bda:5411` hub whose parent is not one, wherever it is attached
-(D833). The defaults are the maintainer's rig: hub `.3` of the cascade,
-port 2, serial `001900293137511339383538`.
-`--console PATH` names the tty instead, for a host that gives it a name of
-its own; finding it by the serial needs nothing of the host's.
+Build tools are needed on the build host; consuming a checked bundle on
+rigpi uses its matching tool sources and prepared metadata. Hardware work
+holds the common rig lock, `~/.cache/landin/rig.lock`, after the build and
+through final readback/restoration. Preserve the USB guard, protected Arty
+and shared pacing state described in the [board guide](../README.md).
+
+Boot power uses hub `.3`, port 2 and ST-LINK serial
+`001900293137511339383538` by default. The same serial locates the probe,
+virtual COM tty and guarded power port. `--console PATH` names a tty
+explicitly. The Arty named by `--guard-serial` must remain present outside
+the switched cascade.
 
 ## Running it
 
+Run this raw command on the rig host from the matching source snapshot.
+Prepare `RAM_BUNDLE` on the build host as the [board guide](../README.md)
+describes; the rig host needs no refine or cross-binutils when consuming it.
+
 ```sh
 python3 environments/boards/stm32h753/board.py \
-    --refine compiler/ada/build/nix-x86_64-linux/debug/bin/refine \
-    --probe-rs PATH/TO/probe-rs \
-    --hub .3 --port 2 --serial 001900293137511339383538 \
-    --output NEW_DIRECTORY
+    --mode=ram --bundle=RAM_BUNDLE --ram-loader=PATH/TO/landin-ram-run \
+    --probe-rs=PATH/TO/probe-rs \
+    --output=NEW_DIRECTORY
 ```
 
-The output holds the image, its build report, its disassembly and every
-command's log, `uart.bin` (every byte the board sent) and `sent.bin` (every
-byte the host sent), and `result.json`: the image's hash, what its float
-routines were found to use, each verdict, every frame, `echo_gaps`, where
-the echo left out sent bytes, as offset and length, and the commands with
-their status and time. Its status is `passed`, `failed` with the first
-refusal, or `pending`, naming what the float unit still lacks: the image's
-float routines calling software helpers, the compiler-owned startup not
-granting CP10 and CP11, or the square root not yet sent. A pending run is
-never a passed one, and `--record` writes only a passed run's record. The linked ELF holds the name of the object refine assembled beside it, so its hash depends on the output's name: a record gives the name as `image_name`, and a reader rebuilding the image to check the hash builds it under that name.
+For a boot check, replace the mode and bundle with `--mode=boot` and
+`--bundle=BOOT_BUNDLE`, omit `--ram-loader`, and provide
+`--fixed-image=PATH/TO/fixed.elf` if the bundle does not already carry it.
+The fixed image is the quiet resident program restored and cold-started
+afterward, subject to the USB stop guard. A failed restoration is a failed
+check; a USB fault stops further hardware actions and requires the
+operator's recovery.
+
+The output retains the ELF, build report, command logs, `uart.bin`,
+`sent.bin`, elapsed time and `result.json`, including `mode`, the warm-load
+report or the boot/restoration evidence, and the physical oracle verdicts.
+Use `mode` and `warm_load` to identify RAM evidence. Keep passed RAM runs in
+`ram-record.json` with `--record`; `record.json` remains boot evidence.
+ELF hashes depend on the output basename; rebuild a recorded image using
+its `image_name`.
+
+Float evidence can be `pending` if software helpers remain, startup has
+not granted CP10/CP11, or square root has not run. Pending is never passed,
+and only a passed run can be recorded.
 
 ## The trace
 
 The firmware writes frames between the echoed bytes in the RP2040 board's
 form: STX, a tag letter, a field per key, ` k=` and eight lowercase hex
-digits, then ETX and LF. The host never sends STX or ETX. The ST-LINK's
-virtual COM port re-enumerates after the power cycle, so the firmware
-writes nothing until a byte has arrived: the host sends `S` first.
+digits, then ETX and LF. The host never sends STX or ETX. A boot check's power cycle
+re-enumerates the ST-LINK's virtual COM port. In both modes the firmware
+waits for the host's first byte, `S`, before writing its boot frame.
 
 | Tag | When | Fields |
 |---|---|---|
-| `b` | once, after the first byte | `r` RCC_RSR as read first in `start`, `v` VTOR, `a` CPACR and `c` CCR then, `q` PWR_CR3 and `y` PWR_CSR1, as the description's stage left them before reset, `w` the bytes that had arrived |
+| `b` | once, after the first byte | `r` RCC_RSR as read first in `start`, `v` VTOR, `a` CPACR and `c` CCR then, `q` PWR_CR3 and `y` PWR_CSR1 at application entry, configured by the description's supply stage in boot mode and checked before SRAM loading in RAM mode, `w` the bytes that had arrived |
 | `t` | after each 0x11 | `h` bytes handled, `c` ring restarts, `d` epochs the stream completed, `w` its laps, `k` DMA_STR0 entries, `m` SysTick interrupts, `u` USART3 entries, `p` the exception number USART3's handler ran in, `n` DMA1_S0NDTR, `e` bytes consumed in this epoch, `g` PB0's input, `s` the application's state |
 | `f` | after 0x14 and 16 operand bytes | f32 results as bit patterns: `a` sum, `s` difference, `m` product, `d` quotient, `c` the comparisons, `q` the square root once it is sent |
 | `F` | after 0x15 and 32 operand bytes | the same for f64, each result's high word under its key and its low word under the next letter: `a` and `b`, `s` and `t`, `m` and `n`, `d` and `e`, `q` and `r`; `c` the comparisons |
@@ -100,10 +102,12 @@ greater or equal 16, greater 32.
 
 | Checked | Against |
 |---|---|
-| the ELF's vector table | 166 words at 0x0800_0000, the boot address (RM0433 2.6, p. 138), word 1 reset, word 27 the DMA_STR0 handler and word 55 the USART3 handler (Table 147, pp. 754 and 755) |
+| the warm RAM entry | the helper validates SRAM-only load segments, writes and reads them back, establishes the vector/trap base, stack and entry, and reports `flash_written: false`; the physical scenario then checks device behavior |
+| the startup frame (RAM mode) | VTOR equals the loaded ELF table; caches are disabled, LDO supply and valid VOS3 are checked as in the boot oracle, and CP10/CP11 must permit the float unit; reset flags are observed without a power-on assertion |
+| the ELF's vector table (boot artifact) | 166 words at 0x0800_0000, the boot address (RM0433 2.6, p. 138), word 1 the supply stage entering reset, word 27 the DMA_STR0 handler and word 55 the USART3 handler (Table 147, pp. 754 and 755) |
 | the float routines' instructions | `vadd`, `vsub`, `vmul`, `vdiv` and `vcmp` of both widths and no call to a software float helper; software helpers alone are pending |
-| flash after flashing | the vector table, read back over SWD, equal to the image's |
-| the boot frame | RCC_RSR's named flags are Table 56's power-on line alone (p. 333), so the run began at power-on and no software reset followed; VTOR is the boot address; CCR's IC and DC are clear, the cacheless profile read on the chip; PWR_CR3 holds the LDO supply the description's stage wrote before reset, and PWR_CSR1 reads VOS3 with ACTVOSRDY set, the voltage levels valid (6.4.1, p. 262; 6.8.2, p. 305; 6.8.4, p. 308; D653); one byte, the host's, had arrived; CPACR's CP10 and CP11 granting the float unit, pending until the compiler-owned startup grants them |
+| flash after flashing (boot only) | the vector table, read back over SWD, equal to the image's |
+| the boot frame (boot mode) | RCC_RSR's named flags are Table 56's power-on line alone (p. 333), so the run began at power-on and no software reset followed; VTOR is the boot address; CCR's IC and DC are clear, the cacheless profile read on the chip; PWR_CR3 holds the LDO supply the description's stage wrote before reset, and PWR_CSR1 reads VOS3 with ACTVOSRDY set, the voltage levels valid (6.4.1, p. 262; 6.8.2, p. 305; 6.8.4, p. 308; D653); one byte, the host's, had arrived; CPACR's CP10 and CP11 granting the float unit, pending until the compiler-owned startup grants them |
 | the shared scenario | `1`, `A` and `0`, the bytes the emulator lane's application is fed, echoed, with PB0's input 1 after `1` and 0 after `0` |
 | USART3's interrupt | its handler at slot 55 entered in exception 55, raised by the USART's own IDLE flag, and entered again for each later byte; SysTick, every millisecond, advancing |
 | an overrun | after 0x12, a 300-byte burst into the 256-byte ring is discarded, never echoed, and the ring restarts once |
