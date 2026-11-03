@@ -190,6 +190,7 @@ fn image(plan: &Plan) -> Result<Image> {
     ensure!(phsize >= 32 && phcount > 0 && phcount <= 128, "bad ELF program headers");
     let mut segments = Vec::new();
     let mut ranges = Vec::new();
+    let mut loaded_sections = Vec::new();
     let mut executable = Vec::new();
     let mut table_loaded = false;
     for i in 0..phcount {
@@ -209,6 +210,7 @@ fn image(plan: &Plan) -> Result<Image> {
         ensure!(ranges.iter().all(|(lo,hi)| address + memory <= *lo || address >= *hi),
             "overlapping load segments");
         ranges.push((address, address + memory));
+        loaded_sections.push((address, offset as u64, size as u64));
         if word(&bytes, at + 24)? & 1 != 0 {
             executable.push((address, address + size as u64));
         }
@@ -224,6 +226,52 @@ fn image(plan: &Plan) -> Result<Image> {
             ensure!(entry & 1 == 1, "Arm entry is not Thumb");
         }
         segments.push((address, body));
+    }
+    // A custom script can exclude allocated sections from PT_LOAD with
+    // :NONE, including NOLOAD BSS that startup will still clear. Validate
+    // every allocated VMA independently of the loader's segment writes.
+    for section in file.sections() {
+        if section.size() == 0 || !matches!(section.flags(),
+            object::SectionFlags::Elf { sh_flags } if sh_flags & 2 != 0) {
+            continue;
+        }
+        let address = section.address();
+        let size = section.size();
+        let name = section.name().context("invalid allocated section name")?;
+        ensure!(in_ram(&plan.board, address, size),
+            "allocated section {name} at {address:#x} is outside SRAM");
+        ensure!(address + size <= bottom as u64 || address >= stack as u64,
+            "allocated section {name} overlaps reserved stack");
+        if let Some((offset, file_size)) = section.file_range() {
+            // Match both the runtime span and its exact ELF file mapping.
+            // Equal bytes at a different offset cannot substitute for the
+            // initialized section the linker declared.
+            ensure!(file_size == size && loaded_sections.iter().any(|(start, file_at, length)|
+                address >= *start && address + size <= start + length
+                && file_at.checked_add(address - start) == Some(offset)),
+                "allocated section {name} has no matching file-backed load segment");
+            ensure!(section.data().with_context(|| format!("read allocated section {name}"))?.len() as u64 == size,
+                "allocated section {name} has truncated file data");
+        }
+    }
+    // Symbols are what startup uses, so also reject script rebinding that
+    // leaves an otherwise valid .bss section behind at its original VMA.
+    for item in file.symbols() {
+        let Ok(name) = item.name() else { continue; };
+        if !linked_symbol_section(item.section()) || !name.starts_with("_landin_firmware_")
+            || !(name.ends_with("_bss_start") || name.ends_with("_bss_end")) {
+            continue;
+        }
+        let stem = name.strip_suffix("_start").or_else(|| name.strip_suffix("_end")).unwrap();
+        let first = u64::from(symbol(&format!("{stem}_start"))?);
+        let end = u64::from(symbol(&format!("{stem}_end"))?);
+        ensure!(end >= first, "BSS symbol range {stem} ends before it starts");
+        if end != first {
+            ensure!(in_ram(&plan.board, first, end - first),
+                "BSS symbol range {stem} is outside SRAM");
+            ensure!(end <= bottom as u64 || first >= stack as u64,
+                "BSS symbol range {stem} overlaps reserved stack");
+        }
     }
     ensure!(!segments.is_empty() && table_loaded && in_ram(&plan.board, vector.into(), table_size),
         "vector table is not completely loaded in SRAM");
@@ -623,6 +671,118 @@ mod tests {
             assert!(!in_ram(board, u64::MAX - 1, 4));
             assert!(!in_ram(board, 0x40000000, 4));
         }
+    }
+    fn elf_test_word(bytes: &mut [u8], at: usize, value: u32) {
+        bytes[at..at + 4].copy_from_slice(&value.to_le_bytes());
+    }
+    // A real ELF32 image with one executable PT_LOAD, an allocated BSS
+    // excluded from it (the linker-script :NONE case), and nonalloc metadata.
+    fn allocated_test_elf() -> Vec<u8> {
+        let mut bytes = vec![0u8; 0x700];
+        bytes[..7].copy_from_slice(b"\x7fELF\x01\x01\x01");
+        bytes[16..20].copy_from_slice(&[2, 0, 40, 0]); // ET_EXEC, EM_ARM
+        for (at, value) in [(20, 1), (24, 0x200000c1), (28, 52), (32, 0x500)] {
+            elf_test_word(&mut bytes, at, value);
+        }
+        for (at, value) in [(40, 52u16), (42, 32), (44, 1), (46, 40), (48, 7), (50, 4)] {
+            bytes[at..at + 2].copy_from_slice(&value.to_le_bytes());
+        }
+        for (index, value) in [1, 0x100, 0x20000000, 0x20000000, 0xc4, 0xc4, 5, 4].into_iter().enumerate() {
+            elf_test_word(&mut bytes, 52 + 4 * index, value);
+        }
+        elf_test_word(&mut bytes, 0x100, 0x20042000);
+        elf_test_word(&mut bytes, 0x104, 0x200000c1);
+        bytes[0x1c0..0x1c4].copy_from_slice(&[0x70, 0x47, 0x00, 0xbf]);
+        let names = ["", ".isr_vector", ".text", ".bss", ".shstrtab", ".strtab", ".symtab"];
+        let mut strings = vec![0u8];
+        let mut offsets = Vec::new();
+        for name in names {
+            offsets.push(strings.len() as u32);
+            strings.extend_from_slice(name.as_bytes()); strings.push(0);
+        }
+        bytes[0x200..0x200 + strings.len()].copy_from_slice(&strings);
+        let sections = [
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [offsets[1], 1, 2, 0x20000000, 0x100, 0xc0, 0, 0, 256, 0],
+            [offsets[2], 1, 6, 0x200000c0, 0x1c0, 4, 0, 0, 2, 0],
+            [offsets[3], 8, 3, 0x20000200, 0, 16, 0, 0, 4, 0],
+            [offsets[4], 3, 0, 0, 0x200, strings.len() as u32, 0, 0, 1, 0],
+            [offsets[5], 3, 0, 0, 0x300, 0, 0, 0, 1, 0],
+            [offsets[6], 2, 0, 0, 0x400, 7 * 16, 5, 1, 4, 16],
+        ];
+        for (index, section) in sections.into_iter().enumerate() {
+            for (field, value) in section.into_iter().enumerate() {
+                elf_test_word(&mut bytes, 0x500 + index * 40 + field * 4, value);
+            }
+        }
+        let symbols = [
+            ("_landin_firmware_vectors", 0x20000000, 1u16),
+            ("_landin_firmware_stack_top", 0x20042000, 0xfff1),
+            ("_landin_firmware_stack_bottom", 0x20041000, 0xfff1),
+            ("_landin_firmware_reset", 0x200000c1, 2),
+            ("_landin_firmware_bss_start", 0x20000200, 3),
+            ("_landin_firmware_bss_end", 0x20000210, 3),
+        ];
+        let mut strings = vec![0u8];
+        for (index, (name, value, section)) in symbols.into_iter().enumerate() {
+            let at = 0x400 + (index + 1) * 16;
+            elf_test_word(&mut bytes, at, strings.len() as u32);
+            elf_test_word(&mut bytes, at + 4, value);
+            bytes[at + 12] = 0x10; // STB_GLOBAL
+            bytes[at + 14..at + 16].copy_from_slice(&section.to_le_bytes());
+            strings.extend_from_slice(name.as_bytes()); strings.push(0);
+        }
+        bytes[0x300..0x300 + strings.len()].copy_from_slice(&strings);
+        elf_test_word(&mut bytes, 0x500 + 5 * 40 + 20, strings.len() as u32);
+        bytes
+    }
+    fn offline_elf_control(bytes: &[u8], validate: bool) -> Result<Value> {
+        static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let path = std::env::temp_dir().join(format!("landin-allocated-{}-{}.elf", std::process::id(),
+            NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)));
+        fs::write(&path, bytes)?;
+        let plan = serde_json::to_vec(&json!({"format_version":1,"board":"rp2040","mode":"ram",
+            "probe":"deliberately invalid probe selector","elf":path}))?;
+        let result = process_plan(&plan, validate);
+        fs::remove_file(path)?;
+        result
+    }
+    #[test]
+    fn allocated_sections_and_startup_ranges_are_checked_before_probe_parsing() {
+        let baseline = allocated_test_elf();
+        assert_eq!(offline_elf_control(&baseline, true).unwrap()["status"], "validated");
+        // Nonalloc ELF metadata and allocated SRAM NOBITS without a load
+        // segment are valid. Rejected mutations each preserve the PT_LOAD.
+        let cases: &[(&str, &[(usize, u32)])] = &[
+            ("outside SRAM", &[(0x500 + 3 * 40 + 12, 0x10000000)]),
+            ("overlaps reserved stack", &[(0x500 + 3 * 40 + 12, 0x20041000)]),
+            ("outside SRAM", &[(0x500 + 3 * 40 + 12, 0xfffffff8)]),
+            ("no matching file-backed load segment", &[(0x500 + 2 * 40 + 16, 0x1c4)]),
+            ("no matching file-backed load segment", &[(0x500 + 2 * 40 + 12, 0x20000300)]),
+            ("no matching file-backed load segment", &[(0x500 + 3 * 40 + 4, 1), (0x500 + 3 * 40 + 16, 0x200)]),
+            ("BSS symbol range", &[(0x400 + 5 * 16 + 4, 0x10000000), (0x400 + 6 * 16 + 4, 0x10000010)]),
+            ("BSS symbol range", &[(0x400 + 5 * 16 + 4, 0x20041000), (0x400 + 6 * 16 + 4, 0x20041010)]),
+            ("ends before it starts", &[(0x400 + 6 * 16 + 4, 0x200001ff)]),
+            ("missing _landin_firmware_bss_end", &[(0x400 + 6 * 16 + 12, 0x10)]),
+        ];
+        for (message, mutations) in cases {
+            let mut bytes = baseline.clone();
+            for (at, value) in *mutations { elf_test_word(&mut bytes, *at, *value); }
+            // validate=false would parse the invalid selector after image
+            // validation. This error therefore proves the pre-attach guard.
+            let error = format!("{:#}", offline_elf_control(&bytes, false).unwrap_err());
+            assert!(error.contains(message), "wanted {message}, got {error}");
+            assert!(!error.contains("parse probe selector"), "{error}");
+        }
+        let mut empty = baseline.clone();
+        elf_test_word(&mut empty, 0x400 + 5 * 16 + 4, 0x10000000);
+        elf_test_word(&mut empty, 0x400 + 6 * 16 + 4, 0x10000000);
+        assert!(offline_elf_control(&empty, true).is_ok());
+        // A minimal image need not define BSS endpoints at all.
+        let mut absent = baseline.clone();
+        elf_test_word(&mut absent, 0x400 + 5 * 16 + 12, 0x10);
+        elf_test_word(&mut absent, 0x400 + 6 * 16 + 12, 0x10);
+        assert!(offline_elf_control(&absent, true).is_ok());
     }
     #[test]
     fn c3_instruction_storage_requires_whole_aligned_words_before_io() {
