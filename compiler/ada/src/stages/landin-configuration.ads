@@ -56,6 +56,64 @@ package Landin.Configuration is
    procedure Set_C_Runtime (Into : in out Table; Linked : Boolean);
    function C_Runtime_Requested (In_Table : Table) return Boolean;
 
+   --  The compiler's fixed facts, `compiler.NAME` in a fixed condition or
+   --  a module value [1530]/D437: the one table of their names, which
+   --  configuration and name resolution both read.  An atom fact is
+   --  compared with a configuration atom; `word_size` is an integer and
+   --  each C fact a bool.  `compiler.feature.NAME` is a feature's, which
+   --  Landin.Targets.Levels names.
+   type Fixed_Fact is
+     (Arch_Fact, OS_Fact, Byte_Order_Fact, Build_Mode_Fact, Word_Size_Fact,
+      C_SysV_LP64_Fact, C_Darwin_LP64_Fact, C_AAPCS64_LP64_Fact,
+      C_RiscV_LP64D_Fact, C_RiscV_ILP32_Fact, C_Runtime_Fact);
+   subtype Atom_Fact is Fixed_Fact range Arch_Fact .. Build_Mode_Fact;
+   subtype Valued_Fact is Fixed_Fact range Word_Size_Fact .. C_Runtime_Fact;
+   subtype C_ABI_Fact is Fixed_Fact
+     range C_SysV_LP64_Fact .. C_RiscV_ILP32_Fact;
+
+   function Fact_Name (Fact : Fixed_Fact) return String
+     is (case Fact is
+           when Arch_Fact => "arch",
+           when OS_Fact => "os",
+           when Byte_Order_Fact => "byte_order",
+           when Build_Mode_Fact => "build_mode",
+           when Word_Size_Fact => "word_size",
+           when C_SysV_LP64_Fact => "c_sysv_lp64",
+           when C_Darwin_LP64_Fact => "c_darwin_lp64",
+           when C_AAPCS64_LP64_Fact => "c_aapcs64_lp64",
+           when C_RiscV_LP64D_Fact => "c_riscv_lp64d",
+           when C_RiscV_ILP32_Fact => "c_riscv_ilp32",
+           when C_Runtime_Fact => "c_runtime");
+
+   function Is_Fact_Name (Word : String) return Boolean
+     is (for some Fact in Fixed_Fact => Fact_Name (Fact) = Word);
+
+   function Fact_Named (Word : String) return Fixed_Fact
+     with Pre => Is_Fact_Name (Word);
+
+   function Is_Atom_Fact_Name (Word : String) return Boolean
+     is (Is_Fact_Name (Word) and then Fact_Named (Word) in Atom_Fact);
+
+   function Is_Valued_Fact_Name (Word : String) return Boolean
+     is (Is_Fact_Name (Word) and then Fact_Named (Word) in Valued_Fact);
+
+   --  The C ABI on which a C fact is true.
+   function ABI_Of (Fact : C_ABI_Fact) return Landin.Targets.C_ABI_Kind
+     is (case Fact is
+           when C_SysV_LP64_Fact => Landin.Targets.SysV_AMD64_LP64,
+           when C_Darwin_LP64_Fact => Landin.Targets.Darwin_AAPCS64_LP64,
+           when C_AAPCS64_LP64_Fact => Landin.Targets.AAPCS64_LP64,
+           when C_RiscV_LP64D_Fact => Landin.Targets.RiscV_LP64D,
+           when C_RiscV_ILP32_Fact => Landin.Targets.RiscV_ILP32);
+
+   --  Whether WORD is a configuration atom an atom fact is compared with:
+   --  an architecture's, Landin.Targets.Atom's, a system's, a byte order's
+   --  or a build mode's.
+   function Is_Configuration_Atom (Word : String) return Boolean
+     is (Landin.Targets.Is_Architecture_Atom (Word)
+         or else Word in "linux" | "darwin" | "freebsd" | "freestanding"
+                       | "little" | "big" | "debug" | "release");
+
    --  D542: the members a device description is written in.
    function Is_Description_Member (Namespace, Member : String) return Boolean
      is ((Namespace = "compiler"

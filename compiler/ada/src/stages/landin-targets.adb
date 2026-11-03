@@ -129,6 +129,16 @@ package body Landin.Targets is
       return Facts.Label (Facts.Label'First .. Last);
    end Name;
 
+   function Architecture_Named (Word : String) return Architecture is
+   begin
+      for Machine in Architecture loop
+         if Atom (Machine) = Word then
+            return Machine;
+         end if;
+      end loop;
+      raise Compiler_Defect with "no architecture is named " & Word;
+   end Architecture_Named;
+
    function Architecture_Of (Facts : Target_Facts) return Architecture
      is (Facts.Machine);
 

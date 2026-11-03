@@ -8,6 +8,7 @@ with Landin.Backend.C_ABI;
 with Landin.Backend.AAPCS64_ABI;
 with Landin.Backend.RiscV_ABI;
 with Landin.Backend.Toolchain;
+with Landin.Configuration;
 with Landin.IR;
 with Landin.Memory;
 with Landin.Platform.Native;
@@ -292,6 +293,83 @@ package body Landin.Tests.Targets_Suite is
       end;
    end Backends_Are_Stated_Per_Target;
 
+   --  `compiler.arch == rv32` reads Landin.Targets.Atom, the one table of
+   --  architecture atoms, so each atom must name its architecture and no
+   --  target name or level may pass for one.
+   procedure Architectures_Have_One_Atom_Each
+     (Item : in out Landin.Testing.Context);
+
+   procedure Architectures_Have_One_Atom_Each
+     (Item : in out Landin.Testing.Context) is
+   begin
+      Landin.Testing.Check
+        (Item,
+         (for all Machine in Architecture =>
+            Is_Architecture_Atom (Atom (Machine))
+            and then Architecture_Named (Atom (Machine)) = Machine),
+         "each architecture's atom names it");
+      Landin.Testing.Check
+        (Item,
+         Architecture_Named ("x86_64") = X86_64
+           and then Architecture_Named ("cortex_m0") = Cortex_M0
+           and then Architecture_Named ("rv32") = RV32
+           and then not Is_Architecture_Atom ("cortex-m0")
+           and then not Is_Architecture_Atom ("x86-64")
+           and then not Is_Architecture_Atom ("riscv32")
+           and then not Is_Architecture_Atom ("rv32imc")
+           and then not Is_Architecture_Atom (""),
+         "a target name or a level is not an architecture atom");
+   end Architectures_Have_One_Atom_Each;
+
+   --  `compiler.NAME` is read through Landin.Configuration.Fact_Name, the
+   --  one table of fixed facts, so each name must select its fact, each C
+   --  fact a C ABI of its own, and every architecture atom must be an
+   --  atom a fact is compared with.
+   procedure Fixed_Facts_Have_One_Name_Each
+     (Item : in out Landin.Testing.Context);
+
+   procedure Fixed_Facts_Have_One_Name_Each
+     (Item : in out Landin.Testing.Context)
+   is
+      package Config renames Landin.Configuration;
+      use type Config.Fixed_Fact;
+   begin
+      Landin.Testing.Check
+        (Item,
+         (for all Fact in Config.Fixed_Fact =>
+            Config.Is_Fact_Name (Config.Fact_Name (Fact))
+            and then Config.Fact_Named (Config.Fact_Name (Fact)) = Fact),
+         "each fixed fact's name selects it");
+      Landin.Testing.Check
+        (Item,
+         (for all Fact in Config.C_ABI_Fact =>
+            (for all Other in Config.C_ABI_Fact =>
+               Fact = Other
+               or else Config.ABI_Of (Fact) /= Config.ABI_Of (Other))),
+         "each C fact is true on a C ABI of its own");
+      Landin.Testing.Check
+        (Item,
+         Config.Is_Atom_Fact_Name ("arch")
+           and then Config.Is_Atom_Fact_Name ("os")
+           and then not Config.Is_Atom_Fact_Name ("word_size")
+           and then Config.Is_Valued_Fact_Name ("word_size")
+           and then Config.Is_Valued_Fact_Name ("c_runtime")
+           and then not Config.Is_Valued_Fact_Name ("build_mode")
+           and then not Config.Is_Fact_Name ("feature")
+           and then not Config.Is_Fact_Name ("core")
+           and then not Config.Is_Fact_Name (""),
+         "atom facts and valued facts are told apart");
+      Landin.Testing.Check
+        (Item,
+         (for all Machine in Architecture =>
+            Config.Is_Configuration_Atom (Atom (Machine)))
+           and then Config.Is_Configuration_Atom ("freestanding")
+           and then Config.Is_Configuration_Atom ("release")
+           and then not Config.Is_Configuration_Atom ("arch")
+           and then not Config.Is_Configuration_Atom ("cortex-m0"),
+         "every architecture atom is a configuration atom");
+   end Fixed_Facts_Have_One_Name_Each;
+
    --  The driver and the server select through one mapping, so each
    --  name must reach the constructor it names and nothing else may.
    procedure Names_Select_Their_Descriptions
@@ -316,12 +394,13 @@ package body Landin.Tests.Targets_Suite is
          "each described name selects its own constructor");
       Landin.Testing.Check
         (Item,
-         Name (Selection.Described ("linux-x86-64")) = "linux-x86-64"
-           and then Name (Selection.Described ("darwin-arm64"))
-                    = "darwin-arm64"
-           and then Name (Selection.Described ("cortex-m0")) = "cortex-m0"
-           and then Name (Selection.Described ("synthetic-32"))
-                    = "synthetic-32",
+         (for all Index in 1 .. Selection.Described_Count =>
+            Selection.Is_Described (Selection.Described_Name (Index))
+            and then Name (Selection.Described
+                             (Selection.Described_Name (Index)))
+                     = Selection.Described_Name (Index)
+            and then Name (Selection.Described_At (Index))
+                     = Selection.Described_Name (Index)),
          "a selected description is named as it was selected");
       Landin.Testing.Check
         (Item,
@@ -2532,6 +2611,12 @@ package body Landin.Tests.Targets_Suite is
       Landin.Testing.Register
         (Into, "targets", "names select their descriptions",
          Names_Select_Their_Descriptions'Access);
+      Landin.Testing.Register
+        (Into, "targets", "architectures have one atom each",
+         Architectures_Have_One_Atom_Each'Access);
+      Landin.Testing.Register
+        (Into, "targets", "fixed facts have one name each",
+         Fixed_Facts_Have_One_Name_Each'Access);
       Landin.Testing.Register
         (Into, "targets", "levels are stated per family",
          Levels_Are_Stated_Per_Family'Access);
