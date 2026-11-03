@@ -69,11 +69,28 @@ def absent(paths):
             for f in paths if not os.path.exists(f)]
 
 
-LANGUAGE_FILES = [SPEC_NAME, TOUR_NAME, "prototype-1-driver.md",
-                  "prototype-2-parser.md",
-                  "prototype-3-containers.md",
-                  "prototype-4-app.md",
-                  "prototype-5-server.md"]
+#  Every prototype, by its findings' letter.  This table is where a
+#  prototype is registered, and everything in this file that needs the
+#  prototypes reads it.  Outside this file a new prototype also needs, and
+#  check.py holds each of these to the table: an entry in
+#  docs/site/render_html.py's DOCS, its key in NAV_GROUPS and its letter in
+#  FINDING_LETTERS (check_site_documents, check_finding_letters); a path in
+#  .github/workflows/pages.yml (check_site_documents); a `Current with
+#  specification` line (check_specification_version).  By hand, and held
+#  by nothing: the derivation register in compiler/tests/registers.md
+#  names a prototype by the number this table gives, its target
+#  applicability register has a scope for prototypes 1 to 4 only, which
+#  `wanted_scopes` below transcribes, and AGENTS.md's prototype coverage
+#  describes each in prose.
+PROTOTYPE_FINDINGS = {
+    "X": "prototype-1-driver.md",
+    "Y": "prototype-2-parser.md",
+    "Z": "prototype-3-containers.md",
+    "W": "prototype-4-app.md",
+    "V": "prototype-5-server.md",
+}
+PROTOTYPE_FILES = sorted(PROTOTYPE_FINDINGS.values())
+LANGUAGE_FILES = [SPEC_NAME, TOUR_NAME] + PROTOTYPE_FILES
 ROADMAP = "ROADMAP.md"
 #  The evidence registers: what the compiler's evidence is, as opposed to
 #  what is left to do.  Four tables, read here and generated into matrices.
@@ -281,13 +298,6 @@ REGISTER_CITATION = re.compile(
     r"(?<![A-Za-z0-9_.])(R551-\d\d|R730-\d\d|SR-\d{2,})(?![A-Za-z0-9_])")
 #  The paragraph naming every record that has left the register's table.
 REGISTER_LEFT = "Records that have left the register: "
-PROTOTYPE_FINDINGS = {
-    "X": "prototype-1-driver.md",
-    "Y": "prototype-2-parser.md",
-    "Z": "prototype-3-containers.md",
-    "W": "prototype-4-app.md",
-    "V": "prototype-5-server.md",
-}
 #  The finding letters as a regular-expression class.  Every reader of a
 #  finding citation uses this, and the site renderer's own copy is held to
 #  it, so a new prototype is one entry above rather than a letter added
@@ -428,7 +438,7 @@ def check(path):
     all_lines = text.split("\n")
     out = []
     basename = os.path.basename(path)
-    if basename == "tour.md" or re.fullmatch(r"prototype-[1-5]-.+\.md", basename):
+    if basename == TOUR_NAME or basename in PROTOTYPE_FILES:
         out += live_example_tokens(text)
 
     #  A fence says what its block is; one that says nothing is a fault.
@@ -2525,9 +2535,7 @@ def check_specification_version(full_run):
          re.compile(r"Kept current at specification \*\*([0-9][0-9.]*)\*\*")),
         ("tour.md", re.compile(r"^Version ([0-9][0-9.]*) \u2014", re.M)),
     ] + [(name, re.compile(r"^Current with specification ([0-9][0-9.]*)\.", re.M))
-         for name in ("prototype-1-driver.md", "prototype-2-parser.md",
-                      "prototype-3-containers.md", "prototype-4-app.md",
-                      "prototype-5-server.md")]
+         for name in PROTOTYPE_FILES]
     out = absent([readme] + [path for path, _ in places])
     if out:
         return out
@@ -2573,6 +2581,48 @@ def check_finding_letters(full_run):
         return [(path, line, "links findings %s; check.py's prototypes have %s"
                  % (found.group(1), FINDING_LETTERS))]
     return []
+
+
+def check_site_documents(full_run):
+    """Every page the site renders has a place in its navigation and a path
+    that publishes it, and every prototype is one of them.
+
+    The renderer refused a document missing from NAV_GROUPS only when it
+    ran, after this file had passed, and pages.yml's paths, which decide
+    whether an edit republishes the site, were kept in step by hand: two
+    rendered documents were missing from them.
+    """
+    if not full_run:
+        return []
+    renderer = "docs/site/render_html.py"
+    workflow = ".github/workflows/pages.yml"
+    out = absent([os.path.join(ROOT, renderer), os.path.join(ROOT, workflow)])
+    if out:
+        return out
+    sys.path.insert(0, ROOT)
+    from docs.site import render_html
+    documents = render_html.DOCS + render_html.GUIDES
+    try:
+        render_html.nav_groups(documents)
+    except SystemExit as refusal:
+        out.append((renderer, 1, str(refusal)))
+    sources = [document["src"] for document in documents]
+    for prototype in PROTOTYPE_FILES:
+        if prototype not in sources:
+            out.append((renderer, 1, "renders no page for %s" % prototype))
+    text = io.open(os.path.join(ROOT, workflow), encoding="utf-8").read()
+    found = re.search(r"^    paths:\n((?:      - '[^']+'\n)+)", text, re.M)
+    if not found:
+        return out + [(workflow, 1, "has no push paths where"
+                       " check_site_documents looks")]
+    line = text.count("\n", 0, found.start()) + 1
+    paths = re.findall(r"- '([^']+)'", found.group(1))
+    import fnmatch
+    for source in sources:
+        if not any(fnmatch.fnmatchcase(source, path) for path in paths):
+            out.append((workflow, line, "publishes the site on no change to"
+                        " %s, which the site renders" % source))
+    return out
 
 
 def check_pinned_toolchain(full_run):
@@ -9770,6 +9820,7 @@ def main(argv):
     extra += check_roadmap_citations(full_run)
     extra += check_specification_version(full_run)
     extra += check_finding_letters(full_run)
+    extra += check_site_documents(full_run)
     extra += check_pinned_toolchain(full_run)
     extra += check_macos_environment(full_run)
     extra += check_developer_loops(full_run)

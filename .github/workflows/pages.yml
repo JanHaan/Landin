@@ -28,6 +28,8 @@ on:
       - 'prototype-4-app.md'
       - 'prototype-5-server.md'
       - 'docs/documents.md'
+      - 'docs/from-c.md'
+      - 'docs/capabilities.md'
       - 'examples.md'
       - 'README.md'
       - 'ROADMAP.md'

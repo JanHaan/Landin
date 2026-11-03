@@ -406,6 +406,54 @@ class Citations(unittest.TestCase):
         self.assertEqual(self.cited("# Tour\n\nprose only\n"), [])
 
 
+class SiteDocuments(unittest.TestCase):
+    """Every rendered page has a group, a publishing path and, for a
+    prototype, a page at all, before the renderer runs."""
+
+    WORKFLOW = ".github/workflows/pages.yml"
+
+    def setUp(self):
+        #  The renderer is read from the checkout, whatever tree a control
+        #  writes, so that only the copied workflow differs.
+        sys.path.insert(0, str(Path(checker.ROOT)))
+        from docs.site import render_html
+        self.renderer = render_html
+
+    def said(self, workflow=None):
+        from check_controls import tree
+        source = (Path(checker.ROOT) / self.WORKFLOW).read_text()
+        with tree(copied=["docs/site"], written={
+                self.WORKFLOW: workflow(source) if workflow else source}):
+            return [why for _, _, why in checker.check_site_documents(True)]
+
+    def test_the_real_site_passes(self):
+        self.assertEqual(self.said(), [])
+
+    def test_a_document_no_group_names_is_reported(self):
+        groups = [(name, [key for key in keys if key != "p5"])
+                  for name, keys in self.renderer.NAV_GROUPS]
+        with mock.patch.object(self.renderer, "NAV_GROUPS", groups):
+            said = self.said()
+        self.assertTrue(any("NAV_GROUPS and the documents differ: p5" in why
+                            for why in said), said)
+
+    def test_a_prototype_without_a_page_is_reported(self):
+        documents = [document for document in self.renderer.DOCS
+                     if document["key"] != "p5"]
+        groups = [(name, [key for key in keys if key != "p5"])
+                  for name, keys in self.renderer.NAV_GROUPS]
+        with mock.patch.object(self.renderer, "DOCS", documents), \
+                mock.patch.object(self.renderer, "NAV_GROUPS", groups):
+            said = self.said()
+        self.assertEqual(said, ["renders no page for prototype-5-server.md"])
+
+    def test_a_rendered_source_the_workflow_omits_is_reported(self):
+        said = self.said(lambda text: text.replace(
+            "      - 'docs/from-c.md'\n", ""))
+        self.assertEqual(said, ["publishes the site on no change to"
+                                " docs/from-c.md, which the site renders"])
+
+
 QUALITY = ["compiler/tests/quality", "scripts/quality.sh",
            "compiler/ada/src/base/landin-optimization.ads",
            "compiler/ada/tests/src/landin-tests-fixture_execution_suite.adb",
