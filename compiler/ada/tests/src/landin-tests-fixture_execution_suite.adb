@@ -1905,6 +1905,12 @@ package body Landin.Tests.Fixture_Execution_Suite is
          Version : Landin.Platform.Tool_Result;
          Asked   : Landin.Platform.Path_List;
          Line    : Unbounded.Unbounded_String;
+         --  QEMU's user emulation takes its -cpu option from QEMU_CPU as
+         --  well, so a refused -cpu is the caller's environment, which no
+         --  other emulator would mend.
+         Cpu     : constant Boolean :=
+           Ada.Strings.Fixed.Index (Unbounded.To_String (Ran.Output), "-cpu")
+           > 0;
       begin
          Asked.Append ("--version");
          Tools.Run (Runner_Name, Asked, Version, Landin.Platform.Merged);
@@ -1935,8 +1941,12 @@ package body Landin.Tests.Fixture_Execution_Suite is
                        then "status" & Integer'Image (Ran.Exit_Code)
                        else "it did not exit")
                     & "): " & Unbounded.To_String (Ran.Output))
-            & "; run the lane under the pinned QEMU, which nix develop"
-            & " provides and nix build .#qemu-user builds");
+            & (if Cpu
+               then "; QEMU reads its -cpu option from QEMU_CPU too, so set"
+                    & " QEMU_CPU to a CPU the emulator knows, such as max,"
+                    & " or unset it"
+               else "; run the lane under the pinned QEMU, which nix"
+                    & " develop provides and nix build .#qemu-user builds"));
       exception
          when Landin.External_Tool_Failed =>
             Problem := Unbounded.To_Unbounded_String
@@ -2015,17 +2025,17 @@ package body Landin.Tests.Fixture_Execution_Suite is
    is
       procedure Probe
         (Status : Integer; Problem : out Unbounded.Unbounded_String;
-         Linked : Integer := 0);
+         Linked : Integer := 0; Said : String := "");
 
       procedure Probe
         (Status : Integer; Problem : out Unbounded.Unbounded_String;
-         Linked : Integer := 0)
+         Linked : Integer := 0; Said : String := "")
       is
          Host  : Landin.Testing.Fakes.Fake_Filesystem;
          Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
       begin
          Tools.Add_Result (Linked, "");
-         Tools.Add_Result (Status, "");
+         Tools.Add_Result (Status, Said);
          Tools.Add_Result
            (0, "qemu-riscv64 version 8.2.2 (Debian 1:8.2.2+ds-0ubuntu1.10)"
                & ASCII.LF & "Copyright (c) 2003-2023" & ASCII.LF);
@@ -2072,6 +2082,22 @@ package body Landin.Tests.Fixture_Execution_Suite is
            (Unbounded.To_String (Problem), "could not link the runner probe")
          > 0,
          "a probe the driver cannot link says so");
+
+      --  An empty or unknown QEMU_CPU is the emulator's -cpu option, and
+      --  the pinned QEMU refuses it as readily as any other.
+      Probe (1, Problem,
+             Said => "qemu-riscv64: -cpu option cannot be empty" & ASCII.LF);
+      declare
+         Said : constant String := Unbounded.To_String (Problem);
+      begin
+         Landin.Testing.Check
+           (Item,
+            Ada.Strings.Fixed.Index (Said, "-cpu option cannot be empty") > 0
+            and then Ada.Strings.Fixed.Index
+              (Said, "set QEMU_CPU to a CPU") > 0
+            and then Ada.Strings.Fixed.Index (Said, "pinned QEMU") = 0,
+            "a refused -cpu names QEMU_CPU, not the pinned QEMU: " & Said);
+      end;
    end A_Known_Bad_Runner_Is_Refused;
 
    --  Whether the lane's processor has every feature of a level of its

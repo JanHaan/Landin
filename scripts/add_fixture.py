@@ -18,16 +18,26 @@ and its files, as compiler/tests/README.md says.  This then
    it is given; the corpus reads an L0015 refusal's modules from the
    refusal itself, so its reason says only why, if anything.  `--refuse`
    still names the codes by hand, held to refine's own;
-3. regenerates every file a fixture is read into, `check.py --generate`:
+3. puts a positive, runtime or ABI fixture's sources in the layout
+   `refine fmt` gives, which `formatting/the corpus is formatted` holds
+   them to, unless the fixture names [1750] and its layout is its
+   evidence;
+4. regenerates every file a fixture is read into, `check.py --generate`:
    the coverage, the matrices, the diagnostic catalogue's owners and the
    tokens among them;
-4. says what is left that only a person can decide: a Linux x86-64
+5. says what is left that only a person can decide: a Linux x86-64
    runtime or ABI fixture that does not name `linux-arm64` needs a record
    in compiler/tests/linux-arm64/parity.json saying why and what runs on
-   arm64 instead.
-
-Then run its own lane, `./scripts/dev-test.sh --fixture=CLASS/NAME`, and
-`python3 check.py`.
+   arm64 instead;
+6. names, for the fixture's class, every step left, in order.  The
+   recordings come first: `--record=lowering` for a positive fixture,
+   whose lowering compiler/tests/lowering.ir holds, and
+   `--record=CLASS/NAME` for one whose `expect` file is not written yet.
+   Only the test program records, and several new fixtures' recordings
+   belong in one run of it, so this names them rather than running them.
+   Then the one run of the fixture and of every corpus case that reads
+   it, the highlighters' integration pass for a source the editor grammar
+   parses, and `python3 check.py`.
 """
 
 import argparse
@@ -44,6 +54,10 @@ sys.path.insert(0, str(ROOT / "compiler/tests"))
 import fixture_meta  # noqa: E402
 
 CORPUS = ROOT / "compiler/tests/cortex-m/corpus.json"
+#  The fixtures `formatting/the corpus is formatted` exempts by name, beside
+#  every one naming [1750]: their layout is what they show.
+LAYOUT_EVIDENCE = ("value-continued-at-any-indentation",
+                   "r490-lexical-module-observation")
 ARM64_PARITY = ROOT / "compiler/tests/linux-arm64/parity.json"
 GENERATED = ("--generate",)
 
@@ -78,6 +92,72 @@ def cortex_codes(meta, directory, refine):
                          " compiler with --refine=PATH:\n%s"
                          % (meta.label, refine, said))
     return codes
+
+
+def held_to_layout(meta):
+    """Whether the corpus formatting case holds the fixture's sources to
+    the layout refine fmt gives: a positive, runtime or ABI fixture's are,
+    unless the fixture's layout is its evidence."""
+    return (meta.cls in ("positive", "runtime", "abi")
+            and "1750" not in meta.get("constructs", "")
+            and meta.name not in LAYOUT_EVIDENCE)
+
+
+def format_sources(meta, directory, refine):
+    """Put the fixture's sources in refine fmt's layout, and return the
+    paths of those it changed."""
+    sources = sorted(path for path in directory.rglob("*.ldn")
+                     if not any(part.startswith(".") for part in
+                                path.relative_to(directory).parts))
+    before = {path: path.read_bytes() for path in sources}
+    ran = subprocess.run([str(refine), "fmt", str(directory)],
+                         capture_output=True, text=True, timeout=300)
+    if ran.returncode != 0:
+        raise SystemExit("%s: refine fmt could not lay out its sources, and"
+                         " formatting/the corpus is formatted holds them to"
+                         " that layout:\n%s"
+                         % (meta.label, ran.stdout + ran.stderr))
+    return [path for path in sources if path.read_bytes() != before[path]]
+
+
+def remaining_steps(meta, expect_written, unformatted=None):
+    """What only the test program or another tool does for a fixture of
+    META's class, in order: each a command line.
+
+    EXPECT_WRITTEN says whether the fixture's `expect` file exists, and
+    UNFORMATTED names the fixture's directory when no refine was here to
+    put its sources in the layout."""
+    steps = []
+    if unformatted:
+        steps.append("refine fmt %s, with the refine ./scripts/dev-build.sh"
+                     " --compiler-only builds" % unformatted)
+    records = []
+    if meta.cls == "positive":
+        records.append("--record=lowering")
+    if meta.get("expect") and not expect_written:
+        records.append("--record=" + meta.label)
+    if records:
+        steps.append("./scripts/dev-test.sh " + " ".join(records))
+    #  --fixture runs a program class, or any fixture with a recorded
+    #  report.
+    cases = []
+    if (meta.cls in ("positive", "negative", "runtime", "abi")
+            or meta.get("expect")):
+        cases.append("--fixture=" + meta.label)
+    if meta.cls in ("positive", "negative"):
+        cases.append("--case='lexer/agrees with the corpus'")
+        if meta.get("program"):
+            cases.append("--case='parser/agrees with the corpus'")
+    if meta.cls == "positive":
+        cases.append("--case='lowering/the recorded corpus is current'")
+    if meta.cls in ("positive", "runtime", "abi"):
+        cases.append("--case='formatting/the corpus is formatted'")
+    if cases:
+        steps.append("./scripts/dev-test.sh " + " ".join(cases))
+    if meta.cls in ("positive", "runtime", "abi"):
+        steps.append("./highlight/test.sh --integration, inside nix develop")
+    steps.append("python3 check.py")
+    return steps
 
 
 def corpus_row(meta, refuse, reason, refused=None):
@@ -153,6 +233,7 @@ def main(argv=None):
     except fixture_meta.FixtureError as error:
         raise SystemExit(str(error))
 
+    refine = args.refine or built_refine()
     if meta.cls in ("runtime", "abi"):
         record = json.loads(CORPUS.read_text(encoding="utf-8"))
         if meta.label in record["fixtures"]:
@@ -161,7 +242,6 @@ def main(argv=None):
         else:
             refused = None
             if meta.cls == "runtime":
-                refine = args.refine or built_refine()
                 if refine is None:
                     raise SystemExit(
                         "no refine is built here to compile %s for"
@@ -177,6 +257,15 @@ def main(argv=None):
             print("added %s to %s as %s" % (
                 meta.label, CORPUS.relative_to(ROOT),
                 record["fixtures"][meta.label]["mode"]), flush=True)
+
+    unformatted = None
+    if held_to_layout(meta):
+        if refine is None:
+            unformatted = str(directory.relative_to(ROOT))
+        else:
+            for path in format_sources(meta, directory, refine):
+                print("put %s in refine fmt's layout"
+                      % path.relative_to(ROOT), flush=True)
 
     for flag in GENERATED:
         ran = subprocess.run([sys.executable, str(ROOT / "check.py"), flag],
@@ -197,8 +286,10 @@ def main(argv=None):
                 " that does" % ARM64_PARITY.relative_to(ROOT))
     for one in left:
         print("left to do: " + one)
-    print("now run ./scripts/dev-test.sh --fixture=%s and python3 check.py"
-          % meta.label)
+    expect_written = bool(meta.get("expect")) and (
+        directory / meta["expect"]).is_file()
+    for one in remaining_steps(meta, expect_written, unformatted):
+        print("then run: " + one)
     return 1 if left else 0
 
 

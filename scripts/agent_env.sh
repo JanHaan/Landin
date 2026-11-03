@@ -14,16 +14,20 @@
 #  is sourced into.  Claude Code takes it through a SessionStart hook; see
 #  "Local agent feedback" in docs/process.md.
 #
-#  It prints nothing and succeeds where there is no nix, or where python3
-#  and gprbuild are already on PATH, so a hook calling it is harmless on
-#  every host.  A worktree whose flake or pins differ from the checkout the
-#  file was made for still needs `nix develop` of its own.
+#  Where there is no nix, or python3 and gprbuild are already on PATH, it
+#  prints /dev/null and succeeds, so `. "$(./scripts/agent_env.sh)"` holds
+#  in every shell and a hook calling it is harmless on every host.  A
+#  worktree whose flake or pins differ from the checkout the file was made
+#  for still needs `nix develop` of its own.
 
 set -euo pipefail
 
 root=$(cd -- "$(dirname -- "$0")/.." && pwd)
 if ! command -v nix > /dev/null ||
     { command -v python3 > /dev/null && command -v gprbuild > /dev/null; }; then
+    #  Nothing to add, and an empty path would make the sourcing shell
+    #  fail with no word of why.
+    printf '%s\n' /dev/null
     exit 0
 fi
 

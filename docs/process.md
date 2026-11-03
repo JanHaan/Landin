@@ -168,8 +168,9 @@ evaluates the flake before each one, about two seconds a command.
 `scripts/agent_env.sh` evaluates it once per `flake.nix`, `flake.lock` and
 `environments/pins.sh`, writes what the shell exports to a file under
 `~/.cache/landin/agent-env/`, and prints that file's path; sourcing it takes a
-few milliseconds and leaves `TMPDIR` alone. It prints nothing where there is
-no nix or the toolchain is already on `PATH`. Claude Code takes the file
+few milliseconds and leaves `TMPDIR` alone. Where there is no nix, or the
+toolchain is already on `PATH`, it prints `/dev/null`, so
+`. "$(./scripts/agent_env.sh)"` holds in either shell. Claude Code takes the file
 through a SessionStart hook in `.claude/settings.local.json`, which then
 reaches every Bash command of the session and of its subagents:
 

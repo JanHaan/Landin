@@ -973,11 +973,14 @@ python3 scripts/add_fixture.py CLASS/NAME
 ```
 
 It reads the metadata as the test program does and stops on any fault; gives
-a runtime or ABI fixture its row in `cortex-m/corpus.json`; regenerates every
-file a fixture is read into (`check.py --generate`: `targets.matrix`,
-`constructs.matrix`, the diagnostic matrix and `lexical.tokens` among them);
-and says what only a person can decide, a Linux x86-64 runtime or ABI fixture
-that does not run on arm64 needing its record in `linux-arm64/parity.json`.
+a runtime or ABI fixture its row in `cortex-m/corpus.json`; puts a positive,
+runtime or ABI fixture's sources in the layout `refine fmt` gives, which
+`formatting/the corpus is formatted` holds the corpus to, unless the fixture
+names [1750] and its layout is its evidence; regenerates every file a fixture
+is read into (`check.py --generate`: `targets.matrix`, `constructs.matrix`,
+the diagnostic matrix and `lexical.tokens` among them); and says what only a
+person can decide, a Linux x86-64 runtime or ABI fixture that does not run on
+arm64 needing its record in `linux-arm64/parity.json`.
 A runtime fixture's row is what Cortex-M0 compilation does with it: the
 script compiles it with refine, the newest this checkout built or the one
 `--refine=PATH` names, and writes `execute` when it compiles and `refuse`
@@ -985,10 +988,21 @@ with the distinct codes it refused with, sorted as the corpus compares them,
 when it does not. A refusal other than L0015 alone takes the `--reason` it
 is given, and an L0015 one needs none, since the corpus reads its refused
 modules from the refusal. An ABI fixture, whose C peer is hosted, is a
-`restriction` with the `--reason` it is given. Then run the fixture on its
-own lane, `./scripts/dev-test.sh --fixture=CLASS/NAME`, and `python3
-check.py`, which names a runtime or ABI fixture that has no row and the
-command that writes it.
+`restriction` with the `--reason` it is given.
+
+It ends by naming, for the fixture's class, each step only the test program
+or another tool can take, as `then run:` lines in the order to take them:
+`./scripts/dev-test.sh --record=lowering` for a positive fixture, whose
+lowering `lowering.ir` records, with `--record=CLASS/NAME` in the same run
+for a fixture whose `expect` file is not written yet; one
+`./scripts/dev-test.sh` run of the fixture and of every corpus case that
+reads it (the lexer's and parser's `agrees with the corpus` for a positive or
+negative fixture, `lowering/the recorded corpus is current` for a positive
+one and `formatting/the corpus is formatted` for a positive, runtime or ABI
+one); `./highlight/test.sh --integration`, inside `nix develop`, for a source
+the editor grammar parses; and `python3 check.py`, which names a runtime or
+ABI fixture that has no row and the command that writes it. A fixture edited
+later is held to the same cases, the formatter's among them.
 
 Discovery is strict. An unknown key, a repeated key, a missing required key,
 a class that disagrees with its directory, a line that is not a pair, a

@@ -43,6 +43,22 @@ case "${1:-}" in
              }' "$Tests_Source" | sed "s|landin_tests|$Name|g"
         echo "       $Name --record-and-run   records, then runs every case"
         echo
+        #  What a suite costs is not in its name, and a brief that names
+        #  one beside a new fixture did not expect half an hour.
+        echo "Most suites take seconds; three take minutes on their own:"
+        echo "  fixture execution  emits every positive fixture and compiles, links"
+        echo "                     and runs every runtime fixture at every profile:"
+        echo "                     half an hour and more on one worker, about fifteen"
+        echo "                     minutes at LANDIN_TEST_JOBS=8.  --fixture=CLASS/NAME"
+        echo "                     runs one fixture instead."
+        echo "  parser             parses every truncation and mutation of the corpus:"
+        echo "                     about five minutes"
+        echo "  memory             compiles one real program over and over to see what"
+        echo "                     it keeps: about five minutes"
+        echo "LANDIN_TEST_JOBS=N splits fixture execution's two corpus-wide cases"
+        echo "across N workers, one by default; scripts/parallel-equivalence.sh holds"
+        echo "a wider run to the same transcript.  It changes no other suite."
+        echo
         echo "No option runs the complete suite; a selection is a FILTERED run."
         echo "Suites, for --suite=NAME and --case=SUITE/NAME:"
         awk '/Expected_Suites : constant/ { on = 1 }
