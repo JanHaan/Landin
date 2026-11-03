@@ -453,6 +453,21 @@ def paced(args, what, action):
     return common.paced(args.pace, what, action, args.arty_serial, args.cascade)
 
 
+def restore_fixed(run, args, chip, probe, console_for, cycle, settle):
+    """Flash, cold-start and prove the fixed image reached its park loop."""
+    paced(args, 'restore resident image', lambda: probe.download_bin(args.fixed_image, chip.offset))
+    settle(run)
+    restored, _ = cycle(run, console_for, probe, None)
+    try:
+        fixed = common.esp_image(args.fixed_image.read_bytes())
+        stream = restored.wait(lambda body: common.rom_log(body.decode('latin-1'))['entry']
+            == fixed['entry'], 10, 'the resident image ROM entry')
+        boot_log(stream.decode('latin-1'), fixed)
+        return common.read_fixed_marker(probe, common.fixed_elf(args, chip.name))
+    finally:
+        restored.close()
+
+
 def run_board(chip, args, console_for, cycle, settle):
     """The whole run: SETTLE(run) waits for the hub to list the board again
     after a download resets the chip; CONSOLE_FOR(run) opens the console,
@@ -566,18 +581,8 @@ def run_board(chip, args, console_for, cycle, settle):
         if console:
             console.close()
         if lock.file:
-            def restore_fixed():
-                paced(args, 'restore resident image', lambda: probe.download_bin(args.fixed_image, chip.offset))
-                settle(run)
-                restored, _ = cycle(run, console_for, probe, None)
-                try:
-                    fixed = common.esp_image(args.fixed_image.read_bytes())
-                    stream = restored.wait(lambda body: common.rom_log(body.decode('latin-1'))['entry']
-                        == fixed['entry'], 10, 'the resident image ROM entry')
-                    boot_log(stream.decode('latin-1'), fixed)
-                finally:
-                    restored.close()
-            common.finish_boot(args, result, restore_fixed)
+            common.finish_boot(args, result, lambda: restore_fixed(
+                run, args, chip, probe, console_for, cycle, settle))
         lock.release()
         if console:
             console.close()

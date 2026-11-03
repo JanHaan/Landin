@@ -114,6 +114,11 @@ def prepare(board, mode, refine, output, source=None):
     files.update(fixed_elf=fixed, fixed_image=fixed, fixed_report=output / 'fixed-build.json')
     if board.startswith('esp32'):
         files['fixed_image'] = fixed.with_name('fixed.elf.bin')
+    if board == 'rp2350':
+        import uf2
+        recovery = output / 'fixed.uf2'
+        recovery.write_bytes(uf2.convert(fixed))
+        files['fixed_uf2'] = recovery
     for name, filename in (('disassembly', 'disassembly.txt'),
                            ('disassembly_log', 'disassembly.log'),
                            ('attributes', 'attributes.log')):

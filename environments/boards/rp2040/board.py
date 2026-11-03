@@ -294,6 +294,7 @@ def restore_fixed(run, args):
     power_cycle(common.InGroup(run, args.hub_group), args)
     device = common.port_device(common.listing(common.InGroup(run, args.hub_group), args.hub, args.hub_seconds), args.port)
     require(not device or not device.startswith('2e8a:0003'), 'fixed image fell back to RP2040 BOOTSEL')
+    return common.read_fixed_marker(probe(run, args), common.fixed_elf(args, "rp2040"))
 
 
 def main():

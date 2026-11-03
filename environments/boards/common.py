@@ -380,6 +380,7 @@ def board_preflight(args, board):
                 'a boot check needs --fixed-image to restore the resident image')
         require(args.fixed_image.is_file(), 'the fixed resident image does not exist')
         validate_fixed_image(args.fixed_image, board)
+        fixed_marker_address(fixed_elf(args, board))
         require(not getattr(args, 'block_control', False),
                 'Pico 2 corrupt controls require physical off-cascade UF2 recovery; no probe attaches in BOOTSEL')
 
@@ -413,9 +414,11 @@ def finish_boot(args, result, restore):
         return
     try:
         args.pace.before('resident image restoration')
-        restore()
+        marker = restore()
+        require(isinstance(marker, dict) and marker.get('value') == FIXED_READY_MAGIC,
+                'resident restoration has no startup readiness proof')
         args.pace.before('resident image restoration completion')
-        result['fixed_restore'] = dict(status='passed', sha256=sha(args.fixed_image))
+        result['fixed_restore'] = dict(status='passed', sha256=sha(args.fixed_image), marker=marker)
     except (Failed, OSError, subprocess.TimeoutExpired) as error:
         result['fixed_restore'] = dict(status='pending', reason=str(error))
         result['status'] = 'failed'
@@ -502,6 +505,132 @@ def elf_sections(image):
         name = data[names + h[0]:data.index(b'\0', names + h[0])].decode()
         sections[name] = (h[3], h[4], h[5])
     return data, sections
+
+
+FIXED_READY_SYMBOL = '_landin_fixed_ready'
+FIXED_READY_MAGIC = 0x4c465831
+
+
+def _elf32_tables(data):
+    """Bounded section and program tables of a little-endian ELF32 file."""
+    require(len(data) >= 52 and data[:7] == b'\x7fELF\x01\x01\x01',
+            'not an ELF32 LE image')
+    require(struct.unpack_from('<I', data, 20)[0] == 1
+            and struct.unpack_from('<H', data, 40)[0] == 52,
+            'invalid ELF32 header')
+    phoff, shoff = struct.unpack_from('<II', data, 28)
+    phsize, phnum, shsize, shnum, shnames = struct.unpack_from('<5H', data, 42)
+    require(not phnum or (phsize == 32 and phoff >= 52
+            and phoff + phnum * phsize <= len(data)), 'invalid ELF32 program table')
+    require(shnum and shsize == 40 and shoff >= 52
+            and shoff + shnum * shsize <= len(data), 'invalid ELF32 section table')
+    headers = [struct.unpack_from('<10I', data, shoff + i * shsize) for i in range(shnum)]
+    programs = [struct.unpack_from('<8I', data, phoff + i * phsize) for i in range(phnum)]
+    for header in headers:
+        if header[1] != 8:
+            require(header[4] + header[5] <= len(data), 'ELF32 section exceeds file')
+    require(shnames < shnum and headers[shnames][1] == 3,
+            'invalid ELF32 section names')
+    for kind, offset, _, physical, size, memory, _, _ in programs:
+        require(offset + size <= len(data) and (kind != 1 or size <= memory)
+                and physical + size <= 0x100000000, 'invalid ELF32 segment extent')
+    return headers, programs
+
+
+def _elf32_symbol_entries(image):
+    data = Path(image).read_bytes()
+    headers, _ = _elf32_tables(data)
+    found, bindings, ambiguous = {}, {}, set()
+    for header in headers:
+        if header[1] != 2:
+            continue
+        offset, size, linked, entry_size = header[4], header[5], header[6], header[9]
+        require(entry_size == 16 and size % entry_size == 0,
+                'invalid ELF32 symbol table entries')
+        require(linked < len(headers) and headers[linked][1] == 3,
+                'invalid ELF32 symbol names')
+        strings_at, strings_size = headers[linked][4:6]
+        strings = data[strings_at:strings_at + strings_size]
+        for position in range(offset, offset + size, entry_size):
+            name_at, address, length, info, _, section = struct.unpack_from('<IIIBBH', data, position)
+            require(name_at < len(strings), 'ELF32 symbol name exceeds string table')
+            end = strings.find(b'\0', name_at)
+            require(end >= 0, 'unterminated ELF32 symbol name')
+            try:
+                name = strings[name_at:end].decode('utf-8')
+            except UnicodeDecodeError as error:
+                raise Failed('invalid ELF32 symbol name') from error
+            if not name or section == 0:
+                continue
+            require(section < len(headers) or section >= 0xff00,
+                    'ELF32 symbol names an absent section')
+            entry = (address, length, info & 15, section)
+            binding = info >> 4
+            # Arm mapping symbols such as $t/$d repeat at each code/data
+            # boundary. Ambiguous local names have no single address.
+            if name in ambiguous or (name in found and found[name] != entry):
+                require(name != FIXED_READY_SYMBOL and binding == 0
+                        and bindings.get(name, 0) == 0,
+                        'conflicting ELF32 symbol definitions: ' + name)
+                found.pop(name, None)
+                ambiguous.add(name)
+                continue
+            found[name], bindings[name] = entry, binding
+    return found, headers
+
+
+def elf_symbols(image):
+    """Defined ELF32 addresses, omitting ambiguous local symbol names."""
+    entries, _ = _elf32_symbol_entries(image)
+    return {name: entry[0] for name, entry in entries.items()}
+
+
+def fixed_elf(args, board):
+    """The ELF accompanying the resident image, including an ESP binary."""
+    image = Path(args.fixed_image)
+    if image.read_bytes()[:4] == b'\x7fELF':
+        return image
+    if getattr(args, 'bundle', None):
+        import bundle
+        try:
+            prepared = bundle.validate(args.bundle, board=board, mode='boot')
+            elf = bundle.artifact(prepared, 'fixed_elf')
+        except bundle.Invalid as error:
+            raise Failed('fixed resident ELF: ' + str(error)) from error
+    else:
+        elf = image.with_suffix('')
+    require(elf.is_file(), 'resident readiness needs the ELF accompanying the fixed image: ' + str(elf))
+    parsed = esp_image(image.read_bytes())
+    data = elf.read_bytes()
+    _elf32_tables(data)
+    require(parsed['entry'] == struct.unpack_from('<I', data, 24)[0]
+            and parsed['segments'] == [(address, body) for address, body, _ in elf_segments(elf)],
+            'fixed ESP binary does not match its companion ELF')
+    return elf
+
+
+def fixed_marker_address(image):
+    """An aligned mutable u32 marker defined by the resident ELF itself."""
+    entries, headers = _elf32_symbol_entries(image)
+    require(FIXED_READY_SYMBOL in entries, 'fixed ELF has no resident readiness marker')
+    address, size, kind, section = entries[FIXED_READY_SYMBOL]
+    require(size == 4 and kind == 1 and address % 4 == 0 and section < len(headers),
+            'fixed readiness marker is not an aligned u32 datum')
+    header = headers[section]
+    require(header[2] & 3 == 3 and header[3] <= address
+            and address + 4 <= header[3] + header[5],
+            'fixed readiness marker is not in writable allocated storage')
+    return address
+
+
+def read_fixed_marker(probe, image):
+    """Prove startup reached the resident program after its cold start."""
+    address = fixed_marker_address(image)
+    value, = probe.read_words('resident-ready', address, 1)
+    require(value == FIXED_READY_MAGIC,
+            'resident image did not reach its park loop: readiness at %#x is %#x, expected %#x'
+            % (address, value, FIXED_READY_MAGIC))
+    return dict(symbol=FIXED_READY_SYMBOL, address=address, value=value, elf_sha256=sha(image))
 
 
 def loaded(image, address, size):

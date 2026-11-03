@@ -91,6 +91,26 @@ def elf32(sections, segments):
     return bytes(header) + programs + bytes(body) + table
 
 
+def symbol_elf(symbols=None):
+    """An ELF symbol table independently assembled beside a writable datum."""
+    symbols = symbols if symbols is not None else [(COMMON.FIXED_READY_SYMBOL, 0x20000000, 4, 0x11, 1)]
+    names = b'\0' + b''.join(name.encode() + b'\0' for name, *_ in symbols)
+    entries, at = bytearray(bytes(16)), 1
+    for name, address, size, info, section in symbols:
+        entries += struct.pack('<IIIBBH', at, address, size, info, 0, section)
+        at += len(name.encode()) + 1
+    result = bytearray(elf32([('.data', 0x20000000, bytes(4)),
+                             ('.strtab', 0, names), ('.symtab', 0, entries)],
+                            [(0x10001000, '.data')]))
+    shoff = struct.unpack_from('<I', result, 32)[0]
+    struct.pack_into('<I', result, shoff + 40 + 8, 3)  # data is SHF_ALLOC|WRITE
+    struct.pack_into('<I', result, shoff + 80 + 4, 3)  # string table
+    struct.pack_into('<I', result, shoff + 120 + 4, 2)  # symbol table
+    struct.pack_into('<I', result, shoff + 120 + 24, 2) # linked string table
+    struct.pack_into('<I', result, shoff + 120 + 36, 16)
+    return bytes(result)
+
+
 STATUS = """Current status for hub 7-2.3 [0bda:5411 Generic USB2.1 Hub, USB 2.10, 4 ports, ppps]
   Port 1: 0100 power
   Port 2: 0103 power enable connect [0483:374e STMicroelectronics STLINK-V3 001900293137511339383538]
@@ -184,6 +204,97 @@ class Images(unittest.TestCase):
     def test_nm_s_listing_names_addresses(self):
         listing = '24000000 B handled\n         U __aeabi_fadd\n08000101 t start\n'
         self.assertEqual(COMMON.parse_nm(listing), {'handled': 0x24000000, 'start': 0x08000101})
+
+
+class ResidentReadiness(unittest.TestCase):
+    def test_symbol_address_comes_from_the_elf_without_nm(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'fixed.elf'
+            path.write_bytes(symbol_elf())
+            self.assertEqual(COMMON.elf_symbols(path), {COMMON.FIXED_READY_SYMBOL: 0x20000000})
+            probe = mock.Mock()
+            probe.read_words.return_value = [COMMON.FIXED_READY_MAGIC]
+            proof = COMMON.read_fixed_marker(probe, path)
+            probe.read_words.assert_called_once_with('resident-ready', 0x20000000, 1)
+            self.assertEqual(proof, dict(symbol=COMMON.FIXED_READY_SYMBOL, address=0x20000000,
+                                         value=COMMON.FIXED_READY_MAGIC, elf_sha256=COMMON.sha(path)))
+            probe.read_words.return_value = [0]
+            with self.assertRaisesRegex(COMMON.Failed, 'did not reach its park loop'):
+                COMMON.read_fixed_marker(probe, path)
+
+    def test_repeated_local_mapping_names_do_not_hide_the_global_marker(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'fixed.elf'
+            path.write_bytes(symbol_elf([
+                (COMMON.FIXED_READY_SYMBOL, 0x20000000, 4, 0x11, 1),
+                ('$d', 0x10000100, 0, 0, 1), ('$d', 0x10000200, 0, 0, 1)]))
+            self.assertEqual(COMMON.elf_symbols(path), {COMMON.FIXED_READY_SYMBOL: 0x20000000})
+
+    def test_bad_tables_and_marker_definitions_fail_before_a_probe_read(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'fixed.elf'
+            bad_table = bytearray(symbol_elf())
+            struct.pack_into('<I', bad_table, 32, len(bad_table) - 3)
+            cases = [b'\x7fELF', bytes(bad_table), symbol_elf([]),
+                     symbol_elf([(COMMON.FIXED_READY_SYMBOL, 0x20000000, 8, 0x11, 1)]),
+                     symbol_elf([(COMMON.FIXED_READY_SYMBOL, 0x20000000, 4, 0x12, 1)]),
+                     symbol_elf([(COMMON.FIXED_READY_SYMBOL, 0x10000000, 4, 0x11, 1)]),
+                     symbol_elf([(COMMON.FIXED_READY_SYMBOL, 0x20000000, 4, 0x11, 1),
+                                 (COMMON.FIXED_READY_SYMBOL, 0x20000004, 4, 0x11, 1)])]
+            for data in cases:
+                with self.subTest(length=len(data)):
+                    path.write_bytes(data)
+                    probe = mock.Mock()
+                    with self.assertRaises(COMMON.Failed):
+                        COMMON.read_fixed_marker(probe, path)
+                    probe.read_words.assert_not_called()
+
+    def test_each_swd_restore_reads_readiness_after_the_cold_cycle(self):
+        for board in ('rp2040', 'rp2350', 'rp2350_hazard3', 'stm32h753'):
+            with self.subTest(board=board):
+                spec = importlib.util.spec_from_file_location('resident_' + board,
+                    ROOT / 'environments/boards' / board / 'board.py')
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+                events = []
+                sections = {'.boot2': (0x10000000, 0, 256),
+                            '.isr_vector': (0x08000000, 0, 64),
+                            '.embedded_block': (0x10000110, 0, 20)}
+                args = SimpleNamespace(fixed_image=Path('fixed.elf'), hub_group=None,
+                                       hub='hub', hub_seconds=1, port=2)
+                factory = 'running' if board == 'rp2350_hazard3' else 'probe'
+                proof = dict(value=COMMON.FIXED_READY_MAGIC)
+                with mock.patch.object(module.common, 'elf_sections', return_value=(bytes(256), sections)), \
+                        mock.patch.object(module.common, 'loaded', return_value=bytes(64)), \
+                        mock.patch.object(module.common, 'InGroup'), \
+                        mock.patch.object(module.common, 'fixed_elf', return_value=Path('fixed.elf')), \
+                        mock.patch.object(module.common, 'read_fixed_marker',
+                            side_effect=lambda *_: events.append('marker') or proof), \
+                        mock.patch.object(module, factory), \
+                        mock.patch.object(module, 'flash', side_effect=lambda *_: events.append('flash')), \
+                        mock.patch.object(module, 'power_cycle', side_effect=lambda *_: events.append('cold')), \
+                        mock.patch.object(module.common, 'listing'), \
+                        mock.patch.object(module.common, 'port_device', return_value=None):
+                    if hasattr(module, 'pico2'):
+                        with mock.patch.object(module.pico2, 'refuse_bootsel'):
+                            self.assertEqual(module.restore_fixed(mock.Mock(), args), proof)
+                    else:
+                        self.assertEqual(module.restore_fixed(mock.Mock(), args), proof)
+                self.assertEqual(events, ['flash', 'cold', 'marker'])
+
+    def test_successful_restoration_retains_proof_and_missing_proof_is_pending(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'fixed.elf'
+            path.write_bytes(symbol_elf())
+            args = SimpleNamespace(mode='boot', pace=mock.Mock(), fixed_image=path)
+            proof = dict(value=COMMON.FIXED_READY_MAGIC, address=0x20000000)
+            result = dict(status='passed')
+            COMMON.finish_boot(args, result, lambda: proof)
+            self.assertEqual(result['fixed_restore']['marker'], proof)
+            self.assertEqual(result['fixed_restore']['status'], 'passed')
+            COMMON.finish_boot(args, result, lambda: None)
+            self.assertEqual(result['fixed_restore']['status'], 'pending')
+            self.assertEqual(result['status'], 'failed')
 
 
 class Probes(unittest.TestCase):

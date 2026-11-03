@@ -427,6 +427,46 @@ class PowerOn(unittest.TestCase):
 
 
 class Restore(unittest.TestCase):
+    def test_resident_readiness_is_checked_after_the_cold_boot_log(self):
+        events, proof = [], dict(value=COMMON.FIXED_READY_MAGIC)
+        probe = mock.Mock()
+        probe.download_bin.side_effect = lambda *_: events.append('flash')
+        console = mock.Mock()
+        console.wait.return_value = b'entry 0x40380000\n'
+        args = SimpleNamespace(fixed_image=mock.Mock())
+        def cycle(*_):
+            events.append('cold')
+            return console, None
+        with mock.patch.object(ESP, 'paced', side_effect=lambda args, name, action: action()), \
+                mock.patch.object(ESP.common, 'esp_image', return_value={'entry': 0x40380000}), \
+                mock.patch.object(ESP, 'boot_log', side_effect=lambda *_: events.append('ROM')), \
+                mock.patch.object(ESP.common, 'fixed_elf', return_value=Path('fixed.elf')), \
+                mock.patch.object(ESP.common, 'read_fixed_marker',
+                    side_effect=lambda *_: events.append('marker') or proof):
+            self.assertEqual(ESP.restore_fixed(mock.Mock(), args, C3, probe, mock.Mock(),
+                                              cycle, mock.Mock()), proof)
+        self.assertEqual(events, ['flash', 'cold', 'ROM', 'marker'])
+        console.close.assert_called_once()
+
+    def test_fixed_binary_requires_matching_elf_not_symbol_metadata(self):
+        with tempfile.TemporaryDirectory() as directory:
+            spec = importlib.util.spec_from_file_location('resident_symbols',
+                ROOT / 'scripts/tests/test_board_common.py')
+            helpers = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(helpers)
+            elf = Path(directory) / 'fixed.elf'
+            data = bytearray(helpers.symbol_elf())
+            struct.pack_into('<I', data, 24, 0x40380000)
+            elf.write_bytes(data)
+            segments = [(address, body) for address, body, _ in COMMON.elf_segments(elf)]
+            binary = Path(str(elf) + '.bin')
+            binary.write_bytes(esp_image(0x40380000, 5, (3, 199), segments))
+            args = SimpleNamespace(fixed_image=binary, bundle=None)
+            self.assertEqual(COMMON.fixed_elf(args, 'esp32c3'), elf)
+            binary.write_bytes(esp_image(0x40380000, 5, (3, 199), [(0x40380000, b'wrong')]))
+            with self.assertRaisesRegex(COMMON.Failed, 'does not match'):
+                COMMON.fixed_elf(args, 'esp32c3')
+
     def test_a_download_that_finds_no_probe_is_tried_again(self):
         tries = []
 

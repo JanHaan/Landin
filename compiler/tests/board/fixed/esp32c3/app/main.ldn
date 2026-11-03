@@ -1,5 +1,8 @@
 -- Fixed flash image: watchdog stage runs; hardware USB-JTAG stays available.
 import descriptions/esp32c3
+link(symbol: "_landin_fixed_ready", keep) mut fixed_ready: u32 = 0
+
 start: () -> none =
+    fixed_ready = 0x4c46_5831
     while true do continue end while
 end start

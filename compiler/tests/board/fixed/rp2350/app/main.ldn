@@ -1,5 +1,8 @@
 -- Fixed flash image: no application USB, no peripheral activity.
 import descriptions/rp2350
+link(symbol: "_landin_fixed_ready", keep) mut fixed_ready: u32 = 0
+
 start: () -> none =
+    fixed_ready = 0x4c46_5831
     while true do continue end while
 end start

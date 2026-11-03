@@ -414,6 +414,7 @@ def restore_fixed(run, args):
     flash(run, args, args.fixed_image, common.loaded(args.fixed_image, 0x10000000, 64))
     power_cycle(common.InGroup(run, args.hub_group), args)
     pico2.refuse_bootsel(common.InGroup(run, args.hub_group), args, False)
+    return common.read_fixed_marker(running(run, args), common.fixed_elf(args, "rp2350_hazard3"))
 
 
 def main():

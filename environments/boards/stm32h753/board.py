@@ -520,6 +520,7 @@ def restore_fixed(run, args):
     require(address == VECTORS, 'fixed image vectors are not at the flash boot address')
     flash(run, args, args.fixed_image, data[offset:offset + size])
     power_cycle(common.InGroup(run, args.hub_group), args)
+    return common.read_fixed_marker(probe(run, args), common.fixed_elf(args, "stm32h753"))
 
 
 def main():

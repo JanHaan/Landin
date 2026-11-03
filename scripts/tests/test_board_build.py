@@ -109,6 +109,32 @@ class Build(unittest.TestCase):
         self.assertEqual(manifest['files']['fixed_image']['sha256'], bundle.sha(output / 'fixed.elf'))
         self.assertEqual(manifest['metadata'], dict(stage=b'stage'.hex(), crc=17))
 
+    def test_arm_pico2_bundle_keeps_ready_uf2_recovery_artifact(self):
+        import uf2
+        refine = self.root / 'refine'
+        refine.write_bytes(b'compiler')
+        output = self.root / 'pico2'
+        class Run:
+            def __init__(self, out):
+                self.out = out
+            def command(self, name, argv):
+                (self.out / 'fixed.elf').write_bytes(b'fixed ELF')
+                (self.out / 'fixed-build.json').write_text('{}')
+        def compile_image(run, args):
+            elf = run.out / 'board.elf'
+            elf.write_bytes(b'ELF')
+            (run.out / 'build.json').write_text('{}')
+            return elf, b'head', {'start': 1}
+        with mock.patch.object(build, 'load', return_value=SimpleNamespace(build=compile_image)), \
+                mock.patch.object(build, 'tool', return_value='/tool/nm'), \
+                mock.patch.object(build.common, 'Run', Run), \
+                mock.patch.object(uf2, 'convert', return_value=b'converted UF2') as convert, \
+                mock.patch.object(bundle, 'source_identity', return_value={'sha256': 'sources'}):
+            manifest = build.prepare('rp2350', 'boot', refine, output)
+        convert.assert_called_once_with(output / 'fixed.elf')
+        self.assertEqual((output / 'fixed.uf2').read_bytes(), b'converted UF2')
+        self.assertEqual(manifest['files']['fixed_uf2']['sha256'], bundle.sha(output / 'fixed.uf2'))
+
     def test_esp_preparation_keeps_binary_and_elf_and_serializes_header_bytes(self):
         refine = self.root / 'refine'
         refine.write_bytes(b'compiler')
