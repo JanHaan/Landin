@@ -26,6 +26,46 @@ struct Plan {
     elf: PathBuf,
 }
 
+#[derive(Deserialize)]
+struct ReadPlan {
+    format_version: u32,
+    board: String,
+    mode: String,
+    probe: String,
+    address: u64,
+    count: u32,
+}
+
+fn validate_read(plan: &ReadPlan) -> Result<()> {
+    ensure!(plan.format_version == 1 && plan.mode == "read", "expected format 1 read plan");
+    chip(&plan.board)?;
+    ensure!((1..=65536).contains(&plan.count), "read count must be 1 to 65536 words");
+    ensure!(plan.address % 4 == 0, "word read address must be aligned to four bytes");
+    let end = plan.address.checked_add(u64::from(plan.count) * 4).context("read address overflow")?;
+    ensure!(plan.address <= u64::from(u32::MAX) && end <= 1u64 << 32,
+        "word read must fit the 32-bit target address space");
+    Ok(())
+}
+
+fn execute_read(plan: &ReadPlan) -> Result<Value> {
+    // Callers validate before opening a probe. Readbacks include flash and
+    // MMIO as well as SRAM; they never use warm-entry cleanup or reset.
+    let selector: DebugProbeSelector = plan.probe.parse()?;
+    let probe = Lister::new().open(selector)?;
+    let mut target = Registry::from_builtin_families().get_target_by_name(chip(&plan.board)?)?;
+    target.cores.truncate(1);
+    let mut session = probe.attach(target, Permissions::default())?;
+    let mut words = vec![0u32; plan.count as usize];
+    session.core(0)?.read_32(plan.address, &mut words)?;
+    // Session attach/drop clear debug breakpoints and may briefly halt the
+    // executing core. Truncation excludes the reset-held other RP core.
+    // No explicit halt, reset, peripheral cleanup or memory write occurs.
+    drop(session);
+    Ok(json!({"format_version":1,"status":"passed","mode":"read","board":plan.board,
+        "address":plan.address,"count":plan.count,"words":words,"flash_written":false,
+        "debug_housekeeping":true,"core":0}))
+}
+
 struct Image {
     bytes: Vec<u8>,
     segments: Vec<(u64, Vec<u8>)>,
@@ -322,12 +362,22 @@ fn execute(plan: &Plan, image: &Image) -> Result<Value> {
 
 fn main() -> Result<()> {
     let args = Args::parse();
-    let plan: Plan = serde_json::from_slice(&fs::read(args.plan)?)?;
-    let image = image(&plan)?; // Validate every input before opening a probe.
-    let result = execute(&plan, &image);
+    let bytes = fs::read(args.plan)?;
+    let envelope: Value = serde_json::from_slice(&bytes)?;
+    let read = envelope.get("mode").and_then(Value::as_str) == Some("read");
+    let result = if read {
+        let plan: ReadPlan = serde_json::from_slice(&bytes)?;
+        validate_read(&plan)?; // Validate every input before opening a probe.
+        execute_read(&plan)
+    } else {
+        let plan: Plan = serde_json::from_slice(&bytes)?;
+        let image = image(&plan)?;
+        execute(&plan, &image)
+    };
     fs::write(args.output, serde_json::to_vec_pretty(&match &result {
         Ok(value) => value.clone(),
-        Err(error) => json!({"status":"failed","mode":"warm","flash_written":false,"error":format!("{error:#}")}),
+        Err(error) => json!({"status":"failed","mode":if read {"read"} else {"warm"},
+            "flash_written":false,"error":format!("{error:#}")}),
     })?)?;
     result.map(|_| ())
 }
@@ -335,6 +385,41 @@ fn main() -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn read_plan(address: u64, count: u32) -> ReadPlan {
+        ReadPlan { format_version: 1, board: "rp2040".into(), mode: "read".into(),
+            probe: "0000:0002:10.42.0.50/0".into(), address, count }
+    }
+    #[test]
+    fn read_plans_need_no_elf_and_cover_flash_sram_and_mmio() {
+        let plan: ReadPlan = serde_json::from_value(json!({"format_version":1,"board":"rp2040",
+            "mode":"read","probe":"0000:0002:10.42.0.50/0","address":0x10000000u64,"count":64})).unwrap();
+        assert!(validate_read(&plan).is_ok());
+        for address in [0x20000000, 0x50000008, 0xe000ed08, 0xfffffffc] {
+            assert!(validate_read(&read_plan(address, 1)).is_ok());
+        }
+        assert!(validate_read(&read_plan(0x20000000, 65536)).is_ok());
+    }
+    #[test]
+    fn invalid_reads_are_refused_before_probe_access() {
+        for (address, count) in [(0, 0), (0, 65537), (1, 1), (0x100000000, 1),
+                                  (0xfffffffc, 2), (u64::MAX - 3, 2)] {
+            assert!(validate_read(&read_plan(address, count)).is_err());
+        }
+        let mut plan = read_plan(0x20000000, 1);
+        plan.board = "unknown".into();
+        assert!(validate_read(&plan).is_err());
+        plan.board = "rp2040".into();
+        plan.mode = "ram".into();
+        assert!(validate_read(&plan).is_err());
+        plan.mode = "read".into();
+        plan.format_version = 2;
+        assert!(validate_read(&plan).is_err());
+        for count in [json!(-1), json!(4294967296u64), Value::Null] {
+            let invalid = json!({"format_version":1,"board":"rp2040","mode":"read",
+                "probe":"0000:0002:10.42.0.50/0","address":0x20000000u64,"count":count});
+            assert!(serde_json::from_value::<ReadPlan>(invalid).is_err());
+        }
+    }
     #[test]
     fn flash_and_wrapping_loads_are_refused_for_every_board() {
         for board in ["rp2040","rp2350","rp2350_hazard3","stm32h753","esp32c3","esp32c5"] {
