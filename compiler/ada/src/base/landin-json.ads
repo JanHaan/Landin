@@ -56,8 +56,12 @@ package Landin.Json is
 
    --  Parse Text.  Ok says whether it was one JSON value with nothing but
    --  white space around it; when it was not, Fault_At and Fault say where
-   --  and why, and the document holds nothing.
-   procedure Parse (Into : in out Document; Text : String);
+   --  and why, and the document holds nothing.  Depth_Limit is the
+   --  nesting refused; a reader of a tool's own output, such as Clang's
+   --  AST, raises it from the protocol's bound.
+   procedure Parse
+     (Into : in out Document; Text : String;
+      Depth_Limit : Positive := Maximum_Depth);
 
    function Ok (Of_Document : Document) return Boolean;
 

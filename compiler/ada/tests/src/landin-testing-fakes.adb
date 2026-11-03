@@ -300,6 +300,15 @@ package body Landin.Testing.Fakes is
           in A_Directory | An_Unlistable_Directory;
    end Is_Directory;
 
+   overriding function Is_Link
+     (Host : Fake_Filesystem; Path : String) return Boolean
+     is (Host.Links.Contains (Path));
+
+   procedure Add_Link (Host : in out Fake_Filesystem; Path : String) is
+   begin
+      Host.Links.Append (Path);
+   end Add_Link;
+
    procedure Raise_On_Read
      (Host : in out Fake_Filesystem;
       Reason : Ada.Exceptions.Exception_Id := Compiler_Defect'Identity) is
@@ -428,6 +437,12 @@ package body Landin.Testing.Fakes is
       Host.Writes.Data.Refuses_Removal := True;
    end Refuse_Removals;
 
+   procedure Fail_Move (Host : in out Fake_Filesystem; At_Move : Positive) is
+   begin
+      Host.Writes.Data.Fails_Move := True;
+      Host.Writes.Data.Moves_Before_Failure := At_Move - 1;
+   end Fail_Move;
+
    overriding procedure Remove_File
      (Host   : Fake_Filesystem;
       Path   : String;
@@ -528,6 +543,15 @@ package body Landin.Testing.Fakes is
       Destination : constant Natural := Find (Host, To);
       Item : File_Entry;
    begin
+      if Host.Writes.Data.Fails_Move then
+         if Host.Writes.Data.Moves_Before_Failure = 0 then
+            Host.Writes.Data.Fails_Move := False;
+            Status := Landin.Platform.Not_Movable;
+            return;
+         end if;
+         Host.Writes.Data.Moves_Before_Failure :=
+           Host.Writes.Data.Moves_Before_Failure - 1;
+      end if;
       if Existing = 0 then
          Status := Landin.Platform.Move_Source_Absent;
       elsif Host.Writes.Data.Refuses_Removal or else Destination /= 0
@@ -827,7 +851,8 @@ package body Landin.Testing.Fakes is
            (Program   => Unbounded.To_Unbounded_String (Program),
             Arguments => Arguments,
             Capture   => Landin.Platform.Merged,
-            Attached  => True));
+            Attached  => True,
+            others    => <>));
       if Host.State.Data.Raises then
          Host.State.Data.Raises := False;
          Ada.Exceptions.Raise_Exception
@@ -836,6 +861,26 @@ package body Landin.Testing.Fakes is
       end if;
       Result := Host.State.Data.Program;
    end Run_Attached;
+
+   overriding procedure Run_In_Environment
+     (Host        : Fake_Tool_Runner;
+      Program     : String;
+      Arguments   : Landin.Platform.Path_List;
+      Environment : Landin.Platform.Path_List;
+      Result      : out Landin.Platform.Tool_Result;
+      Capture     : Landin.Platform.Capture_Mode := Landin.Platform.Merged)
+   is
+   begin
+      Fake_Tool_Runner'Class (Host).Run (Program, Arguments, Result, Capture);
+      declare
+         Last : Tool_Call := Host.State.Data.Calls.Last_Element;
+      begin
+         Last.Environment := Environment;
+         Last.Isolated := True;
+         Host.State.Data.Calls.Replace_Element
+           (Host.State.Data.Calls.Last_Index, Last);
+      end;
+   end Run_In_Environment;
 
    overriding procedure Run
      (Host      : Fake_Tool_Runner;
@@ -873,7 +918,8 @@ package body Landin.Testing.Fakes is
            (Program   => Unbounded.To_Unbounded_String (Program),
             Arguments => Arguments,
             Capture   => Capture,
-            Attached  => False));
+            Attached  => False,
+            others    => <>));
       if Host.State.Data.Output_Store /= null then
          if Host.State.Data.Moves_Backup_Back
            and then Result.Ended = Landin.Platform.Exited

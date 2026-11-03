@@ -1,4 +1,6 @@
+with Ada.Environment_Variables;
 with Ada.Real_Time;
+with Ada.Strings.Fixed;
 
 with GNAT.OS_Lib;
 
@@ -21,6 +23,8 @@ package body Landin.Platform.Native.Tools is
    --  The spawn action establishes a private process group before exec.
    function Start_Tool
      (Args    : C_Strings.chars_ptr_array;
+      Env     : C_Strings.chars_ptr_array;
+      Isolated : Interfaces.C.int;
       Input   : Interfaces.C.int;
       Capture : Interfaces.C.int;
       Errors  : Interfaces.C.int;
@@ -148,15 +152,31 @@ package body Landin.Platform.Native.Tools is
       return Found;
    end Available;
 
-   overriding procedure Run
-     (Host      : Native_Tool_Runner;
-      Program   : String;
-      Arguments : Path_List;
-      Result    : out Tool_Result;
-      Capture   : Capture_Mode := Merged)
+   --  Run, with the caller's environment unless Isolated, and then with
+   --  exactly the variables Environment names (D821).
+   procedure Run_Tool
+     (Host        : Native_Tool_Runner;
+      Program     : String;
+      Arguments   : Path_List;
+      Environment : Path_List;
+      Isolated    : Boolean;
+      Result      : out Tool_Result;
+      Capture     : Capture_Mode);
+
+   procedure Run_Tool
+     (Host        : Native_Tool_Runner;
+      Program     : String;
+      Arguments   : Path_List;
+      Environment : Path_List;
+      Isolated    : Boolean;
+      Result      : out Tool_Result;
+      Capture     : Capture_Mode)
    is
       List           : C_Strings.chars_ptr_array
         (0 .. Interfaces.C.size_t (Arguments.Length) + 1) :=
+          [others => C_Strings.Null_Ptr];
+      Env_List       : C_Strings.chars_ptr_array
+        (0 .. Interfaces.C.size_t (Environment.Length)) :=
           [others => C_Strings.Null_Ptr];
       Located        : OS.String_Access := null;
       Name           : OS.String_Access := null;
@@ -189,6 +209,9 @@ package body Landin.Platform.Native.Tools is
       procedure Release_Arguments is
       begin
          for Item of List loop
+            C_Strings.Free (Item);
+         end loop;
+         for Item of Env_List loop
             C_Strings.Free (Item);
          end loop;
          OS.Free (Located);
@@ -254,6 +277,20 @@ package body Landin.Platform.Native.Tools is
          List (Interfaces.C.size_t (Index)) :=
            C_Strings.New_String (Arguments.Element (Index));
       end loop;
+      declare
+         Next : Interfaces.C.size_t := 0;
+      begin
+         for Item of Environment loop
+            if Ada.Strings.Fixed.Index (Item, "=") /= 0 then
+               Env_List (Next) := C_Strings.New_String (Item);
+               Next := Next + 1;
+            elsif Ada.Environment_Variables.Exists (Item) then
+               Env_List (Next) := C_Strings.New_String
+                 (Item & "=" & Ada.Environment_Variables.Value (Item));
+               Next := Next + 1;
+            end if;
+         end loop;
+      end;
 
       --  The adapter chooses a unique name and creates the file before
       --  returning. Pass that open descriptor to the spawn action, avoiding
@@ -292,7 +329,7 @@ package body Landin.Platform.Native.Tools is
          Wait_Interval : Duration := 0.001;
       begin
          if Start_Tool
-           (List,
+           (List, Env_List, (if Isolated then 1 else 0),
             (if Input_FD = OS.Invalid_FD then -1
              else Interfaces.C.int (Input_FD)),
             Interfaces.C.int (FD),
@@ -396,7 +433,30 @@ package body Landin.Platform.Native.Tools is
          end;
          Release_Arguments;
          raise;
+   end Run_Tool;
+
+   overriding procedure Run
+     (Host      : Native_Tool_Runner;
+      Program   : String;
+      Arguments : Path_List;
+      Result    : out Tool_Result;
+      Capture   : Capture_Mode := Merged) is
+   begin
+      Run_Tool (Host, Program, Arguments, No_Arguments, False, Result,
+                Capture);
    end Run;
+
+   overriding procedure Run_In_Environment
+     (Host        : Native_Tool_Runner;
+      Program     : String;
+      Arguments   : Path_List;
+      Environment : Path_List;
+      Result      : out Tool_Result;
+      Capture     : Capture_Mode := Merged) is
+   begin
+      Run_Tool (Host, Program, Arguments, Environment, True, Result,
+                Capture);
+   end Run_In_Environment;
 
    overriding function Output_Produced
      (Host : Native_Tool_Runner; Files : Filesystem'Class; Path : String)
