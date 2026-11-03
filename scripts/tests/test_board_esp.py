@@ -244,9 +244,13 @@ class Board:
         self.entries, self.ticks, self.masked_ticks, self.mode = 0, 5, 0, None
         self.previous = [0, 0]
         self.received += b'ESP-ROM:esp32c5-eco2-20250121\r\nentry 0x40800000\r\n'
+        # The C5's CLICINT18 and 17 as its port writes them: level bits,
+        # enabled, and the timer's SHV, bit 16, set (D830).
         self.frame('b', r=1, v=chip.expected_mtvec,
                    **({} if chip.expected_mtvt is None else
-                      dict(w=chip.expected_mtvt ^ (4 if fault == 'mtvt' else 0))))
+                      dict(w=chip.expected_mtvt ^ (4 if fault == 'mtvt' else 0),
+                           x=0x40000100 if fault == 'timer not vectored' else 0x40010100,
+                           y=0x20010100 if fault == 'uart vectored' else 0x20000100)))
 
     def frame(self, tag, **fields):
         self.received += b'\x02' + tag.encode() + b''.join(
@@ -326,6 +330,14 @@ class Scenario(unittest.TestCase):
         # D830: the C5's mtvt names the image's table of handler addresses.
         with self.assertRaisesRegex(COMMON.Failed, 'mtvt reads 0x40800244, not 0x40800240'):
             ESP.scenario(Board(C5, 'mtvt'), C5, 1240)
+        # The timer hardware vectored and UART0 not, by the words its boot
+        # frame carries.
+        for fault, said in (('timer not vectored', 'the timer is not hardware vectored'),
+                            ('uart vectored', 'UART0 is hardware vectored')):
+            with self.subTest(fault), self.assertRaisesRegex(COMMON.Failed, said):
+                ESP.scenario(Board(C5, fault), C5, 1240)
+        verdicts, _, _ = ESP.scenario(Board(C5), C5, 1240)
+        self.assertEqual(verdicts['boot']['clicint'], {'18': '0x40010100', '17': '0x20000100'})
 
     def test_the_atomics_oracles_are_the_arithmetic(self):
         self.assertEqual(C3.atomics(0x41, 0x7e), dict(b=0x41, h=0x417e, w=0x417e7e41))
@@ -381,13 +393,9 @@ class PowerOn(unittest.TestCase):
             value = self.words[address]
             return [value.pop(0) if isinstance(value, list) else value]
 
-    def board(self, cause=1, reason=1, state=2, timer=(5, 9), uart=0x20000100,
-              timer_word=0x40010100):
-        # CLICINT17 and 18 as the port writes them: level bits, enabled, and
-        # the timer's SHV, bit 16, set (D830).
+    def board(self, cause=1, reason=1, state=2, timer=(5, 9)):
         words = {C5_BOARD.RESET_CAUSE: 0x20 | cause, 0x10: reason, 0x14: state,
-                 0x18: list(timer), C5_BOARD.CLICINT + 4 * 17: uart,
-                 C5_BOARD.CLICINT + 4 * 18: timer_word}
+                 0x18: list(timer)}
         words.update({0x20 + 4 * i: 0 for i in range(5)})
         return self.Fake(words)
 
@@ -395,14 +403,6 @@ class PowerOn(unittest.TestCase):
         with mock.patch.object(C5_BOARD.time, 'sleep'):
             found = C5_BOARD.power_on_boot(self.board(), self.NAMES)
         self.assertEqual((found['reset_cause'], found['boot_reason']), (1, 1))
-        self.assertEqual(found['clicint'], {'18': '0x40010100', '17': '0x20000100'})
-
-    def test_a_timer_not_vectored_or_a_uart_vectored_fails(self):
-        for board, said in ((self.board(timer_word=0x40000100), 'not hardware vectored'),
-                            (self.board(uart=0x20010100), 'UART0 is hardware vectored')):
-            with mock.patch.object(C5_BOARD.time, 'sleep'), \
-                    self.assertRaisesRegex(COMMON.Failed, said):
-                C5_BOARD.power_on_boot(board, self.NAMES)
 
     def test_another_cause_a_halted_application_or_a_stopped_timer_fails(self):
         for board in (self.board(cause=0x0c), self.board(reason=0x0c), self.board(state=1),

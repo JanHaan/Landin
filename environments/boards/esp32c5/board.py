@@ -82,6 +82,19 @@ class C5(esp.Chip):
                     % (identity, word, expected))
         return address
 
+    def boot(self, frame):
+        # CLICINT18 and 17 as the core read them back, which the probe's
+        # system bus access cannot reach: the timer's SHV set, so the CLIC
+        # takes it through mtvt's table, and UART0's clear, for the common
+        # entry (D830).
+        require('x' in frame and 'y' in frame, 'the boot frame carries no CLICINT words')
+        require(frame['x'] & SHV, 'CLICINT%d reads %#x: the timer is not hardware vectored'
+                % (VECTORED, frame['x']))
+        require(not frame['y'] & SHV, 'CLICINT%d reads %#x: UART0 is hardware vectored'
+                % (COMMON_ENTRY, frame['y']))
+        return dict(clicint={str(VECTORED): '%#010x' % frame['x'],
+                             str(COMMON_ENTRY): '%#010x' % frame['y']})
+
     def atomics(self, x, y):
         # The add returns x and leaves x + y; the first compare-exchange
         # finds x + y and stores x ^ y; the second expects x + y, finds
@@ -195,10 +208,10 @@ RESET_CAUSE = 0x600b0410
 IDENTITIES = 48
 HANDLED = (17, 18)
 # CLICINT i, the word of clicintip, clicintie, clicintattr and clicintctl
-# at 0x2080_1000 + 4i (2.8.2.6, Register 2.66): clicintattr's SHV is bit 16
-# of the word.  The port vectors the timer's, 18, by hardware through mtvt,
-# and leaves UART0's, 17, to the common entry (D830).
-CLICINT = 0x20801000
+# (2.8.2.6, Register 2.66): clicintattr's SHV is bit 16 of the word.  The
+# port vectors the timer's, 18, by hardware through mtvt, and leaves
+# UART0's, 17, to the common entry (D830); its boot frame carries both
+# words, x and y.
 SHV = 1 << 16
 VECTORED, COMMON_ENTRY = 18, 17
 
@@ -221,19 +234,8 @@ def power_on_boot(probe, names):
     trap = esp.trap_cells(probe, names)
     require(trap['count'] == 0, 'the unhandled entry took a trap: mcause %#x at %#x'
             % (trap['cause'], trap['pc']))
-    # The timer advanced with its SHV set, so the CLIC took it through
-    # mtvt's table, and UART0's is left clear, for the common entry (D830).
-    vectored = probe.read_words('jtag-clicint-%d' % VECTORED, CLICINT + 4 * VECTORED, 1)[0]
-    common_entry = probe.read_words('jtag-clicint-%d' % COMMON_ENTRY,
-                                    CLICINT + 4 * COMMON_ENTRY, 1)[0]
-    require(vectored & SHV, 'CLICINT%d reads %#x: the timer is not hardware vectored'
-            % (VECTORED, vectored))
-    require(not common_entry & SHV, 'CLICINT%d reads %#x: UART0 is hardware vectored'
-            % (COMMON_ENTRY, common_entry))
     return dict(reset_cause=cause, boot_reason=reason, app_state=state,
-                timer_events=[first, second], trap_count=0,
-                clicint={str(VECTORED): '%#010x' % vectored,
-                         str(COMMON_ENTRY): '%#010x' % common_entry})
+                timer_events=[first, second], trap_count=0)
 
 
 def chip_enable_reset(fd, seconds):

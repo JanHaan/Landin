@@ -17,6 +17,7 @@ import bringup
 import commands
 import core/atomic
 import descriptions/esp32c5
+import esp32c5/clic
 import esp32c5/gpio
 import esp32c5/lp_clkrst
 import esp32c5/systimer
@@ -153,11 +154,18 @@ start: () -> noreturn =
         _ = problem
         halt(1)
     end
+    -- CLICINT18 and CLICINT17 as the core reads them back once both are
+    -- written (Register 2.66): the CLIC is on the core's own bus, which
+    -- JTAG's system bus access does not reach, so the frame carries them.
+    timer_word := clic.clicint18_read(clic.base)
+    uart_word := clic.clicint17_read(clic.base)
     report.open_frame(98)
     report.field(114, reason)
     report.field(118, vector)
     report.field(119, table)
     report.field(116, first_threshold)
+    report.field(120, timer_word)
+    report.field(121, uart_word)
     report.close_frame()
     mut scratch: [64]u8 = zeroed
     mut previous: [2]u8 = zeroed

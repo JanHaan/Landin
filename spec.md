@@ -24760,8 +24760,10 @@ description states (a register row).
 
 **Pinned by** the `rv32 firmware` case `traps follow the interrupt model`,
 which holds the table, stubs and entries of each model; the `rv32 firmware`
-case `a naked handler is refused in a dispatched slot`; and the RV32
-emulator lane, which takes the reference's interrupts.
+case `a naked handler is refused in a dispatched slot`; the RV32
+emulator lane, which takes the reference's interrupts; and the ESP32-C5
+board's record, whose boot frame carries CLICINT18 with `shv` set and
+CLICINT17 with it clear, as the core read them back.
 
 ### D681 — A boot kind is read by one family's boot ROM, or by both
 

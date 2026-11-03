@@ -91,6 +91,11 @@ class Chip:
         to the image; None for a core without a CLIC."""
         return None
 
+    def boot(self, frame):
+        """The verdicts of the boot frame's fields the chip's own port adds,
+        refusing what they must not be; none by default."""
+        return {}
+
     def atomics(self, x, y):
         raise NotImplementedError
 
@@ -235,6 +240,7 @@ def scenario(console, chip, seed):
         require(boot.get('w') == chip.expected_mtvt, 'mtvt reads %s, not %#x'
                 % ('%#x' % boot['w'] if 'w' in boot else 'nothing', chip.expected_mtvt))
         verdicts['boot']['mtvt'] = '%#x' % boot['w']
+    verdicts['boot'].update(chip.boot(boot))
     if 't' in boot:
         verdicts['boot']['rom_threshold'] = boot['t']
     # The shared scenario (D593): 1 sets the indicator, 0 clears it, which
