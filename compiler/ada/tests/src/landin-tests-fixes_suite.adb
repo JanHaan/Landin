@@ -474,7 +474,8 @@ package body Landin.Tests.Fixes_Suite is
 
    --  [1860]'s nearness: the distance counts a swap of two neighbours as
    --  one edit, the bound is a third of the written name and never admits
-   --  a name no longer than the distance, and the order is total.
+   --  a name no longer than the distance, and the order is total, a name
+   --  the misspelling begins going before one merely as far from it.
    procedure Nearness_Is_Bounded_And_Ordered
      (Item : in out Landin.Testing.Context);
 
@@ -485,6 +486,7 @@ package body Landin.Tests.Fixes_Suite is
       Tied   : Near.Ranking;
       Nested : Near.Ranking;
       Many   : Near.Ranking;
+      Begun  : Near.Ranking;
    begin
       Landin.Testing.Check_Equal
         (Item, Near.Distance ("cuont", "count"), 1,
@@ -532,6 +534,15 @@ package body Landin.Tests.Fixes_Suite is
       Landin.Testing.Check
         (Item, Near.Count (Many) = 2 and then Near.Nth (Many, 1) = "items",
          "a spelling offered twice keeps its innermost depth once");
+
+      Near.Consider (Begun, "linux-x86", "linux-rv64");
+      Near.Consider (Begun, "linux-x86", "linux-x86-64");
+      Landin.Testing.Check
+        (Item,
+         Near.Count (Begun) = 2
+           and then Near.Nth (Begun, 1) = "linux-x86-64"
+           and then Near.Nth (Begun, 2) = "linux-rv64",
+         "at one distance and depth, a name the misspelling begins first");
    end Nearness_Is_Bounded_And_Ordered;
 
    procedure Advisory_Warnings_Preserve_Source

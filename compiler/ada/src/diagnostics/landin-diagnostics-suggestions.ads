@@ -16,8 +16,12 @@
 --
 --  The order is total, so the same program always gets the same
 --  suggestions: nearest first, then the innermost scope first -- the order
---  [0140]'s search would have found them in -- then by spelling.  Only
---  the candidates at the nearest distance are kept, and at most three.
+--  [0140]'s search would have found them in -- then the one whose head is
+--  nearest what was written, then by spelling.  A head is the candidate's
+--  first bytes, as many as were written, so a name the misspelling begins,
+--  or nearly begins, is offered before one it is merely as far from:
+--  `linux-x86` is `linux-x86-64` cut short, and as far from `linux-rv64`.
+--  Only the candidates at the nearest distance are kept, and at most three.
 
 private with Ada.Containers.Indefinite_Vectors;
 
@@ -54,6 +58,7 @@ private
    type Entry_Kind (Length : Natural) is record
       Distance : Natural;
       Depth    : Natural;
+      Head     : Natural;
       Spelling : String (1 .. Length);
    end record;
 

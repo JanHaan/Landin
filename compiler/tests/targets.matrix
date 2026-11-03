@@ -825,6 +825,7 @@ negative/one-line-handler-without-value | linux-x86-64, linux-arm64, darwin-arm6
 negative/operand-with-no-block-text-is-refused-there | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/operands-of-two-types | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/option-outside-configuration | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/option-takes-no-atom-name | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/packed-field-width-is-not-a-scalar-name | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/panic-handler-four-kinds | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/parameter-hides-a-concept | linux-x86-64, linux-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64

@@ -16291,6 +16291,8 @@ option's value is established, rather than at each arithmetic intermediate.
 An option cannot reuse a compiler-owned configuration atom name: `x86_64`,
 `arm64`, `rv64`, `cortex_m0`, `synthetic_32`, `little`, `big`, `debug` or
 `release`.
+D855 extends this to every configuration atom, the systems' and `rv32`'s
+among them.
 That collision is L0390; a reserved tool namespace name is L0203. An option
 inside any fixed arm or with a type other than `bool` or an enabled integer
 scalar is likewise L0390, even when its default is a fixed value. An invalid
@@ -16753,9 +16755,11 @@ implements the form.
 
 **Chosen:** an instance's address is valid while its thread runs, and every
 frame of that thread is inside that time, so the origin rules treat it as a
-module binding's: `addr`, an `inout` argument, a pointer kept in a local or
-in another of the thread's instances, and a result that returns it are all
-admitted as they are for module storage, and no new refusal applies. What
+module binding's: `addr`, an `inout` argument, a pointer kept in a local,
+and a result that returns it are all admitted as they are for module
+storage, and no new refusal applies. The thread's instances can keep the
+address only as an integer, since thread storage holds no pointer and no
+pointer union (L0328). What
 outlives the thread is another thread's storage or memory a thread hands
 another, and a pointer there is the program's to keep valid, as D446 leaves
 every reference shared with a thread to the program. A module binding can
@@ -16884,6 +16888,31 @@ D505 took and this replaces. All were declined.
 `runtime/thread-storage-holds-its-instance` and
 `positive/thread-storage-declarations`, whose addresses stay in frames and
 arguments, still admitted.
+
+### D855 — An option takes no configuration atom's name
+
+**The discrepancy:** D202 refused an option named after a compiler-owned
+atom and listed the atoms of its day, `x86_64`, `arm64`, `rv64`,
+`cortex_m0`, `synthetic_32`, `little`, `big`, `debug` and `release`. D264's
+systems, `linux`, `darwin`, `freebsd` and `freestanding`, and D660's
+`rv32` came later and were never added, so `option linux: bool = true` was
+accepted, and the option was then read in the atom's place: `compiler.os ==
+linux` compared a system with a bool.
+
+**Chosen:** an option cannot take the name of any configuration atom a
+fixed fact is compared with: an architecture's, a system's, a byte order's
+or a build mode's. The refusal is D202's L0390, and its note lists every
+atom, read from the one table the configuration stage and name resolution
+both ask, so an atom a later target adds is refused without a second edit.
+
+**The alternatives:** letting an option shadow an atom outside `compiler.`
+comparisons, which still makes `compiler.os == linux` mean something other
+than what it says; and a code of its own for the systems' names, when the
+rule and its route are D202's.
+
+**Pinned by** `negative/option-takes-no-atom-name`, a system's, the
+freestanding system's and `rv32`; and `negative/r491-option-compiler-atom`,
+whose note now lists the whole set.
 
 ## DECISIONS: THE TOOLCHAIN, C AND THE MACHINE
 
@@ -19428,6 +19457,53 @@ that needs it.
 `negative/generic-closed-parameter-refusals`,
 `negative/r720-match-alias-array-not-copied` and the catalogue suite's
 `rows are whole`.
+
+### D856 — A refusal whose notes are fixed takes no note of its own
+
+**The discrepancy:** the checker builds L0304's two notes out of its own
+tables and ignored a note its caller gave beside them, so two refusals,
+a substituted array element with no stored shape and `offsetof` through
+something that is not a struct, wrote notes that never reached a report,
+and nothing said so.
+
+**Chosen:** a note given to L0304 is a compiler defect when the diagnostic
+is built, as a related label on the refused span already is. What a
+refusal knows to write instead is its route (D761). The `offsetof`
+refusals give theirs as routes; the array element's note restated the
+refusal and was dropped.
+
+**The alternatives:** printing the given note after the two facts, which
+the catalogue row's count refuses and which makes the third note mean two
+things; and keeping the silent drop, which is how the two sites went unseen.
+
+**Pinned by** `diagnostics/a fixed-note code takes no note` and
+`negative/offsetof-refusals`, whose routes now print.
+
+### D857 — A misspelling is offered the name it begins before one as far
+
+**The discrepancy:** a near name is ranked by distance, then by scope, then
+by spelling, and `refine --target=linux-x86` was offered `linux-rv64`: both
+it and `linux-x86-64` are three edits away, and `r` sorts first.
+
+**Chosen:** among candidates at one distance and one depth, the one whose
+first bytes, as many as were written, are nearest what was written comes
+first, and spelling breaks what is left. A name the misspelling begins is
+at no distance from its head, so `linux-x86` is offered `linux-x86-64`; one
+it nearly begins comes next. Distance and scope still decide first, so a
+nearer name, or one an inner scope declares, keeps its place. A target
+named by its system alone, `--target=freebsd`, is too far from any target
+to be near one, and when no target is near the driver offers every target
+the name begins as a system, with `macos` read as `darwin`.
+
+**The alternatives:** ranking every name the misspelling begins before any
+other, which offers a long completion over a one-edit neighbour; and
+admitting a name the misspelling begins beyond the bound, which offers
+every declaration that shares a short head; a target's system is the one
+head that is a whole word, and only the driver's offer reads it.
+
+**Pinned by** `fixes/nearness is bounded and ordered` and
+`driver/targets are selected by name`, which names `linux-x86`, `macos`
+and `freebsd`.
 
 ### D383 — `refine check` takes what `compile` takes about the program
 

@@ -59,7 +59,10 @@ package body Landin.Diagnostics.Explanations is
                & "one was named and this compiler's own host is not a desc"
                & "ribed target, so a build has nothing to compile for unti"
                & "l one is named. `refine --identify` lists the described "
-               & "targets.",
+               & "targets. A misspelt target is offered the nearest descri"
+               & "bed one, a name cut short the one it begins, and a syste"
+               & "m named alone, `linux` or `macos`, every target of that "
+               & "system (D857).",
             when Catalogue.Unwritable_Output =>
                "An output file cannot be written, or `refine fmt` cannot"
                & " rewrite its input. For emitted output, check that the d"
@@ -602,7 +605,18 @@ package body Landin.Diagnostics.Explanations is
                & "d integer scalar. Move the option outside every fixed ar"
                & "m, choose an available name, or change its type, respect"
                & "ively. A fixed default value does not make any of those "
-               & "declarations valid.",
+               & "declarations valid."
+               & LF
+               & LF
+               & "The atom names are every value a fixed fact is compared "
+               & "with (D855): the architectures `x86_64`, `arm64`, `rv64`"
+               & ", `cortex_m0`, `rv32` and `synthetic_32`, the systems `l"
+               & "inux`, `darwin`, `freebsd` and `freestanding`, the byte "
+               & "orders `little` and `big`, and the build modes `debug` a"
+               & "nd `release`. An option of one of those names would be r"
+               & "ead in the atom's place, so `compiler.os == linux` would"
+               & " compare a system with the option. The refusal's note li"
+               & "sts them.",
             when Catalogue.Invalid_Tool_Directive =>
                "A tool directive breaks [1510]/[1590]/D202 when it has o"
                & "ther than one positional argument, or when `linker.libra"

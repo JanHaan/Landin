@@ -42,7 +42,8 @@
 --  two notes, the construct and its standing, and it is not a misspelling
 --  and must never be reported as one.  A refusal that knows the form to
 --  write instead gives it as Route, a third note after those two, rather
---  than in its message (D761).
+--  than in its message (D761).  Report raises Compiler_Defect when it is
+--  given a Note as well, which the two facts leave no place for.
 --
 --  Recursive_Nominal_Value is D137's finite-layout rule, distinct from
 --  Cyclic_Type_Alias: an alias cycle reaches no type, while a nominal cycle

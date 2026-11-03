@@ -1971,6 +1971,8 @@ package body Landin.Diagnostics.Citations is
             when 772 =>
                "A thread's instance's address is not kept in a module bi"
                & "nding every thread reads",
+            when 855 =>
+               "An option takes no configuration atom's name",
             when 267 =>
                "Library source namespaces declare target availability",
             when 575 =>
@@ -2084,6 +2086,11 @@ package body Landin.Diagnostics.Citations is
             when 761 =>
                "A refusal whose notes are fixed facts says its route in "
                & "a third note",
+            when 856 =>
+               "A refusal whose notes are fixed takes no note of its own",
+            when 857 =>
+               "A misspelling is offered the name it begins before one a"
+               & "s far",
             when 383 =>
                "`refine check` takes what `compile` takes about the prog"
                & "ram",
@@ -3461,6 +3468,8 @@ package body Landin.Diagnostics.Citations is
                "Decisions: Modules and compile time",
             when 772 =>
                "Decisions: Modules and compile time",
+            when 855 =>
+               "Decisions: Modules and compile time",
             when 267 =>
                "Decisions: The toolchain, C and the machine",
             when 575 =>
@@ -3554,6 +3563,10 @@ package body Landin.Diagnostics.Citations is
             when 373 =>
                "Decisions: The toolchain, C and the machine",
             when 761 =>
+               "Decisions: The toolchain, C and the machine",
+            when 856 =>
+               "Decisions: The toolchain, C and the machine",
+            when 857 =>
                "Decisions: The toolchain, C and the machine",
             when 383 =>
                "Decisions: The toolchain, C and the machine",
@@ -5033,6 +5046,9 @@ package body Landin.Diagnostics.Citations is
                "https://www.701.dev/spec.html#d772-a-thread-s-instance-s"
                & "-address-is-not-kept-in-a-module-binding-every-thread-re"
                & "ads",
+            when 855 =>
+               "https://www.701.dev/spec.html#d855-an-option-takes-no-co"
+               & "nfiguration-atom-s-name",
             when 267 =>
                "https://www.701.dev/spec.html#d267-library-source-namesp"
                & "aces-declare-target-availability",
@@ -5174,6 +5190,12 @@ package body Landin.Diagnostics.Citations is
             when 761 =>
                "https://www.701.dev/spec.html#d761-a-refusal-whose-notes"
                & "-are-fixed-facts-says-its-route-in-a-third-note",
+            when 856 =>
+               "https://www.701.dev/spec.html#d856-a-refusal-whose-notes"
+               & "-are-fixed-takes-no-note-of-its-own",
+            when 857 =>
+               "https://www.701.dev/spec.html#d857-a-misspelling-is-offe"
+               & "red-the-name-it-begins-before-one-as-far",
             when 383 =>
                "https://www.701.dev/spec.html#d383-refine-check-takes-wh"
                & "at-compile-takes-about-the-program",

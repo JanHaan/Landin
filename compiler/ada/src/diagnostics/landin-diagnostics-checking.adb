@@ -29,7 +29,14 @@ package body Landin.Diagnostics.Checking is
       --  [1830] promises two facts and the checker writes neither: the
       --  construct's paragraph and what it is both come out of the tables
       --  above.  Conformance failures use the ordinary note argument; their
-      --  exact note and related-source shape is catalogued.
+      --  exact note and related-source shape is catalogued.  A note given
+      --  beside the two facts would be dropped without a word, so it is a
+      --  defect where it was written: what to write instead is the Route.
+      if Item = Unsupported_Use and then Note /= "" then
+         raise Compiler_Defect
+           with Text & " takes its notes from its row and was given one: "
+                & Note;
+      end if;
       if Item = Unsupported_Use then
          Add_Note
            (Built, "the tour describes it at " & Construct (Refused));

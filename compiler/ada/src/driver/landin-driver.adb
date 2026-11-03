@@ -1306,7 +1306,9 @@ package body Landin.Driver is
          end Times_Written;
 
          --  "; did you mean T?" for the described target nearest Name,
-         --  or "".  `macos` is what a reader calls `darwin`.
+         --  or "".  `macos` is what a reader calls `darwin`.  A system
+         --  named alone, `linux` or `darwin`, is too far from any target
+         --  to be near one, and is offered every target of that system.
          function Nearest_Target (Name : String) return String;
 
          function Nearest_Target (Name : String) return String is
@@ -1315,6 +1317,25 @@ package body Landin.Driver is
               (if Starts_With (Name, "macos")
                then "darwin" & Name (Name'First + 5 .. Name'Last)
                else Name);
+
+            --  The described targets from Index on that Asked begins, as
+            --  a system begins its targets, separated by commas.
+            function Begun (Index : Positive) return String;
+
+            function Begun (Index : Positive) return String is
+               Rest : constant String :=
+                 (if Index < Landin.Targets.Selection.Described_Count
+                  then Begun (Index + 1) else "");
+               Here : constant String :=
+                 Landin.Targets.Selection.Described_Name (Index);
+            begin
+               if not Starts_With (Here, Asked & "-") then
+                  return Rest;
+               elsif Rest = "" then
+                  return Here;
+               end if;
+               return Here & ", " & Rest;
+            end Begun;
          begin
             for Index in 1 .. Landin.Targets.Selection.Described_Count loop
                Landin.Diagnostics.Suggestions.Consider
@@ -1326,7 +1347,21 @@ package body Landin.Driver is
             then
                return "; did you mean " & Asked & "?";
             elsif Landin.Diagnostics.Suggestions.Count (Offered) = 0 then
-               return "";
+               declare
+                  Listed : constant String := Begun (1);
+                  Last   : constant Natural :=
+                    Ada.Strings.Fixed.Index
+                      (Listed, ", ", Going => Ada.Strings.Backward);
+               begin
+                  if Listed = "" then
+                     return "";
+                  elsif Last = 0 then
+                     return "; did you mean " & Listed & "?";
+                  end if;
+                  return "; did you mean "
+                    & Listed (Listed'First .. Last - 1) & " or "
+                    & Listed (Last + 2 .. Listed'Last) & "?";
+               end;
             end if;
             return "; did you mean "
               & Landin.Diagnostics.Suggestions.Nth (Offered, 1) & "?";

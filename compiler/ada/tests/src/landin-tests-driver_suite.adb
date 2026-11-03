@@ -1425,6 +1425,16 @@ package body Landin.Tests.Driver_Suite is
           (Arguments_Of ("--target=synthetic-32"), Host, Tools);
       Wrong : constant Landin.Driver.Outcome :=
         Landin.Driver.Execute (Arguments_Of ("--target=vax"), Host, Tools);
+      --  As far from `linux-rv64` as from `linux-x86-64`, which it begins.
+      Short : constant Landin.Driver.Outcome :=
+        Landin.Driver.Execute
+          (Arguments_Of ("--target=linux-x86"), Host, Tools);
+      --  A system named alone is near no target, and is offered its own.
+      Mac : constant Landin.Driver.Outcome :=
+        Landin.Driver.Execute (Arguments_Of ("--target=macos"), Host, Tools);
+      BSD : constant Landin.Driver.Outcome :=
+        Landin.Driver.Execute
+          (Arguments_Of ("--target=freebsd"), Host, Tools);
    begin
       Landin.Testing.Check_Equal
         (Item, Known.Status, Landin.Driver.Status_Success,
@@ -1445,6 +1455,23 @@ package body Landin.Tests.Driver_Suite is
       Landin.Testing.Check
         (Item, not Contains (Unbounded.To_String (Wrong.Output), "target:"),
          "a refused target is not announced as selected");
+      Landin.Testing.Check
+        (Item,
+         Contains
+           (Unbounded.To_String (Short.Report),
+            "did you mean linux-x86-64?"),
+         "a target cut short is offered the name it begins");
+      Landin.Testing.Check
+        (Item,
+         Contains
+           (Unbounded.To_String (Mac.Report), "did you mean darwin-arm64?"),
+         "a system named alone is offered its target");
+      Landin.Testing.Check
+        (Item,
+         Contains
+           (Unbounded.To_String (BSD.Report),
+            "did you mean freebsd-x86-64 or freebsd-arm64?"),
+         "and every one of its targets");
    end Targets_Are_Selected_By_Name;
 
    procedure Repeated_Target_Is_Misuse

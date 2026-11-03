@@ -65,8 +65,21 @@ package body Landin.Diagnostics.Suggestions is
          or else (Left.Distance = Right.Distance
                   and then (Left.Depth < Right.Depth
                             or else (Left.Depth = Right.Depth
-                                     and then Left.Spelling
-                                                < Right.Spelling))));
+                                     and then (Left.Head < Right.Head
+                                               or else
+                                                 (Left.Head = Right.Head
+                                                  and then Left.Spelling
+                                                    < Right.Spelling))))));
+
+   --  How far Written is from Candidate's first Written'Length bytes:
+   --  none when Written begins Candidate.
+   function Head_Distance (Written, Candidate : String) return Natural
+     is (Distance
+           (Written,
+            Candidate
+              (Candidate'First
+               .. Candidate'First
+                  + Natural'Min (Written'Length, Candidate'Length) - 1)));
 
    procedure Consider
      (Into      : in out Ranking;
@@ -84,6 +97,7 @@ package body Landin.Diagnostics.Suggestions is
            (Length   => Candidate'Length,
             Distance => Distance (Written, Candidate),
             Depth    => Depth,
+            Head     => Head_Distance (Written, Candidate),
             Spelling => Candidate);
          Position : Positive := 1;
       begin
