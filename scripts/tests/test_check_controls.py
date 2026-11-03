@@ -1912,7 +1912,8 @@ class TargetLists(unittest.TestCase):
     """The host manifest's and the fixture reader's targets are the
     compiler's."""
 
-    INPUTS = [checker.TARGET_SELECTION, checker.EMIT_MANIFEST]
+    INPUTS = [checker.TARGET_SELECTION, checker.EMIT_MANIFEST] + sorted(
+        {path for path, _ in checker.TARGET_SUBSETS})
 
     def broken(self, path, old, new):
         from check_controls import tree
@@ -1946,6 +1947,36 @@ class TargetLists(unittest.TestCase):
                            'MODE_TARGETS = ("linux-sparc64",')
         self.assertEqual(said, ["MODE_TARGETS names linux-sparc64, which is"
                                 " not among the targets it is drawn from"])
+
+    def test_a_subset_naming_no_described_target_is_reported(self):
+        for path, old, new, name in (
+                ("scripts/image_bounds.py", '"cortex-m0": 2 ** 32 - 1,',
+                 '"cortex-m7": 2 ** 32 - 1,', "REACH"),
+                ("scripts/driver_manifest.py", '"darwin-arm64", "cortex-m0",',
+                 '"darwin-arm64", "synthetic-32",', "TARGETS"),
+                ("compiler/tests/test_determinism.py", '"darwin-arm64", "cortex-m0",',
+                 '"macos-arm64", "cortex-m0",', "TARGETS")):
+            with self.subTest(path=path):
+                said = self.broken(path, old, new)
+                self.assertEqual(len(said), 1, said)
+                self.assertTrue(said[0].startswith(name + " names "), said)
+                self.assertIn("is not a target the compiler describes with a"
+                              " backend", said[0])
+
+    def test_a_product_target_or_scope_outside_the_compiler_is_reported(self):
+        from unittest import mock
+        with mock.patch.object(checker, "PRODUCT_TARGETS",
+                               checker.PRODUCT_TARGETS + ("macos-arm64",)):
+            said = faults(checker.check_target_lists, copied=self.INPUTS)
+        self.assertEqual([why for _, _, why in said],
+                         ["PRODUCT_TARGETS names macos-arm64, which is not a"
+                          " target the compiler describes with a backend"])
+        scopes = dict(checker.TARGET_SCOPES, firmware=("cortex-m0", "rv32"))
+        with mock.patch.object(checker, "TARGET_SCOPES", scopes):
+            said = faults(checker.check_target_lists, copied=self.INPUTS)
+        self.assertEqual([why for _, _, why in said],
+                         ["TARGET_SCOPES['firmware'] names rv32, which is not"
+                          " a product target"])
 
 
 class CatalogueLabels(unittest.TestCase):

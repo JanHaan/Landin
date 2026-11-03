@@ -337,6 +337,39 @@ class Inventory(unittest.TestCase):
         self.assertIn("has a trap_report:, which firmware never writes", messages[0])
         self.assertIn("The corpus inventory", messages[0])
 
+    def test_an_rv32_claim_must_be_a_run_that_is_made(self):
+        """rv32 fills no column, and a fixture naming it is held all the same."""
+        self.assertEqual(CHECK.rv32_target_problems(), [])
+        records = CHECK.fixture_records()
+        altered = dict(records)
+        #  A runtime fixture the RV32 lanes do not run: no corpus row.
+        name = "runtime/add-exits-with-its-sum"
+        meta, fields = records[name]
+        altered[name] = (meta, dict(fields, targets=fields["targets"] + ", rv32"))
+        #  A compile-time fixture that names rv32 and selects nothing.
+        hosted = "negative/name-declared-nowhere"
+        meta, fields = records[hosted]
+        altered[hosted] = (meta, dict(fields, targets=fields["targets"] + ", rv32"))
+        #  One that selects rv32 and does not name it.
+        own = "positive/ramtext-esp32c3"
+        meta, fields = records[own]
+        altered[own] = (meta, dict(fields, targets="cortex-m0"))
+        corpus = {"fixtures": {}}
+        with unittest.mock.patch.object(CHECK, "fixture_records",
+                                        lambda: altered), \
+                unittest.mock.patch.object(CHECK.json, "load",
+                                           return_value=corpus):
+            messages = [m for _, _, m in CHECK.rv32_target_problems()]
+        self.assertEqual(len(messages), 3, messages)
+        self.assertTrue(any(message.startswith(
+            "runtime/add-exits-with-its-sum names rv32, and only the firmware"
+            " corpus's RV32 lanes, esp32c3 and sifive-e, run a program there")
+            for message in messages), messages)
+        self.assertIn("negative/name-declared-nowhere names rv32 and no argument"
+                      " selects --target=rv32", messages)
+        self.assertIn("positive/ramtext-esp32c3 selects --target=rv32 and does"
+                      " not name rv32 among its targets", messages)
+
     def test_every_named_target_is_placed_by_a_record(self):
         """A target line with no record behind it is refused, not believed."""
         self.assertEqual(CHECK.unplaced_target_problems(), [])

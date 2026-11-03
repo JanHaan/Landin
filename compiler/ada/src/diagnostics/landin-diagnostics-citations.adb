@@ -2463,6 +2463,15 @@ package body Landin.Diagnostics.Citations is
             when 791 =>
                "Every backend fills every build-report counter with one "
                & "meaning, and a routine's stack beside its frame",
+            when 840 =>
+               "rv32 is no product target of the construct inventory, an"
+               & "d a fixture naming it is held to a run",
+            when 841 =>
+               "The host manifest selects what it compiles, and its debu"
+               & "g entries compare on one checkout",
+            when 842 =>
+               "The harness names the RV32 lanes for a fixture naming rv"
+               & "32",
             when 151 =>
                "Raw storage is a private library state machine",
             when 152 =>
@@ -3838,6 +3847,12 @@ package body Landin.Diagnostics.Citations is
             when 790 =>
                "Decisions: The toolchain, C and the machine",
             when 791 =>
+               "Decisions: The toolchain, C and the machine",
+            when 840 =>
+               "Decisions: The toolchain, C and the machine",
+            when 841 =>
+               "Decisions: The toolchain, C and the machine",
+            when 842 =>
                "Decisions: The toolchain, C and the machine",
             when 151 =>
                "Decisions: The core library and the derived programs",
@@ -5628,6 +5643,17 @@ package body Landin.Diagnostics.Citations is
                "https://www.701.dev/spec.html#d791-every-backend-fills-e"
                & "very-build-report-counter-with-one-meaning-and-a-routine"
                & "-s-stack-beside-its-frame",
+            when 840 =>
+               "https://www.701.dev/spec.html#d840-rv32-is-no-product-ta"
+               & "rget-of-the-construct-inventory-and-a-fixture-naming-it-"
+               & "is-held-to-a-run",
+            when 841 =>
+               "https://www.701.dev/spec.html#d841-the-host-manifest-sel"
+               & "ects-what-it-compiles-and-its-debug-entries-compare-on-o"
+               & "ne-checkout",
+            when 842 =>
+               "https://www.701.dev/spec.html#d842-the-harness-names-the"
+               & "-rv32-lanes-for-a-fixture-naming-rv32",
             when 151 =>
                "https://www.701.dev/spec.html#d151-raw-storage-is-a-priv"
                & "ate-library-state-machine",
