@@ -32,7 +32,8 @@ each recorded under NEW_DIRECTORY:
      architecture the cores run when it attaches, verify it, and read the
      entry word, the table and the block back;
   4. with no probe-rs attached, cut the Pico 2's power and restore it,
-     after checking that the hub's guarded port holds the device named;
+     after checking that the probe's Arty is off the cascade, and wait for
+     the hub to list again;
   5. read the boot frame and drive the scenario over the UART, comparing
      every echoed byte and every frame with what the host sent;
   6. read the counters back over SWD as RP235x_riscv, from the cores the
@@ -62,8 +63,10 @@ SOURCE = ROOT / 'compiler/tests/board/rp2350_hazard3'
 SHARED_SOURCE = ROOT / 'compiler/tests/board/rp2350'
 sys.path.insert(0, str(HERE.parent))
 import common  # noqa: E402
+import pico2  # noqa: E402
 from common import (Failed, echo_of, elf_sections, frames_safe,  # noqa: E402,F401
                     require, sha, symbols)
+from pico2 import BOOTSEL, paced  # noqa: E402,F401
 
 # The board's command bytes, which it also echoes.
 USBCTRL, REPORT, STALL = 0x05, 0x11, 0x12
@@ -95,9 +98,6 @@ HANDLERS = {16: 'timer_irq', 26: 'dma_irq', 16 + 14: 'usb_irq'}
 # RISC-V on RP2350, the LAST item of one word, a link of zero to itself, and
 # the end marker (5.1.5.1, Blocks, p. 329).
 IMAGE_DEF = (0xffffded3, 0x11010142, 0x000001ff, 0x00000000, 0xab123579)
-# A block the boot ROM refuses leaves it in BOOTSEL, whose USB identity is
-# 2e8a:000f (5.6.1, Table 470, p. 370).
-BOOTSEL = '2e8a:000f'
 # Atomics reach SRAM alone: an AMO anywhere else is a store fault (3.8.9,
 # MCAUSE, Table 403, code 7), and SRAM is 0x2000_0000 to 0x2008_2000.
 SRAM = (0x20000000, 0x20082000)
@@ -211,46 +211,34 @@ def block_control(run, args, elf, head):
     image is flashed again.  Flashing it again means attaching in BOOTSEL,
     which halts the boot ROM mid-enumeration (D712), so the control runs
     only with --bootsel-attach, on a hub that does not carry the probe."""
-    require(args.bootsel_attach, '--block-control ends in BOOTSEL, where flashing the image again'
-            ' halts the boot ROM on the bus; it needs --bootsel-attach, on a hub without the probe')
+    pico2.require_leave(args)
     bad = corrupted(run, elf)
     chip = flash(run, args, bad, head[:-4] + struct.pack('<I', IMAGE_DEF[-1] ^ 0xffffffff),
                  "the corrupted image's head")
     hub = common.InGroup(run, args.hub_group)
     power_cycle(hub, args)
-    deadline = time.time() + args.enumerate_seconds
-    device = None
-    while time.time() < deadline:
-        # The cycle re-enumerates the hub's inner hubs, and a listing can
-        # meet their new device nodes before udev has given them the group
-        # that may read them: such a listing fails, and the next is asked.
-        device = common.port_device(hub.command('hub-after-corrupt', ['uhubctl', '-l', args.hub],
-                                                check=False), args.port)
-        if device and device.startswith(BOOTSEL):
-            break
-        time.sleep(0.5)
-    require(device and device.startswith(BOOTSEL),
-            'with its block corrupted the board did not enumerate as BOOTSEL %s; port %d shows %s'
-            % (BOOTSEL, args.port, device))
-    require(not args.pico_serial or args.pico_serial in device,
-            'BOOTSEL enumerated as %s, not with serial %s' % (device, args.pico_serial))
+    device = pico2.await_bootsel(hub, args)
     return dict(corrupted_end_marker='%08x' % (IMAGE_DEF[-1] ^ 0xffffffff), flashed_as=chip,
                 enumerated=device)
 
 
-def attached(run, args, name):
+def attached(run, args, name, bootsel_allowed=None):
     """probe-rs for the Pico 2 as the architecture its cores run now: the
     boot ROM runs on Arm in BOOTSEL and after probe-rs has flashed as
     RP235x, and there RP235x_riscv's debug module times out; a RISC-V image
     gates the Arm cores' access ports, and RP235x meets a FAULT (D712).
     RP235x is tried first, since its refusal is the quick one.  Neither is
-    tried while the chip is in BOOTSEL."""
-    refuse_bootsel(common.InGroup(run, args.hub_group), args)
+    tried while the chip is in BOOTSEL, unless BOOTSEL_ALLOWED, by default
+    --bootsel-attach; the probe returned says in `from_bootsel` whether it
+    was."""
+    from_bootsel = pico2.refuse_bootsel(common.InGroup(run, args.hub_group), args,
+                                        bootsel_allowed)
     for chip in ARM_CHIP, RISCV_CHIP:
         attempt = common.Probe(run, args.probe_rs, chip, args.probe)
         run.command('%s-%s' % (name, chip), attempt.argv('read', 'b32', hex(FLASH), '1'),
                     timeout=60, check=False)
         if run.commands[-1]['status'] == 0:
+            attempt.from_bootsel = bool(from_bootsel)
             return attempt
     raise Failed('neither %s nor %s reaches the Pico 2; see %s-*.log' % (ARM_CHIP, RISCV_CHIP, name))
 
@@ -265,94 +253,35 @@ def flash(run, args, elf, head, what="the image's entry word, table and block"):
     """Flash ELF and verify it through the architecture the cores run when
     the probe attaches, and read HEAD back; returns the chip it flashed as.
 
-    Flashed through the Arm side, the chip was in BOOTSEL, enumerated on
-    USB, and probe-rs leaves its cores halted, so its USB stops answering:
-    the host then retries the port for minutes, and on the rig reset the
-    hub chain the probe's own USB hangs from, while every probe-rs start
-    waited 85 s listing USB probes.  So the power is cycled at once, the
-    boot ROM enters what was flashed, and the head is read back from the
-    image's cores."""
+    Flashed through the Arm side, probe-rs leaves the cores halted, and
+    the image is booted by a power cycle before the head is read back from
+    its cores.  When the chip was in BOOTSEL it was enumerated on USB, and
+    halted its USB stops answering: the host then retries the port for
+    minutes, and on the rig reset the hub chain the probe's own USB hangs
+    from, while every probe-rs start waited 85 s listing USB probes.  So
+    that cycle is taken at once rather than paced, and the head is never
+    read back from BOOTSEL (D712)."""
+    hub = common.InGroup(run, args.hub_group)
     probe = attached(run, args, 'attach')
     flashed_as = probe.chip
     paced(args, 'download', lambda: run.command('flash', probe.argv('download', '--verify', elf),
                                                 timeout=300))
     if flashed_as == ARM_CHIP:
-        power_cycle(common.InGroup(run, args.hub_group), args)
+        power_cycle(hub, args, at_once=probe.from_bootsel)
         time.sleep(args.boot_seconds)
-        probe = attached(run, args, 'reattach')
+        probe = attached(run, args, 'reattach', bootsel_allowed=False)
+    else:
+        pico2.settle(hub, args)
     count = len(head) // 4
     back = struct.pack('<%dI' % count, *probe.read_words('flash-readback', FLASH, count))
     require(back == head, 'flash does not hold %s' % what)
     return flashed_as
 
 
-class Listings:
-    """HUB's commands, a listing of a hub asked again while it fails until
-    SECONDS have passed: any port switched on the rig's hubs, by this tool
-    or another, re-enumerates the whole tree, and a listing that meets it
-    gone, or its nodes before udev has regrouped them, fails."""
-    def __init__(self, hub, seconds):
-        self.hub, self.seconds = hub, seconds
-
-    def command(self, name, argv, **kw):
-        if '-a' in argv:
-            return self.hub.command(name, argv, **kw)
-        deadline = time.time() + self.seconds
-        while True:
-            try:
-                return self.hub.command(name, argv, **kw)
-            except Failed:
-                if time.time() >= deadline:
-                    raise
-                time.sleep(0.5)
-
-
-def paced(args, what, action):
-    """ACTION, which may disconnect a device on the rig's hub cascade,
-    spaced by args.pace from every other such action on the host."""
-    args.pace.before(what)
-    try:
-        return action()
-    finally:
-        args.pace.after(what)
-
-
-def power_cycle(run, args):
-    """The Pico 2's port, never the guarded one, only on a hub whose
-    guarded port holds the device named, and, with --pico-serial, only
-    while the port holds that Pico 2 or no USB device at all: a Pico 2
-    running this firmware does not enumerate.  The cycle is paced with
-    every other tool's actions on the rig, and waits until the kernel has
-    logged nothing of USB for a while, stopping on any trouble it logged
-    since the last action (D725), since a cycle met by a port failing
-    enumeration reset the whole hub tree above it on the rig (D712); and
-    after the cycle the guarded port must show its device again and the
-    probe answer on the network, or the run stops."""
-    common.off_cascade(args.guard_serial, args.cascade)
-    paced(args, 'power cycle', lambda: common.power_cycle(
-        Listings(run, args.guard_seconds), args.hub, args.port, args.off_seconds,
-        holds_if_any=args.pico_serial))
-    deadline = time.time() + args.guard_seconds
-    while True:
-        try:
-            common.off_cascade(args.guard_serial, args.cascade)
-            break
-        except Failed as error:
-            require(time.time() < deadline, 'after the cycle: %s; stopping' % error)
-        time.sleep(0.5)
-    answer = run.command('probe-ping', ['ping', '-c', '1', '-W', '2', args.probe_host], check=False)
-    require(' 0% packet loss' in answer,
-            'after the cycle the probe at %s does not answer ping; stopping' % args.probe_host)
-
-
-def refuse_bootsel(run, args):
-    """Refuse to go on while the Pico 2 enumerates as BOOTSEL: a probe-rs
-    attach there halts the boot ROM, whose USB then stops answering (D712)."""
-    device = common.port_device(Listings(run, args.guard_seconds).command(
-        'hub-before-attach', ['uhubctl', '-l', args.hub]), args.port)
-    require(args.bootsel_attach or not (device and device.startswith(BOOTSEL)),
-            'the Pico 2 enumerates as BOOTSEL %s; no probe attaches to it there. Cycle port %d'
-            ' once and wait for it to stop enumerating' % (device, args.port))
+def power_cycle(run, args, at_once=False):
+    """The Pico 2's port, as pico2.power_cycle switches it: a Pico 2
+    running this firmware does not enumerate."""
+    pico2.power_cycle(run, args, at_once)
 
 
 def report(console, count):
@@ -513,37 +442,11 @@ def main():
                         help="the bridge's slot 0 UART port; slot N's is this plus N")
     parser.add_argument('--bridge-slots', type=int, default=6,
                         help='the slots a bridge this starts serves, every one of the probe')
-    parser.add_argument('--hub', default='7-2.3.3', help="the Pico 2's hub, as uhubctl -l names it")
-    parser.add_argument('--port', type=int, default=2, help="the Pico 2's port on it")
-    parser.add_argument('--pico-serial', help="the Pico 2's USB serial, which its port must show"
-                        " whenever it shows a device; this firmware does not enumerate")
-    parser.add_argument('--cascade', default='7-2',
-                        help='the hub cascade whose ports are switched, as sysfs names its root')
-    parser.add_argument('--guard-serial', default='210319B3E738',
-                        help="a device that must be present and off the switched cascade, the"
-                             " probe's Arty on the maintainer's rig, or no port is switched")
-    parser.add_argument('--off-seconds', type=float, default=1.0)
+    pico2.arguments(parser)
     parser.add_argument('--block-control', action='store_true',
                         help='first flash an image whose block is corrupted and require the boot ROM'
-                             ' to refuse it, enumerating as BOOTSEL; then flash the good image')
-    parser.add_argument('--boot-seconds', type=float, default=1.0,
-                        help='how long the boot ROM is given after a power cycle before the probe'
-                             ' attaches')
-    parser.add_argument('--bootsel-attach', action='store_true',
-                        help='let the probe attach to a Pico 2 in BOOTSEL, as --block-control needs;'
-                             ' only for a Pico 2 on a hub that does not carry the probe')
-    parser.add_argument('--guard-seconds', type=float, default=15.0,
-                        help="how long the guarded port may take to show its device after a cycle")
-    parser.add_argument('--spacing', type=float, default=120,
-                        help='the least time between two actions that may disconnect a USB device'
-                             ' on the rig, by any tool')
-    parser.add_argument('--quiet', type=float, default=60,
-                        help='how long the kernel must have logged nothing of USB before one')
-    parser.add_argument('--enumerate-seconds', type=float, default=10.0,
-                        help='how long BOOTSEL may take to enumerate after the power cycle')
-    parser.add_argument('--hub-group', default='dialout',
-                        help="the group that may switch the hub's ports; uhubctl runs through"
-                             " sg when the session is not in it")
+                             ' to refuse it, enumerating as BOOTSEL; then flash the good image, from'
+                             ' BOOTSEL, which needs --bootsel-attach')
     parser.add_argument('--indicator-pin', metavar='PIN',
                         help="the probe's GPIO wired to the Pico 2's GPIO3; without it the"
                              " indicator is checked by its pad's readback alone")

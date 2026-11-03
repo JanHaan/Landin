@@ -22,9 +22,12 @@ NEW_DIRECTORY:
      flipped, cycle the power and require the boot ROM to refuse it and
      enumerate as USB BOOTSEL, 2e8a:000f;
   3. flash the image with probe-rs, verify it, and read the vector table
-     and the block back;
+     and the block back; flashed from BOOTSEL, which only --bootsel-attach
+     allows, the power is cycled at once and the head read back from the
+     image the boot ROM entered (D712);
   4. with the probe detached, cut the Pico 2's power and restore it, after
-     checking that the hub's guarded port holds the device named;
+     checking that the probe's Arty is off the cascade, and wait for the
+     hub to list again;
   5. read the boot frame and drive the scenario over the UART, comparing
      every echoed byte and every frame with what the host sent;
   6. read the counters back over SWD and compare them with the last frame.
@@ -49,8 +52,10 @@ ROOT = HERE.parents[2]
 SOURCE = ROOT / 'compiler/tests/board/rp2350'
 sys.path.insert(0, str(HERE.parent))
 import common  # noqa: E402
+import pico2  # noqa: E402
 from common import (Failed, echo_of, elf_sections, frames, frames_safe,  # noqa: E402,F401
                     require, sha, symbols)
+from pico2 import BOOTSEL  # noqa: E402,F401
 
 # The board's command bytes, which it also echoes.
 USBCTRL, REPORT, STALL = 0x05, 0x11, 0x12
@@ -68,9 +73,6 @@ USBCTRL_SLOT = 16 + 14  # USBCTRL_IRQ (3.2, Table 95, p. 81)
 # Arm in Secure state on RP2350, the LAST item of one word, a link of zero
 # to itself, and the end marker (5.1.5.1, Blocks, p. 329).
 IMAGE_DEF = (0xffffded3, 0x10210142, 0x000001ff, 0x00000000, 0xab123579)
-# A block the boot ROM refuses leaves it in BOOTSEL, whose USB identity is
-# 2e8a:000f (5.6.1, Table 470, p. 370).
-BOOTSEL = '2e8a:000f'
 # probehive's slot for the Pico 2.
 SLOT = 1
 # What environments/cortex-m/driver.py feeds the synthetic application.
@@ -124,28 +126,15 @@ def corrupted(run, elf):
 def block_control(run, args, elf, head):
     """The physical negative control: an image whose block is corrupted is
     not booted, so the boot ROM falls back to USB BOOTSEL; then the good
-    image is flashed again."""
+    image is flashed again, from BOOTSEL, which only --bootsel-attach
+    allows (D712)."""
+    pico2.require_leave(args)
     bad = corrupted(run, elf)
-    probe(run, args).flash(bad, VECTORS, head[:-4] + struct.pack('<I', IMAGE_DEF[-1] ^ 0xffffffff),
-                           "the corrupted image's head")
+    flash(run, args, bad, head[:-4] + struct.pack('<I', IMAGE_DEF[-1] ^ 0xffffffff),
+          "the corrupted image's head")
     hub = common.InGroup(run, args.hub_group)
     power_cycle(hub, args)
-    deadline = time.time() + args.enumerate_seconds
-    device = None
-    while time.time() < deadline:
-        #  common.listing retries a listing refused while udev regroups the
-        #  re-enumerated hubs' nodes, as every poll after a cycle may be.
-        device = common.port_device(
-            common.listing(hub, args.hub, max(1.0, deadline - time.time()),
-                           name='hub-after-corrupt'), args.port)
-        if device and device.startswith(BOOTSEL):
-            break
-        time.sleep(0.5)
-    require(device and device.startswith(BOOTSEL),
-            'with its block corrupted the board did not enumerate as BOOTSEL %s; port %d shows %s'
-            % (BOOTSEL, args.port, device))
-    require(not args.pico_serial or args.pico_serial in device,
-            'BOOTSEL enumerated as %s, not with serial %s' % (device, args.pico_serial))
+    device = pico2.await_bootsel(hub, args)
     return dict(corrupted_end_marker='%08x' % (IMAGE_DEF[-1] ^ 0xffffffff), enumerated=device)
 
 
@@ -153,18 +142,36 @@ def probe(run, args):
     return common.Probe(run, args.probe_rs, 'RP235x', args.probe)
 
 
-def flash(run, args, elf, head):
-    return probe(run, args).flash(elf, VECTORS, head, "the image's vector table and block")
+def flash(run, args, elf, head, what="the image's vector table and block"):
+    """Flash ELF and verify it, then read HEAD back.
+
+    probe-rs halts both cores on every attach as RP235x.  Flashed from
+    BOOTSEL, the boot ROM was enumerated on USB and is left halted, so
+    its USB stops answering: the host then retries the port for minutes,
+    and on the rig reset the hub tree above it.  So the power is cycled at
+    once, the boot ROM enters what was flashed, and the head is read back
+    from the image it entered, never from BOOTSEL (D712)."""
+    hub = common.InGroup(run, args.hub_group)
+    from_bootsel = pico2.refuse_bootsel(hub, args)
+    swd = probe(run, args)
+    pico2.paced(args, 'download', lambda: run.command(
+        'flash', swd.argv('download', '--verify', elf), timeout=300))
+    if from_bootsel:
+        power_cycle(hub, args, at_once=True)
+        time.sleep(args.boot_seconds)
+        pico2.refuse_bootsel(hub, args, allowed=False)
+    else:
+        pico2.settle(hub, args)
+    count = len(head) // 4
+    back = struct.pack('<%dI' % count, *swd.read_words('flash-readback', VECTORS, count))
+    require(back == head, 'flash does not hold %s' % what)
+    return back
 
 
-def power_cycle(run, args):
-    """The Pico 2's port, never the guarded one, only on a hub whose
-    guarded port holds the device named, and, with --pico-serial, only
-    while the port holds that Pico 2 or no USB device at all: a Pico 2
+def power_cycle(run, args, at_once=False):
+    """The Pico 2's port, as pico2.power_cycle switches it: a Pico 2
     running this firmware does not enumerate."""
-    common.off_cascade(args.guard_serial, args.cascade)
-    common.power_cycle(run, args.hub, args.port, args.off_seconds,
-                       holds_if_any=args.pico_serial)
+    pico2.power_cycle(run, args, at_once)
 
 
 def report(console, count):
@@ -308,24 +315,11 @@ def main():
     parser.add_argument('--probe-host', default='10.42.0.50')
     parser.add_argument('--debug-port', type=int, default=4441)
     parser.add_argument('--uart-port', type=int, default=4461)
-    parser.add_argument('--hub', default='7-2.3.3', help="the Pico 2's hub, as uhubctl -l names it")
-    parser.add_argument('--port', type=int, default=2, help="the Pico 2's port on it")
-    parser.add_argument('--pico-serial', help="the Pico 2's USB serial, which its port must show"
-                        " whenever it shows a device; this firmware does not enumerate")
-    parser.add_argument('--guard-serial', default='210319B3E738',
-                        help="a device that must be present and off the switched cascade, the"
-                             " probe's Arty on the maintainer's rig, or no port is switched")
-    parser.add_argument('--cascade', default='7-2',
-                        help='the hub cascade whose ports are switched, as sysfs names its root')
-    parser.add_argument('--off-seconds', type=float, default=1.0)
+    pico2.arguments(parser)
     parser.add_argument('--block-control', action='store_true',
                         help='first flash an image whose block is corrupted and require the boot ROM'
-                             ' to refuse it, enumerating as BOOTSEL; then flash the good image')
-    parser.add_argument('--enumerate-seconds', type=float, default=10.0,
-                        help='how long BOOTSEL may take to enumerate after the power cycle')
-    parser.add_argument('--hub-group', default='dialout',
-                        help="the group that may switch the hub's ports; uhubctl runs through"
-                             " sg when the session is not in it")
+                             ' to refuse it, enumerating as BOOTSEL; then flash the good image, from'
+                             ' BOOTSEL, which needs --bootsel-attach')
     parser.add_argument('--indicator-pin', metavar='PIN',
                         help="the probe's GPIO wired to the Pico 2's GPIO3; without it the"
                              " indicator is checked by its pad's readback alone")
@@ -342,13 +336,15 @@ def main():
     args.probehive_build = (args.probehive_build or args.probehive / 'build/slots_ci').resolve()
     args.output = args.output.resolve()
     args.output.mkdir(parents=True)
+    args.pace = common.Pace(args.spacing, args.quiet)
     run = common.Run(args.output)
     result = dict(status='failed')
-    bridge = console = None
-    # The run holds the rig's lock (D725).
-    lock = common.rig_lock('rp2350 board.py').acquire()
+    bridge = console = lock = None
     try:
         elf, head, names = build(run, args)
+        # Every step from here reaches the rig, which one run holds at a
+        # time (D725).
+        lock = common.rig_lock('rp2350 board.py').acquire()
         result.update(image_sha256=sha(elf), image_name=elf.name, image_block=['%08x' % w for w in IMAGE_DEF])
         if args.block_control:
             result['block_control'] = block_control(run, args, elf, head)
@@ -378,7 +374,8 @@ def main():
             result['frames'] = common.frame_record(bytes(console.received))
         if bridge:
             bridge.close()
-        lock.release()
+        if lock:
+            lock.release()
         result['commands'] = run.commands
         common.write_json(args.output / 'result.json', result)
     if args.record and result['status'] == 'passed':

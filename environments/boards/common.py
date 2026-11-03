@@ -257,6 +257,29 @@ class Pace:
         self.state.write_text('%f %s\n' % (self.clock(), what))
 
 
+def paced(pace, what, action, guard=None, cascade=None):
+    """ACTION, which may disconnect a device on the rig's hub cascade,
+    spaced by PACE from every other such action on the host; with GUARD,
+    a USB serial, only while that device is present and off CASCADE, as
+    the probe's Arty must be (D725)."""
+    if guard:
+        off_cascade(guard, cascade)
+    pace.before(what)
+    try:
+        return action()
+    finally:
+        pace.after(what)
+
+
+def pace_arguments(parser):
+    """The options that set a tool's Pace (D725)."""
+    parser.add_argument('--spacing', type=float, default=120.0,
+                        help='seconds between two actions that may disconnect a device on the'
+                             ' hub cascade, by any tool on the host')
+    parser.add_argument('--quiet', type=float, default=60.0,
+                        help='seconds the kernel must have logged nothing of USB before one')
+
+
 def kernel_usb_lines(seconds):
     """The kernel's USB lines of the last SECONDS, as (unix time, text)."""
     found = subprocess.run(['journalctl', '-k', '--since', '-%ds' % seconds, '--no-pager',
@@ -592,17 +615,19 @@ def wait_for_hub(hub, location, shows, seconds, interval=0.5):
     """The hub at LOCATION's listing once it lists again and each (port,
     text) of SHOWS shows its text: switching any port of the rig's hub
     cascade, or a USB device on it resetting, re-enumerates every hub in
-    it, and a listing taken meanwhile finds no hub."""
+    it, and a listing taken meanwhile finds no hub.  With SHOWS empty, the
+    hub listing at all is what is waited for."""
     deadline = time.time() + seconds
     while True:
         status = hub.command('hub-wait', ['uhubctl', '-l', location], check=False)
         ports = hub_ports(status)
-        if all(port in ports and text in ports[port] for port, text in shows):
+        if ('Current status for hub %s ' % location in status
+                and all(port in ports and text in ports[port] for port, text in shows)):
             return status
         if time.time() >= deadline:
-            raise Failed('hub %s did not list %s within %g s' % (
-                location, ', '.join('%s on port %d' % (text, port) for port, text in shows),
-                seconds))
+            raise Failed('hub %s did not list %swithin %g s' % (
+                location, ''.join('%s on port %d, ' % (text, port) for port, text in shows)[:-2]
+                + ' ' if shows else '', seconds))
         time.sleep(interval)
 
 

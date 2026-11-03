@@ -274,6 +274,21 @@ class Hubs(unittest.TestCase):
     def test_a_group_the_host_lacks_is_none_to_lack(self):
         self.assertTrue(COMMON.in_group('no-such-group-on-any-host-1230'))
 
+    def test_the_hub_is_waited_for_until_it_lists_what_it_must_show(self):
+        # D725: a listing taken while the cascade re-enumerates finds no
+        # hub, and uhubctl then lists nothing at all, which shows nothing.
+        hub = Recorded()
+        hub.answers['hub-wait'] = ''
+        with mock.patch.object(COMMON.time, 'sleep'), \
+                self.assertRaisesRegex(COMMON.Failed, 'hub 7-2.3 did not list within 0 s'):
+            COMMON.wait_for_hub(hub, '7-2.3', [], 0)
+        with self.assertRaisesRegex(COMMON.Failed, 'did not list SOMEONE on port 2 within'):
+            COMMON.wait_for_hub(hub, '7-2.3', [(2, 'SOMEONE')], 0)
+        hub = Recorded(**{'hub-wait': STATUS})
+        self.assertEqual(COMMON.wait_for_hub(hub, '7-2.3', [], 0), STATUS)
+        self.assertEqual(COMMON.wait_for_hub(hub, '7-2.3', [(2, '001900293137511339383538')], 0),
+                         STATUS)
+
 
 class Consoles(unittest.TestCase):
     def test_a_tty_is_found_by_its_usb_serial(self):
@@ -512,6 +527,27 @@ class Pace(unittest.TestCase):
             Path(tmp, 'rig.pace').write_text('900.0 download\n')
             pace.before('power on')
             self.assertGreaterEqual(clock[0], 1210.0)
+
+    def test_a_paced_action_is_recorded_even_when_it_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            pace, clock, _ = self.pace(tmp, [])
+
+            def fails():
+                raise COMMON.Failed('the switch failed')
+            with self.assertRaisesRegex(COMMON.Failed, 'the switch failed'):
+                COMMON.paced(pace, 'power cycle', fails)
+            self.assertEqual(pace.last(), clock[0])
+            self.assertEqual(COMMON.paced(pace, 'download', lambda: 'done'), 'done')
+
+    def test_a_guarded_paced_action_waits_for_nothing_while_the_arty_is_away(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            pace, _, _ = self.pace(tmp, [])
+            for where in ('7-2.3.3.4', None):
+                with mock.patch.object(COMMON, 'device_location', return_value=where), \
+                        self.assertRaises(COMMON.Failed):
+                    COMMON.paced(pace, 'power cycle', lambda: self.fail('switched'),
+                                 '210319B3E738', '7-2')
+            self.assertEqual(pace.last(), 0.0)
 
     def test_a_usb_error_since_the_last_action_stops_the_run(self):
         with tempfile.TemporaryDirectory() as tmp:

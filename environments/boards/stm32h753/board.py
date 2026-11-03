@@ -16,9 +16,12 @@ hub uhubctl can switch.  The steps, each recorded under NEW_DIRECTORY:
      its vector table at the boot address and the handlers at slots 27
      and 55, and, from its disassembly, whether the float routines use the
      float unit or software helpers;
-  2. flash it with probe-rs, verify it, and read the vector table back;
+  2. flash it with probe-rs, verify it, and, once the hub lists the
+     ST-LINK again, read the vector table back;
   3. cut the board's power and restore it, after checking that the port
-     holds the ST-LINK named;
+     holds the ST-LINK named and that the probe's Arty is off the cascade,
+     the cycle paced with every other tool's actions on the rig, and wait
+     for the hub to list the ST-LINK again;
   4. find the virtual COM port again once it re-enumerates, send the start
      byte, read the boot frame and drive the scenario, comparing every
      echoed byte and every frame with what the host sent and with RM0433;
@@ -280,9 +283,32 @@ def probe(run, args):
     return common.Probe(run, args.probe_rs, CHIP, args.probe)
 
 
+def settle(run, args):
+    """Wait for the hub to list the ST-LINK on its port again: a download
+    resets the chip, and the cascade re-enumerates whole whenever a device
+    on it resets or a port is switched (D725)."""
+    common.wait_for_hub(run, args.hub, [(args.port, args.serial)], args.hub_seconds)
+
+
+def flash(run, args, elf, table):
+    """Flash and verify the image, and read its vector table back once the
+    hub lists the ST-LINK again."""
+    swd = probe(run, args)
+    run.command('flash', swd.argv('download', '--verify', elf), timeout=300)
+    settle(common.InGroup(run, args.hub_group), args)
+    back = swd.read_bytes('flash-readback', VECTORS, len(table))
+    require(back == table, "flash does not hold the image's vector table")
+    return back
+
+
 def power_cycle(run, args):
-    """The ST-LINK's port, only when the hub's listing shows it there."""
-    common.power_cycle(run, args.hub, args.port, args.off_seconds, holds=args.serial)
+    """The ST-LINK's port, only when the hub's listing shows it there and
+    the probe's Arty is off the cascade, paced with every other tool's
+    actions on the rig, and then the ST-LINK listed again (D725)."""
+    common.paced(args.pace, 'power cycle', lambda: common.power_cycle(
+        run, args.hub, args.port, args.off_seconds, holds=args.serial),
+        args.guard_serial, args.cascade)
+    settle(run, args)
 
 
 def report(console):
@@ -494,6 +520,15 @@ def main():
                         help="the group that may switch the hub's ports; uhubctl runs through"
                              " sg when the session is not in it")
     parser.add_argument('--off-seconds', type=float, default=1.0)
+    parser.add_argument('--guard-serial', default='210319B3E738',
+                        help="a device that must be present and off the switched cascade, the"
+                             " probe's Arty on the maintainer's rig, or no port is switched")
+    parser.add_argument('--cascade', default='7-2',
+                        help='the hub cascade whose ports are switched, as sysfs names its root')
+    parser.add_argument('--hub-seconds', type=float, default=60.0,
+                        help='how long the hub may take to list the ST-LINK again after a download'
+                             ' or a cycle')
+    common.pace_arguments(parser)
     parser.add_argument('--console', type=Path,
                         help="the virtual COM port's tty, found by --serial's USB serial under"
                              " /sys/class/tty by default")
@@ -510,6 +545,7 @@ def main():
     args.probe = args.probe or common.stlink(args.serial)
     args.output = args.output.resolve()
     args.output.mkdir(parents=True)
+    args.pace = common.Pace(args.spacing, args.quiet)
     run = common.Run(args.output)
     result = dict(status='failed')
     console = None
@@ -518,7 +554,7 @@ def main():
     try:
         elf, table, names, image = build(run, args)
         result.update(image_sha256=common.sha(elf), image_name=elf.name, image=image)
-        probe(run, args).flash(elf, VECTORS, table, "the image's vector table")
+        flash(run, args, elf, table)
         result['flash_readback'] = 'matches'
         power_cycle(common.InGroup(run, args.hub_group), args)
         tty = (wait_for_path(args.console, args.tty_seconds) if args.console

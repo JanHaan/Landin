@@ -2,7 +2,9 @@
 """Controls for the RP2350 board tool's oracle, without a board (D655): the
 IMAGE_DEF block it expects, the corrupted copy of its negative control and
 that control's reading of the hub, the hub's guard while the Pico 2 does
-not enumerate, and the framing and accounting it shares with the RP2040's."""
+not enumerate, the pace and the wait for the hub around each download and
+cycle, a flash from BOOTSEL followed at once by a cycle (D712), and the
+framing and accounting it shares with the RP2040's."""
 import importlib.util
 import struct
 import tempfile
@@ -30,6 +32,18 @@ QUIET = ('Current status for hub 7-2.3.3 [0bda:5411 Generic USB2.1 Hub, USB 2.10
          '  Port 1: 0100 power\n  Port 2: 0101 power connect\n  Port 3: 0100 power\n' + GUARD)
 BOOTSEL = QUIET.replace('  Port 2: 0101 power connect\n',
                         '  Port 2: 0103 power enable connect [2e8a:000f Raspberry Pi RP2350 %s]\n' % SERIAL)
+
+
+class Paced:
+    """A pace that records each action it spaces."""
+    def __init__(self, calls):
+        self.calls = calls
+
+    def before(self, what):
+        self.calls.append('before ' + what)
+
+    def after(self, what):
+        self.calls.append('after ' + what)
 
 
 class Recorded:
@@ -88,7 +102,22 @@ class Block(unittest.TestCase):
 
 ARGS = dict(hub='7-2.3.3', port=2, guard_serial='210319B3E738', cascade='7-2', off_seconds=0,
             pico_serial=SERIAL, hub_group=None, enumerate_seconds=1.0, probe_rs='probe-rs',
-            probe='0000:0002:10.42.0.50/1')
+            probe='0000:0002:10.42.0.50/1', guard_seconds=0, boot_seconds=0,
+            bootsel_attach=False, probe_host='10.42.0.50')
+PING = '1 packets transmitted, 1 received, 0% packet loss, time 0ms\n'
+
+
+def paced_args(run, **more):
+    """ARGS with a pace that records into RUN's calls."""
+    return SimpleNamespace(**dict(ARGS, pace=Paced(run.calls), **more))
+
+
+def answers(**more):
+    """The answers a clean guarded cycle gets."""
+    found = {'hub-status': QUIET, 'hub-wait': QUIET, 'probe-ping': PING,
+             'hub-before-attach': QUIET}
+    found.update(more)
+    return found
 
 
 class Hub(unittest.TestCase):
@@ -98,27 +127,31 @@ class Hub(unittest.TestCase):
         self.addCleanup(patcher.stop)
 
     def test_a_port_holding_no_device_or_the_pico_2_is_switched(self):
-        args = SimpleNamespace(**ARGS)
         for status in (QUIET, BOOTSEL):
-            hub = Recorded(**{'hub-status': status})
-            BOARD.power_cycle(hub, args)
-            self.assertEqual(hub.calls, ['hub-status', 'power-cycle'])
+            hub = Recorded(**answers(**{'hub-status': status}))
+            BOARD.power_cycle(hub, paced_args(hub))
+            self.assertEqual(hub.calls, ['before power cycle', 'hub-status', 'power-cycle',
+                                         'after power cycle', 'hub-wait', 'probe-ping'])
 
     def test_a_port_holding_another_device_is_not(self):
-        args = SimpleNamespace(**ARGS)
-        hub = Recorded(**{'hub-status': BOOTSEL.replace(SERIAL, 'SOMEONE-ELSE')})
+        hub = Recorded(**answers(**{'hub-status': BOOTSEL.replace(SERIAL, 'SOMEONE-ELSE')}))
         with self.assertRaises(BOARD.Failed):
-            BOARD.power_cycle(hub, args)
-        self.assertEqual(hub.calls, ['hub-status'])
+            BOARD.power_cycle(hub, paced_args(hub))
+        self.assertEqual(hub.calls, ['before power cycle', 'hub-status', 'after power cycle'])
 
     def test_nothing_is_switched_while_the_arty_is_on_the_cascade_or_absent(self):
-        args = SimpleNamespace(**ARGS)
         for where in ('7-2.3.3.4', None):
-            hub = Recorded(**{'hub-status': QUIET})
+            hub = Recorded(**answers())
             with mock.patch.object(BOARD.common, 'device_location', return_value=where), \
                     self.assertRaises(BOARD.Failed):
-                BOARD.power_cycle(hub, args)
+                BOARD.power_cycle(hub, paced_args(hub))
             self.assertEqual(hub.calls, [])
+
+    def test_the_cycle_waits_for_the_hub_to_list_again(self):
+        hub = Recorded(**answers(**{'hub-wait': ['', QUIET]}))
+        with mock.patch.object(BOARD.common.time, 'sleep'):
+            BOARD.power_cycle(hub, paced_args(hub, guard_seconds=5))
+        self.assertEqual(hub.calls.count('hub-wait'), 2)
 
 
 class Control(unittest.TestCase):
@@ -127,14 +160,20 @@ class Control(unittest.TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
 
-    def control(self, after):
-        args = SimpleNamespace(**ARGS)
-        head = struct.pack('<%dI' % (BOARD.VECTOR_WORDS + 5),
+    def head(self):
+        return struct.pack('<%dI' % (BOARD.VECTOR_WORDS + 5),
                            *([0x20082000] + [0x10000201] * 67 + list(BOARD.IMAGE_DEF)))
+
+    def readback(self, head):
+        return '0x10000000: ' + ' '.join(
+            '%08x' % w for w in struct.unpack('<%dI' % (len(head) // 4), head))
+
+    def control(self, after, bootsel_attach=True):
+        head = self.head()
         bad = head[:-4] + struct.pack('<I', 0xab123579 ^ 0xffffffff)
-        line = ' '.join('%08x' % w for w in struct.unpack('<%dI' % (len(bad) // 4), bad))
-        run = Recorded(**{'hub-status': QUIET, 'flash-readback': '0x10000000: ' + line,
-                          'hub-after-corrupt': after})
+        run = Recorded(**answers(**{'flash-readback': self.readback(bad),
+                                    'hub-after-corrupt': after}))
+        args = paced_args(run, bootsel_attach=bootsel_attach)
         with tempfile.TemporaryDirectory() as out:
             path = Path(out) / 'board.elf'
             path.write_bytes(image(BOARD.IMAGE_DEF))
@@ -145,12 +184,46 @@ class Control(unittest.TestCase):
     def test_a_refused_block_leaves_the_board_in_bootsel(self):
         run, verdict = self.control([QUIET, BOOTSEL])
         self.assertEqual(verdict['enumerated'], '2e8a:000f Raspberry Pi RP2350 ' + SERIAL)
-        self.assertEqual(run.calls, ['flash', 'flash-readback', 'hub-status', 'power-cycle',
+        self.assertEqual(run.calls, ['hub-before-attach', 'before download', 'flash',
+                                     'after download', 'hub-wait', 'flash-readback',
+                                     'before power cycle', 'hub-status', 'power-cycle',
+                                     'after power cycle', 'hub-wait', 'probe-ping',
                                      'hub-after-corrupt', 'hub-after-corrupt'])
 
     def test_a_board_that_boots_the_corrupted_image_fails_the_control(self):
         with self.assertRaisesRegex(BOARD.Failed, 'did not enumerate as BOOTSEL'):
             self.control([QUIET])
+
+    def test_the_control_needs_leave_to_attach_in_bootsel(self):
+        # D712: the good image is flashed again from BOOTSEL.
+        with self.assertRaisesRegex(BOARD.Failed, '--bootsel-attach'):
+            self.control([BOOTSEL], bootsel_attach=False)
+
+    def test_a_flash_from_bootsel_cycles_the_power_at_once(self):
+        # D712: the attach halted the boot ROM, so the cycle that boots the
+        # image is recorded but not paced, and the head is read back from
+        # the image, never from BOOTSEL.
+        head = self.head()
+        run = Recorded(**answers(**{'hub-before-attach': [BOOTSEL, QUIET],
+                                    'flash-readback': self.readback(head)}))
+        with mock.patch.object(BOARD.time, 'sleep'):
+            BOARD.flash(run, paced_args(run, bootsel_attach=True), 'board.elf', head)
+        self.assertEqual(run.calls, ['hub-before-attach', 'before download', 'flash',
+                                     'after download', 'hub-status', 'power-cycle',
+                                     'after power cycle at once', 'hub-wait', 'probe-ping',
+                                     'hub-before-attach', 'flash-readback'])
+
+    def test_nothing_attaches_while_the_pico_2_is_in_bootsel(self):
+        run = Recorded(**answers(**{'hub-before-attach': BOOTSEL}))
+        with self.assertRaisesRegex(BOARD.Failed, 'enumerates as BOOTSEL'):
+            BOARD.flash(run, paced_args(run), 'board.elf', self.head())
+        self.assertEqual(run.calls, ['hub-before-attach'])
+        # Allowed to attach, it never reads back while BOOTSEL still shows.
+        run = Recorded(**answers(**{'hub-before-attach': BOOTSEL}))
+        with mock.patch.object(BOARD.time, 'sleep'), \
+                self.assertRaisesRegex(BOARD.Failed, 'enumerates as BOOTSEL'):
+            BOARD.flash(run, paced_args(run, bootsel_attach=True), 'board.elf', self.head())
+        self.assertNotIn('flash-readback', run.calls)
 
 
 class Framing(unittest.TestCase):

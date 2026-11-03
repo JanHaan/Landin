@@ -2366,6 +2366,9 @@ package body Landin.Diagnostics.Citations is
             when 727 =>
                "The ESP boards' stream is sent a piece at a time, after "
                & "each piece's echo",
+            when 832 =>
+               "Every board tool paces and waits for the hub, and a flas"
+               & "h from BOOTSEL is cycled at once",
             when 645 =>
                "The shared command loop takes its indicator and transmit"
                & "ter as function values",
@@ -3841,6 +3844,8 @@ package body Landin.Diagnostics.Citations is
             when 726 =>
                "Decisions: The toolchain, C and the machine",
             when 727 =>
+               "Decisions: The toolchain, C and the machine",
+            when 832 =>
                "Decisions: The toolchain, C and the machine",
             when 645 =>
                "Decisions: The toolchain, C and the machine",
@@ -5631,6 +5636,10 @@ package body Landin.Diagnostics.Citations is
             when 727 =>
                "https://www.701.dev/spec.html#d727-the-esp-boards-stream"
                & "-is-sent-a-piece-at-a-time-after-each-piece-s-echo",
+            when 832 =>
+               "https://www.701.dev/spec.html#d832-every-board-tool-pace"
+               & "s-and-waits-for-the-hub-and-a-flash-from-bootsel-is-cycl"
+               & "ed-at-once",
             when 645 =>
                "https://www.701.dev/spec.html#d645-the-shared-command-lo"
                & "op-takes-its-indicator-and-transmitter-as-function-value"

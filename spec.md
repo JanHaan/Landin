@@ -23054,6 +23054,9 @@ retrying a listing that finds no hub, which hides the trouble the pace
 stops at; and the spacing left to whoever runs a tool, which two streams
 did not keep.
 
+D832 extends the pace and the wait to every board tool, the RP2040's, the
+Pico 2's and the STM32H753's among them.
+
 **Pinned by** `scripts/tests/test_board_common.py`'s `RigLock` and `Pace`.
 
 ### D726 — An ESP port resets its RX FIFO on an overflow and drains nothing of it
@@ -23101,6 +23104,45 @@ boards' rate.
 
 **Pinned by** `environments/boards/esp32c3/record.json`'s stream verdict
 and `scripts/tests/test_board_esp.py`'s `Scenario`.
+
+### D832 — Every board tool paces and waits for the hub, and a flash from BOOTSEL is cycled at once
+
+**The tour said** nothing; D725 paced the ESP tools' downloads and switches
+and had them wait for the hub after each, and D712 kept the Hazard3 tool
+from attaching to a Pico 2 in BOOTSEL, while the Arm Pico 2's tool still
+flashed from BOOTSEL and left the halted boot ROM on the bus, and the
+RP2040's, the Arm Pico 2's and the STM32H753's tools neither paced nor
+waited.
+
+**Chosen:** every board tool's power cycle is paced with `common.paced`,
+only while the probe's Arty is off the cascade, and after a download or a
+switch every tool waits with `common.wait_for_hub` for its hub to list
+again, and to show the device the port must hold when it holds one, the
+STM32H753's ST-LINK; a listing that finds no hub at all no longer passes
+for one that shows nothing. The two Pico 2 tools share `pico2.py`, which
+switches, paces and waits for both: neither attaches while the port shows
+BOOTSEL unless told `--bootsel-attach`, which their block controls need;
+after a flash from BOOTSEL the power is cycled at once, unpaced but
+recorded so the next action is spaced from it, since the pace's two
+minutes would leave the halted boot ROM on the bus that D712 found
+resetting the hub tree; and the head is never read back while the port
+still shows BOOTSEL. The RP2040's and the STM32H753's downloads are not
+paced, since the chip they reset enumerates nothing on the cascade, but
+their tools still wait for the hub after them; the Pico 2 tools pace
+theirs, since one from BOOTSEL resets a device that does.
+
+**The alternatives:** pacing the cycle after a BOOTSEL flash like any
+other, which waits two minutes beside a boot ROM the kernel is already
+failing to reach, and whose pace would then stop at the USB errors that
+wait causes; probe-rs told not to halt a core it only reads, which leaves
+the download's own halt; and flashing the good image back over USB
+through the boot ROM's PICOBOOT interface, which needs a tool and rights
+no other run uses.
+
+**Pinned by** `scripts/tests/test_board_rp2350.py`'s `Control` and `Hub`,
+`test_board_rp2350_hazard3.py`'s `Attach` and `Hub`, the RP2040's and
+the STM32H753's `Hub` cases, and `test_board_common.py`'s `Pace` and
+`Hubs`.
 
 ### D645 — The shared command loop takes its indicator and transmitter as function values
 
@@ -23621,6 +23663,10 @@ back before the power cycle, which leaves the halted BOOTSEL on the bus;
 resetting with probe-rs, which needs the same attach; and leaving the
 negative control on, which ends every run in the state that reset the
 tree.
+
+D832 extends this decision to the Arm Pico 2's tool, which shares the
+Hazard3 tool's handling of the hub, and takes the cycle after a flash from
+BOOTSEL unpaced.
 
 **Pinned by** `scripts/tests/test_board_rp2350_hazard3.py`'s `Attach`
 and `Hub` cases, and the record's `flashed_as`.

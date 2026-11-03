@@ -32,7 +32,13 @@ only in SRAM and would be lost with its power, and every switch on the
 cascade re-enumerates the whole of it (D725). The port is switched off and on in one
 `uhubctl -a cycle`: switching it off re-enumerates the hub's inner hubs, and
 a second call can meet their new device nodes before udev has given them
-the group allowed to switch them.
+the group allowed to switch them. The run holds the rig's lock,
+`~/.cache/landin/rig.lock`, from its build to its last read; its cycle is
+spaced from every other tool's actions on the host, by `--spacing` seconds
+and until the kernel has logged nothing of USB for `--quiet` seconds, and
+stops on any USB trouble the kernel logged since the last one; and after
+the download and after the cycle the tool waits, up to `--hub-seconds`, for
+the hub to list again (D725, D832).
 
 ## Running it
 

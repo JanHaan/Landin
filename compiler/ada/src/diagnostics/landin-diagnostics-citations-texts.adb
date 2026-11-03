@@ -25801,6 +25801,28 @@ package body Landin.Diagnostics.Citations.Texts is
                & "2469 of 3000 bytes, which the port reports as overruns, "
                & "as it should. The ESP32-C5's record was taken with the s"
                & "tream at the line's rate, which it kept.",
+            when 832 =>
+               "Chosen: every board tool's power cycle is paced with `co"
+               & "mmon.paced`, only while the probe's Arty is off the casc"
+               & "ade, and after a download or a switch every tool waits w"
+               & "ith `common.wait_for_hub` for its hub to list again, and"
+               & " to show the device the port must hold when it holds one"
+               & ", the STM32H753's ST-LINK; a listing that finds no hub a"
+               & "t all no longer passes for one that shows nothing. The t"
+               & "wo Pico 2 tools share `pico2.py`, which switches, paces "
+               & "and waits for both: neither attaches while the port show"
+               & "s BOOTSEL unless told `--bootsel-attach`, which their bl"
+               & "ock controls need; after a flash from BOOTSEL the power "
+               & "is cycled at once, unpaced but recorded so the next acti"
+               & "on is spaced from it, since the pace's two minutes would"
+               & " leave the halted boot ROM on the bus that D712 found re"
+               & "setting the hub tree; and the head is never read back wh"
+               & "ile the port still shows BOOTSEL. The RP2040's and the S"
+               & "TM32H753's downloads are not paced, since the chip they "
+               & "reset enumerates nothing on the cascade, but their tools"
+               & " still wait for the hub after them; the Pico 2 tools pac"
+               & "e theirs, since one from BOOTSEL resets a device that do"
+               & "es.",
             when 645 =>
                "Chosen: the module names no device. Its `port` is a stru"
                & "ct of two function values ([1000]), `indicate: (on: bool"

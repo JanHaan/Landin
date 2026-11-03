@@ -433,12 +433,7 @@ def paced(args, what, action):
     by args.pace."""
     # The probe's Arty must never lose power or re-enumerate, so nothing
     # disturbs the cascade while it is on it (D725).
-    common.off_cascade(args.arty_serial, args.cascade)
-    args.pace.before(what)
-    try:
-        return action()
-    finally:
-        args.pace.after(what)
+    return common.paced(args.pace, what, action, args.arty_serial, args.cascade)
 
 
 def run_board(chip, args, console_for, cycle, settle):
@@ -587,11 +582,7 @@ def arguments(parser, chip):
                              " probe's Arty on the maintainer's rig, or nothing is done to the hub")
     parser.add_argument('--cascade', default='7-2',
                         help='the hub cascade the boards are on, as sysfs names its root')
-    parser.add_argument('--spacing', type=float, default=120.0,
-                        help='seconds between two actions that disconnect a device on the hub,'
-                             ' by any tool on the host (D725)')
-    parser.add_argument('--quiet', type=float, default=60.0,
-                        help='seconds the kernel must have logged nothing of USB before one')
+    common.pace_arguments(parser)
     parser.add_argument('--recover', action='store_true',
                         help="first reset the chip into its ROM's download mode through its own"
                              ' USB-Serial-JTAG, for an image that left JTAG unanswered')

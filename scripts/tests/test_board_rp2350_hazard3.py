@@ -186,7 +186,7 @@ def paced_args(run, **more):
 
 def cycling(**more):
     """The answers a clean guarded cycle gets."""
-    answers = {'hub-status': QUIET, 'hub-after-cycle': QUIET,
+    answers = {'hub-status': QUIET, 'hub-after-cycle': QUIET, 'hub-wait': QUIET,
                'probe-ping': PING, 'hub-before-attach': QUIET}
     answers.update(more)
     return answers
@@ -219,9 +219,30 @@ class Attach(unittest.TestCase):
         self.assertEqual(run.calls, ['hub-before-attach', 'attach-RP235x', 'before download',
                                      'flash', 'after download', 'before power cycle',
                                      'hub-status', 'power-cycle', 'after power cycle',
-                                     'probe-ping', 'hub-before-attach',
+                                     'hub-wait', 'probe-ping', 'hub-before-attach',
                                      'reattach-RP235x', 'reattach-RP235x_riscv',
                                      'flash-readback'])
+
+    def test_a_flash_from_bootsel_cycles_the_power_at_once(self):
+        # D712: the attach halted the boot ROM, so the cycle is not paced,
+        # only recorded, and the head is not read back while BOOTSEL shows.
+        head = struct.pack('<2I', 0x3900006f, 0)
+        run = Recorded(statuses={'reattach-RP235x': 1}, **cycling(**{
+            'hub-before-attach': [BOOTSEL, QUIET],
+            'flash-readback': '0x10000000: 3900006f 00000000'}))
+        args = paced_args(run, bootsel_attach=True)
+        with mock.patch.object(BOARD.time, 'sleep'):
+            self.assertEqual(BOARD.flash(run, args, 'board.elf', head), 'RP235x')
+        self.assertEqual(run.calls, ['hub-before-attach', 'attach-RP235x', 'before download',
+                                     'flash', 'after download', 'hub-status', 'power-cycle',
+                                     'after power cycle at once', 'hub-wait', 'probe-ping',
+                                     'hub-before-attach', 'reattach-RP235x',
+                                     'reattach-RP235x_riscv', 'flash-readback'])
+        run = Recorded(**cycling(**{'hub-before-attach': BOOTSEL}))
+        with mock.patch.object(BOARD.time, 'sleep'), \
+                self.assertRaisesRegex(BOARD.Failed, 'enumerates as BOOTSEL'):
+            BOARD.flash(run, paced_args(run, bootsel_attach=True), 'board.elf', head)
+        self.assertNotIn('reattach-RP235x', run.calls)
 
     def test_a_flash_through_the_risc_v_side_reads_back_at_once(self):
         head = struct.pack('<2I', 0x3900006f, 0)
@@ -232,7 +253,7 @@ class Attach(unittest.TestCase):
             BOARD.flash(run, args, 'board.elf', head)
         self.assertEqual(run.calls, ['hub-before-attach', 'attach-RP235x', 'attach-RP235x_riscv',
                                      'before download', 'flash', 'after download',
-                                     'flash-readback'])
+                                     'hub-wait', 'flash-readback'])
 
     def test_nothing_attaches_while_the_pico_2_is_in_bootsel(self):
         args = SimpleNamespace(**ARGS)
@@ -261,7 +282,7 @@ class Hub(unittest.TestCase):
         hub = Recorded(**cycling())
         BOARD.power_cycle(hub, paced_args(hub))
         self.assertEqual(hub.calls, ['before power cycle', 'hub-status', 'power-cycle',
-                                     'after power cycle', 'probe-ping'])
+                                     'after power cycle', 'hub-wait', 'probe-ping'])
         for where in ('7-2.3.3.4', None):
             hub = Recorded(**cycling())
             with mock.patch.object(BOARD.common, 'device_location', return_value=where), \
@@ -281,7 +302,7 @@ class Hub(unittest.TestCase):
             BOARD.power_cycle(hub, paced_args(hub, guard_seconds=5))
         self.assertEqual(hub.calls, ['before power cycle', 'hub-status', 'hub-status',
                                      'hub-status', 'power-cycle', 'after power cycle',
-                                     'probe-ping'])
+                                     'hub-wait', 'probe-ping'])
         hub = Flaky(**cycling())
         with self.assertRaisesRegex(BOARD.Failed, 'hub-status failed'):
             BOARD.power_cycle(hub, paced_args(hub))

@@ -17,10 +17,11 @@ a hub uhubctl can switch.  The steps, each recorded under NEW_DIRECTORY:
      carries the CRC-32 the boot ROM checks and that vector word 21 is the
      USBCTRL_IRQ handler;
   2. flash it with probe-rs, verify it, and read the first 256 bytes of
-     flash back to compare with the image;
+     flash back to compare with the image, once the hub lists again;
   3. with the probe detached, cut the Pico's power and restore it, after
-     checking that the port is not the guarded one (the Arty's, whose
-     bitstream lives in SRAM);
+     checking that the probe's Arty, whose bitstream lives in SRAM, is off
+     the cascade, the cycle paced with every other tool's actions on the
+     rig, and wait for the hub to list again;
   4. read the boot frame and drive the scenario over the UART, comparing
      every echoed byte and every frame with what the host sent;
   5. read the counters back over SWD and compare them with the last frame.
@@ -98,14 +99,24 @@ def probe(run, args):
 
 
 def flash(run, args, elf, stage):
-    return probe(run, args).flash(elf, 0x10000000, stage, "the image's second stage")
+    """Flash and verify the image, then, once the hub lists again, read the
+    second stage back: a download resets the chip, and a device resetting
+    on the rig's cascade re-enumerates the whole of it (D725)."""
+    swd = probe(run, args)
+    run.command('flash', swd.argv('download', '--verify', elf), timeout=300)
+    common.wait_for_hub(common.InGroup(run, args.hub_group), args.hub, [], args.hub_seconds)
+    back = swd.read_bytes('flash-readback', 0x10000000, len(stage))
+    require(back == stage, "flash does not hold the image's second stage")
+    return back
 
 
 def power_cycle(run, args):
-    """The Pico's port, never the guarded one, and only on a hub whose
-    guarded port holds the device named."""
-    common.off_cascade(args.guard_serial, args.cascade)
-    common.power_cycle(run, args.hub, args.port, args.off_seconds)
+    """The Pico's port, only while the probe's Arty is off the cascade,
+    paced with every other tool's actions on the rig, and then the hub
+    listing again (D725)."""
+    common.paced(args.pace, 'power cycle', lambda: common.power_cycle(
+        run, args.hub, args.port, args.off_seconds), args.guard_serial, args.cascade)
+    common.wait_for_hub(run, args.hub, [], args.hub_seconds)
 
 
 def report(console, count):
@@ -253,6 +264,9 @@ def main():
     parser.add_argument('--cascade', default='7-2',
                         help='the hub cascade whose ports are switched, as sysfs names its root')
     parser.add_argument('--off-seconds', type=float, default=1.0)
+    parser.add_argument('--hub-seconds', type=float, default=60.0,
+                        help='how long the hub may take to list again after a download or a cycle')
+    common.pace_arguments(parser)
     parser.add_argument('--hub-group', default='dialout',
                         help="the group that may switch the hub's ports; uhubctl runs through"
                              " sg when the session is not in it")
@@ -271,6 +285,7 @@ def main():
     args.probehive_build = (args.probehive_build or args.probehive / 'build/slots_ci').resolve()
     args.output = args.output.resolve()
     args.output.mkdir(parents=True)
+    args.pace = common.Pace(args.spacing, args.quiet)
     run = common.Run(args.output)
     result = dict(status='failed')
     bridge = console = None

@@ -27,10 +27,22 @@ The ST-LINK's USB serial names three things: the probe probe-rs opens, the
 tty of its virtual COM port, found under `/sys/class/tty` by the serial of
 the USB device it belongs to, and the hub port that is switched. The tool
 switches only `--port` on `--hub`, and only after `uhubctl` shows that serial
-on that port; the port is switched off and on in one `uhubctl -a cycle`,
-run through `/run/wrappers/bin/sg GROUP -c`, `--hub-group`, `dialout` by
-default, when the session is not in that group. The defaults are the
-maintainer's rig: hub `7-2.3`, port 2, serial `001900293137511339383538`.
+on that port and while the device with `--guard-serial`, the probe's Arty
+on the maintainer's rig, is present and not on `--cascade`; the port is
+switched off and on in one `uhubctl -a cycle`, run through
+`/run/wrappers/bin/sg GROUP -c`, `--hub-group`, `dialout` by default, when
+the session is not in that group. On the maintainer's rig the ST-LINK's
+hub is one of a cascade, `7-2`, every hub of which re-enumerates, the
+ST-LINK and every other board's USB device with it, whenever any port of
+it is switched or any device on it resets (D725). So the run holds the
+rig's lock, `~/.cache/landin/rig.lock`, from its build to its last read;
+its cycle is spaced from every other tool's actions on the host, by
+`--spacing` seconds and until the kernel has logged nothing of USB for
+`--quiet` seconds, and stops on any USB trouble the kernel logged since
+the last one; and after the download and after the cycle the tool waits,
+up to `--hub-seconds`, for the hub to list the ST-LINK on its port again
+(D832). The defaults are the maintainer's rig: hub `7-2.3`, port 2,
+serial `001900293137511339383538`, on the cascade `7-2`.
 `--console PATH` names the tty instead, for a host that gives it a name of
 its own; finding it by the serial needs nothing of the host's.
 

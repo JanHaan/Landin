@@ -38,6 +38,24 @@ port is switched off and on in one `uhubctl -a cycle`, through
 the group that may switch it. The defaults are the maintainer's rig: hub
 `7-2.3.3`, port 2, on the cascade `7-2`.
 
+How the tool switches, paces and waits is [`../pico2.py`](../pico2.py)'s,
+which [the Hazard3 tool](../rp2350_hazard3/README.md) shares, since both run
+the same board on the same port (D832). The run holds the rig's lock,
+`~/.cache/landin/rig.lock`, from its first step on the rig to its last; it
+spaces each download and cycle from every other tool's on the host, by
+`--spacing` seconds and until the kernel has logged nothing of USB for
+`--quiet` seconds, stopping on any USB trouble the kernel logged since the
+last such action; and after each it waits up to `--guard-seconds` for the
+hub to list again and the Arty to be found off the cascade, and pings
+`--probe-host`. Every probe-rs attach as `RP235x` halts both cores, and a
+Pico 2 in BOOTSEL halted so keeps its USB pull-up but stops answering,
+which on the rig reset the hub tree above it (D712). So the tool refuses
+to attach while the port shows BOOTSEL, 2e8a:000f, unless told
+`--bootsel-attach`, which `--block-control` needs, since it flashes the
+good image again from BOOTSEL; after a flash from BOOTSEL it cycles the
+power at once, unpaced, gives the boot ROM `--boot-seconds`, and reads the
+head back from the image, never from BOOTSEL.
+
 ## Running it
 
 ```sh
@@ -45,7 +63,7 @@ python3 environments/boards/rp2350/board.py \
     --refine compiler/ada/build/nix-x86_64-linux/debug/bin/refine \
     --probehive ~/src/probehive --probe-rs PATH/TO/probe-rs --slot 1 \
     --hub 7-2.3.3 --port 2 --guard-serial 210319B3E738 \
-    --block-control --output NEW_DIRECTORY
+    --block-control --bootsel-attach --output NEW_DIRECTORY
 ```
 
 The output holds the image, its build report and every command's log, the
@@ -76,7 +94,7 @@ frame, and 0x12 stops reading for 100 ms.
 |---|---|
 | the ELF's vector table | 68 words at 0x1000_0000, the start of flash, word 30 the USBCTRL_IRQ handler (3.2, Table 95, p. 81) |
 | the ELF's block | directly after the table, the minimum Arm IMAGE_DEF (5.9.5.1, Table 503, p. 390): the start and end markers (5.1.5.1, p. 329), IMAGE_TYPE an Arm executable in Secure state for RP2350, LAST and a link to itself |
-| the block control, with `--block-control` | a copy whose end marker is flipped, flashed and power-cycled, is refused by the boot ROM, which enumerates as USB BOOTSEL, 2e8a:000f (5.6.1, Table 470, p. 370); the good image is then flashed again |
+| the block control, with `--block-control` | a copy whose end marker is flipped, flashed and power-cycled, is refused by the boot ROM, which enumerates as USB BOOTSEL, 2e8a:000f (5.6.1, Table 470, p. 370); the good image is then flashed again, from BOOTSEL, and the power cycled at once |
 | flash after flashing | the vector table and the block, read back over SWD, equal to the image's |
 | the boot frame | CHIP_RESET is HAD_POR alone (6.4, p. 429), so the run began at power-on; VTOR is 0x1000_0000, so the boot ROM took the block and entered this image; clk_ref is on the crystal |
 | the shared scenario | `1`, `A` and `0`, the bytes the emulator lane's application is fed, echoed, with `g` 8 after `1` and 0 after `0`, and with `--indicator-pin` the wire high after `1` and low after `0` |

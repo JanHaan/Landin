@@ -52,7 +52,10 @@ USB trouble the kernel logged since the last such action (D725). After
 the cycle it waits `--guard-seconds` for that device to be present again,
 still off the cascade, and pings `--probe-host`, and stops if either is missing. A
 listing of the hub that meets the tree re-enumerating is asked again until
-`--guard-seconds` have passed.
+`--guard-seconds` have passed, and after each download and cycle the tool
+waits as long for the hub to list again. How it switches, paces and waits
+is [`../pico2.py`](../pico2.py)'s, which [the Arm tool](../rp2350/README.md)
+shares (D832).
 The defaults are the maintainer's rig: hub `7-2.3.3`, port 2, on the
 cascade `7-2`.
 
@@ -78,10 +81,12 @@ probe's own USB, and every probe-rs start spent 85 s in its USB probe
 listing. So the tool refuses to attach while the Pico 2's port shows
 BOOTSEL, 2e8a:000f, unless told `--bootsel-attach`; if it ever does, cycle
 the port once and wait for it to stop enumerating before anything else.
-After flashing through the Arm side the tool cycles the power at once,
-gives the boot ROM `--boot-seconds`, and reads the head back from the cores
-the new image runs on. The counters are read as `RP235x_riscv` alone, from
-the cores the image booted on.
+After flashing through the Arm side the tool cycles the power, gives the
+boot ROM `--boot-seconds`, and reads the head back from the cores the new
+image runs on, never from BOOTSEL; when the flash was from BOOTSEL that
+cycle is taken at once, unpaced, rather than after the pace's two minutes
+with the halted boot ROM on the bus (D832). The counters are read as
+`RP235x_riscv` alone, from the cores the image booted on.
 
 The negative control ends in BOOTSEL and must then flash the image
 again, which is that attach, so `--block-control` needs `--bootsel-attach`

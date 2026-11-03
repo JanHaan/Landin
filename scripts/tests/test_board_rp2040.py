@@ -19,7 +19,19 @@ class Hub:
 
     def command(self, name, argv, **_):
         self.calls.append(name)
-        return self.status if name == 'hub-status' else ''
+        return self.status if name in ('hub-status', 'hub-wait') else ''
+
+
+class Paced:
+    """A pace that records each action it spaces into CALLS."""
+    def __init__(self, calls):
+        self.calls = calls
+
+    def before(self, what):
+        self.calls.append('before ' + what)
+
+    def after(self, what):
+        self.calls.append('after ' + what)
 
 
 STATUS = """Current status for hub 7-2.3.3 [0bda:5411 Generic USB2.1 Hub, USB 2.10, 4 ports, ppps]
@@ -48,19 +60,31 @@ class Oracle(unittest.TestCase):
         self.assertEqual(BOARD.frames_safe(stream), [('t', {'h': 10})])
         self.assertEqual(BOARD.echo_of(stream), b'abcd')
 
+    def args(self, hub):
+        return SimpleNamespace(hub='7-2.3.3', port=1, guard_serial='210319B3E738',
+                               cascade='7-2', off_seconds=0, hub_seconds=0,
+                               pace=Paced(hub.calls))
+
     def test_the_hub_is_switched_only_while_the_arty_is_off_the_cascade(self):
-        args = SimpleNamespace(hub='7-2.3.3', port=1, guard_serial='210319B3E738',
-                               cascade='7-2', off_seconds=0)
         for where in ('7-2.3.3.4', None):
             hub = Hub(STATUS)
             with mock.patch.object(BOARD.common, 'device_location', return_value=where), \
                     self.assertRaises(BOARD.Failed):
-                BOARD.power_cycle(hub, args)
+                BOARD.power_cycle(hub, self.args(hub))
             self.assertEqual(hub.calls, [])
         hub = Hub(STATUS)
         with mock.patch.object(BOARD.common, 'device_location', return_value='7-1.4'):
-            BOARD.power_cycle(hub, args)
-        self.assertEqual(hub.calls, ['hub-status', 'power-cycle'])
+            BOARD.power_cycle(hub, self.args(hub))
+        # D725: paced, and the hub listing again before anything else.
+        self.assertEqual(hub.calls, ['before power cycle', 'hub-status', 'power-cycle',
+                                     'after power cycle', 'hub-wait'])
+
+    def test_a_hub_that_does_not_list_again_stops_the_run(self):
+        hub = Hub(STATUS)
+        hub.status = ''
+        with mock.patch.object(BOARD.common, 'device_location', return_value='7-1.4'), \
+                self.assertRaisesRegex(BOARD.Failed, 'did not list within'):
+            BOARD.power_cycle(hub, self.args(hub))
 
 if __name__ == '__main__':
     unittest.main()

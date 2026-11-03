@@ -8,6 +8,7 @@ import math
 import random
 import struct
 import unittest
+from unittest import mock
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -226,26 +227,62 @@ class Instructions(unittest.TestCase):
 
 
 class Hub(unittest.TestCase):
-    def test_only_the_port_holding_the_st_link_is_switched(self):
-        class Recorded:
-            def __init__(self, status):
-                self.status, self.calls = status, []
+    class Recorded:
+        def __init__(self, status):
+            self.status, self.calls = status, []
 
-            def command(self, name, argv, **_):
-                self.calls.append(name)
-                return self.status if name == 'hub-status' else ''
-        listing = ('Current status for hub 7-2.3 [0bda:5411 Generic USB2.1 Hub]\n'
-                   '  Port 2: 0103 power enable connect [0483:374e STMicroelectronics'
-                   ' STLINK-V3 001900293137511339383538]\n')
-        args = SimpleNamespace(hub='7-2.3', port=2, off_seconds=1.0,
-                               serial='001900293137511339383538')
-        hub = Recorded(listing)
-        BOARD.power_cycle(hub, args)
-        self.assertEqual(hub.calls, ['hub-status', 'power-cycle'])
-        hub = Recorded(listing.replace('Port 2', 'Port 3'))
+        def command(self, name, argv, **_):
+            self.calls.append(name)
+            return self.status if name in ('hub-status', 'hub-wait') else ''
+
+    class Paced:
+        def __init__(self, calls):
+            self.calls = calls
+
+        def before(self, what):
+            self.calls.append('before ' + what)
+
+        def after(self, what):
+            self.calls.append('after ' + what)
+
+    LISTING = ('Current status for hub 7-2.3 [0bda:5411 Generic USB2.1 Hub]\n'
+               '  Port 2: 0103 power enable connect [0483:374e STMicroelectronics'
+               ' STLINK-V3 001900293137511339383538]\n')
+
+    def args(self, hub):
+        return SimpleNamespace(hub='7-2.3', port=2, off_seconds=1.0, hub_seconds=0,
+                               serial='001900293137511339383538', guard_serial='210319B3E738',
+                               cascade='7-2', pace=self.Paced(hub.calls))
+
+    def setUp(self):
+        patcher = mock.patch.object(BOARD.common, 'device_location', return_value='7-1.4')
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_only_the_port_holding_the_st_link_is_switched(self):
+        hub = self.Recorded(self.LISTING)
+        BOARD.power_cycle(hub, self.args(hub))
+        # D725: paced, and the ST-LINK listed again before the console.
+        self.assertEqual(hub.calls, ['before power cycle', 'hub-status', 'power-cycle',
+                                     'after power cycle', 'hub-wait'])
+        hub = self.Recorded(self.LISTING.replace('Port 2', 'Port 3'))
         with self.assertRaises(BOARD.Failed):
-            BOARD.power_cycle(hub, args)
-        self.assertEqual(hub.calls, ['hub-status'])
+            BOARD.power_cycle(hub, self.args(hub))
+        self.assertEqual(hub.calls, ['before power cycle', 'hub-status', 'after power cycle'])
+
+    def test_nothing_is_switched_while_the_arty_is_on_the_cascade_or_absent(self):
+        for where in ('7-2.3.4', None):
+            hub = self.Recorded(self.LISTING)
+            with mock.patch.object(BOARD.common, 'device_location', return_value=where), \
+                    self.assertRaises(BOARD.Failed):
+                BOARD.power_cycle(hub, self.args(hub))
+            self.assertEqual(hub.calls, [])
+
+    def test_a_cycle_waits_for_the_st_link_to_be_listed_again(self):
+        hub = self.Recorded(self.LISTING)
+        hub.status = self.LISTING.replace('STLINK-V3 001900293137511339383538', '')
+        with self.assertRaisesRegex(BOARD.Failed, 'did not list 001900293137511339383538 on port 2'):
+            BOARD.settle(hub, self.args(hub))
 
 
 if __name__ == '__main__':
