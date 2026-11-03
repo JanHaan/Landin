@@ -310,6 +310,137 @@ class Emission(unittest.TestCase):
                                     controls.encode()).hexdigest())
 
 
+#  A stub compiler that writes the controls it was given as its assembly,
+#  so each entry's digest says which request made it.
+SAYS_ITS_CONTROLS = (
+    "#!" + sys.executable + "\n"
+    "import pathlib, sys\n"
+    "args = sys.argv[1:]\n"
+    "said = [a for a in args if a.startswith(('--target=', '--build-mode=',\n"
+    "    '--optimize=', '--specialize=', '--debug='))]\n"
+    "pathlib.Path(args[args.index('-o') + 1]).write_text(' '.join(said))\n")
+
+
+def selected(stub, *options, fixtures=("positive/a", "positive/b", "runtime/r")):
+    """Run `emit` with OPTIONS over a small tree of FIXTURES and STUB."""
+    with tempfile.TemporaryDirectory() as tmp:
+        area = Path(tmp)
+        for name in fixtures:
+            fixture = area / "compiler/tests/fixtures" / name
+            fixture.mkdir(parents=True)
+            (fixture / "fixture.meta").write_text(
+                "program: main.ldn\ntargets: linux-x86-64\n")
+        refine = area / "refine"
+        refine.write_text(stub)
+        refine.chmod(0o755)
+        out = area / "manifest.json"
+        result = subprocess.run(
+            [sys.executable, str(CHECK), "emit", str(refine), str(area), str(out)]
+            + list(options), capture_output=True, text=True)
+        return result, (json.loads(out.read_text()) if out.exists() else None)
+
+
+def controls_digest(*said):
+    return hashlib.sha256(" ".join(said).encode()).hexdigest()
+
+
+class Selectors(unittest.TestCase):
+    """A before-and-after proof compiles what it names and says why it refused."""
+
+    def test_fixtures_profiles_and_modes_select_entries(self):
+        result, manifest = selected(
+            SAYS_ITS_CONTROLS, "linux-x86-64", "--fixture=positive/a",
+            "--fixture=runtime/r", "--profile=size/auto", "--mode=release",
+            "--jobs=2")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        said = controls_digest("--target=linux-x86-64", "--build-mode=release",
+                               "--optimize=size", "--specialize=auto")
+        self.assertEqual(manifest, {
+            "a|linux-x86-64|release|optimize=size|specialize=auto": said,
+            "runtime/r|linux-x86-64|release|optimize=size|specialize=auto": said})
+
+    def test_a_corpus_selector_adds_the_runtime_corpus(self):
+        result, manifest = selected(
+            SAYS_ITS_CONTROLS, "linux-x86-64", "--corpus=positive",
+            "--corpus=runtime", "--profile=none-off", "--mode=debug",
+            fixtures=("positive/a", "runtime/r"))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(sorted(manifest), [
+            "a|linux-x86-64|debug|optimize=none|specialize=off",
+            "runtime/r|linux-x86-64|debug|optimize=none|specialize=off"])
+
+    def test_debug_information_is_each_targets_own(self):
+        result, manifest = selected(
+            SAYS_ITS_CONTROLS, "linux-x86-64,cortex-m0", "--fixture=positive/b",
+            "--profile=none-off", "--mode=debug", "--debug-info")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        for target, debug in (("linux-x86-64", "full"), ("cortex-m0", "lines")):
+            base = "b|%s|debug|optimize=none|specialize=off" % target
+            controls = ("--target=" + target, "--build-mode=debug",
+                        "--optimize=none", "--specialize=off")
+            self.assertEqual(manifest[base], controls_digest(*controls))
+            self.assertEqual(manifest[base + "|debug=" + debug],
+                             controls_digest(*controls, "--debug=" + debug))
+        self.assertEqual(len(manifest), 4)
+
+    def test_an_unexpected_refusal_says_its_first_diagnostic(self):
+        stub = ("#!/bin/sh\n"
+                "printf 'error[L0500]: no library was found\\n"
+                "  --> main.ldn:1:1\\n  |\\n1 | quoted source\\n  | ^^^\\n"
+                "  = note: name it with --library=PATH\\n"
+                "error[L0001]: a second refusal\\n' >&2\n"
+                "exit 1\n")
+        result, manifest = selected(stub, "linux-x86-64", "--fixture=positive/a",
+                                    "--profile=none-off", "--mode=debug")
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(set(manifest.values()), {"refused:1"})
+        self.assertIn("'refused:1': error[L0500]: no library was found"
+                      " --> main.ldn:1:1 = note: name it with --library=PATH\n",
+                      result.stderr)
+        self.assertNotIn("quoted source", result.stderr)
+        self.assertNotIn("L0001", result.stderr)
+
+    def test_a_runtime_fixture_links_as_its_record_says_where_it_is_hosted(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            area = Path(tmp)
+            fixture = area / "compiler/tests/fixtures/runtime/r"
+            fixture.mkdir(parents=True)
+            (fixture / "fixture.meta").write_text(
+                "program: main.ldn\nlink: libc\ntargets: linux-x86-64\n")
+            refine = area / "refine"
+            refine.write_text(
+                "#!" + sys.executable + "\n"
+                "import pathlib, sys\n"
+                "args = sys.argv[1:]\n"
+                "said = [a for a in args if a.startswith(('--target=', '--link='))]\n"
+                "pathlib.Path(args[args.index('-o') + 1]).write_text(' '.join(said))\n")
+            refine.chmod(0o755)
+            out = area / "manifest.json"
+            result = subprocess.run(
+                [sys.executable, str(CHECK), "emit", str(refine), str(area), str(out),
+                 "linux-x86-64", "--corpus=runtime", "--profile=none-off",
+                 "--mode=debug"], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(json.loads(out.read_text()), {
+                "runtime/r|linux-x86-64|debug|optimize=none|specialize=off":
+                    controls_digest("--target=linux-x86-64", "--link=libc")})
+
+    def test_a_debug_entry_refuses_where_its_entry_without_does(self):
+        other = dict(BASE)
+        other["external-scalar-c-boundary|cortex-m0|debug|optimize=size"
+              "|specialize=auto|debug=lines"] = "refused:1"
+        result = compare(other, dict(other))
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_an_unknown_selection_is_refused(self):
+        for options in (("--fixture=a",), ("--fixture=negative/a",),
+                        ("--profile=fast-off",), ("--corpus=negative",),
+                        ("--jobs=0",)):
+            with self.subTest(options=options):
+                result, _ = selected(SAYS_ITS_CONTROLS, "linux-x86-64", *options)
+                self.assertEqual(result.returncode, 2, result.stderr)
+
+
 class Levels(unittest.TestCase):
     """A fixture is compiled at the level its `args` request, on their target."""
 
