@@ -14,7 +14,8 @@ private package Landin.Bindings.Texts is
 
    function Is_Landin_Identifier (Text : String) return Boolean;
 
-   --  Spec.md's keyword production and the contextual words beside it.
+   --  The keyword production of spec.md and the contextual words beside
+   --  it.
    function Is_Avoided (Name : String) return Boolean;
 
    --  A part of a generated C symbol: every character other than an ASCII

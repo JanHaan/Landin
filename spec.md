@@ -19597,7 +19597,7 @@ argument's `if` from its own parentheses.
 
 **The tour said** nothing of the binding generator, and D410 and D413 gave
 a byte-packed C record and one with a flexible array member a Landin form,
-which D414 lets C reach only through a pointer. `bindings/generate.py`
+which D414 lets C reach only through a pointer. The binding generator
 still refused both, so a header declaring either had no generated binding,
 and a pointer to any selected record was generated as `ptr u8`.
 
@@ -21541,8 +21541,9 @@ offline tests, and the gate's `cortex-m` steps that fetch and regenerate.
 ### D820 — `refine bindings` is the binding generator
 
 **The tour said** at [1580] that a separate, deterministic generator reads
-headers and writes the declarations. It was `bindings/generate.py`, so
-binding a header needed Python, which no feature of the compiler may.
+headers and writes the declarations. It was a Python script in
+`bindings/`, so binding a header needed Python, which no feature of the
+compiler may.
 
 **Chosen:** the generator is a command of refine's own, as the SVD importer
 is (D555):
@@ -21563,12 +21564,13 @@ required, as the sysroot, the policy and the output directory are: the
 generator's contract is that nothing it reads is chosen for it. Paths are
 made absolute against the working directory without resolving links.
 
-The four outputs are what `bindings/generate.py` wrote, byte for byte, for
-every header and policy its tests and the repository bind, on every
-target: the same declarations in the same order, the same adapters and the
-same metadata with sorted keys, except that each now says it was generated
-by `refine bindings`. The policy is unchanged. Clang is asked what it was
-asked before, in the same order and with the same arguments (D821), and
+The four outputs are what the Python generator wrote, byte for byte: for
+every header and policy `bindings/test.py` binds, and for the committed
+fixture's on each of the three targets, the same declarations in the same
+order, the same adapters and the same metadata with sorted keys, and the
+same refusals; each output now says only that `refine bindings` made it.
+The policy is unchanged. Clang is asked what it was asked before, in the
+same order and with the same arguments, the empty file of D821 aside, and
 generation lives in `Landin.Bindings`, a function of what Clang printed, so
 the whole generator runs against a fake Clang. What it reads it reads with
 `Landin.Json`, and a reserved word is one of `Landin.Tokens`', which

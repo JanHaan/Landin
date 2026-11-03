@@ -17,8 +17,8 @@ package body Landin.Bindings.Texts is
    function Listed (Name : String; Words : String_Vectors.Vector)
      return Boolean is (Words.Contains (Name));
 
-   --  Spec.md [1760]'s keyword production is Landin.Tokens' reserved
-   --  words, which check.py holds to it.
+   --  The keyword production of spec.md's [1760] is Landin.Tokens'
+   --  reserved words, which check.py holds to it.
    function Is_Avoided (Name : String) return Boolean is
      ((for some Word in Landin.Tokens.Reserved_Word =>
          Landin.Tokens.Spelling (Word) = Name)
