@@ -94,6 +94,12 @@ package Landin.Platform is
    function Is_Directory (Host : Filesystem; Path : String) return Boolean
      is abstract;
 
+   --  Whether Path itself is a symbolic link, whatever it names.  A tool
+   --  that replaces files in a directory refuses one, rather than replace
+   --  them wherever the link leads.
+   function Is_Link (Host : Filesystem; Path : String) return Boolean
+     is abstract;
+
    --  Bytes, not lines: the lexer is byte-oriented and a text-mode read
    --  would quietly rewrite line endings out from under a span.
    procedure Read_File
@@ -233,6 +239,19 @@ package Landin.Platform is
       Arguments : Path_List;
       Result    : out Tool_Result;
       Capture   : Capture_Mode := Merged) is abstract;
+
+   --  Run as Run does, with an environment of exactly Environment rather
+   --  than the caller's (D821).  An item `NAME=VALUE` sets a variable; an
+   --  item `NAME` passes the caller's own value on, and nothing when the
+   --  caller has none.  `refine bindings` runs Clang so, and no CPATH, no
+   --  driver override and no configuration a shell set reaches it.
+   procedure Run_In_Environment
+     (Host        : Tool_Runner;
+      Program     : String;
+      Arguments   : Path_List;
+      Environment : Path_List;
+      Result      : out Tool_Result;
+      Capture     : Capture_Mode := Merged) is abstract;
 
    --  D526: how a program `refine run` started ended.  Unlike a tool's,
    --  this carries the signal, because refine says which one ended the

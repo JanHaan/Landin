@@ -42,6 +42,14 @@ package Landin.Platform.Native.Tools is
       Result    : out Tool_Result;
       Capture   : Capture_Mode := Merged);
 
+   overriding procedure Run_In_Environment
+     (Host        : Native_Tool_Runner;
+      Program     : String;
+      Arguments   : Path_List;
+      Environment : Path_List;
+      Result      : out Tool_Result;
+      Capture     : Capture_Mode := Merged);
+
    --  Through `landin_tool_process.c`, which owns the signal dispositions
    --  and their restoration.
    overriding procedure Run_Attached

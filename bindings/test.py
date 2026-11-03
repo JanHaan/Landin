@@ -1,5 +1,13 @@
 #!/usr/bin/env python3
-"""Standard-library tests for the Clang-backed binding generator."""
+"""Standard-library tests for `refine bindings` and the pinned Clang.
+
+    python3 bindings/test.py --refine PATH
+    LANDIN_REFINE=PATH python3 bindings/test.py
+
+Every case runs the refine named, and the external Clang that $CLANG names
+(clang by default), on headers and policies written here; the cases that
+only a fake host reaches are the compiler's own, in its bindings suite.
+"""
 
 from __future__ import annotations
 
@@ -8,20 +16,38 @@ import json
 import os
 import pathlib
 import re
-import runpy
 import shutil
 import subprocess
 import sys
 import tempfile
 import unittest
-from unittest import mock
 from typing import Any
 
 HERE = pathlib.Path(__file__).resolve().parent
-GENERATOR = HERE / "generate.py"
+#  The compiler under test: --refine PATH, or $LANDIN_REFINE.
+REFINE = os.environ.get("LANDIN_REFINE")
 FIXTURE = (HERE.parent / "compiler" / "tests" / "fixtures" / "abi" /
            "r440-bindings-generated")
 TARGET = "x86_64-pc-linux-gnu"
+TARGET_NAME = "linux-x86-64"
+#  A refusal is reported (1) or a request refine cannot carry out as
+#  written (2); either is a diagnostic, never a defect (70).
+REFUSED = (1, 2)
+
+
+def refine() -> str:
+    if REFINE is None:
+        raise RuntimeError("name the refine to test with --refine PATH or"
+                           " $LANDIN_REFINE")
+    found = shutil.which(REFINE)
+    if found is None:
+        raise RuntimeError(f"refine {REFINE!r} is not an executable")
+    return str(pathlib.Path(found).resolve())
+
+
+def diagnostic(message: str) -> str:
+    """The line refine reports a refusal with, whatever its code."""
+    return r"error\[L\d{4}\]: " + re.escape(message)
 
 HEADER = r"""
 typedef struct Pair {
@@ -164,59 +190,6 @@ def policy() -> dict[str, Any]:
     }
 
 
-class TargetContractTests(unittest.TestCase):
-    def test_each_target_is_one_row_with_its_own_char_and_fact(self) -> None:
-        """D256: the standard AAPCS64's plain char is unsigned, and its
-        bindings assert its own fact rather than Darwin's."""
-        module = runpy.run_path(str(GENERATOR))
-        rows = module["TARGET_ABIS"]
-        self.assertEqual(set(module["SUPPORTED_TARGETS"]), set(rows))
-        arm64 = rows[module["LINUX_ARM64_TARGET"]]
-        self.assertEqual((arm64["fact"], arm64["plain_char"], arm64["convention"]),
-                         ("c_aapcs64_lp64", "unsigned", "aapcs64"))
-        self.assertEqual({row["fact"] for row in rows.values()},
-                         {"c_sysv_lp64", "c_darwin_lp64", "c_aapcs64_lp64"})
-
-    def test_plain_char_sign_must_be_the_rows(self) -> None:
-        """A Clang that disagrees with the row about char describes another ABI."""
-        module = runpy.run_path(str(GENERATOR))
-        macros = ("#define __LP64__ 1\n#define __CHAR_BIT__ 8\n"
-                  "#define __SIZEOF_SHORT__ 2\n#define __SIZEOF_INT__ 4\n"
-                  "#define __SIZEOF_LONG__ 8\n#define __SIZEOF_LONG_LONG__ 8\n"
-                  "#define __SIZEOF_POINTER__ 8\n#define __SIZEOF_SIZE_T__ 8\n"
-                  "#define __SIZEOF_PTRDIFF_T__ 8\n#define __SIZEOF_FLOAT__ 4\n"
-                  "#define __SIZEOF_DOUBLE__ 8\n#define __FLT_RADIX__ 2\n"
-                  "#define __FLT_MANT_DIG__ 24\n#define __DBL_MANT_DIG__ 53\n"
-                  "#define __aarch64__ 1\n#define __linux__ 1\n#define __ELF__ 1\n"
-                  "#define __BYTE_ORDER__ __ORDER_LITTLE_ENDIAN__\n")
-        target = module["LINUX_ARM64_TARGET"]
-        for char_macro, accepted in (("#define __CHAR_UNSIGNED__ 1\n", True),
-                                     ("", False)):
-            driver = object.__new__(module["ClangDriver"])
-            driver.inputs = mock.Mock(target=target)
-            replies = [subprocess.CompletedProcess([], 0, (target + "\n").encode()),
-                       subprocess.CompletedProcess([], 0,
-                                                   (macros + char_macro).encode())]
-            with mock.patch.object(driver, "run", side_effect=replies):
-                if accepted:
-                    driver.verify_target()
-                else:
-                    with self.assertRaisesRegex(module["BindingError"],
-                                                "plain char is signed"):
-                        driver.verify_target()
-
-    def test_second_lp64_abi_is_refused_before_macro_or_header_work(self) -> None:
-        module = runpy.run_path(str(GENERATOR))
-        driver = object.__new__(module["ClangDriver"])
-        driver.inputs = mock.Mock(target=module["SUPPORTED_TARGET"])
-        with mock.patch.object(driver, "run", return_value=subprocess.CompletedProcess(
-                [], 0, b"arm64-apple-macosx26.0.0\n")) as run:
-            with self.assertRaisesRegex(module["BindingError"], "required"):
-                driver.verify_target()
-        self.assertEqual(run.call_count, 1)
-        self.assertEqual(run.call_args.args[0], ("-print-target-triple",))
-
-
 class PolicyNameTests(unittest.TestCase):
     def test_malformed_names_report_context_before_clang_or_output_creation(self) -> None:
         with tempfile.TemporaryDirectory(prefix="landin-policy-name-test-") as temporary:
@@ -236,60 +209,57 @@ class PolicyNameTests(unittest.TestCase):
                     policy_path.write_text(json.dumps(selected), encoding="utf-8")
                     output = root / f"generated-{index}"
                     process = subprocess.run([
-                        sys.executable, str(GENERATOR), "--clang", sys.executable,
-                        "--target", TARGET, "--sysroot", str(root),
-                        "--header", str(header), "--policy", str(policy_path),
-                        "--out-dir", str(output),
+                        refine(), "bindings", "--clang", sys.executable,
+                        "--target", TARGET_NAME, "--sysroot", str(root),
+                        "--policy", str(policy_path),
+                        "--out-dir", str(output), str(header),
                     ], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-                    self.assertEqual(process.returncode, 2, process.stderr)
+                    self.assertEqual(process.returncode, 1, process.stderr)
                     self.assertEqual(process.stdout, "")
-                    self.assertEqual(process.stderr,
-                        f"bindings: error: policy declaration 1 (alias {name!r}): "
-                        "name must contain a non-whitespace, non-@ character\n")
+                    self.assertRegex(process.stderr, r"\A" + diagnostic(
+                        f"policy declaration 1 (alias {name!r}): "
+                        "name must contain a non-whitespace, non-@ character")
+                        + r"\n\Z")
                     self.assertFalse(output.exists())
 
     def test_supported_names_and_explicit_landin_names_still_load(self) -> None:
-        module = runpy.run_path(str(GENERATOR))
+        """A name's Landin name, seen through the collision its selection
+        meets with an earlier one that already took the expected name."""
+        clang = shutil.which(os.environ.get("CLANG", "clang"))
+        if clang is None:
+            raise RuntimeError("an external Clang is required")
         with tempfile.TemporaryDirectory(prefix="landin-policy-name-test-") as temporary:
-            path = pathlib.Path(temporary) / "policy.json"
-            for name, explicit, expected in (
+            root = pathlib.Path(temporary)
+            header = root / "api.h"
+            header.write_text("typedef int Widget;\ntypedef int Other;\n",
+                              encoding="utf-8")
+            for index, (name, explicit, expected) in enumerate((
                     ("Widget", None, "widget"),
                     ("@Widget", None, "widget"),
                     ("struct Widget", None, "widget"),
-                    ("@Widget", "chosen", "chosen")):
+                    ("@Widget", "chosen", "chosen"))):
                 with self.subTest(name=name, explicit=explicit):
                     selected = policy()
                     entry = {"kind": "alias", "name": name}
                     if explicit is not None:
                         entry["landin_name"] = explicit
-                    selected["declarations"] = [entry]
-                    path.write_text(json.dumps(selected), encoding="utf-8")
-                    loaded = module["Policy"].load(path)
-                    self.assertEqual(loaded.entries[0].name, name)
-                    self.assertEqual(loaded.entries[0].landin_name, expected)
-
-
-class EnumProbeTests(unittest.TestCase):
-    def test_probe_reads_only_filtered_constants(self) -> None:
-        module = runpy.run_path(str(GENERATOR))
-        candidates = [name for name in module["BUILTIN_LAYOUT"]
-                      if name not in {"float", "double", "_Bool"}]
-        names = ("unsigned int", "long")
-        output = "\n".join(json.dumps({
-            "kind": "EnumConstantDecl", "name": f"landin_enum_probe_type_{index}",
-            "inner": [{"kind": "ConstantExpr", "value": str(candidates.index(name) + 1)}],
-        }) for index, name in enumerate(names)).encode()
-        driver = object.__new__(module["ClangDriver"])
-        enums = [module["EnumInfo"]({}, "", tag) for tag in ("First", "Second")]
-        with tempfile.TemporaryDirectory() as directory:
-            translation = pathlib.Path(directory) / "translation.i"
-            translation.write_text("enum First { A }; enum Second { B };\n")
-            with mock.patch.object(driver, "run", return_value=subprocess.CompletedProcess(
-                    [], 0, output)) as run, mock.patch.object(
-                    driver, "parse_ast", side_effect=AssertionError("full AST requested")):
-                driver.query_enum_types(mock.Mock(identifiers=set()), translation, enums)
-        self.assertEqual([enum.compatible_type for enum in enums], list(names))
-        self.assertIn("-ast-dump-filter=landin_enum_probe_type_", run.call_args.args[0])
+                    selected["declarations"] = [
+                        {"kind": "alias", "name": "Other", "landin_name": expected},
+                        entry]
+                    policy_path = root / f"policy-{index}.json"
+                    policy_path.write_text(json.dumps(selected), encoding="utf-8")
+                    process = subprocess.run([
+                        refine(), "bindings", "--clang", clang,
+                        "--target", TARGET_NAME, "--sysroot", str(root),
+                        "--policy", str(policy_path),
+                        "--out-dir", str(root / f"generated-{index}"),
+                        str(header),
+                    ], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                    self.assertEqual(process.returncode, 1, process.stderr)
+                    self.assertRegex(process.stderr, r"\A" + diagnostic(
+                        f"policy declaration 2 (alias {name!r}): Landin name "
+                        f"{expected!r} collides with policy declaration 1 "
+                        f"(alias 'Other')") + r"\n\Z")
 
 
 class GeneratorTests(unittest.TestCase):
@@ -335,13 +305,13 @@ class GeneratorTests(unittest.TestCase):
     def command(self, parent: pathlib.Path, sysroot: pathlib.Path,
                 includes: pathlib.Path, output: pathlib.Path) -> list[str]:
         return [
-            sys.executable, str(GENERATOR), "--clang", str(self.clang),
-            "--target", TARGET, "--sysroot", str(sysroot),
-            "--header", f"api/api.h={parent / 'api.h'}",
+            refine(), "bindings", "--clang", str(self.clang),
+            "--target", TARGET_NAME, "--sysroot", str(sysroot),
             "--policy", str(parent / "policy.json"), "--out-dir", str(output),
             "--system-include-dir", str(includes),
             "--system-include-dir", str(self.resource_include),
             "--define", "LANDIN_BINDING_TEST=1",
+            f"api/api.h={parent / 'api.h'}",
         ]
 
     def generate(self, parent: pathlib.Path, *, header: str = HEADER,
@@ -381,12 +351,12 @@ class GeneratorTests(unittest.TestCase):
                 encoding="utf-8")))
         shutil.move(parent / "api.h", parent / "r440-bindings.h")
         command = [
-            sys.executable, str(GENERATOR), "--clang", str(self.clang),
-            "--target", TARGET, "--sysroot", str(sysroot),
-            "--header", f"r440-bindings.h={parent / 'r440-bindings.h'}",
+            refine(), "bindings", "--clang", str(self.clang),
+            "--target", TARGET_NAME, "--sysroot", str(sysroot),
             "--policy", str(parent / "policy.json"), "--out-dir", str(output),
             "--system-include-dir", str(includes),
             "--system-include-dir", str(self.resource_include),
+            f"r440-bindings.h={parent / 'r440-bindings.h'}",
         ]
         process = subprocess.run(command, stdout=subprocess.PIPE,
                                  stderr=subprocess.PIPE, text=True)
@@ -590,7 +560,7 @@ int main(void)
                                         header=header, selected_policy=selected_policy,
                                         expect_success=False)
         self.assertIn(expected, process.stderr)
-        self.assertEqual(process.returncode, 2)
+        self.assertIn(process.returncode, REFUSED)
         self.assertNotIn("Traceback", process.stderr)
         self.assertFalse(output.exists())
 
@@ -613,7 +583,7 @@ int main(void)
                 process = subprocess.run(
                     self.command(parent, sysroot, includes, output),
                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-                self.assertEqual(process.returncode, 2, process.stderr)
+                self.assertIn(process.returncode, REFUSED, process.stderr)
                 self.assertEqual(process.stdout, "")
                 self.assertNotIn("Traceback", process.stderr)
                 if preexisting:
@@ -625,12 +595,12 @@ int main(void)
                     self.assertFalse(output.exists())
                     for name in names:
                         self.assertFalse((output / name).exists())
-                prefix = "bindings: error: " + expected
                 if trailing_detail:
                     self.assertRegex(process.stderr,
-                                     r"\A" + re.escape(prefix) + r": [^\n]+\n\Z")
+                                     r"\A" + diagnostic(expected) + r": [^\n]+\n\Z")
                 else:
-                    self.assertEqual(process.stderr, prefix + "\n")
+                    self.assertRegex(process.stderr,
+                                     r"\A" + diagnostic(expected) + r"\n\Z")
 
     def test_dependency_names_cannot_reuse_selected_names(self) -> None:
         selected = {
@@ -689,44 +659,23 @@ int main(void)
         self.assertEqual(outer["representation"], "c-owned-opaque")
 
     def test_record_dependency_chain_is_classified_once(self) -> None:
-        count = 16
+        """Each record is classified once and kept: a chain of 64 records,
+        each holding the one before by value, would take 2**64 steps if a
+        record's fields were classified again for each record holding it."""
+        count = 64
         header = "typedef struct R0 { int value; } R0;\n"
         header += "".join(
             f"typedef struct R{index} {{ R{index - 1} value; }} R{index};\n"
             for index in range(1, count))
         header += f"extern R{count - 1} get_outer(void);\n"
-        parent = self.root / "dependency-chain"
-        selected = self.selection(self.function("get_outer"))
-        sysroot, includes, output = self.make_tree(
-            parent, header=header, selected_policy=selected)
-        module = runpy.run_path(str(GENERATOR))
-        inputs = module["parse_arguments"](
-            self.command(parent, sysroot, includes, output)[2:])
-        include_map = parent / "header-map"
-        include_map.mkdir()
-        module["create_include_map"](include_map, inputs.headers)
-        translation = parent / "translation.c"
-        module["write_translation_unit"](translation, inputs.headers)
-        driver = module["ClangDriver"](inputs, include_map)
-        ast = module["ASTModel"](driver.parse_ast(driver.preprocess(translation)))
-        generator = module["Generator"](
-            ast, module["Policy"].load(inputs.policy_path), inputs.headers)
-
-        with mock.patch.object(generator, "record_classification",
-                               wraps=generator.record_classification) as classify, \
-             mock.patch.object(generator, "validate_function_shape",
-                               wraps=generator.validate_function_shape) as validate:
-            generator.collect_dependencies()
-            self.assertEqual(len(generator.needed_records), count)
-            self.assertLessEqual(classify.call_count, 2 * count)
-            first_calls = classify.call_count
-            generator.collect_dependencies()
-            self.assertEqual(classify.call_count, first_calls)
-            self.assertEqual(validate.call_count, 1)
-
-        bindings, _, _, _ = generator.generate()
-        self.assertIn("public r15: type = layout(c) struct", bindings)
+        _, output = self.generate(
+            self.root / "dependency-chain", header=header,
+            selected_policy=self.selection(self.function("get_outer")))
+        bindings = (output / "bindings.ldn").read_text(encoding="utf-8")
+        self.assertIn(f"public r{count - 1}: type = layout(c) struct", bindings)
         self.assertIn("public r0: type = layout(c) struct", bindings)
+        self.assertLess(bindings.index("public r0:"),
+                        bindings.index(f"public r{count - 1}:"))
 
     def test_const_global_has_read_only_address_adapter(self) -> None:
         selected = {
@@ -1859,7 +1808,7 @@ int main(void) {
                 (parent / "api.h").write_text(header)
                 (parent / "policy.json").write_text(json.dumps(selected))
                 process = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-                self.assertEqual(process.returncode, 2, process.stderr)
+                self.assertIn(process.returncode, REFUSED, process.stderr)
                 self.assertIn(error, process.stderr)
                 self.assertNotIn("Traceback", process.stderr)
                 self.assertEqual({name: (output / name).read_bytes() for name in names}, original)
@@ -1911,12 +1860,10 @@ int main(void) {{
 ''')
 
     def test_every_normative_keyword_is_normalized_and_explicit_names_refused(self) -> None:
-        module = runpy.run_path(str(GENERATOR))
         spec = (HERE.parent / "spec.md").read_text()
         production = re.search(r'^keyword\s*::=(.*?)(?=\n\n)', spec, re.M | re.S)
         self.assertIsNotNone(production)
         keywords = set(re.findall(r'"([a-z]+)"', production.group(1)))
-        self.assertEqual(module["LANDIN_KEYWORDS"], keywords)
         c_keywords = {"auto", "break", "case", "char", "const", "continue", "default",
                       "do", "double", "else", "enum", "extern", "float", "for", "goto",
                       "if", "inline", "int", "long", "register", "restrict", "return",
@@ -1931,7 +1878,6 @@ int main(void) {{
             self.assertIn(f"    c_{name}: c.c_int", text)
         for name in sorted(keywords | {"compiler", "assembler", "linker"}):
             with self.subTest(name=name):
-                self.assertEqual(module["sanitize_landin"](name), "c_" + name)
                 self.assert_generation_error(self.selection(self.function("f", landin_name=name)),
                                              "is reserved", header="int f(void);\n")
 
@@ -1948,7 +1894,7 @@ int main(void) {{
                          {"kind": "callback", "name": "CB", "nullable": False, "parameters": {}})
                 process, output = self.generate(self.root / f"abi-refusal-{index}", header=header + "\n",
                                                selected_policy=self.selection(entry), expect_success=False)
-                self.assertEqual(process.returncode, 2, process.stderr)
+                self.assertIn(process.returncode, REFUSED, process.stderr)
                 self.assertIn(message, process.stderr)
                 self.assertFalse(output.exists())
 
@@ -1990,29 +1936,26 @@ int main(void) { return f(36) != 37; }
                 env = dict(os.environ, **{variable: str(ambient)})
                 process = subprocess.run(self.command(parent, sysroot, includes, output),
                                          env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-                self.assertEqual(process.returncode, 2, process.stderr)
+                self.assertIn(process.returncode, REFUSED, process.stderr)
                 self.assertIn("'dep.h' file not found", process.stderr)
                 self.assertFalse(output.exists())
-        # Instrument real subprocess calls in-process: include exclusion must
-        # hold for triple/macros/preprocessing/AST/enum probe/adapter validation.
+        # Every Clang refine runs is given its own environment, which the
+        # compiler's bindings suite holds each call to.  Here, an include
+        # path and a driver override set around refine change nothing.
         (parent / "api.h").write_text("typedef enum E { ONE=1 } E;\n")
         (parent / "policy.json").write_text(json.dumps(self.selection({"kind": "enum", "name": "E"})))
-        module = runpy.run_path(str(GENERATOR))
-        real_run = subprocess.run
-        calls: list[list[str]] = []
-        def checked_run(command: list[str], **kwargs: Any) -> Any:
-            calls.append(command)
-            self.assertIn("env", kwargs)
-            for variable in ("CPATH", "C_INCLUDE_PATH", "CCC_OVERRIDE_OPTIONS"):
-                self.assertNotIn(variable, kwargs["env"])
-            return real_run(command, **kwargs)
-        with mock.patch.dict(os.environ, {"CPATH": str(ambient), "C_INCLUDE_PATH": str(ambient),
-                                          "CCC_OVERRIDE_OPTIONS": "+-fshort-enums"}), \
-                mock.patch.object(subprocess, "run", side_effect=checked_run):
-            self.assertEqual(module["main"](self.command(parent, sysroot, includes, output)[2:]), 0)
-        self.assertGreaterEqual(len(calls), 6)
-        self.assertTrue(any("enum-probe.i" in " ".join(command) for command in calls))
-        self.assertTrue(any("adapters.c" in " ".join(command) for command in calls))
+        outputs = []
+        for env in (dict(os.environ),
+                    dict(os.environ, CPATH=str(ambient), C_INCLUDE_PATH=str(ambient),
+                         CCC_OVERRIDE_OPTIONS="+-fshort-enums")):
+            process = subprocess.run(self.command(parent, sysroot, includes, output),
+                                     env=env, stdout=subprocess.PIPE,
+                                     stderr=subprocess.PIPE, text=True)
+            self.assertEqual(process.returncode, 0, process.stderr)
+            outputs.append({name: (output / name).read_bytes() for name in
+                            ("bindings.ldn", "adapters.c", "exports.h", "bindings.json")})
+        self.assertEqual(outputs[0], outputs[1])
+        self.assertIn(b'"size": 4', outputs[1]["bindings.json"])
 
     def test_anonymous_enums_are_deterministic_across_hash_seeds(self) -> None:
         parent = self.root / "hash-seeds"
@@ -2020,16 +1963,15 @@ int main(void) { return f(36) != 37; }
             selected_policy=self.selection({"kind": "enum", "name": "@A", "landin_name": "a_enum"},
                                            {"kind": "enum", "name": "@B", "landin_name": "b_enum"}))
         baseline = None
-        for seed in range(12):
+        for _ in range(4):
             process = subprocess.run(self.command(parent, sysroot, includes, output),
-                                     env=dict(os.environ, PYTHONHASHSEED=str(seed)),
                                      stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
             self.assertEqual(process.returncode, 0, process.stderr)
             actual = {name: (output / name).read_bytes() for name in
                       ("bindings.ldn", "adapters.c", "exports.h", "bindings.json")}
             if baseline is None:
                 baseline = actual
-            self.assertEqual(actual, baseline, f"hash seed {seed}")
+            self.assertEqual(actual, baseline)
         text = (output / "bindings.ldn").read_text()
         self.assertLess(text.index("public a_enum:"), text.index("public b_enum:"))
 
@@ -2070,9 +2012,10 @@ int main(void) { return f(36) != 37; }
 
         process = subprocess.run(self.command(parent, sysroot, includes, output),
                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        self.assertEqual(process.returncode, 2, process.stderr)
-        self.assertEqual(process.stderr,
-                         "bindings: error: output directory must not be a symbolic link\n")
+        self.assertEqual(process.returncode, 1, process.stderr)
+        self.assertRegex(process.stderr, r"\A" + diagnostic(
+            f"the output directory {output} is a symbolic link; name the"
+            " directory it leads to with --out-dir") + r"\n\Z")
         self.assertTrue(output.is_symlink())
         self.assertEqual({name: (target / name).read_bytes() for name in names}, original)
         self.assertEqual({entry.name for entry in target.iterdir()}, set(names))
@@ -2090,44 +2033,19 @@ int main(void) { return f(36) != 37; }
                 (output / name).write_text("old " + name)
         process = subprocess.run(self.command(parent, sysroot, includes, output),
                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        self.assertEqual(process.returncode, 2, process.stderr)
+        self.assertEqual(process.returncode, 1, process.stderr)
         self.assertIn("existing output is not a regular file", process.stderr)
         self.assertNotIn("Traceback", process.stderr)
         self.assertTrue((output / "adapters.c").is_dir())
         for name in set(names) - {"adapters.c"}:
             self.assertEqual((output / name).read_text(), "old " + name)
         (output / "adapters.c").rmdir()
-        # Rollback after each possible successful prefix, with both preexisting
-        # and newly created destinations. Use real replacement except one fault.
-        module = runpy.run_path(str(GENERATOR))
-        real_replace = os.replace
-        for existing in (True, False):
-            for fail_at in range(1, 5):
-                destination = parent / f"destination-{existing}-{fail_at}"
-                staging = parent / f"staging-{existing}-{fail_at}"
-                staging.mkdir()
-                if existing:
-                    destination.mkdir()
-                for name in names:
-                    (staging / name).write_text("new " + name)
-                    if existing:
-                        (destination / name).write_text("old " + name)
-                calls = 0
-                def fail_once(src: pathlib.Path, dst: pathlib.Path) -> None:
-                    nonlocal calls
-                    calls += 1
-                    if calls == fail_at:
-                        raise OSError(5, "injected publication failure")
-                    real_replace(src, dst)
-                with mock.patch.object(os, "replace", side_effect=fail_once):
-                    with self.assertRaisesRegex(module["BindingError"], "previous outputs restored"):
-                        module["publish_outputs"](staging, destination)
-                if existing:
-                    self.assertEqual({name: (destination / name).read_text() for name in names},
-                                     {name: "old " + name for name in names})
-                else:
-                    self.assertFalse(destination.exists())
-        self.assertFalse(list(parent.glob(".landin-bindings-backup-*")))
+        # A failure part way through replacement, after each prefix, is the
+        # compiler suite's: it needs a filesystem that fails on cue.
+        process = subprocess.run(self.command(parent, sysroot, includes, output),
+                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        self.assertEqual(process.returncode, 0, process.stderr)
+        self.assertEqual(sorted(path.name for path in output.iterdir()), sorted(names))
 
     def test_failed_validation_does_not_replace_outputs(self) -> None:
         parent = self.root / "atomic"
@@ -2140,7 +2058,7 @@ int main(void) { return f(36) != 37; }
         (parent / "policy.json").write_text(json.dumps(broken), encoding="utf-8")
         process = subprocess.run(self.command(parent, sysroot, includes, output),
                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        self.assertEqual(process.returncode, 2)
+        self.assertIn(process.returncode, REFUSED)
         self.assertIn("stale policy", process.stderr)
         for name in ("bindings.ldn", "adapters.c", "exports.h", "bindings.json"):
             self.assertEqual((output / name).read_text(encoding="utf-8"), "sentinel\n")
@@ -2174,7 +2092,7 @@ int main(void) { return f(36) != 37; }
                 process = subprocess.run(
                     self.command(parent, sysroot, includes, output),
                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-                self.assertEqual(process.returncode, 2, process.stderr)
+                self.assertIn(process.returncode, REFUSED, process.stderr)
                 self.assertIn(f"duplicate JSON key '{key}'", process.stderr)
                 self.assertEqual(sentinel.read_text(encoding="utf-8"), "sentinel\n")
                 self.assertEqual(sorted(path.name for path in output.iterdir()),
@@ -2182,4 +2100,9 @@ int main(void) { return f(36) != 37; }
 
 
 if __name__ == "__main__":
-    unittest.main(verbosity=2)
+    arguments = sys.argv[1:]
+    if "--refine" in arguments:
+        at = arguments.index("--refine")
+        REFINE = arguments[at + 1]
+        del arguments[at:at + 2]
+    unittest.main(argv=[sys.argv[0], *arguments], verbosity=2)

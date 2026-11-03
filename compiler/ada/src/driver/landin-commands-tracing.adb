@@ -21,6 +21,23 @@ package body Landin.Commands.Tracing is
       Host.Original.Run (Program, Arguments, Result, Capture);
    end Run;
 
+   overriding procedure Run_In_Environment
+     (Host : Runner; Program : String;
+      Arguments : Landin.Platform.Path_List;
+      Environment : Landin.Platform.Path_List;
+      Result : out Landin.Platform.Tool_Result;
+      Capture : Landin.Platform.Capture_Mode := Landin.Platform.Merged)
+   is
+   begin
+      US.Append (Host.Transcript.all, "run [" & Landin.Json.Quoted (Program));
+      for Argument of Arguments loop
+         US.Append (Host.Transcript.all, "," & Landin.Json.Quoted (Argument));
+      end loop;
+      US.Append (Host.Transcript.all, "]" & ASCII.LF);
+      Host.Original.Run_In_Environment
+        (Program, Arguments, Environment, Result, Capture);
+   end Run_In_Environment;
+
    overriding procedure Run_Attached
      (Host : Runner; Program : String;
       Arguments : Landin.Platform.Path_List;

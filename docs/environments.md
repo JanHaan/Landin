@@ -278,8 +278,8 @@ not a product backend. Its package comes from the container's existing Debian
 channel rather than a third download authority. The C boundary work refreshed
 that one base pin from Debian 12 to the official Debian 13 `trixie-20260824` image index,
 which gives the local loop Clang 19.1.7. The gate installs Ubuntu 24.04's
-clang-19 at the exact version `environments/pins.sh` names; the binding
-generator's tests pass on both. GNAT and GPRbuild retain their
+clang-19 at the exact version `environments/pins.sh` names; `refine
+bindings`' tests pass on both. GNAT and GPRbuild retain their
 existing versions and archive checksums.
 
 GDB comes from that same Debian channel for `scripts/debug.sh` in the local
@@ -378,7 +378,7 @@ also selects `llvmPackages."19".clang` and `glibc.dev` from the package set
 fixed by `flake.lock`, matching the Debian environments' Clang major without
 following nixpkgs' default. Its `clang-19` is that package set's 19.1.7, not
 the gate's: the `bindings` job runs Ubuntu 24.04's clang-19 at the version
-`LANDIN_CLANG_UBUNTU` pins, 19.1.1, and the binding generator's tests pass on
+`LANDIN_CLANG_UBUNTU` pins, 19.1.1, and `refine bindings`' tests pass on
 both. The Darwin shell does not pretend that its SDK is a
 Linux sysroot; run binding-generator tests through `scripts/linux-loop.sh`
 there.

@@ -91,6 +91,12 @@ package Landin.Testing.Fakes is
    overriding function Is_Directory
      (Host : Fake_Filesystem; Path : String) return Boolean;
 
+   --  True for a path Add_Link named, and only for one.
+   overriding function Is_Link
+     (Host : Fake_Filesystem; Path : String) return Boolean;
+
+   procedure Add_Link (Host : in out Fake_Filesystem; Path : String);
+
    --  Inject an exception at the next read.  An invalid request must return
    --  its diagnostics before this injection can fire.
    procedure Raise_On_Read
@@ -108,6 +114,10 @@ package Landin.Testing.Fakes is
    procedure Refuse_Writes (Host : in out Fake_Filesystem);
 
    procedure Refuse_Removals (Host : in out Fake_Filesystem);
+
+   --  Make the At_Move'th move from now answer Not_Movable, and only it:
+   --  a replacement that fails part way, then puts back what it moved.
+   procedure Fail_Move (Host : in out Fake_Filesystem; At_Move : Positive);
 
    overriding procedure Remove_File
      (Host   : Fake_Filesystem;
@@ -235,6 +245,9 @@ package Landin.Testing.Fakes is
       Capture   : Landin.Platform.Capture_Mode := Landin.Platform.Merged;
       --  Run_Attached's, a program `refine run` started, and not a tool.
       Attached  : Boolean := False;
+      --  Run_In_Environment's, and the environment it was given.
+      Isolated  : Boolean := False;
+      Environment : Landin.Platform.Path_List;
    end record;
 
    function Call_At
@@ -249,6 +262,15 @@ package Landin.Testing.Fakes is
       Arguments : Landin.Platform.Path_List;
       Result    : out Landin.Platform.Tool_Result;
       Capture   : Landin.Platform.Capture_Mode := Landin.Platform.Merged);
+
+   --  Answers as Run does, and records the environment it was given.
+   overriding procedure Run_In_Environment
+     (Host        : Fake_Tool_Runner;
+      Program     : String;
+      Arguments   : Landin.Platform.Path_List;
+      Environment : Landin.Platform.Path_List;
+      Result      : out Landin.Platform.Tool_Result;
+      Capture     : Landin.Platform.Capture_Mode := Landin.Platform.Merged);
 
    --  D526: how every later Run_Attached says its program ended: exited
    --  with Exit_Code, or, when Signal is not zero, killed by it.  It
@@ -381,6 +403,9 @@ private
       Identity_Comparisons : Natural := 0;
       Private_Made : Natural := 0;
       Refuses_Private : Boolean := False;
+      --  Fail_Move's: the moves still to come before the failing one.
+      Moves_Before_Failure : Natural := 0;
+      Fails_Move : Boolean := False;
    end record;
 
    type Store_Access is access Store;
@@ -395,6 +420,7 @@ private
    type Fake_Filesystem is limited new Landin.Platform.Filesystem
    with record
       Aliases : Landin.Platform.Path_List;
+      Links : Landin.Platform.Path_List;
       Executable : Unbounded.Unbounded_String;
       Writes : Store_Owner;
    end record;

@@ -10,6 +10,7 @@ package body Landin.Commands.Catalogue is
          when Overview => "", when Check => "check",
          when Compile => "compile", when Run => "run",
          when Format => "fmt", when Svd => "svd",
+         when Bindings => "bindings",
          when Explain => "explain", when Server => "lsp",
          when Version => "version", when Targets => "targets",
          when Completion => "completion", when Help => "help");
@@ -26,6 +27,8 @@ package body Landin.Commands.Catalogue is
            "Format source files, or a directory's, in the one Landin layout",
          when Svd =>
            "Generate a device's register modules and interrupts from its SVD",
+         when Bindings =>
+           "Generate Landin bindings and C adapters for C headers",
          when Explain =>
            "Explain diagnostic codes, and the rules and decisions notes cite",
          when Server => "Serve the language server protocol over stdio",
@@ -71,7 +74,11 @@ package body Landin.Commands.Catalogue is
          when Stdio => "--stdio", when JSON => "--json",
          when Warnings => "--warnings", when Warn => "--warn",
          when Allow => "--allow", when Deny => "--deny",
-         when Policy => "--policy", when Out_Dir => "--out-dir");
+         when Policy => "--policy", when Out_Dir => "--out-dir",
+         when Clang => "--clang", when Sysroot => "--sysroot",
+         when Include_Dir => "--include-dir",
+         when System_Include_Dir => "--system-include-dir",
+         when Define => "--define");
 
    function Description (Flag : Option) return String is
      (case Flag is
@@ -127,9 +134,17 @@ package body Landin.Commands.Catalogue is
          when Warn => "Enable a warning code or all (repeatable)",
          when Allow => "Suppress a warning code or all (repeatable)",
          when Deny => "Enable and promote a warning to an error (repeatable)",
-         when Policy => "The selection policy the SVD was reviewed against",
-         when Out_Dir =>
-           "Directory the modules and the description are written under");
+         when Policy =>
+           "The policy that selects what is generated, and how",
+         when Out_Dir => "Directory the outputs are written under",
+         when Clang => "The Clang that reads the headers, by path or name",
+         when Sysroot => "The target's system root; an empty one will do",
+         when Include_Dir =>
+           "Search DIR for quoted and angled headers (repeatable)",
+         when System_Include_Dir =>
+           "Search DIR for system headers (repeatable)",
+         when Define =>
+           "Define NAME, or NAME=VALUE, for Clang (repeatable)");
 
    function Values (Flag : Option) return String is
      (case Flag is
@@ -171,6 +186,8 @@ package body Landin.Commands.Catalogue is
             or else Flag in Warnings .. Deny,
           when Format => Flag in Format_Check | Format_Stdout,
           when Svd => Flag in Policy | Out_Dir,
+          when Bindings =>
+            Flag in Target | Policy | Out_Dir | Clang .. Define,
           when Explain => Flag = Explain_Full,
           when Server => Flag = Stdio,
           when Version => Flag in JSON | Library,
@@ -212,7 +229,8 @@ package body Landin.Commands.Catalogue is
 
    function Repeatable (Flag : Option) return Boolean is
      (Flag in Help_Flag | Verbose | Quiet | Root | Library_Directory
-       | Build_Option | Warn | Allow | Deny);
+       | Build_Option | Warn | Allow | Deny | Include_Dir
+       | System_Include_Dir | Define);
 
    function Valid_Value (Flag : Option; Text : String) return Boolean is
    begin
@@ -336,6 +354,9 @@ package body Landin.Commands.Catalogue is
             when Run => " [options] source.ldn ... [-- ARGUMENT ...]",
             when Format => " [options] source.ldn|DIR ...",
             when Svd => " --policy=POLICY.json --out-dir=DIR DEVICE.svd",
+            when Bindings =>
+              " --clang=CLANG --sysroot=DIR --policy=POLICY.json"
+              & " --out-dir=DIR [LOGICAL=]HEADER.h ...",
             when Explain => " [options] [CODE|[NNNN]|DNNN ...]",
             when Completion => " [options] bash|zsh|fish",
             when Help => " [COMMAND|reference]",
@@ -364,7 +385,9 @@ package body Landin.Commands.Catalogue is
                      when Quiet => "-q, --quiet",
                      when Output => "-o, --output",
                      when others => Name (Flag))
-                 & (if Flag = Library_Directory then " DIR"
+                 & (if Flag in Library_Directory | Sysroot | Include_Dir
+                             | System_Include_Dir
+                    then " DIR"
                     elsif Takes_Value (Flag) then " VALUE" else "");
             begin
                US.Append (Text, "  " & Spelling
@@ -461,6 +484,23 @@ package body Landin.Commands.Catalogue is
               & LF & "scripts/fetch_inputs.py fetches a pinned SVD by its"
               & " hash."
               & LF);
+         when Bindings =>
+            US.Append (Text, LF
+              & "Example: refine bindings --clang=clang-19"
+              & " --target=linux-x86-64" & LF
+              & "  --sysroot=sysroot --policy=policy.json --out-dir=generated"
+              & LF & "  --system-include-dir=""$(clang-19 -print-resource-dir)"
+              & "/include""" & LF & "  api/public.h=include/public.h" & LF
+              & "A header is LOGICAL=PATH, or PATH, whose last name is then"
+              & LF & "its logical one: the relative name exports.h includes it"
+              & LF & "by. Clang reads the headers and nothing else: it gets"
+              & LF & "-nostdinc, the roots and defines named here, and an"
+              & LF & "environment of PATH, HOME and the temporary directory"
+              & LF & "alone. Four files are written: bindings.ldn, adapters.c,"
+              & LF & "exports.h and bindings.json; each is written beside its"
+              & LF & "destination and read back, and adapters.c compiled,"
+              & LF & "before any is replaced. bindings/README.md describes the"
+              & LF & "policy." & LF);
          when others => null;
       end case;
       return US.To_String (Text);

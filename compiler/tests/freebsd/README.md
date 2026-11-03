@@ -74,7 +74,7 @@ bsdtar. Its
 `clang-19` takes the bare compiler, with the wrapper's resource directory, for
 a command that names a target or a sysroot, as every FreeBSD compilation does,
 because nixpkgs' wrapper adds the host's glibc to a FreeBSD build; a host
-program gets the wrapper, as `bindings/test.py` needs. The shell does not
+program gets the wrapper, as `bindings/test.py`'s `refine bindings` needs. The shell does not
 provide the system emulators and firmware that run the guests; nixpkgs'
 QEMU does, its iPXE ROMs and arm64 UEFI firmware included, so on a Linux
 host the whole lane runs from the shell with that QEMU added. amd64 needs

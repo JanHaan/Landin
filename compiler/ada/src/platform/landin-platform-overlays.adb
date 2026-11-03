@@ -85,6 +85,10 @@ package body Landin.Platform.Overlays is
      is (not Host.Held.Contains (Path)
          and then Host.Under.Is_Directory (Path));
 
+   overriding function Is_Link
+     (Host : Overlay; Path : String) return Boolean
+     is (not Host.Held.Contains (Path) and then Host.Under.Is_Link (Path));
+
    overriding procedure Read_File
      (Host    : Overlay;
       Path    : String;

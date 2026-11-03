@@ -2172,3 +2172,41 @@ A data region that is `"rw"`, as the ESP32-C3's data-bus alias of its
 SRAM is, would hold bytes the core cannot fetch, and the first call would
 fault. Place the routine in `.text`, or in an executable region of the
 description with `link(region: "NAME")`.
+
+### L0579
+
+`refine bindings` cannot read its policy (D820): it is not UTF-8 JSON, names
+a key twice, is not schema 1, lacks a key it needs or names one refine does
+not read, gives one of the wrong shape, or binds for another ABI than
+`--target` names. The message names the key or the declaration. A policy's
+every key is described in `bindings/README.md`.
+
+### L0580
+
+The Clang `refine bindings` was given cannot be used as asked (D820): it
+cannot be run, a root it is given is not a directory, it failed, and the
+message carries its error output with the request's paths replaced by
+names that do not depend on where it ran, or it describes another ABI than
+the target's: another triple, data model, byte order or sign of plain
+`char`. A header reached through an absolute path under none of the roots
+the request names is refused too, since what is generated could then depend
+on where it was. Name the pinned Clang with `--clang`, and every root a
+header needs with `--include-dir` or `--system-include-dir`.
+
+### L0581
+
+A declaration the policy selects cannot be bound (D820), and the message
+names the policy declaration and the position: the header no longer has it
+(a stale policy), a reference position has no policy or a scalar one has
+one, or the declaration uses a form `bindings/README.md` lists as refused,
+such as an extended floating type, a calling convention attribute, an
+anonymous aggregate or a wrapper that would forward a C variadic tail. A
+Landin name two declarations would share is refused here too. Correct the
+policy, or select another declaration.
+
+### L0582
+
+`refine bindings` will not replace its outputs (D820): the output directory
+is a symbolic link or not a directory, an output is a directory or a link,
+or an earlier run left its staged or kept copies beside one. Nothing was
+written. Remove what the message names, or choose another `--out-dir`.

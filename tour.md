@@ -4225,9 +4225,10 @@ type and take element-wise operators ([0590]).
 
 ### [1580] Importing from C
 
-A bodyless `extern(c)` declaration imports a C function. `refine` reads
-Landin, never C headers: a separate, deterministic binding generator reads
-headers and writes these declarations for you.
+A bodyless `extern(c)` declaration imports a C function. A compilation
+reads Landin, never C headers: `refine bindings`, a deterministic binding
+generator, asks Clang what a header declares and writes these declarations
+for you.
 
 ```landin
 none_returned: atom
@@ -5374,8 +5375,8 @@ with a guard on an ordinary integer.
 - no user-defined operators and no macros
 - no compile-time execution
 - no separate interface files
-- no header parsing inside `refine` (the separate binding generator reads
-  headers)
+- no header parsing inside the compiler (`refine bindings` asks Clang what a
+  header declares)
 
 ## WHAT IS STILL OPEN
 

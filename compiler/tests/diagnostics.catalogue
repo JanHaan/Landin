@@ -132,3 +132,7 @@ L0528  Live     D557: an SVD form refine svd does not read, for a selected regis
 L0529  Live     D557: a selected register the SVD describes in a way that cannot be generated as it says
 L0530  Live     D556: a policy that selects what its SVD does not have
 L0531  Live     D558: outputs refine svd will not replace
+L0579  Live     D820: a binding policy refine bindings cannot read
+L0580  Live     D820: a Clang that cannot be run as asked, fails, or describes another ABI
+L0581  Live     D820: a selected C declaration, or its policy, that cannot be bound
+L0582  Live     D820: outputs refine bindings will not replace

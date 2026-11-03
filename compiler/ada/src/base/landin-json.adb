@@ -18,7 +18,10 @@ package body Landin.Json is
    --  deep in the descent reaches the procedure that records it.
    Refused : exception;
 
-   procedure Parse (Into : in out Document; Text : String) is
+   procedure Parse
+     (Into : in out Document; Text : String;
+      Depth_Limit : Positive := Maximum_Depth)
+   is
       Cursor : Natural := Text'First;
       Depth  : Natural := 0;
 
@@ -355,9 +358,9 @@ package body Landin.Json is
                      others => <>);
                begin
                   Depth := Depth + 1;
-                  if Depth > Maximum_Depth then
+                  if Depth > Depth_Limit then
                      Refuse ("nested deeper than"
-                             & Natural'Image (Maximum_Depth), Cursor);
+                             & Natural'Image (Depth_Limit), Cursor);
                   end if;
                   Cursor := Cursor + 1;
                   Skip_Space;

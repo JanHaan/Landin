@@ -14,6 +14,12 @@ package Landin.Commands.Tracing is
       Arguments : Landin.Platform.Path_List;
       Result : out Landin.Platform.Tool_Result;
       Capture : Landin.Platform.Capture_Mode := Landin.Platform.Merged);
+   overriding procedure Run_In_Environment
+     (Host : Runner; Program : String;
+      Arguments : Landin.Platform.Path_List;
+      Environment : Landin.Platform.Path_List;
+      Result : out Landin.Platform.Tool_Result;
+      Capture : Landin.Platform.Capture_Mode := Landin.Platform.Merged);
    overriding procedure Run_Attached
      (Host : Runner; Program : String;
       Arguments : Landin.Platform.Path_List;

@@ -579,8 +579,8 @@ end config_path
 There are no header files. A module is a directory, every file in it sees
 the others, and `public` is what another module may name [1410]. A plain
 `import core/io` binds `io`, `as` renames it [1430], and a list in
-parentheses, `(get, post)`, selects names [1440]. `refine` never reads a C header:
-`bindings/generate.py` asks Clang for one and writes Landin declarations
+parentheses, `(get, post)`, selects names [1440]. A compilation never reads a C
+header: `refine bindings` asks Clang for one and writes Landin declarations
 from it [1580].
 
 ### `#define` for a constant
@@ -1203,7 +1203,7 @@ a slice of a field are refused, and a field is read and written by copy.
 Where a target needs aligned loads, the compiler moves such a field a byte at
 a time. C takes a packed record through a pointer and never by value
 [1580]. `layout(packed)` is a different thing, a hardware register's bits at
-stated positions [0730]. `bindings/generate.py` writes this form for a
+stated positions [0730]. `refine bindings` writes this form for a
 header's packed struct, and a typed pointer wherever the header passes one.
 
 ### Flexible array members
@@ -1235,7 +1235,7 @@ slice of the bytes the call filled, from `offsetof` to the record's length,
 which keeps their length and their origin. Because the elements would
 overlap whatever follows, such a record is no array element and no field of
 another C record, and C takes it through a pointer [1580].
-`bindings/generate.py` writes a header's flexible member as this last
+`refine bindings` writes a header's flexible member as this last
 `[0]T` field.
 
 ## Where to go next

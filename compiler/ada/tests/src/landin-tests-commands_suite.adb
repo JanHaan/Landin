@@ -763,8 +763,8 @@ package body Landin.Tests.Commands_Suite is
                "--emit=asm is an option of compile, not of check, and"
                & " follows its command: refine compile --emit=asm ...");
       Refused (["--target=linux-x86-64", "--version"],
-               "--target=linux-x86-64 is an option of check, compile and"
-               & " run, not of version");
+               "--target=linux-x86-64 is an option of check, compile, run"
+               & " and bindings, not of version");
       Refused (["-o", "x.s", "main.ldn"],
                "-o x.s is an option of compile; name the command first:"
                & " refine compile -o x.s ...");

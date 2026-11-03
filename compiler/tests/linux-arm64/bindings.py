@@ -19,7 +19,6 @@ from pathlib import Path
 import platform
 import shutil
 import subprocess
-import sys
 
 ROOT = Path(__file__).resolve().parents[3]
 FIXTURE = ROOT / "compiler/tests/fixtures/abi/r440-bindings-generated"
@@ -78,13 +77,14 @@ def main():
 
     generated = output / "generated"
     include = args.sysroot / "usr/include"
-    run([sys.executable, ROOT / "bindings/generate.py", "--clang", clang,
-         "--target", TARGET, "--sysroot", args.sysroot,
-         "--header", "r440-bindings.h=" + str(inputs / "r440-bindings.h"),
-         "--policy", inputs / "policy.json", "--out-dir", generated,
-         "--system-include-dir", resource / "include",
-         "--system-include-dir", include / "aarch64-linux-gnu",
-         "--system-include-dir", include])
+    run([refine, "bindings", "--clang=" + clang, "--target=linux-arm64",
+         "--sysroot=" + str(args.sysroot),
+         "--policy=" + str(inputs / "policy.json"),
+         "--out-dir=" + str(generated),
+         "--system-include-dir=" + str(resource / "include"),
+         "--system-include-dir=" + str(include / "aarch64-linux-gnu"),
+         "--system-include-dir=" + str(include),
+         "r440-bindings.h=" + str(inputs / "r440-bindings.h")])
     bindings = (generated / "bindings.ldn").read_text()
     require("compiler.assert(compiler.c_aapcs64_lp64)" in bindings,
             "the bindings do not assert the standard AAPCS64's fact")

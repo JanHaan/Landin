@@ -16,8 +16,8 @@
 extern char **environ;
 
 int landin_tool_capture(char *path, size_t capacity);
-int landin_tool_start(char *const args[], int input, int capture, int errors,
-                      int *child);
+int landin_tool_start(char *const args[], char *const env[], int isolated,
+                      int input, int capture, int errors, int *child);
 int landin_tool_wait(int child, int *status, int no_hang);
 int landin_tool_stop(int child, int *status);
 int landin_program_run(char *const args[], int *signal_number,
@@ -67,9 +67,12 @@ static int landin_tool_source(int source, int moved[3])
    among 0 to 2 is first moved above them, and each action reads a
    descriptor no action writes; the moved copies are closed after the call.
    A caller with no standard input of its own whose capture took that
-   number gives the child none rather than the capture. */
-int landin_tool_start(char *const args[], int input, int capture, int errors,
-                      int *child)
+   number gives the child none rather than the capture.
+
+   An isolated tool runs with exactly ENV, a NULL-terminated list of
+   NAME=VALUE strings, rather than the caller's environment. */
+int landin_tool_start(char *const args[], char *const env[], int isolated,
+                      int input, int capture, int errors, int *child)
 {
     posix_spawnattr_t attributes;
     posix_spawn_file_actions_t actions;
@@ -126,7 +129,8 @@ int landin_tool_start(char *const args[], int input, int capture, int errors,
     if (error == 0 && errors >= 0 && errors != capture && errors != input)
         error = posix_spawn_file_actions_addclose(&actions, errors);
     if (error == 0)
-        error = posix_spawn(&pid, args[0], &actions, &attributes, args, environ);
+        error = posix_spawn(&pid, args[0], &actions, &attributes, args,
+                            isolated ? env : environ);
     posix_spawn_file_actions_destroy(&actions);
     posix_spawnattr_destroy(&attributes);
     for (index = 0; index <= STDERR_FILENO; index++)

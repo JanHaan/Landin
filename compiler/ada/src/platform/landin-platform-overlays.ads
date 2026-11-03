@@ -59,6 +59,9 @@ package Landin.Platform.Overlays is
    overriding function Is_Directory
      (Host : Overlay; Path : String) return Boolean;
 
+   overriding function Is_Link
+     (Host : Overlay; Path : String) return Boolean;
+
    overriding procedure Read_File
      (Host    : Overlay;
       Path    : String;

@@ -1,6 +1,7 @@
 with Ada.Directories;
 with Ada.Environment_Variables;
 with Ada.IO_Exceptions;
+with GNAT.OS_Lib;
 with Ada.Strings.Fixed;
 with Ada.Streams.Stream_IO;
 with Interfaces;
@@ -249,6 +250,14 @@ package body Landin.Platform.Native is
       when Ada.IO_Exceptions.Name_Error =>
          return False;
    end Is_Directory;
+
+   overriding function Is_Link
+     (Host : Native_Filesystem; Path : String) return Boolean
+   is
+      pragma Unreferenced (Host);
+   begin
+      return GNAT.OS_Lib.Is_Symbolic_Link (Path);
+   end Is_Link;
 
    ---------------------------------------------------------------------
    --  Read_File
