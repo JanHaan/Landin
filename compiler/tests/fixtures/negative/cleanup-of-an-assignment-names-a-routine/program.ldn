@@ -1,0 +1,17 @@
+--  D873: `defer` and `undo` register a call, and an assignment after either
+--  is named as one, with the routine that would make it.
+stopped: atom
+
+step: (inout finished: bool, inout steps: u32) -> none ! stopped =
+    defer finished = true
+    defer steps += 1
+    undo finished = false
+    fail stopped when steps > 3
+end step
+
+public main: () -> (code: i32) =
+    mut finished: bool = false
+    mut steps: u32 = 0
+    step(finished, steps) else none
+    code = (if finished then 0 else 1 end if)
+end main

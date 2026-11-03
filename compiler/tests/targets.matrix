@@ -280,6 +280,7 @@ negative/character-literal-empty | linux-x86-64, linux-arm64, darwin-arm64, free
 negative/character-literal-invalid-codepoint | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/character-literal-multiple | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/character-literal-needs-u32 | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/cleanup-of-an-assignment-names-a-routine | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/closing-word-written-twice-is-removed | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/compiler-concept-reserved | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/compiler-conformance-reserved | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -439,6 +440,7 @@ negative/external-convention-not-closed | linux-x86-64, linux-arm64, freebsd-x86
 negative/fail-carries-no-value | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/fail-needs-one-atom | linux-x86-64, linux-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
 negative/fail-outside-declared-set | linux-x86-64, linux-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
+negative/failing-call-ending-a-body-is-its-value | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/failing-function-signature-mismatch | linux-x86-64, linux-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
 negative/feature-compared-with-architecture | linux-x86-64, linux-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
 negative/feature-outside-configuration | linux-x86-64, linux-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
@@ -560,6 +562,7 @@ negative/hosted-initializer-optional | linux-x86-64, linux-arm64, freebsd-x86-64
 negative/hosted-initializer-permission | linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64
 negative/hosted-initializer-referent | linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64
 negative/hosted-initializer-result | linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64
+negative/hosted-main-failure-has-no-error-set | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/hosted-system-is-no-world | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/hosted-system-runs-no-programs | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/identifier-with-capitals | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -890,6 +893,7 @@ negative/pointer-union-many-address-of-referent | linux-x86-64, linux-arm64, dar
 negative/pointer-union-many-any-construction | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/pointer-union-many-assignment-target | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/pointer-union-many-atom-outside-the-set | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+negative/pointer-union-many-call-else-atom-names-the-route | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/pointer-union-many-case-named-twice | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/pointer-union-many-comparison | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/pointer-union-many-dereference | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -1262,6 +1266,7 @@ negative/readonly-slice-write | linux-x86-64, linux-arm64, darwin-arm64, synthet
 negative/recover-infallible-call | linux-x86-64, linux-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
 negative/recovered-result-dropped-by-omission | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/recovery-clause-unclosed | linux-x86-64, linux-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64
+negative/recovery-exit-is-held-in-a-block | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/recovery-value-before-more-of-an-if-arm | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/recovery-value-in-an-if-arm-divides-the-if | linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 negative/recursive-module-image-cycle | linux-x86-64, linux-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64

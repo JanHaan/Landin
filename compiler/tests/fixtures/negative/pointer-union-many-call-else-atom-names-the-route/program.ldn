@@ -1,0 +1,32 @@
+--  D874: a call returning a plain pointer does not fill a union of several
+--  atoms and the pointer through an atom `else` (D235); the refusal names
+--  the union and the one-atom union a recovery fills, which widens into it.
+unavailable: atom
+absent, denied: atom
+maybe_cell: type = absent | denied | ptr mut u32
+
+obtain: (cell: ptr mut u32, reject: bool)
+        -> (result: ptr mut u32 from cell) ! unavailable =
+    fail unavailable when reject
+    result = cell
+end obtain
+
+public main: () -> (code: i32) =
+    code = 1
+    mut cell: u32 = 40
+    present: maybe_cell = obtain(addr cell, false) else absent
+    missing: maybe_cell = obtain(addr cell, true) else (problem)
+        _ = problem
+        denied
+    end
+    match present
+        absent: code = 2
+        denied: code = 3
+        ptr (held): code = i32(held.val)
+    end match
+    match missing
+        absent: code = 4
+        denied: code = code + 1
+        ptr (held): code = i32(held.val)
+    end match
+end main

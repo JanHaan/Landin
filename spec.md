@@ -19652,6 +19652,135 @@ head that is a whole word, and only the driver's offer reads it.
 `driver/targets are selected by name`, which names `linux-x86`, `macos`
 and `freebsd`.
 
+### D870 — An exit written as a call's `else` value names the block that holds it
+
+**The discrepancy:** [1030] says a recovery "either supplies a value in place
+of the result, or leaves: `return`, `fail`, `break` or `continue`", and
+`x := f() else return` and `f() else return`, written as a newcomer writes
+them to give up on a failure, were L0102, "`return` begins a statement, and
+a statement has no value", with the note "a statement stands on its own
+line". After `else continue` the line repair restated it as "a value belongs
+before `continue`" and offered `else 0 continue`, and `else break` was the
+bare "an expression belongs here". None named the block a leaving recovery
+is written in, nor `try`.
+
+**Chosen:** the grammar is unchanged: the one-value recovery takes an
+expression, and an exit is a statement. An exit after a call's `else` is
+refused at the exit as L0102, "a recovery that leaves holds its `return`
+in a block: write `else begin return end`", whose note names `else value`,
+the bound block and `try`, and whose Likely fix writes `begin` before the
+exit and `end` after it. The exit is read as that block's one statement, so
+the line is one report. A bare `else` that ends its line before a `return`
+or a `fail` is still D370's, which reads the lines under it as the bound
+recovery.
+
+**The alternatives:** admitting `else return`, `else break`, `else continue`
+and `else fail atom` as recovery forms of their own, four forms beside
+`else begin ... end` that differ from it by two words, which would also make
+`if c then f() else return end if` read two ways in an `if` arm [1820]; and
+keeping the old report with a second note, which still called the exit a
+statement on a line of its own.
+
+**Pinned by** `negative/recovery-exit-is-held-in-a-block`, whose fix the
+`fixes` suite compiles clean.
+
+### D871 — A failing call that ends a body with returns is refused for its failure alone
+
+**The discrepancy:** a failing call written as the last line of a routine
+with returns, often meant as a statement, is the body's value [1080]. Its
+first refusal was L0301, "this is `u8` and `i32` belongs here" or "the
+required aggregate type and shape", against the returns, and L0329's "use
+`try` or `else`" came second, because a report's code orders reports that
+stand on one span.
+
+**Chosen:** when the last value of a body with returns is a call with a
+concrete, nonempty error set, neither tried nor recovered, its result is not
+held to the returns, and L0329 is its one refusal: "this failing call is
+neither tried nor recovered with `else`, and ending the body it is read as
+the routine's value", whose note names `try`, `else` and the discard `_ =`
+for a result that is not the routine's value. Once the failure is handled the
+result is checked against the returns as before. A callee whose set is still
+being inferred keeps both reports, since whether it can fail is not yet known
+where the body is checked.
+
+**The alternatives:** reordering reports by stage rather than by code, which
+would move every other report on a shared span; and keeping L0301 with a
+note naming the failure, which leads with the type when the call is what was
+wrong.
+
+**Pinned by** `negative/failing-call-ending-a-body-is-its-value`.
+
+### D872 — A failure in the hosted `main` is refused naming `else` and a routine with a set
+
+**The discrepancy:** `try` inside the hosted `main` was L0329, "this body can
+fail with `bad`, which is outside its declared error set", whose note said to
+add the atom to the routine's `!` set; `main` may have none [1970], so that
+fix was refused next as L0502. An unhandled call there was told "write `try`
+to propagate or `else` to handle", and `try` has nowhere to propagate to.
+
+**Chosen:** in the entry module's public `main` of a hosted program, the
+atom outside the set is "`main` can fail with `bad`, and the hosted entry
+declares no error set", and the note says that `try` has nowhere to pass it:
+handle it with `else` where it is raised, or move the work into a routine
+whose `!` set holds it and handle that call's failure with `else` in `main`.
+An unhandled call there keeps its message and takes the same note. A
+firmware program has no hosted `main`, and its reports are unchanged.
+
+**The alternatives:** admitting `!` on `main` with a default exit code for a
+failure, a hosted entry contract of its own that [1970] does not have; and
+naming L0502 in the note, which explains why the first suggestion failed
+rather than what to write.
+
+**Pinned by** `negative/hosted-main-failure-has-no-error-set`,
+`negative/erased-typed-call-unhandled` and
+`negative/for-fallible-undeclared-error`, whose `main` the two notes now
+answer.
+
+### D873 — An assignment after `defer` or `undo` is named as one
+
+**The discrepancy:** `defer finished = true` was L0103, "`defer` registers a
+call, not a constructed value", with the note "write the call that runs when
+its block is left": an assignment was called a constructed value, and the
+way to defer one was not said.
+
+**Chosen:** a place followed by `=` or a compound assignment after `defer` or
+`undo` is refused over the whole assignment as L0103, "`defer` registers a
+call, and this is an assignment", whose note says to write the assignment in
+a routine of its own, taking the place as `inout`, and to register a call to
+it [1100] [1110]. Which programs are accepted does not change.
+
+**The alternatives:** admitting an assignment as a cleanup, which [1100]'s
+rule that a cleanup reads its arguments when it runs would have to be
+restated for, and which `defer` of a call already expresses; and a fix
+writing the routine, an edit outside the line that names a routine the
+refusal cannot know the name of.
+
+**Pinned by** `negative/cleanup-of-an-assignment-names-a-routine`.
+
+### D874 — An atom `else` filling a several-atom pointer union names the one-atom route
+
+**The discrepancy:** D235 keeps a call returning a plain pointer from filling
+a union of several atoms and that pointer through an atom `else`, which would
+need a new lowering, and its refusal was the generic L0301, "this does not
+have the required pointer type and shape". It named neither the union nor
+D235, nor a form that fills it.
+
+**Chosen:** an `else` value of such a call, when the call fills a
+several-atom pointer union, is L0301 at the value, "an `else` value stands in
+for this call's plain pointer, and does not widen it into `absent | denied |
+ptr mut u32`", spelling the union. Where the value is one atom, the note names
+the one-atom union of that atom and the pointer, `absent | ptr mut u32`, to
+recover into first: D189 admits that recovery, and D235 widens its value
+into the larger union. Otherwise the note says to recover the pointer with an
+`else` that leaves and widen it afterwards. Which programs are accepted does
+not change.
+
+**The alternatives:** admitting the recovery by lowering it through the
+one-atom union, the new lowering D235 declined; and naming only D235, which
+says why and not what to write.
+
+**Pinned by** `negative/pointer-union-many-call-else-atom-names-the-route`.
+
 ### D383 — `refine check` takes what `compile` takes about the program
 
 **The discrepancy:** `check` and `compile` read one program, and only

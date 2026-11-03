@@ -212,6 +212,21 @@ package body Landin.Diagnostics.Fixes is
       return Result;
    end Ignore_Failure;
 
+   function Hold_Exit
+     (Source : Landin.Source.Source_Id;
+      Opens  : Landin.Source.Byte_Offset;
+      Closes : Landin.Source.Byte_Offset;
+      Word   : String) return Fix
+   is
+      Result : Fix := Make_Fix
+        (Hold_Exit, Likely,
+         "write `begin` before `" & Word & "` and `end` after it");
+   begin
+      Add_Edit (Result, Make_Edit (Source, (Opens, Opens), "begin "));
+      Add_Edit (Result, Make_Edit (Source, (Closes, Closes), " end"));
+      return Result;
+   end Hold_Exit;
+
    function Respellings
      (Source  : Landin.Source.Source_Id;
       Where   : Landin.Source.Span;

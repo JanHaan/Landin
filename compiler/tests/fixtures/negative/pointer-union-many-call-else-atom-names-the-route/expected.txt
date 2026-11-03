@@ -1,0 +1,20 @@
+error[L0301]: an `else` value stands in for this call's plain pointer, and does not widen it into `absent | denied | ptr mut u32`
+  --> ../tests/fixtures/negative/pointer-union-many-call-else-atom-names-the-route/program.ldn:17:57
+   |
+17 |     present: maybe_cell = obtain(addr cell, false) else absent
+   |                                                         ^^^^^^
+  --> ../tests/fixtures/negative/pointer-union-many-call-else-atom-names-the-route/program.ldn:9:13
+  |
+9 |         -> (result: ptr mut u32 from cell) ! unavailable =
+  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the successful call result
+  = note: D235: recover into `absent | ptr mut u32` first, whose value widens into this union
+error[L0301]: an `else` value stands in for this call's plain pointer, and does not widen it into `absent | denied | ptr mut u32`
+  --> ../tests/fixtures/negative/pointer-union-many-call-else-atom-names-the-route/program.ldn:20:9
+   |
+20 |         denied
+   |         ^^^^^^
+  --> ../tests/fixtures/negative/pointer-union-many-call-else-atom-names-the-route/program.ldn:9:13
+  |
+9 |         -> (result: ptr mut u32 from cell) ! unavailable =
+  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the successful call result
+  = note: D235: recover into `denied | ptr mut u32` first, whose value widens into this union

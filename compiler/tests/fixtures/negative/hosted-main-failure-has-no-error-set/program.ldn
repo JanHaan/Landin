@@ -1,0 +1,15 @@
+--  D872: the hosted `main` declares no `!` set, so neither `try` there nor a
+--  bare failing call is mended by widening one; both refusals name `else`
+--  and a routine with a set of its own.
+unreadable: atom
+
+settings: (path: utf8) -> (size: u32) ! unreadable =
+    fail unreadable when lenof path == 0
+    size = 4
+end settings
+
+public main: () -> (code: i32) =
+    size := try settings("landin.conf")
+    code = i32(size)
+    _ = settings("")
+end main

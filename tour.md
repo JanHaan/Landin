@@ -1696,7 +1696,7 @@ Exact rules: spec [1980].
 
 An `else` after a call handles its failure on the spot. The handler either
 supplies a value in place of the result, or leaves: `return`, `fail`,
-`break` or `continue`.
+`break` or `continue`, written in a block, as `else begin return end`.
 
 ```landin
 h1 := open_file(path) else 0

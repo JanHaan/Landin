@@ -2107,6 +2107,20 @@ package body Landin.Diagnostics.Citations is
             when 857 =>
                "A misspelling is offered the name it begins before one a"
                & "s far",
+            when 870 =>
+               "An exit written as a call's `else` value names the block"
+               & " that holds it",
+            when 871 =>
+               "A failing call that ends a body with returns is refused "
+               & "for its failure alone",
+            when 872 =>
+               "A failure in the hosted `main` is refused naming `else` "
+               & "and a routine with a set",
+            when 873 =>
+               "An assignment after `defer` or `undo` is named as one",
+            when 874 =>
+               "An atom `else` filling a several-atom pointer union name"
+               & "s the one-atom route",
             when 383 =>
                "`refine check` takes what `compile` takes about the prog"
                & "ram",
@@ -3606,6 +3620,16 @@ package body Landin.Diagnostics.Citations is
             when 856 =>
                "Decisions: The toolchain, C and the machine",
             when 857 =>
+               "Decisions: The toolchain, C and the machine",
+            when 870 =>
+               "Decisions: The toolchain, C and the machine",
+            when 871 =>
+               "Decisions: The toolchain, C and the machine",
+            when 872 =>
+               "Decisions: The toolchain, C and the machine",
+            when 873 =>
+               "Decisions: The toolchain, C and the machine",
+            when 874 =>
                "Decisions: The toolchain, C and the machine",
             when 383 =>
                "Decisions: The toolchain, C and the machine",
@@ -5262,6 +5286,21 @@ package body Landin.Diagnostics.Citations is
             when 857 =>
                "https://www.701.dev/spec.html#d857-a-misspelling-is-offe"
                & "red-the-name-it-begins-before-one-as-far",
+            when 870 =>
+               "https://www.701.dev/spec.html#d870-an-exit-written-as-a-"
+               & "call-s-else-value-names-the-block-that-holds-it",
+            when 871 =>
+               "https://www.701.dev/spec.html#d871-a-failing-call-that-e"
+               & "nds-a-body-with-returns-is-refused-for-its-failure-alone",
+            when 872 =>
+               "https://www.701.dev/spec.html#d872-a-failure-in-the-host"
+               & "ed-main-is-refused-naming-else-and-a-routine-with-a-set",
+            when 873 =>
+               "https://www.701.dev/spec.html#d873-an-assignment-after-d"
+               & "efer-or-undo-is-named-as-one",
+            when 874 =>
+               "https://www.701.dev/spec.html#d874-an-atom-else-filling-"
+               & "a-several-atom-pointer-union-names-the-one-atom-route",
             when 383 =>
                "https://www.701.dev/spec.html#d383-refine-check-takes-wh"
                & "at-compile-takes-about-the-program",

@@ -1,0 +1,38 @@
+--  D870: an exit written as a call's `else` value is refused with the
+--  block that holds it, and the fix writes that block around the exit.
+missing, refused: atom
+
+lookup: (key: u32) -> (value: u32) ! missing =
+    fail missing when key == 0
+    value = key
+end lookup
+
+store: (key: u32) -> none ! missing =
+    fail missing when key == 0
+end store
+
+first: (key: u32) -> (value: u32) =
+    value = 0
+    found := lookup(key) else begin return end
+    store(key) else begin return end
+    value = found
+end first
+
+total: (keys: []u32) -> (sum: u32) =
+    sum = 0
+    for key in keys do
+        found := lookup(key) else begin continue end
+        store(key) else begin break end
+        sum += found
+    end for
+end total
+
+checked: (key: u32) -> (value: u32) ! refused =
+    value = lookup(key) else begin fail refused end
+end checked
+
+public main: () -> (code: i32) =
+    keys: [3]u32 = [1, 2, 3]
+    sum := first(2) + total(keys[0 ..< 3]) + (checked(4) else 0)
+    code = (if sum == 12 then 0 else 1 end if)
+end main

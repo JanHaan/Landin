@@ -1,0 +1,9 @@
+class: negative
+summary: D874's atom `else` on a call returning a plain pointer, filling a several-atom pointer union, is refused naming the union and the one-atom union that widens into it
+program: program.ldn
+codes: L0301, L0301
+constructs: 0480, 1030, 1870
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+expect: expected.txt
+args: ../tests/fixtures/negative/pointer-union-many-call-else-atom-names-the-route/program.ldn
+status: 1

@@ -1835,7 +1835,8 @@ package body Landin.Diagnostics.Citations.Texts is
             when 1030 =>
                "An `else` after a call handles its failure on the spot. "
                & "The handler either supplies a value in place of the resu"
-               & "lt, or leaves: `return`, `fail`, `break` or `continue`."
+               & "lt, or leaves: `return`, `fail`, `break` or `continue`, "
+               & "written in a block, as `else begin return end`."
                & LF
                & LF
                & "    h1 := open_file(path) else 0"
@@ -23789,6 +23790,62 @@ package body Landin.Diagnostics.Citations.Texts is
                & "target to be near one, and when no target is near the dr"
                & "iver offers every target the name begins as a system, wi"
                & "th `macos` read as `darwin`.",
+            when 870 =>
+               "Chosen: the grammar is unchanged: the one-value recovery"
+               & " takes an expression, and an exit is a statement. An exi"
+               & "t after a call's `else` is refused at the exit as L0102,"
+               & " ""a recovery that leaves holds its `return` in a block: "
+               & "write `else begin return end`"", whose note names `else v"
+               & "alue`, the bound block and `try`, and whose Likely fix w"
+               & "rites `begin` before the exit and `end` after it. The ex"
+               & "it is read as that block's one statement, so the line is"
+               & " one report. A bare `else` that ends its line before a `"
+               & "return` or a `fail` is still D370's, which reads the lin"
+               & "es under it as the bound recovery.",
+            when 871 =>
+               "Chosen: when the last value of a body with returns is a "
+               & "call with a concrete, nonempty error set, neither tried "
+               & "nor recovered, its result is not held to the returns, an"
+               & "d L0329 is its one refusal: ""this failing call is neithe"
+               & "r tried nor recovered with `else`, and ending the body i"
+               & "t is read as the routine's value"", whose note names `try"
+               & "`, `else` and the discard `_ =` for a result that is not"
+               & " the routine's value. Once the failure is handled the re"
+               & "sult is checked against the returns as before. A callee "
+               & "whose set is still being inferred keeps both reports, si"
+               & "nce whether it can fail is not yet known where the body "
+               & "is checked.",
+            when 872 =>
+               "Chosen: in the entry module's public `main` of a hosted "
+               & "program, the atom outside the set is ""`main` can fail wi"
+               & "th `bad`, and the hosted entry declares no error set"", a"
+               & "nd the note says that `try` has nowhere to pass it: hand"
+               & "le it with `else` where it is raised, or move the work i"
+               & "nto a routine whose `!` set holds it and handle that cal"
+               & "l's failure with `else` in `main`. An unhandled call the"
+               & "re keeps its message and takes the same note. A firmware"
+               & " program has no hosted `main`, and its reports are uncha"
+               & "nged.",
+            when 873 =>
+               "Chosen: a place followed by `=` or a compound assignment"
+               & " after `defer` or `undo` is refused over the whole assig"
+               & "nment as L0103, ""`defer` registers a call, and this is a"
+               & "n assignment"", whose note says to write the assignment i"
+               & "n a routine of its own, taking the place as `inout`, and"
+               & " to register a call to it [1100] [1110]. Which programs "
+               & "are accepted does not change.",
+            when 874 =>
+               "Chosen: an `else` value of such a call, when the call fi"
+               & "lls a several-atom pointer union, is L0301 at the value,"
+               & " ""an `else` value stands in for this call's plain pointe"
+               & "r, and does not widen it into `absent | denied | ptr mut"
+               & " u32`"", spelling the union. Where the value is one atom,"
+               & " the note names the one-atom union of that atom and the "
+               & "pointer, `absent | ptr mut u32`, to recover into first: "
+               & "D189 admits that recovery, and D235 widens its value int"
+               & "o the larger union. Otherwise the note says to recover t"
+               & "he pointer with an `else` that leaves and widen it after"
+               & "wards. Which programs are accepted does not change.",
             when 383 =>
                "Chosen: `check` takes every option that says which progr"
                & "am is compiled and how: `--target`, `--level`, `--root`,"

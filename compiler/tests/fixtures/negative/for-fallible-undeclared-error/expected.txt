@@ -1,4 +1,4 @@
-error[L0329]: this body can fail with `failed`, which is outside its declared error set
+error[L0329]: `main` can fail with `failed`, and the hosted entry declares no error set
   --> ../tests/fixtures/negative/for-fallible-undeclared-error/main.ldn:28:1
    |
 28 | public main: () -> (code: i32) =
@@ -7,4 +7,4 @@ error[L0329]: this body can fail with `failed`, which is outside its declared er
    |
 30 |     try for item in value do
    |     ^^^^^^^^^^^^^^^^^^^^^^^^ this traversal's providers can fail with `failed`
-  = note: [0940]: every failing path belongs to the function's `!` set; add `failed` to it, or recover the failure where it is raised
+  = note: [1970]: `main` takes no `!` set, so `try` has nowhere to pass `failed`; handle it where it is raised with `else`, or move the work into a routine whose `!` set holds it and handle that call's failure with `else` in `main`

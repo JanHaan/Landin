@@ -1,0 +1,9 @@
+class: negative
+summary: D871's failing call ending a body with returns is one L0329 saying the body reads it as the routine's value, before any type its result has
+program: program.ldn
+codes: L0329, L0329
+constructs: 0940, 0960, 1030, 1080
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+expect: expected.txt
+args: ../tests/fixtures/negative/failing-call-ending-a-body-is-its-value/program.ldn
+status: 1

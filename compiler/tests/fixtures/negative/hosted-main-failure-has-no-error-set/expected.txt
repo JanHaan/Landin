@@ -1,0 +1,20 @@
+error[L0329]: `main` can fail with `unreadable`, and the hosted entry declares no error set
+  --> ../tests/fixtures/negative/hosted-main-failure-has-no-error-set/program.ldn:11:1
+   |
+11 | public main: () -> (code: i32) =
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/hosted-main-failure-has-no-error-set/program.ldn:12:13
+   |
+12 |     size := try settings("landin.conf")
+   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^ this call can fail with `unreadable`
+  = note: [1970]: `main` takes no `!` set, so `try` has nowhere to pass `unreadable`; handle it where it is raised with `else`, or move the work into a routine whose `!` set holds it and handle that call's failure with `else` in `main`
+error[L0329]: this failing call is neither tried nor recovered with `else`
+  --> ../tests/fixtures/negative/hosted-main-failure-has-no-error-set/program.ldn:14:9
+   |
+14 |     _ = settings("")
+   |         ^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/hosted-main-failure-has-no-error-set/program.ldn:6:1
+  |
+6 | settings: (path: utf8) -> (size: u32) ! unreadable =
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this failing signature
+  = note: [1970]/[1030]: `main` declares no `!` set for `try` to pass the error to; handle it here with `else`, or call a routine whose `!` set holds it and handle that call's failure with `else`
