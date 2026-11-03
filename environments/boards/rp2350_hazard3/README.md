@@ -86,10 +86,16 @@ BOOTSEL, 2e8a:000f, unless told `--bootsel-attach`; if it ever does, cycle
 the port once and wait for it to stop enumerating before anything else.
 After flashing through the Arm side the tool cycles the power, gives the
 boot ROM `--boot-seconds`, and reads the head back from the cores the new
-image runs on, never from BOOTSEL; when the flash was from BOOTSEL that
-cycle is taken at once, unpaced, since the trouble the halted boot ROM
-makes the kernel log would stop a paced one and leave it on the bus
-(D832). The counters are read as
+image runs on, never from BOOTSEL. probe-rs's own `RP235x` reset, which every download makes to load its
+flash algorithm, reboots the chip into BOOTSEL for 30 ms and resets it
+again with the reset caught, so the boot ROM's USB device stays on the bus
+with its core halted; on 2026-11-03 the host's retries of such a device
+hung its xHCI controller. So after every download as `RP235x` the tool
+cycles the power at once, unpaced, before it waits for the hub or lets
+any probe-rs attach or read (D832). The block
+control's corrupted image is read back only when it was flashed as
+`RP235x_riscv`, whose halted hart enumerates nothing, before a paced
+cycle. The counters are read as
 `RP235x_riscv` alone, from the cores the image booted on.
 
 The negative control ends in BOOTSEL and must then flash the image

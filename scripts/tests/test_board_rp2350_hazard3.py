@@ -217,11 +217,10 @@ class Attach(unittest.TestCase):
         with mock.patch.object(BOARD.time, 'sleep'):
             self.assertEqual(BOARD.flash(run, args, 'board.elf', head), 'RP235x')
         self.assertEqual(run.calls, ['hub-before-attach', 'attach-RP235x', 'before download',
-                                     'flash', 'after download', 'before power cycle',
-                                     'hub-status', 'power-cycle', 'after power cycle',
-                                     'hub-wait', 'probe-ping', 'hub-before-attach',
-                                     'reattach-RP235x', 'reattach-RP235x_riscv',
-                                     'flash-readback'])
+                                     'flash', 'after download', 'hub-status', 'power-cycle',
+                                     'after power cycle at once', 'hub-wait', 'probe-ping',
+                                     'hub-before-attach', 'reattach-RP235x',
+                                     'reattach-RP235x_riscv', 'flash-readback'])
 
     def test_a_flash_from_bootsel_cycles_the_power_at_once(self):
         # D712: the attach halted the boot ROM, so the cycle is not paced,
@@ -264,6 +263,36 @@ class Attach(unittest.TestCase):
         args = SimpleNamespace(**dict(ARGS, bootsel_attach=True))
         self.assertEqual(BOARD.attached(Recorded(**cycling(**{'hub-before-attach': BOOTSEL})),
                                         args, 'attach').chip, 'RP235x')
+
+    def block_control(self, **statuses):
+        head = struct.pack('<2I', 0x3900006f, 0)
+        bad = head[:-4] + struct.pack('<I', BOARD.IMAGE_DEF[-1] ^ 0xffffffff)
+        run = Recorded(statuses=statuses, **cycling(**{
+            'flash-readback': '0x10000000: ' + ' '.join(
+                '%08x' % w for w in struct.unpack('<2I', bad)),
+            'hub-after-corrupt': [QUIET, BOOTSEL]}))
+        args = paced_args(run, bootsel_attach=True)
+        with mock.patch.object(BOARD, 'corrupted', return_value='bad.elf'), \
+                mock.patch.object(BOARD.time, 'sleep'):
+            return run, BOARD.block_control(run, args, 'board.elf', head)
+
+    def test_a_block_control_flashed_as_rp235x_is_cycled_at_once_and_never_read(self):
+        # D832: the download's RP235x reset leaves BOOTSEL halted on the bus.
+        run, verdict = self.block_control()
+        self.assertEqual(verdict['flashed_as'], 'RP235x')
+        self.assertEqual(run.calls, ['hub-before-attach', 'attach-RP235x', 'before download',
+                                     'flash', 'after download', 'hub-status', 'power-cycle',
+                                     'after power cycle at once', 'hub-wait', 'probe-ping',
+                                     'hub-after-corrupt', 'hub-after-corrupt'])
+
+    def test_a_block_control_flashed_as_rp235x_riscv_is_read_back_before_a_paced_cycle(self):
+        run, verdict = self.block_control(**{'attach-RP235x': 1})
+        self.assertEqual(verdict['flashed_as'], 'RP235x_riscv')
+        self.assertEqual(run.calls, ['hub-before-attach', 'attach-RP235x', 'attach-RP235x_riscv',
+                                     'before download', 'flash', 'after download', 'hub-wait',
+                                     'flash-readback', 'before power cycle', 'hub-status',
+                                     'power-cycle', 'after power cycle', 'hub-wait',
+                                     'probe-ping', 'hub-after-corrupt', 'hub-after-corrupt'])
 
     def test_the_block_control_needs_leave_to_attach_in_bootsel(self):
         run = Recorded(**cycling())

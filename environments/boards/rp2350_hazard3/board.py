@@ -211,11 +211,9 @@ def block_control(run, args, elf, head):
     only with --bootsel-attach, on a hub that does not carry the probe."""
     pico2.require_leave(args)
     bad = corrupted(run, elf)
-    chip = flash(run, args, bad, head[:-4] + struct.pack('<I', IMAGE_DEF[-1] ^ 0xffffffff),
-                 "the corrupted image's head")
-    hub = common.InGroup(run, args.hub_group)
-    power_cycle(hub, args)
-    device = pico2.await_bootsel(hub, args)
+    chip, device = pico2.corrupt(run, args, bad,
+                                 head[:-4] + struct.pack('<I', IMAGE_DEF[-1] ^ 0xffffffff),
+                                 "the corrupted image's head")
     return dict(corrupted_end_marker='%08x' % (IMAGE_DEF[-1] ^ 0xffffffff), flashed_as=chip,
                 enumerated=device)
 

@@ -23169,6 +23169,30 @@ the last as soon as the hub lists again, and the cycle taken at once after
 a BOOTSEL flash differs from a paced one only in not stopping at the
 trouble the halted boot ROM causes.
 
+**Amended for probe-rs's RP235x reset:** the halt that leaves BOOTSEL on
+the bus is not only an attach's. probe-rs's `RP235x` system reset, which
+every download makes before it loads its flash algorithm, reboots the
+chip into BOOTSEL through the watchdog's scratch registers for 30 ms so
+that the boot ROM raises its clocks, then resets it again with the reset
+caught, leaving the boot ROM's USB device connected with its core halted.
+On 2026-11-03 the Arm tool's block control attached, read one word and
+downloaded its corrupted image, about 1.3 s from 16:48:20.2, and nothing
+else touched the chip; at 16:48:20.688 `3-2.3.3.2` enumerated, failed four
+descriptor reads with -110, was power-cycled by the kernel at 16:49:24,
+and at 16:49:42 the host's xHCI controller stopped answering its commands
+and was declared dead, with the probe's Arty and the whole cascade on it,
+while the tool's next listing waited behind the kernel's enumeration. So
+every download as `RP235x`, by either Pico 2 tool, is followed at once by
+the power cycle, unpaced but recorded, before any wait for the hub and
+before any probe-rs attaches or reads; the head is read back from the
+booted image after `--boot-seconds`; and the block control's corrupted
+image is never read back once flashed as `RP235x`, the cycle bringing the
+boot ROM up in BOOTSEL, which the tool only lists. The cycle cannot come
+sooner than the kernel lets the hub be switched: a uhubctl call waits
+while the hub enumerates a port, as that listing waited 82 s, so the rule
+shortens the device's time on the bus without closing it, which only a
+reset that does not leave BOOTSEL halted closes.
+
 **The alternatives:** pacing the cycle after a BOOTSEL flash like any
 other, which waits two minutes beside a boot ROM the kernel is already
 failing to reach, and whose pace would then stop at the USB errors that

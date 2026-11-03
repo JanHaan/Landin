@@ -3,7 +3,8 @@
 IMAGE_DEF block it expects, the corrupted copy of its negative control and
 that control's reading of the hub, the hub's guard while the Pico 2 does
 not enumerate, the pace and the wait for the hub around each download and
-cycle, a flash from BOOTSEL followed at once by a cycle (D712), and the
+cycle, every download as RP235x followed at once by a cycle (D712,
+D832), and the
 framing and accounting it shares with the RP2040's."""
 import importlib.util
 import struct
@@ -187,10 +188,20 @@ class Control(unittest.TestCase):
         run, verdict = self.control([QUIET, BOOTSEL])
         self.assertEqual(verdict['enumerated'], '2e8a:000f Raspberry Pi RP2350 ' + SERIAL)
         self.assertEqual(run.calls, ['hub-before-attach', 'attach-RP235x', 'before download',
-                                     'flash', 'after download', 'hub-wait', 'flash-readback',
-                                     'before power cycle', 'hub-status', 'power-cycle',
-                                     'after power cycle', 'hub-wait', 'probe-ping',
+                                     'flash', 'after download', 'hub-status', 'power-cycle',
+                                     'after power cycle at once', 'hub-wait', 'probe-ping',
                                      'hub-after-corrupt', 'hub-after-corrupt'])
+
+    def test_the_corrupted_image_s_download_is_cycled_before_anything_reaches_the_chip(self):
+        # D832: probe-rs's RP235x reset leaves BOOTSEL's USB on the bus with
+        # its core halted, so the cycle comes straight after the download,
+        # unpaced but recorded, and no probe-rs attaches or reads the chip
+        # from the download to the end of the control.
+        run, _ = self.control([QUIET, BOOTSEL])
+        after = run.calls[run.calls.index('after download') + 1:]
+        self.assertEqual(after[:3], ['hub-status', 'power-cycle', 'after power cycle at once'])
+        self.assertNotIn('before power cycle', run.calls)
+        self.assertFalse([c for c in after if 'attach' in c or 'read' in c or c == 'flash'])
 
     def test_a_board_that_boots_the_corrupted_image_fails_the_control(self):
         with self.assertRaisesRegex(BOARD.Failed, 'did not enumerate as BOOTSEL'):
@@ -211,6 +222,19 @@ class Control(unittest.TestCase):
         with mock.patch.object(BOARD.time, 'sleep'):
             self.assertEqual(BOARD.flash(run, paced_args(run, bootsel_attach=True),
                                          'board.elf', head), 'RP235x')
+        self.assertEqual(run.calls, ['hub-before-attach', 'attach-RP235x', 'before download',
+                                     'flash', 'after download', 'hub-status', 'power-cycle',
+                                     'after power cycle at once', 'hub-wait', 'probe-ping',
+                                     'hub-before-attach', 'reattach-RP235x', 'flash-readback'])
+
+    def test_every_download_as_rp235x_is_cycled_at_once_before_the_head_is_read(self):
+        # D832: the download's own reset left BOOTSEL's USB device halted on
+        # the bus; the cycle precedes any wait for the hub and any attach,
+        # and the head is read back from the booted image.
+        head = self.head()
+        run = Recorded(**answers(**{'flash-readback': self.readback(head)}))
+        with mock.patch.object(BOARD.time, 'sleep'):
+            self.assertEqual(BOARD.flash(run, paced_args(run), 'board.elf', head), 'RP235x')
         self.assertEqual(run.calls, ['hub-before-attach', 'attach-RP235x', 'before download',
                                      'flash', 'after download', 'hub-status', 'power-cycle',
                                      'after power cycle at once', 'hub-wait', 'probe-ping',

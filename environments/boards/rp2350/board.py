@@ -132,11 +132,9 @@ def block_control(run, args, elf, head):
     allows (D712)."""
     pico2.require_leave(args)
     bad = corrupted(run, elf)
-    flash(run, args, bad, head[:-4] + struct.pack('<I', IMAGE_DEF[-1] ^ 0xffffffff),
-          "the corrupted image's head")
-    hub = common.InGroup(run, args.hub_group)
-    power_cycle(hub, args)
-    device = pico2.await_bootsel(hub, args)
+    _, device = pico2.corrupt(run, args, bad,
+                              head[:-4] + struct.pack('<I', IMAGE_DEF[-1] ^ 0xffffffff),
+                              "the corrupted image's head")
     return dict(corrupted_end_marker='%08x' % (IMAGE_DEF[-1] ^ 0xffffffff), enumerated=device)
 
 

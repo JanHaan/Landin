@@ -56,9 +56,17 @@ Pico 2 in BOOTSEL halted so keeps its USB pull-up but stops answering,
 which on the rig reset the hub tree above it (D712). So the tool refuses
 to attach while the port shows BOOTSEL, 2e8a:000f, unless told
 `--bootsel-attach`, which `--block-control` needs, since it flashes the
-good image again from BOOTSEL; after a flash from BOOTSEL it cycles the
-power at once, unpaced, gives the boot ROM `--boot-seconds`, and reads the
-head back from the image, never from BOOTSEL. probe-rs is told the chip as
+good image again from BOOTSEL. probe-rs's own `RP235x` reset, which every download makes to load its
+flash algorithm, reboots the chip into BOOTSEL for 30 ms and resets it
+again with the reset caught, so the boot ROM's USB device stays on the bus
+with its core halted; on 2026-11-03 the host's retries of such a device
+hung its xHCI controller. So after every download as `RP235x` the tool
+cycles the power at once, unpaced, before it waits for the hub or lets
+any probe-rs attach or read (D832); then it gives the boot ROM
+`--boot-seconds` and reads the head back from the image, never from
+BOOTSEL. The block control's corrupted image is never read back: the
+cycle after its download brings the boot ROM up in BOOTSEL, and the tool
+only lists the hub until it enumerates. probe-rs is told the chip as
 the architecture its cores run when it attaches, `RP235x` or
 `RP235x_riscv`, as [the Hazard3 tool's table](../rp2350_hazard3/README.md#which-chip-probe-rs-is-told)
 gives it: a board that tool left running its RISC-V image meets `RP235x`
@@ -103,7 +111,7 @@ frame, and 0x12 stops reading for 100 ms.
 |---|---|
 | the ELF's vector table | 68 words at 0x1000_0000, the start of flash, word 30 the USBCTRL_IRQ handler (3.2, Table 95, p. 81) |
 | the ELF's block | directly after the table, the minimum Arm IMAGE_DEF (5.9.5.1, Table 503, p. 390): the start and end markers (5.1.5.1, p. 329), IMAGE_TYPE an Arm executable in Secure state for RP2350, LAST and a link to itself |
-| the block control, with `--block-control` | a copy whose end marker is flipped, flashed and power-cycled, is refused by the boot ROM, which enumerates as USB BOOTSEL, 2e8a:000f (5.6.1, Table 470, p. 370); the good image is then flashed again, from BOOTSEL, and the power cycled at once |
+| the block control, with `--block-control` | a copy whose end marker is flipped, flashed and power-cycled at once, never read back by a probe, is refused by the boot ROM, which enumerates as USB BOOTSEL, 2e8a:000f (5.6.1, Table 470, p. 370); the good image is then flashed again, from BOOTSEL, and the power cycled at once |
 | flash after flashing | the vector table and the block, read back over SWD, equal to the image's |
 | the boot frame | CHIP_RESET is HAD_POR alone (6.4, p. 429), so the run began at power-on; VTOR is 0x1000_0000, so the boot ROM took the block and entered this image; clk_ref is on the crystal |
 | the shared scenario | `1`, `A` and `0`, the bytes the emulator lane's application is fed, echoed, with `g` 8 after `1` and 0 after `0`, and with `--indicator-pin` the wire high after `1` and low after `0` |

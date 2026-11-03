@@ -20,7 +20,11 @@ each reaches the hub and the bus the same way:
     answering; and when one has flashed from BOOTSEL the power is cycled
     at once, unpaced, since the trouble the halted BOOTSEL makes the kernel
     log would stop a paced cycle and leave it on the bus (D712, D832);
-  * a block control's power cycle must end in BOOTSEL.
+  * every download as RP235x is followed at once by a power cycle, before
+    any wait or attach: probe-rs's RP235x reset leaves the boot ROM's USB
+    on the bus with its core halted (D832);
+  * a block control's image is never read back once booted, and its power
+    cycle must end in BOOTSEL.
 
 Each tool's args carry `hub`, `port`, `pico_serial`, `guard_serial`,
 `cascade`, `off_seconds`, `guard_seconds`, `enumerate_seconds`,
@@ -140,35 +144,81 @@ def attached(run, args, name, bootsel_allowed=None):
     raise Failed('neither %s nor %s reaches the Pico 2; see %s-*.log' % (ARM_CHIP, RISCV_CHIP, name))
 
 
+def download(run, args, elf):
+    """Attach as the architecture the cores run, flash ELF and verify it;
+    returns the probe it flashed through and whether the power has been
+    cycled since.
+
+    A download as RP235x is followed at once by the cycle, unpaced but
+    recorded, before any listing waits for the hub and before any probe
+    attaches or reads.  probe-rs's RP235x system reset, which the download
+    makes to load its flash algorithm, reboots the chip into BOOTSEL for
+    30 ms so that the boot ROM raises its clocks, then resets it again
+    with the reset caught: the boot ROM's USB device is left connected
+    while its core is halted, and fails every request the host makes of
+    it.  On 2026-11-03 such a download put BOOTSEL on the bus within half
+    a second of its start; the kernel's retries hung the host's xHCI
+    controller 82 s later.  The cycle ends that device the moment the hub
+    lets it switch, which the kernel's enumeration may hold it from for a
+    while (D832)."""
+    probe = attached(run, args, 'attach')
+    paced(args, 'download', lambda: run.command('flash', probe.argv('download', '--verify', elf),
+                                                timeout=300))
+    if probe.chip != ARM_CHIP:
+        return probe, False
+    power_cycle(common.InGroup(run, args.hub_group), args, at_once=True)
+    return probe, True
+
+
+def read_head(probe, head, what):
+    count = len(head) // 4
+    back = struct.pack('<%dI' % count, *probe.read_words('flash-readback', FLASH, count))
+    require(back == head, 'flash does not hold %s' % what)
+
+
 def flash(run, args, elf, head, image_chip, what):
     """Flash ELF and verify it through the architecture the cores run when
     the probe attaches, and read HEAD back from the start of flash; returns
     the chip it flashed as.  IMAGE_CHIP is the architecture the image runs
     on, as probe-rs names it.
 
-    Flashed through the other architecture's side, as an Arm image is over
-    a RISC-V one still running, or a Hazard3 image from BOOTSEL or over an
-    Arm one, the image is booted by a power cycle before the head is read
-    back from its own cores.  When the chip was in BOOTSEL it was enumerated
-    on USB, and halted its USB stops answering: the host then retries the
-    port for minutes, and on the rig reset the hub chain the probe's own USB
-    hangs from.  So that cycle is taken at once rather than paced, and the
-    head is never read back from BOOTSEL (D712, D832)."""
+    The image is booted by a power cycle before the head is read back from
+    its own cores whenever it was flashed as RP235x, which is cycled at
+    once, `download`, or through the other architecture's side, as an Arm
+    image over a RISC-V one still running, which is cycled paced.  The head
+    is never read back while the port shows BOOTSEL (D712, D832)."""
     hub = common.InGroup(run, args.hub_group)
-    probe = attached(run, args, 'attach')
+    probe, cycled = download(run, args, elf)
     flashed_as = probe.chip
-    paced(args, 'download', lambda: run.command('flash', probe.argv('download', '--verify', elf),
-                                                timeout=300))
-    if probe.from_bootsel or flashed_as != image_chip:
-        power_cycle(hub, args, at_once=probe.from_bootsel)
+    if not cycled and flashed_as != image_chip:
+        power_cycle(hub, args)
+        cycled = True
+    if cycled:
         time.sleep(args.boot_seconds)
         probe = attached(run, args, 'reattach', bootsel_allowed=False)
     else:
         settle(hub, args)
-    count = len(head) // 4
-    back = struct.pack('<%dI' % count, *probe.read_words('flash-readback', FLASH, count))
-    require(back == head, 'flash does not hold %s' % what)
+    read_head(probe, head, what)
     return flashed_as
+
+
+def corrupt(run, args, elf, head, what):
+    """The block control's flash of ELF, whose block the boot ROM refuses,
+    and the board brought to BOOTSEL by its power alone: the image is
+    never booted for a probe to read.  Flashed as RP235x the power is
+    cycled at once, `download`, and nothing reads the chip again; flashed
+    as RP235x_riscv the halted hart, which enumerates nothing, is read back
+    before a paced cycle.  Returns the chip it flashed as and what the port
+    shows once the boot ROM enumerates as BOOTSEL; no probe attaches while
+    it does."""
+    require_leave(args)
+    hub = common.InGroup(run, args.hub_group)
+    probe, cycled = download(run, args, elf)
+    if not cycled:
+        settle(hub, args)
+        read_head(probe, head, what)
+        power_cycle(hub, args)
+    return probe.chip, await_bootsel(hub, args)
 
 
 def require_leave(args):
