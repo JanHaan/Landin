@@ -229,6 +229,16 @@ fn update(core: &mut Core<'_>, address: u64, clear: u32, set: u32) -> Result<()>
     Ok(())
 }
 
+fn hazard3_irq_reset_writes() -> impl Iterator<Item = (u16, u32)> {
+    // pico-sdk 2.2.0 hardware/regs/rvcsr.h: MEICONTEXT resets to
+    // 0x8000; MEIEA, MEIFA and MEIPRA reset to zero. Low write bits
+    // select windows of sixteen IRQ bits or four priority nibbles.
+    // RP2350 implements 52 external IRQs: four bit and thirteen priority windows.
+    std::iter::once((0xbe5, 0x8000))
+        .chain((0..4).flat_map(|window| [(0xbe0, window), (0xbe2, window)]))
+        .chain((0..13).map(|window| (0xbe3, window)))
+}
+
 fn cleanup(core: &mut Core<'_>, board: &str, arm: bool) -> Result<Value> {
     if arm {
         // ARM DCRSR selector 20 combines CONTROL:FAULTMASK:BASEPRI:PRIMASK.
@@ -262,6 +272,14 @@ fn cleanup(core: &mut Core<'_>, board: &str, arm: bool) -> Result<Value> {
         }
         core.write_core_reg(RegisterId(0x300), 0x1800u32)?; // mstatus: MPP=M, MIE=0
         core.write_core_reg(RegisterId(0x304), 0u32)?; // mie
+        if board == "rp2350_hazard3" {
+            // Abandoning an external handler without mret leaves its
+            // priority stack active. MEICONTEXT is writable, so reset it
+            // and all IRQ windows while MIE/mie are clear, before SRAM writes.
+            for (csr, value) in hazard3_irq_reset_writes() {
+                core.write_core_reg(RegisterId(csr), value)?;
+            }
+        }
     }
     match board {
         "rp2040" | "rp2350" | "rp2350_hazard3" => {
@@ -309,8 +327,12 @@ fn cleanup(core: &mut Core<'_>, board: &str, arm: bool) -> Result<Value> {
         }
         _ => unreachable!(),
     }
-    Ok(json!({"contract":"warm-board-v1", "peripheral_sources_stopped":true,
-        "other_core_parked":board.starts_with("rp"), "rom_reset":false}))
+    let mut report = json!({"contract":"warm-board-v1", "peripheral_sources_stopped":true,
+        "other_core_parked":board.starts_with("rp"), "rom_reset":false});
+    if board == "rp2350_hazard3" {
+        report["hazard3_irq_state_reset"] = json!(true);
+    }
+    Ok(report)
 }
 
 fn instruction_fence(session: &mut probe_rs::Session) -> Result<()> {
@@ -435,6 +457,38 @@ fn main() -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn hazard3_reset_clears_all_52_irqs_and_active_priority() {
+        let mut enables = u64::MAX;
+        let mut forced = u64::MAX;
+        let mut priorities = [15u8; 52];
+        let mut context = 0xff1f1fffu32; // active priority and interrupt context
+        let writes: Vec<_> = hazard3_irq_reset_writes().collect();
+        assert_eq!(writes.first(), Some(&(0xbe5, 0x8000)));
+        assert_eq!(writes.last(), Some(&(0xbe3, 12))); // IRQs 48..51
+        assert_eq!(writes.len(), 22);
+        for (csr, value) in writes {
+            match csr {
+                0xbe5 => context = value,
+                0xbe0 | 0xbe2 => {
+                    assert!(value & 31 < 4);
+                    assert_eq!(value >> 16, 0);
+                    let mask = 0xffffu64 << (16 * (value & 31));
+                    if csr == 0xbe0 { enables &= !mask; } else { forced &= !mask; }
+                }
+                0xbe3 => {
+                    assert_eq!(value >> 16, 0);
+                    let first = 4 * (value & 31) as usize;
+                    priorities[first..first + 4].fill(0);
+                }
+                _ => panic!("unexpected Hazard3 CSR {csr:#x}"),
+            }
+        }
+        assert_eq!(context, 0x8000);
+        assert_eq!(enables, 0);
+        assert_eq!(forced, 0);
+        assert!(priorities.iter().all(|priority| *priority == 0));
+    }
     #[test]
     fn describe_is_offline_and_excludes_execution_plans() {
         assert!(Args::try_parse_from(["helper", "--describe"]).unwrap().describe);
