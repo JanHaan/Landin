@@ -40,11 +40,22 @@ package Landin.Build_Reports is
       --  No_Item means an independently emitted body; otherwise this is
       --  the earlier stable body identity actually shared by the symbol.
       Shared_With       : Landin.IR.Item_Id := Landin.IR.No_Item;
+      --  Every backend fills every field below for every routine it emits.
+      --  The frame: what the prologue reserves below the frame record and
+      --  the registers it pushes, for the routine's cells, spill and save
+      --  homes and incoming register homes.  It is not the routine's
+      --  stack, which Stack_Bytes is.
       Frame_Bytes       : Landin.Targets.Byte_Count := 0;
       Spill_Bytes       : Landin.Targets.Byte_Count := 0;
+      --  The callee-saved registers the routine saves, in its frame or
+      --  pushed beside its frame record; never the frame record itself.
       Save_Bytes        : Landin.Targets.Byte_Count := 0;
+      --  The distinct registers the allocation holds a value or slot in,
+      --  saved or not; zero on a backend that gives each one a home.
       Register_Count    : Natural := 0;
       Spill_Count       : Natural := 0;
+      --  Static sites in the routine's final text, as
+      --  Landin.Backend.Site_Counts counts them.
       Instructions      : Natural := 0;
       Stack_Loads       : Natural := 0;
       Stack_Stores      : Natural := 0;

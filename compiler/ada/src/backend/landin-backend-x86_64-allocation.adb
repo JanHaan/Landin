@@ -118,6 +118,36 @@ package body Landin.Backend.X86_64.Allocation is
       return Count;
    end SSE_Count;
 
+   function Held_Count (Of_Plan : Plan) return Natural is
+      Held : array (General_Register) of Boolean := [others => False];
+      Held_SSE : SSE_Register_Set := [others => False];
+      Count : Natural := 0;
+
+      procedure Note (Place : Location);
+      procedure Note (Place : Location) is
+      begin
+         case Place.Kind is
+            when GP => Held (Place.Register) := True;
+            when SSE => Held_SSE (Place.Float_Register) := True;
+            when Absent | Stack => null;
+         end case;
+      end Note;
+   begin
+      for Place of Of_Plan.Slot loop
+         Note (Place);
+      end loop;
+      for Place of Of_Plan.Value loop
+         Note (Place);
+      end loop;
+      for Used of Held loop
+         Count := Count + Boolean'Pos (Used);
+      end loop;
+      for Used of Held_SSE loop
+         Count := Count + Boolean'Pos (Used);
+      end loop;
+      return Count;
+   end Held_Count;
+
    function Save_Count (Of_Plan : Plan) return Natural is
       Count : Natural := 0;
    begin

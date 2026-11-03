@@ -67,8 +67,8 @@ def build(run, refine, name, optimize, specialize, debug='none'):
             require(physical == virtual and 0x20000000 <= physical < 0x20003000,
                     'zero-fill segment has a spurious flash load address')
     report=json.loads((run.out/'build.json').read_text())['build']
-    require(all(r['frame_bytes'] <= 4096 for r in report['routines']),
-            'individual driver frame exceeds stack reservation')
+    require(all(r['stack_bytes'] <= 4096 for r in report['routines']),
+            "an individual driver routine's stack exceeds the stack reservation")
     #  Only a global symbol is a C runtime's; a Landin routine, an
     #  instance of `free` among them (D421), is local (D415).
     exported={s[2] for line in names.splitlines()

@@ -15,6 +15,7 @@ with Landin.Targets.Packed;
 with Landin.Targets.Firmware;
 with Ada.Strings.Fixed;
 with Landin.Backend.Arm32_ABI;
+with Landin.Backend.Site_Counts;
 with Landin.Backend.Work_Arrays;
 with Landin.Types;
 
@@ -375,8 +376,42 @@ package body Landin.Backend.Cortex_M is
       Options : Landin.Optimization.Options) return Boolean
    is
       pragma Unreferenced (Options);
-      Layout : Frame;
       Limit : constant Landin.Targets.Byte_Count := 16#FFFF_FFC0#;
+      Bound : Landin.Targets.Byte_Count;
+
+      --  Whether every call's staging fits below a frame of Reserved
+      --  bytes.  Physical RAM belongs to the selected image, not this
+      --  address bound.
+      function Calls_Fit (Reserved : Landin.Targets.Byte_Count) return Boolean;
+      function Calls_Fit (Reserved : Landin.Targets.Byte_Count) return Boolean
+      is
+      begin
+         for Block in 1 .. Landin.IR.Block_Count (Of_Unit, Item) loop
+            for Position in 1 .. Landin.IR.Length
+              (Of_Unit, Item, Landin.IR.Block_Id (Block))
+            loop
+               declare
+                  Value : constant Landin.IR.Value_Id := Landin.IR.Nth_Value
+                    (Of_Unit, Item, Landin.IR.Block_Id (Block), Position);
+               begin
+                  if Landin.IR.Op_Of (Of_Unit, Item, Value)
+                    in Landin.IR.Call | Landin.IR.Indirect_Call
+                  then
+                     declare
+                        Call : constant Arm32_ABI.Plan := Arm32_ABI.Call_Plan
+                          (Of_Unit, Item, Value, Facts, Limit - Reserved);
+                        pragma Unreferenced (Call);
+                     begin
+                        null;
+                     end;
+                  end if;
+               end;
+            end loop;
+         end loop;
+         return True;
+      exception
+         when Stack_Limit_Exceeded => return False;
+      end Calls_Fit;
    begin
       if Facts /= Landin.Targets.Cortex_M then
          return False;
@@ -384,32 +419,20 @@ package body Landin.Backend.Cortex_M is
       if Landin.IR.Is_External (Of_Unit, Item) then
          return True;
       end if;
-      Layout := Allocated_Frame (Of_Unit, Item, Facts, Limit);
-      --  Include caller staging and the largest transient selector scratch.
-      --  Physical RAM belongs to the selected image, not this address bound.
-      for Block in 1 .. Landin.IR.Block_Count (Of_Unit, Item) loop
-         for Position in 1 .. Landin.IR.Length
-           (Of_Unit, Item, Landin.IR.Block_Id (Block))
-         loop
-            declare
-               Value : constant Landin.IR.Value_Id := Landin.IR.Nth_Value
-                 (Of_Unit, Item, Landin.IR.Block_Id (Block), Position);
-            begin
-               if Landin.IR.Op_Of (Of_Unit, Item, Value)
-                 in Landin.IR.Call | Landin.IR.Indirect_Call
-               then
-                  declare
-                     Call : constant Arm32_ABI.Plan := Arm32_ABI.Call_Plan
-                       (Of_Unit, Item, Value, Facts, Limit - Extent (Layout));
-                     pragma Unreferenced (Call);
-                  begin
-                     null;
-                  end;
-               end if;
-            end;
-         end loop;
-      end loop;
-      return Extent (Layout) <= Limit;
+      --  Only emission plans the frame; preflight plans it only when the
+      --  reference frame cannot show the frame and its calls' staging
+      --  addressable.  Include caller staging and the largest transient
+      --  selector scratch.
+      Bound := Landin.Backend.Frame_Bound (Of_Unit, Item, Facts, Limit, 0);
+      if Bound <= Limit and then Calls_Fit (Bound) then
+         return True;
+      end if;
+      declare
+         Reserved : constant Landin.Targets.Byte_Count :=
+           Extent (Allocated_Frame (Of_Unit, Item, Facts, Limit));
+      begin
+         return Reserved <= Limit and then Calls_Fit (Reserved);
+      end;
    exception
       when Stack_Limit_Exceeded => return False;
    end Frame_Is_Addressable;
@@ -480,7 +503,6 @@ package body Landin.Backend.Cortex_M is
       --  carrier.
       Atoms_Ranked : constant Atom_Codes := Ranked (Of_Unit);
       Serial : Natural := 0;
-      Instruction_Count : Natural := 0;
       Leaf_Frame : Boolean := False;
       Leaf_Homes : Landin.Targets.Byte_Count := 0;
       --  How far sp stands below the bottom of a framed routine's homes,
@@ -576,7 +598,6 @@ package body Landin.Backend.Cortex_M is
          if Instruction'Length > 0
            and then Instruction (Instruction'First) /= '.'
          then
-            Instruction_Count := Instruction_Count + 1;
             if Pool_Active and then not Pool_Flushing
               and then not Literals.Is_Empty
             then
@@ -1486,15 +1507,16 @@ package body Landin.Backend.Cortex_M is
          end if;
       end Emit_Vectors;
 
+      --  Layout is the routine's one planned frame, which the tentative
+      --  emission hands the final one.
       procedure Emit_Routine
-        (Item : Landin.IR.Item_Id; Probe : Boolean := True;
+        (Item : Landin.IR.Item_Id; Layout : Frame; Probe : Boolean := True;
          Leaf : Boolean := False; Saves : Low_Set := [others => True]);
 
       procedure Emit_Routine
-        (Item : Landin.IR.Item_Id; Probe : Boolean := True;
+        (Item : Landin.IR.Item_Id; Layout : Frame; Probe : Boolean := True;
          Leaf : Boolean := False; Saves : Low_Set := [others => True]) is
          Path_Layouts : Landin.IR.Shape_Measurement.Layout_Cache;
-         Before_Emit : constant Natural := Instruction_Count;
          Before_Serial : constant Natural := Serial;
          Before_Line : constant Natural := Emission_Line;
          Before_Generation : constant Natural := Pool_Generation;
@@ -1514,8 +1536,6 @@ package body Landin.Backend.Cortex_M is
            (Positive, Positive);
          Sites : Branch_Vectors.Vector;
          Assembly_Barriers : Position_Vectors.Vector;
-         Layout : constant Frame := Allocated_Frame
-           (Of_Unit, Item, Facts, 16#FFFF_FFC0#);
          Result : constant Landin.Types.Type_Kind :=
            Landin.IR.Result_Of (Of_Unit, Item);
          Plan : constant Arm32_ABI.Plan := Arm32_ABI.Signature_Plan
@@ -2011,9 +2031,6 @@ package body Landin.Backend.Cortex_M is
                               & " " & Name & LF);
                            Cursor := Site.Last - Routine_Start
                              + Text'First + 1;
-                           Instruction_Count := Instruction_Count -
-                             (if Unbounded.Length (Site.Condition) = 0
-                              then 1 else 2);
                         end if;
                      end;
                   end if;
@@ -5425,7 +5442,6 @@ package body Landin.Backend.Cortex_M is
                Mark_Low (Text);
                Unbounded.Delete
                  (Out_Text, Routine_Start, Unbounded.Length (Out_Text));
-               Instruction_Count := Before_Emit;
                Serial := Before_Serial;
                Emission_Line := Before_Line;
                Pool_Generation := Before_Generation;
@@ -5433,30 +5449,41 @@ package body Landin.Backend.Cortex_M is
                Literals.Clear;
                --  No byte positions survive the tentative emission. The
                --  final pass builds literal pools and branch sites anew.
-               Emit_Routine (Item, Probe => False, Leaf => Eligible,
+               Emit_Routine (Item, Layout, Probe => False, Leaf => Eligible,
                              Saves => Used_Low);
                return;
             end;
          end if;
          Shorten_Local_Branches;
-         Landin.Build_Reports.Append (Report,
-           Landin.Build_Reports.Routine_Statistics'
-             (Item => Item,
-              Frame_Bytes => Homes + (if Leaf then Save_Count else 24)
-                + Landin.Targets.Byte_Count (Kept),
-              Spill_Bytes => Spill_Bytes (Layout),
-              Save_Bytes => (if Leaf then Save_Count else 24)
-                + Landin.Targets.Byte_Count (Kept),
-              Spill_Count => Spill_Count (Layout),
-              Instructions => Instruction_Count - Before_Emit,
-              Stack_Bytes => Homes + (if Leaf then Save_Count else 24)
-                + Landin.Targets.Byte_Count (Kept) + Deepest_Below,
-              Calls_Panic => not Edges.Is_Empty
-                or else (Limit_Trapped and then Panic /= null
-                         and then Landin.Panics.Handler (Panic.all)
-                           /= Landin.IR.No_Item),
-              Helper_Calls => Helpers_Called,
-              others => <>));
+         declare
+            --  The frame is what the prologue reserves below what it
+            --  pushes: the laid-out frame, d8-d15's save and the incoming
+            --  register homes.  The saves are r4-r7, or a leaf's low
+            --  registers, and d8-d15; the frame record, r11 and lr, and
+            --  an interrupt handler's kept limit are the stack's alone.
+            Counts : Landin.Build_Reports.Routine_Statistics :=
+              (Item => Item,
+               Frame_Bytes => Homes,
+               Spill_Bytes => Spill_Bytes (Layout),
+               Save_Bytes => (if Leaf then Save_Count else 16) + VFP_Save,
+               Spill_Count => Spill_Count (Layout),
+               Stack_Bytes => Homes + (if Leaf then Save_Count else 24)
+                 + Landin.Targets.Byte_Count (Kept) + Deepest_Below,
+               Calls_Panic => not Edges.Is_Empty
+                 or else (Limit_Trapped and then Panic /= null
+                          and then Landin.Panics.Handler (Panic.all)
+                            /= Landin.IR.No_Item),
+               Helper_Calls => Helpers_Called,
+               others => <>);
+            Counted : Landin.Backend.Site_Counts.Counter
+              (Landin.Backend.Site_Counts.Thumb);
+         begin
+            Landin.Backend.Site_Counts.Add_Lines
+              (Counted, Unbounded.Slice
+                 (Out_Text, Routine_Start, Unbounded.Length (Out_Text)));
+            Landin.Backend.Site_Counts.Fill (Counted, Counts);
+            Landin.Build_Reports.Append (Report, Counts);
+         end;
       end Emit_Routine;
       --  The value a datum's block describes.  [1460] says nothing runs
       --  before the entry point, so this walk is a fold and not an
@@ -6833,7 +6860,8 @@ package body Landin.Backend.Cortex_M is
             if Landin.IR.Kind_Of (Of_Unit, Item) = Landin.IR.Routine
               and then not Landin.IR.Is_External (Of_Unit, Item)
             then
-               Emit_Routine (Item);
+               Emit_Routine
+                 (Item, Allocated_Frame (Of_Unit, Item, Facts, 16#FFFF_FFC0#));
             end if;
          end;
       end loop;

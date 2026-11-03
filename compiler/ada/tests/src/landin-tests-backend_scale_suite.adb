@@ -275,6 +275,11 @@ package body Landin.Tests.Backend_Scale_Suite is
               (Item, X86.Frame_Is_Addressable
                  (Code, 1, Facts, (Objective, Opt.Off)),
                "large source preflight uses bounded host-stack storage");
+            Landin.Testing.Check
+              (Item, Backend.Frame_Bound
+                 (Code, 1, Facts, 2 ** 31 - 1, Alloc.Register_Set'Length)
+                 in Backend.Extent (Frame) .. 2 ** 31 - 1,
+               "preflight's bound covers the frame emission plans");
             if Objective = Opt.None then
                declare
                   Below : Targets.Byte_Count := 0;
@@ -363,7 +368,7 @@ package body Landin.Tests.Backend_Scale_Suite is
                begin
                   Emit (Work, Objective, Text, Report);
                   Landin.Testing.Check
-                    (Item, Reports.Nth_Routine (Report, 1).Register_Count = 0
+                    (Item, Reports.Nth_Routine (Report, 1).Save_Bytes = 0
                      and then Reports.Nth_Routine (Report, 1).Frame_Bytes
                        = Targets.Byte_Count (Length + 36),
                      "boundary witness has no intervening callee-save touch");

@@ -198,6 +198,7 @@ package body Landin.Build_Reports is
                  & Image (Landin.Targets.Byte_Count (R.Item)));
             Field ("shared_with", Landin.Targets.Byte_Count (R.Shared_With));
             Field ("frame_bytes", R.Frame_Bytes);
+            Field ("stack_bytes", R.Stack_Bytes);
             Field ("spill_bytes", R.Spill_Bytes);
             Field ("save_bytes", R.Save_Bytes);
             Field ("register_count", Landin.Targets.Byte_Count

@@ -1028,6 +1028,36 @@ package body Landin.Backend is
       Saves   : Positive) return Frame
      is (Reference_Frame (Of_Unit, Item, Facts, Maximum, Saves));
 
+   function Frame_Bound
+     (Of_Unit : IR.Unit;
+      Item    : IR.Item_Id;
+      Facts   : Targets.Target_Facts;
+      Largest : Targets.Byte_Count;
+      Saves   : Natural) return Targets.Byte_Count
+   is
+      Cell : constant Targets.Byte_Count :=
+        8 + Targets.Byte_Count (Targets.Stack_Alignment (Facts));
+      Cells : constant Targets.Byte_Count :=
+        Targets.Byte_Count (IR.Value_Count (Of_Unit, Item))
+        + Targets.Byte_Count (Saves) + 1;
+   begin
+      if Cells > Largest / Cell then
+         return Largest + 1;
+      end if;
+      declare
+         Room : constant Targets.Byte_Count := Largest - Cells * Cell;
+         Reference : constant Targets.Byte_Count :=
+           Extent (Laid_Out (Of_Unit, Item, Facts, Room));
+      begin
+         return (if Reference > Room then Largest + 1
+                 else Reference + Cells * Cell);
+      end;
+   exception
+      when Stack_Limit_Exceeded =>
+         --  Over the bound is no answer: the planned frame may fit.
+         return Largest + 1;
+   end Frame_Bound;
+
    function Reference_Frame
      (Of_Unit : IR.Unit;
       Item    : IR.Item_Id;

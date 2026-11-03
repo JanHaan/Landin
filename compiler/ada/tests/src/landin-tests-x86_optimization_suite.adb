@@ -361,7 +361,7 @@ package body Landin.Tests.X86_Optimization_Suite is
               (Item, New_Counts.Stack_Loads + New_Counts.Stack_Stores
                  < Old.Stack_Loads + Old.Stack_Stores
                and then New_Counts.Frame_Bytes < Old.Frame_Bytes
-               and then New_Counts.Register_Count = Alloc.Save_Count (Plan),
+               and then New_Counts.Register_Count = Alloc.Held_Count (Plan),
                "loop traffic frame and reports reflect actual allocation");
          end;
          Landin.Testing.Check
@@ -703,8 +703,9 @@ package body Landin.Tests.X86_Optimization_Suite is
               (Item, New_Counts.Stack_Loads + New_Counts.Stack_Stores
                  < Old.Stack_Loads + Old.Stack_Stores
                and then New_Counts.Frame_Bytes < Old.Frame_Bytes
-               and then New_Counts.Register_Count
-                 = Alloc.Save_Count (Plan) + Alloc.SSE_Count (Plan)
+               and then New_Counts.Register_Count = Alloc.Held_Count (Plan)
+               and then Alloc.Held_Count (Plan)
+                 >= Alloc.Save_Count (Plan) + Alloc.SSE_Count (Plan)
                and then Contains (US.To_String (After), "%xmm8")
                and then Contains (US.To_String (After), "mulsd"),
                "float allocation reduces measured stack traffic and frame");

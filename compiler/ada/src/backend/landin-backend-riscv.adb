@@ -1,5 +1,7 @@
 with Ada.Containers.Vectors;
 with Ada.Containers.Hashed_Sets;
+with Ada.Finalization;
+with Ada.Unchecked_Deallocation;
 with Landin.Targets.Firmware;
 with Landin.Provenance;
 with Landin.Layouts;
@@ -16,6 +18,7 @@ with Landin.Backend.RiscV_ABI;
 with Landin.Backend.RiscV_Instructions;
 with Landin.Backend.ELF;
 with Landin.Backend.Entry_Point;
+with Landin.Backend.Site_Counts;
 with Landin.Backend.Trap_Reports;
 with Landin.Backend.Work_Arrays;
 with Landin.Types;
@@ -500,13 +503,17 @@ package body Landin.Backend.RiscV is
       Options : Landin.Optimization.Options) return Boolean
    is
       Limit : constant Landin.Targets.Byte_Count := 16#7fff_ffff#;
-      Layout : Frame;
    begin
       if Landin.IR.Is_External (Of_Unit, Item) then
          return True;
       end if;
-      Layout := Routine_Frame (Of_Unit, Item, Facts, Options, Limit);
-      if Extent (Layout) > Limit then
+      --  Only emission plans the frame; preflight plans it only when the
+      --  reference frame cannot show it addressable.
+      if Landin.Backend.Frame_Bound
+          (Of_Unit, Item, Facts, Limit, Saved_Set'Length) > Limit
+        and then Extent (Routine_Frame (Of_Unit, Item, Facts, Options, Limit))
+          > Limit
+      then
          return False;
       end if;
       if Landin.IR.Signature_Of (Of_Unit, Item) /= Landin.IR.No_Signature
@@ -618,6 +625,28 @@ package body Landin.Backend.RiscV is
       --  carrier.
       Atoms_Ranked : constant Atom_Codes := Ranked (Of_Unit);
       Serial : Natural := 0;
+
+      --  Each routine's one frame, which emission and debug output both
+      --  read; a build without debug output keeps none past its routine.
+      type Frame_Array is array (Positive range <>) of Debug_Frame_Access;
+      procedure Free_Frame is new Ada.Unchecked_Deallocation
+        (Frame, Debug_Frame_Access);
+      type Retained_Frames (Last : Natural) is
+        new Ada.Finalization.Limited_Controlled with record
+         Frames : Frame_Array (1 .. Last) := [others => null];
+      end record;
+      overriding procedure Finalize (Owned : in out Retained_Frames);
+      overriding procedure Finalize (Owned : in out Retained_Frames) is
+      begin
+         for Index in Owned.Frames'Range loop
+            if Owned.Frames (Index) /= null then
+               Free_Frame (Owned.Frames (Index));
+            end if;
+         end loop;
+      end Finalize;
+      Saved : Retained_Frames (Landin.IR.Item_Count (Of_Unit));
+      function Cached_Frame (Item : Landin.IR.Item_Id)
+        return Debug_Frame_Access is (Saved.Frames (Positive (Item)));
 
       --  D671: the machine's width, whether an eight-byte value is a
       --  register pair, and the word a pointer, a saved register and a
@@ -1700,9 +1729,13 @@ package body Landin.Backend.RiscV is
          return Offset;
       end Field_Offset;
 
-      procedure Emit_Routine (Item : Landin.IR.Item_Id);
+      --  Plan and Layout are the routine's one plan and frame.
+      procedure Emit_Routine
+        (Item : Landin.IR.Item_Id; Plan : Allocation_Plan; Layout : Frame);
 
-      procedure Emit_Routine (Item : Landin.IR.Item_Id) is
+      procedure Emit_Routine
+        (Item : Landin.IR.Item_Id; Plan : Allocation_Plan; Layout : Frame)
+      is
          --  D471's checks, unless the routine runs before its thread has
          --  a thread pointer (D504).
          --  An interrupt handler is unchecked: the compiler's trap entry
@@ -1714,10 +1747,6 @@ package body Landin.Backend.RiscV is
              (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item))
                /= Landin.Machine.Interrupt_Handler;
          Path_Layouts : Landin.IR.Shape_Measurement.Layout_Cache;
-         Plan : constant Allocation_Plan :=
-           Allocate (Of_Unit, Item, Facts, Options);
-         Layout : constant Frame := Frame_For
-           (Of_Unit, Item, Facts, Options, Plan, 16#7fff_ffff#);
          Saves : constant Saved_Set := Plan.Saves;
          Result : constant Landin.Types.Type_Kind :=
            Landin.IR.Result_Of (Of_Unit, Item);
@@ -1745,6 +1774,22 @@ package body Landin.Backend.RiscV is
 
          --  Where this routine's text begins in the output.
          Routine_Start : constant Natural := Unbounded.Length (Output);
+
+         --  Counts, with the sites counted over the routine's final text.
+         procedure Append_Statistics
+           (Counts : Landin.Build_Reports.Routine_Statistics);
+         procedure Append_Statistics
+           (Counts : Landin.Build_Reports.Routine_Statistics)
+         is
+            Counted : Site_Counts.Counter (Site_Counts.RISC_V);
+            Filled : Landin.Build_Reports.Routine_Statistics := Counts;
+         begin
+            Site_Counts.Add_Lines
+              (Counted, Unbounded.Slice
+                 (Output, Routine_Start + 1, Unbounded.Length (Output)));
+            Site_Counts.Fill (Counted, Filled);
+            Landin.Build_Reports.Append (Report, Filled);
+         end Append_Statistics;
 
          --  D678: at XLEN 32 a callee-saved register the routine's text
          --  never otherwise names, by its number or, in an assembly
@@ -5364,9 +5409,8 @@ package body Landin.Backend.RiscV is
                Emit (".cfi_endproc");
             end if;
             Platform_Directive (ELF_Spelling.Size_To_Here (Symbol (Item)));
-            Landin.Build_Reports.Append (Report,
-              Landin.Build_Reports.Routine_Statistics'
-                (Item => Item, Naked => True, others => <>));
+            Append_Statistics
+              ((Item => Item, Naked => True, others => <>));
             return;
          end if;
          --  D672: the frame record is the caller's x8 and the return
@@ -5702,19 +5746,20 @@ package body Landin.Backend.RiscV is
          end if;
          Platform_Directive (ELF_Spelling.Size_To_Here (Symbol (Item)));
          Prune_Saves;
-         Landin.Build_Reports.Append (Report,
-           Landin.Build_Reports.Routine_Statistics'
-             (Item => Item, Frame_Bytes => Extent (Layout),
-              Spill_Bytes => Spill_Bytes (Layout),
-              Save_Bytes => Save_Bytes (Layout),
-              Register_Count => Save_Count (Plan.Saves),
-              Spill_Count => Plan.Homes,
-              Stack_Bytes => 16 + Extent (Layout) + Deepest_Area,
-              Calls_Panic => not Edges.Is_Empty
-                or else (Limit_Trapped and then Panic /= null
-                         and then Landin.Panics.Calls_Out (Panic.all)),
-              Helper_Calls => Helpers_Called,
-              others => <>));
+         --  No value or slot is held in a register: every one has its
+         --  home, and the saved registers are selection's fixed scratch.
+         Append_Statistics
+           ((Item => Item, Frame_Bytes => Extent (Layout),
+             Spill_Bytes => Spill_Bytes (Layout),
+             Save_Bytes => Save_Bytes (Layout),
+             Register_Count => 0,
+             Spill_Count => Plan.Homes,
+             Stack_Bytes => 16 + Extent (Layout) + Deepest_Area,
+             Calls_Panic => not Edges.Is_Empty
+               or else (Limit_Trapped and then Panic /= null
+                        and then Landin.Panics.Calls_Out (Panic.all)),
+             Helper_Calls => Helpers_Called,
+             others => <>));
       end Emit_Routine;
 
       --  The value a datum's block describes.  [1460] says nothing runs
@@ -7155,7 +7200,23 @@ package body Landin.Backend.RiscV is
                else
                   Emit (Item_Section (Item, "text", "routine"));
                end if;
-               Emit_Routine (Item);
+               declare
+                  Plan : constant Allocation_Plan :=
+                    Allocate (Of_Unit, Item, Facts, Options);
+               begin
+                  if Debug = null or else Pairs then
+                     Emit_Routine
+                       (Item, Plan, Frame_For
+                          (Of_Unit, Item, Facts, Options, Plan,
+                           16#7fff_ffff#));
+                  else
+                     Saved.Frames (Index) := new Frame'
+                       (Frame_For
+                          (Of_Unit, Item, Facts, Options, Plan,
+                           16#7fff_ffff#));
+                     Emit_Routine (Item, Plan, Saved.Frames (Index).all);
+                  end if;
+               end;
             end if;
          end;
       end loop;
@@ -7480,7 +7541,8 @@ package body Landin.Backend.RiscV is
          Unbounded.Append (Output,
            ELF_Debug_Sections
              (Of_Unit, Meanings, Names, Facts, Options, Debug.all,
-              Local_Prefix, Symbol'Access));
+              Local_Prefix, Symbol'Access, Cached_Frame'Access,
+              Cached_Frame'Access));
       end if;
       Emit (ELF_Spelling.No_Executable_Stack);
       Assembly := Output;

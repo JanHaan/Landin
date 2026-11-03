@@ -206,6 +206,124 @@ package body Landin.Tests.Stack_Report_Suite is
       end loop;
    end A_Closed_Graph_On_Every_Target;
 
+   Counted_Program : constant String :=
+     "leaf: (x: u32) -> (y: u32) =" & LF
+     & "    y = x" & LF
+     & "end leaf" & LF
+     & LF
+     & "apply: (f: (x: u32) -> (y: u32), x: u32) -> (y: u32) =" & LF
+     & "    y = f(x)" & LF
+     & "end apply" & LF
+     & LF
+     & "public main: () -> (code: i32) =" & LF
+     & "    _ = apply(leaf, 7)" & LF
+     & "    code = 0" & LF
+     & "end main" & LF;
+
+   --  Every backend fills every counter of the build report, and its
+   --  stack is the frame the depth report gives the same routine: here a
+   --  leaf, a routine calling through a function value, and main calling
+   --  it, each at the reference profile, which keeps every value in the
+   --  frame.
+   procedure The_Build_Report_Counts_On_Every_Target
+     (Item : in out Landin.Testing.Context);
+
+   procedure The_Build_Report_Counts_On_Every_Target
+     (Item : in out Landin.Testing.Context)
+   is
+      --  The line of Text that begins with Prefix, or "".
+      function Line_Of (Text, Prefix : String) return String;
+      function Line_Of (Text, Prefix : String) return String is
+         First : constant Natural := Ada.Strings.Fixed.Index
+           (Text, LF & Prefix);
+         Last : Natural;
+      begin
+         if First = 0 then
+            return "";
+         end if;
+         Last := First + 1;
+         while Last < Text'Last and then Text (Last + 1) /= LF loop
+            Last := Last + 1;
+         end loop;
+         return Text (First + 1 .. Last);
+      end Line_Of;
+   begin
+      for Index in Native'Range loop
+         declare
+            Target : constant String := Native (Index).all;
+            Host : Landin.Testing.Fakes.Fake_Filesystem;
+            Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+            Args : Landin.Platform.Path_List;
+            Result : Landin.Driver.Outcome;
+         begin
+            Host.Add_File ("main.ldn", Counted_Program);
+            Args.Append ("--target=" & Target);
+            if Target /= "cortex-m0" then
+               Args.Append ("--link=libc");
+            end if;
+            Args.Append ("--optimize=none");
+            Args.Append ("--specialize=off");
+            Args.Append ("--emit=asm");
+            Args.Append ("-o");
+            Args.Append ("out.s");
+            Args.Append ("--build-report=build.json");
+            Args.Append ("--stack-report=stack.json");
+            Args.Append ("main.ldn");
+            Result := Landin.Driver.Execute (Args, Host, Tools);
+            Landin.Testing.Check_Equal
+              (Item, Result.Status, Landin.Driver.Status_Success,
+               Target & " emits with both reports: "
+               & US.To_String (Result.Report));
+            declare
+               Build : constant String := Host.Written ("build.json");
+               Stack : constant String := Host.Written ("stack.json");
+               function Number (Routine : Positive) return String is
+                 (Ada.Strings.Fixed.Trim
+                    (Routine'Image, Ada.Strings.Both));
+               function Counted (Routine : Positive) return String is
+                 (Line_Of (Build, "{""item"":" & Number (Routine) & ","));
+               function Measured (Routine : Positive) return String is
+                 (Line_Of (Stack, "{""item"":" & Number (Routine) & ","));
+               Leaf : constant String := Counted (1);
+               Apply : constant String := Counted (2);
+               Main : constant String := Counted (3);
+            begin
+               for Routine in 1 .. 3 loop
+                  Landin.Testing.Check
+                    (Item, Field (Counted (Routine), "stack_bytes") > 0
+                       and then Field (Counted (Routine), "stack_bytes")
+                         = Field (Measured (Routine), "frame_bytes")
+                       and then Field (Counted (Routine), "stack_bytes")
+                         > Field (Counted (Routine), "frame_bytes")
+                       and then Field (Counted (Routine), "frame_bytes") > 0,
+                     Target & ": a routine's stack is its depth report "
+                     & "frame and more than its frame: "
+                     & Counted (Routine) & " " & Measured (Routine));
+                  Landin.Testing.Check
+                    (Item, Field (Counted (Routine), "instructions") > 0
+                       and then Field (Counted (Routine), "stack_loads") > 0
+                       and then Field (Counted (Routine), "stack_stores") > 0
+                       and then Field (Counted (Routine), "spill_count") > 0
+                       and then Field (Counted (Routine), "register_count")
+                         = 0,
+                     Target & ": the reference profile's sites are counted "
+                     & "and it holds no value in a register: "
+                     & Counted (Routine));
+               end loop;
+               Landin.Testing.Check
+                 (Item, Field (Leaf, "direct_calls") = 0
+                    and then Field (Leaf, "indirect_calls") = 0
+                    and then Field (Apply, "direct_calls") = 0
+                    and then Field (Apply, "indirect_calls") = 1
+                    and then Field (Main, "direct_calls") = 1
+                    and then Field (Main, "indirect_calls") = 0,
+                  Target & ": each call is counted as it is made: "
+                  & Build);
+            end;
+         end;
+      end loop;
+   end The_Build_Report_Counts_On_Every_Target;
+
    Switch_Program : constant String :=
      "mut main_saved: usize = 0" & LF
      & "mut fibre_saved: usize = 0" & LF
@@ -1208,6 +1326,9 @@ package body Landin.Tests.Stack_Report_Suite is
       Landin.Testing.Register
         (Into, "stack report", "a closed graph on every target",
          A_Closed_Graph_On_Every_Target'Access);
+      Landin.Testing.Register
+        (Into, "stack report", "the build report counts on every target",
+         The_Build_Report_Counts_On_Every_Target'Access);
       Landin.Testing.Register
         (Into, "stack report", "a switch costs its frame",
          A_Switch_Costs_Its_Frame'Access);

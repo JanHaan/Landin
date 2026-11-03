@@ -17113,7 +17113,8 @@ artifact writes. The source adapter retains exact path bytes in hexadecimal,
 source-content SHA-256 and item origins; equivalent inputs and controls produce
 byte-identical reports without clocks or temporary output paths. Routine
 metrics are emitted instruction sites and frame/register/spill/save and static
-stack-traffic counts. Actual assembled text bytes are measured externally by
+stack-traffic counts, and each routine's own stack, every one filled with one
+meaning on every backend (D791). Actual assembled text bytes are measured externally by
 `compiler/tests/quality/check.py`, not fabricated from an IR count.
 Each item carries its `name`, the spelling its symbol has (D417, D421), and
 `left_indirect` lists every evidence call the emitted program still makes
@@ -24072,6 +24073,90 @@ recursion and whose same handler through `any` is judged against the
 margin instead, and emitted where it fits; and
 `negative/stack-handler-opens-its-graph`, whose handler is refused for its
 C call and not for its call through `any`.
+
+### D790 — Frame preflight answers from a bound, and a routine's one plan serves emission and its debugger
+
+**The tour said** nothing. Before anything is written the driver asks the
+backend whether each routine's frame, and the area each of its calls
+reserves, is addressable, so that a frame too large is a refusal and not
+bad text. Arm64 and RISC-V planned every routine's allocation and frame for
+that answer, again to emit it, and with debug output a third time for its
+variable locations; x86-64 planned it twice with debug output, and
+Cortex-M0 twice for its answer and twice more for its tentative and final
+emission. On the scaling generator's 16,000-declaration `functions`
+program at `speed`, arm64's allocation was 19 per cent of a compile's
+cycles, preflight's and emission's 9.4 and 9.3; with `--debug=full` it was
+15.5, a third each for preflight, emission and debug output.
+
+**Chosen:** preflight answers from the reference frame, which gives every
+slot and scalar value a home of its own, with room for one more home per
+value, one per register the target may save and the frame's rounding, each
+eight bytes padded to the stack's alignment. A frame any allocation plans
+places a subset of the same slot cells in the same order and at most those
+homes after them, so it is within that bound; only a routine whose bound
+exceeds the limit is planned at preflight, for the exact answer, and the
+refusals are the ones they were. Emission plans each routine once. With
+debug output it keeps that plan and frame, and the DWARF encoder reads its
+locations from them; Cortex-M0's tentative emission hands its frame to the
+final one.
+
+**The alternatives:** a plan made at preflight and kept for emission, which
+must outlive every driver step between them, and which a check's preflight,
+made before the IR is optimized, could not supply; and a debug encoder that
+plans for itself, which can disagree with the code it describes only by a
+defect but pays a third plan to find none. Both were declined.
+
+**Pinned by** the `backend scale` suite's `large routine`, whose bound
+covers the frame emission plans at every objective; byte-identical
+assembly for every positive fixture on all eight targets, at all nine
+profiles and in both build modes, and with `--debug=full` or, on
+Cortex-M0 and RV32, `--debug=lines`, before and after; and the GDB
+sessions.
+
+### D791 — Every backend fills every build-report counter with one meaning, and a routine's stack beside its frame
+
+**The tour said** nothing. The build report's `routines` rows were filled
+differently by each backend: x86-64 counted instructions, stack traffic and
+calls from its selected instruction stream, Cortex-M0 instructions alone,
+arm64 and RISC-V none of them; `register_count` was x86-64's callee-saved
+and XMM registers, arm64's held and saved ones and RISC-V's fixed scratch
+saves; and `frame_bytes` on Cortex-M0 held its pushed registers and frame
+record, which elsewhere it does not, while D467's depth report read every
+routine's stack from the backend instead. A comparison across targets from
+the report was unsafe.
+
+**Chosen:** every backend fills every field of a row for every routine it
+emits. `frame_bytes` is what the prologue reserves below the frame record
+and the registers it pushes, for slot cells, spill and save homes and
+incoming register homes; `stack_bytes`, which the row now carries, is
+D467's frame, the routine's own stack from its caller's stack pointer.
+`save_bytes` are the callee-saved registers the routine saves, in its
+frame or pushed beside its frame record, never the record itself.
+`register_count` is the distinct registers the allocation holds a value or
+slot in, saved or not, so zero on RISC-V and Cortex-M0, which give every one
+a home. The sites are counted in the routine's final text, after branch
+shortening: each instruction; a load or store whose address is the stack
+pointer, the frame pointer or a register the routine set from one of them
+by a move, an addition or `lea` since its last label or call; a push, a pop,
+and x86-64's call and return, which move the return address through the
+stack; a call to a named routine; and a call through a register. A count is
+of sites, not executions.
+
+**The alternatives:** a report saying, for each target, which counters it
+does not measure, which leaves the comparison as unsafe as it was; counting
+only accesses through the stack and frame pointers themselves, which on
+arm64, RISC-V and Thumb misses every cell beyond their short displacements
+and on x86-64 every aggregate it clears or copies through `lea`; keeping
+Cortex-M0's `frame_bytes` as its stack, which its lanes read as one and
+which `stack_bytes` now is; and renaming the depth report's `frame_bytes`,
+which would change a second format to fix the first. All were declined.
+
+**Pinned by** the `stack report` suite's `the build report counts on every
+target`, whose rows have a stack equal to the depth report's frame and a
+call through a function value counted as indirect on each native backend;
+the `backend plans` suite's `site counts follow frame addresses`; the `opt
+foundations` suite's `deterministic reports`; the `cortex ABI` suite's
+save counts; and the `x86 opt` suite's register counts.
 
 ## DECISIONS: THE CORE LIBRARY AND THE DERIVED PROGRAMS
 

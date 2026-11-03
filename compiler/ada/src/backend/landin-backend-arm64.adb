@@ -2,7 +2,9 @@ with Ada.Containers.Generic_Sort;
 with Ada.Containers.Ordered_Maps;
 with Ada.Containers.Vectors;
 with Ada.Containers.Indefinite_Hashed_Maps;
+with Ada.Finalization;
 with Ada.Strings.Hash;
+with Ada.Unchecked_Deallocation;
 with Landin.Provenance;
 with Landin.Layouts;
 with Landin.Machine;
@@ -21,6 +23,7 @@ with Landin.Backend.Arm64.Platform;
 with Landin.Backend.Arm64.Selection;
 with Landin.Backend.ELF;
 with Landin.Backend.Entry_Point;
+with Landin.Backend.Site_Counts;
 with Landin.Backend.Trap_Reports;
 with Landin.Backend.Work_Arrays;
 with Landin.Types;
@@ -1433,13 +1436,17 @@ package body Landin.Backend.Arm64 is
       Options : Landin.Optimization.Options) return Boolean
    is
       Limit : constant Landin.Targets.Byte_Count := 16#7fff_ffff#;
-      Layout : Frame;
    begin
       if Landin.IR.Is_External (Of_Unit, Item) then
          return True;
       end if;
-      Layout := Routine_Frame (Of_Unit, Item, Facts, Options, Limit);
-      if Extent (Layout) > Limit then
+      --  Only emission plans the frame; preflight plans it only when the
+      --  reference frame cannot show it addressable.
+      if Landin.Backend.Frame_Bound
+          (Of_Unit, Item, Facts, Limit, Saved_Set'Length) > Limit
+        and then Extent (Routine_Frame (Of_Unit, Item, Facts, Options, Limit))
+          > Limit
+      then
          return False;
       end if;
       if Landin.IR.Signature_Of (Of_Unit, Item) /= Landin.IR.No_Signature
@@ -1566,6 +1573,48 @@ package body Landin.Backend.Arm64 is
       --  carrier.
       Atoms_Ranked : constant Atom_Codes := Ranked (Of_Unit);
       Serial : Natural := 0;
+
+      --  Each routine's one plan and frame, which emission and debug
+      --  output both read; a build without debug output keeps neither past
+      --  its routine.  Each routine's statistics wait for the final text,
+      --  where branch shortening has decided its instructions: they are
+      --  counted over the lines from First to Last.
+      type Plan_Array is array (Positive range <>) of Debug_Plan_Access;
+      type Frame_Array is array (Positive range <>) of Debug_Frame_Access;
+      procedure Free_Plan is new Ada.Unchecked_Deallocation
+        (Allocation_Plan, Debug_Plan_Access);
+      procedure Free_Frame is new Ada.Unchecked_Deallocation
+        (Frame, Debug_Frame_Access);
+      type Retained_Facts (Last : Natural) is
+        new Ada.Finalization.Limited_Controlled with record
+         Plans : Plan_Array (1 .. Last) := [others => null];
+         Frames : Frame_Array (1 .. Last) := [others => null];
+      end record;
+      overriding procedure Finalize (Owned : in out Retained_Facts);
+      overriding procedure Finalize (Owned : in out Retained_Facts) is
+      begin
+         for Index in Owned.Plans'Range loop
+            if Owned.Frames (Index) /= null then
+               Free_Frame (Owned.Frames (Index));
+            end if;
+            if Owned.Plans (Index) /= null then
+               Free_Plan (Owned.Plans (Index));
+            end if;
+         end loop;
+      end Finalize;
+      Saved : Retained_Facts (Landin.IR.Item_Count (Of_Unit));
+      function Cached_Plan (Item : Landin.IR.Item_Id)
+        return Debug_Plan_Access is (Saved.Plans (Positive (Item)));
+      function Cached_Frame (Item : Landin.IR.Item_Id)
+        return Debug_Frame_Access is (Saved.Frames (Positive (Item)));
+      type Routine_Lines is record
+         First : Positive := 1;
+         Last : Natural := 0;
+      end record;
+      Statistics : array (1 .. Landin.IR.Item_Count (Of_Unit)) of
+        Landin.Build_Reports.Routine_Statistics;
+      Routine_Text : array (1 .. Landin.IR.Item_Count (Of_Unit)) of
+        Routine_Lines;
 
       procedure Put (Line : String; Known : Boolean := False);
       procedure Emit (Instruction : String);
@@ -2724,19 +2773,19 @@ package body Landin.Backend.Arm64 is
          return Offset;
       end Field_Offset;
 
-      procedure Emit_Routine (Item : Landin.IR.Item_Id);
+      --  Plan and Layout are the routine's one plan and frame.
+      procedure Emit_Routine
+        (Item : Landin.IR.Item_Id; Plan : Allocation_Plan; Layout : Frame);
 
-      procedure Emit_Routine (Item : Landin.IR.Item_Id) is
+      procedure Emit_Routine
+        (Item : Landin.IR.Item_Id; Plan : Allocation_Plan; Layout : Frame)
+      is
          --  D471's checks, unless the routine runs before its thread has
          --  a thread pointer (D504).
          Checks : constant Boolean := Prepares
            and then not Landin.Backend.Runs_Before_Thread_Pointer
              (Facts, Symbol (Item));
          Path_Layouts : Landin.IR.Shape_Measurement.Layout_Cache;
-         Plan : constant Allocation_Plan :=
-           Allocate (Of_Unit, Item, Facts, Options);
-         Layout : constant Frame := Frame_For
-           (Of_Unit, Item, Facts, Options, Plan, 16#7fff_ffff#);
          Saves : constant Saved_Set := Plan.Saves;
          Result : constant Landin.Types.Type_Kind :=
            Landin.IR.Result_Of (Of_Unit, Item);
@@ -6653,9 +6702,9 @@ package body Landin.Backend.Arm64 is
                Emit (".cfi_endproc");
             end if;
             Platform_Directive (Platform.End_Function (Format, Symbol (Item)));
-            Landin.Build_Reports.Append (Report,
-              Landin.Build_Reports.Routine_Statistics'
-                (Item => Item, Naked => True, others => <>));
+            Statistics (Positive (Item)) :=
+              (Item => Item, Naked => True, others => <>);
+            Routine_Text (Positive (Item)).Last := Natural (Lines.Length);
             return;
          end if;
          Emit ("stp x29, x30, [sp, #-16]!");
@@ -6974,18 +7023,18 @@ package body Landin.Backend.Arm64 is
             Emit (".cfi_endproc");
          end if;
          Platform_Directive (Platform.End_Function (Format, Symbol (Item)));
-         Landin.Build_Reports.Append (Report,
-           Landin.Build_Reports.Routine_Statistics'
-             (Item => Item, Frame_Bytes => Extent (Layout),
-              Spill_Bytes => Spill_Bytes (Layout),
-              Save_Bytes => Save_Bytes (Layout),
-              Register_Count => Save_Count (Plan.Saves or Plan.Held),
-              Spill_Count => Plan.Homes,
-              Stack_Bytes => 16 + Extent (Layout) + Deepest_Area,
-              Calls_Panic => not Edges.Is_Empty
-                or else (Limit_Trapped and then Panic /= null
-                         and then Landin.Panics.Calls_Out (Panic.all)),
-              others => <>));
+         Statistics (Positive (Item)) :=
+           (Item => Item, Frame_Bytes => Extent (Layout),
+            Spill_Bytes => Spill_Bytes (Layout),
+            Save_Bytes => Save_Bytes (Layout),
+            Register_Count => Save_Count (Plan.Held),
+            Spill_Count => Plan.Homes,
+            Stack_Bytes => 16 + Extent (Layout) + Deepest_Area,
+            Calls_Panic => not Edges.Is_Empty
+              or else (Limit_Trapped and then Panic /= null
+                       and then Landin.Panics.Calls_Out (Panic.all)),
+            others => <>);
+         Routine_Text (Positive (Item)).Last := Natural (Lines.Length);
       end Emit_Routine;
 
       --  The value a datum's block describes.  [1460] says nothing runs
@@ -8382,7 +8431,27 @@ package body Landin.Backend.Arm64 is
                if Format = Landin.Targets.Capabilities.ELF then
                   Emit (ELF_Spelling.Item_Section ("text", "routine", Index));
                end if;
-               Emit_Routine (Item);
+               Routine_Text (Index).First := Natural (Lines.Length) + 1;
+               if Debug = null then
+                  declare
+                     Plan : constant Allocation_Plan :=
+                       Allocate (Of_Unit, Item, Facts, Options);
+                  begin
+                     Emit_Routine
+                       (Item, Plan, Frame_For
+                          (Of_Unit, Item, Facts, Options, Plan,
+                           16#7fff_ffff#));
+                  end;
+               else
+                  Saved.Plans (Index) := new Allocation_Plan'
+                    (Allocate (Of_Unit, Item, Facts, Options));
+                  Saved.Frames (Index) := new Frame'
+                    (Debug_Frame
+                       (Of_Unit, Item, Facts, Saved.Plans (Index).all,
+                        Options));
+                  Emit_Routine
+                    (Item, Saved.Plans (Index).all, Saved.Frames (Index).all);
+               end if;
             end if;
          end;
       end loop;
@@ -8784,11 +8853,13 @@ package body Landin.Backend.Arm64 is
                when Landin.Targets.Capabilities.Mach_O =>
                   Mach_O_Debug_Sections
                     (Of_Unit, Meanings, Names, Facts, Options, Debug.all,
-                     Local_Prefix, Symbol'Access),
+                     Local_Prefix, Symbol'Access, Cached_Plan'Access,
+                     Cached_Frame'Access),
                when Landin.Targets.Capabilities.ELF =>
                   ELF_Debug_Sections
                     (Of_Unit, Meanings, Names, Facts, Options, Debug.all,
-                     Local_Prefix, Symbol'Access)));
+                     Local_Prefix, Symbol'Access, Cached_Plan'Access,
+                     Cached_Frame'Access)));
       end if;
       Emit (Platform.Trailer (Format));
       --  The first pass retains every long form.  Its byte counts are upper
@@ -8796,11 +8867,48 @@ package body Landin.Backend.Arm64 is
       --  Removing long forms cannot increase those bounds.  A segment break
       --  leaves the original form intact when inline assembly or a directive
       --  makes the distance unknown.
+      --  Each routine's statistics count the lines this pass writes for
+      --  it, its branches as shortening leaves them.
       declare
          Out_Text : Unbounded.Unbounded_String;
          Next_Branch : Positive := 1;
          Index : Positive := 1;
+         --  The first routine, in item order, whose lines are still to
+         --  be written, or zero once none is.
+         Routine : Natural := 0;
+         Counted : Site_Counts.Counter (Site_Counts.A64);
+
+         procedure Next_Routine;
+         procedure Next_Routine is
+         begin
+            loop
+               Routine := (if Routine = Routine_Text'Last then 0
+                           else Routine + 1);
+               exit when Routine = 0
+                 or else Routine_Text (Routine).Last
+                   >= Routine_Text (Routine).First;
+            end loop;
+         end Next_Routine;
+
+         --  Line Text, written for Lines (Position).
+         procedure Write (Position : Positive; Text : String);
+         procedure Write (Position : Positive; Text : String) is
+         begin
+            while Routine /= 0
+              and then Position > Routine_Text (Routine).Last
+            loop
+               Site_Counts.Fill (Counted, Statistics (Routine));
+               Site_Counts.Clear (Counted);
+               Next_Routine;
+            end loop;
+            if Routine /= 0 and then Position >= Routine_Text (Routine).First
+            then
+               Site_Counts.Add (Counted, Text);
+            end if;
+            Unbounded.Append (Out_Text, Text & LF);
+         end Write;
       begin
+         Next_Routine;
          while Index <= Natural (Lines.Length) loop
             if Next_Branch <= Natural (Branches.Length)
               and then Branches (Next_Branch).First = Index
@@ -8816,13 +8924,10 @@ package body Landin.Backend.Arm64 is
                     and then abs (Labels.Element (Name).Offset -
                                   Lines (Index).Offset) <= Branch.Reach
                   then
-                     Unbounded.Append
-                       (Out_Text, Unbounded.To_String (Branch.Direct) & LF);
+                     Write (Index, Unbounded.To_String (Branch.Direct));
                   else
                      for Part in Index .. Index + 2 loop
-                        Unbounded.Append
-                          (Out_Text,
-                           Unbounded.To_String (Lines (Part).Text) & LF);
+                        Write (Part, Unbounded.To_String (Lines (Part).Text));
                      end loop;
                   end if;
                   Index := Index + 3;
@@ -8832,16 +8937,25 @@ package body Landin.Backend.Arm64 is
                if Index = Natural (Lines.Length) then
                   Unbounded.Append (Out_Text, Debug_Text);
                end if;
-               Unbounded.Append
-                 (Out_Text, Unbounded.To_String (Lines (Index).Text) & LF);
+               Write (Index, Unbounded.To_String (Lines (Index).Text));
                if Index = Preamble_After then
                   Unbounded.Append (Out_Text, Preamble_Text);
                end if;
                Index := Index + 1;
             end if;
          end loop;
+         while Routine /= 0 loop
+            Site_Counts.Fill (Counted, Statistics (Routine));
+            Site_Counts.Clear (Counted);
+            Next_Routine;
+         end loop;
          Assembly := Out_Text;
       end;
+      for Index in Routine_Text'Range loop
+         if Routine_Text (Index).Last >= Routine_Text (Index).First then
+            Landin.Build_Reports.Append (Report, Statistics (Index));
+         end if;
+      end loop;
    end Emit;
 
 end Landin.Backend.Arm64;

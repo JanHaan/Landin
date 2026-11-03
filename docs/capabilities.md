@@ -602,7 +602,9 @@ process ignores SIGPIPE and gives its children the default back.
   specialization, which are independent switches. The driver selects
   size/auto by default; `--optimize=none --specialize=off` selects the
   reference, and `--build-report=PATH` requests deterministic off-target
-  JSON. Build mode remains independent.
+  JSON, whose every routine row counts frame, stack, saves, spills,
+  registers, instructions, stack traffic and calls the same way on every
+  backend (D791). Build mode remains independent.
 - **The simplifier.** At size and speed it forwards a slot's value across
   writes that cannot reach it and computes identical operations and checks
   within a block once. Immutable module values fold, a check a dominating

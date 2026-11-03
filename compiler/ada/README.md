@@ -153,7 +153,7 @@ different responsibilities.
 | `Landin.IR.Specialization_Policy` | bounded benefit and profitability estimates | claim assembled-byte costs or depend on host word width |
 | `Landin.IR.Verifier` | release-build well-formedness of a completed Unit, including atom/error set membership, descriptor/carrier, multiple-result slot and static function-image agreement, call-failure slots and exits, valid neutral subobject paths and recursive image descriptors, plus target-aware fit of every static fold | diagnose source, repair malformed IR, or choose backend policy |
 | `Landin.IR.Dump` | canonical human-readable text for a Unit | be a stable interface, a reader, or a serialisation |
-| `Landin.Backend` | where a routine's cells live, the recursive target extent of one neutral field shape, where a scalar or fixed-array leaf at any path depth sits inside an aggregate datum or slot, how wide one element of an array of either is, the target-byte replay of scalar, fixed-array and unfolded variant runs, each atom's dense code, how many items hold each linker spelling, which indirect access an indexed address folds into, and D536's one form for a run in a static image | name a machine, choose a register, or ask the host a width |
+| `Landin.Backend` | where a routine's cells live, an extent no frame a backend plans for a routine exceeds, which frame preflight answers from, the recursive target extent of one neutral field shape, where a scalar or fixed-array leaf at any path depth sits inside an aggregate datum or slot, how wide one element of an array of either is, the target-byte replay of scalar, fixed-array and unfolded variant runs, each atom's dense code, how many items hold each linker spelling, which indirect access an indexed address folds into, and D536's one form for a run in a static image | name a machine, choose a register, or ask the host a width |
 | `Landin.Backend.Work_Arrays` | heap-owned backend scratch with lexical exception-safe reclamation | place instruction-proportional arrays on the host stack |
 | `Landin.Backend.Reciprocals` | the multiplier, shift and 65-bit correction that divide every dividend of one width by one known divisor that is neither zero nor a power of two | choose instructions or registers, or ask the host a width |
 | `Landin.Backend.C_ABI` | SysV AMD64 classification and one call/entry/result placement plan from target facts and neutral shapes, including independent GP/SSE banks and aggregate rollback | ask the host for layout, put register placements in IR, or change the internal Landin ABI |
@@ -171,6 +171,7 @@ different responsibilities.
 | `Landin.Backend.X86_64` | the assembly text for one target, every register in it, collision-safe whole-program symbols, the hosted entry's initializer call, D161's read-only literal data, the target-width scalar, finite-array, compact repetition, nested-child and selected-variant directives and padding for recursively written aggregate images, and D187's omission of exactly the overflow, element-index, slice-range and integer-conversion edges an instruction is marked for | decide a language error mapping, write a file, or run a tool |
 | `Landin.Backend.X86_64.Allocation` | deterministic stack homes, the five available SysV callee-save GP registers, slots' registers over their live intervals, and the four caller-saved registers selection leaves alone between two operations | give a location a register selection writes inside its interval, or allocate failure registers |
 | `Landin.Backend.X86_64.Machine` | selected instruction counts and optional canonical body-equivalence evidence | canonicalize external symbols as local labels or equate counts with assembled bytes |
+| `Landin.Backend.Site_Counts` | the build report's static instruction, stack-traffic and call sites in an arm64, RISC-V or Thumb routine's final text, following the registers it sets from its stack or frame pointer | select, rewrite or assemble an instruction, or equate a count with assembled bytes |
 | `Landin.Backend.Debug_Locations` | format-independent lexical visibility and definite initialization at IR instruction boundaries | choose storage, encode debugger records or read the host |
 | `Landin.Backend.Dwarf` | shared DWARF type/scope/location encoding parameterized by backend placement and section policy | change language types, choose variable storage, read the host or write files |
 | `Landin.Backend.X86_64.Dwarf` | x86 allocation adapter, register encodings and ELF entry points for the shared DWARF encoder | change source facts or choose variable storage |
@@ -434,9 +435,35 @@ executable also has a `firmware` object. A source entry contains
 through a table, each with its `routine`, `source`, `line`, `column`, the
 `provider` a concrete table holds and `why`, a sentence. The nested build
 carries the target and both controls, plus
-`specializations`, `routines`, `layouts`. Instruction/stack counts are static
-emission sites, `estimated_growth` is an IR policy score, and neither claims
-assembled bytes. `scripts/quality.sh` obtains those from pinned Linux object
+`specializations`, `routines`, `layouts`. Every backend fills every field
+of a `routines` row for every routine it emits, with one meaning on every
+target. `frame_bytes` is what the prologue reserves below the frame record
+and the registers it pushes: slot cells, spill and save homes and incoming
+register homes, rounded to the stack's alignment. It is not the routine's
+stack: `stack_bytes` is, the figure the depth report gives the routine as
+its `frame_bytes`, from the stack pointer its caller had before the call,
+with the return address, frame record, pushed registers and the largest
+call or push area. `save_bytes` are the callee-saved registers it saves, in
+the frame or pushed beside the frame record, never the record itself;
+`spill_bytes` and `spill_count` its spill homes. `register_count` is the
+distinct registers the allocation holds a value or slot in, saved or not,
+and zero on RISC-V and Cortex-M0, which give every one a home.
+`instructions`, `stack_loads`, `stack_stores`, `direct_calls` and
+`indirect_calls` are static sites in the routine's final text: a load or
+store reaches the stack through the stack or frame pointer or a register
+set from one since the last label or call, and a push, a pop and x86-64's
+call and return are stack traffic too. x86-64 counts them from its
+selected stream and the other backends with `Landin.Backend.Site_Counts`.
+Instruction/stack counts are static emission sites, `estimated_growth` is
+an IR policy score, and neither claims assembled bytes.
+
+Frame preflight and emission do not plan a routine twice. Preflight asks
+`Landin.Backend.Frame_Bound`, which needs only the reference frame, and
+plans the frame only for a routine the bound does not show addressable.
+Emission plans each routine once, and when debug output is requested keeps
+the plan and frame for the DWARF encoder, which reads them rather than
+planning again; Cortex-M0's tentative emission hands its frame to the
+final one. `scripts/quality.sh` obtains those from pinned Linux object
 tools. Complete mandatory runtime profiles and quantitative acceptance are
 recorded in `compiler/tests/README.md`, not inferred from the existence of
 these packages.

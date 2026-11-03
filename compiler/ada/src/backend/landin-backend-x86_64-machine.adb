@@ -90,6 +90,81 @@ package body Landin.Backend.X86_64.Machine is
    function Retained_Labels (Of_Stream : Stream) return Natural
      is (Natural (Of_Stream.Labels.Length));
 
+   --  The general register Name spells at any width, numbered as the
+   --  encoding numbers it, or -1; Wide says whether it is the whole
+   --  sixty-four bits.
+   procedure Decode (Name : String; Number : out Integer; Wide : out Boolean);
+
+   procedure Decode (Name : String; Number : out Integer; Wide : out Boolean)
+   is
+      Legacy : constant array (0 .. 7) of String (1 .. 2) :=
+        ["ax", "cx", "dx", "bx", "sp", "bp", "si", "di"];
+      Bare : constant String :=
+        (if Name'Length > 1 and then Name (Name'First) = '%'
+         then Name (Name'First + 1 .. Name'Last) else "");
+      Value : Natural := 0;
+      Last : Natural;
+   begin
+      Number := -1;
+      Wide := False;
+      if Bare'Length >= 2 and then Bare (Bare'First) = 'r'
+        and then Bare (Bare'First + 1) in '0' .. '9'
+      then
+         Last := Bare'First + 1;
+         while Last <= Bare'Last and then Bare (Last) in '0' .. '9' loop
+            Value := Value * 10
+              + (Character'Pos (Bare (Last)) - Character'Pos ('0'));
+            Last := Last + 1;
+         end loop;
+         if Value in 8 .. 15
+           and then (Last > Bare'Last
+                     or else (Last = Bare'Last
+                              and then Bare (Last) in 'd' | 'w' | 'b'))
+         then
+            Number := Value;
+            Wide := Last > Bare'Last;
+         end if;
+         return;
+      end if;
+      for Index in Legacy'Range loop
+         declare
+            Pair : constant String := Legacy (Index);
+         begin
+            if Bare = Pair
+              or else (Bare'Length = 3 and then Bare (Bare'First) in 'r' | 'e'
+                       and then Bare (Bare'First + 1 .. Bare'Last) = Pair)
+              or else (Bare'Length = 3 and then Index >= 4
+                       and then Bare = Pair & "l")
+              or else (Bare'Length = 2 and then Index < 4
+                       and then Bare (Bare'Last) in 'l' | 'h'
+                       and then Bare (Bare'First) = Pair (1))
+            then
+               Number := Index;
+               Wide := Bare'Length = 3 and then Bare (Bare'First) = 'r';
+               return;
+            end if;
+         end;
+      end loop;
+   end Decode;
+
+   --  The base register of a memory operand, or "".
+   function Base_Of (Part : String) return String;
+
+   function Base_Of (Part : String) return String is
+      Open : constant Natural := Ada.Strings.Fixed.Index (Part, "(");
+   begin
+      if Open = 0 then
+         return "";
+      end if;
+      for Index in Open + 1 .. Part'Last loop
+         if Part (Index) in ',' | ')' then
+            return Ada.Strings.Fixed.Trim
+              (Part (Open + 1 .. Index - 1), Ada.Strings.Both);
+         end if;
+      end loop;
+      return "";
+   end Base_Of;
+
    procedure Instruction (Into : in out Stream; Text : String) is
       Position : Natural := Text'First;
       First_Token : Boolean := True;
@@ -100,14 +175,27 @@ package body Landin.Backend.X86_64.Machine is
         (if Space = 0 then Text'Last + 1 else Space + 1);
       Depth : Natural := 0;
       Quoted : Boolean := False;
+      --  The first operand's last character, and how many operands.
+      First_Last : Natural := Text'Last;
+      Operands : Natural := 0;
+
+      --  Whether Name holds a stack address.
+      function Holds_Address (Name : String) return Boolean;
+
+      function Holds_Address (Name : String) return Boolean is
+         Number : Integer;
+         Wide : Boolean;
+      begin
+         Decode (Name, Number, Wide);
+         return Wide and then (Number in 4 | 5 or else
+                                 (Number >= 0 and then Into.Derived (Number)));
+      end Holds_Address;
 
       procedure Count_Operand (Last : Natural; Destination : Boolean);
 
       procedure Count_Operand (Last : Natural; Destination : Boolean) is
          Part : constant String := Text (Operand_Start .. Last);
-         On_Stack : constant Boolean :=
-           Ada.Strings.Fixed.Index (Part, "(%rbp") > 0
-           or else Ada.Strings.Fixed.Index (Part, "(%rsp") > 0;
+         On_Stack : constant Boolean := Holds_Address (Base_Of (Part));
          Write_Only : constant Boolean := Starts (Op, "mov")
            or else Starts (Op, "set") or else Starts (Op, "pop");
          Read_Only : constant Boolean := Starts (Op, "cmp")
@@ -154,11 +242,57 @@ package body Landin.Backend.X86_64.Machine is
                Depth := Depth - 1;
             elsif Text (Index) = ',' and then Depth = 0 then
                Count_Operand (Index - 1, False);
+               if Operands = 0 then
+                  First_Last := Index - 1;
+               end if;
+               Operands := Operands + 1;
                Operand_Start := Index + 1;
             end if;
          end if;
       end loop;
       Count_Operand (Text'Last, True);
+      if Operand_Start <= Text'Last then
+         Operands := Operands + 1;
+      end if;
+      declare
+         First_Part : constant String := Ada.Strings.Fixed.Trim
+           (Text ((if Space = 0 then Text'Last + 1 else Space + 1)
+                  .. First_Last), Ada.Strings.Both);
+         Last_Part : constant String := Ada.Strings.Fixed.Trim
+           (Text (Operand_Start .. Text'Last), Ada.Strings.Both);
+         Destination, Source : Integer;
+         Wide_Destination, Wide_Source : Boolean;
+      begin
+         Decode (Last_Part, Destination, Wide_Destination);
+         Decode (First_Part, Source, Wide_Source);
+         if Op = "call" or else Op = "syscall" then
+            Into.Derived := [others => False];
+         elsif Starts (Op, "div") or else Starts (Op, "idiv")
+           or else Starts (Op, "mul")
+           or else (Starts (Op, "imul") and then Operands = 1)
+           or else Op in "cqto" | "cltd" | "cqo" | "cdq"
+         then
+            Into.Derived (0) := False;
+            Into.Derived (2) := False;
+         elsif Destination < 0 or else Operands /= 2
+           or else Starts (Op, "cmp") or else Starts (Op, "test")
+         then
+            null;
+         elsif Starts (Op, "lea") then
+            Into.Derived (Destination) := Wide_Destination
+              and then Holds_Address (Base_Of (First_Part));
+         elsif Starts (Op, "mov") and then Source >= 0 then
+            Into.Derived (Destination) := Wide_Destination
+              and then Wide_Source and then Holds_Address (First_Part);
+         elsif Starts (Op, "add") or else Starts (Op, "sub") then
+            Into.Derived (Destination) := Wide_Destination
+              and then (Into.Derived (Destination)
+                        or else (Starts (Op, "add")
+                                 and then Holds_Address (First_Part)));
+         else
+            Into.Derived (Destination) := False;
+         end if;
+      end;
       if not Into.Recording then
          return;
       end if;
@@ -211,6 +345,8 @@ package body Landin.Backend.X86_64.Machine is
       if Into.Sealed then
          raise Landin.Compiler_Defect with "a sealed body gained a label";
       end if;
+      --  Control can arrive here from anywhere.
+      Into.Derived := [others => False];
       if not Into.Recording then
          return;
       end if;
