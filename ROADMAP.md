@@ -2638,7 +2638,7 @@ conditional import, or the empty-module shape recorded as the way (SR-40).
 Refusals: an unknown applied name gets L0201's near names (SR-20); L0331
 names `noreturn` (SR-32); the buffered writer's `format` takes the inline
 list `text.format` takes, and L0304 never offers a form that is then refused
-(SR-350); no refusal repeats its own span as a secondary
+(D419); no refusal repeats its own span as a secondary
 (SR-34); one missing conformance entry is one report (SR-59); L0315 names
 the convention that locks (SR-63); L0326 counts an erased view's address
 (SR-71); L0342 names a read-only address (SR-74); no fix-it changes a
@@ -3249,6 +3249,39 @@ evidence; `scheduled` followed by one or more unfinished items that take on
 its parts, separated by commas; or `retired`, with the reason it no longer
 applies. Remove a scheduled owner when its part is complete. A record stays
 scheduled on its other owners until they finish, then leaves the register.
+
+A record that leaves the table is still cited by the item that closed it,
+so its identity is listed below, and a citation of a record that never
+existed can be told from one of a record that left. SR-210 to SR-213 are
+the four defects a review of `main` after R13.35 numbered and fixed at
+once; they were never rows.
+
+Records that have left the register: SR-13, SR-14, SR-15, SR-16, SR-17,
+SR-20, SR-22, SR-23, SR-24, SR-25, SR-26, SR-27, SR-28, SR-29, SR-31, SR-32,
+SR-34, SR-37, SR-38, SR-39, SR-40, SR-41, SR-42, SR-43, SR-44, SR-45, SR-47,
+SR-48, SR-53, SR-54, SR-55, SR-56, SR-57, SR-58, SR-59, SR-60, SR-61, SR-62,
+SR-63, SR-64, SR-66, SR-67, SR-68, SR-69, SR-70, SR-71, SR-72, SR-73, SR-74,
+SR-75, SR-76, SR-77, SR-78, SR-80, SR-81, SR-83, SR-85, SR-90, SR-91, SR-92,
+SR-93, SR-94, SR-95, SR-102, SR-103, SR-104, SR-105, SR-106, SR-107, SR-108,
+SR-109, SR-111, SR-112, SR-113, SR-114, SR-115, SR-116, SR-117, SR-118,
+SR-119, SR-123, SR-124, SR-126, SR-128, SR-129, SR-130, SR-131, SR-132,
+SR-133, SR-134, SR-136, SR-137, SR-138, SR-139, SR-140, SR-141, SR-142,
+SR-143, SR-144, SR-145, SR-147, SR-148, SR-149, SR-150, SR-151, SR-152,
+SR-153, SR-155, SR-158, SR-159, SR-160, SR-161, SR-162, SR-163, SR-164,
+SR-165, SR-166, SR-168, SR-169, SR-170, SR-171, SR-172, SR-173, SR-174,
+SR-175, SR-176, SR-177, SR-178, SR-180, SR-181, SR-182, SR-183, SR-184,
+SR-185, SR-186, SR-187, SR-188, SR-189, SR-190, SR-191, SR-192, SR-193,
+SR-194, SR-197, SR-198, SR-199, SR-200, SR-201, SR-202, SR-203, SR-204,
+SR-205, SR-206, SR-207, SR-208, SR-209, SR-210, SR-211, SR-212, SR-213,
+SR-214, SR-215, SR-216, SR-217, SR-218, SR-219, SR-220, SR-221, SR-222,
+SR-223, SR-224, SR-227, SR-228, SR-229, SR-230, SR-232, SR-233, SR-234,
+SR-235, SR-236, SR-237, SR-238, SR-239, SR-240, SR-241, SR-242, SR-243,
+SR-244, SR-245, SR-246, SR-248, SR-249, SR-250, SR-251, SR-252, SR-260,
+SR-263, SR-268, SR-270, SR-271, SR-274, SR-276, SR-278, SR-280, SR-282,
+SR-283, SR-284, SR-305, SR-306, SR-318, SR-332, SR-333, SR-338, SR-343,
+SR-347, SR-349, SR-351, SR-352, SR-353, SR-356, SR-357, SR-362, SR-365,
+SR-366, SR-372, SR-388, SR-391, SR-393, SR-402, SR-428, SR-487, SR-488,
+SR-489, SR-499, SR-511, SR-517.
 
 | Record | Family | What stands | Activation | Completion | Status |
 | --- | --- | --- | --- | --- | --- |

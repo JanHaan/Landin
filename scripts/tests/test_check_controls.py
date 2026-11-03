@@ -1520,6 +1520,43 @@ class RoadmapStructure(unittest.TestCase):
                                    "| %s | Competitive" % MEASURED))
         self.assertTrue(any("registered twice" in why for why in said))
 
+    def test_a_citation_of_a_record_that_never_was_is_reported(self):
+        #  Past every record the register has had, so it names nothing.
+        invented = "SR-%d" % (1 + max(int(n) for n in re.findall(
+            r"SR-(\d+)", real_roadmap())))
+        said = roadmap_faults(once("What waits for a trigger.",
+                                   "What waits for a trigger (%s)." % invented))
+        self.assertTrue(any("%s is cited and is no register record" % invented
+                            in why for why in said))
+        #  Quoted in a code span, as a finding spells what it met, it is not
+        #  a citation.
+        said = roadmap_faults(once("What waits for a trigger.",
+                                   "What waits for a trigger (`%s`)."
+                                   % invented))
+        self.assertFalse(any(invented in why for why in said))
+
+    def test_a_record_that_left_is_defined_only_by_the_list(self):
+        listed = re.search(r"^%s(\S+?)," % re.escape(checker.REGISTER_LEFT),
+                           real_roadmap(), re.M).group(1)
+        said = roadmap_faults(once(checker.REGISTER_LEFT + listed + ", ",
+                                   checker.REGISTER_LEFT))
+        self.assertTrue(any("%s is cited and is no register record" % listed
+                            in why for why in said))
+
+    def test_a_record_listed_as_left_and_still_a_row_is_reported(self):
+        said = roadmap_faults(once(checker.REGISTER_LEFT,
+                                   checker.REGISTER_LEFT + MEASURED + ", "))
+        self.assertTrue(any("%s is listed as having left the register and is"
+                            " still its row" % MEASURED in why
+                            for why in said))
+
+    def test_a_merged_record_is_defined_by_the_row_it_joined(self):
+        joined = re.search(r"Merged: (R730-\d\d|SR-\d+)",
+                           real_roadmap()).group(1)
+        said = roadmap_faults(once("Merged: " + joined, "Beside " + joined))
+        self.assertTrue(any("%s is cited and is no register record" % joined
+                            in why for why in said))
+
     def test_a_record_scheduled_on_no_item_is_reported(self):
         said = roadmap_faults(once("| scheduled " + SCHEDULED + " |",
                                    "| scheduled %s |" % CLOSED))

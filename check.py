@@ -276,6 +276,11 @@ REGISTER_STATUS = re.compile(
 ROADMAP_CITATION = re.compile(
     r"(?<![A-Za-z0-9_.])(R\d+\.\d+|R551-\d\d|R730-\d\d|SR-\d{2,})"
     r"(?![A-Za-z0-9_])")
+#  The register's own identities among them, which ROADMAP.md must define.
+REGISTER_CITATION = re.compile(
+    r"(?<![A-Za-z0-9_.])(R551-\d\d|R730-\d\d|SR-\d{2,})(?![A-Za-z0-9_])")
+#  The paragraph naming every record that has left the register's table.
+REGISTER_LEFT = "Records that have left the register: "
 PROTOTYPE_FINDINGS = {
     "X": "prototype-1-driver.md",
     "Y": "prototype-2-parser.md",
@@ -2103,6 +2108,57 @@ def register_problems(text, statuses):
                                 % (record, item)))
     for family in sorted(families - set(owned)):
         out.append((1, "family %s owns no open record" % family))
+    return out + register_citation_problems(lines, rows, seen)
+
+
+def register_citation_problems(lines, rows, defined):
+    """Every register record ROADMAP.md cites is one the register defines.
+
+    One item's closing paragraph cited a record that never existed, and
+    every check passed; as the register grew past its number, the citation could come to
+    name an unrelated row.  A record is defined by its row, retired or not;
+    by the row it was merged into, which names it after `Merged:`; or, once
+    its row has left the table, by the list of records that have left, since
+    the item that closed it goes on citing it.  An identity in a code span is
+    quoted rather than cited: a finding about a citation spells the one it
+    met.
+    """
+    out = []
+    merged = set()
+    for _, row in rows:
+        for cell in row.values():
+            if "Merged:" in cell:
+                merged.update(REGISTER_CITATION.findall(
+                    cell.split("Merged:", 1)[1]))
+    left = {}
+    starts = [n for n, line in enumerate(lines)
+              if line.startswith(REGISTER_LEFT)]
+    if len(starts) != 1:
+        return [(1, "expected one paragraph beginning %r, found %d"
+                 % (REGISTER_LEFT.strip(), len(starts)))]
+    at = starts[0]
+    while at < len(lines) and lines[at].strip():
+        for record in REGISTER_CITATION.findall(lines[at]):
+            if record in left:
+                out.append((at + 1, "%s is listed twice as having left the"
+                            " register" % record))
+            elif record in defined:
+                out.append((at + 1, "%s is listed as having left the register"
+                            " and is still its row at %d"
+                            % (record, defined[record])))
+            left.setdefault(record, at + 1)
+        at += 1
+    for n, line in enumerate(lines, 1):
+        for found in REGISTER_CITATION.finditer(
+                re.sub(r"`[^`]*`", "", line)):
+            record = found.group(1)
+            if record not in defined and record not in merged \
+                    and record not in left:
+                out.append((n, "%s is cited and is no register record: no"
+                            " row, no `Merged:` name and not among the"
+                            " records that have left the register; list it"
+                            " there only if its row has left the table"
+                            % record))
     return out
 
 
