@@ -22,7 +22,7 @@ explains the package boundaries, not a second work list.
 | Linux system calls and the static entry `_landin_start` | ordinary `platform/linux` |
 | native driver, library and directory arguments, and platform link arguments | target-guarded `Landin.Backend.Toolchain` |
 | C alias identities | ordinary `platform/c`, guarded by the selected ABI fact |
-| actual header/tool ABI verification | `bindings/generate.py`, explicit Clang target and sysroot |
+| actual header/tool ABI verification | `refine bindings`, explicit Clang target and sysroot |
 
 The Linux x86-64, Linux arm64 and Darwin descriptions all use 64-bit pointers,
 eight-byte pointer alignment, sixteen-byte stack alignment and little-endian

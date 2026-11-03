@@ -6,7 +6,6 @@ from pathlib import Path
 import platform
 import shutil
 import shlex
-import sys
 
 from check import ROOT, Run, hash_file, require
 
@@ -38,12 +37,14 @@ def main():
         policy["abi"]["target"] = "arm64-apple-macos26.0.0"
         (inputs / "policy.json").write_text(json.dumps(policy, indent=2) + "\n")
         generated = output / "generated"
-        run.command([sys.executable, ROOT / "bindings/generate.py", "--clang", "/usr/bin/clang",
-                     "--target", policy["abi"]["target"], "--sysroot", sdk,
-                     "--header", "r440-bindings.h=" + str(inputs / "r440-bindings.h"),
-                     "--policy", inputs / "policy.json", "--out-dir", generated,
-                     "--system-include-dir", resource / "include",
-                     "--system-include-dir", sdk / "usr/include"], "generate", ROOT)
+        run.command([refine, "bindings", "--clang=/usr/bin/clang",
+                     "--target=darwin-arm64", "--sysroot=" + str(sdk),
+                     "--policy=" + str(inputs / "policy.json"),
+                     "--out-dir=" + str(generated),
+                     "--system-include-dir=" + str(resource / "include"),
+                     "--system-include-dir=" + str(sdk / "usr/include"),
+                     "r440-bindings.h=" + str(inputs / "r440-bindings.h")],
+                    "generate", ROOT)
         require("compiler.assert(compiler.c_darwin_lp64)" in
                 (generated / "bindings.ldn").read_text(), "missing Darwin guard")
         shutil.copyfile(inputs / "program.ldn", generated / "program.ldn")

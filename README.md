@@ -186,6 +186,7 @@ it names.
 | `refine explain L0301` | explain a diagnostic code and what to change; `[1760]` or `D275`, a cited rule or decision |
 | `refine lsp` | the language server an editor starts |
 | `refine svd --policy=P.json --out-dir=DIR CHIP.svd` | generate a chip's register modules and interrupts from its SVD; see [devices](devices/README.md) |
+| `refine bindings --clang=clang-19 ... api.h` | generate Landin bindings and C adapters for C headers; see [bindings](bindings/README.md) |
 | `refine version` | name the compiler and the library it uses |
 | `refine --help`, `refine compile --help` | every command, and one command's options |
 
@@ -217,7 +218,8 @@ short:
   as a group a routine joins among them; and Linux executables with no C
   library by default.
 - **The C boundary:** each hosted target's C ABI, packed and flexible
-  records, callbacks and variadic calls, and a binding generator over Clang.
+  records, callbacks and variadic calls, and `refine bindings`, a binding
+  generator over Clang.
 - **Code generation:** byte-identical output on every target whatever the
   build environment; register allocation, inlining and simplification at
   speed; and only the routines a program reaches are emitted.
@@ -272,7 +274,7 @@ loop.
 | `core/`, `hosted/`, `platform/` | the standard library. |
 | `docs/` | derived guides, never authorities: [the documents' arrangement](docs/documents.md), [diagnostics](docs/diagnostics.md), [formatting](docs/format.md), [the language server](docs/server.md), [the IR](docs/ir.md), [target contracts](docs/targets.md), [environments](docs/environments.md), and non-normative [design notes](docs/notes/printf-alternative.md). |
 | `examples/` | the programs derived from prototypes 2, 3, 4 and 5: [`config_parser/`](examples/config_parser/), [`derived_containers/`](examples/derived_containers/), [`derived_hosted/`](examples/derived_hosted/) and [`derived_server/`](examples/derived_server/). |
-| [`bindings/`](bindings/README.md) | the C binding generator, which asks an external Clang for a header's AST so `refine` never parses C. |
+| [`bindings/`](bindings/README.md) | `refine bindings`' policy, its tests and its documentation: the C binding generator asks an external Clang for a header's AST, so the compiler never parses C. |
 | [`highlight/`](highlight/README.md) | highlighting and editor packages, from VS Code and JetBrains IDEs through Vim, Emacs and Notepad++. |
 | `environments/` | `pins.sh`, the one place a toolchain version or checksum is written, and the environments that produce evidence. |
 | `scripts/`, `check.py`, `flake.nix` | build, test and check commands, and `nix develop`. |

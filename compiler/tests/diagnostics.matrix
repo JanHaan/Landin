@@ -131,5 +131,5 @@ L0530  Live     error   no-fix   true  empty-ok    0..0 0     driver            
 L0531  Live     error   no-fix   false empty-ok    0..0 0     driver                              test:landin-tests-devices_suite.adb
 L0579  Live     error   no-fix   false empty-ok    0..0 0     driver                              test:landin-tests-bindings_suite.adb
 L0580  Live     error   no-fix   false empty-ok    0..0 0     driver                              test:landin-tests-bindings_suite.adb
-L0581  Live     error   no-fix   false empty-ok    0..0 0     driver                              -
+L0581  Live     error   no-fix   false empty-ok    0..0 0     driver                              test:landin-tests-bindings_suite.adb
 L0582  Live     error   no-fix   false empty-ok    0..0 0     driver                              test:landin-tests-bindings_suite.adb

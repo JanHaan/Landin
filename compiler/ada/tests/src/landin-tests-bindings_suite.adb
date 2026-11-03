@@ -426,6 +426,7 @@ package body Landin.Tests.Bindings_Suite is
          Tools.Add_Result (0, "x86_64-pc-linux-gnu" & LF);
          Tools.Add_Result (0, Macros (Unsigned_Char => False));
          Tools.Add_Result (0, Preprocessed (Marker));
+         Tools.Add_Result (0, Ast);
          declare
             Result : constant Landin.Driver.Outcome :=
               Landin.Commands.Execute (Asked, Host, Tools, Meter);
@@ -480,6 +481,12 @@ package body Landin.Tests.Bindings_Suite is
          Host.Add_File (Root & "/sysroot.h", "");
       end No_Sysroot;
 
+      Stale : constant String :=
+        Ada.Strings.Fixed.Replace_Slice
+          (Policy, Ada.Strings.Fixed.Index (Policy, """twice"""),
+           Ada.Strings.Fixed.Index (Policy, """twice""") + 6,
+           """gone""");
+
       Twice_Key : constant String :=
         Ada.Strings.Fixed.Replace_Slice
           (Policy, Ada.Strings.Fixed.Index (Policy, """namespace"""),
@@ -505,6 +512,10 @@ package body Landin.Tests.Bindings_Suite is
                "api.h"], "L0579",
               "the policy binds for x86_64-pc-linux-gnu, and --target names"
               & " linux-arm64");
+      Expect (Arguments, "L0581",
+              "policy declaration 3 (function 'gone'): selected function was"
+              & " not found in Clang AST (stale policy)",
+              Policy_Text => Stale);
       Expect (Arguments, "L0580",
               "unsupported path-sensitive preprocessing outside explicit"
               & " roots",

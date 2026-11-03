@@ -5221,9 +5221,10 @@ package body Landin.Diagnostics.Citations.Texts is
                & "ector type and take element-wise operators ([0590]).",
             when 1580 =>
                "A bodyless `extern(c)` declaration imports a C function."
-               & " `refine` reads Landin, never C headers: a separate, det"
-               & "erministic binding generator reads headers and writes th"
-               & "ese declarations for you."
+               & " A compilation reads Landin, never C headers: `refine bi"
+               & "ndings`, a deterministic binding generator, asks Clang w"
+               & "hat a header declares and writes these declarations for "
+               & "you."
                & LF
                & LF
                & "    none_returned: atom"

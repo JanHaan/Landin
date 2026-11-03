@@ -1,24 +1,24 @@
 # Landin C binding generator
 
-`generate.py` is the repository-owned, standard-library-only binding generator
-for the C boundary. It asks an external Clang for a JSON AST; it does not parse C header
-text and it does not make `refine` a header parser. Its supported ABIs are
-Linux x86-64 ELF System V AMD64 LP64 and Darwin arm64 with Apple's AAPCS64
-platform differences, both with signed plain `char`, and Linux arm64's
-standard AAPCS64 LP64, whose plain `char` is unsigned (D256), all with
-ordinary (non-short) C11 enums. Each is one row of `TARGET_ABIS`, which says
-its fact, calling convention, plain `char` and identifying macros, and a
-policy's `plain_char` must be its target's. `verify_target` checks the
-explicit triple, architecture, object format macros, data model, byte order
-and the sign of plain `char`. Generated code asserts the selected
-`compiler.c_sysv_lp64`, `compiler.c_darwin_lp64` or `compiler.c_aapcs64_lp64`
-fact. The exact Apple binding target is `arm64-apple-macos26.0.0`; native
-tools and SDK are pinned in `environments/macos-arm64/policy.json`. The Linux
-arm64 target is `aarch64-unknown-linux-gnu`, and
-`compiler/tests/linux-arm64/bindings.py` regenerates the committed fixture's
-header and policy for it and runs the result natively.
-[Target contracts](../docs/targets.md) explains the separate compiler and
-generator guards.
+`refine bindings` is the binding generator for the C boundary (D820). It asks
+an external Clang for a JSON AST; it does not parse C header text, and no
+compilation reads a header. Its supported ABIs are Linux x86-64 ELF System V
+AMD64 LP64 and Darwin arm64 with Apple's AAPCS64 platform differences, both
+with signed plain `char`, and Linux arm64's standard AAPCS64 LP64, whose
+plain `char` is unsigned (D256), all with ordinary (non-short) C11 enums.
+Each is one row of `Landin.Bindings`' targets, which says its refine target
+name, Clang triple, fact, calling convention, plain `char` and identifying
+macros, and a policy's `plain_char` must be its target's. Clang's answers
+are checked for the explicit triple, architecture, object format macros, data
+model, byte order and the sign of plain `char`. Generated code asserts the
+selected `compiler.c_sysv_lp64`, `compiler.c_darwin_lp64` or
+`compiler.c_aapcs64_lp64` fact. The exact Apple binding target is
+`arm64-apple-macos26.0.0`; native tools and SDK are pinned in
+`environments/macos-arm64/policy.json`. The Linux arm64 target is
+`aarch64-unknown-linux-gnu`, and `compiler/tests/linux-arm64/bindings.py`
+regenerates the committed fixture's header and policy for it and runs the
+result natively. [Target contracts](../docs/targets.md) explains the separate
+compiler and generator guards.
 
 The generator writes exactly four files:
 
@@ -34,50 +34,69 @@ The generator writes exactly four files:
   representations, adapter symbols, and output hashes without timestamps,
   AST addresses, or absolute host paths.
 
-Generation stages all four files, checks the target facts, validates every
-selected declaration and policy, and compiles `adapters.c` with the same Clang
-invocation before replacing any destination file. The output directory itself
-must not be a symbolic link. Destination entries are preflighted; a replacement
-failure rolls back the replaced prefix from backups.
-If rollback itself fails, the error names the retained recovery backup rather
-than claiming the old set was restored. This is failure recovery, not an atomic
-four-file snapshot for concurrent readers; do not consume outputs during generation.
+Generation checks the target facts, validates every selected declaration and
+policy, and compiles `adapters.c` with the same Clang invocation before
+replacing any destination file. The output directory itself must not be a
+symbolic link, and no output may be a directory or a link. Replacement is
+`refine svd`'s (D558): each new file is written beside its destination as
+`NAME.refine-new` and read back, and only then is each destination replaced,
+its old bytes kept as `NAME.refine-old` until every replacement is done; a
+failure puts back what was replaced, or names the kept copy it could not put
+back. A file whose bytes are already the new ones is left alone. This is
+failure recovery, not an atomic four-file snapshot for concurrent readers; do
+not consume outputs during generation.
 
 ## Invocation
 
 ```sh
-python3 bindings/generate.py \
-  --clang /absolute/path/to/clang \
-  --target x86_64-pc-linux-gnu \
-  --sysroot /absolute/path/to/sysroot \
-  --header api/public.h=/checkout/include/public.h \
-  --header api/detail.h=/checkout/include/detail.h \
-  --policy /checkout/bindings-policy.json \
-  --out-dir /checkout/generated \
-  --include-dir /checkout/include \
-  --system-include-dir "$(clang -print-resource-dir)/include" \
-  --define FEATURE_LEVEL=3
+refine bindings \
+  --clang=/absolute/path/to/clang \
+  --target=linux-x86-64 \
+  --sysroot=/absolute/path/to/sysroot \
+  --policy=/checkout/bindings-policy.json \
+  --out-dir=/checkout/generated \
+  --include-dir=/checkout/include \
+  --system-include-dir="$(clang -print-resource-dir)/include" \
+  --define=FEATURE_LEVEL=3 \
+  api/public.h=/checkout/include/public.h \
+  api/detail.h=/checkout/include/detail.h
 ```
 
-Every option shown through `--out-dir` is required; `--header` is repeatable.
-A header argument is either `LOGICAL=PATH` or `PATH`, in which case its basename
-is the logical name. Logical names are the relocatable spellings emitted in
-`exports.h`. They must be unique relative include paths.
+`--clang`, `--sysroot`, `--policy` and `--out-dir` are required, and at least
+one header; `--target` is refine's target name, `linux-x86-64`, `linux-arm64`
+or `darwin-arm64`, and defaults to the host's as for every command. The
+policy's `abi.target` must be the Clang triple that name selects. `--clang`
+names a Clang by path or by a name found on PATH. Each header is an operand,
+either `LOGICAL=PATH` or `PATH`, in which case its last component is the
+logical name. Logical names are the relocatable spellings emitted in
+`exports.h`. They must be unique relative include paths. `--include-dir`,
+`--system-include-dir` and `--define` repeat; relative paths are taken from
+the working directory without resolving links. `refine bindings --help` says
+the same.
 
 The generator passes `-nostdinc`. It sees only the named headers, explicit
 `--include-dir`/`--system-include-dir` roots, and explicit `--define` values.
-No development-host header directory is inherited: every Clang process receives
-a controlled environment, excluding `CPATH`, `C_INCLUDE_PATH`, driver-option
-overrides and default driver configuration files. File-prefix maps cover explicit
-include/system/sysroot roots, so transitive `__FILE__` constants survive relocation.
-Preprocessing outside those roots is refused; time-sensitive macros are errors.
-The sysroot is required
+No development-host header directory is inherited: every Clang process runs
+in an environment of its own, `PATH`, `HOME` and the temporary directory with
+`LC_ALL=C` and `TZ=UTC` (D821), so no `CPATH`, `C_INCLUDE_PATH` or
+driver-option override reaches it, and `--no-default-config` excludes default
+driver configuration files. Clang works in a private directory under
+`TMPDIR`, removed afterwards. File-prefix maps cover explicit
+include/system/sysroot roots, so transitive `__FILE__` constants survive
+relocation. Preprocessing outside those roots is refused; time-sensitive
+macros are errors. The sysroot is required
 even for self-contained headers; an empty directory is valid when no target
 system header is needed. Clang's resource include directory must be named
 explicitly when a selected incoming-varargs adapter needs `<stdarg.h>`.
 Opaque-object and nullable-callback allocation uses `calloc`/`free`, so the
 explicit include configuration must provide `<stdlib.h>` when those adapters
 are generated.
+
+A refusal is a diagnostic, and `refine explain` describes each code: a
+request written wrong is L0002, a header or policy that cannot be read L0003,
+a policy that is not one L0579, a Clang that cannot be used as asked L0580, a
+selection that cannot be bound L0581, outputs in the way L0582, and a
+replacement that fails L0005.
 
 Compile `adapters.c` with `-std=c11` and the same logical header mapping and
 preprocessor environment. The ABI fixture harness additionally uses
@@ -446,18 +465,26 @@ Current deliberate limits are visible rather than completion shortcuts:
 ## Tests
 
 ```sh
-python3 bindings/test.py
+CLANG=clang-19 python3 bindings/test.py --refine PATH
 ```
+
+`--refine` names the compiler under test, or `$LANDIN_REFINE` does. What only
+a fake Clang can show is the compiler's own: the `bindings` suite holds the
+target rows, the refusal of another triple before any header work, a whole
+binding with every Clang run in its own environment, each refusal by its
+code, and a replacement that fails after each of its moves putting every
+output back (`./scripts/dev-test.sh --suite=bindings`).
 
 The suite requires an external Clang, and the gate and the development shell
 run different builds of Clang 19. The gate's `bindings` job installs Ubuntu
 24.04's `clang-19` at the version `environments/pins.sh` pins as
-`LANDIN_CLANG_UBUNTU`, 19.1.1. The Linux Nix development shell's `clang-19`
-is LLVM 19 from the package set `flake.lock` fixes, 19.1.7 at the time of
-writing, which nothing pins to the gate's. The suite passes with both, and
-the gate's is the one a regenerated fixture is answered for. Syntax-only adapter checks keep C warnings fatal while allowing
-unused command-line options from the Nix Clang wrapper to remain warnings.
-It uses an empty explicit Linux sysroot,
+`LANDIN_CLANG_UBUNTU`, 19.1.1, and runs the debug compiler the gate built.
+The Linux Nix development shell's `clang-19` is LLVM 19 from the package set
+`flake.lock` fixes, 19.1.7 at the time of writing, which nothing pins to the
+gate's. The suite passes with both, and the gate's is the one a regenerated
+fixture is answered for. Syntax-only adapter checks keep C warnings fatal
+while allowing unused command-line options from the Nix Clang wrapper to
+remain warnings. It uses an empty explicit Linux sysroot,
 self-contained headers, and Clang's explicitly named resource headers. It
 checks relocated byte-for-byte generation, path-free metadata, ABI guards,
 precise refusal paths, and no replacement on failure. It compiles generated C
@@ -467,8 +494,9 @@ wrappers (packed records' through typed pointers at an odd address), nullable ca
 a mixed register/stack-sized incoming-varargs schema. Regression inputs also pin
 recursive retention and callback policy, unequal nested array extents, true enum
 compatible types, declaration identity, reserved names, ambient-environment
-exclusion, multi-seed anonymous-enum ordering, transitive path macros and injected
-publication failures. Output-origin regressions assert exact direct/adapter
+exclusion, repeated anonymous-enum ordering, transitive path macros and a
+dependency chain deep enough to need each record classified once.
+Output-origin regressions assert exact direct/adapter
 signatures and unchanged policy metadata, then execute pointer-identity witnesses;
 store regressions reject contradictory call-only policies for globals, TLS and
 opaque members, including reference-bearing aggregates. Opaque-name regressions
@@ -482,7 +510,7 @@ of frame-origin arguments.
 From the repository root, with `CLANG` naming the desired frontend (the
 gate's `bindings` job uses Ubuntu 24.04's `clang-19` at the version
 `environments/pins.sh` names; `nix develop` provides a `clang-19` that
-`CLANG=clang-19 python3 bindings/test.py` runs with, as the gate does):
+`bindings/test.py` runs with, as the gate does) and a built refine:
 
 ```sh
 CLANG=${CLANG:-clang}
@@ -490,12 +518,12 @@ fixture=compiler/tests/fixtures/abi/r440-bindings-generated
 work=$(mktemp -d)
 mkdir "$work/sysroot" "$work/includes"
 printf 'typedef __SIZE_TYPE__ size_t;\nvoid *calloc(size_t, size_t);\nvoid free(void *);\n' > "$work/includes/stdlib.h"
-python3 bindings/generate.py \
-  --clang "$CLANG" --target x86_64-pc-linux-gnu --sysroot "$work/sysroot" \
-  --header "r440-bindings.h=$fixture/r440-bindings.h" \
-  --policy "$fixture/policy.json" --out-dir "$fixture" \
-  --system-include-dir "$work/includes" \
-  --system-include-dir "$("$CLANG" -print-resource-dir)/include"
+refine bindings \
+  --clang="$CLANG" --target=linux-x86-64 --sysroot="$work/sysroot" \
+  --policy="$fixture/policy.json" --out-dir="$fixture" \
+  --system-include-dir="$work/includes" \
+  --system-include-dir="$("$CLANG" -print-resource-dir)/include" \
+  "r440-bindings.h=$fixture/r440-bindings.h"
 rm -r "$work"
 ```
 
@@ -515,20 +543,23 @@ one, C calls an exported Landin handler with a packed record at an odd
 address, and Landin reads and writes a flexible member through the buffer's
 bytes at the member's offset. Its reference-output calls use a static C source and
 assert retained pointer identity, not just successful return. Linux execution
-remains a separate, mandatory compiler gate; the Python suite does not run
-`refine` or establish frame-origin negative diagnostics.
+remains a separate, mandatory compiler gate; the Python suite runs
+`refine bindings` and no compilation, and establishes no frame-origin
+negative diagnostics.
 
-`check.py` remains standard-library-only and does not need Clang merely to run.
-An environment that elects to run generator tests must provision Clang and, for
-real system headers, the explicit target sysroot/include roots. Generated files
-are ordinary build inputs; package/root arrangement and invoking this tool from
-a future build design remain outside `refine`.
+`check.py` remains standard-library-only and needs neither Clang nor refine
+merely to run. An environment that elects to run generator tests must provision
+Clang, a built refine and, for real system headers, the explicit target
+sysroot/include roots. Generated files are ordinary build inputs;
+package/root arrangement and invoking this command from a future build design
+remain outside the compiler.
 
 
 ## Native Darwin validation
 
 `compiler/tests/darwin/bindings.py --refine PATH --output NEW_DIRECTORY`
-regenerates the shared binding corpus with Apple Clang and SDK include roots,
+regenerates the shared binding corpus with that refine, Apple Clang and SDK
+include roots,
 then compiles and executes its Landin/C differential program. It covers all
 supported adapter categories and retains the generated outputs and command
 logs. Linux golden files are not replaced by Darwin output. The runner also

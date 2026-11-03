@@ -416,7 +416,8 @@
           '';
 
           #  LLVM 19 under the versioned names Debian and Ubuntu give it and
-          #  the gate's commands use: `CLANG=clang-19 bindings/test.py` and
+          #  the gate's commands use: `CLANG=clang-19 bindings/test.py`, which
+          #  runs `refine bindings`, and
           #  the FreeBSD lanes' default --clang, --lld and --objdump.
           #  Ubuntu's clang-19 is one compiler that finds the host's libc for
           #  a host program and only the named sysroot for another target.

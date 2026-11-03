@@ -19,10 +19,10 @@ compiler; the pin is the compiler version, not the distributor.
 
 ## External binding-generator frontend
 
-The C binding generator, `bindings/generate.py`, is a separate source tool,
-not part of the Ada bootstrap and not a C or LLVM product backend.  The
-Linux environments provide a Clang 19 as the external C11 header frontend and
-compiler for its generated C adapters.  The selected target is
+The C binding generator, `refine bindings` (D820), asks an external Clang for
+a header's AST; Clang is not part of the Ada bootstrap and not a C or LLVM
+product backend.  The Linux environments provide a Clang 19 as the external
+C11 header frontend and compiler for its generated C adapters.  The selected target is
 `x86_64-pc-linux-gnu` on x86-64 and `aarch64-unknown-linux-gnu` on arm64,
 where the Linux arm64 jobs install the same package for arm64 and run
 `compiler/tests/linux-arm64/bindings.py`.  The gate's bindings job installs Ubuntu 24.04's
@@ -30,7 +30,8 @@ where the Linux arm64 jobs install the same package for arm64 and run
 the version `environments/pins.sh` names as `LANDIN_CLANG_UBUNTU`, asserts
 the installed version, and takes the headers and root sysroot from the same
 release's `libc6-dev`.  The local container's `debian/stable` channel gives
-19.1.7, and `bindings/test.py` passes on both, the committed fixture's
+19.1.7, and `bindings/test.py`, which runs `refine bindings`, passes on
+both, the committed fixture's
 byte-for-byte regeneration included; the gate's is the version of record.
 The versioned package name prevents a moving default Clang major.
 

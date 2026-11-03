@@ -227,6 +227,14 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   any, leaves unchanged files alone and removes what its old manifest names
   and it no longer makes. [The device guide](../devices/README.md)
   describes the policy.
+- `refine bindings --clang=CLANG --sysroot=DIR --policy=POLICY.json
+  --out-dir=DIR HEADER.h ...` asks the named Clang, in an environment of
+  its own, for the headers' declarations and writes the bindings a reviewed
+  policy selects: Landin declarations, C adapters for the forms Landin does
+  not carry natively, the header that declares them, and metadata (D820,
+  D821). It stages its four outputs and compiles the adapters before
+  replacing any, as `refine svd` does. [The binding guide](../bindings/README.md)
+  describes the policy.
 - `refine lsp` is a language server over standard input and output: an
   editor started with it gets diagnostics, definitions, hover types,
   formatting and quick fixes from the compiler's own stages, as
@@ -585,9 +593,10 @@ process ignores SIGPIPE and gives its children the default back.
   last-field flexible array member, both passed to C by pointer.
 - Callbacks and variadic calls, and a C function value made from an address
   a loader found.
-- [`bindings/`](../bindings/README.md) generates bindings, packed and
-  flexible-member records among them, from an external Clang's view of a
-  header. Unsupported C forms are refused by name.
+- `refine bindings` ([`bindings/`](../bindings/README.md)) generates
+  bindings, packed and flexible-member records among them, from an external
+  Clang's view of a header, with nothing but refine and that Clang.
+  Unsupported C forms are refused by name.
 - Only the entry, C imports, public C definitions, link names and Cortex-M
   placements are global symbols. Every other routine and datum, public or
   not, is local to the image, so none meets the C library's names.
