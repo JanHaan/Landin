@@ -2410,6 +2410,9 @@ package body Landin.Diagnostics.Citations is
             when 713 =>
                "A board tool reuses a probehive bridge, and one it start"
                & "s outlives it",
+            when 831 =>
+               "RP2350's register modules are the chip's, and the Pico 2"
+               & "'s two ports share theirs",
             when 530 =>
                "`refine explain` answers a construct and a decision",
             when 599 =>
@@ -3868,6 +3871,8 @@ package body Landin.Diagnostics.Citations is
             when 712 =>
                "Decisions: The toolchain, C and the machine",
             when 713 =>
+               "Decisions: The toolchain, C and the machine",
+            when 831 =>
                "Decisions: The toolchain, C and the machine",
             when 530 =>
                "Decisions: The toolchain, C and the machine",
@@ -5680,6 +5685,10 @@ package body Landin.Diagnostics.Citations is
             when 713 =>
                "https://www.701.dev/spec.html#d713-a-board-tool-reuses-a"
                & "-probehive-bridge-and-one-it-starts-outlives-it",
+            when 831 =>
+               "https://www.701.dev/spec.html#d831-rp2350-s-register-mod"
+               & "ules-are-the-chip-s-and-the-pico-2-s-two-ports-share-the"
+               & "irs",
             when 530 =>
                "https://www.701.dev/spec.html#d530-refine-explain-answer"
                & "s-a-construct-and-a-decision",

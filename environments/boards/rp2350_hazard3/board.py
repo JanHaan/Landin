@@ -57,6 +57,9 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 SOURCE = ROOT / 'compiler/tests/board/rp2350_hazard3'
+# The Arm port's bringup, report and serial, which this port shares over the
+# chip's modules (D831).
+SHARED_SOURCE = ROOT / 'compiler/tests/board/rp2350'
 sys.path.insert(0, str(HERE.parent))
 import common  # noqa: E402
 from common import (Failed, echo_of, elf_sections, frames_safe,  # noqa: E402,F401
@@ -177,7 +180,7 @@ def build(run, args):
     elf = run.out / 'board.elf'
     run.command('compile', [args.refine, '--root=' + str(ROOT / 'devices'),
         '--root=' + str(ROOT / 'devices/generated'), '--root=' + str(ROOT / 'compiler/tests/driver'),
-        '--root=' + str(SOURCE), '--target=rv32', '--level=rv32imac',
+        '--root=' + str(SOURCE), '--root=' + str(SHARED_SOURCE), '--target=rv32', '--level=rv32imac',
         '--firmware-entry=start', '--emit=exe',
         '--build-report=' + str(run.out / 'build.json'), str(SOURCE / 'app'), '-o', str(elf)])
     firmware = json.loads((run.out / 'build.json').read_text())['firmware']

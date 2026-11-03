@@ -1,7 +1,8 @@
 -- The board's trace: frames on UART0 between the echoed bytes, each STX, a
 -- tag letter, fields of a key letter, '=' and eight lowercase hex digits
 -- after a space, then ETX and LF.  The host never sends STX or ETX, so a
--- frame is found wherever it falls in the echo.
+-- frame is found wherever it falls in the echo.  Both of the Pico 2's
+-- ports use it (D831).
 import rp2350/uart0
 
 digits: [16]u8 = [48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 97, 98, 99, 100, 101, 102]

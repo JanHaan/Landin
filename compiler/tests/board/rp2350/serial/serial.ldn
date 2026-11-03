@@ -13,8 +13,10 @@
 -- RP2040.  While the channel is stopped or exhausted the UART's 32-byte
 -- FIFO holds what arrives; a byte past that is lost, which the UART flags
 -- as an overrun (UARTRIS's OERIS, bit 10) and a snapshot reports as one,
--- so no byte is lost unreported.
-import platform/cortex_m
+-- so no byte is lost unreported.  Both of the Pico 2's ports use it, the
+-- Arm cores' and the Hazard3 cores' (D831), so its barriers are the
+-- target's own, compiler.device_barrier, a DMB on Arm and a FENCE on
+-- RISC-V.
 import rp2350/dma
 import rp2350/io_bank0
 import rp2350/uart0
@@ -92,7 +94,7 @@ public open: (rate: u32, budget: u32, escaping buf: []mut u8)
     dma.ch0_trans_count_write(dma.base, budget)
     dma.intr_write(dma.base, 1)
     dma.inte0_write(dma.base, 1)
-    cortex_m.device_barrier()
+    compiler.device_barrier()
     dma.ch0_ctrl_trig_write(dma.base, image | 1)
     r = (buf: buf, consumed: 0, budget: budget, produced: 0, config: image,
          active: true, lost: false, broken: false)
@@ -104,7 +106,7 @@ snapshot: (inout r: rx) -> (count: usize) ! overrun | transfer_error | exhausted
     if r.active then
         status := dma.ch0_ctrl_trig_read(dma.base)
         remaining := dma.ch0_trans_count_read(dma.base) & count_bits
-        cortex_m.device_barrier()
+        compiler.device_barrier()
         if (status & errors) <> 0 or remaining > r.budget then
             r.broken = true
         end if
@@ -170,7 +172,7 @@ public stop: (inout r: rx) -> none ! stop_timeout =
         fail stop_timeout when attempts == 1000
     end while
     dma.intr_write(dma.base, 1)
-    cortex_m.device_barrier()
+    compiler.device_barrier()
 end stop
 
 -- Discards unread bytes deliberately; may be called after error or exhaustion.
@@ -188,6 +190,6 @@ public restart: (inout r: rx) -> none ! stop_timeout | transfer_error =
     r.lost = false
     r.broken = false
     r.active = true
-    cortex_m.device_barrier()
+    compiler.device_barrier()
     dma.ch0_ctrl_trig_write(dma.base, r.config | 1)
 end restart

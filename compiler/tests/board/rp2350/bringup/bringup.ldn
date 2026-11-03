@@ -6,7 +6,8 @@
 -- takes UART0, DMA, TIMER0 and bank 0's pins and pads out of reset, holds
 -- USBCTRL in it, and enables the pads it uses, clearing their isolation
 -- latches (D654).  Values are the RP2350 datasheet's (release 8) and
--- pico-sdk 2.2.0's headers'.
+-- pico-sdk 2.2.0's headers'.  Both of the Pico 2's ports use it: nothing it
+-- touches differs between the two kinds of core (D831).
 import rp2350/clocks
 import rp2350/io_bank0
 import rp2350/pads_bank0

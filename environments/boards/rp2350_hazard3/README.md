@@ -6,7 +6,11 @@ at `--level=rv32imac` through `devices/descriptions/rp2350_hazard3`,
 flashed, and booted from power-on with nothing attached to its cores. It
 is [the Pico 2's Arm port](../rp2350/README.md) (D654) with its
 interrupts through Hazard3's Xh3irq rather than the NVIC, and with a
-counter kept by an `amoadd.w`, an A-extension read-modify-write (D710). `board.py` builds the image, flashes it, switches the Pico 2's
+counter kept by an `amoadd.w`, an A-extension read-modify-write (D710).
+The port is its `app` alone: its `bringup`, `report` and `serial` are the
+Arm port's, under `compiler/tests/board/rp2350`, which the tool names as a
+root after the port's own, over the chip's modules, `rp2350/PERIPHERAL`
+(D831). `board.py` builds the image, flashes it, switches the Pico 2's
 power and checks what the board writes on its UART against a physical
 oracle written from what the host sent and from the RP2350 datasheet,
 release 8 (D711). It is a developer tool: no compiler feature runs it or

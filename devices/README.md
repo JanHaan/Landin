@@ -22,7 +22,9 @@ This tree holds five devices: Raspberry Pi's RP2040 and RP2350, ST's
 STM32H753 and Espressif's ESP32-C3 and ESP32-C5, and six descriptions,
 RP2350's Hazard3 cores having one of their own. A
 description is imported as `descriptions/DEVICE` with `--root=devices`, and
-its register modules as `DEVICE/PERIPHERAL` with `--root=devices/generated`.
+its register modules as `CHIP/PERIPHERAL` with `--root=devices/generated`,
+named by the chip alone, so that both of RP2350's descriptions name the same
+modules (D831).
 
 ## Device descriptions
 
@@ -290,11 +292,14 @@ check evaluates store by store.
 
 `policies/rp2350_hazard3.json` reads RP2350's pinned SVD again for its
 Hazard3 cores (D706): the Arm selection without the M33's private bus, with
-the core `hazard3` and the identity `rp2350-hazard3`. Its modules, under
-`generated/rp2350_hazard3`, are byte for byte the Arm side's, and its
-description, `descriptions/rp2350_hazard3`, has the same 68 slots and the
-Pico 2's map. Hazard3's interrupt control is its own CSRs, which no SVD
-describes.
+the core `hazard3` and the identity `rp2350-hazard3`. Its modules are the
+chip's, `generated/rp2350`, the Arm side's: a core changes no register, so
+both policies write each module they share byte for byte alike, and each
+keeps a manifest and a correspondence of its own there, the Hazard3 one's
+`outputs-hazard3.json` and `correspondence-hazard3.json`, which name no
+`ppb` (D831). Its description, `descriptions/rp2350_hazard3`, has the same
+68 slots and the Pico 2's map. Hazard3's interrupt control is its own CSRs,
+which no SVD describes.
 
 ## RP2350: the selected surface
 

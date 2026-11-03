@@ -1,0 +1,14 @@
+{
+  "rp2350/clocks/device.ldn": "5c81b7839ae0073c59f07cb9217c37af66125ab624da47001195019ed1454b1b",
+  "rp2350/correspondence-hazard3.json": "57aca6a5a83e7404d81af1a80192859169b0380b3f4dae589aa08e53196c7227",
+  "rp2350/dma/device.ldn": "cb9300188c111afa6e865f6e778efaf5a79c2eb67476d533d85f80f7d7e0d898",
+  "rp2350/io_bank0/device.ldn": "e418a15cbf0f52ab021199d09b25e0c1fd5374be0f2eff50795cfba6a31c2752",
+  "rp2350/pads_bank0/device.ldn": "558a1c8491dc0906584e665d55593fb0209b9aff6cfec5dccd90460040d1f928",
+  "rp2350/powman/device.ldn": "add83ffc30c10d2aef54e8dc5517ae3222cb0abebac5618711adf5c33911ad0e",
+  "rp2350/resets/device.ldn": "df79583b82a2979eb7c05e11031c8d44257e9e52dccea26d363eab9e30b1ea83",
+  "rp2350/sio/device.ldn": "29606335fa64da29695fc3af58a8f3e2070bbaebcc6c8b5229b3e2a664f72347",
+  "rp2350/ticks/device.ldn": "27659b58a38c061613c5c76aaa855c4866bf1cdcabc4419665190dbcbcf0732c",
+  "rp2350/timer0/device.ldn": "0f0b08785225132f8f75dc29292cdbc19a6dc04a03300ac969ff9f3bf6a47460",
+  "rp2350/uart0/device.ldn": "5489ea785f489c75339a0e5c82661a631ec246f3c522668682c9e84f4f3a5db4",
+  "rp2350/xosc/device.ldn": "4cbfdf929b2f4209f0e2cab17917883b3580b955ad755cd14a813d63a7f897fd"
+}

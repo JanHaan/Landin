@@ -22682,6 +22682,10 @@ control is its own CSRs, which no SVD describes.
 cannot select by target; and reusing `rp2350`'s modules, which offers a
 Hazard3 program the M33's NVIC.
 
+D831 supersedes this decision in part: the Hazard3 policy writes its
+modules under the chip's prefix, `generated/rp2350`, beside the Arm
+policy's, and its description stays its own.
+
 **Pinned by** `devices/test.py`'s `Rp2350Hazard3Oracles`.
 
 ### D707 — The ESP descriptions are RAM-only images that keep clear of the ROM
@@ -23535,7 +23539,8 @@ frame is counted by `core/atomic`'s `add` on a `u32` cell in SRAM, which
 the level's `a` admits (D690) and lowers to `amoadd.w.aqrl`, and the frame
 carries what it returned. The modules are copies rather than shared with
 the Arm port's, because their imports name the other description's
-modules.
+modules. D831 supersedes this in part: the two ports share one `bringup`,
+`report` and `serial` over the chip's modules.
 
 **The alternatives:** one set of modules for both ports, which an import
 naming one description's modules cannot be; `atomic.exchange` or
@@ -23641,6 +23646,40 @@ console, two clients of one slot; and moving the other tools to the shared
 bridge, which their recorded runs would no longer describe.
 
 **Pinned by** `scripts/tests/test_board_common.py`'s `Bridges` cases.
+
+### D831 — RP2350's register modules are the chip's, and the Pico 2's two ports share theirs
+
+**The tour said** nothing; D706 gave the Hazard3 description modules of its
+own, `rp2350_hazard3/PERIPHERAL`, byte for byte the Arm side's, and D710
+copied the Arm port's `bringup`, `report` and `serial` for the Hazard3 port
+because their imports named the other description's modules.
+
+**Chosen:** a register module is named by the chip alone. The Hazard3
+policy writes its modules under the chip's prefix, `generated/rp2350`,
+where the Arm policy writes the same text, with a manifest and a
+correspondence of its own, `outputs-hazard3.json` and
+`correspondence-hazard3.json`, which name no `ppb`; the
+`generated/rp2350_hazard3` tree is gone. The Hazard3 description is still
+its own, so a program selects its core by the description it imports and
+reaches the chip's registers as `rp2350/PERIPHERAL` either way. The
+Hazard3 port keeps its own `app` and takes `bringup`, `report` and
+`serial` from the Arm port's directory, which its tool names as a root
+after the port's own; their barriers are `compiler.device_barrier`, the
+target's own, a DMB on the M33 and a FENCE on Hazard3, rather than
+`platform/cortex_m`'s or `platform/riscv`'s wrapper of it.
+
+**The alternatives:** a root that maps one module path onto either
+description's modules, which the loader cannot do without a mapping it
+does not have; a module per core for the barriers, chosen by the order of
+the roots, which `compiler.device_barrier` makes unnecessary; and keeping
+the copies, whose every fix had to be made twice. D706's objection, that
+the chip's modules offer a Hazard3 program the M33's NVIC, holds no
+further than before: `rp2350/ppb` was already reachable under the same
+root, and the Hazard3 policy still selects no private bus.
+
+**Pinned by** `devices/test.py`'s `Rp2350Hazard3Oracles`, which holds the
+Hazard3 manifest to the Arm one's without `ppb` and every file to its
+regeneration, and both Pico 2 tools' builds from the one set of modules.
 
 ### D530 — `refine explain` answers a construct and a decision
 

@@ -1626,14 +1626,20 @@ class Rp2350Hazard3Oracles(unittest.TestCase):
                          {k: v for k, v in arm['policies'].items()
                           if not k.startswith('PPB.')})
         # Every module the two share is the same text: the core does not
-        # change a register.
-        for peripheral in expected:
-            name = peripheral.lower() + '/device.ldn'
-            self.assertEqual(
-                (HERE / hazard3['modules'] / hazard3['prefix'] / name).read_bytes(),
-                (HERE / arm['modules'] / arm['prefix'] / name).read_bytes(), name)
-        self.assertFalse((HERE / hazard3['modules'] / hazard3['prefix'] / 'ppb')
-                         .exists())
+        # change a register, so the Hazard3 description's modules are the
+        # chip's, named by the chip alone (D831), and its manifest names
+        # every one the Arm cores' does, at the same hash, but the private
+        # bus's.
+        self.assertEqual((hazard3['modules'], hazard3['prefix']),
+                         (arm['modules'], arm['prefix']))
+        def modules(policy):
+            recorded = json.loads((HERE / policy['modules'] / policy['manifest']).read_text())
+            return {path: digest for path, digest in recorded.items()
+                    if path.endswith('/device.ldn')}
+        self.assertEqual(modules(hazard3),
+                         {path: digest for path, digest in modules(arm).items()
+                          if not path.startswith(arm['prefix'] + '/ppb/')})
+        self.assertEqual(len(modules(hazard3)), len(expected))
         text = (DESCRIPTIONS / 'rp2350_hazard3/interrupts.ldn').read_text()
         # RP2350 Datasheet release 8, 3.2, p. 81: one IRQ table for both
         # cores' kinds, so Hazard3's IRQ n is the Arm cores' n, and the

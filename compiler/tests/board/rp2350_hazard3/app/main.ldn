@@ -5,7 +5,9 @@
 -- checks against its physical oracle (D710, D711).  The echo and the
 -- indicator are the shared commands.handle, run by the synthetic
 -- application in the emulator and the other boards too.  It runs in
--- machine mode on core 0, built at --level=rv32imac.
+-- machine mode on core 0, built at --level=rv32imac.  Its bringup, report
+-- and serial are the Arm port's, which its tool names as a root after this
+-- port's, over the chip's modules (D831).
 --
 -- Three bytes are also commands, after their echo: 0x05 forces IRQ14,
 -- USBCTRL_IRQ, pending through meifa, which slot 30's handler counts;
@@ -18,11 +20,11 @@ import descriptions/rp2350_hazard3
 import platform/riscv
 import platform/riscv/hazard3
 import report
-import rp2350_hazard3/clocks
-import rp2350_hazard3/dma
-import rp2350_hazard3/powman
-import rp2350_hazard3/sio
-import rp2350_hazard3/timer0
+import rp2350/clocks
+import rp2350/dma
+import rp2350/powman
+import rp2350/sio
+import rp2350/timer0
 import serial
 
 link(align: 256)

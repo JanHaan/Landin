@@ -26102,7 +26102,9 @@ package body Landin.Diagnostics.Citations.Texts is
                & "s to `amoadd.w.aqrl`, and the frame carries what it retu"
                & "rned. The modules are copies rather than shared with the"
                & " Arm port's, because their imports name the other descri"
-               & "ption's modules.",
+               & "ption's modules. D831 supersedes this in part: the two p"
+               & "orts share one `bringup`, `report` and `serial` over the"
+               & " chip's modules.",
             when 711 =>
                "Chosen: `environments/boards/rp2350_hazard3/board.py` bu"
                & "ilds the image and checks, from the ELF and the build re"
@@ -26169,6 +26171,23 @@ package body Landin.Diagnostics.Citations.Texts is
                & "he slot's SWD through the bridge's TCP port, so probe-rs"
                & " and the console go through the same client. The RP2040'"
                & "s and the Arm Pico 2's tools keep their own bridges.",
+            when 831 =>
+               "Chosen: a register module is named by the chip alone. Th"
+               & "e Hazard3 policy writes its modules under the chip's pre"
+               & "fix, `generated/rp2350`, where the Arm policy writes the"
+               & " same text, with a manifest and a correspondence of its "
+               & "own, `outputs-hazard3.json` and `correspondence-hazard3."
+               & "json`, which name no `ppb`; the `generated/rp2350_hazard"
+               & "3` tree is gone. The Hazard3 description is still its ow"
+               & "n, so a program selects its core by the description it i"
+               & "mports and reaches the chip's registers as `rp2350/PERIP"
+               & "HERAL` either way. The Hazard3 port keeps its own `app` "
+               & "and takes `bringup`, `report` and `serial` from the Arm "
+               & "port's directory, which its tool names as a root after t"
+               & "he port's own; their barriers are `compiler.device_barri"
+               & "er`, the target's own, a DMB on the M33 and a FENCE on H"
+               & "azard3, rather than `platform/cortex_m`'s or `platform/r"
+               & "iscv`'s wrapper of it.",
             when 530 =>
                "Chosen: `refine explain` takes `[1590]`, `1590`, `D275` "
                & "or `d275` beside a diagnostic code. For a construct or a"

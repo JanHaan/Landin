@@ -9,7 +9,9 @@
     "See devices/notices/LICENSE.pico-sdk and devices/README.md."
   ],
   "modules": "generated",
-  "prefix": "rp2350_hazard3",
+  "prefix": "rp2350",
+  "correspondence": "rp2350/correspondence-hazard3.json",
+  "manifest": "rp2350/outputs-hazard3.json",
   "description": "descriptions/rp2350_hazard3",
   "identity": "rp2350-hazard3",
   "core": "hazard3",
