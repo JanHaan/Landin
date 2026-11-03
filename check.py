@@ -5513,6 +5513,58 @@ def cortex_target_problems():
     return problems
 
 
+RV32_TARGET_FLAG = "--target=rv32"
+RV32_LANES = ("esp32c3", "sifive-e")
+
+
+def rv32_target_problems():
+    """A fixture that names rv32 is one a run makes there.
+
+    rv32 is no product target of the construct inventory (D840), so no
+    column is filled from it, and a `targets:` line no run reads is how a
+    fixture quietly stops being checked.  So a compile-time fixture names
+    rv32 exactly when its own `args` select it, as a Cortex-M one does;
+    and a runtime or ABI fixture names it only with a firmware corpus row
+    that executes it on one of the corpus's RV32 lanes, which are the only
+    runs of a program on RV32 and the lane the harness's NOT APPLICABLE
+    note names for it.
+    """
+    corpus_path = os.path.join(ROOT, CORTEX_CORPUS)
+    if not os.path.exists(corpus_path):
+        return []
+    with io.open(corpus_path, encoding="utf-8") as stream:
+        corpus = json.load(stream)["fixtures"]
+    problems = []
+    for name, (path, fields) in sorted(fixture_records().items()):
+        named = "rv32" in [
+            one.strip() for one in fields.get("targets", "").split(",")]
+        kind = name.split("/")[0]
+        if kind in ("runtime", "abi"):
+            row = corpus.get(name, {})
+            runs = row.get("mode") == "execute" and "profile_limit" not in row \
+                and any(row.get("lanes", {}).get(lane, {}).get("mode", "execute")
+                        == "execute" for lane in RV32_LANES)
+            if named and not runs:
+                problems.append((path, 0, (
+                    "%s names rv32, and only the firmware corpus's RV32 lanes,"
+                    " %s, run a program there; give it an \"execute\" row in"
+                    " %s that one of them runs, or drop rv32 from its targets:"
+                    " (environments/cortex-m/README.md, RV32 lanes)"
+                    % (name, " and ".join(RV32_LANES), CORTEX_CORPUS))))
+            continue
+        if kind not in ("positive", "negative", "end-to-end"):
+            continue
+        selected = RV32_TARGET_FLAG in (fields.get("args", "") or "").split()
+        if named and not selected:
+            problems.append((path, 0, "%s names rv32 and no argument selects %s"
+                             % (name, RV32_TARGET_FLAG)))
+        elif selected and not named:
+            problems.append((path, 0, (
+                "%s selects %s and does not name rv32 among its targets"
+                % (name, RV32_TARGET_FLAG))))
+    return problems
+
+
 def unplaced_target_problems():
     """Every target a fixture names is a verdict some record places.
 
@@ -6118,6 +6170,7 @@ def check_matrix(full_run):
     out = inventory_problems(inputs) if inputs is not None else [
         (REGISTERS, 1, "the construct inventory's inputs cannot be read")]
     out += cortex_target_problems()
+    out += rv32_target_problems()
     out += arm64_linux_problems()
     out += unplaced_target_problems()
     out += cortex_probe_problems(construct_titles() or ())
@@ -7763,6 +7816,32 @@ def described_targets():
 
 
 EMIT_MANIFEST = "scripts/emit_manifest.py"
+#  The Python lists that choose some of the targets rather than all, each
+#  (path, the module-level name a tuple or a dict of them is bound to).
+#  A dict's keys are its targets.
+TARGET_SUBSETS = (("scripts/driver_manifest.py", "TARGETS"),
+                  ("compiler/tests/test_determinism.py", "TARGETS"),
+                  ("compiler/tests/test_determinism.py", "DEBUG_FLAG"),
+                  ("scripts/image_bounds.py", "REACH"))
+
+
+def assigned_lists(path, names):
+    """{name: (line, value)} for each of NAMES PATH binds at module level
+    to a literal, read without importing PATH; a dict's value is its keys,
+    which are all a target list needs of it."""
+    import ast
+    found = {}
+    with io.open(path, encoding="utf-8") as stream:
+        tree = ast.parse(stream.read())
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and len(node.targets) == 1 \
+                and isinstance(node.targets[0], ast.Name) \
+                and node.targets[0].id in names:
+            value = node.value
+            found[node.targets[0].id] = (node.lineno, tuple(
+                ast.literal_eval(key) for key in value.keys)
+                if isinstance(value, ast.Dict) else ast.literal_eval(value))
+    return found
 
 
 def check_target_lists(full_run):
@@ -7774,6 +7853,13 @@ def check_target_lists(full_run):
     described target; the manifest's are every one with a backend, which
     is every described target but the checking-only ones; the build-mode
     comparison's and the firmware corpus's are among them.
+
+    The other lists choose some of the targets on purpose, so each is held
+    only to naming targets with a backend: the construct inventory's
+    product targets and its scopes, the driver manifest's, the
+    determinism contract's and its debug modes, and the image bounds'
+    reach.  A target renamed in the compiler is then reported in every
+    list that still spells the old name, rather than passing it silently.
     """
     if not full_run:
         return []
@@ -7781,19 +7867,12 @@ def check_target_lists(full_run):
     if out:
         return out
     manifest = os.path.join(ROOT, EMIT_MANIFEST)
-    out = absent([manifest])
+    out = absent([manifest] + sorted({os.path.join(ROOT, path)
+                                      for path, _ in TARGET_SUBSETS}))
     if out:
         return out
-    import ast
-    lists = {}
-    tree = ast.parse(read_file(manifest, encoding="utf-8"))
-    for node in tree.body:
-        if isinstance(node, ast.Assign) and len(node.targets) == 1 \
-                and isinstance(node.targets[0], ast.Name) \
-                and node.targets[0].id in ("TARGETS", "MODE_TARGETS",
-                                            "FIRMWARE_TARGETS"):
-            lists[node.targets[0].id] = (node.lineno,
-                                         ast.literal_eval(node.value))
+    lists = assigned_lists(manifest, ("TARGETS", "MODE_TARGETS",
+                                      "FIRMWARE_TARGETS"))
     for name in ("TARGETS", "MODE_TARGETS", "FIRMWARE_TARGETS"):
         if name not in lists:
             out.append((EMIT_MANIFEST, 1, "has no %s where check_target_lists"
@@ -7820,6 +7899,37 @@ def check_target_lists(full_run):
                 out.append((EMIT_MANIFEST, line, "%s names %s, which is not"
                             " among the targets it is drawn from"
                             % (name, one)))
+
+    def subset(where, line, name, named, within, what):
+        for one in named:
+            if one not in within:
+                out.append((where, line, "%s names %s, which is not %s"
+                            % (name, one, what)))
+
+    backend = "a target the compiler describes with a backend"
+    #  The two below are this file's own, read where it is rather than
+    #  under ROOT, which a control may have moved.
+    here = "check.py"
+    with io.open(os.path.abspath(__file__), encoding="utf-8") as stream:
+        source = stream.read()
+
+    def line_of(name):
+        found = re.search(r"^%s = " % name, source, re.M)
+        return source.count("\n", 0, found.start()) + 1 if found else 1
+
+    subset(here, line_of("PRODUCT_TARGETS"), "PRODUCT_TARGETS",
+           PRODUCT_TARGETS, emitting, backend)
+    for scope, named in sorted(TARGET_SCOPES.items()):
+        subset(here, line_of("TARGET_SCOPES"), "TARGET_SCOPES[%r]" % scope,
+               named, PRODUCT_TARGETS, "a product target")
+    for path, name in TARGET_SUBSETS:
+        found = assigned_lists(os.path.join(ROOT, path), (name,))
+        if name not in found:
+            out.append((path, 1, "has no %s where check_target_lists looks"
+                        % name))
+            continue
+        line, named = found[name]
+        subset(path, line, name, named, emitting, backend)
     return out
 
 

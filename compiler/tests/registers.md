@@ -30,7 +30,16 @@ with every named refusal and the wording of its [1830] note.
 - **Targets** are `all` (Linux x86-64, arm64 and RV64, FreeBSD x86-64 and arm64, macOS arm64 and Cortex-M), `hosted`,
   `cortex-m` or `none`; `cortex-m` is the Cortex-M family, today
   `cortex-m0` alone, and a scope rather than a target's spelling.
-  `synthetic-32` is a pre-Cortex model and applies to no construct. **Gaps** are applicable targets without the state's
+  `synthetic-32` is a pre-Cortex model and applies to no construct.
+  `rv32`, the RV32 firmware target, is no product target and has no
+  column (D840): it runs the firmware corpus on two lanes, but [1270],
+  [1400], [1570], [1610], [1730], [1830] and [1860] have their Cortex-M
+  evidence only from records that are Cortex-M's alone, the derived
+  driver, the firmware machine probe and fixtures that select
+  `cortex-m0`, so accounting every construct on it would open gaps no
+  item owns. A fixture that names it is still held to a run there: a
+  compile-time one selects `--target=rv32`, and a runtime or ABI one has
+  a firmware corpus row an RV32 lane executes. **Gaps** are applicable targets without the state's
   evidence, and every gap needs an owning item.
 - **Owners** are live roadmap items or successor families. A finished owner,
   an unknown owner or an owner the disposition does not mention is refused.

@@ -222,6 +222,53 @@ agent. CPU time includes reaped children; peak child RSS is a process peak,
 not the simultaneous memory of all workers. These measurements can identify
 expensive commands, but do not establish a CPU or SSD bottleneck alone.
 
+### Proving a change emits the same bytes
+
+A change meant to alter no emitted output is shown to by two manifests,
+one from a compiler built before the change and one from a compiler built
+after it, emitted over the same checkout and compared. Keep the first
+compiler where it was built. `refine` finds its library in `lib/landin`
+beside the `bin/` it runs from, or in the checkout six directories above a
+build tree's `bin/refine`, so a copy anywhere else refuses every hosted
+program as L0500, "no library holding platform/linux was found". Two
+places keep it:
+
+- Before the first edit, `LANDIN_BUILD_VARIANT=baseline ./scripts/dev-build.sh
+  --compiler-only` builds the unchanged compiler into a build tree of its own,
+  `compiler/ada/build/$LANDIN_BUILD_TAG.baseline/`, which later builds leave
+  alone. Both compilers then read the checkout's library as it is when they
+  run, so this proves a change to the compiler alone.
+- For a change to `core/`, `hosted/` or `platform/` as well, build the
+  baseline in a worktree of the starting revision, `git worktree add
+  ../landin-base REV`, then `./scripts/build.sh --compiler-only` there;
+  its `refine` reads that worktree's library. Still pass this checkout as
+  ROOT to both runs.
+
+```sh
+base="compiler/ada/build/$LANDIN_BUILD_TAG.baseline/debug/bin/refine"
+new="compiler/ada/build/$LANDIN_BUILD_TAG/debug/bin/refine"
+proof=$(mktemp -d)
+python3 scripts/emit_manifest.py emit "$base" . "$proof/base.json" \
+    --corpus=positive --corpus=runtime --profile=size-auto --debug-info
+python3 scripts/emit_manifest.py emit "$new" . "$proof/new.json" \
+    --corpus=positive --corpus=runtime --profile=size-auto --debug-info
+python3 scripts/emit_manifest.py compare "$proof/base.json" "$proof/new.json"
+```
+
+`emit` compiles every positive fixture for every target in both build
+modes and at all nine profiles unless told otherwise, on every core.
+The optional fourth operand names the targets, comma-separated;
+`--corpus=` repeats and takes `positive`, `runtime` and `cortex-m`, the
+Cortex-M counterparts; `--fixture=KIND/NAME` repeats and keeps only those;
+`--profile=OPTIMIZE-SPECIALIZE` and `--mode=debug` or `release` repeat and
+keep only those; `--jobs=N` sets how many compilations run at once; and
+`--debug-info` compiles every entry again with the target's source
+debugging, `--debug=full` hosted and `--debug=lines` on firmware. Debug
+information names the directory a fixture was compiled in, which is why
+both runs take the same ROOT, and why the gate's cross-host manifest has no
+debug entries: two hosts' checkouts sit at different paths. An unexpected
+refusal is reported with the first diagnostic the compiler gave for it.
+
 ## Historical: choosing acceptance scope
 
 The maintainer's decision for the retired acceptance was: full

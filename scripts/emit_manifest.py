@@ -50,7 +50,41 @@ standard profiles, and every result has to agree.
     emit REFINE ROOT OUT.json     write this host's manifest
     compare A.json B.json [...]   require every manifest to agree
     modes DEBUG RELEASE ROOT      require the two compiler builds to agree
+
+The same manifest is how a change that should alter no emitted byte is
+shown to: `emit` once with a compiler built before the change and once
+with one built after it, both over the same ROOT, then `compare` the two.
+For that use `emit` takes selectors, none of which the gate passes, so the
+host manifest stays what it is:
+
+    --corpus=positive|runtime|cortex-m   the corpora compiled, repeatable;
+                                         positive alone by default.  A
+                                         runtime fixture is compiled for
+                                         the targets `modes` compiles it
+                                         for, linked as its `link:` says
+                                         on a hosted one, and
+                                         a Cortex-M counterpart for each
+                                         firmware target
+    --fixture=KIND/NAME                  only these, repeatable, as the
+                                         harness's `--fixture=` spells them
+    --profile=OPTIMIZE-SPECIALIZE        only these, repeatable, `-` or `/`
+    --mode=debug|release                 only this build mode, repeatable
+    --debug-info                         every entry again with the
+                                         target's source debugging,
+                                         `--debug=full` hosted and
+                                         `--debug=lines` on firmware,
+                                         keyed `|debug=full` or
+                                         `|debug=lines`
+    --jobs=N                             compilations at once; every core
+                                         by default
+
+Debug information names the directory it was compiled in, the fixture's
+own, and a caller-file digest that follows it, so a `|debug=` entry is
+comparable only with one emitted over a ROOT at the same path.  That holds
+for a before-and-after on one checkout, and not across hosts, whose
+checkouts sit at different paths: the gate's manifest has no such entry.
 """
+import argparse
 import concurrent.futures
 import hashlib
 import json
@@ -71,7 +105,9 @@ TARGETS = ("linux-x86-64", "linux-arm64", "darwin-arm64", "cortex-m0",
 MODES = ("debug", "release")
 OPTIMIZATIONS = ("none", "size", "speed")
 SPECIALIZATIONS = ("off", "auto", "all")
-MAX_WORKERS = 4
+PROFILES = tuple((optimize, specialize) for optimize in OPTIMIZATIONS
+                 for specialize in SPECIALIZATIONS)
+CORPORA = ("positive", "runtime", "cortex-m")
 
 #  These source/target pairs deliberately refuse in both modes.  Most use
 #  target-specific C or machine facilities; the fixed-conditional fixtures
@@ -164,17 +200,24 @@ EXPECTED_REFUSALS = {
 DIGEST = re.compile(r"[0-9a-f]{64}\Z")
 
 
-def evidence_faults(manifest):
-    """Reject a shared refusal wherever assembly is promised."""
+def evidence_faults(manifest, diagnostics=None):
+    """Reject a shared refusal wherever assembly is promised.
+
+    DIAGNOSTICS, where `emit` has them, holds the first diagnostic of each
+    refusal, so a fault says why rather than only that it refused.  A
+    `|debug=` entry refuses where its entry without debug information does.
+    """
     faults = []
     emitted = 0
     for key, value in sorted(manifest.items()):
         if isinstance(value, str) and DIGEST.fullmatch(value):
             emitted += 1
-        elif value == "refused:1" and key in EXPECTED_REFUSALS:
+        elif value == "refused:1" and key.split("|debug=")[0] in EXPECTED_REFUSALS:
             continue
         else:
-            faults.append("%s has unexpected emission result %r" % (key, value))
+            said = (diagnostics or {}).get(key)
+            faults.append("%s has unexpected emission result %r%s"
+                          % (key, value, ": " + said if said else ""))
     if not emitted:
         faults.insert(0, "no assembly digest was emitted")
     return faults
@@ -232,59 +275,100 @@ def own_target(fixture):
     return None
 
 
+def first_diagnostic(result):
+    """The first diagnostic a refusal printed, with its notes, on one line.
+
+    A refusal is recorded as `refused:STATUS` alone, which is the same
+    string on every host; what it said is for the reader of a fault, who
+    otherwise has a status and no reason.
+    """
+    lines = (result.stderr + result.stdout).decode("utf-8", "replace").splitlines()
+    said = []
+    for line in lines:
+        if not line.strip():
+            if said:
+                break
+            continue
+        if not said:
+            said.append(line.strip())
+        elif not line[0].isspace() and not line[0].isdigit():
+            break
+        elif line.strip().startswith(("-->", "= ")):
+            #  Where it is and what to do; the quoted source is neither.
+            said.append(line.strip())
+    return " ".join(said)
+
+
 def compile_one(job):
     """Compile one entry in its own directory, including any sidecars."""
-    key, refine, fixture, sources, target, level, mode, optimize, specialize, asm = job
+    (key, refine, fixture, sources, target, level, mode, optimize, specialize,
+     debug, asm) = job
     asm.parent.mkdir()
     #  cwd and operands preserve the source-path spelling on every host.
     result = subprocess.run(
         [str(refine), "--target=" + target]
-        + (["--level=" + level] if level else []) + ["--build-mode=" + mode,
-         "--optimize=" + optimize, "--specialize=" + specialize, "--emit=asm",
-         "-o", str(asm)] + sources,
+        + (["--level=" + level] if level else [])
+        + ["--build-mode=" + mode]
+        + ["--optimize=" + optimize, "--specialize=" + specialize]
+        + (["--debug=" + debug] if debug else [])
+        + ["--emit=asm", "-o", str(asm)] + sources,
         capture_output=True, cwd=fixture)
     if result.returncode != 0 or not asm.exists():
-        return key, "refused:%d" % result.returncode
-    return key, hashlib.sha256(asm.read_bytes()).hexdigest()
+        return key, "refused:%d" % result.returncode, first_diagnostic(result)
+    return key, hashlib.sha256(asm.read_bytes()).hexdigest(), None
 
 
-def emit(refine, root, out, workers=None, targets=TARGETS):
+def debug_information(target):
+    """The source debugging TARGET emits: lines on firmware, full hosted."""
+    return "lines" if target in FIRMWARE_TARGETS else "full"
+
+
+def emit(refine, root, out, workers=None, targets=TARGETS, corpora=("positive",),
+         fixtures=(), profiles=PROFILES, build_modes=MODES, debug_info=False):
     #  A rebuild of this build waits until the manifest is written, rather
     #  than replace refine between two of its requests.
     build_lock.reading(refine)
     refine = Path(refine).resolve()
-    fixtures = sorted(
-        p for p in (Path(root).resolve() / "compiler/tests/fixtures/positive").iterdir()
-        if p.is_dir())
+    entries = corpus_entries(root, targets, corpora, fixtures)
     if workers is None:
-        workers = min(MAX_WORKERS, os.cpu_count() or 1)
-    manifest, refused = {}, 0
+        workers = os.cpu_count() or 1
+    manifest, diagnostics, refused = {}, {}, 0
     with tempfile.TemporaryDirectory() as tmp:
         jobs = []
-        for fixture in fixtures:
-            sources = operands(fixture)
-            level = levels(fixture)
-            own = own_target(fixture)
-            for target in (t for t in targets if own in (None, t)):
-                for mode in MODES:
-                    for optimize in OPTIMIZATIONS:
-                        for specialize in SPECIALIZATIONS:
-                            key = (f"{fixture.name}|{target}|{mode}|"
-                                   f"optimize={optimize}|specialize={specialize}")
+        for name, directory, sources, wanted, level in entries:
+            #  A positive fixture's key is its bare name, as it always was,
+            #  so the host manifest the gate compares is unchanged.
+            shown = name.split("/", 1)[1] if name.startswith("positive/") else name
+            #  A runtime fixture links as its `link:` says on a hosted lane,
+            #  and compiled without it can be another program or none.
+            link = (fixture_meta.read(directory, strict=False).get("link")
+                    if name.startswith("runtime/") else None)
+            for target in wanted:
+                for debug in (None, debug_information(target)) if debug_info else (None,):
+                    for mode in build_modes:
+                        for optimize, specialize in profiles:
+                            key = (f"{shown}|{target}|{mode}|"
+                                   f"optimize={optimize}|specialize={specialize}"
+                                   + (f"|debug={debug}" if debug else ""))
                             asm = Path(tmp) / str(len(jobs)) / "out.s"
-                            jobs.append((key, refine, fixture, sources, target,
+                            jobs.append((key, refine, directory,
+                                         (["--link=" + link] if link and target
+                                          not in FIRMWARE_TARGETS else [])
+                                         + sources, target,
                                          level.get(target), mode, optimize,
-                                         specialize, asm))
+                                         specialize, debug, asm))
         with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
             # Preserve inventory order regardless of completion order.
-            for key, value in pool.map(compile_one, jobs):
+            for key, value, said in pool.map(compile_one, jobs):
                 manifest[key] = value
                 refused += value.startswith("refused:")
+                if said:
+                    diagnostics[key] = said
     Path(out).write_text(json.dumps(manifest, indent=1, sort_keys=True) + "\n")
     print("fixtures %d  entries %d  emitted %d  refused %d"
-          % (len(fixtures), len(manifest), len(manifest) - refused, refused))
+          % (len(entries), len(manifest), len(manifest) - refused, refused))
     print("manifest sha256:", hashlib.sha256(Path(out).read_bytes()).hexdigest())
-    faults = evidence_faults(manifest)
+    faults = evidence_faults(manifest, diagnostics)
     if faults:
         print("manifest lacks required assembly evidence: %d fault(s)" % len(faults),
               file=sys.stderr)
@@ -345,7 +429,10 @@ def compare(paths):
                 faults.append("%s: %s is %s, %s has %s"
                               % (name, key, other[key][:16], first_name, first[key][:16]))
     if faults:
-        print("emission is not host-neutral evidence: %d fault(s)" % len(faults),
+        #  Two hosts' manifests or two compilers' on one checkout: the
+        #  same disagreement means a host leak in one, a change in the other.
+        print("the manifests disagree, so emission is not host-neutral evidence"
+              " or the compilers emit differently: %d fault(s)" % len(faults),
               file=sys.stderr)
         report_faults(faults)
         return 1
@@ -362,28 +449,33 @@ MODE_TARGETS = ("linux-x86-64", "linux-arm64", "cortex-m0", "rv32")
 FIRMWARE_TARGETS = ("cortex-m0", "rv32")
 STANDARD_PROFILES = (("none", "off"), ("size", "off"), ("size", "auto"),
                      ("speed", "auto"))
-def mode_entries(root, targets):
-    """(name, directory, operands, targets, levels) for each source compared.
+def corpus_entries(root, targets, corpora=CORPORA, names=()):
+    """(name, directory, operands, targets, levels) for each source compiled.
 
     A positive fixture is compiled for every target, at the level its `args`
     request on the target they name; a runtime fixture for the targets its
     `targets:` names and for each firmware target the firmware corpus
     executes it on, which is every `execute` row of its inventory, since
-    no `targets:` names rv32; and a Cortex-M counterpart, which has no
+    no runtime fixture's `targets:` names rv32 or needs to name cortex-m0
+    for the corpus to run it; and a Cortex-M counterpart, which has no
     fixture record and replaces its row's fixture there, for each firmware
-    target.
+    target.  CORPORA chooses among the three, and NAMES, spelt
+    `positive/NAME`, `runtime/NAME` or `cortex-m/NAME`, keeps only those.
     """
     tests = Path(root).resolve() / "compiler/tests"
     firmware = tuple(t for t in targets if t in FIRMWARE_TARGETS)
     executed = set()
-    if firmware:
+    if firmware and "runtime" in corpora:
         rows = json.loads((tests / "cortex-m/corpus.json").read_text())["fixtures"]
         executed = {name for name, row in rows.items()
                     if row["mode"] == "execute" and "counterpart" not in row}
+    wanted_names = set(names)
     entries = []
-    for kind in ("positive", "runtime"):
+    for kind in (one for one in ("positive", "runtime") if one in corpora):
         for fixture in sorted(p for p in (tests / "fixtures" / kind).iterdir()
                               if p.is_dir()):
+            if wanted_names and kind + "/" + fixture.name not in wanted_names:
+                continue
             own = own_target(fixture) if kind == "positive" else None
             wanted = tuple(t for t in targets if own in (None, t))
             if kind == "runtime":
@@ -395,12 +487,31 @@ def mode_entries(root, targets):
             if wanted:
                 entries.append((kind + "/" + fixture.name, fixture,
                                 operands(fixture), wanted, levels(fixture)))
-    if firmware:
+    if firmware and "cortex-m" in corpora:
         for case in sorted(p for p in (tests / "cortex-m/cases").iterdir()
                            if p.is_dir()):
+            if wanted_names and "cortex-m/" + case.name not in wanted_names:
+                continue
             entries.append(("cortex-m/" + case.name, case, ["main.ldn"],
                             firmware, {}))
     return entries
+
+
+def mode_entries(root, targets):
+    """Every source `modes` compares: the three corpora whole."""
+    return corpus_entries(root, targets)
+
+
+def known_names(root):
+    """Every name `--fixture=` may give: each corpus's sources, by kind."""
+    tests = Path(root).resolve() / "compiler/tests"
+    found = set()
+    for kind, where in (("positive", tests / "fixtures/positive"),
+                        ("runtime", tests / "fixtures/runtime"),
+                        ("cortex-m", tests / "cortex-m/cases")):
+        if where.is_dir():
+            found.update(kind + "/" + p.name for p in where.iterdir() if p.is_dir())
+    return found
 
 
 def emit_both(job):
@@ -430,7 +541,7 @@ def modes(debug, release, root, workers=None, targets=MODE_TARGETS):
         build_lock.reading(compiler)
     compilers = (Path(debug).resolve(), Path(release).resolve())
     if workers is None:
-        workers = min(MAX_WORKERS, os.cpu_count() or 1)
+        workers = os.cpu_count() or 1
     entries = mode_entries(root, targets)
     disagree, emitted, refused = [], 0, 0
     with tempfile.TemporaryDirectory() as tmp:
@@ -466,24 +577,83 @@ def modes(debug, release, root, workers=None, targets=MODE_TARGETS):
     return 0
 
 
+def target_list(text, command):
+    """TEXT's comma-separated targets, or None after saying what is wrong."""
+    targets = tuple(text.split(","))
+    if not text or not set(targets) <= set(TARGETS) or len(set(targets)) != len(targets):
+        print("%s: TARGETS must be distinct names from %s" % (command, ", ".join(TARGETS)),
+              file=sys.stderr)
+        return None
+    return targets
+
+
+def profile(text):
+    """`size-auto` or `size/auto` as ("size", "auto"), for argparse."""
+    pair = tuple(text.replace("/", "-").split("-", 1))
+    if pair not in PROFILES:
+        raise argparse.ArgumentTypeError(
+            "unknown profile %s; the profiles are %s, written with - or /"
+            % (text, ", ".join("-".join(one) for one in PROFILES)))
+    return pair
+
+
+def jobs(text):
+    count = int(text)
+    if count < 1:
+        raise argparse.ArgumentTypeError("--jobs needs one or more")
+    return count
+
+
 def main(argv):
-    if len(argv) == 5 and argv[1] == "emit":
-        return emit(argv[2], argv[3], argv[4])
-    if len(argv) == 6 and argv[1] == "emit":
-        targets = tuple(argv[5].split(","))
-        if not targets or not set(targets) <= set(TARGETS) or len(set(targets)) != len(targets):
-            print("emit: TARGETS must be distinct names from %s" % ", ".join(TARGETS),
-                  file=sys.stderr)
+    if len(argv) >= 2 and argv[1] == "emit":
+        parser = argparse.ArgumentParser(
+            prog="emit_manifest.py emit", allow_abbrev=False,
+            description="Write this host's manifest; the selectors make a"
+            " smaller one for a before-and-after proof.")
+        parser.add_argument("refine")
+        parser.add_argument("root")
+        parser.add_argument("out")
+        parser.add_argument("targets", nargs="?", default=",".join(TARGETS))
+        parser.add_argument("--corpus", action="append", choices=CORPORA)
+        parser.add_argument("--fixture", action="append", default=[])
+        parser.add_argument("--profile", action="append", type=profile)
+        parser.add_argument("--mode", action="append", choices=MODES)
+        parser.add_argument("--debug-info", action="store_true")
+        parser.add_argument("--jobs", type=jobs)
+        given = parser.parse_args(argv[2:])
+        targets = target_list(given.targets, "emit")
+        if targets is None:
             return 2
-        return emit(argv[2], argv[3], argv[4], targets=targets)
-    if len(argv) in (5, 6) and argv[1] == "modes":
-        targets = tuple(argv[5].split(",")) if len(argv) == 6 else MODE_TARGETS
-        if (not targets or not set(targets) <= set(TARGETS)
-                or len(set(targets)) != len(targets)):
-            print("modes: TARGETS must be distinct names from %s" % ", ".join(TARGETS),
-                  file=sys.stderr)
+        unknown = sorted(set(given.fixture) - known_names(given.root))
+        if unknown:
+            print("emit: unknown fixture %s; a fixture is KIND/NAME, a directory"
+                  " under compiler/tests/fixtures/positive or runtime, or under"
+                  " compiler/tests/cortex-m/cases for KIND cortex-m"
+                  % ", ".join(unknown), file=sys.stderr)
             return 2
-        return modes(argv[2], argv[3], argv[4], targets=targets)
+        #  A named fixture brings its corpus; without names, positive alone.
+        corpora = tuple(given.corpus or ()) + tuple(
+            name.split("/")[0] for name in given.fixture)
+        return emit(given.refine, given.root, given.out, workers=given.jobs,
+                    targets=targets, corpora=corpora or ("positive",),
+                    fixtures=tuple(given.fixture),
+                    profiles=tuple(dict.fromkeys(given.profile or PROFILES)),
+                    build_modes=tuple(m for m in MODES if m in (given.mode or MODES)),
+                    debug_info=given.debug_info)
+    if len(argv) >= 2 and argv[1] == "modes":
+        parser = argparse.ArgumentParser(prog="emit_manifest.py modes",
+                                         allow_abbrev=False)
+        parser.add_argument("debug")
+        parser.add_argument("release")
+        parser.add_argument("root")
+        parser.add_argument("targets", nargs="?", default=",".join(MODE_TARGETS))
+        parser.add_argument("--jobs", type=jobs)
+        given = parser.parse_args(argv[2:])
+        targets = target_list(given.targets, "modes")
+        if targets is None:
+            return 2
+        return modes(given.debug, given.release, given.root, workers=given.jobs,
+                     targets=targets)
     if len(argv) >= 4 and argv[1] == "merge":
         return merge(argv[2], argv[3:])
     #  One manifest reaches compare() rather than the usage text, so that
@@ -492,10 +662,14 @@ def main(argv):
     #  this arrives, and it must not look like a pass.
     if len(argv) >= 3 and argv[1] == "compare":
         return compare(argv[2:])
-    print("usage: emit_manifest.py emit REFINE ROOT OUT.json [TARGET,...]", file=sys.stderr)
+    print("usage: emit_manifest.py emit REFINE ROOT OUT.json [TARGET,...]\n"
+          "           [--corpus=positive|runtime|cortex-m]... [--fixture=KIND/NAME]...\n"
+          "           [--profile=OPTIMIZE-SPECIALIZE]... [--mode=debug|release]...\n"
+          "           [--debug-info] [--jobs=N]", file=sys.stderr)
     print("       emit_manifest.py merge OUT.json PART.json [...]", file=sys.stderr)
     print("       emit_manifest.py compare A.json B.json [...]", file=sys.stderr)
-    print("       emit_manifest.py modes DEBUG RELEASE ROOT [TARGET,...]", file=sys.stderr)
+    print("       emit_manifest.py modes DEBUG RELEASE ROOT [TARGET,...] [--jobs=N]",
+          file=sys.stderr)
     return 2
 
 

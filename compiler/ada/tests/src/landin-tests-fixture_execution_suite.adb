@@ -24,6 +24,7 @@ with Landin.Platform.Native.Tools;
 with Landin.Targets;
 with Landin.Targets.Capabilities;
 with Landin.Targets.Levels;
+with Landin.Targets.Selection;
 with Landin.Testing.Fakes;
 with Landin.Testing.Fixtures;
 with Landin.Testing.Lanes;
@@ -174,9 +175,46 @@ package body Landin.Tests.Fixture_Execution_Suite is
       elsif Target = "cortex-m0" then
          "environments/cortex-m/backend_corpus.py --case=" & Label
          & " --refine=REFINE --output=DIR, or the gate's cortex-m job"
+      elsif Target = "rv32" then
+         "environments/cortex-m/backend_corpus.py --lane=esp32c3 --case="
+         & Label & " --refine=REFINE --output=DIR at rv32imc, or"
+         & " --lane=sifive-e at rv32imac, which run its row of"
+         & " compiler/tests/cortex-m/corpus.json; or the gate's"
+         & " cortex-m-rv32 job"
       else
          "no lane runs it: " & Target & " is a layout model the targets"
          & " suite measures");
+
+   --  Every target with a backend has a lane, and a focused run names it:
+   --  rv32's note once said "a layout model", which is synthetic-32's,
+   --  while the firmware corpus ran RV32 on two lanes of its own.
+   procedure Every_Target_Names_Its_Lane
+     (Item : in out Landin.Testing.Context);
+
+   procedure Every_Target_Names_Its_Lane
+     (Item : in out Landin.Testing.Context) is
+   begin
+      for Index in 1 .. Landin.Targets.Selection.Described_Count loop
+         declare
+            Name : constant String :=
+              Landin.Targets.Selection.Described_Name (Index);
+            Said : constant String :=
+              Lane_Command ("runtime/example", Name);
+            Emits : constant Boolean := Landin.Targets.Capabilities.Emits
+              (Landin.Targets.Selection.Described (Name));
+         begin
+            Landin.Testing.Check
+              (Item,
+               Emits = (Ada.Strings.Fixed.Index (Said, "no lane runs it") = 0),
+               Name & "'s lane note: " & Said);
+         end;
+      end loop;
+      Landin.Testing.Check
+        (Item,
+         Ada.Strings.Fixed.Index
+           (Lane_Command ("runtime/example", "rv32"), "--lane=esp32c3") > 0,
+         "rv32's note names the firmware corpus's RV32 lanes");
+   end Every_Target_Names_Its_Lane;
 
    function Lane_Note (Path : String) return String is
       Host  : Landin.Platform.Native.Native_Filesystem;
@@ -4360,6 +4398,9 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Landin.Testing.Register
         (Into, "fixture execution", "a report is recorded by name",
          A_Report_Is_Recorded_By_Name'Access);
+      Landin.Testing.Register
+        (Into, "fixture execution", "every target names its lane",
+         Every_Target_Names_Its_Lane'Access);
       Landin.Testing.Register
         (Into, "fixture execution", "a known-bad runner is refused",
          A_Known_Bad_Runner_Is_Refused'Access);

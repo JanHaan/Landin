@@ -24656,6 +24656,95 @@ the `backend plans` suite's `site counts follow frame addresses`; the `opt
 foundations` suite's `deterministic reports`; the `cortex ABI` suite's
 save counts; and the `x86 opt` suite's register counts.
 
+### D840 — rv32 is no product target of the construct inventory, and a fixture naming it is held to a run
+
+**The tour said** nothing; `check.py`'s `PRODUCT_TARGETS`, the targets
+the construct inventory accounts every construct on and the columns of
+`constructs.matrix`, left `rv32` out without saying so, and nothing held
+a fixture's `targets: rv32` to any run, nor that list or the other Python
+lists that choose some targets, the driver manifest's, the determinism
+contract's and the image bounds', to the targets the compiler describes.
+
+**Chosen:** rv32 stays out of the product targets, and the inventory says
+why. It runs the whole firmware corpus on two lanes (D695), but seven
+constructs, [1270], [1400], [1570], [1610], [1730], [1830] and [1860],
+have their Cortex-M evidence only from records that are Cortex-M's alone:
+the derived driver, the firmware machine probe and compile-time fixtures
+that select `cortex-m0`. Counting rv32 opens seven gaps, and every gap
+needs an owning item, which no live item is. A fixture that names `rv32`
+is held to a run all the same: a compile-time one names it exactly when
+its `args` select `--target=rv32`, and a runtime or ABI one names it only
+with a firmware corpus row that executes it on an RV32 lane. `check.py`
+holds `PRODUCT_TARGETS`, each `TARGET_SCOPES` entry, and the lists above
+to name only targets the compiler describes with a backend, and each
+scope to lie within the product targets.
+
+**The alternatives:** rv32 as a product target, which needs those seven
+gaps owned or seven RV32 counterparts of Cortex-M-only evidence, the
+driver among them, and is the step to take when an item owns RV32's
+parity with Cortex-M; and rv32 within the `cortex-m` scope, which is the
+Cortex-M family and would claim Arm evidence for a RISC-V target.
+
+**Pinned by** `scripts/tests/test_construct_inventory.py`'s
+`test_an_rv32_claim_must_be_a_run_that_is_made` and
+`scripts/tests/test_check_controls.py`'s `TargetLists`.
+
+### D841 — The host manifest selects what it compiles, and its debug entries compare on one checkout
+
+**The tour said** nothing; `scripts/emit_manifest.py emit` ran four
+compilations at once, compiled only the positive corpus, every profile in
+both build modes, and no source debugging, and recorded a refusal as
+`refused:STATUS` with nothing of what the compiler said. A proof that a
+change emitted the same bytes took 31 to 40 minutes a manifest on a
+32-core host, or a script of its own, and a baseline compiler copied out
+of its build tree reported thousands of bare refusals.
+
+**Chosen:** `emit` runs as many compilations as the host has cores, so
+the whole host manifest, 41,832 entries, took 370 seconds on a 32-core
+host other builds were sharing; and it takes `--corpus=` (positive, runtime and the Cortex-M counterparts, for
+the targets `modes` compiles them for, a runtime fixture linked as its
+`link:` says on a hosted target, as the harness links it), `--fixture=KIND/NAME`,
+`--profile=OPTIMIZE-SPECIALIZE`, `--mode=`, `--jobs=` and `--debug-info`,
+which compiles each entry again with the target's source debugging,
+`--debug=full` hosted and `--debug=lines` on firmware, the one each
+accepts, keyed `|debug=full` or `|debug=lines`. A positive fixture's key
+is its bare name as before, other corpora's carry their kind, and with no
+selector the manifest is the one the gate compares, unchanged. A fault
+for an unexpected refusal ends with the compiler's first diagnostic and
+its notes; the manifest's value stays `refused:STATUS`, the same on every
+host. Debug information names the directory a fixture was compiled in,
+and a caller-file digest follows it, so a debug entry compares only with
+one emitted over a ROOT at the same path: a before-and-after on one
+checkout, never the gate's cross-host comparison, which has none.
+
+**The alternatives:** debug entries in the gate's manifest with the
+directory taken out before hashing, which needs the digest comment
+rewritten as well and would make the comparison about an altered text
+rather than the compiler's; a fixed four workers, which kept a host
+manifest at half an hour; and refusals recorded with their diagnostic,
+which put host paths into the values the hosts must agree on.
+
+**Pinned by** `scripts/tests/test_host_determinism.py`'s `Selectors`.
+
+### D842 — The harness names the RV32 lanes for a fixture naming rv32
+
+**The tour said** nothing; a `--fixture=` run whose lane a fixture does
+not apply to names the command of each target's lane, and for `rv32`
+said "no lane runs it: rv32 is a layout model the targets suite measures",
+which is `synthetic-32`'s description.
+
+**Chosen:** the note names the firmware corpus's RV32 lanes,
+`backend_corpus.py --lane=esp32c3` at rv32imc or `--lane=sifive-e` at
+rv32imac, and the gate's `cortex-m-rv32` job; D840 holds a runtime
+fixture naming rv32 to a corpus row those lanes execute, so the lane named
+is one that runs it.
+
+**The alternatives:** refusing `rv32` in a runtime fixture's `targets:`,
+which no runtime fixture names today and which would make a program
+written for RV32 alone unable to say so.
+
+**Pinned by** D840's check, which keeps the named lane a run.
+
 ## DECISIONS: THE CORE LIBRARY AND THE DERIVED PROGRAMS
 
 These were taken while writing `core` and the derived programs, and most
