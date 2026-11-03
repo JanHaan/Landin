@@ -189,6 +189,15 @@ package Landin.Testing.Fixtures is
    function C_Sources (Item : Fixture) return String;
    function C_Args    (Item : Fixture) return String;
 
+   --  The `c-args` as TARGET's lane passes them to its C driver, one
+   --  argument per word: each argument a line of compiler/tests/
+   --  c-args.targets, whose text is Spellings, spells another way for
+   --  TARGET in that spelling, and every other as written.  The Python
+   --  lanes take the same file through fixture_meta's `c_args_for`.
+   function C_Args_For
+     (Item : Fixture; Target, Spellings : String)
+      return Landin.Platform.Path_List;
+
    --  A runtime or ABI fixture's C sources that the harness builds, each
    --  into a shared object of its own, before the program runs: the same
    --  comma-separated relative `.c` paths as `c-sources`.  Each object is

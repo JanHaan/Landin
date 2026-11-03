@@ -1,0 +1,22 @@
+# How an ABI fixture's `c-args:` are spelled for a target whose linker does
+# not take the GNU spelling the fixture is written in.
+#
+# A fixture's `c-args:` are written once, as GCC and GNU ld (and LLVM's lld,
+# which takes the same options) read them.  A line here says how TARGET's
+# lane passes one of them instead:
+#
+#   TARGET  WRITTEN  PASSED
+#
+# WRITTEN ends in NAME, which matches the rest of the argument, the symbol
+# it names; PASSED is the argument TARGET's lane passes, with NAME replaced
+# by that symbol wherever it stands.  An argument no line matches is passed
+# as written.  The test program reads this file through
+# Landin.Testing.Fixtures and every Python lane through
+# compiler/tests/fixture_meta.py, so the Darwin verdict of a fixture is the
+# same whichever runner gives it; compiler/tests/fixture-meta.cases holds
+# both readers to it.
+
+# Apple's ld64 has no --wrap.  Its -alias makes the C name an alias of the
+# wrapper, so the program's calls reach the wrapper as GNU ld's --wrap
+# sends them; Mach-O spells every C symbol with a leading underscore.
+darwin-arm64  -Wl,--wrap=NAME  -Wl,-alias,___wrap_NAME,_NAME

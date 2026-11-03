@@ -124,7 +124,7 @@ class Lane(SHARED.Lane):
         assembly = Path(str(executable) + '.s')
         self.command([*argv, '--emit=asm', '-o', assembly], label + '-emit')
         objects = []
-        cargs = shlex.split(meta.get('c-args', ''))
+        cargs = meta.c_args_for(TARGET)
         compile_args = [a for a in cargs if not a.startswith('-Wl,') and not a.startswith('-l')]
         for index, name in enumerate(meta.c_sources):
             obj = Path(str(executable) + f'-peer-{index}.o')
