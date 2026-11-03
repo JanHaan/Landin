@@ -20970,6 +20970,15 @@ package body Landin.Diagnostics.Citations.Texts is
                & "ource still, so a generic routine nothing calls is not r"
                & "efused for any of them. [1290] says so, and [1350] says "
                & "that its rule is a generic type's.",
+            when 881 =>
+               "Chosen: when the missing concept refines others, L0318's"
+               & " note names, after [1290]'s rule, each refined concept t"
+               & "he type does conform to, in the order the concept's decl"
+               & "aration lists them: ""`fibre.whole` conforms to `fibre.sc"
+               & "heduler`, which `fibre.turns` refines, and not to `fibre"
+               & ".turns` itself"". A type that conforms to none of them, a"
+               & " concept with no parents, and a key with more than one i"
+               & "nput are noted as before.",
             when 139 =>
                "Chosen: `fixed if expression then declaration* (elsif ex"
                & "pression then declaration*)* (else declaration*)? end if"
@@ -21481,6 +21490,30 @@ package body Landin.Diagnostics.Citations.Texts is
                & "n `escaping` parameter, which the callee may keep anywhe"
                & "re: both stay the program's, as D505 leaves every pointe"
                & "r one thread hands another.",
+            when 880 =>
+               "Chosen: a refusal names a type or a concept as the sourc"
+               & "e it is reported in would write it. A declaration of tha"
+               & "t source's own module, or one a selected import binds, i"
+               & "s its name alone; one of a module the source imports is "
+               & "qualified by the name the import binds, the module's las"
+               & "t path segment or the alias an `as` gives (D201); one of"
+               & " a module the source does not import is qualified by the"
+               & " last segment, as an import would bind it. Outside its m"
+               & "odule, a private type is written by the first public ali"
+               & "as of its module, in declaration order, whose type is th"
+               & "e private one applied to the alias's own formals in orde"
+               & "r, so `cell_value(u32)` is `atomic.cell(u32)`. A pointer"
+               & " with one atom for its empty case is `(atom | ptr T)` (D"
+               & "189). A type whose identity is not yet interned, as one "
+               & "refused while its own actual is being built, keeps the w"
+               & "ords ""this concrete type"". The rule is one spelling, `La"
+               & "ndin.Checking.Spelling`, which every refusal of the shap"
+               & "e reads: L0318's missing conformance, L0319's erased pro"
+               & "vider, L0342's list of concepts, L0344's refused pointer"
+               & " and L0348's missing iterable conformance. A spelling ma"
+               & "de for no source, as the language server's hover and a p"
+               & "ointer union's interned name are, is unqualified, as bef"
+               & "ore.",
             when 267 =>
                "Chosen: `core/*` is the shared freestanding library. Eve"
                & "ry public interface of core/cmp, core/diag, core/fault, "
@@ -26916,6 +26949,16 @@ package body Landin.Diagnostics.Citations.Texts is
                & "call and return, which move the return address through t"
                & "he stack; a call to a named routine; and a call through "
                & "a register. A count is of sites, not executions.",
+            when 882 =>
+               "Chosen: L0344's refusal of a pointer names the pointer a"
+               & "s the program writes it (D880), ""..., not `ptr mut atomi"
+               & "c.cell(u32)`"", and when its pointee is a type of `core/a"
+               & "tomic`, its note says the cell is read and written by it"
+               & "s own operations, `atomic.load(addr cell)` and `atomic.s"
+               & "tore(addr cell, value)` among them, qualified as the sou"
+               & "rce imports the module, and that a builtin takes a point"
+               & "er to a plain `u8`, `u16`, `u32` or `u64`. Every other r"
+               & "efused pointer keeps D227's note.",
             when 151 =>
                "Chosen: the repository-owned `core/mem` module declares "
                & "a private parameterized nominal `raw(item)` with an allo"

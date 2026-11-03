@@ -1,0 +1,10 @@
+error[L0318]: `f64` has no conformance to `text.formattable`
+  --> ../tests/fixtures/negative/format-float-names-its-type/main.ldn:12:29
+   |
+12 |     io.format(out, "{}\n", [any(addr ratio)]) else none
+   |                             ^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/format-float-names-its-type/../../../../../core/io/buffered.ldn:120:17
+    |
+120 |                 values: []any text.formattable)
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the required type
+  = note: [1290]: every constrained type actual must have one whole-program conformance

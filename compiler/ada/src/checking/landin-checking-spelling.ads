@@ -29,13 +29,49 @@ package Landin.Checking.Spelling is
 
    function Atoms_Text (From : Tables; Set_Id : Atom_Set_Id) return String;
 
-   function Nominal_Text (From : Tables; Id : Nominal_Type_Id) return String;
+   --  Each spelling below names a declaration of another module as WITHIN,
+   --  a source a person reads it in, would write it: `text.formattable`
+   --  in a program that imports core/text, `formattable` in core/text
+   --  itself.  With No_Source every name is written alone.
 
-   function Reference_Text (From : Tables; Id : Reference_Id) return String;
+   --  A declaration's name, qualified for WITHIN.
+   function Declaration_Text
+     (From   : Tables;
+      Id     : Landin.Resolution.Declaration_Id;
+      Within : Landin.Source.Source_Id := Landin.Source.No_Source)
+      return String;
 
+   --  A concept's name, qualified for WITHIN: `text.formattable`.
+   function Concept_Name
+     (From   : Tables;
+      Id     : Concept_Id;
+      Within : Landin.Source.Source_Id := Landin.Source.No_Source)
+      return String;
+
+   function Nominal_Text
+     (From   : Tables;
+      Id     : Nominal_Type_Id;
+      Within : Landin.Source.Source_Id := Landin.Source.No_Source)
+      return String;
+
+   function Reference_Text
+     (From   : Tables;
+      Id     : Reference_Id;
+      Within : Landin.Source.Source_Id := Landin.Source.No_Source)
+      return String;
+
+   --  The type a pointer described by ITEM points to, which is also how
+   --  any value's type is written from the parts a descriptor holds.
    function Referent_Text
-     (From : Tables; Item : Reference_Descriptor) return String;
+     (From   : Tables;
+      Item   : Reference_Descriptor;
+      Within : Landin.Source.Source_Id := Landin.Source.No_Source)
+      return String;
 
-   function Shape_Text (From : Tables; Shape : Field_Shape) return String;
+   function Shape_Text
+     (From   : Tables;
+      Shape  : Field_Shape;
+      Within : Landin.Source.Source_Id := Landin.Source.No_Source)
+      return String;
 
 end Landin.Checking.Spelling;

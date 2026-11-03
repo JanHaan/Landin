@@ -1,4 +1,4 @@
-error[L0318]: this concrete type has no conformance to `equatable`
+error[L0318]: `tag` has no conformance to `cmp.equatable`
   --> ../tests/fixtures/negative/core-map-missing-parent-conformance/main.ldn:7:1
   |
 7 | tag is cmp.hashable (hash: key_hash)

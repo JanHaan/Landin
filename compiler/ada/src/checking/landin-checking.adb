@@ -1435,6 +1435,25 @@ package body Landin.Checking is
       Into.Nominal_Spellings (Nominal_Identities.Position (Into, Id)) := Name;
    end Note_Union_Spelling;
 
+   function Public_Alias_Of
+     (Of_Table : Table; Template : Declaration_Id) return Declaration_Id
+   is
+      Found : constant Public_Alias_Maps.Cursor :=
+        Of_Table.Public_Aliases.Find (Template);
+   begin
+      return (if Public_Alias_Maps.Has_Element (Found)
+              then Public_Alias_Maps.Element (Found)
+              else No_Declaration);
+   end Public_Alias_Of;
+
+   procedure Note_Public_Alias
+     (Into : in out Table; Template, Alias : Declaration_Id) is
+   begin
+      if not Into.Public_Aliases.Contains (Template) then
+         Into.Public_Aliases.Insert (Template, Alias);
+      end if;
+   end Note_Public_Alias;
+
    function Instance_Actual_Count
      (Of_Table : Table; Id : Nominal_Type_Id) return Natural
      is (Of_Table.Nominal_Actual_Runs.Element

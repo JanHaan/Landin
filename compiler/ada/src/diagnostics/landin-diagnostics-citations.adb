@@ -1925,6 +1925,9 @@ package body Landin.Diagnostics.Citations is
             when 771 =>
                "A generic routine's body is checked for each instance a "
                & "call makes",
+            when 881 =>
+               "A missing composed conformance names the concepts it ref"
+               & "ines that the type has",
             when 139 =>
                "Fixed conditionals select module declarations without ex"
                & "ecution",
@@ -1971,6 +1974,9 @@ package body Landin.Diagnostics.Citations is
             when 772 =>
                "A thread's instance's address is not kept in a module bi"
                & "nding every thread reads",
+            when 880 =>
+               "A refusal spells a type and a concept as the program rea"
+               & "ding it writes them",
             when 267 =>
                "Library source namespaces declare target availability",
             when 575 =>
@@ -2463,6 +2469,9 @@ package body Landin.Diagnostics.Citations is
             when 791 =>
                "Every backend fills every build-report counter with one "
                & "meaning, and a routine's stack beside its frame",
+            when 882 =>
+               "A memory builtin given an atomic cell names the cell's o"
+               & "perations",
             when 151 =>
                "Raw storage is a private library state machine",
             when 152 =>
@@ -3427,6 +3436,8 @@ package body Landin.Diagnostics.Citations is
                "Decisions: Concepts, generics and runtime dispatch",
             when 771 =>
                "Decisions: Concepts, generics and runtime dispatch",
+            when 881 =>
+               "Decisions: Concepts, generics and runtime dispatch",
             when 139 =>
                "Decisions: Modules and compile time",
             when 150 =>
@@ -3460,6 +3471,8 @@ package body Landin.Diagnostics.Citations is
             when 732 =>
                "Decisions: Modules and compile time",
             when 772 =>
+               "Decisions: Modules and compile time",
+            when 880 =>
                "Decisions: Modules and compile time",
             when 267 =>
                "Decisions: The toolchain, C and the machine",
@@ -3838,6 +3851,8 @@ package body Landin.Diagnostics.Citations is
             when 790 =>
                "Decisions: The toolchain, C and the machine",
             when 791 =>
+               "Decisions: The toolchain, C and the machine",
+            when 882 =>
                "Decisions: The toolchain, C and the machine",
             when 151 =>
                "Decisions: The core library and the derived programs",
@@ -4980,6 +4995,10 @@ package body Landin.Diagnostics.Citations is
             when 771 =>
                "https://www.701.dev/spec.html#d771-a-generic-routine-s-b"
                & "ody-is-checked-for-each-instance-a-call-makes",
+            when 881 =>
+               "https://www.701.dev/spec.html#d881-a-missing-composed-co"
+               & "nformance-names-the-concepts-it-refines-that-the-type-ha"
+               & "s",
             when 139 =>
                "https://www.701.dev/spec.html#d139-fixed-conditionals-se"
                & "lect-module-declarations-without-execution",
@@ -5033,6 +5052,9 @@ package body Landin.Diagnostics.Citations is
                "https://www.701.dev/spec.html#d772-a-thread-s-instance-s"
                & "-address-is-not-kept-in-a-module-binding-every-thread-re"
                & "ads",
+            when 880 =>
+               "https://www.701.dev/spec.html#d880-a-refusal-spells-a-ty"
+               & "pe-and-a-concept-as-the-program-reading-it-writes-them",
             when 267 =>
                "https://www.701.dev/spec.html#d267-library-source-namesp"
                & "aces-declare-target-availability",
@@ -5628,6 +5650,9 @@ package body Landin.Diagnostics.Citations is
                "https://www.701.dev/spec.html#d791-every-backend-fills-e"
                & "very-build-report-counter-with-one-meaning-and-a-routine"
                & "-s-stack-beside-its-frame",
+            when 882 =>
+               "https://www.701.dev/spec.html#d882-a-memory-builtin-give"
+               & "n-an-atomic-cell-names-the-cell-s-operations",
             when 151 =>
                "https://www.701.dev/spec.html#d151-raw-storage-is-a-priv"
                & "ate-library-state-machine",

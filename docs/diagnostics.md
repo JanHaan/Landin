@@ -861,7 +861,10 @@ i32 is ordered ()
 ### L0318
 
 A type given for a formal lacks a conformance the formal requires [1290].
-An `any C` provides C and every concept C refines, and no other (D492):
+The refusal names the type and the concept as the program writes them,
+`f64` and `text.formattable`, and for a concept that refines others, those
+the type does conform to. An `any C` provides C and every concept C
+refines, and no other (D492):
 erase the provider as an `any` of the wanted concept where it is made.
 Its address is not erased again; pass the `any C` itself.
 
@@ -1322,6 +1325,11 @@ operand the operation admits on this target. A refusal that names the target
 is made only where the program reaches the call (D564): a builtin in an
 imported routine nothing calls refuses nothing, and a module compiled with no
 `main` reaches everything it holds.
+
+A pointer the operation does not take is named as the program writes its
+type. A `core/atomic` cell is not a scalar: it is read and written by its own
+operations, `atomic.load` and `atomic.store` among them, and the refusal of a
+builtin given one names them.
 
 A `core/atomic` cell the target's atomics cannot carry is refused the same
 way where the program uses it (D510): on Cortex-M0 and RV32 a `u64` cell,

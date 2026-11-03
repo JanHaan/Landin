@@ -1,0 +1,20 @@
+error[L0318]: `fibre.whole` has no conformance to `fibre.turns`
+  --> ../tests/fixtures/negative/fibre-turns-over-scheduler-only/main.ldn:11:44
+   |
+11 |     mut over_whole := try fibre.turns_over(any(addr runner), backing, 2)
+   |                                            ^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/fibre-turns-over-scheduler-only/../../../../../core/fibre/fibre.ldn:215:21
+    |
+215 | public turns_over: (runs: any turns, backing: []mut u8, count: usize)
+    |                     ^^^^^^^^^^^^^^^ the required type
+  = note: [1290]: every constrained type actual must have one whole-program conformance; `fibre.whole` conforms to `fibre.scheduler`, which `fibre.turns` refines, and not to `fibre.turns` itself
+error[L0318]: `blocking.host` has no conformance to `fibre.turns`
+  --> ../tests/fixtures/negative/fibre-turns-over-scheduler-only/main.ldn:13:43
+   |
+13 |     mut over_host := try fibre.turns_over(any(addr host), backing, 2)
+   |                                           ^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/fibre-turns-over-scheduler-only/../../../../../core/fibre/fibre.ldn:215:21
+    |
+215 | public turns_over: (runs: any turns, backing: []mut u8, count: usize)
+    |                     ^^^^^^^^^^^^^^^ the required type
+  = note: [1290]: every constrained type actual must have one whole-program conformance; `blocking.host` conforms to `fibre.scheduler`, which `fibre.turns` refines, and not to `fibre.turns` itself

@@ -3,6 +3,7 @@ summary: D444 turns_over refuses fibre.whole and the blocking host, which provid
 program: main.ldn
 root: ../../../../..
 status: 1
+expect: expected.txt
 codes: L0318, L0318
 constructs: 1290, 1380, 1675
 targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

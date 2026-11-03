@@ -1,4 +1,4 @@
-error[L0344]: memory access needs an unsigned scalar pointer without a subtype
+error[L0344]: memory access needs an unsigned scalar pointer without a subtype, not `ptr mut i32`
   --> ../tests/fixtures/negative/r630-signed/program.ldn:5:30
   |
 5 |     _ = compiler.atomic_load(addr s, compiler.relaxed)

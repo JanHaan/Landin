@@ -16064,6 +16064,31 @@ refused before anything calls it.
 **Pinned by** `negative/generic-borrow-checked-at-instance`, the view held
 across the push refused once `main` calls the routine.
 
+### D881 — A missing composed conformance names the concepts it refines that the type has
+
+**The tour said** at [1290] that a constrained type actual needs a
+conformance, and D444 that a provider running every task to its end has
+nothing to yield to and provides `fibre.scheduler` alone. `fibre.turns_over`
+over a `fibre.whole` was L0318 "this concrete type has no conformance to
+`turns`", which said neither which type nor that it does provide
+`fibre.scheduler`, which `fibre.turns` refines and which is the reason the
+group is refused.
+
+**Chosen:** when the missing concept refines others, L0318's note names,
+after [1290]'s rule, each refined concept the type does conform to, in the
+order the concept's declaration lists them: "`fibre.whole` conforms to
+`fibre.scheduler`, which `fibre.turns` refines, and not to `fibre.turns`
+itself". A type that conforms to none of them, a concept with no parents,
+and a key with more than one input are noted as before.
+
+**The alternatives:** naming every concept the type conforms to, which for a
+library scalar is a list of a dozen that says nothing about the one
+missing; and naming the parents whatever the type conforms to, which tells
+the reader nothing they could not read from the concept.
+
+**Pinned by** `negative/fibre-turns-over-scheduler-only`, whose `fibre.whole`
+and `blocking.host` are each named with the `fibre.scheduler` they provide.
+
 ## DECISIONS: MODULES AND COMPILE TIME
 
 The module graph, what an import binds, and what is settled before
@@ -16884,6 +16909,55 @@ D505 took and this replaces. All were declined.
 `runtime/thread-storage-holds-its-instance` and
 `positive/thread-storage-declarations`, whose addresses stay in frames and
 arguments, still admitted.
+
+### D880 — A refusal spells a type and a concept as the program reading it writes them
+
+**The tour said** nothing of how a diagnostic names a type. The checker's
+refusals named a concept by its bare declared name and most named no type at
+all: `io.format` given an `f64` was "this concrete type has no conformance
+to `formattable`", which names neither the `f64` nor the
+`text.formattable` the program wrote, and L0342's list of a pointee's
+concepts said `formattable` and `equatable` for what a program writes
+`text.formattable` and `cmp.equatable`. A private type reached through a
+public alias, `atomic.cell(u32)` or `blocking.host`, could only have been
+named by the library's own `cell_value` or `blocking_value`.
+
+**Chosen:** a refusal names a type or a concept as the source it is
+reported in would write it. A declaration of that source's own module, or
+one a selected import binds, is its name alone; one of a module the source
+imports is qualified by the name the import binds, the module's last path
+segment or the alias an `as` gives (D201); one of a module the source does
+not import is qualified by the last segment, as an import would bind it.
+Outside its module, a private type is written by the first public alias of
+its module, in declaration order, whose type is the private one applied to
+the alias's own formals in order, so `cell_value(u32)` is
+`atomic.cell(u32)`. A pointer with one atom for its empty case is
+`(atom | ptr T)` (D189). A type whose identity is not yet interned, as one
+refused while its own actual is being built, keeps the words "this concrete
+type". The rule is one spelling, `Landin.Checking.Spelling`, which every
+refusal of the shape reads: L0318's missing conformance, L0319's erased
+provider, L0342's list of concepts, L0344's refused pointer and L0348's
+missing iterable conformance. A spelling made for no source, as the
+language server's hover and a pointer union's interned name are, is
+unqualified, as before.
+
+**The alternatives:** qualifying every name by its module's whole path,
+`core/text.formattable`, which no program writes; spelling a type by the
+declaration that made its identity, which names the library's private
+`cell_value` for the public `cell` a program wrote; and recovering the
+spelling from the source text at the refused node, which knows nothing of a
+type that reached it by deduction, the `f64` an `any(addr ratio)` erased
+among them.
+
+**Pinned by** `negative/format-float-names-its-type`, whose refusal names
+`f64` and `text.formattable`; `negative/any-construction-qualifies-library-concepts`,
+whose list holds the program's own `display` and the library's
+`text.formattable`; `negative/atomic-builtin-on-cell-names-its-operations`,
+whose pointer is `ptr mut atomic.cell(u32)`; `negative/r630-optional`'s
+`(absent | ptr u32)`; and the re-recorded refusals of
+`negative/atomic-cell-holds-unsigned-scalars`,
+`negative/generic-closed-parameter-refusals` and
+`negative/for-iterable-missing-conformance`.
 
 ## DECISIONS: THE TOOLCHAIN, C AND THE MACHINE
 
@@ -24579,6 +24653,32 @@ call through a function value counted as indirect on each native backend;
 the `backend plans` suite's `site counts follow frame addresses`; the `opt
 foundations` suite's `deterministic reports`; the `cortex ABI` suite's
 save counts; and the `x86 opt` suite's register counts.
+
+### D882 — A memory builtin given an atomic cell names the cell's operations
+
+**The tour said** at [1620] that a memory intrinsic takes an unsigned
+scalar pointer, and D500 that a `core/atomic` cell is read and written by
+its own operations. `compiler.atomic_store(addr word_cell, word,
+compiler.seq_cst)` on an `atomic.cell(u32)` was L0344 "memory access needs
+an unsigned scalar pointer without a subtype", with D227's note; it named
+neither the pointer it was given nor `atomic.load` and `atomic.store`, and
+the program that met it found them by reading `core/atomic`.
+
+**Chosen:** L0344's refusal of a pointer names the pointer as the program
+writes it (D880), "..., not `ptr mut atomic.cell(u32)`", and when its
+pointee is a type of `core/atomic`, its note says the cell is read and
+written by its own operations, `atomic.load(addr cell)` and
+`atomic.store(addr cell, value)` among them, qualified as the source
+imports the module, and that a builtin takes a pointer to a plain `u8`,
+`u16`, `u32` or `u64`. Every other refused pointer keeps D227's note.
+
+**The alternatives:** accepting a cell's address in the builtins, which
+makes a cell's storage a builtin contract and lets a program bypass the
+operations D510 checks against the target; and naming only the plain
+scalar a builtin takes, which leaves the reader who wanted the cell's
+operations to find them again.
+
+**Pinned by** `negative/atomic-builtin-on-cell-names-its-operations`.
 
 ## DECISIONS: THE CORE LIBRARY AND THE DERIVED PROGRAMS
 

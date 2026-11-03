@@ -307,6 +307,21 @@ package Landin.Resolution is
      return String
      with Pre => Contains (Of_Table, Id);
 
+   --  What Source writes before Id's name to reach it (D201): the name
+   --  its import of Id's module binds, `text` for core/text's
+   --  `formattable` or the alias an `as` gives, and for a module the
+   --  source does not import, the last part of its path, which an import
+   --  would bind.  "" when Source reaches Id by its name alone, in Id's
+   --  own module or through a selected import; for a declaration of the
+   --  entry module or of no module; and for No_Source, so a spelling for
+   --  nobody in particular is unqualified.
+   function Qualifier_From
+     (Of_Table  : Table;
+      Spellings : Landin.Source.Names.Table;
+      Id        : Declaration_Id;
+      Source    : Landin.Source.Source_Id) return String
+     with Pre => Contains (Of_Table, Id);
+
    --  What this scope itself gives that name, so a duplicate is something
    --  found rather than two lists compared, and No_Declaration otherwise.
    function Declared_Here

@@ -1,3 +1,5 @@
+with Ada.Strings.Fixed;
+
 package body Landin.Resolution is
 
    ------------------------------------------------------------------
@@ -190,6 +192,60 @@ package body Landin.Resolution is
       end loop;
       return "";
    end Module_Path_Of;
+
+   function Qualifier_From
+     (Of_Table  : Table;
+      Spellings : Landin.Source.Names.Table;
+      Id        : Declaration_Id;
+      Source    : Landin.Source.Source_Id) return String
+   is
+      Path : constant String := Module_Path_Of (Of_Table, Id);
+      Declared : Scope_Id := Scope_Of (Of_Table, Id);
+      Reader : Scope_Id;
+   begin
+      if Path = "" or else Source = Landin.Source.No_Source
+        or else Natural (Source) > Natural (Of_Table.File_Scopes.Length)
+      then
+         return "";
+      end if;
+      while Declared /= No_Scope
+        and then Sort_Of (Of_Table, Declared) /= Module_Scope
+      loop
+         Declared := Enclosing (Of_Table, Declared);
+      end loop;
+      Reader := Enclosing (Of_Table, File_Scope_Of (Of_Table, Source));
+      if Declared = Reader then
+         return "";
+      end if;
+      declare
+         Import_Index : Natural := Of_Table.Scopes.Element
+           (Positive (File_Scope_Of (Of_Table, Source))).First_Import;
+      begin
+         while Import_Index /= 0 loop
+            declare
+               Bound : constant Import_Binding :=
+                 Of_Table.Import_Order.Element (Import_Index);
+            begin
+               if Bound.Member = Id then
+                  return "";
+               elsif Bound.Member = No_Declaration
+                 and then Bound.Target /= Landin.Modules.No_Module
+                 and then Module_Scope_Of (Of_Table, Bound.Target) = Declared
+               then
+                  return Landin.Source.Names.Spelling
+                    (Spellings, Bound.Name);
+               end if;
+               Import_Index := Bound.Next_In_Scope;
+            end;
+         end loop;
+      end;
+      declare
+         Slash : constant Natural :=
+           Ada.Strings.Fixed.Index (Path, "/", Ada.Strings.Backward);
+      begin
+         return (if Slash = 0 then Path else Path (Slash + 1 .. Path'Last));
+      end;
+   end Qualifier_From;
 
    function Declared_Here
      (Of_Table : Table;

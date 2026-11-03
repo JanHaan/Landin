@@ -1,0 +1,14 @@
+--  An f64 has no `text.formattable` conformance, so formatting one is
+--  refused where it is erased, and the refusal names both the type and the
+--  concept as this program writes them, not the library's own spellings.
+import core/io
+import hosted/blocking
+
+public main: () -> (code: i32) =
+    host := blocking.new()
+    mut storage: [64]u8 = zeroed
+    mut out := io.buffered_over(host, io.out(host), storage)
+    ratio: f64 = 1.5
+    io.format(out, "{}\n", [any(addr ratio)]) else none
+    code = 0
+end main
