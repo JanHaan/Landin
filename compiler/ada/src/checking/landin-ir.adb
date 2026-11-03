@@ -3291,48 +3291,6 @@ package body Landin.IR is
                        and then Is_Sealed
                          (Of_Unit, Item, Slot_Of (Of_Unit, Item, Value))));
 
-   function Call_Variadic_Types_Are_Valid
-     (Of_Unit : Unit; Item : Item_Id; Call : Value_Id) return Boolean
-   is
-   begin
-      if not Holds (Of_Unit, Item, Call)
-        or else Op_Of (Of_Unit, Item, Call)
-          not in Landin.IR.Call | Indirect_Call
-      then
-         return False;
-      end if;
-      declare
-         Types : constant Run := Held (Of_Unit, Item, Call).Variadic_Types;
-         Limit : constant Natural := Natural (Of_Unit.Signature_Parts.Length);
-      begin
-         return Types.First <= Limit
-           and then Types.Count <= Limit - Types.First;
-      end;
-   end Call_Variadic_Types_Are_Valid;
-
-   function Call_Variadic_Count
-     (Of_Unit : Unit; Item : Item_Id; Call : Value_Id) return Natural is
-   begin
-      if not Call_Variadic_Types_Are_Valid (Of_Unit, Item, Call) then
-         raise Landin.Compiler_Defect with "invalid variadic type run";
-      end if;
-      return Held (Of_Unit, Item, Call).Variadic_Types.Count;
-   end Call_Variadic_Count;
-
-   function Nth_Call_Variadic_Type
-     (Of_Unit : Unit; Item : Item_Id; Call : Value_Id; Index : Positive)
-      return Signature_Part
-   is
-   begin
-      if not Call_Variadic_Types_Are_Valid (Of_Unit, Item, Call)
-        or else Index > Call_Variadic_Count (Of_Unit, Item, Call)
-      then
-         raise Landin.Compiler_Defect with "invalid variadic type index";
-      end if;
-      return Of_Unit.Signature_Parts.Element
-        (Held (Of_Unit, Item, Call).Variadic_Types.First + Index);
-   end Nth_Call_Variadic_Type;
-
    function Call_Signature
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Signature_Id
      is (Held (Of_Unit, Item, Value).Signature);
@@ -5490,30 +5448,13 @@ package body Landin.IR is
       return Append (Into, Item, Made);
    end Emit_Evidence_Self;
 
-   function Stored_Variadic_Types
-     (Into : in out Unit; Types : Signature_Part_Array) return Run;
-
-   function Stored_Variadic_Types
-     (Into : in out Unit; Types : Signature_Part_Array) return Run
-   is
-      Made : constant Run :=
-        (First => Natural (Into.Signature_Parts.Length),
-         Count => Types'Length);
-   begin
-      for Part of Types loop
-         Into.Signature_Parts.Append (Part);
-      end loop;
-      return Made;
-   end Stored_Variadic_Types;
-
    function Emit_Call
      (Into   : in out Unit;
       Item   : Item_Id;
       Callee : Item_Id;
       Result : Landin.Types.Type_Kind;
       Site   : Landin.Provenance.Origin;
-      Failure : Slot_Id := No_Slot;
-      Variadic_Types : Signature_Part_Array := No_Signature_Parts)
+      Failure : Slot_Id := No_Slot)
       return Value_Id
    is
       Callee_Signature : constant Signature_Id :=
@@ -5527,8 +5468,6 @@ package body Landin.IR is
               (Into, Callee_Signature, 1).Atoms
             else No_Atom_Set)
          else No_Atom_Set);
-      Stored_Types : constant Run :=
-        Stored_Variadic_Types (Into, Variadic_Types);
    begin
       return Append
         (Into, Item,
@@ -5539,7 +5478,6 @@ package body Landin.IR is
                       Signature      => Callee_Signature,
                       Atom_Set       => Result_Atoms,
                       Slot           => Failure,
-                      Variadic_Types => Stored_Types,
                       First_Arg      => 0,
                       Args           => 0,
                       others         => <>));
@@ -5551,16 +5489,13 @@ package body Landin.IR is
       Signature : Signature_Id;
       Result    : Landin.Types.Type_Kind;
       Site      : Landin.Provenance.Origin;
-      Failure   : Slot_Id := No_Slot;
-      Variadic_Types : Signature_Part_Array := No_Signature_Parts)
+      Failure   : Slot_Id := No_Slot)
       return Value_Id
    is
       Result_Atoms : constant Atom_Set_Id :=
         (if Signature_Result_Count (Into, Signature) = 1
          then Nth_Signature_Result (Into, Signature, 1).Atoms
          else No_Atom_Set);
-      Stored_Types : constant Run :=
-        Stored_Variadic_Types (Into, Variadic_Types);
    begin
       return Append
         (Into, Item,
@@ -5570,7 +5505,6 @@ package body Landin.IR is
                       Signature      => Signature,
                       Atom_Set       => Result_Atoms,
                       Slot           => Failure,
-                      Variadic_Types => Stored_Types,
                       First_Arg      => 0,
                       Args           => 0,
                       others         => <>));

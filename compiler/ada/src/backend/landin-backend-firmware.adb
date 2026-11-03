@@ -184,12 +184,6 @@ package body Landin.Backend.Firmware is
         & LF;
    end Startup;
 
-   function RV32_Stage_Label return String is
-     (".section .text.landin_firmware_reset_stage,""ax"",@progbits" & LF
-      & ".balign 4" & LF
-      & ".globl " & Profiles.Reset_Stage_Symbol & LF
-      & Profiles.Reset_Stage_Symbol & ":" & LF);
-
    function RV32_Image
      (Of_Unit : Landin.IR.Unit;
       Names : Landin.Source.Names.Table;

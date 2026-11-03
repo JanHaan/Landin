@@ -251,13 +251,4 @@ package body Landin.Stages.Syntax is
       Outcome := (if Failed (Context) then Stop else Continue);
    end Run_Using;
 
-   procedure Run_With_Cache
-     (Whole   : in out Compilation'Class;
-      Cache   : in out Parse_Cache;
-      Outcome : out Stage_Outcome)
-   is
-   begin
-      Run_Using (Whole, Outcome, Cache => Cache'Access);
-   end Run_With_Cache;
-
 end Landin.Stages.Syntax;

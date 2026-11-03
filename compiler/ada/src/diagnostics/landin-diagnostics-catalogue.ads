@@ -1350,9 +1350,6 @@ package Landin.Diagnostics.Catalogue is
    function Rule (Of_Code : Code_Name) return String
      is (Table (Of_Code).Rule.all);
 
-   function Needs_Source (Of_Code : Code_Name) return Boolean
-     is (Table (Of_Code).Source);
-
    function Needs_Non_Empty_Span (Of_Code : Code_Name) return Boolean
      is (Table (Of_Code).Bytes);
 

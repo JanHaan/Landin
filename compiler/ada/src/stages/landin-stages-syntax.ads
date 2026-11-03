@@ -55,11 +55,6 @@ package Landin.Stages.Syntax is
    function Held_Text (Cache : Parse_Cache; Path : String) return String
      with Pre => Holds (Cache, Path);
 
-   procedure Run_With_Cache
-     (Whole   : in out Compilation'Class;
-      Cache   : in out Parse_Cache;
-      Outcome : out Stage_Outcome);
-
 
    --  Reuse unchanged parsed sources from Previous when source identities
    --  and text agree. The caller first copies Previous's interned names in

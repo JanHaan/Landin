@@ -59,19 +59,6 @@ package body Landin.Server.Answers is
       return J.Result (Written);
    end Capabilities;
 
-   function Version_Of
-     (Store : Landin.Server.Documents.Store; Path : String)
-      return Long_Long_Integer
-   is
-   begin
-      for Held of Store.Open loop
-         if Unbounded.To_String (Held.Path) = Path then
-            return Held.Version;
-         end if;
-      end loop;
-      return -1;
-   end Version_Of;
-
    --  A range over Text, as the editor counts it.
    procedure Write_Range
      (Written : in out J.Builder;

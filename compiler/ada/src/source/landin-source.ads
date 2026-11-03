@@ -77,8 +77,6 @@ package Landin.Source is
    function Text   (Item : Snapshot) return String;
    function Length (Item : Snapshot) return Byte_Offset;
 
-   function Full_Span (Item : Snapshot) return Span;
-
    function Is_Valid (Item : Snapshot; Offset : Byte_Offset) return Boolean
      is (Offset <= Length (Item));
 
