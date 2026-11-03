@@ -57,15 +57,11 @@ def closure(refine: Path, workload: str, scratch: Path) -> list[str]:
 
 
 def repository_path(path: str) -> str:
-    """A reported source from the repository root.  A module the program
-    imports through its root is named as the root spells it; one the
-    compiler adds itself, the hosted entry's platform module in a program
-    that imports nothing, is found in the library, which a build names
-    absolutely."""
-    path = os.path.normpath(path)
-    if os.path.isabs(path) and Path(path).is_relative_to(ROOT):
-        return str(Path(path).relative_to(ROOT))
-    return path
+    """A reported source from the repository root, the root the build
+    names: a module the program imports and one the compiler adds itself,
+    the hosted entry's platform module in a program that imports nothing,
+    are both named as that root spells them (D732)."""
+    return os.path.normpath(path)
 
 
 def main() -> int:

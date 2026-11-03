@@ -868,9 +868,14 @@ package body Landin.Driver.Loading is
               = Landin.Modules.No_Module
             and then Host.Is_Directory (Joined_Path (Library, Logical)));
 
+      --  D732: the module's directory is spelt as an import of it would
+      --  spell it, through the library's place in the search order, so a
+      --  root that names the library names its modules the same way
+      --  whether the program imports them or the compiler adds them.
       procedure Add_Implicit (Logical : String);
       procedure Add_Implicit (Logical : String) is
-         Directory : constant String := Joined_Path (Library, Logical);
+         Directory : constant String :=
+           Joined_Path (Searched.Element (Library_At), Logical);
          Added : constant Landin.Modules.Module_Id :=
            Landin.Modules.Add_Module
              (Graph.all, Logical, Directory, Positive (Library_Position));
