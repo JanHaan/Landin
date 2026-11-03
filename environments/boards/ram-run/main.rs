@@ -21,6 +21,7 @@ struct Args {
     #[arg(long, required_unless_present = "describe")] plan: Option<PathBuf>,
     #[arg(long, required_unless_present = "describe")] output: Option<PathBuf>,
     #[arg(long, exclusive = true)] describe: bool,
+    #[arg(long)] validate: bool,
 }
 
 #[derive(Deserialize)]
@@ -136,6 +137,10 @@ fn word(bytes: &[u8], at: usize) -> Result<u32> {
     Ok(u32::from_le_bytes(bytes.get(at..at + 4).context("truncated ELF word")?.try_into()?))
 }
 
+fn linked_symbol_section(section: object::SymbolSection) -> bool {
+    matches!(section, object::SymbolSection::Section(_) | object::SymbolSection::Absolute)
+}
+
 fn image(plan: &Plan) -> Result<Image> {
     ensure!(plan.format_version == 1 && plan.mode == "ram", "expected format 1 RAM plan");
     chip(&plan.board)?;
@@ -146,7 +151,7 @@ fn image(plan: &Plan) -> Result<Image> {
     ensure!(file.architecture() == if arm {object::Architecture::Arm} else {object::Architecture::Riscv32},
         "ELF architecture does not match board");
     let symbol = |name: &str| -> Result<u32> {
-        file.symbols().find(|s| s.name().ok() == Some(name) && s.is_definition())
+        file.symbols().find(|s| s.name().ok() == Some(name) && linked_symbol_section(s.section()))
             .map(|s| s.address().try_into()).context(format!("missing {name}"))?
             .map_err(Into::into)
     };
@@ -384,6 +389,28 @@ fn execute(plan: &Plan, image: &Image) -> Result<Value> {
         "cleanup":cleanup,"helper_source_sha256":source_digest()}))
 }
 
+fn process_plan(bytes: &[u8], validate: bool) -> Result<Value> {
+    let envelope: Value = serde_json::from_slice(bytes)?;
+    let read = envelope.get("mode").and_then(Value::as_str) == Some("read");
+    if read {
+        let plan: ReadPlan = serde_json::from_slice(bytes)?;
+        validate_read(&plan)?; // Validate every input before opening a probe.
+        if validate {
+            Ok(json!({"format_version":1,"status":"validated","mode":"read","board":plan.board,
+                "address":plan.address,"count":plan.count,"flash_written":false,
+                "helper_source_sha256":source_digest()}))
+        } else { execute_read(&plan) }
+    } else {
+        let plan: Plan = serde_json::from_slice(bytes)?;
+        let image = image(&plan)?;
+        if validate {
+            Ok(json!({"format_version":1,"status":"validated","mode":"ram","board":plan.board,
+                "elf_sha256":digest(&image.bytes),"entry":image.entry,"vector":image.vector,
+                "stack":image.stack,"flash_written":false,"helper_source_sha256":source_digest()}))
+        } else { execute(&plan, &image) }
+    }
+}
+
 fn main() -> Result<()> {
     let args = Args::parse();
     if args.describe {
@@ -392,20 +419,14 @@ fn main() -> Result<()> {
         return Ok(());
     }
     let bytes = fs::read(args.plan.context("missing plan")?)?;
-    let envelope: Value = serde_json::from_slice(&bytes)?;
-    let read = envelope.get("mode").and_then(Value::as_str) == Some("read");
-    let result = if read {
-        let plan: ReadPlan = serde_json::from_slice(&bytes)?;
-        validate_read(&plan)?; // Validate every input before opening a probe.
-        execute_read(&plan)
-    } else {
-        let plan: Plan = serde_json::from_slice(&bytes)?;
-        let image = image(&plan)?;
-        execute(&plan, &image)
-    };
+    let result = process_plan(&bytes, args.validate);
+    let mode = if args.validate { "validate" }
+        else if serde_json::from_slice::<Value>(&bytes).is_ok_and(|plan|
+            plan.get("mode").and_then(Value::as_str) == Some("read")) { "read" }
+        else { "warm" };
     fs::write(args.output.context("missing output")?, serde_json::to_vec_pretty(&match &result {
         Ok(value) => value.clone(),
-        Err(error) => json!({"status":"failed","mode":if read {"read"} else {"warm"},
+        Err(error) => json!({"status":"failed","mode":mode,
             "flash_written":false,"error":format!("{error:#}")}),
     })?)?;
     result.map(|_| ())
@@ -420,7 +441,33 @@ mod tests {
         assert!(Args::try_parse_from(["helper"]).is_err());
         assert!(Args::try_parse_from(["helper", "--plan", "p", "--output", "o"]).is_ok());
         assert!(Args::try_parse_from(["helper", "--describe", "--plan", "p", "--output", "o"]).is_err());
+        assert!(Args::try_parse_from(["helper", "--describe", "--validate"]).is_err());
+        assert!(Args::try_parse_from(["helper", "--validate"]).is_err());
+        assert!(Args::try_parse_from(["helper", "--validate", "--plan", "p"]).is_err());
+        assert!(Args::try_parse_from(["helper", "--validate", "--plan", "p", "--output", "o"]).unwrap().validate);
         assert_eq!(source_digest().len(), 64);
+    }
+    #[test]
+    fn linker_absolute_and_section_symbols_are_defined_addresses() {
+        use object::SymbolSection;
+        assert!(linked_symbol_section(SymbolSection::Absolute));
+        assert!(linked_symbol_section(SymbolSection::Section(object::SectionIndex(1))));
+        for section in [SymbolSection::Undefined, SymbolSection::Common,
+                        SymbolSection::Unknown, SymbolSection::None] {
+            assert!(!linked_symbol_section(section));
+        }
+    }
+    #[test]
+    fn offline_read_validation_never_parses_or_opens_the_probe() {
+        let mut plan = json!({"format_version":1,"board":"rp2040","mode":"read",
+            "probe":"deliberately invalid probe selector","address":0x20000000u32,"count":1});
+        let report = process_plan(&serde_json::to_vec(&plan).unwrap(), true).unwrap();
+        assert_eq!(report["status"], "validated");
+        assert_eq!(report["board"], "rp2040");
+        assert_eq!(report["address"], 0x20000000u32);
+        assert_eq!(report["helper_source_sha256"], source_digest());
+        plan["count"] = json!(0);
+        assert!(process_plan(&serde_json::to_vec(&plan).unwrap(), true).is_err());
     }
     fn read_plan(address: u64, count: u32) -> ReadPlan {
         ReadPlan { format_version: 1, board: "rp2040".into(), mode: "read".into(),
