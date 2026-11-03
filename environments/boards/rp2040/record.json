@@ -1,6 +1,7 @@
 {
   "status": "passed",
-  "image_sha256": "57cc70386f87f51bb8539d069c2c04acc06ab2f2e06477a1890211afe2230eed",
+  "image_sha256": "709ffa489a9d5dcad190a7975aefd36ada4d750541d15fdbe772dc4220c30f84",
+  "image_name": "board.elf",
   "second_stage_crc32": "e5e96a65",
   "second_stage_sha256": "bb2162f7be7e4aeb609c398074206139e53a83696702a404021297271f3cd140",
   "flash_readback": "matches",
@@ -32,9 +33,9 @@
       "held_by_fifo": 32,
       "restarts": 3,
       "dma_completions": 2,
-      "timer_events": 1393,
+      "timer_events": 8377,
       "echoed": 11202,
-      "sent": 11570
+      "sent": 11572
     }
   },
   "swd": {
@@ -44,8 +45,26 @@
     "usb_events": 1,
     "trans_count": 1094
   },
-  "uart_sha256": "2f2ccab11bd7c997295fc770a8e67f3a284722e10ebedd0a5f10fd9eb91116b1",
-  "sent_sha256": "d6bd26162b19de4f73019d0e0a88422e4237388c349c0767ff74fc65c643b3c3",
+  "uart_sha256": "453bd69805bd785c70bb594c6bd868cce035a40d6a190ec0562a213b89b94e36",
+  "mode": "boot",
+  "fixed_restore": {
+    "status": "passed",
+    "sha256": "ffcf113e64faf59521ad10732e15531fb775661ae6c35a0195accd06764f5add",
+    "marker": {
+      "symbol": "_landin_fixed_ready",
+      "address": 536870912,
+      "value": 1279678513,
+      "elf_sha256": "ffcf113e64faf59521ad10732e15531fb775661ae6c35a0195accd06764f5add"
+    }
+  },
+  "seconds": 27.851,
+  "kernel_usb": {
+    "since": 1793747428.545406,
+    "until": 1793747456.3772404,
+    "lines": [],
+    "status": "captured"
+  },
+  "sent_sha256": "862543372c500f893b20ccce8a53c22a29917e5b561e86a0fe674a64666d86ba",
   "frames": [
     {
       "tag": "b",
@@ -58,7 +77,7 @@
       "h": "00002bc2",
       "c": "00000003",
       "d": "00000002",
-      "m": "00000571",
+      "m": "000020b9",
       "u": "00000001",
       "p": "00000015",
       "n": "00000446",
@@ -68,20 +87,28 @@
     }
   ],
   "commands": [
-    "compile",
-    "symbols",
-    "flash",
-    "flash-readback",
     "gpio-environment",
+    "flash",
+    "hub-wait",
+    "flash-readback",
     "gpio-release",
     "hub-status",
     "power-cycle",
+    "hub-wait",
     "gpio-after-1",
     "gpio-after-0",
     "swd-handled",
     "swd-recoveries",
     "swd-dma_events",
     "swd-usb_events",
-    "swd-trans-count"
+    "swd-trans-count",
+    "flash",
+    "hub-wait",
+    "flash-readback",
+    "hub-status",
+    "power-cycle",
+    "hub-wait",
+    "hub-status",
+    "resident-ready"
   ]
 }

@@ -59,11 +59,11 @@
     "handled": 11802,
     "recoveries": 3,
     "dma_entries": 48,
-    "usart_entries": 133,
+    "usart_entries": 142,
     "s0ndtr": 237,
     "s0cr": 1049617
   },
-  "uart_sha256": "6875aeb2a29b9aef8c2a03e5595bd0cc30c9691f551bdb3a598af43df5bcbaa3",
+  "uart_sha256": "1b4c12eeb9e7651753d385f5ca9135cc97422ddde591a9b8ab9f543593ee7612",
   "mode": "ram",
   "warm_load": {
     "board": "stm32h753",
@@ -77,7 +77,7 @@
     "entry": 603990433,
     "flash_written": false,
     "format_version": 1,
-    "helper_source_sha256": "3d3db74ea85e12463f6942fc8ecce32492cf2f8caafcf6a8ba24b40a8678fc56",
+    "helper_source_sha256": "2f9423710f4166b2f2cbf5bbed58fe9702c5807a94c9726da4d2873b5a5457db",
     "mode": "warm",
     "previous_pc": 603994370,
     "segments": [
@@ -91,10 +91,10 @@
     "status": "passed",
     "vector": 603979776
   },
-  "seconds": 15.397,
+  "seconds": 14.071,
   "kernel_usb": {
-    "since": 1793746005.420574,
-    "until": 1793746020.7966793,
+    "since": 1793747572.1844354,
+    "until": 1793747586.2396472,
     "lines": [],
     "status": "captured"
   },
@@ -117,8 +117,8 @@
       "d": "00000002",
       "w": "0000002f",
       "k": "00000030",
-      "m": "000021b9",
-      "u": "00000085",
+      "m": "000021d2",
+      "u": "0000008e",
       "p": "00000037",
       "n": "000000ed",
       "e": "00000e13",

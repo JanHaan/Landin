@@ -1,0 +1,157 @@
+{
+  "status": "passed",
+  "image_sha256": "539d95162c5b5f39064be270f0cdfe0d2a3ea31743a4f24ff557bb99b9590061",
+  "image_name": "board.elf",
+  "elf_sha256": "539d95162c5b5f39064be270f0cdfe0d2a3ea31743a4f24ff557bb99b9590061",
+  "instructions": [],
+  "verdicts": {
+    "boot": {
+      "reset_cause": 1,
+      "mtvec": "0x40380101"
+    },
+    "shared": {
+      "input": "1A0",
+      "echo": "1A0",
+      "indicator_after_1": 1024,
+      "indicator_after_0": 0
+    },
+    "interrupts": {
+      "receive_mcause": "0x80000001",
+      "timer_mcause": "0x80000002"
+    },
+    "atomics": {
+      "x": 116,
+      "y": 93,
+      "b": 116,
+      "h": 29789,
+      "w": 1952275828
+    },
+    "ring_overrun": {
+      "burst": 300,
+      "ring": 256,
+      "dropped": 44,
+      "restarts": 1
+    },
+    "threshold": {
+      "burst": 300,
+      "fifo_overflows": 1,
+      "restarts": 2,
+      "timer_interrupts_meanwhile": 100
+    },
+    "stream": {
+      "timer_events": 2441,
+      "receive_interrupts": 4741,
+      "echoed": 3014,
+      "sent": 3614
+    }
+  },
+  "jtag": {
+    "trap_count": 0,
+    "handled": 3014,
+    "recoveries": 2,
+    "dropped": 44,
+    "overflows": 1,
+    "entries": 4741,
+    "boot_reason": 1,
+    "byte_cell": 116,
+    "half_cell": 29789,
+    "word_cell": 1952275828
+  },
+  "readback": [
+    "0x40380000+0x180",
+    "0x40380180+0x5b50"
+  ],
+  "uart_sha256": "914ace9d1b5ea1d2cd5545293bdb4cfa6bee74d00a31e06a3866e76d9c77b07e",
+  "mode": "ram",
+  "warm_load": {
+    "board": "esp32c3",
+    "cleanup": {
+      "contract": "warm-board-v1",
+      "other_core_parked": false,
+      "peripheral_sources_stopped": true,
+      "rom_reset": false
+    },
+    "elf_sha256": "539d95162c5b5f39064be270f0cdfe0d2a3ea31743a4f24ff557bb99b9590061",
+    "entry": 1077411840,
+    "flash_written": false,
+    "format_version": 1,
+    "helper_source_sha256": "2f9423710f4166b2f2cbf5bbed58fe9702c5807a94c9726da4d2873b5a5457db",
+    "mode": "warm",
+    "previous_pc": 1077422602,
+    "segments": [
+      {
+        "address": 1077411840,
+        "bytes": 384,
+        "sha256": "2e7066ccdfb7951acca9b4ef211acc79fb0095cb11a2acf1688afe7db53a19ba"
+      },
+      {
+        "address": 1077412224,
+        "bytes": 23376,
+        "sha256": "56a39acbf23088a2320da795f73705087a392f46865c967650070bc64dd4dd8a"
+      },
+      {
+        "address": 1070202880,
+        "bytes": 84,
+        "sha256": "baf848941ad631f991459c3f53c511193f690b528643ef10c80675716f879199"
+      }
+    ],
+    "stack": 1070366720,
+    "status": "passed",
+    "vector": 1077412096
+  },
+  "seconds": 13.507,
+  "kernel_usb": {
+    "since": 1793747398.651908,
+    "until": 1793747412.1341798,
+    "lines": [],
+    "status": "captured"
+  },
+  "sent_sha256": "5ac29a7d385819161814c8f23f97a6a82ba69ae0187502c8fd0c9b77f110ad06",
+  "frames": [
+    {
+      "tag": "b",
+      "r": "00000001",
+      "v": "40380101"
+    },
+    {
+      "tag": "a",
+      "b": "00000074",
+      "h": "0000745d",
+      "w": "745d5d74"
+    },
+    {
+      "tag": "t",
+      "h": "00000bc6",
+      "c": "00000002",
+      "i": "00001285",
+      "m": "00000989",
+      "p": "80000001",
+      "q": "80000002",
+      "k": "00000064",
+      "l": "0000002c",
+      "o": "00000001",
+      "e": "00000cc6",
+      "g": "00000000",
+      "s": "00000002"
+    }
+  ],
+  "commands": [
+    "ram-load",
+    "jtag-trap-cause",
+    "jtag-trap-pc",
+    "jtag-trap-value",
+    "jtag-trap-sp",
+    "jtag-trap-count",
+    "jtag-handled",
+    "jtag-recoveries",
+    "jtag-dropped",
+    "jtag-overflows",
+    "jtag-entries",
+    "jtag-boot_reason",
+    "jtag-byte_cell",
+    "jtag-half_cell",
+    "jtag-word_cell",
+    "jtag-readback-40380000",
+    "jtag-readback-40380180"
+  ]
+}

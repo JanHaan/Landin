@@ -1,0 +1,114 @@
+{
+  "status": "passed",
+  "image_sha256": "3ae672bfbc42306f14c0718173e1787c435044d600aaf0104dc34d1bbf739a37",
+  "image_name": "board.elf",
+  "verdicts": {
+    "boot": {
+      "chip_reset": 256,
+      "vtor": 536870912,
+      "clk_ref_selected": 4
+    },
+    "shared": {
+      "input": "1A0",
+      "echo": "1A0",
+      "indicator_after_1": 8,
+      "indicator_after_0": 0,
+      "wire": "IO32",
+      "wire_after_1": 1,
+      "wire_after_0": 0
+    },
+    "irq5": {
+      "entries": 1,
+      "exception": 21
+    },
+    "overrun": {
+      "burst": 300,
+      "recoveries": 1
+    },
+    "epochs": {
+      "flagged_burst": 100,
+      "held_by_fifo": 32,
+      "restarts": 3,
+      "dma_completions": 2,
+      "timer_events": 9393,
+      "echoed": 11202,
+      "sent": 11572
+    }
+  },
+  "swd": {
+    "handled": 11202,
+    "recoveries": 3,
+    "dma_events": 2,
+    "usb_events": 1,
+    "trans_count": 1094
+  },
+  "uart_sha256": "64873dfdcd22b9c6d211ed0fe1ed086f70a0c01ed240f56d4245fc38b49adfa1",
+  "mode": "ram",
+  "warm_load": {
+    "board": "rp2040",
+    "cleanup": {
+      "contract": "warm-board-v1",
+      "other_core_parked": true,
+      "peripheral_sources_stopped": true,
+      "rom_reset": false
+    },
+    "elf_sha256": "3ae672bfbc42306f14c0718173e1787c435044d600aaf0104dc34d1bbf739a37",
+    "entry": 536871105,
+    "flash_written": false,
+    "format_version": 1,
+    "helper_source_sha256": "2f9423710f4166b2f2cbf5bbed58fe9702c5807a94c9726da4d2873b5a5457db",
+    "mode": "warm",
+    "previous_pc": 536879572,
+    "segments": [
+      {
+        "address": 536870912,
+        "bytes": 23676,
+        "sha256": "849bb81991df576555ff4384a37272931c2e8f4b32ddaefe0ee1ec28ef0d2b43"
+      }
+    ],
+    "stack": 537141248,
+    "status": "passed",
+    "vector": 536870912
+  },
+  "seconds": 16.708,
+  "kernel_usb": {
+    "since": 1793747537.7020113,
+    "until": 1793747554.3927257,
+    "lines": [],
+    "status": "captured"
+  },
+  "sent_sha256": "862543372c500f893b20ccce8a53c22a29917e5b561e86a0fe674a64666d86ba",
+  "frames": [
+    {
+      "tag": "b",
+      "r": "00000100",
+      "v": "20000000",
+      "k": "00000004"
+    },
+    {
+      "tag": "t",
+      "h": "00002bc2",
+      "c": "00000003",
+      "d": "00000002",
+      "m": "000024b1",
+      "u": "00000001",
+      "p": "00000015",
+      "n": "00000446",
+      "e": "00000bba",
+      "g": "00000000",
+      "s": "00000002"
+    }
+  ],
+  "commands": [
+    "gpio-environment",
+    "gpio-release",
+    "ram-load",
+    "gpio-after-1",
+    "gpio-after-0",
+    "swd-handled",
+    "swd-recoveries",
+    "swd-dma_events",
+    "swd-usb_events",
+    "swd-trans-count"
+  ]
+}
