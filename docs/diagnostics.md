@@ -131,7 +131,9 @@ path and its permissions.
 `--target=` names no target the compiler describes, or none was named and
 this compiler's own host is not a described target, so a build has nothing
 to compile for until one is named. `refine --identify` lists the described
-targets.
+targets. A misspelt target is offered the nearest described one, a name cut
+short the one it begins, and a system named alone, `linux` or `macos`,
+every target of that system (D857).
 
 ### L0005
 

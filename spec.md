@@ -19479,6 +19479,32 @@ things; and keeping the silent drop, which is how the two sites went unseen.
 **Pinned by** `diagnostics/a fixed-note code takes no note` and
 `negative/offsetof-refusals`, whose routes now print.
 
+### D857 — A misspelling is offered the name it begins before one as far
+
+**The discrepancy:** a near name is ranked by distance, then by scope, then
+by spelling, and `refine --target=linux-x86` was offered `linux-rv64`: both
+it and `linux-x86-64` are three edits away, and `r` sorts first.
+
+**Chosen:** among candidates at one distance and one depth, the one whose
+first bytes, as many as were written, are nearest what was written comes
+first, and spelling breaks what is left. A name the misspelling begins is
+at no distance from its head, so `linux-x86` is offered `linux-x86-64`; one
+it nearly begins comes next. Distance and scope still decide first, so a
+nearer name, or one an inner scope declares, keeps its place. A target
+named by its system alone, `--target=freebsd`, is too far from any target
+to be near one, and when no target is near the driver offers every target
+the name begins as a system, with `macos` read as `darwin`.
+
+**The alternatives:** ranking every name the misspelling begins before any
+other, which offers a long completion over a one-edit neighbour; and
+admitting a name the misspelling begins beyond the bound, which offers
+every declaration that shares a short head; a target's system is the one
+head that is a whole word, and only the driver's offer reads it.
+
+**Pinned by** `fixes/nearness is bounded and ordered` and
+`driver/targets are selected by name`, which names `linux-x86`, `macos`
+and `freebsd`.
+
 ### D383 — `refine check` takes what `compile` takes about the program
 
 **The discrepancy:** `check` and `compile` read one program, and only
