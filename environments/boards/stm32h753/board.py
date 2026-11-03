@@ -518,8 +518,8 @@ def main():
     parser.add_argument('--objdump', default=tool('objdump'))
     parser.add_argument('--readelf', default=tool('readelf'))
     parser.add_argument('--output', type=Path, required=True, help='a new directory')
-    parser.add_argument('--hub', default='7-2.3', help="the ST-LINK's hub, as uhubctl -l names it;"
-                        " the maintainer's rig's by default")
+    parser.add_argument('--hub', default='.3', help="the ST-LINK's hub, as uhubctl -l names it or"
+                        " relative to the cascade; the maintainer's rig's by default")
     parser.add_argument('--port', type=int, default=2, help="the ST-LINK's port on it")
     parser.add_argument('--hub-group', default='dialout',
                         help="the group that may switch the hub's ports; uhubctl runs through"
@@ -528,8 +528,7 @@ def main():
     parser.add_argument('--guard-serial', default='210319B3E738',
                         help="a device that must be present and off the switched cascade, the"
                              " probe's Arty on the maintainer's rig, or no port is switched")
-    parser.add_argument('--cascade', default='7-2',
-                        help='the hub cascade whose ports are switched, as sysfs names its root')
+    common.cascade_argument(parser)
     parser.add_argument('--hub-seconds', type=float, default=60.0,
                         help='how long the hub may take to list the ST-LINK again after a download'
                              ' or a cycle')
@@ -543,6 +542,7 @@ def main():
     parser.add_argument('--record', type=Path,
                         help="also write a passed run's record here")
     args = parser.parse_args()
+    common.place_hubs(parser, args, 'hub')
     require(args.probe_rs, 'no probe-rs: name one with --probe-rs')
     for name in ('nm', 'objdump', 'readelf'):
         require(getattr(args, name), 'no arm-eabi-%s or arm-none-eabi-%s on PATH: name one with --%s'

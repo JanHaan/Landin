@@ -10,7 +10,8 @@ this checks what the board does with it.  The board is reached through a
 probehive slot (https://github.com/JanHaan/probehive): probe-rs reaches
 its SWD through `--probe`, and the probe's bridge, DIR/scripts/dap_bridge.py,
 serves its UART as a TCP port while the scenario runs; the two never hold
-the slot at once.  The Pico's power is its USB port on
+the slot at once.  The bridge is the one already serving the probe, or one
+started for all its slots and left running for the next tool.  The Pico's power is its USB port on
 a hub uhubctl can switch.  The steps, each recorded under NEW_DIRECTORY:
 
   1. build the image and check, from the ELF alone, that its second stage
@@ -255,21 +256,26 @@ def main():
     parser.add_argument('--probehive', type=Path, required=True, help='a probehive checkout')
     parser.add_argument('--probe-rs', type=Path, default=shutil.which('probe-rs'),
                         help='a probe-rs that reaches the probe named by --probe')
-    parser.add_argument('--probe', default='0000:0002:10.42.0.50/0',
-                        help="probe-rs's --probe for the slot: its CMSIS-DAP UDP transport by default,"
-                             " or 0000:0001:HOST:PORT for TCP through a bridge of its own")
+    parser.add_argument('--slot', type=int, default=0, help="the probehive slot, 0 on the"
+                        " maintainer's rig; its UART is the bridge's UART port plus the slot")
+    parser.add_argument('--probe',
+                        help="probe-rs's --probe for the slot: its CMSIS-DAP UDP transport,"
+                             " 0000:0002:HOST/SLOT, by default, or 0000:0001:HOST:PORT for TCP"
+                             " through a bridge of its own")
     parser.add_argument('--nm', default=shutil.which('arm-eabi-nm') or shutil.which('arm-none-eabi-nm'))
     parser.add_argument('--output', type=Path, required=True, help='a new directory')
     parser.add_argument('--probe-host', default='10.42.0.50')
     parser.add_argument('--debug-port', type=int, default=4441)
     parser.add_argument('--uart-port', type=int, default=4461)
-    parser.add_argument('--hub', default='7-2.3.3', help="the Pico's hub, as uhubctl -l names it")
+    parser.add_argument('--bridge-slots', type=int, default=6,
+                        help='the slots a bridge this starts serves, every one of the probe')
+    parser.add_argument('--hub', default='.3.3',
+                        help="the Pico's hub, as uhubctl -l names it or relative to the cascade")
     parser.add_argument('--port', type=int, default=1, help="the Pico's port on it")
     parser.add_argument('--guard-serial', default='210319B3E738',
                         help="a device that must be present and off the switched cascade, the"
                              " probe's Arty on the maintainer's rig, or no port is switched")
-    parser.add_argument('--cascade', default='7-2',
-                        help='the hub cascade whose ports are switched, as sysfs names its root')
+    common.cascade_argument(parser)
     parser.add_argument('--off-seconds', type=float, default=1.0)
     parser.add_argument('--hub-seconds', type=float, default=60.0,
                         help='how long the hub may take to list again after a download or a cycle')
@@ -286,8 +292,10 @@ def main():
     parser.add_argument('--record', type=Path,
                         help="also write a passed run's record here, as record.json is")
     args = parser.parse_args()
+    common.place_hubs(parser, args, 'hub')
     require(args.probe_rs, 'no probe-rs: name one with --probe-rs')
     require(args.nm, 'no arm-eabi-nm or arm-none-eabi-nm on PATH: name one with --nm')
+    args.probe = args.probe or common.udp_slot(args.probe_host, args.slot)
     args.probehive = args.probehive.resolve()
     args.probehive_build = (args.probehive_build or args.probehive / 'build/slots_ci').resolve()
     args.output = args.output.resolve()
@@ -306,15 +314,17 @@ def main():
         result['flash_readback'] = 'matches'
         pins = (common.ProbehivePins(run, args.probehive, args.probehive_build, args.indicator_pin)
                 if args.indicator_pin else None)
-        bridge = common.ProbehiveBridge(run, args.probehive, args.probe_host, 1,
-                                        args.debug_port, args.uart_port)
-        console = common.TcpConsole(args.uart_port)
+        # One bridge serves every slot of the probe and is left running for
+        # the next tool; the probe-rs runs before and after the console
+        # reach the slot while no client of the bridge holds it.
+        bridge, result['bridge'] = common.shared_bridge(
+            run, args.probehive, args.probe_host, args.slot, args.bridge_slots, args.debug_port,
+            args.uart_port)
+        console = common.TcpConsole(args.uart_port + args.slot)
         power_cycle(common.InGroup(run, args.hub_group), args)
         verdicts, final = scenario(console, run, args.seed, pins)
         result['verdicts'] = verdicts
         console.close()
-        bridge.close()
-        bridge = None
         result['swd'] = cross_check(run, args, names, final)
         result['status'] = 'passed'
     except (Failed, subprocess.TimeoutExpired, OSError) as error:

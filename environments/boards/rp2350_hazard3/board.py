@@ -411,6 +411,7 @@ def main():
     parser.add_argument('--record', type=Path,
                         help="also write a passed run's record here")
     args = parser.parse_args()
+    common.place_hubs(parser, args, 'hub')
     require(args.probe_rs, 'no probe-rs: name one with --probe-rs')
     require(args.nm and args.objdump, 'no riscv64-elf-nm and -objdump or riscv64-unknown-elf-nm and'
             ' -objdump on PATH: name them with --nm and --objdump')

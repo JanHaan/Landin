@@ -17,6 +17,8 @@ does not depend on the chip:
     its CMSIS-DAP UDP transport or a bridge's TCP port, or an ST-LINK named
     by its serial; reading words, and flashing with verification and a
     readback;
+  * the hub cascade's root, found by its hub's identity, and each board's
+    hub placed relative to it;
   * the hub's power cycle: one `uhubctl -a cycle` of one port, or ports
     switched off and on together, and a wait for the hub to list again
     after the cascade re-enumerates; each only after
@@ -33,13 +35,16 @@ does not depend on the chip:
     its bytes, and the log those ROMs write while they load it;
   * the record a passed run writes;
   * the rig's one lock, held by every run's hardware phase, and the pace
-    of the actions that disconnect a device on its hub cascade.
+    of the actions that disconnect a device on its hub cascade, which
+    `python3 common.py acknowledge REASON` tells that the USB trouble the
+    kernel logged so far is understood.
 
 Nothing here touches a board unless a tool calls it, and nothing needs more
 than the standard library, so scripts/tests/test_board_common.py runs it on
 the gate's Python with no board, probe or hub.
 """
 
+import argparse
 import fcntl
 import grp
 import hashlib
@@ -237,7 +242,9 @@ class Pace:
                    if when >= last and USB_TROUBLE.search(text)]
         if trouble:
             raise Failed('the kernel logged USB trouble since the last action; stopping before'
-                         ' %s: %s' % (what, trouble[0]))
+                         ' %s: %s.  Once its cause is known and the rig is quiet,'
+                         ' `python3 environments/boards/common.py acknowledge REASON` lets the'
+                         ' next action go' % (what, trouble[0]))
         began = self.clock()
         while True:
             now = self.clock()
@@ -255,6 +262,13 @@ class Pace:
     def after(self, what):
         self.state.parent.mkdir(parents=True, exist_ok=True)
         self.state.write_text('%f %s\n' % (self.clock(), what))
+
+    def acknowledge(self, reason):
+        """Record that the USB trouble the kernel logged before now is
+        understood, for REASON: the next action is spaced from now, and only
+        trouble logged after it stops a run (D835)."""
+        require(reason.strip(), 'say why the trouble is understood')
+        self.after('acknowledged: ' + ' '.join(reason.split()))
 
 
 def paced(pace, what, action, guard=None, cascade=None):
@@ -550,7 +564,7 @@ def port_device(status, port):
 
 
 def device_location(serial, sysfs=Path('/sys/bus/usb/devices')):
-    """Where the USB device with SERIAL is, its hub path such as 7-1.2, or
+    """Where the USB device with SERIAL is, its hub path such as 5-1.2, or
     None."""
     for entry in sorted(Path(sysfs).glob('*')):
         if ':' in entry.name:
@@ -565,7 +579,7 @@ def device_location(serial, sysfs=Path('/sys/bus/usb/devices')):
 
 def off_cascade(serial, cascade, sysfs=Path('/sys/bus/usb/devices')):
     """Require that the device with SERIAL is present and not on the hub
-    cascade at CASCADE, a hub path such as 7-2: a device that must never
+    cascade at CASCADE, a hub path such as 5-1: a device that must never
     lose power or re-enumerate, the probe's Arty on the rig, is kept off
     the cascade whose ports the tools switch (D725).  Returns where it is."""
     found = device_location(serial, sysfs)
@@ -574,6 +588,80 @@ def off_cascade(serial, cascade, sysfs=Path('/sys/bus/usb/devices')):
             'the device with serial %s is at %s, on the cascade %s whose ports are switched;'
             ' refusing to switch' % (serial, found, cascade))
     return found
+
+
+# The rig's hub cascade is built of Realtek RTS5411 hubs, of which the
+# USB2 side is this VID:PID; the cascade's root is the one such hub whose
+# parent is not one (D833).
+CASCADE_HUB = '0bda:5411'
+
+
+def usb_identity(device):
+    """The VID:PID of the USB device at DEVICE, its sysfs directory, or
+    None."""
+    try:
+        return '%s:%s' % ((Path(device) / 'idVendor').read_text().strip(),
+                          (Path(device) / 'idProduct').read_text().strip())
+    except OSError:
+        return None
+
+
+def cascade_root(identity=CASCADE_HUB, sysfs=Path('/sys/bus/usb/devices')):
+    """The hub path of the rig's hub cascade, as sysfs names its root, such
+    as 5-1: the one hub that is IDENTITY, a VID:PID, and whose parent is
+    not, under any controller and on any port.  The tools name each board's
+    hub relative to it, so moving the cascade needs no edit (D833).
+    Refuses when no hub or several are such a root."""
+    roots = []
+    for entry in sorted(Path(sysfs).glob('*')):
+        if ':' in entry.name or entry.name.startswith('usb') or usb_identity(entry) != identity:
+            continue
+        parent = entry.name.rpartition('.')[0]
+        if not parent or usb_identity(Path(sysfs) / parent) != identity:
+            roots.append(entry.name)
+    require(roots, 'no USB hub %s whose parent is another is attached, so no hub cascade was'
+            ' found: attach it, or name its root with --cascade' % identity)
+    require(len(roots) == 1, 'the hubs %s are each a USB hub %s whose parent is another, so the'
+            ' hub cascade is not one of them alone: name its root with --cascade'
+            % (', '.join(roots), identity))
+    return roots[0]
+
+
+RELATIVE_HUB = re.compile(r'(\.[1-9][0-9]*)+')
+
+
+def on_cascade(location, cascade):
+    """LOCATION, a hub path as uhubctl and sysfs name it: one relative to
+    the cascade, such as .3.3, is placed under CASCADE, and any other is
+    taken as it is (D833)."""
+    if not location.startswith('.'):
+        return location
+    require(RELATIVE_HUB.fullmatch(location),
+            'the hub %r is neither a hub path nor one relative to the cascade, such as .3.3'
+            % location)
+    return cascade + location
+
+
+def cascade_argument(parser):
+    """The --cascade option every tool takes: its default, None, is the root
+    `cascade_root` finds."""
+    parser.add_argument('--cascade',
+                        help='the hub cascade whose ports are switched, as sysfs names its root;'
+                             ' by default the one USB hub %s whose parent is not one, wherever'
+                             ' it is attached' % CASCADE_HUB)
+
+
+def place_hubs(parser, args, *names, sysfs=Path('/sys/bus/usb/devices')):
+    """args.cascade found by `cascade_root` when it was not given, and each
+    of NAMES, the attribute of ARGS naming a hub, placed on it by
+    `on_cascade`; either refusing is PARSER's error, before anything runs."""
+    try:
+        if args.cascade is None:
+            args.cascade = cascade_root(sysfs=sysfs)
+        for name in names:
+            setattr(args, name, on_cascade(getattr(args, name), args.cascade))
+    except Failed as error:
+        parser.error(str(error))
 
 
 class Listings:
@@ -939,7 +1027,7 @@ def modem_lines(fd):
 
 
 def tty_at(location, sysfs=Path('/sys/class/tty'), dev=Path('/dev')):
-    """The tty of the USB device at LOCATION, a hub path such as 7-2.3.4.4,
+    """The tty of the USB device at LOCATION, a hub path such as 5-1.3.4.4,
     as sysfs places it, or None; with two, the one on the lowest interface.
     A bridge without a serial of its own is told apart by where it is
     plugged in."""
@@ -1033,3 +1121,27 @@ def record(result, kept, sent, commands, keep_tags):
 
 def write_json(path, value):
     Path(path).write_text(json.dumps(value, indent=2) + '\n')
+
+
+def main(argv=None):
+    """`acknowledge REASON`: the rig's pace told that the USB trouble the
+    kernel logged so far is understood, under the rig's lock."""
+    parser = argparse.ArgumentParser(description=main.__doc__)
+    commands = parser.add_subparsers(dest='command', required=True)
+    acknowledge = commands.add_parser(
+        'acknowledge', help='let the next board run go after USB trouble whose cause is known;'
+                            ' the next action is still spaced from now')
+    acknowledge.add_argument('reason', help='what the trouble was, kept in the pace file')
+    args = parser.parse_args(argv)
+    pace = Pace()
+    try:
+        with rig_lock('common.py acknowledge'):
+            pace.acknowledge(args.reason)
+    except Failed as error:
+        parser.error(str(error))
+    print('acknowledged in %s: %s' % (pace.state, pace.state.read_text().strip()))
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

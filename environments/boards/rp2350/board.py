@@ -10,7 +10,9 @@ A developer tool, not a compiler dependency: refine builds the image at
 board is reached through probehive slot 1 (https://github.com/JanHaan/probehive):
 probe-rs reaches its SWD through `--probe`, and the probe's bridge,
 DIR/scripts/dap_bridge.py, serves its UART as a TCP port while the scenario
-runs; the two never hold the slot at once.  The Pico 2's power is its USB
+runs; the two never hold the slot at once.  The bridge is the one already serving
+the probe, or one started for all its slots and left running for the next
+tool.  The Pico 2's power is its USB
 port on a hub uhubctl can switch.  The steps, each recorded under
 NEW_DIRECTORY:
 
@@ -299,6 +301,8 @@ def main():
     parser.add_argument('--probe-host', default='10.42.0.50')
     parser.add_argument('--debug-port', type=int, default=4441)
     parser.add_argument('--uart-port', type=int, default=4461)
+    parser.add_argument('--bridge-slots', type=int, default=6,
+                        help='the slots a bridge this starts serves, every one of the probe')
     pico2.arguments(parser)
     parser.add_argument('--block-control', action='store_true',
                         help='first flash an image whose block is corrupted and require the boot ROM'
@@ -313,6 +317,7 @@ def main():
     parser.add_argument('--record', type=Path,
                         help="also write a passed run's record here")
     args = parser.parse_args()
+    common.place_hubs(parser, args, 'hub')
     require(args.probe_rs, 'no probe-rs: name one with --probe-rs')
     require(args.nm, 'no arm-eabi-nm or arm-none-eabi-nm on PATH: name one with --nm')
     args.probe = args.probe or common.udp_slot(args.probe_host, args.slot)
@@ -336,15 +341,17 @@ def main():
         result['flash_readback'] = 'matches'
         pins = (common.ProbehivePins(run, args.probehive, args.probehive_build, args.indicator_pin)
                 if args.indicator_pin else None)
-        bridge = common.ProbehiveBridge(run, args.probehive, args.probe_host, args.slot + 1,
-                                        args.debug_port, args.uart_port)
+        # One bridge serves every slot of the probe and is left running for
+        # the next tool; the probe-rs runs before and after the console
+        # reach the slot while no client of the bridge holds it.
+        bridge, result['bridge'] = common.shared_bridge(
+            run, args.probehive, args.probe_host, args.slot, args.bridge_slots, args.debug_port,
+            args.uart_port)
         console = common.TcpConsole(args.uart_port + args.slot)
         power_cycle(common.InGroup(run, args.hub_group), args)
         verdicts, final = scenario(console, run, args.seed, pins)
         result['verdicts'] = verdicts
         console.close()
-        bridge.close()
-        bridge = None
         result['swd'] = cross_check(run, args, names, final)
         result['status'] = 'passed'
     except (Failed, subprocess.TimeoutExpired, OSError) as error:

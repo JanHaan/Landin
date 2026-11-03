@@ -557,6 +557,25 @@ class Pace(unittest.TestCase):
             with self.assertRaises(COMMON.Failed):
                 pace.before('power cycle')
 
+    def test_acknowledged_trouble_stops_no_run_and_later_trouble_still_does(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            lines = [(1005.0, 'usb 7-2.3: device not accepting address 41, error -71')]
+            pace, clock, _ = self.pace(tmp, lines, now=1200.0)
+            Path(tmp, 'rig.pace').write_text('1000.0 download\n')
+            with self.assertRaisesRegex(COMMON.Failed, 'common.py acknowledge REASON'):
+                pace.before('power cycle')
+            with self.assertRaises(COMMON.Failed):
+                pace.acknowledge('  ')
+            pace.acknowledge('the hub  dropped\nfrom its port')
+            self.assertEqual(Path(tmp, 'rig.pace').read_text(),
+                             '1200.000000 acknowledged: the hub dropped from its port\n')
+            pace.before('power cycle')
+            self.assertGreaterEqual(clock[0], 1320.0)
+            lines.append((clock[0] + 1, 'usb 5-1: device descriptor read/64, error -71'))
+            clock[0] += 200
+            with self.assertRaises(COMMON.Failed):
+                pace.before('power cycle')
+
     def test_a_cascade_that_never_goes_quiet_stops_the_run(self):
         with tempfile.TemporaryDirectory() as tmp:
             pace, clock, _ = self.pace(tmp, [])
@@ -599,6 +618,95 @@ class Cascade(unittest.TestCase):
                     COMMON.off_cascade('ARTY', cascade, sysfs)
             with self.assertRaises(COMMON.Failed):
                 COMMON.off_cascade('GONE', '7-2', sysfs)
+
+
+class Root(unittest.TestCase):
+    """The hub cascade's root found by its hub's identity, and each board's
+    hub placed relative to it (D833), in a fake sysfs tree."""
+    HUB, HUB3 = ('0bda', '5411'), ('0bda', '0411')
+
+    def tree(self, tmp, devices):
+        for name, identity in devices.items():
+            (Path(tmp) / name).mkdir()
+            if identity:
+                (Path(tmp) / name / 'idVendor').write_text(identity[0] + '\n')
+                (Path(tmp) / name / 'idProduct').write_text(identity[1] + '\n')
+        return Path(tmp)
+
+    def rig(self, tmp, root):
+        """The rig's cascade under ROOT, its USB3 side, a root hub and a
+        hub of another make beside it."""
+        bus = root.split('-')[0]
+        return self.tree(tmp, {
+            'usb' + bus: ('1d6b', '0002'), root: self.HUB, root + '.3': self.HUB,
+            root + '.3.3': self.HUB, root + '.3.4': self.HUB, root + '.4': self.HUB,
+            root + '.3.4.2': ('303a', '1001'), root + '.3.4.2:1.0': None,
+            '6-1': self.HUB3, '6-1.3': self.HUB3, '3-2': ('0403', '6010'),
+            '5-2': ('0557', '7000'), '5-2.1': ('0557', '2419')})
+
+    def test_the_root_is_the_hub_whose_parent_is_not_one(self):
+        for root in ('7-2', '5-1', '1-10'):
+            with tempfile.TemporaryDirectory() as tmp:
+                self.assertEqual(COMMON.cascade_root(sysfs=self.rig(tmp, root)), root)
+
+    def test_none_or_several_are_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sysfs = self.tree(tmp, {'usb5': ('1d6b', '0002'), '6-1': self.HUB3})
+            with self.assertRaisesRegex(COMMON.Failed, 'no USB hub 0bda:5411 .*--cascade'):
+                COMMON.cascade_root(sysfs=sysfs)
+        with tempfile.TemporaryDirectory() as tmp:
+            sysfs = self.rig(tmp, '5-1')
+            (sysfs / '7-2.1').mkdir()
+            (sysfs / '7-2.1' / 'idVendor').write_text('0bda\n')
+            (sysfs / '7-2.1' / 'idProduct').write_text('5411\n')
+            with self.assertRaisesRegex(COMMON.Failed, 'the hubs 5-1, 7-2.1 .*--cascade'):
+                COMMON.cascade_root(sysfs=sysfs)
+
+    def test_a_relative_hub_is_placed_and_any_other_kept(self):
+        self.assertEqual(COMMON.on_cascade('.3.3', '5-1'), '5-1.3.3')
+        self.assertEqual(COMMON.on_cascade('.4', '5-1'), '5-1.4')
+        self.assertEqual(COMMON.on_cascade('7-2.3.3', '5-1'), '7-2.3.3')
+        for wrong in ('.', '.3.', '..3', '.0', '.x'):
+            with self.assertRaises(COMMON.Failed):
+                COMMON.on_cascade(wrong, '5-1')
+
+    def parser(self):
+        import argparse
+        parser = argparse.ArgumentParser()
+        parser.add_argument('--hub', default='.3.3')
+        parser.add_argument('--console-hub', default='.4')
+        COMMON.cascade_argument(parser)
+        return parser
+
+    def test_the_tools_options_find_the_root_unless_named(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sysfs = self.rig(tmp, '5-1')
+            for argv, hub, console, cascade in (
+                    ([], '5-1.3.3', '5-1.4', '5-1'),
+                    (['--cascade', '7-2'], '7-2.3.3', '7-2.4', '7-2'),
+                    (['--hub', '9-1.3.3'], '9-1.3.3', '5-1.4', '5-1'),
+                    (['--hub', '.3.4', '--cascade', '5-1'], '5-1.3.4', '5-1.4', '5-1')):
+                parser = self.parser()
+                args = parser.parse_args(argv)
+                COMMON.place_hubs(parser, args, 'hub', 'console_hub', sysfs=sysfs)
+                self.assertEqual((args.hub, args.console_hub, args.cascade), (hub, console, cascade))
+
+    def test_no_root_is_the_parsers_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            parser = self.parser()
+            args = parser.parse_args([])
+            with mock.patch('sys.stderr'), self.assertRaises(SystemExit) as raised:
+                COMMON.place_hubs(parser, args, 'hub', sysfs=Path(tmp))
+            self.assertEqual(raised.exception.code, 2)
+
+    def test_no_tool_writes_an_absolute_hub_into_its_defaults(self):
+        """A move of the cascade needs no edit: every tool's hub defaults
+        are relative to it, and its cascade is found."""
+        boards = ROOT / 'environments/boards'
+        for path in sorted(boards.glob('*.py')) + sorted(boards.glob('*/board.py')):
+            text = path.read_text()
+            self.assertNotRegex(text, r"default='[0-9]+-[0-9]", path)
+            self.assertNotRegex(text, r"'--cascade', default", path)
 
 
 if __name__ == '__main__':

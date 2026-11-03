@@ -25836,6 +25836,29 @@ package body Landin.Diagnostics.Citations.Texts is
                & "ned as hiding trouble: the listing is what disturbs the "
                & "cascade, and the pace still stops at any error the kerne"
                & "l logs.",
+            when 833 =>
+               "Chosen: the rig's hub cascade is found by its hub's iden"
+               & "tity, `common.cascade_root`: the one USB hub `0bda:5411`"
+               & ", the RTS5411's USB2 side the cascade is built of, whose"
+               & " parent is not one, under any controller and on any port"
+               & "; when no hub or several are such a root the tool refuse"
+               & "s before it runs and asks for `--cascade`. A hub is name"
+               & "d either as `uhubctl -l` names it or relative to that ro"
+               & "ot, `.3.3`, and every tool's defaults are relative, so t"
+               & "he Arty guard's cascade and every switched hub follow th"
+               & "e cascade wherever it is plugged in. An explicit `--casc"
+               & "ade` or an absolute `--hub` is taken as it is. On 2026-1"
+               & "1-03 the cascade moved from `7-2`, a front-panel port wh"
+               & "ose controller kept dropping its top hub, to `5-1` on an"
+               & "other controller, and every default named the old one.",
+            when 835 =>
+               "Chosen: `python3 environments/boards/common.py acknowled"
+               & "ge REASON`, under the rig's lock, records in the pace fi"
+               & "le that the trouble logged so far is understood, with it"
+               & "s reason: the next action is spaced from that moment as "
+               & "from any other, and only trouble logged after it stops a"
+               & " run. A run stopped by the pace names the command in its"
+               & " refusal. Nothing clears the trouble on its own.",
             when 645 =>
                "Chosen: the module names no device. Its `port` is a stru"
                & "ct of two function values ([1000]), `indicate: (on: bool"
@@ -26206,6 +26229,18 @@ package body Landin.Diagnostics.Citations.Texts is
                & "he slot's SWD through the bridge's TCP port, so probe-rs"
                & " and the console go through the same client. The RP2040'"
                & "s and the Arm Pico 2's tools keep their own bridges.",
+            when 834 =>
+               "Chosen: both tools take their console from `common.share"
+               & "d_bridge`, as the ESP32-C3's and the Hazard3 tool's do: "
+               & "a bridge listening on both of the slot's ports is reused"
+               & " and never stopped, and otherwise one is started for eve"
+               & "ry slot of the probe, `--bridge-slots`, and left running"
+               & "; `result.json` says which. probe-rs still reaches the s"
+               & "lot over UDP, before the console opens and after it clos"
+               & "es, so the two are never the slot's clients at once, as "
+               & "before; the bridge resynchronises a slot with each new c"
+               & "onnection. The RP2040's record is taken again under this"
+               & " rule.",
             when 831 =>
                "Chosen: a register module is named by the chip alone. Th"
                & "e Hazard3 policy writes its modules under the chip's pre"

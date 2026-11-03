@@ -2369,6 +2369,12 @@ package body Landin.Diagnostics.Citations is
             when 832 =>
                "Every board tool paces and waits for the hub, and a flas"
                & "h from BOOTSEL is cycled at once",
+            when 833 =>
+               "The board tools find the hub cascade by its hub and name"
+               & " each board's hub relative to it",
+            when 835 =>
+               "USB trouble stops the pace until it is acknowledged with"
+               & " a reason",
             when 645 =>
                "The shared command loop takes its indicator and transmit"
                & "ter as function values",
@@ -2413,6 +2419,9 @@ package body Landin.Diagnostics.Citations is
             when 713 =>
                "A board tool reuses a probehive bridge, and one it start"
                & "s outlives it",
+            when 834 =>
+               "The RP2040's and the Arm Pico 2's tools reuse the shared"
+               & " bridge for their console",
             when 831 =>
                "RP2350's register modules are the chip's, and the Pico 2"
                & "'s two ports share theirs",
@@ -3847,6 +3856,10 @@ package body Landin.Diagnostics.Citations is
                "Decisions: The toolchain, C and the machine",
             when 832 =>
                "Decisions: The toolchain, C and the machine",
+            when 833 =>
+               "Decisions: The toolchain, C and the machine",
+            when 835 =>
+               "Decisions: The toolchain, C and the machine",
             when 645 =>
                "Decisions: The toolchain, C and the machine",
             when 646 =>
@@ -3876,6 +3889,8 @@ package body Landin.Diagnostics.Citations is
             when 712 =>
                "Decisions: The toolchain, C and the machine",
             when 713 =>
+               "Decisions: The toolchain, C and the machine",
+            when 834 =>
                "Decisions: The toolchain, C and the machine",
             when 831 =>
                "Decisions: The toolchain, C and the machine",
@@ -5640,6 +5655,13 @@ package body Landin.Diagnostics.Citations is
                "https://www.701.dev/spec.html#d832-every-board-tool-pace"
                & "s-and-waits-for-the-hub-and-a-flash-from-bootsel-is-cycl"
                & "ed-at-once",
+            when 833 =>
+               "https://www.701.dev/spec.html#d833-the-board-tools-find-"
+               & "the-hub-cascade-by-its-hub-and-name-each-board-s-hub-rel"
+               & "ative-to-it",
+            when 835 =>
+               "https://www.701.dev/spec.html#d835-usb-trouble-stops-the"
+               & "-pace-until-it-is-acknowledged-with-a-reason",
             when 645 =>
                "https://www.701.dev/spec.html#d645-the-shared-command-lo"
                & "op-takes-its-indicator-and-transmitter-as-function-value"
@@ -5694,6 +5716,10 @@ package body Landin.Diagnostics.Citations is
             when 713 =>
                "https://www.701.dev/spec.html#d713-a-board-tool-reuses-a"
                & "-probehive-bridge-and-one-it-starts-outlives-it",
+            when 834 =>
+               "https://www.701.dev/spec.html#d834-the-rp2040-s-and-the-"
+               & "arm-pico-2-s-tools-reuse-the-shared-bridge-for-their-con"
+               & "sole",
             when 831 =>
                "https://www.701.dev/spec.html#d831-rp2350-s-register-mod"
                & "ules-are-the-chip-s-and-the-pico-2-s-two-ports-share-the"

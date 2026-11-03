@@ -18,7 +18,7 @@ RP2040 board's port (D593-D596) on this chip's own registers (D654).
 | What | Which | Why |
 |---|---|---|
 | the board | a Raspberry Pi Pico 2 H, its SWD on the 3-pin debug connector, GPIO0 (UART0 TX) to slot 1's UART RX and GPIO1 (UART0 RX) to its TX, powered from its USB port | the RP2350 and its 4 MiB flash, as the description lays them out |
-| a probe | a [probehive](https://github.com/JanHaan/probehive) SWD slot, slot 1 by default, `--slot`, and a checkout of probehive, whose `scripts/dap_bridge.py` serves slot N's UART as TCP port 4461 + N | SWD to flash and read back, and the UART the trace comes over |
+| a probe | a [probehive](https://github.com/JanHaan/probehive) SWD slot, slot 1 by default, `--slot`, and a checkout of probehive, whose `scripts/dap_bridge.py` serves slot N's UART as TCP port 4461 + N; a bridge already listening on the slot's ports is reused and left running, and otherwise the tool starts one for every slot of the probe, `--bridge-slots`, and leaves it running for the next tool | SWD to flash and read back, and the UART the trace comes over |
 | probe-rs | one that reaches the slot as `--probe` names it, `0000:0002:10.42.0.50/1` by default, the CMSIS-DAP UDP transport, with `--chip RP235x` | flashing, verifying and reading memory |
 | the indicator's wire | optionally, GPIO3 wired to one of the probe's GPIO, named with `--indicator-pin`; probehive's `scripts/gpio.py` reads it | the indicator's level on the wire, not only as its pad reads it back |
 | power | the Pico 2's USB port on a hub with per-port power switching, and `uhubctl` with the right to switch it | a power cycle, so the run starts at power-on |
@@ -26,8 +26,8 @@ RP2040 board's port (D593-D596) on this chip's own registers (D654).
 
 The tool switches only `--port` on `--hub`, and only while
 the device with `--guard-serial`, the probe's own Arty A7, is present and not on
-`--cascade`, the hub cascade the boards are on (`7-2` on the maintainer's
-rig), found by its serial wherever it is plugged in: its bitstream is held
+`--cascade`, the hub cascade the boards are on (by default the one `0bda:5411`
+hub whose parent is not one, wherever it is attached, D833), found by its serial wherever it is plugged in: its bitstream is held
 only in SRAM and would be lost with its power, and every switch on the
 cascade re-enumerates the whole of it (D725), as [the RP2040's tool](../rp2040/README.md) does: this
 firmware does not enumerate on USB, so the Pico 2's port shows no device of
@@ -35,8 +35,9 @@ its own while it runs. With `--pico-serial`, the port must also show that
 serial whenever it shows a device, which a Pico 2 does in BOOTSEL. The
 port is switched off and on in one `uhubctl -a cycle`, through
 `/run/wrappers/bin/sg GROUP -c`, `--hub-group`, when the session is not in
-the group that may switch it. The defaults are the maintainer's rig: hub
-`7-2.3.3`, port 2, on the cascade `7-2`.
+the group that may switch it. `--hub` is named
+as `uhubctl -l` names it, or relative to the cascade's root; the defaults
+are the maintainer's rig: hub `.3.3`, port 2.
 
 How the tool switches, paces, waits and flashes is [`../pico2.py`](../pico2.py)'s,
 which [the Hazard3 tool](../rp2350_hazard3/README.md) shares, since both run
@@ -67,13 +68,13 @@ image before the head is read back; `result.json`'s `flashed_as` says which.
 python3 environments/boards/rp2350/board.py \
     --refine compiler/ada/build/nix-x86_64-linux/debug/bin/refine \
     --probehive ~/src/probehive --probe-rs PATH/TO/probe-rs --slot 1 \
-    --hub 7-2.3.3 --port 2 --guard-serial 210319B3E738 \
+    --hub .3.3 --port 2 --guard-serial 210319B3E738 \
     --block-control --bootsel-attach --output NEW_DIRECTORY
 ```
 
 The output holds the image, its build report and every command's log, the
-bridge's log, `uart.bin` (every byte the board sent) and `sent.bin` (every
-byte the host sent), and `result.json`: the image's hash, its block, the
+bridge's log when it started one, `uart.bin` (every byte the board sent) and `sent.bin` (every
+byte the host sent), and `result.json`: the image's hash, its block, whether the bridge was reused, the
 block control's verdict, each verdict, every frame and the commands with
 their status and time. `--record` writes a passed run's record. The linked ELF holds the name of the object refine assembled beside it, so its hash depends on the output's name: a record gives the name as `image_name`, and a reader rebuilding the image to check the hash builds it under that name.
 

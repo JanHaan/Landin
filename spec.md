@@ -23056,6 +23056,7 @@ did not keep.
 
 D832 extends the pace and the wait to every board tool, the RP2040's, the
 Pico 2's and the STM32H753's among them.
+D835 lets the pace be told that trouble it stopped at is understood.
 
 **Pinned by** `scripts/tests/test_board_common.py`'s `RigLock` and `Pace`.
 
@@ -23156,6 +23157,54 @@ needs a tool and rights no other run uses.
 `test_board_rp2350_hazard3.py`'s `Attach` and `Hub`, the RP2040's and
 the STM32H753's `Hub` cases, and `test_board_common.py`'s `Pace` and
 `Hubs`.
+
+### D833 — The board tools find the hub cascade by its hub and name each board's hub relative to it
+
+**The tour said** nothing; every board tool's `--hub` and `--cascade`
+defaults, and each board's README, named the maintainer's rig by the
+paths the kernel gave it on one host port, `7-2.3.3` under `7-2`.
+
+**Chosen:** the rig's hub cascade is found by its hub's identity,
+`common.cascade_root`: the one USB hub `0bda:5411`, the RTS5411's USB2
+side the cascade is built of, whose parent is not one, under any
+controller and on any port; when no hub or several are such a root the
+tool refuses before it runs and asks for `--cascade`. A hub is named
+either as `uhubctl -l` names it or relative to that root, `.3.3`, and every
+tool's defaults are relative, so the Arty guard's cascade and every
+switched hub follow the cascade wherever it is plugged in. An explicit
+`--cascade` or an absolute `--hub` is taken as it is. On 2026-11-03 the
+cascade moved from `7-2`, a front-panel port whose controller kept
+dropping its top hub, to `5-1` on another controller, and every default
+named the old one.
+
+**The alternatives:** the root's path kept in a host file of the rig's
+own, which is one more thing to edit on the next move; and the root
+found by the boards' serials, which the Pico boards' firmware never
+enumerates.
+
+**Pinned by** `scripts/tests/test_board_common.py`'s `Root`.
+
+### D835 — USB trouble stops the pace until it is acknowledged with a reason
+
+**The tour said** nothing; D725's pace stops a run when the kernel logged a
+USB error since the last paced action, and nothing but that action's next
+run cleared it, so trouble a run did not cause, the cascade's hub dropping
+from its host port for an afternoon, stopped every later run until someone
+wrote the pace file by hand.
+
+**Chosen:** `python3 environments/boards/common.py acknowledge REASON`,
+under the rig's lock, records in the pace file that the trouble logged so
+far is understood, with its reason: the next action is spaced from that
+moment as from any other, and only trouble logged after it stops a run. A
+run stopped by the pace names the command in its refusal. Nothing clears the
+trouble on its own.
+
+**The alternatives:** trouble older than some age forgotten, which lets a
+run go into a cascade still failing without anyone having looked; and the
+pace file written by hand, which a newcomer cannot guess and which keeps no
+reason.
+
+**Pinned by** `scripts/tests/test_board_common.py`'s `Pace`.
 
 ### D645 — The shared command loop takes its indicator and transmitter as function values
 
@@ -23704,7 +23753,36 @@ same probe meets as a second client; probe-rs over UDP beside the bridge's
 console, two clients of one slot; and moving the other tools to the shared
 bridge, which their recorded runs would no longer describe.
 
+D834 supersedes the last of these in part: the RP2040's and the Arm Pico
+2's tools reuse the shared bridge too.
+
 **Pinned by** `scripts/tests/test_board_common.py`'s `Bridges` cases.
+
+### D834 — The RP2040's and the Arm Pico 2's tools reuse the shared bridge for their console
+
+**The tour said** nothing; D713 left the RP2040's and the Arm Pico 2's
+tools starting a bridge of their own for each run, on the ports the shared
+bridge already listens on, so either tool failed to start its bridge while
+another board's tool had left the shared one running, and a run had to stop
+that bridge first and start it again after.
+
+**Chosen:** both tools take their console from `common.shared_bridge`, as
+the ESP32-C3's and the Hazard3 tool's do: a bridge listening on both of the
+slot's ports is reused and never stopped, and otherwise one is started for
+every slot of the probe, `--bridge-slots`, and left running; `result.json`
+says which. probe-rs still reaches the slot over UDP, before the console
+opens and after it closes, so the two are never the slot's clients at once,
+as before; the bridge resynchronises a slot with each new connection. The
+RP2040's record is taken again under this rule.
+
+**The alternatives:** stopping a running bridge for the run and starting
+it again after, which is what the run had to do by hand and which drops the
+console of any other tool on the probe; and probe-rs through the bridge's
+TCP port as the Hazard3 tool's, which would change how these tools flash
+and read back for no fault seen in them.
+
+**Pinned by** `scripts/tests/test_board_common.py`'s `Bridges` cases, and
+the RP2040's record, taken through the shared bridge.
 
 ### D831 — RP2350's register modules are the chip's, and the Pico 2's two ports share theirs
 

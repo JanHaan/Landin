@@ -38,8 +38,8 @@ board's tool on another slot finds it (D713). `result.json` says which.
 
 The tool switches only `--port` on `--hub`, and only while
 the device with `--guard-serial`, the probe's own Arty A7, is present and not on
-`--cascade`, the hub cascade the boards are on (`7-2` on the maintainer's
-rig), found by its serial wherever it is plugged in: its bitstream is held
+`--cascade`, the hub cascade the boards are on (by default the one `0bda:5411`
+hub whose parent is not one, wherever it is attached, D833), found by its serial wherever it is plugged in: its bitstream is held
 only in SRAM and would be lost with its power, and every switch on the
 cascade re-enumerates the whole of it (D725), as [the Pico 2's Arm tool](../rp2350/README.md) does. On
 the rig such a cycle coincided with a reset of the whole hub tree above it,
@@ -56,8 +56,8 @@ listing of the hub that meets the tree re-enumerating is asked again until
 waits as long for the hub to list again. How it switches, paces and waits
 is [`../pico2.py`](../pico2.py)'s, which [the Arm tool](../rp2350/README.md)
 shares (D832).
-The defaults are the maintainer's rig: hub `7-2.3.3`, port 2, on the
-cascade `7-2`.
+`--hub` is named as `uhubctl -l` names it, or relative to the cascade's
+root; the defaults are the maintainer's rig: hub `.3.3`, port 2.
 
 ## Which chip probe-rs is told
 
@@ -99,7 +99,7 @@ rig it does not run at present.
 python3 environments/boards/rp2350_hazard3/board.py \
     --refine compiler/ada/build/nix-x86_64-linux/debug/bin/refine \
     --probehive ~/src/probehive --probe-rs PATH/TO/probe-rs --slot 1 \
-    --hub 7-2.3.3 --port 2 --guard-serial 210319B3E738 \
+    --hub .3.3 --port 2 --guard-serial 210319B3E738 \
     --output NEW_DIRECTORY
 ```
 

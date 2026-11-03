@@ -77,6 +77,7 @@ def main():
     parser.add_argument('--uart-port', type=int, default=4461,
                         help="the bridge's slot 0 UART port; slot N's is this plus N")
     args = parser.parse_args()
+    common.place_hubs(parser, args, 'hub')
     esp.required_tools(args)
     chip = C3()
 

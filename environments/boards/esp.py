@@ -564,7 +564,8 @@ def arguments(parser, chip):
     parser.add_argument('--objdump', default=shutil.which('riscv64-elf-objdump')
                         or shutil.which('riscv64-unknown-elf-objdump'))
     parser.add_argument('--output', type=Path, required=True, help='a new directory')
-    parser.add_argument('--hub', default='7-2.3.4', help="the board's hub, as uhubctl -l names it")
+    parser.add_argument('--hub', default='.3.4',
+                        help="the board's hub, as uhubctl -l names it or relative to the cascade")
     parser.add_argument('--guard-port', type=int, default=1, help='a port never switched')
     parser.add_argument('--guard-device', default='1366:0105',
                         help='what the guarded port must show, or the hub is not switched')
@@ -580,8 +581,7 @@ def arguments(parser, chip):
     parser.add_argument('--arty-serial', default='210319B3E738',
                         help="a device that must be present and off the switched cascade, the"
                              " probe's Arty on the maintainer's rig, or nothing is done to the hub")
-    parser.add_argument('--cascade', default='7-2',
-                        help='the hub cascade the boards are on, as sysfs names its root')
+    common.cascade_argument(parser)
     common.pace_arguments(parser)
     parser.add_argument('--recover', action='store_true',
                         help="first reset the chip into its ROM's download mode through its own"

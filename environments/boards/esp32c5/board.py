@@ -99,8 +99,9 @@ def main():
     parser.add_argument('--port', type=int, default=3, help="the board's JTAG port on the hub")
     parser.add_argument('--serial', default='D0:CF:13:E0:87:F0',
                         help="the USB serial the JTAG port must show before it is switched")
-    parser.add_argument('--console-hub', default='7-2.4',
-                        help="the CH340X bridge's hub, as uhubctl -l names it")
+    parser.add_argument('--console-hub', default='.4',
+                        help="the CH340X bridge's hub, as uhubctl -l names it or relative to the"
+                             ' cascade')
     parser.add_argument('--console-port', type=int, default=3,
                         help="the CH340X bridge's port on its hub")
     parser.add_argument('--console-device', default='1a86:7523',
@@ -115,6 +116,7 @@ def main():
     parser.add_argument('--reset-seconds', type=float, default=0.1,
                         help='how long RTS holds EN low for the chip-enable reset')
     args = parser.parse_args()
+    common.place_hubs(parser, args, 'hub', 'console_hub')
     esp.required_tools(args)
     console_location = '%s.%d' % (args.console_hub, args.console_port)
     jtag_location = '%s.%d' % (args.hub, args.port)

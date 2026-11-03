@@ -202,15 +202,15 @@ def await_bootsel(run, args):
 
 def arguments(parser):
     """The options both tools take for the hub, the guard and the pace."""
-    parser.add_argument('--hub', default='7-2.3.3', help="the Pico 2's hub, as uhubctl -l names it")
+    parser.add_argument('--hub', default='.3.3',
+                        help="the Pico 2's hub, as uhubctl -l names it or relative to the cascade")
     parser.add_argument('--port', type=int, default=2, help="the Pico 2's port on it")
     parser.add_argument('--pico-serial', help="the Pico 2's USB serial, which its port must show"
                         " whenever it shows a device; its port's firmware does not enumerate")
     parser.add_argument('--guard-serial', default='210319B3E738',
                         help="a device that must be present and off the switched cascade, the"
                              " probe's Arty on the maintainer's rig, or no port is switched")
-    parser.add_argument('--cascade', default='7-2',
-                        help='the hub cascade whose ports are switched, as sysfs names its root')
+    common.cascade_argument(parser)
     parser.add_argument('--off-seconds', type=float, default=1.0)
     parser.add_argument('--guard-seconds', type=float, default=15.0,
                         help='how long the hub may take to list again, and the guarded device to'

@@ -14,7 +14,7 @@ no hosted runner has the board.
 | What | Which | Why |
 |---|---|---|
 | the board | a Raspberry Pi Pico H, its SWD on the 3-pin debug connector, GPIO0 (UART0 TX) to the probe's UART RX and GPIO1 (UART0 RX) to its TX, powered from its USB port | the RP2040 and its 2 MiB W25Q16JV flash, as the description lays them out |
-| a probe | a [probehive](https://github.com/JanHaan/probehive) SWD slot and a checkout of it, whose `scripts/dap_bridge.py` serves the slot's UART as TCP port 4461 | SWD to flash and read back, and the UART the trace comes over |
+| a probe | a [probehive](https://github.com/JanHaan/probehive) SWD slot, slot 0 by default, `--slot`, and a checkout of it, whose `scripts/dap_bridge.py` serves slot N's UART as TCP port 4461 + N; a bridge already listening on the slot's ports is reused and left running, and otherwise the tool starts one for every slot of the probe, `--bridge-slots`, and leaves it running for the next tool | SWD to flash and read back, and the UART the trace comes over |
 | probe-rs | one that reaches the slot as `--probe` names it: the CMSIS-DAP UDP transport the default `0000:0002:10.42.0.50/0` asks for is a pull request to probe-rs, and upstream's TCP transport reaches a bridge as `0000:0001:HOST:PORT` | flashing, verifying and reading memory |
 | the indicator's wire | optionally, GPIO3 (the Pico's pin 5) wired to one of the probe's GPIO, named with `--indicator-pin`; IO32 on the maintainer's rig. probehive's `scripts/gpio.py` reads it, with the LiteX its `nix develop` carries | the indicator's level on the wire, not only as its pad reads it back |
 | power | the Pico's USB port on a hub with per-port power switching, and `uhubctl` with the right to switch it | a power cycle, so the run starts at power-on |
@@ -26,8 +26,8 @@ runs `uhubctl` through `/run/wrappers/bin/sg GROUP -c` when the session is
 not in that group, as a session started before its user joined it is not.
 The tool switches only `--port` on `--hub`, and only while
 the device with `--guard-serial`, the probe's own Arty A7, is present and not on
-`--cascade`, the hub cascade the boards are on (`7-2` on the maintainer's
-rig), found by its serial wherever it is plugged in: its bitstream is held
+`--cascade`, the hub cascade the boards are on (by default the one `0bda:5411`
+hub whose parent is not one, wherever it is attached, D833), found by its serial wherever it is plugged in: its bitstream is held
 only in SRAM and would be lost with its power, and every switch on the
 cascade re-enumerates the whole of it (D725). The port is switched off and on in one
 `uhubctl -a cycle`: switching it off re-enumerates the hub's inner hubs, and
@@ -40,7 +40,9 @@ by `--spacing` seconds and until the kernel has logged nothing of USB for
 last one, since even a download to the Pico, which enumerates nothing, has
 been followed by the whole cascade disconnecting; and after
 the download and after the cycle the tool waits, up to `--hub-seconds`, for
-the hub to list again (D725, D832).
+the hub to list again (D725, D832). `--hub` is named as `uhubctl -l` names
+it, or relative to the cascade's root; the default is the maintainer's rig:
+hub `.3.3`, port 1.
 
 ## Running it
 
@@ -48,15 +50,15 @@ the hub to list again (D725, D832).
 python3 environments/boards/rp2040/board.py \
     --refine compiler/ada/build/nix-x86_64-linux/debug/bin/refine \
     --probehive ~/src/probehive --probe-rs PATH/TO/probe-rs --probe 0000:0002:10.42.0.50/0 \
-    --hub 7-2.3.3 --port 1 --guard-serial 210319B3E738 \
+    --hub .3.3 --port 1 --guard-serial 210319B3E738 \
     --indicator-pin IO32 \
     --output NEW_DIRECTORY
 ```
 
 The output holds the image, its build report and every command's log, the
-bridge's log, `uart.bin` (every byte the board sent) and `sent.bin` (every
+bridge's log when it started one, `uart.bin` (every byte the board sent) and `sent.bin` (every
 byte the host sent), and `result.json`: the image's and the second stage's
-hashes, the stage's CRC, each verdict, every frame and the commands with
+hashes, the stage's CRC, whether the bridge was reused, each verdict, every frame and the commands with
 their status and time. The run the item recorded is
 [`record.json`](record.json), whose image was built as `board.elf`; it
 predates the record's `image_name`. The linked ELF holds the name of the object refine assembled beside it, so its hash depends on the output's name: a record gives the name as `image_name`, and a reader rebuilding the image to check the hash builds it under that name.
