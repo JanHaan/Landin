@@ -26333,6 +26333,25 @@ package body Landin.Diagnostics.Citations.Texts is
                & "ets, whose every request also compiles `platform/linux`,"
                & " take the debug compiler about fifteen times as long as "
                & "any other, so rv32 joins the part with one of them.",
+            when 740 =>
+               "Chosen: a positive fixture whose `targets:` names one ta"
+               & "rget and whose `args` choose that target with `--target="
+               & "` is that target's, and the host manifest and the build-"
+               & "mode comparison compile it for that target alone, as the"
+               & " harness does: D659 lowers such a fixture there too. It "
+               & "needs no refusal listed for any other target, and the D6"
+               & "58 pairs for the three rv32 fixtures are gone; `assembly"
+               & "-comments-naked`, cortex-m0's, is no longer compiled for"
+               & " the other seven, where its naked routine is gated off. "
+               & "A fixture whose `args` choose a target while its `target"
+               & "s:` names others, as `range-subtypes` does, is still com"
+               & "piled for every target, and a refusal on one is still a "
+               & "fault. `check.py` holds the manifest's `TARGETS` to ever"
+               & "y target `refine targets` describes but the checking-onl"
+               & "y ones, the fixture reader's names to all of them, and `"
+               & "MODE_TARGETS` and `FIRMWARE_TARGETS` to lie within the l"
+               & "ists they are drawn from, reading the compiler's own sel"
+               & "ection table.",
             when 659 =>
                "Chosen: such a fixture is lowered at the target its `arg"
                & "s` name with `--target=`, or else at the first its `targ"

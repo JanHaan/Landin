@@ -340,6 +340,66 @@ class Levels(unittest.TestCase):
                 self.assertEqual(manifest[key], hashlib.sha256(said.encode()).hexdigest())
 
 
+class OwnTarget(unittest.TestCase):
+    """A fixture of one target is compiled for it alone (D740)."""
+
+    def emitted(self, meta):
+        with tempfile.TemporaryDirectory() as tmp:
+            area = Path(tmp)
+            fixture = area / "compiler/tests/fixtures/positive/example"
+            fixture.mkdir(parents=True)
+            (fixture / "fixture.meta").write_text("program: main.ldn\n" + meta)
+            refine = area / "refine"
+            #  Every other target refuses it, as rv32's descriptions are.
+            refine.write_text(
+                "#!" + sys.executable + "\n"
+                "import pathlib, sys\n"
+                "args = sys.argv[1:]\n"
+                "if '--target=rv32' not in args:\n"
+                "    sys.exit(1)\n"
+                "pathlib.Path(args[args.index('-o') + 1]).write_text('asm')\n")
+            refine.chmod(0o755)
+            out = area / "manifest.json"
+            result = subprocess.run(
+                [sys.executable, str(CHECK), "emit", str(refine), str(area), str(out)],
+                capture_output=True, text=True)
+            return result, (json.loads(out.read_text()) if out.exists() else {})
+
+    def test_a_fixture_of_one_target_needs_no_listed_refusals(self):
+        result, manifest = self.emitted("targets: rv32\nargs: --target=rv32\n")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual({key.split("|")[1] for key in manifest}, {"rv32"})
+        self.assertEqual(len(manifest), 2 * 3 * 3)
+
+    def test_args_alone_do_not_make_a_fixture_one_targets(self):
+        #  `range-subtypes` chooses cortex-m0 in its `args` and names seven
+        #  targets: every target compiles it, and a refusal is a fault.
+        result, manifest = self.emitted(
+            "targets: rv32, cortex-m0\nargs: --target=rv32\n")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("unexpected emission result", result.stderr)
+        self.assertEqual(len(manifest), 8 * 2 * 3 * 3)
+
+    def test_the_build_modes_compare_it_on_its_target_alone(self):
+        sys.path.insert(0, str(CHECK.parent))
+        self.addCleanup(sys.path.remove, str(CHECK.parent))
+        import emit_manifest
+        with tempfile.TemporaryDirectory() as tmp:
+            positive = Path(tmp) / "compiler/tests/fixtures/positive"
+            for name, meta in (("shared", ""),
+                               ("own", "targets: linux-arm64\n"
+                                       "args: --target=linux-arm64\n")):
+                (positive / name).mkdir(parents=True)
+                (positive / name / "fixture.meta").write_text(
+                    "program: main.ldn\n" + meta)
+            (Path(tmp) / "compiler/tests/fixtures/runtime").mkdir()
+            entries = emit_manifest.mode_entries(
+                tmp, ("linux-x86-64", "linux-arm64"))
+        self.assertEqual({name: wanted for name, _, _, wanted, _ in entries},
+                         {"positive/shared": ("linux-x86-64", "linux-arm64"),
+                          "positive/own": ("linux-arm64",)})
+
+
 def modes(debug_body, release_body):
     """Run `modes` over a small corpus with two stub compilers."""
     with tempfile.TemporaryDirectory() as tmp:

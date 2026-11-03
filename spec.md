@@ -23637,6 +23637,39 @@ firmware corpus's reach in `BuildModes`, and `Workflows`, which holds each
 host's parts in `determinism.yml` and the gate's `build-modes` parts to
 partitioning the check's targets.
 
+### D740 — A fixture of one target is compiled for it alone, and the manifest's targets are the compiler's
+
+**The discrepancy:** D658 listed by name the refusals of the three
+fixtures whose `args` name rv32, one pair for each other target. Adding
+rv32 meant adding it to `scripts/emit_manifest.py`'s two lists by hand,
+and three rv32-only fixtures written in three streams each failed the host
+manifest on all seven other targets until their pairs were listed; nothing
+short of the gate's `determinism` job said so.
+
+**Chosen:** a positive fixture whose `targets:` names one target and whose
+`args` choose that target with `--target=` is that target's, and the host
+manifest and the build-mode comparison compile it for that target alone,
+as the harness does: D659 lowers such a fixture there too. It needs no
+refusal listed for any other target, and the D658 pairs for the three rv32
+fixtures are gone; `assembly-comments-naked`, cortex-m0's, is no longer
+compiled for the other seven, where its naked routine is gated off. A fixture whose `args` choose a target while its
+`targets:` names others, as `range-subtypes` does, is still compiled for
+every target, and a refusal on one is still a fault. `check.py` holds the
+manifest's `TARGETS` to every target `refine targets` describes but the
+checking-only ones, the fixture reader's names to all of them, and
+`MODE_TARGETS` and `FIRMWARE_TARGETS` to lie within the lists they are
+drawn from, reading the compiler's own selection table.
+
+**The alternatives:** permitting a refusal wherever `args` choose
+another target, which would let `range-subtypes` start refusing on every
+target but cortex-m0 without a fault; listing each pair as
+D658 did, which is the step that was missed; and asking the compiler at
+emission time, which the stub compilers the manifest's controls run
+cannot answer.
+
+**Pinned by** `scripts/tests/test_host_determinism.py`'s `OwnTarget`,
+and `scripts/tests/test_check_controls.py`'s `TargetLists`.
+
 ### D659 — The lowering record lowers a fixture where the harness compiles it
 
 **The tour said** nothing; `compiler/tests/lowering.ir` lowered every

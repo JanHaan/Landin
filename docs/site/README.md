@@ -18,8 +18,14 @@ The checker also requires that each item follows its dependencies.
 | kind | sources | how it is read |
 |---|---|---|
 | the tour | `tour.md` | as a literate document: every `[NNNN]` construct becomes a block holding its prose and the code that follows, and every citation becomes a link to the construct it names |
-| the prototypes | `prototype-{1..4}-*.md` | as listings, because in those the code is the argument, with the closing findings pulled out as entries |
+| the prototypes | `prototype-{1..5}-*.md` | as listings, because in those the code is the argument, with the closing findings pulled out as entries |
 | the guides | the Markdown documents named in `GUIDES`, including `examples.md` | as ordinary prose, with `[NNNN]` citations linked into the tour and links between documents rewritten to the pages they name |
+
+Where a page sits, in the sidebar and on the front page's shelf, is written
+once, in the renderer's `NAV_GROUPS`. `check.py` holds that table to naming
+every rendered document exactly once, and the publishing workflow's paths to
+including every rendered source, so a new document is refused before the
+site is built rather than when it is.
 
 Nothing here is a parser, and the highlighting is not written here. It comes
 from [`highlight/landin_highlight.py`](../../highlight/README.md), the one

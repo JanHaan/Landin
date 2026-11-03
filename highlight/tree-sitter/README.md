@@ -51,8 +51,9 @@ retain the repository's dual license.
 by default), and load that, compiling again only when a source file is newer
 than the library. A grammar checked out, unpacked or copied with older
 timestamps therefore runs whatever grammar was compiled there last, without a
-word. `--rebuild` does not settle it: with the pinned 0.26.9 CLI and no working
-C compiler, `parse --rebuild` keeps the cached library and still exits 0. Give
+word. `--rebuild` does not settle it: with the pinned 0.26.9 CLI and no C
+compiler on `PATH`, `parse --rebuild` keeps the cached library and still exits
+0, though a compiler named by `CC` that cannot run is an error. Give
 each run a library directory of its own, which the CLI must compile into and
 which fails when it cannot:
 
@@ -60,7 +61,8 @@ which fails when it cannot:
 TREE_SITTER_LIBDIR="$(mktemp -d)" tree-sitter parse ../tests/structural.ldn
 ```
 
-`../test.sh` does the same with a fresh `XDG_CACHE_HOME`, so its verdicts are
-always about the parser in this checkout. Run the CLI from this directory: it
+`../test.sh` does the same with a fresh `XDG_CACHE_HOME`, and refuses when
+the CLI left no library there, so its verdicts are always about the parser in
+this checkout. Run the CLI from this directory: it
 finds the grammar in the current directory, since no parser directories are
 configured.

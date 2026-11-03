@@ -2389,6 +2389,9 @@ package body Landin.Diagnostics.Citations is
             when 658 =>
                "rv32's bytes are held to every host and to both compiler"
                & " builds",
+            when 740 =>
+               "A fixture of one target is compiled for it alone, and th"
+               & "e manifest's targets are the compiler's",
             when 659 =>
                "The lowering record lowers a fixture where the harness c"
                & "ompiles it",
@@ -3748,6 +3751,8 @@ package body Landin.Diagnostics.Citations is
             when 657 =>
                "Decisions: The toolchain, C and the machine",
             when 658 =>
+               "Decisions: The toolchain, C and the machine",
+            when 740 =>
                "Decisions: The toolchain, C and the machine",
             when 659 =>
                "Decisions: The toolchain, C and the machine",
@@ -5478,6 +5483,10 @@ package body Landin.Diagnostics.Citations is
             when 658 =>
                "https://www.701.dev/spec.html#d658-rv32-s-bytes-are-held"
                & "-to-every-host-and-to-both-compiler-builds",
+            when 740 =>
+               "https://www.701.dev/spec.html#d740-a-fixture-of-one-targ"
+               & "et-is-compiled-for-it-alone-and-the-manifest-s-targets-a"
+               & "re-the-compiler-s",
             when 659 =>
                "https://www.701.dev/spec.html#d659-the-lowering-record-l"
                & "owers-a-fixture-where-the-harness-compiles-it",

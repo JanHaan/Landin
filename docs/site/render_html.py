@@ -60,7 +60,7 @@ OG_IMAGE = "og.png"
 
 DOCS = [
     dict(key="spec", banner=True, src="spec.md", out="spec.html", kind="document",
-         nav="the specification", group="the specification",
+         nav="the specification",
          blurb="The normative reference, not for reading through: look up "
                "the exact rule a tour entry or a compiler message names."),
     #  The tour's opening three paragraphs are its lead, its first
@@ -68,30 +68,30 @@ DOCS = [
     dict(key="tour", src="tour.md", out="tour.html", kind="document",
          lead_paras=3, wrap_opening=True,
          reference_after="What you can write now",
-         nav="the tour", group="the specification",
+         nav="the tour",
          blurb="The language explained, construct by numbered construct. "
                "It teaches; the specification decides."),
-    dict(key="p1", banner=True, group="design stress tests", src="prototype-1-driver.md", out="prototype-1.html", kind="document",
+    dict(key="p1", banner=True, src="prototype-1-driver.md", out="prototype-1.html", kind="document",
          nav="prototype 1 — driver",
          blurb="Not learning material: a Cortex-M driver sketch, written "
                "before the compiler to find where the specification was "
                "silent. Its findings are the point."),
-    dict(key="p2", banner=True, group="design stress tests", src="prototype-2-parser.md", out="prototype-2.html", kind="document",
+    dict(key="p2", banner=True, src="prototype-2-parser.md", out="prototype-2.html", kind="document",
          nav="prototype 2 — parser",
          blurb="Not learning material: a recovering parser sketch, written "
                "before the compiler to find where the specification was "
                "silent. Its findings are the point."),
-    dict(key="p3", banner=True, group="design stress tests", src="prototype-3-containers.md", out="prototype-3.html", kind="document",
+    dict(key="p3", banner=True, src="prototype-3-containers.md", out="prototype-3.html", kind="document",
          nav="prototype 3 — containers",
          blurb="Not learning material: a generic container library sketch, "
                "written before the compiler to find where the specification "
                "was silent. Its findings are the point."),
-    dict(key="p4", banner=True, group="design stress tests", src="prototype-4-app.md", out="prototype-4.html", kind="document",
+    dict(key="p4", banner=True, src="prototype-4-app.md", out="prototype-4.html", kind="document",
          nav="prototype 4 — application",
          blurb="Not learning material: a hosted application sketch, written "
                "before the compiler to find where the specification was "
                "silent. Its findings are the point."),
-    dict(key="p5", banner=True, group="design stress tests", src="prototype-5-server.md", out="prototype-5.html", kind="document",
+    dict(key="p5", banner=True, src="prototype-5-server.md", out="prototype-5.html", kind="document",
          nav="prototype 5 — server",
          blurb="Not learning material: a server with two requests in flight "
                "and its single-core counterpart, written before fibres to "
@@ -1336,116 +1336,115 @@ def render_sample(lines, hl, links):
 
 GUIDES = [
     dict(key="documents", src="docs/documents.md", out="documents.html",
-         nav="how the documents are arranged", group="the language",
+         nav="how the documents are arranged",
          blurb="Where each kind of rule lives in the specification and the "
                "tour, where a new one goes, and what the arrangement is "
                "and is not evidence of."),
     dict(key="examples", src="examples.md", out="examples.html",
-         nav="running examples", group="the language",
+         nav="running examples",
          blurb="Complete programs to copy and run, each printing what it "
                "computes: everyday tools, printing and failures, the classic "
                "exercises and the Benchmark Game ports."),
     dict(key="from-c", src="docs/from-c.md", out="from-c.html",
-         nav="for C programmers", group="the language", captions=True,
+         nav="for C programmers", captions=True,
          nest=True,
          blurb="Each habit a C programmer brings, from `#include` to "
                "`exit`, in its Landin form, and the habits with no answer "
                "yet."),
     dict(key="readme", src="README.md", out="readme.html",
-         nav="the project", group="the project",
+         nav="the project",
          blurb="What Landin is, what is in the repository, and how to build "
                "the part of it that exists."),
     dict(key="capabilities", src="docs/capabilities.md",
          out="capabilities.html",
-         nav="what refine does today", group="the project",
+         nav="what refine does today",
          blurb="The inventory of the compiler, its library and its "
                "tooling: every target, language form, library service, "
                "command and debugger the gate holds it to."),
     dict(key="roadmap", src="ROADMAP.md", out="roadmap.html",
-         nav="the roadmap", group="the project",
+         nav="the roadmap",
          blurb="The sole authority for open work: phases, dependencies, "
                "gates, and the register of work waiting for a trigger."),
     dict(key="handoff", src="handoff.md", out="handoff.html",
-         nav="the design, in one page", group="the project",
+         nav="the design, in one page",
          blurb="The design and the principles behind it, and which "
                "decisions must not be quietly reversed."),
     dict(key="compiler", src="compiler/ada/README.md", out="compiler.html",
-         nav="the bootstrap compiler", group="the implementation",
+         nav="the bootstrap compiler",
          blurb="The Ada 2022 chassis: what each package owns, what it may "
                "not own, and what is deliberately absent."),
     dict(key="core", src="core/README.md", out="core.html",
-         nav="the core modules", group="the implementation",
+         nav="the core modules",
          blurb="Explicit allocator capabilities, collections and the "
                "constrained CPU library, with their module boundaries."),
     dict(key="devices", src="devices/README.md", out="devices.html",
-         nav="generated device fixtures", group="the implementation",
+         nav="generated device fixtures",
          blurb="Pinned vendor sources, deterministic Landin modules and "
                "independent device-consumer evidence."),
     dict(key="driver", src="compiler/tests/driver/DERIVATION.md", out="driver.html",
-         nav="the derived driver", group="the implementation",
+         nav="the derived driver",
          blurb="Prototype 1's executable application, public DMA contract, "
                "device adaptations and independent execution evidence."),
     dict(key="diagnostics", src="docs/diagnostics.md",
          out="diagnostics.html",
-         nav="what each diagnostic means", group="the implementation",
+         nav="what each diagnostic means",
          blurb="Every diagnostic code: the rule it enforces, the paragraph "
                "that states it, and what to change. What `refine explain` "
                "prints."),
     dict(key="format", src="docs/format.md", out="format.html",
-         nav="how a source is laid out", group="the implementation",
+         nav="how a source is laid out",
          blurb="The one layout `refine fmt` gives every source: each rule "
                "with a program as written and as formatted."),
     dict(key="server", src="docs/server.md", out="server.html",
-         nav="what the language server answers", group="the implementation",
+         nav="what the language server answers",
          blurb="`refine lsp`: where a file belongs, what each request is "
                "answered with, and how far it reads past a syntax error."),
     dict(key="ir", src="docs/ir.md", out="ir.html",
-         nav="the intermediate representation", group="the implementation",
+         nav="the intermediate representation",
          blurb="How checked source becomes verified, target-neutral IR, "
                "and why it takes this form. A derived implementation guide."),
     dict(key="targets", src="docs/targets.md", out="targets.html",
-         nav="target contracts", group="the implementation",
+         nav="target contracts",
          blurb="Target descriptions, ABI capabilities, symbol spelling "
                "and backend boundaries."),
     dict(key="toolchain", src="compiler/ada/TOOLCHAIN.md", out="toolchain.html",
-         nav="the pinned toolchain", group="the implementation",
+         nav="the pinned toolchain",
          blurb="One compiler, recorded exactly, with the warning policy and "
                "the checksums that verify it."),
     dict(key="environments", src="docs/environments.md",
          out="environments.html",
-         nav="the environments", group="the implementation",
+         nav="the environments",
          blurb="Which machine produces which kind of evidence, and what "
                "runs where now that the native acceptance is retired."),
     dict(key="cortex-m", src="environments/cortex-m/README.md",
-         out="cortex-m.html", nav="Cortex-M execution profile", group="the implementation",
+         out="cortex-m.html", nav="Cortex-M execution profile",
          blurb="Pinned QEMU CPU probes and a deterministic synthetic peripheral lane, "
                "with executable evidence and explicit model limits."),
     dict(key="native-ci", src="environments/native-ci/README.md",
          out="native-ci.html", nav="native acceptance, retired",
-         group="the implementation",
          blurb="The exact-revision acceptance that approved every revision "
                "through 0.2.0, kept as the record of how it worked."),
     dict(key="process", src="docs/process.md", out="process.html",
-         nav="the validation workflow", group="the implementation",
+         nav="the validation workflow",
          blurb="The edit, test and push loop that runs now, and the "
                "retired acceptance scopes and what they cost."),
     dict(key="editors", src="highlight/README.md", out="editors.html",
-         nav="editor and IDE support", group="the implementation",
+         nav="editor and IDE support",
          blurb="Installable Landin highlighting for Zed, VS Code, Neovim, "
                "Vim, Emacs, Helix and the other major editor families, "
                "and the language server each of them starts."),
     dict(key="fixtures", src="compiler/tests/README.md", out="fixtures.html",
-         nav="the fixtures", group="the implementation",
+         nav="the fixtures",
          blurb="The test format that has to outlive the implementation "
                "currently checking it."),
     dict(key="registers", src="compiler/tests/registers.md",
          out="registers.html",
-         nav="the evidence registers", group="the implementation",
+         nav="the evidence registers",
          blurb="Every construct's state, targets and owner, and every "
                "prototype derivation, held to the corpus by check.py."),
     dict(key="harness", src="compiler/tests/harness-cases/README.md",
          out="harness-cases.html",
-         nav="the malformed cases", group="the implementation",
+         nav="the malformed cases",
          blurb="Trees that exist to be rejected, and the fault each one "
                "carries."),
 ]
@@ -2336,7 +2335,12 @@ def render_guide(text, links, targets, hl, captions=False, lead_paras=1,
 #  the documents are grouped by who they are for, numbered so a group can
 #  be named in conversation, and only the groups that matter to the page
 #  being read start open.  The front page's shelf uses the same table, so
-#  the two cannot disagree about where a document lives.
+#  the two cannot disagree about where a document lives.  This is the only
+#  place a document's group is written: each entry of DOCS and GUIDES once
+#  carried a `group=` of its own that nothing read, and half of them had
+#  drifted from what the pages showed.  check.py holds the table to name
+#  every document exactly once, so a new one is refused before this
+#  renderer runs.
 NAV_GROUPS = [
     ("the language", ["tour", "spec", "examples", "from-c", "library",
                       "documents"]),

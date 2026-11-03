@@ -12,6 +12,7 @@ a check reads content-addressed inputs the real files are copied and then
 broken in one place, because a recorded sha256 cannot be invented.
 """
 import json
+import os
 import re
 import subprocess
 import sys
@@ -405,6 +406,54 @@ class Citations(unittest.TestCase):
         self.assertEqual(self.cited("# Tour\n\nprose only\n"), [])
 
 
+class SiteDocuments(unittest.TestCase):
+    """Every rendered page has a group, a publishing path and, for a
+    prototype, a page at all, before the renderer runs."""
+
+    WORKFLOW = ".github/workflows/pages.yml"
+
+    def setUp(self):
+        #  The renderer is read from the checkout, whatever tree a control
+        #  writes, so that only the copied workflow differs.
+        sys.path.insert(0, str(Path(checker.ROOT)))
+        from docs.site import render_html
+        self.renderer = render_html
+
+    def said(self, workflow=None):
+        from check_controls import tree
+        source = (Path(checker.ROOT) / self.WORKFLOW).read_text()
+        with tree(copied=["docs/site"], written={
+                self.WORKFLOW: workflow(source) if workflow else source}):
+            return [why for _, _, why in checker.check_site_documents(True)]
+
+    def test_the_real_site_passes(self):
+        self.assertEqual(self.said(), [])
+
+    def test_a_document_no_group_names_is_reported(self):
+        groups = [(name, [key for key in keys if key != "p5"])
+                  for name, keys in self.renderer.NAV_GROUPS]
+        with mock.patch.object(self.renderer, "NAV_GROUPS", groups):
+            said = self.said()
+        self.assertTrue(any("NAV_GROUPS and the documents differ: p5" in why
+                            for why in said), said)
+
+    def test_a_prototype_without_a_page_is_reported(self):
+        documents = [document for document in self.renderer.DOCS
+                     if document["key"] != "p5"]
+        groups = [(name, [key for key in keys if key != "p5"])
+                  for name, keys in self.renderer.NAV_GROUPS]
+        with mock.patch.object(self.renderer, "DOCS", documents), \
+                mock.patch.object(self.renderer, "NAV_GROUPS", groups):
+            said = self.said()
+        self.assertEqual(said, ["renders no page for prototype-5-server.md"])
+
+    def test_a_rendered_source_the_workflow_omits_is_reported(self):
+        said = self.said(lambda text: text.replace(
+            "      - 'docs/from-c.md'\n", ""))
+        self.assertEqual(said, ["publishes the site on no change to"
+                                " docs/from-c.md, which the site renders"])
+
+
 QUALITY = ["compiler/tests/quality", "scripts/quality.sh",
            "compiler/ada/src/base/landin-optimization.ads",
            "compiler/ada/tests/src/landin-tests-fixture_execution_suite.adb",
@@ -708,6 +757,29 @@ class CodeRules(unittest.TestCase):
             path.write_text("# example\n\n" + program + shared + shared)
             self.assertTrue(any("'value' declared 2 times" in why
                                 for _, why in checker.check(path)))
+
+    def test_a_single_file_gets_the_rules_the_full_run_gives_it(self):
+        #  docs/from-c.md's blocks are files the test program compiles, and
+        #  one names a parameter `at`, which only the full language
+        #  reserves.  The full run never reads that page under these rules,
+        #  so naming it alone must not either; a language file named alone
+        #  still gets them.
+        import contextlib
+        import io
+        here = Path.cwd()
+        try:
+            for named, verdict, status in (
+                    ("docs/from-c.md", "left to the full run", 0),
+                    ("prototype-2-parser.md", "clean", 0)):
+                with self.subTest(named=named):
+                    printed = io.StringIO()
+                    with contextlib.redirect_stdout(printed):
+                        said = checker.main(["check.py", named])
+                    self.assertEqual(said, status, printed.getvalue())
+                    self.assertIn(verdict, printed.getvalue())
+                    self.assertNotIn("keyword", printed.getvalue())
+        finally:
+            os.chdir(here)
 
     def test_numbered_code_keeps_source_positions(self):
         problems = checker.check_numbered_code(
@@ -1520,6 +1592,43 @@ class RoadmapStructure(unittest.TestCase):
                                    "| %s | Competitive" % MEASURED))
         self.assertTrue(any("registered twice" in why for why in said))
 
+    def test_a_citation_of_a_record_that_never_was_is_reported(self):
+        #  Past every record the register has had, so it names nothing.
+        invented = "SR-%d" % (1 + max(int(n) for n in re.findall(
+            r"SR-(\d+)", real_roadmap())))
+        said = roadmap_faults(once("What waits for a trigger.",
+                                   "What waits for a trigger (%s)." % invented))
+        self.assertTrue(any("%s is cited and is no register record" % invented
+                            in why for why in said))
+        #  Quoted in a code span, as a finding spells what it met, it is not
+        #  a citation.
+        said = roadmap_faults(once("What waits for a trigger.",
+                                   "What waits for a trigger (`%s`)."
+                                   % invented))
+        self.assertFalse(any(invented in why for why in said))
+
+    def test_a_record_that_left_is_defined_only_by_the_list(self):
+        listed = re.search(r"^%s(\S+?)," % re.escape(checker.REGISTER_LEFT),
+                           real_roadmap(), re.M).group(1)
+        said = roadmap_faults(once(checker.REGISTER_LEFT + listed + ", ",
+                                   checker.REGISTER_LEFT))
+        self.assertTrue(any("%s is cited and is no register record" % listed
+                            in why for why in said))
+
+    def test_a_record_listed_as_left_and_still_a_row_is_reported(self):
+        said = roadmap_faults(once(checker.REGISTER_LEFT,
+                                   checker.REGISTER_LEFT + MEASURED + ", "))
+        self.assertTrue(any("%s is listed as having left the register and is"
+                            " still its row" % MEASURED in why
+                            for why in said))
+
+    def test_a_merged_record_is_defined_by_the_row_it_joined(self):
+        joined = re.search(r"Merged: (R730-\d\d|SR-\d+)",
+                           real_roadmap()).group(1)
+        said = roadmap_faults(once("Merged: " + joined, "Beside " + joined))
+        self.assertTrue(any("%s is cited and is no register record" % joined
+                            in why for why in said))
+
     def test_a_record_scheduled_on_no_item_is_reported(self):
         said = roadmap_faults(once("| scheduled " + SCHEDULED + " |",
                                    "| scheduled %s |" % CLOSED))
@@ -1797,6 +1906,46 @@ class DiscussionTargets(unittest.TestCase):
             said = [why for _, _, why
                     in checker.check_discussion_targets(True)]
         self.assertTrue(any("held to nothing" in why for why in said))
+
+
+class TargetLists(unittest.TestCase):
+    """The host manifest's and the fixture reader's targets are the
+    compiler's."""
+
+    INPUTS = [checker.TARGET_SELECTION, checker.EMIT_MANIFEST]
+
+    def broken(self, path, old, new):
+        from check_controls import tree
+        with tree(copied=self.INPUTS) as root:
+            target = root / path
+            text = target.read_text()
+            self.assertIn(old, text)
+            target.write_text(text.replace(old, new, 1))
+            return [why for _, _, why in checker.check_target_lists(True)]
+
+    def test_the_real_lists_agree(self):
+        self.assertEqual(
+            faults(checker.check_target_lists, copied=self.INPUTS), [])
+
+    def test_a_newly_described_target_is_reported_in_every_list(self):
+        said = self.broken(checker.TARGET_SELECTION,
+                           'when 8 => "rv32"', 'when 8 => "rv32e"')
+        self.assertEqual(len(said), 2, said)
+        self.assertTrue(all("the compiler describes" in why and "rv32e" in why
+                            for why in said))
+
+    def test_a_target_the_manifest_leaves_out_is_reported(self):
+        said = self.broken(checker.EMIT_MANIFEST, ', "linux-rv64", "rv32")',
+                           ', "linux-rv64")')
+        self.assertTrue(any(why.startswith("TARGETS names") for why in said),
+                        said)
+
+    def test_a_mode_target_the_manifest_does_not_emit_is_reported(self):
+        said = self.broken(checker.EMIT_MANIFEST,
+                           'MODE_TARGETS = ("linux-x86-64",',
+                           'MODE_TARGETS = ("linux-sparc64",')
+        self.assertEqual(said, ["MODE_TARGETS names linux-sparc64, which is"
+                                " not among the targets it is drawn from"])
 
 
 class CatalogueLabels(unittest.TestCase):

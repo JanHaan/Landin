@@ -106,6 +106,19 @@ if test -x "$tree_cli"; then
         fi
         "$tree_cli" generate
         "$tree_cli" test
+        #  The cache is empty, so the parser the CLI ran is one it compiled
+        #  from this checkout just now, or there is none.  The pinned CLI's
+        #  `--rebuild` keeps a cached parser and exits 0 when it finds no C
+        #  compiler, so nothing here passes it; this holds the CLI to having
+        #  built the library rather than trusting how it exited.
+        set -- "$XDG_CACHE_HOME"/tree-sitter/lib/landin.*
+        if ! test -f "$1"; then
+            echo "$0: tree-sitter ran no parser compiled from this checkout" >&2
+            echo "  (nothing in $XDG_CACHE_HOME/tree-sitter/lib); it compiles" >&2
+            echo "  src/parser.c and src/scanner.c with \$CC or the C compiler" >&2
+            echo "  on PATH, so one must work: see highlight/tree-sitter/README.md" >&2
+            exit 1
+        fi
         "$tree_cli" parse --quiet \
           "$root/highlight/tests/structural.ldn"
         if ! "$tree_cli" highlight --check \

@@ -8,7 +8,7 @@ are tedious to re-check by hand after every edit. It resolves files next
 to itself, so it works from anywhere.
 
     python3 check.py            # all files
-    python3 check.py FILE...    # only these
+    python3 check.py FILE...    # these, if they are language files or ROADMAP.md
 """
 import collections
 from functools import lru_cache
@@ -69,11 +69,28 @@ def absent(paths):
             for f in paths if not os.path.exists(f)]
 
 
-LANGUAGE_FILES = [SPEC_NAME, TOUR_NAME, "prototype-1-driver.md",
-                  "prototype-2-parser.md",
-                  "prototype-3-containers.md",
-                  "prototype-4-app.md",
-                  "prototype-5-server.md"]
+#  Every prototype, by its findings' letter.  This table is where a
+#  prototype is registered, and everything in this file that needs the
+#  prototypes reads it.  Outside this file a new prototype also needs, and
+#  check.py holds each of these to the table: an entry in
+#  docs/site/render_html.py's DOCS, its key in NAV_GROUPS and its letter in
+#  FINDING_LETTERS (check_site_documents, check_finding_letters); a path in
+#  .github/workflows/pages.yml (check_site_documents); a `Current with
+#  specification` line (check_specification_version).  By hand, and held
+#  by nothing: the derivation register in compiler/tests/registers.md
+#  names a prototype by the number this table gives, its target
+#  applicability register has a scope for prototypes 1 to 4 only, which
+#  `wanted_scopes` below transcribes, and AGENTS.md's prototype coverage
+#  describes each in prose.
+PROTOTYPE_FINDINGS = {
+    "X": "prototype-1-driver.md",
+    "Y": "prototype-2-parser.md",
+    "Z": "prototype-3-containers.md",
+    "W": "prototype-4-app.md",
+    "V": "prototype-5-server.md",
+}
+PROTOTYPE_FILES = sorted(PROTOTYPE_FINDINGS.values())
+LANGUAGE_FILES = [SPEC_NAME, TOUR_NAME] + PROTOTYPE_FILES
 ROADMAP = "ROADMAP.md"
 #  The evidence registers: what the compiler's evidence is, as opposed to
 #  what is left to do.  Four tables, read here and generated into matrices.
@@ -276,13 +293,11 @@ REGISTER_STATUS = re.compile(
 ROADMAP_CITATION = re.compile(
     r"(?<![A-Za-z0-9_.])(R\d+\.\d+|R551-\d\d|R730-\d\d|SR-\d{2,})"
     r"(?![A-Za-z0-9_])")
-PROTOTYPE_FINDINGS = {
-    "X": "prototype-1-driver.md",
-    "Y": "prototype-2-parser.md",
-    "Z": "prototype-3-containers.md",
-    "W": "prototype-4-app.md",
-    "V": "prototype-5-server.md",
-}
+#  The register's own identities among them, which ROADMAP.md must define.
+REGISTER_CITATION = re.compile(
+    r"(?<![A-Za-z0-9_.])(R551-\d\d|R730-\d\d|SR-\d{2,})(?![A-Za-z0-9_])")
+#  The paragraph naming every record that has left the register's table.
+REGISTER_LEFT = "Records that have left the register: "
 #  The finding letters as a regular-expression class.  Every reader of a
 #  finding citation uses this, and the site renderer's own copy is held to
 #  it, so a new prototype is one entry above rather than a letter added
@@ -423,7 +438,7 @@ def check(path):
     all_lines = text.split("\n")
     out = []
     basename = os.path.basename(path)
-    if basename == "tour.md" or re.fullmatch(r"prototype-[1-5]-.+\.md", basename):
+    if basename == TOUR_NAME or basename in PROTOTYPE_FILES:
         out += live_example_tokens(text)
 
     #  A fence says what its block is; one that says nothing is a fault.
@@ -2103,6 +2118,57 @@ def register_problems(text, statuses):
                                 % (record, item)))
     for family in sorted(families - set(owned)):
         out.append((1, "family %s owns no open record" % family))
+    return out + register_citation_problems(lines, rows, seen)
+
+
+def register_citation_problems(lines, rows, defined):
+    """Every register record ROADMAP.md cites is one the register defines.
+
+    One item's closing paragraph cited a record that never existed, and
+    every check passed; as the register grew past its number, the citation could come to
+    name an unrelated row.  A record is defined by its row, retired or not;
+    by the row it was merged into, which names it after `Merged:`; or, once
+    its row has left the table, by the list of records that have left, since
+    the item that closed it goes on citing it.  An identity in a code span is
+    quoted rather than cited: a finding about a citation spells the one it
+    met.
+    """
+    out = []
+    merged = set()
+    for _, row in rows:
+        for cell in row.values():
+            if "Merged:" in cell:
+                merged.update(REGISTER_CITATION.findall(
+                    cell.split("Merged:", 1)[1]))
+    left = {}
+    starts = [n for n, line in enumerate(lines)
+              if line.startswith(REGISTER_LEFT)]
+    if len(starts) != 1:
+        return [(1, "expected one paragraph beginning %r, found %d"
+                 % (REGISTER_LEFT.strip(), len(starts)))]
+    at = starts[0]
+    while at < len(lines) and lines[at].strip():
+        for record in REGISTER_CITATION.findall(lines[at]):
+            if record in left:
+                out.append((at + 1, "%s is listed twice as having left the"
+                            " register" % record))
+            elif record in defined:
+                out.append((at + 1, "%s is listed as having left the register"
+                            " and is still its row at %d"
+                            % (record, defined[record])))
+            left.setdefault(record, at + 1)
+        at += 1
+    for n, line in enumerate(lines, 1):
+        for found in REGISTER_CITATION.finditer(
+                re.sub(r"`[^`]*`", "", line)):
+            record = found.group(1)
+            if record not in defined and record not in merged \
+                    and record not in left:
+                out.append((n, "%s is cited and is no register record: no"
+                            " row, no `Merged:` name and not among the"
+                            " records that have left the register; list it"
+                            " there only if its row has left the table"
+                            % record))
     return out
 
 
@@ -2469,9 +2535,7 @@ def check_specification_version(full_run):
          re.compile(r"Kept current at specification \*\*([0-9][0-9.]*)\*\*")),
         ("tour.md", re.compile(r"^Version ([0-9][0-9.]*) \u2014", re.M)),
     ] + [(name, re.compile(r"^Current with specification ([0-9][0-9.]*)\.", re.M))
-         for name in ("prototype-1-driver.md", "prototype-2-parser.md",
-                      "prototype-3-containers.md", "prototype-4-app.md",
-                      "prototype-5-server.md")]
+         for name in PROTOTYPE_FILES]
     out = absent([readme] + [path for path, _ in places])
     if out:
         return out
@@ -2517,6 +2581,48 @@ def check_finding_letters(full_run):
         return [(path, line, "links findings %s; check.py's prototypes have %s"
                  % (found.group(1), FINDING_LETTERS))]
     return []
+
+
+def check_site_documents(full_run):
+    """Every page the site renders has a place in its navigation and a path
+    that publishes it, and every prototype is one of them.
+
+    The renderer refused a document missing from NAV_GROUPS only when it
+    ran, after this file had passed, and pages.yml's paths, which decide
+    whether an edit republishes the site, were kept in step by hand: two
+    rendered documents were missing from them.
+    """
+    if not full_run:
+        return []
+    renderer = "docs/site/render_html.py"
+    workflow = ".github/workflows/pages.yml"
+    out = absent([os.path.join(ROOT, renderer), os.path.join(ROOT, workflow)])
+    if out:
+        return out
+    sys.path.insert(0, ROOT)
+    from docs.site import render_html
+    documents = render_html.DOCS + render_html.GUIDES
+    try:
+        render_html.nav_groups(documents)
+    except SystemExit as refusal:
+        out.append((renderer, 1, str(refusal)))
+    sources = [document["src"] for document in documents]
+    for prototype in PROTOTYPE_FILES:
+        if prototype not in sources:
+            out.append((renderer, 1, "renders no page for %s" % prototype))
+    text = io.open(os.path.join(ROOT, workflow), encoding="utf-8").read()
+    found = re.search(r"^    paths:\n((?:      - '[^']+'\n)+)", text, re.M)
+    if not found:
+        return out + [(workflow, 1, "has no push paths where"
+                       " check_site_documents looks")]
+    line = text.count("\n", 0, found.start()) + 1
+    paths = re.findall(r"- '([^']+)'", found.group(1))
+    import fnmatch
+    for source in sources:
+        if not any(fnmatch.fnmatchcase(source, path) for path in paths):
+            out.append((workflow, line, "publishes the site on no change to"
+                        " %s, which the site renders" % source))
+    return out
 
 
 def check_pinned_toolchain(full_run):
@@ -7589,6 +7695,88 @@ CHECKING_ONLY_TARGETS = ("synthetic-32",)
 TARGET_SHAPED = re.compile(r"^[a-z]+(?:-[a-z0-9]+)+$")
 
 
+def described_targets():
+    """(every target the compiler describes, in `refine targets` order,
+    problems).
+
+    The selection package's name table is the one `refine --target=`,
+    `refine targets` and the language server all read, so every list of
+    targets kept outside the compiler is held to it through this reader.
+    """
+    names = os.path.join(ROOT, TARGET_SELECTION)
+    missing = absent([names])
+    if missing:
+        return [], missing
+    with io.open(names, encoding="utf-8") as stream:
+        table = stream.read()
+    described = re.findall(r'when\s+\d+\s*=>\s*"([a-z0-9-]+)"', table)
+    if not described:
+        return [], [(TARGET_SELECTION, 1,
+                     "no described target name was found in Described_Name")]
+    return described, []
+
+
+EMIT_MANIFEST = "scripts/emit_manifest.py"
+
+
+def check_target_lists(full_run):
+    """The Python lists of targets name the targets the compiler describes.
+
+    A target added to the compiler was in neither of the host manifest's
+    lists until someone added it, and nothing short of the gate's
+    determinism job said so.  The fixture reader's names are every
+    described target; the manifest's are every one with a backend, which
+    is every described target but the checking-only ones; the build-mode
+    comparison's and the firmware corpus's are among them.
+    """
+    if not full_run:
+        return []
+    described, out = described_targets()
+    if out:
+        return out
+    manifest = os.path.join(ROOT, EMIT_MANIFEST)
+    out = absent([manifest])
+    if out:
+        return out
+    import ast
+    lists = {}
+    tree = ast.parse(io.open(manifest, encoding="utf-8").read())
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and len(node.targets) == 1 \
+                and isinstance(node.targets[0], ast.Name) \
+                and node.targets[0].id in ("TARGETS", "MODE_TARGETS",
+                                            "FIRMWARE_TARGETS"):
+            lists[node.targets[0].id] = (node.lineno,
+                                         ast.literal_eval(node.value))
+    for name in ("TARGETS", "MODE_TARGETS", "FIRMWARE_TARGETS"):
+        if name not in lists:
+            out.append((EMIT_MANIFEST, 1, "has no %s where check_target_lists"
+                        " looks" % name))
+    if out:
+        return out
+
+    def differ(where, line, name, have, want):
+        if set(have) != set(want):
+            out.append((where, line, "%s names %s; the compiler describes %s"
+                        % (name, ", ".join(sorted(have)),
+                           ", ".join(sorted(want)))))
+
+    emitting = [one for one in described if one not in CHECKING_ONLY_TARGETS]
+    differ("compiler/tests/fixture_meta.py", 1, "TARGETS",
+           fixture_meta.TARGETS, described)
+    line, targets = lists["TARGETS"]
+    differ(EMIT_MANIFEST, line, "TARGETS", targets, emitting)
+    for name, within in (("MODE_TARGETS", targets),
+                         ("FIRMWARE_TARGETS", lists["MODE_TARGETS"][1])):
+        line, named = lists[name]
+        for one in named:
+            if one not in within:
+                out.append((EMIT_MANIFEST, line, "%s names %s, which is not"
+                            " among the targets it is drawn from"
+                            % (name, one)))
+    return out
+
+
 def dropdown_options(text):
     """Each `options:` list in a form, as (line, [plain scalar items]).
 
@@ -7629,19 +7817,15 @@ def check_discussion_targets(full_run):
     """
     if not full_run:
         return []
-    names = os.path.join(ROOT, TARGET_SELECTION)
     forms = os.path.join(ROOT, DISCUSSION_FORMS)
-    missing = absent((names, forms))
+    missing = absent([forms])
     if missing:
         return missing
-    with io.open(names, encoding="utf-8") as stream:
-        table = stream.read()
-    described = [name for name in re.findall(
-        r'when\s+\d+\s*=>\s*"([a-z0-9-]+)"', table)
-        if name not in CHECKING_ONLY_TARGETS]
-    if not described:
-        return [(TARGET_SELECTION, 1,
-                 "no described target name was found in Described_Name")]
+    described, out = described_targets()
+    if out:
+        return out
+    described = [name for name in described
+                 if name not in CHECKING_ONLY_TARGETS]
     out = []
     offered = 0
     for name in sorted(os.listdir(forms)):
@@ -9679,14 +9863,25 @@ def main(argv):
         return 2
 
     total = 0
+    unchecked = 0
     for path in paths:
-        base = os.path.basename(path)
-        if base == ROADMAP:
+        #  A file gets the per-file rules the full run gives it and no
+        #  others.  Those rules are the language files' and the roadmap's;
+        #  every other document is checked against its fixtures, pages and
+        #  sources by the full run alone.  Reading docs/from-c.md under the
+        #  language files' rules once refused `at` as a name in a block the
+        #  test program compiles, a file the full run calls clean.
+        relative = os.path.normpath(
+            os.path.relpath(os.path.realpath(path), os.path.realpath(ROOT)))
+        if relative == ROADMAP:
             problems = check_roadmap(path)
-        elif base in LANGUAGE_FILES:
+        elif relative in LANGUAGE_FILES:
             problems = check(path)
         else:
-            problems = check(path)
+            print("%-30s %s" % (path, "has no per-file rules; the full run,"
+                                " python3 check.py, checks it"))
+            unchecked += 1
+            continue
         total += len(problems)
         print("%-30s %s" % (path, "clean" if not problems else
                             "%d problem(s)" % len(problems)))
@@ -9703,6 +9898,7 @@ def main(argv):
     extra += check_roadmap_citations(full_run)
     extra += check_specification_version(full_run)
     extra += check_finding_letters(full_run)
+    extra += check_site_documents(full_run)
     extra += check_pinned_toolchain(full_run)
     extra += check_macos_environment(full_run)
     extra += check_developer_loops(full_run)
@@ -9740,6 +9936,7 @@ def main(argv):
     extra += check_register_entries(full_run)
     extra += check_borrowed_icons(full_run)
     extra += check_discussion_targets(full_run)
+    extra += check_target_lists(full_run)
     extra += check_named_files(full_run)
     extra += check_catalogue(full_run)
     extra += check_catalogue_labels(full_run)
@@ -9767,7 +9964,10 @@ def main(argv):
         total += 1
         print("%-30s %5d  %s" % (path, line, why))
 
-    print("\n%s" % ("all clean" if not total else "%d problem(s)" % total))
+    left = ("; %d file(s) left to the full run" % unchecked
+            if unchecked else "")
+    print("\n%s%s" % ("all clean" if not total else "%d problem(s)" % total,
+                       left))
     return 1 if total else 0
 
 

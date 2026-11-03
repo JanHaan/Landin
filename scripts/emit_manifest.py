@@ -148,14 +148,6 @@ REFUSAL_PAIRS = {
     ("r491-symbolic-c-layout", "rv32"),
     ("r630-memory-scalars", "rv32"),
     ("written-type-c-function", "rv32"),
-} | {
-    #  A fixture whose `args` name rv32 is a description's or a platform
-    #  module's, which every other target refuses (L0515, L0015); one at
-    #  rv32imac uses the read-modify-write cortex-m0 has none of (L0344).
-    (fixture, target)
-    for fixture in ("atomic-read-modify-write-rv32imac",
-                    "library-platform-riscv-hazard3", "ramtext-esp32c3")
-    for target in TARGETS if target != "rv32"
 }
 BASE_EXPECTED_REFUSALS = {
     "%s|%s|%s" % (fixture, target, mode)
@@ -224,6 +216,22 @@ def levels(fixture):
     return {target[-1]: level[-1]} if target and level else {}
 
 
+def own_target(fixture):
+    """The one target FIXTURE is compiled for, or None (D740).
+
+    A fixture whose `targets:` names one target and whose `args` choose it
+    with `--target=` is that target's: the harness compiles it there alone,
+    and the others refuse it or compile a program nobody runs.  So it is
+    compiled for that target only, and a new fixture of one target needs no
+    refusal listed for every other.
+    """
+    meta = fixture_meta.read(fixture, strict=False)
+    chosen = [a.split("=", 1)[1] for a in meta.args if a.startswith("--target=")]
+    if chosen and tuple(meta.targets) == (chosen[-1],):
+        return chosen[-1]
+    return None
+
+
 def compile_one(job):
     """Compile one entry in its own directory, including any sidecars."""
     key, refine, fixture, sources, target, level, mode, optimize, specialize, asm = job
@@ -256,7 +264,8 @@ def emit(refine, root, out, workers=None, targets=TARGETS):
         for fixture in fixtures:
             sources = operands(fixture)
             level = levels(fixture)
-            for target in targets:
+            own = own_target(fixture)
+            for target in (t for t in targets if own in (None, t)):
                 for mode in MODES:
                     for optimize in OPTIMIZATIONS:
                         for specialize in SPECIALIZATIONS:
@@ -375,7 +384,8 @@ def mode_entries(root, targets):
     for kind in ("positive", "runtime"):
         for fixture in sorted(p for p in (tests / "fixtures" / kind).iterdir()
                               if p.is_dir()):
-            wanted = targets
+            own = own_target(fixture) if kind == "positive" else None
+            wanted = tuple(t for t in targets if own in (None, t))
             if kind == "runtime":
                 #  `targets:` spells each as `--target` does.
                 named = fixture_meta.read(fixture, strict=False).targets
