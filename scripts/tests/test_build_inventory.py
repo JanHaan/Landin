@@ -824,6 +824,13 @@ path.write_text("-- generated at " + str(path) + "\\n"
                 self.assertIn("owns the native GPR configuration", result.stderr)
                 self.assertEqual(self.manifest.read_text(), old)
                 self.assertEqual(self.calls(), calls)
+        # An unknown long option is refused before the staleness check,
+        # which would otherwise rebuild from clean for the changed switches.
+        result = self.run_build("--no-such-option")
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("build.sh does not take --no-such-option", result.stderr)
+        self.assertEqual(self.manifest.read_text(), old)
+        self.assertEqual(self.calls(), calls)
 
 
 class DeveloperScripts(unittest.TestCase):
@@ -859,6 +866,34 @@ class DeveloperScripts(unittest.TestCase):
         listed = result.stdout.split("Suites, for --suite=NAME and"
                                      " --case=SUITE/NAME:\n")[1]
         self.assertEqual([line.strip() for line in listed.splitlines()], suites)
+
+    def test_build_help_and_refusal_need_no_build_and_no_python(self):
+        # The build scripts read their arguments before env.sh, so neither
+        # the usage nor a refused argument reaches the staleness check.
+        with tempfile.TemporaryDirectory(prefix="landin-help-") as tmp:
+            path = self.bare_path(Path(tmp))
+            for script, name in (("build.sh", "scripts/build.sh"),
+                                 ("dev-build.sh", "scripts/dev-build.sh")):
+                for arguments, status, stream in (
+                        (["--help"], 0, "stdout"),
+                        (["-q", "-h"], 0, "stdout"),
+                        (["--no-such-option"], 2, "stderr"),
+                        (["refine.gpr"], 2, "stderr")):
+                    with self.subTest(script=script, arguments=arguments):
+                        result = subprocess.run(
+                            ["sh", str(ROOT / "scripts" / script),
+                             *arguments],
+                            env={"PATH": path}, capture_output=True,
+                            text=True, timeout=10)
+                        self.assertEqual(result.returncode, status,
+                                         result.stderr)
+                        self.assertIn(
+                            "usage: " + name
+                            + " [--compiler-only] [GPRBUILD-SWITCH ...]",
+                            getattr(result, stream))
+                        if status:
+                            self.assertIn(arguments[0], result.stderr)
+                            self.assertEqual(result.stdout, "")
 
     def test_missing_python_names_the_development_shell(self):
         with tempfile.TemporaryDirectory(prefix="landin-python-") as tmp:

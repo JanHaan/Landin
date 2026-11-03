@@ -203,10 +203,14 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   directory under `TMPDIR` or `/tmp`, runs the program on this terminal with
   the arguments after `--` exactly, exits with its status, or with 128 and
   the number of the signal that ended it and a line naming it, and removes
-  the directory on every way out. It takes `compile`'s options except those
-  that say what is written, and runs only the compiler's own host. A bare
-  `refine program.ldn` checks and says that it wrote nothing, naming both
-  commands; `-q` silences that line.
+  the directory on every way out, a termination or hangup sent to refine
+  among them, which it passes on to the program. It takes `compile`'s
+  options except those that say what is written, and runs only the
+  compiler's own host. A bare `refine program.ldn` checks and says that it
+  wrote nothing, naming the commands that run and build what it checked,
+  with the options that chose it, `run` for a hosted target and `compile`
+  with a firmware entry for a firmware target; `-q` silences that
+  line.
 - The default target is the compiler's own host; cross-compilation names a
   `--target`. Bare source requests and `--emit=asm|exe` remain
   compatibility spellings, and `build` is reserved for future project

@@ -1318,6 +1318,40 @@ package body Landin.Tests.Platform_Suite is
       end;
    end A_Killed_Tool_Is_Not_An_Exit;
 
+   --  D730: touches the real host, deliberately, since what is measured
+   --  is the host's own delivery of a signal.  The program sends its
+   --  parent, this test program, a termination and then a hangup, as kill
+   --  or a closed session would send refine; each must reach the program,
+   --  which ends by it, and leave this process running.  Were neither
+   --  passed on, the test program itself would end here, which no case
+   --  could report but whoever ran it would see.
+   procedure Native_Attached_Runs_Pass_Termination_On
+     (Item : in out Landin.Testing.Context);
+
+   procedure Native_Attached_Runs_Pass_Termination_On
+     (Item : in out Landin.Testing.Context)
+   is
+      Runner : Landin.Platform.Native.Tools.Native_Tool_Runner;
+   begin
+      for Signal of Landin.Platform.Path_List'(["TERM", "HUP"]) loop
+         declare
+            Arguments : Landin.Platform.Path_List;
+            Result : Landin.Platform.Program_Result;
+         begin
+            Landin.Platform.Add (Arguments, "-c");
+            Landin.Platform.Add
+              (Arguments, "kill -" & Signal & " $PPID; exec sleep 30");
+            Runner.Run_Attached ("/bin/sh", Arguments, Result);
+            Landin.Testing.Check
+              (Item, Result.Ended = Landin.Platform.Signaled
+                 and then Unbounded.To_String (Result.Signal_Name)
+                   = "SIG" & Signal,
+               "a SIG" & Signal & " sent to the caller ends the program: "
+               & Unbounded.To_String (Result.Signal_Name));
+         end;
+      end loop;
+   end Native_Attached_Runs_Pass_Termination_On;
+
    --  Every byte value, not just the printable ones.  A reader that
    --  narrowed or sign-extended high bytes would have passed every test
    --  the suite had, because they were all ASCII.
@@ -1830,6 +1864,9 @@ package body Landin.Tests.Platform_Suite is
       Landin.Testing.Register
         (Into, "platform", "a killed tool is not an exit",
          A_Killed_Tool_Is_Not_An_Exit'Access);
+      Landin.Testing.Register
+        (Into, "platform", "native attached runs pass termination on",
+         Native_Attached_Runs_Pass_Termination_On'Access);
       Landin.Testing.Register
         (Into, "platform", "every byte survives",
          Every_Byte_Survives'Access);

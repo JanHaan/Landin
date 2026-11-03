@@ -1959,6 +1959,9 @@ package body Landin.Diagnostics.Citations is
             when 563 =>
                "An empty first directory does not hide a later root's mo"
                & "dule",
+            when 732 =>
+               "A module the compiler adds is spelt as an import of it w"
+               & "ould be",
             when 267 =>
                "Library source namespaces declare target availability",
             when 575 =>
@@ -2210,6 +2213,11 @@ package body Landin.Diagnostics.Citations is
             when 526 =>
                "`refine run` compiles to a temporary executable and runs"
                & " it",
+            when 730 =>
+               "`refine run` passes a termination or hangup on to its pr"
+               & "ogram",
+            when 731 =>
+               "The bare form's line repeats what chose the program",
             when 565 =>
                "What an option needs of its request is the command catal"
                & "ogue's",
@@ -3407,6 +3415,8 @@ package body Landin.Diagnostics.Citations is
                "Decisions: Modules and compile time",
             when 563 =>
                "Decisions: Modules and compile time",
+            when 732 =>
+               "Decisions: Modules and compile time",
             when 267 =>
                "Decisions: The toolchain, C and the machine",
             when 575 =>
@@ -3608,6 +3618,10 @@ package body Landin.Diagnostics.Citations is
             when 525 =>
                "Decisions: The toolchain, C and the machine",
             when 526 =>
+               "Decisions: The toolchain, C and the machine",
+            when 730 =>
+               "Decisions: The toolchain, C and the machine",
+            when 731 =>
                "Decisions: The toolchain, C and the machine",
             when 565 =>
                "Decisions: The toolchain, C and the machine",
@@ -4942,6 +4956,9 @@ package body Landin.Diagnostics.Citations is
             when 563 =>
                "https://www.701.dev/spec.html#d563-an-empty-first-direct"
                & "ory-does-not-hide-a-later-root-s-module",
+            when 732 =>
+               "https://www.701.dev/spec.html#d732-a-module-the-compiler"
+               & "-adds-is-spelt-as-an-import-of-it-would-be",
             when 267 =>
                "https://www.701.dev/spec.html#d267-library-source-namesp"
                & "aces-declare-target-availability",
@@ -5248,6 +5265,12 @@ package body Landin.Diagnostics.Citations is
             when 526 =>
                "https://www.701.dev/spec.html#d526-refine-run-compiles-t"
                & "o-a-temporary-executable-and-runs-it",
+            when 730 =>
+               "https://www.701.dev/spec.html#d730-refine-run-passes-a-t"
+               & "ermination-or-hangup-on-to-its-program",
+            when 731 =>
+               "https://www.701.dev/spec.html#d731-the-bare-form-s-line-"
+               & "repeats-what-chose-the-program",
             when 565 =>
                "https://www.701.dev/spec.html#d565-what-an-option-needs-"
                & "of-its-request-is-the-command-catalogue-s",

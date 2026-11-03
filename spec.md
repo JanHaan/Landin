@@ -16754,6 +16754,36 @@ refusal, the next root's module beyond an empty second directory, and the
 empty module that stays legal with no rival, with an empty one, and when
 the first directory has a source.
 
+### D732 — A module the compiler adds is spelt as an import of it would be
+
+**The tour said** nothing of how a source is named. The compiler adds two
+modules no import names: the hosted entry's platform module and, on a
+firmware target, the reference description (D543). Each was read from the
+library's own path, which is absolute, while an import of the same module
+through a root that names the library was spelt as that root spells it. A
+build report, a diagnostic and a source map without `--debug` therefore
+named one file two ways, depending on whether the program imported it, and
+a script reading the report's sources had to recognise an absolute path
+inside the checkout as a repository one.
+
+**Chosen:** an added module's directory is the library's place in the
+search order joined with the module's path, so when a root names the
+library it is spelt through that root, exactly as an import of it is; when
+none does, it is the library's own path, as before. Which file is read does
+not change, only how it is named. D422's library names in maps and debugging
+information are decided by the module's path, and do not change either.
+
+**The alternatives:** naming every library source absolutely, imported or
+not, which makes a report differ between two checkouts of the same tree;
+and stating the two spellings in the build report's documentation, which
+leaves every reader of a report to undo them.
+
+**Pinned by** the driver case `added modules are spelt as imports`, whose
+firmware program imports nothing and whose root names the library by an
+alias, and the fixture execution case that holds the debugger workloads to
+their recorded source closures, which reads every source relative to the
+root.
+
 ## DECISIONS: THE TOOLCHAIN, C AND THE MACHINE
 
 The C boundary, the machine directives, the entry point, and the
@@ -21215,7 +21245,8 @@ is written into a new directory only its user may enter, under `TMPDIR` or
 and a trap report name the program. The program runs in the caller's working
 directory with refine's environment, standard input, output and error, and
 no time limit; while it runs refine ignores the terminal's interrupt and quit
-signals, which reach the program. The directory is removed when the program
+signals, which reach the program, and passes on a termination or hangup sent
+to refine itself (D730). The directory is removed when the program
 ends, and on every way out before it: a refusal, a failed link, a program
 killed. refine exits with the program's status. A program ended by a signal
 makes refine write one line naming the signal and exit with 128 and its
@@ -21224,7 +21255,8 @@ refine's own statuses, which a script cannot tell from the program's.
 
 Bare `refine FILE`, after a check that found no error, writes one line to
 standard error: that it checked and wrote nothing, with `refine run FILE` to
-run it and `refine compile FILE -o NAME` to build it. `-q` silences it, and
+run it and `refine compile FILE -o NAME` to build it, each repeating the
+options that chose the program (D731). `-q` silences it, and
 `refine check` stays silent, since it is the form tools call.
 
 **The alternatives:** writing the executable beside the source, which leaves
@@ -21245,6 +21277,71 @@ started at all is refine's own status 1, with a line saying why.
 signal`, `run removes its directory`, `run refusals` and `the bare form says
 it only checked`; `end-to-end/run-another-target`; and the outside-user
 check's `refine run` of the first program.
+
+### D730 — `refine run` passes a termination or hangup on to its program
+
+**D526 said** that refine ignores the terminal's interrupt and quit while
+the program runs, so they reach the program and refine stays to remove its
+directory. A termination or hangup sent to refine alone, as `kill` or a
+closed session sends it, ended refine at once: its directory stayed under
+`TMPDIR`, and the program, which had not been sent the signal, ran on
+without its parent, once for thirteen hours at a full core.
+
+**Chosen:** while the program runs, refine catches `SIGTERM` and `SIGHUP`
+and sends each to the program. The program ends by it, as it would have
+had it been sent the signal itself, and refine then removes the directory,
+writes the line naming the signal and exits with 128 and its number, as for
+any program a signal ended. Both are blocked from before the program is
+started until refine knows its process, so one sent while it starts is
+passed on once it has. A signal refine was started with ignored, as `nohup`
+starts a command, stays ignored, and the program inherits that. Before the
+program runs and after it has ended, each has its usual action.
+
+**The alternatives:** removing the directory in refine's own handler and
+then ending, which leaves the program running; killing the program with
+`SIGKILL`, which denies it the chance to end as it chooses; and putting the
+program in a process group of its own, which a terminal would then not
+signal. The termination of refine while it compiles, before the program
+exists, still ends it at once and leaves the directory, for the seconds a
+compilation takes.
+
+**Pinned by** the platform case `native attached runs pass termination on`,
+which sends refine's own process each signal from the program and requires
+the program to have ended by it and the test program to have survived it,
+and the commands case `run reports a signal`, which holds the directory's
+removal and the line for a program ended by `SIGTERM`.
+
+### D731 — The bare form's line repeats what chose the program
+
+**D526 said** that bare `refine FILE` closes with `refine run FILE` to run
+it and `refine compile FILE -o NAME` to build it. Both dropped every option
+the check was given, so after `refine --target=rv32 --level=rv32imac DIR`
+they named a hosted build of another program, and `run` was offered on
+targets nothing runs on the host.
+
+**Chosen:** the commands the line names repeat the options that chose the
+program and how it is compiled, in the order given: `--target`, `--level`,
+`--root`, `--library`, `-L`, `--option`, `--build-mode`, `--optimize`,
+`--specialize`, `--link` and `--firmware-entry`. A report the check was
+asked for is not asked for again, and the line then says it wrote no
+program rather than nothing. `run` is offered for a hosted target, which
+has a host to run on; on another host `refine run` refuses it and names
+`refine compile --target` (D526). For a firmware target, which nothing runs
+on a host, the line offers `compile` alone, with `--firmware-entry=NAME`
+when the check named no entry, since a firmware build needs one. The line
+depends on the request alone and never on the host it is made on, so a
+recorded fixture's closing line is the same on every lane. A word a shell
+would split or expand is written in single quotes.
+
+**The alternatives:** offering `run` only on the compiler's own host, which
+makes a fixture checked for another target record a different line on each
+host; dropping the line for anything but the host's own build, which leaves
+a cross-compiler's user with no next step; and naming every option the
+check was given, reports among them, which writes them a second time.
+
+**Pinned by** the commands case `the bare form says it only checked`, and
+the recorded closing lines of the positive and end-to-end fixtures checked
+on another target.
 
 ### D565 — What an option needs of its request is the command catalogue's
 

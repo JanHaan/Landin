@@ -171,21 +171,61 @@ int landin_tool_stop(int child, int *status)
     return landin_tool_wait(child, status, 0);
 }
 
+/* The program landin_program_run is waiting for, and a termination or
+   hangup that arrived before it was known, for the handler below. */
+static volatile sig_atomic_t landin_program_child = 0;
+static volatile sig_atomic_t landin_program_pending = 0;
+
+/* Pass a termination or hangup sent to refine on to its program, which
+   ends by it, so refine is left to remove the program's directory and
+   report how it ended rather than end first and leave both behind. */
+static void landin_program_forward(int signal_number)
+{
+    int saved = errno;
+
+    if (landin_program_child > 0)
+        kill((pid_t)landin_program_child, signal_number);
+    else
+        landin_program_pending = signal_number;
+    errno = saved;
+}
+
+/* Forward NUMBER while the program runs, saving its disposition in OLD,
+   unless refine was started with it ignored, as nohup starts a command:
+   then it stays ignored, and the program inherits that. */
+static void landin_program_catch(int number, struct sigaction *old)
+{
+    struct sigaction forward;
+
+    sigaction(number, NULL, old);
+    if (old->sa_handler == SIG_IGN)
+        return;
+    memset(&forward, 0, sizeof forward);
+    forward.sa_handler = landin_program_forward;
+    sigemptyset(&forward.sa_mask);
+    forward.sa_flags = SA_RESTART;
+    sigaction(number, &forward, NULL);
+}
+
 /* D526: run the program refine run built, attached to the caller's
    terminal: its standard descriptors, its process group, no limit.  The
    child starts with the default action for the interrupt and quit signals,
    which refine ignores while the child runs, so a terminal's ^C and ^\
    reach the program and refine stays to remove its directory and report
-   how it ended.  Returns 0 with STATUS the exit status, or with
-   SIGNAL_NUMBER nonzero when a signal ended it; otherwise an errno value,
-   CHILD nonzero when the program was started and could not be waited
-   for. */
+   how it ended.  A termination or hangup sent to refine alone, as kill
+   or a closed session sends it, is forwarded to the program for the same
+   reason; both are blocked until the program is known, so one sent while
+   it starts is forwarded once it has.  Returns 0 with STATUS the exit
+   status, or with SIGNAL_NUMBER nonzero when a signal ended it; otherwise
+   an errno value, CHILD nonzero when the program was started and could
+   not be waited for. */
 int landin_program_run(char *const args[], int *signal_number,
                        int *status, int *child)
 {
     posix_spawnattr_t attributes;
-    struct sigaction ignore, old_interrupt, old_quit;
-    sigset_t defaults;
+    struct sigaction ignore, old_interrupt, old_quit, old_terminate,
+        old_hangup;
+    sigset_t defaults, forwarded, old_mask;
     pid_t pid;
     pid_t reaped;
     int word = 0;
@@ -194,17 +234,30 @@ int landin_program_run(char *const args[], int *signal_number,
     *signal_number = 0;
     *status = 0;
     *child = 0;
-    error = posix_spawnattr_init(&attributes);
+    sigemptyset(&forwarded);
+    sigaddset(&forwarded, SIGTERM);
+    sigaddset(&forwarded, SIGHUP);
+    error = pthread_sigmask(SIG_BLOCK, &forwarded, &old_mask);
     if (error != 0)
         return error;
+    error = posix_spawnattr_init(&attributes);
+    if (error != 0) {
+        pthread_sigmask(SIG_SETMASK, &old_mask, NULL);
+        return error;
+    }
     sigemptyset(&defaults);
     sigaddset(&defaults, SIGINT);
     sigaddset(&defaults, SIGQUIT);
     error = posix_spawnattr_setsigdefault(&attributes, &defaults);
+    /* The program starts with refine's mask as it was before the block. */
     if (error == 0)
-        error = posix_spawnattr_setflags(&attributes, POSIX_SPAWN_SETSIGDEF);
+        error = posix_spawnattr_setsigmask(&attributes, &old_mask);
+    if (error == 0)
+        error = posix_spawnattr_setflags
+            (&attributes, POSIX_SPAWN_SETSIGDEF | POSIX_SPAWN_SETSIGMASK);
     if (error != 0) {
         posix_spawnattr_destroy(&attributes);
+        pthread_sigmask(SIG_SETMASK, &old_mask, NULL);
         return error;
     }
     memset(&ignore, 0, sizeof ignore);
@@ -212,10 +265,27 @@ int landin_program_run(char *const args[], int *signal_number,
     sigemptyset(&ignore.sa_mask);
     sigaction(SIGINT, &ignore, &old_interrupt);
     sigaction(SIGQUIT, &ignore, &old_quit);
+    landin_program_child = 0;
+    landin_program_pending = 0;
+    landin_program_catch(SIGTERM, &old_terminate);
+    landin_program_catch(SIGHUP, &old_hangup);
     error = posix_spawn(&pid, args[0], NULL, &attributes, args, environ);
     posix_spawnattr_destroy(&attributes);
-    if (error == 0) {
+    if (error != 0) {
+        /* No program to pass them to: what was sent is refine's again. */
+        sigaction(SIGTERM, &old_terminate, NULL);
+        sigaction(SIGHUP, &old_hangup, NULL);
+    } else {
         *child = (int)pid;
+        landin_program_child = (sig_atomic_t)pid;
+    }
+    /* What was blocked is delivered here, to the program or to refine. */
+    pthread_sigmask(SIG_SETMASK, &old_mask, NULL);
+    if (error != 0 && landin_program_pending != 0)
+        raise(landin_program_pending);
+    if (error == 0) {
+        if (landin_program_pending != 0)
+            kill(pid, landin_program_pending);
         do {
             reaped = waitpid(pid, &word, 0);
         } while (reaped < 0 && errno == EINTR);
@@ -226,6 +296,11 @@ int landin_program_run(char *const args[], int *signal_number,
         else
             *status = WEXITSTATUS(word);
     }
+    if (*child != 0) {
+        sigaction(SIGTERM, &old_terminate, NULL);
+        sigaction(SIGHUP, &old_hangup, NULL);
+    }
+    landin_program_child = 0;
     sigaction(SIGINT, &old_interrupt, NULL);
     sigaction(SIGQUIT, &old_quit, NULL);
     return error;

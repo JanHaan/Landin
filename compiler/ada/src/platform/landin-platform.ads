@@ -251,8 +251,9 @@ package Landin.Platform is
    --  working directory, in the caller's process group, and with no time
    --  limit.  While it runs the caller ignores the terminal's interrupt
    --  and quit signals, which reach the program with their default
-   --  actions.  A program that cannot be started raises
-   --  External_Tool_Failed.
+   --  actions, and passes a termination or hangup sent to it on to the
+   --  program, so it stays to say how the program ended (D730).  A
+   --  program that cannot be started raises External_Tool_Failed.
    procedure Run_Attached
      (Host      : Tool_Runner;
       Program   : String;

@@ -978,6 +978,20 @@ package body Landin.Tests.Commands_Suite is
       Landin.Testing.Check
         (Item, not Host.Exists ("/virtual/tmp/refine-run-1"),
          "a killed program's directory is removed");
+      --  D730: a termination sent to refine is passed on, and the program
+      --  it ends is reported and its directory removed as for any other.
+      Tools.Set_Program_Result (0, Signal => 15, Signal_Name => "SIGTERM");
+      Result := Landin.Commands.Execute
+        (["run", "--link=libc", "game.ldn"], Host, Tools, Meter,
+         Built_For => Linux_Host);
+      Landin.Commands.Launch (Result, Host, Tools);
+      Landin.Testing.Check
+        (Item, Result.Status = 143
+           and then US.To_String (Result.Report)
+             = "refine: game was ended by SIGTERM (signal 15)" & ASCII.LF
+           and then not Host.Exists ("/virtual/tmp/refine-run-2"),
+         "a program a forwarded termination ended is reported, and its"
+         & " directory removed: " & US.To_String (Result.Report));
    end Run_Reports_A_Signal;
 
    --  D526: the directory goes on every way out before the program runs.
@@ -1190,9 +1204,12 @@ package body Landin.Tests.Commands_Suite is
       procedure Said (Args : Landin.Platform.Path_List; Expected : String);
       procedure Said (Args : Landin.Platform.Path_List; Expected : String) is
          Result : constant Landin.Driver.Outcome :=
-           Landin.Commands.Execute (Args, Host, Tools, Meter);
+           Landin.Commands.Execute
+             (Args, Host, Tools, Meter, Built_For => Linux_Host);
       begin
-         Landin.Testing.Check_Equal (Item, Result.Status, 0, "it checks");
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, 0,
+            "it checks: " & US.To_String (Result.Report));
          Landin.Testing.Check_Equal
            (Item, US.To_String (Result.Report), Expected,
             "what the check says on standard error");
@@ -1208,6 +1225,38 @@ package body Landin.Tests.Commands_Suite is
       Said (["check", "main.ldn"], "");
       Landin.Testing.Check_Equal
         (Item, Host.Write_Count, 0, "checking writes nothing");
+      --  D731: the commands it names repeat what chose the program, and
+      --  name only what the target can do, the same on every host.
+      Said (["--target=linux-x86-64", "--optimize=speed", "main.ldn",
+             "--build-report=report.json"],
+            "refine: checked main.ldn and wrote no program; run it with"
+            & " `refine run --target=linux-x86-64 --optimize=speed"
+            & " main.ldn`, or build it with `refine compile"
+            & " --target=linux-x86-64 --optimize=speed main.ldn -o main`"
+            & ASCII.LF);
+      Said (["--target=linux-arm64", "--level=armv8.1-a", "main.ldn"],
+            "refine: checked main.ldn and wrote nothing; run it with"
+            & " `refine run --target=linux-arm64 --level=armv8.1-a"
+            & " main.ldn`, or build it with `refine compile"
+            & " --target=linux-arm64 --level=armv8.1-a main.ldn -o main`"
+            & ASCII.LF);
+      Host.Add_Firmware_Library;
+      Host.Add_File ("firmware.ldn",
+        "public start: () -> noreturn = loop do end loop end start");
+      Said (["--target=cortex-m0", "firmware.ldn"],
+            "refine: checked firmware.ldn and wrote nothing; build it with"
+            & " `refine compile --target=cortex-m0 --firmware-entry=NAME"
+            & " firmware.ldn -o firmware`" & ASCII.LF);
+      Said (["--target=cortex-m0", "--firmware-entry=start",
+             "firmware.ldn"],
+            "refine: checked firmware.ldn and wrote nothing; build it with"
+            & " `refine compile --target=cortex-m0 --firmware-entry=start"
+            & " firmware.ldn -o firmware`" & ASCII.LF);
+      Host.Add_File ("my game.ldn", Source);
+      Said (["my game.ldn"],
+            "refine: checked 'my game.ldn' and wrote nothing; run it with"
+            & " `refine run 'my game.ldn'`, or build it with"
+            & " `refine compile 'my game.ldn' -o 'my game'`" & ASCII.LF);
    end Bare_Form_Says_It_Only_Checked;
 
    --  D524: -L takes its directory as a C compiler's does, after a

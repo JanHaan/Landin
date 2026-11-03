@@ -3,6 +3,7 @@ with Ada.Exceptions;
 with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 
+with Landin.Byte_Encoding;
 with Landin.Diagnostics;
 with Landin.Diagnostics.Catalogue;
 with Landin.Commands.Catalogue;
@@ -1013,6 +1014,63 @@ package body Landin.Tests.Driver_Suite is
         (Item, Run (True, A_Source).Status, Landin.Driver.Status_Success,
          "a first directory with a source still wins");
    end Empty_First_Directories_Name_A_Later_Root;
+
+   --  D732: a module the compiler adds itself is spelt as an import of it
+   --  would be, through the root that names the library, and not by the
+   --  library's own path.  Here the added module is the firmware
+   --  reference description, and the root names the library by an alias.
+   procedure Added_Modules_Are_Spelt_As_Imports
+     (Item : in out Landin.Testing.Context);
+
+   procedure Added_Modules_Are_Spelt_As_Imports
+     (Item : in out Landin.Testing.Context)
+   is
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Library : constant String := "/opt/landin/lib/landin";
+      Reference : constant String := "/platform/cortex_m/reference";
+      Args : Landin.Platform.Path_List;
+      Result : Landin.Driver.Outcome;
+   begin
+      Host.Add_Firmware_Library;
+      --  The same library under the name the request's root gives it.
+      Host.Add_Directory ("vendor");
+      Host.Add_Directory ("vendor/platform");
+      Host.Add_Directory ("vendor/platform/cortex_m");
+      Host.Add_Directory ("vendor" & Reference);
+      for Name of Landin.Platform.Path_List'(["interrupts.ldn", "memory.ldn"])
+      loop
+         declare
+            Text : Unbounded.Unbounded_String;
+            Status : Landin.Platform.Read_Status;
+         begin
+            Host.Read_File (Library & Reference & "/" & Name, Text, Status);
+            Host.Add_File
+              ("vendor" & Reference & "/" & Name, Unbounded.To_String (Text));
+         end;
+      end loop;
+      Host.Add_Alias ("vendor", Library);
+      Host.Add_Directory ("entry");
+      Host.Add_File
+        ("entry/main.ldn",
+         "public start: () -> noreturn = loop do end loop end start" & LF);
+      Args.Append ("--target=cortex-m0");
+      Args.Append ("--root=vendor");
+      Args.Append ("--build-report=build.json");
+      Args.Append ("entry");
+      Result := Landin.Driver.Execute (Args, Host, Tools);
+      Landin.Testing.Check_Equal
+        (Item, Result.Status, Landin.Driver.Status_Success,
+         "the firmware checks: " & Unbounded.To_String (Result.Report));
+      Landin.Testing.Check
+        (Item, Contains (Host.Written ("build.json"),
+                         Landin.Byte_Encoding.Hex
+                           ("vendor" & Reference & "/interrupts.ldn"))
+         and then not Contains (Host.Written ("build.json"),
+                                Landin.Byte_Encoding.Hex (Library)),
+         "the added description is spelt through the root: "
+         & Host.Written ("build.json"));
+   end Added_Modules_Are_Spelt_As_Imports;
 
    procedure Unlistable_Import_Roots_Are_Reported
      (Item : in out Landin.Testing.Context);
@@ -6861,6 +6919,9 @@ package body Landin.Tests.Driver_Suite is
       Landin.Testing.Register
         (Into, "driver", "an empty first directory names a later root",
          Empty_First_Directories_Name_A_Later_Root'Access);
+      Landin.Testing.Register
+        (Into, "driver", "added modules are spelt as imports",
+         Added_Modules_Are_Spelt_As_Imports'Access);
       Landin.Testing.Register
         (Into, "driver", "the library is found beside the compiler",
          Library_Is_Found_Beside_The_Compiler'Access);

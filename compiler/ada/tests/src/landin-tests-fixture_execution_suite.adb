@@ -3956,20 +3956,13 @@ package body Landin.Tests.Fixture_Execution_Suite is
 
       --  The path a report names, from compiler/ada where the harness
       --  runs, as the record writes it: from the repository root.  The
-      --  hosted entry's platform module, which the compiler adds to a
-      --  program that imports nothing, is found in the library, which the
-      --  report names absolutely.
-      Root : constant String := Ada.Directories.Full_Name ("../..") & "/";
-
+      --  library is the root the request names, so a module the compiler
+      --  adds itself is spelt through it as an imported one is (D732).
       function Repository_Path (Path : String) return String;
 
       function Repository_Path (Path : String) return String is
       begin
-         if Path'Length > Root'Length
-           and then Path (Path'First .. Path'First + Root'Length - 1) = Root
-         then
-            return Path (Path'First + Root'Length .. Path'Last);
-         elsif Path'Length > 6
+         if Path'Length > 6
            and then Path (Path'First .. Path'First + 5) = "../../"
          then
             return Path (Path'First + 6 .. Path'Last);
