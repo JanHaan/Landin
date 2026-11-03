@@ -14,9 +14,14 @@ import bundle
 
 
 def source_tree(root):
+    root.mkdir(parents=True)
+    for name in bundle.SOURCE_FILES:
+        path = root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(name)
     for name in bundle.SOURCE_ROOTS:
         directory = root / name
-        directory.mkdir(parents=True)
+        directory.mkdir(parents=True, exist_ok=True)
         (directory / 'input.ldn').write_text(name)
 
 
@@ -63,8 +68,14 @@ class Bundles(unittest.TestCase):
         path.write_text('uncommitted bytes')
         with self.assertRaisesRegex(bundle.Invalid, 'source identity'):
             self.validate()
+
         path.write_text('devices')
         (self.source / 'devices/new.ldn').write_text('new input')
+        with self.assertRaisesRegex(bundle.Invalid, 'source identity'):
+            self.validate()
+
+    def test_toolchain_pin_changes_invalidate_bundle(self):
+        (self.source / 'environments/pins.sh').write_text('new toolchain')
         with self.assertRaisesRegex(bundle.Invalid, 'source identity'):
             self.validate()
 
