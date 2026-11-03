@@ -8,6 +8,7 @@ the Python reader refuses and the test program accepts cannot sit in a
 fixture unnoticed.
 """
 
+import re
 import sys
 import unittest
 from pathlib import Path
@@ -18,6 +19,7 @@ sys.path.insert(0, str(ROOT / "compiler/tests"))
 import fixture_meta  # noqa: E402
 
 TABLE = ROOT / "compiler/tests/fixture-meta.cases"
+LEVELS = ROOT / "compiler/ada/src/stages/landin-targets-levels"
 
 
 def cases(text):
@@ -101,6 +103,58 @@ class FixtureMetaTest(unittest.TestCase):
 
     def test_levels_cover_every_target(self):
         self.assertEqual(set(fixture_meta.FAMILY_OF), set(fixture_meta.TARGETS))
+        #  Each target's family is held to the test program's by a
+        #  `levels@TARGET` field both readers render.
+        rendered = {key[len("levels@"):]
+                    for case in cases(TABLE.read_text())
+                    for key, _ in case["fields"]
+                    if key.startswith("levels@")}
+        self.assertEqual(rendered, set(fixture_meta.TARGETS))
+
+    def test_the_targets_are_the_compilers(self):
+        #  The selection package's own table, which `refine --target=`
+        #  reads; a name added there is a name a fixture may hold.
+        self.assertEqual(fixture_meta.TARGETS[:3],
+                         ("linux-x86-64", "linux-arm64", "darwin-arm64"))
+        self.assertIn("rv32", fixture_meta.TARGETS)
+        self.assertEqual(len(set(fixture_meta.TARGETS)),
+                         len(fixture_meta.TARGETS))
+        self.assertEqual(fixture_meta.described_targets(
+            'function Described_Name (Index : Positive) return String is\n'
+            '  (case Index is when 1 => "a-b", when 2 => "c",\n'
+            '   when others => raise Compiler_Defect);\n'
+            'function Described_At (Index : Positive) return Target_Facts is\n'
+            '  (case Index is when 1 => "not-a-name");\n'), ("a-b", "c"))
+
+    def test_the_families_are_the_compilers(self):
+        #  Landin.Targets.Levels' families, each its subtype's range of
+        #  Level_Id in order, the first its default, as the compiler
+        #  spells them; which family a target has is fixture-meta.cases'.
+        spec = (LEVELS.with_suffix(".ads")).read_text()
+        body = (LEVELS.with_suffix(".adb")).read_text()
+        ids = [one.strip() for one in re.search(
+            r"type Level_Id is\s*\((.*?)\);", spec, re.S).group(1).split(",")]
+        spelled = dict(re.findall(
+            r'when (\w+)\s*=>\s*"([^"]+)"', re.search(
+                r"function Spelled \(Id : Level_Id\).*?;", body,
+                re.S).group(0)))
+        ranges = dict((name, (first, last)) for name, first, last in
+                      re.findall(r"subtype (\w+) is Level_Id range"
+                                 r" (\w+) \.\. (\w+);", body))
+        def function(name):
+            #  A function's text, to the blank line after it.
+            return body.split("function %s " % name, 1)[1].split("\n\n", 1)[0]
+        in_family, defaults = function("In_Family"), function("Default_Level")
+        families = []
+        for subtype in re.findall(r"Id in (\w+)", in_family):
+            first, last = ranges[subtype]
+            members = ids[ids.index(first):ids.index(last) + 1]
+            self.assertIn("=> %s," % first, defaults, subtype)
+            families.append(tuple(spelled[one] for one in members))
+        self.assertGreaterEqual(len(families), 5)
+        self.assertEqual(sorted(families),
+                         sorted(levels for levels
+                                in fixture_meta.FAMILIES.values() if levels))
 
 
 if __name__ == "__main__":

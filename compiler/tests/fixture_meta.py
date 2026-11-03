@@ -37,10 +37,25 @@ NAME = "fixture.meta"
 CLASSES = ("unit", "positive", "negative", "runtime", "abi", "debugger",
            "end-to-end")
 
+#  The compiler's one list of target names, `Landin.Targets.Selection`'s
+#  Described_Name, which `refine --target=`, the language server and the
+#  test program read.  Every Python list of targets is this one or is held
+#  to it: read it here rather than writing the names out again.
+SELECTION = HERE.parent / "ada/src/stages/landin-targets-selection.adb"
+_DESCRIBED = re.compile(r'when\s+\d+\s*=>\s*"([a-z0-9-]+)"')
+
+
+def described_targets(text=None):
+    """The target names the compiler describes, in its order, from the
+    text of SELECTION, or of the file itself when none is given."""
+    if text is None:
+        text = SELECTION.read_text(encoding="utf-8")
+    body = text.split("function Described_Name", 1)[-1]
+    return tuple(_DESCRIBED.findall(body.split(";", 1)[0]))
+
+
 #  The names a fixture's `targets:` may hold: `refine --target=`'s own.
-TARGETS = ("linux-x86-64", "linux-arm64", "linux-rv64", "darwin-arm64",
-           "cortex-m0", "rv32", "freebsd-x86-64", "freebsd-arm64",
-           "synthetic-32")
+TARGETS = described_targets()
 
 #  Each target's CPU feature levels (D255), as `Landin.Targets.Levels`
 #  spells them; the first is the default.  A lane runs only its own

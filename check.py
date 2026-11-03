@@ -6691,9 +6691,10 @@ def check_coverage_registers(full_run):
             out.append((REGISTERS, 1, "freestanding closure lacks " + evidence))
 
     allowed = set()
-    known_targets = {"linux-x86-64", "linux-arm64", "darwin-arm64",
-                     "freebsd-x86-64", "freebsd-arm64", "linux-rv64", "cortex-m0",
-                     "rv32", "synthetic-32"}
+    known_targets = set(described_target_names())
+    if not known_targets:
+        out.append((TARGET_SELECTION, 1,
+                    "no described target name was found in Described_Name"))
     if scopes is None:
         out.append((REGISTERS, 1, "the target applicability register is absent"))
     else:
@@ -7589,6 +7590,17 @@ CHECKING_ONLY_TARGETS = ("synthetic-32",)
 TARGET_SHAPED = re.compile(r"^[a-z]+(?:-[a-z0-9]+)+$")
 
 
+def described_target_names():
+    """The targets the compiler describes, in its order, from the selection
+    package's name table as fixture_meta reads it; none when the table is
+    not there, which the caller reports."""
+    path = os.path.join(ROOT, TARGET_SELECTION)
+    if not os.path.exists(path):
+        return ()
+    with io.open(path, encoding="utf-8") as stream:
+        return fixture_meta.described_targets(stream.read())
+
+
 def dropdown_options(text):
     """Each `options:` list in a form, as (line, [plain scalar items]).
 
@@ -7634,11 +7646,8 @@ def check_discussion_targets(full_run):
     missing = absent((names, forms))
     if missing:
         return missing
-    with io.open(names, encoding="utf-8") as stream:
-        table = stream.read()
-    described = [name for name in re.findall(
-        r'when\s+\d+\s*=>\s*"([a-z0-9-]+)"', table)
-        if name not in CHECKING_ONLY_TARGETS]
+    described = [name for name in described_target_names()
+                 if name not in CHECKING_ONLY_TARGETS]
     if not described:
         return [(TARGET_SELECTION, 1,
                  "no described target name was found in Described_Name")]
