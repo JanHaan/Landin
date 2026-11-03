@@ -1,0 +1,9 @@
+class: negative
+summary: D124 refuses a one-line `else` handler that ends without the binding's value at the handler alone, since it is its own block and control expression
+program: program.ldn
+codes: L0332
+constructs: 1050, 1080
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+expect: expected.txt
+args: ../tests/fixtures/negative/one-line-handler-without-value/program.ldn
+status: 1

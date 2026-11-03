@@ -2957,9 +2957,17 @@ package body Landin.Stages.Checking.Flow is
                         --  D376: `else none` on a call with a result is
                         --  refused once, by the checker, rather than again
                         --  here as an empty value block.
+                        --  A handler written on one line is its own
+                        --  block, so a missing value is related to the
+                        --  call it recovers rather than to itself.
                         Flow_Block
                           (Of_Tree, Recovery_Body, Result,
-                           Syn.Origin (Of_Tree, Recovery), Recovered,
+                           (if Landin.Source."="
+                                 (Syn.Where (Of_Tree, Recovery),
+                                  Syn.Where (Of_Tree, Recovery_Body))
+                            then Syn.Origin (Of_Tree, Node)
+                            else Syn.Origin (Of_Tree, Recovery)),
+                           Recovered,
                            Recovery_Edges,
                            Needs_Value
                            and then not Syn.Ignores_Failure
