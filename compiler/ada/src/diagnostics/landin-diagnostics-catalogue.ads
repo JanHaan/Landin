@@ -257,6 +257,9 @@ package Landin.Diagnostics.Catalogue is
       RAM_Code_Unplaceable,
       --  D251 also admits removing a whole unused, effect-free local.
       Unused_Pure_Local,
+      --  D760: an untyped float literal whose f32 rounding changes the
+      --  integer a conversion gives.
+      Literal_Rounded_Away,
       --  The backend and its toolchain.  None is about a frontend
       --  construct: two are the host failing to finish an accepted
       --  program, one is [1970]'s missing entry shape, one is a verified
@@ -1149,6 +1152,15 @@ package Landin.Diagnostics.Catalogue is
          Fixes => May_Fix, Shown_By => Negative_Fixture,
          Rule => +("D251: an unused local with an effect-free literal"
                    & " initializer")),
+      --  The literal is the one place: the conversion around it is what
+      --  the message names, and the note gives both routes.
+      Literal_Rounded_Away =>
+        (Code => "L0350", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 0, Most => 0, Notes => 1, Route => False,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("D760: an untyped float literal converted to an integer"
+                   & " that its f32 rounding changes")),
       --  The backend's reports need not have a source. A missing entry uses an
       --  entry-module anchor when available, but permits a point in an empty
       --  file or a source-free fallback. L0500 is the one diagnostic here a

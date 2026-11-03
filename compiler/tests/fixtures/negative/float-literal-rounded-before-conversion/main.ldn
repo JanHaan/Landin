@@ -1,0 +1,18 @@
+big: () -> (n: u64) =
+    n = u64(1.0e18)
+end big
+below: () -> (n: i64) =
+    n = -i64(-1.0e18)
+end below
+edge: () -> (n: u8) =
+    n = u8(255.999999)
+end edge
+low: () -> (n: i32) =
+    n = i32(-2147483649.0)
+end low
+exact: () -> (n: u64) =
+    n = u64(f64(1.0e18)) + u64(f32(1.0e18)) + u64(45.7)
+end exact
+public main: () -> (code: i32) =
+    code = i32(big() + u64(below()) + u64(edge()) + u64(low()) + exact())
+end main

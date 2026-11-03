@@ -2070,6 +2070,13 @@ package body Landin.Stages.Checking is
          Kind       : out Ty.Type_Kind;
          Known      : out Boolean;
          Overflowed : out Boolean);
+      procedure Convert_Literal_At_F64
+        (Of_Tree    : Syn.Tree;
+         Node       : Syn.Node_Id;
+         Into       : Ty.Integer_Name;
+         Literal    : out Boolean;
+         Result     : out Ty.Folded;
+         Overflowed : out Boolean);
       function Character_Value
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Magnitude;
       procedure Commit_To
@@ -14149,6 +14156,54 @@ package body Landin.Stages.Checking is
          end if;
       end Check_Float_Literal;
 
+      --  D760: an integer conversion gives an untyped float literal
+      --  [0210]'s f32, and this is what the same literal, under the same
+      --  signs, converts to at f64, the width that keeps more of what was
+      --  written.  Literal is False for any other operand: an expression
+      --  of literals is not compared.
+      procedure Convert_Literal_At_F64
+        (Of_Tree    : Syn.Tree;
+         Node       : Syn.Node_Id;
+         Into       : Ty.Integer_Name;
+         Literal    : out Boolean;
+         Result     : out Ty.Folded;
+         Overflowed : out Boolean)
+      is
+         Sign_Bit : constant Ty.Magnitude := 2 ** 63;
+         Operand  : Syn.Node_Id := Node;
+         Negative : Boolean := False;
+         Bits     : Ty.Magnitude;
+      begin
+         Result := 0;
+         Overflowed := False;
+         while Syn.Kind (Of_Tree, Operand) = Syn.Negation loop
+            Negative := not Negative;
+            Operand := Syn.Operand_Of (Of_Tree, Operand);
+         end loop;
+         Literal := Syn.Kind (Of_Tree, Operand) = Syn.Float_Literal;
+         if not Literal then
+            return;
+         end if;
+
+         declare
+            Snap : Landin.Source.Snapshot renames
+              Source (Context, Syn.Source_Of (Of_Tree));
+         begin
+            Ty.Evaluate_Float
+              (Landin.Source.Slice (Snap, Syn.Anchor (Of_Tree, Operand)),
+               Ty.F64, Bits, Overflowed);
+         end;
+         if Overflowed then
+            return;
+         end if;
+         if Negative then
+            Bits := (if Bits >= Sign_Bit then Bits - Sign_Bit
+                     else Bits + Sign_Bit);
+         end if;
+         Ty.Convert_Float_To_Integer
+           (Bits, Ty.F64, Into, Facts, Result, Overflowed);
+      end Convert_Literal_At_F64;
+
       function Float_Special_Type
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind
       is
@@ -25404,6 +25459,7 @@ package body Landin.Stages.Checking is
                           Syn.Nth_Argument (Of_Tree, Node, 1);
                         Got : Ty.Type_Kind :=
                           Synthesise (Of_Tree, Value);
+                        Defaulted : Boolean := False;
                      begin
                         if Got = Ty.Untyped_Integer then
                            Commit_To
@@ -25421,6 +25477,7 @@ package body Landin.Stages.Checking is
                               return Kept (Ty.Ill_Typed);
                            end if;
                            Got := Ty.Default_Float;
+                           Defaulted := True;
                         elsif Got in Ty.Pointer_Value | Ty.Aggregate
                           and then Pointer_Union_Refused
                             (Of_Tree, Value, "an integer conversion")
@@ -25469,6 +25526,66 @@ package body Landin.Stages.Checking is
                                     Ty.Integer_Name (Conversion), Facts,
                                     Result, Overflowed);
                               end if;
+
+                              --  D760: the literal took [0210]'s f32
+                              --  silently, and is refused when that
+                              --  rounding changes the integer it gives.
+                              if Defaulted and then Known then
+                                 declare
+                                    Literal   : Boolean;
+                                    Wide      : Ty.Folded;
+                                    Wide_Over : Boolean;
+                                 begin
+                                    Convert_Literal_At_F64
+                                      (Of_Tree, Value,
+                                       Ty.Integer_Name (Conversion),
+                                       Literal, Wide, Wide_Over);
+                                    if Literal
+                                      and then
+                                        (Wide_Over /= Overflowed
+                                         or else (not Overflowed
+                                                  and then Wide /= Result))
+                                    then
+                                       Bad.Report
+                                         (Item    => Bad.Literal_Rounded_Away,
+                                          Source  => Syn.Source_Of (Of_Tree),
+                                          Where   => Syn.Where
+                                            (Of_Tree, Value),
+                                          Message =>
+                                            "this literal is an f32 here,"
+                                            & " which "
+                                            & (if Overflowed
+                                               then "no " & Shown (Conversion)
+                                                    & " holds"
+                                               else "converts to "
+                                                    & Ada.Strings.Fixed.Trim
+                                                        (Ty.Folded'Image
+                                                           (Result),
+                                                         Ada.Strings.Both))
+                                            & ", while the number written "
+                                            & (if Wide_Over
+                                               then "fits no "
+                                                    & Shown (Conversion)
+                                               else "converts to "
+                                                    & Ada.Strings.Fixed.Trim
+                                                        (Ty.Folded'Image
+                                                           (Wide),
+                                                         Ada.Strings.Both)),
+                                          Note    =>
+                                            "[0210]/D760: a float literal"
+                                            & " with no type is an f32;"
+                                            & " write `f64(...)` around it"
+                                            & " to convert the f64 value,"
+                                            & " or `f32(...)` to keep this"
+                                            & " rounding",
+                                          Into    => Found);
+                                       Landin.Checking.Refuse
+                                         (Types.all, Of_Tree, Node);
+                                       return Kept (Ty.Ill_Typed);
+                                    end if;
+                                 end;
+                              end if;
+
                               if Overflowed then
                                  Bad.Report
                                    (Item    => Bad.Literal_Out_Of_Range,

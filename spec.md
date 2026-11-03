@@ -3878,7 +3878,8 @@ participates in the range check, or what infinity and NaN mean as integers.
 applied to an f32 or f64 value. A typed source retains its float width. An
 untyped float operand first takes [0210]'s default f32 type, so the source is
 rounded to f32 before conversion; there is still no implicit conversion
-between numeric classes.
+between numeric classes. D760 subsequently refuses an untyped literal operand
+whose f32 rounding changes the integer the conversion gives.
 
 The finite source is truncated toward zero, then that mathematical integer is
 checked against the destination's inclusive range. The ordering matters:
@@ -3910,6 +3911,38 @@ values a mathematical integer they do not have. All were declined.
 `negative/float-to-integer-known-nan`,
 `negative/float-to-bool-known-invalid`, and the
 `conversion.float-to-integer` guarantee row.
+
+### D760 — A float literal's f32 rounding may not change an integer conversion
+
+**The tour said** at [0210] that a float literal is distinct from an integer
+and at [0310] that a float converts to an integer by truncating toward zero.
+D162 gave a float literal with no context f32, and D171 converted such an
+operand at that width, so `u64(1.0e18)` was 999999984306749440: the literal
+lost its low digits to f32's 24 bits before it was converted, and nothing in
+the program or the report said so.
+
+**Chosen:** an integer conversion whose operand is an untyped float literal,
+negated any number of times, converts it as an f32 still, and is refused,
+L0350, when the literal's f64 value would convert to a different integer, or
+one of the two converts and the other does not. The report names both
+outcomes, and its note names `f64(...)` around the literal for the written
+value and `f32(...)` for the rounded one; either is typed, and a typed operand
+keeps its width and is never compared. A literal whose rounding leaves the
+integer alone, `i64(45.7)` or `u8(-0.75)`, converts as before, and an operand
+that is an expression of literals rather than a literal is not compared. The
+comparison is the checker's exact decimal evaluation at each width and
+D171's truncation, so it does not depend on the host.
+
+**The alternatives:** give the operand of an integer conversion f64 as its
+context, which changes the meaning of conversions that already compile and
+gives a literal a type from a conversion, a context [0310] does not give it;
+refuse every untyped float literal converted to an integer, which refuses
+`i64(45.7)`, the tour's own example, for a rounding that changes nothing; and
+a warning, which compiles the surprising value all the same, when writing
+`f32(...)` already says the rounding was meant.
+
+**Pinned by** `negative/float-literal-rounded-before-conversion` and
+`runtime/float-to-integer-conversions`.
 
 ### D172 — A bool has the integer image zero or one
 

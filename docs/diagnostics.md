@@ -1507,6 +1507,23 @@ unused: () -> none =
 end unused
 ```
 
+### L0350
+
+A float literal converted to an integer, `u64(1.0e18)`, has no type of its
+own, so it is an `f32` [0210], and the conversion truncates the `f32`
+(D171). Where that rounding changes the integer the conversion gives, or
+whether it gives one, the conversion is refused (D760): `u64(1.0e18)` would
+be 999999984306749440. The report names both integers. Write `f64(...)`
+around the literal to convert its `f64` value, or `f32(...)` to keep the
+rounding on purpose. A literal whose rounding gives the same integer, as
+`i64(45.7)` does, is converted as written.
+
+```landin
+big: () -> (n: u64) =
+    n = u64(1.0e18)
+end big
+```
+
 ## The backend and its toolchain
 
 ### L0500

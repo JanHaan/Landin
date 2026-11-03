@@ -1353,6 +1353,9 @@ package body Landin.Diagnostics.Citations is
             when 171 =>
                "Float-to-integer conversion truncates before checking ra"
                & "nge",
+            when 760 =>
+               "A float literal's f32 rounding may not change an integer"
+               & " conversion",
             when 172 =>
                "A bool has the integer image zero or one",
             when 173 =>
@@ -2069,6 +2072,9 @@ package body Landin.Diagnostics.Citations is
             when 373 =>
                "A note explains in words, and a cited label stands besid"
                & "e them",
+            when 761 =>
+               "A refusal whose notes are fixed facts says its route in "
+               & "a third note",
             when 383 =>
                "`refine check` takes what `compile` takes about the prog"
                & "ram",
@@ -2915,6 +2921,8 @@ package body Landin.Diagnostics.Citations is
                "Decisions: Operators, conversions and traps",
             when 171 =>
                "Decisions: Operators, conversions and traps",
+            when 760 =>
+               "Decisions: Operators, conversions and traps",
             when 172 =>
                "Decisions: Operators, conversions and traps",
             when 173 =>
@@ -3498,6 +3506,8 @@ package body Landin.Diagnostics.Citations is
             when 370 =>
                "Decisions: The toolchain, C and the machine",
             when 373 =>
+               "Decisions: The toolchain, C and the machine",
+            when 761 =>
                "Decisions: The toolchain, C and the machine",
             when 383 =>
                "Decisions: The toolchain, C and the machine",
@@ -4199,6 +4209,9 @@ package body Landin.Diagnostics.Citations is
             when 171 =>
                "https://www.701.dev/spec.html#d171-float-to-integer-conv"
                & "ersion-truncates-before-checking-range",
+            when 760 =>
+               "https://www.701.dev/spec.html#d760-a-float-literal-s-f32"
+               & "-rounding-may-not-change-an-integer-conversion",
             when 172 =>
                "https://www.701.dev/spec.html#d172-a-bool-has-the-intege"
                & "r-image-zero-or-one",
@@ -5080,6 +5093,9 @@ package body Landin.Diagnostics.Citations is
             when 373 =>
                "https://www.701.dev/spec.html#d373-a-note-explains-in-wo"
                & "rds-and-a-cited-label-stands-beside-them",
+            when 761 =>
+               "https://www.701.dev/spec.html#d761-a-refusal-whose-notes"
+               & "-are-fixed-facts-says-its-route-in-a-third-note",
             when 383 =>
                "https://www.701.dev/spec.html#d383-refine-check-takes-wh"
                & "at-compile-takes-about-the-program",

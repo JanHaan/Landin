@@ -678,6 +678,11 @@ The fine print:
   a distinct type ([0650]), but it never turns an integer into a pointer.
   `ptr(address)` does that, taking its pointer type from the declaration
   ([0460]).
+- A float literal with nothing to say its type is an `f32`, and a
+  conversion does not say it. `u64(1.0e18)` would truncate the `f32`
+  nearest 10^18, which is 999,999,984,306,749,440, so it is refused; write
+  `u64(f64(1.0e18))` for the number written. `i64(45.7)` gives 45 at
+  either width and is converted as it stands.
 
 ### [0320] Shifts
 
