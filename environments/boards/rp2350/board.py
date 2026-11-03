@@ -330,6 +330,11 @@ def main():
     result = dict(status='failed')
     bridge = console = lock = None
     try:
+        # The indicator's environment is found before the rig is held: it
+        # touches nothing of the rig, and a host that has not built it
+        # builds it first.
+        pins = (common.ProbehivePins(run, args.probehive, args.probehive_build, args.indicator_pin)
+                if args.indicator_pin else None)
         elf, head, names = build(run, args)
         # Every step from here reaches the rig, which one run holds at a
         # time (D725).
@@ -339,8 +344,8 @@ def main():
             result['block_control'] = block_control(run, args, elf, head)
         result['flashed_as'] = flash(run, args, elf, head)
         result['flash_readback'] = 'matches'
-        pins = (common.ProbehivePins(run, args.probehive, args.probehive_build, args.indicator_pin)
-                if args.indicator_pin else None)
+        if pins:
+            pins.release()
         # One bridge serves every slot of the probe and is left running for
         # the next tool; the probe-rs runs before and after the console
         # reach the slot while no client of the bridge holds it.

@@ -881,16 +881,25 @@ def bridged(port, host='127.0.0.1'):
 class ProbehivePins:
     """The probe's GPIO PIN through probehive's scripts/gpio.py, which needs
     the LiteX its own development shell carries: that shell's Python and its
-    environment are found once, each read runs the script with them, and
-    the pin is released to an input first."""
-    def __init__(self, run, probehive, build, pin):
+    environment are found once, when this is made, which touches nothing of
+    the rig, so a tool makes it before its hardware phase; each read runs
+    the script with them, and the tool releases the pin to an input before
+    its first.  A shell that does not open within SECONDS is refused,
+    naming the command that builds it, since a shell not yet built on the
+    host builds probehive's whole FPGA toolchain first."""
+    def __init__(self, run, probehive, build, pin, seconds=300):
         self.run, self.probehive, self.build, self.pin = run, Path(probehive), build, pin
-        found = run.command('gpio-environment', ['nix', 'develop', self.probehive, '-c',
-            'python3', '-c',
-            'import json, os, sys, litex; print(json.dumps([sys.executable, dict(os.environ)]))'],
-            timeout=300, cwd=self.probehive)
+        try:
+            found = run.command('gpio-environment', ['nix', 'develop', self.probehive, '-c',
+                'python3', '-c',
+                'import json, os, sys, litex; print(json.dumps([sys.executable, dict(os.environ)]))'],
+                timeout=seconds, cwd=self.probehive)
+        except subprocess.TimeoutExpired:
+            raise Failed('probehive\'s development shell, which gives scripts/gpio.py its LiteX,'
+                         ' did not open within %g s: on a host that has not built it, it builds'
+                         ' the FPGA toolchain first; build it once with `nix develop %s -c true`'
+                         ' and run again' % (seconds, self.probehive))
         self.python, self.env = json.loads(found.strip().splitlines()[-1])
-        self.release()
 
     def gpio(self, name, *pins):
         return self.run.command(name, [self.python, self.probehive / 'scripts/gpio.py',

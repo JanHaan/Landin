@@ -303,17 +303,22 @@ def main():
     args.pace = common.Pace(args.spacing, args.quiet)
     run = common.Run(args.output)
     result = dict(status='failed')
-    bridge = console = None
-    # The run holds the rig's lock (D725).
-    lock = common.rig_lock('rp2040 board.py').acquire()
+    bridge = console = lock = None
     try:
+        # The indicator's environment is found before the rig is held: it
+        # touches nothing of the rig, and a host that has not built it
+        # builds it first.
+        pins = (common.ProbehivePins(run, args.probehive, args.probehive_build, args.indicator_pin)
+                if args.indicator_pin else None)
+        # The run holds the rig's lock from its build to its last read (D725).
+        lock = common.rig_lock('rp2040 board.py').acquire()
         elf, stage, crc, names = build(run, args)
         result.update(image_sha256=sha(elf), image_name=elf.name, second_stage_crc32='%08x' % crc,
                       second_stage_sha256=hashlib.sha256(stage).hexdigest())
         flash(run, args, elf, stage)
         result['flash_readback'] = 'matches'
-        pins = (common.ProbehivePins(run, args.probehive, args.probehive_build, args.indicator_pin)
-                if args.indicator_pin else None)
+        if pins:
+            pins.release()
         # One bridge serves every slot of the probe and is left running for
         # the next tool; the probe-rs runs before and after the console
         # reach the slot while no client of the bridge holds it.
@@ -338,7 +343,8 @@ def main():
             result['frames'] = common.frame_record(bytes(console.received))
         if bridge:
             bridge.close()
-        lock.release()
+        if lock:
+            lock.release()
         result['commands'] = run.commands
         common.write_json(args.output / 'result.json', result)
     if args.record and result['status'] == 'passed':

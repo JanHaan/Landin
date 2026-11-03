@@ -425,6 +425,11 @@ def main():
     result = dict(status='failed')
     bridge = console = lock = None
     try:
+        # The indicator's environment is found before the rig is held: it
+        # touches nothing of the rig, and a host that has not built it
+        # builds it first.
+        pins = (common.ProbehivePins(run, args.probehive, args.probehive_build, args.indicator_pin)
+                if args.indicator_pin else None)
         elf, head, names, adds = build(run, args)
         # Every step from here reaches the rig, which one run holds at a time.
         lock = common.rig_lock('rp2350_hazard3 board.py').acquire()
@@ -438,8 +443,8 @@ def main():
             result['block_control'] = block_control(run, args, elf, head)
         result['flashed_as'] = flash(run, args, elf, head)
         result['flash_readback'] = 'matches'
-        pins = (common.ProbehivePins(run, args.probehive, args.probehive_build, args.indicator_pin)
-                if args.indicator_pin else None)
+        if pins:
+            pins.release()
         console = common.TcpConsole(args.uart_port + args.slot)
         power_cycle(common.InGroup(run, args.hub_group), args)
         verdicts, final, reports = scenario(console, run, args.seed, pins)

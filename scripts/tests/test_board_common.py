@@ -436,6 +436,26 @@ class Bridges(unittest.TestCase):
         self.assertEqual(COMMON.bridged(4442), '0000:0001:127.0.0.1:4442')
 
 
+class Pins(unittest.TestCase):
+    def test_the_shell_is_found_without_touching_the_pin(self):
+        class Shell:
+            calls = []
+
+            def command(self, name, argv, **kw):
+                self.calls.append(name)
+                return 'building\n["/nix/store/python3", {"PYTHONPATH": "/litex"}]\n'
+        pins = COMMON.ProbehivePins(Shell(), '/src/probehive', '/build', 'IO32')
+        self.assertEqual((Shell.calls, pins.python, pins.env),
+                         (['gpio-environment'], '/nix/store/python3', {'PYTHONPATH': '/litex'}))
+
+    def test_a_shell_that_does_not_open_names_how_to_build_it(self):
+        class Building:
+            def command(self, name, argv, timeout, **kw):
+                raise COMMON.subprocess.TimeoutExpired(argv, timeout)
+        with self.assertRaisesRegex(COMMON.Failed, r'nix develop /src/probehive -c true'):
+            COMMON.ProbehivePins(Building(), '/src/probehive', '/build', 'IO32', seconds=1)
+
+
 class Records(unittest.TestCase):
     def test_a_record_keeps_the_boot_frames_and_the_last(self):
         result = dict(status='passed', image_sha256='ab', extra=1,
