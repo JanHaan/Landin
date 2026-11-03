@@ -165,6 +165,19 @@ def startup(console):
     return stream, len(console.sent)
 
 
+def send_stream(console, data):
+    """Keep ordinary traffic within one 64-byte piece of its echo."""
+    before = len(echo_of(bytes(console.received)))
+    for at in range(0, len(data), 64):
+        piece = data[at:at + 64]
+        console.send(piece)
+        end = before + at + len(piece)
+        stream = console.wait(lambda s: len(echo_of(s)) >= end, 5,
+                              'the echo of the stream bytes from %d' % at)
+        require(echo_of(stream)[before + at:end] == piece,
+                'the ordinary stream echo differs at byte %d' % at)
+
+
 def scenario(console, run, seed, pins=None, mode='boot', vector=None):
     """The board-port scenario and its oracle.  Returns the verdicts and
     the last telemetry frame."""
@@ -226,7 +239,7 @@ def scenario(console, run, seed, pins=None, mode='boot', vector=None):
     # is exhausted the UART's 32-byte FIFO holds what arrives, and only that.
     def fill(epoch, last=b''):
         part = bytes(rng.randrange(0x20, 0x7f) for _ in range(BUDGET - epoch - len(last)))
-        console.send(part + last)
+        send_stream(console, part + last)
         return part
     # An epoch that ends in STALL: the channel is exhausted while the
     # application stops reading, and a 100-byte burst then overflows the
@@ -248,7 +261,7 @@ def scenario(console, run, seed, pins=None, mode='boot', vector=None):
     require(after['c'] == 3 and after['d'] == 2,
             'after an exhausted epoch: %d restarts and %d completions, not 3 and 2'
             % (after['c'], after['d']))
-    console.send(bytes(rng.randrange(0x20, 0x7f) for _ in range(3000)))
+    send_stream(console, bytes(rng.randrange(0x20, 0x7f) for _ in range(3000)))
     final = report(console, seen); seen += 1
     require(final['c'] == 3 and final['d'] == 2, 'the last epoch restarted the ring')
     require(final['m'] > after['m'] > high['m'], 'the timer did not advance')

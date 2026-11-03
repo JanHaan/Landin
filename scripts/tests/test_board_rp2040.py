@@ -188,6 +188,50 @@ def startup_retry(test, board):
 
 
 class Oracle(unittest.TestCase):
+    def test_ordinary_stream_waits_for_each_complete_echo_between_frames(self):
+        test = self
+        class Console:
+            def __init__(self):
+                self.received = bytearray(b'old\x02t h=00000003\x03\n')
+                self.pieces = []
+                self.pending = None
+            def send(self, piece):
+                test.assertIsNone(self.pending, 'another piece overtook its echo')
+                test.assertLessEqual(len(piece), 64)
+                self.pieces.append(piece)
+                self.pending = piece
+            def wait(self, predicate, *_):
+                test.assertFalse(predicate(bytes(self.received)))
+                self.received += self.pending[:-1]
+                test.assertFalse(predicate(bytes(self.received)))
+                self.received += b'\x02t h=00000003\x03\n' + self.pending[-1:]
+                self.pending = None
+                test.assertTrue(predicate(bytes(self.received)))
+                return bytes(self.received)
+        console = Console()
+        data = b'abcdefghijklmnopqrstuvwxyz' * 5 + bytes([BOARD.STALL])
+        BOARD.send_stream(console, data)
+        self.assertEqual(b''.join(console.pieces), data)
+        self.assertEqual(list(map(len, console.pieces)), [64, 64, 3])
+        self.assertEqual(BOARD.echo_of(console.received), b'old' + data)
+
+    def test_ordinary_stream_stops_on_missing_or_corrupt_echo(self):
+        for corrupt in (False, True):
+            with self.subTest(corrupt=corrupt):
+                console = mock.Mock(received=b'')
+                def wait(predicate, *_):
+                    if corrupt:
+                        answer = b'X' + b'a' * 63
+                        self.assertTrue(predicate(answer))
+                        return answer
+                    self.assertFalse(predicate(b'a' * 63))
+                    raise BOARD.Failed('missing final echo byte')
+                console.wait.side_effect = wait
+                with self.assertRaisesRegex(BOARD.Failed,
+                        'echo differs|missing final echo byte'):
+                    BOARD.send_stream(console, b'a' * 129)
+                console.send.assert_called_once_with(b'a' * 64)
+
     def test_second_stage_readback_compares_helper_bytes(self):
         stage = bytes(range(256))
         for actual in (stage, stage[:-1] + b'\x00'):

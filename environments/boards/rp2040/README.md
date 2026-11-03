@@ -96,6 +96,14 @@ all ACKs and GO; echo and handled-count checks exclude that prefix.
 Three bytes are commands after their echo: 0x05 sets IRQ5 pending in the
 NVIC (D596), 0x11 asks for a `t` frame, and 0x12 stops reading for 100 ms.
 
+Ordinary epoch fills and the final stream use pieces of at most 64 bytes,
+each sent after the previous piece is echoed. A measured boot run lost
+bytes during an ordinary fill at continuous line rate, before the intended
+DMA exhaustion. Echo synchronization keeps this traffic within the
+application's servicing rate. The deliberate 300-byte ring overflow and
+100-byte FIFO overflow remain bursts, with the same exact loss, restart
+and DMA completion checks.
+
 ## The oracle
 
 | Checked | Against |
