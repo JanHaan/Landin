@@ -48,8 +48,11 @@ beside it. There are three ways to get both.
 [the releases page](https://github.com/JanHaan/Landin/releases) holds
 `bin/refine` and the library under `lib/landin`, with no top-level
 directory. Unpack it into a directory of its own and put its `bin` on your
-`PATH`. The archives of 0.2.7 and earlier hold `refine` alone, without its
-library, and cannot build the first program below. The 0.2.8 archive for
+`PATH`. No release yet can build the first program below: it imports
+`hosted/blocking` and starts with `refine run`, which came after 0.2.8, and
+the archives of 0.2.7 and earlier hold `refine` alone, without its library.
+Until a release has them, install with nix or from source, which build the
+compiler and library this README describes. The 0.2.8 archive for
 Linux x86-64 is 34 MB, most of it the compiler's debug information; later
 archives leave that out, at about 10 MB, and publish it beside them as
 `landin-VERSION-PLATFORM-debug.tar.gz`, which is wanted only to read a
