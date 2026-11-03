@@ -9,6 +9,8 @@ to itself, so it works from anywhere.
 
     python3 check.py            # all files
     python3 check.py FILE...    # these, if they are language files or ROADMAP.md
+    python3 check.py --generate # every generated file; usage() names
+                                # the flag that writes each one alone
 """
 import collections
 from functools import lru_cache
@@ -34,6 +36,22 @@ from roadmap_order import execution_order
 #  is held to by compiler/tests/fixture-meta.cases.
 sys.path.insert(0, os.path.join(ROOT, "compiler", "tests"))
 import fixture_meta  # noqa: E402
+
+
+#  Every file this reads or writes is closed by the time the call returns.
+#  `io.open(path).read()` left it to the collector, and under unittest
+#  each one printed a ResourceWarning: forty-five thousand lines of them
+#  buried the failures in scripts/script_tests.py's output.
+def read_file(*arguments, **options):
+    """The whole of a file, with io.open's arguments."""
+    with io.open(*arguments, **options) as stream:
+        return stream.read()
+
+
+def write_file(path, text):
+    """Replace a generated file's text, as UTF-8."""
+    with io.open(path, "w", encoding="utf-8") as stream:
+        stream.write(text)
 
 
 def fixture_fields(path):
@@ -432,6 +450,23 @@ def live_example_tokens(text):
     return out
 
 
+def grammar_problems(path):
+    """(line, why) for every fault read_grammar finds in PATH's grammar,
+    and one for a grammar with no `program` rule to derive from.
+
+    Every check that reads the grammar stops quietly at a fault, so the
+    faults are reported in one place: here, for the file that holds them.
+    The token generator stopped with "the grammar has problems" and named
+    none, and a run over spec.md alone called it clean, which left
+    calling read_grammar from Python as the only way to find out.
+    """
+    _, trees, problems = read_grammar(path)
+    if "program" not in trees:
+        problems = problems + [(1, "the grammar has no `program` rule,"
+                                   " so nothing can be derived from it")]
+    return sorted(problems)
+
+
 def check(path):
     with io.open(path, encoding="utf-8") as source:
         text = source.read()
@@ -440,6 +475,8 @@ def check(path):
     basename = os.path.basename(path)
     if basename == TOUR_NAME or basename in PROTOTYPE_FILES:
         out += live_example_tokens(text)
+    if basename == SPEC_NAME:
+        out += grammar_problems(path)
 
     #  A fence says what its block is; one that says nothing is a fault.
     #  This was documented and never enforced: `sections` filed a bare
@@ -1873,7 +1910,7 @@ def successor_families(text):
 
 def check_roadmap(path):
     """Cheap structural and referential checks over ROADMAP.md."""
-    lines = io.open(path, encoding="utf-8").read().splitlines()
+    lines = read_file(path, encoding="utf-8").splitlines()
     out = []
     phases = collections.defaultdict(list)
     gates = collections.defaultdict(list)
@@ -2278,7 +2315,7 @@ def check_project_status(full_run):
     if missing:
         return missing
 
-    lines = io.open(roadmap, encoding="utf-8").read().splitlines()
+    lines = read_file(roadmap, encoding="utf-8").splitlines()
     items = {}
     current = None
     for n, line in enumerate(lines, 1):
@@ -2343,7 +2380,7 @@ def check_project_status(full_run):
 
     for path in documents:
         relative = os.path.relpath(path, ROOT)
-        text = io.open(path, encoding="utf-8").read()
+        text = read_file(path, encoding="utf-8")
         markers = []
         for n, line in enumerate(text.splitlines(), 1):
             for kind, pattern in (("current", CURRENT_ROADMAP_WORK),
@@ -2400,13 +2437,13 @@ def construct_ids():
         path = os.path.join(ROOT, name)
         if os.path.exists(path):
             out |= set(re.findall(r"^### \[(\d{4})\] ",
-                                  io.open(path, encoding="utf-8").read(),
+                                  read_file(path, encoding="utf-8"),
                                   re.M))
     return out
 
 
 def construct_definitions(path):
-    text = io.open(path, encoding="utf-8").read()
+    text = read_file(path, encoding="utf-8")
     definitions = collections.defaultdict(list)
     for n, line in enumerate(text.splitlines(), 1):
         match = re.match(r"^### \[(\d{4})\] ", line)
@@ -2418,7 +2455,7 @@ def construct_definitions(path):
 def finding_definitions(paths):
     definitions = collections.defaultdict(list)
     for prefix, path in paths.items():
-        text = io.open(path, encoding="utf-8").read()
+        text = read_file(path, encoding="utf-8")
         for n, line in enumerate(text.splitlines(), 1):
             match = re.match(r"^(%s\d+)\s" % prefix, line)
             if match:
@@ -2467,7 +2504,7 @@ def check_citations(paths):
     for path in citation_paths:
         if os.path.basename(path) not in PROTOTYPE_FINDINGS.values():
             continue
-        text = io.open(path, encoding="utf-8").read()
+        text = read_file(path, encoding="utf-8")
         for n, line in enumerate(text.splitlines(), 1):
             match = re.match(r"^### \[(\d{4})\]", line)
             if match:
@@ -2491,7 +2528,7 @@ def check_citations(paths):
                         % (finding, locations[0][0], locations[0][1])))
 
     for path in citation_paths:
-        text = io.open(path, encoding="utf-8").read()
+        text = read_file(path, encoding="utf-8")
         for match in re.finditer(r"(?<![\w])\[(\d{4})\](?![A-Za-z_0-9])", text):
             if match.group(1) not in constructs:
                 line = text.count("\n", 0, match.start()) + 1
@@ -2540,12 +2577,12 @@ def check_specification_version(full_run):
     if out:
         return out
     stated = re.search(r"^\*\*Status: specification ([0-9][0-9.]*)\.",
-                       io.open(readme, encoding="utf-8").read(), re.M)
+                       read_file(readme, encoding="utf-8"), re.M)
     if not stated:
         return [(readme, 1, "the status line states no specification version")]
     version = stated.group(1)
     for path, pattern in places:
-        text = io.open(path, encoding="utf-8").read()
+        text = read_file(path, encoding="utf-8")
         found = pattern.search(text)
         if not found:
             out.append((path, 1, "states no specification version where "
@@ -2572,7 +2609,7 @@ def check_finding_letters(full_run):
     out = absent([path])
     if out:
         return out
-    text = io.open(path, encoding="utf-8").read()
+    text = read_file(path, encoding="utf-8")
     found = re.search(r'^FINDING_LETTERS = "(\[[A-Z]+\])"$', text, re.M)
     if not found:
         return [(path, 1, "has no FINDING_LETTERS for the prototypes' findings")]
@@ -2610,7 +2647,7 @@ def check_site_documents(full_run):
     for prototype in PROTOTYPE_FILES:
         if prototype not in sources:
             out.append((renderer, 1, "renders no page for %s" % prototype))
-    text = io.open(os.path.join(ROOT, workflow), encoding="utf-8").read()
+    text = read_file(os.path.join(ROOT, workflow), encoding="utf-8")
     found = re.search(r"^    paths:\n((?:      - '[^']+'\n)+)", text, re.M)
     if not found:
         return out + [(workflow, 1, "has no push paths where"
@@ -2649,9 +2686,9 @@ def check_pinned_toolchain(full_run):
     if out:
         return out
 
-    recipe_text = io.open(recipe, encoding="utf-8").read()
-    record_text = io.open(record, encoding="utf-8").read()
-    pins_text = (io.open(pins, encoding="utf-8").read()
+    recipe_text = read_file(recipe, encoding="utf-8")
+    record_text = read_file(record, encoding="utf-8")
+    pins_text = (read_file(pins, encoding="utf-8")
                  if os.path.exists(pins) else "")
 
     wanted = {
@@ -2691,7 +2728,7 @@ def check_pinned_toolchain(full_run):
         path = os.path.join(ROOT, relative)
         if not os.path.exists(path):
             continue
-        text = io.open(path, encoding="utf-8").read()
+        text = read_file(path, encoding="utf-8")
         if "environments/pins.sh" not in text:
             out.append((path, 1, "%s does not read environments/pins.sh"
                                  % relative))
@@ -2727,7 +2764,7 @@ def check_pinned_toolchain(full_run):
                 continue
             path = os.path.join(directory, name_yml)
             relative = os.path.relpath(path, ROOT)
-            text = io.open(path, encoding="utf-8").read()
+            text = read_file(path, encoding="utf-8")
             for name, pattern in wanted.items():
                 found = pattern.search(recipe_text)
                 if found and found.group(1) in text:
@@ -2791,7 +2828,7 @@ def arm_elf_pin_problems(pins, pins_text, record, record_text):
         if missing:
             out += missing
             continue
-        text = io.open(path, encoding="utf-8").read()
+        text = read_file(path, encoding="utf-8")
         for read in reads:
             if read not in text:
                 out.append((path, 1, "%s does not read %s from "
@@ -2840,7 +2877,7 @@ def riscv_elf_pin_problems(pins, pins_text, record, record_text):
         if missing:
             out += missing
             continue
-        text = io.open(path, encoding="utf-8").read()
+        text = read_file(path, encoding="utf-8")
         for read in reads:
             if read not in text:
                 out.append((path, 1, "%s does not read %s from "
@@ -2880,11 +2917,11 @@ def gate_tool_pin_problems(pins, pins_text, record, record_text):
     missing = absent([package, lock])
     if missing:
         return out + missing
-    declared = json.load(io.open(package, encoding="utf-8"))
+    declared = json.loads(read_file(package, encoding="utf-8"))
     if declared.get("devDependencies", {}).get("tree-sitter-cli") != version:
         out.append((package, 1, "tree-sitter-cli is not %s, the version "
                                 "environments/pins.sh names" % version))
-    locked = json.load(io.open(lock, encoding="utf-8")).get("packages", {})
+    locked = json.loads(read_file(lock, encoding="utf-8")).get("packages", {})
     if locked.get("node_modules/tree-sitter-cli", {}).get("version") != version:
         out.append((lock, 1, "the lockfile's tree-sitter-cli is not %s, the "
                              "version environments/pins.sh names" % version))
@@ -2894,7 +2931,7 @@ def gate_tool_pin_problems(pins, pins_text, record, record_text):
     flake = os.path.join(ROOT, "flake.nix")
     if not os.path.exists(flake):
         return out
-    flake_text = io.open(flake, encoding="utf-8").read()
+    flake_text = read_file(flake, encoding="utf-8")
     for name in CROSS_LANE_PINS:
         if 'pin "%s"' % name not in flake_text:
             out.append((flake, 1, "flake.nix does not hold its cross lane to "
@@ -2993,7 +3030,7 @@ def check_developer_loops(full_run):
         if not os.path.exists(path):
             out.append((relative, 1, "the development-loop script is missing"))
             continue
-        script = io.open(path, encoding="utf-8").read()
+        script = read_file(path, encoding="utf-8")
         for snippet in snippets:
             if snippet not in script:
                 out.append((relative, 1,
@@ -3004,7 +3041,7 @@ def check_developer_loops(full_run):
 
     loop = os.path.join(ROOT, "scripts/linux-loop.sh")
     if os.path.exists(loop):
-        script = io.open(loop, encoding="utf-8").read()
+        script = read_file(loop, encoding="utf-8")
         if "./scripts/build.sh && ./scripts/test.sh" in script:
             out.append(("scripts/linux-loop.sh", 1,
                         "the default loop builds twice; test.sh owns the build"))
@@ -3137,7 +3174,7 @@ def token_dump():
             for source in sorted(f for f in os.listdir(case)
                                  if f.endswith(".ldn")):
                 path = os.path.join(case, source)
-                text = io.open(path, "rb").read().decode("latin-1")
+                text = read_file(path, "rb").decode("latin-1")
                 tokens, complaint = landin_tokens(text, signs, trees)
                 where = "%s/%s/%s" % (kind, name, source)
 
@@ -3183,7 +3220,7 @@ STATED_IN_PROSE = {
 def fixed_results(meta):
     """The files a fixture's `fixed:` names as results of its fixes."""
     named = re.search(r"^fixed: (.+)$",
-                      io.open(meta, encoding="utf-8").read(), re.M)
+                      read_file(meta, encoding="utf-8"), re.M)
     if not named:
         return set()
     return {pair.split("->")[-1].strip()
@@ -3218,7 +3255,7 @@ def frontend_codes():
         #  closed.
         return set()
     found = re.search(r"function Code_For[^;]*?is \(case .*?\);",
-                      io.open(full, encoding="utf-8").read(), re.S)
+                      read_file(full, encoding="utf-8"), re.S)
     if not found or not parsed:
         #  The same fail-closed answer as a missing file: a table that
         #  moved is not a table with fewer rows.
@@ -3387,8 +3424,10 @@ def check_grammar_corpus(full_run):
     if missing:
         return missing
 
-    rules, trees, problems = read_grammar(tour)
-    out = [(SPEC_NAME, n, why) for n, why in problems]
+    #  The grammar's own faults are check()'s to report, for spec.md, which
+    #  every run that reaches this reads too.
+    rules, trees, _ = read_grammar(tour)
+    out = []
     if not trees or "program" not in trees:
         return out
 
@@ -3402,7 +3441,7 @@ def check_grammar_corpus(full_run):
     #  fixtures were written for it.
     witness = os.path.join(fixtures, "positive/line-ends-crlf/program.ldn")
     if os.path.exists(witness):
-        if "\r" not in io.open(witness, "rb").read().decode("latin-1"):
+        if "\r" not in read_file(witness, "rb").decode("latin-1"):
             out.append(("compiler/tests/fixtures/positive/line-ends-crlf"
                         "/program.ldn", 1,
                         "this fixture must carry a CR byte, and the corpus "
@@ -3562,7 +3601,7 @@ def check_grammar_corpus(full_run):
     #  marked each with a `-- [NNNN]` line, and matching that marker in the
     #  Markdown found nothing and so could never refuse anything.
     owning, heading, inside = set(), None, False
-    for line in io.open(tour, encoding="utf-8").read().splitlines():
+    for line in read_file(tour, encoding="utf-8").splitlines():
         named = re.match(r"^### \[(\d{4})\]", line)
         if named:
             heading = named.group(1)
@@ -3593,11 +3632,11 @@ def check_grammar_corpus(full_run):
         if not os.path.exists(recorded):
             out.append(("compiler/tests/lexical.tokens", 1,
                         "the token dump is missing; regenerate it with "
-                        "python3 check.py --generate (or --tokens)"))
-        elif io.open(recorded, encoding="utf-8").read() != fresh:
+                        + regenerating("compiler/tests/lexical.tokens")))
+        elif read_file(recorded, encoding="utf-8") != fresh:
             out.append(("compiler/tests/lexical.tokens", 1,
                         "the token dump is stale; regenerate it with "
-                        "python3 check.py --generate (or --tokens)"))
+                        + regenerating("compiler/tests/lexical.tokens")))
 
     save_grammar_corpus_cache(cache_path, cache_identity, cached)
     return out
@@ -3623,8 +3662,8 @@ def check_token_vocabulary(full_run):
         return missing
 
     out = []
-    spec_text = io.open(spec, encoding="utf-8").read()
-    body_text = io.open(body, encoding="utf-8").read()
+    spec_text = read_file(spec, encoding="utf-8")
+    body_text = read_file(body, encoding="utf-8")
     rules, trees, problems = read_grammar(tour)
     if problems:
         return []
@@ -3786,7 +3825,7 @@ def check_precedence_table(full_run):
 
     where = "compiler/ada/src/syntax/landin-syntax-precedence.ads"
     out = []
-    text = io.open(spec, encoding="utf-8").read()
+    text = read_file(spec, encoding="utf-8")
     rules, trees, problems = read_grammar(tour)
     if problems:
         return []
@@ -3799,8 +3838,8 @@ def check_precedence_table(full_run):
     #  What a token kind spells, so a table over kinds can be compared with
     #  a grammar over bytes.
     spelling = dict(re.findall(r'when\s+([A-Za-z_]+)\s*=>\s*"([^"]+)",',
-                               io.open(signs, encoding="utf-8").read()))
-    token_text = io.open(tokens, encoding="utf-8").read()
+                               read_file(signs, encoding="utf-8")))
+    token_text = read_file(tokens, encoding="utf-8")
 
     def item_of(kind):
         if kind == "Identifier":
@@ -4064,7 +4103,7 @@ def check_note_words(full_run):
                 continue
             path = os.path.join(directory, name)
             relative = os.path.relpath(path, ROOT)
-            text = io.open(path, encoding="utf-8").read()
+            text = read_file(path, encoding="utf-8")
             for line, said in ada_note_runs(text):
                 if "::=" in said:
                     out.append((relative, line,
@@ -4098,7 +4137,7 @@ def check_foreign_forms(full_run):
     if out:
         return out
     relative = os.path.relpath(table, ROOT)
-    text = io.open(table, encoding="utf-8").read()
+    text = read_file(table, encoding="utf-8")
 
     def column(function):
         found = re.search(r"function %s \(Item : Foreign_Form\)(.*?)\);"
@@ -4148,7 +4187,7 @@ def check_foreign_forms(full_run):
         if expect:
             recorded = os.path.join(os.path.dirname(meta), expect)
             if os.path.exists(recorded):
-                report = io.open(recorded, encoding="utf-8").read()
+                report = read_file(recorded, encoding="utf-8")
         if not re.search(r"`[^`\n]*%s[^`\n]*`" % re.escape(word), report) \
                 or "Landin writes" not in report:
             out.append((relative, 1, "negative/%s does not record a report"
@@ -4184,14 +4223,14 @@ def check_refused_constructs(full_run):
         return missing
 
     out = []
-    parser_text = io.open(parser, encoding="utf-8").read()
-    codes_text = io.open(codes, encoding="utf-8").read()
+    parser_text = read_file(parser, encoding="utf-8")
+    codes_text = read_file(codes, encoding="utf-8")
     #  Both documents, because a word the parser refuses is written where
     #  the language is explained and not where the kernel is specified:
     #  `loop` and `match` are in the tour and the spec omits them by
     #  design, which is the whole reason the parser has to name them.
     tour_text = "\n".join(
-        io.open(os.path.join(ROOT, name), encoding="utf-8").read()
+        read_file(os.path.join(ROOT, name), encoding="utf-8")
         for name in (SPEC_NAME, TOUR_NAME)
         if os.path.exists(os.path.join(ROOT, name)))
     rules, _, problems = read_grammar(tour)
@@ -4223,7 +4262,7 @@ def check_refused_constructs(full_run):
     checking_source = ""
     checking_path = os.path.join(ROOT, checking_relative)
     if os.path.exists(checking_path):
-        checking_source = io.open(checking_path, encoding="utf-8").read()
+        checking_source = read_file(checking_path, encoding="utf-8")
     if refusal_entries() is None:
         out.append((
             "compiler/ada/src/diagnostics/landin-diagnostics-syntactic.ads",
@@ -4294,7 +4333,7 @@ def check_refused_constructs(full_run):
         ROOT, "compiler/ada/src/diagnostics/landin-diagnostics-checking.ads")
     out.extend(absent((checking,)))
     if os.path.exists(checking):
-        checking_text = io.open(checking, encoding="utf-8").read()
+        checking_text = read_file(checking, encoding="utf-8")
         found = re.search(
             r"function Spelling \(Item : Refused_Type_Name\) return String"
             r"\s*is \(case Item is(.*?)\);", checking_text, re.S)
@@ -4356,7 +4395,7 @@ def check_refused_constructs(full_run):
     if os.path.exists(types):
         found = re.search(r"function Spelling \(Item : Scalar_Name\)"
                           r"[^;]*?is \(case Item is(.*?)\);",
-                          io.open(types, encoding="utf-8").read(), re.S)
+                          read_file(types, encoding="utf-8"), re.S)
         if not found:
             out.append(("compiler/ada/src/checking/landin-types.ads", 1,
                         "the type table could not be read"))
@@ -4377,7 +4416,7 @@ def check_refused_constructs(full_run):
 
         text_found = re.search(r"function Spelling \(Item : Text_View\)"
                                r"[^;]*?is \(case Item is(.*?)\);",
-                               io.open(types, encoding="utf-8").read(), re.S)
+                               read_file(types, encoding="utf-8"), re.S)
         if not text_found:
             out.append(("compiler/ada/src/checking/landin-types.ads", 1,
                         "the text-view table could not be read"))
@@ -4426,7 +4465,7 @@ def catalogue_rows():
     if not os.path.exists(spec):
         return None
 
-    text = ada_without_comments(io.open(spec, encoding="utf-8").read())
+    text = ada_without_comments(read_file(spec, encoding="utf-8"))
 
     names = re.search(r"type Code_Name is\s*\((.*?)\);", text, re.S)
     table = re.search(r"Table : constant array \(Code_Name\) of Row :=\s*"
@@ -4518,7 +4557,7 @@ def check_catalogue(full_run):
             path = os.path.join(here, name)
             if path.endswith("landin-diagnostics-catalogue.ads"):
                 continue
-            text = io.open(path, encoding="utf-8").read()
+            text = read_file(path, encoding="utf-8")
             for found in re.finditer(r'"(L\d{4})"', text):
                 where = os.path.relpath(path, ROOT)
                 out.append((where, text.count("\n", 0, found.start()) + 1,
@@ -4532,11 +4571,13 @@ def check_catalogue(full_run):
         if not os.path.exists(recorded):
             out.append(("compiler/tests/diagnostics.catalogue", 1,
                         "the catalogue reading copy is missing; regenerate "
-                        "it with python3 check.py --generate (or --catalogue)"))
-        elif io.open(recorded, encoding="utf-8").read() != fresh:
+                        "it with " + regenerating(
+                            "compiler/tests/diagnostics.catalogue")))
+        elif read_file(recorded, encoding="utf-8") != fresh:
             out.append(("compiler/tests/diagnostics.catalogue", 1,
                         "the catalogue reading copy is stale; regenerate "
-                        "it with python3 check.py --generate (or --catalogue)"))
+                        "it with " + regenerating(
+                            "compiler/tests/diagnostics.catalogue")))
 
     #  A fixture may name the codes its report must carry.
     known = {row["code"] for row in rows}
@@ -4798,7 +4839,7 @@ def check_catalogue_labels(full_run):
 def third_party_notices():
     """The root inventory must name the notices beside vendored material."""
     out = []
-    inventory = io.open(os.path.join(ROOT, "LICENSE"), encoding="utf-8").read()
+    inventory = read_file(os.path.join(ROOT, "LICENSE"), encoding="utf-8")
     notices = {
         "assets/icons.py": ("Lucide", "ISC"),
         "assets/fonts/nunito-sans/OFL.txt":
@@ -4817,7 +4858,7 @@ def third_party_notices():
         if not os.path.isfile(path):
             out.append((relative, 1, "vendored material's notice is missing"))
             continue
-        text = io.open(path, encoding="utf-8").read()
+        text = read_file(path, encoding="utf-8")
         for marker in markers:
             if marker not in text:
                 out.append((relative, 1, "notice attribution is missing: "
@@ -4840,10 +4881,10 @@ def shared_routine_witnesses():
         if missing:
             out.extend(missing)
             continue
-        source = io.open(os.path.join(ROOT, published),
-                         encoding="utf-8").read()
+        source = read_file(os.path.join(ROOT, published),
+                         encoding="utf-8")
         for copy, names in sorted(copies.items()):
-            text = io.open(os.path.join(ROOT, copy), encoding="utf-8").read()
+            text = read_file(os.path.join(ROOT, copy), encoding="utf-8")
             for name in names:
                 found = re.search(r"^" + name + r": .*?^end " + name + r"$",
                                   source, re.M | re.S)
@@ -4858,9 +4899,9 @@ def shared_routine_witnesses():
 
 def tour_example_witnesses():
     """Tour examples that retain their compiled source witnesses."""
-    tour = io.open(os.path.join(ROOT, "tour.md"), encoding="utf-8").read()
+    tour = read_file(os.path.join(ROOT, "tour.md"), encoding="utf-8")
     where = "compiler/tests/fixtures/positive/r491-tour-allocator-examples/main.ldn"
-    source = io.open(os.path.join(ROOT, where), encoding="utf-8").read()
+    source = read_file(os.path.join(ROOT, where), encoding="utf-8")
     out = []
     for name in ("new_buffers", "make_widget"):
         found = re.search(r"^" + name + r": \(.*?^end " + name + r"$",
@@ -4869,7 +4910,7 @@ def tour_example_witnesses():
             out.append((where, 1, "compiled witness differs from tour " + name))
     #  D405: [1220]'s several-label arm checks as the tour writes it.
     where = "compiler/tests/fixtures/positive/match-arm-names-several-cases/program.ldn"
-    source = io.open(os.path.join(ROOT, where), encoding="utf-8").read()
+    source = read_file(os.path.join(ROOT, where), encoding="utf-8")
     found = re.search(r"^describe: \(.*?^end describe$", tour, re.M | re.S)
     if not found or found.group() not in source:
         out.append((where, 1, "compiled witness differs from tour describe"))
@@ -4878,8 +4919,8 @@ def tour_example_witnesses():
 
 def decision_status_references():
     """Decision evidence cannot call a completed roadmap owner active."""
-    spec = io.open(os.path.join(ROOT, "spec.md"), encoding="utf-8").read()
-    roadmap = io.open(os.path.join(ROOT, ROADMAP), encoding="utf-8").read()
+    spec = read_file(os.path.join(ROOT, "spec.md"), encoding="utf-8")
+    roadmap = read_file(os.path.join(ROOT, ROADMAP), encoding="utf-8")
     statuses = roadmap_statuses(roadmap)
     out = []
     for pin in re.finditer(r"^\*\*Pinned by[^*]*\*\*.*?(?=^\*\*|^### |\Z)",
@@ -4949,7 +4990,7 @@ def test_suite_inventory():
     out = []
     directory = os.path.join(ROOT, "compiler/ada/tests/src")
     where = "compiler/ada/tests/src/landin_tests.adb"
-    main = io.open(os.path.join(ROOT, where), encoding="utf-8").read()
+    main = read_file(os.path.join(ROOT, where), encoding="utf-8")
     expected_block = re.search(r"Expected_Suites\s*:.*?:=\s*\[(.*?)\];",
                                main, re.S)
     if not expected_block:
@@ -4965,8 +5006,8 @@ def test_suite_inventory():
     for filename in sorted(os.listdir(directory)):
         if not re.fullmatch(r"landin-tests-.+_suite\.adb", filename):
             continue
-        text = io.open(os.path.join(directory, filename),
-                       encoding="utf-8").read()
+        text = read_file(os.path.join(directory, filename),
+                       encoding="utf-8")
         package = re.search(r"package body (Landin\.Tests\.\w+) is", text)
         if not package:
             out.append((where, 1, "suite package is unreadable: " + filename))
@@ -5002,7 +5043,7 @@ def fixture_profiles():
                 continue
             entries = []
             for number, line in enumerate(
-                    io.open(meta, encoding="utf-8"), 1):
+                    read_file(meta, encoding="utf-8").splitlines(True), 1):
                 match = re.match(r"^\s*profiles\s*:(.*)$", line)
                 if match:
                     entries.append((number, match.group(1).strip()))
@@ -5088,7 +5129,7 @@ def lowering_verifies():
     if missing:
         return missing
 
-    text = io.open(path, encoding="utf-8").read()
+    text = read_file(path, encoding="utf-8")
     if "Landin.IR.Verifier.Verify" in text:
         return []
     return [(where, 1,
@@ -5186,7 +5227,7 @@ def pinned_fixtures():
         path = os.path.join(ROOT, relative)
         if not os.path.exists(path):
             continue
-        text = io.open(path, encoding="utf-8").read()
+        text = read_file(path, encoding="utf-8")
         for paragraph in block.finditer(text):
             for found in fixture.finditer(paragraph.group(0)):
                 named = found.group(1)
@@ -5239,7 +5280,7 @@ def construct_evidence():
         path = os.path.join(ROOT, relative)
         if not os.path.exists(path):
             continue
-        text = io.open(path, encoding="utf-8").read()
+        text = read_file(path, encoding="utf-8")
         table = re.search(
             r"function Construct \(Item : Refused_(?:Construct|Use)\)"
             r".*?is \(case Item is(.*?)\)\s+with Post", text, re.S)
@@ -5333,7 +5374,7 @@ def refusal_entries():
                  for suffix in (".ads", ".adb")]
         if not all(os.path.exists(path) for path in paths):
             return None
-        spec_text, body_text = (io.open(path, encoding="utf-8").read()
+        spec_text, body_text = (read_file(path, encoding="utf-8")
                                 for path in paths)
         constructs = case_table(spec_text,
                                 "function Construct (Item : %s)" % kind)
@@ -5385,7 +5426,8 @@ def arm64_linux_problems():
     path = os.path.join(ROOT, ARM64_LINUX_PARITY)
     if not os.path.exists(path):
         return [(ARM64_LINUX_PARITY, 1, "the linux-arm64 dispositions are absent")]
-    records = json.load(io.open(path, encoding="utf-8")).get("differences", {})
+    records = json.loads(read_file(path, encoding="utf-8")).get(
+        "differences", {})
     fixtures = fixture_records()
 
     def targets_of(fields):
@@ -5537,7 +5579,7 @@ def cortex_probe_records():
     path = os.path.join(ROOT, CORTEX_PROBES)
     if not os.path.exists(path):
         return []
-    return json.load(io.open(path, encoding="utf-8")).get("probes", [])
+    return json.loads(read_file(path, encoding="utf-8")).get("probes", [])
 
 
 def cortex_probe_problems(titles):
@@ -5564,7 +5606,7 @@ def cortex_probe_problems(titles):
                     "probe %s names a %s that is not here: %s"
                     % (name, role, relative or "nothing"))))
         if source and runner and os.path.exists(os.path.join(ROOT, runner)):
-            body = io.open(os.path.join(ROOT, runner), encoding="utf-8").read()
+            body = read_file(os.path.join(ROOT, runner), encoding="utf-8")
             if os.path.basename(source) not in body:
                 problems.append((CORTEX_PROBES, 0, (
                     "probe %s says %s runs %s and it does not name it"
@@ -5627,9 +5669,9 @@ def fixture_target_claims():
                for path in (parity_path, corpus_path, driver_path,
                             os.path.join(ROOT, ARM64_LINUX_PARITY))):
         return None
-    parity = json.load(io.open(parity_path, encoding="utf-8"))
-    corpus = json.load(io.open(corpus_path, encoding="utf-8"))["fixtures"]
-    driver = json.load(io.open(driver_path, encoding="utf-8"))
+    parity = json.loads(read_file(parity_path, encoding="utf-8"))
+    corpus = json.loads(read_file(corpus_path, encoding="utf-8"))["fixtures"]
+    driver = json.loads(read_file(driver_path, encoding="utf-8"))
     best = {}
 
     def claim(fixture, target, what):
@@ -5728,7 +5770,7 @@ def construct_titles():
         path = os.path.join(ROOT, name)
         if not os.path.exists(path):
             return None
-        text = io.open(path, encoding="utf-8").read()
+        text = read_file(path, encoding="utf-8")
         for found in re.finditer(r"^### \[(\d{4})\] (.+)$", text, re.M):
             ids.append((found.group(1), name, found.group(2).strip()))
     return sorted(ids)
@@ -5741,7 +5783,7 @@ def construct_paragraphs():
         path = os.path.join(ROOT, name)
         if not os.path.exists(path):
             continue
-        text = io.open(path, encoding="utf-8").read()
+        text = read_file(path, encoding="utf-8")
         heads = list(re.finditer(r"^#{2,3} .*$", text, re.M))
         for index, head in enumerate(heads):
             found = re.match(r"### \[(\d{4})\] ", head.group(0))
@@ -5796,8 +5838,8 @@ def inventory_inputs():
     if (titles is None or refusals is None or targets is None
             or not os.path.exists(roadmap) or not os.path.exists(registers)):
         return None
-    return {"roadmap": io.open(roadmap, encoding="utf-8").read(),
-            "registers": io.open(registers, encoding="utf-8").read(),
+    return {"roadmap": read_file(roadmap, encoding="utf-8"),
+            "registers": read_file(registers, encoding="utf-8"),
             "titles": titles,
             "paragraphs": construct_paragraphs(),
             "evidence": construct_evidence(),
@@ -6087,11 +6129,11 @@ def check_matrix(full_run):
     if not os.path.exists(recorded):
         return out + [("compiler/tests/constructs.matrix", 1,
                        "the construct matrix is missing; regenerate it with "
-                       "python3 check.py --generate (or --matrix)")]
-    if io.open(recorded, encoding="utf-8").read() != fresh:
+                       + regenerating("compiler/tests/constructs.matrix"))]
+    if read_file(recorded, encoding="utf-8") != fresh:
         return out + [("compiler/tests/constructs.matrix", 1,
                        "the construct matrix is stale; regenerate it with "
-                       "python3 check.py --generate (or --matrix)")]
+                       + regenerating("compiler/tests/constructs.matrix"))]
     return out
 
 
@@ -6105,7 +6147,7 @@ def markdown_register(relative, heading, columns):
     path = os.path.join(ROOT, relative)
     if not os.path.exists(path):
         return None
-    return markdown_table(io.open(path, encoding="utf-8").read().splitlines(),
+    return markdown_table(read_file(path, encoding="utf-8").splitlines(),
                           heading, columns)
 
 
@@ -6486,8 +6528,8 @@ def coverage_dumps():
     for _, row in prototypes:
         number = row["Prototype"].strip("`Pp ")
         source, _ = finding_sources.get(number, ("?", "?"))
-        source_text = (io.open(os.path.join(ROOT, source), encoding="utf-8")
-                       .read() if source != "?" else "")
+        source_text = (read_file(os.path.join(ROOT, source), encoding="utf-8")
+                       if source != "?" else "")
         locations = []
         for finding in re.findall(FINDING_LETTERS + r"\d+", row["Findings"]):
             match = re.search(r"^%s\b" % finding, source_text, re.M)
@@ -6640,8 +6682,8 @@ def check_coverage_registers(full_run):
                     probe = "environments/cortex-m/firmware.py"
                     runner = "environments/cortex-m/run.py"
                     if probe in row["Evidence"] and os.path.isfile(probe):
-                        probe_text = io.open(probe, encoding="utf-8").read()
-                        runner_text = io.open(runner, encoding="utf-8").read()
+                        probe_text = read_file(probe, encoding="utf-8")
+                        runner_text = read_file(runner, encoding="utf-8")
                         firmware_trap = all(pin in probe_text for pin in (
                             "R660_FIRMWARE_BOOT_PASS",
                             "R660_NAKED_FALLTHROUGH_PASS",
@@ -6654,9 +6696,9 @@ def check_coverage_registers(full_run):
                     peer = "compiler/tests/fixtures/abi/r670-panic/peer.c"
                     runner = "environments/cortex-m/run.py"
                     if probe in row["Evidence"] and os.path.isfile(peer):
-                        probe_text = io.open(probe, encoding="utf-8").read()
-                        peer_text = io.open(peer, encoding="utf-8").read()
-                        runner_text = io.open(runner, encoding="utf-8").read()
+                        probe_text = read_file(probe, encoding="utf-8")
+                        peer_text = read_file(peer, encoding="utf-8")
+                        runner_text = read_file(runner, encoding="utf-8")
                         firmware_trap = all(pin in probe_text for pin in (
                             "R670_PANIC_PASS", "0xde01",
                             "'panic-default'")) and all(
@@ -6712,8 +6754,8 @@ def check_coverage_registers(full_run):
                     out.append((where, line,
                                 "%s names missing fixture %s" % (key, name)))
             for decision in re.findall(r"D\d+", row["Rules"]):
-                text = io.open(os.path.join(ROOT, SPEC_NAME),
-                               encoding="utf-8").read()
+                text = read_file(os.path.join(ROOT, SPEC_NAME),
+                               encoding="utf-8")
                 if not re.search(r"^### %s\b" % decision, text, re.M):
                     out.append((where, line,
                                 "%s names missing decision %s" %
@@ -6762,7 +6804,7 @@ def check_coverage_registers(full_run):
             if source is None:
                 out.append((REGISTERS, line, "unknown prototype %s" % number))
                 continue
-            text = io.open(os.path.join(ROOT, source), encoding="utf-8").read()
+            text = read_file(os.path.join(ROOT, source), encoding="utf-8")
             findings = re.findall(FINDING_LETTERS + r"\d+", row["Findings"])
             if not findings:
                 out.append((REGISTERS, line,
@@ -6782,8 +6824,8 @@ def check_coverage_registers(full_run):
     for field in ("source", "protocol", "layout", "driver", "mapping", "runner"):
         if not os.path.isfile(os.path.join(ROOT, firmware.get(field, ""))):
             out.append((REGISTERS, 1, "driver derivation lacks " + field))
-    mandatory = io.open(os.path.join(ROOT, "environments/cortex-m/run.py"),
-                        encoding="utf-8").read()
+    mandatory = read_file(os.path.join(ROOT, "environments/cortex-m/run.py"),
+                        encoding="utf-8")
     if "driver_execute(self, refine)" not in mandatory:
         out.append((REGISTERS, 1, "driver evidence is not in the mandatory lane"))
     if "evidence_execute(self, refine)" not in mandatory:
@@ -6846,11 +6888,11 @@ def check_coverage_registers(full_run):
             if not os.path.exists(path):
                 out.append((relative, 1,
                             "coverage matrix is missing; regenerate it with "
-                            "python3 check.py --generate (or --coverage)"))
-            elif io.open(path, encoding="utf-8").read() != fresh:
+                            + regenerating(relative)))
+            elif read_file(path, encoding="utf-8") != fresh:
                 out.append((relative, 1,
                             "coverage matrix is stale; regenerate it with "
-                            "python3 check.py --generate (or --coverage)"))
+                            + regenerating(relative)))
     return out
 
 
@@ -6880,8 +6922,8 @@ def diagnostic_matrix_dump():
         for name in files:
             if name.endswith((".ads", ".adb")):
                 path = os.path.join(here, name)
-                tests[os.path.relpath(path, ROOT)] = io.open(
-                    path, encoding="utf-8").read()
+                tests[os.path.relpath(path, ROOT)] = read_file(
+                    path, encoding="utf-8")
 
     lines = ["# Generated by check.py from the diagnostic catalogue, emitters,",
              "# fixture metadata and Ada cases.  Do not edit; regenerate with",
@@ -6937,7 +6979,7 @@ def explanation_sections():
     path = os.path.join(ROOT, EXPLANATIONS)
     if not os.path.exists(path):
         return None, [(EXPLANATIONS, 1, "the explanations are missing")]
-    lines = io.open(path, encoding="utf-8").read().split("\n")
+    lines = read_file(path, encoding="utf-8").split("\n")
     sections = collections.OrderedDict()
     problems = []
     current = None
@@ -7114,11 +7156,11 @@ def check_explanations(full_run):
     fresh = explanations_dump()
     target = os.path.join(ROOT, EXPLANATIONS_ADA)
     if fresh is not None and (not os.path.exists(target)
-                              or io.open(target, encoding="utf-8").read()
+                              or read_file(target, encoding="utf-8")
                               != fresh):
         out.append((EXPLANATIONS_ADA, 1,
-                    "the explanations are stale; regenerate them with"
-                    " python3 check.py --generate (or --catalogue)"))
+                    "the explanations are stale; regenerate them with "
+                    + regenerating(EXPLANATIONS_ADA)))
     return out
 
 
@@ -7210,7 +7252,7 @@ def citation_entries():
         path = os.path.join(ROOT, name)
         if not os.path.exists(path):
             return None, None, [(name, 1, "the document is missing")]
-        lines = io.open(path, encoding="utf-8").read().split("\n")
+        lines = read_file(path, encoding="utf-8").split("\n")
         heads = [n for n, line in enumerate(lines)
                  if re.match(r"^#{1,3} ", line)]
         section = ""
@@ -7323,10 +7365,10 @@ def check_citation_table(full_run):
     for path, text in zip((CITATIONS_ADA, CITATION_TEXTS_ADA), fresh):
         target = os.path.join(ROOT, path)
         if (not os.path.exists(target)
-                or io.open(target, encoding="utf-8").read() != text):
+                or read_file(target, encoding="utf-8") != text):
             out.append((path, 1,
-                        "the citations are stale; regenerate them with"
-                        " python3 check.py --generate (or --catalogue)"))
+                        "the citations are stale; regenerate them with "
+                        + regenerating(path)))
     return out
 
 
@@ -7353,7 +7395,7 @@ def check_layout_page(full_run):
     if problems:
         return []
     signs = grammar_signs(trees)
-    lines = io.open(path, encoding="utf-8").read().split("\n")
+    lines = read_file(path, encoding="utf-8").split("\n")
     out = []
     in_rules, title, start, blocks, block = False, None, 0, [], None
 
@@ -7603,11 +7645,11 @@ def check_diagnostic_matrix(full_run):
     if not os.path.exists(path):
         out.append(("compiler/tests/diagnostics.matrix", 1,
                     "the diagnostic matrix is missing; regenerate it with "
-                    "python3 check.py --generate (or --catalogue)"))
-    elif io.open(path, encoding="utf-8").read() != fresh:
+                    + regenerating("compiler/tests/diagnostics.matrix")))
+    elif read_file(path, encoding="utf-8") != fresh:
         out.append(("compiler/tests/diagnostics.matrix", 1,
                     "the diagnostic matrix is stale; regenerate it with "
-                    "python3 check.py --generate (or --catalogue)"))
+                    + regenerating("compiler/tests/diagnostics.matrix")))
     return out
 
 
@@ -7670,7 +7712,7 @@ def check_borrowed_icons(full_run):
         if not os.path.exists(path):
             return []
 
-    text = io.open(module, encoding="utf-8").read()
+    text = read_file(module, encoding="utf-8")
     defined = set(re.findall(r'^    "([a-z-]+)": \(', text, re.M))
     explained = set(re.findall(r'^    "([a-z-]+)": "', text, re.M))
     out = []
@@ -7683,7 +7725,7 @@ def check_borrowed_icons(full_run):
                     "WHY names %s, which is not in ICONS" % name))
 
     used = set(re.findall(r'icons\.use\("([a-z-]+)"', 
-                          io.open(site, encoding="utf-8").read()))
+                          read_file(site, encoding="utf-8")))
     for name in sorted(used - defined):
         out.append(("docs/site/render_html.py", 1,
                     "asks for the %s icon, which assets/icons.py does not "
@@ -7744,7 +7786,7 @@ def check_target_lists(full_run):
         return out
     import ast
     lists = {}
-    tree = ast.parse(io.open(manifest, encoding="utf-8").read())
+    tree = ast.parse(read_file(manifest, encoding="utf-8"))
     for node in tree.body:
         if isinstance(node, ast.Assign) and len(node.targets) == 1 \
                 and isinstance(node.targets[0], ast.Name) \
@@ -7885,9 +7927,9 @@ def check_icon(full_run):
     if out:
         return out
 
-    svg = io.open(drawing, encoding="utf-8").read()
-    code = io.open(module, encoding="utf-8").read()
-    css = io.open(site, encoding="utf-8").read()
+    svg = read_file(drawing, encoding="utf-8")
+    code = read_file(module, encoding="utf-8")
+    css = read_file(site, encoding="utf-8")
 
     #  The stylesheet's light values are the first :root, its dark ones the
     #  block the switch turns on over a light system; the other copy, the
@@ -7987,8 +8029,8 @@ def check_fonts(full_run):
             return []
 
     out = []
-    code = io.open(module, encoding="utf-8").read()
-    css = io.open(site, encoding="utf-8").read()
+    code = read_file(module, encoding="utf-8")
+    css = read_file(site, encoding="utf-8")
 
     #  Where the module looks for a licensed family, read out of the
     #  module the same way its families are, so this check and the
@@ -8024,7 +8066,7 @@ def check_fonts(full_run):
                 out.append((module, 1, "%s names %s, which is not vendored"
                                        % (family, relative)))
                 continue
-        sheet = io.open(source, encoding="utf-8").read()
+        sheet = read_file(source, encoding="utf-8")
         spans = []
         for face in re.findall(r"@font-face\s*\{(.*?)\}", sheet, re.S):
             #  A src url that resolves nowhere is a face the browser skips
@@ -8056,7 +8098,7 @@ def check_fonts(full_run):
         path = os.path.join(ROOT, relative)
         if not os.path.exists(path):
             continue
-        text = io.open(path, encoding="utf-8").read()
+        text = read_file(path, encoding="utf-8")
         for family, spans in sorted(covered.items()):
             missing = sorted({
                 ch for ch in set(text)
@@ -8108,7 +8150,7 @@ def check_ascii_dashes(full_run):
         name = os.path.relpath(path, ROOT)
         inside, findings = False, False
         for n, line in enumerate(
-                io.open(path, encoding="utf-8").read().splitlines(), 1):
+                read_file(path, encoding="utf-8").splitlines(), 1):
             stripped = line.strip()
             if stripped.startswith("## WHAT THIS ONE FOUND") \
                     or stripped.startswith(
@@ -8162,7 +8204,7 @@ def check_unfenced_code(full_run):
         name = os.path.basename(path)
         inside = False
         for n, line in enumerate(
-                io.open(path, encoding="utf-8").read().splitlines(), 1):
+                read_file(path, encoding="utf-8").splitlines(), 1):
             if line.strip().startswith("```"):
                 inside = not inside
                 continue
@@ -8198,7 +8240,7 @@ def check_first_program(full_run):
     if missing:
         return missing
 
-    lines = io.open(readme, encoding="utf-8").read().splitlines()
+    lines = read_file(readme, encoding="utf-8").splitlines()
     heading = "## Your first program"
     found = [at for at, line in enumerate(lines) if line == heading]
     if len(found) != 1:
@@ -8221,11 +8263,11 @@ def check_first_program(full_run):
     out = []
     shown, after = fenced("landin", start + 1)
     printed, _ = fenced("text", after)
-    if shown != io.open(source, encoding="utf-8").read():
+    if shown != read_file(source, encoding="utf-8"):
         out.append(("README.md", start + 1,
                     "the first program's listing differs from %s/main.ldn"
                     % FIRST_PROGRAM))
-    if printed != io.open(output, encoding="utf-8").read():
+    if printed != read_file(output, encoding="utf-8"):
         out.append(("README.md", start + 1,
                     "the first program's shown output differs from"
                     " %s/output.txt" % FIRST_PROGRAM))
@@ -8259,7 +8301,7 @@ def check_from_c_page(full_run):
             with io.open(os.path.join(directory, name),
                          encoding="utf-8", newline="") as stream:
                 sources[name] = stream.read()
-    lines = io.open(page, encoding="utf-8").read().split("\n")
+    lines = read_file(page, encoding="utf-8").split("\n")
     out, shown = [], {}
     n = 0
     while n < len(lines):
@@ -8372,7 +8414,7 @@ def check_library_page(full_run):
             return None
         with io.open(full, encoding="utf-8", newline="") as stream:
             return stream.read()
-    lines = io.open(page, encoding="utf-8").read().split("\n")
+    lines = read_file(page, encoding="utf-8").split("\n")
     return [(LIBRARY_PAGE, line, message)
             for line, message in library_block_faults(lines, read)]
 
@@ -8397,7 +8439,7 @@ def check_running_examples(full_run):
     if missing:
         return missing
 
-    lines = io.open(document, encoding="utf-8").read().splitlines()
+    lines = read_file(document, encoding="utf-8").splitlines()
     out = []
     landin_fences = sum(line == "```landin" for line in lines)
     if landin_fences != len(RUNNING_EXAMPLES):
@@ -8439,8 +8481,8 @@ def check_running_examples(full_run):
             continue
 
         shown = "\n".join(lines[opened + 1:closed]) + "\n"
-        actual = io.open(os.path.join(ROOT, source),
-                         encoding="utf-8").read()
+        actual = read_file(os.path.join(ROOT, source),
+                         encoding="utf-8")
         if shown != actual:
             out.append(("examples.md", opened + 1,
                         "%s's listing differs from %s" % (title, source)))
@@ -8526,7 +8568,7 @@ def check_table_shape(full_run):
         inside = False
         width, header = None, 0
         for n, line in enumerate(
-                io.open(path, encoding="utf-8").read().splitlines(), 1):
+                read_file(path, encoding="utf-8").splitlines(), 1):
             if line.strip().startswith("```"):
                 inside = not inside
                 width = None
@@ -8590,7 +8632,7 @@ def check_comment_forms(full_run):
 
     shown = set()
     inside = False
-    for line in io.open(tour, encoding="utf-8").read().splitlines():
+    for line in read_file(tour, encoding="utf-8").splitlines():
         fence = re.match(r"^```(\S*)\s*$", line.strip())
         if fence:
             inside = fence.group(1).startswith("landin") if not inside else False
@@ -8642,7 +8684,7 @@ def check_named_files(full_run):
             continue
         ada = relative.endswith((".ads", ".adb"))
         for n, line in enumerate(
-                io.open(path, encoding="utf-8").read().splitlines(), 1):
+                read_file(path, encoding="utf-8").splitlines(), 1):
             #  In Ada only a comment names a file as a reference; a name in
             #  a string literal is data a test hands to the compiler.
             if ada:
@@ -8777,7 +8819,7 @@ def check_stale_backlog(paths, full_run):
         #  macOS did to every reading of this check.
         relative = os.path.normpath(
             os.path.relpath(os.path.realpath(path), os.path.realpath(ROOT)))
-        text = io.open(path, encoding="utf-8").read()
+        text = read_file(path, encoding="utf-8")
         for n, line in enumerate(text.splitlines(), 1):
             if (relative, line) in STALE_BACKLOG_ALLOWLIST:
                 continue
@@ -8800,7 +8842,7 @@ def check_register_entries(full_run):
     path = os.path.join(ROOT, SPEC_NAME)
     if not os.path.exists(path):
         return []
-    text = io.open(path, encoding="utf-8").read()
+    text = read_file(path, encoding="utf-8")
     out = []
     parts = re.split(r"\n### (D\d+) — [^\n]*\n", text)
     for name, body in zip(parts[1::2], parts[2::2]):
@@ -8845,7 +8887,7 @@ def check_highlight_vocabulary(full_run):
     scalars = set(re.findall(r'"([a-z0-9]+)"', rules.get("scalar_name", "")))
 
     out = []
-    shared_text = io.open(shared, encoding="utf-8").read()
+    shared_text = read_file(shared, encoding="utf-8")
 
     def block(name):
         found = re.search(r"^%s = \{(.*?)\}" % name, shared_text,
@@ -8865,7 +8907,7 @@ def check_highlight_vocabulary(full_run):
                     "scalar names the grammar has and the highlighter does"
                     " not colour: %s" % " ".join(lost)))
 
-    grammar_text = io.open(grammar, encoding="utf-8").read()
+    grammar_text = read_file(grammar, encoding="utf-8")
     tools = set(re.findall(r'"([a-z]+)"', rules.get("tool_namespace", "")))
     if tools != block("BUILTIN_MODULES"):
         out.append((shared, 1,
@@ -8967,7 +9009,7 @@ def check_highlighters(full_run):
     highlight_dir = os.path.dirname(generator)
     sys.path.insert(0, highlight_dir)
     try:
-        source = io.open(generator, encoding="utf-8").read()
+        source = read_file(generator, encoding="utf-8")
         exec(compile(source, generator, "exec"), namespace)
         generated = namespace["outputs"]()
     except Exception as exc:
@@ -8980,7 +9022,7 @@ def check_highlighters(full_run):
         relative = os.path.relpath(path, ROOT)
         if not os.path.exists(path):
             out.append((relative, 1, "generated editor artifact is missing"))
-        elif io.open(path, encoding="utf-8").read() != expected:
+        elif read_file(path, encoding="utf-8") != expected:
             out.append((relative, 1,
                         "generated editor artifact is stale; regenerate it with"
                         " python3 check.py --generate (or highlight/generate.py)"))
@@ -9031,7 +9073,7 @@ def check_binding_generator(full_run):
 
     out = []
     try:
-        source = io.open(required[0], encoding="utf-8").read()
+        source = read_file(required[0], encoding="utf-8")
         compile(source, required[0], "exec")
     except (OSError, SyntaxError) as error:
         out.append((required[0], getattr(error, "lineno", 1) or 1,
@@ -9040,7 +9082,7 @@ def check_binding_generator(full_run):
         out.append(("bindings/generate.py", 1,
                     "the Python binding generator is retired: refine"
                     " bindings is the generator (D820)"))
-    readme = io.open(required[1], encoding="utf-8").read()
+    readme = read_file(required[1], encoding="utf-8")
     if "refine bindings" not in readme:
         out.append((required[1], 1,
                     "the binding guide does not name refine bindings"))
@@ -9209,7 +9251,7 @@ def check_optimization_contract(full_run):
                          for name in [identity] + native):
         out.append(("scripts/build.sh", 1,
                     "host C sources and headers must invalidate build checksums"))
-    manifest = io.open("scripts/build.sh", encoding="utf-8").read()
+    manifest = read_file("scripts/build.sh", encoding="utf-8")
     function = re.search(r"^landin_manifest\(\) \{\n(.*?)^\}", manifest,
                          re.M | re.S)
     if not function or not re.search(
@@ -9217,7 +9259,7 @@ def check_optimization_contract(full_run):
             function.group(1)):
         out.append(("scripts/build.sh", 1,
                     "host C sources and headers must invalidate build checksums"))
-    project = io.open("compiler/ada/landin_lib.gpr", encoding="utf-8").read()
+    project = read_file("compiler/ada/landin_lib.gpr", encoding="utf-8")
     if 'for Languages use ("Ada", "C");' not in project:
         out.append(("compiler/ada/landin_lib.gpr", 1,
                     "native identity adapter must link into the shared library"))
@@ -9229,12 +9271,12 @@ def check_optimization_contract(full_run):
         except ValueError as error:
             if "failed" not in str(error):
                 out.append((quality_path, 1, "quality command loses its diagnostic"))
-    options = io.open(options_path, encoding="utf-8").read()
+    options = read_file(options_path, encoding="utf-8")
     for name, pair in (("Default_Options", "Size, Auto"),
                        ("Reference_Options", "None, Off")):
         if not re.search(name + r"\s*:.*?:=\s*\(" + pair + r"\)", options):
             out.append((options_path, 1, name + " differs from D211"))
-    harness = io.open(harness_path, encoding="utf-8").read().replace(
+    harness = read_file(harness_path, encoding="utf-8").replace(
         "Landin.Optimization.", "")
     for objective, specialization in (("None", "Off"), ("Size", "Off"),
                                       ("Size", "Auto"), ("Speed", "Auto"),
@@ -9405,7 +9447,7 @@ def check_hosted_derivation(full_run):
     out = absent([manifest])
     if out:
         return out
-    text = io.open(manifest, encoding="utf-8").read()
+    text = read_file(manifest, encoding="utf-8")
     sources = ["core/region/region.ldn"]
     for directory, _, names in os.walk("examples/derived_hosted"):
         sources.extend(os.path.join(directory, name) for name in names
@@ -9456,7 +9498,7 @@ def cortex_corpus_row_problems():
     path = os.path.join(ROOT, CORTEX_CORPUS)
     if not os.path.exists(path):
         return []
-    rows = json.load(io.open(path, encoding="utf-8"))["fixtures"]
+    rows = json.loads(read_file(path, encoding="utf-8"))["fixtures"]
     fixtures = set()
     for kind in ("runtime", "abi"):
         base = os.path.join(ROOT, "compiler/tests/fixtures", kind)
@@ -9535,8 +9577,8 @@ def check_macos_environment(full_run):
     if out:
         return out
     try:
-        policy = json.loads(io.open(policy_path, encoding="utf-8").read())
-        record = io.open("compiler/ada/TOOLCHAIN.md", encoding="utf-8").read()
+        policy = json.loads(read_file(policy_path, encoding="utf-8"))
+        record = read_file("compiler/ada/TOOLCHAIN.md", encoding="utf-8")
         keys = {"schema", "macos_major", "sdk_version", "sdk_build", "clang",
                 "assembler", "linker", "debugger", "dsymutil", "dwarfdump"}
         if set(policy) != keys or policy["schema"] != 1:
@@ -9665,19 +9707,18 @@ def check_core_module_places(full_run):
     listed = set()
     if os.path.exists(probe):
         found = re.search(r"MODULES = tuple\('core/'\+name for name in\s*"
-                          r"\(([^)]*)\)", io.open(probe, encoding="utf-8")
-                          .read())
+                          r"\(([^)]*)\)", read_file(probe, encoding="utf-8"))
         if found:
             listed = set(re.findall(r"'([a-z_]+)'", found.group(1)))
     corpus_path = os.path.join(ROOT, "compiler/tests/cortex-m/corpus.json")
     rows = {}
     if os.path.exists(corpus_path):
-        rows = json.load(io.open(corpus_path, encoding="utf-8"))["fixtures"]
+        rows = json.loads(read_file(corpus_path, encoding="utf-8"))["fixtures"]
     guide = os.path.join(ROOT, "docs/library.md")
     sections = set()
     if os.path.exists(guide):
-        sections = set(re.findall(r"^## (core/[a-z_/]+)$", io.open(
-            guide, encoding="utf-8").read(), re.M))
+        sections = set(re.findall(r"^## (core/[a-z_/]+)$", read_file(
+            guide, encoding="utf-8"), re.M))
     for name in sorted(os.listdir(core)):
         directory = os.path.join(core, name)
         if not os.path.isdir(directory) or not any(
@@ -9719,14 +9760,21 @@ def check_library_documentation(full_run):
     return []
 
 
+def write_generated(relative, text):
+    """Write one of GENERATED's files and say so."""
+    write_file(os.path.join(ROOT, relative), text)
+    print("wrote " + relative)
+
+
 def generate_tokens():
     text = token_dump()
     if text is None:
-        print("the grammar has problems; fix those first")
+        print("the token dump is derived from %s's grammar, which has these"
+              " problems; fix them first:" % SPEC_NAME)
+        for line, why in grammar_problems(os.path.join(ROOT, SPEC_NAME)):
+            print("    %s:%d  %s" % (SPEC_NAME, line, why))
         return 2
-    io.open(os.path.join(ROOT, "compiler/tests/lexical.tokens"), "w",
-            encoding="utf-8").write(text)
-    print("wrote compiler/tests/lexical.tokens")
+    write_generated("compiler/tests/lexical.tokens", text)
     return 0
 
 
@@ -9735,31 +9783,23 @@ def generate_catalogue():
     if text is None:
         print("the catalogue could not be read")
         return 2
-    io.open(os.path.join(ROOT, "compiler/tests/diagnostics.catalogue"),
-            "w", encoding="utf-8").write(text)
     matrix = diagnostic_matrix_dump()
     if matrix is None:
         print("the diagnostic matrix could not be read")
         return 2
-    io.open(os.path.join(ROOT, "compiler/tests/diagnostics.matrix"),
-            "w", encoding="utf-8").write(matrix)
     explained = explanations_dump()
     if explained is None:
         print("the explanations could not be generated; run check.py")
         return 2
-    io.open(os.path.join(ROOT, EXPLANATIONS_ADA), "w",
-            encoding="utf-8").write(explained)
     cited = citations_dump()
     if cited is None:
         print("the citations could not be generated; run check.py")
         return 2
+    write_generated("compiler/tests/diagnostics.catalogue", text)
+    write_generated("compiler/tests/diagnostics.matrix", matrix)
+    write_generated(EXPLANATIONS_ADA, explained)
     for path, text in zip((CITATIONS_ADA, CITATION_TEXTS_ADA), cited):
-        io.open(os.path.join(ROOT, path), "w", encoding="utf-8").write(text)
-    print("wrote compiler/tests/diagnostics.catalogue")
-    print("wrote compiler/tests/diagnostics.matrix")
-    print("wrote " + EXPLANATIONS_ADA)
-    print("wrote " + CITATIONS_ADA)
-    print("wrote " + CITATION_TEXTS_ADA)
+        write_generated(path, text)
     return 0
 
 
@@ -9769,9 +9809,7 @@ def generate_coverage():
         print("the coverage registers could not be read")
         return 2
     for name, text in dumps.items():
-        io.open(os.path.join(ROOT, "compiler/tests", name), "w",
-                encoding="utf-8").write(text)
-        print("wrote compiler/tests/%s" % name)
+        write_generated("compiler/tests/" + name, text)
     return 0
 
 
@@ -9780,9 +9818,7 @@ def generate_matrix():
     if text is None:
         print("the documents could not be read")
         return 2
-    io.open(os.path.join(ROOT, "compiler/tests/constructs.matrix"),
-            "w", encoding="utf-8").write(text)
-    print("wrote compiler/tests/constructs.matrix")
+    write_generated("compiler/tests/constructs.matrix", text)
     return 0
 
 
@@ -9813,6 +9849,43 @@ GENERATORS = (("--tokens", generate_tokens),
               ("--matrix", generate_matrix))
 GENERATE_ALL = "--generate"
 
+#  What each of those flags writes.  The usage line and every message that
+#  calls a file missing or stale are made from this, so they cannot name a
+#  flag that does not write the file: the usage once let --matrix read as
+#  regenerating the diagnostic matrix, which only --catalogue writes.
+GENERATED = (("--tokens", ("compiler/tests/lexical.tokens",)),
+             ("--catalogue", ("compiler/tests/diagnostics.catalogue",
+                              "compiler/tests/diagnostics.matrix",
+                              EXPLANATIONS_ADA, CITATIONS_ADA,
+                              CITATION_TEXTS_ADA)),
+             ("--coverage", ("compiler/tests/guarantees.matrix",
+                             "compiler/tests/conformances.matrix",
+                             "compiler/tests/prototypes.matrix",
+                             "compiler/tests/targets.matrix")),
+             ("--matrix", ("compiler/tests/constructs.matrix",)))
+
+
+def regenerating(relative):
+    """The command that regenerates RELATIVE, one of GENERATED's files."""
+    for flag, files in GENERATED:
+        if relative in files:
+            return "python3 check.py %s (or %s)" % (GENERATE_ALL, flag)
+    raise KeyError("%s is not a file check.py generates" % relative)
+
+
+def usage():
+    """What check.py does with each argument, a line each."""
+    lines = ["usage:",
+             "  python3 check.py              checks everything",
+             "  python3 check.py FILE...      checks those files",
+             "  python3 check.py %-12s regenerates every file below, and"
+             " the editor files highlight/generate.py writes" % GENERATE_ALL]
+    for flag, files in GENERATED:
+        lines.append("  python3 check.py %-12s regenerates %s"
+                     % (flag, files[0]))
+        lines += ["%31s %s" % ("", one) for one in files[1:]]
+    return "\n".join(lines)
+
 
 def generate(flags):
     """Run the named generators, or all of them; the first failure stops."""
@@ -9833,19 +9906,15 @@ def main(argv):
 
     flags = [one for one in argv[1:] if one.startswith("--")]
     valid = [GENERATE_ALL] + [flag for flag, _ in GENERATORS]
-    usage = ("python3 check.py checks everything, and python3 check.py"
-             " FILE... checks those files; %s regenerates every generated"
-             " file, and %s regenerate theirs"
-             % (GENERATE_ALL, ", ".join(flag for flag, _ in GENERATORS)))
     unknown = [one for one in flags if one not in valid]
     if unknown:
-        print("check.py does not know %s; %s"
-              % (", ".join(unknown), usage))
+        print("check.py does not know %s\n%s"
+              % (", ".join(unknown), usage()))
         return 2
     if flags:
         if len(flags) != len(argv) - 1:
             print("a generator flag writes files and takes no file to"
-                  " check; %s" % usage)
+                  " check\n%s" % usage())
             return 2
         return generate(flags)
 

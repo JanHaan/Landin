@@ -96,5 +96,51 @@ class GeneratorFlags(unittest.TestCase):
                     self.assertIn(flag, said)
 
 
+class GeneratedFiles(unittest.TestCase):
+    """Each generated file is named by the flag that writes it.
+
+    The usage line once let --matrix read as regenerating
+    compiler/tests/diagnostics.matrix, which only --catalogue writes.
+    """
+
+    def test_the_table_has_a_row_for_each_generator(self):
+        self.assertEqual([flag for flag, _ in CHECK.GENERATED],
+                         [flag for flag, _ in CHECK.GENERATORS])
+
+    def test_each_generator_writes_the_files_its_row_names(self):
+        #  The real generators over the real tree, with the writes caught,
+        #  so what is compared is what each one would write.
+        for flag, run in CHECK.GENERATORS:
+            with self.subTest(flag=flag):
+                written = []
+                with patch.object(CHECK, "write_file",
+                                  lambda path, _: written.append(
+                                      os.path.relpath(path, CHECK.ROOT))), \
+                        contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(run(), 0)
+                self.assertEqual(sorted(written),
+                                 sorted(dict(CHECK.GENERATED)[flag]))
+
+    def test_the_usage_names_each_file_beside_its_flag(self):
+        lines = CHECK.usage().splitlines()
+        for flag, files in CHECK.GENERATED:
+            with self.subTest(flag=flag):
+                at = next(n for n, line in enumerate(lines)
+                          if line.split()[2:3] == [flag])
+                named = [lines[at].split()[-1]] + [
+                    line.strip() for line in lines[at + 1:at + len(files)]]
+                self.assertEqual(named, list(files))
+                self.assertIn("--generate (or %s)" % flag,
+                              CHECK.regenerating(files[-1]))
+
+    def test_a_stale_file_message_names_its_flag_from_the_table(self):
+        #  A message spelling its flag out is a second place to get it
+        #  wrong; regenerating() is the one.
+        source = (ROOT / "check.py").read_text(encoding="utf-8")
+        self.assertNotRegex(source, r"--generate \(or --")
+        with self.assertRaises(KeyError):
+            CHECK.regenerating("compiler/tests/unknown.matrix")
+
+
 if __name__ == "__main__":
     unittest.main()

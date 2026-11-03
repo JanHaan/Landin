@@ -11,6 +11,8 @@ tree that satisfies it, and shows it speaking on one that does not.  Where
 a check reads content-addressed inputs the real files are copied and then
 broken in one place, because a recorded sha256 cannot be invented.
 """
+import contextlib
+import io
 import json
 import os
 import re
@@ -909,16 +911,49 @@ class GrammarCorpus(unittest.TestCase):
 
     def test_a_grammar_rule_nothing_reaches_is_reported(self):
         #  Every rule must be defined and reachable: an unreachable
-        #  production is grammar nobody can be held to.
+        #  production is grammar nobody can be held to.  The grammar's
+        #  faults are the specification's own, so a run over spec.md
+        #  alone reports them as well as the full run.
         from check_controls import tree
-        with tree(copied=GRAMMAR) as root:
+        with tree(copied=["spec.md", "tour.md"]) as root:
+            spec = root / "spec.md"
+            self.assertEqual(checker.grammar_problems(str(spec)), [])
+            spec.write_text(spec.read_text().replace(
+                "```landin-grammar\nprogram",
+                "```landin-grammar\nstranded    ::= \"unreachable\"\nprogram",
+                1))
+            said = [why for _, why in checker.check(str(spec))]
+            self.assertIn("grammar rule 'stranded' is unreachable", said)
+            self.assertIn("grammar preamble omits contextual words:"
+                          " unreachable", said)
+            printed = io.StringIO()
+            with contextlib.redirect_stdout(printed), mock.patch.object(
+                    checker, "__file__", str(root / "check.py")):
+                status = checker.main(["check.py", "spec.md"])
+        self.assertEqual(status, 1)
+        self.assertIn("grammar rule 'stranded' is unreachable",
+                      printed.getvalue())
+
+    def test_the_token_generator_names_the_grammar_problems(self):
+        #  It stopped with "the grammar has problems; fix those first" and
+        #  named none, and so did scripts/add_fixture.py, which runs it.
+        from check_controls import tree
+        with tree(copied=["spec.md"]) as root:
             spec = root / "spec.md"
             spec.write_text(spec.read_text().replace(
                 "```landin-grammar\nprogram",
                 "```landin-grammar\nstranded    ::= \"unreachable\"\nprogram",
                 1))
-            said = [why for _, _, why in checker.check_grammar_corpus(True)]
-        self.assertTrue(said)
+            line = checker.grammar_problems(str(spec))[0][0]
+            printed = io.StringIO()
+            with contextlib.redirect_stdout(printed):
+                status = checker.generate_tokens()
+            self.assertFalse((root / "compiler/tests/lexical.tokens").exists())
+        self.assertEqual(status, 2)
+        said = printed.getvalue()
+        self.assertIn("spec.md:%d  " % line, said)
+        self.assertIn("grammar rule 'stranded' is unreachable", said)
+        self.assertIn("omits contextual words: unreachable", said)
 
 
 TOKENS = ["spec.md", "tour.md",
