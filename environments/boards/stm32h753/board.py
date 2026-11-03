@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
-"""Flash the prototype-1 board port to a NUCLEO-H753ZI, boot it from
-power-on and check its trace against the physical oracle.
+"""Run the board port from SRAM by default and check its physical oracle.
+
+RAM runs consume --bundle or build with --refine, then use --ram-loader
+without flash writes or resets. --mode=boot checks a flash/cold boot and
+restores --fixed-image; the numbered flash steps below describe that mode.
 
     python3 environments/boards/stm32h753/board.py --refine REFINE \\
-        --probe-rs PROBE_RS --output NEW_DIRECTORY
+        --probe-rs PROBE_RS --ram-loader LOADER --output NEW_DIRECTORY
 
 A developer tool, not a compiler dependency: refine builds the image, and
 this checks what the board does with it.  The board is reached through its
@@ -248,15 +251,19 @@ def float_unit(found):
 
 
 def build(run, args):
-    elf = run.out / 'board.elf'
+    if getattr(args, 'bundle', None):
+        elf, meta, names = common.consume_board(run, args, 'stm32h753')
+        return elf, bytes.fromhex(meta['table']), names, meta['image']
+    elf = run.out / getattr(args, 'image_name', 'board.elf')
     run.command('compile', [args.refine, '--root=' + str(ROOT / 'devices'),
         '--root=' + str(ROOT / 'devices/generated'), '--root=' + str(ROOT / 'compiler/tests/driver'),
         '--root=' + str(SOURCE), '--target=cortex-m0', '--level=armv7e-m',
-        '--firmware-entry=start', '--emit=exe',
+        '--firmware-entry=start', '--emit=exe', *common.firmware_layout(args),
         '--build-report=' + str(run.out / 'build.json'), str(SOURCE / 'app'), '-o', str(elf)])
     data, sections = common.elf_sections(elf)
     address, offset, size = sections['.isr_vector']
-    require(address == VECTORS and size == 4 * VECTOR_WORDS,
+    expected = common.validate_ram_image(elf, 'stm32h753') if getattr(args, 'mode', 'boot') == 'ram' else VECTORS
+    require(address == expected and size == 4 * VECTOR_WORDS,
             'the vector table is not %d words at %#x' % (VECTOR_WORDS, VECTORS))
     words = struct.unpack_from('<%dI' % VECTOR_WORDS, data, offset)
     names = common.symbols(run, args.nm, elf)
@@ -339,13 +346,14 @@ def wait_for_path(path, seconds):
     raise Failed('%s could not be opened within %g s' % (path, seconds))
 
 
-def boot(console):
+def boot(console, mode='boot', vector=None):
     """The boot frame, which the firmware writes once a byte has arrived."""
     stream = console.wait(lambda s: common.tagged(s, 'b'), 5, 'the boot frame')
     b = common.tagged(stream, 'b')[0]
-    require(b['r'] & RSR_FLAGS == RSR_POWER_ON,
-            'RCC_RSR is %08x, not the flags of a power-on reset alone' % b['r'])
-    require(b['v'] == VECTORS, 'VTOR is %08x, not the boot address' % b['v'])
+    if mode == 'boot':
+        require(b['r'] & RSR_FLAGS == RSR_POWER_ON,
+                'RCC_RSR is %08x, not the flags of a power-on reset alone' % b['r'])
+    require(b['v'] == (VECTORS if vector is None else vector), 'VTOR is %08x, not the boot address' % b['v'])
     require(b['c'] & CCR_CACHES == 0, 'SCB_CCR is %08x: a cache is enabled' % b['c'])
     require(b['q'] & CR3_SUPPLY == CR3_LDO,
             'PWR_CR3 reads %08x: the stage did not configure the LDO supply' % b['q'])
@@ -367,12 +375,12 @@ def discarded(sent, spans):
     return bytes(out + sent[at:])
 
 
-def scenario(console, seed):
+def scenario(console, seed, mode='boot', vector=None):
     """The board-port scenario and its oracle.  Returns the verdicts, the
     last telemetry frame and the bytes the epoch then running has taken."""
     verdicts = {}
     echoed(console, START, 10)
-    verdicts['boot'] = boot(console)
+    verdicts['boot'] = boot(console, mode, vector)
     # The shared scenario (D593), the bytes the emulator lane's application
     # is fed, 1, A and 0: each echoed, 1 setting PB0 and 0 clearing it,
     # which its input data register reads back.
@@ -505,9 +513,19 @@ def cross_check(run, args, names, final):
     return read
 
 
+def restore_fixed(run, args):
+    """Restore and cold-start the board's validated resident image."""
+    data, sections = common.elf_sections(args.fixed_image)
+    address, offset, size = sections['.isr_vector']
+    require(address == VECTORS, 'fixed image vectors are not at the flash boot address')
+    flash(run, args, args.fixed_image, data[offset:offset + size])
+    power_cycle(common.InGroup(run, args.hub_group), args)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('--refine', type=Path, required=True)
+    parser.add_argument('--refine', type=Path)
+    common.board_arguments(parser)
     parser.add_argument('--probe-rs', type=Path, default=shutil.which('probe-rs'),
                         help='a probe-rs that reaches the ST-LINK')
     parser.add_argument('--serial', default='001900293137511339383538',
@@ -543,33 +561,41 @@ def main():
     parser.add_argument('--record', type=Path,
                         help="also write a passed run's record here")
     args = parser.parse_args()
+    common.board_preflight(args, 'stm32h753')
     # The virtual COM port's tty belongs to --hub-group (D836).
     common.rerun_in_group(args.hub_group)
     common.place_hubs(parser, args, 'hub')
     require(args.probe_rs, 'no probe-rs: name one with --probe-rs')
     for name in ('nm', 'objdump', 'readelf'):
-        require(getattr(args, name), 'no arm-eabi-%s or arm-none-eabi-%s on PATH: name one with --%s'
+        require(args.bundle or getattr(args, name), 'no arm-eabi-%s or arm-none-eabi-%s on PATH: name one with --%s'
                 % (name, name, name))
     args.probe = args.probe or common.stlink(args.serial)
     args.output = args.output.resolve()
     args.output.mkdir(parents=True)
     args.pace = common.Pace(args.spacing, args.quiet)
     run = common.Run(args.output)
-    result = dict(status='failed')
+    run.pace = args.pace
+    result = dict(status='failed', mode=args.mode)
+    began = time.monotonic()
     console = None
     # The run holds the rig's lock (D725).
-    lock = common.rig_lock('stm32h753 board.py').acquire()
+    lock = common.rig_lock('stm32h753 board.py')
     try:
         elf, table, names, image = build(run, args)
+        lock.acquire()
         result.update(image_sha256=common.sha(elf), image_name=elf.name, image=image)
-        flash(run, args, elf, table)
-        result['flash_readback'] = 'matches'
-        power_cycle(common.InGroup(run, args.hub_group), args)
+        if args.mode == 'boot':
+            flash(run, args, elf, table)
+            result['flash_readback'] = 'matches'
+            power_cycle(common.InGroup(run, args.hub_group), args)
         tty = (wait_for_path(args.console, args.tty_seconds) if args.console
                else common.wait_for_tty(args.serial, args.tty_seconds))
         result['tty'] = str(tty)
         console = common.TtyConsole(tty)
-        verdicts, final, used = scenario(console, args.seed)
+        if args.mode == 'ram':
+            result['warm_load'] = common.ram_load(run, args, 'stm32h753', elf)
+        verdicts, final, used = scenario(console, args.seed, args.mode,
+            common.elf_sections(elf)[1]['.isr_vector'][0])
         verdicts['floats'] = floats(console, args.seed, used)
         last = report(console)
         require(last['c'] == final['c'], 'the float exercise restarted the ring')
@@ -586,6 +612,7 @@ def main():
             ('the square root is not sent', verdicts['floats']['square_root'] == 'passed'))
             if not done]
         result['pending'] = pending
+        args.pace.before('board scenario completion')
         result['status'] = 'pending' if pending else 'passed'
     except (Failed, subprocess.TimeoutExpired, OSError) as error:
         result['failure'] = str(error)
@@ -598,13 +625,16 @@ def main():
             result['frames'] = common.frame_record(bytes(console.received))
             result['echo_gaps'] = common.gaps(bytes(console.sent),
                                               echo_of(bytes(console.received)))
+        if lock.file:
+            common.finish_boot(args, result, lambda: restore_fixed(run, args))
         lock.release()
+        result['seconds'] = round(time.monotonic() - began, 3)
         result['commands'] = run.commands
         common.write_json(args.output / 'result.json', result)
     if args.record and result['status'] == 'passed':
         kept = ('status', 'image_sha256', 'image_name', 'image', 'flash_readback', 'verdicts', 'swd', 'uart_sha256')
         common.write_json(args.record, common.record(
-            result, kept, (args.output / 'sent.bin').read_bytes(), run.commands, ('b',)))
+            result, tuple(k for k in (*kept, 'mode', 'warm_load', 'fixed_restore', 'seconds') if k in result), (args.output / 'sent.bin').read_bytes(), run.commands, ('b',)))
     print('board %s: %s%s' % (result['status'], args.output,
                               ': ' + result['failure'] if result['status'] == 'failed'
                               else ': ' + '; '.join(result['pending']) if result['status'] == 'pending'

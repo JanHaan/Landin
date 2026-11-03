@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Controls for the RP2040 board tool's oracle, without a board (D595)."""
 import importlib.util
+import tempfile
 from pathlib import Path
 from types import SimpleNamespace
 import unittest
@@ -43,6 +44,38 @@ STATUS = """Current status for hub 7-2.3.3 [0bda:5411 Generic USB2.1 Hub, USB 2.
 
 
 class Oracle(unittest.TestCase):
+    def test_default_ram_run_builds_before_lock_and_never_flashes_or_cycles_power(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            elf = Path(tmp) / 'image.elf'
+            elf.write_bytes(b'image')
+            events = []
+            lock = mock.Mock(file=True)
+            lock.acquire.side_effect = lambda: events.append('lock') or lock
+            def build(*_):
+                events.append('build')
+                return elf, b'', 0, {}
+            console = mock.Mock(received=b'', sent=b'')
+            argv = ['board.py', '--refine=refine', '--ram-loader=loader', '--probe-rs=probe',
+                    '--nm=nm', '--probehive=' + tmp, '--output=' + tmp + '/run', '--cascade=1-1']
+            with mock.patch.object(BOARD.sys, 'argv', argv), \
+                    mock.patch.object(BOARD.common, 'place_hubs'), \
+                    mock.patch.object(BOARD.common, 'Pace'), \
+                    mock.patch.object(BOARD.common, 'rig_lock', return_value=lock), \
+                    mock.patch.object(BOARD, 'build', side_effect=build), \
+                    mock.patch.object(BOARD, 'flash') as flash, \
+                    mock.patch.object(BOARD, 'power_cycle') as cycle, \
+                    mock.patch.object(BOARD.common, 'shared_bridge', return_value=(None, {})), \
+                    mock.patch.object(BOARD.common, 'TcpConsole', return_value=console), \
+                    mock.patch.object(BOARD.common, 'ram_load', return_value={'mode': 'warm'}) as load, \
+                    mock.patch.object(BOARD.common, 'elf_sections', return_value=(b'', {'.isr_vector': (0x20000000, 0, 8)})), \
+                    mock.patch.object(BOARD, 'scenario', return_value=({}, {})), \
+                    mock.patch.object(BOARD, 'cross_check', return_value={}):
+                self.assertEqual(BOARD.main(), 0)
+            self.assertEqual(events, ['build', 'lock'])
+            flash.assert_not_called()
+            cycle.assert_not_called()
+            load.assert_called_once()
+
     def test_the_checksum_is_the_boot_rom_s(self):
         # CRC-32/MPEG-2's check value, the parameters RP2040's datasheet
         # gives in 2.8.1.3.1.

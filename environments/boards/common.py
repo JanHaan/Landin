@@ -54,6 +54,7 @@ import os
 import re
 import select
 import shlex
+import shutil
 import socket
 import struct
 import subprocess
@@ -210,7 +211,8 @@ def rig_lock(who, path=RIG_LOCK, report=None):
 
 
 USB_TROUBLE = re.compile(r'error -\d+|not accepting address|unable to enumerate|attempt power cycle'
-                         r'|Timeout while waiting for setup device')
+                         r'|Timeout while waiting for setup device|HC died|host controller.*(?:dead|timeout)'
+                         r'|controller.*timed out|xHCI.*not responding', re.IGNORECASE)
 
 
 class Pace:
@@ -311,7 +313,7 @@ def kernel_usb_lines(seconds):
     lines = []
     for line in found.splitlines():
         fields = line.split(None, 1)
-        if len(fields) == 2 and re.search(r'\busb\b|xhci', fields[1]):
+        if len(fields) == 2 and re.search(r'\busb\b|xhci|HC died|host controller', fields[1], re.IGNORECASE):
             try:
                 lines.append((float(fields[0]), fields[1]))
             except ValueError:
@@ -342,6 +344,148 @@ class Run:
 
 def sha(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def board_arguments(parser):
+    """Shared development/boot selection; bundles need no compiler on the rig."""
+    parser.add_argument('--mode', choices=('ram', 'boot'), default='ram')
+    parser.add_argument('--bundle', type=Path, help='a checked offline board bundle')
+    parser.add_argument('--ram-loader', type=Path, default=shutil.which('landin-ram-run'),
+                        help='the pinned persistent-session SRAM loader')
+    parser.add_argument('--fixed-image', type=Path, help='the resident image restored after a boot check')
+
+
+def firmware_layout(args):
+    return ['--firmware-layout=ram'] if getattr(args, 'mode', 'boot') == 'ram' else []
+
+
+def board_preflight(args, board):
+    """Pure preflight, before taking the lock or touching USB."""
+    if getattr(args, 'bundle', None):
+        import bundle
+        prepared = bundle.validate(args.bundle, board=board, mode=args.mode)
+        if args.mode == 'boot' and not getattr(args, 'fixed_image', None):
+            args.fixed_image = bundle.artifact(prepared, 'fixed_image')
+    else:
+        require(args.refine, 'name --bundle or --refine before running a board')
+    if args.mode == 'ram':
+        require(args.ram_loader, 'no SRAM loader: name one with --ram-loader')
+        require(not any(getattr(args, k, False) for k in ('recover', 'block_control', 'image_control')),
+                'boot/recovery controls require --mode=boot; RAM runs never reset or write flash')
+        if getattr(args, 'record', None):
+            require(args.record.name != 'record.json',
+                    'RAM evidence is separate: use --record=ram-record.json')
+    else:
+        require(getattr(args, 'fixed_image', None),
+                'a boot check needs --fixed-image to restore the resident image')
+        require(args.fixed_image.is_file(), 'the fixed resident image does not exist')
+        validate_fixed_image(args.fixed_image, board)
+        require(not getattr(args, 'block_control', False),
+                'Pico 2 corrupt controls require physical off-cascade UF2 recovery; no probe attaches in BOOTSEL')
+
+
+def validate_fixed_image(image, board):
+    """Check the recovery artifact before a boot check can touch hardware."""
+    if board in ('esp32c3', 'esp32c5'):
+        parsed = esp_image(Path(image).read_bytes())
+        require(parsed['chip'] == (5 if board == 'esp32c3' else 23),
+                'the fixed image names another ESP chip')
+        return
+    data, sections = elf_sections(image)
+    machine = struct.unpack_from('<H', data, 18)[0]
+    require(machine == (243 if board == 'rp2350_hazard3' else 40),
+            'the fixed image uses another architecture')
+    if board == 'rp2040':
+        require('.boot2' in sections and sections['.boot2'][0] == 0x10000000
+                and sections['.boot2'][2] == 256, 'fixed image lacks RP2040 boot2')
+    elif board.startswith('rp2350'):
+        require('.embedded_block' in sections, 'fixed image lacks a Pico 2 IMAGE_DEF block')
+    require('.isr_vector' in sections, 'fixed image has no vector/trap table')
+    vectors = sections['.isr_vector'][0]
+    require(0x08000000 <= vectors < 0x08200000 if board == 'stm32h753'
+            else 0x10000000 <= vectors < 0x10400000,
+            'fixed image vectors are outside the board flash')
+
+
+def finish_boot(args, result, restore):
+    """Restore a resident image, unless the USB guard forbids further hardware work."""
+    if args.mode != 'boot':
+        return
+    try:
+        args.pace.before('resident image restoration')
+        restore()
+        args.pace.before('resident image restoration completion')
+        result['fixed_restore'] = dict(status='passed', sha256=sha(args.fixed_image))
+    except (Failed, OSError, subprocess.TimeoutExpired) as error:
+        result['fixed_restore'] = dict(status='pending', reason=str(error))
+        result['status'] = 'failed'
+        result['failure'] = result.get('failure', '') + '; resident image restoration pending: ' + str(error)
+
+
+RAM_REGIONS = {
+    'rp2040': ((0x20000000, 0x20042000),),
+    'rp2350': ((0x20000000, 0x20082000),),
+    'rp2350_hazard3': ((0x20000000, 0x20082000),),
+    'stm32h753': ((0x00000000, 0x00010000), (0x20000000, 0x20020000),
+                 (0x24000000, 0x24080000), (0x30000000, 0x30048000),
+                 (0x38000000, 0x38010000)),
+    'esp32c3': ((0x40380000, 0x403a0000), (0x3fca0000, 0x3fcc8000)),
+    'esp32c5': ((0x40800000, 0x4084e000),),
+}
+
+
+def validate_ram_image(elf, board):
+    """Reject flash LMAs and boot-only sections before a loader sees hardware."""
+    _, sections = elf_sections(elf)
+    require(not ({'.boot2', '.embedded_block'} & sections.keys()),
+            'RAM image contains boot-only sections; rebuild with --firmware-layout=ram')
+    segments = elf_segments(elf)
+    require(segments, 'RAM image has no loadable bytes')
+    for address, body, _ in segments:
+        require(any(lo <= address and address + len(body) <= hi for lo, hi in RAM_REGIONS[board]),
+                'image exceeds SRAM or has a flash load address; use --mode=boot for the boot check')
+    data = Path(elf).read_bytes()
+    phoff, = struct.unpack_from('<I', data, 0x1c)
+    phentsize, phnum = struct.unpack_from('<HH', data, 0x2a)
+    for i in range(phnum):
+        kind, offset, vaddr, paddr, filesz, memsz, _, _ = struct.unpack_from(
+            '<8I', data, phoff + i * phentsize)
+        if kind == 1:
+            require(filesz <= memsz and offset + filesz <= len(data), 'RAM ELF has a truncated segment')
+            require(any(lo <= vaddr and vaddr + memsz <= hi for lo, hi in RAM_REGIONS[board]),
+                    'image memory exceeds SRAM; use --mode=boot for the boot check')
+            require(vaddr == paddr, 'RAM ELF has a relocated load address; rebuild with --firmware-layout=ram')
+    require('.isr_vector' in sections, 'RAM image has no vector/trap table')
+    return sections['.isr_vector'][0]
+
+
+def consume_board(run, args, board):
+    import bundle
+    prepared = bundle.consume(run, args, board)
+    elf = bundle.artifact(prepared, 'elf')
+    if args.mode == 'ram':
+        validate_ram_image(elf, board)
+    return elf, prepared['metadata'], prepared['symbols']
+
+
+def ram_load(run, args, board, elf):
+    """One checked session, without a flash loader or reset convenience path."""
+    validate_ram_image(elf, board)
+    plan, output = run.out / 'ram-plan.json', run.out / 'ram-load.json'
+    write_json(plan, dict(format_version=1, board=board, mode='ram',
+                          probe=args.probe, elf=str(elf.resolve())))
+    args.pace.before('RAM load')
+    run.command('ram-load', [args.ram_loader, '--plan', plan, '--output', output], timeout=120)
+    report = json.loads(output.read_text())
+    require(report.get('format_version') == 1 and report.get('status') == 'passed'
+            and report.get('mode') == 'warm' and report.get('flash_written') is False
+            and report.get('board') == board and report.get('elf_sha256') == sha(elf),
+            'the SRAM loader did not return matching successful warm-load evidence')
+    # Check before recording a new pacing timestamp, preserving all errors
+    # since the previous action as well as those during this session.
+    args.pace.before('RAM load completion')
+    args.pace.after('RAM load')
+    return report
 
 
 def elf_sections(image):
@@ -499,6 +643,9 @@ class Probe:
         self.run, self.probe_rs, self.chip, self.probe = run, probe_rs, chip, probe
 
     def argv(self, *rest):
+        pace = getattr(self.run, 'pace', None)
+        if pace:
+            pace.before('probe ' + (str(rest[0]) if rest else 'command'))
         return [self.probe_rs, *rest, '--chip', self.chip, '--probe', self.probe]
 
     def read_words(self, name, address, count):

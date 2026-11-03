@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""Flash the prototype-1 board port to a Raspberry Pi Pico 2's Hazard3
-cores, boot it from power-on and check its trace against the physical
-oracle.
+"""Run the board port from SRAM by default and check its physical oracle.
+
+RAM runs consume --bundle or build with --refine, then use --ram-loader
+without flash writes or resets. --mode=boot checks a flash/cold boot and
+restores --fixed-image; the numbered flash steps below describe that mode.
 
     python3 environments/boards/rp2350_hazard3/board.py --refine REFINE \
-        --probehive DIR --probe-rs PROBE_RS --output NEW_DIRECTORY
+        --probehive DIR --probe-rs PROBE_RS --ram-loader LOADER --output NEW_DIRECTORY
 
 A developer tool, not a compiler dependency: refine builds the image for
 --target=rv32 at --level=rv32imac, and this checks what the board does with
@@ -175,18 +177,25 @@ def amo_adds(listing):
 
 
 def build(run, args):
-    elf = run.out / 'board.elf'
+    if getattr(args, 'bundle', None):
+        elf, meta, names = common.consume_board(run, args, 'rp2350_hazard3')
+        return elf, bytes.fromhex(meta['head']), names, meta['adds']
+    elf = run.out / getattr(args, 'image_name', 'board.elf')
     run.command('compile', [args.refine, '--root=' + str(ROOT / 'devices'),
         '--root=' + str(ROOT / 'devices/generated'), '--root=' + str(ROOT / 'compiler/tests/driver'),
         '--root=' + str(SOURCE), '--root=' + str(SHARED_SOURCE), '--target=rv32', '--level=rv32imac',
-        '--firmware-entry=start', '--emit=exe',
+        '--firmware-entry=start', '--emit=exe', *common.firmware_layout(args),
         '--build-report=' + str(run.out / 'build.json'), str(SOURCE / 'app'), '-o', str(elf)])
     firmware = json.loads((run.out / 'build.json').read_text())['firmware']
     names = symbols(run, args.nm, elf)
-    block = check_layout(elf, names, firmware)
+    ram = getattr(args, 'mode', 'boot') == 'ram'
+    if ram:
+        common.validate_ram_image(elf, 'rp2350_hazard3')
+    else:
+        block = check_layout(elf, names, firmware)
     adds = amo_adds(run.command('disassembly', [args.objdump, '-d', elf]))
     require(adds, 'the image executes no amoadd.w')
-    head = common.loaded(elf, FLASH, block + 4 * len(IMAGE_DEF) - FLASH)
+    head = b'' if ram else common.loaded(elf, FLASH, block + 4 * len(IMAGE_DEF) - FLASH)
     return elf, head, names, adds
 
 
@@ -242,16 +251,17 @@ def report(console, count):
     return common.ask(console, REPORT, 't', count)
 
 
-def scenario(console, run, seed, pins=None):
+def scenario(console, run, seed, pins=None, mode='boot', vector=None):
     """The board-port scenario and its oracle.  Returns the verdicts, the
     last telemetry frame and how many there were."""
     verdicts = {}
     stream = console.wait(lambda s: any(t == 'b' for t, _ in frames_safe(s)), 5, 'the boot frame')
     boot = [f for t, f in frames_safe(stream) if t == 'b'][0]
-    require(boot['r'] == CHIP_RESET_HAD_POR,
-            'CHIP_RESET is %08x, not a power-on reset alone' % boot['r'])
+    if mode == 'boot':
+        require(boot['r'] == CHIP_RESET_HAD_POR,
+                'CHIP_RESET is %08x, not a power-on reset alone' % boot['r'])
     require(boot['a'] == MARCHID_HAZARD3, 'marchid is %08x: this is not Hazard3' % boot['a'])
-    require(boot['v'] == MTVEC, 'mtvec is %08x, not the table in vectored mode' % boot['v'])
+    require(boot['v'] == (MTVEC if vector is None else vector), 'mtvec is %08x, not the table in vectored mode' % boot['v'])
     require(boot['k'] == CLK_REF_XOSC, 'clk_ref is not on the crystal: %08x' % boot['k'])
     verdicts['boot'] = dict(chip_reset=boot['r'], marchid=boot['a'], mtvec=boot['v'],
                             clk_ref_selected=boot['k'])
@@ -375,9 +385,19 @@ def cross_check(run, args, names, final, reports):
     return dict(read, trans_count=count)
 
 
+def restore_fixed(run, args):
+    """Restore and cold-start the board's validated resident image."""
+    _, sections = common.elf_sections(args.fixed_image)
+    require('.embedded_block' in sections, 'fixed image has no Pico 2 IMAGE_DEF block')
+    flash(run, args, args.fixed_image, common.loaded(args.fixed_image, 0x10000000, 64))
+    power_cycle(common.InGroup(run, args.hub_group), args)
+    pico2.refuse_bootsel(common.InGroup(run, args.hub_group), args, False)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('--refine', type=Path, required=True)
+    parser.add_argument('--refine', type=Path)
+    common.board_arguments(parser)
     parser.add_argument('--probehive', type=Path, required=True, help='a probehive checkout')
     parser.add_argument('--probe-rs', type=Path, default=shutil.which('probe-rs'),
                         help='a probe-rs whose CMSIS-DAP TCP transport reaches the bridge')
@@ -409,18 +429,22 @@ def main():
     parser.add_argument('--record', type=Path,
                         help="also write a passed run's record here")
     args = parser.parse_args()
+    common.board_preflight(args, 'rp2350_hazard3')
     common.place_hubs(parser, args, 'hub')
+    pico2.boot_location(args)
     require(args.probe_rs, 'no probe-rs: name one with --probe-rs')
-    require(args.nm and args.objdump, 'no riscv64-elf-nm and -objdump or riscv64-unknown-elf-nm and'
+    require(args.bundle or (args.nm and args.objdump), 'no riscv64-elf-nm and -objdump or riscv64-unknown-elf-nm and'
             ' -objdump on PATH: name them with --nm and --objdump')
-    args.probe = common.bridged(args.debug_port + args.slot)
+    args.probe = args.probe or common.udp_slot(args.probe_host, args.slot)
     args.probehive = args.probehive.resolve()
     args.probehive_build = (args.probehive_build or args.probehive / 'build/slots_ci').resolve()
     args.output = args.output.resolve()
     args.output.mkdir(parents=True)
     args.pace = common.Pace(args.spacing, args.quiet)
     run = common.Run(args.output)
-    result = dict(status='failed')
+    run.pace = args.pace
+    result = dict(status='failed', mode=args.mode)
+    began = time.monotonic()
     bridge = console = lock = None
     try:
         # The indicator's environment is found before the rig is held: it
@@ -432,22 +456,26 @@ def main():
         # Every step from here reaches the rig, which one run holds at a time.
         lock = common.rig_lock('rp2350_hazard3 board.py').acquire()
         result.update(image_sha256=sha(elf), image_name=elf.name,
-                      image_block=['%08x' % w for w in IMAGE_DEF],
                       amoadd=[dict(address=a, function=f) for a, f in adds])
         bridge, result['bridge'] = common.shared_bridge(
             run, args.probehive, args.probe_host, args.slot, args.bridge_slots,
             args.debug_port, args.uart_port)
-        if args.block_control:
-            result['block_control'] = block_control(run, args, elf, head)
-        result['flashed_as'] = flash(run, args, elf, head)
-        result['flash_readback'] = 'matches'
+        if args.mode == 'boot':
+            result['flashed_as'] = flash(run, args, elf, head)
+            result['flash_readback'] = 'matches'
         if pins:
             pins.release()
         console = common.TcpConsole(args.uart_port + args.slot)
-        power_cycle(common.InGroup(run, args.hub_group), args)
-        verdicts, final, reports = scenario(console, run, args.seed, pins)
+        if args.mode == 'ram':
+            pico2.refuse_bootsel(common.InGroup(run, args.hub_group), args, False)
+            result['warm_load'] = common.ram_load(run, args, 'rp2350_hazard3', elf)
+        else:
+            power_cycle(common.InGroup(run, args.hub_group), args)
+        verdicts, final, reports = scenario(console, run, args.seed, pins, args.mode,
+            common.elf_sections(elf)[1]['.isr_vector'][0] | 1)
         result['verdicts'] = verdicts
         result['swd'] = cross_check(run, args, names, final, reports)
+        args.pace.before('board scenario completion')
         result['status'] = 'passed'
     except (Failed, subprocess.TimeoutExpired, OSError) as error:
         result['failure'] = str(error)
@@ -458,18 +486,21 @@ def main():
             (args.output / 'sent.bin').write_bytes(bytes(console.sent))
             result['uart_sha256'] = hashlib.sha256(bytes(console.received)).hexdigest()
             result['frames'] = common.frame_record(bytes(console.received))
+        if lock and lock.file:
+            common.finish_boot(args, result, lambda: restore_fixed(run, args))
         if bridge:
             # Detached: left running for the next tool.
             bridge.close()
         if lock:
             lock.release()
+        result['seconds'] = round(time.monotonic() - began, 3)
         result['commands'] = run.commands
         common.write_json(args.output / 'result.json', result)
     if args.record and result['status'] == 'passed':
         kept = ('status', 'image_sha256', 'image_name', 'image_block', 'amoadd', 'flashed_as', 'flash_readback',
                 'verdicts', 'swd', 'uart_sha256') + (('block_control',) if args.block_control else ())
         common.write_json(args.record, common.record(
-            result, kept, (args.output / 'sent.bin').read_bytes(), run.commands, ('b',)))
+            result, tuple(k for k in (*kept, 'mode', 'warm_load', 'fixed_restore', 'seconds') if k in result), (args.output / 'sent.bin').read_bytes(), run.commands, ('b',)))
     print('board %s: %s%s' % (result['status'], args.output,
                               '' if result['status'] == 'passed' else ': ' + result['failure']))
     return 0 if result['status'] == 'passed' else 1
