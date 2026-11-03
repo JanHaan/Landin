@@ -1,0 +1,17 @@
+--  D124: a handler written on one line is its block and its control
+--  expression at once; one that ends without a value is refused once, at
+--  the handler, with no second place to name.
+missing: atom
+
+nothing: () -> none =
+end nothing
+
+pick: (flag: bool) -> (value: i32) ! missing =
+    fail missing when flag
+    value = 1
+end pick
+
+public main: () -> (code: i32) =
+    chosen := pick(true) else nothing()
+    code = chosen
+end main

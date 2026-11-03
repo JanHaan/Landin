@@ -1,0 +1,10 @@
+error[L0332]: this control block can fall through without producing a value
+  --> ../tests/fixtures/negative/one-line-handler-without-value/program.ldn:15:26
+   |
+15 |     chosen := pick(true) else nothing()
+   |                          ^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/one-line-handler-without-value/program.ldn:15:15
+   |
+15 |     chosen := pick(true) else nothing()
+   |               ^^^^^^^^^^^^^^^^^^^^^^^^^ this control expression needs a value
+  = note: D124: an early return needs no joined value, but every fallthrough edge does
