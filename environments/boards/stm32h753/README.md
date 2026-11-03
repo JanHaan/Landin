@@ -36,10 +36,11 @@ hub is one of a cascade, `7-2`, every hub of which re-enumerates, the
 ST-LINK and every other board's USB device with it, whenever any port of
 it is switched or any device on it resets (D725). So the run holds the
 rig's lock, `~/.cache/landin/rig.lock`, from its build to its last read;
-its cycle is spaced from every other tool's actions on the host, by
-`--spacing` seconds and until the kernel has logged nothing of USB for
-`--quiet` seconds, and stops on any USB trouble the kernel logged since
-the last one; and after the download and after the cycle the tool waits,
+its download and its cycle are each spaced from every other tool's
+actions on the host, by `--spacing` seconds and until the kernel has
+logged nothing of USB for `--quiet` seconds, and stop on any USB trouble
+the kernel logged since the last one; and after the download and after
+the cycle the tool waits,
 up to `--hub-seconds`, for the hub to list the ST-LINK on its port again
 (D832). The defaults are the maintainer's rig: hub `7-2.3`, port 2,
 serial `001900293137511339383538`, on the cascade `7-2`.

@@ -99,11 +99,15 @@ def probe(run, args):
 
 
 def flash(run, args, elf, stage):
-    """Flash and verify the image, then, once the hub lists again, read the
-    second stage back: a download resets the chip, and a device resetting
-    on the rig's cascade re-enumerates the whole of it (D725)."""
+    """Flash and verify the image, paced with every other tool's actions on
+    the rig, then, once the hub lists again, read the second stage back: a
+    download resets the chip, and on the rig the whole cascade above the
+    Pico once disconnected within a second of one, although the Pico
+    enumerates nothing (D725, D832)."""
     swd = probe(run, args)
-    run.command('flash', swd.argv('download', '--verify', elf), timeout=300)
+    common.paced(args.pace, 'download', lambda: run.command(
+        'flash', swd.argv('download', '--verify', elf), timeout=300),
+        args.guard_serial, args.cascade)
     common.wait_for_hub(common.InGroup(run, args.hub_group), args.hub, [], args.hub_seconds)
     back = swd.read_bytes('flash-readback', 0x10000000, len(stage))
     require(back == stage, "flash does not hold the image's second stage")

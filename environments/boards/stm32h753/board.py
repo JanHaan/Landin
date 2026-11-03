@@ -291,10 +291,13 @@ def settle(run, args):
 
 
 def flash(run, args, elf, table):
-    """Flash and verify the image, and read its vector table back once the
-    hub lists the ST-LINK again."""
+    """Flash and verify the image, paced with every other tool's actions on
+    the rig, as any download is, and read its vector table back once the hub
+    lists the ST-LINK again (D832)."""
     swd = probe(run, args)
-    run.command('flash', swd.argv('download', '--verify', elf), timeout=300)
+    common.paced(args.pace, 'download', lambda: run.command(
+        'flash', swd.argv('download', '--verify', elf), timeout=300),
+        args.guard_serial, args.cascade)
     settle(common.InGroup(run, args.hub_group), args)
     back = swd.read_bytes('flash-readback', VECTORS, len(table))
     require(back == table, "flash does not hold the image's vector table")

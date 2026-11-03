@@ -23114,9 +23114,10 @@ flashed from BOOTSEL and left the halted boot ROM on the bus, and the
 RP2040's, the Arm Pico 2's and the STM32H753's tools neither paced nor
 waited.
 
-**Chosen:** every board tool's power cycle is paced with `common.paced`,
-only while the probe's Arty is off the cascade, and after a download or a
-switch every tool waits with `common.wait_for_hub` for its hub to list
+**Chosen:** every board tool's downloads and power cycles are paced with
+`common.paced`, only while the probe's Arty is off the cascade, and after
+a download or a switch every tool waits with `common.wait_for_hub` for its
+hub to list
 again, and to show the device the port must hold when it holds one, the
 STM32H753's ST-LINK; a listing that finds no hub at all no longer passes
 for one that shows nothing. The two Pico 2 tools share `pico2.py`, which
@@ -23126,18 +23127,19 @@ after a flash from BOOTSEL the power is cycled at once, unpaced but
 recorded so the next action is spaced from it, since the pace's two
 minutes would leave the halted boot ROM on the bus that D712 found
 resetting the hub tree; and the head is never read back while the port
-still shows BOOTSEL. The RP2040's and the STM32H753's downloads are not
-paced, since the chip they reset enumerates nothing on the cascade, but
-their tools still wait for the hub after them; the Pico 2 tools pace
-theirs, since one from BOOTSEL resets a device that does.
+still shows BOOTSEL. A download is paced even when the chip it resets
+enumerates nothing: on 2026-11-03 a download to the RP2040, whose
+firmware has no USB, was followed within a second by the whole cascade
+disconnecting.
 
 **The alternatives:** pacing the cycle after a BOOTSEL flash like any
 other, which waits two minutes beside a boot ROM the kernel is already
 failing to reach, and whose pace would then stop at the USB errors that
-wait causes; probe-rs told not to halt a core it only reads, which leaves
-the download's own halt; and flashing the good image back over USB
-through the boot ROM's PICOBOOT interface, which needs a tool and rights
-no other run uses.
+wait causes; leaving a download through a probe off the cascade unpaced,
+which the RP2040's run above refutes; probe-rs told not to halt a core it
+only reads, which leaves the download's own halt; and flashing the good
+image back over USB through the boot ROM's PICOBOOT interface, which
+needs a tool and rights no other run uses.
 
 **Pinned by** `scripts/tests/test_board_rp2350.py`'s `Control` and `Hub`,
 `test_board_rp2350_hazard3.py`'s `Attach` and `Hub`, the RP2040's and
