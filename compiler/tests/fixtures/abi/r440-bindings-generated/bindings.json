@@ -1417,9 +1417,9 @@
     "policy_sha256": "f23db01474fdde605ee822eee9d15027712abd1e5e9667fd9986418cf822fb3d"
   },
   "outputs": {
-    "adapters.c": "e46fc03981f173fcdd390b903b5038e4daf1d2225197f1df1319d714f9aa9682",
-    "bindings.ldn": "866e94d95359ef0dd48b37a9da6c997fe24a3b909d1e7b3500b11c1342e2892e",
-    "exports.h": "b9b3ce73b399dd4633b8545f112bfd07f39058bac15a179aedcd08132819b33e"
+    "adapters.c": "95df950bd3ea8d5fd6cc5347339430dad2984176c05f0f597b028b0dca126364",
+    "bindings.ldn": "0c7ce260831ea7af1bd7a7025d883d942c2873e217078520feef28df7a68eb60",
+    "exports.h": "70ee2f7d0dfedf31855db8aa8ce41da3bb2edf60ea0c07923b94c11052e34777"
   },
   "schema_version": 1
 }
