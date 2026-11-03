@@ -41081,6 +41081,12 @@ package body Landin.Stages.Checking is
                  (if Index = 0
                   then Landin.Targets.Firmware.Spelling (Profile.Device)
                     & " has no region named " & Name
+                  elsif Landin.Targets.Firmware."=" (Profile.Layout,
+                    Landin.Targets.Firmware.RAM_Layout)
+                    and then not Landin.Targets.Firmware.RAM_Region
+                      (Profile, Index)
+                  then "RAM layout cannot load region " & Name
+                    & "; use --firmware-layout=boot for the board boot check"
                   elsif Attr.Section /= Landin.Source.Empty_Span
                   then "a region placement chooses its own section"
                   elsif Routine and then not Landin.Targets.Firmware

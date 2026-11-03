@@ -6867,6 +6867,9 @@ package body Landin.Backend.Cortex_M is
          begin
             if Landin.IR.Kind_Of (Of_Unit, Item) = Landin.IR.Routine
               and then not Landin.IR.Is_External (Of_Unit, Item)
+              and then not
+                (Landin.IR.Placement_Of (Of_Unit, Item).Boot_Stage
+                 and then not Landin.IR.Firmware_Profile (Of_Unit).Has_Stage)
             then
                Emit_Routine
                  (Item, Allocated_Frame (Of_Unit, Item, Facts, 16#FFFF_FFC0#));

@@ -46,10 +46,10 @@ package body Landin.Tests.RV32_Firmware_Suite is
 
    function Script_Of
      (Description : String; Level : String := "rv32imac";
-      Program : String := "") return Written;
+      Program : String := ""; Layout : String := "boot") return Written;
    function Script_Of
      (Description : String; Level : String := "rv32imac";
-      Program : String := "") return Written
+      Program : String := ""; Layout : String := "boot") return Written
    is
       Host : Landin.Testing.Fakes.Fake_Filesystem;
       Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
@@ -72,6 +72,7 @@ package body Landin.Tests.RV32_Firmware_Suite is
       Args.Append ("--root=/w/devices");
       Args.Append ("--target=rv32");
       Args.Append ("--level=" & Level);
+      Args.Append ("--firmware-layout=" & Layout);
       Args.Append ("--emit=linker-script");
       Args.Append ("--build-report=/w/q.json");
       Args.Append ("-o");
@@ -680,10 +681,10 @@ package body Landin.Tests.RV32_Firmware_Suite is
    --  declarations beside `start`, and what the request said.
    procedure Assembly_Of
      (Description, Program : String; Text, Said : out U.Unbounded_String;
-      Level : String := "rv32imac");
+      Level : String := "rv32imac"; Layout : String := "boot");
    procedure Assembly_Of
      (Description, Program : String; Text, Said : out U.Unbounded_String;
-      Level : String := "rv32imac")
+      Level : String := "rv32imac"; Layout : String := "boot")
    is
       Host : Landin.Testing.Fakes.Fake_Filesystem;
       Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
@@ -704,6 +705,7 @@ package body Landin.Tests.RV32_Firmware_Suite is
       Args.Append ("--root=/w/devices");
       Args.Append ("--target=rv32");
       Args.Append ("--level=" & Level);
+      Args.Append ("--firmware-layout=" & Layout);
       Args.Append ("--firmware-entry=start");
       Args.Append ("--debug=lines");
       Args.Append ("--emit=asm");
@@ -936,8 +938,77 @@ package body Landin.Tests.RV32_Firmware_Suite is
         & ".globl _landin_firmware_vectors" & LF);
    end Traps_Follow_The_Model;
 
+   procedure RAM_Layout (Item : in out Landin.Testing.Context);
+   procedure RAM_Layout (Item : in out Landin.Testing.Context) is
+      Block_Profile : constant Written := Script_Of
+        (Description ("hazard3", "rp2350-image-block", 68), Layout => "ram");
+      ESP_Description : constant String :=
+        "compiler.device(""dev"")" & LF
+        & "compiler.core(""esp-rv32imc"")" & LF
+        & "compiler.vectors(32)" & LF
+        & "compiler.boot(""esp-app-image"")" & LF
+        & "compiler.esp_image(5, 3, 199, 0)" & LF
+        & "linker.region(""IRAM"", 0x4038_0000, 128 * 1024, ""rx"")" & LF
+        & "linker.region(""DRAM"", 0x3FCA_0000, 160 * 1024, ""rw"")" & LF
+        & "linker.place(""vectors"", ""IRAM"")" & LF
+        & "linker.place(""text"", ""IRAM"")" & LF
+        & "linker.place(""rodata"", ""IRAM"")" & LF
+        & "linker.place(""data"", ""DRAM"")" & LF
+        & "linker.place(""bss"", ""DRAM"")" & LF
+        & "linker.place(""stack"", ""DRAM"", 16 * 1024)" & LF
+        & "link(boot_stage) extern(naked) feed: () -> none =" & LF
+        & "    assembler.block(""li t0, 1\nj _landin_firmware_reset"")" & LF
+        & "end feed" & LF;
+      ESP_Profile : constant Written := Script_Of
+        (ESP_Description, Level => "rv32imc", Layout => "ram");
+      Assembly, Said : U.Unbounded_String;
+   begin
+      Landin.Testing.Check_Equal
+        (Item, Block_Profile.Status, Landin.Driver.Status_Success,
+         U.To_String (Block_Profile.Said));
+      Landin.Testing.Check
+        (Item, not Contains (U.To_String (Block_Profile.Script),
+                   ".embedded_block")
+           and then not Contains (U.To_String (Block_Profile.Script), " AT>")
+           and then Contains (U.To_String (Block_Profile.Report),
+             """described_boot"":""rp2350-image-block"""),
+         "RAM layout drops the ROM block and preserves its description");
+      Landin.Testing.Check_Equal
+        (Item, ESP_Profile.Status, Landin.Driver.Status_Success,
+         U.To_String (ESP_Profile.Said));
+      Landin.Testing.Check
+        (Item, Contains (U.To_String (ESP_Profile.Report),
+                   """layout"":""ram""")
+           and then not Contains (U.To_String (ESP_Profile.Report),
+                   """esp_image"":")
+           and then not Contains (U.To_String (ESP_Profile.Script), " AT>"),
+         "RAM layout omits ESP packaging and loads data in place");
+      Landin.Testing.Check
+        (Item, Contains (U.To_String (ESP_Profile.Report),
+                   """text"":""IRAM""")
+           and then Contains (U.To_String (ESP_Profile.Report),
+                   """data"":""DRAM"""),
+         "the ESP instruction and data windows retain their split");
+      Assembly_Of (ESP_Description, "", Assembly, Said,
+                   Level => "rv32imc", Layout => "ram");
+      Landin.Testing.Check
+        (Item, Contains (U.To_String (Assembly),
+                   "j _landin_firmware_reset_stage")
+           and then Contains (U.To_String (Assembly),
+                   "_landin_firmware_reset_stage:")
+           and then not Contains (U.To_String (Assembly),
+                   "la a0, _landin_firmware_data_load")
+           and then Contains (U.To_String (Assembly),
+                   "la a1, _landin_firmware_bss_start"),
+         "RAM startup retains watchdog setup and BSS clearing: "
+         & U.To_String (Said));
+   end RAM_Layout;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "rv32 firmware", "RAM layout omits ROM packaging",
+         RAM_Layout'Access);
       Landin.Testing.Register
         (Into, "rv32 firmware", "traps follow the interrupt model",
          Traps_Follow_The_Model'Access);

@@ -388,6 +388,16 @@ package body Landin.Configuration is
      (In_Table : Table; Index : Positive) return Landin.Syntax.Node_Id
      is (In_Table.Deferred.Element (Index).Node);
 
+   procedure Set_Firmware_Layout
+     (Into : in out Table; Layout : Landin.Targets.Firmware.Layout_Kind) is
+   begin
+      Into.Selected_Layout := Layout;
+   end Set_Firmware_Layout;
+
+   function Firmware_Layout (In_Table : Table)
+      return Landin.Targets.Firmware.Layout_Kind is
+     (In_Table.Selected_Layout);
+
    procedure Set_Profile
      (Into : in out Table; Selected : Landin.Targets.Firmware.Profile) is
    begin

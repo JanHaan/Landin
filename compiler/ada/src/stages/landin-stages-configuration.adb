@@ -2232,6 +2232,7 @@ package body Landin.Stages.Configuration is
       procedure Finish_Profile is
          use type Firmware.Section_Kind;
          use type Firmware.Float_Unit;
+         use type Firmware.Layout_Kind;
          use type Landin.Targets.Byte_Count;
          Complete : Boolean := True;
          Logical : constant String :=
@@ -2575,7 +2576,21 @@ package body Landin.Stages.Configuration is
          end if;
          if Complete then
             Built.Present := True;
-            Landin.Configuration.Set_Profile (Activity.all, Built);
+            if Landin.Configuration.Firmware_Layout (Activity.all)
+              = Firmware.RAM_Layout
+              and then Firmware.RAM_Text_Region (Built) = 0
+            then
+               Report_At
+                 (Bad.Description_Layout, Core_Site,
+                  "--firmware-layout=ram needs an executable writable"
+                  & " region in the description",
+                  "use --firmware-layout=boot for the board boot check");
+            else
+               Landin.Configuration.Set_Profile
+                 (Activity.all, Firmware.For_Layout
+                    (Built, Landin.Configuration.Firmware_Layout
+                       (Activity.all)));
+            end if;
          end if;
       end Finish_Profile;
 

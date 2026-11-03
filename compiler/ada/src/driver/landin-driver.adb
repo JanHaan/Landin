@@ -758,6 +758,10 @@ package body Landin.Driver is
       Link_Seen : Boolean := False;
       Firmware_Name : Unbounded.Unbounded_String;
       Firmware_Seen : Boolean := False;
+      use type Landin.Targets.Firmware.Layout_Kind;
+      Layout_Seen : Boolean := False;
+      Selected_Layout : Landin.Targets.Firmware.Layout_Kind :=
+        Landin.Targets.Firmware.Boot_Layout;
       --  D546: a developer's linker script, linked in place of OUT.ld.
       Script_Path : Unbounded.Unbounded_String;
       Script_Seen : Boolean := False;
@@ -798,6 +802,7 @@ package body Landin.Driver is
             C.Stack_Report => Stack_Report_Seen,
             C.Toolchain => Toolchain_Seen, C.Linker => Linker_Seen,
             C.Link => Link_Seen, C.Firmware_Entry => Firmware_Seen,
+            C.Firmware_Layout => Layout_Seen,
             C.Keep_Asm => Keep_Assembly,
             C.Output => Output_Seen
               and then Unbounded.Length (Output_Problem) = 0,
@@ -1012,6 +1017,20 @@ package body Landin.Driver is
                Firmware_Seen := True;
                Firmware_Name := Unbounded.To_Unbounded_String
                  (After (Argument, "--firmware-entry="));
+
+            elsif Starts_With (Argument, "--firmware-layout=") then
+               if Layout_Seen
+                 or else After (Argument, "--firmware-layout=")
+                   not in "boot" | "ram"
+               then
+                  Unknowns.Append (Argument);
+                  Bad_Use := True;
+               end if;
+               Layout_Seen := True;
+               Selected_Layout :=
+                 (if After (Argument, "--firmware-layout=") = "ram"
+                  then Landin.Targets.Firmware.RAM_Layout
+                  else Landin.Targets.Firmware.Boot_Layout);
 
             elsif Starts_With (Argument, "--linker-script=") then
                if Script_Seen
@@ -2705,7 +2724,13 @@ package body Landin.Driver is
                           (Code_Toolchain_Failed,
                            Driver & " failed with status"
                            & Integer'Image (Ran.Exit_Code) & LF
-                           & Unbounded.To_String (Ran.Output));
+                           & Unbounded.To_String (Ran.Output)
+                           & (if Selected_Layout =
+                               Landin.Targets.Firmware.RAM_Layout
+                             then LF & "RAM layout capacity is bounded by"
+                               & " the described SRAM; use"
+                               & " --firmware-layout=boot for the board"
+                               & " boot check" else ""));
                      end if;
                   end;
                elsif not Tools.Output_Produced (Host, Target_Path) then
@@ -2726,7 +2751,9 @@ package body Landin.Driver is
                     (Code_Toolchain_Failed,
                      Driver & " left executable output aliasing its prior"
                      & " backup at " & Target_Path);
-               elsif On_Firmware and then Script_Seen
+               elsif On_Firmware
+                 and then (Script_Seen or else Selected_Layout =
+                             Landin.Targets.Firmware.RAM_Layout)
                  and then Landin.Build_Reports.Firmware.Contract_Fault
                    (Host, Target_Path,
                     Landin.IR.Firmware_Profile
@@ -2738,7 +2765,8 @@ package body Landin.Driver is
                   --  D546: the developer's script broke a clause.
                   Note_Failure
                     (Rows.Code (Rows.Linker_Script_Contract),
-                     Unbounded.To_String (Script_Path)
+                     (if Script_Seen then Unbounded.To_String (Script_Path)
+                      else "the RAM layout")
                      & " breaks the firmware linker script contract, "
                      & Landin.Build_Reports.Firmware.Contract_Fault
                          (Host, Target_Path,
@@ -2747,8 +2775,12 @@ package body Landin.Driver is
                           Landin.Backend.Firmware.Used_Regions
                             (Landin.Stages.Code (Context).all,
                              Landin.Stages.Identities (Context).all))
-                     & " (D546); the derived script beside it, "
-                     & Target_Path & ".ld, keeps every clause");
+                     & (if Script_Seen
+                        then " (D546); the derived script beside it, "
+                          & Target_Path & ".ld, keeps every clause"
+                        else " (D900); keep every runtime section in SRAM,"
+                          & " or use --firmware-layout=boot for the board"
+                          & " boot check"));
                   Restore_Output;
                elsif Unbounded.Length (Backup) > 0 then
                   Host.Remove_File (Unbounded.To_String (Backup), Removed);
@@ -2888,7 +2920,9 @@ package body Landin.Driver is
                Valid : Boolean := True;
             begin
                if Report_Seen and then not Landin.Stages.Failed (Context) then
-                  if On_Firmware and then Emit = Emit_Linker_Script then
+                  if On_Firmware
+                    and then Emit in Emit_Linker_Script | Emit_Assembly
+                  then
                      Firmware := Unbounded.To_Unbounded_String
                        (Landin.Build_Reports.Firmware.Limits
                           (Landin.IR.Firmware_Profile
@@ -3223,13 +3257,22 @@ package body Landin.Driver is
                                           .Image_Reach_Source (Facts)),
                                     when others =>
                                        (if Firmware
-                                        then "the flash of " & Profile
+                                        then (if Selected_Layout =
+                                          Landin.Targets.Firmware.RAM_Layout
+                                          then "the RAM of "
+                                          else "the flash of ")
+                                          & Profile
                                           & " holds"
                                         else Landin.Targets.Capabilities
                                           .Image_Reach_Source (Facts)))));
                      begin
                         Landin.Diagnostics.Add_Note
                           (Refused,
+                           (if Selected_Layout =
+                             Landin.Targets.Firmware.RAM_Layout
+                            then "RAM layout capacity exceeded; use"
+                              & " --firmware-layout=boot for the board boot"
+                              & " check. " else "") &
                            "every image the program lowers counts before"
                            & " section GC; make the static data smaller,"
                            & " or allocate it when the program runs (D537)");
@@ -3910,6 +3953,8 @@ package body Landin.Driver is
          end loop;
          --  `compiler.c_runtime` is true on Linux exactly when the request
          --  keeps C's runtime; the other systems always link it.
+         Landin.Configuration.Set_Firmware_Layout
+           (Landin.Stages.Configurations (Context).all, Selected_Layout);
          Landin.Configuration.Set_C_Runtime
            (Landin.Stages.Configurations (Context).all,
             Link_Mode = Link_Libc);
@@ -4122,7 +4167,8 @@ package body Landin.Driver is
 
          --  Target facts and emission options are known before any source
          --  is loaded.  A source error must not hide an incompatible request.
-         if (Emit /= Emit_Nothing or else Firmware_Seen or else Link_Seen)
+         if (Emit /= Emit_Nothing or else Firmware_Seen or else Layout_Seen
+             or else Link_Seen)
            and then Rejected.Is_Empty
          then
             declare
@@ -4147,6 +4193,13 @@ package body Landin.Driver is
                       elsif On_Firmware
                       then "use --debug=lines or --debug=none"
                       else "use --debug=full or --debug=none"));
+                  Target_Option_Refused := True;
+               elsif Layout_Seen and then not On_Firmware then
+                  Bad_Use := True;
+                  Note_Failure
+                    (Code_Unknown_Option,
+                     "--firmware-layout requires a firmware target:"
+                     & " --target=cortex-m0 or --target=rv32");
                   Target_Option_Refused := True;
                elsif Firmware_Seen and then not On_Firmware then
                   Bad_Use := True;

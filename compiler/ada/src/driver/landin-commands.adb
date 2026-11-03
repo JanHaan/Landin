@@ -968,7 +968,7 @@ package body Landin.Commands is
             for Text of Asked.Forwarded loop
                for Flag in C.Option loop
                   if Flag in C.Target .. C.Specialize | C.Link
-                    | C.Firmware_Entry
+                    | C.Firmware_Entry | C.Firmware_Layout
                     and then Text'Length > C.Name (Flag)'Length
                     and then Text (Text'First
                       .. Text'First + C.Name (Flag)'Length) = C.Name (Flag)

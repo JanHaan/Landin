@@ -7,6 +7,7 @@ package body Landin.Build_Reports.Firmware is
    package Members is new Ada.Containers.Indefinite_Ordered_Sets (String);
    use type Landin.Platform.Read_Status;
    use type Landin.Targets.Byte_Count;
+   use type Landin.Targets.Firmware.Layout_Kind;
 
    function Image (Value : Landin.Targets.Byte_Count) return String is
      (Ada.Strings.Fixed.Trim (Value'Image, Ada.Strings.Both));
@@ -24,6 +25,9 @@ package body Landin.Build_Reports.Firmware is
         & Firmware.Spelling (Profile.Device)
         & """,""core"":""" & Firmware.Spelling (Profile.Core)
         & """,""float_unit"":""" & Firmware.Spelling (Profile.Float)
+        & """,""layout"":""" & Firmware.Spelling (Profile.Layout)
+        & """,""described_boot"":"""
+        & Firmware.Spelling (Profile.Described_Boot)
         & """,""boot"":""" & Firmware.Spelling (Profile.Boot)
         & """,""vector_address"":" & Image (Firmware.Vector_Address (Profile))
         & ",""vector_words"":" & Image
@@ -48,7 +52,9 @@ package body Landin.Build_Reports.Firmware is
            & Firmware.Spelling
                (Firmware.Placed_Region (Profile, Section).Name) & """");
       end loop;
-      US.Append (Result, "}");
+      US.Append (Result, "},""code_limit"":"
+        & Image (Firmware.Flash_Capacity (Profile))
+        & ",""ram_layout_limit"":" & Image (Firmware.RAM_Capacity (Profile)));
       return US.To_String (Result);
    end Facts;
 
@@ -58,7 +64,9 @@ package body Landin.Build_Reports.Firmware is
       Stack : constant Firmware.Region :=
         Firmware.Placed_Region (Profile, Firmware.Stack);
    begin
-      return "{""flash_limit"":" & Image (Firmware.Flash_Capacity (Profile))
+      return "{""flash_limit"":"
+        & Image (if Profile.Layout = Firmware.RAM_Layout then 0
+                 else Firmware.Flash_Capacity (Profile))
         & ",""static_ram_limit"":"
         & Image (Firmware.Static_RAM_Capacity (Profile))
         & ",""stack_reserved"":" & Image (Profile.Stack_Size)
@@ -137,7 +145,8 @@ package body Landin.Build_Reports.Firmware is
       Stage_At, Stage_Bytes, Stage_Sum : Landin.Targets.Byte_Count := 0;
       --  D638: the image block as the linked image holds it.
       Block_At, Block_Bytes : Landin.Targets.Byte_Count := 0;
-      Block_Words : US.Unbounded_String;
+      Block_Words, Load_Segments : US.Unbounded_String;
+      RAM_Used : Landin.Targets.Byte_Count := 0;
    begin
       Result := US.Null_Unbounded_String;
       Valid := False;
@@ -303,6 +312,18 @@ package body Landin.Build_Reports.Firmware is
                      then
                         return;
                      end if;
+                     if Firmware.RAM_Only (Profile) then
+                        RAM_Used := RAM_Used + Memory_Size;
+                     end if;
+                     if File_Size > 0 then
+                        US.Append (Load_Segments,
+                          (if US.Length (Load_Segments) = 0 then "" else ",")
+                          & "{""address"":" & Image (Physical)
+                          & ",""runtime_address"":" & Image (Virtual)
+                          & ",""file_bytes"":" & Image (File_Size)
+                          & ",""memory_bytes"":" & Image (Memory_Size)
+                          & "}");
+                     end if;
                      --  A segment in the data region is static RAM, even
                      --  where text shares the region, as on an ESP32's
                      --  SRAM (D685).
@@ -329,8 +350,7 @@ package body Landin.Build_Reports.Firmware is
                           or else (Firmware.Writable
                                      (Profile.Regions
                                         (Region_Of (Physical, File_Size)).Mode)
-                                   and then not Firmware.Takes_ESP_Image
-                                     (Profile.Boot))
+                                   and then not Firmware.RAM_Only (Profile))
                         then
                            return;
                         end if;
@@ -426,10 +446,18 @@ package body Landin.Build_Reports.Firmware is
          end;
       end;
 
-      US.Append (Result, "{""flash_used"":" & Image (Flash_End - Flash.Origin)
-        & ",""flash_limit"":" & Image (Flash.Length)
+      US.Append (Result, "{""flash_used"":"
+        & Image (if Profile.Layout = Firmware.RAM_Layout then 0
+                 else Flash_End - Flash.Origin)
+        & ",""flash_limit"":"
+        & Image (if Profile.Layout = Firmware.RAM_Layout then 0
+                 else Flash.Length)
         & ",""flash_remaining"":"
-        & Image (Flash.Origin + Flash.Length - Flash_End)
+        & Image (if Profile.Layout = Firmware.RAM_Layout then 0
+                 else Flash.Origin + Flash.Length - Flash_End)
+        & ",""code_used"":" & Image (Flash_End - Flash.Origin)
+        & ",""ram_layout_used"":" & Image (RAM_Used)
+        & ",""load_segments"":[" & US.To_String (Load_Segments) & "]"
         & ",""static_ram_used"":" & Image (RAM_End - RAM.Origin)
         & ",""static_ram_limit"":" & Image (RAM_Limit)
         & ",""static_ram_remaining"":"
@@ -627,7 +655,13 @@ package body Landin.Build_Reports.Firmware is
             if Value (Last) < Value (First) then
                return "clause 4, the initialized images: " & Name
                  & " ends before it begins";
-            elsif Size > 0 and then not Within
+            elsif Size > 0 and then Profile.Layout = Firmware.RAM_Layout
+              and then Value (Load) /= Value (First)
+            then
+               return "clause 4, the RAM layout: " & Name
+                 & " must load at its runtime address";
+            elsif Size > 0 and then Profile.Layout /= Firmware.RAM_Layout
+              and then not Within
               (Value (Load), Size,
                Firmware.Placed_Region (Profile, Firmware.Text))
             then
@@ -702,6 +736,11 @@ package body Landin.Build_Reports.Firmware is
             Need ("_landin_firmware_entry");
          end if;
          Need ("_landin_firmware_reset");
+         if Profile.Has_Stage
+           and then Firmware.Stage_Before_Reset (Profile.Boot)
+         then
+            Need (Firmware.Reset_Stage_Symbol);
+         end if;
          Need ("_landin_firmware_unhandled");
          Need ("_landin_firmware_vectors");
          Need ("_landin_firmware_stack_top");
@@ -747,6 +786,10 @@ package body Landin.Build_Reports.Firmware is
             Bytes : constant Landin.Targets.Byte_Count :=
               Firmware.Vector_Bytes (Profile);
             At_File : constant Natural := Loaded (Address, Bytes);
+            Reset : constant String :=
+              (if Profile.Has_Stage
+                 and then Firmware.Stage_Before_Reset (Profile.Boot)
+               then Firmware.Reset_Stage_Symbol else Firmware.Reset_Symbol);
          begin
             if Value ("_landin_firmware_vectors") /= Address then
                return "clause 1, the vector table: it is at "
@@ -763,7 +806,7 @@ package body Landin.Build_Reports.Firmware is
               and then
                 (Word (At_File) /= Value ("_landin_firmware_stack_top")
                  or else Word (At_File + 4)
-                   /= (Value ("_landin_firmware_reset") / 2) * 2 + 1)
+                   /= (Value (Reset) / 2) * 2 + 1)
             then
                return "clause 1, the vector table: its first words are not"
                  & " the initial stack pointer and reset";
@@ -914,6 +957,51 @@ package body Landin.Build_Reports.Firmware is
                end;
             end loop;
          end;
+
+         --  D900: a RAM run loads only described SRAM, at its execution
+         --  address. This includes custom sections beyond startup's symbols.
+         if Profile.Layout = Firmware.RAM_Layout then
+            declare
+               Header : constant Natural := Natural (Word (28));
+            begin
+               for Index in 0 .. Natural (Number (44, 2)) - 1 loop
+                  declare
+                     At_Entry : constant Natural := Header + Index * 32;
+                     First : constant Landin.Targets.Byte_Count :=
+                       Word (At_Entry + 8);
+                     Physical : constant Landin.Targets.Byte_Count :=
+                       Word (At_Entry + 12);
+                     File_Size : constant Landin.Targets.Byte_Count :=
+                       Word (At_Entry + 16);
+                     Memory_Size : constant Landin.Targets.Byte_Count :=
+                       Word (At_Entry + 20);
+                  begin
+                     if Word (At_Entry) = 1 and then Memory_Size > 0
+                       and then First < Value ("_landin_firmware_stack_top")
+                       and then First + Memory_Size
+                         > Value ("_landin_firmware_stack_bottom")
+                     then
+                        return "clause 3, the stack: a RAM segment overlaps"
+                          & " the reserved stack; use --firmware-layout=boot"
+                          & " for the board boot check";
+                     end if;
+                     if Word (At_Entry) = 1 and then Memory_Size > 0
+                       and then
+                         (not (for some Region in 1 .. Profile.Count =>
+                            Firmware.RAM_Region (Profile, Region)
+                            and then Within
+                              (First, Memory_Size, Profile.Regions (Region)))
+                          or else (File_Size > 0 and then Physical /= First))
+                     then
+                        return "clause 4, the RAM layout: every loaded"
+                          & " segment must stay in SRAM with load address"
+                          & " equal to runtime address; use"
+                          & " --firmware-layout=boot for the board boot check";
+                     end if;
+                  end;
+               end loop;
+            end;
+         end if;
 
          --  Clause 4: each initialized image loads from flash.
          declare

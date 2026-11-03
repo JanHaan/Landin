@@ -7,6 +7,7 @@ package body Landin.Backend.Firmware is
    package US renames Ada.Strings.Unbounded;
    use type Landin.Targets.Byte_Count;
    use type Landin.Targets.Firmware.Float_Unit;
+   use type Profiles.Layout_Kind;
 
    LF : constant Character := Character'Val (10);
 
@@ -65,9 +66,12 @@ package body Landin.Backend.Firmware is
                  Profiles.Spelling (Profile.Regions (Index).Name);
             begin
                US.Append (Regions,
+                 (if Profile.Layout = Profiles.RAM_Layout then "" else
                  "ldr r0, =" & Region_Symbol (Name, "data_load") & LF
                  & "ldr r1, =" & Region_Symbol (Name, "data_start") & LF
                  & "ldr r2, =" & Region_Symbol (Name, "data_end") & LF
+                 & "cmp r0, r1" & LF
+                 & "beq 9f" & LF
                  & "8:" & LF
                  & "cmp r1, r2" & LF
                  & "bcs 9f" & LF
@@ -76,7 +80,7 @@ package body Landin.Backend.Firmware is
                  & "adds r0, #1" & LF
                  & "adds r1, #1" & LF
                  & "b 8b" & LF
-                 & "9:" & LF
+                 & "9:" & LF)
                  & "ldr r1, =" & Region_Symbol (Name, "bss_start") & LF
                  & "ldr r2, =" & Region_Symbol (Name, "bss_end") & LF
                  & "movs r3, #0" & LF
@@ -120,9 +124,12 @@ package body Landin.Backend.Firmware is
              & "str r1, [r0]" & LF
              & "dsb sy" & LF
              & "isb sy" & LF)
-        & "ldr r0, =_landin_firmware_data_load" & LF
+        & (if Profile.Layout = Profiles.RAM_Layout then "" else
+        "ldr r0, =_landin_firmware_data_load" & LF
         & "ldr r1, =_landin_firmware_data_start" & LF
         & "ldr r2, =_landin_firmware_data_end" & LF
+        & "cmp r0, r1" & LF
+        & "beq 2f" & LF
         & "1:" & LF
         & "cmp r1, r2" & LF
         & "bcs 2f" & LF
@@ -135,6 +142,8 @@ package body Landin.Backend.Firmware is
         & "ldr r0, =_landin_firmware_ramtext_load" & LF
         & "ldr r1, =_landin_firmware_ramtext_start" & LF
         & "ldr r2, =_landin_firmware_ramtext_end" & LF
+        & "cmp r0, r1" & LF
+        & "beq 7f" & LF
         & "6:" & LF
         & "cmp r1, r2" & LF
         & "bcs 7f" & LF
@@ -143,7 +152,7 @@ package body Landin.Backend.Firmware is
         & "adds r0, #1" & LF
         & "adds r1, #1" & LF
         & "b 6b" & LF
-        & "7:" & LF
+        & "7:" & LF)
         & "ldr r1, =_landin_firmware_bss_start" & LF
         & "ldr r2, =_landin_firmware_bss_end" & LF
         & "movs r3, #0" & LF
@@ -382,9 +391,13 @@ package body Landin.Backend.Firmware is
       procedure Copy (Load, First, Last : String);
       procedure Copy (Load, First, Last : String) is
       begin
+         if Profile.Layout = Profiles.RAM_Layout then
+            return;
+         end if;
          Line (Regions, "la a0, " & Load);
          Line (Regions, "la a1, " & First);
          Line (Regions, "la a2, " & Last);
+         Line (Regions, "beq a0, a1, 2f");
          Line (Regions, "1:");
          Line (Regions, "bgeu a1, a2, 2f");
          Line (Regions, "lbu a3, 0(a0)");
@@ -731,8 +744,13 @@ package body Landin.Backend.Firmware is
       --  where the core's alignment puts it after that word.
       RV32 : constant Boolean := Profile.Core in Profiles.RISC_V_Core;
       Entry_Address : constant String :=
-        "ORIGIN(" & Vectors & ")"
-        & (if Prefix = 0 then "" else " + " & Number (Prefix));
+        (if not RV32
+           and then Profile.Layout = Profiles.RAM_Layout
+           and then Profiles.Vector_Address (Profile)
+             /= Profiles.Placed_Region (Profile, Profiles.Vectors).Origin
+         then Number (Profiles.Vector_Address (Profile))
+         else "ORIGIN(" & Vectors & ")"
+           & (if Prefix = 0 then "" else " + " & Number (Prefix)));
       Memory, Sections, Segments : US.Unbounded_String;
       --  D686: an RV32 script names its loaded segments, one an output
       --  section begins, so that no segment carries the ELF's own headers,
@@ -744,14 +762,18 @@ package body Landin.Backend.Firmware is
       --  The end of the last output section in the stack's region, which
       --  must stay below the stack, and the last load image in flash.
       In_Stack_Region : US.Unbounded_String;
-      ESP : constant Boolean := Profiles.Takes_ESP_Image (Profile.Boot);
+      Ramtext_With_Text : constant Boolean := Profiles.RAM_Only (Profile);
+      RAM : constant Boolean := Profile.Layout = Profiles.RAM_Layout;
+      function Load_From_Text return String is
+        (if RAM then "" else " AT> " & Flash);
       Ramtext : constant String :=
         "  .ramtext : ALIGN(8) {" & LF
         & "    _landin_firmware_ramtext_start = .;" & LF
         & "    *(.ramtext.*)" & LF
         & "    _landin_firmware_ramtext_end = .;" & LF;
       Last_Load : US.Unbounded_String :=
-        US.To_Unbounded_String (if ESP then ".data" else ".ramtext");
+        US.To_Unbounded_String
+          (if Ramtext_With_Text then ".data" else ".ramtext");
    begin
       for Index in 1 .. Profile.Count loop
          US.Append (Memory, "  "
@@ -762,7 +784,7 @@ package body Landin.Backend.Firmware is
       end loop;
       if Profile.Placed (Profiles.Data) = Stack_At then
          In_Stack_Region := US.To_Unbounded_String
-           (if ESP
+           (if Ramtext_With_Text
             then "_landin_firmware_data_end"
             else "_landin_firmware_ramtext_end");
       end if;
@@ -785,7 +807,7 @@ package body Landin.Backend.Firmware is
                     & "    *(.landin_region." & Name & ".data.*)" & LF
                     & "    " & Region_Symbol (Name, "data_end")
                     & " = .;" & LF
-                    & "  } > " & Name & " AT> " & Flash
+                    & "  } > " & Name & Load_From_Text
                     & Segment ("region_" & Name & "_data") & LF
                     & "  " & Region_Symbol (Name, "data_load")
                     & " = LOADADDR(" & Section & "_data);" & LF
@@ -860,10 +882,10 @@ package body Landin.Backend.Firmware is
            else "")
         & "  .text : { *(.text .text.*) } > " & Flash & Segment ("text")
         & LF
-        --  D688, D657: an ESP image's RAM code runs where the ROM loads
-        --  it, with its text and in its segment, so reset's copy is of
-        --  itself.
-        & (if ESP then Ramtext & "  } > " & Flash & Segment ("text") & LF
+        --  D900, D688: RAM code runs with text when the whole image is
+        --  loaded into SRAM; a boot image otherwise copies it into data.
+        & (if Ramtext_With_Text
+           then Ramtext & "  } > " & Flash & Segment ("text") & LF
            else "")
         & "  .rodata : { *(.rodata .rodata.*"
         & (if RV32 then " .srodata .srodata.*" else "") & ") } > "
@@ -878,10 +900,10 @@ package body Landin.Backend.Firmware is
         & "    *(.data .data.*" & (if RV32 then " .sdata .sdata.*" else "")
         & ")" & LF
         & "    _landin_firmware_data_end = .;" & LF
-        & "  } > " & Data & " AT> " & Flash & Segment ("data") & LF
+        & "  } > " & Data & Load_From_Text & Segment ("data") & LF
         & "  _landin_firmware_data_load = LOADADDR(.data);" & LF
-        & (if ESP then ""
-           else Ramtext & "  } > " & Data & " AT> " & Flash & LF)
+        & (if Ramtext_With_Text then ""
+           else Ramtext & "  } > " & Data & Load_From_Text & LF)
         & "  _landin_firmware_ramtext_load = LOADADDR(.ramtext);" & LF
         & "  .bss (NOLOAD) : AT(ADDR(.bss)) ALIGN(8) {" & LF
         & "    _landin_firmware_bss_start = .;" & LF
@@ -935,11 +957,17 @@ package body Landin.Backend.Firmware is
            else "ASSERT(" & US.To_String (In_Stack_Region)
              & " <= _landin_firmware_sta"
              & "ck_bottom," & LF
-             & "       """ & Stack & " image overlaps the reserved "
-             & Size_Words (Profile.Stack_Size) & " stack"")" & LF)
-        & "ASSERT(LOADADDR(" & US.To_String (Last_Load) & ") + SIZEOF("
+             & "       """ & Stack
+             & (if RAM then " RAM capacity exceeded: image overlaps the"
+                  & " reserved " else " image overlaps the reserved ")
+             & Size_Words (Profile.Stack_Size) & " stack"
+             & (if RAM then "; use --firmware-layout=boot for the board"
+                  & " boot check"
+                else "") & """)" & LF)
+        & (if RAM then "" else "ASSERT(LOADADDR("
+        & US.To_String (Last_Load) & ") + SIZEOF("
         & US.To_String (Last_Load) & ") <= "
         & "ORIGIN(" & Flash & ") + LENGTH(" & Flash & ")," & LF
-        & "       ""initialized image exceeds flash"")" & LF;
+        & "       ""initialized image exceeds flash"")" & LF);
    end Linker_Script;
 end Landin.Backend.Firmware;
