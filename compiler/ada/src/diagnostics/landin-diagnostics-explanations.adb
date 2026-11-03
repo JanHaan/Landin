@@ -535,7 +535,10 @@ package body Landin.Diagnostics.Explanations is
                & "ed after it (D455). Otherwise, keep the use non-retainin"
                & "g or update storage within the same origin. Keeping the "
                & "storage alive longer alone does not grant retention perm"
-               & "ission.",
+               & "ission. A thread's instance of `link(thread)` storage en"
+               & "ds with its thread, so its address is not kept in a modu"
+               & "le binding every thread reads (D772); keep it in a local"
+               & " or pass it on as an argument.",
             when Catalogue.Borrowed_Place =>
                "A place is changed while a view derived from it is still"
                & " in use [0800] [0830]. Finish with the view first, or ta"
@@ -984,12 +987,16 @@ package body Landin.Diagnostics.Explanations is
                & "ymbol that differ only in `escaping` are refused too, an"
                & "d the report names the parameter: a Landin caller of eit"
                & "her is checked against what it says, so repeat `escaping"
-               & "` on both (D441). `link(thread)` places a module `mut` b"
-               & "inding that has no value, one instance in every thread ("
-               & "D496): it places no routine, takes no initializer, and t"
-               & "akes no link symbol or section, which would name or plac"
-               & "e one instance for all of them. Drop the value, make the"
-               & " binding `mut`, or drop the other attribute.",
+               & "` on both (D441). A public naked or interrupt routine wi"
+               & "th no link name is a global symbol under its own spellin"
+               & "g, held to the same rule (D770): to make a C import a na"
+               & "ked routine's view (D516), give the routine the import's"
+               & " `link(symbol: ...)`. `link(thread)` places a module `mu"
+               & "t` binding that has no value, one instance in every thre"
+               & "ad (D496): it places no routine, takes no initializer, a"
+               & "nd takes no link symbol or section, which would name or "
+               & "place one instance for all of them. Drop the value, make"
+               & " the binding `mut`, or drop the other attribute.",
             when Catalogue.Traversal_Source =>
                "A `for` source is not something the loop can traverse [1"
                & "150]. A range traversal runs over integers, an array or "

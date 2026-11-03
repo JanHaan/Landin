@@ -4164,7 +4164,14 @@ package body Landin.Diagnostics.Citations.Texts is
                & "tself and store it."
                & LF
                & "- A private `! ...` error set is inferred separately for"
-               & " each concrete instance.",
+               & " each concrete instance."
+               & LF
+               & "- The body is checked for each instance a call makes. Be"
+               & "fore anything calls it, only its names and the operands "
+               & "no type could make valid are checked, so a generic funct"
+               & "ion nothing calls is not refused for a view held across "
+               & "a call that may move its source, or for anything else th"
+               & "at depends on what `t` turns out to be.",
             when 1300 =>
                "The type is normally deduced from the arguments. You may"
                & " also name it, in the same named-argument list as the ru"
@@ -4362,9 +4369,10 @@ package body Landin.Diagnostics.Citations.Texts is
                & "print:"
                & LF
                & LF
-               & "- The template is checked even if nothing applies it, an"
-               & "d an error that depends on the argument is reported at e"
-               & "ach application."
+               & "- A generic type's template is checked even if nothing a"
+               & "pplies it, and an error that depends on the argument is "
+               & "reported at each application. A generic function's body "
+               & "is checked per instance instead ([1290])."
                & LF
                & "- An unused or phantom parameter still distinguishes ins"
                & "tances."
@@ -9527,7 +9535,10 @@ package body Landin.Diagnostics.Citations.Texts is
                & "ger, a backtrace and the symbol table name it as the sou"
                & "rce does. A C import's spelling is never checked against"
                & " the selected C library's: nothing but an export can mee"
-               & "t it."
+               & "t it. Exports meet each other, and a public definition i"
+               & "n a machine convention with no link name is held under i"
+               & "ts own spelling to the rule a link name is: no other exp"
+               & "ort may have it (L0347, D770)."
                & LF
                & LF
                & "Within one program two items can still want one spelling"
@@ -10727,10 +10738,15 @@ package body Landin.Diagnostics.Citations.Texts is
                & "An instance's address is valid while its thread runs, wh"
                & "ich is as long as any frame of that thread lives, and th"
                & "e origin rules treat it as a module binding's: it may be"
-               & " passed, returned and kept in the thread's frames and th"
-               & "read storage. Keeping it where another thread reads it a"
-               & "fter the thread has ended is the program's to avoid, as "
-               & "for any pointer a thread hands another (D505).",
+               & " passed, returned and kept in the thread's frames, and i"
+               & "n its thread storage only as an integer, since thread st"
+               & "orage holds no pointer (L0328). A store of it, or of a r"
+               & "eference the body took from it, into a module binding wi"
+               & "thout `link(thread)` is refused, since every thread read"
+               & "s that binding (L0314, D772). Keeping it anywhere else a"
+               & "nother thread reads it after the thread has ended is the"
+               & " program's to avoid, as for any pointer a thread hands a"
+               & "nother (D505).",
             when others => "");
 
    function Decision_Text (Number : Natural) return String
@@ -20916,6 +20932,17 @@ package body Landin.Diagnostics.Citations.Texts is
                & "`(f: ...)` still needs a context: D419 gives it a closed"
                & " parameter's, and a parameter whose type is a formal giv"
                & "es it none.",
+            when 771 =>
+               "Chosen: a generic routine's body is checked with each in"
+               & "stance's actuals, as D138 makes them, and not as its tem"
+               & "plate. Before any call its names are resolved, its signa"
+               & "ture's names are held to naming something, and an operan"
+               & "d no actual could make valid is refused; everything else"
+               & " waits for an instance, among it the types of its expres"
+               & "sions, its error handling and whether a view keeps its s"
+               & "ource still, so a generic routine nothing calls is not r"
+               & "efused for any of them. [1290] says so, and [1350] says "
+               & "that its rule is a generic type's.",
             when 139 =>
                "Chosen: `fixed if expression then declaration* (elsif ex"
                & "pression then declaration*)* (else declaration*)? end if"
@@ -21401,6 +21428,23 @@ package body Landin.Diagnostics.Citations.Texts is
                & "wins as before, whatever later roots hold. An import of "
                & "the library searches the library alone (D275), so it has"
                & " no rival. This amends D150's discovery paragraph.",
+            when 772 =>
+               "Chosen: the reference facts carry, beside D375's externa"
+               & "l alternative, whether that alternative is a thread's in"
+               & "stance: `addr` of `link(thread)` storage or of a field, "
+               & "element or slice of it, and every value the body takes f"
+               & "rom one by a copy, a join or a view. An assignment whose"
+               & " destination is rooted in a module binding without `link"
+               & "(thread)` and whose value carries such an alternative is"
+               & " L0314, relating the binding; the note says to keep the "
+               & "address in a local or pass it on. The rule holds on ever"
+               & "y target, firmware's ordinary storage included, so a pro"
+               & "gram means the same everywhere. A call's result does not"
+               & " carry the fact, since a signature says only that a resu"
+               & "lt outlives the call, and neither does an argument for a"
+               & "n `escaping` parameter, which the callee may keep anywhe"
+               & "re: both stay the program's, as D505 leaves every pointe"
+               & "r one thread hands another.",
             when 267 =>
                "Chosen: `core/*` is the shared freestanding library. Eve"
                & "ry public interface of core/cmp, core/diag, core/fault, "
@@ -24422,22 +24466,24 @@ package body Landin.Diagnostics.Citations.Texts is
             when 516 =>
                "Chosen: a bodyless `extern(c)` declaration with an expli"
                & "cit `link(symbol: ...)` may name the symbol a naked rout"
-               & "ine with a body defines, as a C header declares a routin"
-               & "e written in assembly: ordinary code calls the naked tex"
-               & "t through the import's C signature, and the text owns ho"
-               & "nouring it. The checker admits the pair beside each othe"
-               & "r, as it admits C's view of `main` (D279), and the verif"
-               & "ied IR's agreement of a symbol's declarations takes the "
-               & "pair as one; any other pairing of a naked definition and"
-               & " a declaration of its symbol is still L0347. The naked r"
-               & "outine is reached through the import, rather than kept a"
-               & "s every machine-convention definition is, so a program t"
-               & "hat never calls the import carries neither. `platform/li"
-               & "nux`'s `clone_thread` is such an import, and its text ha"
-               & "s no label: the creator and the new thread run the same "
-               & "instructions after the call and each picks its next step"
-               & " with a conditional move, or on RV64 a mask, since a hos"
-               & "ted body then admitted no label.",
+               & "ine with a body defines under the same written link name"
+               & ", as a C header declares a routine written in assembly: "
+               & "ordinary code calls the naked text through the import's "
+               & "C signature, and the text owns honouring it. The checker"
+               & " admits the pair beside each other, as it admits C's vie"
+               & "w of `main` (D279), and the verified IR's agreement of a"
+               & " symbol's declarations takes the pair as one; any other "
+               & "pairing of a naked definition and a declaration of its s"
+               & "ymbol is still L0347, a public naked routine's own spell"
+               & "ing among them since D770. The naked routine is reached "
+               & "through the import, rather than kept as every machine-co"
+               & "nvention definition is, so a program that never calls th"
+               & "e import carries neither. `platform/linux`'s `clone_thre"
+               & "ad` is such an import, and its text has no label: the cr"
+               & "eator and the new thread run the same instructions after"
+               & " the call and each picks its next step with a conditiona"
+               & "l move, or on RV64 a mask, since a hosted body then admi"
+               & "tted no label.",
             when 670 =>
                "Chosen: RV32 text is checked as RV64's is: at most 4096 "
                & "ASCII bytes in LF lines, `#` comments, no directive, sep"
@@ -26640,6 +26686,18 @@ package body Landin.Diagnostics.Citations.Texts is
                & "pt counts wherever the call is, and on a hosted Linux ta"
                & "rget the vDSO's clock, a foreign call, still opens a tas"
                & "k that may reach it.",
+            when 770 =>
+               "Chosen: a public naked or interrupt routine with no link"
+               & " name is held to [1610]'s rule under its own spelling. W"
+               & "hen another declaration's symbol is that spelling, wheth"
+               & "er an explicit link name, a C import's or C definition's"
+               & " spelling or another such routine's, L0347 refuses the r"
+               & "outine, relates the other declaration, and says that a C"
+               & " import is a naked routine's view when the routine write"
+               & "s the import's `link(symbol: ...)`. The spelling is not "
+               & "taken as a link name, so the routine stays a global symb"
+               & "ol every program keeps rather than one only an import re"
+               & "aches.",
             when 151 =>
                "Chosen: the repository-owned `core/mem` module declares "
                & "a private parameterized nominal `raw(item)` with an allo"

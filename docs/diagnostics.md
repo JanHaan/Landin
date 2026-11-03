@@ -798,7 +798,10 @@ A reference kept `escaping into` a parameter must outlive that argument's
 origin: a frame reference never outlives a parameter's storage, and a local
 only the storage of locals declared after it (D455). Otherwise, keep the use
 non-retaining or update storage within the same origin. Keeping the storage
-alive longer alone does not grant retention permission.
+alive longer alone does not grant retention permission. A thread's instance
+of `link(thread)` storage ends with its thread, so its address is not kept
+in a module binding every thread reads (D772); keep it in a local or pass
+it on as an argument.
 
 ```landin
 bad: () -> (pointer: ptr u32) =
@@ -1398,7 +1401,10 @@ spellings, alignments and vectors [1640] lists. Rename the symbol or correct
 the declaration. Two declarations of one C symbol that differ only in
 `escaping` are refused too, and the report names the parameter: a Landin
 caller of either is checked against what it says, so repeat `escaping` on
-both (D441). `link(thread)` places a module `mut` binding that has no
+both (D441). A public naked or interrupt routine with no link name is a
+global symbol under its own spelling, held to the same rule (D770): to make
+a C import a naked routine's view (D516), give the routine the import's
+`link(symbol: ...)`. `link(thread)` places a module `mut` binding that has no
 value, one instance in every thread (D496): it places no routine, takes no
 initializer, and takes no link symbol or section, which would name or place
 one instance for all of them. Drop the value, make the binding `mut`, or

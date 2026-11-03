@@ -1919,6 +1919,9 @@ package body Landin.Diagnostics.Citations is
                & "inary context",
             when 420 =>
                "A named construction carries its type into deduction",
+            when 771 =>
+               "A generic routine's body is checked for each instance a "
+               & "call makes",
             when 139 =>
                "Fixed conditionals select module declarations without ex"
                & "ecution",
@@ -1959,6 +1962,9 @@ package body Landin.Diagnostics.Citations is
             when 563 =>
                "An empty first directory does not hide a later root's mo"
                & "dule",
+            when 772 =>
+               "A thread's instance's address is not kept in a module bi"
+               & "nding every thread reads",
             when 267 =>
                "Library source namespaces declare target availability",
             when 575 =>
@@ -2423,6 +2429,9 @@ package body Landin.Diagnostics.Citations is
             when 570 =>
                "The depth report closes a call through a table or a func"
                & "tion value",
+            when 770 =>
+               "A public machine-convention routine's own spelling is he"
+               & "ld to the link-name rule",
             when 151 =>
                "Raw storage is a private library state machine",
             when 152 =>
@@ -3377,6 +3386,8 @@ package body Landin.Diagnostics.Citations is
                "Decisions: Concepts, generics and runtime dispatch",
             when 420 =>
                "Decisions: Concepts, generics and runtime dispatch",
+            when 771 =>
+               "Decisions: Concepts, generics and runtime dispatch",
             when 139 =>
                "Decisions: Modules and compile time",
             when 150 =>
@@ -3406,6 +3417,8 @@ package body Landin.Diagnostics.Citations is
             when 505 =>
                "Decisions: Modules and compile time",
             when 563 =>
+               "Decisions: Modules and compile time",
+            when 772 =>
                "Decisions: Modules and compile time",
             when 267 =>
                "Decisions: The toolchain, C and the machine",
@@ -3764,6 +3777,8 @@ package body Landin.Diagnostics.Citations is
             when 688 =>
                "Decisions: The toolchain, C and the machine",
             when 570 =>
+               "Decisions: The toolchain, C and the machine",
+            when 770 =>
                "Decisions: The toolchain, C and the machine",
             when 151 =>
                "Decisions: The core library and the derived programs",
@@ -4896,6 +4911,9 @@ package body Landin.Diagnostics.Citations is
             when 420 =>
                "https://www.701.dev/spec.html#d420-a-named-construction-"
                & "carries-its-type-into-deduction",
+            when 771 =>
+               "https://www.701.dev/spec.html#d771-a-generic-routine-s-b"
+               & "ody-is-checked-for-each-instance-a-call-makes",
             when 139 =>
                "https://www.701.dev/spec.html#d139-fixed-conditionals-se"
                & "lect-module-declarations-without-execution",
@@ -4942,6 +4960,10 @@ package body Landin.Diagnostics.Citations is
             when 563 =>
                "https://www.701.dev/spec.html#d563-an-empty-first-direct"
                & "ory-does-not-hide-a-later-root-s-module",
+            when 772 =>
+               "https://www.701.dev/spec.html#d772-a-thread-s-instance-s"
+               & "-address-is-not-kept-in-a-module-binding-every-thread-re"
+               & "ads",
             when 267 =>
                "https://www.701.dev/spec.html#d267-library-source-namesp"
                & "aces-declare-target-availability",
@@ -5503,6 +5525,10 @@ package body Landin.Diagnostics.Citations is
             when 570 =>
                "https://www.701.dev/spec.html#d570-the-depth-report-clos"
                & "es-a-call-through-a-table-or-a-function-value",
+            when 770 =>
+               "https://www.701.dev/spec.html#d770-a-public-machine-conv"
+               & "ention-routine-s-own-spelling-is-held-to-the-link-name-r"
+               & "ule",
             when 151 =>
                "https://www.701.dev/spec.html#d151-raw-storage-is-a-priv"
                & "ate-library-state-machine",

@@ -1857,6 +1857,9 @@ symbol local to the image under its own name: no C library or linked object
 can collide with it or be replaced by it, and a debugger, a backtrace and the
 symbol table name it as the source does. A C import's spelling is never
 checked against the selected C library's: nothing but an export can meet it.
+Exports meet each other, and a public definition in a machine convention
+with no link name is held under its own spelling to the rule a link name is:
+no other export may have it (L0347, D770).
 
 Within one program two items can still want one spelling: two modules'
 routines named `reset`, or a routine beside a C import of its own name, since
@@ -2552,10 +2555,13 @@ module storage, which interrupt handlers share as they share any.
 
 An instance's address is valid while its thread runs, which is as long as
 any frame of that thread lives, and the origin rules treat it as a module
-binding's: it may be passed, returned and kept in the thread's frames and
-thread storage. Keeping it where another thread reads it after the thread
-has ended is the program's to avoid, as for any pointer a thread hands
-another (D505).
+binding's: it may be passed, returned and kept in the thread's frames, and
+in its thread storage only as an integer, since thread storage holds no
+pointer (L0328). A store of it, or of a reference the body took from it,
+into a module binding without `link(thread)` is refused, since every thread
+reads that binding (L0314, D772). Keeping it anywhere else another thread
+reads it after the thread has ended is the program's to avoid, as for any
+pointer a thread hands another (D505).
 
 ## THE DECISIONS THIS DOCUMENT TOOK
 
@@ -15997,6 +16003,33 @@ declined.
 **Pinned by** `runtime/generic-closed-parameter-takes-context` on every
 target.
 
+### D771 — A generic routine's body is checked for each instance a call makes
+
+**The tour said** at [1350] that a generic type's template is checked even if
+nothing applies it, and nothing of a generic routine's body. A reader took
+the first for routines too: a live `vec.at` view held across `vec.push` in
+a generic routine nothing called checked clean until a caller was added.
+
+**Chosen:** a generic routine's body is checked with each instance's
+actuals, as D138 makes them, and not as its template. Before any call its
+names are resolved, its signature's names are held to naming something,
+and an operand no actual could make valid is refused; everything else
+waits for an instance, among it the types of its expressions, its error
+handling and whether a view keeps its source still, so a generic routine
+nothing calls is not refused for any of them. [1290] says so, and [1350]
+says that its rule is a generic type's.
+
+**The alternatives:** checking the body once with its formals symbolic, as
+a generic type's template is walked, which needs every check that asks a
+type, a callee's signature or an origin to answer for a formal: the borrow
+check asks what a generic callee's result derives from, which the instance
+decides; and checking it at a guessed instance, which reports what no real
+call might meet. Both were declined until a program needs a template
+refused before anything calls it.
+
+**Pinned by** `negative/generic-borrow-checked-at-instance`, the view held
+across the push refused once `main` calls the routine.
+
 ## DECISIONS: MODULES AND COMPILE TIME
 
 The module graph, what an import binds, and what is settled before
@@ -16704,8 +16737,8 @@ tracking the instance as the outermost frame of its thread, which refuses
 returning its address from the routine that names it; and refusing a store
 of it into a module binding without `link(thread)`, which the reference
 facts could carry beside D375's external alternative but which meets only
-a pointer union written at module level. All were declined; the last waits
-for a program that needs it.
+a pointer union written at module level. All were declined; D772 later
+took the last.
 
 **Pinned by** `positive/thread-storage-declarations`, the forms D496
 admits; `runtime/thread-storage-holds-its-instance`, whose instance is
@@ -16753,6 +16786,40 @@ driver case `an empty first directory names a later root`, which holds the
 refusal, the next root's module beyond an empty second directory, and the
 empty module that stays legal with no rival, with an empty one, and when
 the first directory has a source.
+
+### D772 — A thread's instance's address is not kept in a module binding every thread reads
+
+**The tour said** nothing. D505 tracks an instance's address as module
+storage's and declined refusing its store into a module binding without
+`link(thread)` until a program needed it. A store into a module pointer
+union, the one place module storage can hold a pointer, was admitted, and
+another thread could read the address after its thread ended.
+
+**Chosen:** the reference facts carry, beside D375's external alternative,
+whether that alternative is a thread's instance: `addr` of `link(thread)`
+storage or of a field, element or slice of it, and every value the body
+takes from one by a copy, a join or a view. An assignment whose
+destination is rooted in a module binding without `link(thread)` and whose
+value carries such an alternative is L0314, relating the binding; the note
+says to keep the address in a local or pass it on. The rule holds on every
+target, firmware's ordinary storage included, so a program means the same
+everywhere. A call's result does not carry the fact, since a signature says
+only that a result outlives the call, and neither does an argument for an
+`escaping` parameter, which the callee may keep anywhere: both stay the
+program's, as D505 leaves every pointer one thread hands another.
+
+**The alternatives:** a signature mark for a result that is thread storage,
+which every routine returning module storage would have to write or have
+inferred; refusing a thread's address for an `escaping` parameter, which
+refuses handing a thread's own buffer to a group or a call that keeps it
+only while the thread runs; and leaving the store to the program, which
+D505 took and this replaces. All were declined.
+
+**Pinned by** `negative/thread-storage-address-kept-in-module`, a store of
+`addr` and one through a local that holds it; and
+`runtime/thread-storage-holds-its-instance` and
+`positive/thread-storage-declarations`, whose addresses stay in frames and
+arguments, still admitted.
 
 ## DECISIONS: THE TOOLCHAIN, C AND THE MACHINE
 
@@ -20754,12 +20821,14 @@ leave its routine.
 
 **Chosen:** a bodyless `extern(c)` declaration with an explicit
 `link(symbol: ...)` may name the symbol a naked routine with a body
-defines, as a C header declares a routine written in assembly: ordinary
+defines under the same written link name, as a C header declares a
+routine written in assembly: ordinary
 code calls the naked text through the import's C signature, and the text
 owns honouring it. The checker admits the pair beside each other, as it
 admits C's view of `main` (D279), and the verified IR's agreement of a
 symbol's declarations takes the pair as one; any other pairing of a
-naked definition and a declaration of its symbol is still L0347. The
+naked definition and a declaration of its symbol is still L0347, a public
+naked routine's own spelling among them since D770. The
 naked routine is reached through the import, rather than kept as every
 machine-convention definition is, so a program that never calls the
 import carries neither.
@@ -24072,6 +24141,36 @@ recursion and whose same handler through `any` is judged against the
 margin instead, and emitted where it fits; and
 `negative/stack-handler-opens-its-graph`, whose handler is refused for its
 C call and not for its call through `any`.
+
+### D770 — A public machine-convention routine's own spelling is held to the link-name rule
+
+**The tour said** at [1610] that a link symbol denotes one compatible
+function and at most one definition. D415 made every public definition in
+a machine convention a global symbol under its own spelling, but the
+collision check compared only explicit link names and the spellings of C
+imports and C definitions. A bodyless `extern(c) link(symbol: "S")` import
+beside a public naked routine named `S` was admitted and then failed at the
+link: D516 pairs an import only with a naked routine that names its symbol,
+so the import's symbol was left undefined.
+
+**Chosen:** a public naked or interrupt routine with no link name is held to
+[1610]'s rule under its own spelling. When another declaration's symbol is
+that spelling, whether an explicit link name, a C import's or C
+definition's spelling or another such routine's, L0347 refuses the routine,
+relates the other declaration, and says that a C import is a naked
+routine's view when the routine writes the import's `link(symbol: ...)`.
+The spelling is not taken as a link name, so the routine stays a global
+symbol every program keeps rather than one only an import reaches.
+
+**The alternatives:** extending D516's pair to a routine's own spelling,
+which would make whether a public naked routine is kept depend on whether
+some import names it; and noting the spelling as the routine's link name,
+which makes every public naked routine one an import reaches. Both were
+declined.
+
+**Pinned by** `negative/naked-routine-own-symbol-collides`, an import of a
+public naked routine's spelling; and `runtime/assembly-naked-labels`, D516's
+pair with the routine naming its symbol, still admitted.
 
 ## DECISIONS: THE CORE LIBRARY AND THE DERIVED PROGRAMS
 

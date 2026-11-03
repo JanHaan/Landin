@@ -1,0 +1,16 @@
+--  D770: a public naked routine with no link name is the global symbol
+--  `count_down` under its own spelling (D415), so a C import of that symbol
+--  collides with it; the import is the routine's view (D516) only when the
+--  routine names the symbol with `link(symbol: "count_down")`.
+public extern(c) link(symbol: "count_down") count_down_view:
+    (n: u64) -> (rounds: u64)
+
+public extern(naked) count_down: () -> none =
+    assembler.block("""
+        ret
+        """)
+end count_down
+
+public main: () -> (code: i32) =
+    code = i32(count_down_view(3))
+end main

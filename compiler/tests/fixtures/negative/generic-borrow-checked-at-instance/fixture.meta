@@ -1,0 +1,8 @@
+class: negative
+summary: D771 checks a generic routine's body at each instance a call makes, so a view held across a push is refused once the routine is called
+expect: expected.txt
+args: --root=../.. ../tests/fixtures/negative/generic-borrow-checked-at-instance
+status: 1
+codes: L0315
+constructs: 0800, 1290, 1300
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

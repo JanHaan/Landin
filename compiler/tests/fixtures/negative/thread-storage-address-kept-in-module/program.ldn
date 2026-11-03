@@ -1,0 +1,23 @@
+--  D772: a thread's instance of `link(thread)` storage ends with its
+--  thread, so its address is not kept in a module binding every thread
+--  reads, taken directly or through a local that holds it.
+none_kept: atom
+
+link(thread) mut counter: u32
+mut kept: none_kept | ptr mut u32 = none_kept
+
+remember: () -> none =
+    kept = addr counter
+end remember
+
+remember_through_local: () -> none =
+    held := addr counter
+    held.val = 1
+    kept = held
+end remember_through_local
+
+public main: () -> (code: i32) =
+    remember()
+    remember_through_local()
+    code = 0
+end main

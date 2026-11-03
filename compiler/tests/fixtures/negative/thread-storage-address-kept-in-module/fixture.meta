@@ -1,0 +1,9 @@
+class: negative
+summary: D772 refuses keeping the address of a thread's instance in a module binding without link(thread), directly or through a local
+program: program.ldn
+codes: L0314, L0314
+constructs: 0770, 1996
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+args: ../tests/fixtures/negative/thread-storage-address-kept-in-module/program.ldn
+expect: expected.txt
+status: 1
