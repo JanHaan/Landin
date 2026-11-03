@@ -104,7 +104,10 @@ def build(run, args, chip):
     """refine's ELF and OUT.bin for the chip's board port, and its report."""
     if getattr(args, 'bundle', None):
         import bundle
-        prepared = bundle.consume(run, args, chip.name)
+        try:
+            prepared = bundle.consume(run, args, chip.name)
+        except bundle.Invalid as error:
+            raise Failed('board bundle: ' + str(error)) from error
         elf = bundle.artifact(prepared, 'elf')
         args.prepared_bundle = prepared
         image = bundle.artifact(prepared, 'image') if 'image' in prepared['files'] else None

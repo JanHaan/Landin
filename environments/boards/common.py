@@ -467,7 +467,10 @@ def validate_ram_image(elf, board):
 
 def consume_board(run, args, board):
     import bundle
-    prepared = bundle.consume(run, args, board)
+    try:
+        prepared = bundle.consume(run, args, board)
+    except bundle.Invalid as error:
+        raise Failed('board bundle: ' + str(error)) from error
     elf = bundle.artifact(prepared, 'elf')
     if args.mode == 'ram':
         validate_ram_image(elf, board)

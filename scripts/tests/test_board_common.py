@@ -925,6 +925,14 @@ class Root(unittest.TestCase):
 
 
 class RamRuns(unittest.TestCase):
+    def test_invalid_bundle_becomes_a_retained_board_failure(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            (directory / 'bundle.json').write_text('{"format_version": 0}')
+            args = SimpleNamespace(bundle=directory, mode='ram')
+            with self.assertRaisesRegex(COMMON.Failed, 'board bundle:'):
+                COMMON.consume_board(mock.Mock(), args, 'rp2040')
+
     def image(self, path, address=0x20000000, physical=None, extra=()):
         sections = [('.isr_vector', address, struct.pack('<2I', 0x20041000, address + 9))]
         sections += list(extra)
