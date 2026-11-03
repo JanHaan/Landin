@@ -2,6 +2,7 @@ with Ada.Exceptions;
 with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 with Landin.Build_Identity;
+with Landin.Commands.Bindings;
 with Landin.Commands.Catalogue;
 with Landin.Commands.Devices;
 with Landin.Commands.Presentation;
@@ -391,6 +392,22 @@ package body Landin.Commands is
                  & " and where to write: refine svd --policy=POLICY.json"
                  & " --out-dir=DIR DEVICE.svd");
             end if;
+         when C.Bindings =>
+            if Result.Wants_Help then
+               null;
+            elsif Result.Operands.Is_Empty then
+               Refuse ("bindings binds at least one header: refine bindings"
+                 & " --clang=CLANG --sysroot=DIR --policy=POLICY.json"
+                 & " --out-dir=DIR [LOGICAL=]HEADER.h ...");
+            elsif not Seen (C.Clang) or else not Seen (C.Sysroot)
+              or else not Seen (C.Policy) or else not Seen (C.Out_Dir)
+            then
+               Refuse ("bindings needs the Clang that reads the headers, the"
+                 & " target's system root, the policy and where to write:"
+                 & " refine bindings --clang=CLANG --sysroot=DIR"
+                 & " --policy=POLICY.json --out-dir=DIR [LOGICAL=]HEADER.h"
+                 & " ...");
+            end if;
          when C.Run =>
             if Result.Operands.Is_Empty and then not Result.Wants_Help then
                Refuse ("run needs a source to compile and run: refine run"
@@ -700,6 +717,51 @@ package body Landin.Commands is
                   Policy_Path => Effective (C.Policy, ""),
                   Out_Dir => Effective (C.Out_Dir, ""),
                   Host => Host, Result => Result);
+            when C.Bindings =>
+               declare
+                  Request : Landin.Commands.Bindings.Request;
+
+                  --  Every value given for Flag, in order.
+                  function Every (Flag : C.Option)
+                    return Landin.Platform.Path_List;
+
+                  function Every (Flag : C.Option)
+                    return Landin.Platform.Path_List
+                  is
+                     Prefix : constant String := C.Name (Flag) & "=";
+                     Found : Landin.Platform.Path_List;
+                  begin
+                     for Text of Asked.Forwarded loop
+                        if Text'Length >= Prefix'Length
+                          and then Text (Text'First
+                                         .. Text'First + Prefix'Length - 1)
+                                   = Prefix
+                        then
+                           Found.Append
+                             (Text (Text'First + Prefix'Length .. Text'Last));
+                        end if;
+                     end loop;
+                     return Found;
+                  end Every;
+               begin
+                  Request.Clang := US.To_Unbounded_String
+                    (Effective (C.Clang, ""));
+                  Request.Target := US.To_Unbounded_String
+                    (Effective (C.Target, ""));
+                  Request.Sysroot := US.To_Unbounded_String
+                    (Effective (C.Sysroot, ""));
+                  Request.Policy := US.To_Unbounded_String
+                    (Effective (C.Policy, ""));
+                  Request.Out_Dir := US.To_Unbounded_String
+                    (Effective (C.Out_Dir, ""));
+                  Request.Headers := Asked.Operands;
+                  Request.Include_Dirs := Every (C.Include_Dir);
+                  Request.System_Include_Dirs :=
+                    Every (C.System_Include_Dir);
+                  Request.Defines := Every (C.Define);
+                  Landin.Commands.Bindings.Generate
+                    (Request, Host, Tools, Built_For, Result);
+               end;
             when C.Completion =>
                if Asked.Operands.Is_Empty or else Asked.Operands.Element (1)
                  not in "bash" | "zsh" | "fish"

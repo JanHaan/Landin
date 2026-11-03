@@ -1460,7 +1460,46 @@ package body Landin.Diagnostics.Explanations is
                & "pt copies beside a destination, or the manifest it finds"
                & " there names a file outside the directory. Nothing was w"
                & "ritten. Remove what the message names, or choose another"
-               & " `--out-dir`.");
+               & " `--out-dir`.",
+            when Catalogue.Bindings_Policy_Invalid =>
+               "`refine bindings` cannot read its policy (D820): it is n"
+               & "ot UTF-8 JSON, names a key twice, is not schema 1, lacks"
+               & " a key it needs or names one refine does not read, gives"
+               & " one of the wrong shape, or binds for another ABI than `"
+               & "--target` names. The message names the key or the declar"
+               & "ation. A policy's every key is described in `bindings/RE"
+               & "ADME.md`.",
+            when Catalogue.Bindings_Clang_Refused =>
+               "The Clang `refine bindings` was given cannot be used as "
+               & "asked (D820): it cannot be run, a root it is given is no"
+               & "t a directory, it failed, and the message carries its er"
+               & "ror output with the request's paths replaced by names th"
+               & "at do not depend on where it ran, or it describes anothe"
+               & "r ABI than the target's: another triple, data model, byt"
+               & "e order or sign of plain `char`. A header reached throug"
+               & "h an absolute path under none of the roots the request n"
+               & "ames is refused too, since what is generated could then "
+               & "depend on where it was. Name the pinned Clang with `--cl"
+               & "ang`, and every root a header needs with `--include-dir`"
+               & " or `--system-include-dir`.",
+            when Catalogue.Bindings_Declaration_Refused =>
+               "A declaration the policy selects cannot be bound (D820),"
+               & " and the message names the policy declaration and the po"
+               & "sition: the header no longer has it (a stale policy), a "
+               & "reference position has no policy or a scalar one has one"
+               & ", or the declaration uses a form `bindings/README.md` li"
+               & "sts as refused, such as an extended floating type, a cal"
+               & "ling convention attribute, an anonymous aggregate or a w"
+               & "rapper that would forward a C variadic tail. A Landin na"
+               & "me two declarations would share is refused here too. Cor"
+               & "rect the policy, or select another declaration.",
+            when Catalogue.Bindings_Output_Refused =>
+               "`refine bindings` will not replace its outputs (D820): t"
+               & "he output directory is a symbolic link or not a director"
+               & "y, an output is a directory or a link, or an earlier run"
+               & " left its staged or kept copies beside one. Nothing was "
+               & "written. Remove what the message names, or choose anothe"
+               & "r `--out-dir`.");
 
    function Example (Of_Code : Catalogue.Code_Name) return String
      is (case Of_Code is
@@ -2471,6 +2510,14 @@ package body Landin.Diagnostics.Explanations is
             when Catalogue.Svd_Not_Found =>
                "",
             when Catalogue.Svd_Output_Refused =>
+               "",
+            when Catalogue.Bindings_Policy_Invalid =>
+               "",
+            when Catalogue.Bindings_Clang_Refused =>
+               "",
+            when Catalogue.Bindings_Declaration_Refused =>
+               "",
+            when Catalogue.Bindings_Output_Refused =>
                "");
 
 end Landin.Diagnostics.Explanations;

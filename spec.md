@@ -2044,8 +2044,9 @@ with an explicit extraction schema rather than an untyped Landin `va_list`.
 No declared or inferred Landin error set, exception unwinding, or `longjmp`
 across Landin frames is part of this boundary.
 
-Header processing belongs to the separate deterministic clang-AST binding
-generator, never to `refine`. The generator contract covers declarations
+Header processing belongs to Clang, which the deterministic binding
+generator `refine bindings` asks for a header's AST (D820); no compilation
+reads a header. The generator contract covers declarations
 and C adapters for integer-backed enums, untagged unions, bitfields, globals,
 thread-local access, nullable callbacks and schema-defined incoming varargs.
 It does not introduce native C union, bitfield or TLS grammar. Policy supplies
@@ -16945,8 +16946,9 @@ the independent register banks and the hidden result pointer;
 was read. That workflow cannot meet a complete C binding's pressure without
 repeating signatures manually.
 
-**Chosen:** the separate deterministic clang-AST generator described at [1975]
-extracts C declarations and emits explicit adapters for forms outside the
+**Chosen:** the deterministic Clang-AST generator described at [1975],
+`refine bindings` (D820), extracts C declarations and emits explicit adapters
+for forms outside the
 native grammar. Policy fills semantic gaps and extraction schemas; it does not
 replace signatures by hand. Enums retain C integer values; C unions and
 bitfields are not Landin tagged variants or hardware packed fields. Globals
@@ -16963,8 +16965,8 @@ backend rather than solving bindings. Adding native union, bitfield, TLS and
 freestanding path. Handwritten signature replacement disguises the old
 workflow as generation. These alternatives are declined.
 
-**Pinned by** `bindings/generate.py`, its Clang-backed `bindings/test.py`
-suite and `abi/r440-bindings-generated`, with
+**Pinned by** `refine bindings`, the `bindings` suite, the Clang-backed
+`bindings/test.py` and `abi/r440-bindings-generated`, with
 `negative/r440-c-variadic-definition` for the receiving variadic definition
 that has to go through a generated adapter instead.
 
@@ -21535,6 +21537,94 @@ maintainer declined; and fetching inside `check.py`, which runs offline.
 
 **Pinned by** `scripts/tests/test_fetch_inputs.py`, `devices/test.py`'s
 offline tests, and the gate's `cortex-m` steps that fetch and regenerate.
+
+### D820 — `refine bindings` is the binding generator
+
+**The tour said** at [1580] that a separate, deterministic generator reads
+headers and writes the declarations. It was `bindings/generate.py`, so
+binding a header needed Python, which no feature of the compiler may.
+
+**Chosen:** the generator is a command of refine's own, as the SVD importer
+is (D555):
+
+`refine bindings --clang=CLANG [--target=NAME] --sysroot=DIR
+--policy=POLICY.json --out-dir=DIR [--include-dir=DIR]...
+[--system-include-dir=DIR]... [--define=NAME[=VALUE]]...
+[LOGICAL=]HEADER.h ...`
+
+It is named for what it makes, as `svd` is for what it reads, because what
+it reads is C, which names nothing a command could be called. The headers are
+its operands, each `LOGICAL=PATH`, or `PATH` named by its last component.
+`--target` is refine's own target name, defaulting to the host's as for
+every command, and selects one of three rows: `linux-x86-64`, `linux-arm64`
+and `darwin-arm64`, whose Clang triples the policy's `abi.target` must name.
+`--clang` names the Clang by path or by a name found on PATH, and is
+required, as the sysroot, the policy and the output directory are: the
+generator's contract is that nothing it reads is chosen for it. Paths are
+made absolute against the working directory without resolving links.
+
+The four outputs are what `bindings/generate.py` wrote, byte for byte, for
+every header and policy its tests and the repository bind, on every
+target: the same declarations in the same order, the same adapters and the
+same metadata with sorted keys, except that each now says it was generated
+by `refine bindings`. The policy is unchanged. Clang is asked what it was
+asked before, in the same order and with the same arguments (D821), and
+generation lives in `Landin.Bindings`, a function of what Clang printed, so
+the whole generator runs against a fake Clang. What it reads it reads with
+`Landin.Json`, and a reserved word is one of `Landin.Tokens`', which
+`check.py` holds to the keyword production. Outputs are replaced as D558
+replaces refine svd's, every new file written and read back before any is
+replaced and a failure putting back what was replaced, rather than by the
+Python generator's backup directory. A refusal is a diagnostic: a request
+written wrong is L0002, a header or policy that cannot be read L0003, a
+policy that is not one L0579, a Clang that cannot be used as asked L0580, a
+selection that cannot be bound L0581, outputs in the way L0582, and a
+replacement that fails L0005.
+
+**The alternatives:** keeping the Python generator, which the row asked
+to retire; Python's own option spellings, `--header` and a Clang triple
+for `--target`, which would be the only command whose target is not one of
+refine's names; a header parser of refine's own, which [1975] refuses; and
+naming the command for its input, `refine c` or `refine header`, which says
+less than what it makes. All were declined.
+
+**Pinned by** the `bindings` suite's `a header is bound through a fake
+clang`, `requests are refused by code`, `another triple is refused first`,
+`plain char must be the row's`, `each target is one row` and `a failed
+replacement puts back`; `bindings/test.py`, every case against the pinned
+Clang, with `abi/r440-bindings-generated` regenerated byte for byte; and the
+gate's `bindings` job.
+
+### D821 — Clang runs in an environment of its own, through `Landin.Platform`
+
+**The tour said** nothing. The Python generator ran Clang with an
+environment of PATH, HOME and the temporary directory alone, so that no
+CPATH, C_INCLUDE_PATH or driver override a shell set could change what a
+header means, and refine's tool runner gave every tool the caller's
+environment.
+
+**Chosen:** `Landin.Platform`'s tool runner has `Run_In_Environment`, which
+runs a program with exactly the environment it is given: an item
+`NAME=VALUE` sets a variable, and an item `NAME` passes the caller's own
+value on, or nothing when the caller has none. `refine bindings` gives every
+Clang run `PATH`, `HOME`, `TMPDIR`, `TMP`, `TEMP` and `SystemRoot` as the
+caller has them, `LC_ALL=C` and `TZ=UTC`, and nothing else, with
+`--no-default-config` and `-nostdinc` as before. Its work, the copied
+headers, the preprocessed translation unit and the enum probe, is in a
+private directory refine makes and removes. The target's macros are probed
+from an empty file in that directory rather than from standard input.
+`Landin.Platform`'s filesystem also says whether a path is a symbolic link,
+so the output directory, and each output, is refused when one is.
+
+**The alternatives:** inheriting the caller's environment, which would let
+CPATH supply a header the request never named; clearing it entirely, which
+leaves Clang no PATH to find its own tools by; and wrapping Clang in `env`,
+a second program between refine and the one it means to run.
+
+**Pinned by** the `bindings` suite's `a header is bound through a fake
+clang`, which holds every Clang call to that environment, and
+`bindings/test.py`'s `ambient include variables are excluded from every
+clang invocation`.
 
 ### D585 — The gate builds the flake on every run that does not reuse a pass
 

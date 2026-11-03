@@ -290,7 +290,13 @@ package Landin.Diagnostics.Catalogue is
       Svd_Form_Unsupported,
       Svd_Device_Inconsistent,
       Svd_Not_Found,
-      Svd_Output_Refused);
+      Svd_Output_Refused,
+      --  D820: `refine bindings`, which binds C headers for Landin.  No
+      --  program is refused for any of them.
+      Bindings_Policy_Invalid,
+      Bindings_Clang_Refused,
+      Bindings_Declaration_Refused,
+      Bindings_Output_Refused);
 
    --  Live, or kept so its number is never reused. A code is retired when
    --  the rule it names stops existing: `No_Frontend` retired when the
@@ -1312,7 +1318,36 @@ package Landin.Diagnostics.Catalogue is
          Source => False, Bytes => False,
          Least => 0, Most => 0, Notes => 0,
          Fixes => No_Fix, Shown_By => Invocation,
-         Rule => +"D558: outputs refine svd will not replace")];
+         Rule => +"D558: outputs refine svd will not replace"),
+      --  D820: `refine bindings` raises these for its policy, for what
+      --  Clang answers, for a selected declaration and for its outputs,
+      --  and the bindings suite owns them.  None is in a Landin source.
+      Bindings_Policy_Invalid =>
+        (Code => "L0579", Level => Error, State => Live,
+         Source => False, Bytes => False,
+         Least => 0, Most => 0, Notes => 0,
+         Fixes => No_Fix, Shown_By => Invocation,
+         Rule => +"D820: a binding policy refine bindings cannot read"),
+      Bindings_Clang_Refused =>
+        (Code => "L0580", Level => Error, State => Live,
+         Source => False, Bytes => False,
+         Least => 0, Most => 0, Notes => 0,
+         Fixes => No_Fix, Shown_By => Invocation,
+         Rule => +("D820: a Clang that cannot be run as asked, fails, or"
+                   & " describes another ABI")),
+      Bindings_Declaration_Refused =>
+        (Code => "L0581", Level => Error, State => Live,
+         Source => False, Bytes => False,
+         Least => 0, Most => 0, Notes => 0,
+         Fixes => No_Fix, Shown_By => Invocation,
+         Rule => +("D820: a selected C declaration, or its policy, that"
+                   & " cannot be bound")),
+      Bindings_Output_Refused =>
+        (Code => "L0582", Level => Error, State => Live,
+         Source => False, Bytes => False,
+         Least => 0, Most => 0, Notes => 0,
+         Fixes => No_Fix, Shown_By => Invocation,
+         Rule => +"D820: outputs refine bindings will not replace")];
 
    ------------------------------------------------------------------
    --  The columns, read out of the table

@@ -2229,6 +2229,11 @@ package body Landin.Diagnostics.Citations is
                "`refine svd` replaces its outputs whole or not at all",
             when 559 =>
                "Vendor inputs are pinned by URL and SHA-256 and fetched",
+            when 820 =>
+               "`refine bindings` is the binding generator",
+            when 821 =>
+               "Clang runs in an environment of its own, through `Landin"
+               & ".Platform`",
             when 585 =>
                "The gate builds the flake on every run that does not reu"
                & "se a pass",
@@ -3624,6 +3629,10 @@ package body Landin.Diagnostics.Citations is
             when 558 =>
                "Decisions: The toolchain, C and the machine",
             when 559 =>
+               "Decisions: The toolchain, C and the machine",
+            when 820 =>
+               "Decisions: The toolchain, C and the machine",
+            when 821 =>
                "Decisions: The toolchain, C and the machine",
             when 585 =>
                "Decisions: The toolchain, C and the machine",
@@ -5272,6 +5281,12 @@ package body Landin.Diagnostics.Citations is
             when 559 =>
                "https://www.701.dev/spec.html#d559-vendor-inputs-are-pin"
                & "ned-by-url-and-sha-256-and-fetched",
+            when 820 =>
+               "https://www.701.dev/spec.html#d820-refine-bindings-is-th"
+               & "e-binding-generator",
+            when 821 =>
+               "https://www.701.dev/spec.html#d821-clang-runs-in-an-envi"
+               & "ronment-of-its-own-through-landin-platform",
             when 585 =>
                "https://www.701.dev/spec.html#d585-the-gate-builds-the-f"
                & "lake-on-every-run-that-does-not-reuse-a-pass",
