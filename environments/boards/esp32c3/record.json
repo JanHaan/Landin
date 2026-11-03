@@ -1,9 +1,8 @@
 {
   "status": "passed",
-  "source_commit": "1f41447dac07f29fbe3375ed5d15ad01db11cf4c",
-  "image_sha256": "07e5d9c10d64a5e84c4795e6034ef9d2cdc124d677c81f2343648a4b91cfaa45",
+  "image_sha256": "7b48d93020a8a3e76ae4c9937e073210bf07d0ac9cacf22ad5e98b31bfa8ac6a",
   "image_name": "board.elf.bin",
-  "elf_sha256": "bdc468cdcced3529506127d57166e3dc9cc241c644b63a260f6b46d2db753a0a",
+  "elf_sha256": "6aa912645540255fb24389c0a42995f542acfc724b622b8e5100e223e895d4e2",
   "image": {
     "chip": 5,
     "revisions": [
@@ -13,11 +12,11 @@
     "entry": "0x40380000",
     "segments": [
       "0x40380000+0x180",
-      "0x40380180+0x5ba8",
-      "0x40385d28+0x54"
+      "0x40380180+0x5bb0",
+      "0x40385d30+0x54"
     ],
-    "checksum": "0x9b",
-    "sha256": "13ca5808d0f351c817d2cf80709f7d1be3f96b2a044c5fec2f97c0c75da880cd"
+    "checksum": "0xa7",
+    "sha256": "11057f0d42c20d7f95c8d78cc573d332ab5f7dd92ada7cde788662898666f1c4"
   },
   "instructions": [],
   "flash": {
@@ -29,8 +28,8 @@
     "boot": "SPI_FAST_FLASH_BOOT",
     "loads": [
       "0x40380000+0x180",
-      "0x40380180+0x5ba8",
-      "0x40385d28+0x54"
+      "0x40380180+0x5bb0",
+      "0x40385d30+0x54"
     ],
     "entry": "0x40380000"
   },
@@ -69,8 +68,8 @@
       "timer_interrupts_meanwhile": 100
     },
     "stream": {
-      "timer_events": 3884,
-      "receive_interrupts": 4742,
+      "timer_events": 3638,
+      "receive_interrupts": 4743,
       "echoed": 3014,
       "sent": 3614
     }
@@ -81,7 +80,7 @@
     "recoveries": 2,
     "dropped": 44,
     "overflows": 1,
-    "entries": 4742,
+    "entries": 4743,
     "boot_reason": 1,
     "byte_cell": 116,
     "half_cell": 29789,
@@ -89,19 +88,51 @@
   },
   "readback": [
     "0x40380000+0x180",
-    "0x40380180+0x5ba8"
+    "0x40380180+0x5bb0"
   ],
-  "uart_sha256": "f3199303dc7bc38083f999f39cc3eab089d4d2dd47710e96fe4373d7966c121e",
-  "image_control": {
-    "sha256": {
-      "calculated": "13ca5808d0f351c817d2cf80709f7d1be3f96b2a044c5fec2f97c0c75da880cd",
-      "expected": "13ca5808d0f351c817d2cf80709f7d1be3f96b2a044c5fec2f97c0c75da88032",
-      "entered": true
-    },
-    "checksum": {
-      "calculated": "0x9b",
-      "stored": "0x64"
+  "uart_sha256": "d1437b44cc12537df2028cf428bb72256d4330b85ecc1d17a25e680e67e5b664",
+  "mode": "boot",
+  "fixed_restore": {
+    "status": "passed",
+    "sha256": "f2a4a72bcba5d087834a528f7325dfab04af20c30c7a6dec335d0210372a80a6",
+    "marker": {
+      "symbol": "_landin_fixed_ready",
+      "address": 1070202900,
+      "value": 1279678513,
+      "elf_sha256": "9684a096e16bb273bc4c4021026add185116f31a5bdf1a23f6311351f676b5ae"
     }
+  },
+  "seconds": 32.758,
+  "kernel_usb": {
+    "since": 1793745479.8592377,
+    "until": 1793745512.5821323,
+    "lines": [
+      {
+        "time": 1793745485.732713,
+        "text": "rigpi kernel: usb 1-1.2.3.4.2: USB disconnect, device number 15"
+      },
+      {
+        "time": 1793745489.156684,
+        "text": "rigpi kernel: usb 1-1.2.3.4.2: new full-speed USB device number 26 using xhci_hcd"
+      },
+      {
+        "time": 1793745489.256705,
+        "text": "rigpi kernel: cdc_acm 1-1.2.3.4.2:1.0: ttyACM4: USB ACM device"
+      },
+      {
+        "time": 1793745505.252741,
+        "text": "rigpi kernel: usb 1-1.2.3.4.2: USB disconnect, device number 26"
+      },
+      {
+        "time": 1793745509.084739,
+        "text": "rigpi kernel: usb 1-1.2.3.4.2: new full-speed USB device number 27 using xhci_hcd"
+      },
+      {
+        "time": 1793745509.192676,
+        "text": "rigpi kernel: cdc_acm 1-1.2.3.4.2:1.0: ttyACM4: USB ACM device"
+      }
+    ],
+    "status": "captured"
   },
   "sent_sha256": "5ac29a7d385819161814c8f23f97a6a82ba69ae0187502c8fd0c9b77f110ad06",
   "frames": [
@@ -120,8 +151,8 @@
       "tag": "t",
       "h": "00000bc6",
       "c": "00000002",
-      "i": "00001286",
-      "m": "00000f2c",
+      "i": "00001287",
+      "m": "00000e36",
       "p": "80000001",
       "q": "80000002",
       "k": "00000064",
@@ -133,26 +164,6 @@
     }
   ],
   "commands": [
-    "compile",
-    "symbols",
-    "disassemble",
-    "flash",
-    "hub-wait",
-    "hub-status",
-    "power-off",
-    "hub-wait",
-    "hub-status",
-    "power-on",
-    "hub-wait",
-    "hub-wait",
-    "flash",
-    "hub-wait",
-    "hub-status",
-    "power-off",
-    "hub-wait",
-    "hub-status",
-    "power-on",
-    "hub-wait",
     "flash",
     "hub-wait",
     "hub-status",
@@ -176,6 +187,16 @@
     "jtag-half_cell",
     "jtag-word_cell",
     "jtag-readback-40380000",
-    "jtag-readback-40380180"
+    "jtag-readback-40380180",
+    "flash",
+    "hub-wait",
+    "hub-status",
+    "power-off",
+    "hub-wait",
+    "hub-status",
+    "power-on",
+    "hub-wait",
+    "hub-wait",
+    "resident-ready"
   ]
 }

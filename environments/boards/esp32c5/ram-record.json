@@ -1,0 +1,175 @@
+{
+  "status": "passed",
+  "image_sha256": "0e697e8471174ddda0141ae52de8f27d2ae4edaeb073ca484de22d830f0eeb07",
+  "image_name": "board.elf",
+  "elf_sha256": "0e697e8471174ddda0141ae52de8f27d2ae4edaeb073ca484de22d830f0eeb07",
+  "instructions": [
+    "amoadd.w.aqrl",
+    "lr.w.aq",
+    "sc.w.rl"
+  ],
+  "verdicts": {
+    "boot": {
+      "reset_cause": 1,
+      "mtvec": "0x40800303",
+      "mtvt": "0x408001c0",
+      "clicint": {
+        "18": "0x5fc10100",
+        "17": "0x3fc00100"
+      },
+      "rom_threshold": 15
+    },
+    "shared": {
+      "input": "1A0",
+      "echo": "1A0",
+      "indicator_after_1": 16777216,
+      "indicator_after_0": 0
+    },
+    "interrupts": {
+      "receive_mcause": "0xb8000011",
+      "timer_mcause": "0xb8000012"
+    },
+    "atomics": {
+      "x": 116,
+      "y": 93,
+      "p": 116,
+      "q": 209,
+      "r": 41,
+      "d": 41,
+      "e": 116,
+      "f": 209
+    },
+    "ring_overrun": {
+      "burst": 300,
+      "ring": 256,
+      "dropped": 44,
+      "restarts": 1
+    },
+    "threshold": {
+      "burst": 300,
+      "fifo_overflows": 1,
+      "restarts": 2,
+      "timer_interrupts_meanwhile": 100
+    },
+    "stream": {
+      "timer_events": 2478,
+      "receive_interrupts": 6630,
+      "echoed": 3014,
+      "sent": 3614
+    }
+  },
+  "jtag": {
+    "trap_count": 0,
+    "handled": 3014,
+    "recoveries": 2,
+    "dropped": 44,
+    "overflows": 1,
+    "entries": 6630,
+    "boot_reason": 1,
+    "word_cell": 41,
+    "byte_cell": 209
+  },
+  "readback": [
+    "0x40800000+0x1c0",
+    "0x408001c0+0x5bb8"
+  ],
+  "uart_sha256": "cfcafc9c1e37d6e05ef36fc2675d688be292c7db356c5cb73cd6f378d5595a83",
+  "mode": "ram",
+  "warm_load": {
+    "board": "esp32c5",
+    "cleanup": {
+      "contract": "warm-board-v1",
+      "other_core_parked": false,
+      "peripheral_sources_stopped": true,
+      "rom_reset": false
+    },
+    "elf_sha256": "0e697e8471174ddda0141ae52de8f27d2ae4edaeb073ca484de22d830f0eeb07",
+    "entry": 1082130432,
+    "flash_written": false,
+    "format_version": 1,
+    "helper_source_sha256": "0bffa02c525ae7834c3f1ebfe3a3f870c6782a52de056aaa7a131c1b0c6756d7",
+    "mode": "warm",
+    "previous_pc": 1082142734,
+    "segments": [
+      {
+        "address": 1082130432,
+        "bytes": 448,
+        "sha256": "ec7ac1f87382a59b7e51dd3ffae5215fa34e4348a1bc3e6511d2f7edba0b88a7"
+      },
+      {
+        "address": 1082130880,
+        "bytes": 23480,
+        "sha256": "fbbd270732fb5247f2c970ce72c366fba41f741a822692974c45e20a6c861a2e"
+      },
+      {
+        "address": 1082154360,
+        "bytes": 104,
+        "sha256": "dd18dbf2f181ca9e8344b7d2cc397c09f1f99cc665b24de459f2a06186a64549"
+      }
+    ],
+    "stack": 1082449920,
+    "status": "passed",
+    "vector": 1082130688
+  },
+  "seconds": 25.546,
+  "kernel_usb": {
+    "since": 1793746575.3244078,
+    "until": 1793746600.8458931,
+    "lines": [],
+    "status": "captured"
+  },
+  "sent_sha256": "5ac29a7d385819161814c8f23f97a6a82ba69ae0187502c8fd0c9b77f110ad06",
+  "frames": [
+    {
+      "tag": "b",
+      "r": "00000001",
+      "v": "40800303",
+      "w": "408001c0",
+      "t": "0000000f",
+      "x": "5fc10100",
+      "y": "3fc00100"
+    },
+    {
+      "tag": "a",
+      "p": "00000074",
+      "q": "000000d1",
+      "r": "00000029",
+      "d": "00000029",
+      "e": "00000074",
+      "f": "000000d1"
+    },
+    {
+      "tag": "t",
+      "h": "00000bc6",
+      "c": "00000002",
+      "i": "000019e6",
+      "m": "000009ae",
+      "p": "b8000011",
+      "q": "b8000012",
+      "k": "00000064",
+      "l": "0000002c",
+      "o": "00000001",
+      "e": "00000cc6",
+      "g": "00000000",
+      "s": "00000002"
+    }
+  ],
+  "commands": [
+    "ram-load",
+    "jtag-trap-cause",
+    "jtag-trap-pc",
+    "jtag-trap-value",
+    "jtag-trap-sp",
+    "jtag-trap-count",
+    "jtag-handled",
+    "jtag-recoveries",
+    "jtag-dropped",
+    "jtag-overflows",
+    "jtag-entries",
+    "jtag-boot_reason",
+    "jtag-word_cell",
+    "jtag-byte_cell",
+    "jtag-readback-40800000",
+    "jtag-readback-408001c0"
+  ]
+}

@@ -1,15 +1,15 @@
 {
   "status": "passed",
-  "image_sha256": "f55e6c0f6ccc2f1f8f41f105a26c94872ed747afef0da664e98eeab91f52a3cd",
+  "image_sha256": "d5e05de158334d1b33f2e58ae542a07b60a871a5fa51d55277271967df3c8d5f",
   "image_name": "board.elf",
   "image": {
     "float_unit": "passed",
-    "helpers": [],
     "fp_attributes": [
       "Tag_FP_arch: FPv5/FP-D16 for ARMv8",
       "Tag_ABI_FP_number_model: IEEE 754",
       "Tag_ABI_VFP_args: VFP registers"
-    ]
+    ],
+    "helpers": []
   },
   "flash_readback": "matches",
   "verdicts": {
@@ -60,11 +60,23 @@
     "handled": 11802,
     "recoveries": 3,
     "dma_entries": 47,
-    "usart_entries": 121,
+    "usart_entries": 134,
     "s0ndtr": 237,
     "s0cr": 1049617
   },
-  "uart_sha256": "713eed8a5a9a2835500265be2d849aea8e7ea73b52fa85ca7fab0674c114322a",
+  "uart_sha256": "9c370ce8339c4365d0c4527854729f253be5236b3de80629607e437376b641a2",
+  "mode": "boot",
+  "fixed_restore": {
+    "status": "passed",
+    "sha256": "d8a29b9c03689ec51138e030803295054d7eb63fec28cb4687e5a2d373c2c216",
+    "marker": {
+      "symbol": "_landin_fixed_ready",
+      "address": 603979776,
+      "value": 1279678513,
+      "elf_sha256": "d8a29b9c03689ec51138e030803295054d7eb63fec28cb4687e5a2d373c2c216"
+    }
+  },
+  "seconds": 28.452,
   "sent_sha256": "9c1ed83a8ee05099f20278dedccdae8c41645ba1c5d9c8e97e74de61ea319768",
   "frames": [
     {
@@ -84,8 +96,8 @@
       "d": "00000002",
       "w": "0000002f",
       "k": "0000002f",
-      "m": "0000129b",
-      "u": "00000079",
+      "m": "00002378",
+      "u": "00000086",
       "p": "00000037",
       "n": "000000ed",
       "e": "00000e13",
@@ -94,20 +106,24 @@
     }
   ],
   "commands": [
-    "compile",
-    "symbols",
-    "symbol-sizes",
-    "disassembly",
-    "attributes",
     "flash",
+    "hub-wait",
     "flash-readback",
     "hub-status",
     "power-cycle",
+    "hub-wait",
     "swd-handled",
     "swd-recoveries",
     "swd-dma_entries",
     "swd-usart_entries",
     "swd-s0ndtr",
-    "swd-s0cr"
+    "swd-s0cr",
+    "flash",
+    "hub-wait",
+    "flash-readback",
+    "hub-status",
+    "power-cycle",
+    "hub-wait",
+    "resident-ready"
   ]
 }

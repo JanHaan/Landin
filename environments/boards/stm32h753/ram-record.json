@@ -1,0 +1,138 @@
+{
+  "status": "passed",
+  "image_sha256": "580b2629ebcfc427acec16d21313d40d52bb65f4891eb54520e09ec919ed30f8",
+  "image_name": "board.elf",
+  "image": {
+    "float_unit": "passed",
+    "fp_attributes": [
+      "Tag_FP_arch: FPv5/FP-D16 for ARMv8",
+      "Tag_ABI_FP_number_model: IEEE 754",
+      "Tag_ABI_VFP_args: VFP registers"
+    ],
+    "helpers": []
+  },
+  "verdicts": {
+    "boot": {
+      "rcc_rsr": 0,
+      "vtor": 603979776,
+      "cpacr": 15728640,
+      "ccr": 262656,
+      "pwr_cr3": 66,
+      "pwr_csr1": 24576
+    },
+    "shared": {
+      "input": "1A0",
+      "echo": "1A0",
+      "indicator_after_1": 1,
+      "indicator_after_0": 0
+    },
+    "usart3": {
+      "entries": 6,
+      "exception": 55
+    },
+    "overrun": {
+      "burst": 300,
+      "recoveries": 1
+    },
+    "epochs": {
+      "flagged_burst": 100,
+      "held_by_receiver": 17,
+      "restarts": 3,
+      "epochs": 2,
+      "laps": 36,
+      "echoed": 9201,
+      "sent": 9584
+    },
+    "floats": {
+      "f32": {
+        "pairs": 52,
+        "square_roots": 52
+      },
+      "f64": {
+        "pairs": 52,
+        "square_roots": 52
+      },
+      "square_root": "passed"
+    }
+  },
+  "swd": {
+    "handled": 11802,
+    "recoveries": 3,
+    "dma_entries": 48,
+    "usart_entries": 133,
+    "s0ndtr": 237,
+    "s0cr": 1049617
+  },
+  "uart_sha256": "6875aeb2a29b9aef8c2a03e5595bd0cc30c9691f551bdb3a598af43df5bcbaa3",
+  "mode": "ram",
+  "warm_load": {
+    "board": "stm32h753",
+    "cleanup": {
+      "contract": "warm-board-v1",
+      "other_core_parked": false,
+      "peripheral_sources_stopped": true,
+      "rom_reset": false
+    },
+    "elf_sha256": "580b2629ebcfc427acec16d21313d40d52bb65f4891eb54520e09ec919ed30f8",
+    "entry": 603990433,
+    "flash_written": false,
+    "format_version": 1,
+    "helper_source_sha256": "3d3db74ea85e12463f6942fc8ecce32492cf2f8caafcf6a8ba24b40a8678fc56",
+    "mode": "warm",
+    "previous_pc": 603994370,
+    "segments": [
+      {
+        "address": 603979776,
+        "bytes": 36508,
+        "sha256": "2df9a875713514a96700f043bc8bc01a250d023f399fff91097ff3cb35da6439"
+      }
+    ],
+    "stack": 604504064,
+    "status": "passed",
+    "vector": 603979776
+  },
+  "seconds": 15.397,
+  "kernel_usb": {
+    "since": 1793746005.420574,
+    "until": 1793746020.7966793,
+    "lines": [],
+    "status": "captured"
+  },
+  "sent_sha256": "9c1ed83a8ee05099f20278dedccdae8c41645ba1c5d9c8e97e74de61ea319768",
+  "frames": [
+    {
+      "tag": "b",
+      "r": "00000000",
+      "v": "24000000",
+      "a": "00f00000",
+      "c": "00040200",
+      "q": "00000042",
+      "y": "00006000",
+      "w": "00000001"
+    },
+    {
+      "tag": "t",
+      "h": "00002e1a",
+      "c": "00000003",
+      "d": "00000002",
+      "w": "0000002f",
+      "k": "00000030",
+      "m": "000021b9",
+      "u": "00000085",
+      "p": "00000037",
+      "n": "000000ed",
+      "e": "00000e13",
+      "g": "00000001",
+      "s": "00000002"
+    }
+  ],
+  "commands": [
+    "ram-load",
+    "swd-handled",
+    "swd-recoveries",
+    "swd-dma_entries",
+    "swd-usart_entries",
+    "swd-s0ndtr",
+    "swd-s0cr"
+  ]
+}
