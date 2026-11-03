@@ -1342,27 +1342,27 @@ package Landin.Diagnostics.Catalogue is
       Bindings_Policy_Invalid =>
         (Code => "L0579", Level => Error, State => Live,
          Source => False, Bytes => False,
-         Least => 0, Most => 0, Notes => 0,
+         Least => 0, Most => 0, Notes => 0, Route => False,
          Fixes => No_Fix, Shown_By => Invocation,
          Rule => +"D820: a binding policy refine bindings cannot read"),
       Bindings_Clang_Refused =>
         (Code => "L0580", Level => Error, State => Live,
          Source => False, Bytes => False,
-         Least => 0, Most => 0, Notes => 0,
+         Least => 0, Most => 0, Notes => 0, Route => False,
          Fixes => No_Fix, Shown_By => Invocation,
          Rule => +("D820: a Clang that cannot be run as asked, fails, or"
                    & " describes another ABI")),
       Bindings_Declaration_Refused =>
         (Code => "L0581", Level => Error, State => Live,
          Source => False, Bytes => False,
-         Least => 0, Most => 0, Notes => 0,
+         Least => 0, Most => 0, Notes => 0, Route => False,
          Fixes => No_Fix, Shown_By => Invocation,
          Rule => +("D820: a selected C declaration, or its policy, that"
                    & " cannot be bound")),
       Bindings_Output_Refused =>
         (Code => "L0582", Level => Error, State => Live,
          Source => False, Bytes => False,
-         Least => 0, Most => 0, Notes => 0,
+         Least => 0, Most => 0, Notes => 0, Route => False,
          Fixes => No_Fix, Shown_By => Invocation,
          Rule => +"D820: outputs refine bindings will not replace")];
 
