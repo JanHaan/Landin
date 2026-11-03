@@ -106,13 +106,32 @@ package Landin.Configuration is
            when C_RiscV_LP64D_Fact => Landin.Targets.RiscV_LP64D,
            when C_RiscV_ILP32_Fact => Landin.Targets.RiscV_ILP32);
 
+   --  The configuration atoms that are not an architecture's: a system's,
+   --  a byte order's and a build mode's.
+   type Fixed_Atom is
+     (Linux_Atom, Darwin_Atom, FreeBSD_Atom, Freestanding_Atom,
+      Little_Atom, Big_Atom, Debug_Atom, Release_Atom);
+
+   function Atom_Name (Atom : Fixed_Atom) return String
+     is (case Atom is
+           when Linux_Atom => "linux",
+           when Darwin_Atom => "darwin",
+           when FreeBSD_Atom => "freebsd",
+           when Freestanding_Atom => "freestanding",
+           when Little_Atom => "little",
+           when Big_Atom => "big",
+           when Debug_Atom => "debug",
+           when Release_Atom => "release");
+
    --  Whether WORD is a configuration atom an atom fact is compared with:
-   --  an architecture's, Landin.Targets.Atom's, a system's, a byte order's
-   --  or a build mode's.
+   --  an architecture's, Landin.Targets.Atom's, or a Fixed_Atom's.
    function Is_Configuration_Atom (Word : String) return Boolean
      is (Landin.Targets.Is_Architecture_Atom (Word)
-         or else Word in "linux" | "darwin" | "freebsd" | "freestanding"
-                       | "little" | "big" | "debug" | "release");
+         or else (for some Atom in Fixed_Atom => Atom_Name (Atom) = Word));
+
+   --  Every configuration atom, each in backticks, the last after `or`:
+   --  what a refusal of one as an option's name lists (D855).
+   function Configuration_Atom_List return String;
 
    --  D542: the members a device description is written in.
    function Is_Description_Member (Namespace, Member : String) return Boolean

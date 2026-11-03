@@ -1009,16 +1009,18 @@ package body Landin.Stages.Configuration is
                   Note => "[1560]: compiler, assembler and linker"
                     & " are implicitly available builtin modules",
                   Into => Found);
-            elsif Landin.Targets.Is_Architecture_Atom
+            elsif Landin.Configuration.Is_Configuration_Atom
                     (Spelled (Syn.Name (Of_Tree, Node)))
-              or else Spelled (Syn.Name (Of_Tree, Node))
-                in "little" | "big" | "debug" | "release"
             then
+               --  D855: an option of an atom's name would be read in the
+               --  atom's place, so `compiler.os == linux` would compare a
+               --  system with the option.
                Report_Configuration_Rule
                  (Bad.Invalid_Option_Declaration, Of_Tree, Node,
                   "this option name is compiler-owned",
-                  Note => "D202: configuration atom names cannot be reused"
-                    & " by options");
+                  Note => "D855: an option cannot take a configuration"
+                    & " atom's name: "
+                    & Landin.Configuration.Configuration_Atom_List);
             else
                if not Late then
                   Landin.Configuration.Record_Option

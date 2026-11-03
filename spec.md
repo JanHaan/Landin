@@ -16291,6 +16291,8 @@ option's value is established, rather than at each arithmetic intermediate.
 An option cannot reuse a compiler-owned configuration atom name: `x86_64`,
 `arm64`, `rv64`, `cortex_m0`, `synthetic_32`, `little`, `big`, `debug` or
 `release`.
+D855 extends this to every configuration atom, the systems' and `rv32`'s
+among them.
 That collision is L0390; a reserved tool namespace name is L0203. An option
 inside any fixed arm or with a type other than `bool` or an enabled integer
 scalar is likewise L0390, even when its default is a fixed value. An invalid
@@ -16886,6 +16888,31 @@ D505 took and this replaces. All were declined.
 `runtime/thread-storage-holds-its-instance` and
 `positive/thread-storage-declarations`, whose addresses stay in frames and
 arguments, still admitted.
+
+### D855 — An option takes no configuration atom's name
+
+**The discrepancy:** D202 refused an option named after a compiler-owned
+atom and listed the atoms of its day, `x86_64`, `arm64`, `rv64`,
+`cortex_m0`, `synthetic_32`, `little`, `big`, `debug` and `release`. D264's
+systems, `linux`, `darwin`, `freebsd` and `freestanding`, and D660's
+`rv32` came later and were never added, so `option linux: bool = true` was
+accepted, and the option was then read in the atom's place: `compiler.os ==
+linux` compared a system with a bool.
+
+**Chosen:** an option cannot take the name of any configuration atom a
+fixed fact is compared with: an architecture's, a system's, a byte order's
+or a build mode's. The refusal is D202's L0390, and its note lists every
+atom, read from the one table the configuration stage and name resolution
+both ask, so an atom a later target adds is refused without a second edit.
+
+**The alternatives:** letting an option shadow an atom outside `compiler.`
+comparisons, which still makes `compiler.os == linux` mean something other
+than what it says; and a code of its own for the systems' names, when the
+rule and its route are D202's.
+
+**Pinned by** `negative/option-takes-no-atom-name`, a system's, the
+freestanding system's and `rv32`; and `negative/r491-option-compiler-atom`,
+whose note now lists the whole set.
 
 ## DECISIONS: THE TOOLCHAIN, C AND THE MACHINE
 

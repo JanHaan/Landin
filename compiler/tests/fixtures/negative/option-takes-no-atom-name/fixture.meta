@@ -1,0 +1,9 @@
+class: negative
+summary: D855 options cannot take any configuration atom's name, a system's among them
+program: main.ldn
+codes: L0390, L0390, L0390
+constructs: 1530, 1560
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+expect: expected.txt
+args: ../tests/fixtures/negative/option-takes-no-atom-name/main.ldn
+status: 1

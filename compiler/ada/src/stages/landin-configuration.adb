@@ -18,6 +18,29 @@ package body Landin.Configuration is
       raise Compiler_Defect with "no fixed fact is named " & Word;
    end Fact_Named;
 
+   function Configuration_Atom_List return String is
+      Listed : Ada.Strings.Unbounded.Unbounded_String;
+
+      procedure Add (Word : String);
+
+      procedure Add (Word : String) is
+      begin
+         if Ada.Strings.Unbounded.Length (Listed) > 0 then
+            Ada.Strings.Unbounded.Append (Listed, ", ");
+         end if;
+         Ada.Strings.Unbounded.Append (Listed, "`" & Word & "`");
+      end Add;
+   begin
+      for Machine in Landin.Targets.Architecture loop
+         Add (Landin.Targets.Atom (Machine));
+      end loop;
+      for Atom in Fixed_Atom'First .. Fixed_Atom'Pred (Fixed_Atom'Last) loop
+         Add (Atom_Name (Atom));
+      end loop;
+      return Ada.Strings.Unbounded.To_String (Listed)
+        & " or `" & Atom_Name (Fixed_Atom'Last) & "`";
+   end Configuration_Atom_List;
+
    function Compiler_Member
      (Names : Landin.Source.Names.Table; Of_Tree : Landin.Syntax.Tree;
       Node : Landin.Syntax.Node_Id) return String

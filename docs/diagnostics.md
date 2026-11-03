@@ -1449,6 +1449,14 @@ or an enabled integer scalar. Move the option outside every fixed arm, choose
 an available name, or change its type, respectively. A fixed default value
 does not make any of those declarations valid.
 
+The atom names are every value a fixed fact is compared with (D855): the
+architectures `x86_64`, `arm64`, `rv64`, `cortex_m0`, `rv32` and
+`synthetic_32`, the systems `linux`, `darwin`, `freebsd` and
+`freestanding`, the byte orders `little` and `big`, and the build modes
+`debug` and `release`. An option of one of those names would be read in
+the atom's place, so `compiler.os == linux` would compare a system with
+the option. The refusal's note lists them.
+
 ```landin
 option debug: u32 = 1
 ```

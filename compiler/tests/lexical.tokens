@@ -75940,6 +75940,25 @@ file negative/option-outside-configuration/program.ldn tokens 20
   46 51 count
   52 55 end
   56 57 f
+file negative/option-takes-no-atom-name/main.ldn tokens 18
+  250 256 option
+  257 262 linux
+  262 263 :
+  264 268 bool
+  269 270 =
+  271 275 true
+  276 282 option
+  283 295 freestanding
+  295 296 :
+  297 300 u32
+  301 302 =
+  303 304 0
+  305 311 option
+  312 316 rv32
+  316 317 :
+  318 322 bool
+  323 324 =
+  325 330 false
 file negative/packed-field-width-is-not-a-scalar-name/main.ldn tokens 5
   0 6 narrow
   6 7 :

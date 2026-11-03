@@ -1,0 +1,7 @@
+--  D855: an option cannot take a configuration atom's name, a system's
+--  or `rv32` as well as the atoms D202 listed, since an option of
+--  the name would be read in the atom's place: `compiler.os == linux`
+--  would compare a system with a bool.
+option linux: bool = true
+option freestanding: u32 = 0
+option rv32: bool = false
