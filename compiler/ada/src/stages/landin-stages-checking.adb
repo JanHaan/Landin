@@ -776,28 +776,34 @@ package body Landin.Stages.Checking is
 
       function Construction_Type
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Syn.Node_Id;
-      function Construction_Field_Count
-        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Natural;
-      function Nth_Construction_Field
-        (Of_Tree : Syn.Tree; Node : Syn.Node_Id; Index : Positive)
-         return Syn.Node_Id;
       function Construction_Field_Name
         (Of_Tree : Syn.Tree; Field : Syn.Node_Id)
          return Landin.Source.Names.Name_Id;
-      function Construction_Field_Value
-        (Of_Tree : Syn.Tree; Field : Syn.Node_Id) return Syn.Node_Id;
-      function Construction_Fill
-        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Syn.Node_Id;
       function Construction_Values_Present
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
 
+      --  Resolution's view of a construction, read through this stage's
+      --  table.
       function Is_Struct_Construction
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
-        is (Syn.Kind (Of_Tree, Node) = Syn.Struct_Literal
-            or else
-              (Syn.Kind (Of_Tree, Node) = Syn.Labeled_Application
-               and then Res.Class_Of (Meanings.all, Of_Tree, Node)
-                          = Res.Type_Construction));
+        is (Res.Is_Struct_Construction (Meanings.all, Of_Tree, Node));
+
+      function Construction_Field_Count
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Natural
+        is (Res.Construction_Field_Count (Meanings.all, Of_Tree, Node));
+
+      function Nth_Construction_Field
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id; Index : Positive)
+         return Syn.Node_Id
+        is (Res.Nth_Construction_Field (Meanings.all, Of_Tree, Node, Index));
+
+      function Construction_Field_Value
+        (Of_Tree : Syn.Tree; Field : Syn.Node_Id) return Syn.Node_Id
+        renames Res.Construction_Field_Value;
+
+      function Construction_Fill
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Syn.Node_Id
+        is (Res.Construction_Fill (Meanings.all, Of_Tree, Node));
 
       function Construction_Type
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Syn.Node_Id
@@ -837,85 +843,12 @@ package body Landin.Stages.Checking is
          return False;
       end Has_Contextual_Element;
 
-      function Construction_Field_Count
-        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Natural is
-         Count : Natural := 0;
-      begin
-         if Syn.Kind (Of_Tree, Node) = Syn.Struct_Literal then
-            return Syn.Field_Value_Count (Of_Tree, Node);
-         end if;
-         for Index in 1 .. Syn.Argument_Count (Of_Tree, Node) loop
-            if Res.Role_Of
-              (Meanings.all, Of_Tree, Syn.Nth_Argument (Of_Tree, Node, Index))
-                in Res.Field_Argument | Res.Payload_Argument
-            then
-               Count := Count + 1;
-            end if;
-         end loop;
-         return Count;
-      end Construction_Field_Count;
-
-      function Nth_Construction_Field
-        (Of_Tree : Syn.Tree; Node : Syn.Node_Id; Index : Positive)
-         return Syn.Node_Id is
-         Found : Natural := 0;
-      begin
-         if Syn.Kind (Of_Tree, Node) = Syn.Struct_Literal then
-            return Syn.Nth_Field_Value (Of_Tree, Node, Index);
-         end if;
-         for At_Index in 1 .. Syn.Argument_Count (Of_Tree, Node) loop
-            declare
-               Argument : constant Syn.Node_Id :=
-                 Syn.Nth_Argument (Of_Tree, Node, At_Index);
-            begin
-               if Res.Role_Of (Meanings.all, Of_Tree, Argument)
-                    in Res.Field_Argument | Res.Payload_Argument
-               then
-                  Found := Found + 1;
-                  if Found = Index then
-                     return Argument;
-                  end if;
-               end if;
-            end;
-         end loop;
-         raise Landin.Compiler_Defect;
-      end Nth_Construction_Field;
-
       function Construction_Field_Name
         (Of_Tree : Syn.Tree; Field : Syn.Node_Id)
          return Landin.Source.Names.Name_Id
         is (if Syn.Kind (Of_Tree, Field) = Syn.Field_Value
             then Syn.Name (Of_Tree, Field)
             else Syn.Argument_Label (Of_Tree, Field));
-
-      function Construction_Field_Value
-        (Of_Tree : Syn.Tree; Field : Syn.Node_Id) return Syn.Node_Id
-        is (if Syn.Kind (Of_Tree, Field) = Syn.Field_Value
-            then Syn.Value_Of (Of_Tree, Field)
-            else Syn.Expression_Projection (Of_Tree, Field));
-
-      function Construction_Fill
-        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Syn.Node_Id is
-      begin
-         if Syn.Kind (Of_Tree, Node) = Syn.Struct_Literal then
-            return Syn.Struct_Fill (Of_Tree, Node);
-         elsif Syn.Kind (Of_Tree, Node) /= Syn.Labeled_Application then
-            return Syn.No_Node;
-         end if;
-         for Index in 1 .. Syn.Argument_Count (Of_Tree, Node) loop
-            declare
-               Argument : constant Syn.Node_Id :=
-                 Syn.Nth_Argument (Of_Tree, Node, Index);
-            begin
-               if Res.Role_Of (Meanings.all, Of_Tree, Argument)
-                    = Res.Fill_Argument
-               then
-                  return Syn.Expression_Projection (Of_Tree, Argument);
-               end if;
-            end;
-         end loop;
-         return Syn.No_Node;
-      end Construction_Fill;
 
       --  Labelled applications retain separate type and value projections.
       --  Only static formals may use the former without the latter. Check

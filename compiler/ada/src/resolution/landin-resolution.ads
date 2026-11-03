@@ -782,6 +782,49 @@ package Landin.Resolution is
           Post => Match_Of (Into, Of_Tree, Node)
                     = (if Accepted then Call_Matched else Call_Rejected);
 
+   ------------------------------------------------------------------
+   --  Constructions
+   ------------------------------------------------------------------
+
+   --  A construction is a struct literal or a labelled application this
+   --  table classified as one.  Resolution selects the view, so the
+   --  source's neutral application never becomes an alternate tree; the
+   --  checker and lowering both read a construction through these.
+
+   function Is_Struct_Construction
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id) return Boolean;
+
+   function Is_Case_Construction
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id) return Boolean;
+
+   --  A struct literal's field values, or an application's field and
+   --  payload arguments in written order.
+   function Construction_Field_Count
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id) return Natural;
+
+   function Nth_Construction_Field
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id;
+      Index    : Positive) return Landin.Syntax.Node_Id;
+
+   --  The expression a field written by either form gives.
+   function Construction_Field_Value
+     (Of_Tree : Landin.Syntax.Tree;
+      Field   : Landin.Syntax.Node_Id) return Landin.Syntax.Node_Id;
+
+   --  [0720]'s trailing fill, or No_Node when the construction has none.
+   function Construction_Fill
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id) return Landin.Syntax.Node_Id;
+
 private
 
    type Declaration is record
