@@ -407,7 +407,9 @@ package body Landin.Diagnostics.Explanations is
                "A known form used where the language does not permit it "
                & "[1830], found once the checker knows what the form means"
                & ". The report names the specific rule; its two notes give"
-               & " the tour paragraph and the form's standing."
+               & " the tour paragraph and the form's standing, and a third"
+               & ", where the checker knows one, the form to write instead"
+               & " (D761)."
                & LF
                & LF
                & "For a variant [0680]-[0690] (D75/D76/D241), its part bel"
@@ -429,10 +431,10 @@ package body Landin.Diagnostics.Explanations is
                & "e call. A generic routine's slice parameter gives one on"
                & "ly when its element type names no formal (D419); where t"
                & "he element type is a formal, deduced from the arguments,"
-               & " the report names the binding to pass instead, `values :"
-               & "= [...]`, or `values: [N]E = [...]` when an element such"
-               & " as `any(addr x)` needs a context, which an inferred bin"
-               & "ding does not give."
+               & " the third note names the binding to pass instead, `valu"
+               & "es := [...]`, or `values: [N]E = [...]` when an element "
+               & "such as `any(addr x)` needs a context, which an inferred"
+               & " binding does not give."
                & LF
                & LF
                & "An `f32` or `f64` assembly operand [1630] is placed in a"
@@ -1214,6 +1216,17 @@ package body Landin.Diagnostics.Explanations is
                & "lizer may perform work are not warned about. `--allow=L0"
                & "349` suppresses this observation; `--deny=L0349` enables"
                & " it as an invocation error before emission.",
+            when Catalogue.Literal_Rounded_Away =>
+               "A float literal converted to an integer, `u64(1.0e18)`, "
+               & "has no type of its own, so it is an `f32` [0210], and th"
+               & "e conversion truncates the `f32` (D171). Where that roun"
+               & "ding changes the integer the conversion gives, or whethe"
+               & "r it gives one, the conversion is refused (D760): `u64(1"
+               & ".0e18)` would be 999999984306749440. The report names bo"
+               & "th integers. Write `f64(...)` around the literal to conv"
+               & "ert its `f64` value, or `f32(...)` to keep the rounding "
+               & "on purpose. A literal whose rounding gives the same inte"
+               & "ger, as `i64(45.7)` does, is converted as written.",
             when Catalogue.No_Toolchain =>
                "The requested output cannot be made with the selected ta"
                & "rget, settings or available toolchain [1550]. The diagno"
@@ -2429,6 +2442,13 @@ package body Landin.Diagnostics.Explanations is
                & "    count: i32 = 42"
                & LF
                & "end unused"
+               & LF,
+            when Catalogue.Literal_Rounded_Away =>
+               "big: () -> (n: u64) ="
+               & LF
+               & "    n = u64(1.0e18)"
+               & LF
+               & "end big"
                & LF,
             when Catalogue.No_Toolchain =>
                "",

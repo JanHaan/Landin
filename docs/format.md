@@ -149,9 +149,13 @@ below says none. A comma or a colon takes one space after it and none before.
 
 Every binary operator, `=`, `:=`, `->`, `!` and `|` has one space on each
 side. A type's or concept's formals, a conformance's entries, a recovery's
-name and a pointer arm's binding stand one space from what precedes them:
-`type (item: type)`, `is log (note: n)`, `else (problem)`, `ptr (p):`. A
-prefix `-` keeps a space before another `-`, because `--` begins a comment.
+name and a pointer arm's or a `_` arm's binding stand one space from what
+precedes them: `type (item: type)`, `is log (note: n)`, `else (problem)`,
+`ptr (p):`, `_ (rest):`. A case arm's payload touches its case,
+`red(shade):`, as a call's arguments touch what it calls: the parentheses
+take that case's payload apart. `ptr` and `_` name no case, and their
+binding is the matched value itself (D434). A prefix `-` keeps a space
+before another `-`, because `--` begins a comment.
 An applied written type keeps its ordinary type spacing and puts no space
 before the value argument's `(`: `[]mut u8(value)`, `[4]u8(value)` and
 `ptr mut u8(value)`. A function type retains spaces around `->` and joins
@@ -168,6 +172,10 @@ f:(a:i32,b :i32)->(r :i32)=
     pointer := ptr  u8 (hidden)
     callback := (x:i32)->(y:i32) (wrapped)
     tagged := tag (u32,7) (value)
+    match c
+        red (shade): g(shade)
+        _(rest): h(rest)
+    end match
 end f
 ```
 
@@ -180,6 +188,10 @@ f: (a: i32, b: i32) -> (r: i32) =
     pointer := ptr u8(hidden)
     callback := (x: i32) -> (y: i32)(wrapped)
     tagged := tag(u32, 7)(value)
+    match c
+        red(shade): g(shade)
+        _ (rest): h(rest)
+    end match
 end f
 ```
 

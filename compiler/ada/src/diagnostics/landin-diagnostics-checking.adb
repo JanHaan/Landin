@@ -13,6 +13,7 @@ package body Landin.Diagnostics.Checking is
       Related : Landin.Provenance.Origin := Landin.Provenance.No_Origin;
       Because : String := "";
       Refused : Refused_Use := Struct_Value;
+      Route   : String := "";
       Fixes   : Fix_List := No_Fixes;
       Into    : in out Diagnostic_List)
    is
@@ -45,6 +46,12 @@ package body Landin.Diagnostics.Checking is
          Add_Note (Built, Note);
       end if;
 
+      --  The route follows the facts, and the row says whether the code
+      --  admits one.
+      if Route /= "" then
+         Add_Note (Built, Route);
+      end if;
+
       if Because /= "" then
          if not Landin.Provenance.Is_Known (Related) then
             raise Compiler_Defect
@@ -73,7 +80,7 @@ package body Landin.Diagnostics.Checking is
       --  The row this code carries is checked against the diagnostic just
       --  built, for Landin.Diagnostics.Lexical's reason: a code whose
       --  occurrences do not carry what it promises is worse than none.
-      if Rows.Required_Notes (Named) /= Note_Count (Built)
+      if not Rows.Admits_Notes (Named, Note_Count (Built))
         or else Label_Count (Built) < Rows.Minimum_Secondaries (Named)
         or else Label_Count (Built) > Rows.Maximum_Secondaries (Named)
       then

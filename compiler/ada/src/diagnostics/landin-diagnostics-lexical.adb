@@ -77,7 +77,7 @@ package body Landin.Diagnostics.Lexical is
    is
       Text : constant Code_String := Rows.Code (Named);
    begin
-      if Rows.Required_Notes (Named) /= Note_Count (Report)
+      if not Rows.Admits_Notes (Named, Note_Count (Report))
         or else Label_Count (Report) < Rows.Minimum_Secondaries (Named)
         or else Label_Count (Report) > Rows.Maximum_Secondaries (Named)
       then

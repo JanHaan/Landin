@@ -101,6 +101,19 @@ package body Landin.Tests.Catalogue_Suite is
            and then Rows.Maximum_Secondaries (Rows.Unresolved_Name) = 1,
          "an unresolved name admits the local that hid it");
 
+      --  D761: a route note follows fixed notes, and L0304's are the only
+      --  fixed facts a route would otherwise be written beside.  Any other
+      --  code says its route in the note it already has.
+      for Name in Rows.Code_Name loop
+         Landin.Testing.Check
+           (Item,
+            Rows.Admits_Notes (Name, Rows.Required_Notes (Name))
+              and then
+                Rows.Admits_Notes (Name, Rows.Required_Notes (Name) + 1)
+                  = (Name = Rows.Unsupported_Use),
+            Name'Image & " admits a route note only as L0304");
+      end loop;
+
       --  Distinct, because a number that names two rules is worse than no
       --  number at all.
       for Left in Rows.Code_Name loop

@@ -1,0 +1,22 @@
+endpoint: type = struct
+    listener: u32
+    at: u16
+end endpoint
+span: type = struct
+    first: u8
+    at, until: u16
+end span
+control: type = layout(packed, u32) struct
+    mode: u4 at 0..3
+    at: u4 at 4..7
+    rest: u24 at 8..31
+end control
+public main: () -> (code: i32) =
+    e: endpoint = (listener: 7, at: 80)
+    s: span = (first: 1, at: 2, until: 3)
+    c: control = (mode: 1, at: 2, rest: 3)
+    code = 1
+    if e.at == 80 and s.at + s.until == 5 and c.at == 2 then
+        code = 42
+    end if
+end main

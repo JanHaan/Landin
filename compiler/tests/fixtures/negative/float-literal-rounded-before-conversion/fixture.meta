@@ -1,0 +1,8 @@
+class: negative
+summary: an untyped float literal is an f32, and its conversion to an integer is refused where that rounding changes the integer it gives, or whether it gives one, while one it leaves alone and one written as f64 convert
+expect: expected.txt
+args: --root=../.. ../tests/fixtures/negative/float-literal-rounded-before-conversion
+status: 1
+constructs: 0170, 0210, 0310
+codes: L0350, L0350, L0350, L0350
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

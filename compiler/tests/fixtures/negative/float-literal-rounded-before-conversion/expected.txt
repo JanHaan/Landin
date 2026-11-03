@@ -1,0 +1,24 @@
+error[L0350]: this literal is an f32 here, which converts to 999999984306749440, while the number written converts to 1000000000000000000
+  --> ../tests/fixtures/negative/float-literal-rounded-before-conversion/main.ldn:2:13
+  |
+2 |     n = u64(1.0e18)
+  |             ^^^^^^
+  = note: [0210]/D760: a float literal with no type is an f32; write `f64(...)` around it to convert the f64 value, or `f32(...)` to keep this rounding
+error[L0350]: this literal is an f32 here, which converts to -999999984306749440, while the number written converts to -1000000000000000000
+  --> ../tests/fixtures/negative/float-literal-rounded-before-conversion/main.ldn:5:14
+  |
+5 |     n = -i64(-1.0e18)
+  |              ^^^^^^^
+  = note: [0210]/D760: a float literal with no type is an f32; write `f64(...)` around it to convert the f64 value, or `f32(...)` to keep this rounding
+error[L0350]: this literal is an f32 here, which no `u8` holds, while the number written converts to 255
+  --> ../tests/fixtures/negative/float-literal-rounded-before-conversion/main.ldn:8:12
+  |
+8 |     n = u8(255.999999)
+  |            ^^^^^^^^^^
+  = note: [0210]/D760: a float literal with no type is an f32; write `f64(...)` around it to convert the f64 value, or `f32(...)` to keep this rounding
+error[L0350]: this literal is an f32 here, which converts to -2147483648, while the number written fits no `i32`
+  --> ../tests/fixtures/negative/float-literal-rounded-before-conversion/main.ldn:11:13
+   |
+11 |     n = i32(-2147483649.0)
+   |             ^^^^^^^^^^^^^
+  = note: [0210]/D760: a float literal with no type is an f32; write `f64(...)` around it to convert the f64 value, or `f32(...)` to keep this rounding

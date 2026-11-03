@@ -62,7 +62,7 @@ package body Landin.Diagnostics.Syntactic is
       --  The row this code carries is checked against the diagnostic just
       --  built.  A code whose occurrences do not carry what it promises is
       --  worse than no code at all, so this is a defect and not a warning.
-      if Rows.Required_Notes (Named) /= Note_Count (Built)
+      if not Rows.Admits_Notes (Named, Note_Count (Built))
         or else Label_Count (Built) < Rows.Minimum_Secondaries (Named)
         or else Label_Count (Built) > Rows.Maximum_Secondaries (Named)
       then

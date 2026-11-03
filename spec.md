@@ -3878,7 +3878,8 @@ participates in the range check, or what infinity and NaN mean as integers.
 applied to an f32 or f64 value. A typed source retains its float width. An
 untyped float operand first takes [0210]'s default f32 type, so the source is
 rounded to f32 before conversion; there is still no implicit conversion
-between numeric classes.
+between numeric classes. D760 subsequently refuses an untyped literal operand
+whose f32 rounding changes the integer the conversion gives.
 
 The finite source is truncated toward zero, then that mathematical integer is
 checked against the destination's inclusive range. The ordering matters:
@@ -3910,6 +3911,38 @@ values a mathematical integer they do not have. All were declined.
 `negative/float-to-integer-known-nan`,
 `negative/float-to-bool-known-invalid`, and the
 `conversion.float-to-integer` guarantee row.
+
+### D760 — A float literal's f32 rounding may not change an integer conversion
+
+**The tour said** at [0210] that a float literal is distinct from an integer
+and at [0310] that a float converts to an integer by truncating toward zero.
+D162 gave a float literal with no context f32, and D171 converted such an
+operand at that width, so `u64(1.0e18)` was 999999984306749440: the literal
+lost its low digits to f32's 24 bits before it was converted, and nothing in
+the program or the report said so.
+
+**Chosen:** an integer conversion whose operand is an untyped float literal,
+negated any number of times, converts it as an f32 still, and is refused,
+L0350, when the literal's f64 value would convert to a different integer, or
+one of the two converts and the other does not. The report names both
+outcomes, and its note names `f64(...)` around the literal for the written
+value and `f32(...)` for the rounded one; either is typed, and a typed operand
+keeps its width and is never compared. A literal whose rounding leaves the
+integer alone, `i64(45.7)` or `u8(-0.75)`, converts as before, and an operand
+that is an expression of literals rather than a literal is not compared. The
+comparison is the checker's exact decimal evaluation at each width and
+D171's truncation, so it does not depend on the host.
+
+**The alternatives:** give the operand of an integer conversion f64 as its
+context, which changes the meaning of conversions that already compile and
+gives a literal a type from a conversion, a context [0310] does not give it;
+refuse every untyped float literal converted to an integer, which refuses
+`i64(45.7)`, the tour's own example, for a rounding that changes nothing; and
+a warning, which compiles the surprising value all the same, when writing
+`f32(...)` already says the rounding was meant.
+
+**Pinned by** `negative/float-literal-rounded-before-conversion` and
+`runtime/float-to-integer-conversions`.
 
 ### D172 — A bool has the integer image zero or one
 
@@ -19295,6 +19328,36 @@ which a reader at the report has not yet run.
 **Pinned by** `check.py`'s note check and its control in
 `scripts/tests/test_check_controls.py`, and every recorded negative report the change
 rewrote.
+
+### D761 — A refusal whose notes are fixed facts says its route in a third note
+
+**The discrepancy:** L0304, the checker's half of [1830], carries two notes
+every occurrence must have, the tour paragraph and the form's standing, and
+the catalogue held every code to one exact count of notes. A refusal that
+knew the form to write instead, the binding a generic slice parameter's
+literal needs (D419), the copy a match alias of an array needs, or the `_ =`
+a construction statement needs, could carry it only in its message, after a
+semicolon, where the report's first line became a sentence and a half.
+
+**Chosen:** a catalogue row says, beside its count of notes, whether an
+occurrence may carry one more: the route, the form to write instead, after
+the fixed notes. L0304 is the one row that admits it, and every reporting
+package holds a diagnostic to the count or the count and the route. The
+message says what was refused and the route note what to write, beginning
+`instead,`. Every other code has a note of its own to say its route in, and
+the catalogue suite refuses a route on any row but L0304's.
+
+**The alternatives:** keeping the route in the message, which every such
+refusal did and which is what made the message long; making the route a
+`help` line, which is a fix an editor applies, and a route that names a
+binding to introduce elsewhere is not an edit the refusal knows how to make;
+and an interval of notes for every row, a second number on 128 rows for one
+that needs it.
+
+**Pinned by** `negative/array-lent-refusals`,
+`negative/generic-closed-parameter-refusals`,
+`negative/r720-match-alias-array-not-copied` and the catalogue suite's
+`rows are whole`.
 
 ### D383 — `refine check` takes what `compile` takes about the program
 

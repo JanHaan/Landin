@@ -257,6 +257,9 @@ package Landin.Diagnostics.Catalogue is
       RAM_Code_Unplaceable,
       --  D251 also admits removing a whole unused, effect-free local.
       Unused_Pure_Local,
+      --  D760: an untyped float literal whose f32 rounding changes the
+      --  integer a conversion gives.
+      Literal_Rounded_Away,
       --  The backend and its toolchain.  None is about a frontend
       --  construct: two are the host failing to finish an accepted
       --  program, one is [1970]'s missing entry shape, one is a verified
@@ -340,6 +343,10 @@ package Landin.Diagnostics.Catalogue is
       Most     : Natural;
       --  How many notes every occurrence carries.
       Notes    : Natural;
+      --  Whether an occurrence may carry one note after those: the route,
+      --  the form to write instead, which a code whose notes are fixed
+      --  facts would otherwise have to write into its message (D761).
+      Route    : Boolean;
       Fixes    : Fix_Admission;
       Shown_By : Evidence;
       --  The rule the code enforces, in one line.  Documentation, not prose
@@ -360,66 +367,66 @@ package Landin.Diagnostics.Catalogue is
       No_Frontend =>
         (Code => "L0001", Level => Error, State => Retired,
          Source => True, Bytes => False,
-         Least => 0, Most => 0, Notes => 1,
+         Least => 0, Most => 0, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Invocation,
          Rule => +"a source was read and no frontend is wired to the driver"),
       Unknown_Option =>
         (Code => "L0002", Level => Error, State => Live,
          Source => False, Bytes => False,
-         Least => 0, Most => 0, Notes => 0,
+         Least => 0, Most => 0, Notes => 0, Route => False,
          Fixes => No_Fix, Shown_By => Invocation,
          Rule => +"an option or argument the driver does not define"),
       Unreadable_Source =>
         (Code => "L0003", Level => Error, State => Live,
          Source => False, Bytes => False,
-         Least => 0, Most => 0, Notes => 0,
+         Least => 0, Most => 0, Notes => 0, Route => False,
          Fixes => No_Fix, Shown_By => Invocation,
          Rule => +"a source that is missing or cannot be read"),
       Unknown_Target =>
         (Code => "L0004", Level => Error, State => Live,
          Source => False, Bytes => False,
-         Least => 0, Most => 0, Notes => 0,
+         Least => 0, Most => 0, Notes => 0, Route => False,
          Fixes => No_Fix, Shown_By => Invocation,
          Rule => +"a target no description names"),
       Unwritable_Output =>
         (Code => "L0005", Level => Error, State => Live,
          Source => False, Bytes => False,
-         Least => 0, Most => 0, Notes => 0,
+         Least => 0, Most => 0, Notes => 0, Route => False,
          Fixes => No_Fix, Shown_By => Invocation,
          Rule => +"an output file that cannot be written"),
       --  [1420]'s import, offered the module directories it is near.
       Module_Not_Found =>
         (Code => "L0006", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 0, Most => 0, Notes => 1,
+         Least => 0, Most => 0, Notes => 1, Route => False,
          Fixes => May_Fix, Shown_By => Negative_Fixture,
          Rule => +("[1420]: no ordered import root contains the requested"
                    & " module")),
       Module_Directory_Invalid =>
         (Code => "L0007", Level => Error, State => Live,
          Source => False, Bytes => False,
-         Least => 0, Most => 0, Notes => 1,
+         Least => 0, Most => 0, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("[1410], [1420]: a module directory is invalid or"
                    & " unreadable")),
       Module_Unavailable_For_Target =>
         (Code => "L0015", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 0, Most => 0, Notes => 1,
+         Least => 0, Most => 0, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("D267: an imported source namespace is unavailable for"
                    & " the target")),
       Root_Holds_Library_Module =>
         (Code => "L0016", Level => Warning, State => Live,
          Source => True, Bytes => True,
-         Least => 0, Most => 0, Notes => 1,
+         Least => 0, Most => 0, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("D275: a project root holds a module the compiler's"
                    & " library supplies instead")),
       Empty_Module_Hides_Root =>
         (Code => "L0532", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 0, Most => 0, Notes => 1,
+         Least => 0, Most => 0, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("D563: an import's first directory holds no source and a"
                    & " later root holds its module")),
@@ -429,7 +436,7 @@ package Landin.Diagnostics.Catalogue is
       Not_Formatted =>
         (Code => "L0008", Level => Error, State => Live,
          Source => True, Bytes => False,
-         Least => 0, Most => 0, Notes => 1,
+         Least => 0, Most => 0, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Invocation,
          Rule => +("D252: a source `refine fmt --check` finds out of the"
                    & " layout")),
@@ -439,7 +446,7 @@ package Landin.Diagnostics.Catalogue is
       Unknown_Level =>
         (Code => "L0009", Level => Error, State => Live,
          Source => False, Bytes => False,
-         Least => 0, Most => 0, Notes => 0,
+         Least => 0, Most => 0, Notes => 0, Route => False,
          Fixes => No_Fix, Shown_By => Invocation,
          Rule => +("D255: a CPU feature level the selected target does not"
                    & " have")),
@@ -448,13 +455,13 @@ package Landin.Diagnostics.Catalogue is
       Construct_Not_Enabled =>
         (Code => "L0010", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 0, Most => 0, Notes => 2,
+         Least => 0, Most => 0, Notes => 2, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +"[1830]: the tour describes this and the kernel omits it"),
       Malformed_Integer =>
         (Code => "L0011", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 0, Most => 0, Notes => 1,
+         Least => 0, Most => 0, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("[1770]: an integer with missing digits, misplaced"
                    & " underscores, an invalid base digit, or an adjacent"
@@ -462,27 +469,27 @@ package Landin.Diagnostics.Catalogue is
       Unknown_Bytes =>
         (Code => "L0012", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 0, Most => 0, Notes => 1,
+         Least => 0, Most => 0, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("[1750]/[1760]: a run of bytes no rule spells, or a word"
                    & " with a capital")),
       Unterminated_Comment =>
         (Code => "L0013", Level => Error, State => Live,
          Source => True, Bytes => False,
-         Least => 1, Most => 1, Notes => 0,
+         Least => 1, Most => 1, Notes => 0, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +"[1780]: a block comment that is never closed"),
       Unterminated_Literal =>
         (Code => "L0014", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 1, Most => 1, Notes => 0,
+         Least => 1, Most => 1, Notes => 0, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("[0250]/[0260]/[0280]: a quoted or raw literal that is"
                    & " never closed")),
       Name_Expected =>
         (Code => "L0100", Level => Error, State => Live,
          Source => True, Bytes => False,
-         Least => 0, Most => 0, Notes => 1,
+         Least => 0, Most => 0, Notes => 1, Route => False,
          Fixes => May_Fix, Shown_By => Negative_Fixture,
          Rule => +("[1760]: a name position holds something that is not a"
                    & " name")),
@@ -495,64 +502,64 @@ package Landin.Diagnostics.Catalogue is
       Type_Expected =>
         (Code => "L0101", Level => Error, State => Live,
          Source => True, Bytes => False,
-         Least => 1, Most => 1, Notes => 1,
+         Least => 1, Most => 1, Notes => 1, Route => False,
          Fixes => May_Fix, Shown_By => Negative_Fixture,
          Rule => +"[1790]: a type position holds no type the kernel enables"),
       Expression_Expected =>
         (Code => "L0102", Level => Error, State => Live,
          Source => True, Bytes => False,
-         Least => 1, Most => 1, Notes => 1,
+         Least => 1, Most => 1, Notes => 1, Route => False,
          Fixes => May_Fix, Shown_By => Negative_Fixture,
          Rule => +"[1820]: an expression was required and none begins here"),
       Token_Expected =>
         (Code => "L0103", Level => Error, State => Live,
          Source => True, Bytes => False,
-         Least => 1, Most => 1, Notes => 1,
+         Least => 1, Most => 1, Notes => 1, Route => False,
          Fixes => May_Fix, Shown_By => Negative_Fixture,
          Rule => +"[1810]: a terminal the production spells is absent"),
       Unclosed_Construct =>
         (Code => "L0104", Level => Error, State => Live,
          Source => True, Bytes => False,
-         Least => 1, Most => 1, Notes => 1,
+         Least => 1, Most => 1, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +"[1800]: a construct whose closing `end` never arrives"),
       --  [0390]'s `=` inside an expression, offered `==`.
       Assignment_In_Expression =>
         (Code => "L0105", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 0, Most => 0, Notes => 1,
+         Least => 0, Most => 0, Notes => 1, Route => False,
          Fixes => May_Fix, Shown_By => Negative_Fixture,
          Rule => +"[0390]: assignment is a statement, never an expression"),
       Comparison_Chained =>
         (Code => "L0106", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 1, Most => 1, Notes => 1,
+         Least => 1, Most => 1, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +"[1820]: comparison takes at most one operator"),
       Return_Carries_Value =>
         (Code => "L0107", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 1, Most => 1, Notes => 1,
+         Least => 1, Most => 1, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("[1810]: `return` carries no value; assign the named"
                    & " return")),
       Public_On_Statement =>
         (Code => "L0108", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 1, Most => 1, Notes => 1,
+         Least => 1, Most => 1, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +"[1740]: `public` rides on a declaration, not a statement"),
       --  [1800]'s closing name, which can only be the declared one.
       End_Name_Mismatch =>
         (Code => "L0109", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 1, Most => 1, Notes => 1,
+         Least => 1, Most => 1, Notes => 1, Route => False,
          Fixes => May_Fix, Shown_By => Negative_Fixture,
          Rule => +"[1800]: the name on `end` is not the name declared"),
       Stray_Token =>
         (Code => "L0110", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 0, Most => 0, Notes => 1,
+         Least => 0, Most => 0, Notes => 1, Route => False,
          Fixes => May_Fix, Shown_By => Negative_Fixture,
          Rule => +("[1740]: a run of tokens beginning no declaration or"
                    & " statement")),
@@ -562,13 +569,13 @@ package Landin.Diagnostics.Catalogue is
       Nesting_Too_Deep =>
         (Code => "L0111", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 1, Most => 1, Notes => 1,
+         Least => 1, Most => 1, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Implementation_Limit,
          Rule => +"an implementation limit on how deeply a construct nests"),
       Positional_After_Named =>
         (Code => "L0112", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 0, Most => 0, Notes => 1,
+         Least => 0, Most => 0, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("[0980]: a positional call argument precedes every named"
                    & " argument")),
@@ -578,7 +585,7 @@ package Landin.Diagnostics.Catalogue is
       Duplicate_Declaration =>
         (Code => "L0200", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 1, Most => 1, Notes => 1,
+         Least => 1, Most => 1, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +"[1850]: one scope gives one name to one thing"),
       --  An unresolved name has no second place by definition, and [1860]'s
@@ -588,20 +595,20 @@ package Landin.Diagnostics.Catalogue is
       Unresolved_Name =>
         (Code => "L0201", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 0, Most => 1, Notes => 1,
+         Least => 0, Most => 1, Notes => 1, Route => False,
          Fixes => May_Fix, Shown_By => Negative_Fixture,
          Rule => +"[1860]: a name used and declared in no visible scope"),
       Inaccessible_Name =>
         (Code => "L0202", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 1, Most => 1, Notes => 1,
+         Least => 1, Most => 1, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("[1410]: a module-internal declaration used across"
                    & " modules")),
       Reserved_Tool_Name =>
         (Code => "L0203", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 0, Most => 0, Notes => 1,
+         Least => 0, Most => 0, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("[1560]: a builtin tool namespace binding or use is"
                    & " unavailable")),
@@ -613,14 +620,14 @@ package Landin.Diagnostics.Catalogue is
       Literal_Out_Of_Range =>
         (Code => "L0300", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 0, Most => 1, Notes => 1,
+         Least => 0, Most => 1, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("a compile-time magnitude its context or target does not"
                    & " hold")),
       Register_Reserved_Bits =>
         (Code => "L0398", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 0, Most => 0, Notes => 1,
+         Least => 0, Most => 0, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("[0740]: a known register image violates its reserved-bit"
                    & " write policy")),
@@ -629,14 +636,14 @@ package Landin.Diagnostics.Catalogue is
       Type_Mismatch =>
         (Code => "L0301", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 1, Most => 1, Notes => 1,
+         Least => 1, Most => 1, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("[1890]: a value's type is not the one its context or"
                    & " operation requires")),
       Not_Definitely_Assigned =>
         (Code => "L0302", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 1, Most => 1, Notes => 1,
+         Least => 1, Most => 1, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("[1910], [0910], [0930]: a place unassigned at a read or"
                    & " exit")),
@@ -645,16 +652,17 @@ package Landin.Diagnostics.Catalogue is
       Immutable_Target =>
         (Code => "L0303", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 1, Most => 1, Notes => 1,
+         Least => 1, Most => 1, Notes => 1, Route => False,
          Fixes => May_Fix, Shown_By => Negative_Fixture,
          Rule => +"[1900]: a place that may not be written"),
       --  [1830]'s two facts, the same two L0010 carries: which construct this
       --  is, and what it is. A substitution-dependent use may relate the
-      --  template.
+      --  template, and a refusal that knows the form to write instead says
+      --  so in a third note (D761).
       Unsupported_Use =>
         (Code => "L0304", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 0, Most => 1, Notes => 2,
+         Least => 0, Most => 1, Notes => 2, Route => True,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("[1830]: a known form used where the language does not"
                    & " permit it")),
@@ -663,7 +671,7 @@ package Landin.Diagnostics.Catalogue is
       Not_Known_At_Compile_Time =>
         (Code => "L0305", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 0, Most => 1, Notes => 1,
+         Least => 0, Most => 1, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("[1940]/D136/D202: a required static value or initial"
                    & " image that the compiler cannot establish before"
@@ -674,33 +682,33 @@ package Landin.Diagnostics.Catalogue is
       Impossible_Operand =>
         (Code => "L0306", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 0, Most => 1, Notes => 1,
+         Least => 0, Most => 1, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("[1950]: an operand the operation cannot take, where the"
                    & " compiler knows it")),
       Compile_Time_Assertion_Failed =>
         (Code => "L0324", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 0, Most => 0, Notes => 1,
+         Least => 0, Most => 0, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +"[1510]: a compile-time assertion is false"),
       Cyclic_Type_Alias =>
         (Code => "L0307", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 0, Most => 0, Notes => 1,
+         Least => 0, Most => 0, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +"[1795]: a chain of aliases that reaches no type"),
       --  [0750]'s field by name, offered the fields it is near.
       Unresolved_Field =>
         (Code => "L0308", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 0, Most => 0, Notes => 1,
+         Least => 0, Most => 0, Notes => 1, Route => False,
          Fixes => May_Fix, Shown_By => Negative_Fixture,
          Rule => +"[0750]: a field a struct was not declared with"),
       Field_Named_Twice =>
         (Code => "L0309", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 1, Most => 1, Notes => 1,
+         Least => 1, Most => 1, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("[0670]/[0710]/D74/D76: each field is named at most once"
                    & " in a struct declaration or literal, or a variant case"
@@ -708,81 +716,81 @@ package Landin.Diagnostics.Catalogue is
       Field_Not_Given =>
         (Code => "L0310", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 0, Most => 0, Notes => 1,
+         Least => 0, Most => 0, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("[0710]/D76: every field in a struct literal or variant"
                    & " case construction is named or covered by `of`")),
       Variant_Case_Named_Twice =>
         (Code => "L0311", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 1, Most => 1, Notes => 1,
+         Least => 1, Most => 1, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +"[1210]: a match names each variant case at most once"),
       Variant_Case_Not_Matched =>
         (Code => "L0312", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 0, Most => 0, Notes => 1,
+         Least => 0, Most => 0, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +"[1210]: an exhaustive match names every variant case"),
       Recursive_Nominal_Value =>
         (Code => "L0313", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 1, Most => 1, Notes => 1,
+         Least => 1, Most => 1, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("D137: a nominal value layout cannot contain itself by"
                    & " value")),
       Reference_Escapes =>
         (Code => "L0314", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 1, Most => 1, Notes => 1,
+         Least => 1, Most => 1, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("[0770]/[0780]: retention requires live storage and"
                    & " permission from the reference's origin")),
       Borrowed_Place =>
         (Code => "L0315", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 1, Most => 1, Notes => 1,
+         Least => 1, Most => 1, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("[0800]/[0830]: a live derived view keeps its source"
                    & " still")),
       Return_Sources_Disagree =>
         (Code => "L0316", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 1, Most => 1, Notes => 1,
+         Least => 1, Most => 1, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("[0790]: a returned reference derives from exactly its"
                    & " declared source parameters")),
       Conformance_Collision =>
         (Code => "L0317", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 1, Most => 1, Notes => 1,
+         Least => 1, Most => 1, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +"a whole-program conformance key has two declarations"),
       Unsatisfied_Constraint =>
         (Code => "L0318", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 1, Most => 1, Notes => 1,
+         Least => 1, Most => 1, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("a concrete type actual lacks the required concept"
                    & " conformance")),
       Compiler_Conformance_Reserved =>
         (Code => "L0319", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 0, Most => 0, Notes => 1,
+         Least => 0, Most => 0, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("a user attempts to declare the compiler-owned concept or"
                    & " one of its supplied conformances")),
       Malformed_Text_Literal =>
         (Code => "L0320", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 0, Most => 0, Notes => 1,
+         Least => 0, Most => 0, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("[0270] [1750]: a text literal contains a malformed"
                    & " escape or invalid source encoding")),
       Malformed_Float_Literal =>
         (Code => "L0321", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 0, Most => 0, Notes => 1,
+         Least => 0, Most => 0, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("[0210] [0220] [0230] [1770]: a float has a complete"
                    & " fraction and exponent when required, and ends before"
@@ -790,14 +798,14 @@ package Landin.Diagnostics.Catalogue is
       Malformed_Character_Literal =>
         (Code => "L0322", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 0, Most => 0, Notes => 1,
+         Least => 0, Most => 0, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("[0250] [0270]: a character literal spells exactly one"
                    & " Unicode scalar value")),
       Malformed_Raw_Literal =>
         (Code => "L0323", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 0, Most => 0, Notes => 1,
+         Least => 0, Most => 0, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("[0280] [1750]: raw content is UTF-8 and every nonblank"
                    & " line has the closing delimiter's indentation")),
@@ -807,21 +815,21 @@ package Landin.Diagnostics.Catalogue is
       Size_Limit_Exceeded =>
         (Code => "L0325", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 0, Most => 1, Notes => 1,
+         Least => 0, Most => 1, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Implementation_Limit,
          Rule => +("D247: an implementation limit on declarations in a"
                    & " routine or fields in a struct body or variant case")),
       Invalid_Option_Declaration =>
         (Code => "L0390", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 0, Most => 0, Notes => 1,
+         Least => 0, Most => 0, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("[1530]/D202: an option must be unconditional, have an"
                    & " available name and use a supported scalar type")),
       Invalid_Tool_Directive =>
         (Code => "L0391", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 0, Most => 0, Notes => 1,
+         Least => 0, Most => 0, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("[1510]/[1590]/D202: a tool directive needs one argument;"
                    & " linker.library needs a quoted portable library name")),
@@ -830,7 +838,7 @@ package Landin.Diagnostics.Catalogue is
       Mutable_Never_Written =>
         (Code => "L0326", Level => Warning, State => Live,
          Source => True, Bytes => True,
-         Least => 0, Most => 0, Notes => 1,
+         Least => 0, Most => 0, Notes => 1, Route => False,
          Fixes => May_Fix, Shown_By => Negative_Fixture,
          Rule => +"D251: a local declared `mut` that nothing writes"),
       --  [0980]'s argument label, offered the parameters it is near. The row
@@ -838,28 +846,28 @@ package Landin.Diagnostics.Catalogue is
       Call_Argument_Match =>
         (Code => "L0327", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 1, Most => 1, Notes => 1,
+         Least => 1, Most => 1, Notes => 1, Route => False,
          Fixes => May_Fix, Shown_By => Negative_Fixture,
          Rule => +("[1920]/D138: call arguments match the parameters and the"
                    & " callee's static formals")),
       Zero_Image_Unavailable =>
         (Code => "L0328", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 1, Most => 1, Notes => 1,
+         Least => 1, Most => 1, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("[0540]: zeroed or an implicit initializer has no"
                    & " complete zero image")),
       Error_Contract_Violated =>
         (Code => "L0329", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 1, Most => 1, Notes => 1,
+         Least => 1, Most => 1, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("[0940]/[0960]: failures obey the declared error set and"
                    & " call handling")),
       Assembly_Block_Contract =>
         (Code => "L0330", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 1, Most => 1, Notes => 1,
+         Least => 1, Most => 1, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("[1630]/[1990]: assembly operands, registers and template"
                    & " slots obey the block contract")),
@@ -867,14 +875,14 @@ package Landin.Diagnostics.Catalogue is
       Result_Use =>
         (Code => "L0331", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 1, Most => 1, Notes => 1,
+         Least => 1, Most => 1, Notes => 1, Route => False,
          Fixes => May_Fix, Shown_By => Negative_Fixture,
          Rule => +("[1020]/[1930]/[0990]: a call's results are used,"
                    & " discarded or bound as the signature allows")),
       Control_Value =>
         (Code => "L0332", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 1, Most => 1, Notes => 1,
+         Least => 1, Most => 1, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("[1180]/[1190]/D124: a break carries a value exactly when"
                    & " its target needs one; value-producing fallthroughs"
@@ -882,112 +890,112 @@ package Landin.Diagnostics.Catalogue is
       Match_Arm_Form =>
         (Code => "L0333", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 1, Most => 1, Notes => 1,
+         Least => 1, Most => 1, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("[1210]/[0480]/[0640]: each match arm names a case of its"
                    & " subject in an admitted form")),
       Aggregate_Form =>
         (Code => "L0334", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 1, Most => 1, Notes => 1,
+         Least => 1, Most => 1, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("[0700]/[0720]: struct, variant and array values are"
                    & " built and used in their admitted forms")),
       Pointer_Union_Use =>
         (Code => "L0335", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 1, Most => 1, Notes => 1,
+         Least => 1, Most => 1, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("[0480]: a pointer union is matched before its pointer is"
                    & " read")),
       Packed_Image =>
         (Code => "L0336", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 1, Most => 1, Notes => 1,
+         Least => 1, Most => 1, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("[0730]: a packed image is used through its fields and"
                    & " declared layout")),
       Place_Required =>
         (Code => "L0337", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 1, Most => 1, Notes => 1,
+         Least => 1, Most => 1, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("[0430]/[0900]/[0910]: an operation needing a distinct"
                    & " addressable place lacks one")),
       Type_Declaration_Form =>
         (Code => "L0338", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 1, Most => 1, Notes => 1,
+         Least => 1, Most => 1, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("[1795]/[1350]: a type position or declaration is not"
                    & " well formed")),
       Signature_Form =>
         (Code => "L0339", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 1, Most => 1, Notes => 1,
+         Least => 1, Most => 1, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("[0790]/[0980]/[0990]/D192: a written signature is not"
                    & " well formed")),
       Generic_Deduction =>
         (Code => "L0340", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 1, Most => 1, Notes => 1,
+         Least => 1, Most => 1, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("D138: a generic call deduces and instantiates one"
                    & " concrete routine")),
       Conformance_Form =>
         (Code => "L0341", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 1, Most => 1, Notes => 1,
+         Least => 1, Most => 1, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("[1230]-[1270]: a concept or conformance declaration is"
                    & " not well formed")),
       Erased_Contract =>
         (Code => "L0342", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 1, Most => 1, Notes => 1,
+         Least => 1, Most => 1, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("[1370]-[1390]/D145-D147: an `any` value or dispatch"
                    & " outside its erased contract")),
       Noreturn_Contract =>
         (Code => "L0343", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 1, Most => 1, Notes => 1,
+         Least => 1, Most => 1, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("[0890]: a noreturn routine is infallible and never"
                    & " returns")),
       Memory_Contract =>
         (Code => "L0344", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 1, Most => 1, Notes => 1,
+         Least => 1, Most => 1, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("[1620]/D227: a memory intrinsic outside its explicit"
                    & " contract")),
       Machine_Entry_Contract =>
         (Code => "L0345", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 1, Most => 1, Notes => 1,
+         Least => 1, Most => 1, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("[1570]: an interrupt or naked routine outside its"
                    & " machine-entry contract")),
       Foreign_Boundary =>
         (Code => "L0346", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 1, Most => 1, Notes => 1,
+         Least => 1, Most => 1, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("[1580]: a C boundary signature, layout or variadic call"
                    & " the C ABI cannot carry")),
       Linkage_Contract =>
         (Code => "L0347", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 1, Most => 1, Notes => 1,
+         Least => 1, Most => 1, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("[1610]/[1640]: a link symbol, helper import or placement"
                    & " outside its contract")),
       Traversal_Source =>
         (Code => "L0348", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 1, Most => 1, Notes => 1,
+         Least => 1, Most => 1, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("[1150]/D180: a for source is a range, a traversable"
                    & " value or one exact iterable conformance")),
@@ -997,14 +1005,14 @@ package Landin.Diagnostics.Catalogue is
       Invalid_Description_Directive =>
         (Code => "L0399", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 0, Most => 0, Notes => 1,
+         Least => 0, Most => 0, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("D542: a device description directive whose arguments are"
                    & " not the forms its row says")),
       Description_Structure =>
         (Code => "L0513", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 0, Most => 0, Notes => 1,
+         Least => 0, Most => 0, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("D542/D543: a description directive outside one"
                    & " description, a repeated or missing one, or a second"
@@ -1012,14 +1020,14 @@ package Landin.Diagnostics.Catalogue is
       Description_Layout =>
         (Code => "L0514", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 0, Most => 0, Notes => 1,
+         Least => 0, Most => 0, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("D543: regions that overlap, or a placement, vector table"
                    & " or stack its regions cannot hold")),
       Description_Core_Mismatch =>
         (Code => "L0515", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 0, Most => 0, Notes => 1,
+         Least => 0, Most => 0, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("D543: a description whose core is not the request's"
                    & " target and level")),
@@ -1027,13 +1035,13 @@ package Landin.Diagnostics.Catalogue is
       Boot_Kind_Reserved =>
         (Code => "L0516", Level => Error, State => Retired,
          Source => False, Bytes => False,
-         Least => 0, Most => 0, Notes => 0,
+         Least => 0, Most => 0, Notes => 0, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +"retired: a reserved boot image kind refine did not build"),
       Region_Placement =>
         (Code => "L0517", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 0, Most => 0, Notes => 1,
+         Least => 0, Most => 0, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("D547: a link(region: ...) the selected description"
                    & " cannot hold")),
@@ -1044,7 +1052,7 @@ package Landin.Diagnostics.Catalogue is
       No_Description =>
         (Code => "L0518", Level => Error, State => Live,
          Source => False, Bytes => False,
-         Least => 0, Most => 0, Notes => 1,
+         Least => 0, Most => 0, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Invocation,
          Rule => +("D543: firmware or a placement that needs a profile, with"
                    & " no description reached and none in the library")),
@@ -1053,34 +1061,34 @@ package Landin.Diagnostics.Catalogue is
       Boot_Stage_Form =>
         (Code => "L0533", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 0, Most => 0, Notes => 1,
+         Least => 0, Most => 0, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("D587: link(boot_stage) on anything but a naked routine"
                    & " with no other link attribute")),
       Boot_Stage_Outside =>
         (Code => "L0534", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 0, Most => 0, Notes => 1,
+         Least => 0, Most => 0, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("D587: a boot stage outside the device description the"
                    & " program selects")),
       Boot_Stage_Unwanted =>
         (Code => "L0535", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 0, Most => 0, Notes => 1,
+         Least => 0, Most => 0, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("D587: a boot stage in a description whose boot kind"
                    & " takes none")),
       Boot_Stage_Repeated =>
         (Code => "L0536", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 0, Most => 0, Notes => 1,
+         Least => 0, Most => 0, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +"D587: a second boot stage in one description"),
       Boot_Stage_Missing =>
         (Code => "L0537", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 0, Most => 0, Notes => 1,
+         Least => 0, Most => 0, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("D587: a description whose boot kind begins with a"
                    & " second stage, holding none")),
@@ -1089,49 +1097,49 @@ package Landin.Diagnostics.Catalogue is
       Float_Unit_Unsupported =>
         (Code => "L0545", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 0, Most => 0, Notes => 1,
+         Least => 0, Most => 0, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("D615: a float unit refine does not build, or one the"
                    & " description's core cannot have")),
       Float_Unit_Level =>
         (Code => "L0546", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 0, Most => 0, Notes => 1,
+         Least => 0, Most => 0, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("D615: a description with a float unit, built at a"
                    & " level whose architecture lacks it")),
       Reset_Stage_Return =>
         (Code => "L0560", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 0, Most => 0, Notes => 1,
+         Least => 0, Most => 0, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("D653: a vector-table description's stage that does"
                    & " not name compiler-owned reset")),
       Reset_Stage_Stack =>
         (Code => "L0561", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 0, Most => 0, Notes => 1,
+         Least => 0, Most => 0, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("D653: a vector-table description's stage that uses the"
                    & " stack")),
       Boot_Kind_Family =>
         (Code => "L0576", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 0, Most => 0, Notes => 1,
+         Least => 0, Most => 0, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("D681: a boot image kind another family's boot ROM"
                    & " reads")),
       RAM_Code_Unplaceable =>
         (Code => "L0578", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 1, Most => 1, Notes => 1,
+         Least => 1, Most => 1, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("D688: a .ramtext routine in a profile whose data region"
                    & " code does not run in")),
       ESP_Image_Facts =>
         (Code => "L0575", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 0, Most => 0, Notes => 1,
+         Least => 0, Most => 0, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("D683: an esp-app-image description without"
                    & " compiler.esp_image, or compiler.esp_image without an"
@@ -1140,10 +1148,19 @@ package Landin.Diagnostics.Catalogue is
       Unused_Pure_Local =>
         (Code => "L0349", Level => Warning, State => Live,
          Source => True, Bytes => True,
-         Least => 0, Most => 0, Notes => 1,
+         Least => 0, Most => 0, Notes => 1, Route => False,
          Fixes => May_Fix, Shown_By => Negative_Fixture,
          Rule => +("D251: an unused local with an effect-free literal"
                    & " initializer")),
+      --  The literal is the one place: the conversion around it is what
+      --  the message names, and the note gives both routes.
+      Literal_Rounded_Away =>
+        (Code => "L0350", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 0, Most => 0, Notes => 1, Route => False,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("D760: an untyped float literal converted to an integer"
+                   & " that its f32 rounding changes")),
       --  The backend's reports need not have a source. A missing entry uses an
       --  entry-module anchor when available, but permits a point in an empty
       --  file or a source-free fallback. L0500 is the one diagnostic here a
@@ -1152,21 +1169,21 @@ package Landin.Diagnostics.Catalogue is
       No_Toolchain =>
         (Code => "L0500", Level => Error, State => Live,
          Source => False, Bytes => False,
-         Least => 0, Most => 0, Notes => 1,
+         Least => 0, Most => 0, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Invocation,
          Rule => +("[1550]: the requested output cannot be made with the"
                    & " target, settings or available toolchain")),
       Toolchain_Failed =>
         (Code => "L0501", Level => Error, State => Live,
          Source => False, Bytes => False,
-         Least => 0, Most => 0, Notes => 0,
+         Least => 0, Most => 0, Notes => 0, Route => False,
          Fixes => No_Fix, Shown_By => Invocation,
          Rule => +("[1550]: assembler or linker refusal, or executable"
                    & " output lifecycle failure")),
       Entry_Point_Missing =>
         (Code => "L0502", Level => Error, State => Live,
          Source => False, Bytes => False,
-         Least => 0, Most => 0, Notes => 0,
+         Least => 0, Most => 0, Notes => 0, Route => False,
          Fixes => No_Fix, Shown_By => Invocation,
          Rule => +("[1970] [1990]: a missing or invalid hosted main or"
                    & " explicitly selected firmware entry")),
@@ -1175,41 +1192,41 @@ package Landin.Diagnostics.Catalogue is
       Argument_Not_In_A_Register =>
         (Code => "L0503", Level => Error, State => Retired,
          Source => False, Bytes => False,
-         Least => 0, Most => 0, Notes => 0,
+         Least => 0, Most => 0, Notes => 0, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +"retired: the register-only internal calling limit"),
       Frame_Not_Addressable =>
         (Code => "L0504", Level => Error, State => Live,
          Source => False, Bytes => False,
-         Least => 0, Most => 0, Notes => 0,
+         Least => 0, Most => 0, Notes => 0, Route => False,
          Fixes => No_Fix, Shown_By => Invocation,
          Rule => +("a verified frame outside x86-64's signed displacement"
                    & " encoding")),
       Image_Budget_Exceeded =>
         (Code => "L0505", Level => Error, State => Live,
          Source => False, Bytes => False,
-         Least => 0, Most => 0, Notes => 0,
+         Least => 0, Most => 0, Notes => 0, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("D537: static images exceed the image budget of the"
                    & " target or the firmware profile")),
       Panic_Contract_Invalid =>
         (Code => "L0506", Level => Error, State => Live,
          Source => False, Bytes => False,
-         Least => 0, Most => 0, Notes => 0,
+         Least => 0, Most => 0, Notes => 0, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("[1670]: invalid panic handler or unrepresentable site"
                    & " space")),
       Firmware_Frame_Exceeds_Stack =>
         (Code => "L0507", Level => Error, State => Live,
          Source => False, Bytes => False,
-         Least => 0, Most => 0, Notes => 0,
+         Least => 0, Most => 0, Notes => 0, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("[1990]: one Cortex-M0 firmware frame exceeds the"
                    & " selected stack reservation")),
       Handler_Exceeds_Stack_Margin =>
         (Code => "L0508", Level => Error, State => Live,
          Source => False, Bytes => False,
-         Least => 0, Most => 0, Notes => 0,
+         Least => 0, Most => 0, Notes => 0, Route => False,
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("[1670]: a selected panic handler in a program that"
                    & " prepares a stack exceeds or cannot be measured"
@@ -1220,7 +1237,7 @@ package Landin.Diagnostics.Catalogue is
       Library_Not_Found =>
         (Code => "L0509", Level => Error, State => Live,
          Source => True, Bytes => True,
-         Least => 0, Most => 0, Notes => 1,
+         Least => 0, Most => 0, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Invocation,
          Rule => +("[1590]/D525: a failed link's library that no named"
                    & " directory and none of the C driver's own holds")),
@@ -1228,7 +1245,7 @@ package Landin.Diagnostics.Catalogue is
       Linker_Script_Contract =>
         (Code => "L0519", Level => Error, State => Live,
          Source => False, Bytes => False,
-         Least => 0, Most => 0, Notes => 1,
+         Least => 0, Most => 0, Notes => 1, Route => False,
          Fixes => No_Fix, Shown_By => Invocation,
          Rule => +("D546: a linked firmware image that breaks a clause of"
                    & " the linker script contract")),
@@ -1238,7 +1255,7 @@ package Landin.Diagnostics.Catalogue is
       Boot_Stage_Object =>
         (Code => "L0538", Level => Error, State => Live,
          Source => False, Bytes => False,
-         Least => 0, Most => 0, Notes => 0,
+         Least => 0, Most => 0, Notes => 0, Route => False,
          Fixes => No_Fix, Shown_By => Invocation,
          Rule => +("D588: an assembled boot stage that outgrows its slot or"
                    & " that a relocation reaches")),
@@ -1247,7 +1264,7 @@ package Landin.Diagnostics.Catalogue is
       Image_Block_Object =>
         (Code => "L0555", Level => Error, State => Live,
          Source => False, Bytes => False,
-         Least => 0, Most => 0, Notes => 0,
+         Least => 0, Most => 0, Notes => 0, Route => False,
          Fixes => No_Fix, Shown_By => Invocation,
          Rule => +("D638: an assembled image block that is not the IMAGE_DEF"
                    & " block its boot kind gives, or that a relocation"
@@ -1258,7 +1275,7 @@ package Landin.Diagnostics.Catalogue is
       ESP_Image_Object =>
         (Code => "L0577", Level => Error, State => Live,
          Source => False, Bytes => False,
-         Least => 0, Most => 0, Notes => 0,
+         Least => 0, Most => 0, Notes => 0, Route => False,
          Fixes => No_Fix, Shown_By => Invocation,
          Rule => +("D685: a linked image no ESP application image can hold,"
                    & " or one whose written bytes do not read back")),
@@ -1270,47 +1287,47 @@ package Landin.Diagnostics.Catalogue is
       Svd_Malformed =>
         (Code => "L0525", Level => Error, State => Live,
          Source => True, Bytes => False,
-         Least => 0, Most => 0, Notes => 0,
+         Least => 0, Most => 0, Notes => 0, Route => False,
          Fixes => No_Fix, Shown_By => Invocation,
          Rule => +("D555: an SVD that is not XML in the subset refine svd"
                    & " reads")),
       Svd_Policy_Invalid =>
         (Code => "L0526", Level => Error, State => Live,
          Source => True, Bytes => False,
-         Least => 0, Most => 0, Notes => 0,
+         Least => 0, Most => 0, Notes => 0, Route => False,
          Fixes => No_Fix, Shown_By => Invocation,
          Rule => +"D556: a selection policy refine svd cannot read"),
       Svd_Input_Mismatch =>
         (Code => "L0527", Level => Error, State => Live,
          Source => True, Bytes => False,
-         Least => 0, Most => 0, Notes => 0,
+         Least => 0, Most => 0, Notes => 0, Route => False,
          Fixes => No_Fix, Shown_By => Invocation,
          Rule => +("D556: an SVD that is not the one its policy was reviewed"
                    & " against")),
       Svd_Form_Unsupported =>
         (Code => "L0528", Level => Error, State => Live,
          Source => True, Bytes => False,
-         Least => 0, Most => 0, Notes => 0,
+         Least => 0, Most => 0, Notes => 0, Route => False,
          Fixes => No_Fix, Shown_By => Invocation,
          Rule => +("D557: an SVD form refine svd does not read, for a"
                    & " selected register")),
       Svd_Device_Inconsistent =>
         (Code => "L0529", Level => Error, State => Live,
          Source => True, Bytes => False,
-         Least => 0, Most => 0, Notes => 0,
+         Least => 0, Most => 0, Notes => 0, Route => False,
          Fixes => No_Fix, Shown_By => Invocation,
          Rule => +("D557: a selected register the SVD describes in a way"
                    & " that cannot be generated as it says")),
       Svd_Not_Found =>
         (Code => "L0530", Level => Error, State => Live,
          Source => True, Bytes => False,
-         Least => 0, Most => 0, Notes => 0,
+         Least => 0, Most => 0, Notes => 0, Route => False,
          Fixes => No_Fix, Shown_By => Invocation,
          Rule => +"D556: a policy that selects what its SVD does not have"),
       Svd_Output_Refused =>
         (Code => "L0531", Level => Error, State => Live,
          Source => False, Bytes => False,
-         Least => 0, Most => 0, Notes => 0,
+         Least => 0, Most => 0, Notes => 0, Route => False,
          Fixes => No_Fix, Shown_By => Invocation,
          Rule => +"D558: outputs refine svd will not replace")];
 
@@ -1347,6 +1364,14 @@ package Landin.Diagnostics.Catalogue is
 
    function Required_Notes (Of_Code : Code_Name) return Natural
      is (Table (Of_Code).Notes);
+
+   --  Whether an occurrence carrying Count notes carries what its row
+   --  promises: the required notes, and the route where one is admitted.
+   function Admits_Notes (Of_Code : Code_Name; Count : Natural)
+     return Boolean
+     is (Count = Table (Of_Code).Notes
+         or else (Table (Of_Code).Route
+                  and then Count = Table (Of_Code).Notes + 1));
 
    function Warning_Enabled_By_Default (Of_Code : Code_Name) return Boolean
      is (Table (Of_Code).Level = Warning);

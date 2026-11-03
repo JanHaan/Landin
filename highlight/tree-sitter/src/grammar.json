@@ -2351,8 +2351,22 @@
           "type": "FIELD",
           "name": "name",
           "content": {
-            "type": "SYMBOL",
-            "name": "identifier_list"
+            "type": "CHOICE",
+            "members": [
+              {
+                "type": "SYMBOL",
+                "name": "identifier_list"
+              },
+              {
+                "type": "ALIAS",
+                "content": {
+                  "type": "SYMBOL",
+                  "name": "_at_field_names"
+                },
+                "named": true,
+                "value": "identifier_list"
+              }
+            ]
           }
         },
         {
@@ -2408,6 +2422,36 @@
               "type": "BLANK"
             }
           ]
+        }
+      ]
+    },
+    "_at_field_names": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "ALIAS",
+          "content": {
+            "type": "STRING",
+            "value": "at"
+          },
+          "named": true,
+          "value": "identifier"
+        },
+        {
+          "type": "REPEAT",
+          "content": {
+            "type": "SEQ",
+            "members": [
+              {
+                "type": "STRING",
+                "value": ","
+              },
+              {
+                "type": "SYMBOL",
+                "name": "identifier"
+              }
+            ]
+          }
         }
       ]
     },
@@ -7586,6 +7630,9 @@
     [
       "identifier_list",
       "variant_part"
+    ],
+    [
+      "field"
     ],
     [
       "link_symbol",

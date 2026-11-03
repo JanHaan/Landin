@@ -534,7 +534,14 @@ package body Landin.Diagnostics.Citations.Texts is
                & " the pointer out of a distinct type ([0650]), but it nev"
                & "er turns an integer into a pointer. `ptr(address)` does "
                & "that, taking its pointer type from the declaration ([046"
-               & "0]).",
+               & "0])."
+               & LF
+               & "- A float literal with nothing to say its type is an `f3"
+               & "2`, and a conversion does not say it. `u64(1.0e18)` woul"
+               & "d truncate the `f32` nearest 10^18, which is 999,999,984"
+               & ",306,749,440, so it is refused; write `u64(f64(1.0e18))`"
+               & " for the number written. `i64(45.7)` gives 45 at either "
+               & "width and is converted as it stands.",
             when 320 =>
                "`<<` and `>>` shift. Bits shifted out are gone and zeros"
                & " come in, and a signed `>>` keeps the sign. There is one"
@@ -11494,7 +11501,9 @@ package body Landin.Diagnostics.Citations.Texts is
                & " float width. An untyped float operand first takes [0210"
                & "]'s default f32 type, so the source is rounded to f32 be"
                & "fore conversion; there is still no implicit conversion b"
-               & "etween numeric classes."
+               & "etween numeric classes. D760 subsequently refuses an unt"
+               & "yped literal operand whose f32 rounding changes the inte"
+               & "ger the conversion gives."
                & LF
                & LF
                & "The finite source is truncated toward zero, then that ma"
@@ -11518,6 +11527,22 @@ package body Landin.Diagnostics.Citations.Texts is
                & "ection; D172 subsequently admits bool as an integer sour"
                & "ce and D173 admits integer as a bool source; D174 subseq"
                & "uently admits float as a bool source.",
+            when 760 =>
+               "Chosen: an integer conversion whose operand is an untype"
+               & "d float literal, negated any number of times, converts i"
+               & "t as an f32 still, and is refused, L0350, when the liter"
+               & "al's f64 value would convert to a different integer, or "
+               & "one of the two converts and the other does not. The repo"
+               & "rt names both outcomes, and its note names `f64(...)` ar"
+               & "ound the literal for the written value and `f32(...)` fo"
+               & "r the rounded one; either is typed, and a typed operand "
+               & "keeps its width and is never compared. A literal whose r"
+               & "ounding leaves the integer alone, `i64(45.7)` or `u8(-0."
+               & "75)`, converts as before, and an operand that is an expr"
+               & "ession of literals rather than a literal is not compared"
+               & ". The comparison is the checker's exact decimal evaluati"
+               & "on at each width and D171's truncation, so it does not d"
+               & "epend on the host.",
             when 172 =>
                "Chosen: the kernel enables any enabled integer type appl"
                & "ied to a bool value. False converts to zero and true con"
@@ -23608,6 +23633,16 @@ package body Landin.Diagnostics.Citations.Texts is
                & " of the source, as `for item in source do`. `check.py` r"
                & "eads every note literal out of the compiler and refuses "
                & "one that is a bare label or quotes a production.",
+            when 761 =>
+               "Chosen: a catalogue row says, beside its count of notes,"
+               & " whether an occurrence may carry one more: the route, th"
+               & "e form to write instead, after the fixed notes. L0304 is"
+               & " the one row that admits it, and every reporting package"
+               & " holds a diagnostic to the count or the count and the ro"
+               & "ute. The message says what was refused and the route not"
+               & "e what to write, beginning `instead,`. Every other code "
+               & "has a note of its own to say its route in, and the catal"
+               & "ogue suite refuses a route on any row but L0304's.",
             when 383 =>
                "Chosen: `check` takes every option that says which progr"
                & "am is compiled and how: `--target`, `--level`, `--root`,"

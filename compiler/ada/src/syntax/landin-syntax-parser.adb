@@ -6546,8 +6546,17 @@ package body Landin.Syntax.Parser is
                            Parts : Slot_Vectors.Vector;
                         begin
                            Parts.Append (Of_Type);
+                           --  `at` is a name everywhere else, so a field
+                           --  may be called `at`.  An expression never
+                           --  begins with `:` or `,`, so an `at` followed
+                           --  by one is the next field's name, and only an
+                           --  inline body, whose next field follows a
+                           --  comma, keeps reading `at ,` as a clause
+                           --  missing its offset.
                            if Peek = Tok.Identifier
                              and then Named_Here = At_Id
+                             and then Ahead (1) /= Tok.Colon
+                             and then (Compact or else Ahead (1) /= Tok.Comma)
                            then
                               Advance;
                               Parts.Append (Parse_Expression);
