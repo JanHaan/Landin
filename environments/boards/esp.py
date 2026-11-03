@@ -102,13 +102,23 @@ class Chip:
 
 def build(run, args, chip):
     """refine's ELF and OUT.bin for the chip's board port, and its report."""
-    elf = run.out / 'board.elf'
+    if getattr(args, 'bundle', None):
+        import bundle
+        prepared = bundle.consume(run, args, chip.name)
+        elf = bundle.artifact(prepared, 'elf')
+        args.prepared_bundle = prepared
+        image = bundle.artifact(prepared, 'image') if 'image' in prepared['files'] else None
+        return elf, image, json.loads(bundle.artifact(prepared, 'report').read_text())
+    elf = run.out / getattr(args, 'image_name', 'board.elf')
     source = ROOT / 'compiler/tests/board' / chip.name
     run.command('compile', [args.refine, '--root=' + str(ROOT / 'devices'),
         '--root=' + str(ROOT / 'devices/generated'), '--root=' + str(ROOT / 'compiler/tests/driver'),
         '--root=' + str(source), '--target=rv32', '--level=' + chip.level,
-        '--firmware-entry=start', '--emit=exe',
+        '--firmware-entry=start', '--emit=exe', *common.firmware_layout(args),
         '--build-report=' + str(run.out / 'build.json'), str(source / 'app'), '-o', str(elf)])
+    if getattr(args, 'mode', 'boot') == 'ram':
+        common.validate_ram_image(elf, chip.name)
+        return elf, None, json.loads((run.out / 'build.json').read_text())
     image = elf.with_name(elf.name + '.bin')
     require(image.is_file(), 'refine wrote no %s' % image.name)
     return elf, image, json.loads((run.out / 'build.json').read_text())
@@ -219,7 +229,7 @@ def operands(rng):
     return rng.choice(choices), rng.choice(choices)
 
 
-def scenario(console, chip, seed):
+def scenario(console, chip, seed, mode='boot'):
     """The board-port scenario and its oracle; returns the verdicts, the
     last telemetry frame and the atomics frame."""
     verdicts, seen = {}, 0
@@ -231,8 +241,9 @@ def scenario(console, chip, seed):
 
     def echoed(s):
         return echo_of(s[begin:])
-    require(boot['r'] == POWER_ON, 'the reset cause reads %#x, not the chip reset of a power-on'
-            % boot['r'])
+    if mode == 'boot':
+        require(boot['r'] == POWER_ON, 'the reset cause reads %#x, not the chip reset of a power-on'
+                % boot['r'])
     require(boot['v'] == chip.expected_mtvec, 'mtvec reads %#x, not %#x'
             % (boot['v'], chip.expected_mtvec))
     verdicts['boot'] = dict(reset_cause=boot['r'], mtvec='%#x' % boot['v'])
@@ -454,84 +465,97 @@ def run_board(chip, args, console_for, cycle, settle):
     args.output = args.output.resolve()
     args.output.mkdir(parents=True)
     run = common.Run(args.output)
+    run.pace = args.pace
     result = dict(status='failed')
+    began = time.monotonic()
     console = None
     probe = common.Probe(run, args.probe_rs, chip.probe_chip, args.probe)
     lock = common.rig_lock('%s board.py' % chip.name)
     names = None
     try:
         elf, path, made = build(run, args, chip)
-        data = path.read_bytes()
-        image = check_image(chip, data, elf, made)
-        names = common.symbols(run, args.nm, elf)
+        ram = args.mode == 'ram'
+        prepared = getattr(args, 'prepared_bundle', None)
+        if ram:
+            common.validate_ram_image(elf, chip.name)
+            image = dict(segments=[(a, body) for a, body, _ in common.elf_segments(elf)],
+                         entry=struct.unpack_from('<I', elf.read_bytes(), 0x18)[0])
+        else:
+            data = path.read_bytes()
+            image = check_image(chip, data, elf, made)
+        names = prepared['symbols'] if prepared else common.symbols(run, args.nm, elf)
         _, sections = common.elf_sections(elf)
         chip.expected_mtvec = chip.mtvec(sections, names)
         chip.expected_mtvt = chip.mtvt(elf, names)
-        commit = subprocess.run(['git', '-C', str(ROOT), 'rev-parse', 'HEAD'],
-                                capture_output=True, text=True).stdout.strip()
-        dirty = subprocess.run(['git', '-C', str(ROOT), 'status', '--porcelain', '--untracked-files=no'],
-                               capture_output=True, text=True).stdout.strip()
-        result.update(source_commit=commit + ('+modified' if dirty else ''))
-        result.update(image_sha256=common.sha(path), image_name=path.name,
-                      elf_sha256=common.sha(elf),
-                      image=dict(chip=image['chip'], revisions=[image['min_revision'],
-                                 image['max_revision']], entry='%#x' % image['entry'],
-                                 segments=['%#x+%#x' % (a, len(b)) for a, b in image['segments']],
-                                 checksum='%#04x' % image['checksum'], sha256=image['sha256']),
-                      instructions=instructions(chip, objdump(run, args, elf)))
+        result.update(mode=args.mode, image_sha256=common.sha(elf if ram else path),
+                      image_name=(elf if ram else path).name, elf_sha256=common.sha(elf))
+        if prepared:
+            result['instructions'] = prepared['metadata']['instructions']
+        else:
+            result['instructions'] = instructions(chip, objdump(run, args, elf))
+        if not ram:
+            result['image'] = dict(chip=image['chip'], revisions=[image['min_revision'],
+                image['max_revision']], entry='%#x' % image['entry'],
+                segments=['%#x+%#x' % (a, len(body)) for a, body in image['segments']],
+                checksum='%#04x' % image['checksum'], sha256=image['sha256'])
         # The hardware phase, from the first flash to the last JTAG read,
         # holds the rig's lock.
         lock.acquire()
-        if args.recover:
-            paced(args, 'download mode', lambda: download_mode(args.serial))
-            settle(run)
-        if args.image_control:
-            controls = {}
-            # The SHA-256 control first: its image boots.  Then the checksum
-            # control, whose refused image leaves the ROM resetting the chip
-            # over and over, each reset dropping its USB-Serial-JTAG from the
-            # hub cascade: the good image is written back the moment the
-            # refusal is read, without waiting for a quiet the loop never
-            # gives (D722, D725).
-            for where, judge in (('sha256', warned_sha), ('checksum', refused_checksum)):
-                bad = run.out / ('%s-flipped.bin' % where)
-                bad.write_bytes(corrupted(data, where))
-                paced(args, 'download', lambda: probe.download_bin(bad, chip.offset))
-                settle(run)
-                try:
-                    console, _ = cycle(run, console_for, probe, None)
-                    time.sleep(args.control_seconds)
-                    console.close()
-                finally:
-                    if where == 'checksum':
-                        restore(probe, path, chip.offset)
-                        args.pace.after('restore')
-                text = bytes(console.received).decode('latin-1')
-                (run.out / ('rom-%s.log' % where)).write_text(text)
-                console = None
-                settle(run)
-                controls[where] = judge(text, image)
-            result['image_control'] = controls
+        if ram:
+            console = console_for(run)
+            result['warm_load'] = common.ram_load(run, args, chip.name, elf)
         else:
-            paced(args, 'download', lambda: probe.download_bin(path, chip.offset))
-            settle(run)
-        result['flash'] = dict(offset='%#x' % chip.offset, verified=True)
-        console, power_on = cycle(run, console_for, probe, names)
-        if power_on:
-            result['power_on'] = power_on
-        stream = console.wait(lambda s: tagged(s, 'b'), 10, 'the ROM log and the boot frame')
-        text = stream[:stream.index(b'\x02')].decode('latin-1')
-        (run.out / 'rom.log').write_text(text)
-        result['rom'] = boot_log(text, image)
-        verdicts, final, atomics = scenario(console, chip, args.seed)
+            if args.recover:
+                paced(args, 'download mode', lambda: download_mode(args.serial))
+                settle(run)
+            if args.image_control:
+                controls = {}
+                # The SHA-256 control first: its image boots.  Then the checksum
+                # control, whose refused image leaves the ROM resetting the chip
+                # over and over, each reset dropping its USB-Serial-JTAG from the
+                # hub cascade: the good image is written back the moment the
+                # refusal is read, without waiting for a quiet the loop never
+                # gives (D722, D725).
+                for where, judge in (('sha256', warned_sha), ('checksum', refused_checksum)):
+                    bad = run.out / ('%s-flipped.bin' % where)
+                    bad.write_bytes(corrupted(data, where))
+                    paced(args, 'download', lambda: probe.download_bin(bad, chip.offset))
+                    settle(run)
+                    try:
+                        console, _ = cycle(run, console_for, probe, None)
+                        time.sleep(args.control_seconds)
+                        console.close()
+                    finally:
+                        if where == 'checksum':
+                            restore(probe, path, chip.offset)
+                            args.pace.after('restore')
+                    text = bytes(console.received).decode('latin-1')
+                    (run.out / ('rom-%s.log' % where)).write_text(text)
+                    console = None
+                    settle(run)
+                    controls[where] = judge(text, image)
+                result['image_control'] = controls
+            else:
+                paced(args, 'download', lambda: probe.download_bin(path, chip.offset))
+                settle(run)
+            result['flash'] = dict(offset='%#x' % chip.offset, verified=True)
+            console, power_on = cycle(run, console_for, probe, names)
+            if power_on:
+                result['power_on'] = power_on
+            stream = console.wait(lambda s: tagged(s, 'b'), 10, 'the ROM log and the boot frame')
+            text = stream[:stream.index(b'\x02')].decode('latin-1')
+            (run.out / 'rom.log').write_text(text)
+            result['rom'] = boot_log(text, image)
+        verdicts, final, atomics = scenario(console, chip, args.seed, args.mode)
         result['verdicts'] = verdicts
         console.close()
         result['jtag'] = cross_check(probe, chip, names, final, atomics)
         result['readback'] = readback(probe, image, elf)
+        args.pace.before('board scenario completion')
         result['status'] = 'passed'
     except (Failed, subprocess.TimeoutExpired, OSError) as error:
         result['failure'] = str(error)
-        if lock.file and names:
+        if lock.file and names and not any(USB in str(error) for USB in ('USB trouble', 'HC died')):
             # A failed run keeps what the unhandled entry recorded, if the
             # probe still reaches the chip.
             try:
@@ -539,6 +563,21 @@ def run_board(chip, args, console_for, cycle, settle):
             except (Failed, subprocess.TimeoutExpired, OSError) as reading:
                 result['trap'] = 'unread: %s' % reading
     finally:
+        if console:
+            console.close()
+        if lock.file:
+            def restore_fixed():
+                paced(args, 'restore resident image', lambda: probe.download_bin(args.fixed_image, chip.offset))
+                settle(run)
+                restored, _ = cycle(run, console_for, probe, None)
+                try:
+                    fixed = common.esp_image(args.fixed_image.read_bytes())
+                    stream = restored.wait(lambda body: common.rom_log(body.decode('latin-1'))['entry']
+                        == fixed['entry'], 10, 'the resident image ROM entry')
+                    boot_log(stream.decode('latin-1'), fixed)
+                finally:
+                    restored.close()
+            common.finish_boot(args, result, restore_fixed)
         lock.release()
         if console:
             console.close()
@@ -546,13 +585,14 @@ def run_board(chip, args, console_for, cycle, settle):
             (args.output / 'sent.bin').write_bytes(bytes(console.sent))
             result['uart_sha256'] = hashlib.sha256(bytes(console.received)).hexdigest()
             result['frames'] = common.frame_record(bytes(console.received))
+        result['seconds'] = round(time.monotonic() - began, 3)
         result['commands'] = run.commands
         common.write_json(args.output / 'result.json', result)
     if args.record and result['status'] == 'passed':
         kept = ('status', 'source_commit', 'image_sha256', 'image_name', 'elf_sha256', 'image', 'instructions',
                 'flash', 'power_on', 'rom', 'verdicts', 'jtag', 'readback', 'uart_sha256') + (
                     ('image_control',) if args.image_control else ())
-        kept = tuple(k for k in kept if k in result)
+        kept = tuple(k for k in (*kept, 'mode', 'warm_load', 'fixed_restore', 'seconds') if k in result)
         common.write_json(args.record, common.record(
             result, kept, (args.output / 'sent.bin').read_bytes(), run.commands, ('b', 'a')))
     print('board %s: %s%s' % (result['status'], args.output,
@@ -562,7 +602,8 @@ def run_board(chip, args, console_for, cycle, settle):
 
 def arguments(parser, chip):
     """The options both ESP tools take."""
-    parser.add_argument('--refine', type=Path, required=True)
+    parser.add_argument('--refine', type=Path)
+    common.board_arguments(parser)
     parser.add_argument('--probe-rs', type=Path, default=shutil.which('probe-rs'),
                         help='a probe-rs that reaches the board\'s USB-Serial-JTAG')
     parser.add_argument('--nm', default=shutil.which('riscv64-elf-nm')
@@ -599,5 +640,5 @@ def arguments(parser, chip):
 def required_tools(args):
     args.pace = common.Pace(args.spacing, args.quiet)
     require(args.probe_rs, 'no probe-rs: name one with --probe-rs')
-    require(args.nm, 'no riscv64-elf-nm or riscv64-unknown-elf-nm on PATH: name one with --nm')
-    require(args.objdump, 'no riscv64-elf-objdump on PATH: name one with --objdump')
+    require(args.bundle or args.nm, 'no riscv64-elf-nm or riscv64-unknown-elf-nm on PATH: name one with --nm')
+    require(args.bundle or args.objdump, 'no riscv64-elf-objdump on PATH: name one with --objdump')

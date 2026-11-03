@@ -112,16 +112,20 @@ def bootsel(run, args, name='hub-before-attach'):
 
 
 def refuse_bootsel(run, args, allowed=None):
-    """Refuse to go on while the Pico 2 enumerates as BOOTSEL, unless
-    ALLOWED, by default --bootsel-attach: a probe-rs attach there halts the
-    boot ROM, whose USB then stops answering (D712).  Returns what the port
-    shows when it is BOOTSEL, or None."""
+    """Never attach to BOOTSEL; install a valid fixed image by UF2 off
+    the cascade first. ALLOWED is retained for callers but cannot bypass
+    this guard."""
     device = bootsel(run, args)
-    allowed = args.bootsel_attach if allowed is None else allowed
-    require(allowed or not device,
+    require(not device,
             'the Pico 2 enumerates as BOOTSEL %s; no probe attaches to it there. Cycle port %d'
-            ' once and wait for it to stop enumerating' % (device, args.port))
+            ' only off the cascade after installing a fixed image by UF2' % (device, args.port))
     return device
+
+
+def boot_location(args):
+    require(args.mode != 'boot' or not (args.hub == args.cascade
+            or args.hub.startswith(args.cascade + '.')),
+            'Pico 2 boot checks must be off the cascade; install its fixed image by UF2 there first')
 
 
 def attached(run, args, name, bootsel_allowed=None):
@@ -129,10 +133,9 @@ def attached(run, args, name, bootsel_allowed=None):
     boot ROM runs on Arm in BOOTSEL and after probe-rs has flashed as
     RP235x, and there RP235x_riscv's debug module times out; a RISC-V image
     gates the Arm cores' access ports, and RP235x meets a FAULT (D712).
-    RP235x is tried first, since its refusal is the quick one.  Neither is
-    tried while the chip is in BOOTSEL, unless BOOTSEL_ALLOWED, by default
-    --bootsel-attach; the probe returned says in `from_bootsel` whether it
-    was."""
+    RP235x is tried first, since its refusal is the quick one. Neither is
+    tried while the chip is in BOOTSEL; BOOTSEL_ALLOWED cannot bypass this
+    guard. A valid fixed image must first be installed by UF2 off the cascade."""
     from_bootsel = refuse_bootsel(common.InGroup(run, args.hub_group), args, bootsel_allowed)
     for chip in ARM_CHIP, RISCV_CHIP:
         attempt = common.Probe(run, args.probe_rs, chip, args.probe)
@@ -271,8 +274,7 @@ def arguments(parser):
                         help='how long the boot ROM is given after a power cycle before the probe'
                              ' attaches')
     parser.add_argument('--bootsel-attach', action='store_true',
-                        help='let the probe attach to a Pico 2 in BOOTSEL, as --block-control needs;'
-                             ' only for a Pico 2 on a hub that does not carry the probe')
+                        help='obsolete compatibility flag; BOOTSEL attachment is always refused')
     parser.add_argument('--hub-group', default='dialout',
                         help="the group that may switch the hub's ports; uhubctl runs through"
                              " sg when the session is not in it")

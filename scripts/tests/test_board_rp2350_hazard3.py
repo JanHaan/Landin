@@ -222,26 +222,11 @@ class Attach(unittest.TestCase):
                                      'hub-before-attach', 'reattach-RP235x',
                                      'reattach-RP235x_riscv', 'flash-readback'])
 
-    def test_a_flash_from_bootsel_cycles_the_power_at_once(self):
-        # D712: the attach halted the boot ROM, so the cycle is not paced,
-        # only recorded, and the head is not read back while BOOTSEL shows.
-        head = struct.pack('<2I', 0x3900006f, 0)
-        run = Recorded(statuses={'reattach-RP235x': 1}, **cycling(**{
-            'hub-before-attach': [BOOTSEL, QUIET],
-            'flash-readback': '0x10000000: 3900006f 00000000'}))
-        args = paced_args(run, bootsel_attach=True)
-        with mock.patch.object(BOARD.time, 'sleep'):
-            self.assertEqual(BOARD.flash(run, args, 'board.elf', head), 'RP235x')
-        self.assertEqual(run.calls, ['hub-before-attach', 'attach-RP235x', 'before download',
-                                     'flash', 'after download', 'hub-status', 'power-cycle',
-                                     'after power cycle at once', 'hub-wait', 'probe-ping',
-                                     'hub-before-attach', 'reattach-RP235x',
-                                     'reattach-RP235x_riscv', 'flash-readback'])
+    def test_even_explicit_bootsel_attach_is_refused_before_any_probe_command(self):
         run = Recorded(**cycling(**{'hub-before-attach': BOOTSEL}))
-        with mock.patch.object(BOARD.time, 'sleep'), \
-                self.assertRaisesRegex(BOARD.Failed, 'enumerates as BOOTSEL'):
-            BOARD.flash(run, paced_args(run, bootsel_attach=True), 'board.elf', head)
-        self.assertNotIn('reattach-RP235x', run.calls)
+        with self.assertRaisesRegex(BOARD.Failed, 'enumerates as BOOTSEL'):
+            BOARD.flash(run, paced_args(run, bootsel_attach=True), 'board.elf', b'')
+        self.assertEqual(run.calls, ['hub-before-attach'])
 
     def test_a_flash_through_the_risc_v_side_reads_back_at_once(self):
         head = struct.pack('<2I', 0x3900006f, 0)
@@ -261,8 +246,8 @@ class Attach(unittest.TestCase):
             BOARD.attached(run, args, 'attach')
         self.assertEqual(run.calls, ['hub-before-attach'])
         args = SimpleNamespace(**dict(ARGS, bootsel_attach=True))
-        self.assertEqual(BOARD.attached(Recorded(**cycling(**{'hub-before-attach': BOOTSEL})),
-                                        args, 'attach').chip, 'RP235x')
+        with self.assertRaisesRegex(BOARD.Failed, 'enumerates as BOOTSEL'):
+            BOARD.attached(Recorded(**cycling(**{'hub-before-attach': BOOTSEL})), args, 'attach')
 
     def block_control(self, **statuses):
         head = struct.pack('<2I', 0x3900006f, 0)

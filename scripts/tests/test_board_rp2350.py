@@ -212,20 +212,11 @@ class Control(unittest.TestCase):
         with self.assertRaisesRegex(BOARD.Failed, '--bootsel-attach'):
             self.control([BOOTSEL], bootsel_attach=False)
 
-    def test_a_flash_from_bootsel_cycles_the_power_at_once(self):
-        # D712: the attach halted the boot ROM, so the cycle that boots the
-        # image is recorded but not paced, and the head is read back from
-        # the image, never from BOOTSEL.
-        head = self.head()
-        run = Recorded(**answers(**{'hub-before-attach': [BOOTSEL, QUIET],
-                                    'flash-readback': self.readback(head)}))
-        with mock.patch.object(BOARD.time, 'sleep'):
-            self.assertEqual(BOARD.flash(run, paced_args(run, bootsel_attach=True),
-                                         'board.elf', head), 'RP235x')
-        self.assertEqual(run.calls, ['hub-before-attach', 'attach-RP235x', 'before download',
-                                     'flash', 'after download', 'hub-status', 'power-cycle',
-                                     'after power cycle at once', 'hub-wait', 'probe-ping',
-                                     'hub-before-attach', 'reattach-RP235x', 'flash-readback'])
+    def test_even_explicit_bootsel_attach_is_refused_before_any_probe_command(self):
+        run = Recorded(**answers(**{'hub-before-attach': BOOTSEL}))
+        with self.assertRaisesRegex(BOARD.Failed, 'enumerates as BOOTSEL'):
+            BOARD.flash(run, paced_args(run, bootsel_attach=True), 'board.elf', b'')
+        self.assertEqual(run.calls, ['hub-before-attach'])
 
     def test_every_download_as_rp235x_is_cycled_at_once_before_the_head_is_read(self):
         # D832: the download's own reset left BOOTSEL's USB device halted on

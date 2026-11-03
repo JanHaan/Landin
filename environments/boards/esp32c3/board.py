@@ -90,6 +90,7 @@ def main():
     parser.add_argument('--uart-port', type=int, default=4461,
                         help="the bridge's slot 0 UART port; slot N's is this plus N")
     args = parser.parse_args()
+    common.board_preflight(args, 'esp32c3')
     # The console's tty, and the JTAG's that --recover opens, belong to
     # --hub-group (D836).
     common.rerun_in_group(args.hub_group)

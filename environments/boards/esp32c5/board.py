@@ -129,6 +129,7 @@ def main():
     parser.add_argument('--reset-seconds', type=float, default=0.1,
                         help='how long RTS holds EN low for the chip-enable reset')
     args = parser.parse_args()
+    common.board_preflight(args, 'esp32c5')
     # The console's tty, and the JTAG's that --recover opens, belong to
     # --hub-group (D836).
     common.rerun_in_group(args.hub_group)

@@ -4,6 +4,7 @@
 to fixed inputs on the standard library alone."""
 import argparse
 import importlib.util
+import json
 import os
 import select
 import socket
@@ -14,6 +15,7 @@ import threading
 import time
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -781,6 +783,84 @@ class Root(unittest.TestCase):
             text = path.read_text()
             self.assertNotRegex(text, r"default='[0-9]+-[0-9]", path)
             self.assertNotRegex(text, r"'--cascade', default", path)
+
+
+class RamRuns(unittest.TestCase):
+    def image(self, path, address=0x20000000, physical=None, extra=()):
+        sections = [('.isr_vector', address, struct.pack('<2I', 0x20041000, address + 9))]
+        sections += list(extra)
+        path.write_bytes(elf32(sections, [(address if physical is None else physical, '.isr_vector')]))
+        return path
+
+    def test_ram_layout_rejects_flash_lmas_boot_sections_and_oversized_bss(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'test.elf'
+            self.assertEqual(COMMON.validate_ram_image(self.image(path), 'rp2040'), 0x20000000)
+            for image in (
+                    lambda: self.image(path, physical=0x10000000),
+                    lambda: self.image(path, extra=[('.boot2', 0x20000100, bytes(256))])):
+                image()
+                with self.assertRaises(COMMON.Failed):
+                    COMMON.validate_ram_image(path, 'rp2040')
+            self.image(path)
+            body = bytearray(path.read_bytes())
+            struct.pack_into('<I', body, 52 + 20, 0x50000)
+            path.write_bytes(body)
+            with self.assertRaisesRegex(COMMON.Failed, 'memory exceeds SRAM'):
+                COMMON.validate_ram_image(path, 'rp2040')
+
+    def test_loader_matches_the_bundle_identity_and_checks_usb_after_the_call(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            elf = self.image(out / 'board.elf')
+            pace = mock.Mock()
+            args = SimpleNamespace(probe='0000:0002:10.42.0.50/0', ram_loader='loader', pace=pace)
+            report = dict(format_version=1, status='passed', mode='warm', flash_written=False,
+                          board='rp2040', elf_sha256=COMMON.sha(elf))
+            run = mock.Mock(out=out)
+            def command(name, argv, **kwargs):
+                self.assertEqual(name, 'ram-load')
+                self.assertEqual(argv[0], 'loader')
+                (out / 'ram-load.json').write_text(json.dumps(report))
+            run.command.side_effect = command
+            self.assertEqual(COMMON.ram_load(run, args, 'rp2040', elf), report)
+            self.assertEqual(pace.before.call_args_list,
+                             [mock.call('RAM load'), mock.call('RAM load completion')])
+            for field, value in (('flash_written', True), ('elf_sha256', 'stale'),
+                                 ('status', 'failed'), ('board', 'rp2350'), ('mode', 'boot')):
+                wrong = dict(report, **{field: value})
+                with mock.patch.object(json, 'loads', return_value=wrong), self.assertRaises(COMMON.Failed):
+                    COMMON.ram_load(run, args, 'rp2040', elf)
+
+    def test_ram_mode_refuses_boot_controls_and_boot_record_overwrite_before_hardware(self):
+        parser = argparse.ArgumentParser()
+        parser.add_argument('--refine', default='refine')
+        parser.add_argument('--record', type=Path)
+        parser.add_argument('--recover', action='store_true')
+        COMMON.board_arguments(parser)
+        for options in (['--recover'], ['--record=record.json']):
+            args = parser.parse_args(['--ram-loader=loader', *options])
+            with self.assertRaises(COMMON.Failed), mock.patch.object(COMMON, 'rig_lock') as lock:
+                COMMON.board_preflight(args, 'rp2040')
+            lock.assert_not_called()
+
+    def test_usb_trouble_prevents_fixed_image_restoration(self):
+        args = SimpleNamespace(mode='boot', pace=mock.Mock(), fixed_image=Path('fixed.elf'))
+        args.pace.before.side_effect = COMMON.Failed('USB trouble: HC died')
+        result = {'status': 'passed'}
+        restore = mock.Mock()
+        COMMON.finish_boot(args, result, restore)
+        restore.assert_not_called()
+        self.assertEqual(result['status'], 'failed')
+        self.assertEqual(result['fixed_restore']['status'], 'pending')
+
+    def test_controller_failures_are_usb_trouble_and_wifi_firmware_is_not(self):
+        for text in ('xhci_hcd: HC died', 'host controller timeout', 'controller timed out',
+                     'xHCI host controller not responding'):
+            self.assertRegex(text, COMMON.USB_TROUBLE)
+        journal = SimpleNamespace(stdout='1.0 brcmfmac: firmware error -2\n2.0 xhci_hcd: HC died\n')
+        with mock.patch.object(COMMON.subprocess, 'run', return_value=journal):
+            self.assertEqual(COMMON.kernel_usb_lines(3), [(2.0, 'xhci_hcd: HC died')])
 
 
 if __name__ == '__main__':

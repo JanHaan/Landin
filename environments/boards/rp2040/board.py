@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
-"""Flash the prototype-1 board port to a Raspberry Pi Pico, boot it from
-power-on and check its trace against the physical oracle.
+"""Run the board port from SRAM by default and check its physical oracle.
+
+RAM runs consume --bundle or build with --refine, then use --ram-loader
+without flash writes or resets. --mode=boot checks a flash/cold boot and
+restores --fixed-image; the numbered flash steps below describe that mode.
 
     python3 environments/boards/rp2040/board.py --refine REFINE \
-        --probehive DIR --probe-rs PROBE_RS --output NEW_DIRECTORY
+        --probehive DIR --probe-rs PROBE_RS --ram-loader LOADER --output NEW_DIRECTORY
 
 A developer tool, not a compiler dependency: refine builds the image, and
 this checks what the board does with it.  The board is reached through a
@@ -74,21 +77,30 @@ def crc32_mpeg2(data):
 
 
 def build(run, args):
-    elf = run.out / 'board.elf'
+    if getattr(args, 'bundle', None):
+        elf, meta, names = common.consume_board(run, args, 'rp2040')
+        return elf, bytes.fromhex(meta['stage']), meta['crc'], names
+    elf = run.out / getattr(args, 'image_name', 'board.elf')
     run.command('compile', [args.refine, '--root=' + str(ROOT / 'devices'),
         '--root=' + str(ROOT / 'devices/generated'), '--root=' + str(ROOT / 'compiler/tests/driver'),
-        '--root=' + str(SOURCE), '--target=cortex-m0', '--firmware-entry=start', '--emit=exe',
+        '--root=' + str(SOURCE), '--target=cortex-m0', '--firmware-entry=start', '--emit=exe', *common.firmware_layout(args),
         '--build-report=' + str(run.out / 'build.json'), str(SOURCE / 'app'), '-o', str(elf)])
     data, sections = elf_sections(elf)
-    address, offset, size = sections['.boot2']
-    require(address == 0x10000000 and size == 256, '.boot2 is not 256 bytes at 0x10000000')
-    stage = data[offset:offset + 256]
-    crc = crc32_mpeg2(stage[:252])
-    require(struct.unpack_from('<I', stage, 252)[0] == crc,
-            'the second stage does not carry its CRC-32 %08x' % crc)
-    require(any(stage[:252]), 'the second stage is empty')
+    ram = getattr(args, 'mode', 'boot') == 'ram'
+    stage, crc = b'', 0
+    if ram:
+        expected = common.validate_ram_image(elf, 'rp2040')
+    else:
+        address, offset, size = sections['.boot2']
+        require(address == 0x10000000 and size == 256, '.boot2 is not 256 bytes at 0x10000000')
+        stage = data[offset:offset + 256]
+        crc = crc32_mpeg2(stage[:252])
+        require(struct.unpack_from('<I', stage, 252)[0] == crc,
+                'the second stage does not carry its CRC-32 %08x' % crc)
+        require(any(stage[:252]), 'the second stage is empty')
+        expected = VECTORS
     address, offset, size = sections['.isr_vector']
-    require(address == VECTORS, 'the vector table is not at 0x10000100')
+    require(address == expected, 'the vector table is not at %#x' % expected)
     words = struct.unpack_from('<%dI' % (size // 4), data, offset)
     names = symbols(run, args.nm, elf)
     require(words[USBCTRL_SLOT] == names['usb_irq'] | 1, 'vector word 21 is not the USBCTRL_IRQ handler')
@@ -132,15 +144,16 @@ def report(console, count):
     return common.ask(console, REPORT, 't', count)
 
 
-def scenario(console, run, seed, pins=None):
+def scenario(console, run, seed, pins=None, mode='boot', vector=None):
     """The board-port scenario and its oracle.  Returns the verdicts and
     the last telemetry frame."""
     verdicts = {}
     stream = console.wait(lambda s: any(t == 'b' for t, _ in frames_safe(s)), 5, 'the boot frame')
     boot = [f for t, f in frames_safe(stream) if t == 'b'][0]
-    require(boot['r'] == CHIP_RESET_HAD_POR,
-            'CHIP_RESET is %08x, not a power-on reset alone' % boot['r'])
-    require(boot['v'] == VECTORS, 'VTOR is %08x: the second stage did not run' % boot['v'])
+    if mode == 'boot':
+        require(boot['r'] == CHIP_RESET_HAD_POR,
+                'CHIP_RESET is %08x, not a power-on reset alone' % boot['r'])
+    require(boot['v'] == (VECTORS if vector is None else vector), 'VTOR is %08x: not the loaded vector table' % boot['v'])
     require(boot['k'] == CLK_REF_XOSC, 'clk_ref is not on the crystal: %08x' % boot['k'])
     verdicts['boot'] = dict(chip_reset=boot['r'], vtor=boot['v'], clk_ref_selected=boot['k'])
     seen = 0
@@ -250,9 +263,21 @@ def cross_check(run, args, names, final):
     return dict(read, trans_count=count)
 
 
+def restore_fixed(run, args):
+    """Restore and cold-start the board's validated resident image."""
+    data, sections = common.elf_sections(args.fixed_image)
+    address, offset, size = sections['.boot2']
+    require(address == 0x10000000 and size == 256, 'fixed image has no valid RP2040 second stage')
+    flash(run, args, args.fixed_image, data[offset:offset + size])
+    power_cycle(common.InGroup(run, args.hub_group), args)
+    device = common.port_device(common.listing(common.InGroup(run, args.hub_group), args.hub, args.hub_seconds), args.port)
+    require(not device or not device.startswith('2e8a:0003'), 'fixed image fell back to RP2040 BOOTSEL')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('--refine', type=Path, required=True)
+    parser.add_argument('--refine', type=Path)
+    common.board_arguments(parser)
     parser.add_argument('--probehive', type=Path, required=True, help='a probehive checkout')
     parser.add_argument('--probe-rs', type=Path, default=shutil.which('probe-rs'),
                         help='a probe-rs that reaches the probe named by --probe')
@@ -292,9 +317,10 @@ def main():
     parser.add_argument('--record', type=Path,
                         help="also write a passed run's record here, as record.json is")
     args = parser.parse_args()
+    common.board_preflight(args, 'rp2040')
     common.place_hubs(parser, args, 'hub')
     require(args.probe_rs, 'no probe-rs: name one with --probe-rs')
-    require(args.nm, 'no arm-eabi-nm or arm-none-eabi-nm on PATH: name one with --nm')
+    require(args.bundle or args.nm, 'no arm-eabi-nm or arm-none-eabi-nm on PATH: name one with --nm')
     args.probe = args.probe or common.udp_slot(args.probe_host, args.slot)
     args.probehive = args.probehive.resolve()
     args.probehive_build = (args.probehive_build or args.probehive / 'build/slots_ci').resolve()
@@ -302,7 +328,9 @@ def main():
     args.output.mkdir(parents=True)
     args.pace = common.Pace(args.spacing, args.quiet)
     run = common.Run(args.output)
-    result = dict(status='failed')
+    run.pace = args.pace
+    result = dict(status='failed', mode=args.mode)
+    began = time.monotonic()
     bridge = console = lock = None
     try:
         # The indicator's environment is found before the rig is held: it
@@ -310,13 +338,14 @@ def main():
         # builds it first.
         pins = (common.ProbehivePins(run, args.probehive, args.probehive_build, args.indicator_pin)
                 if args.indicator_pin else None)
-        # The run holds the rig's lock from its build to its last read (D725).
-        lock = common.rig_lock('rp2040 board.py').acquire()
         elf, stage, crc, names = build(run, args)
-        result.update(image_sha256=sha(elf), image_name=elf.name, second_stage_crc32='%08x' % crc,
-                      second_stage_sha256=hashlib.sha256(stage).hexdigest())
-        flash(run, args, elf, stage)
-        result['flash_readback'] = 'matches'
+        lock = common.rig_lock('rp2040 board.py').acquire()
+        result.update(image_sha256=sha(elf), image_name=elf.name)
+        if args.mode == 'boot':
+            result.update(second_stage_crc32='%08x' % crc,
+                          second_stage_sha256=hashlib.sha256(stage).hexdigest())
+            flash(run, args, elf, stage)
+            result['flash_readback'] = 'matches'
         if pins:
             pins.release()
         # One bridge serves every slot of the probe and is left running for
@@ -326,11 +355,16 @@ def main():
             run, args.probehive, args.probe_host, args.slot, args.bridge_slots, args.debug_port,
             args.uart_port)
         console = common.TcpConsole(args.uart_port + args.slot)
-        power_cycle(common.InGroup(run, args.hub_group), args)
-        verdicts, final = scenario(console, run, args.seed, pins)
+        if args.mode == 'ram':
+            result['warm_load'] = common.ram_load(run, args, 'rp2040', elf)
+        else:
+            power_cycle(common.InGroup(run, args.hub_group), args)
+        verdicts, final = scenario(console, run, args.seed, pins, args.mode,
+            common.elf_sections(elf)[1]['.isr_vector'][0])
         result['verdicts'] = verdicts
         console.close()
         result['swd'] = cross_check(run, args, names, final)
+        args.pace.before('board scenario completion')
         result['status'] = 'passed'
     except (Failed, subprocess.TimeoutExpired, OSError) as error:
         result['failure'] = str(error)
@@ -341,17 +375,20 @@ def main():
             (args.output / 'sent.bin').write_bytes(bytes(console.sent))
             result['uart_sha256'] = hashlib.sha256(bytes(console.received)).hexdigest()
             result['frames'] = common.frame_record(bytes(console.received))
+        if lock and lock.file:
+            common.finish_boot(args, result, lambda: restore_fixed(run, args))
         if bridge:
             bridge.close()
         if lock:
             lock.release()
+        result['seconds'] = round(time.monotonic() - began, 3)
         result['commands'] = run.commands
         common.write_json(args.output / 'result.json', result)
     if args.record and result['status'] == 'passed':
         kept = ('status', 'image_sha256', 'image_name', 'second_stage_crc32', 'second_stage_sha256',
                 'flash_readback', 'verdicts', 'swd', 'uart_sha256')
         common.write_json(args.record, common.record(
-            result, kept, (args.output / 'sent.bin').read_bytes(), run.commands, ('b',)))
+            result, tuple(k for k in (*kept, 'mode', 'warm_load', 'fixed_restore', 'seconds') if k in result), (args.output / 'sent.bin').read_bytes(), run.commands, ('b',)))
     print('board %s: %s%s' % (result['status'], args.output,
                               '' if result['status'] == 'passed' else ': ' + result['failure']))
     return 0 if result['status'] == 'passed' else 1
