@@ -51,6 +51,27 @@ package Landin.Targets.Firmware is
          & Spelling (Core));
    --  Every core's spelling, quoted, as a note lists them.
    function Core_Names return String;
+   --  D542: the `cpu/name` an SVD gives CORE, from which `refine svd`
+   --  writes `compiler.core`: an Arm core's CMSIS name, and "" for a
+   --  RISC-V core, which no SVD the importer reads names, so its policy
+   --  names it instead.  The importer reads this table and keeps none of
+   --  its own.
+   function Svd_Name (Core : Core_Kind) return String
+     is (case Core is
+           when Cortex_M0 => "CM0",
+           when Cortex_M0plus => "CM0PLUS",
+           when Cortex_M3 => "CM3",
+           when Cortex_M4 => "CM4",
+           when Cortex_M7 => "CM7",
+           when Cortex_M33 => "CM33",
+           when RISC_V_Core => "");
+   function Is_Svd_Name (Text : String) return Boolean
+     is (Text /= "" and then (for some Core in Core_Kind =>
+                                Svd_Name (Core) = Text));
+   function Core_Of_Svd (Text : String) return Core_Kind
+     with Pre => Is_Svd_Name (Text);
+   --  Every SVD name, as a refusal lists them: "CM0, ... and CM33".
+   function Svd_Names return String;
    --  The target architecture whose builds run on CORE.
    function Family (Core : Core_Kind) return Architecture
      is (if Core in RISC_V_Core then RV32 else Cortex_M0);

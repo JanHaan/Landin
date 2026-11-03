@@ -56,6 +56,38 @@ package body Landin.Targets.Firmware is
       return Ada.Strings.Unbounded.To_String (Result);
    end Core_Names;
 
+   function Core_Of_Svd (Text : String) return Core_Kind is
+   begin
+      for Core in Core_Kind loop
+         if Svd_Name (Core) /= "" and then Svd_Name (Core) = Text then
+            return Core;
+         end if;
+      end loop;
+      raise Compiler_Defect with "no core's SVD name is " & Text;
+   end Core_Of_Svd;
+
+   function Svd_Names return String is
+      Result : Ada.Strings.Unbounded.Unbounded_String;
+      Last : Core_Kind := Core_Kind'First;
+   begin
+      for Core in Core_Kind loop
+         if Svd_Name (Core) /= "" then
+            Last := Core;
+         end if;
+      end loop;
+      for Core in Core_Kind loop
+         if Svd_Name (Core) /= "" then
+            Ada.Strings.Unbounded.Append
+              (Result,
+               (if Ada.Strings.Unbounded.Length (Result) = 0 then ""
+                elsif Core = Last then " and "
+                else ", ")
+               & Svd_Name (Core));
+         end if;
+      end loop;
+      return Ada.Strings.Unbounded.To_String (Result);
+   end Svd_Names;
+
    function Level_Name (Core : Core_Kind) return String is
      (case Core is
         when Cortex_M0 | Cortex_M0plus => "armv6-m",
