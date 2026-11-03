@@ -47,9 +47,7 @@ class LinkInputsTests(unittest.TestCase):
                          ("./changed.md\n", "changed"))
 
     def test_link_free_document_is_selected_and_workflow_allows_empty(self):
-        document = (ROOT / "docs/documents.md").read_text()
-        self.assertNotIn("http://", document)
-        self.assertNotIn("https://", document)
+        document = "# A document without links\n\nOnly plain text.\n"
         Path("docs").mkdir()
         Path("docs/documents.md").write_text(document)
         self.commit()

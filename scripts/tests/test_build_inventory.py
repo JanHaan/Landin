@@ -405,10 +405,13 @@ path.write_text("-- generated at " + str(path) + "\\n"
                 if row.startswith("linked ")]
 
     def run_build(self, *arguments, extra=None):
+        # A wrapper runs several Python probes even with fake tools. This
+        # bounds hangs, not build speed: five seconds expired on loaded
+        # developer hosts, including when this module ran by itself.
         return subprocess.run(
             ["sh", str(self.root / "scripts/build.sh"), *arguments],
             env={**self.env, **(extra or {})}, text=True, capture_output=True,
-            timeout=5)
+            timeout=30)
 
     def calls(self):
         return [json.loads(line) for line in
