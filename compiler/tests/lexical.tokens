@@ -37528,6 +37528,46 @@ file negative/addr-of-a-literal-is-refused-there/program.ldn tokens 16
   43 44 p
   45 48 end
   49 53 take
+file negative/addr-of-a-measure-is-refused-there/program.ldn tokens 39
+  200 206 public
+  207 211 main
+  211 212 :
+  213 214 (
+  214 215 )
+  216 218 ->
+  219 220 (
+  220 224 code
+  224 225 :
+  226 229 i32
+  229 230 )
+  231 232 =
+  237 243 people
+  243 244 :
+  245 246 [
+  246 247 3
+  247 248 ]
+  248 251 i32
+  252 253 =
+  254 255 [
+  255 256 1
+  256 257 ,
+  258 259 2
+  259 260 ,
+  261 262 3
+  262 263 ]
+  268 269 p
+  270 272 :=
+  273 276 any
+  276 277 (
+  277 281 addr
+  282 287 lenof
+  288 294 people
+  294 295 )
+  300 304 code
+  305 306 =
+  307 308 0
+  309 312 end
+  313 317 main
 file negative/aggregate-call-result-missing-at-early-exit/program.ldn tokens 62
   0 4 pair
   4 5 :
@@ -70110,6 +70150,89 @@ file negative/match-arm-binding-names-several-cases/program.ldn tokens 59
   358 363 match
   364 367 end
   368 372 size
+file negative/match-arm-second-statement-names-the-bare-block/program.ldn tokens 82
+  175 181 choice
+  181 182 :
+  183 187 type
+  188 189 =
+  190 196 struct
+  201 205 kind
+  205 206 :
+  207 214 variant
+  215 220 empty
+  221 222 |
+  223 227 full
+  228 229 |
+  230 235 spare
+  236 239 end
+  240 244 kind
+  245 248 end
+  249 255 choice
+  257 263 report
+  263 264 :
+  265 266 (
+  266 267 n
+  267 268 :
+  269 272 i32
+  272 273 )
+  274 276 ->
+  277 281 none
+  282 283 =
+  284 287 end
+  288 294 report
+  296 302 public
+  303 307 main
+  307 308 :
+  309 310 (
+  310 311 )
+  312 314 ->
+  315 316 (
+  316 320 code
+  320 321 :
+  322 325 i32
+  325 326 )
+  327 328 =
+  333 338 value
+  338 339 :
+  340 346 choice
+  347 348 =
+  349 350 (
+  350 354 kind
+  354 355 :
+  356 361 empty
+  361 362 )
+  367 371 code
+  372 373 =
+  374 376 42
+  381 386 match
+  387 392 value
+  392 393 .
+  393 397 kind
+  406 411 empty
+  411 412 :
+  425 429 code
+  430 431 =
+  432 433 1
+  446 452 report
+  452 453 (
+  453 457 code
+  457 458 )
+  471 474 inc
+  475 479 code
+  488 492 full
+  492 493 :
+  494 498 code
+  499 500 =
+  501 502 2
+  511 516 spare
+  516 517 :
+  518 522 code
+  523 524 =
+  525 526 3
+  531 534 end
+  535 540 match
+  541 544 end
+  545 549 main
 file negative/match-label-named-twice/program.ldn tokens 107
   124 129 north
   129 130 :
@@ -70716,6 +70839,66 @@ file negative/match-wildcard-among-labels/program.ldn tokens 50
   290 295 match
   296 299 end
   300 307 heading
+file negative/match-wildcard-on-a-variant-part-names-the-cases/program.ldn tokens 59
+  175 181 choice
+  181 182 :
+  183 187 type
+  188 189 =
+  190 196 struct
+  201 205 kind
+  205 206 :
+  207 214 variant
+  215 220 empty
+  221 222 |
+  223 227 full
+  228 229 |
+  230 235 spare
+  236 239 end
+  240 244 kind
+  245 248 end
+  249 255 choice
+  257 263 public
+  264 268 main
+  268 269 :
+  270 271 (
+  271 272 )
+  273 275 ->
+  276 277 (
+  277 281 code
+  281 282 :
+  283 286 i32
+  286 287 )
+  288 289 =
+  294 299 value
+  299 300 :
+  301 307 choice
+  308 309 =
+  310 311 (
+  311 315 kind
+  315 316 :
+  317 322 empty
+  322 323 )
+  328 332 code
+  333 334 =
+  335 337 42
+  342 347 match
+  348 353 value
+  353 354 .
+  354 358 kind
+  367 372 empty
+  372 373 :
+  374 378 code
+  379 380 =
+  381 382 1
+  391 392 _
+  392 393 :
+  394 398 code
+  399 400 =
+  401 402 2
+  407 410 end
+  411 416 match
+  417 420 end
+  421 425 main
 file negative/measure-in-parentheses-is-written-bare/program.ldn tokens 29
   0 6 choice
   6 7 :
@@ -79800,6 +79983,26 @@ file negative/qualified-construction-all-fill/main.ldn tokens 26
   222 223 )
   224 227 end
   228 235 nothing
+file negative/quoted-import-path-is-written-bare/program.ldn tokens 19
+  98 104 import
+  105 116 "core/text"
+  118 124 public
+  125 129 main
+  129 130 :
+  131 132 (
+  132 133 )
+  134 136 ->
+  137 138 (
+  138 142 code
+  142 143 :
+  144 147 i32
+  147 148 )
+  149 150 =
+  155 159 code
+  160 161 =
+  162 163 0
+  164 167 end
+  168 172 main
 file negative/r430-assertion-arity/main.ldn tokens 8
   0 8 compiler
   8 9 .
@@ -108315,6 +108518,30 @@ file negative/tool-namespace-bindings/program.ldn tokens 31
   105 113 compiler
   114 117 end
   118 119 f
+file negative/trailing-operator-after-a-measure-names-the-value/program.ldn tokens 23
+  177 185 count_of
+  185 186 :
+  187 188 (
+  188 192 line
+  192 193 :
+  194 195 [
+  195 196 ]
+  196 198 u8
+  198 199 )
+  200 202 ->
+  203 204 (
+  204 209 count
+  209 210 :
+  211 216 usize
+  216 217 )
+  218 219 =
+  224 229 count
+  230 231 =
+  232 237 lenof
+  238 242 line
+  243 244 +
+  245 248 end
+  249 257 count_of
 file negative/trapping-arm-unassigned-return/main.ldn tokens 80
   147 150 dot
   150 151 :
@@ -108974,6 +109201,66 @@ file negative/unnamed-error-binding-is-removed/program.ldn tokens 43
   115 116 0
   117 120 end
   121 126 value
+file negative/unnamed-result-names-the-named-form/program.ldn tokens 59
+  207 210 add
+  210 211 :
+  212 213 (
+  213 214 a
+  214 215 :
+  216 219 i32
+  219 220 ,
+  221 222 b
+  222 223 :
+  224 227 i32
+  227 228 )
+  229 231 ->
+  232 235 i32
+  236 237 =
+  242 243 a
+  244 245 +
+  246 247 b
+  248 251 end
+  252 255 add
+  257 265 subtract
+  265 266 :
+  267 268 (
+  268 269 a
+  269 270 :
+  271 274 i32
+  274 275 ,
+  276 277 b
+  277 278 :
+  279 282 i32
+  282 283 )
+  284 286 ->
+  287 297 difference
+  297 298 :
+  299 302 i32
+  303 304 =
+  309 319 difference
+  320 321 =
+  322 323 a
+  324 325 -
+  326 327 b
+  328 331 end
+  332 340 subtract
+  342 348 public
+  349 353 main
+  353 354 :
+  355 356 (
+  356 357 )
+  358 360 ->
+  361 362 (
+  362 366 code
+  366 367 :
+  368 371 i32
+  371 372 )
+  373 374 =
+  379 383 code
+  384 385 =
+  386 387 0
+  388 391 end
+  392 396 main
 file negative/unterminated-raw-literal/program.ldn refused a raw literal is never closed
 file negative/unterminated-text-literal/main.ldn refused a text literal is never closed
 file negative/unused-pure-local/program.ldn tokens 61
@@ -112375,6 +112662,36 @@ file negative/warning-advisory/program.ldn tokens 39
   246 247 1
   248 251 end
   252 258 sample
+file negative/when-on-a-statement-names-the-exits/program.ldn tokens 29
+  137 143 public
+  144 148 main
+  148 149 :
+  150 151 (
+  151 152 )
+  153 155 ->
+  156 157 (
+  157 161 code
+  161 162 :
+  163 166 i32
+  166 167 )
+  168 169 =
+  174 181 outcome
+  181 182 :
+  183 186 i32
+  187 188 =
+  189 191 40
+  196 200 code
+  201 202 =
+  203 204 0
+  209 213 code
+  214 215 =
+  216 223 outcome
+  224 228 when
+  229 236 outcome
+  237 238 >
+  239 241 30
+  242 245 end
+  246 250 main
 file negative/wide-integer-not-enabled/program.ldn tokens 5
   0 4 wide
   4 5 :

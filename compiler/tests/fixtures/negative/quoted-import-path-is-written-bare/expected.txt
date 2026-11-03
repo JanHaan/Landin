@@ -1,0 +1,6 @@
+error[L0100]: an import's module path is written without quotes
+  --> ../tests/fixtures/negative/quoted-import-path-is-written-bare/program.ldn:3:8
+  |
+3 | import "core/text"
+  |        ^^^^^^^^^^^
+  = note: [1420]: an import names the module by its path of names and slashes, as in `import core/text`

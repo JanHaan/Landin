@@ -1188,6 +1188,12 @@ package body Landin.Syntax.Repairs is
          declare
             procedure Consider (One : Trial);
 
+            --  Whether the token at Position is [0370]'s `lenof`.
+            function Measures (Position : Natural) return Boolean
+              is (Position in 1 .. Natural (Pieces.Length)
+                  and then Bytes (Pieces (Position).First
+                                  .. Pieces (Position).Last) = "lenof");
+
             --  Two changes that write the same line are one repair.
             procedure Consider (One : Trial) is
                Written : constant String :=
@@ -1252,13 +1258,24 @@ package body Landin.Syntax.Repairs is
                   Consider ((Moved, Position, Asked));
                end if;
             end loop;
+            --  `lenof` is spelled as a name and measures the operand after
+            --  it, so no swap moves the word or takes its operand from
+            --  it: `lenof line +` mended as `lenof + line` reads the word
+            --  as a name nobody declared.
             for Position in 1 .. Natural (Pieces.Length) - 1 loop
-               Consider ((Swapped, Position, Asked));
+               if not Measures (Position - 1)
+                 and then not Measures (Position)
+                 and then not Measures (Position + 1)
+               then
+                  Consider ((Swapped, Position, Asked));
+               end if;
             end loop;
             --  A name followed by one operand, as a conversion written
-            --  without its parentheses: `i32 x` for `i32(x)`.
+            --  without its parentheses: `i32 x` for `i32(x)`.  `lenof x`
+            --  is already a measure, never a call of `lenof`.
             for Position in 1 .. Natural (Pieces.Length) - 1 loop
                if Pieces (Position).Kind = Tok.Identifier
+                 and then not Measures (Position)
                  and then (Pieces (Position + 1).Kind = Tok.Identifier
                            or else Tok.Is_Literal
                              (Pieces (Position + 1).Kind))

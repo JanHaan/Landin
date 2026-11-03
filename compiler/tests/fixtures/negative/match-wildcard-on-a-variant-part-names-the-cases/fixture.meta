@@ -1,0 +1,9 @@
+class: negative
+summary: D866 a `_` arm on a variant part is one refusal naming the cases left to list, with no missing-case report for each of them
+program: program.ldn
+codes: L0333
+constructs: 0680, 1210
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+args: ../tests/fixtures/negative/match-wildcard-on-a-variant-part-names-the-cases/program.ldn
+expect: expected.txt
+status: 1

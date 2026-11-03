@@ -1,0 +1,9 @@
+class: negative
+summary: D860 a second statement under a match arm is refused once, naming the bare block several statements need, and the next arm is still read as an arm
+program: program.ldn
+codes: L0103
+constructs: 1210
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+args: ../tests/fixtures/negative/match-arm-second-statement-names-the-bare-block/program.ldn
+expect: expected.txt
+status: 1

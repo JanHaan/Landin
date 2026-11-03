@@ -19403,6 +19403,153 @@ line below the mistake.
 **Pinned by** `negative/statements-after-a-bare-else-name-its-binder`, whose
 fix the `fixes` suite compiles clean.
 
+### D860 — A second statement under a match arm names the bare block
+
+**The discrepancy:** an arm with two statements and no `begin`, `empty:` and
+then `code = 1` and `code = 3` on the lines under it, was L0103 at the second
+statement's `=`, "a match arm puts `:` after its case": the parser read the
+statement's name as the next arm's case. [1210] says an arm runs one
+statement or one expression and that several make the arm a bare block, and
+nothing in the report said so.
+
+**Chosen:** after an arm, a line that begins with what only a statement
+begins with (a statement's keyword, a discard, or a name followed by `=`,
+`:=`, an updating assignment or a call that no `:` follows) is refused at
+its first token as L0103, "a match arm runs one statement, and this is a
+second", labelled at the case the arm began with, and its note names the
+bare block: `begin` after the arm's `:`, its statements, then `end`. Each
+such line is read as a statement and adds no report of its own, so the next
+arm is still an arm. Indentation decides nothing here: the line is a
+statement by its tokens, wherever it stands.
+
+**The alternatives:** admitting several statements by indentation, which
+[1210] and D77 decline, the arm's extent being its one statement; and a fix
+that writes `begin` and `end`, which needs the arm's last statement, which
+the parser cannot know without reading indentation as structure.
+
+**Pinned by** `negative/match-arm-second-statement-names-the-bare-block`.
+
+### D861 — A type alone after `->` names the return with a name
+
+**The discrepancy:** `add: (a: i32, b: i32) -> i32 =`, another language's
+unnamed result, was first L0104, "this function is never closed", although
+`end add` closed it, and only second L0103, "returns are named, or `none`",
+which is the mistake. The failed returns left the type and the `=` unread,
+so the body never opened.
+
+**Chosen:** a type where [1800]'s returns belong, beginning with a name that
+no `:` or `,` follows, with `ptr` or with `[`, is refused there as L0103, "a return is named as well
+as typed", whose note writes the named form, `(result: i32)` when the type
+is one name and `(result: type)` otherwise. The type is read as one return's,
+so the body opens at `=` and the function is closed by its own `end`: one
+report. Named returns written without their parentheses, `-> code: i32`,
+were the same two reports, and are one, L0103, "named returns are written in
+parentheses", the list read as though they were there.
+
+**The alternatives:** a fix that writes `(result: i32)`, which would also
+have to rename every use the body makes, since the body cannot name a result
+it never declared; and a name taken from the function's own, which guesses.
+
+**Pinned by** `negative/unnamed-result-names-the-named-form`.
+
+### D862 — A quoted import path says the path is written bare
+
+**The discrepancy:** `import "esp32c5/clic"` was L0100, "a name belongs
+here", at the quote, with [1760]'s rule for names as its note, and said
+nothing of an import taking a path of names, `import esp32c5/clic`.
+
+**Chosen:** an import whose path is a text or raw literal is refused at the
+literal as L0100, "an import's module path is written without quotes", whose
+note shows `import core/text`. The import binds nothing, so the refusal is
+one report.
+
+**The alternatives:** reading the text as the path, which makes two
+spellings of one import; and splitting the literal into names for the
+resolver, which would bind what the program did not write.
+
+**Pinned by** `negative/quoted-import-path-is-written-bare`.
+
+### D863 — `addr` of a measure is the address of a value
+
+**The discrepancy:** `any(addr lenof people)` was L0103, "`people` does not
+belong here", with the help "remove `people`": `lenof` is spelled as a
+name, so the parser read `addr lenof` as the address of a binding called
+`lenof`, and the repair dropped the measured operand, which changes the
+program's meaning.
+
+**Chosen:** `addr` followed by [0370]'s `lenof` and a name, or by D411's
+`offsetof` and a dotted name, is refused at the measure as L0100, "`addr`
+takes a named place, and a measure is a value with no address", as a
+literal after `addr` is, and its note says to bind the measure to a name
+first. The report's own words begin "`addr` takes", which D261's repairs
+already leave standing, so nothing offers to drop the operand.
+
+**The alternatives:** taking the address of a temporary holding the
+measure, which [0380]'s place rule refuses for every other value.
+
+**Pinned by** `negative/addr-of-a-measure-is-refused-there`.
+
+### D864 — No repair moves `lenof` or its operand
+
+**The discrepancy:** `count = lenof line +` was L0102, "`line` and `+` are
+written the wrong way round", whose note offered `count = lenof + line`, a
+line that then reads `lenof` as an undeclared name, L0201. `y = x +` was
+answered "a value belongs after `+`".
+
+**Chosen:** D261's swaps and its call-with-parentheses trial leave a
+`lenof` and the token after it where they were, as its removals already
+did, so a trailing operator after a measure is answered as one after any
+other value, "a value belongs after `+`", with the value written there as
+its likely fix.
+
+**The alternatives:** dropping every swap when the parser asked for a
+value, which loses the swaps that mend other lines, as a word written after
+the operand it belongs before.
+
+**Pinned by** `negative/trailing-operator-after-a-measure-names-the-value`,
+whose fix the `fixes` suite compiles clean.
+
+### D865 — `when` after a statement that is no exit names the exits
+
+**The discrepancy:** `code = outcome when outcome > 30` was L0110, "this
+begins no statement", at `when`, whose note listed the statements; nothing
+said that [0970]'s `when` qualifies only an exit, or that an assignment on a
+condition wants an `if`.
+
+**Chosen:** a `when` left over after a statement is refused as L0110, "only
+an exit takes `when`: `return`, `fail`, `break` or `continue`", and its note
+says any other statement runs on a condition inside `if condition then` and
+`end if`.
+
+**The alternatives:** admitting `when` on every statement, a second
+conditional form beside `if` that the tour does not have; and a fix
+rewriting the line as an `if`, which spans lines the parser has not read.
+
+**Pinned by** `negative/when-on-a-statement-names-the-exits`.
+
+### D866 — A `_` arm on a variant part is one refusal naming the cases left
+
+**The discrepancy:** `_: fail no_space` after `drains(onto): ...` was L0333,
+"this case does not belong to the variant part matched here", beside an
+L0312 for each case `_` was to cover, while the tour's [1210] said that `_`
+"covers whatever is left" without saying where. D77 had declined a wildcard
+on a variant part, which neither the tour nor the refusal said.
+
+**Chosen:** D77 stands. The first `_` arm of a match on a variant part is
+refused as L0333, "a variant part is matched case by case, and `_` is no
+case", labelled at the subject, and its note names the cases no other arm
+names, to be listed on one arm as D405 allows, `full, spare:`, or says to
+remove the arm when every case has one. The missing-case reports it stands
+for are not made. [1210] says that `_` covers what is left of an atom set
+or a pointer union and that a variant part takes none.
+
+**The alternatives:** admitting `_` on a variant part, which D77 declined
+because [1210] already makes a missing case a compile error; and keeping a
+missing-case report for each case, which says the same mistake once per
+case.
+
+**Pinned by** `negative/match-wildcard-on-a-variant-part-names-the-cases`.
+
 ### D373 — A note explains in words, and a cited label stands beside them
 
 **The discrepancy:** a diagnostic's note is what a reader who does not know

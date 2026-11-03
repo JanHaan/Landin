@@ -219,7 +219,11 @@ package body Landin.Diagnostics.Explanations is
                & ": `else (problem)`, closed by `end` (D370). `_` among se"
                & "veral labels of one arm is refused too: it covers every "
                & "case no other arm names, so it is an arm of its own (D40"
-               & "5).",
+               & "5). An import's module path is names and slashes and is "
+               & "never quoted: `import core/text`, not `import ""core/text"
+               & """` (D862). `addr` of a measure, `addr lenof items`, woul"
+               & "d take the address of a value: bind the measure to a nam"
+               & "e first and take the address of the name (D863).",
             when Catalogue.Type_Expected =>
                "A type position holds nothing the kernel enables as a ty"
                & "pe [1790].",
@@ -241,7 +245,16 @@ package body Landin.Diagnostics.Explanations is
                & "uld change what the line computes. Nor is an applied typ"
                & "e called to make a value: `list(i32)(items: ..., len: 3)"
                & "` is refused naming the form that works, the fields in p"
-               & "arentheses where the type is declared [1350].",
+               & "arentheses where the type is declared [1350]. A match ar"
+               & "m runs one statement or one expression, so a second stat"
+               & "ement under an arm is refused at its first token, naming"
+               & " the bare block that holds several, `case: begin`, the s"
+               & "tatements, then `end` (D860). A type alone after `->`, a"
+               & "nother language's unnamed result, is refused naming the "
+               & "return with a name, `-> (result: i32)`, and the function"
+               & " is still closed by its own `end`; so are named returns "
+               & "written without their parentheses, `-> code: i32` (D861)"
+               & ".",
             when Catalogue.Unclosed_Construct =>
                "A construct opened and its `end` never arrived [1800]. T"
                & "he second label shows where it opened; close it there.",
@@ -269,7 +282,11 @@ package body Landin.Diagnostics.Explanations is
                & " too: it selects module declarations [1500], so declare "
                & "a routine per system in a module-level `fixed if`, or br"
                & "anch with `if` on a module value that holds the fact, `o"
-               & "n_linux: bool = compiler.os == linux` (D437).",
+               & "n_linux: bool = compiler.os == linux` (D437). `when` aft"
+               & "er a statement that is no exit, `code = 1 when ready`, i"
+               & "s refused naming the four exits that take it, `return`, "
+               & "`fail`, `break` and `continue`; any other statement runs"
+               & " on a condition inside `if` (D865).",
             when Catalogue.Nesting_Too_Deep =>
                "An implementation limit, not a rule of the language: a c"
                & "onstruct nests more deeply than the parser holds. Split "
@@ -781,9 +798,13 @@ package body Landin.Diagnostics.Explanations is
                & "rms bind no payload [0630]. A wildcard arm comes last; o"
                & "n an atom set it may bind one read-only name, `_ (rest):"
                & "`, to the atoms no other arm names, and only when some a"
-               & "re left (D434). Variant payload names are positional and"
-               & " complete (D78). Rewrite the arm in the form its subject"
-               & " admits, or compare numbers with `if` and `elsif`.",
+               & "re left (D434). A variant part takes no wildcard arm: it"
+               & "s match names every case, and the refusal names the case"
+               & "s the `_` was to cover, to be listed in one arm, `full, "
+               & "spare:`, with no missing-case report for each (D866). Va"
+               & "riant payload names are positional and complete (D78). R"
+               & "ewrite the arm in the form its subject admits, or compar"
+               & "e numbers with `if` and `elsif`.",
             when Catalogue.Aggregate_Form =>
                "A struct, variant or array value is built or used outsid"
                & "e its admitted form [0700] [0720]. A construction applie"

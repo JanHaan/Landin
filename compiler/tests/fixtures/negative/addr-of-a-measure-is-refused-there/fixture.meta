@@ -1,0 +1,9 @@
+class: negative
+summary: D863 `addr` of a `lenof` measure is refused as the address of a value, saying to bind the measure first, with no repair that removes its operand
+program: program.ldn
+codes: L0100
+constructs: 0370, 0380
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+args: ../tests/fixtures/negative/addr-of-a-measure-is-refused-there/program.ldn
+expect: expected.txt
+status: 1

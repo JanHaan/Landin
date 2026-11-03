@@ -1,0 +1,10 @@
+error[L0333]: a variant part is matched case by case, and `_` is no case
+  --> ../tests/fixtures/negative/match-wildcard-on-a-variant-part-names-the-cases/program.ldn:13:9
+   |
+13 |         _: code = 2
+   |         ^
+  --> ../tests/fixtures/negative/match-wildcard-on-a-variant-part-names-the-cases/program.ldn:11:11
+   |
+11 |     match value.kind
+   |           ^^^^^^^^^^ the matched variant part
+  = note: D77: name the cases `_` was to cover in one arm, `full, spare:`, as D405 lets several cases share it

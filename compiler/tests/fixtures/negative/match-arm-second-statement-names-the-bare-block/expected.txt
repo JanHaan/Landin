@@ -1,0 +1,10 @@
+error[L0103]: a match arm runs one statement, and this is a second
+  --> ../tests/fixtures/negative/match-arm-second-statement-names-the-bare-block/program.ldn:17:13
+   |
+17 |             report(code)
+   |             ^^^^^^
+  --> ../tests/fixtures/negative/match-arm-second-statement-names-the-bare-block/program.ldn:15:9
+   |
+15 |         empty:
+   |         ^^^^^ the arm it follows
+  = note: [1210]: for several, make the arm a bare block: `begin` after the arm's `:`, its statements, then `end`

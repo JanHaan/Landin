@@ -1,0 +1,20 @@
+error[L0103]: a return is named as well as typed
+  --> ../tests/fixtures/negative/unnamed-result-names-the-named-form/program.ldn:4:26
+  |
+4 | add: (a: i32, b: i32) -> i32 =
+  |                          ^^^
+  --> ../tests/fixtures/negative/unnamed-result-names-the-named-form/program.ldn:4:1
+  |
+4 | add: (a: i32, b: i32) -> i32 =
+  | ^^^ declared here
+  = note: [1800]: a function's returns are named in parentheses: write `(result: i32)` and assign `result` in the body, or write `none`
+error[L0103]: named returns are written in parentheses
+  --> ../tests/fixtures/negative/unnamed-result-names-the-named-form/program.ldn:8:31
+  |
+8 | subtract: (a: i32, b: i32) -> difference: i32 =
+  |                               ^^^^^^^^^^
+  --> ../tests/fixtures/negative/unnamed-result-names-the-named-form/program.ldn:8:1
+  |
+8 | subtract: (a: i32, b: i32) -> difference: i32 =
+  | ^^^^^^^^ declared here
+  = note: [1800]: a function's returns are named in parentheses, as in `(code: i32)`, or written `none`

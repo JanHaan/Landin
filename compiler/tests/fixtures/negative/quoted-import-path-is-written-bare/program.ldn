@@ -1,0 +1,7 @@
+--  D862: a module path written as text is refused saying the path is
+--  written without quotes.
+import "core/text"
+
+public main: () -> (code: i32) =
+    code = 0
+end main

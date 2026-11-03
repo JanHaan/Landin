@@ -1,0 +1,6 @@
+error[L0110]: only an exit takes `when`: `return`, `fail`, `break` or `continue`
+  --> ../tests/fixtures/negative/when-on-a-statement-names-the-exits/program.ldn:6:20
+  |
+6 |     code = outcome when outcome > 30
+  |                    ^^^^^^^^^^^^^^^^^
+  = note: [0970]: any other statement runs on a condition inside `if condition then` ... `end if`

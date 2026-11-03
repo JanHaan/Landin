@@ -1,0 +1,6 @@
+--  D864: an operator that ends its line after a `lenof` measure wants
+--  its right operand, as after any other value; no repair moves the
+--  measured name away from `lenof`.
+count_of: (line: []u8) -> (count: usize) =
+    count = lenof line +
+end count_of

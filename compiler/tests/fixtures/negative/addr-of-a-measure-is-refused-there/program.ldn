@@ -1,0 +1,8 @@
+--  D863: `lenof` is spelled as a name and measures, so `addr lenof x`
+--  takes the address of a value and is refused naming the binding it
+--  needs, with no repair that drops the measured operand.
+public main: () -> (code: i32) =
+    people: [3]i32 = [1, 2, 3]
+    p := any(addr lenof people)
+    code = 0
+end main

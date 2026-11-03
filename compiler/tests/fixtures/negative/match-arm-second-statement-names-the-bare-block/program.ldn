@@ -1,0 +1,22 @@
+--  D860: an arm runs one statement, so a second under it is refused
+--  naming the bare block that holds several, once for the arm, and the
+--  arm after it is still an arm.
+choice: type = struct
+    kind: variant empty | full | spare end kind
+end choice
+
+report: (n: i32) -> none =
+end report
+
+public main: () -> (code: i32) =
+    value: choice = (kind: empty)
+    code = 42
+    match value.kind
+        empty:
+            code = 1
+            report(code)
+            inc code
+        full: code = 2
+        spare: code = 3
+    end match
+end main
