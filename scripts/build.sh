@@ -30,6 +30,48 @@
 #  that was linked, by content, and a build that finds nothing to do still
 #  requires bin/ to hold exactly those executables.
 
+#  The arguments are read before anything else: --help prints the usage, and
+#  an argument build.sh does not take is refused with it, both without a
+#  build, a lock or Python, and before the staleness check could clean the
+#  tree for a switch that only changed the manifest.  A single-dash argument
+#  is a GPRbuild switch and passes through, as -q, -jN and -R do; GPRbuild's
+#  long options, like its configuration, are build.sh's own to choose.
+landin_usage() {
+    Name=scripts/build.sh
+    if [ "${LANDIN_BUILD_INCREMENTAL:-no}" = yes ]; then
+        Name=scripts/dev-build.sh
+    fi
+    echo "usage: $Name [--compiler-only] [GPRBUILD-SWITCH ...]"
+    echo
+    echo "Builds refine and the test program, or with --compiler-only refine"
+    echo "alone, in compiler/ada/build/TAG/MODE and publishes them into its bin/."
+    echo "A GPRbuild switch such as -q, -jN, -k or -R passes through to GPRbuild;"
+    echo "a long option is refused, GPRbuild's configuration among them."
+    echo "LANDIN_BUILD_MODE (debug or release), LANDIN_BUILD_TAG and"
+    echo "LANDIN_BUILD_VARIANT choose the tree; scripts/env.sh says how."
+}
+
+for Argument do
+    case "$Argument" in
+        --help | -h)
+            landin_usage
+            exit 0
+            ;;
+        --compiler-only | --config | --config=* | --autoconf | --autoconf=*) ;;
+        --* | -)
+            echo "landin: build.sh does not take $Argument" >&2
+            landin_usage >&2
+            exit 2
+            ;;
+        -*) ;;
+        *)
+            echo "landin: build.sh takes options only, not $Argument" >&2
+            landin_usage >&2
+            exit 2
+            ;;
+    esac
+done
+
 . "$(dirname -- "$0")/env.sh"
 
 landin_build_lock mode "$@"
