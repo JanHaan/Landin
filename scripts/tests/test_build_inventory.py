@@ -29,6 +29,11 @@ BASE = ["source 1 compiler/ada/src/main.adb", "source 2 compiler/ada/src/host.c"
         "gnat pinned", "gprbuild pinned", "toolchain configuration selected",
         'toolchain c-driver {"path": "/tools/selected-cc", "sha256": "123"}',
         'toolchain gprbuild {"path": "/tools/builder", "sha256": "456"}']
+#  Every subprocess here is a shell script over fake tools and ends in well
+#  under a second on an idle host.  The limit only stops a hang: five
+#  seconds was exceeded by build.sh at a load near 50, which is the load
+#  scripts/script_tests.py's own sixteen workers can put on a host.
+HANG = 300
 FIXED = [row for row in BASE if row.split(" ", 1)[0]
          in ("project", "mode", "switches", "gnat", "gprbuild", "toolchain")]
 
@@ -78,7 +83,7 @@ class BuildInventory(unittest.TestCase):
                      "LANDIN_BUILD_DIR": str(build),
                      "LANDIN_BUILD_TAG": "test", "LANDIN_BUILD_MODE": "debug",
                      "Current": "\n".join(sorted(new)),
-                     "Incremental": incremental}, check=True, timeout=5)
+                     "Incremental": incremental}, check=True, timeout=HANG)
             self.assertEqual(published.read_text(), "published compiler\n",
                              "a rebuild removed the published compiler")
             return obj.exists(), result.stdout
@@ -228,7 +233,7 @@ class ManifestFailures(unittest.TestCase):
             result = subprocess.run(
                 ["sh", "-eu", "-c", MANIFEST
                  + 'printf \'%s\\n\' "$Current" > "$WRITTEN"\n'],
-                text=True, capture_output=True, timeout=10,
+                text=True, capture_output=True, timeout=HANG,
                 env={**os.environ, "PATH": str(fake) + os.pathsep
                      + os.environ["PATH"], "LANDIN_ROOT": str(root),
                      "LANDIN_ADA_DIR": str(ada), "LANDIN_BUILD_MODE": "debug",
@@ -408,7 +413,7 @@ path.write_text("-- generated at " + str(path) + "\\n"
         return subprocess.run(
             ["sh", str(self.root / "scripts/build.sh"), *arguments],
             env={**self.env, **(extra or {})}, text=True, capture_output=True,
-            timeout=5)
+            timeout=HANG)
 
     def calls(self):
         return [json.loads(line) for line in
@@ -851,7 +856,7 @@ class DeveloperScripts(unittest.TestCase):
                     result = subprocess.run(
                         ["sh", str(ROOT / "scripts" / script), "--help"],
                         env={"PATH": path}, capture_output=True, text=True,
-                        timeout=10)
+                        timeout=HANG)
                     self.assertEqual(result.returncode, 0, result.stderr)
                     self.assertIn(
                         "usage: " + name + " [--record | --fixture=CLASS/NAME"
@@ -884,7 +889,7 @@ class DeveloperScripts(unittest.TestCase):
                             ["sh", str(ROOT / "scripts" / script),
                              *arguments],
                             env={"PATH": path}, capture_output=True,
-                            text=True, timeout=10)
+                            text=True, timeout=HANG)
                         self.assertEqual(result.returncode, status,
                                          result.stderr)
                         self.assertIn(
@@ -903,7 +908,7 @@ class DeveloperScripts(unittest.TestCase):
                     result = subprocess.run(
                         ["sh", str(ROOT / "scripts" / script)],
                         env={"PATH": path}, capture_output=True, text=True,
-                        timeout=10)
+                        timeout=HANG)
                     self.assertEqual(result.returncode, 127)
                     self.assertIn("landin: python3 is not on PATH",
                                   result.stderr)
@@ -922,7 +927,7 @@ class DeveloperScripts(unittest.TestCase):
             def probe(**extra):
                 return subprocess.run(
                     ["sh", str(scripts / "probe.sh")], capture_output=True,
-                    text=True, timeout=10,
+                    text=True, timeout=HANG,
                     env={"PATH": os.environ["PATH"],
                          "LANDIN_BUILD_TAG": "nix-x86_64-linux", **extra})
             plain = probe().stdout.split()
@@ -980,7 +985,7 @@ class BuildArchives(unittest.TestCase):
                     result = subprocess.run(
                         ["sh", "-eu", "-c", command], cwd=root,
                         env={**os.environ, "RUNNER_TEMP": tmp},
-                        capture_output=True, text=True, timeout=5)
+                        capture_output=True, text=True, timeout=HANG)
                     self.assertEqual(result.returncode, 0, result.stderr)
                     archive_path = Path(words[2].replace("$RUNNER_TEMP", tmp))
                     with tarfile.open(archive_path) as archive:
@@ -1025,7 +1030,7 @@ class RecipeChecksum(unittest.TestCase):
                         (fake / "cksum").chmod(0o755)
                     result = subprocess.run(
                         ["sh", str(scripts / "linux-loop.sh"), "true"],
-                        text=True, capture_output=True, timeout=5,
+                        text=True, capture_output=True, timeout=HANG,
                         env={**os.environ, "PATH": str(fake) + os.pathsep
                              + os.environ["PATH"], "CALLS": str(calls),
                              "LANDIN_LINUX_IMAGE": override,
@@ -1039,7 +1044,7 @@ class RecipeChecksum(unittest.TestCase):
                         self.assertEqual(len(rows), 2)
                         checksum = subprocess.check_output(
                             ["cksum", str(recipe)], text=True,
-                            timeout=5).split()[0]
+                            timeout=HANG).split()[0]
                         expected = override or "landin-linux-amd64:" + checksum
                         self.assertEqual(rows[0], "image inspect " + expected)
                         self.assertIn(expected + " true", rows[1])

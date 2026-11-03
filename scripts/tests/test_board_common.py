@@ -4,11 +4,13 @@
 to fixed inputs on the standard library alone."""
 import importlib.util
 import os
+import select
 import socket
 import struct
 import sys
 import tempfile
 import threading
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -17,6 +19,35 @@ ROOT = Path(__file__).resolve().parents[2]
 SPEC = importlib.util.spec_from_file_location('common', ROOT / 'environments/boards/common.py')
 COMMON = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(COMMON)
+
+#  Seconds to wait for bytes that are coming.  A wait ends as soon as they
+#  arrive, so the margin costs nothing on an idle host, and it is wide
+#  because scripts/script_tests.py's own workers load the host this runs on.
+PATIENCE = 60
+
+
+def read_exactly(source, count):
+    """COUNT bytes from SOURCE, a descriptor or a socket, however many
+    reads they take to arrive, or what came before PATIENCE ran out.
+
+    One read of a pty or a socket returns what has arrived, which on a
+    loaded host was b'S' of b'S1'; the rest is waited for rather than
+    missed.
+    """
+    got = b''
+    deadline = time.monotonic() + PATIENCE
+    while len(got) < count:
+        left = deadline - time.monotonic()
+        if left <= 0 or not select.select([source], [], [], left)[0]:
+            break
+        if isinstance(source, int):
+            piece = os.read(source, count - len(got))
+        else:
+            piece = source.recv(count - len(got))
+        if not piece:
+            break
+        got += piece
+    return got
 
 
 class Recorded:
@@ -271,9 +302,10 @@ class Consoles(unittest.TestCase):
             console = COMMON.TtyConsole(os.ttyname(line))
             try:
                 console.send(b'S1', pace=1)
-                self.assertEqual(os.read(controller, 2), b'S1')
+                self.assertEqual(read_exactly(controller, 2),
+                                 b'S1')
                 os.write(controller, b'\x02b r=00fa0000\x03\nS')
-                stream = console.wait(lambda s: s.endswith(b'S'), 5, 'the echo')
+                stream = console.wait(lambda s: s.endswith(b'S'), PATIENCE, 'the echo')
                 self.assertEqual(COMMON.tagged(stream, 'b'), [{'r': 0x00fa0000}])
                 self.assertEqual(bytes(console.sent), b'S1')
             finally:
@@ -291,12 +323,13 @@ class Consoles(unittest.TestCase):
         thread.start()
         console = COMMON.TcpConsole(server.getsockname()[1])
         try:
-            thread.join(5)
+            thread.join(PATIENCE)
             peer = accepted[0]
             console.send(b'1A0')
-            self.assertEqual(peer.recv(3), b'1A0')
+            self.assertEqual(read_exactly(peer, 3), b'1A0')
             peer.sendall(b'1A0')
-            self.assertEqual(console.wait(lambda s: len(s) == 3, 5, 'the echo'), b'1A0')
+            self.assertEqual(console.wait(lambda s: len(s) == 3, PATIENCE, 'the echo'),
+                             b'1A0')
             with self.assertRaisesRegex(COMMON.Failed, 'waited'):
                 console.wait(lambda s: len(s) > 3, 0.1, 'more')
             peer.close()

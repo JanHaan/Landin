@@ -10,6 +10,11 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[2]
+#  Seconds before a command that should have answered is called hung.  Each
+#  answers in milliseconds on an idle host; the limit is wide because
+#  scripts/script_tests.py runs these beside fifteen other workers, and a
+#  load near 50 has stretched a five-second limit past its end.
+HANG = 300
 
 
 class BuildLocks(unittest.TestCase):
@@ -53,7 +58,7 @@ echo "$LANDIN_BUILD_MODE"
         def finish():
             if process.poll() is None:
                 process.kill()
-            process.communicate(timeout=5)
+            process.communicate(timeout=HANG)
 
         self.addCleanup(finish)
         return process
@@ -63,7 +68,7 @@ echo "$LANDIN_BUILD_MODE"
         with selectors.DefaultSelector() as selector:
             selector.register(stream, selectors.EVENT_READ)
             while True:
-                self.assertTrue(selector.select(10), "command produced no event")
+                self.assertTrue(selector.select(HANG), "command produced no event")
                 byte = os.read(stream.fileno(), 1)
                 if byte in (b"", b"\n"):
                     return result.decode()
@@ -77,7 +82,7 @@ echo "$LANDIN_BUILD_MODE"
         self.assertIsNone(process.poll())
 
     def release(self, process):
-        stdout, stderr = process.communicate("finish\n", timeout=10)
+        stdout, stderr = process.communicate("finish\n", timeout=HANG)
         self.assertEqual(process.returncode, 0, (stdout, stderr))
 
     def test_same_mode_waits_but_other_modes_and_tags_can_run(self):
@@ -135,7 +140,7 @@ echo "$LANDIN_BUILD_MODE"
         self.assertTrue(marker.exists())
         self.assertIsNone(cleanup.poll())
         self.release(second)
-        stdout, stderr = cleanup.communicate(timeout=10)
+        stdout, stderr = cleanup.communicate(timeout=HANG)
         self.assertEqual(cleanup.returncode, 0, (stdout, stderr))
         self.assertFalse(build.exists())
         self.assertEqual(lock.stat().st_ino, identity)
@@ -153,7 +158,7 @@ echo "$LANDIN_BUILD_MODE"
         self.ready(testing)
         builder = self.start()
         self.waiting(builder)
-        testing.communicate("finish\n", timeout=10)
+        testing.communicate("finish\n", timeout=HANG)
         self.assertEqual(testing.returncode, 23)
         self.ready(builder)
         self.release(builder)
@@ -164,7 +169,7 @@ echo "$LANDIN_BUILD_MODE"
         waiting = self.start()
         self.waiting(waiting)
         first.terminate()
-        first.communicate(timeout=10)
+        first.communicate(timeout=HANG)
         self.ready(waiting)
         self.release(waiting)
 
@@ -236,7 +241,7 @@ echo "$LANDIN_BUILD_MODE"
         self.assertIsNone(publisher.poll())
         self.assertIn("echo old", (build / "bin/refine").read_text())
         self.release(reader)
-        publisher.communicate(timeout=10)
+        publisher.communicate(timeout=HANG)
         self.assertEqual(publisher.returncode, 0)
         self.assertIn("echo new", (build / "bin/refine").read_text())
         self.assertEqual(sorted(p.name for p in (build / "bin").iterdir()),
@@ -251,7 +256,7 @@ echo "$LANDIN_BUILD_MODE"
         self.assertIn("test-debug.readers", said)
         self.assertTrue((build / "bin/refine").exists())
         self.release(reader)
-        cleanup.communicate(timeout=10)
+        cleanup.communicate(timeout=HANG)
         self.assertEqual(cleanup.returncode, 0)
         self.assertFalse(build.exists())
 
@@ -262,7 +267,7 @@ echo "$LANDIN_BUILD_MODE"
         readers = self.root / "compiler/ada/.build-locks/test-debug.readers"
         publisher = self.publish(
             build, LANDIN_BUILD_READER="%s:%d" % (readers, reader.pid))
-        _, stderr = publisher.communicate(timeout=10)
+        _, stderr = publisher.communicate(timeout=HANG)
         self.assertEqual(publisher.returncode, 2)
         self.assertIn("pid %d is running this build's refine" % reader.pid,
                       stderr)
@@ -293,7 +298,7 @@ echo "$LANDIN_BUILD_MODE"
         for mode in ("debug", "release", "", "unknown", "../other", "a/b"):
             with self.subTest(mode=mode):
                 process = self.start("validate.sh", LANDIN_BUILD_MODE=mode)
-                stdout, stderr = process.communicate(timeout=10)
+                stdout, stderr = process.communicate(timeout=HANG)
                 if mode in ("debug", "release", ""):
                     self.assertEqual(process.returncode, 0, stderr)
                     self.assertEqual(stdout.strip(), mode or "debug")

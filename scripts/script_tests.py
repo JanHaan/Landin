@@ -10,7 +10,8 @@ exactly as `python3 scripts/tests/<module>` would run it.
 
 Output is held per process and printed whole in module order, then shard
 order, with its time, so the log reads as the serial loop's did and says
-which module took the time.  The exit status is 1 if any process failed.
+which module took the time.  The exit status is 1 if any process failed,
+or printed a ResourceWarning.
 
     python3 scripts/script_tests.py [--jobs N] [directory]
 
@@ -97,6 +98,12 @@ def main(argv):
             sys.stdout.write(output)
             if status != 0:
                 failed.append(label)
+            elif "ResourceWarning" in output:
+                #  unittest shows a file or socket left to the collector,
+                #  and forty-five thousand such lines once buried the
+                #  failures in this output; one is a failure here.
+                failed.append("%s (left a file or socket open; see its"
+                              " ResourceWarning)" % label)
     print("== %d processes at --jobs=%d in %.1f s"
           % (len(work), args.jobs, time.monotonic() - started))
     for label in failed:
