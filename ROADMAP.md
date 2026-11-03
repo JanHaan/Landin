@@ -1464,7 +1464,7 @@ SR-690 to SR-694.
 
 ### R12.45 — Board runs from RAM
 
-Status: in progress
+Status: active
 Depends on: R12.40
 
 A board run writes flash and resets the chip through its boot ROM for every
@@ -1492,107 +1492,69 @@ the boot check flashes and cold-starts each board at least once, the Pico 2
 away from the cascade; and a program larger than SRAM is refused for a RAM
 run with the boot check named.
 
-**Implementation choices agreed with the maintainer.** The starting tree is
-`eef9d3db5`. The supported scope is six ports on five boards: RP2040,
+Implementation started at `eef9d3db5`. The maintainer selected builds on
+epycmicro with checked image/source bundles transferred to rigpi,
+compiler-derived `--firmware-layout=ram`, and a defined warm
+reinitialization contract instead of a hardware reset/catch requirement
+(D900-D902). The supported scope is six ports on five boards: RP2040,
 RP2350 Arm and Hazard3, STM32H753, ESP32-C3 and ESP32-C5.
 
-1. Build on epycmicro and run the tools on rigpi. Recommend a command,
-   provisionally `python3 BOARD_RUNNER --board=rp2040
-   --host=rigpi --output=NEW_DIRECTORY`, that builds, transfers and runs a
-   checked image bundle with the matching tool source. The bundle keeps
-   content identities of the source and compiler, ELF, boot image when
-   applicable, build report and checksums; the Pi validates them before
-   taking the rig lock. This covers an unpushed candidate without
-   repeatedly building refine on the Pi. Native Pi builds remain an
-   alternative. The gate's
-   arm64 artifact, debug-only and retained for one day, is not the default
-   development compiler.
-2. Offer RAM placement through the compiler's derived script, selected
-   explicitly, rather than maintaining a developer script for each board.
-   Recommend `--firmware-layout=ram`, retaining the existing boot layout
-   as the compiler default and making RAM the board tool's default. Use
-   the description's executable writable regions for vectors and code,
-   preserve separate instruction and data mappings where required, and
-   put initialized data at its runtime address. Startup skips a copy
-   whose source equals its destination and still clears BSS. Omit ROM
-   packaging and the RP2040's flash second stage from a RAM artifact;
-   retain chip initialization stages needed before ordinary startup.
-   Hold custom scripts to the selected layout's checked contract. Refuse
-   images exceeding SRAM or requiring flash placement, naming the boot
-   check, before contacting hardware.
-3. Use the maintainer's selected warm reinitialization contract, distinct
-   from hardware reset and cold boot. A RAM ELF alone is insufficient:
-   the pinned probe-rs loader can still call the RP235x reset sequence
-   that enters BOOTSEL. Use a small Landin-owned session helper with the
-   pinned probe-rs library, explicit halt, SRAM write, register and resume
-   operations, and no flasher or system-reset path. Stop DMA and interrupt
-   sources before replacing SRAM, park the other RP core and retire active
-   exceptions before restarting compiler startup. Check the supported
-   clock and cache baseline and refuse other states with the boot check
-   named. Configure and verify the STM32's supply before writing its SRAM.
-   Keep Pico 2 experiments off the cascade until its fixed image is
-   verified, and establish switching between Arm and Hazard3 explicitly.
-   The fixed image starts no
-   application USB service; the ESP chips' hardware USB-JTAG and the
-   external debuggers remain available. Record reset/catch evidence,
-   vector or trap base, stack, entry, loaded bytes, flash identity and
-   kernel USB delta in a RAM run; a power-on flag alone is no RAM oracle.
-   Repeat from used SRAM and active peripherals to expose stale state.
-4. Keep a separate explicit boot check. It flashes the ordinary image,
-   cold-starts it and exercises the existing device oracle and relevant
-   malformed-image controls: second stage and checksum, image block,
-   ESP header and segments, the startup copy of data and RAM code, flash
-   execution where supported, and flash-sized programs. Run it for image
-   format or startup changes, item closure and the later board gate.
-   Restore and verify the fixed image afterward. Recover the unplugged
-   Pico 2 by a prepared UF2 off the cascade before any probe attachment;
-   keep all its boot checks and corrupted-image controls off the cascade.
-   Its return to the cascade follows verification of the fixed image.
-5. Add a hardware-free all-board build command, provisionally
-   `python3 BOARD_BUILDER --refine=REFINE
-   --output=NEW_DIRECTORY`. Build every port, validate its artifacts and
-   name every build failure and record mismatch before returning failure.
-   Compare boot artifacts with the existing boot records using their
-   recorded filenames, and compare RAM artifacts with separately recorded
-   RAM identities. Keep ELF and ESP image hashes distinct. Never update
-   hardware records from a build, or discover USB, open a probe, acquire
-   the rig lock or use SSH in this mode (SR-735, SR-691). Add recurring
-   all-port offline builds to the software gate: a failed build fails the
-   lane, while record drift is reported separately from a build failure.
-   The explicit record-comparison command fails on either.
+`environments/boards/run.py` builds the current candidate and transfers its
+matching tools and checksummed bundle in one command. The Pi runs the
+physical oracle under its common lock. The pinned probe-rs session helper
+halts and retires an active exception, stops the supported peripheral
+sources, parks the other RP core, loads and reads back SRAM, sets vectors,
+stack and entry, and resumes. It uses single-core sessions for RP reads
+and omits RP2040's rescue-reset attach fallback. Startup still clears BSS
+and skips an in-place data copy. Unsupported warm states and images that
+exceed SRAM are refused with the boot check named.
 
-BOARD_RUNNER and BOARD_BUILDER name proposed entry points under
-`environments/boards/`, not existing commands.
+The explicit boot mode retains ROM packaging, cold-start and copy/XIP
+checks, then restores a USB-silent fixed application and verifies its
+startup marker. Pico 2 recovery uses the prepared Arm UF2 off the cascade;
+no tool may attach to BOOTSEL. Every Pico 2 boot check stays off the
+cascade. The architecture-switch boundary and its setup procedure still
+need the maintainer's choice and physical evidence. No warm run silently
+substitutes a reset through the ROM.
 
-After the maintainer settles these choices, use isolated worktrees from
-the starting tree and one integrator. Divide compiler layout/startup,
-board session/oracles, and offline build/bundle work between writers
-with distinct owned paths. Verify the warm contract per chip before
-claiming its development path; offline build and GPIO work proceed alongside it. The
-integrator owns common Python interfaces, decisions, documentation and
-register edits, and serializes all hardware on rigpi through the board
-tools and its common lock. No stream may push or promote.
+`environments/boards/build.py` builds every boot/RAM port without rig,
+USB or SSH access and compares each artifact with its separate hardware
+record, keeping ESP ELF and ROM-image identities distinct (SR-735).
+Its strict mode fails record drift; the software gate reports drift while
+failing compilation or artifact checks (SR-691). Offline builds never
+refresh physical records. All six boot and RAM images and fixed images
+have built. The STM32 boot check passed in 28.452 seconds, including fixed
+image restoration and its startup marker; its retained kernel delta shows
+only its own expected power cycles. RAM and remaining boot evidence are
+still pending.
 
-Prepare a LiteX-only arm64 GPIO environment without the FPGA toolchain
-(SR-737), and a central boards README naming the commands, rig rules and
-probe-rs revision `6f9946fe` (SR-738). The current kernel reader already
-filters for USB and xHCI, excluding the Pi's Wi-Fi firmware errors; add
-controls for that distinction and for controller-death stops (SR-736).
-The Pi's Arty and cascade are sibling ports behind its VL805, so this move
-does not establish that they have separate USB controllers. Preserve
-direct UDP for debug and provide the UART/GPIO dependencies on the Pi.
+The central boards README documents setup, the lock, amended pacing,
+USB-error stops, the source pin and recovery (SR-738). A companion
+probehive worktree provides the LiteX-only arm64/x86-64 GPIO shell
+(SR-737). Debug stays native UDP; the shared bridge supplies UART, with
+a two-phase RP startup handshake keeping its poller out of loader sessions.
+The Pi's Arty and cascade still share its VL805 controller; moving hosts
+does not establish independent controller failure domains (SR-736).
 
-Each writer gets exact affected cases and script modules in its brief,
-default build workers and the native command-continuation method; the
-complete suite belongs to integration and the gate. Integration runs all
-six offline builds, the affected compiler and board-tool controls, native
-Mac feedback where applicable, the emission-mode comparison and scaling
-checks, and the closing activation sweep against `eef9d3db5`. Time every
-hardware run and retain its mode, identities, oracle and USB evidence.
-Re-record both Pico 2 ports (SR-684) and the RP2040's current transport
-path (SR-739). Keep SR-680 and SR-736 open until the evidence supports
-their disposition. A push still needs the maintainer's word; promotion
-also needs the candidate's complete successful gate.
+Streams used isolated branches and worktrees, exact affected selectors and
+one integrator; no stream may push or promote. Integration retains the
+complete suite, focused controls, offline images, native/cross helper
+builds, emission comparisons, scaling and activations against the starting
+tree. Native Mac feedback awaits the maintainer's availability notice.
+Re-record both Pico 2 ports (SR-684) and prove the RP2040 transport/oracle
+(SR-739); keep SR-680 and SR-736 open until physical evidence supports a
+disposition. Every hardware run is timed and stops on kernel USB trouble.
+A push needs the maintainer's word; promotion also needs the candidate's
+complete successful gate.
+
+The activation sweep also reached SR-266, SR-289, SR-296, SR-298 and
+SR-605: caller-aware internal-error reporting, language option values,
+diagnostic citation policy, trap-site resolution and RP2350 image hashes
+retain their activations. SR-552 and SR-555 retain theirs: no script-test
+host-only dependency or locked lane tool changed. SR-699's activation is
+the Cortex-M runner's arguments, not the new board runner. SR-724 remains
+for the next change to gate job identities, matrix legs or the reuse list;
+this item adds a step to the existing Cortex-M programs leg.
 
 ### R12.50 — Xtensa, ESP32 and ESP32-S3
 
@@ -3792,9 +3754,13 @@ SR-489, SR-499, SR-511, SR-517.
 | SR-735 | Usability | No check compares a board's `record.json` with the image its tool builds now: main's soft-float attribute change moved the RP2040's and both Pico 2s' image hashes, and SR-647 the C5's, and nothing said so; finding out meant importing each tool and calling its build with a hand-made namespace, since no tool builds its image alone. Met deciding which records to re-record in the November board round. | The next compiler change that moves a firmware image, or R12.45. | A build-only mode that builds every board's image and names each whose record no longer matches. | open |
 | SR-736 | Usability | The rig's USB host failed three ways in a day. On the front-panel port the cascade's top hub dropped every 30-50 s with no device or kernel error before it, and autosuspend, turned off everywhere, was not the cause; on the ASMedia xHCI at PCI c2:00.0 a Pico 2 halted in BOOTSEL failing enumeration hard-locked a CPU in `xhci_handle_command_timeout` and the controller died, taking the Arty's USB, which shared it, with the cascade; and with the cascade on the onboard connector's second port, a Pico 2 left in BOOTSEL dropped the whole cascade 75 times in ten minutes until it was unplugged. A switch of one port drops only its own device where the host is sound. Met in the November board round. | The next rig change or board run. | The cascade and the Arty on separate controllers, no BOOTSEL on the bus (SR-680), and a run that meets a controller death stopping with recovery left to the maintainer. | open |
 | SR-737 | Usability | The RP tools enter probehive's full FPGA development shell, Yosys and the nextpnr-xilinx chip database among it, only to read one GPIO through LiteX, so on a host that had not built it an RP2040 run held the rig 300 s and failed with a bare timeout; the tools now find the shell before taking the lock and name the command that builds it. Preparing the tools for rigpi also found that probehive's flake exposes only x86_64-linux, so the documented GPIO environment is unavailable on the arm64 board host. Met in the November board round and R12.45's planning. | R12.45's Pi tooling, or the next probehive change. | A light LiteX-only shell in probehive for the tools' GPIO reads, available on both x86_64-linux and aarch64-linux. | open |
-| SR-738 | Usability | No boards README names the rig's rules, the lock, the pace and its `acknowledge`, never switching the Arty, never attaching to a BOOTSEL Pico 2, or the probe-rs build the runs use: `--probe-rs` defaults to `PATH`, where `nix develop` has none, and the build (`~/src/rig-bench/wt-eval-all`, 0.32.0-335-g99f97fd2) is pinned nowhere and found only in notes. Met starting the November board round. | The next boards change, or R12.45. | A README in `environments/boards/` naming the rules and how to get the probe-rs the tools need, or the build pinned. | open |
+| SR-738 | Usability | No boards README names the rig's rules, the lock, the pace and its `acknowledge`, never switching the Arty, never attaching to a BOOTSEL Pico 2, or the probe-rs build the runs use: `--probe-rs` defaults to `PATH`, where `nix develop` has none, and the build (`~/src/rig-bench/wt-eval-all`, 0.32.0-335-g99f97fd2) is pinned nowhere and found only in notes. Met starting the November board round. | The next boards change, or R12.45. | A README in `environments/boards/` naming the rules and how to get the probe-rs the tools need, or the build pinned. Locally built unsigned helper closures need an explicit store import, documented with setup. | open |
 | SR-739 | Usability | The RP2040 and Arm Pico 2 tools started a probehive bridge of their own and failed while the shared one the Hazard3 and ESP32-C3 tools leave running held the probe. Both now take the shared bridge (D834); the RP2040's flash and readback went through it beside the C3's, but no RP run has passed since. Met in the November board round. | The next RP2040 run. | A passed RP2040 run through the shared bridge. | open |
 | SR-740 | Usability | Writing R12.45's command proposals before implementation, `check.py` reported the explicitly provisional script paths as missing repository references. Its named-file check has no documented notation for proposed paths; finding that meant reading `check_named_files`, and the proposal had to use command placeholders. | The next change to the named-file check or its documentation. | A documented way to name a proposed path without claiming that it exists, held by a check control. | open |
+| SR-741 | Usability | A RAM build of the STM32H753 met L0519 saying its vector did not enter reset, although it correctly entered the description's supply stage before reset. The developer-script ELF contract had assumed the reset function directly, rejecting that valid stage too. Met linking real device RAM images for R12.45. | R12.45's linker contract. | A staged vector accepted and a wrong entry refused in both layouts. | retired: the contract checks the selected description-owned stage and its symbol; focused and real-link controls pass |
+| SR-742 | Usability | Running the Hazard3 tool's new RAM main-path control failed at `args.probe`: the tool selected it without defining a `--probe` argument, so a real invocation could not reach the board. Met covering the startup handshake in R12.45. | R12.45's board-tool main-path checks. | A parsed default or explicit probe and an exercised main path. | retired: the parser defines `--probe` and the main-path controls reach the loader |
+| SR-743 | Usability | The first bundled STM32 boot attempt failed before taking the rig lock: the fixed ELF was listed as both `fixed_elf` and `fixed_image`, and staging copied it twice then refused its own second copy. The exception escaped as a Python traceback instead of a failed board result. Met running R12.45's one-command Pi path. | R12.45's bundle consumption. | Shared artifact aliases copied once, conflicting identities refused, and staging failures retained in the board result. | retired: aliases copy once with identity checks; bundle errors enter the board failure path, held by focused controls |
+| SR-744 | Usability | Reviewing the USB stop guard found that an action advanced its pacing timestamp after finishing without checking kernel errors logged during it; the next action could miss those errors. Runs also kept no kernel delta for a reader to verify their disconnect claim. Met validating R12.45's STM32 boot path. | R12.45's USB guard and run records. | Completion errors stop before the timestamp advances, restoration and later actions stay blocked, and every result retains its kernel USB delta. | retired: completion and final scans fail closed; all tools retain deduplicated USB lines, with during-action and late-error controls |
 
 ## Retained positions
 

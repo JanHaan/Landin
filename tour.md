@@ -4969,6 +4969,12 @@ compiler's reset initializes RAM before calling it. Returning from it, or a
 failed check, traps, since there is no hosted exit to go to. General build
 and package orchestration are outside the firmware path.
 
+For a debugger-loaded SRAM image, select `--firmware-layout=ram`. The
+compiler derives RAM placement from the same device description, retains
+BSS clearing and skips copies of data already in place. The board tool
+establishes the device state before entry. The default `boot` layout keeps
+the image its boot ROM needs; a RAM run does not test that boot path.
+
 Exact rules: spec [1975] for hosted programs, spec [1990] for firmware.
 
 ### [1660] Where capabilities come from

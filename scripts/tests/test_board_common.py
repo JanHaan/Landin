@@ -365,7 +365,8 @@ class Probes(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp)
             report = dict(format_version=1, status='passed', mode='read', board='rp2350',
-                          address=0x20000000, count=2, words=[42, 7], flash_written=False)
+                          address=0x20000000, count=2, words=[42, 7], flash_written=False,
+                          helper_source_sha256=COMMON.helper_source_hash())
             run = mock.Mock(out=out, pace=mock.Mock())
             def command(name, argv, **kwargs):
                 self.assertEqual(argv[0], 'loader')
@@ -379,6 +380,7 @@ class Probes(unittest.TestCase):
             self.assertEqual(run.pace.before.call_args_list,
                              [mock.call('probe read'), mock.call('probe read completion')])
             for field, value in (('board', 'rp2040'), ('address', 0x20000004),
+                                 ('helper_source_sha256', 'stale'),
                                  ('flash_written', True), ('count', 1),
                                  ('words', [True, 7]), ('words', [-1, 7])):
                 original = report[field]
@@ -1133,7 +1135,8 @@ class RamRuns(unittest.TestCase):
             pace = mock.Mock()
             args = SimpleNamespace(probe='0000:0002:10.42.0.50/0', ram_loader='loader', pace=pace)
             report = dict(format_version=1, status='passed', mode='warm', flash_written=False,
-                          board='rp2040', elf_sha256=COMMON.sha(elf))
+                          board='rp2040', elf_sha256=COMMON.sha(elf),
+                          helper_source_sha256=COMMON.helper_source_hash())
             run = mock.Mock(out=out)
             def command(name, argv, **kwargs):
                 self.assertEqual(name, 'ram-load')
@@ -1144,6 +1147,7 @@ class RamRuns(unittest.TestCase):
             self.assertEqual(pace.before.call_args_list,
                              [mock.call('RAM load'), mock.call('RAM load completion')])
             for field, value in (('flash_written', True), ('elf_sha256', 'stale'),
+                                 ('helper_source_sha256', 'stale'),
                                  ('status', 'failed'), ('board', 'rp2350'), ('mode', 'boot')):
                 wrong = dict(report, **{field: value})
                 with mock.patch.object(json, 'loads', return_value=wrong), self.assertRaises(COMMON.Failed):

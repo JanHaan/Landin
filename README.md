@@ -207,7 +207,7 @@ short:
 | Linux RV64 | hosted executables | under QEMU's user emulation, with GDB |
 | macOS arm64 | hosted executables | natively, with LLDB |
 | FreeBSD x86-64 and arm64 | hosted executables, emitted on Linux | in FreeBSD VMs, with LLDB |
-| Cortex-M0 | firmware for the device description it imports, or within the 32 KiB flash and 16 KiB RAM reference; RP2040, RP2350 and STM32H753 firmware runs on its board, each recorded against its own oracle; a Cortex-M7 description with its float unit builds hard-float | under the pinned QEMU, with GDB, for the reference, and the corpus on QEMU's Cortex-M33 and Cortex-M7 |
+| Cortex-M0 | boot or debugger-loaded RAM firmware from the device description it imports, or within the 32 KiB flash and 16 KiB RAM reference; RP2040, RP2350 and STM32H753 ports have physical oracles; a Cortex-M7 description with its float unit builds hard-float | under the pinned QEMU, with GDB, for the reference, and the corpus on QEMU's Cortex-M33 and Cortex-M7 |
 | RV32 | firmware at `rv32imc` or `rv32imac` for the device description it imports, or within the same reference's capacities; ESP32-C3, ESP32-C5 and RP2350 Hazard3 firmware runs on its board, each recorded against its own oracle, the ESP chips booting an image refine writes with no second stage | the corpus under Espressif's QEMU, on its `esp32c3` and `sifive_e` machines |
 
 - **The language kernel:** functions, aggregates and variants, declared
@@ -241,7 +241,7 @@ buy, concurrency and optimization; a build tool, package acquisition,
 release versioning and self-hosting stay outside it.
 [`ROADMAP.md`](ROADMAP.md) is the sole authority for open work.
 
-**Next roadmap item: R12.45 — Board runs from RAM (planned).**
+**Current roadmap work: R12.45 — Board runs from RAM.**
 
 ## Questions, bugs and ideas
 

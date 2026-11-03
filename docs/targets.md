@@ -1012,6 +1012,22 @@ the profile it was built for: device, core, boot kind, vector address and
 length, regions and placements, and the second stage or the image block.
 The sizes come from ELF load segments; the helper names come from the linker
 map. Assembly-only reports have no linked capacity measurement.
+
+`--firmware-layout=ram` derives an SRAM layout from the same profile
+(D900), using executable data RAM where available and retaining the
+description's stack reservation and separate instruction/data mappings.
+Initialized sections have equal load and runtime addresses; startup skips
+self-copies and clears BSS. The flash second stage and ROM image packaging
+are omitted, while initialization stages needed by ordinary startup remain.
+The driver checks every RAM ELF's loaded sections, vectors, startup symbols
+and stack against that layout, including when using a developer script.
+The report names the layout, original boot kind and effective vector-table
+kind, code/RAM capacities and linked load segments. Capacity diagnostics
+name the boot layout and board boot check. The debugger or board tool owns
+core and peripheral reinitialization before entry; linking does not perform
+it. The [board tools](../environments/boards/README.md) keep warm runs and
+cold-boot evidence separate.
+
 The assembler uses Cortex-M0/Thumb/soft-float/AAPCS flags and fatal warnings,
 or hard float and the unit with a float unit (D617).
 The linker uses those flags plus `-nostdlib -nostartfiles -nodefaultlibs`, the

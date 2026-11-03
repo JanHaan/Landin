@@ -251,7 +251,7 @@ tool, package acquisition, release versioning and self-hosting stay outside
 it, owned by the successor families its register names. Its identities are
 cited in `ROADMAP.md` and nowhere else.
 
-**Next roadmap item: R12.45 — Board runs from RAM (planned).**
+**Current roadmap work: R12.45 — Board runs from RAM.**
 
 ## Versions
 

@@ -2357,6 +2357,12 @@ package body Landin.Diagnostics.Citations is
             when 724 =>
                "The ESP32-C5's power-on boot is read over JTAG, and its "
                & "ROM's log after a chip-enable reset",
+            when 901 =>
+               "Board development enters SRAM under an explicit warm con"
+               & "tract",
+            when 902 =>
+               "Offline board builds compare artifact records and carry "
+               & "checked inputs",
             when 725 =>
                "Every board run holds the rig's lock and paces what disc"
                & "onnects a device",
@@ -2448,6 +2454,9 @@ package body Landin.Diagnostics.Citations is
             when 546 =>
                "A developer's linker script is held to a written contrac"
                & "t",
+            when 900 =>
+               "A RAM firmware layout is derived from the same device de"
+               & "scription",
             when 547 =>
                "A declaration can be placed in a named region",
             when 587 =>
@@ -3851,6 +3860,10 @@ package body Landin.Diagnostics.Citations is
                "Decisions: The toolchain, C and the machine",
             when 724 =>
                "Decisions: The toolchain, C and the machine",
+            when 901 =>
+               "Decisions: The toolchain, C and the machine",
+            when 902 =>
+               "Decisions: The toolchain, C and the machine",
             when 725 =>
                "Decisions: The toolchain, C and the machine",
             when 726 =>
@@ -3912,6 +3925,8 @@ package body Landin.Diagnostics.Citations is
             when 545 =>
                "Decisions: The toolchain, C and the machine",
             when 546 =>
+               "Decisions: The toolchain, C and the machine",
+            when 900 =>
                "Decisions: The toolchain, C and the machine",
             when 547 =>
                "Decisions: The toolchain, C and the machine",
@@ -5647,6 +5662,12 @@ package body Landin.Diagnostics.Citations is
                "https://www.701.dev/spec.html#d724-the-esp32-c5-s-power-"
                & "on-boot-is-read-over-jtag-and-its-rom-s-log-after-a-chip"
                & "-enable-reset",
+            when 901 =>
+               "https://www.701.dev/spec.html#d901-board-development-ent"
+               & "ers-sram-under-an-explicit-warm-contract",
+            when 902 =>
+               "https://www.701.dev/spec.html#d902-offline-board-builds-"
+               & "compare-artifact-records-and-carry-checked-inputs",
             when 725 =>
                "https://www.701.dev/spec.html#d725-every-board-run-holds"
                & "-the-rig-s-lock-and-paces-what-disconnects-a-device",
@@ -5755,6 +5776,9 @@ package body Landin.Diagnostics.Citations is
             when 546 =>
                "https://www.701.dev/spec.html#d546-a-developer-s-linker-"
                & "script-is-held-to-a-written-contract",
+            when 900 =>
+               "https://www.701.dev/spec.html#d900-a-ram-firmware-layout"
+               & "-is-derived-from-the-same-device-description",
             when 547 =>
                "https://www.701.dev/spec.html#d547-a-declaration-can-be-"
                & "placed-in-a-named-region",

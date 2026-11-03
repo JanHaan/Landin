@@ -18,8 +18,9 @@ use std::{fs, path::PathBuf, time::{Duration, Instant}};
 
 #[derive(Parser)]
 struct Args {
-    #[arg(long)] plan: PathBuf,
-    #[arg(long)] output: PathBuf,
+    #[arg(long, required_unless_present = "describe")] plan: Option<PathBuf>,
+    #[arg(long, required_unless_present = "describe")] output: Option<PathBuf>,
+    #[arg(long, exclusive = true)] describe: bool,
 }
 
 #[derive(Deserialize)]
@@ -55,9 +56,10 @@ fn validate_read(plan: &ReadPlan) -> Result<()> {
 fn execute_read(plan: &ReadPlan) -> Result<Value> {
     // Callers validate before opening a probe. Readbacks include flash and
     // MMIO as well as SRAM; they never use warm-entry cleanup or reset.
+    let target = attach_target(&plan.board)?;
     let selector: DebugProbeSelector = plan.probe.parse()?;
     let probe = Lister::new().open(selector)?;
-    let mut session = probe.attach(attach_target(&plan.board)?, Permissions::default())?;
+    let mut session = probe.attach(target, Permissions::default())?;
     let mut words = vec![0u32; plan.count as usize];
     session.core(0)?.read_32(plan.address, &mut words)?;
     // Session attach/drop clear debug breakpoints and may briefly halt the
@@ -66,7 +68,7 @@ fn execute_read(plan: &ReadPlan) -> Result<Value> {
     drop(session);
     Ok(json!({"format_version":1,"status":"passed","mode":"read","board":plan.board,
         "address":plan.address,"count":plan.count,"words":words,"flash_written":false,
-        "debug_housekeeping":true,"core":0}))
+        "debug_housekeeping":true,"core":0,"helper_source_sha256":source_digest()}))
 }
 
 struct Image {
@@ -80,6 +82,10 @@ struct Image {
 
 fn digest(bytes: &[u8]) -> String {
     Sha256::digest(bytes).iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
+fn source_digest() -> String {
+    digest(include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/bin/landin-ram-run.rs")))
 }
 
 fn chip(board: &str) -> Result<&'static str> {
@@ -100,6 +106,8 @@ fn chip(board: &str) -> Result<&'static str> {
 // debug_port_setup. The generic sequence retains its ordinary multidrop
 // setup and core debug start, without that fallback or a vendor reset path.
 fn attach_target(board: &str) -> Result<Target> {
+    static PLUGINS: std::sync::Once = std::sync::Once::new();
+    PLUGINS.call_once(probe_rs_espressif::register_plugin);
     let mut target = Registry::from_builtin_families().get_target_by_name(chip(board)?)?;
     target.cores.truncate(1);
     if board == "rp2040" {
@@ -337,12 +345,13 @@ fn instruction_fence(session: &mut probe_rs::Session) -> Result<()> {
 }
 
 fn execute(plan: &Plan, image: &Image) -> Result<Value> {
+    let target = attach_target(&plan.board)?;
     let selector: DebugProbeSelector = plan.probe.parse()?;
     let probe = Lister::new().open(selector)?;
     // Expose only the executing core to Session, whose Drop otherwise tries
     // to halt the reset-held RP core 1 and can leave core 0 halted on failure.
     // PSM below parks core 1 independently before changing any SRAM.
-    let mut session = probe.attach(attach_target(&plan.board)?, Permissions::default())?;
+    let mut session = probe.attach(target, Permissions::default())?;
     session.core(0)?.halt(Duration::from_secs(2))?;
     let mut core = session.core(0)?;
     let previous_pc: u32 = core.read_core_reg(core.program_counter().id)?;
@@ -372,12 +381,17 @@ fn execute(plan: &Plan, image: &Image) -> Result<Value> {
     Ok(json!({"format_version":1,"status":"passed","mode":"warm","board":plan.board,
         "elf_sha256":digest(&image.bytes),"flash_written":false,"previous_pc":previous_pc,
         "entry":image.entry,"vector":image.vector,"stack":image.stack,"segments":written,
-        "cleanup":cleanup}))
+        "cleanup":cleanup,"helper_source_sha256":source_digest()}))
 }
 
 fn main() -> Result<()> {
     let args = Args::parse();
-    let bytes = fs::read(args.plan)?;
+    if args.describe {
+        println!("{}", json!({"protocol_version":1,"source_sha256":source_digest(),
+            "probe_rs_revision":"6f9946fe748edd0e55604dc42bc0f7ea3e7485da"}));
+        return Ok(());
+    }
+    let bytes = fs::read(args.plan.context("missing plan")?)?;
     let envelope: Value = serde_json::from_slice(&bytes)?;
     let read = envelope.get("mode").and_then(Value::as_str) == Some("read");
     let result = if read {
@@ -389,7 +403,7 @@ fn main() -> Result<()> {
         let image = image(&plan)?;
         execute(&plan, &image)
     };
-    fs::write(args.output, serde_json::to_vec_pretty(&match &result {
+    fs::write(args.output.context("missing output")?, serde_json::to_vec_pretty(&match &result {
         Ok(value) => value.clone(),
         Err(error) => json!({"status":"failed","mode":if read {"read"} else {"warm"},
             "flash_written":false,"error":format!("{error:#}")}),
@@ -400,6 +414,14 @@ fn main() -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn describe_is_offline_and_excludes_execution_plans() {
+        assert!(Args::try_parse_from(["helper", "--describe"]).unwrap().describe);
+        assert!(Args::try_parse_from(["helper"]).is_err());
+        assert!(Args::try_parse_from(["helper", "--plan", "p", "--output", "o"]).is_ok());
+        assert!(Args::try_parse_from(["helper", "--describe", "--plan", "p", "--output", "o"]).is_err());
+        assert_eq!(source_digest().len(), 64);
+    }
     fn read_plan(address: u64, count: u32) -> ReadPlan {
         ReadPlan { format_version: 1, board: "rp2040".into(), mode: "read".into(),
             probe: "0000:0002:10.42.0.50/0".into(), address, count }

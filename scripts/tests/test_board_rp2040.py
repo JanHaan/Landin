@@ -56,7 +56,7 @@ def helper_readback(argv, data, *, board, probe):
     words = list(struct.unpack('<%dI' % (len(data) // 4), data))
     Path(argv[4]).write_text(json.dumps(dict(format_version=1, status='passed',
         mode='read', board=board, address=0x10000000, count=len(words),
-        flash_written=False, words=words)))
+        flash_written=False, words=words, helper_source_sha256=BOARD.common.helper_source_hash())))
 
 
 def helper_fixture_command(run, name, argv, answer, *, board, probe):

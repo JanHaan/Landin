@@ -65,7 +65,7 @@ python3 environments/boards/rp2350/board.py \
 ```
 
 For a boot check, replace the mode and bundle with `--mode=boot` and
-`--bundle=BOOT_BUNDLE`, omit `--ram-loader`, and provide
+`--bundle=BOOT_BUNDLE`, retain `--ram-loader` for single-core readback, and provide
 `--fixed-image=PATH/TO/fixed.elf` if the bundle does not already carry it.
 The fixed image is the quiet resident program restored and cold-started
 afterward, subject to the USB stop guard. Name the off-cascade `--hub` and its

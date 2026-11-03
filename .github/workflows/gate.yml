@@ -658,6 +658,23 @@ jobs:
             --refine "$PWD/compiler/ada/build/linux-amd64/release/bin/refine" \
             --toolchain "$RUNNER_TEMP/cortex-m/gnat-arm-elf/bin/arm-eabi-gcc"
 
+      - name: Build every board port without hardware
+        if: matrix.part == 'programs'
+        run: |
+          export PATH="$RUNNER_TEMP/cortex-m/gnat-arm-elf/bin:$RUNNER_TEMP/cortex-m/gnat-riscv64-elf/bin:$PATH"
+          python3 environments/boards/build.py \
+            --refine "$PWD/compiler/ada/build/linux-amd64/release/bin/refine" \
+            --mode=both --records=report --output "$RUNNER_TEMP/board-images"
+
+      - name: Keep offline board build evidence
+        if: always() && matrix.part == 'programs'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: offline-board-images
+          path: ${{ runner.temp }}/board-images
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: One part of every Cortex-M lane
         run: |
           LANDIN_CORTEX_JOBS=4 python3 environments/cortex-m/run.py \

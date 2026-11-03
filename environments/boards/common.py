@@ -429,6 +429,10 @@ def firmware_layout(args):
 HELPER_PROBE_REVISION = '6f9946fe748edd0e55604dc42bc0f7ea3e7485da'
 
 
+def helper_source_hash():
+    return sha(Path(__file__).parent / 'ram-run/main.rs')
+
+
 def verify_ram_helper(args):
     """Describe the installed executable without opening a probe."""
     rebuild = ('rebuild from this source with `nix build .#board-ram-run`'
@@ -446,7 +450,7 @@ def verify_ram_helper(args):
         identity = json.loads(described.stdout)
     except (ValueError, TypeError) as error:
         raise Failed('SRAM helper --describe returned invalid JSON; ' + rebuild) from error
-    expected = dict(protocol_version=1, source_sha256=sha(Path(__file__).parent / 'ram-run/main.rs'),
+    expected = dict(protocol_version=1, source_sha256=helper_source_hash(),
                     probe_rs_revision=HELPER_PROBE_REVISION)
     require(isinstance(identity, dict), 'SRAM helper metadata is not an object; ' + rebuild)
     for field, value in expected.items():
@@ -589,7 +593,8 @@ def ram_load(run, args, board, elf):
     report = json.loads(output.read_text())
     require(report.get('format_version') == 1 and report.get('status') == 'passed'
             and report.get('mode') == 'warm' and report.get('flash_written') is False
-            and report.get('board') == board and report.get('elf_sha256') == sha(elf),
+            and report.get('board') == board and report.get('elf_sha256') == sha(elf)
+            and report.get('helper_source_sha256') == helper_source_hash(),
             'the SRAM loader did not return matching successful warm-load evidence')
     # Check before recording a new pacing timestamp, preserving all errors
     # since the previous action as well as those during this session.
@@ -906,6 +911,7 @@ class Probe:
             require(report.get('format_version') == 1 and report.get('status') == 'passed'
                     and report.get('mode') == 'read' and report.get('board') == board
                     and report.get('flash_written') is False
+                    and report.get('helper_source_sha256') == helper_source_hash()
                     and report.get('address') == address and report.get('count') == count
                     and isinstance(words, list) and len(words) == count
                     and all(type(word) is int and 0 <= word <= 0xffffffff for word in words),

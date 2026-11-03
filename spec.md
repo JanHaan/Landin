@@ -2224,8 +2224,11 @@ Reset masks configurable interrupts, initializes reserved r9 and the root
 r11 to zero, and, when the description has a float unit (D615), gives CP10
 and CP11 full access in CPACR followed by DSB and ISB, before anything can
 execute a float instruction, leaving lazy stacking at its reset default
-(D618). It then copies initialized RAM data and RAM code from their flash load
-addresses, and clears BSS. DSB and ISB precede unmasking and transfer to the
+(D618). It then copies initialized RAM data and RAM code from their load
+addresses, skipping a copy whose source is already its destination, and
+clears BSS. `--firmware-layout=ram` derives an in-place SRAM image instead
+of the default boot image (D900); a debugger establishes the core and
+device state before entering its startup. DSB and ISB precede unmasking and transfer to the
 selected entry. It does not call user module initializers [1460]/[1940],
 construct a hosted environment, allocate memory or run a scheduler. This reset
 contract assumes execution through the hardware reset vector, with no NMI or
@@ -23024,6 +23027,74 @@ the image's segments unchecked on the board.
 **Pinned by** `environments/boards/esp32c5/record.json` and
 `scripts/tests/test_board_esp.py`'s `PowerOn`.
 
+### D901 — Board development enters SRAM under an explicit warm contract
+
+**The tour said** nothing about a debugger's device lifecycle. D725 and
+D832 serialized flash downloads and power-on runs; probe-rs's RP235x reset
+can deliberately enter BOOTSEL before catching reset.
+
+**Chosen:** board tools default to `--mode=ram`, distinct from explicit
+`--mode=boot`. A pinned probe-rs session helper halts and reinitializes the
+supported board-port state without flash programming or a system reset.
+It retires active exceptions, stops application DMA and interrupt sources
+before replacing SRAM, parks the other RP core, checks the supported clock
+and cache baseline and configures the STM32 supply before writing RAM.
+Before hardware access the tool checks the helper's offline description
+against its compiled source identity and pinned probe-rs revision. It
+validates load ranges and vector bytes independently, verifies SRAM
+readback, establishes instruction visibility, and sets vector/trap base,
+stack and entry before compiler startup. The C5's active CLIC level is
+retired by returning from its handler, not by clearing its threshold.
+Unsupported prior state is refused with the boot check named. This is a
+defined warm entry, not a claim that arbitrary device state was reset.
+
+Each board retains a fixed application-silent flash image. A boot check
+loads and cold-starts the ordinary image, exercises its boot oracle, then
+restores and checks the fixed image. Boot image-format and startup changes,
+item closure and the physical board gate require this separate evidence.
+Pico 2 boot and corrupted-image work is off the cascade; probe attachment
+in BOOTSEL is always refused. Hardware USB-JTAG remains available on the
+ESP chips. Every hardware phase still holds the host rig lock and stops
+on kernel USB trouble. Runs record their mode, input identities, elapsed
+time, warm preparation or boot evidence and physical oracle results.
+
+The RP UART protocol uses ACK, boot frame, GO and readiness before its
+scenario. Loading precedes the UART connection because independent UDP
+clients cannot share a probe slot's sequence. The handshake tolerates
+early bytes lost before UART setup and keeps its bytes outside DMA epochs.
+
+**The alternatives:** vector catch as a universal clean-reset promise;
+calling probe-rs's ordinary RAM download and inheriting its reset sequence;
+or treating a power-on reset flag as proof of a warm run's preparation.
+
+**Pinned by** the board-tool controls under `scripts/tests/`, including
+RAM-only operation, USB stops, helper provenance, mode-specific oracles,
+fixed-image restoration and the RP startup handshake.
+
+### D902 — Offline board builds compare artifact records and carry checked inputs
+
+**The tour said** nothing about board evidence; each tool previously built
+only when it was about to contact its board.
+
+**Chosen:** the offline builder prepares every supported port without USB,
+probes, the rig lock or network access. It validates artifacts, names every
+build failure and record mismatch, and distinguishes boot records from RAM
+records and ELF identity from ESP image identity. The strict command fails
+on either; the software gate builds both layouts and reports record drift
+separately from compilation failure. A build never rewrites hardware
+evidence. Bundles retain compiler and source content identities, including
+dirty sources and toolchain pins, artifact checksums and the matching tool
+source. The remote wrapper builds on epycmicro, transfers inputs and runs
+the oracle on rigpi, which revalidates them before hardware access; failed
+runs retain their evidence too.
+
+**The alternatives:** depending on the next physical run to discover a
+broken port; using an ephemeral pushed-revision compiler artifact for an
+unpushed tree; or automatically refreshing a hardware record from a build.
+
+**Pinned by** `scripts/tests/test_board_build.py`,
+`scripts/tests/test_board_bundle.py` and `scripts/tests/test_board_run.py`.
+
 ### D725 — Every board run holds the rig's lock and paces what disconnects a device
 
 **The tour said** nothing; each board tool switched its own hub port when
@@ -24238,6 +24309,44 @@ which the developer's ownership of the linker does not wait for.
 **Pinned by** `environments/cortex-m/descriptions.py`, which links with a
 copy of the derived script and with one breaking each clause, each refused
 naming its clause.
+
+### D900 — A RAM firmware layout is derived from the same device description
+
+**The tour said** at [1650] that compiler startup initializes RAM; D545
+derived only a boot layout, and D546 checked a developer's script.
+
+**Chosen:** `--firmware-layout=boot|ram` selects the artifact layout for
+Cortex-M and RV32 firmware, with `boot` the compiler default. A RAM layout
+uses the description's executable data region when one exists, otherwise
+its executable writable text region or first executable writable region.
+An ESP RAM-only description retains its instruction/data mappings. Vectors,
+text and read-only data move to that region; data, BSS and the stack retain
+their described placements. Initialized RAM sections load at their runtime
+addresses. Startup skips self-copies, including named writable regions,
+and still clears BSS. Initialization stages remain, except the RP2040's
+flash second stage. RAM artifacts have no boot prefix, image block or ESP
+application-image package.
+
+Every RAM executable, with the derived or a developer's script, is checked
+after linking: the full vector image, startup symbols, stack reservation,
+all allocated sections and load segments must satisfy its SRAM layout.
+Flash placement, flash load addresses and stack overlap are refused;
+capacity refusals name the boot layout and board boot check. A valid
+description-owned reset stage is the vector's entry when present, in both
+layouts. The build report distinguishes `layout`, `described_boot` and the
+effective `boot`, reports code and RAM capacities, and gives each linked
+load segment's physical and runtime addresses and file and memory sizes.
+The loader establishes the core/peripheral baseline; RAM layout itself
+does not reset a board or establish cold-boot evidence.
+
+**The alternatives:** a second linker script maintained by each board port;
+moving already-linked flash bytes into RAM without relocation; and treating
+a successful RAM run as evidence about the ROM's boot format.
+
+**Pinned by** the `cortex ABI` case `RAM layout derives SRAM placement`,
+the `rv32 firmware` case `RAM layout omits ROM packaging`, the board build
+controls and the linked developer-script, flash-load-address and SRAM
+capacity controls.
 
 ### D547 — A declaration can be placed in a named region
 

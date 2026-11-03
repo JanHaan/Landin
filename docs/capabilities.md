@@ -70,6 +70,12 @@ entry that describes it, and put a new one where a reader would look for it.
   limits by `--emit=linker-script` (D589), a developer's own is linked with
   `--linker-script=FILE` and held to a contract (D546), and
   `link(region: ...)` places a declaration in a named region (D547).
+  Cortex-M and RV32 also derive an in-place SRAM layout with
+  `--firmware-layout=ram` (D900), checking the linked vectors, sections and
+  stack, retaining BSS clearing and omitting ROM packaging. The
+  [board tools](../environments/boards/README.md) prepare all six ports
+  without hardware, compare boot and RAM records separately, and transfer
+  checked images and matching tool sources to the Pi board host.
   Firmware runs on the pinned QEMU
   [emulator](../environments/cortex-m/README.md), with synthetic devices
   served through its debugger stub. Fifty-five RP2040 registers and

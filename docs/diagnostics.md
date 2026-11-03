@@ -1795,12 +1795,16 @@ description, or name a library that holds the reference with
 
 ### L0519
 
-A firmware image linked with `--linker-script=FILE` breaks the contract a
-developer's script must keep (D546), and the message names the clause: the
+A firmware image linked with `--linker-script=FILE`, or any RAM-layout
+firmware image, breaks its checked layout contract (D546, D900). The
+message names the clause: the
 vector table at the description's boot address with its whole length, a
 `_landin_firmware_*` startup symbol missing, the stack outside a writable
 region of the description or of another size, or an initialized image whose
-load address is not in the region text is placed in. Change the script so the
+load address is not in the region text is placed in. A description-owned
+initialization stage is the reset-vector entry when present. In RAM layout,
+loaded sections must be in SRAM, their load and runtime addresses equal,
+and their ranges clear of the reserved stack. Change the script so the
 clause holds; the derived script refine writes beside the image as `OUT.ld`
 meets every clause.
 
