@@ -69,12 +69,13 @@ class Bundles(unittest.TestCase):
         with self.assertRaisesRegex(bundle.Invalid, 'source identity'):
             self.validate()
 
-    def test_toolchain_pin_changes_invalidate_bundle(self):
-        (self.source / 'environments/pins.sh').write_text('new toolchain')
-        with self.assertRaisesRegex(bundle.Invalid, 'source identity'):
-            self.validate()
         path.write_text('devices')
         (self.source / 'devices/new.ldn').write_text('new input')
+        with self.assertRaisesRegex(bundle.Invalid, 'source identity'):
+            self.validate()
+
+    def test_toolchain_pin_changes_invalidate_bundle(self):
+        (self.source / 'environments/pins.sh').write_text('new toolchain')
         with self.assertRaisesRegex(bundle.Invalid, 'source identity'):
             self.validate()
 
