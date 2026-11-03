@@ -232,7 +232,7 @@ fn image(plan: &Plan) -> Result<Image> {
     // every allocated VMA independently of the loader's segment writes.
     for section in file.sections() {
         if section.size() == 0 || !matches!(section.flags(),
-            object::SectionFlags::Elf { sh_flags } if sh_flags & 2 != 0) {
+            object::SectionFlags::Elf { sh_flags, .. } if sh_flags.contains(object::elf::SHF_ALLOC)) {
             continue;
         }
         let address = section.address();
