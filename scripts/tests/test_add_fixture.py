@@ -1,5 +1,6 @@
 """scripts/add_fixture.py starts a new fixture's Cortex-M row as the
-corpus's rules say, and refuses what only a person can decide."""
+corpus's rules say, lays out its sources, refuses what only a person can
+decide, and names every step left for its class."""
 
 import sys
 import unittest
@@ -97,6 +98,85 @@ class AddFixtureTest(unittest.TestCase):
              "witness": "compiler/tests/fixtures/abi/new/fixture.meta"})
         with self.assertRaises(SystemExit):
             add_fixture.corpus_row(meta("abi/new"), None, None)
+
+    def test_each_class_is_told_every_step_left(self):
+        #  A positive fixture is in lowering.ir, which only the test
+        #  program records, and in the lexer's, parser's and formatter's
+        #  corpus cases; the integration pass parses its source.
+        positive = add_fixture.remaining_steps(
+            meta("positive/new", program="program.ldn"), False)
+        self.assertEqual(positive, [
+            "./scripts/dev-test.sh --record=lowering",
+            "./scripts/dev-test.sh --fixture=positive/new"
+            " --case='lexer/agrees with the corpus'"
+            " --case='parser/agrees with the corpus'"
+            " --case='lowering/the recorded corpus is current'"
+            " --case='formatting/the corpus is formatted'",
+            "./highlight/test.sh --integration, inside nix develop",
+            "python3 check.py"])
+        #  A negative fixture's report is recorded until it is written, and
+        #  its layout is its evidence, so neither formatter nor editor
+        #  grammar is held to it.
+        negative = meta("negative/new", program="program.ldn",
+                        expect="expected.txt", args="program.ldn")
+        self.assertEqual(add_fixture.remaining_steps(negative, False), [
+            "./scripts/dev-test.sh --record=negative/new",
+            "./scripts/dev-test.sh --fixture=negative/new"
+            " --case='lexer/agrees with the corpus'"
+            " --case='parser/agrees with the corpus'",
+            "python3 check.py"])
+        self.assertNotIn("--record", " ".join(
+            add_fixture.remaining_steps(negative, True)))
+        #  A runtime fixture is formatted and parsed by the editor grammar,
+        #  and recorded nowhere.
+        runtime = add_fixture.remaining_steps(
+            meta("runtime/new", program="main.ldn"), False,
+            "compiler/tests/fixtures/runtime/new")
+        self.assertTrue(runtime[0].startswith(
+            "refine fmt compiler/tests/fixtures/runtime/new"))
+        self.assertEqual(runtime[1:], [
+            "./scripts/dev-test.sh --fixture=runtime/new"
+            " --case='formatting/the corpus is formatted'",
+            "./highlight/test.sh --integration, inside nix develop",
+            "python3 check.py"])
+        #  A unit fixture with no report has no lane of its own.
+        self.assertEqual(add_fixture.remaining_steps(meta("unit/new"), False),
+                         ["python3 check.py"])
+
+    def test_the_layout_is_held_where_the_corpus_case_holds_it(self):
+        self.assertTrue(add_fixture.held_to_layout(
+            meta("positive/new", constructs="0010")))
+        self.assertTrue(add_fixture.held_to_layout(meta("abi/new")))
+        self.assertFalse(add_fixture.held_to_layout(meta("negative/new")))
+        self.assertFalse(add_fixture.held_to_layout(
+            meta("runtime/new", constructs="0010, 1750")))
+        source = (ROOT / "compiler/ada/tests/src/"
+                  "landin-tests-formatting_suite.adb").read_text()
+        case = source[source.index("procedure The_Corpus_Is_Formatted"):]
+        case = case[:case.index("procedure Visit")]
+        for name in add_fixture.LAYOUT_EVIDENCE:
+            self.assertIn('"%s"' % name, case)
+            self.assertFalse(add_fixture.held_to_layout(
+                meta("positive/" + name)))
+
+    def test_sources_are_laid_out_and_named(self):
+        import os
+        import tempfile
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            (base / "main.ldn").write_text("fn main()\n")
+            (base / "kept.ldn").write_text("kept\n")
+            fake = base / "refine"
+            #  A refine fmt that lays out main.ldn and leaves kept.ldn.
+            fake.write_text("#!/bin/sh\nprintf 'laid out\\n' > \"$2/main.ldn\"\n")
+            os.chmod(fake, 0o755)
+            changed = add_fixture.format_sources(
+                meta("runtime/new"), base, fake)
+            self.assertEqual(changed, [base / "main.ldn"])
+            fake.write_text("#!/bin/sh\necho 'error[L0010]: no' >&2\nexit 1\n")
+            with self.assertRaises(SystemExit) as raised:
+                add_fixture.format_sources(meta("runtime/new"), base, fake)
+            self.assertIn("L0010", str(raised.exception))
 
     def test_a_missing_fixture_says_to_write_it(self):
         with self.assertRaises(SystemExit) as raised:
