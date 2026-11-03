@@ -57,12 +57,14 @@ fn validate_read(plan: &ReadPlan) -> Result<()> {
 fn execute_read(plan: &ReadPlan) -> Result<Value> {
     // Callers validate before opening a probe. Readbacks include flash and
     // MMIO as well as SRAM; they never use warm-entry cleanup or reset.
-    let target = attach_target(&plan.board)?;
-    let selector: DebugProbeSelector = plan.probe.parse()?;
-    let probe = Lister::new().open(selector)?;
-    let mut session = probe.attach(target, Permissions::default())?;
+    let target = attach_target(&plan.board).with_context(|| format!("{} select target", plan.board))?;
+    let selector: DebugProbeSelector = plan.probe.parse().context("parse probe selector")?;
+    let probe = Lister::new().open(selector).with_context(|| format!("{} open probe {}", plan.board, plan.probe))?;
+    let mut session = probe.attach(target, Permissions::default())
+        .with_context(|| format!("{} attach without reset", plan.board))?;
     let mut words = vec![0u32; plan.count as usize];
-    session.core(0)?.read_32(plan.address, &mut words)?;
+    session.core(0).context("select readback core 0")?.read_32(plan.address, &mut words)
+        .with_context(|| format!("{} read {} words at {:#x}", plan.board, plan.count, plan.address))?;
     // Session attach/drop clear debug breakpoints and may briefly halt the
     // executing core. Truncation excludes the reset-held other RP core.
     // No explicit halt, reset, peripheral cleanup or memory write occurs.
@@ -217,15 +219,18 @@ fn image(plan: &Plan) -> Result<Image> {
 fn poll(core: &mut Core<'_>, address: u64, mask: u32, expected: u32) -> Result<u32> {
     let until = Instant::now() + Duration::from_secs(2);
     loop {
-        let value = core.read_word_32(address)?;
+        let value = core.read_word_32(address)
+            .with_context(|| format!("poll register {address:#x}"))?;
         if value & mask == expected { return Ok(value); }
         ensure!(Instant::now() < until, "register {address:#x} did not reach {expected:#x}");
     }
 }
 
 fn update(core: &mut Core<'_>, address: u64, clear: u32, set: u32) -> Result<()> {
-    let previous = core.read_word_32(address)?;
-    core.write_word_32(address, (previous & !clear) | set)?;
+    let previous = core.read_word_32(address)
+        .with_context(|| format!("read register {address:#x} before update"))?;
+    core.write_word_32(address, (previous & !clear) | set)
+        .with_context(|| format!("write updated register {address:#x}"))?;
     Ok(())
 }
 
@@ -243,41 +248,41 @@ fn cleanup(core: &mut Core<'_>, board: &str, arm: bool) -> Result<Value> {
     if arm {
         // ARM DCRSR selector 20 combines CONTROL:FAULTMASK:BASEPRI:PRIMASK.
         // Keep interrupts masked while retiring an interrupted handler.
-        core.write_core_reg(RegisterId(20), 1u32)?;
+        core.write_core_reg(RegisterId(20), 1u32).with_context(|| format!("{board} cleanup write core register {:#x}", 20))?;
         let mut thread = false;
         let until = Instant::now() + Duration::from_secs(2);
         for _ in 0..16384 {
-            if core.read_core_reg::<u32>(RegisterId(16))? & 0x1ff == 0 { thread = true; break; }
+            if core.read_core_reg::<u32>(RegisterId(16)).with_context(|| format!("{board} cleanup read core register {:#x}", 16))? & 0x1ff == 0 { thread = true; break; }
             if Instant::now() >= until { break; }
-            core.step()?;
+            core.step().with_context(|| format!("{board} cleanup step active handler"))?;
         }
         ensure!(thread, "could not retire active exception; use the boot check");
-        core.write_word_32(0xe000e010, 0)?; // SysTick CTRL
-        core.write_word_32(0xe000ed04, (1 << 25) | (1 << 27))?; // pending SysTick/PendSV
+        core.write_word_32(0xe000e010, 0).with_context(|| format!("{board} cleanup write MMIO {:#x}", 0xe000e010u64))?; // SysTick CTRL
+        core.write_word_32(0xe000ed04, (1 << 25) | (1 << 27)).with_context(|| format!("{board} cleanup write MMIO {:#x}", 0xe000ed04u64))?; // pending SysTick/PendSV
         for offset in (0..32).step_by(4) {
-            core.write_word_32(0xe000e180 + offset, u32::MAX)?; // NVIC ICER
-            core.write_word_32(0xe000e280 + offset, u32::MAX)?; // NVIC ICPR
+            core.write_word_32(0xe000e180 + offset, u32::MAX).with_context(|| format!("{board} cleanup write MMIO {:#x}", 0xe000e180 + offset))?; // NVIC ICER
+            core.write_word_32(0xe000e280 + offset, u32::MAX).with_context(|| format!("{board} cleanup write MMIO {:#x}", 0xe000e280 + offset))?; // NVIC ICPR
         }
     } else {
-        let state = core.read_core_reg::<u32>(RegisterId(0x300))?;
-        core.write_core_reg(RegisterId(0x300), state & !8)?;
+        let state = core.read_core_reg::<u32>(RegisterId(0x300)).with_context(|| format!("{board} cleanup read core register {:#x}", 0x300))?;
+        core.write_core_reg(RegisterId(0x300), state & !8).with_context(|| format!("{board} cleanup write core register {:#x}", 0x300))?;
         if board == "esp32c5" {
             // CLIC mintstatus.MIL is read-only. A genuine mret restores it
             // from mcause.MPIL; clearing the threshold cannot retire it.
             let until = Instant::now() + Duration::from_secs(2);
-            while core.read_core_reg::<u32>(RegisterId(0xfb1))? & 0xff000000 != 0 {
+            while core.read_core_reg::<u32>(RegisterId(0xfb1)).with_context(|| format!("{board} cleanup read core register {:#x}", 0xfb1))? & 0xff000000 != 0 {
                 ensure!(Instant::now() < until, "active CLIC handler did not retire; use the boot check");
-                core.step()?; // probe-rs steps with dcsr.stepie=0.
+                core.step().with_context(|| format!("{board} cleanup step active handler"))?; // probe-rs steps with dcsr.stepie=0.
             }
         }
-        core.write_core_reg(RegisterId(0x300), 0x1800u32)?; // mstatus: MPP=M, MIE=0
-        core.write_core_reg(RegisterId(0x304), 0u32)?; // mie
+        core.write_core_reg(RegisterId(0x300), 0x1800u32).with_context(|| format!("{board} cleanup write core register {:#x}", 0x300))?; // mstatus: MPP=M, MIE=0
+        core.write_core_reg(RegisterId(0x304), 0u32).with_context(|| format!("{board} cleanup write core register {:#x}", 0x304))?; // mie
         if board == "rp2350_hazard3" {
             // Abandoning an external handler without mret leaves its
             // priority stack active. MEICONTEXT is writable, so reset it
             // and all IRQ windows while MIE/mie are clear, before SRAM writes.
             for (csr, value) in hazard3_irq_reset_writes() {
-                core.write_core_reg(RegisterId(csr), value)?;
+                core.write_core_reg(RegisterId(csr), value).with_context(|| format!("{board} cleanup write core register {:#x}", csr))?;
             }
         }
     }
@@ -290,40 +295,40 @@ fn cleanup(core: &mut Core<'_>, board: &str, arm: bool) -> Result<Value> {
             let other = if rp2 {1 << 24} else {1 << 16};
             update(core, psm + 4, 0, other)?;
             poll(core, psm + 0xc, other, 0)?;
-            core.write_word_32(if rp2 {0x400d8000} else {0x40058000}, 0)?;
+            core.write_word_32(if rp2 {0x400d8000} else {0x40058000}, 0).with_context(|| format!("{board} cleanup write MMIO {:#x}", if rp2 {0x400d8000} else {0x40058000}))?;
             // The same peripherals bringup.peripherals releases: asserting
             // reset stops DMA before any SRAM contents are changed.
             update(core, if rp2 {0x40020000} else {0x4000c000}, 0,
                 if rp2 {0x14800244} else {0x00600124})?;
         }
         "stm32h753" => {
-            let supply = core.read_word_32(0x5802480c)?;
-            core.write_word_32(0x5802480c, (supply & !7) | 2)?;
+            let supply = core.read_word_32(0x5802480c).with_context(|| format!("{board} cleanup read MMIO {:#x}", 0x5802480c))?;
+            core.write_word_32(0x5802480c, (supply & !7) | 2).with_context(|| format!("{board} cleanup write MMIO {:#x}", 0x5802480c))?;
             poll(core, 0x58024804, 1 << 13, 1 << 13)?;
-            ensure!(core.read_word_32(0xe000ed14)? & 0x30000 == 0,
+            ensure!(core.read_word_32(0xe000ed14).with_context(|| format!("{board} cleanup read MMIO {:#x}", 0xe000ed14u64))? & 0x30000 == 0,
                 "warm STM32 contract requires disabled caches; use the boot check");
-            ensure!(core.read_word_32(0x58024410)? & 0x38 == 0,
+            ensure!(core.read_word_32(0x58024410).with_context(|| format!("{board} cleanup read MMIO {:#x}", 0x58024410))? & 0x38 == 0,
                 "warm STM32 contract requires HSI system clock; use the boot check");
-            core.write_word_32(0x40004800, 0)?; // USART3 CR1
+            core.write_word_32(0x40004800, 0).with_context(|| format!("{board} cleanup write MMIO {:#x}", 0x40004800))?; // USART3 CR1
             update(core, 0x40020010, 1, 0)?; // DMA1 stream 0 EN
             poll(core, 0x40020010, 1, 0)?;
-            core.write_word_32(0x40020008, 0x3d)?; // stream 0 LIFCR
-            core.write_word_32(0x40004808, 0)?; // USART3 CR3 DMA/IRQ
-            core.write_word_32(0x40004820, 0x00121bdf)?; // USART3 ICR
+            core.write_word_32(0x40020008, 0x3d).with_context(|| format!("{board} cleanup write MMIO {:#x}", 0x40020008))?; // stream 0 LIFCR
+            core.write_word_32(0x40004808, 0).with_context(|| format!("{board} cleanup write MMIO {:#x}", 0x40004808))?; // USART3 CR3 DMA/IRQ
+            core.write_word_32(0x40004820, 0x00121bdf).with_context(|| format!("{board} cleanup write MMIO {:#x}", 0x40004820))?; // USART3 ICR
         }
         "esp32c3" | "esp32c5" => {
             // probe-rs on_connect/on_halt disable all chip watchdogs.
             // Keep UART timing and USB Serial/JTAG clocks intact; mask the
             // application interrupt sources, then its own startup rebuilds
             // the UART FIFOs, interrupt matrix and system timer.
-            core.write_word_32(0x6000000c, 0)?;
-            core.write_word_32(0x60000010, u32::MAX)?;
+            core.write_word_32(0x6000000c, 0).with_context(|| format!("{board} cleanup write MMIO {:#x}", 0x6000000c))?;
+            core.write_word_32(0x60000010, u32::MAX).with_context(|| format!("{board} cleanup write MMIO {:#x}", 0x60000010))?;
             let timer = if board == "esp32c3" {0x60023000} else {0x6000a000};
-            core.write_word_32(timer + 0x64, 0)?;
-            core.write_word_32(timer + 0x6c, 7)?;
+            core.write_word_32(timer + 0x64, 0).with_context(|| format!("{board} cleanup write MMIO {:#x}", timer + 0x64))?;
+            core.write_word_32(timer + 0x6c, 7).with_context(|| format!("{board} cleanup write MMIO {:#x}", timer + 0x6c))?;
             update(core, timer, 0x01c00000, 0)?; // comparator work enables 0..2
-            if board == "esp32c3" { core.write_word_32(0x600c2000 + 0x104, 0)?; }
-            else { core.write_core_reg(RegisterId(0x347), 0u32)?; }
+            if board == "esp32c3" { core.write_word_32(0x600c2000 + 0x104, 0).with_context(|| format!("{board} cleanup write MMIO {:#x}", 0x600c2000 + 0x104))?; }
+            else { core.write_core_reg(RegisterId(0x347), 0u32).with_context(|| format!("{board} cleanup write core register {:#x}", 0x347))?; }
         }
         _ => unreachable!(),
     }
@@ -336,7 +341,7 @@ fn cleanup(core: &mut Core<'_>, board: &str, arm: bool) -> Result<Value> {
 }
 
 fn instruction_fence(session: &mut probe_rs::Session) -> Result<()> {
-    let mut interface = session.get_riscv_interface(0)?;
+    let mut interface = session.get_riscv_interface(0).context("select RISC-V fence interface")?;
     let control: Abstractcs = interface.read_dm_register()?;
     ensure!((control.0 >> 24) & 31 >= 2, "debug module needs two program-buffer words for instruction fence");
     let saved0: Progbuf0 = interface.read_dm_register()?;
@@ -351,7 +356,8 @@ fn instruction_fence(session: &mut probe_rs::Session) -> Result<()> {
             interface.write_dm_register(Abstractcs(0x700))?;
             interface.write_dm_register(Progbuf0(opcode))?;
             interface.write_dm_register(Progbuf1(0x00100073))?; // ebreak
-            interface.write_dm_register(AccessRegisterCommand(0x00241000))?;
+            interface.write_dm_register(AccessRegisterCommand(0x00241000))
+                .with_context(|| format!("execute fence opcode {opcode:#010x}"))?;
             let until = Instant::now() + Duration::from_secs(1);
             loop {
                 let status: Abstractcs = interface.read_dm_register()?;
@@ -372,39 +378,46 @@ fn instruction_fence(session: &mut probe_rs::Session) -> Result<()> {
 }
 
 fn execute(plan: &Plan, image: &Image) -> Result<Value> {
-    let target = attach_target(&plan.board)?;
-    let selector: DebugProbeSelector = plan.probe.parse()?;
-    let probe = Lister::new().open(selector)?;
+    let target = attach_target(&plan.board).with_context(|| format!("{} select target", plan.board))?;
+    let selector: DebugProbeSelector = plan.probe.parse().context("parse probe selector")?;
+    let probe = Lister::new().open(selector).with_context(|| format!("{} open probe {}", plan.board, plan.probe))?;
     // Expose only the executing core to Session, whose Drop otherwise tries
     // to halt the reset-held RP core 1 and can leave core 0 halted on failure.
     // PSM below parks core 1 independently before changing any SRAM.
-    let mut session = probe.attach(target, Permissions::default())?;
-    session.core(0)?.halt(Duration::from_secs(2))?;
-    let mut core = session.core(0)?;
-    let previous_pc: u32 = core.read_core_reg(core.program_counter().id)?;
-    let cleanup = cleanup(&mut core, &plan.board, image.arm)?;
+    let mut session = probe.attach(target, Permissions::default())
+        .with_context(|| format!("{} attach without reset", plan.board))?;
+    session.core(0).context("select warm-load core 0")?.halt(Duration::from_secs(2))
+        .with_context(|| format!("{} halt core 0", plan.board))?;
+    let mut core = session.core(0).context("select warm-load core 0")?;
+    let previous_pc: u32 = core.read_core_reg(core.program_counter().id)
+        .with_context(|| format!("{} read previous PC", plan.board))?;
+    let cleanup = cleanup(&mut core, &plan.board, image.arm)
+        .with_context(|| format!("{} warm cleanup", plan.board))?;
     let mut written = Vec::new();
     for (address, body) in &image.segments {
         if body.is_empty() { continue; }
-        core.write_8(*address, body)?;
+        core.write_8(*address, body)
+            .with_context(|| format!("{} write SRAM segment {address:#x} ({} bytes)", plan.board, body.len()))?;
         let mut back = vec![0; body.len()];
-        core.read_8(*address, &mut back)?;
+        core.read_8(*address, &mut back)
+            .with_context(|| format!("{} verify SRAM segment {address:#x} ({} bytes)", plan.board, body.len()))?;
         ensure!(back == *body, "SRAM readback differs at {address:#x}");
         written.push(json!({"address":address,"bytes":body.len(),"sha256":digest(body)}));
     }
     drop(core);
-    if !image.arm { instruction_fence(&mut session)?; }
-    let mut core = session.core(0)?;
+    if !image.arm { instruction_fence(&mut session).with_context(|| format!("{} instruction fence", plan.board))?; }
+    let mut core = session.core(0).context("select warm-load core 0")?;
     if image.arm {
-        core.write_core_reg(RegisterId(16), 0x01000000u32)?;
-        core.write_core_reg(RegisterId(20), 1u32)?;
-        core.write_word_32(0xe000ed08, image.vector)?;
+        core.write_core_reg(RegisterId(16), 0x01000000u32).context("entry write xPSR register 16")?;
+        core.write_core_reg(RegisterId(20), 1u32).context("entry write special register 20")?;
+        core.write_word_32(0xe000ed08, image.vector).context("entry write VTOR 0xe000ed08")?;
     } else {
-        core.write_core_reg(RegisterId(0x305), image.vector)?;
+        core.write_core_reg(RegisterId(0x305), image.vector).context("entry write mtvec CSR 0x305")?;
     }
-    core.write_core_reg(core.stack_pointer().id, image.stack)?;
-    core.write_core_reg(core.program_counter().id, image.entry & if image.arm {!1} else {!0})?;
-    core.run()?;
+    core.write_core_reg(core.stack_pointer().id, image.stack).context("entry write stack pointer")?;
+    core.write_core_reg(core.program_counter().id, image.entry & if image.arm {!1} else {!0})
+        .context("entry write program counter")?;
+    core.run().with_context(|| format!("{} resume loaded entry", plan.board))?;
     Ok(json!({"format_version":1,"status":"passed","mode":"warm","board":plan.board,
         "elf_sha256":digest(&image.bytes),"flash_written":false,"previous_pc":previous_pc,
         "entry":image.entry,"vector":image.vector,"stack":image.stack,"segments":written,
