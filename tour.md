@@ -3437,6 +3437,11 @@ values around. Fine print:
   concrete instance, so you cannot take `sort` itself and store it.
 - A private `! ...` error set is inferred separately for each concrete
   instance.
+- The body is checked for each instance a call makes. Before anything
+  calls it, only its names and the operands no type could make valid are
+  checked, so a generic function nothing calls is not refused for a view
+  held across a call that may move its source, or for anything else that
+  depends on what `t` turns out to be.
 
 ### [1300] Calling a generic function
 
@@ -3580,8 +3585,9 @@ An alias may be generic too, including a union of atom sets, and an
 alias never makes a new type: `missing | ptr t` keeps the one-word
 optional pointer of [0480]. Fine print:
 
-- The template is checked even if nothing applies it, and an error that
-  depends on the argument is reported at each application.
+- A generic type's template is checked even if nothing applies it, and
+  an error that depends on the argument is reported at each application.
+  A generic function's body is checked per instance instead ([1290]).
 - An unused or phantom parameter still distinguishes instances.
 - A struct may not contain itself by value, even through another
   template.

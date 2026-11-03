@@ -1,0 +1,21 @@
+--  D771: a generic routine's body is checked with each instance's actuals,
+--  so the view `slot` held across `vec.push` is refused once `main` calls
+--  `held`; a routine nothing called would not be.
+import core/mem
+import core/vec
+import hosted/heap
+
+held: (provider: type is mem.allocator, inout values: vec.list(i32),
+       memory: provider) -> (answer: i32) ! mem.out_of_memory =
+    slot := vec.at(values, 0) else (problem)
+        _ = problem
+        fail mem.out_of_memory
+    end
+    try vec.push(values, memory, 4)
+    answer = slot.val
+end held
+
+public main: () -> (code: i32) =
+    mut values := vec.new(item: i32)
+    code = held(values, heap.new()) else 1
+end main

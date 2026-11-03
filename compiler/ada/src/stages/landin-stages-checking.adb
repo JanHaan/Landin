@@ -40147,6 +40147,109 @@ package body Landin.Stages.Checking is
          Landin.Checking.Note_Link_Symbol (Types.all, Id, Symbol);
       end Check_External_Declaration;
 
+      --  D770: a public routine in a machine convention with no link name
+      --  is a global symbol under its own spelling (D415), so that
+      --  spelling is held to the rule an explicit link name is: no other
+      --  declaration's symbol may be it.  It is not noted as a link
+      --  symbol, which would make the routine one a C import reaches
+      --  (D516) rather than one every program keeps.
+      procedure Check_Machine_Symbols;
+
+      procedure Check_Machine_Symbols is
+         --  The spelling ID is global under without a link name, or
+         --  No_Name when ID is no such routine.
+         function Own_Symbol
+           (Id : Res.Declaration_Id) return Landin.Source.Names.Name_Id;
+
+         function Own_Symbol
+           (Id : Res.Declaration_Id) return Landin.Source.Names.Name_Id is
+         begin
+            if Res.Sort_Of (Meanings.all, Id) /= Res.Module_Function then
+               return Landin.Source.Names.No_Name;
+            end if;
+            declare
+               Of_Tree : constant not null access constant Syn.Tree :=
+                 Tree_For (Res.Source_Of (Meanings.all, Id));
+               Node : constant Syn.Node_Id := Res.Node_Of (Meanings.all, Id);
+            begin
+               if Syn.Kind (Of_Tree.all, Node) = Syn.Function_Declaration
+                 and then not Syn.Is_External (Of_Tree.all, Node)
+                 and then Syn.Is_Public (Of_Tree.all, Node)
+                 and then Syn.Machine_Convention (Of_Tree.all, Node)
+                   /= Landin.Machine.Ordinary
+                 and then Syn.Link_Symbol_Span (Of_Tree.all, Node)
+                   = Landin.Source.Empty_Span
+                 and then Landin.Configuration.Is_Active
+                   (Configurations (Context).all,
+                    Syn.Source_Of (Of_Tree.all), Node)
+               then
+                  return Syn.Name (Of_Tree.all, Node);
+               end if;
+            end;
+            return Landin.Source.Names.No_Name;
+         end Own_Symbol;
+
+         Count : constant Res.Declaration_Id :=
+           Res.Declaration_Id (Res.Declaration_Count (Meanings.all));
+      begin
+         for Id in Res.Declaration_Id'(1) .. Count loop
+            declare
+               Symbol : constant Landin.Source.Names.Name_Id :=
+                 Own_Symbol (Id);
+            begin
+               if Symbol /= Landin.Source.Names.No_Name then
+                  for Other in Res.Declaration_Id'(1) .. Count loop
+                     if Other /= Id
+                       and then
+                         (Landin.Checking.Link_Symbol (Types.all, Other)
+                            = Symbol
+                          or else (Other < Id
+                                   and then Own_Symbol (Other) = Symbol))
+                     then
+                        declare
+                           Of_Tree : constant not null access constant
+                             Syn.Tree :=
+                               Tree_For (Res.Source_Of (Meanings.all, Id));
+                           Node : constant Syn.Node_Id :=
+                             Res.Node_Of (Meanings.all, Id);
+                           Other_Tree : constant not null access constant
+                             Syn.Tree :=
+                               Tree_For (Res.Source_Of (Meanings.all, Other));
+                           Kind : constant String :=
+                             (if Syn.Machine_Convention (Of_Tree.all, Node)
+                                = Landin.Machine.Naked_Routine
+                              then "naked" else "interrupt");
+                        begin
+                           Bad.Report
+                             (Item => Bad.Linkage_Contract,
+                              Source => Syn.Source_Of (Of_Tree.all),
+                              Where => Syn.Anchor (Of_Tree.all, Node),
+                              Message => "this public " & Kind
+                                & " routine is the global symbol `"
+                                & Spelled (Symbol)
+                                & "`, which another declaration also names",
+                              Note => "D770/[1975]: a public routine in a"
+                                & " machine convention is a global symbol"
+                                & " under its own spelling, distinct from"
+                                & " every other symbol; a C import is a"
+                                & " naked routine's view when the routine"
+                                & " names the symbol with link(symbol: """
+                                & Spelled (Symbol) & """)",
+                              Related => Syn.Origin
+                                (Other_Tree.all,
+                                 Res.Node_Of (Meanings.all, Other)),
+                              Because => "the other declaration of the"
+                                & " symbol",
+                              Into => Found);
+                        end;
+                        exit;
+                     end if;
+                  end loop;
+               end if;
+            end;
+         end loop;
+      end Check_Machine_Symbols;
+
       procedure Check_Hosted_Main_Linkage;
 
       procedure Check_Hosted_Main_Linkage is
@@ -41502,6 +41605,7 @@ package body Landin.Stages.Checking is
       end if;
 
       Check_Hosted_Main_Linkage;
+      Check_Machine_Symbols;
 
       --  An `any` construction can materialize a parameterized conformance
       --  provider while the ordinary body pass above is checking its

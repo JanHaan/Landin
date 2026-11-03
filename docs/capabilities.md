@@ -417,6 +417,8 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   keeps each thread's last errno and last signal so, and a handle from
   `system.new()` records into the calling thread's (D503, D509).
   platform/linux lays the block a new thread's `clone` takes (D504).
+  An instance's address stored in a module binding without
+  `link(thread)` is refused (D772).
 - **Fibres on Cortex-M0.** On the retained Cortex-M0 profile a consumer of
   `core/fibre`'s round of turns, two fibres on 1,472-byte stacks cut from
   fixed module storage, fits with its painted peaks and D461's exception

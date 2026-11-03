@@ -1,0 +1,10 @@
+error[L0347]: this public naked routine is the global symbol `count_down`, which another declaration also names
+  --> ../tests/fixtures/negative/naked-routine-own-symbol-collides/program.ldn:8:22
+  |
+8 | public extern(naked) count_down: () -> none =
+  |                      ^^^^^^^^^^
+  --> ../tests/fixtures/negative/naked-routine-own-symbol-collides/program.ldn:5:1
+  |
+5 | public extern(c) link(symbol: "count_down") count_down_view:
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the other declaration of the symbol
+  = note: D770/[1975]: a public routine in a machine convention is a global symbol under its own spelling, distinct from every other symbol; a C import is a naked routine's view when the routine names the symbol with link(symbol: "count_down")

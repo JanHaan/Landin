@@ -292,6 +292,10 @@ package body Landin.Stages.Checking.References is
          --  views, immutable module storage among it, can be no store's
          --  destination, so D222 asks only about this subset.
          Writable_External : Boolean := False;
+         --  An External alternative that is a thread's instance of
+         --  `link(thread)` storage, which ends with its thread, so no
+         --  module binding another thread reads may keep it.
+         Thread     : Boolean := False;
          Untracked  : Boolean := False;
          --  A refused value supplies no proof for a return-origin check.
          --  Keep that diagnostic state distinct from raw address origins.
@@ -384,6 +388,7 @@ package body Landin.Stages.Checking.References is
          Into_Fact.External := Into_Fact.External or Other.External;
          Into_Fact.Writable_External :=
            Into_Fact.Writable_External or Other.Writable_External;
+         Into_Fact.Thread := Into_Fact.Thread or Other.Thread;
          Into_Fact.Untracked := Into_Fact.Untracked or Other.Untracked;
          Into_Fact.Invalid := Into_Fact.Invalid or Other.Invalid;
          --  An explicitly untracked alternative cannot erase a tracked
@@ -954,6 +959,12 @@ package body Landin.Stages.Checking.References is
 
       function Named_Storage_Fact
         (Tree : Syn.Tree; Place : Syn.Node_Id) return Reference_Fact;
+
+      --  D772: whether module binding ID is `link(thread)` storage.
+      function Thread_Storage (Id : Res.Declaration_Id) return Boolean
+      is (Syn.Attributes
+            (Tree_For (Res.Source_Of (Meanings.all, Id)).all,
+             Res.Node_Of (Meanings.all, Id)).Thread);
 
       function Fact_Of
         (Tree : Syn.Tree; Node : Syn.Node_Id) return Origin_Fact;
@@ -2713,6 +2724,7 @@ package body Landin.Stages.Checking.References is
                when Res.Module_Binding =>
                   Result.External := True;
                   Result.Writable_External := True;
+                  Result.Thread := Thread_Storage (Id);
                when Res.Parameter =>
                   declare
                      Parameter_Tree : constant
@@ -3575,6 +3587,32 @@ package body Landin.Stages.Checking.References is
                   end if;
                end loop;
             end if;
+         end if;
+
+         --  D772: a thread's instance ends with its thread, and every
+         --  thread reads a module binding, so none without `link(thread)`
+         --  may keep its address.
+         if Valid and then not Fact.Value.Untracked
+           and then not Fact.Value.Frame
+           and then Fact.Value.Thread
+           and then Module_Destination
+           and then not Thread_Storage (Id)
+         then
+            Bad.Report
+              (Item    => Bad.Reference_Escapes,
+               Source  => Syn.Source_Of (Tree),
+               Where   => Syn.Where (Tree, Value),
+               Message => "this address of a thread's `link(thread)`"
+                          & " instance cannot be kept in module storage",
+               Note    => "D772: an instance ends with its thread, and"
+                          & " another thread could read the address after"
+                          & " it; keep it in a local, or pass it as an"
+                          & " argument",
+               Related => Syn.Origin
+                 (Tree_For (Res.Source_Of (Meanings.all, Id)).all,
+                  Res.Node_Of (Meanings.all, Id)),
+               Because => "the module binding every thread reads",
+               Into    => Sink.all);
          end if;
 
          --  An address of known local storage keeps its declaration roots.

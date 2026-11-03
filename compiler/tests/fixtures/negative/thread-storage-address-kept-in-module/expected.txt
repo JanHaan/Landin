@@ -1,0 +1,20 @@
+error[L0314]: this address of a thread's `link(thread)` instance cannot be kept in module storage
+  --> ../tests/fixtures/negative/thread-storage-address-kept-in-module/program.ldn:10:12
+   |
+10 |     kept = addr counter
+   |            ^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/thread-storage-address-kept-in-module/program.ldn:7:1
+  |
+7 | mut kept: none_kept | ptr mut u32 = none_kept
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the module binding every thread reads
+  = note: D772: an instance ends with its thread, and another thread could read the address after it; keep it in a local, or pass it as an argument
+error[L0314]: this address of a thread's `link(thread)` instance cannot be kept in module storage
+  --> ../tests/fixtures/negative/thread-storage-address-kept-in-module/program.ldn:16:12
+   |
+16 |     kept = held
+   |            ^^^^
+  --> ../tests/fixtures/negative/thread-storage-address-kept-in-module/program.ldn:7:1
+  |
+7 | mut kept: none_kept | ptr mut u32 = none_kept
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the module binding every thread reads
+  = note: D772: an instance ends with its thread, and another thread could read the address after it; keep it in a local, or pass it as an argument
