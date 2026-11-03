@@ -365,6 +365,27 @@ package body Landin.IR.Verifier is
          end if;
       end Checkpoint;
 
+      --  Whether a folded image fits the scalar it initializes: a Bool is
+      --  0 or 1, a float's bit pattern fits its width, and an integer is
+      --  in its type's range.
+      function Fits
+        (Held : Landin.Types.Folded;
+         Element : Landin.Types.Scalar_Name) return Boolean;
+
+      function Fits
+        (Held : Landin.Types.Folded;
+         Element : Landin.Types.Scalar_Name) return Boolean
+      is (if Element = Landin.Types.Bool
+          then Held in 0 .. 1
+          elsif Element in Landin.Types.Float_Name
+          then Held >= 0
+            and then Held <= Landin.Types.Folded
+              (2 ** Natural
+                 (Landin.Types.Float_Width
+                    (Landin.Types.Float_Name (Element))) - 1)
+          else Landin.Types.Holds
+            (Held, Landin.Types.Integer_Name (Element), Facts));
+
       generic
          type Element is private;
          Initial : Element;
@@ -5387,29 +5408,11 @@ package body Landin.IR.Verifier is
                   Expected_Elements : Natural := 0;
                   Expected_Descendants : Natural := 0;
 
-                  function Fits
-                    (Held : Landin.Types.Folded;
-                     Element : Landin.Types.Scalar_Name) return Boolean;
-
                   function Check_Field_Image
                     (Shape    : Field_Shape;
                      Image    : Aggregate_Field_Image;
                      Flat     : Landin.Types.Folded;
                      Top      : Boolean) return Fault_Kind;
-
-                  function Fits
-                    (Held : Landin.Types.Folded;
-                     Element : Landin.Types.Scalar_Name) return Boolean
-                  is (if Element = Landin.Types.Bool
-                      then Held in 0 .. 1
-                      elsif Element in Landin.Types.Float_Name
-                      then Held >= 0
-                        and then Held <= Landin.Types.Folded
-                          (2 ** Natural
-                             (Landin.Types.Float_Width
-                                (Landin.Types.Float_Name (Element))) - 1)
-                      else Landin.Types.Holds
-                        (Held, Landin.Types.Integer_Name (Element), Facts));
 
                   function Check_Field_Image
                     (Shape    : Field_Shape;
@@ -5820,20 +5823,6 @@ package body Landin.IR.Verifier is
                     Aggregate_Image_On_Variant_Field;
                   Function_Fault : constant Fault_Kind :=
                     Function_Value_Signature_Disagrees;
-
-                  function Fits
-                    (Held : Landin.Types.Folded;
-                     Element : Landin.Types.Scalar_Name) return Boolean
-                  is (if Element = Landin.Types.Bool
-                      then Held in 0 .. 1
-                      elsif Element in Landin.Types.Float_Name
-                      then Held >= 0
-                        and then Held <= Landin.Types.Folded
-                          (2 ** Natural
-                             (Landin.Types.Float_Width
-                                (Landin.Types.Float_Name (Element))) - 1)
-                      else Landin.Types.Holds
-                        (Held, Landin.Types.Integer_Name (Element), Facts));
                begin
                   for Field in 1 .. Field_Count (Of_Unit, Id) loop
                      declare
