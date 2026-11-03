@@ -40,6 +40,10 @@ end indicator_pin
 -- MNLBITS 3: CLICINTCTL's three implemented bits are all level, none
 -- priority (2.8.2.5, Table 2.8-2).
 public levels: () -> none =
+    -- A debugger warm entry preserves core-local CLIC state. Retire the
+    -- two sources before the program configures and enables them again.
+    clic.clicint17_write(clic.base, 0)
+    clic.clicint18_write(clic.base, 0)
     clic.mcliccfg_write(clic.base, 3)
 end levels
 

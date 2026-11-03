@@ -1,0 +1,5 @@
+-- Fixed flash image: watchdog stage runs; hardware USB-JTAG stays available.
+import descriptions/esp32c3
+start: () -> none =
+    while true do continue end while
+end start

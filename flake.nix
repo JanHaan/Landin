@@ -749,7 +749,7 @@
       devShells = builtins.mapAttrs (_: built: { default = built.shell; }) perSystem;
 
       packages = builtins.mapAttrs (
-        _: built: {
+        system: built: {
           #  The source build is the default, because `nix build` on a
           #  repository is expected to build it.  refine-bin is the fast
           #  path for a consumer who wants the compiler rather than the
@@ -766,7 +766,15 @@
         #  shell's is.  Ubuntu 24.04's packaged 8.2 is not a substitute:
         #  it writes a riscv64 sigaction four words long where Linux's is
         #  three, overwriting the word after a correct program's buffer.
-        // (if built.isLinux then { qemu-user = built.qemuUser; } else { })
+        // (if built.isLinux then {
+          qemu-user = built.qemuUser;
+          board-ram-run = import ./environments/boards/ram-run/package.nix {
+            pkgs = inputs.nixpkgs.legacyPackages.${system};
+          };
+          board-ram-run-rigpi = import ./environments/boards/ram-run/package.nix {
+            pkgs = inputs.nixpkgs.legacyPackages.${system}.pkgsCross.aarch64-multiplatform;
+          };
+        } else { })
       ) perSystem;
     };
 }

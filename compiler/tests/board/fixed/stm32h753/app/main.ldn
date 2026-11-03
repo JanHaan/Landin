@@ -1,0 +1,5 @@
+-- Fixed flash image: no application USB, no peripheral activity.
+import descriptions/stm32h753
+start: () -> none =
+    while true do continue end while
+end start
