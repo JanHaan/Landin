@@ -454,7 +454,7 @@ class Pins(unittest.TestCase):
         class Building:
             def command(self, name, argv, timeout, **kw):
                 raise COMMON.subprocess.TimeoutExpired(argv, timeout)
-        with self.assertRaisesRegex(COMMON.Failed, r'nix develop /src/probehive -c true'):
+        with self.assertRaisesRegex(COMMON.Failed, r'nix develop /src/probehive#gpio -c true'):
             COMMON.ProbehivePins(Building(), '/src/probehive', '/build', 'IO32', seconds=1)
 
 

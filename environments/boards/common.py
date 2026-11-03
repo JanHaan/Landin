@@ -1027,24 +1027,23 @@ def bridged(port, host='127.0.0.1'):
 
 class ProbehivePins:
     """The probe's GPIO PIN through probehive's scripts/gpio.py, which needs
-    the LiteX its own development shell carries: that shell's Python and its
+    the LiteX its lightweight GPIO shell carries: that shell's Python and its
     environment are found once, when this is made, which touches nothing of
     the rig, so a tool makes it before its hardware phase; each read runs
     the script with them, and the tool releases the pin to an input before
     its first.  A shell that does not open within SECONDS is refused,
-    naming the command that builds it, since a shell not yet built on the
-    host builds probehive's whole FPGA toolchain first."""
+    naming the command that prepares it. The GPIO shell is available on
+    arm64 without the FPGA development toolchain."""
     def __init__(self, run, probehive, build, pin, seconds=300):
         self.run, self.probehive, self.build, self.pin = run, Path(probehive), build, pin
         try:
-            found = run.command('gpio-environment', ['nix', 'develop', self.probehive, '-c',
+            found = run.command('gpio-environment', ['nix', 'develop', str(self.probehive) + '#gpio', '-c',
                 'python3', '-c',
                 'import json, os, sys, litex; print(json.dumps([sys.executable, dict(os.environ)]))'],
                 timeout=seconds, cwd=self.probehive)
         except subprocess.TimeoutExpired:
-            raise Failed('probehive\'s development shell, which gives scripts/gpio.py its LiteX,'
-                         ' did not open within %g s: on a host that has not built it, it builds'
-                         ' the FPGA toolchain first; build it once with `nix develop %s -c true`'
+            raise Failed('probehive\'s lightweight GPIO shell, which gives scripts/gpio.py its LiteX,'
+                         ' did not open within %g s; prepare it with `nix develop %s#gpio -c true`'
                          ' and run again' % (seconds, self.probehive))
         self.python, self.env = json.loads(found.strip().splitlines()[-1])
 

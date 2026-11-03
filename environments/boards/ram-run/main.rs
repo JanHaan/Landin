@@ -2,8 +2,8 @@
 //! The Python board tool owns the rig lock, USB guard and physical oracle.
 use anyhow::{Context, Result, bail, ensure};
 use clap::Parser;
-use object::{Object, ObjectSymbol};
-use probe_rs::{Core, MemoryInterface, Permissions, RegisterId, probe::{DebugProbeSelector, list::Lister}};
+use object::{Object, ObjectSection, ObjectSymbol};
+use probe_rs::{Core, MemoryInterface, Permissions, RegisterId, config::Registry, probe::{DebugProbeSelector, list::Lister}};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
@@ -33,7 +33,9 @@ struct Image {
     arm: bool,
 }
 
-fn digest(bytes: &[u8]) -> String { format!("{:x}", Sha256::digest(bytes)) }
+fn digest(bytes: &[u8]) -> String {
+    Sha256::digest(bytes).iter().map(|byte| format!("{byte:02x}")).collect()
+}
 
 fn chip(board: &str) -> Result<&'static str> {
     Ok(match board {
@@ -82,6 +84,12 @@ fn image(plan: &Plan) -> Result<Image> {
             .map_err(Into::into)
     };
     let vector = symbol("_landin_firmware_vectors")?;
+    let table = file.section_by_name(".isr_vector").context("no vector section")?;
+    let table_size = table.size();
+    ensure!(table.address() == vector as u64 && table_size > 0 && table_size <= 4096,
+        "vector symbol and section differ");
+    ensure!(vector as u64 % table_size.next_power_of_two().max(128) == 0,
+        "unaligned vector table");
     let stack = symbol("_landin_firmware_stack_top")?;
     let bottom = symbol("_landin_firmware_stack_bottom")?;
     ensure!(bottom < stack && in_ram(&plan.board, bottom.into(), (stack - bottom).into()), "stack is outside SRAM");
@@ -92,6 +100,9 @@ fn image(plan: &Plan) -> Result<Image> {
     let phcount = u16::from_le_bytes(bytes[44..46].try_into()?) as usize;
     ensure!(phsize >= 32 && phcount > 0 && phcount <= 128, "bad ELF program headers");
     let mut segments = Vec::new();
+    let mut ranges = Vec::new();
+    let mut executable = Vec::new();
+    let mut table_loaded = false;
     for i in 0..phcount {
         let at = phoff.checked_add(i * phsize).context("ELF header overflow")?;
         if word(&bytes, at)? != 1 { continue; }
@@ -105,9 +116,18 @@ fn image(plan: &Plan) -> Result<Image> {
             "segment at {address:#x} is not an in-place SRAM image; use the boot check");
         ensure!(address + memory <= bottom as u64 || address >= stack as u64,
             "segment overlaps reserved stack");
+        ensure!(ranges.iter().all(|(lo,hi)| address + memory <= *lo || address >= *hi),
+            "overlapping load segments");
+        ranges.push((address, address + memory));
+        if word(&bytes, at + 24)? & 1 != 0 {
+            executable.push((address, address + size as u64));
+        }
         let body = bytes.get(offset..offset.checked_add(size).context("segment overflow")?)
             .context("segment past end of ELF")?.to_vec();
-        if arm && vector as u64 >= address && (vector as u64) + 8 <= address + size as u64 {
+        if vector as u64 >= address && (vector as u64) + table_size <= address + size as u64 {
+            table_loaded = true;
+        }
+        if arm && table_loaded && vector as u64 >= address && (vector as u64) + 8 <= address + size as u64 {
             let position = (vector as u64 - address) as usize;
             ensure!(word(&body, position)? == stack, "vector stack differs from linked stack");
             entry = word(&body, position + 4)?;
@@ -115,9 +135,10 @@ fn image(plan: &Plan) -> Result<Image> {
         }
         segments.push((address, body));
     }
-    ensure!(!segments.is_empty() && in_ram(&plan.board, vector.into(), 4), "no SRAM image or vector table");
+    ensure!(!segments.is_empty() && table_loaded && in_ram(&plan.board, vector.into(), table_size),
+        "vector table is not completely loaded in SRAM");
     let code = (entry & if arm {!1} else {!0}) as u64;
-    ensure!(segments.iter().any(|(a,b)| code >= *a && code < a + b.len() as u64), "entry is not loaded");
+    ensure!(executable.iter().any(|(lo,hi)| code >= *lo && code < *hi), "entry is not loaded executable code");
     Ok(Image { bytes, segments, entry, vector, stack, arm })
 }
 
@@ -164,8 +185,10 @@ fn cleanup(core: &mut Core<'_>, board: &str, arm: bool) -> Result<Value> {
             let rp2 = board != "rp2040";
             // pico-sdk 2.2.0 PSM_FRCE_OFF.PROC1: park the other processor
             // without resetting core 0 or executing the ROM.
-            update(core, if rp2 {0x40018004} else {0x40010004}, 0,
-                if rp2 {1 << 24} else {1 << 16})?;
+            let psm = if rp2 {0x40018000} else {0x40010000};
+            let other = if rp2 {1 << 24} else {1 << 16};
+            update(core, psm + 4, 0, other)?;
+            poll(core, psm + 0xc, other, 0)?;
             core.write_word_32(if rp2 {0x400d8000} else {0x40058000}, 0)?;
             // The same peripherals bringup.peripherals releases: asserting
             // reset stops DMA before any SRAM contents are changed.
@@ -210,14 +233,13 @@ fn cleanup(core: &mut Core<'_>, board: &str, arm: bool) -> Result<Value> {
 fn execute(plan: &Plan, image: &Image) -> Result<Value> {
     let selector: DebugProbeSelector = plan.probe.parse()?;
     let probe = Lister::new().open(selector)?;
-    let mut session = probe.attach(chip(&plan.board)?, Permissions::default())?;
-    for index in 0..session.target().cores.len() {
-        match session.core(index) {
-            Ok(mut core) => { core.halt(Duration::from_secs(2))?; }
-            Err(probe_rs::Error::CoreDisabled(_)) if index > 0 => (),
-            Err(error) => return Err(error.into()),
-        }
-    }
+    // Expose only the executing core to Session, whose Drop otherwise tries
+    // to halt the reset-held RP core 1 and can leave core 0 halted on failure.
+    // PSM below parks core 1 independently before changing any SRAM.
+    let mut target = Registry::from_builtin_families().get_target_by_name(chip(&plan.board)?)?;
+    target.cores.truncate(1);
+    let mut session = probe.attach(target, Permissions::default())?;
+    session.core(0)?.halt(Duration::from_secs(2))?;
     let mut core = session.core(0)?;
     let previous_pc: u32 = core.read_core_reg(core.program_counter().id)?;
     let cleanup = cleanup(&mut core, &plan.board, image.arm)?;
