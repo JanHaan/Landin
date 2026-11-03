@@ -163,6 +163,18 @@ package Landin.Diagnostics.Fixes is
       Where  : Landin.Source.Span) return Fix
      with Pre => Landin.Source.Length (Where) > 0;
 
+   --  [1030]'s exit written as an `else`'s value: `begin ` is written
+   --  before the exit at Opens and ` end` after it at Closes, which makes
+   --  it the bare block a recovery that leaves holds.  Likely: the exit is
+   --  what the line meant to do on failure, but the person may instead
+   --  have meant `try`, which passes the failure on.
+   function Hold_Exit
+     (Source : Landin.Source.Source_Id;
+      Opens  : Landin.Source.Byte_Offset;
+      Closes : Landin.Source.Byte_Offset;
+      Word   : String) return Fix
+     with Pre => Opens < Closes;
+
    --  One Respell per name the ranking kept, nearest first; none when it
    --  kept none.
    function Respellings

@@ -223,7 +223,11 @@ package body Landin.Diagnostics.Explanations is
             when Catalogue.Expression_Expected =>
                "An expression was required and none begins here [1820]: "
                & "an operator with no operand, or a separator where a valu"
-               & "e belongs.",
+               & "e belongs. An exit written as a call's `else` value, `f("
+               & ") else return`, is refused here too, because a recovery "
+               & "that leaves holds its `return`, `fail`, `break` or `cont"
+               & "inue` in a block [1030]: the likely fix writes `else beg"
+               & "in return end` (D870).",
             when Catalogue.Token_Expected =>
                "A token the grammar requires is absent [1810]. The secon"
                & "d label points at the construct that required it. When a"
@@ -238,7 +242,11 @@ package body Landin.Diagnostics.Explanations is
                & "uld change what the line computes. Nor is an applied typ"
                & "e called to make a value: `list(i32)(items: ..., len: 3)"
                & "` is refused naming the form that works, the fields in p"
-               & "arentheses where the type is declared [1350].",
+               & "arentheses where the type is declared [1350]. `defer` an"
+               & "d `undo` register a call, so an assignment after either "
+               & "is refused as an assignment: write it in a routine of it"
+               & "s own that takes the place as `inout`, and register a ca"
+               & "ll to that [1100] [1110] (D873).",
             when Catalogue.Unclosed_Construct =>
                "A construct opened and its `end` never arrived [1800]. T"
                & "he second label shows where it opened; close it there.",
@@ -372,7 +380,11 @@ package body Landin.Diagnostics.Explanations is
                & ", `utf16` or `cstring` from its context but never a poin"
                & "ter; for a `ptr u8` parameter, bind it, `name: []u8 = ""."
                & "..""`, and pass `addr name[0]`, since the literal ends in"
-               & " NUL (D442).",
+               & " NUL (D442). An atom `else` on a call that returns a pla"
+               & "in pointer does not widen it into a union of several ato"
+               & "ms and that pointer (D235): the refusal names the one-at"
+               & "om union to recover into, whose value widens into the la"
+               & "rger one (D874).",
             when Catalogue.Not_Definitely_Assigned =>
                "Required storage is not definitely assigned at a read or"
                & " an exit [1910]. A read needs the place assigned on ever"
@@ -700,7 +712,15 @@ package body Landin.Diagnostics.Explanations is
                & "recover them through ordinary call `else`. In an `if` ar"
                & "m, `else value` after a call divides the `if` [1820], wh"
                & "ich leaves the call unrecovered: write `(f() else 0)`, o"
-               & "r bind the error with `else (problem)`.",
+               & "r bind the error with `else (problem)`. A failing call t"
+               & "hat ends a body with returns is read as the routine's va"
+               & "lue [1080], and the refusal says so; its result is held "
+               & "to the returns only once the failure is handled (D871). "
+               & "The hosted `main` takes no `!` set [1970], so a `try` or"
+               & " an unhandled call there is not mended by widening one: "
+               & "handle the failure with `else`, or move the work into a "
+               & "routine whose set holds it and handle that call's failur"
+               & "e in `main` (D872).",
             when Catalogue.Assembly_Block_Contract =>
                "An assembly block, operand or template breaks [1630]'s b"
                & "lock contract or [1990]'s register rules. Only `assemble"

@@ -7,4 +7,4 @@ error[L0329]: this failing call is neither tried nor recovered with `else`
   |
 3 |     read: (self: ptr mut item) -> (value: i32) ! unavailable
   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this failing signature
-  = note: [0960]/[1030]: write `try` to propagate or `else` to handle the declared error
+  = note: [1970]/[1030]: `main` declares no `!` set for `try` to pass the error to; handle it here with `else`, or call a routine whose `!` set holds it and handle that call's failure with `else`

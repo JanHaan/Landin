@@ -2418,6 +2418,10 @@ package body Landin.Stages.Checking is
            Landin.Checking.No_Signature;
          Atoms        : Landin.Checking.Atom_Set_Id :=
            Landin.Checking.No_Atom_Set;
+         --  D235: the several-atom pointer union a call's plain pointer
+         --  result fills, where this context is that call's recovery.
+         Filled_Union : Landin.Checking.Nominal_Type_Id :=
+           Landin.Checking.No_Nominal_Type;
       end record;
 
       No_Value_Context : constant Value_Context := (others => <>);
@@ -2637,6 +2641,12 @@ package body Landin.Stages.Checking is
         (Index_Type => Positive, Element_Type => Unanswered_Selection);
       Unanswered_Selections : Unanswered_Lists.Vector;
       Checking_Routine_Body : Boolean := False;
+      --  D235: the recovered call a several-atom pointer union is being
+      --  filled from while its value is synthesised, and that union.
+      Filling_Source : Landin.Source.Source_Id := Landin.Source.No_Source;
+      Filling_Call : Syn.Node_Id := Syn.No_Node;
+      Filling_Union : Landin.Checking.Nominal_Type_Id :=
+        Landin.Checking.No_Nominal_Type;
       --  Whether a routine body is being checked: a `mut` module binding
       --  read there holds whatever was last written, not its image.
       In_Routine_Body : Boolean := False;
@@ -16660,6 +16670,13 @@ package body Landin.Stages.Checking is
                         Expected.Signature := Result.Signature;
                      when Ty.Pointer_Value | Ty.Slice_Value =>
                         Expected.Reference := Joined_Reference;
+                        if Result.Kind = Ty.Pointer_Value
+                          and then Joined_Reference = Result.Reference
+                          and then Filling_Call = Node
+                          and then Filling_Source = Syn.Source_Of (Of_Tree)
+                        then
+                           Expected.Filled_Union := Filling_Union;
+                        end if;
                      when Ty.Any_Value =>
                         Expected.Concept := Result.Concept;
                      when others =>
@@ -32567,6 +32584,38 @@ package body Landin.Stages.Checking is
          return True;
       end Final_Control_Is_Statement;
 
+      --  A failing call nothing handles, ending a routine's body, was
+      --  most often written as a statement and read as the body's value.
+      --  Its failure is the first thing wrong with it, and L0329 says it
+      --  as that; whether its result has the type of the returns waits
+      --  for the failure to be handled.  True when Value is such a call.
+      function Ends_Body_Unhandled
+        (Of_Tree : Syn.Tree; Value : Syn.Node_Id) return Boolean;
+
+      function Ends_Body_Unhandled
+        (Of_Tree : Syn.Tree; Value : Syn.Node_Id) return Boolean
+      is
+         Signature : Landin.Checking.Signature_Id;
+      begin
+         if Syn.Kind (Of_Tree, Value)
+              not in Syn.Call | Syn.Labeled_Application
+           or else Is_Struct_Construction (Of_Tree, Value)
+           or else Syn.Recovery_Of (Of_Tree, Value) /= Syn.No_Node
+         then
+            return False;
+         end if;
+         Signature := Effective_Call_Signature (Of_Tree, Value);
+         if Signature = Landin.Checking.No_Signature
+           or else Landin.Checking.Signature_Error_Form
+             (Types.all, Signature) /= Landin.Checking.Concrete
+           or else Landin.Checking.Signature_Errors (Types.all, Signature)
+             = Landin.Checking.No_Atom_Set
+         then
+            return False;
+         end if;
+         return True;
+      end Ends_Body_Unhandled;
+
       procedure Check_Block
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
@@ -32615,6 +32664,11 @@ package body Landin.Stages.Checking is
                         return;
                      end if;
                   end;
+               end if;
+               if Routine_Body
+                 and then Ends_Body_Unhandled (Of_Tree, Value)
+               then
+                  return;
                end if;
             end;
          end if;
@@ -33049,6 +33103,61 @@ package body Landin.Stages.Checking is
          Because : String)
       is
       begin
+         if Expected.Kind = Ty.Pointer_Value
+           and then Expected.Filled_Union /= Landin.Checking.No_Nominal_Type
+         then
+            --  D235: the recovery stands in for the call's plain pointer,
+            --  which is what the union would be filled from; only a
+            --  one-atom union's recovery is admitted, and it widens.
+            declare
+               Spelt : constant Landin.Checking.Spelling.Tables :=
+                 (Types => Types, Meanings => Meanings,
+                  Spellings => Spellings);
+               Union_Text : constant String :=
+                 Spelling.Atoms_Text
+                   (Spelt, Landin.Checking.Union_Atoms
+                      (Types.all, Expected.Filled_Union))
+                 & " | " & Spelling.Reference_Text
+                   (Spelt, Landin.Checking.Union_Pointer
+                      (Types.all, Expected.Filled_Union));
+               One_Atom : constant Boolean :=
+                 Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
+                   = Ty.Atom_Value
+                 and then Landin.Checking.Holds
+                   (Types.all,
+                    Landin.Checking.Atom_Set_Of (Types.all, Of_Tree, Node))
+                 and then Landin.Checking.Atom_Count
+                   (Types.all,
+                    Landin.Checking.Atom_Set_Of (Types.all, Of_Tree, Node))
+                   = 1;
+            begin
+               Bad.Report
+                 (Item    => Bad.Type_Mismatch,
+                  Source  => Syn.Source_Of (Of_Tree),
+                  Where   => Syn.Where (Of_Tree, Node),
+                  Message => "an `else` value stands in for this call's"
+                             & " plain pointer, and does not widen it into `"
+                             & Union_Text & "`",
+                  Note    =>
+                    (if One_Atom
+                     then "D235: recover into `"
+                          & Spelling.Atoms_Text
+                              (Spelt, Landin.Checking.Atom_Set_Of
+                                 (Types.all, Of_Tree, Node))
+                          & " | " & Spelling.Reference_Text
+                              (Spelt, Landin.Checking.Union_Pointer
+                                 (Types.all, Expected.Filled_Union))
+                          & "` first, whose value widens into this union"
+                     else "D235: recover the pointer with an `else` that"
+                          & " leaves, and widen it into this union"
+                          & " afterwards"),
+                  Related => Beside (Of_Tree, Node, Site),
+                  Because => Beside_Label (Of_Tree, Node, Site, Because),
+                  Into    => Found);
+               Landin.Checking.Refuse (Types.all, Of_Tree, Node);
+               return;
+            end;
+         end if;
          Bad.Report
            (Item    => Bad.Type_Mismatch,
             Source  => Syn.Source_Of (Of_Tree),
@@ -33320,11 +33429,39 @@ package body Landin.Stages.Checking is
             return;
          end if;
 
-         Got :=
-           (if Syn.Kind (Of_Tree, Node)
-                 in Syn.Name_Reference | Syn.Member_Selection
-            then Selected_From (Of_Tree, Node)
-            else Synthesise (Of_Tree, Node));
+         if Syn.Kind (Of_Tree, Node) in Syn.Call | Syn.Labeled_Application
+           and then Syn.Recovery_Of (Of_Tree, Node) /= Syn.No_Node
+         then
+            --  D235: an atom recovery does not widen the call's plain
+            --  pointer, and its refusal names this union.
+            declare
+               Saved_Source : constant Landin.Source.Source_Id :=
+                 Filling_Source;
+               Saved_Call : constant Syn.Node_Id := Filling_Call;
+               Saved_Union : constant Landin.Checking.Nominal_Type_Id :=
+                 Filling_Union;
+            begin
+               Filling_Source := Syn.Source_Of (Of_Tree);
+               Filling_Call := Node;
+               Filling_Union := Union;
+               Got := Synthesise (Of_Tree, Node);
+               Filling_Source := Saved_Source;
+               Filling_Call := Saved_Call;
+               Filling_Union := Saved_Union;
+            exception
+               when others =>
+                  Filling_Source := Saved_Source;
+                  Filling_Call := Saved_Call;
+                  Filling_Union := Saved_Union;
+                  raise;
+            end;
+         else
+            Got :=
+              (if Syn.Kind (Of_Tree, Node)
+                    in Syn.Name_Reference | Syn.Member_Selection
+               then Selected_From (Of_Tree, Node)
+               else Synthesise (Of_Tree, Node));
+         end if;
          case Got is
             when Ty.Ill_Typed =>
                return;
@@ -38696,7 +38833,28 @@ package body Landin.Stages.Checking is
             --  ordinary declaration-backed view.
             View : Landin.Checking.Routine_Instance_Id :=
               Landin.Checking.No_Routine_Instance;
+            --  The signature whose body holds the call, or 0 where no
+            --  report needs it.
+            Caller : Natural := 0;
          end record;
+
+         --  The hosted entry's signature, or 0: [1970]'s `main` declares no
+         --  `!` set, so its refusals name the routes it does have.
+         Hosted_Main : Natural := 0;
+
+         --  The final value of each declared routine body with returns,
+         --  which [1080] reads as the routine's value.
+         Body_Values : Selection_Lists.Vector;
+
+         --  The entry module's public `main` of a hosted program.
+         function Is_Hosted_Main (Id : Res.Declaration_Id) return Boolean
+           is (not Landin.Targets.Is_Firmware (Facts)
+               and then Res.Sort_Of (Meanings.all, Id) = Res.Module_Function
+               and then Res.Is_Public (Meanings.all, Id)
+               and then Spelled (Res.Name_Of (Meanings.all, Id)) = "main"
+               and then Landin.Modules.Module_Of
+                 (Grouped.all, Res.Source_Of (Meanings.all, Id))
+                   = Landin.Modules.Entry_Module);
 
          --  One syntax node can occur in arbitrarily many concrete views;
          --  the source node count is not a bound on deferred call evidence.
@@ -39102,7 +39260,8 @@ package body Landin.Stages.Checking is
                                  Node => Node,
                                  Signature => Signature,
                                  View => Landin.Checking.Current_Routine_View
-                                   (Types.all)));
+                                   (Types.all),
+                                 Caller => Caller));
                            if Landin.Checking.Signature_Error_Form
                              (Types.all, Signature) = Landin.Checking.Inferred
                            then
@@ -39159,7 +39318,8 @@ package body Landin.Stages.Checking is
                               Node => Node,
                               Signature => Signature,
                               View => Landin.Checking.Current_Routine_View
-                                (Types.all)));
+                                (Types.all),
+                              Caller => Caller));
                      end if;
                   end;
                   return;
@@ -39278,6 +39438,27 @@ package body Landin.Stages.Checking is
                         begin
                            if Signature /= Landin.Checking.No_Signature then
                               Owns_Body (Positive (Signature)) := True;
+                              if Is_Hosted_Main (Id) then
+                                 Hosted_Main := Positive (Signature);
+                              end if;
+                              if Syn.Return_Count (In_Tree, Node) > 0
+                                and then Syn.Body_Of (In_Tree, Node)
+                                  /= Syn.No_Node
+                              then
+                                 declare
+                                    Runs : constant Syn.Node_Id :=
+                                      Syn.Body_Of (In_Tree, Node);
+                                    Ends : constant Pending_Selection :=
+                                      (Syn.Source_Of (In_Tree),
+                                       (if Syn.Kind (In_Tree, Runs)
+                                             = Syn.Block
+                                        then Syn.Block_Value (In_Tree, Runs)
+                                        else Runs),
+                                       Landin.Checking.No_Routine_Instance);
+                                 begin
+                                    Body_Values.Append (Ends);
+                                 end;
+                              end if;
                               Scan (In_Tree, Syn.Body_Of (In_Tree, Node),
                                     Positive (Signature));
                            end if;
@@ -39556,13 +39737,27 @@ package body Landin.Stages.Checking is
                              (Types.all,
                               Landin.Checking.Signature_Id (Signature))
                                .Where,
-                           Message => "this body can fail with " & Named
-                                      & ", which is outside its declared"
-                                      & " error set",
-                           Note    => "[0940]: every failing path belongs"
-                                      & " to the function's `!` set; add "
-                                      & Named & " to it, or recover the"
-                                      & " failure where it is raised",
+                           Message =>
+                             (if Signature = Hosted_Main
+                              then "`main` can fail with " & Named
+                                   & ", and the hosted entry declares no"
+                                   & " error set"
+                              else "this body can fail with " & Named
+                                   & ", which is outside its declared"
+                                   & " error set"),
+                           Note    =>
+                             (if Signature = Hosted_Main
+                              then "[1970]: `main` takes no `!` set, so"
+                                   & " `try` has nowhere to pass "
+                                   & Named & "; handle it where it is"
+                                   & " raised with `else`, or move the"
+                                   & " work into a routine whose `!` set"
+                                   & " holds it and handle that call's"
+                                   & " failure with `else` in `main`"
+                              else "[0940]: every failing path belongs"
+                                   & " to the function's `!` set; add "
+                                   & Named & " to it, or recover the"
+                                   & " failure where it is raised"),
                            Related =>
                              (if Site.Node = Syn.No_Node
                               then Landin.Checking.Signature_Origin
@@ -39604,6 +39799,16 @@ package body Landin.Stages.Checking is
                      then Syn.Else_Left_At
                             (Of_Tree.all, Issues (Index).Node)
                      else Landin.Source.Empty_Span);
+                  Ends_Body : constant Boolean :=
+                    Landin.Checking.Signature_Result_Count
+                      (Types.all, Issues (Index).Signature) > 0
+                    and then Body_Values.Contains
+                      (Pending_Selection'
+                         (Issues (Index).Source, Issues (Index).Node,
+                          Landin.Checking.No_Routine_Instance));
+                  In_Main : constant Boolean :=
+                    Hosted_Main /= 0
+                    and then Issues (Index).Caller = Hosted_Main;
                begin
                   if Left /= Landin.Source.Empty_Span then
                      --  [1820]: the `else` written after the call divides
@@ -39630,11 +39835,31 @@ package body Landin.Stages.Checking is
                         Source  => Issues (Index).Source,
                         Where   => Syn.Where
                           (Of_Tree.all, Issues (Index).Node),
-                        Message => "this failing call is neither tried nor"
-                                   & " recovered with `else`",
-                        Note    => "[0960]/[1030]: write `try` to propagate"
-                                   & " or `else` to handle the declared"
-                                   & " error",
+                        Message =>
+                          (if Ends_Body
+                           then "this failing call is neither tried nor"
+                                & " recovered with `else`, and ending the"
+                                & " body it is read as the routine's"
+                                & " value"
+                           else "this failing call is neither tried nor"
+                                & " recovered with `else`"),
+                        Note    =>
+                          (if In_Main
+                           then "[1970]/[1030]: `main` declares no `!`"
+                                & " set for `try` to pass the error to;"
+                                & " handle it here with `else`, or call"
+                                & " a routine whose `!` set holds it and"
+                                & " handle that call's failure with"
+                                & " `else`"
+                           elsif Ends_Body
+                           then "[0960]/[1030]: write `try` to propagate"
+                                & " or `else` to handle the declared"
+                                & " error; a call whose result is not"
+                                & " the routine's value is discarded"
+                                & " with `_ =`"
+                           else "[0960]/[1030]: write `try` to propagate"
+                                & " or `else` to handle the declared"
+                                & " error"),
                         Related => Landin.Checking.Signature_Origin
                           (Types.all, Issues (Index).Signature),
                         Because => "this failing signature",
@@ -39752,7 +39977,12 @@ package body Landin.Stages.Checking is
                  (Of_Tree, Runs, Gives, Expected,
                   Result_Site, "the returns this fills", Routine_Body => True);
             end if;
-         elsif not Final_Control_Is_Statement (Of_Tree, Runs, Gives) then
+         elsif not Final_Control_Is_Statement (Of_Tree, Runs, Gives)
+           and then not
+             (Syn.Kind (Of_Tree, Runs) in Syn.Call | Syn.Labeled_Application
+              and then Synthesise (Of_Tree, Runs) /= Ty.Ill_Typed
+              and then Ends_Body_Unhandled (Of_Tree, Runs))
+         then
             Check_Contextual_Value
               (Of_Tree, Runs, Expected, Result_Site,
                "the returns this fills");

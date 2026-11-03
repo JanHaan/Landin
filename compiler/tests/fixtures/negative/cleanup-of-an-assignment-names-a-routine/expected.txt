@@ -1,0 +1,30 @@
+error[L0103]: `defer` registers a call, and this is an assignment
+  --> ../tests/fixtures/negative/cleanup-of-an-assignment-names-a-routine/program.ldn:6:11
+  |
+6 |     defer finished = true
+  |           ^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/cleanup-of-an-assignment-names-a-routine/program.ldn:6:5
+  |
+6 |     defer finished = true
+  |     ^^^^^ the defer
+  = note: [1100]: write the assignment in a routine of its own, taking the place as `inout`, and `defer` a call to it
+error[L0103]: `defer` registers a call, and this is an assignment
+  --> ../tests/fixtures/negative/cleanup-of-an-assignment-names-a-routine/program.ldn:7:11
+  |
+7 |     defer steps += 1
+  |           ^^^^^^^^^^
+  --> ../tests/fixtures/negative/cleanup-of-an-assignment-names-a-routine/program.ldn:7:5
+  |
+7 |     defer steps += 1
+  |     ^^^^^ the defer
+  = note: [1100]: write the assignment in a routine of its own, taking the place as `inout`, and `defer` a call to it
+error[L0103]: `undo` registers a call, and this is an assignment
+  --> ../tests/fixtures/negative/cleanup-of-an-assignment-names-a-routine/program.ldn:8:10
+  |
+8 |     undo finished = false
+  |          ^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/cleanup-of-an-assignment-names-a-routine/program.ldn:8:5
+  |
+8 |     undo finished = false
+  |     ^^^^ the undo
+  = note: [1110]: write the assignment in a routine of its own, taking the place as `inout`, and `undo` a call to it

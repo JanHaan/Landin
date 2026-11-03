@@ -117,7 +117,8 @@ package Landin.Diagnostics is
       Measure_Bare,    --  `sizeof (t)` loses the parentheses
       Unwrap_Name,     --  `else (r)` as a branch's value loses them
       Landin_Form,     --  another language's spelling becomes Landin's
-      Ignore_Failure); --  a value no call result needs becomes `none`
+      Ignore_Failure,  --  a value no call result needs becomes `none`
+      Hold_Exit);      --  an exit after a call's `else` gets a block
 
    type Fix is private;
 

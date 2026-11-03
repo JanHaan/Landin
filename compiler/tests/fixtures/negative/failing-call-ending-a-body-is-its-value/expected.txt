@@ -1,0 +1,20 @@
+error[L0329]: this failing call is neither tried nor recovered with `else`, and ending the body it is read as the routine's value
+  --> ../tests/fixtures/negative/failing-call-ending-a-body-is-its-value/program.ldn:12:5
+   |
+12 |     reading(key)
+   |     ^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/failing-call-ending-a-body-is-its-value/program.ldn:6:1
+  |
+6 | reading: (key: u32) -> (value: u8) ! missing =
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this failing signature
+  = note: [0960]/[1030]: write `try` to propagate or `else` to handle the declared error; a call whose result is not the routine's value is discarded with `_ =`
+error[L0329]: this failing call is neither tried nor recovered with `else`, and ending the body it is read as the routine's value
+  --> ../tests/fixtures/negative/failing-call-ending-a-body-is-its-value/program.ldn:18:5
+   |
+18 |     reading(key)
+   |     ^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/failing-call-ending-a-body-is-its-value/program.ldn:6:1
+  |
+6 | reading: (key: u32) -> (value: u8) ! missing =
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this failing signature
+  = note: [0960]/[1030]: write `try` to propagate or `else` to handle the declared error; a call whose result is not the routine's value is discarded with `_ =`

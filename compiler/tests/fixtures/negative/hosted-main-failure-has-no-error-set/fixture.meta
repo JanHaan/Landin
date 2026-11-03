@@ -1,0 +1,9 @@
+class: negative
+summary: D872's `try` and unhandled failing call in the hosted `main` are refused naming `else` and a fallible routine, never a `!` set `main` may not have
+program: program.ldn
+codes: L0329, L0329
+constructs: 0940, 0960, 1030, 1970
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+expect: expected.txt
+args: ../tests/fixtures/negative/hosted-main-failure-has-no-error-set/program.ldn
+status: 1

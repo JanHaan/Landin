@@ -1,0 +1,9 @@
+class: negative
+summary: D873's assignment after `defer` or `undo` is refused as an assignment, with the note naming a routine that makes it and a cleanup that calls it
+program: program.ldn
+codes: L0103, L0103, L0103
+constructs: 1100, 1110
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+expect: expected.txt
+args: ../tests/fixtures/negative/cleanup-of-an-assignment-names-a-routine/program.ldn
+status: 1

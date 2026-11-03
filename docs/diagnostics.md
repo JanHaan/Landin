@@ -342,7 +342,10 @@ empty: type = ()
 ### L0102
 
 An expression was required and none begins here [1820]: an operator with no
-operand, or a separator where a value belongs.
+operand, or a separator where a value belongs. An exit written as a call's
+`else` value, `f() else return`, is refused here too, because a recovery that
+leaves holds its `return`, `fail`, `break` or `continue` in a block [1030]:
+the likely fix writes `else begin return end` (D870).
 
 ### L0103
 
@@ -356,7 +359,10 @@ its own (D405). Only a name is indexed [0570], so a text literal followed by
 removes the literal, which would change what the line computes. Nor is an
 applied type called to make a value: `list(i32)(items: ..., len: 3)` is
 refused naming the form that works, the fields in parentheses where the
-type is declared [1350].
+type is declared [1350]. `defer` and `undo` register a call, so an
+assignment after either is refused as an assignment: write it in a routine of
+its own that takes the place as `inout`, and register a call to that
+[1100] [1110] (D873).
 
 ```landin
 extern(c) bad: (...) -> none
@@ -552,7 +558,10 @@ another permission [0440]. The second label shows where the requirement was
 stated. Change the value, or convert it explicitly where a conversion exists.
 A text literal takes `utf8`, `[]u8`, `utf16` or `cstring` from its context but
 never a pointer; for a `ptr u8` parameter, bind it, `name: []u8 = "..."`, and
-pass `addr name[0]`, since the literal ends in NUL (D442).
+pass `addr name[0]`, since the literal ends in NUL (D442). An atom `else` on a
+call that returns a plain pointer does not widen it into a union of several
+atoms and that pointer (D235): the refusal names the one-atom union to
+recover into, whose value widens into the larger one (D874).
 
 ```landin
 flag: bool = true
@@ -1025,7 +1034,12 @@ propagate their declared errors: the enclosing routine must declare or infer
 those atoms, and its caller may recover them through ordinary call `else`. In
 an `if` arm, `else value` after a call divides the `if` [1820], which leaves
 the call unrecovered: write `(f() else 0)`, or bind the error with
-`else (problem)`.
+`else (problem)`. A failing call that ends a body with returns is read as the
+routine's value [1080], and the refusal says so; its result is held to the
+returns only once the failure is handled (D871). The hosted `main` takes no
+`!` set [1970], so a `try` or an unhandled call there is not mended by
+widening one: handle the failure with `else`, or move the work into a routine
+whose set holds it and handle that call's failure in `main` (D872).
 
 ```landin
 missing, denied: atom

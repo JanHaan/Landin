@@ -1,0 +1,24 @@
+--  D871: a failing call nothing handles, ending a body with returns, is read
+--  as the body's value.  Its failure is the refusal, said once, and its
+--  result's type is not held to the returns until the failure is handled.
+missing: atom
+
+reading: (key: u32) -> (value: u8) ! missing =
+    fail missing when key == 0
+    value = u8(key)
+end reading
+
+widened: (key: u32) -> (value: i32) =
+    reading(key)
+end widened
+
+pair: (key: u32) -> (low: i32, high: i32) =
+    low = 0
+    high = i32(key)
+    reading(key)
+end pair
+
+public main: () -> (code: i32) =
+    (low, high) := pair(2)
+    code = widened(1) + low + high
+end main

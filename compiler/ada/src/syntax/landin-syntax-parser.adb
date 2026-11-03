@@ -8729,7 +8729,38 @@ package body Landin.Syntax.Parser is
                               Call_Node := Add (Error_Expression, Point);
                            end if;
 
-                           if Kind (Result, Call_Node) /= Call then
+                           if Kind (Result, Call_Node) /= Call
+                             and then Peek in Tok.Equal | Tok.Compound_Assign
+                             and then not Begins_Line (Index)
+                           then
+                              --  An assignment is a statement, and a
+                              --  cleanup registers only a call: the way to
+                              --  delay one is a routine that makes it.
+                              while Peek /= Tok.End_Of_Input
+                                and then not Begins_Line (Index)
+                              loop
+                                 Advance;
+                              end loop;
+                              Complain
+                                (Item    => Syn.Token_Expected,
+                                 Where   => Join
+                                   (Where (Result, Call_Node), Previous),
+                                 Message => "`" & Cleanup_Name
+                                            & "` registers a call, and"
+                                            & " this is an assignment",
+                                 Note    => Cleanup_Paragraph
+                                            & ": write the assignment in"
+                                            & " a routine of its own,"
+                                            & " taking the place as"
+                                            & " `inout`, and `"
+                                            & Cleanup_Name
+                                            & "` a call to it",
+                                 Related => At_Cleanup,
+                                 Because => "the " & Cleanup_Name);
+                              return Add
+                                (Error_Statement, At_Cleanup,
+                                 Join (Start, After_Previous), [Call_Node]);
+                           elsif Kind (Result, Call_Node) /= Call then
                               if Kind (Result, Call_Node)
                                    /= Error_Expression
                               then
@@ -12173,6 +12204,49 @@ package body Landin.Syntax.Parser is
                            if Peek = Tok.Kw_End then
                               Advance;
                            end if;
+                        elsif Peek in Tok.Kw_Return | Tok.Kw_Fail
+                                    | Tok.Kw_Break | Tok.Kw_Continue
+                        then
+                           --  [1030]: a recovery that leaves holds its exit
+                           --  in a block, and the one-value form takes a
+                           --  value, which an exit is not.  The exit is
+                           --  read as that block's one statement, so the
+                           --  line says nothing else.
+                           declare
+                              Exit_At : constant Landin.Source.Span := Here;
+                              Word : constant String := Tok.Spelling (Peek);
+                              Leaving : constant Node_Id :=
+                                Parse_Statement (Active_Frame);
+                              Bare : constant Boolean :=
+                                Previous = Exit_At;
+                           begin
+                              Complain
+                                (Item    => Syn.Expression_Expected,
+                                 Where   => Exit_At,
+                                 Message => "a recovery that leaves holds"
+                                            & " its `" & Word & "` in a"
+                                            & " block: write `else begin "
+                                            & Word
+                                            & (if Bare then "" else " ...")
+                                            & " end`",
+                                 Note    => "[1030]: `else value` stands in"
+                                            & " for the call's result,"
+                                            & " `else (problem) ... end`"
+                                            & " names the error in its"
+                                            & " block, and `try` passes the"
+                                            & " failure on instead",
+                                 Related => At_Else,
+                                 Because => "this recovery",
+                                 Fixes   =>
+                                   [1 => Landin.Diagnostics.Fixes.Hold_Exit
+                                           (Origin_Of, Exit_At.First,
+                                            Previous.Last, Word)]);
+                              Recovery_Body := Add
+                                (Of_Kind  => Block,
+                                 At_Token => Exit_At,
+                                 Extent   => Join (Exit_At, After_Previous),
+                                 Children => [1 => No_Node, 2 => Leaving]);
+                           end;
                         else
                            declare
                               Value : constant Node_Id := Parse_Expression;
