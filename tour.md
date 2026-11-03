@@ -2146,9 +2146,11 @@ end area_and_corners
   bind the payload, as `circle(radius)` does.
 - Several labels share one arm, `north, south:`, and each counts toward
   covering every case. An arm that binds a payload names one case.
-- `_` is an arm of its own and covers whatever is left. On an atom set,
-  `_ (rest):` binds the remaining atoms as a set of their own, so they can
-  be passed on where only those are wanted.
+- `_` is an arm of its own and covers whatever is left of an atom set or a
+  pointer union. On an atom set, `_ (rest):` binds the remaining atoms as a
+  set of their own, so they can be passed on where only those are wanted.
+- A variant part takes no `_`: its match names every case, and the cases
+  that share what an arm runs are listed on that arm.
 - A number has no identity to name, so it is compared with `if` and
   `elsif`, not matched.
 

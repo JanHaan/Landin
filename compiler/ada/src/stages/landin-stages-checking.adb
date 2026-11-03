@@ -30302,6 +30302,10 @@ package body Landin.Stages.Checking is
               (Body_Tree.all, Part);
             type Node_List is array (Positive range <>) of Syn.Node_Id;
             First : Node_List (1 .. Count) := [others => Syn.No_Node];
+            --  D77 takes no `_` arm on a variant part; the first one
+            --  written is refused once, naming the cases it was to cover,
+            --  and the missing-case reports it stands for are not made.
+            Wildcard : Syn.Node_Id := Syn.No_Node;
          begin
             for Position in 1 .. Syn.Match_Label_Total (Of_Tree, Node) loop
                declare
@@ -30326,6 +30330,21 @@ package body Landin.Stages.Checking is
                         Related => Syn.Origin (Of_Tree, Subject),
                         Because => "the matched variant part",
                         Into    => Found);
+                     Refuse_Bindings (Arm);
+                     if Syn.Ends_Arm (Of_Tree, Node, Position) then
+                        Visit_Arm (Arm);
+                     end if;
+                     goto Next_Variant_Arm;
+                  end if;
+
+                  if Syn.Kind (Of_Tree, Pattern) = Syn.Name_Reference
+                    and then Syn.Name (Of_Tree, Pattern)
+                      = Landin.Source.Names.No_Name
+                  then
+                     if Wildcard = Syn.No_Node then
+                        Wildcard := Pattern;
+                     end if;
+                     Landin.Checking.Refuse (Types.all, Of_Tree, Pattern);
                      Refuse_Bindings (Arm);
                      if Syn.Ends_Arm (Of_Tree, Node, Position) then
                         Visit_Arm (Arm);
@@ -30550,6 +30569,44 @@ package body Landin.Stages.Checking is
                   <<Next_Variant_Arm>>
                end;
             end loop;
+
+            if Wildcard /= Syn.No_Node then
+               declare
+                  package Unbounded renames Ada.Strings.Unbounded;
+                  Left : Unbounded.Unbounded_String;
+               begin
+                  for Which in First'Range loop
+                     if First (Which) = Syn.No_Node then
+                        if Unbounded.Length (Left) > 0 then
+                           Unbounded.Append (Left, ", ");
+                        end if;
+                        Unbounded.Append
+                          (Left,
+                           Spelled
+                             (Syn.Name
+                                (Body_Tree.all,
+                                 Syn.Nth_Case (Body_Tree.all, Part, Which))));
+                     end if;
+                  end loop;
+                  Bad.Report
+                    (Item    => Bad.Match_Arm_Form,
+                     Source  => Syn.Source_Of (Of_Tree),
+                     Where   => Syn.Where (Of_Tree, Wildcard),
+                     Message => "a variant part is matched case by case,"
+                                & " and `_` is no case",
+                     Note    =>
+                       (if Unbounded.Length (Left) = 0
+                        then "D77: every case already has an arm; remove"
+                             & " the `_` arm"
+                        else "D77: name the cases `_` was to cover in one"
+                             & " arm, `" & Unbounded.To_String (Left)
+                             & ":`, as D405 lets several cases share it"),
+                     Related => Syn.Origin (Of_Tree, Subject),
+                     Because => "the matched variant part",
+                     Into    => Found);
+               end;
+               return;
+            end if;
 
             for Which in First'Range loop
                if First (Which) = Syn.No_Node then

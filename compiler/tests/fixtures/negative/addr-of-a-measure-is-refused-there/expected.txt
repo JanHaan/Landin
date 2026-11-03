@@ -1,0 +1,6 @@
+error[L0100]: `addr` takes a named place, and a measure is a value with no address
+  --> ../tests/fixtures/negative/addr-of-a-measure-is-refused-there/program.ldn:6:19
+  |
+6 |     p := any(addr lenof people)
+  |                   ^^^^^^^^^^^^
+  = note: [0380]: `addr` names a binding, a field or an element; bind the measure to a name first, as in `count := lenof items`

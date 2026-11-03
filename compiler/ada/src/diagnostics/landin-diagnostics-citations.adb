@@ -2078,6 +2078,22 @@ package body Landin.Diagnostics.Citations is
                "A match arm written as a value names `if` and `elsif`",
             when 370 =>
                "Statements under a bare `else` name the bound recovery",
+            when 860 =>
+               "A second statement under a match arm names the bare bloc"
+               & "k",
+            when 861 =>
+               "A type alone after `->` names the return with a name",
+            when 862 =>
+               "A quoted import path says the path is written bare",
+            when 863 =>
+               "`addr` of a measure is the address of a value",
+            when 864 =>
+               "No repair moves `lenof` or its operand",
+            when 865 =>
+               "`when` after a statement that is no exit names the exits",
+            when 866 =>
+               "A `_` arm on a variant part is one refusal naming the ca"
+               & "ses left",
             when 373 =>
                "A note explains in words, and a cited label stands besid"
                & "e them",
@@ -3550,6 +3566,20 @@ package body Landin.Diagnostics.Citations is
             when 369 =>
                "Decisions: The toolchain, C and the machine",
             when 370 =>
+               "Decisions: The toolchain, C and the machine",
+            when 860 =>
+               "Decisions: The toolchain, C and the machine",
+            when 861 =>
+               "Decisions: The toolchain, C and the machine",
+            when 862 =>
+               "Decisions: The toolchain, C and the machine",
+            when 863 =>
+               "Decisions: The toolchain, C and the machine",
+            when 864 =>
+               "Decisions: The toolchain, C and the machine",
+            when 865 =>
+               "Decisions: The toolchain, C and the machine",
+            when 866 =>
                "Decisions: The toolchain, C and the machine",
             when 373 =>
                "Decisions: The toolchain, C and the machine",
@@ -5168,6 +5198,27 @@ package body Landin.Diagnostics.Citations is
             when 370 =>
                "https://www.701.dev/spec.html#d370-statements-under-a-ba"
                & "re-else-name-the-bound-recovery",
+            when 860 =>
+               "https://www.701.dev/spec.html#d860-a-second-statement-un"
+               & "der-a-match-arm-names-the-bare-block",
+            when 861 =>
+               "https://www.701.dev/spec.html#d861-a-type-alone-after-na"
+               & "mes-the-return-with-a-name",
+            when 862 =>
+               "https://www.701.dev/spec.html#d862-a-quoted-import-path-"
+               & "says-the-path-is-written-bare",
+            when 863 =>
+               "https://www.701.dev/spec.html#d863-addr-of-a-measure-is-"
+               & "the-address-of-a-value",
+            when 864 =>
+               "https://www.701.dev/spec.html#d864-no-repair-moves-lenof"
+               & "-or-its-operand",
+            when 865 =>
+               "https://www.701.dev/spec.html#d865-when-after-a-statemen"
+               & "t-that-is-no-exit-names-the-exits",
+            when 866 =>
+               "https://www.701.dev/spec.html#d866-a-arm-on-a-variant-pa"
+               & "rt-is-one-refusal-naming-the-cases-left",
             when 373 =>
                "https://www.701.dev/spec.html#d373-a-note-explains-in-wo"
                & "rds-and-a-cited-label-stands-beside-them",

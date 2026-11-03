@@ -1,0 +1,12 @@
+error[L0102]: a value belongs after `+`
+  --> ../tests/fixtures/negative/trailing-operator-after-a-measure-names-the-value/program.ldn:5:24
+  |
+5 |     count = lenof line +
+  |                        ^
+  --> ../tests/fixtures/negative/trailing-operator-after-a-measure-names-the-value/program.ldn:6:1
+  |
+6 | end count_of
+  | ^^^ where the parse stopped
+  = note: written as `count = lenof line + 0` the line parses
+  = help: write a value after `+`
+  = help: remove `+`

@@ -1,0 +1,10 @@
+class: negative
+summary: D864 an operator ending its line after a `lenof` operand is reported as a missing right operand, never as the operand and operator swapped
+program: program.ldn
+codes: L0102
+fixed: program.fixed
+constructs: 0370, 1820
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+args: ../tests/fixtures/negative/trailing-operator-after-a-measure-names-the-value/program.ldn
+expect: expected.txt
+status: 1

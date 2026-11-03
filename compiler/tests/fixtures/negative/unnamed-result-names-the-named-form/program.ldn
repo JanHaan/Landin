@@ -1,0 +1,9 @@
+--  D861: another language's unnamed result is one report naming the form
+--  with a name, and the function is still closed by its own `end`.
+add: (a: i32, b: i32) -> i32 =
+    a + b
+end add
+
+public main: () -> (code: i32) =
+    code = 0
+end main

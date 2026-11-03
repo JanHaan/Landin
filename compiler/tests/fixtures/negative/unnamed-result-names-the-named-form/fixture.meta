@@ -1,0 +1,9 @@
+class: negative
+summary: D861 a bare type after `->` is one report naming the named return, and the function its `end` closes is not reported as never closed
+program: program.ldn
+codes: L0103
+constructs: 1800
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+args: ../tests/fixtures/negative/unnamed-result-names-the-named-form/program.ldn
+expect: expected.txt
+status: 1

@@ -2456,10 +2456,14 @@ package body Landin.Diagnostics.Citations.Texts is
                & "h counts toward covering every case. An arm that binds a"
                & " payload names one case."
                & LF
-               & "- `_` is an arm of its own and covers whatever is left. "
-               & "On an atom set, `_ (rest):` binds the remaining atoms as"
-               & " a set of their own, so they can be passed on where only"
-               & " those are wanted."
+               & "- `_` is an arm of its own and covers whatever is left o"
+               & "f an atom set or a pointer union. On an atom set, `_ (re"
+               & "st):` binds the remaining atoms as a set of their own, s"
+               & "o they can be passed on where only those are wanted."
+               & LF
+               & "- A variant part takes no `_`: its match names every cas"
+               & "e, and the cases that share what an arm runs are listed "
+               & "on that arm."
                & LF
                & "- A number has no identity to name, so it is compared wi"
                & "th `if` and `elsif`, not matched.",
@@ -23671,6 +23675,66 @@ package body Landin.Diagnostics.Citations.Texts is
                & "block does not use, and its Likely fix writes ` (problem"
                & ")` after the `else`. The block is read as the bound reco"
                & "very to its `end`, so the mistake is one report.",
+            when 860 =>
+               "Chosen: after an arm, a line that begins with what only "
+               & "a statement begins with (a statement's keyword, a discar"
+               & "d, or a name followed by `=`, `:=`, an updating assignme"
+               & "nt or a call that no `:` follows) is refused at its firs"
+               & "t token as L0103, ""a match arm runs one statement, and t"
+               & "his is a second"", labelled at the case the arm began wit"
+               & "h, and its note names the bare block: `begin` after the "
+               & "arm's `:`, its statements, then `end`. Each such line is"
+               & " read as a statement and adds no report of its own, so t"
+               & "he next arm is still an arm. Indentation decides nothing"
+               & " here: the line is a statement by its tokens, wherever i"
+               & "t stands.",
+            when 861 =>
+               "Chosen: a type where [1800]'s returns belong, beginning "
+               & "with a name that no `:` or `,` follows, with `ptr` or wi"
+               & "th `[`, is refused there as L0103, ""a return is named as"
+               & " well as typed"", whose note writes the named form, `(res"
+               & "ult: i32)` when the type is one name and `(result: type)"
+               & "` otherwise. The type is read as one return's, so the bo"
+               & "dy opens at `=` and the function is closed by its own `e"
+               & "nd`: one report.",
+            when 862 =>
+               "Chosen: an import whose path is a text or raw literal is"
+               & " refused at the literal as L0100, ""an import's module pa"
+               & "th is written without quotes"", whose note shows `import "
+               & "core/text`. The import binds nothing, so the refusal is "
+               & "one report.",
+            when 863 =>
+               "Chosen: `addr` followed by [0370]'s `lenof` and a name, "
+               & "or by D411's `offsetof` and a dotted name, is refused at"
+               & " the measure as L0100, ""`addr` takes a named place, and "
+               & "a measure is a value with no address"", as a literal afte"
+               & "r `addr` is, and its note says to bind the measure to a "
+               & "name first. The report's own words begin ""`addr` takes"","
+               & " which D261's repairs already leave standing, so nothing"
+               & " offers to drop the operand.",
+            when 864 =>
+               "Chosen: D261's swaps and its call-with-parentheses trial"
+               & " leave a `lenof` and the token after it where they were,"
+               & " as its removals already did, so a trailing operator aft"
+               & "er a measure is answered as one after any other value, """
+               & "a value belongs after `+`"", with the value written there"
+               & " as its likely fix.",
+            when 865 =>
+               "Chosen: a `when` left over after a statement is refused "
+               & "as L0110, ""only an exit takes `when`: `return`, `fail`, "
+               & "`break` or `continue`"", and its note says any other stat"
+               & "ement runs on a condition inside `if condition then` and"
+               & " `end if`.",
+            when 866 =>
+               "Chosen: D77 stands. The first `_` arm of a match on a va"
+               & "riant part is refused as L0333, ""a variant part is match"
+               & "ed case by case, and `_` is no case"", labelled at the su"
+               & "bject, and its note names the cases no other arm names, "
+               & "to be listed on one arm as D405 allows, `full, spare:`, "
+               & "or says to remove the arm when every case has one. The m"
+               & "issing-case reports it stands for are not made. [1210] s"
+               & "ays that `_` covers what is left of an atom set or a poi"
+               & "nter union and that a variant part takes none.",
             when 373 =>
                "Chosen: every note the compiler emits says what the rule"
                & " is in plain words. A paragraph or decision label may st"

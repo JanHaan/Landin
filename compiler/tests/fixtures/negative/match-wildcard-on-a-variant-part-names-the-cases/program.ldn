@@ -1,0 +1,15 @@
+--  D866: D77 takes no `_` arm on a variant part.  It is refused once,
+--  naming the cases it was to cover, and the cases it stood for are not
+--  reported again as missing.
+choice: type = struct
+    kind: variant empty | full | spare end kind
+end choice
+
+public main: () -> (code: i32) =
+    value: choice = (kind: empty)
+    code = 42
+    match value.kind
+        empty: code = 1
+        _: code = 2
+    end match
+end main

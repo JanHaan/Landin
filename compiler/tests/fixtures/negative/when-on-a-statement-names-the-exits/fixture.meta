@@ -1,0 +1,9 @@
+class: negative
+summary: D865 `when` after an assignment is refused naming `return`, `fail`, `break` and `continue` as the exits that take it, and `if` for the rest
+program: program.ldn
+codes: L0110
+constructs: 0970
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+args: ../tests/fixtures/negative/when-on-a-statement-names-the-exits/program.ldn
+expect: expected.txt
+status: 1

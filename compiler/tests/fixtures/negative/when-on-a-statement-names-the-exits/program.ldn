@@ -1,0 +1,7 @@
+--  D865: `when` after a statement that is no exit is refused naming the
+--  four exits that take it and `if` for every other statement.
+public main: () -> (code: i32) =
+    outcome: i32 = 40
+    code = 0
+    code = outcome when outcome > 30
+end main
