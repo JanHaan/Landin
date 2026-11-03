@@ -7,6 +7,11 @@ import sys
 import tempfile
 import unittest
 
+#  Seconds before a subprocess here is called hung.  It ends in well under
+#  a second on an idle host; the limit only stops a hang, and is wide
+#  because scripts/script_tests.py's own workers load the host.
+HANG = 300
+
 ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -30,19 +35,19 @@ class PanicLocations(unittest.TestCase):
                                          'stack_exhausted')):
                 args = command + ['--panic-site', str(101 + 5 * 14 + kind)]
                 result = subprocess.run(args + ['--assembly', assembly],
-                                        capture_output=True, timeout=10)
+                                        capture_output=True, timeout=HANG)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(result.stdout, path + f':3:3 ({name})\n'.encode())
                 for identity in ([], ['--build-id', 'b' * 64]):
                     self.assertNotEqual(subprocess.run(args + identity,
-                        capture_output=True, timeout=10).returncode, 0)
+                        capture_output=True, timeout=HANG).returncode, 0)
             for site in (0, -1, 100, 201, 2**32):
                 result = subprocess.run(command + ['--panic-site', str(site),
-                    '--assembly', assembly], capture_output=True, timeout=10)
+                    '--assembly', assembly], capture_output=True, timeout=HANG)
                 self.assertNotEqual(result.returncode, 0)
             assembly.write_bytes(b'other assembly\n')
             self.assertNotEqual(subprocess.run(command + ['--panic-site', '101',
-                '--assembly', assembly], capture_output=True, timeout=10).returncode, 0)
+                '--assembly', assembly], capture_output=True, timeout=HANG).returncode, 0)
 
 
 if __name__ == '__main__':

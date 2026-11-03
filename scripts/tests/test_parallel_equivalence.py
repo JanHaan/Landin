@@ -8,6 +8,11 @@ import subprocess
 import tempfile
 import unittest
 
+#  Seconds before a subprocess here is called hung.  It ends in well under
+#  a second on an idle host; the limit only stops a hang, and is wide
+#  because scripts/script_tests.py's own workers load the host.
+HANG = 300
+
 
 SCRIPTS = Path(__file__).resolve().parents[1]
 PASS = "fixture execution\n  pass  one\n\ncases 1, passed 1, failed 0, checks 1\n"
@@ -37,7 +42,7 @@ class ParallelEquivalence(unittest.TestCase):
             return subprocess.run(
                 [str(scripts / "parallel-equivalence.sh"),
                  "--suite=fixture execution"],
-                capture_output=True, text=True, timeout=10,
+                capture_output=True, text=True, timeout=HANG,
                 env={**os.environ, "LANDIN_BUILD_TAG": "test"},
             )
 

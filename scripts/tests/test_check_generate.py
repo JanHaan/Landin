@@ -84,6 +84,13 @@ class GeneratorFlags(unittest.TestCase):
                 self.assertIn("takes no file", said)
                 self.assertIn("--generate", said)
 
+    def test_help_prints_the_usage_and_runs_nothing(self):
+        for flag in ("--help", "-h"):
+            with self.subTest(flag=flag):
+                status, ran, said = self.run_main(flag)
+                self.assertEqual((status, ran), (0, []))
+                self.assertEqual(said.strip(), CHECK.usage())
+
     def test_an_unknown_flag_is_refused_naming_the_valid_ones(self):
         for arguments in (("--bogus",), ("--generate", "--bogus"),
                           ("spec.md", "--bogus")):

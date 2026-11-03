@@ -9876,6 +9876,7 @@ def regenerating(relative):
 def usage():
     """What check.py does with each argument, a line each."""
     lines = ["usage:",
+             "  python3 check.py --help       prints this",
              "  python3 check.py              checks everything",
              "  python3 check.py FILE...      checks those files",
              "  python3 check.py %-12s regenerates every file below, and"
@@ -9904,6 +9905,9 @@ def main(argv):
     if here:
         os.chdir(here)
 
+    if argv[1:] in (["--help"], ["-h"]):
+        print(usage())
+        return 0
     flags = [one for one in argv[1:] if one.startswith("--")]
     valid = [GENERATE_ALL] + [flag for flag, _ in GENERATORS]
     unknown = [one for one in flags if one not in valid]

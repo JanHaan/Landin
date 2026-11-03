@@ -11,6 +11,10 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
+#  Seconds before a subprocess here is called hung.  It ends in well under
+#  a second on an idle host; the limit only stops a hang, and is wide
+#  because scripts/script_tests.py's own workers load the host.
+HANG = 300
 WATCH = ROOT / "scripts" / "gate_watch.py"
 
 #  Answers each `gh run view` with the next recorded state, holding the last.
@@ -72,7 +76,7 @@ class GateWatch(unittest.TestCase):
                                            os.environ["PATH"])}
         return subprocess.run(
             [sys.executable, str(WATCH), "--interval=0", *arguments],
-            capture_output=True, text=True, timeout=30, env=environment,
+            capture_output=True, text=True, timeout=HANG, env=environment,
             cwd=ROOT)
 
     def asked_for(self):
