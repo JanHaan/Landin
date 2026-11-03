@@ -11,6 +11,19 @@ establish power-on or boot-ROM behavior. `refine` retains the default boot
 layout; board tools default to `--mode=ram` and select the compiler's
 `--firmware-layout=ram` explicitly.
 
+On NixOS the foreign cross-toolchain archives need an FHS environment, as
+the [emulator recipe](../cortex-m/README.md#on-nixos) explains.
+After entering Landin's pinned environment, prepare this shell once, then
+run the Python commands below inside it:
+
+```sh
+mkdir -p ~/.cache/landin/tmp
+NIXPKGS_ALLOW_UNFREE=1 nix-shell -p steam-run python3 --run \
+    'TMPDIR=$HOME/.cache/landin/tmp steam-run bash'
+```
+
+The Pi consumes prepared bundles and needs no cross-toolchain or FHS shell.
+
 ## Build without hardware
 
 ```sh
