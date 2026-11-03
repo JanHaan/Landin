@@ -25821,7 +25821,15 @@ package body Landin.Diagnostics.Citations.Texts is
                & "load is paced even when the chip it resets enumerates no"
                & "thing: on 2026-11-03 a download to the RP2040, whose fir"
                & "mware has no USB, was followed within a second by the wh"
-               & "ole cascade disconnecting.",
+               & "ole cascade disconnecting. The cause was the listing tha"
+               & "t followed it: on the same day `uhubctl -l 7-2.3.3`, a l"
+               & "isting alone while the kernel had that hub runtime-suspe"
+               & "nded, was followed a second later by every hub of the ca"
+               & "scade disconnecting and enumerating again. So every tool"
+               & " asks a hub's first listing again while it fails, `commo"
+               & "n.Listings`, which D725 declined as hiding trouble: the "
+               & "listing is what disturbs the cascade, and the pace still"
+               & " stops at any error the kernel logs.",
             when 645 =>
                "Chosen: the module names no device. Its `port` is a stru"
                & "ct of two function values ([1000]), `indicate: (on: bool"

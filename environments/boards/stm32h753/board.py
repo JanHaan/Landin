@@ -307,10 +307,12 @@ def flash(run, args, elf, table):
 def power_cycle(run, args):
     """The ST-LINK's port, only when the hub's listing shows it there and
     the probe's Arty is off the cascade, paced with every other tool's
-    actions on the rig, and then the ST-LINK listed again (D725)."""
+    actions on the rig, and then the ST-LINK listed again (D725).  The
+    first listing is asked again while it fails: one that resumes a hub the
+    kernel suspended re-enumerates the cascade under it."""
     common.paced(args.pace, 'power cycle', lambda: common.power_cycle(
-        run, args.hub, args.port, args.off_seconds, holds=args.serial),
-        args.guard_serial, args.cascade)
+        common.Listings(run, args.hub_seconds), args.hub, args.port, args.off_seconds,
+        holds=args.serial), args.guard_serial, args.cascade)
     settle(run, args)
 
 

@@ -38,25 +38,7 @@ from common import Failed, require  # noqa: E402
 BOOTSEL = '2e8a:000f'
 
 
-class Listings:
-    """HUB's commands, a listing of a hub asked again while it fails until
-    SECONDS have passed: any port switched on the rig's hubs, by this tool
-    or another, re-enumerates the whole tree, and a listing that meets it
-    gone, or its nodes before udev has regrouped them, fails."""
-    def __init__(self, hub, seconds):
-        self.hub, self.seconds = hub, seconds
-
-    def command(self, name, argv, **kw):
-        if '-a' in argv:
-            return self.hub.command(name, argv, **kw)
-        deadline = time.time() + self.seconds
-        while True:
-            try:
-                return self.hub.command(name, argv, **kw)
-            except Failed:
-                if time.time() >= deadline:
-                    raise
-                time.sleep(0.5)
+Listings = common.Listings
 
 
 def paced(args, what, action):

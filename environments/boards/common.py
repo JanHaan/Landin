@@ -576,6 +576,29 @@ def off_cascade(serial, cascade, sysfs=Path('/sys/bus/usb/devices')):
     return found
 
 
+class Listings:
+    """HUB's commands, a listing of a hub asked again while it fails until
+    SECONDS have passed: any port switched on the rig's hubs, by this tool
+    or another, re-enumerates the whole tree, and so does a listing that
+    resumes a hub the kernel had suspended, the listing itself among them;
+    a listing that meets the tree gone, or its nodes before udev has
+    regrouped them, fails.  A switch, `-a`, is never asked again."""
+    def __init__(self, hub, seconds):
+        self.hub, self.seconds = hub, seconds
+
+    def command(self, name, argv, **kw):
+        if '-a' in argv:
+            return self.hub.command(name, argv, **kw)
+        deadline = time.time() + self.seconds
+        while True:
+            try:
+                return self.hub.command(name, argv, **kw)
+            except Failed:
+                if time.time() >= deadline:
+                    raise
+                time.sleep(0.5)
+
+
 def power_cycle(hub, location, port, off_seconds, holds=None, keeps=None, holds_if_any=None):
     """Cut PORT of the hub at LOCATION and restore it, in one call.
 

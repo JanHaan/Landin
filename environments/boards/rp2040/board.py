@@ -117,9 +117,12 @@ def flash(run, args, elf, stage):
 def power_cycle(run, args):
     """The Pico's port, only while the probe's Arty is off the cascade,
     paced with every other tool's actions on the rig, and then the hub
-    listing again (D725)."""
+    listing again (D725).  The first listing is asked again while it fails:
+    one that resumes a hub the kernel suspended re-enumerates the cascade
+    under it."""
     common.paced(args.pace, 'power cycle', lambda: common.power_cycle(
-        run, args.hub, args.port, args.off_seconds), args.guard_serial, args.cascade)
+        common.Listings(run, args.hub_seconds), args.hub, args.port, args.off_seconds),
+        args.guard_serial, args.cascade)
     common.wait_for_hub(run, args.hub, [], args.hub_seconds)
 
 

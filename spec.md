@@ -23130,7 +23130,13 @@ resetting the hub tree; and the head is never read back while the port
 still shows BOOTSEL. A download is paced even when the chip it resets
 enumerates nothing: on 2026-11-03 a download to the RP2040, whose
 firmware has no USB, was followed within a second by the whole cascade
-disconnecting.
+disconnecting. The cause was the listing that followed it: on the same
+day `uhubctl -l 7-2.3.3`, a listing alone while the kernel had that hub
+runtime-suspended, was followed a second later by every hub of the cascade
+disconnecting and enumerating again. So every tool asks a hub's first
+listing again while it fails, `common.Listings`, which D725 declined as
+hiding trouble: the listing is what disturbs the cascade, and the pace
+still stops at any error the kernel logs.
 
 **The alternatives:** pacing the cycle after a BOOTSEL flash like any
 other, which waits two minutes beside a boot ROM the kernel is already
