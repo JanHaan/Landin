@@ -49,7 +49,7 @@ while True:
             if action == "eof":
                 sys.exit(0)
             if action == "timeout":
-                time.sleep(10)
+                time.sleep(3600)
     if method == "shutdown" and os.environ.get("FUZZ_STUB_ACTION") == "shutdown_eof":
         sys.exit(0)
     if "id" in message:
@@ -59,9 +59,18 @@ while True:
 '''
 
 
+#  The driver's --seconds bounds every answer the stub gives, its start
+#  among them, and a stub that started in over a second on a loaded host
+#  was called hung.  An answer ends the wait, so a wide bound costs nothing
+#  where the stub answers; only the close that never answers waits it out,
+#  twice, and it gets a shorter bound that still outlasts a loaded start.
+HANG = 60
+UNANSWERED = 10
+
+
 class CloseOracleTest(unittest.TestCase):
     def run_driver(self, sources, per_server, action="healthy", close=0,
-                   healthy_preflight=True):
+                   healthy_preflight=True, seconds=HANG):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
             stub = directory / "stub"
@@ -78,7 +87,7 @@ class CloseOracleTest(unittest.TestCase):
                 label = "reproducers/min-100299.ldn" if i == 0 else "source-%d" % i
                 originals.append((label, path, text))
             argv = ["fuzz.py", "--refine", str(stub), "--out", str(out),
-                    "--seconds", "1", "--memory", "0", "--per-server",
+                    "--seconds", str(seconds), "--memory", "0", "--per-server",
                     str(per_server)]
             output = io.StringIO()
             server_type = fuzz.Server
@@ -108,9 +117,10 @@ class CloseOracleTest(unittest.TestCase):
             artifacts = {p.name: p.read_bytes() for p in out.iterdir()}
             return status, output.getvalue(), artifacts, originals
 
-    def assert_hit(self, sources, per_server, close, expected_seed, action="crash"):
+    def assert_hit(self, sources, per_server, close, expected_seed, action="crash",
+                   seconds=HANG):
         status, output, artifacts, originals = self.run_driver(
-            sources, per_server, action, close)
+            sources, per_server, action, close, seconds=seconds)
         self.assertEqual(status, 1, output)
         self.assertIn("hits=1", output)
         label, path, original = originals[expected_seed - 500000]
@@ -142,7 +152,7 @@ class CloseOracleTest(unittest.TestCase):
             stub.chmod(0o755)
             with mock.patch.dict(os.environ, {"FUZZ_STUB_ACTION": "healthy",
                                                "FUZZ_STUB_CLOSE": "0"}):
-                server = fuzz.Server(str(stub), 0, 1)
+                server = fuzz.Server(str(stub), 0, HANG)
                 try:
                     initialize = json.loads(server.transcript[0][3:])
                     self.assertEqual(initialize["method"], "initialize")
@@ -152,6 +162,24 @@ class CloseOracleTest(unittest.TestCase):
                 finally:
                     stopped = server.stop()
                 self.assertEqual(stopped, "")
+
+    def test_a_server_that_never_answers_is_not_left_running(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            stub = Path(temporary) / "stub"
+            stub.write_text("#!%s\nimport time\ntime.sleep(3600)\n"
+                            % sys.executable)
+            stub.chmod(0o755)
+            started = []
+            popen = fuzz.subprocess.Popen
+
+            def record(*args, **options):
+                started.append(popen(*args, **options))
+                return started[-1]
+
+            with mock.patch.object(fuzz.subprocess, "Popen", record), \
+                    self.assertRaisesRegex(fuzz.Broken, "no answer within"):
+                fuzz.Server(str(stub), 0, 1)
+            self.assertIsNotNone(started[0].returncode)
 
     def test_final_close_crash(self):
         self.assertIn("70", self.assert_hit(1, 2, 1, 500000))
@@ -205,8 +233,8 @@ class CloseOracleTest(unittest.TestCase):
                                                   "shutdown_eof"))
 
     def test_close_timeout_is_a_hit(self):
-        self.assertIn("no answer within", self.assert_hit(1, 2, 1, 500000,
-                                                         "timeout"))
+        self.assertIn("no answer within", self.assert_hit(
+            1, 2, 1, 500000, "timeout", seconds=UNANSWERED))
 
     def test_preflight_shutdown_failure_stops_before_mutation(self):
         status, output, artifacts, _ = self.run_driver(
