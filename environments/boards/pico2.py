@@ -138,10 +138,18 @@ def attached(run, args, name, bootsel_allowed=None):
     guard. A valid fixed image must first be installed by UF2 off the cascade."""
     from_bootsel = refuse_bootsel(common.InGroup(run, args.hub_group), args, bootsel_allowed)
     for chip in ARM_CHIP, RISCV_CHIP:
-        attempt = common.Probe(run, args.probe_rs, chip, args.probe)
-        run.command('%s-%s' % (name, chip), attempt.argv('read', 'b32', hex(FLASH), '1'),
-                    timeout=60, check=False)
-        if run.commands[-1]['status'] == 0:
+        attempt = common.Probe(run, args.probe_rs, chip, args.probe,
+                               ram_loader=getattr(args, 'ram_loader', None))
+        command = '%s-%s' % (name, chip)
+        try:
+            attempt.read_words(command, FLASH, 1)
+        except Failed:
+            # Only an unsuccessful attach command permits the other
+            # architecture. USB guard and evidence failures stop here.
+            if (not run.commands or run.commands[-1]['name'] != command
+                    or run.commands[-1]['status'] == 0):
+                raise
+        else:
             attempt.from_bootsel = bool(from_bootsel)
             return attempt
     raise Failed('neither %s nor %s reaches the Pico 2; see %s-*.log' % (ARM_CHIP, RISCV_CHIP, name))

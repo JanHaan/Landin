@@ -318,9 +318,11 @@ class Probes(unittest.TestCase):
             for field, value in (('board', 'rp2040'), ('address', 0x20000004),
                                  ('flash_written', True), ('count', 1),
                                  ('words', [True, 7]), ('words', [-1, 7])):
-                with mock.patch.object(json, 'loads', return_value=dict(report, **{field: value})), \
-                        self.assertRaises(COMMON.Failed):
+                original = report[field]
+                report[field] = value
+                with self.assertRaises(COMMON.Failed):
                     probe.read_words('cells', 0x20000000, 2)
+                report[field] = original
             with self.assertRaisesRegex(COMMON.Failed, '--ram-loader'):
                 COMMON.Probe(run, 'probe-rs', 'RP235x', 'P').read_words('cells', 0x20000000, 2)
 
