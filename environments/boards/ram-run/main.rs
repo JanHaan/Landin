@@ -3,7 +3,12 @@
 use anyhow::{Context, Result, bail, ensure};
 use clap::Parser;
 use object::{Object, ObjectSection, ObjectSymbol};
-use probe_rs::{Core, MemoryInterface, Permissions, RegisterId, config::Registry, probe::{DebugProbeSelector, list::Lister}};
+use probe_rs::{
+    Core, MemoryInterface, Permissions, RegisterId,
+    config::{DebugSequence, Registry, Target},
+    probe::{DebugProbeSelector, list::Lister},
+};
+use probe_rs::architecture::arm::sequences::DefaultArmSequence;
 use probe_rs::architecture::riscv::{Abstractcs, Dmcontrol, Progbuf0, Progbuf1};
 use probe_rs::architecture::riscv::communication_interface::AccessRegisterCommand;
 use serde::Deserialize;
@@ -52,9 +57,7 @@ fn execute_read(plan: &ReadPlan) -> Result<Value> {
     // MMIO as well as SRAM; they never use warm-entry cleanup or reset.
     let selector: DebugProbeSelector = plan.probe.parse()?;
     let probe = Lister::new().open(selector)?;
-    let mut target = Registry::from_builtin_families().get_target_by_name(chip(&plan.board)?)?;
-    target.cores.truncate(1);
-    let mut session = probe.attach(target, Permissions::default())?;
+    let mut session = probe.attach(attach_target(&plan.board)?, Permissions::default())?;
     let mut words = vec![0u32; plan.count as usize];
     session.core(0)?.read_32(plan.address, &mut words)?;
     // Session attach/drop clear debug breakpoints and may briefly halt the
@@ -89,6 +92,20 @@ fn chip(board: &str) -> Result<&'static str> {
         "esp32c5" => "esp32c5",
         _ => bail!("unknown board {board}"),
     })
+}
+
+// Both warm loading and readback must fail rather than rescue-reset a chip
+// when its debug connection is unavailable. At the pinned probe-rs revision,
+// RP2040's only normal-connect customization is a rescue-DP fallback in
+// debug_port_setup. The generic sequence retains its ordinary multidrop
+// setup and core debug start, without that fallback or a vendor reset path.
+fn attach_target(board: &str) -> Result<Target> {
+    let mut target = Registry::from_builtin_families().get_target_by_name(chip(board)?)?;
+    target.cores.truncate(1);
+    if board == "rp2040" {
+        target.debug_sequence = DebugSequence::Arm(DefaultArmSequence::create());
+    }
+    Ok(target)
 }
 
 // Board-tool policy, checked independently of the compiler report. ESP C3
@@ -325,9 +342,7 @@ fn execute(plan: &Plan, image: &Image) -> Result<Value> {
     // Expose only the executing core to Session, whose Drop otherwise tries
     // to halt the reset-held RP core 1 and can leave core 0 halted on failure.
     // PSM below parks core 1 independently before changing any SRAM.
-    let mut target = Registry::from_builtin_families().get_target_by_name(chip(&plan.board)?)?;
-    target.cores.truncate(1);
-    let mut session = probe.attach(target, Permissions::default())?;
+    let mut session = probe.attach(attach_target(&plan.board)?, Permissions::default())?;
     session.core(0)?.halt(Duration::from_secs(2))?;
     let mut core = session.core(0)?;
     let previous_pc: u32 = core.read_core_reg(core.program_counter().id)?;
@@ -388,6 +403,16 @@ mod tests {
     fn read_plan(address: u64, count: u32) -> ReadPlan {
         ReadPlan { format_version: 1, board: "rp2040".into(), mode: "read".into(),
             probe: "0000:0002:10.42.0.50/0".into(), address, count }
+    }
+    #[test]
+    fn attach_policy_keeps_one_core_and_avoids_rp2040_rescue_sequence() {
+        for board in ["rp2040", "rp2350", "rp2350_hazard3", "stm32h753", "esp32c3", "esp32c5"] {
+            let target = attach_target(board).unwrap();
+            assert_eq!(target.cores.len(), 1);
+            if board == "rp2040" {
+                assert!(format!("{:?}", target.debug_sequence).contains("DefaultArmSequence"));
+            }
+        }
     }
     #[test]
     fn read_plans_need_no_elf_and_cover_flash_sram_and_mmio() {
