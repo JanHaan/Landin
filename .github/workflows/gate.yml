@@ -64,7 +64,7 @@ jobs:
           python3 scripts/gate_inputs.py reuse gate.yml \
             documents scripts linux-debug-build compiler-1 compiler-2 compiler-3 \
             compiler-checks linux-release-build \
-            release bindings editor-grammar flake cortex-m-programs cortex-m-corpus \
+            release bindings editor-grammar flake cortex-m-programs cortex-m-corpus cortex-m-rv32 \
             scaling darwin-debug-build \
             darwin-release-build darwin-host darwin-host-release darwin-parity \
             arm64-debug-build arm64-compiler-1 arm64-compiler-2 \

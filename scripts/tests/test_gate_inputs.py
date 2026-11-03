@@ -480,6 +480,18 @@ class Workflow(unittest.TestCase):
                 self.assertTrue(legs, "%s is needed by gate and required by no"
                                       " name in the reuse list" % job)
 
+    def test_every_cortex_m_part_is_required_for_reuse(self):
+        workflow = (ROOT / ".github/workflows/gate.yml").read_text()
+        reuse = workflow.split("gate_inputs.py reuse gate.yml", 1)[1].split(">>", 1)[0]
+        required = {name.strip("'") for name in
+                    re.findall(r"'[^']+'|[\w-]+", reuse.replace("\\\n", " "))}
+        body = workflow.split("\n  cortex-m:\n", 1)[1]
+        parts = re.search(r"part: \[([^\]]*)\]", body).group(1)
+        for part in (name.strip() for name in parts.split(",")):
+            with self.subTest(part=part):
+                self.assertIn("cortex-m-" + part, required,
+                              "every Cortex-M/RV32 part needs its own full pass")
+
 
 def job(result, **outputs):
     return {"result": result, "outputs": outputs}
