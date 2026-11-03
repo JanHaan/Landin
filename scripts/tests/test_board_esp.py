@@ -244,7 +244,9 @@ class Board:
         self.entries, self.ticks, self.masked_ticks, self.mode = 0, 5, 0, None
         self.previous = [0, 0]
         self.received += b'ESP-ROM:esp32c5-eco2-20250121\r\nentry 0x40800000\r\n'
-        self.frame('b', r=1, v=chip.expected_mtvec)
+        self.frame('b', r=1, v=chip.expected_mtvec,
+                   **({} if chip.expected_mtvt is None else
+                      dict(w=chip.expected_mtvt ^ (4 if fault == 'mtvt' else 0))))
 
     def frame(self, tag, **fields):
         self.received += b'\x02' + tag.encode() + b''.join(
@@ -298,6 +300,7 @@ class Board:
 class Scenario(unittest.TestCase):
     def setUp(self):
         C3.expected_mtvec, C5.expected_mtvec = 0x40380101, 0x40800203
+        C5.expected_mtvt = 0x40800240
         self.sleep = mock.patch.object(ESP.time, 'sleep')
         self.sleep.start()
 
@@ -320,6 +323,9 @@ class Scenario(unittest.TestCase):
             for chip in (C3, C5):
                 with self.subTest(fault=fault, chip=chip.name), self.assertRaises(COMMON.Failed):
                     ESP.scenario(Board(chip, fault), chip, 1240)
+        # D830: the C5's mtvt names the image's table of handler addresses.
+        with self.assertRaisesRegex(COMMON.Failed, 'mtvt reads 0x40800244, not 0x40800240'):
+            ESP.scenario(Board(C5, 'mtvt'), C5, 1240)
 
     def test_the_atomics_oracles_are_the_arithmetic(self):
         self.assertEqual(C3.atomics(0x41, 0x7e), dict(b=0x41, h=0x417e, w=0x417e7e41))

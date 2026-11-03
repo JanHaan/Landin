@@ -358,6 +358,15 @@ package body Landin.Backend.Firmware is
          then Symbol (Handlers (Slot))
          else Stub_Name (Slot));
 
+      --  Whether the hardware may enter slot SLOT itself, so that a stub
+      --  of its own saves the frame: a slot the core's dispatch does not
+      --  call, and under the CLIC every slot, since an interrupt whose
+      --  `shv` the program sets is entered through mtvt's table rather
+      --  than the common entry (D830).
+      function Hardware_Entered (Slot : Natural) return Boolean is
+        (Model = Profiles.CLIC
+         or else not Profiles.Dispatched_Slot (Profile.Core, Slot));
+
       --  The mtvec reset writes: the table, in vectored mode, or under the
       --  CLIC its common entry, in CLIC mode.
       Trap_Base : constant String :=
@@ -444,6 +453,29 @@ package body Landin.Backend.Firmware is
       Line (Result, ".size _landin_firmware_vectors, . - _landin_firmware_"
         & "vectors");
       Line (Result, ".option pop");
+      if Model = Profiles.CLIC then
+         --  D830: the CLIC's table of handler addresses, which mtvt
+         --  names: an interrupt whose `shv` is set enters the address
+         --  at mtvt + 4 * id with every register the interrupted
+         --  code's, so a handled slot's is its stub and every other
+         --  slot's the unhandled entry.  mtvt is aligned to 64 bytes
+         --  (the C5's TRM v1.1, Register 2.10).
+         Line (Result, ".section .text.landin_firmware_vector_addresses,"
+           & """ax"",@progbits");
+         Line (Result, ".balign 64");
+         Line (Result, ".globl _landin_firmware_vector_addresses");
+         Line (Result, ".type _landin_firmware_vector_addresses, @object");
+         Line (Result, "_landin_firmware_vector_addresses:");
+         for Slot in 0 .. Profile.Vector_Count - 1 loop
+            Line (Result, ".word "
+              & (if Profiles.Admits (Profile, Slot)
+                   and then Handlers (Slot) /= Landin.IR.No_Item
+                 then Stub_Name (Slot)
+                 else "_landin_firmware_unhandled"));
+         end loop;
+         Line (Result, ".size _landin_firmware_vector_addresses, . - "
+           & "_landin_firmware_vector_addresses");
+      end if;
       if Profiles.Takes_Image_Block (Profile.Boot) then
          --  D637, D682: the IMAGE_DEF block, directly after the table.
          Line (Result, ".section .embedded_block,""a"",@progbits");
@@ -464,7 +496,7 @@ package body Landin.Backend.Firmware is
          if Profiles.Admits (Profile, Slot)
            and then Handlers (Slot) /= Landin.IR.No_Item
            and then not Naked (Handlers (Slot))
-           and then not Profiles.Dispatched_Slot (Profile.Core, Slot)
+           and then Hardware_Entered (Slot)
          then
             Stubbed := True;
             Trap_Entry (Stubs, Stub_Name (Slot));
@@ -496,9 +528,10 @@ package body Landin.Backend.Firmware is
          Trap_End (Result, "_landin_firmware_interrupt");
       end if;
       if Model = Profiles.CLIC then
-         --  D680: CLIC mode with no selective hardware vectoring sends
-         --  every trap to mtvec's base: an interrupt's id is mcause's low
-         --  twelve bits, and its slot is called through the table.
+         --  D680: CLIC mode sends every trap but a hardware vectored
+         --  interrupt's (D830) to mtvec's base: an interrupt's id is
+         --  mcause's low twelve bits, and its slot is called through the
+         --  table.
          Trap_Entry (Result, "_landin_firmware_trap", "64");
          Save (Result, Skip_T0 => False);
          Line (Result, "csrr t0, mcause");
@@ -582,6 +615,11 @@ package body Landin.Backend.Firmware is
       Line (Result, "la t0, " & Trap_Base);
       Line (Result, "ori t0, t0, " & Trap_Mode);
       Line (Result, "csrw mtvec, t0");
+      if Model = Profiles.CLIC then
+         --  D830: mtvt, CSR 0x307, names the table of addresses.
+         Line (Result, "la t0, _landin_firmware_vector_addresses");
+         Line (Result, "csrw 0x307, t0");
+      end if;
       Line (Result, "la sp, _landin_firmware_stack_top");
       US.Append (Result, US.To_String (Regions));
       --  The copies are data to every hart's loads and code to its

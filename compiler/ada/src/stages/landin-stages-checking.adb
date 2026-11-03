@@ -41170,8 +41170,9 @@ package body Landin.Stages.Checking is
                  & (if Landin.Targets.Firmware."="
                       (Landin.Targets.Firmware.Model_Of (Profile.Core),
                        Landin.Targets.Firmware.CLIC)
-                    then "under the CLIC every interrupt enters one common"
-                      & " entry, which reads mcause"
+                    then "under the CLIC an interrupt enters one common"
+                      & " entry, which reads mcause, or with its shv set a"
+                      & " stub mtvt's table names"
                     else "Hazard3's external interrupts all arrive at"
                       & " code 11, whose entry reads meinext")
                  & ", saves the interrupted registers and calls the"

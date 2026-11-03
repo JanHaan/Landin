@@ -86,7 +86,8 @@ entry that describes it, and put a new one where a reader would look for it.
   pairs, f32 and f64 are libgcc's soft float, and 64-bit division is
   libgcc's, with the language's checks unchanged. An image begins with its
   entry word and its trap table, a `j` per mcause code: vectored mtvec on
-  the E31 and the ESP32-C3, a common CLIC entry on the ESP32-C5 and
+  the E31 and the ESP32-C3, a common CLIC entry on the ESP32-C5, beside
+  mtvt's table of stubs for an interrupt the program vectors (D830), and
   Hazard3's meinext dispatch, with a stub that saves the caller-saved
   registers, calls an `extern(interrupt)` routine and unwinds to mepc
   (D680, D686). An exception's mcause, mepc, mtval and sp are recorded in

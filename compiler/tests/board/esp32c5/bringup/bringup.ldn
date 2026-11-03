@@ -4,8 +4,8 @@
 -- where the ROM wrote its log.  This makes GPIO24 the indicator, an output
 -- through the GPIO matrix whose pad's input reads it back, gives the CLIC
 -- three level bits, and starts the system timer's comparator 0 as a 1 ms
--- period on CLIC identity 18 (D721).  Values are the ESP32-C5 TRM
--- v1.1's.
+-- period on CLIC identity 18 (D721), hardware vectored (D830).  Values are
+-- the ESP32-C5 TRM v1.1's.
 import esp32c5/clic
 import esp32c5/gpio
 import esp32c5/interrupt_core0
@@ -59,10 +59,12 @@ public timer: () -> none =
     systimer.int_clr_write(systimer.base, 1)
     systimer.int_ena_write(systimer.base, 1)
     -- The interrupt matrix routes SYSTIMER_TARGET0 to the identity, and
-    -- its CLIC word makes it a positive level interrupt at
-    -- its level, enabled (11.5.3; 2.8.2.6).
+    -- its CLIC word makes it a positive level interrupt at its level,
+    -- enabled, and hardware vectored: SHV, bit 16, sends it through the
+    -- address mtvt's table holds for identity 18 rather than the common
+    -- entry UART0's takes (11.5.3; 2.8.2.6, Register 2.66; D830).
     interrupt_core0.systimer_target0_intr_map_write(interrupt_core0.base, timer_identity)
-    clic.clicint18_write(clic.base, (timer_level_bits << 29) | 0x100)
+    clic.clicint18_write(clic.base, (timer_level_bits << 29) | 0x10100)
 end timer
 
 -- UNIT0's low word: UPDATE, bit 30 of UNIT0_OP, latches the count, and

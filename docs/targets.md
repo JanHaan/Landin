@@ -1090,7 +1090,7 @@ to is the core's interrupt model's (D662, D680):
 | model | cores | mtvec | slot N |
 |---|---|---|---|
 | `vectored` | `sifive-e31`, `esp-rv32imc` | the table, mode 1 | the hardware's: a stub `_landin_firmware_slot_N` for an interrupt routine, the routine itself for a naked one; slot 0 takes every exception |
-| `clic` | `esp-rv32imac-clic` | `_landin_firmware_trap`, mode 3 | called from that common entry by mcause's low twelve bits |
+| `clic` | `esp-rv32imac-clic` | `_landin_firmware_trap`, mode 3 | called from that common entry by mcause's low twelve bits; with the interrupt's `shv` set, which the program writes, entered by the CLIC through word N of `_landin_firmware_vector_addresses`, which mtvt names: the slot's stub, or the unhandled entry (D830) |
 | `xh3irq` | `hazard3` | the table, mode 1 | 11 is `_landin_firmware_external`, which calls slot 16 + IRQ while meinext names one |
 
 A stub saves ra, t0-t6 and a0-a7 below the interrupted sp, 64 bytes or,

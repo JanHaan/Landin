@@ -27,6 +27,7 @@ v6.1's image format; see environments/boards/esp32c5/README.md.
 """
 
 import argparse
+import struct
 import sys
 import time
 from pathlib import Path
@@ -62,6 +63,24 @@ class C5(esp.Chip):
         address = names['_landin_firmware_trap']
         require(address % 64 == 0, 'the trap entry %#x is not 64-byte aligned' % address)
         return address | 3
+
+    def mtvt(self, elf, names):
+        # The CLIC's table of handler addresses, 64-byte aligned (Register
+        # 2.10): word i is where an interrupt of identity i whose SHV is
+        # set enters (Register 2.66), a stub of compiler-owned code for
+        # each handled identity and the unhandled entry for every other
+        # (D830).
+        address = names['_landin_firmware_vector_addresses']
+        require(address % 64 == 0, 'the table of addresses %#x is not 64-byte aligned' % address)
+        words = struct.unpack('<%dI' % IDENTITIES, common.loaded(elf, address, 4 * IDENTITIES))
+        for identity, word in enumerate(words):
+            stub = names.get('_landin_firmware_slot_%d' % identity)
+            require(stub is not None or identity not in HANDLED,
+                    'identity %d has no stub of its own' % identity)
+            expected = stub if identity in HANDLED else names['_landin_firmware_unhandled']
+            require(word == expected, 'word %d of the table of addresses is %#x, not %#x'
+                    % (identity, word, expected))
+        return address
 
     def atomics(self, x, y):
         # The add returns x and leaves x + y; the first compare-exchange
@@ -166,6 +185,17 @@ def main():
 # LP_CLKRST_RESET_CAUSE (the C5's TRM v1.1, Register 9.90): the cause in
 # bits 4:0, 0x01 the chip reset a power-on is (9.1.4, Table 9.1-1).
 RESET_CAUSE = 0x600b0410
+# The CLIC's 48 identities (2.8.2.3, Table 2.8-1), of which the port
+# handles 17, UART0's, and 18, the system timer's.
+IDENTITIES = 48
+HANDLED = (17, 18)
+# CLICINT i, the word of clicintip, clicintie, clicintattr and clicintctl
+# at 0x2080_1000 + 4i (2.8.2.6, Register 2.66): clicintattr's SHV is bit 16
+# of the word.  The port vectors the timer's, 18, by hardware through mtvt,
+# and leaves UART0's, 17, to the common entry (D830).
+CLICINT = 0x20801000
+SHV = 1 << 16
+VECTORED, COMMON_ENTRY = 18, 17
 
 
 def power_on_boot(probe, names):
@@ -186,8 +216,19 @@ def power_on_boot(probe, names):
     trap = esp.trap_cells(probe, names)
     require(trap['count'] == 0, 'the unhandled entry took a trap: mcause %#x at %#x'
             % (trap['cause'], trap['pc']))
+    # The timer advanced with its SHV set, so the CLIC took it through
+    # mtvt's table, and UART0's is left clear, for the common entry (D830).
+    vectored = probe.read_words('jtag-clicint-%d' % VECTORED, CLICINT + 4 * VECTORED, 1)[0]
+    common_entry = probe.read_words('jtag-clicint-%d' % COMMON_ENTRY,
+                                    CLICINT + 4 * COMMON_ENTRY, 1)[0]
+    require(vectored & SHV, 'CLICINT%d reads %#x: the timer is not hardware vectored'
+            % (VECTORED, vectored))
+    require(not common_entry & SHV, 'CLICINT%d reads %#x: UART0 is hardware vectored'
+            % (COMMON_ENTRY, common_entry))
     return dict(reset_cause=cause, boot_reason=reason, app_state=state,
-                timer_events=[first, second], trap_count=0)
+                timer_events=[first, second], trap_count=0,
+                clicint={str(VECTORED): '%#010x' % vectored,
+                         str(COMMON_ENTRY): '%#010x' % common_entry})
 
 
 def chip_enable_reset(fd, seconds):

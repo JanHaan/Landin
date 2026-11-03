@@ -24527,7 +24527,9 @@ unhandled loop, which records it in memory first (D656). Each model sets mtvec i
   ESP-IDF's own vectors set `mtvt` and each interrupt's `shv` instead
   (`components/riscv/vectors_clic.S`); that needs a write per interrupt the
   program enables, which the program owns, and a table of addresses
-  beside the table of jumps.
+  beside the table of jumps. D830 supersedes this in part: mtvt names
+  such a table, and an interrupt whose `shv` the program sets enters its
+  slot's stub through it.
 - `xh3irq`, Hazard3's: mtvec holds the table in vectored mode, and slot 11,
   the machine external interrupt, jumps to `_landin_firmware_external`,
   which saves the registers and, while meinext names an IRQ, calls slot
@@ -24802,6 +24804,44 @@ program with a `.ramtext` routine, requires every executable section of
 every RV32 description's image to lie in a region code runs in, and boots
 the C3's `OUT.bin` through the chip's ROM on Espressif's QEMU, holding the
 ROM's logged segments and entry to the image's.
+
+### D830 — Under the CLIC mtvt names a table of handler addresses, and a program vectors an interrupt by its shv
+
+**The tour said** nothing; D680 sent every CLIC trap to the common entry
+and set no `mtvt`, so an interrupt whose `shv` a program set entered a
+table at address zero.
+
+**Chosen:** under the `clic` model the image also holds
+`_landin_firmware_vector_addresses`, a word per slot, 64-byte aligned as
+mtvt's BASE requires (the ESP32-C5's TRM v1.1, Register 2.10), in its own
+`.text.landin_firmware_vector_addresses` section beside the table of
+jumps; reset writes its address to mtvt, CSR 0x307, after mtvec. Word i
+is where the CLIC enters an interrupt of identity i whose clicintattr
+`shv` is set (Register 2.66), with every register the interrupted code's,
+so a slot an `extern(interrupt)` routine takes holds that slot's stub,
+`_landin_firmware_slot_N`, which saves the frame, calls the routine and
+returns with `mret` as on the vectored cores, and every other slot the
+unhandled entry, which records the trap (D656). Every handled slot is
+reachable both ways, so it has its stub and its `j` in the table of
+jumps, which the common entry calls, and a naked routine stays refused in
+every CLIC slot (L0347). Which interrupts are vectored is the program's:
+it sets `shv` in the CLICINT word it already writes to enable one, and
+the compiler writes no CLIC register. No other model's emission changes.
+
+**The alternatives:** vectoring every handled interrupt by a compiler
+write to its CLICINT word, which would take a device register from the
+program that owns it; a table only of the slots a description names,
+which leaves an identity the program vectors without a handler to enter
+address zero; and placing the table in `.isr_vector`, whose size the
+script asserts as the table of jumps'.
+
+**Pinned by** the `rv32 firmware` case `traps follow the interrupt model`,
+which holds the table, its words, the stubs and the mtvt write under the
+CLIC and no mtvt elsewhere; the firmware corpus's manifest at every
+profile, unchanged on `rv32` and `cortex-m0`; and
+`environments/boards/esp32c5/board.py`, whose port vectors the system
+timer and leaves UART0 to the common entry, and whose oracle holds mtvt,
+the table's words and both CLICINT words to the image and the TRM.
 
 ### D570 — The depth report closes a call through a table or a function value
 

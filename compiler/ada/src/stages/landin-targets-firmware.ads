@@ -192,7 +192,9 @@ package Landin.Targets.Firmware is
    --  enters SLOT: every slot under the CLIC, whose common entry reads
    --  mcause, and on Hazard3 every slot from 16, which meinext names.  A
    --  dispatched slot calls its handler as a routine, so it takes an
-   --  interrupt routine and no naked one.
+   --  interrupt routine and no naked one.  Under the CLIC the hardware
+   --  enters a slot too, through mtvt's table to a stub, when the program
+   --  sets its interrupt's shv (D830).
    function Dispatched_Slot (Core : Core_Kind; Slot : Natural) return Boolean
      is (case Model_Of (Core) is
            when CLIC => True,

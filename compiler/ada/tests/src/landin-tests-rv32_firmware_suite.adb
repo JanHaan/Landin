@@ -619,7 +619,9 @@ package body Landin.Tests.RV32_Firmware_Suite is
       Landin.Testing.Check
         (Item, Contains (U.To_String (CLIC_Naked.Said), "error[L0347]")
            and then Contains (U.To_String (CLIC_Naked.Said),
-             "under the CLIC every interrupt enters one common entry"),
+             "under the CLIC an interrupt enters one common entry")
+           and then Contains (U.To_String (CLIC_Naked.Said),
+             "or with its shv set a stub mtvt's table names"),
          "a CLIC slot refuses a naked routine: "
          & U.To_String (CLIC_Naked.Said));
       Landin.Testing.Check_Equal
@@ -803,6 +805,10 @@ package body Landin.Tests.RV32_Firmware_Suite is
         & "csrw mtvec, t0" & LF & "la sp, _landin_firmware_stack_top" & LF);
       Holds ("reset's end", "fence rw, rw" & LF & "fence.i" & LF
         & "csrsi mstatus, 8" & LF);
+      Landin.Testing.Check
+        (Item, not Contains (U.To_String (Text), "0x307")
+           and then not Contains (U.To_String (Text), "vector_addresses"),
+         "only the CLIC has mtvt and its table");
       Holds ("the unhandled loop", "_landin_firmware_unhandled:" & LF);
       --  D656: the trap's record, made without the stack, every register
       --  but mscratch restored, the count last, then the wait.
@@ -855,7 +861,8 @@ package body Landin.Tests.RV32_Firmware_Suite is
       Holds ("the dispatch's way out", "lw a7, 60(sp)" & LF
         & "addi sp, sp, 64" & LF & "j _landin_firmware_unhandled" & LF);
 
-      --  The C5's CLIC: one common entry, in CLIC mode.
+      --  The C5's CLIC: one common entry, in CLIC mode, and mtvt's
+      --  table of addresses for an interrupt the program vectors (D830).
       Assembly_Of (Description ("esp-rv32imac-clic", "esp-app-image", 48,
                                 "compiler.esp_image(23, 100, 199, 0x2000)"
                                 & LF, "0x4080_0000"),
@@ -871,9 +878,30 @@ package body Landin.Tests.RV32_Firmware_Suite is
       Holds ("the CLIC's frame undone", "1:" & LF & "lw ra, 0(sp)" & LF);
       Holds ("the CLIC's way out", "lw a7, 60(sp)" & LF
         & "addi sp, sp, 64" & LF & "j _landin_firmware_unhandled" & LF);
+      Landin.Testing.Check_Equal
+        (Item, Slot_Of (U.To_String (Text), 16),
+         "j _landin_firmware_unhandled",
+         "a CLIC slot no handler takes is unhandled");
       Landin.Testing.Check
-        (Item, not Contains (U.To_String (Text), "_landin_firmware_slot_"),
-         "no CLIC slot has a stub of its own");
+        (Item, Slot_Of (U.To_String (Text), 17) /= ""
+           and then not Contains (Slot_Of (U.To_String (Text), 17),
+                                  "_landin_firmware"),
+         "the common entry calls slot 17's handler itself: "
+         & Slot_Of (U.To_String (Text), 17));
+      Holds ("mtvt's table", ".section .text.landin_firmware_vector_"
+        & "addresses,""ax"",@progbits" & LF & ".balign 64" & LF
+        & ".globl _landin_firmware_vector_addresses" & LF
+        & ".type _landin_firmware_vector_addresses, @object" & LF
+        & "_landin_firmware_vector_addresses:" & LF
+        & ".word _landin_firmware_unhandled" & LF);
+      Holds ("the vectored slot's stub", ".word _landin_firmware_unhandled"
+        & LF & ".word _landin_firmware_slot_17" & LF
+        & ".word _landin_firmware_unhandled" & LF);
+      Holds ("the stub mtvt names", "_landin_firmware_slot_17:" & LF);
+      Holds ("mtvt", "csrw mtvec, t0" & LF
+        & "la t0, _landin_firmware_vector_addresses" & LF
+        & "csrw 0x307, t0" & LF & "la sp, _landin_firmware_stack_top"
+        & LF);
 
       --  D680, [1995]: with prepared stacks the stub keeps the limit's
       --  cell at zero while the handler runs, in an 80-byte frame.

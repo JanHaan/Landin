@@ -145,9 +145,10 @@ public open: (rate: u32, budget: u32, escaping buf: []mut u8)
     atomic.store(addr produced, 0)
     atomic.store(addr taken, 0)
     -- The interrupt matrix routes source UART0 to the identity, not
-    -- delegated (11.5.3, 11.5.4), and its CLIC word makes it a
-    -- positive level interrupt, not hardware vectored, at its level, and
-    -- enables it (2.8.2.6, Registers 2.64 to 2.67).
+    -- delegated (11.5.3, 11.5.4), and its CLIC word makes it a positive
+    -- level interrupt at its level, not hardware vectored, so that the
+    -- common entry takes it (D830), and enables it (2.8.2.6, Registers
+    -- 2.64 to 2.67).
     saved := riscv.disable_interrupts()
     interrupt_core0.uart0_intr_map_write(interrupt_core0.base, identity)
     clic.clicint17_write(clic.base, (level_bits << 29) | 0x100)

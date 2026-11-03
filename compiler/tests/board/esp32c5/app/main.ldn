@@ -1,8 +1,9 @@
 -- The prototype-1 application on an ESP32-C5: UART0 received by an
 -- interrupt on CLIC identity 17 and echoed, ASCII 1 and 0 driving GPIO24,
--- a 1 ms system-timer wakeup on identity 18, rv32imac's read-modify-writes,
--- and a trace of what the board did, which environments/boards/esp32c5/board.py
--- checks against its physical oracle (D721, D722).  The echo and the
+-- a 1 ms system-timer wakeup on identity 18, hardware vectored, rv32imac's
+-- read-modify-writes, and a trace of what the board did, which
+-- environments/boards/esp32c5/board.py checks against its physical oracle
+-- (D721, D722, D830).  The echo and the
 -- indicator are the shared commands.handle (D645).  The ROM loads the image
 -- into SRAM and enters it with no second stage (D683).
 --
@@ -57,7 +58,8 @@ end cause
 
 -- External interrupt 1 is CLIC identity 17, mcause's code and slot 17 of
 -- the table compiler-owned trap entry calls through; external interrupt 2,
--- slot 18 (TRM v1.1, 2.8.2.3; D680).
+-- slot 18, which the CLIC enters by hardware, through the stub mtvt's
+-- table names (TRM v1.1, 2.8.2.3; D680, D830).
 link(vector: 17)
 extern(interrupt) uart_irq: () -> none =
     uart_cause = cause()
@@ -135,10 +137,12 @@ end halt
 
 start: () -> noreturn =
     -- Read before anything changes it: which reset this was, from
-    -- LP_CLKRST_RESET_CAUSE (Register 9.90), the trap vector
+    -- LP_CLKRST_RESET_CAUSE (Register 9.90), the trap vector and the
+    -- table of handler addresses, mtvt, CSR 0x307 (Register 2.10), which
     -- compiler-owned reset set, and mintthresh as the ROM left it.
     reason := lp_clkrst.reset_cause_read(lp_clkrst.base) & 0x1f
     vector := assembler.block("csrr {value}, mtvec", out value: u32 at general)
+    table := assembler.block("csrr {value}, 0x307", out value: u32 at general)
     boot_reason = reason
     first_threshold := bringup.threshold_now()
     bringup.indicator_pin()
@@ -152,6 +156,7 @@ start: () -> noreturn =
     report.open_frame(98)
     report.field(114, reason)
     report.field(118, vector)
+    report.field(119, table)
     report.field(116, first_threshold)
     report.close_frame()
     mut scratch: [64]u8 = zeroed

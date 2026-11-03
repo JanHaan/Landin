@@ -79,11 +79,17 @@ class Chip:
     name = probe_chip = level = None
     chip_id = min_revision = max_revision = offset = origin = None
     indicator = uart_cause = timer_cause = cause_mask = None
+    expected_mtvt = None
     a_extension = False
     cells = {}
 
     def mtvec(self, sections, names):
         raise NotImplementedError
+
+    def mtvt(self, elf, names):
+        """What mtvt must read, the CLIC's table of handler addresses, held
+        to the image; None for a core without a CLIC."""
+        return None
 
     def atomics(self, x, y):
         raise NotImplementedError
@@ -225,6 +231,10 @@ def scenario(console, chip, seed):
     require(boot['v'] == chip.expected_mtvec, 'mtvec reads %#x, not %#x'
             % (boot['v'], chip.expected_mtvec))
     verdicts['boot'] = dict(reset_cause=boot['r'], mtvec='%#x' % boot['v'])
+    if chip.expected_mtvt is not None:
+        require(boot.get('w') == chip.expected_mtvt, 'mtvt reads %s, not %#x'
+                % ('%#x' % boot['w'] if 'w' in boot else 'nothing', chip.expected_mtvt))
+        verdicts['boot']['mtvt'] = '%#x' % boot['w']
     if 't' in boot:
         verdicts['boot']['rom_threshold'] = boot['t']
     # The shared scenario (D593): 1 sets the indicator, 0 clears it, which
@@ -455,6 +465,7 @@ def run_board(chip, args, console_for, cycle, settle):
         names = common.symbols(run, args.nm, elf)
         _, sections = common.elf_sections(elf)
         chip.expected_mtvec = chip.mtvec(sections, names)
+        chip.expected_mtvt = chip.mtvt(elf, names)
         commit = subprocess.run(['git', '-C', str(ROOT), 'rev-parse', 'HEAD'],
                                 capture_output=True, text=True).stdout.strip()
         dirty = subprocess.run(['git', '-C', str(ROOT), 'status', '--porcelain', '--untracked-files=no'],
