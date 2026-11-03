@@ -6797,9 +6797,9 @@ def check_coverage_registers(full_run):
             out.append((REGISTERS, 1, "freestanding closure lacks " + evidence))
 
     allowed = set()
-    known_targets = {"linux-x86-64", "linux-arm64", "darwin-arm64",
-                     "freebsd-x86-64", "freebsd-arm64", "linux-rv64", "cortex-m0",
-                     "rv32", "synthetic-32"}
+    known, problems = described_targets()
+    known_targets = set(known)
+    out.extend(problems)
     if scopes is None:
         out.append((REGISTERS, 1, "the target applicability register is absent"))
     else:
@@ -7713,8 +7713,7 @@ def described_targets():
     if missing:
         return [], missing
     with io.open(names, encoding="utf-8") as stream:
-        table = stream.read()
-    described = re.findall(r'when\s+\d+\s*=>\s*"([a-z0-9-]+)"', table)
+        described = list(fixture_meta.described_targets(stream.read()))
     if not described:
         return [], [(TARGET_SELECTION, 1,
                      "no described target name was found in Described_Name")]

@@ -10,32 +10,25 @@ package body Landin.Targets.Selection is
          when 7 => "cortex-m0", when 8 => "rv32", when 9 => "synthetic-32",
          when others => raise Compiler_Defect);
 
+   function Described_At (Index : Positive) return Target_Facts is
+     (case Index is
+         when 1 => Linux_X86_64, when 2 => Linux_Arm64,
+         when 3 => Darwin_Arm64, when 4 => FreeBSD_X86_64,
+         when 5 => FreeBSD_Arm64, when 6 => Linux_RV64,
+         when 7 => Cortex_M, when 8 => RV32, when 9 => Synthetic_32,
+         when others => raise Compiler_Defect);
+
    function Is_Described (Name : String) return Boolean is
      (for some Index in 1 .. Described_Count => Described_Name (Index) = Name);
 
    function Described (Name : String) return Target_Facts is
    begin
-      if Name = "linux-x86-64" then
-         return Linux_X86_64;
-      elsif Name = "linux-arm64" then
-         return Linux_Arm64;
-      elsif Name = "linux-rv64" then
-         return Linux_RV64;
-      elsif Name = "freebsd-x86-64" then
-         return FreeBSD_X86_64;
-      elsif Name = "freebsd-arm64" then
-         return FreeBSD_Arm64;
-      elsif Name = "darwin-arm64" then
-         return Darwin_Arm64;
-      elsif Name = "cortex-m0" then
-         return Cortex_M;
-      elsif Name = "rv32" then
-         return RV32;
-      elsif Name = "synthetic-32" then
-         return Synthetic_32;
-      else
-         raise Compiler_Defect with "no target is described as " & Name;
-      end if;
+      for Index in 1 .. Described_Count loop
+         if Described_Name (Index) = Name then
+            return Described_At (Index);
+         end if;
+      end loop;
+      raise Compiler_Defect with "no target is described as " & Name;
    end Described;
 
    --  A GNU triplet is machine-vendor-system, the vendor optional, and the

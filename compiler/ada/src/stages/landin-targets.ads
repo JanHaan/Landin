@@ -29,6 +29,24 @@ package Landin.Targets is
    type Architecture is
      (X86_64, Arm64, RV64, Cortex_M0, RV32, Synthetic_32_Architecture);
 
+   --  The configuration atom that names each architecture, the `rv32` of
+   --  `compiler.arch == rv32` [1530]: the one table of them, which every
+   --  stage that reads an atom asks rather than spelling the atoms again.
+   function Atom (Machine : Architecture) return String
+     is (case Machine is
+           when X86_64 => "x86_64",
+           when Arm64 => "arm64",
+           when RV64 => "rv64",
+           when Cortex_M0 => "cortex_m0",
+           when RV32 => "rv32",
+           when Synthetic_32_Architecture => "synthetic_32");
+
+   function Is_Architecture_Atom (Word : String) return Boolean
+     is (for some Machine in Architecture => Atom (Machine) = Word);
+
+   function Architecture_Named (Word : String) return Architecture
+     with Pre => Is_Architecture_Atom (Word);
+
    --  The scalar sizes a backend has to lay out.  Sizes, not types: a
    --  four-byte scalar aligns the same way whether a program called it an
    --  integer, a float or a pointer.

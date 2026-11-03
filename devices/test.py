@@ -141,6 +141,25 @@ class Offline(unittest.TestCase):
         self.assertEqual(evaluation.r[15], 0x10000100)
         self.assertEqual(evaluation.r[13], 0x20042000)
 
+    def test_the_cores_are_the_compilers(self):
+        """CORES is Landin.Targets.Firmware's table of each core's SVD
+        cpu name, which refine svd reads, joined to the spelling a
+        description names the core by: one table, and this a copy held
+        to it, so render_d542 stays independent of refine's code."""
+        firmware = ROOT / 'compiler/ada/src/stages/landin-targets-firmware'
+
+        def table(text, function):
+            #  A case expression's `when CORE => "TEXT"` arms, to its end.
+            arms = text.split('function %s (Core : Core_Kind)' % function,
+                              1)[1].split(');', 1)[0]
+            return dict(re.findall(r'when (\w+) => "([^"]*)"', arms))
+
+        svd = table(firmware.with_suffix('.ads').read_text(), 'Svd_Name')
+        spelling = table(firmware.with_suffix('.adb').read_text(), 'Spelling')
+        self.assertTrue(svd and spelling)
+        self.assertEqual(CORES, {name: spelling[core]
+                                 for core, name in svd.items() if name})
+
     def test_no_vendor_input_is_vendored(self):
         self.assertFalse((HERE / 'inputs').exists())
         for path in HERE.rglob('*'):

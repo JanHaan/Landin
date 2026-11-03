@@ -3,12 +3,14 @@ with Ada.Strings.Fixed;
 with GNAT.SHA256;
 
 with Landin.Devices.Policies;
+with Landin.Targets.Firmware;
 with Landin.Xml;
 
 package body Landin.Devices.Projection is
 
    package X renames Landin.Xml;
    package P renames Landin.Devices.Policies;
+   package Firmware renames Landin.Targets.Firmware;
 
    package Name_Sets is new Ada.Containers.Indefinite_Ordered_Sets
      (Element_Type => String);
@@ -1502,10 +1504,9 @@ package body Landin.Devices.Projection is
             Fail (Inconsistent_Device, "the SVD names no cpu, so the"
                   & " description's core is not known; the policy's core"
                   & " names it", Device);
-         elsif Core not in "CM0" | "CM0PLUS" | "CM3" | "CM4" | "CM7" | "CM33"
-         then
+         elsif not Firmware.Is_Svd_Name (Core) then
             Fail (Unsupported_Form, "the SVD's cpu is " & Core & ", which"
-                  & " is none of CM0, CM0PLUS, CM3, CM4, CM7 and CM33; a"
+                  & " is none of " & Firmware.Svd_Names & "; a"
                   & " RISC-V device's policy names its core, hazard3,"
                   & " esp-rv32imc or esp-rv32imac-clic",
                   Child (Cpu, "name"));
@@ -1668,12 +1669,8 @@ package body Landin.Devices.Projection is
                & """)");
          Line ("compiler.core("""
                & (if Chosen.Core /= P.From_Svd then P.Core_Name (Chosen.Core)
-                  elsif Core = "CM0" then "cortex-m0"
-                  elsif Core = "CM0PLUS" then "cortex-m0plus"
-                  elsif Core = "CM3" then "cortex-m3"
-                  elsif Core = "CM4" then "cortex-m4"
-                  elsif Core = "CM7" then "cortex-m7"
-                  else "cortex-m33") & """)");
+                  else Firmware.Spelling (Firmware.Core_Of_Svd (Core)))
+               & """)");
          --  D701: a vectored core's table is its 32 mcause codes, and the
          --  C5's CLIC's its 48 interrupt identities; neither takes an
          --  interrupt-matrix source as a slot.

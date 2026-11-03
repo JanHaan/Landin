@@ -487,9 +487,7 @@ package body Landin.Stages.Configuration is
                      return Byte_Order;
                   elsif Word in "debug" | "release" then
                      return Build_Kind;
-                  elsif Word in "x86_64" | "arm64" | "rv64" | "cortex_m0"
-                              | "rv32" | "synthetic_32"
-                  then
+                  elsif Landin.Targets.Is_Architecture_Atom (Word) then
                      return Machine;
                   else
                      return Bad_Value;
@@ -503,21 +501,19 @@ package body Landin.Stages.Configuration is
                   --  unnamed one is not typed as the nearest fact there is.
                   if Is_Feature_Fact (Of_Tree, Node) then
                      return Truth;
-                  elsif Word in "c_sysv_lp64" | "c_darwin_lp64"
-                              | "c_aapcs64_lp64" | "c_riscv_lp64d"
-                              | "c_riscv_ilp32" | "c_runtime"
-                  then
-                     return Truth;
-                  elsif Word = "os" then
-                     return Operating_System;
-                  elsif Word = "word_size" then
-                     return Number;
-                  elsif Word = "byte_order" then
-                     return Byte_Order;
-                  elsif Word = "build_mode" then
-                     return Build_Kind;
-                  elsif Word = "arch" then
-                     return Machine;
+                  elsif Landin.Configuration.Is_Fact_Name (Word) then
+                     return
+                       (case Landin.Configuration.Fact_Named (Word) is
+                          when Landin.Configuration.Arch_Fact => Machine,
+                          when Landin.Configuration.OS_Fact =>
+                             Operating_System,
+                          when Landin.Configuration.Byte_Order_Fact =>
+                             Byte_Order,
+                          when Landin.Configuration.Build_Mode_Fact =>
+                             Build_Kind,
+                          when Landin.Configuration.Word_Size_Fact => Number,
+                          when Landin.Configuration.C_ABI_Fact
+                             | Landin.Configuration.C_Runtime_Fact => Truth);
                   else
                      return Bad_Value;
                   end if;
@@ -544,10 +540,7 @@ package body Landin.Stages.Configuration is
                declare
                   Word : constant String := Spelled (Syn.Name (Of_Tree, Node));
                begin
-                  if Word not in "x86_64" | "arm64" | "rv64" | "cortex_m0"
-                               | "rv32" | "synthetic_32" | "little" | "big"
-                               | "debug" | "release" | "linux" | "darwin"
-                               | "freebsd" | "freestanding"
+                  if not Landin.Configuration.Is_Configuration_Atom (Word)
                     and then Option_Index (Syn.Name (Of_Tree, Node)) = 0
                   then
                      Report_Not_Fixed
@@ -580,11 +573,8 @@ package body Landin.Stages.Configuration is
                      Valid := False;
                   end if;
                elsif not Is_Compiler_Member (Of_Tree, Node)
-                 or else Spelled (Syn.Name (Of_Tree, Node))
-                   not in "arch" | "os" | "word_size" | "byte_order"
-                        | "build_mode" | "c_sysv_lp64" | "c_darwin_lp64"
-                        | "c_aapcs64_lp64" | "c_riscv_lp64d"
-                        | "c_riscv_ilp32" | "c_runtime"
+                 or else not Landin.Configuration.Is_Fact_Name
+                   (Spelled (Syn.Name (Of_Tree, Node)))
                then
                   Report_Not_Fixed
                     (Of_Tree, Node,
@@ -720,24 +710,9 @@ package body Landin.Stages.Configuration is
                                then Landin.Configuration.Debug
                                else Landin.Configuration.Release));
                   end if;
-                  if Word = "x86_64" then
-                     return (Kind => Machine,
-                             Architecture_Value => Landin.Targets.X86_64);
-                  elsif Word = "arm64" then
-                     return (Kind => Machine,
-                             Architecture_Value => Landin.Targets.Arm64);
-                  elsif Word = "rv64" then
-                     return (Kind => Machine,
-                             Architecture_Value => Landin.Targets.RV64);
-                  elsif Word = "cortex_m0" then
-                     return (Kind => Machine,
-                             Architecture_Value => Landin.Targets.Cortex_M0);
-                  elsif Word = "rv32" then
-                     return (Kind => Machine,
-                             Architecture_Value => Landin.Targets.RV32);
-                  elsif Word = "synthetic_32" then
+                  if Landin.Targets.Is_Architecture_Atom (Word) then
                      return (Kind => Machine, Architecture_Value =>
-                               Landin.Targets.Synthetic_32_Architecture);
+                               Landin.Targets.Architecture_Named (Word));
                   end if;
                   raise Compiler_Defect
                     with "an unvalidated fixed name was evaluated: " & Word;
@@ -760,63 +735,54 @@ package body Landin.Stages.Configuration is
                        (Landin.Targets.Levels.Has
                           (Level (Context),
                            Landin.Targets.Levels.Feature_Named (Word)));
-                  elsif Word = "c_sysv_lp64" then
-                     return Boolean_Result
-                       (Landin.Targets.C_ABI_Of (Target (Context))
-                          = Landin.Targets.SysV_AMD64_LP64);
-                  elsif Word = "c_darwin_lp64" then
-                     return Boolean_Result
-                       (Landin.Targets.C_ABI_Of (Target (Context))
-                          = Landin.Targets.Darwin_AAPCS64_LP64);
-                  elsif Word = "c_aapcs64_lp64" then
-                     return Boolean_Result
-                       (Landin.Targets.C_ABI_Of (Target (Context))
-                          = Landin.Targets.AAPCS64_LP64);
-                  elsif Word = "c_riscv_lp64d" then
-                     return Boolean_Result
-                       (Landin.Targets.C_ABI_Of (Target (Context))
-                          = Landin.Targets.RiscV_LP64D);
-                  elsif Word = "c_riscv_ilp32" then
-                     return Boolean_Result
-                       (Landin.Targets.C_ABI_Of (Target (Context))
-                          = Landin.Targets.RiscV_ILP32);
-                  elsif Word = "c_runtime" then
-                     --  Darwin and FreeBSD reach their systems only through
-                     --  their C libraries; Linux links one when the request
-                     --  asks, and firmware never does.
-                     declare
-                        System : constant
-                          Landin.Targets.Capabilities.Hosted_System :=
-                            Landin.Targets.Capabilities.Hosted_System_Of
-                              (Target (Context));
-                     begin
-                        return Boolean_Result
-                          (System in Landin.Targets.Capabilities.Darwin
-                                   | Landin.Targets.Capabilities.FreeBSD
-                           or else
-                             (System = Landin.Targets.Capabilities.Linux
-                              and then
-                                Landin.Configuration.C_Runtime_Requested
-                                  (Activity.all)));
-                     end;
-                  elsif Word = "os" then
-                     return (Kind => Operating_System, System_Value =>
-                       Landin.Targets.Capabilities.Hosted_System_Of
-                         (Target (Context)));
-                  elsif Word = "word_size" then
-                     return (Kind => Number, Integer_Value => Ty.Folded
-                       (Landin.Targets.Pointer_Width (Target (Context))));
-                  elsif Word = "byte_order" then
-                     return (Kind => Byte_Order, Order_Value =>
-                       Landin.Targets.Byte_Order (Target (Context)));
-                  elsif Word = "build_mode" then
-                     return (Kind => Build_Kind, Mode_Value =>
-                       Landin.Configuration.Mode (Activity.all));
-                  elsif Word = "arch" then
-                     return (Kind => Machine,
-                             Architecture_Value =>
-                               Landin.Targets.Architecture_Of
-                                 (Target (Context)));
+                  elsif Landin.Configuration.Is_Fact_Name (Word) then
+                     case Landin.Configuration.Fact_Named (Word) is
+                        when Landin.Configuration.C_ABI_Fact =>
+                           return Boolean_Result
+                             (Landin.Targets.C_ABI_Of (Target (Context))
+                                = Landin.Configuration.ABI_Of
+                                    (Landin.Configuration.Fact_Named
+                                       (Word)));
+                        when Landin.Configuration.C_Runtime_Fact =>
+                           --  Darwin and FreeBSD reach their systems only
+                           --  through their C libraries; Linux links one
+                           --  when the request asks, and firmware never
+                           --  does.
+                           declare
+                              System : constant
+                                Landin.Targets.Capabilities.Hosted_System :=
+                                  Landin.Targets.Capabilities.Hosted_System_Of
+                                    (Target (Context));
+                           begin
+                              return Boolean_Result
+                                (System in Landin.Targets.Capabilities.Darwin
+                                         | Landin.Targets.Capabilities.FreeBSD
+                                 or else
+                                   (System = Landin.Targets.Capabilities.Linux
+                                    and then
+                                      Landin.Configuration.C_Runtime_Requested
+                                        (Activity.all)));
+                           end;
+                        when Landin.Configuration.OS_Fact =>
+                           return (Kind => Operating_System, System_Value =>
+                             Landin.Targets.Capabilities.Hosted_System_Of
+                               (Target (Context)));
+                        when Landin.Configuration.Word_Size_Fact =>
+                           return (Kind => Number, Integer_Value => Ty.Folded
+                             (Landin.Targets.Pointer_Width
+                                (Target (Context))));
+                        when Landin.Configuration.Byte_Order_Fact =>
+                           return (Kind => Byte_Order, Order_Value =>
+                             Landin.Targets.Byte_Order (Target (Context)));
+                        when Landin.Configuration.Build_Mode_Fact =>
+                           return (Kind => Build_Kind, Mode_Value =>
+                             Landin.Configuration.Mode (Activity.all));
+                        when Landin.Configuration.Arch_Fact =>
+                           return (Kind => Machine,
+                                   Architecture_Value =>
+                                     Landin.Targets.Architecture_Of
+                                       (Target (Context)));
+                     end case;
                   end if;
                   raise Compiler_Defect
                     with "an unvalidated compiler fact was evaluated: "
@@ -1043,9 +1009,10 @@ package body Landin.Stages.Configuration is
                   Note => "[1560]: compiler, assembler and linker"
                     & " are implicitly available builtin modules",
                   Into => Found);
-            elsif Spelled (Syn.Name (Of_Tree, Node))
-              in "x86_64" | "arm64" | "rv64" | "cortex_m0" | "rv32"
-                 | "synthetic_32" | "little" | "big" | "debug" | "release"
+            elsif Landin.Targets.Is_Architecture_Atom
+                    (Spelled (Syn.Name (Of_Tree, Node)))
+              or else Spelled (Syn.Name (Of_Tree, Node))
+                in "little" | "big" | "debug" | "release"
             then
                Report_Configuration_Rule
                  (Bad.Invalid_Option_Declaration, Of_Tree, Node,
@@ -2783,16 +2750,13 @@ package body Landin.Stages.Configuration is
       is
          function Atom_Fact (Operand : Syn.Node_Id) return Boolean
            is (Is_Compiler_Member (Of_Tree, Operand)
-               and then Spelled (Syn.Name (Of_Tree, Operand))
-                 in "arch" | "os" | "byte_order" | "build_mode");
+               and then Landin.Configuration.Is_Atom_Fact_Name
+                 (Spelled (Syn.Name (Of_Tree, Operand))));
          function Atom_Operand (Operand : Syn.Node_Id) return Boolean
            is (Atom_Fact (Operand)
                or else (Syn.Kind (Of_Tree, Operand) = Syn.Name_Reference
-                        and then Spelled (Syn.Name (Of_Tree, Operand))
-                          in "x86_64" | "arm64" | "rv64" | "cortex_m0"
-                           | "rv32" | "synthetic_32" | "little" | "big"
-                           | "debug" | "release" | "linux" | "darwin"
-                           | "freebsd" | "freestanding"));
+                        and then Landin.Configuration.Is_Configuration_Atom
+                          (Spelled (Syn.Name (Of_Tree, Operand)))));
 
          procedure Keep;
          procedure Keep is
@@ -2819,10 +2783,8 @@ package body Landin.Stages.Configuration is
             return;
          elsif Is_Feature_Fact (Of_Tree, Node)
            or else (Is_Compiler_Member (Of_Tree, Node)
-                    and then Spelled (Syn.Name (Of_Tree, Node))
-                      in "word_size" | "c_sysv_lp64" | "c_darwin_lp64"
-                       | "c_aapcs64_lp64" | "c_riscv_lp64d" | "c_riscv_ilp32"
-                       | "c_runtime")
+                    and then Landin.Configuration.Is_Valued_Fact_Name
+                      (Spelled (Syn.Name (Of_Tree, Node))))
          then
             Keep;
             return;

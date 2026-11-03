@@ -8,6 +8,16 @@ package body Landin.Configuration is
    use type Landin.Syntax.Node_Kind;
    use type Landin.Source.Names.Name_Id;
 
+   function Fact_Named (Word : String) return Fixed_Fact is
+   begin
+      for Fact in Fixed_Fact loop
+         if Fact_Name (Fact) = Word then
+            return Fact;
+         end if;
+      end loop;
+      raise Compiler_Defect with "no fixed fact is named " & Word;
+   end Fact_Named;
+
    function Compiler_Member
      (Names : Landin.Source.Names.Table; Of_Tree : Landin.Syntax.Tree;
       Node : Landin.Syntax.Node_Id) return String
@@ -196,23 +206,20 @@ package body Landin.Configuration is
          return (if Member = "directory" then "D524: " else "D202: ")
            & Namespace & "." & Member
            & " is a module-only fixed directive";
-      elsif Namespace = "compiler" and then Member
-        in "arch" | "os" | "byte_order" | "build_mode"
-      then
+      elsif Namespace = "compiler" and then Is_Atom_Fact_Name (Member) then
          --  D437: an atom fact has no value of its own outside a fixed
          --  condition; a module value holds its comparison.
          return "D437: compiler." & Member & " is compared in a fixed"
            & " condition or a module value, such as `"
-           & (if Member = "arch" then "on_arm: bool = compiler.arch == arm64"
-              elsif Member = "os" then "on_linux: bool = compiler.os == linux"
-              elsif Member = "byte_order"
-              then "low_first: bool = compiler.byte_order == little"
-              else "debugging: bool = compiler.build_mode == debug")
+           & (case Atom_Fact'(Fact_Named (Member)) is
+                 when Arch_Fact => "on_arm: bool = compiler.arch == arm64",
+                 when OS_Fact => "on_linux: bool = compiler.os == linux",
+                 when Byte_Order_Fact =>
+                    "low_first: bool = compiler.byte_order == little",
+                 when Build_Mode_Fact =>
+                    "debugging: bool = compiler.build_mode == debug")
            & "`, which a routine body then reads";
-      elsif Namespace = "compiler" and then Member
-        in "word_size" | "c_sysv_lp64" | "c_darwin_lp64" | "c_aapcs64_lp64"
-         | "c_riscv_lp64d" | "c_riscv_ilp32" | "c_runtime"
-      then
+      elsif Namespace = "compiler" and then Is_Valued_Fact_Name (Member) then
          return "D437: compiler." & Member & " is read in fixed"
            & " configuration expressions and module values; a routine"
            & " body reads a module value that holds it";

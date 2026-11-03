@@ -3,6 +3,7 @@ with Ada.Strings.Fixed;
 with Ada.Strings.Maps;
 
 with Landin.Targets.Levels;
+with Landin.Targets.Selection;
 
 package body Landin.Testing.Fixtures is
 
@@ -11,14 +12,11 @@ package body Landin.Testing.Fixtures is
 
    Metadata_Name : constant String := "fixture.meta";
 
-   --  Linux and FreeBSD x86-64 and arm64, macOS arm64, Cortex-M, RV32 and
-   --  the synthetic 32-bit layout target are the fixture descriptions.
-   --  A fixture may name only these, because naming a target nothing
+   --  A fixture may name only a target the compiler describes, as
+   --  `refine --target=` spells it, because naming a target nothing
    --  describes is how a fixture quietly stops applying to anything.
-   function Is_Named_Target (Name : String) return Boolean is
-     (Name in "linux-x86-64" | "linux-arm64" | "linux-rv64"
-            | "darwin-arm64" | "cortex-m0" | "rv32"
-            | "freebsd-x86-64" | "freebsd-arm64" | "synthetic-32");
+   function Is_Named_Target (Name : String) return Boolean
+     renames Landin.Targets.Selection.Is_Described;
 
    --  Whether a `targets:` list names LABEL.
    function Names_Label (Targets, Label : String) return Boolean;
@@ -110,15 +108,12 @@ package body Landin.Testing.Fixtures is
    --  executed on every lane its inventories select -- its `targets` for
    --  the hosted ones, compiler/tests/cortex-m/corpus.json for the M
    --  profile -- so a level is held to being a level some lane has, and
-   --  each lane runs its own family's.
+   --  each lane runs its own family's.  Every described target's levels,
+   --  so a family is admitted here as it is in fixture_meta.py.
    function Is_Product_Level (Level : String) return Boolean
-     is (Landin.Targets.Levels.Is_Level_Of (Landin.Targets.Linux_X86_64, Level)
-         or else Landin.Targets.Levels.Is_Level_Of
-           (Landin.Targets.Darwin_Arm64, Level)
-         or else Landin.Targets.Levels.Is_Level_Of
-           (Landin.Targets.Linux_RV64, Level)
-         or else Landin.Targets.Levels.Is_Level_Of
-           (Landin.Targets.Cortex_M, Level));
+     is (for some Index in 1 .. Landin.Targets.Selection.Described_Count =>
+           Landin.Targets.Levels.Is_Level_Of
+             (Landin.Targets.Selection.Described_At (Index), Level));
 
    function Name (Item : Fixture) return String
      is (Unbounded.To_String (Item.Name));

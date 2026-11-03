@@ -655,8 +655,9 @@ package body Landin.Commands is
                   J.End_Object (B);
                else
                   US.Append (Result.Output, Name
-                    & (if Name = "synthetic-32"
-                       then " (checking only)" else "")
+                    & (if Landin.Targets.Capabilities.Emits
+                            (Landin.Targets.Selection.Described (Name))
+                       then "" else " (checking only)")
                     & ": " & Landin.Targets.Levels.Levels_Of
                       (Landin.Targets.Selection.Described (Name)) & LF);
                end if;

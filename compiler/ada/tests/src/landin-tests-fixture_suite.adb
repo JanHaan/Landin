@@ -2,7 +2,7 @@ with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 
 with Landin.Platform.Native;
-with Landin.Targets;
+with Landin.Targets.Selection;
 with Landin.Testing.Fakes;
 with Landin.Testing.Fixtures;
 
@@ -1350,18 +1350,6 @@ package body Landin.Tests.Fixture_Suite is
       function Image (Value : Integer) return String is
         (Ada.Strings.Fixed.Trim (Integer'Image (Value), Ada.Strings.Both));
 
-      function Facts_Named (Name : String) return Landin.Targets.Target_Facts
-      is
-        (if Name = "linux-x86-64" then Landin.Targets.Linux_X86_64
-         elsif Name = "freebsd-x86-64" then Landin.Targets.FreeBSD_X86_64
-         elsif Name = "linux-arm64" then Landin.Targets.Linux_Arm64
-         elsif Name = "darwin-arm64" then Landin.Targets.Darwin_Arm64
-         elsif Name = "freebsd-arm64" then Landin.Targets.FreeBSD_Arm64
-         elsif Name = "linux-rv64" then Landin.Targets.Linux_RV64
-         elsif Name = "cortex-m0" then Landin.Targets.Cortex_M
-         elsif Name = "rv32" then Landin.Targets.RV32
-         else Landin.Targets.Synthetic_32);
-
       --  A field as fixture-meta.cases renders it.
       function Field
         (Fixture : Landin.Testing.Fixtures.Fixture;
@@ -1383,7 +1371,9 @@ package body Landin.Tests.Fixture_Suite is
             begin
                if Head = "levels" then
                   return Joined
-                    (Levels_Of_Family (Fixture, Facts_Named (Tail)));
+                    (Levels_Of_Family
+                       (Fixture,
+                        Landin.Targets.Selection.Described (Tail)));
                elsif Head = "status" then
                   return Image (Status_At (Fixture, Tail));
                elsif Head = "c-args" then

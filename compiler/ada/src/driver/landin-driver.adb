@@ -153,36 +153,53 @@ package body Landin.Driver is
       --  D589: the selected profile's derived linker script, alone.
       Emit_Linker_Script);
 
+   --  The targets are Landin.Targets.Selection's, in its order: every one
+   --  is described, and those a backend emits for are named again, each
+   --  with its levels.
    function Identity return String is
-     ("refine - the Landin bootstrap compiler" & LF
-      & "use refine version for build identity" & LF
-      & "language frontend: scanner, parser, names, types, definite assignment"
-      & LF
-      & "target-neutral IR: lowered and verified" & LF
-      & "backends: linux-x86-64, linux-arm64, darwin-arm64, "
-      & "freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0 and rv32"
-      & " assembly" & LF
-      & "executable output: assembled and linked by a"
-      & " target-selected native toolchain" & LF
-      & "targets described: linux-x86-64, linux-arm64, darwin-arm64, "
-      & "freebsd-x86-64, freebsd-arm64, linux-rv64, "
-      & "cortex-m0, rv32, synthetic-32" & LF
-      & "levels of linux-x86-64: "
-      & Landin.Targets.Levels.Levels_Of (Landin.Targets.Linux_X86_64) & LF
-      & "levels of linux-arm64: "
-      & Landin.Targets.Levels.Levels_Of (Landin.Targets.Linux_Arm64) & LF
-      & "levels of darwin-arm64: "
-      & Landin.Targets.Levels.Levels_Of (Landin.Targets.Darwin_Arm64) & LF
-      & "levels of freebsd-x86-64: "
-      & Landin.Targets.Levels.Levels_Of (Landin.Targets.FreeBSD_X86_64) & LF
-      & "levels of freebsd-arm64: "
-      & Landin.Targets.Levels.Levels_Of (Landin.Targets.FreeBSD_Arm64) & LF
-      & "levels of linux-rv64: "
-      & Landin.Targets.Levels.Levels_Of (Landin.Targets.Linux_RV64) & LF
-      & "levels of cortex-m0: "
-      & Landin.Targets.Levels.Levels_Of (Landin.Targets.Cortex_M) & LF
-      & "levels of rv32: "
-      & Landin.Targets.Levels.Levels_Of (Landin.Targets.RV32) & LF);
+      package Selection renames Landin.Targets.Selection;
+      function Emits (Index : Positive) return Boolean
+        is (Landin.Targets.Capabilities.Emits
+              (Selection.Described_At (Index)));
+      Backends, Described, Levels : Unbounded.Unbounded_String;
+      Emitting, Named : Natural := 0;
+   begin
+      for Index in 1 .. Selection.Described_Count loop
+         if Emits (Index) then
+            Emitting := Emitting + 1;
+         end if;
+      end loop;
+      for Index in 1 .. Selection.Described_Count loop
+         declare
+            Name : constant String := Selection.Described_Name (Index);
+         begin
+            Unbounded.Append
+              (Described, (if Index = 1 then "" else ", ") & Name);
+            if Emits (Index) then
+               Named := Named + 1;
+               Unbounded.Append
+                 (Backends,
+                  (if Named = 1 then ""
+                   elsif Named = Emitting then " and "
+                   else ", ") & Name);
+               Unbounded.Append
+                 (Levels, "levels of " & Name & ": "
+                  & Landin.Targets.Levels.Levels_Of
+                      (Selection.Described_At (Index)) & LF);
+            end if;
+         end;
+      end loop;
+      return "refine - the Landin bootstrap compiler" & LF
+        & "use refine version for build identity" & LF
+        & "language frontend: scanner, parser, names, types,"
+        & " definite assignment" & LF
+        & "target-neutral IR: lowered and verified" & LF
+        & "backends: " & Unbounded.To_String (Backends) & " assembly" & LF
+        & "executable output: assembled and linked by a"
+        & " target-selected native toolchain" & LF
+        & "targets described: " & Unbounded.To_String (Described) & LF
+        & Unbounded.To_String (Levels);
+   end Identity;
 
    --  The command catalogue's own overview: one text for `refine`,
    --  `refine --help` and a request the driver is handed with nothing in it.
@@ -1288,20 +1305,6 @@ package body Landin.Driver is
             return Seen;
          end Times_Written;
 
-
-
-         type Spelling_Access is access constant String;
-         Target_Spellings : constant array (Positive range <>)
-           of Spelling_Access :=
-             [new String'("linux-x86-64"), new String'("linux-arm64"),
-              new String'("darwin-arm64"), new String'("freebsd-x86-64"),
-              new String'("freebsd-arm64"), new String'("linux-rv64"),
-              new String'("cortex-m0"), new String'("rv32"),
-              new String'("synthetic-32")];
-
-
-
-
          --  "; did you mean T?" for the described target nearest Name,
          --  or "".  `macos` is what a reader calls `darwin`.
          function Nearest_Target (Name : String) return String;
@@ -1313,9 +1316,10 @@ package body Landin.Driver is
                then "darwin" & Name (Name'First + 5 .. Name'Last)
                else Name);
          begin
-            for Known of Target_Spellings loop
+            for Index in 1 .. Landin.Targets.Selection.Described_Count loop
                Landin.Diagnostics.Suggestions.Consider
-                 (Offered, Asked, Known.all);
+                 (Offered, Asked,
+                  Landin.Targets.Selection.Described_Name (Index));
             end loop;
             if Asked /= Name
               and then Landin.Targets.Selection.Is_Described (Asked)

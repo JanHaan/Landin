@@ -1087,15 +1087,12 @@ package body Landin.Stages.Resolution is
                      and then Spelled (Syn.Name
                        (Of_Tree, Syn.Target_Of (Of_Tree, Operand)))
                          = "compiler"
-                     and then Spelled (Syn.Name (Of_Tree, Operand))
-                       in "arch" | "os" | "byte_order" | "build_mode");
+                     and then Landin.Configuration.Is_Atom_Fact_Name
+                       (Spelled (Syn.Name (Of_Tree, Operand))));
                function Atom_Word (Operand : Syn.Node_Id) return Boolean
                  is (Syn.Kind (Of_Tree, Operand) = Syn.Name_Reference
-                     and then Spelled (Syn.Name (Of_Tree, Operand))
-                       in "x86_64" | "arm64" | "rv64" | "cortex_m0"
-                        | "rv32" | "synthetic_32" | "little" | "big" | "debug"
-                        | "release" | "linux" | "darwin" | "freebsd"
-                        | "freestanding");
+                     and then Landin.Configuration.Is_Configuration_Atom
+                       (Spelled (Syn.Name (Of_Tree, Operand))));
                Left : constant Syn.Node_Id := Syn.Left_Of (Of_Tree, Node);
                Right : constant Syn.Node_Id := Syn.Right_Of (Of_Tree, Node);
             begin

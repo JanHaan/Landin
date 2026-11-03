@@ -17,9 +17,19 @@
 
 package Landin.Targets.Selection is
 
+   --  The described targets, in the order `refine targets` lists them.
+   --  This is the one list of what a target is called: the driver's
+   --  identity and spellings, the language server, the test harness and
+   --  the repository's Python checks all read it rather than keeping
+   --  their own.
    Described_Count : constant Positive := 9;
    function Described_Name (Index : Positive) return String
      with Pre => Index <= Described_Count;
+
+   --  The description each name selects, from its named constructor.
+   function Described_At (Index : Positive) return Target_Facts
+     with Pre  => Index <= Described_Count,
+          Post => Name (Described_At'Result) = Described_Name (Index);
 
    function Is_Described (Name : String) return Boolean;
 
