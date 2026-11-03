@@ -13,6 +13,10 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[2]
+#  Seconds before a subprocess here is called hung.  It ends in well under
+#  a second on an idle host; the limit only stops a hang, and is wide
+#  because scripts/script_tests.py's own workers load the host.
+HANG = 300
 ACTION = ROOT / ".github/actions/pinned-toolchain/action.yml"
 
 
@@ -87,7 +91,7 @@ class PinnedToolchainVersions(unittest.TestCase):
                  "LANDIN_GPRBUILD_HOME": str(self.root / "gprbuild"),
                  "LANDIN_TEST_MARKERS": str(self.markers),
                  "LANDIN_TEST_LARGE": large, "LANDIN_TEST_FAIL": fail},
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=20)
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=HANG)
 
     def test_actual_action_drains_both_tools_and_prints_only_first_lines(self):
         result = self.run_block()

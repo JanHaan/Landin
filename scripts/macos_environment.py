@@ -120,8 +120,10 @@ def stop_session(leader):
             os.killpg(leader, signal.SIGSTOP)
         except ProcessLookupError:
             pass
+        # A hang guard, not a speed claim: ps took seconds on a loaded host,
+        # and a timeout here would leave the session's other groups running.
         pids = subprocess.check_output(["ps", "-axo", "pid="], text=True,
-                                       timeout=5).split()
+                                       timeout=120).split()
         for word in pids:
             pid = int(word)
             try:

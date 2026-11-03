@@ -167,9 +167,16 @@ class Server:
         self.transcript = []
         self.diagnostics = []
         self.next_id = 1
-        self.request("initialize", {"capabilities": {},
-                                    "initializationOptions": {
-                                        "roots": [ROOT.as_uri()]}})
+        try:
+            self.request("initialize", {"capabilities": {},
+                                        "initializationOptions": {
+                                            "roots": [ROOT.as_uri()]}})
+        except Broken:
+            #  Nobody holds a server that never started, so nobody would
+            #  stop it: it is killed here rather than left running.
+            self.process.kill()
+            self.process.communicate()
+            raise
         self.notify("initialized", {})
 
     def send(self, message):

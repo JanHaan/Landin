@@ -8,6 +8,7 @@ import signal
 import sys
 import subprocess
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
 
@@ -157,18 +158,25 @@ class MacOSEnvironment(unittest.TestCase):
     def test_timeout_stops_a_separate_tool_group(self):
         with tempfile.TemporaryDirectory() as tmp:
             pid_file = Path(tmp) / "child.pid"
+            #  The pid is written whole or not at all, so a limit that
+            #  stops the program mid-write leaves no pid rather than half
+            #  of one.
             code = ("import os, subprocess, sys, time\nfrom pathlib import Path\n"
                     "child = subprocess.Popen([sys.executable, '-c', "
-                    "'import time; time.sleep(60)'], preexec_fn=os.setpgrp)\n"
-                    f"Path({str(pid_file)!r}).write_text(str(child.pid))\n"
-                    "time.sleep(60)\n")
+                    "'import time; time.sleep(600)'], preexec_fn=os.setpgrp)\n"
+                    f"partial = Path({str(pid_file) + '.partial'!r})\n"
+                    "partial.write_text(str(child.pid))\n"
+                    f"os.replace(partial, {str(pid_file)!r})\n"
+                    "time.sleep(600)\n")
             try:
                 #  The limit has to outlast the program's own start, which
                 #  on a loaded host took longer than two seconds and left no
                 #  pid to check.  What is under test is that the limit stops
                 #  the whole group, so a start the limit cut short is
-                #  repeated with a longer one rather than counted.
-                for limit in (2, 8, 30):
+                #  repeated with a longer one rather than counted; the last
+                #  is two minutes, far beyond any start measured under
+                #  scripts/script_tests.py's own load.
+                for limit in (2, 8, 30, 120):
                     (Path(tmp) / f"within-{limit}").mkdir()
                     capture = macos.Capture(Path(tmp) / f"within-{limit}")
                     capture.run("group-timeout", [sys.executable, "-c", code],
@@ -176,19 +184,29 @@ class MacOSEnvironment(unittest.TestCase):
                     if pid_file.exists():
                         break
                 child = int(pid_file.read_text())
-                status = subprocess.run(["ps", "-o", "stat=", "-p", str(child)],
-                                        capture_output=True, text=True, timeout=5)
-                # A reparented zombie is already stopped; reaping belongs to
-                # init on this host, not to the validation process.
-                self.assertTrue(not status.stdout.strip()
-                                or status.stdout.strip().startswith("Z"))
+                #  SIGKILL is delivered when the child is next scheduled,
+                #  which on a loaded host is not at once: a child still
+                #  listed as running is asked again until it is gone, a
+                #  zombie, or two minutes have passed.
+                deadline = time.monotonic() + 120
+                while True:
+                    status = subprocess.run(
+                        ["ps", "-o", "stat=", "-p", str(child)],
+                        capture_output=True, text=True, timeout=120)
+                    state = status.stdout.strip()
+                    # A reparented zombie is already stopped; reaping belongs
+                    # to init on this host, not to the validation process.
+                    if not state or state.startswith("Z"):
+                        break
+                    self.assertLess(time.monotonic(), deadline,
+                                    "the tool group's child is still %s" % state)
+                    time.sleep(0.05)
             finally:
                 if pid_file.exists():
                     try:
                         os.killpg(int(pid_file.read_text()), signal.SIGKILL)
                     except ProcessLookupError:
                         pass
-
 
 if __name__ == "__main__":
     unittest.main()

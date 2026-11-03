@@ -12,6 +12,11 @@ import unittest
 
 
 SCRIPT = Path(__file__).resolve().parents[1] / "run_logged.py"
+#  Seconds before a run that should have ended or spoken is called hung.
+#  Each case here takes a second or so on an idle host, and every wait ends
+#  as soon as what it waits for happens, so the limit costs nothing there;
+#  it is wide because scripts/script_tests.py's workers load the host.
+HANG = 120
 
 
 class LoggedCommands(unittest.TestCase):
@@ -27,7 +32,7 @@ class LoggedCommands(unittest.TestCase):
     def run_python(self, code, *arguments):
         return subprocess.run(self.command(sys.executable, "-c", code,
                                            *arguments),
-                              capture_output=True, text=True, timeout=10)
+                              capture_output=True, text=True, timeout=HANG)
 
     def result(self):
         return json.loads((self.output / "result.json").read_text())
@@ -75,7 +80,7 @@ class LoggedCommands(unittest.TestCase):
 
     def test_launch_failure_is_recorded(self):
         result = subprocess.run(self.command(str(self.output / "absent")),
-                                capture_output=True, text=True, timeout=10)
+                                capture_output=True, text=True, timeout=HANG)
         self.assertEqual(result.returncode, 127)
         self.assertEqual(self.result()["exit_status"], 127)
         self.assertIn("launch_error", self.result())
@@ -95,16 +100,16 @@ class LoggedCommands(unittest.TestCase):
         def cleanup():
             if process.poll() is None:
                 process.kill()
-            process.communicate(timeout=5)
+            process.communicate(timeout=HANG)
 
         self.addCleanup(cleanup)
-        deadline = time.monotonic() + 5
+        deadline = time.monotonic() + HANG
         log = self.output / "command.log"
         while not log.exists() or "ready" not in log.read_text():
             self.assertLess(time.monotonic(), deadline)
             time.sleep(0.01)
         process.terminate()
-        stdout, stderr = process.communicate(timeout=5)
+        stdout, stderr = process.communicate(timeout=HANG)
         self.assertEqual(process.returncode, 128 + signal.SIGTERM,
                          (stdout, stderr))
         self.assertEqual(self.result()["interrupted_by"], signal.SIGTERM)
@@ -119,7 +124,7 @@ class LoggedCommands(unittest.TestCase):
         def cleanup():
             if process.poll() is None:
                 process.kill()
-            process.wait(timeout=5)
+            process.wait(timeout=HANG)
 
         self.addCleanup(cleanup)
         return process
@@ -127,36 +132,61 @@ class LoggedCommands(unittest.TestCase):
     def wait(self, *arguments):
         return subprocess.run(
             [sys.executable, str(SCRIPT), "--wait", str(self.output),
-             *arguments], capture_output=True, text=True, timeout=30)
+             *arguments], capture_output=True, text=True, timeout=2 * HANG)
 
     def test_wait_returns_the_runs_status_and_tail(self):
         self.start("import time; time.sleep(1); print('failure-marker'); "
                    "raise SystemExit(23)")
-        result = self.wait("--timeout=20")
+        result = self.wait("--timeout=%d" % HANG)
         self.assertEqual(result.returncode, 23, result.stdout)
         self.assertIn("exit=23", result.stdout)
         self.assertIn("failure-marker", result.stdout)
         self.assertIn(str(self.output / "result.json"), result.stdout)
 
+    def until(self, ready):
+        """Wait for READY to hold, failing once HANG seconds have passed."""
+        deadline = time.monotonic() + HANG
+        while not ready():
+            self.assertLess(time.monotonic(), deadline)
+            time.sleep(0.01)
+
+    def logged(self, marker):
+        log = self.output / "command.log"
+        return log.exists() and marker in log.read_text()
+
     def test_wait_says_a_run_is_still_going_and_can_be_repeated(self):
-        process = self.start("import time; print('progress-marker', "
-                             "flush=True); time.sleep(3)")
+        #  The run ends when the test says so, not after a fixed sleep: a
+        #  three-second run once ended under load before a one-second wait
+        #  had started, and a wait started before the run had made its
+        #  directory refuses it.
+        release = self.output.parent / "release"
+        process = self.start(
+            "import os, time\nprint('progress-marker', flush=True)\n"
+            "deadline = time.monotonic() + %d\n"
+            "while not os.path.exists(%r) and time.monotonic() < deadline:\n"
+            "    time.sleep(0.01)\n" % (HANG, str(release)))
+        self.until(lambda: self.logged("progress-marker"))
         result = self.wait("--timeout=1")
         self.assertEqual(result.returncode, 124, result.stdout)
         self.assertIn("still running", result.stdout)
         self.assertIn("progress-marker", result.stdout)
-        self.assertEqual(self.wait("--timeout=20").returncode, 0)
-        self.assertEqual(process.wait(timeout=5), 0)
+        release.write_text("")
+        self.assertEqual(self.wait("--timeout=%d" % HANG).returncode, 0)
+        self.assertEqual(process.wait(timeout=HANG), 0)
 
     def test_wait_reports_a_wrapper_that_died_without_a_result(self):
-        process = self.start("import time; time.sleep(5)")
-        deadline = time.monotonic() + 5
-        while not (self.output / "running.json").exists():
-            self.assertLess(time.monotonic(), deadline)
-            time.sleep(0.01)
+        #  The command outlives its wrapper only until it sees the wrapper
+        #  gone, so however long the host takes to get here the run cannot
+        #  end on its own first and write a result.
+        process = self.start(
+            "import os, time\nparent = os.getppid()\n"
+            "deadline = time.monotonic() + %d\n"
+            "while os.getppid() == parent and time.monotonic() < deadline:\n"
+            "    time.sleep(0.01)\n" % HANG)
+        self.until((self.output / "running.json").exists)
         process.kill()
-        process.wait(timeout=5)
-        result = self.wait("--timeout=20")
+        process.wait(timeout=HANG)
+        result = self.wait("--timeout=%d" % HANG)
         self.assertEqual(result.returncode, 125, result.stdout)
         self.assertIn("ended without a result", result.stdout)
 

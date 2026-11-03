@@ -10,6 +10,10 @@ import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
+#  Seconds before a subprocess here is called hung.  It ends in well under
+#  a second on an idle host; the limit only stops a hang, and is wide
+#  because scripts/script_tests.py's own workers load the host.
+HANG = 300
 FAKE = '''import json, os, sys
 from pathlib import Path
 sys.argv = sys.argv[1:]
@@ -52,7 +56,7 @@ class Packages(unittest.TestCase):
                               env={**os.environ, "PATH": str(self.root) + ":" + os.environ["PATH"],
                                    "PACKAGE_STATE": str(self.state), "PACKAGE_LOG": str(self.log),
                                    "PACKAGE_WRONG": "yes" if wrong else ""},
-                              text=True, capture_output=True, timeout=10)
+                              text=True, capture_output=True, timeout=HANG)
 
     def test_warm_matching_packages_do_not_call_apt(self):
         result = self.run_setup("clang-19=19-pinned", "libc6-dev")

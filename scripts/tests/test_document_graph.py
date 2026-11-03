@@ -8,7 +8,6 @@ a directory standing for its README -- and the case where it is not
 reached at all.
 """
 import importlib.util
-import io
 import os
 import shutil
 import tempfile
@@ -30,7 +29,7 @@ class Reachability(unittest.TestCase):
         for name, text in tree.items():
             path = Path(self.tmp) / name
             path.parent.mkdir(parents=True, exist_ok=True)
-            io.open(path, "w", encoding="utf-8").write(text)
+            path.write_text(text, encoding="utf-8")
         return self.tmp
 
     def faults(self, tree):

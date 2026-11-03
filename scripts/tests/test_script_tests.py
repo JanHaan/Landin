@@ -66,6 +66,18 @@ class ScriptTests(unittest.TestCase):
         self.assertIn("FAILED: ", result.stdout)
         self.assertIn("test_b.py", result.stdout.split("FAILED: ", 1)[1])
 
+    def test_a_module_that_leaves_a_file_open_fails_the_run(self):
+        self.module("test_open.py", "import unittest\n\n"
+                    "class Cases(unittest.TestCase):\n"
+                    "    def test_reads(self):\n"
+                    "        open(__file__).read()\n\n"
+                    "unittest.main()\n")
+        result = self.run_runner("--jobs=1")
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("FAILED: ", result.stdout)
+        self.assertIn("test_open.py (left a file or socket open",
+                      result.stdout.split("FAILED: ", 1)[1])
+
     def test_output_is_in_module_order_whatever_finishes_first(self):
         self.module("test_a.py", "import time\ntime.sleep(1)\nprint('first')\n")
         self.module("test_b.py", "print('second')\n")
