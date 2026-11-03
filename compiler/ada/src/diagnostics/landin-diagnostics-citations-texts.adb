@@ -28459,8 +28459,8 @@ package body Landin.Diagnostics.Citations.Texts is
                & "` only when both declare a number model: a soft-float C "
                & "object is then refused, and a libgcc helper object, whic"
                & "h declares none, leaves the image's attribute standing. "
-               & "Without a unit the assembly, the flags and the code are "
-               & "as they were.",
+               & "Without a unit the flags and the code are as they were, "
+               & "and the assembly declares what D780 says.",
             when 618 =>
                "Chosen: with a float unit, compiler-owned reset gives CP"
                & "10 and CP11 full access in CPACR, 0xE000ED88, then DSB a"
@@ -28514,6 +28514,19 @@ package body Landin.Diagnostics.Citations.Texts is
                & "e file. No limited verdict is linked again against the l"
                & "ane's map, which is no device's, and its larger map judg"
                & "es no reference limit stale.",
+            when 780 =>
+               "Chosen: without a unit, the assembly declares `Tag_ABI_F"
+               & "P_number_model` IEEE 754 and `Tag_ABI_VFP_args` 0, the b"
+               & "ase variant, at every Arm level. That is what GCC's soft"
+               & "-float object at the same core declares: GCC writes the "
+               & "number model and leaves the arguments at their default, "
+               & "which is the base variant, so the two objects' attribute"
+               & "s are the same. Every object refine assembles for an Arm"
+               & " level now declares a number model, so it and an object "
+               & "of the other variant refuse each other in either link or"
+               & "der, and an object that declares none, a libgcc helper's"
+               & ", links with either. The flags and the code are unchange"
+               & "d.",
             when 695 =>
                "Chosen: one pinned emulator, Espressif's QEMU `esp-devel"
                & "op-9.2.2-20260417`, locked by URL and SHA-256 in `enviro"

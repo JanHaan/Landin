@@ -2518,6 +2518,9 @@ package body Landin.Diagnostics.Citations is
             when 619 =>
                "QEMU's mps2-an500 is the M7's emulator lane, selected by"
                & " a description",
+            when 780 =>
+               "Without a float unit, Arm assembly declares IEEE floats "
+               & "passed in core registers",
             when 695 =>
                "Espressif's QEMU carries both RV32 corpus lanes, under t"
                & "he Arm lanes' harness",
@@ -3838,6 +3841,8 @@ package body Landin.Diagnostics.Citations is
             when 618 =>
                "Decisions: The core library and the derived programs",
             when 619 =>
+               "Decisions: The core library and the derived programs",
+            when 780 =>
                "Decisions: The core library and the derived programs",
             when 695 =>
                "Decisions: The core library and the derived programs",
@@ -5619,6 +5624,10 @@ package body Landin.Diagnostics.Citations is
             when 619 =>
                "https://www.701.dev/spec.html#d619-qemu-s-mps2-an500-is-"
                & "the-m7-s-emulator-lane-selected-by-a-description",
+            when 780 =>
+               "https://www.701.dev/spec.html#d780-without-a-float-unit-"
+               & "arm-assembly-declares-ieee-floats-passed-in-core-registe"
+               & "rs",
             when 695 =>
                "https://www.701.dev/spec.html#d695-espressif-s-qemu-carr"
                & "ies-both-rv32-corpus-lanes-under-the-arm-lanes-harness",

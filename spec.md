@@ -26277,7 +26277,8 @@ infer from its flags; the assembler and the linker are given
 The linker compares objects' `Tag_ABI_VFP_args` only when both declare a
 number model: a soft-float C object is then refused, and a libgcc helper
 object, which declares none, leaves the image's attribute standing. Without
-a unit the assembly, the flags and the code are as they were.
+a unit the flags and the code are as they were, and the assembly declares
+what D780 says.
 
 **The alternatives:** helpers with the VFP variant's transport, which
 leaves the unit idle; keeping floats in core registers between operations
@@ -26379,6 +26380,40 @@ QEMU's `mps2-an385` Cortex-M3, which has no float unit.
 inventory's `lanes` entries, `environments/cortex-m/descriptions.json`'s
 `lanes` record that the derived profile is held to, and
 `environments/cortex-m/test.py`'s lane controls.
+
+### D780 — Without a float unit, Arm assembly declares IEEE floats passed in core registers
+
+**The tour said** nothing; D617 declared the float attributes only with a
+unit, so assembly without one declared no number model, and the linker,
+which compares `Tag_ABI_VFP_args` only when both objects declare a number
+model, linked such an object into a hard-float image without a word, its
+floats in core registers where the image's callers passed them in s0-s15.
+
+**Chosen:** without a unit, the assembly declares `Tag_ABI_FP_number_model`
+IEEE 754 and `Tag_ABI_VFP_args` 0, the base variant, at every Arm level.
+That is what GCC's soft-float object at the same core declares: GCC writes
+the number model and leaves the arguments at their default, which is the
+base variant, so the two objects' attributes are the same. Every object
+refine assembles for an Arm level now declares a number model, so it and
+an object of the other variant refuse each other in either link order, and
+an object that declares none, a libgcc helper's, links with either. The
+flags and the code are unchanged.
+
+**The alternatives:** declaring nothing, as before, which links a soft-float
+object into a hard-float image; declaring the number model only for a
+program that computes a float, which GCC does not do, so a program would
+accept or refuse a hard-float peer by whether it happened to use a float;
+and `Tag_ABI_VFP_args` 3, compatible with both, for a program none of
+whose routines passes a float, which would read every routine's boundary
+for an attribute GCC never writes for C.
+
+**Pinned by** the `cortex ABI` case `a float unit selects VFP code`, which
+requires both attributes of the assembly without a unit; and
+`environments/cortex-m/firmware.py`'s float-unit case, which holds a
+soft-float refine object's number model and VFP arguments to a GCC
+soft-float object's at the Cortex-M7, and refuses a link of it with a
+hard-float GCC object and of the hard-float refine object with a
+soft-float GCC object, each in both orders.
 
 ### D695 — Espressif's QEMU carries both RV32 corpus lanes, under the Arm lanes' harness
 

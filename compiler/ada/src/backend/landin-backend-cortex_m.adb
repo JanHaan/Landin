@@ -6806,6 +6806,14 @@ package body Landin.Backend.Cortex_M is
            (Landin.IR.Firmware_Profile (Of_Unit).Float));
          Emit (".eabi_attribute Tag_ABI_FP_number_model, 3");
          Emit (".eabi_attribute Tag_ABI_VFP_args, 1");
+      else
+         --  D780: without a unit, the same IEEE model and the base
+         --  variant's arguments, as GCC's soft-float objects declare, so
+         --  this object and a hard-float one refuse each other in either
+         --  link order rather than linking with floats in the wrong
+         --  registers.
+         Emit (".eabi_attribute Tag_ABI_FP_number_model, 3");
+         Emit (".eabi_attribute Tag_ABI_VFP_args, 0");
       end if;
       Emit (".thumb");
       Emit (".text");
