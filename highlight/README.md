@@ -156,10 +156,17 @@ LANDIN_REFINE=/absolute/path/to/refine ./highlight/test.sh --lsp-emacs
 change that is not yet committed still gets its structural and
 `--integration` verdicts, each printed as it passes; the run then fails on the
 pin, as the gate's does, until the change is committed and the pins moved.
-Its tree-sitter pass compiles the parser into a fresh cache; the CLI run by
-hand reuses a cached one, which can be another grammar's, as
+Its tree-sitter pass compiles the parser into a fresh cache, and refuses when
+that left no library there, so a C compiler must work; the CLI run by hand
+reuses a cached one, which can be another grammar's, and its `--rebuild` keeps
+the cached one when it finds no C compiler, as
 [`tree-sitter/README.md`](tree-sitter/README.md#the-cli-runs-a-cached-parser)
-explains.
+explains. Run by hand, the CLI also warns on every invocation that "You have
+not configured any parser directories!". The warning is harmless here: run
+from `highlight/tree-sitter`, the CLI takes the grammar in the current
+directory and needs no parser directories. `tree-sitter init-config` silences
+it, by writing a configuration that lists directories under your home; the
+suite runs it in a configuration directory of its own for the same reason.
 
 The default test never builds or invokes the compiler. Its mandatory path is
 standard-library-only: it scans the lexical fixture, exercises the TextMate
