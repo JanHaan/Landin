@@ -19458,6 +19458,27 @@ that needs it.
 `negative/r720-match-alias-array-not-copied` and the catalogue suite's
 `rows are whole`.
 
+### D856 — A refusal whose notes are fixed takes no note of its own
+
+**The discrepancy:** the checker builds L0304's two notes out of its own
+tables and ignored a note its caller gave beside them, so two refusals,
+a substituted array element with no stored shape and `offsetof` through
+something that is not a struct, wrote notes that never reached a report,
+and nothing said so.
+
+**Chosen:** a note given to L0304 is a compiler defect when the diagnostic
+is built, as a related label on the refused span already is. What a
+refusal knows to write instead is its route (D761). The `offsetof`
+refusals give theirs as routes; the array element's note restated the
+refusal and was dropped.
+
+**The alternatives:** printing the given note after the two facts, which
+the catalogue row's count refuses and which makes the third note mean two
+things; and keeping the silent drop, which is how the two sites went unseen.
+
+**Pinned by** `diagnostics/a fixed-note code takes no note` and
+`negative/offsetof-refusals`, whose routes now print.
+
 ### D383 — `refine check` takes what `compile` takes about the program
 
 **The discrepancy:** `check` and `compile` read one program, and only

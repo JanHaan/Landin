@@ -5205,8 +5205,6 @@ package body Landin.Stages.Checking is
                         Where   => Application.Where,
                         Message => "a substituted array element has no"
                                    & " stored shape",
-                        Note    => "[0520]: an enabled fixed-array element"
-                                   & " has a supported stored shape",
                         Related => Syn.Origin
                           (Of_Tree, Syn.Element_Of (Of_Tree, Written)),
                         Because => "the template element type",
@@ -16999,17 +16997,20 @@ package body Landin.Stages.Checking is
          Path : constant Syn.Node_Id := Syn.Offset_Path (Of_Tree, Node);
          Depth : Positive := 1;
 
-         procedure Refuse (At_Node : Syn.Node_Id; Message, Note : String);
+         --  L0304's notes are [1830]'s two facts; what to write instead
+         --  is the route after them (D761).
+         procedure Refuse (At_Node : Syn.Node_Id; Message, Route : String);
 
-         procedure Refuse (At_Node : Syn.Node_Id; Message, Note : String) is
+         procedure Refuse (At_Node : Syn.Node_Id; Message, Route : String)
+         is
          begin
             Bad.Report
               (Item    => Bad.Unsupported_Use,
                Source  => Syn.Source_Of (Of_Tree),
                Where   => Syn.Where (Of_Tree, At_Node),
                Message => Message,
-               Note    => Note,
                Refused => Bad.Struct_Value,
+               Route   => Route,
                Into    => Found);
          end Refuse;
       begin
@@ -17058,7 +17059,7 @@ package body Landin.Stages.Checking is
                Refuse
                  ((if Type_At_Index = 0 then Path else Chain (Depth)),
                   "`offsetof` measures a field of a declared struct",
-                  "D411: write `offsetof t.field`, where `t` names a"
+                  "instead, write `offsetof t.field`, where `t` names a"
                   & " struct type and `field` one of its fields");
                return False;
             end if;
@@ -17072,7 +17073,7 @@ package body Landin.Stages.Checking is
                      Refuse
                        (Chain (Type_At_Index),
                         "`offsetof` measures a field of a declared struct",
-                        "D411: this type is not a struct, so it has no"
+                        "instead, name a struct type: this one has no"
                         & " fields to measure");
                   end if;
                   return False;
@@ -17099,8 +17100,8 @@ package body Landin.Stages.Checking is
                        (Chain (Index),
                         "a packed image's field has bit positions, not a"
                         & " byte offset",
-                        "D411/D228: `offsetof` measures bytes; a"
-                        & " layout(packed) field's place is its `at` bits");
+                        "instead, read a layout(packed) field's place from"
+                        & " its `at` bits, since `offsetof` measures bytes");
                      return False;
                   end if;
                   if Which = 0
@@ -17131,8 +17132,9 @@ package body Landin.Stages.Checking is
                              (Chain (Index + 1),
                               "`offsetof` selects fields only through a"
                               & " nested struct",
-                              "D411: a variant's case, an array's element"
-                              & " or a scalar has no field to measure");
+                              "instead, select only through struct fields:"
+                              & " a variant's case, an array's element or a"
+                              & " scalar has no field to measure");
                            return False;
                         end if;
                         Nominal := Shape.Nominal;
@@ -17144,8 +17146,8 @@ package body Landin.Stages.Checking is
                      Refuse
                        (Chain (Index),
                         "a variant part has no offset of its own",
-                        "D411: measure a field of a struct; a variant's"
-                        & " cases share their place");
+                        "instead, measure a struct field beside it, since"
+                        & " a variant's cases share their place");
                      return False;
                   end if;
                end;

@@ -980,8 +980,56 @@ package body Landin.Tests.Diagnostics_Suite is
         (Item, Count (Found), 1, "and nothing is added for it");
    end A_Checker_Report_Names_A_Second_Place;
 
+   --  An unsupported use carries [1830]'s two notes out of the checker's
+   --  tables, so a note given beside them has no place in the report and
+   --  cannot be built: what to write instead is the route (D761).
+   procedure A_Fixed_Note_Code_Takes_No_Note
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Fixed_Note_Code_Takes_No_Note
+     (Item : in out Landin.Testing.Context)
+   is
+      package Bad renames Landin.Diagnostics.Checking;
+      Found : Diagnostic_List;
+      Refused : Boolean := False;
+   begin
+      Bad.Report
+        (Item    => Bad.Unsupported_Use,
+         Source  => 1,
+         Where   => (4, 9),
+         Message => "a variant part has no offset of its own",
+         Refused => Bad.Struct_Value,
+         Route   => "instead, measure a struct field beside it",
+         Into    => Found);
+      Landin.Testing.Check_Equal
+        (Item, Count (Found), 1, "a report with a route is built");
+      Landin.Testing.Check_Equal
+        (Item, Note_Count (Get (Found, 1)), 3,
+         "with the two facts and the route");
+      begin
+         Bad.Report
+           (Item    => Bad.Unsupported_Use,
+            Source  => 1,
+            Where   => (4, 9),
+            Message => "a variant part has no offset of its own",
+            Note    => "a variant's cases share their place",
+            Refused => Bad.Struct_Value,
+            Into    => Found);
+      exception
+         when Landin.Compiler_Defect =>
+            Refused := True;
+      end;
+      Landin.Testing.Check
+        (Item, Refused, "a note beside the row's own is a defect");
+      Landin.Testing.Check_Equal
+        (Item, Count (Found), 1, "and nothing is added for it");
+   end A_Fixed_Note_Code_Takes_No_Note;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "diagnostics", "a fixed-note code takes no note",
+         A_Fixed_Note_Code_Takes_No_Note'Access);
       Landin.Testing.Register
         (Into, "diagnostics", "a checker report names a second place",
          A_Checker_Report_Names_A_Second_Place'Access);
