@@ -26,6 +26,12 @@ only builds, as the software gate does. The default strict comparison fails
 on either. Record drift identifies old hardware evidence; a successful
 build does not refresh it.
 
+The native helper can check a prepared RAM plan without hardware:
+`landin-ram-run --validate --plan PLAN.json --output VALIDATION.json`.
+This uses the same ELF and address checks as loading, and never creates a
+probe session. The plan has `format_version: 1`, `mode: "ram"`, `board`,
+`probe` and an absolute `elf` path; `probe` is unused during validation.
+
 Boot images compare with each port's `record.json`; RAM images compare
 with `ram-record.json`. The records name their image filenames because ELF
 identity depends on the output name. ESP image and ELF hashes are separate.
