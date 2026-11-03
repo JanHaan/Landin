@@ -73,7 +73,7 @@
     "0x40800000+0x1c0",
     "0x408001c0+0x5bb8"
   ],
-  "uart_sha256": "23bb02e3578900eee6515e765d45c89dee6685c406a1aedeca5249836fe39e94",
+  "uart_sha256": "987302b9ad40cb3c62f0425c81df00493a2b24c55e3d2dbb4871ff889564541d",
   "mode": "ram",
   "warm_load": {
     "board": "esp32c5",
@@ -87,7 +87,7 @@
     "entry": 1082130432,
     "flash_written": false,
     "format_version": 1,
-    "helper_source_sha256": "2f9423710f4166b2f2cbf5bbed58fe9702c5807a94c9726da4d2873b5a5457db",
+    "helper_source_sha256": "e75f0e0808b14629a7325bafec22fddb8e711e830745ca7b0c7a41200622268c",
     "mode": "warm",
     "previous_pc": 1082142734,
     "segments": [
@@ -111,10 +111,10 @@
     "status": "passed",
     "vector": 1082130688
   },
-  "seconds": 25.367,
+  "seconds": 25.472,
   "kernel_usb": {
-    "since": 1793747599.675209,
-    "until": 1793747625.0175896,
+    "since": 1793748568.9200704,
+    "until": 1793748594.366029,
     "lines": [],
     "status": "captured"
   },

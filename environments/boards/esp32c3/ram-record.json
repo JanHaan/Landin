@@ -39,8 +39,8 @@
       "timer_interrupts_meanwhile": 100
     },
     "stream": {
-      "timer_events": 2441,
-      "receive_interrupts": 4741,
+      "timer_events": 2469,
+      "receive_interrupts": 4746,
       "echoed": 3014,
       "sent": 3614
     }
@@ -51,7 +51,7 @@
     "recoveries": 2,
     "dropped": 44,
     "overflows": 1,
-    "entries": 4741,
+    "entries": 4746,
     "boot_reason": 1,
     "byte_cell": 116,
     "half_cell": 29789,
@@ -61,7 +61,7 @@
     "0x40380000+0x180",
     "0x40380180+0x5b50"
   ],
-  "uart_sha256": "914ace9d1b5ea1d2cd5545293bdb4cfa6bee74d00a31e06a3866e76d9c77b07e",
+  "uart_sha256": "cce64cce4457b7c4ca1e854d8b7046a6e11407a8901e6f490447eb99a539fab5",
   "mode": "ram",
   "warm_load": {
     "board": "esp32c3",
@@ -75,7 +75,7 @@
     "entry": 1077411840,
     "flash_written": false,
     "format_version": 1,
-    "helper_source_sha256": "2f9423710f4166b2f2cbf5bbed58fe9702c5807a94c9726da4d2873b5a5457db",
+    "helper_source_sha256": "e75f0e0808b14629a7325bafec22fddb8e711e830745ca7b0c7a41200622268c",
     "mode": "warm",
     "previous_pc": 1077422602,
     "segments": [
@@ -99,10 +99,10 @@
     "status": "passed",
     "vector": 1077412096
   },
-  "seconds": 13.507,
+  "seconds": 13.496,
   "kernel_usb": {
-    "since": 1793747398.651908,
-    "until": 1793747412.1341798,
+    "since": 1793748532.4199038,
+    "until": 1793748545.8899307,
     "lines": [],
     "status": "captured"
   },
@@ -123,8 +123,8 @@
       "tag": "t",
       "h": "00000bc6",
       "c": "00000002",
-      "i": "00001285",
-      "m": "00000989",
+      "i": "0000128a",
+      "m": "000009a5",
       "p": "80000001",
       "q": "80000002",
       "k": "00000064",

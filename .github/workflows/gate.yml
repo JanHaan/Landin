@@ -591,6 +591,7 @@ jobs:
         run: |
           set -eu
           nix build -L --no-link .#refine .#refine-bin
+          nix build -L --no-link .#board-ram-run .#board-ram-run-rigpi
           nix flake check --no-build --all-systems
           nix develop --command ./scripts/toolchain.sh
 

@@ -1521,14 +1521,16 @@ substitutes a reset through the ROM.
 USB or SSH access and compares each artifact with its separate hardware
 record, keeping ESP ELF and ROM-image identities distinct (SR-735).
 Its strict mode fails record drift; the software gate reports drift while
-failing compilation or artifact checks (SR-691). Offline builds never
+failing compilation or artifact checks (SR-691). The flake gate also builds
+the native and Pi RAM helpers, running the native Rust controls, so a helper
+API error cannot pass on Python controls alone. Offline builds never
 refresh physical records. All six boot and RAM images and fixed images
 have built. Boot checks passed on RP2040 (27.851 seconds), STM32H753
 (28.452 seconds), ESP32-C3 (32.758 seconds) and ESP32-C5 (40.839 seconds),
 including fixed-image restoration and startup markers. Their kernel deltas
 show only their own expected power cycles. Repeated RAM runs passed on
-all four; the retained records with the final helper took 16.708, 14.071,
-13.507 and 25.367 seconds respectively, with no kernel USB lines, flash
+all four; the retained records with the final helper took 17.276, 14.132,
+13.496 and 25.472 seconds respectively, with no kernel USB lines, flash
 writes or ROM resets. RP2040 also passed its physical IO32 indicator and
 the shared UART bridge (SR-739). Passed tool records are retained separately
 for boot and RAM, and all eight artifacts match offline rebuilds.
@@ -1545,9 +1547,9 @@ off-cascade recovery and setup.
 Independent review found that a custom script could exclude an allocated
 NOLOAD section from every load segment and escape the SRAM contract;
 startup could then clear BSS outside SRAM. The compiler and both board-side
-validators are being tightened to check allocated sections and startup
-ranges as well as load segments, with negative custom-script controls
-(SR-747).
+validators check allocated sections and startup ranges as well as load
+segments. Negative custom-script controls, four real linker controls and
+all six real RAM images pass those checks (SR-747).
 
 The central boards README documents setup, the lock, amended pacing,
 USB-error stops, the source pin and recovery (SR-738). A companion
@@ -1571,11 +1573,17 @@ complete successful gate.
 The activation sweep also reached SR-266, SR-289, SR-296, SR-298 and
 SR-605: caller-aware internal-error reporting, language option values,
 diagnostic citation policy, trap-site resolution and RP2350 image hashes
-retain their activations. SR-552 and SR-555 retain theirs: no script-test
+retain their activations. SR-685's architectural register capture remains
+open for a wedged RISC-V board or work on its architectural failure state;
+this item retains loader errors and USB deltas, and prevents ESP failures
+before a successful load from presenting stale application trap cells
+(SR-748). SR-552 and SR-555 retain theirs: no script-test
 host-only dependency or locked lane tool changed. SR-699's activation is
 the Cortex-M runner's arguments, not the new board runner. SR-724 remains
 for the next change to gate job identities, matrix legs or the reuse list;
 this item adds a step to the existing Cortex-M programs leg.
+It also builds both RAM helpers in the existing flake job; job identities
+and reuse rules are unchanged.
 
 ### R12.50 — Xtensa, ESP32 and ESP32-S3
 
@@ -3784,7 +3792,8 @@ SR-489, SR-499, SR-511, SR-517.
 | SR-744 | Usability | Reviewing the USB stop guard found that an action advanced its pacing timestamp after finishing without checking kernel errors logged during it; the next action could miss those errors. Runs also kept no kernel delta for a reader to verify their disconnect claim. Met validating R12.45's STM32 boot path. | R12.45's USB guard and run records. | Completion errors stop before the timestamp advances, restoration and later actions stay blocked, and every result retains its kernel USB delta. | retired: completion and final scans fail closed; all tools retain deduplicated USB lines, with during-action and late-error controls |
 | SR-745 | Usability | The first SRAM load attempt refused a valid STM32 ELF with "missing _landin_firmware_stack_bottom" before opening its probe. The symbol was present as an absolute linker value, which the helper's symbol predicate excluded; diagnosing the refusal required reading the ELF symbol table. Met validating R12.45's real images. | R12.45's helper input checks. | Absolute linker symbols accepted with unchanged range checks, and an offline helper validation mode exercised against each real RAM ELF. | retired: section and absolute definitions are accepted; undefined/common values remain refused, with regression controls and the offline validation mode |
 | SR-746 | Usability | The first ESP32-C3 RAM attempt failed with only "Error occurred during execution of an abstract command: Exception", without naming whether attach, a CSR, a peripheral write or instruction synchronization failed. Its retained helper log could not locate the operation, forcing source inspection and another build. Inspection also found an unsupported generic mie CSR write and byte transfers to instruction SRAM, which permits only aligned words. Met validating R12.45's warm entry. | R12.45's helper diagnostics and C3 access contract. | A failed debug operation names its phase and relevant register or address while retaining the underlying probe error; C3 uses its MMIO interrupt mask and aligned word transfers. | retired: operations retain context, C3 omits the unsupported CSR and uses explicit word I/O with offline alignment controls; native and arm64 helpers build, all six real ELFs validate, and repeated C3 RAM runs pass without USB activity |
-| SR-747 | Usability | Reviewing the RAM image contract found that it checked load segments but not every allocated section. A developer linker script could put BSS in flash with NOLOAD and exclude it from all program headers, bypassing the SRAM bounds check while compiler startup still cleared it. Both board-side validators had the same segment-only gap. Met reviewing R12.45 before candidate readiness. | R12.45's RAM image validation. | Allocated sections and startup ranges must be in SRAM and outside the reserved stack; initialized sections must be covered by matching load bytes, with custom-script and offline negative controls. | open |
+| SR-747 | Usability | Reviewing the RAM image contract found that it checked load segments but not every allocated section. A developer linker script could put BSS in flash with NOLOAD and exclude it from all program headers, bypassing the SRAM bounds check while compiler startup still cleared it. Both board-side validators had the same segment-only gap. Met reviewing R12.45 before candidate readiness. | R12.45's RAM image validation. | Allocated sections and startup ranges must be in SRAM and outside the reserved stack; initialized sections must be covered by matching load bytes, with custom-script and offline negative controls. | retired: the compiler and both validators check allocated sections, load mapping and BSS ranges; focused compiler/Python/Rust controls, four real linker controls, all six real RAM images and the four connected boards pass |
+| SR-748 | Usability | The first C3 RAM loader failure was followed by reads of the new application's trap cells although the loader had not confirmed starting it. The result presented uninitialized SRAM values as a trap, obscuring the actual debug-command failure. Met reviewing R12.45's retained failure evidence. | R12.45's ESP failure reporting. | A failed RAM load must not read application trap cells until the loader confirms starting that image; later application failures retain their trap evidence and USB stops permit no extra reads. | retired: a missing successful warm-load result records an explicit skipped diagnostic without probe reads; post-entry failures retain trap cells, with focused controls for both paths and USB stops |
 
 ## Retained positions
 

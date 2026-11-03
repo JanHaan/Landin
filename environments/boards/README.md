@@ -152,6 +152,8 @@ the ESP hardware USB-JTAG and external debuggers remain available. Boot
 checks retain evidence a RAM run cannot provide: ROM image parsing, second
 stage, image block, ESP header and load segments, data/RAM-code copies,
 execution from flash where supported, and flash-sized programs.
+ESP boot images still load into SRAM; their boot mode checks the ROM
+header and loading, and does not raise the SRAM limit.
 
 Every Pico 2 boot check and malformed-image control belongs off the
 cascade. A Pico 2 in BOOTSEL must never be attached through probe-rs, even
