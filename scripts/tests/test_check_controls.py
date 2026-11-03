@@ -1908,6 +1908,46 @@ class DiscussionTargets(unittest.TestCase):
         self.assertTrue(any("held to nothing" in why for why in said))
 
 
+class TargetLists(unittest.TestCase):
+    """The host manifest's and the fixture reader's targets are the
+    compiler's."""
+
+    INPUTS = [checker.TARGET_SELECTION, checker.EMIT_MANIFEST]
+
+    def broken(self, path, old, new):
+        from check_controls import tree
+        with tree(copied=self.INPUTS) as root:
+            target = root / path
+            text = target.read_text()
+            self.assertIn(old, text)
+            target.write_text(text.replace(old, new, 1))
+            return [why for _, _, why in checker.check_target_lists(True)]
+
+    def test_the_real_lists_agree(self):
+        self.assertEqual(
+            faults(checker.check_target_lists, copied=self.INPUTS), [])
+
+    def test_a_newly_described_target_is_reported_in_every_list(self):
+        said = self.broken(checker.TARGET_SELECTION,
+                           'when 8 => "rv32"', 'when 8 => "rv32e"')
+        self.assertEqual(len(said), 2, said)
+        self.assertTrue(all("the compiler describes" in why and "rv32e" in why
+                            for why in said))
+
+    def test_a_target_the_manifest_leaves_out_is_reported(self):
+        said = self.broken(checker.EMIT_MANIFEST, ', "linux-rv64", "rv32")',
+                           ', "linux-rv64")')
+        self.assertTrue(any(why.startswith("TARGETS names") for why in said),
+                        said)
+
+    def test_a_mode_target_the_manifest_does_not_emit_is_reported(self):
+        said = self.broken(checker.EMIT_MANIFEST,
+                           'MODE_TARGETS = ("linux-x86-64",',
+                           'MODE_TARGETS = ("linux-sparc64",')
+        self.assertEqual(said, ["MODE_TARGETS names linux-sparc64, which is"
+                                " not among the targets it is drawn from"])
+
+
 class CatalogueLabels(unittest.TestCase):
     """A report's second places are held to its code's row at the call."""
 

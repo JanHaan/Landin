@@ -7695,6 +7695,88 @@ CHECKING_ONLY_TARGETS = ("synthetic-32",)
 TARGET_SHAPED = re.compile(r"^[a-z]+(?:-[a-z0-9]+)+$")
 
 
+def described_targets():
+    """(every target the compiler describes, in `refine targets` order,
+    problems).
+
+    The selection package's name table is the one `refine --target=`,
+    `refine targets` and the language server all read, so every list of
+    targets kept outside the compiler is held to it through this reader.
+    """
+    names = os.path.join(ROOT, TARGET_SELECTION)
+    missing = absent([names])
+    if missing:
+        return [], missing
+    with io.open(names, encoding="utf-8") as stream:
+        table = stream.read()
+    described = re.findall(r'when\s+\d+\s*=>\s*"([a-z0-9-]+)"', table)
+    if not described:
+        return [], [(TARGET_SELECTION, 1,
+                     "no described target name was found in Described_Name")]
+    return described, []
+
+
+EMIT_MANIFEST = "scripts/emit_manifest.py"
+
+
+def check_target_lists(full_run):
+    """The Python lists of targets name the targets the compiler describes.
+
+    A target added to the compiler was in neither of the host manifest's
+    lists until someone added it, and nothing short of the gate's
+    determinism job said so.  The fixture reader's names are every
+    described target; the manifest's are every one with a backend, which
+    is every described target but the checking-only ones; the build-mode
+    comparison's and the firmware corpus's are among them.
+    """
+    if not full_run:
+        return []
+    described, out = described_targets()
+    if out:
+        return out
+    manifest = os.path.join(ROOT, EMIT_MANIFEST)
+    out = absent([manifest])
+    if out:
+        return out
+    import ast
+    lists = {}
+    tree = ast.parse(io.open(manifest, encoding="utf-8").read())
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and len(node.targets) == 1 \
+                and isinstance(node.targets[0], ast.Name) \
+                and node.targets[0].id in ("TARGETS", "MODE_TARGETS",
+                                            "FIRMWARE_TARGETS"):
+            lists[node.targets[0].id] = (node.lineno,
+                                         ast.literal_eval(node.value))
+    for name in ("TARGETS", "MODE_TARGETS", "FIRMWARE_TARGETS"):
+        if name not in lists:
+            out.append((EMIT_MANIFEST, 1, "has no %s where check_target_lists"
+                        " looks" % name))
+    if out:
+        return out
+
+    def differ(where, line, name, have, want):
+        if set(have) != set(want):
+            out.append((where, line, "%s names %s; the compiler describes %s"
+                        % (name, ", ".join(sorted(have)),
+                           ", ".join(sorted(want)))))
+
+    emitting = [one for one in described if one not in CHECKING_ONLY_TARGETS]
+    differ("compiler/tests/fixture_meta.py", 1, "TARGETS",
+           fixture_meta.TARGETS, described)
+    line, targets = lists["TARGETS"]
+    differ(EMIT_MANIFEST, line, "TARGETS", targets, emitting)
+    for name, within in (("MODE_TARGETS", targets),
+                         ("FIRMWARE_TARGETS", lists["MODE_TARGETS"][1])):
+        line, named = lists[name]
+        for one in named:
+            if one not in within:
+                out.append((EMIT_MANIFEST, line, "%s names %s, which is not"
+                            " among the targets it is drawn from"
+                            % (name, one)))
+    return out
+
+
 def dropdown_options(text):
     """Each `options:` list in a form, as (line, [plain scalar items]).
 
@@ -7735,19 +7817,15 @@ def check_discussion_targets(full_run):
     """
     if not full_run:
         return []
-    names = os.path.join(ROOT, TARGET_SELECTION)
     forms = os.path.join(ROOT, DISCUSSION_FORMS)
-    missing = absent((names, forms))
+    missing = absent([forms])
     if missing:
         return missing
-    with io.open(names, encoding="utf-8") as stream:
-        table = stream.read()
-    described = [name for name in re.findall(
-        r'when\s+\d+\s*=>\s*"([a-z0-9-]+)"', table)
-        if name not in CHECKING_ONLY_TARGETS]
-    if not described:
-        return [(TARGET_SELECTION, 1,
-                 "no described target name was found in Described_Name")]
+    described, out = described_targets()
+    if out:
+        return out
+    described = [name for name in described
+                 if name not in CHECKING_ONLY_TARGETS]
     out = []
     offered = 0
     for name in sorted(os.listdir(forms)):
@@ -9858,6 +9936,7 @@ def main(argv):
     extra += check_register_entries(full_run)
     extra += check_borrowed_icons(full_run)
     extra += check_discussion_targets(full_run)
+    extra += check_target_lists(full_run)
     extra += check_named_files(full_run)
     extra += check_catalogue(full_run)
     extra += check_catalogue_labels(full_run)

@@ -101,21 +101,28 @@ Before an item closes:
    in words is counted and not matched; `--unmatched` lists those rows, to
    be read against the item's changes by hand.
 2. When the item changed the compiler's lowering, emission or backends,
-   run the two checks only the gate otherwise runs on them, both of which
-   have found defects after a merge: the build-modes comparison, which
-   needs the debug and the release compiler of the same tree
-   (`./scripts/dev-build.sh`, then `LANDIN_BUILD_MODE=release
-   ./scripts/dev-build.sh`),
+   added a target or added positive fixtures, run the three checks only the
+   gate otherwise runs on them, each of which has found defects after a
+   merge: the build-modes comparison, which needs the debug and the release
+   compiler of the same tree (`./scripts/dev-build.sh`, then
+   `LANDIN_BUILD_MODE=release ./scripts/dev-build.sh`); this host's
+   manifest, which every positive fixture must emit or refuse as expected
+   on every target, and which the gate's `determinism` job compares across
+   hosts;
 
    ```sh
    python3 scripts/emit_manifest.py modes \
        "compiler/ada/build/$LANDIN_BUILD_TAG/debug/bin/refine" \
        "compiler/ada/build/$LANDIN_BUILD_TAG/release/bin/refine" .
+   python3 scripts/emit_manifest.py emit \
+       "compiler/ada/build/$LANDIN_BUILD_TAG/debug/bin/refine" . \
+       "$(mktemp -d)/manifest.json"
    ```
 
    and `./scripts/scaling.sh`, alone on its host, since it measures time.
-3. Write the `Done:` paragraph and remove the register rows the item
-   settled, as `ROADMAP.md`'s mechanics ask.
+3. Write the `Done:` paragraph, remove the register rows the item settled
+   and list their identities among the records that have left the
+   register, as `ROADMAP.md`'s mechanics ask.
 
 An item worked in parallel streams merges each stream's branch with git.
 When a stream's work is passed as a patch instead, make it with
