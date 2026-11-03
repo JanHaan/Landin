@@ -546,28 +546,67 @@ RAM_REGIONS = {
 
 
 def validate_ram_image(elf, board):
-    """Reject flash LMAs and boot-only sections before a loader sees hardware."""
-    _, sections = elf_sections(elf)
+    """Check all allocated storage, including sections outside PT_LOAD."""
+    data = Path(elf).read_bytes()
+    headers, programs = _elf32_tables(data)
+    names_header = headers[struct.unpack_from('<H', data, 50)[0]]
+    strings = data[names_header[4]:names_header[4] + names_header[5]]
+    sections = {}
+    for header in headers:
+        name_at = header[0]
+        require(name_at < len(strings), 'ELF32 section name exceeds string table')
+        end = strings.find(b'\0', name_at)
+        require(end >= 0, 'unterminated ELF32 section name')
+        try:
+            name = strings[name_at:end].decode('utf-8')
+        except UnicodeDecodeError as error:
+            raise Failed('invalid ELF32 section name') from error
+        sections[name] = header
     require(not ({'.boot2', '.embedded_block'} & sections.keys()),
             'RAM image contains boot-only sections; rebuild with --firmware-layout=ram')
-    segments = elf_segments(elf)
-    require(segments, 'RAM image has no loadable bytes')
-    for address, body, _ in segments:
-        require(any(lo <= address and address + len(body) <= hi for lo, hi in RAM_REGIONS[board]),
-                'image exceeds SRAM or has a flash load address; use --mode=boot for the boot check')
-    data = Path(elf).read_bytes()
-    phoff, = struct.unpack_from('<I', data, 0x1c)
-    phentsize, phnum = struct.unpack_from('<HH', data, 0x2a)
-    for i in range(phnum):
-        kind, offset, vaddr, paddr, filesz, memsz, _, _ = struct.unpack_from(
-            '<8I', data, phoff + i * phentsize)
-        if kind == 1:
-            require(filesz <= memsz and offset + filesz <= len(data), 'RAM ELF has a truncated segment')
-            require(any(lo <= vaddr and vaddr + memsz <= hi for lo, hi in RAM_REGIONS[board]),
-                    'image memory exceeds SRAM; use --mode=boot for the boot check')
-            require(vaddr == paddr, 'RAM ELF has a relocated load address; rebuild with --firmware-layout=ram')
+    symbols = elf_symbols(elf)
+    bottom, top = '_landin_firmware_stack_bottom', '_landin_firmware_stack_top'
+    stack = None
+    def in_ram(start, size):
+        return any(lo <= start and start + size <= hi for lo, hi in RAM_REGIONS[board])
+    def outside_stack(start, size):
+        return stack is None or start + size <= stack[0] or start >= stack[1]
+    if bottom in symbols or top in symbols:
+        require(bottom in symbols and top in symbols, 'RAM ELF has incomplete reserved stack symbols')
+        stack = symbols[bottom], symbols[top]
+        require(stack[0] < stack[1] and in_ram(stack[0], stack[1] - stack[0]),
+                'reserved stack is outside SRAM; use --mode=boot for the boot check')
+    loads = [program for program in programs if program[0] == 1]
+    require(any(p[4] for p in loads), 'RAM image has no loadable bytes')
+    for _, offset, vaddr, paddr, filesz, memsz, _, _ in loads:
+        require(in_ram(vaddr, memsz),
+                'image memory exceeds SRAM; use --mode=boot for the boot check')
+        require(vaddr == paddr, 'RAM ELF has a relocated load address; rebuild with --firmware-layout=ram')
+        require(not memsz or outside_stack(vaddr, memsz), 'RAM segment overlaps reserved stack')
+    for header in headers:
+        _, kind, flags, address, offset, size, _, _, _, _ = header
+        if not flags & 2 or not size:
+            continue
+        require(in_ram(address, size),
+                'allocated section exceeds SRAM; use --mode=boot for the boot check')
+        require(outside_stack(address, size), 'allocated section overlaps reserved stack')
+        if kind != 8:  # SHT_NOBITS needs storage, but has no bytes to load.
+            require(any(vaddr <= address and address + size <= vaddr + filesz
+                        and offset == segment_offset + address - vaddr
+                        for _, segment_offset, vaddr, _, filesz, _, _, _ in loads),
+                    'initialized allocated section is not covered by a matching PT_LOAD')
+    prefix = '_landin_firmware_'
+    bss_starts = {name[:-6] for name in symbols if name.startswith(prefix) and name.endswith('_bss_start')}
+    bss_ends = {name[:-4] for name in symbols if name.startswith(prefix) and name.endswith('_bss_end')}
+    for name in bss_starts | bss_ends:
+        require(name in bss_starts and name in bss_ends, 'RAM ELF has incomplete BSS symbols: ' + name)
+        start, end = symbols[name + '_start'], symbols[name + '_end']
+        require(start <= end, 'RAM ELF has reversed BSS symbols: ' + name)
+        if start != end:
+            require(in_ram(start, end - start), 'BSS symbols exceed SRAM; use --mode=boot for the boot check')
+            require(outside_stack(start, end - start), 'BSS symbols overlap reserved stack')
     require('.isr_vector' in sections, 'RAM image has no vector/trap table')
-    return sections['.isr_vector'][0]
+    return sections['.isr_vector'][3]
 
 
 def consume_board(run, args, board):

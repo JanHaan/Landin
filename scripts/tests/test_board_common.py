@@ -1128,6 +1128,83 @@ class RamRuns(unittest.TestCase):
             with self.assertRaisesRegex(COMMON.Failed, 'memory exceeds SRAM'):
                 COMMON.validate_ram_image(path, 'rp2040')
 
+    def allocated_image(self, path, address=0x20000100, kind=8, load=False, symbols=()):
+        names = b'\0' + b''.join(name.encode() + b'\0' for name, _ in symbols)
+        entries, at = bytearray(bytes(16)), 1
+        for name, value in symbols:
+            entries += struct.pack('<IIIBBH', at, value, 0, 0x10, 0, 0xfff1)
+            at += len(name) + 1
+        sections = [('.isr_vector', 0x20000000, bytes(8)),
+                    ('.extra', address, bytes(16)), ('.strtab', 0, names), ('.symtab', 0, entries)]
+        loads = [(0x20000000, '.isr_vector')] + ([(address, '.extra')] if load else [])
+        data = bytearray(elf32(sections, loads))
+        shoff = struct.unpack_from('<I', data, 32)[0]
+        struct.pack_into('<I', data, shoff + 80 + 4, kind)
+        for index, section_kind in ((3, 3), (4, 2)):
+            struct.pack_into('<II', data, shoff + index * 40 + 4, section_kind, 0)
+        struct.pack_into('<I', data, shoff + 160 + 24, 3)
+        struct.pack_into('<I', data, shoff + 160 + 36, 16)
+        path.write_bytes(data)
+        return path
+
+    def test_allocated_noload_sections_must_stay_in_ram_and_outside_the_stack(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'allocated.elf'
+            self.assertEqual(COMMON.validate_ram_image(self.allocated_image(path), 'rp2040'), 0x20000000)
+            with self.assertRaisesRegex(COMMON.Failed, 'allocated section exceeds SRAM'):
+                COMMON.validate_ram_image(self.allocated_image(path, address=0x10000100), 'rp2040')
+            stack = [('_landin_firmware_stack_bottom', 0x20000100),
+                     ('_landin_firmware_stack_top', 0x20000200)]
+            with self.assertRaisesRegex(COMMON.Failed, 'allocated section overlaps reserved stack'):
+                COMMON.validate_ram_image(self.allocated_image(path, symbols=stack), 'rp2040')
+
+    def test_reserved_stack_symbols_must_be_a_complete_ram_range(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'allocated.elf'
+            bottom, top = '_landin_firmware_stack_bottom', '_landin_firmware_stack_top'
+            for symbols, message in (([(bottom, 0x20000300)], 'incomplete reserved stack'),
+                    ([(bottom, 0x10000000), (top, 0x10000100)], 'stack is outside SRAM'),
+                    ([(bottom, 0x20000300), (top, 0x20000200)], 'stack is outside SRAM'),
+                    ([(bottom, 0x20000000), (top, 0x20000008)], 'segment overlaps reserved stack')):
+                with self.subTest(symbols=symbols), self.assertRaisesRegex(COMMON.Failed, message):
+                    COMMON.validate_ram_image(self.allocated_image(path, symbols=symbols), 'rp2040')
+
+    def test_initialized_allocated_sections_need_matching_loaded_file_bytes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'allocated.elf'
+            with self.assertRaisesRegex(COMMON.Failed, 'matching PT_LOAD'):
+                COMMON.validate_ram_image(self.allocated_image(path, kind=1), 'rp2040')
+            self.allocated_image(path, kind=1, load=True)
+            self.assertEqual(COMMON.validate_ram_image(path, 'rp2040'), 0x20000000)
+            data = bytearray(path.read_bytes())
+            # Still bounded, and the VMA is covered, but the load names other file bytes.
+            offset = struct.unpack_from('<I', data, 52 + 32 + 4)[0]
+            struct.pack_into('<I', data, 52 + 32 + 4, offset + 1)
+            path.write_bytes(data)
+            with self.assertRaisesRegex(COMMON.Failed, 'matching PT_LOAD'):
+                COMMON.validate_ram_image(path, 'rp2040')
+
+    def test_all_startup_bss_symbol_ranges_are_checked_even_without_sections(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'allocated.elf'
+            for prefix in ('_landin_firmware_bss', '_landin_firmware_region_DTIM_bss'):
+                for start, end, message in ((0x10000000, 0x10000010, 'BSS symbols exceed SRAM'),
+                        (0x20000100, 0x20000110, 'BSS symbols overlap reserved stack'),
+                        (0x200000f0, 0x200000e0, 'reversed BSS symbols')):
+                    with self.subTest(prefix=prefix, start=start):
+                        symbols = [(prefix + '_start', start), (prefix + '_end', end),
+                            ('_landin_firmware_stack_bottom', 0x20000100),
+                            ('_landin_firmware_stack_top', 0x20000200)]
+                        with self.assertRaisesRegex(COMMON.Failed, message):
+                            COMMON.validate_ram_image(self.allocated_image(path, address=0x20000080,
+                                symbols=symbols), 'rp2040')
+                with self.assertRaisesRegex(COMMON.Failed, 'incomplete BSS symbols'):
+                    COMMON.validate_ram_image(self.allocated_image(path,
+                        symbols=[(prefix + '_end', 0x20000100)]), 'rp2040')
+                # An empty range writes nothing, including an unused description region.
+                COMMON.validate_ram_image(self.allocated_image(path, symbols=[
+                    (prefix + '_start', 0x10000000), (prefix + '_end', 0x10000000)]), 'rp2040')
+
     def test_loader_matches_the_bundle_identity_and_checks_usb_after_the_call(self):
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp)
