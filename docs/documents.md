@@ -1,4 +1,4 @@
-# How the two language documents are arranged
+# Document ownership and checks
 
 `tour.md` explains the language and `spec.md` decides it. This says how each
 is laid out, so that a reader looking for a rule knows where to look and an
@@ -90,3 +90,59 @@ behind those is that they were moved rather than rewritten, which is a
 property of how this pass was done and not one anything re-checks. An editor
 who rewords one is on their own, and the fixture named in a register entry is
 the nearest thing to a check that the entry still describes the compiler.
+
+## Mechanical document checks
+
+`check.py` also checks the grammar in `spec.md`: it reads the productions, holds every rule to being defined and reachable, and derives every `.ldn` under `compiler/tests/fixtures/positive`. A negative fixture is held to being *underivable* only when the frontend is what refuses it: one a later stage refuses is legal source and must derive, which its `codes:` is what says (see below). A grammar change that breaks a fixture, or a fixture the grammar cannot derive, fails there. `check.py` does not parse the corpus with the structural editor grammar in `highlight/tree-sitter`; the gate's `editor-grammar` job does, and `./highlight/test.sh --integration` runs that pass inside `nix develop`, which `python3 scripts/activations.py` names whenever the changes reach the grammar, a positive, runtime or ABI fixture or `core/`. A change to the editor grammar or its queries takes two commits, the second moving the editors' pins with `python3 highlight/grammar_pin.py` (`highlight/README.md`). Do not weaken a fixture to make a grammar change pass — the corpus is the agreement the parser has to meet, and the parser suite requires the same verdict from the other side.
+
+A negative fixture's `codes:` is an ordered list, and it also says which stage refused the fixture: `check.py` reads which codes the frontend raises out of the two packages that raise them and requires the grammar to derive a program that only a later stage refused. Do not read a stage off a code's number — the catalogue's header forbids it, and `L0010` began in lexical refusal and is now raised only by the parser.
+
+Four tables in the compiler are transcriptions of the grammar rather than paraphrases of it, and `check.py` compares each with its source. `Landin.Tokens`' reserved words must be `spec.md`'s own `keyword` production. `Landin.Syntax.Precedence` must have [1820]'s levels in [1820]'s order, with the same operators at each, the same fold, the same prefix set and first sets that agree with the grammar's own. The parser's refusal tables cover the words [1760] does not reserve, so only the parser can meet them; the checker's refused-type table covers scalar type names the grammar admits but the kernel has deferred. Both tables must spell words the tour writes, cite paragraphs that exist, and state each refused form's standing: a recorded source-form boundary, a withdrawn form, or a transfer to a successor roadmap. `Landin.Types` spells the thirteen enabled scalar names separately because it maps each onto a machine width. Add a level, an operator, a refused construct or a type in one place and the check says which other place disagrees.
+
+The five documents are Markdown, and the form carries invariants rather than
+being a style. A construct is `### [NNNN] Title` at column 0 and nothing else
+is; a citation is inline and can never be mistaken for a definition, which in
+the `.txt` form it could — 33 lines looked like definitions and were
+citations, and 16 real definitions sat indented inside one example, which is
+how [1050] was missed twice. A Landin example is a fenced block tagged
+`landin`, a production is tagged `landin-grammar`, and an untagged fence is a
+fault: what a block *is* is stated rather than guessed, and the heuristic it
+replaced accepted 114 lines of English as code. Prose is never indented four
+spaces, because Markdown reads that as a code block — an aligned list belongs
+in a table.
+
+`R§n` and `H§n` citations preserved in the roadmap refer to an external design archive; the tracked repository does not depend on that archive.
+
+The documents selected in `docs/site/render_html.py` are published as reading
+copies described in the [site notes](site/README.md). The text files are
+the sources; the pages are
+generated and never edited by hand. See `docs/site/README.md` for the scope.
+
+The mark lives in `assets/`, not in the site renderer. `assets/icon.svg` is
+the drawing — `701` as a path, so no renderer needs Futura — and
+`assets/landin_icon.py` is every rendering of it: the light, dark, contrast,
+`currentColor`, monochrome and `prefers-color-scheme` variants, the inline
+fragment, and the `data:` URL a page carries. Its four colours are the
+site's own, and `check.py` holds them to the stylesheet in
+`docs/site/render_html.py` and to the drawing's own attributes. Add a
+variant there rather than in a consumer, and keep it standard-library-only
+so the site keeps its no-dependency build. See `assets/README.md`.
+
+The two faces the pages are set in are declared in `assets/fonts.py`, not
+in the site renderer. Each family is the subset webfont package its source
+delivers, and `assets/fonts.py` is every rendering of them: the
+`@font-face` block a page carries, the `--ui` and `--mono` stacks, and the
+list of files copied beside the pages. `Nunito Sans` is under the OFL and
+vendored in `assets/fonts/`; `MonoLisaCode` is under a foundry EULA that
+forbids passing the files on, so it lives in the private `landin-fonts`
+repository, found through `LANDIN_FONTS` or beside this one, and a host
+without it renders in the fallback stack while the publishing workflow
+refuses. The module reads each family's own stylesheet rather than
+transcribing thirty `unicode-range` lists, and `check.py` holds every
+character of every rendered document to falling inside a subset of both
+families, because a range nobody covers is a paragraph in a fallback face
+that no word count can see. Add a family there rather than in a consumer,
+keep it standard-library-only, and do not trim the subsets to today's
+documents. See `assets/fonts/README.md`.
+
+Syntax highlighting lives in `highlight/`, not in the site renderer. `highlight/landin_highlight.py` owns the lexical vocabulary rendered by the pages, Pygments, TextMate, Vim, Notepad++, Nano and Kate; `highlight/tree-sitter/` is the checked structural grammar whose queries feed Neovim, Helix and Zed. Emacs provides both native and tree-sitter modes. Generate copied artifacts with `highlight/generate.py`, add a keyword at the shared source rather than in a consumer, and keep the mandatory generator path standard-library-only so the site keeps its no-dependency build. `check.py`'s own list of reserved words is deliberately separate: that one is about legality, this one about colour. See `highlight/README.md`.

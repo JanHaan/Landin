@@ -633,7 +633,8 @@ test $? -eq 42
 ```
 
 `.github/workflows/gate.yml` compiles, runs and checks all twenty-two
-examples on each full gate run. `AGENTS.md` describes the verified
+examples on each full gate run. The
+[gate reference](../../docs/process.md#the-mechanical-gate) describes the verified
 explanatory-only reuse exception.
 
 The test program validates its complete suite-name inventory before any
