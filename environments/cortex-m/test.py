@@ -817,6 +817,26 @@ class ProbeFailures(unittest.TestCase):
                 self.assertNotIn('LEAKED', text)
                 run_module.SERVERS.server.stop()
 
+    def test_a_served_session_meets_no_breakpoint_the_one_before_it_made(self):
+        # `delete breakpoints` spares an internal one, which then fired in
+        # the next program on the same worker.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            run, stack = self.server_run(root)
+            with stack:
+                import run as run_module
+                first = self.script(root, 'first.gdb', 'python', 'import gdb',
+                                    'gdb.Breakpoint("*0x100")',
+                                    'gdb.Breakpoint("*0x200", internal=True)',
+                                    'gdb.Breakpoint("*(int*)0x20000000", 1, 1, internal=True)',
+                                    'print("FIRST_PASS")', 'end')
+                second = self.script(root, 'second.gdb', 'python', 'import gdb',
+                                     'print("LEFT", [b.location for b in gdb.breakpoints()])',
+                                     'end')
+                self.assertIn('FIRST_PASS', run.debug('gdb-first', 'x.elf', first))
+                self.assertIn('LEFT []', run.debug('gdb-second', 'x.elf', second))
+                run_module.SERVERS.server.stop()
+
     def test_a_failed_session_fails_alone(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

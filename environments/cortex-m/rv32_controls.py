@@ -7,13 +7,17 @@ machines: a return, a trap, an overrun stack, and on the rv32imac lane an
 executed A-extension read-modify-write.  Each image is also held to its
 level's checks, and the A-extension image to being refused at rv32imc, so
 the lanes are shown to judge before any compiler output reaches them.
+First, an Arm session, an RV32 one and an Arm one again are served by one
+GDB, as every lane's sessions on a worker are.
 """
 import json
 import re
+import subprocess
 
 from backend import (HERE, LEVELS, execute, harness_start, image_contract, recorded, region,
                      rv32_image, tool)
-from run import Run, require
+import run as runner
+from run import Run, gdb_listener, oracle, require, stop
 
 #  Each control: its LANDIN_CONTROL number, the levels it runs at, and what
 #  the session must see: an exit byte, a trap, or the overrun's message.
@@ -71,10 +75,11 @@ def control_script(profile):
         '}', ''])
 
 
-def control(parent, name, level):
-    """Build and run one control at LEVEL under PARENT's output."""
+def control(parent, name, level, before=(), directory=None):
+    """Build and run one control at LEVEL under PARENT's output, in
+    DIRECTORY there if given; BEFORE goes to a returning control's session."""
     number, _, want = CONTROLS[name]
-    out = parent.out / 'rv32-controls' / (name + '--' + level)
+    out = parent.out / 'rv32-controls' / (directory or name + '--' + level)
     out.mkdir(parents=True)
     run = Run(out, parent.tools)
     profile = recorded(LEVELS[level]['profile'])
@@ -116,7 +121,7 @@ def control(parent, name, level):
     elif want == 'trap':
         execute(run, elf, 0, True, level=level, profile=profile)
     elif isinstance(want, int):
-        execute(run, elf, want, False, level=level, profile=profile)
+        execute(run, elf, want, False, before, level=level, profile=profile)
     else:
         try:
             execute(run, elf, 0, False, level=level, profile=profile)
@@ -130,9 +135,88 @@ def control(parent, name, level):
     return record
 
 
+#  Python a session runs before it makes a breakpoint of its own: no
+#  breakpoint or watchpoint, internal or not, is left from the session before.
+UNMARKED = ['python', 'import gdb',
+            'left = [b.location or b.expression for b in gdb.breakpoints()]',
+            'assert not left, "a session before this one left %s" % left', 'end']
+
+
+def arm_session(run, elf, name, lines):
+    """One session of the M0 probe ELF on QEMU's microbit, LINES after the
+    connection: the cpu lane's program, without its checks."""
+    listener, port, stub = gdb_listener()
+    script = run.out / (name + '.gdb')
+    script.write_text('\n'.join(['set pagination off', 'set confirm off',
+                                 'target remote 127.0.0.1:%d' % port, *lines, 'quit', '']))
+    argv = [str(run.bin / 'qemu-system-arm'), '-M', 'microbit', '-accel', 'tcg,thread=single',
+            '-display', 'none', '-monitor', 'none', '-serial', 'none', '-kernel', str(elf),
+            '-S', *stub]
+    run.commands.append({'name': 'qemu-' + name, 'argv': argv, 'timeout_seconds': 25})
+    with (run.out / ('qemu-' + name + '.log')).open('wb') as log:
+        with listener:
+            process = subprocess.Popen(argv, cwd=run.out, env=run.env, stdout=log, stderr=log,
+                                       start_new_session=True, pass_fds=(listener.fileno(),))
+        try:
+            require(process.poll() is None, 'QEMU exited before connection')
+            oracle(run.debug(name, elf, script), 'SHARED_DEBUGGER_PASS')
+        finally:
+            stop(process)
+
+
+def shared_debugger(parent):
+    """An Arm session, an RV32 one and an Arm one again, served by one GDB.
+
+    `Run.debug` serves every session on a thread from one GDB
+    (gdb_server.py), so a lane meets what the sessions before it on that
+    thread left, which a lane run alone never does: the description an Arm
+    target reported refused an RV32 script's `set architecture riscv:rv32`,
+    and that setting refused the next Arm executable.  The first session
+    also leaves an internal breakpoint and an internal watchpoint, which
+    `delete` spares, and each later one holds that it sees neither.
+    """
+    out = parent.out / 'rv32-controls' / 'shared-debugger'
+    pids = []
+
+    def served():
+        pids.append(runner.SERVERS.server.process.pid)
+    first = Run(out / 'arm', parent.tools)
+    first.out.mkdir(parents=True)
+    first.build('cpu')
+    elf = first.out / 'cpu.elf'
+    arm_session(first, elf, 'gdb-arm', [
+        *UNMARKED, 'python',
+        'assert gdb.selected_inferior().architecture().name().startswith("arm")',
+        'gdb.Breakpoint("done", internal=True)',
+        'gdb.Breakpoint("fault_seen", gdb.BP_WATCHPOINT, gdb.WP_WRITE, internal=True)',
+        'end', 'delete breakpoints', 'continue', 'python',
+        'assert int(gdb.parse_and_eval("$pc")) == int(gdb.parse_and_eval("&done"))',
+        'assert len(gdb.breakpoints()) == 2',
+        'print("SHARED_DEBUGGER_PASS")', 'end'])
+    served()
+    control(parent, 'return', 'rv32imc', before=UNMARKED, directory='shared-debugger/rv32')
+    served()
+    again = Run(out / 'arm-again', parent.tools)
+    again.out.mkdir()
+    arm_session(again, elf, 'gdb-arm', [
+        *UNMARKED, 'break done', 'continue', 'python',
+        'assert gdb.selected_inferior().architecture().name().startswith("arm")',
+        'assert int(gdb.parse_and_eval("result")) == 0x610',
+        'print("SHARED_DEBUGGER_PASS")', 'end'])
+    served()
+    require(len(set(pids)) == 1, 'the shared-debugger sessions were served by GDBs %s, not one'
+            % ', '.join(map(str, pids)))
+    record = {'control': 'shared-debugger', 'sessions': ['armv6-m', 'rv32imc', 'armv6-m'],
+              'gdb_processes': 1, 'status': 'passed'}
+    (out / 'result.json').write_text(json.dumps(record, indent=2) + '\n')
+    return record
+
+
 def execute_suite(parent):
     """Every control at each of its levels; run.py's `rv32-controls` lane."""
-    results = []
+    results = [shared_debugger(parent)]
+    print('rv32 control: shared-debugger, Arm, RV32 and Arm through one GDB, passed',
+          flush=True)
     for name, (_, levels, _) in CONTROLS.items():
         for level in levels:
             results.append(control(parent, name, level))

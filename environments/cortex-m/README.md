@@ -248,6 +248,26 @@ records `part` and a scope naming the part and its lanes. `test.py` holds
 exactly those parts. Each lane's verdict in `result.json` gives the seconds
 it took, which is what to rebalance the parts by.
 
+### Debugger sessions share a GDB per worker
+
+Every lane's debugger sessions go through `Run.debug`, which serves them
+from one `gdb-multiarch` per worker thread (`gdb_server.py`) rather than
+one batch GDB each, since starting GDB is most of what a session costs. A
+session therefore runs after whatever the sessions before it on that
+thread debugged, in any lane and for either architecture, which a lane run
+alone with `--lane` never meets. Before each session the server restores
+the Python namespace, deletes every breakpoint and watchpoint the last
+session made, the internal ones a script makes from Python among them,
+disconnects, unsets the target description the last target reported, sets
+the architecture back to `auto` and loads the session's executable. A
+failure that names an architecture the session's own executable does not
+have, or a stop the session's script never asked for, is one session
+seeing another's state: run the lanes that preceded it on the same worker
+to reproduce it. The `rv32-controls` lane's `shared-debugger` control
+serves an Arm session, an RV32 one and an Arm one again through one GDB,
+the first leaving an internal breakpoint and watchpoint, and requires each
+later session to see none.
+
 ### On NixOS
 
 The locked QEMU and GDB are Debian binaries, and NixOS's own
@@ -835,7 +855,10 @@ lane's recorded profile, and runs them on both machines: a return through a
 frame, a trap at `unimp`, a stack overrun the watchpoint must stop, on
 `sifive-e` an executed `amoadd.w`, `amoswap.w` and LR/SC loop, and on
 `esp32c3` the same A program, which the image check must refuse and the
-core must trap at its first AMO. The two corpus lanes need it, so a
+core must trap at its first AMO. Before them its `shared-debugger` control
+debugs the `cpu` probe, the `return` control and the `cpu` probe again
+through one GDB (see [Debugger sessions share a GDB per
+worker](#debugger-sessions-share-a-gdb-per-worker)). The two corpus lanes need it, so a
 harness that cannot tell these apart stops them before any corpus program.
 
 The atomics probes follow each corpus (D697). On `sifive-e`,
