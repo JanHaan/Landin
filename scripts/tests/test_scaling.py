@@ -65,6 +65,61 @@ class StageReportFreshness(unittest.TestCase):
             self.assertEqual(calls, 2)
 
 
+class ProgramDeclarations(unittest.TestCase):
+    """The declarations column counts the generated program, not the
+    hosted library the compiler's report counts with it."""
+
+    def test_the_library_is_an_empty_program_less_its_main(self):
+        with tempfile.TemporaryDirectory() as work:
+            def compile_empty(command, *_args):
+                entry = command[-1]
+                self.assertEqual(
+                    (Path(entry) / "main.ldn").read_text(),
+                    scaling.EMPTY["main.ldn"])
+                Path(command[2].split("=", 1)[1]).write_text(json.dumps({
+                    "stages": [{"stage": name, "processor_us": 100,
+                                "peak_kib": 32}
+                               for name in scaling.FRONTEND + scaling.EMISSION],
+                    "sizes": {"declarations": 788}}))
+                return subprocess.CompletedProcess(command, 0, b"", b"")
+
+            with mock.patch.object(scaling, "run_compiler",
+                                   side_effect=compile_empty):
+                self.assertEqual(
+                    scaling.library_declarations("refine", work, 5), 787)
+
+    def test_each_row_takes_the_library_off(self):
+        samples = iter({"frontend": float(size), "emission": float(size),
+                        "peak_kib": size,
+                        #  The fields family: two declarations of its own
+                        #  at every size, beside the library's.
+                        "sizes": {"declarations": 787 + 2}}
+                       for size in scaling.SIZES)
+        stdout = CapturedOutput()
+        with tempfile.TemporaryDirectory() as directory:
+            report = Path(directory) / "measurements.json"
+            with (mock.patch.object(scaling, "build_launcher", return_value=None),
+                  mock.patch.object(scaling, "library_declarations",
+                                    return_value=787),
+                  mock.patch.object(scaling, "host_load", return_value=QUIET),
+                  mock.patch.object(scaling, "FAMILIES", (("fields", lambda _: {}),)),
+                  mock.patch.object(scaling, "write_program"),
+                  mock.patch.object(scaling, "median_of",
+                                    side_effect=lambda *args: next(samples)),
+                  contextlib.redirect_stdout(stdout),
+                  contextlib.redirect_stderr(io.StringIO())):
+                scaling.main(["--refine", sys.executable, "--runs=1",
+                              "--no-derived", "--optimize=size",
+                              "--repeats=0", "--json", str(report)])
+            record = json.loads(report.read_text())
+        self.assertEqual(record["library_declarations"], 787)
+        self.assertEqual([row["declarations"]
+                          for row in record["families"]["fields"]],
+                         [2] * len(scaling.SIZES))
+        self.assertIn("     2 declarations", stdout.getvalue())
+        self.assertNotIn("789 declarations", stdout.getvalue())
+
+
 class CapturedOutput(io.StringIO):
     def reconfigure(self, **kwargs):
         pass
@@ -80,6 +135,7 @@ class ScalingMemory(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             report = Path(directory) / "measurements.json"
             with (mock.patch.object(scaling, "build_launcher", return_value=None),
+                  mock.patch.object(scaling, "library_declarations", return_value=0),
                   mock.patch.object(scaling, "host_load", return_value=QUIET),
                   mock.patch.object(scaling, "FAMILIES", (("sample", lambda _: {}),)),
                   mock.patch.object(scaling, "write_program"),
@@ -132,6 +188,7 @@ class ScalingUnderLoad(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             report = Path(directory) / "measurements.json"
             with (mock.patch.object(scaling, "build_launcher", return_value=None),
+                  mock.patch.object(scaling, "library_declarations", return_value=0),
                   mock.patch.object(scaling, "FAMILIES", (("sample", lambda _: {}),)),
                   mock.patch.object(scaling, "write_program"),
                   mock.patch.object(scaling, "median_of", side_effect=sample),
@@ -218,6 +275,7 @@ class ScalingObjectives(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             report = Path(directory) / "measurements.json"
             with (mock.patch.object(scaling, "build_launcher", return_value=None),
+                  mock.patch.object(scaling, "library_declarations", return_value=0),
                   mock.patch.object(scaling, "host_load", return_value=QUIET),
                   mock.patch.object(scaling, "FAMILIES", (("sample", lambda _: {}),)),
                   mock.patch.object(scaling, "write_program"),

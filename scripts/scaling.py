@@ -2,12 +2,16 @@
 """How the compiler's time and peak memory grow with program size.
 
 Each family below generates a program at 1,000, 2,000, 4,000, 8,000 and
-16,000 declarations and asks the compiler to check it and emit its assembly:
+16,000 declarations, or for the fields family as many fields of one struct,
+and asks the compiler to check it and emit its assembly:
 scan, parse, resolve, type and flow checking and lowering to verified IR,
 which is the frontend, and then optimization and the backend, which is
 emission.  The compiler's own `--stage-report` says how much processor time
 each stage took, which leaves out process start, reading the sources and
 the harness.  Five runs per input give median times and the largest peak.
+Each row also prints the declarations the compiler counted in the generated
+program itself: the report counts the hosted library's too, so an empty
+program is measured first and its count, less its `main`, is taken off.
 
 Every family runs at two objectives, `--optimize=size`, the default, and
 `--optimize=speed`, each with its own ratios: speed copies small routines
@@ -442,6 +446,28 @@ def median_of(refine: str, root: str, entry: str, work: str, runs: int,
     return result
 
 
+#  The smallest complete hosted program: what every family's program holds
+#  besides its own declarations, the library a hosted program loads.
+EMPTY = {"main.ldn": "public main: () -> (code: i32) =\n"
+                     "    code = 0\nend main\n"}
+
+
+def library_declarations(refine: str, work: str, timeout: float,
+                         launcher: str | None = None) -> int:
+    """The declarations the compiler counts in a program besides its own.
+
+    The stage report counts every declaration of the compilation, so a
+    generated program's count includes the hosted library's several hundred;
+    the fields family, whose size is in a struct's fields, read the same at
+    every size.  An empty program's count less its `main` is the library's.
+    """
+    directory = os.path.join(work, "empty")
+    write_program(directory, EMPTY)
+    report = os.path.join(work, "empty.json")
+    return measure(refine, directory, directory, report, timeout,
+                   launcher)["sizes"]["declarations"] - 1
+
+
 def write_program(directory: str, files: dict[str, str]) -> None:
     for relative, text in files.items():
         path = os.path.join(directory, relative)
@@ -535,6 +561,13 @@ def main(argv: list[str]) -> int:
         except (OSError, RuntimeError) as error:
             print(f"scaling: {error}", file=sys.stderr)
             return 2
+        try:
+            library = library_declarations(refine, work, arguments.timeout,
+                                           launcher)
+        except (RuntimeError, subprocess.TimeoutExpired) as error:
+            print(f"scaling: the empty program: {error}", file=sys.stderr)
+            return 2
+        record["library_declarations"] = library
         for objective, (family, build) in (
                 (objective, family) for objective in objectives
                 for family in families):
@@ -561,7 +594,9 @@ def main(argv: list[str]) -> int:
                     break
                 load = host_load()
                 ratios = ratios_of(rows[-1] if rows else None, result)
-                result.update(size=size, ratios=ratios, load=load)
+                result.update(size=size, ratios=ratios, load=load,
+                              declarations=(result["sizes"]["declarations"]
+                                            - library))
                 shown = "".join(
                     f"  {part} {result[part]:8.3f}s "
                     + (f"{ratios[part]:5.2f}x" if ratios[part] is not None
@@ -572,7 +607,7 @@ def main(argv: list[str]) -> int:
                 print(f"  {size:>6}{shown}"
                       f"  {result['peak_kib'] / 1024:8.1f} MiB"
                       f"{memory_shown}"
-                      f"  {result['sizes']['declarations']:>6} declarations"
+                      f"  {result['declarations']:>6} declarations"
                       + ("" if load["load"] is None
                          else f"  load {load['load'][0]:.2f}"))
                 missed = over(ratios)
@@ -610,7 +645,8 @@ def main(argv: list[str]) -> int:
                     if not missed:
                         #  The later measurement is the one the next
                         #  doubling compares with.
-                        larger.update(size=size, ratios=again, load=load)
+                        larger.update(size=size, ratios=again, load=load,
+                                      declarations=result["declarations"])
                         result = larger
                 if repeats:
                     result["repeats"] = repeats
