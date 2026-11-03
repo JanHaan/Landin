@@ -2854,6 +2854,9 @@ package body Landin.Diagnostics.Citations is
             when 572 =>
                "A check decides whether a handler fits from the frames i"
                & "t would emit",
+            when 773 =>
+               "A fibre group is joined by the program's `defer`, and no"
+               & " path check makes sure",
             when others => "");
 
    function Decision_Section (Number : Natural) return String
@@ -4109,6 +4112,8 @@ package body Landin.Diagnostics.Citations is
             when 571 =>
                "Decisions: The core library and the derived programs",
             when 572 =>
+               "Decisions: The core library and the derived programs",
+            when 773 =>
                "Decisions: The core library and the derived programs",
             when others => "");
 
@@ -6041,6 +6046,9 @@ package body Landin.Diagnostics.Citations is
             when 572 =>
                "https://www.701.dev/spec.html#d572-a-check-decides-wheth"
                & "er-a-handler-fits-from-the-frames-it-would-emit",
+            when 773 =>
+               "https://www.701.dev/spec.html#d773-a-fibre-group-is-join"
+               & "ed-by-the-program-s-defer-and-no-path-check-makes-sure",
             when others => "");
 
 end Landin.Diagnostics.Citations;

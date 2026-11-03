@@ -31002,6 +31002,12 @@ package body Landin.Diagnostics.Citations.Texts is
                & "es not raise. Every other program, the great majority, p"
                & "repares no stack or selects no handler, and costs a chec"
                & "k nothing more.",
+            when 773 =>
+               "Chosen: `defer fibre.join(group) else none`, written aft"
+               & "er the group is made, is the way, and the compiler does "
+               & "not check that it was written, as it does not check that"
+               & " a region is released. [1675] teaches the `defer` and sa"
+               & "ys the compiler does not check it.",
             when others => "");
 
 end Landin.Diagnostics.Citations.Texts;

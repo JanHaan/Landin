@@ -29224,7 +29224,8 @@ brings the routine-and-state ceremony back one level up and makes the group
 and the states both parameters, so that D445 can no longer order them; a
 checker rule that a frame-backed group is joined on every path, recorded in
 the register rather than taken; and error sets as generic parameters,
-recorded there too. All were declined.
+recorded there too. All were declined; D773 later recorded the `defer` as
+the way.
 
 **Pinned by** `runtime/library-shared-fibre`, a group over `whole` that runs
 its tasks in admission order, keeps the first failure for `join` and refuses
@@ -30861,3 +30862,26 @@ profiles for an answer that differs only at the margin. All were declined.
 `refine check` on Linux x86-64, and the server's scripted session
 `handler-margin`, whose handler is refused while it is edited and cleared
 when it fits.
+
+### D773 — A fibre group is joined by the program's `defer`, and no path check makes sure
+
+**The tour said** at [1675] that a group must be joined before its backing
+goes and that a `defer` does it on every way out. D444 left a checker rule
+that a frame-backed group is joined on every path to the register, and a
+forgotten join runs a fibre on a frame that has gone.
+
+**Chosen:** `defer fibre.join(group) else none`, written after the group is
+made, is the way, and the compiler does not check that it was written, as
+it does not check that a region is released. [1675] teaches the `defer`
+and says the compiler does not check it.
+
+**The alternatives:** a path check keyed on `fibre.group`, as [0910] checks
+that a sunk place is replaced, which makes one library type one the
+language knows; and a check keyed on a property a type declares, that a
+value must be consumed before its scope ends, which is the affine values
+the tour parks. Both were declined until a derived program or a fixture
+forgets a join, or a second library value is as unsafe to forget.
+
+**Pinned by** every fibre fixture that makes a group, among them
+`runtime/library-shared-fibre`, `runtime/fibre-turns-interleave` and
+`runtime/fibre-join-first-failure`, each joining its group in a `defer`.
