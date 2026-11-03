@@ -52,7 +52,7 @@ case "${1:-}" in
         echo "                     minutes at LANDIN_TEST_JOBS=8.  --fixture=CLASS/NAME"
         echo "                     runs one fixture instead."
         echo "  parser             parses every truncation and mutation of the corpus:"
-        echo "                     about five minutes"
+        echo "                     five to fifteen minutes, longest on a loaded host"
         echo "  memory             compiles one real program over and over to see what"
         echo "                     it keeps: about five minutes"
         echo "LANDIN_TEST_JOBS=N splits fixture execution's two corpus-wide cases"
