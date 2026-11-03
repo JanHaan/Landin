@@ -74,10 +74,11 @@ class Recorded:
     def command(self, name, argv, **_):
         self.calls.append(name)
         self.commands.append(dict(name=name, status=self.statuses.get(name, 0)))
-        answer = self.answers.get(name, '')
+        answer = self.answers.get(name, bytes(4) if name.startswith(('attach-', 'reattach-')) else '')
         if isinstance(answer, list):
-            return answer.pop(0) if len(answer) > 1 else answer[0]
-        return answer
+            answer = answer.pop(0) if len(answer) > 1 else answer[0]
+        return HANDSHAKE.helper_fixture_command(self, name, argv, answer,
+            board='rp2350_hazard3', probe=ARGS['probe'])
 
 
 def jal(at, target):
@@ -188,7 +189,7 @@ class Layout(unittest.TestCase):
 ARGS = dict(hub='7-2.3.3', port=2, guard_serial='210319B3E738', cascade='7-2', off_seconds=0,
             pico_serial=None, hub_group=None, enumerate_seconds=1.0, boot_seconds=0,
             guard_seconds=0, bootsel_attach=False, probe_host='10.42.0.50',
-            probe_rs='probe-rs', probe='0000:0001:127.0.0.1:4442')
+            probe_rs='probe-rs', probe='0000:0001:127.0.0.1:4442', ram_loader='ram-loader')
 PING = '1 packets transmitted, 1 received, 0% packet loss, time 0ms\n'
 LOST = '1 packets transmitted, 0 received, 100% packet loss, time 0ms\n'
 
@@ -208,6 +209,12 @@ def cycling(**more):
 
 class Attach(unittest.TestCase):
     def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.output = Path(directory.name)
+        output = mock.patch.object(Recorded, 'out', self.output, create=True)
+        output.start()
+        self.addCleanup(output.stop)
         patcher = mock.patch.object(BOARD.common, 'device_location', return_value='7-1.4')
         patcher.start()
         self.addCleanup(patcher.stop)
@@ -226,7 +233,8 @@ class Attach(unittest.TestCase):
     def test_a_flash_through_the_arm_side_boots_the_image_before_reading_back(self):
         head = struct.pack('<2I', 0x3900006f, 0)
         run = Recorded(statuses={'reattach-RP235x': 1}, **cycling(**{
-            'flash-readback': '0x10000000: 3900006f 00000000'}))
+            'flash-readback': head}))
+        run.out = self.output
         args = paced_args(run)
         with mock.patch.object(BOARD.time, 'sleep'):
             self.assertEqual(BOARD.flash(run, args, 'board.elf', head), 'RP235x')
@@ -245,7 +253,8 @@ class Attach(unittest.TestCase):
     def test_a_flash_through_the_risc_v_side_reads_back_at_once(self):
         head = struct.pack('<2I', 0x3900006f, 0)
         run = Recorded(statuses={'attach-RP235x': 1},
-                       **cycling(**{'flash-readback': '0x10000000: 3900006f 00000001'}))
+                       **cycling(**{'flash-readback': struct.pack('<2I', 0x3900006f, 1)}))
+        run.out = self.output
         args = paced_args(run)
         with self.assertRaisesRegex(BOARD.Failed, 'flash does not hold'):
             BOARD.flash(run, args, 'board.elf', head)
@@ -267,9 +276,9 @@ class Attach(unittest.TestCase):
         head = struct.pack('<2I', 0x3900006f, 0)
         bad = head[:-4] + struct.pack('<I', BOARD.IMAGE_DEF[-1] ^ 0xffffffff)
         run = Recorded(statuses=statuses, **cycling(**{
-            'flash-readback': '0x10000000: ' + ' '.join(
-                '%08x' % w for w in struct.unpack('<2I', bad)),
+            'flash-readback': bad,
             'hub-after-corrupt': [QUIET, BOOTSEL]}))
+        run.out = self.output
         args = paced_args(run, bootsel_attach=True)
         with mock.patch.object(BOARD, 'corrupted', return_value='bad.elf'), \
                 mock.patch.object(BOARD.time, 'sleep'):

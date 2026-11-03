@@ -70,10 +70,11 @@ class Recorded:
     def command(self, name, argv, **_):
         self.calls.append(name)
         self.commands.append(dict(name=name, status=self.statuses.get(name, 0)))
-        answer = self.answers.get(name, '')
+        answer = self.answers.get(name, bytes(4) if name.startswith(('attach-', 'reattach-')) else '')
         if isinstance(answer, list):
-            return answer.pop(0) if len(answer) > 1 else answer[0]
-        return answer
+            answer = answer.pop(0) if len(answer) > 1 else answer[0]
+        return HANDSHAKE.helper_fixture_command(self, name, argv, answer,
+            board='rp2350', probe=ARGS['probe'])
 
 
 def image(block):
@@ -120,7 +121,7 @@ class Block(unittest.TestCase):
 ARGS = dict(hub='7-2.3.3', port=2, guard_serial='210319B3E738', cascade='7-2', off_seconds=0,
             pico_serial=SERIAL, hub_group=None, enumerate_seconds=1.0, probe_rs='probe-rs',
             probe='0000:0002:10.42.0.50/1', guard_seconds=0, boot_seconds=0,
-            bootsel_attach=False, probe_host='10.42.0.50')
+            bootsel_attach=False, probe_host='10.42.0.50', ram_loader='ram-loader')
 PING = '1 packets transmitted, 1 received, 0% packet loss, time 0ms\n'
 
 
@@ -173,6 +174,12 @@ class Hub(unittest.TestCase):
 
 class Control(unittest.TestCase):
     def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.output = Path(directory.name)
+        output = mock.patch.object(Recorded, 'out', self.output, create=True)
+        output.start()
+        self.addCleanup(output.stop)
         patcher = mock.patch.object(BOARD.common, 'device_location', return_value='7-1.4')
         patcher.start()
         self.addCleanup(patcher.stop)
@@ -182,8 +189,7 @@ class Control(unittest.TestCase):
                            *([0x20082000] + [0x10000201] * 67 + list(BOARD.IMAGE_DEF)))
 
     def readback(self, head):
-        return '0x10000000: ' + ' '.join(
-            '%08x' % w for w in struct.unpack('<%dI' % (len(head) // 4), head))
+        return head
 
     def control(self, after, bootsel_attach=True):
         head = self.head()
@@ -238,6 +244,7 @@ class Control(unittest.TestCase):
         # and the head is read back from the booted image.
         head = self.head()
         run = Recorded(**answers(**{'flash-readback': self.readback(head)}))
+        run.out = self.output
         with mock.patch.object(BOARD.time, 'sleep'):
             self.assertEqual(BOARD.flash(run, paced_args(run), 'board.elf', head), 'RP235x')
         self.assertEqual(run.calls, ['hub-before-attach', 'attach-RP235x', 'before download',
@@ -252,6 +259,7 @@ class Control(unittest.TestCase):
         head = self.head()
         run = Recorded(statuses={'attach-RP235x': 1},
                        **answers(**{'flash-readback': self.readback(head)}))
+        run.out = self.output
         with mock.patch.object(BOARD.time, 'sleep'):
             self.assertEqual(BOARD.flash(run, paced_args(run), 'board.elf', head),
                              'RP235x_riscv')

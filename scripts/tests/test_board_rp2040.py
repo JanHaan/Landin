@@ -2,6 +2,8 @@
 """Controls for the RP2040 board tool's oracle, without a board (D595)."""
 import importlib.util
 import contextlib
+import json
+import struct
 import tempfile
 from pathlib import Path
 from types import SimpleNamespace
@@ -42,6 +44,33 @@ STATUS = """Current status for hub 7-2.3.3 [0bda:5411 Generic USB2.1 Hub, USB 2.
   Port 3: 0100 power
   Port 4: 0503 power highspeed enable connect [0403:6010 Digilent Digilent USB Device 210319B3E738]
 """
+
+
+def helper_readback(argv, data, *, board, probe):
+    """Answer the real read plan with fixture bytes, checking the request."""
+    assert len(argv) == 5 and str(argv[0]) == 'ram-loader', argv
+    assert argv[1] == '--plan' and argv[3] == '--output', argv
+    plan = json.loads(Path(argv[2]).read_text())
+    assert plan == dict(format_version=1, board=board, mode='read', probe=probe,
+                        address=0x10000000, count=len(data) // 4), plan
+    words = list(struct.unpack('<%dI' % (len(data) // 4), data))
+    Path(argv[4]).write_text(json.dumps(dict(format_version=1, status='passed',
+        mode='read', board=board, address=0x10000000, count=len(words),
+        flash_written=False, words=words)))
+
+
+def helper_fixture_command(run, name, argv, answer, *, board, probe):
+    """Mock only the helper process; Probe still validates the JSON evidence."""
+    if '--plan' not in argv:
+        return answer
+    if run.commands[-1]['status']:
+        raise BOARD.Failed('helper read failed')
+    if name.endswith('-RP235x_riscv'):
+        board = 'rp2350_hazard3'
+    elif name.endswith('-RP235x'):
+        board = 'rp2350'
+    helper_readback(argv, answer, board=board, probe=probe)
+    return ''
 
 
 def console_order(test, board, built, *, mode='ram', hazard=False):
@@ -154,6 +183,31 @@ def startup_retry(test, board):
 
 
 class Oracle(unittest.TestCase):
+    def test_second_stage_readback_compares_helper_bytes(self):
+        stage = bytes(range(256))
+        for actual in (stage, stage[:-1] + b'\x00'):
+            with self.subTest(matches=actual == stage), tempfile.TemporaryDirectory() as tmp:
+                class Run:
+                    out = Path(tmp)
+                    def command(self, name, argv, **_):
+                        if name == 'flash-readback':
+                            helper_readback(argv, actual, board='rp2040', probe='slot0')
+                        else:
+                            self.assert_download = argv
+                        return ''
+                run = Run()
+                args = SimpleNamespace(probe_rs='probe-rs', probe='slot0', ram_loader='ram-loader',
+                    pace=mock.Mock(), guard_serial='arty', cascade='1-1',
+                    hub_group=None, hub='1-1.3.3', hub_seconds=0)
+                with mock.patch.object(BOARD.common, 'paced', side_effect=lambda pace, what, action, *rest: action()), \
+                        mock.patch.object(BOARD.common, 'wait_for_hub'):
+                    if actual == stage:
+                        self.assertEqual(BOARD.flash(run, args, 'image.elf', stage), stage)
+                    else:
+                        with self.assertRaisesRegex(BOARD.Failed, 'second stage'):
+                            BOARD.flash(run, args, 'image.elf', stage)
+                self.assertIn('download', run.assert_download)
+
     def test_uart_opens_after_ram_loading_and_before_boot_power(self):
         for mode in ('ram', 'boot'):
             with self.subTest(mode=mode):
