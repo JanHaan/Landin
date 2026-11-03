@@ -5,7 +5,10 @@ Invoked as `fake_gdb.py -q -nx -batch -x gdb_server.py`, it runs the real
 serving loop against a `gdb` module that understands only what the controls
 need: a sourced script's `python` blocks run in `__main__`, `fail` raises a
 debugger error, `die` ends the process, `sleep` stalls, and the logging
-settings redirect output to the session's log.
+settings redirect output to the session's log.  A script's `import gdb` is
+this stand-in, whose `Breakpoint` records only a location and whether it is
+internal, and whose `delete breakpoints` spares the internal ones, as GDB's
+does.
 """
 import sys
 import time
@@ -24,6 +27,21 @@ class Gdb:
         self.log = None
         self.logging = False
         self.path = None
+        self.made = []
+        made = self.made
+
+        class Breakpoint:
+            def __init__(self, spec, *kinds, internal=False):
+                self.location, self.visible = spec, not internal
+                made.append(self)
+
+            def delete(self):
+                made.remove(self)
+
+        self.Breakpoint = Breakpoint
+
+    def breakpoints(self):
+        return tuple(self.made)
 
     def write(self, text, stream=None):
         (self.log if self.logging else sys.stdout).write(text)
@@ -39,6 +57,8 @@ class Gdb:
             self.logging = False
         elif words[0] == 'source':
             self.source(Path(words[1]))
+        elif command == 'delete breakpoints':
+            self.made[:] = [made for made in self.made if not made.visible]
         return ''
 
     def source(self, path):
@@ -69,4 +89,5 @@ class Gdb:
 if __name__ == '__main__':
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     import gdb_server
-    gdb_server.serve(Gdb())
+    sys.modules['gdb'] = fake = Gdb()
+    gdb_server.serve(fake)

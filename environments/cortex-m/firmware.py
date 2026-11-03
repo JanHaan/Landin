@@ -192,7 +192,8 @@ def float_unit(parent, refine):
     frame is reserved lazily; the handler's own float instruction fills it,
     the return restores the interrupted d0, and the computation ends with
     its IEEE value.  The image carries the unit's attributes, and a
-    soft-float C object linked into it is refused."""
+    soft-float C object linked into it is refused, as are the mixed pairs
+    `mixed_objects` links (D780)."""
     out = parent.out
     run = Run(out, parent.tools)
     profile = derived(run, refine, 'mps2-an500', out / 'profiles')
@@ -246,8 +247,63 @@ def float_unit(parent, refine):
                 'the mixed link failed for another reason; inspect ' + str(out / 'mixed-link.log'))
     else:
         raise RuntimeError('a soft-float object linked into the hard-float image')
+    mixed_objects(run, Run(out / 'soft-float', parent.tools), refine)
     return [{'kind': 'float-unit', 'level': 'armv7e-m', 'optimize': 'none',
              'specialize': 'off', 'status': 'passed', 'lane': 'mps2-an500'}]
+
+
+SOFT_FLOAT = """mut values: [2]f64
+twice: (x: f64) -> (r: f64) =
+    r = x * 2.0
+end twice
+start: () -> none =
+    values[1] = twice(values[0])
+end start
+"""
+
+
+def mixed_objects(run, soft, refine):
+    """D780: refine's object without a unit, built under SOFT, declares the
+    float attributes GCC's soft-float object at the Cortex-M7 declares, and
+    it and a hard-float GCC object refuse each other in either order, as
+    RUN's hard-float refine object and the soft-float GCC object do.  Each
+    pair is linked alone and relocatably, so no other object, libgcc's
+    among them, takes part; the soft pair links, so the link is sound."""
+    soft.out.mkdir()
+    build(soft, refine, SOFT_FLOAT, level='armv7e-m')
+    gcc, out = run.arm / 'arm-eabi-gcc', run.out
+    (out / 'hard.c').write_text('double twice(double x) { return x * 2.0; }\n')
+    run.command('hard-object', [gcc, '-mcpu=cortex-m7', '-mthumb', '-mfloat-abi=hard',
+                                '-mfpu=fpv5-d16', '-O1', '-c', 'hard.c', '-o', 'hard.o'])
+    refine_soft, refine_hard = soft.out / 'firmware.elf.o', out / 'firmware.elf.o'
+
+    def floats(name, path):
+        said = run.command(name, [run.arm / 'arm-eabi-readelf', '-A', path])
+        return [line.strip() for line in said.splitlines()
+                if 'Tag_ABI_FP_number_model' in line or 'Tag_ABI_VFP_args' in line]
+    declared = floats('soft-attributes', refine_soft)
+    require(declared == floats('gcc-soft-attributes', out / 'soft.o')
+            == ['Tag_ABI_FP_number_model: IEEE 754'],
+            'refine\'s soft-float object declares %s, not what GCC\'s does' % declared)
+    pairs = [('soft-with-hard', refine_soft, out / 'hard.o'),
+             ('hard-with-soft', out / 'hard.o', refine_soft),
+             ('refine-hard-with-soft', refine_hard, out / 'soft.o'),
+             ('soft-with-refine-hard', out / 'soft.o', refine_hard)]
+    for name, first, second in pairs + [('soft-with-soft', refine_soft, out / 'soft.o')]:
+        argv = [gcc, '-nostdlib', '-r', first, second, '-o', name + '.o']
+        if name == 'soft-with-soft':
+            run.command(name, argv)
+            continue
+        try:
+            run.command(name, argv)
+        except RuntimeError:
+            log = (out / (name + '.log')).read_text()
+            require('uses VFP register arguments' in log
+                    and 'failed to merge target specific data' in log,
+                    'the %s link failed for another reason; inspect %s'
+                    % (name, out / (name + '.log')))
+        else:
+            raise RuntimeError('a soft-float and a hard-float object linked: %s' % name)
 
 
 def cpu_levels(parent, refine):

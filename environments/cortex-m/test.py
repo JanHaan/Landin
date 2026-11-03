@@ -490,7 +490,7 @@ class ProbeFailures(unittest.TestCase):
         import backend_corpus
         record = json.loads((HERE.parent.parent / 'compiler/tests/cortex-m/corpus.json').read_text())
         name = 'runtime/r420-map-arena'
-        self.assertEqual(record['fixtures'][name]['lanes']['mps2-an500']['mode'], 'restriction')
+        self.assertEqual(record['fixtures'][name]['mode'], 'execute')
         original = backend_corpus.COUNTERPARTS
         with tempfile.TemporaryDirectory() as directory:
             broken = Path(directory)
@@ -502,7 +502,8 @@ class ProbeFailures(unittest.TestCase):
                     shutil.copytree(source, target)
                 else:
                     target.write_text(source.read_text())
-            del record['fixtures'][name]['lanes']['mps2-an500']['reason']
+            #  A restriction of an execute row on a lane, without its reason.
+            record['fixtures'][name]['lanes'] = {'mps2-an500': {'mode': 'restriction'}}
             (broken / 'corpus.json').write_text(json.dumps(record))
             backend_corpus.COUNTERPARTS = broken
             try:
@@ -815,6 +816,26 @@ class ProbeFailures(unittest.TestCase):
                 text = run.debug('gdb-second', 'x.elf', second)
                 self.assertIn('SECOND_PASS', text)
                 self.assertNotIn('LEAKED', text)
+                run_module.SERVERS.server.stop()
+
+    def test_a_served_session_meets_no_breakpoint_the_one_before_it_made(self):
+        # `delete breakpoints` spares an internal one, which then fired in
+        # the next program on the same worker.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            run, stack = self.server_run(root)
+            with stack:
+                import run as run_module
+                first = self.script(root, 'first.gdb', 'python', 'import gdb',
+                                    'gdb.Breakpoint("*0x100")',
+                                    'gdb.Breakpoint("*0x200", internal=True)',
+                                    'gdb.Breakpoint("*(int*)0x20000000", 1, 1, internal=True)',
+                                    'print("FIRST_PASS")', 'end')
+                second = self.script(root, 'second.gdb', 'python', 'import gdb',
+                                     'print("LEFT", [b.location for b in gdb.breakpoints()])',
+                                     'end')
+                self.assertIn('FIRST_PASS', run.debug('gdb-first', 'x.elf', first))
+                self.assertIn('LEFT []', run.debug('gdb-second', 'x.elf', second))
                 run_module.SERVERS.server.stop()
 
     def test_a_failed_session_fails_alone(self):

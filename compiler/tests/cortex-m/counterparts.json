@@ -134,6 +134,32 @@
         "slots * sizeof ptr node == 16",
         "slots * sizeof ptr node == 8"
       ]
+    ],
+    "r420-list-real-exhaustion": [
+      [
+        "--  The first allocation owns 8 slots, 64 bytes.",
+        "--  The first allocation owns 8 slots, 32 bytes."
+      ],
+      [
+        "extent: usize = 24 * sizeof u64",
+        "extent: usize = 12 * sizeof u64"
+      ],
+      [
+        "--  Extending the same block spends only the final 128 bytes.",
+        "--  Extending the same block spends only the final 64 bytes."
+      ]
+    ],
+    "r420-map-arena": [
+      [
+        "mut backing: [1600]u8 = zeroed",
+        "mut backing: [800]u8 = zeroed"
+      ]
+    ],
+    "r420-pool-provider": [
+      [
+        "sizeof padded_slot == 24 and sizeof pool.slot == 16",
+        "sizeof padded_slot == 12 and sizeof pool.slot == 8"
+      ]
     ]
   }
 }

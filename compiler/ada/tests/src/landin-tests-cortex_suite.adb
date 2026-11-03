@@ -3350,13 +3350,18 @@ package body Landin.Tests.Cortex_Suite is
          "D618: reset grants CP10 and CP11 before the copies");
       Landin.Testing.Check
         (Item, not Contains (Soft, ".fpu")
-           and then not Contains (Soft, "Tag_ABI_VFP_args")
+           and then Contains
+             (Soft, HT & ".eabi_attribute Tag_ABI_FP_number_model, 3" & LF)
+           and then Contains
+             (Soft, HT & ".eabi_attribute Tag_ABI_VFP_args, 0" & LF)
+           and then not Contains (Soft, "Tag_ABI_VFP_args, 1")
            and then not Contains (Soft, "0xe000ed88")
            and then not Contains (Soft, "vstmia")
            and then Contains (Soft, "bl __aeabi_dadd")
            and then Contains (Soft, "bl __aeabi_fmul")
            and then Contains (Soft, "bl __aeabi_dcmplt"),
-         "without the unit the build is soft-float");
+         "without the unit the build is soft-float, and D780: it declares"
+         & " IEEE floats in core registers");
       Landin.Testing.Check
         (Item, (for some A of Hard_Arguments => A = "-mfloat-abi=hard")
            and then (for some A of Hard_Arguments => A = "-mfpu=fpv5-d16")
