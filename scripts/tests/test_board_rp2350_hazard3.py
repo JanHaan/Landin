@@ -272,41 +272,19 @@ class Attach(unittest.TestCase):
         with self.assertRaisesRegex(BOARD.Failed, 'enumerates as BOOTSEL'):
             BOARD.attached(Recorded(**cycling(**{'hub-before-attach': BOOTSEL})), args, 'attach')
 
-    def block_control(self, **statuses):
-        head = struct.pack('<2I', 0x3900006f, 0)
-        bad = head[:-4] + struct.pack('<I', BOARD.IMAGE_DEF[-1] ^ 0xffffffff)
-        run = Recorded(statuses=statuses, **cycling(**{
-            'flash-readback': bad,
-            'hub-after-corrupt': [QUIET, BOOTSEL]}))
-        run.out = self.output
-        args = paced_args(run, bootsel_attach=True)
-        with mock.patch.object(BOARD, 'corrupted', return_value='bad.elf'), \
-                mock.patch.object(BOARD.time, 'sleep'):
-            return run, BOARD.block_control(run, args, 'board.elf', head)
+    def test_malformed_block_controls_refuse_before_any_file_or_hardware_action(self):
+        for allowed in (False, True):
+            with self.subTest(bootsel_attach=allowed):
+                run = Recorded()
+                args = SimpleNamespace(bootsel_attach=allowed)
+                with mock.patch.object(BOARD, 'corrupted') as corrupt:
+                    with self.assertRaisesRegex(BOARD.Failed, 'disabled pending an off-cascade UF2'):
+                        BOARD.block_control(run, args, 'missing.elf', b'')
+                    corrupt.assert_not_called()
+                with self.assertRaisesRegex(BOARD.Failed, 'BOOTSEL attachment is always refused'):
+                    BOARD.pico2.corrupt(run, args, 'missing.elf', b'', 'bad image')
+                self.assertEqual(run.calls, [])
 
-    def test_a_block_control_flashed_as_rp235x_is_cycled_at_once_and_never_read(self):
-        # D832: the download's RP235x reset leaves BOOTSEL halted on the bus.
-        run, verdict = self.block_control()
-        self.assertEqual(verdict['flashed_as'], 'RP235x')
-        self.assertEqual(run.calls, ['hub-before-attach', 'attach-RP235x', 'before download',
-                                     'flash', 'after download', 'hub-status', 'power-cycle',
-                                     'after power cycle at once', 'hub-wait', 'probe-ping',
-                                     'hub-after-corrupt', 'hub-after-corrupt'])
-
-    def test_a_block_control_flashed_as_rp235x_riscv_is_read_back_before_a_paced_cycle(self):
-        run, verdict = self.block_control(**{'attach-RP235x': 1})
-        self.assertEqual(verdict['flashed_as'], 'RP235x_riscv')
-        self.assertEqual(run.calls, ['hub-before-attach', 'attach-RP235x', 'attach-RP235x_riscv',
-                                     'before download', 'flash', 'after download', 'hub-wait',
-                                     'flash-readback', 'before power cycle', 'hub-status',
-                                     'power-cycle', 'after power cycle', 'hub-wait',
-                                     'probe-ping', 'hub-after-corrupt', 'hub-after-corrupt'])
-
-    def test_the_block_control_needs_leave_to_attach_in_bootsel(self):
-        run = Recorded(**cycling())
-        with self.assertRaisesRegex(BOARD.Failed, '--bootsel-attach'):
-            BOARD.block_control(run, SimpleNamespace(**ARGS), 'board.elf', b'')
-        self.assertEqual(run.calls, [])
 
 
 class Hub(unittest.TestCase):

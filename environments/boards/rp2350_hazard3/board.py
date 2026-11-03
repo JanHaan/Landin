@@ -12,9 +12,9 @@ A developer tool, not a compiler dependency: refine builds the image for
 --target=rv32 at --level=rv32imac, and this checks what the board does with
 it.  The board is reached through probehive slot 1
 (https://github.com/JanHaan/probehive), as the Pico 2's Arm run reaches it,
-but through the probe's bridge alone, DIR/scripts/dap_bridge.py: probe-rs
-reaches the slot's SWD through the bridge's TCP port and the trace comes
-over its UART port, so the two share the slot's one client.  A bridge
+with native UDP debug selected by --probe. DIR/scripts/dap_bridge.py
+serves the UART trace; its UART client opens after loading and closes
+before debug readback so the two never hold the slot at once.  A bridge
 already listening is reused and never stopped, and one this starts serves
 every slot and is left running, for another board's tool to reuse.  The
 Pico 2's power is its USB port on a hub uhubctl can switch.  The steps,
@@ -27,9 +27,8 @@ each recorded under NEW_DIRECTORY:
      the RISC-V IMAGE_DEF block the boot ROM looks for follows it inside the
      first 4 KiB as the datasheet gives it, and that the image executes an
      amoadd.w on a counter in SRAM;
-  2. with --block-control, flash a copy whose block's end marker is
-     flipped, cycle the power and require the boot ROM to refuse it and
-     enumerate as USB BOOTSEL, 2e8a:000f;
+  2. refuse --block-control: malformed images require an off-cascade UF2
+     recovery workflow, which this tool does not provide;
   3. flash the image with probe-rs, as RP235x or RP235x_riscv, whichever
      architecture the cores run when it attaches, verify it, and read the
      entry word, the table and the block back;
@@ -213,11 +212,7 @@ def corrupted(run, elf):
 
 
 def block_control(run, args, elf, head):
-    """The physical negative control: an image whose block is corrupted is
-    not booted, so the boot ROM falls back to USB BOOTSEL; then the good
-    image is flashed again.  Flashing it again means attaching in BOOTSEL,
-    which halts the boot ROM mid-enumeration (D712), so the control runs
-    only with --bootsel-attach, on a hub that does not carry the probe."""
+    """Disabled pending off-cascade UF2 recovery; no BOOTSEL probe attach."""
     pico2.require_leave(args)
     bad = corrupted(run, elf)
     chip, device = pico2.corrupt(run, args, bad,
@@ -442,9 +437,8 @@ def main():
                         help='the slots a bridge this starts serves, every one of the probe')
     pico2.arguments(parser)
     parser.add_argument('--block-control', action='store_true',
-                        help='first flash an image whose block is corrupted and require the boot ROM'
-                             ' to refuse it, enumerating as BOOTSEL; then flash the good image, from'
-                             ' BOOTSEL, which needs --bootsel-attach')
+                        help='disabled pending an off-cascade UF2 recovery workflow;'
+                             ' BOOTSEL attachment is always refused')
     parser.add_argument('--indicator-pin', metavar='PIN',
                         help="the probe's GPIO wired to the Pico 2's GPIO3; without it the"
                              " indicator is checked by its pad's readback alone")

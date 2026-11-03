@@ -15,16 +15,14 @@ each reaches the hub and the bus the same way:
   * probe-rs is told the chip as the architecture its cores run when it
     attaches, and an image flashed through the other one's side is booted
     by a power cycle before its head is read back (D712);
-  * no probe-rs attaches while the port shows BOOTSEL unless the run was
-    told it may, since an attach halts the boot ROM, whose USB then stops
-    answering; and when one has flashed from BOOTSEL the power is cycled
-    at once, unpaced, since the trouble the halted BOOTSEL makes the kernel
-    log would stop a paced cycle and leave it on the bus (D712, D832);
+  * no probe attaches while the port shows BOOTSEL, including when the
+    obsolete --bootsel-attach flag is supplied; install and verify the
+    fixed image by UF2 off the cascade before attaching;
   * every download as RP235x is followed at once by a power cycle, before
     any wait or attach: probe-rs's RP235x reset leaves the boot ROM's USB
     on the bus with its core halted (D832);
-  * a block control's image is never read back once booted, and its power
-    cycle must end in BOOTSEL.
+  * malformed-block controls are disabled pending an off-cascade UF2
+    recovery workflow.
 
 Each tool's args carry `hub`, `port`, `pico_serial`, `guard_serial`,
 `cascade`, `off_seconds`, `guard_seconds`, `enumerate_seconds`,
@@ -75,8 +73,8 @@ def power_cycle(run, args, at_once=False):
     rig, stopping on any USB trouble the kernel logged since the last action
     (D725), since a cycle met by a port failing enumeration reset the whole
     hub tree above it on the rig (D712).  AT_ONCE takes the cycle without
-    that check, after a flash from BOOTSEL, whose halted boot ROM is the
-    trouble; it is still recorded as the last action.  After the cycle the hub
+    that check, after a download as RP235x has halted the boot ROM; it
+    is still recorded as the last action.  After the cycle the hub
     must list again, the Arty be found off the cascade and the probe answer
     on the network, or the run stops."""
     def cycle():
@@ -233,10 +231,9 @@ def corrupt(run, args, elf, head, what):
 
 
 def require_leave(args):
-    """The block control ends in BOOTSEL, where flashing the image again
-    halts the boot ROM on the bus: it runs only with --bootsel-attach."""
-    require(args.bootsel_attach, '--block-control ends in BOOTSEL, where flashing the image again'
-            ' halts the boot ROM on the bus; it needs --bootsel-attach, on a hub without the probe')
+    """Refuse legacy malformed-block controls before any hardware action."""
+    raise Failed('--block-control is disabled pending an off-cascade UF2 recovery workflow;'
+                 ' BOOTSEL attachment is always refused, including with --bootsel-attach')
 
 
 def await_bootsel(run, args):

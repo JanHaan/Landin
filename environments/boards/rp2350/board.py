@@ -23,13 +23,11 @@ NEW_DIRECTORY:
      is at the start of flash, that the IMAGE_DEF block the boot ROM looks
      for follows it as the datasheet gives it, and that vector word 30 is
      the USBCTRL_IRQ handler;
-  2. with --block-control, flash a copy whose block's end marker is
-     flipped, cycle the power and require the boot ROM to refuse it and
-     enumerate as USB BOOTSEL, 2e8a:000f;
+  2. refuse --block-control: malformed images require an off-cascade UF2
+     recovery workflow, which this tool does not provide;
   3. flash the image with probe-rs, verify it, and read the vector table
-     and the block back; flashed from BOOTSEL, which only --bootsel-attach
-     allows, the power is cycled at once and the head read back from the
-     image the boot ROM entered (D712);
+     and the block back; BOOTSEL attachment is always refused, so install
+     the quiet fixed image by UF2 off the cascade before attaching;
   4. with the probe detached, cut the Pico 2's power and restore it, after
      checking that the probe's Arty is off the cascade, and wait for the
      hub to list again;
@@ -136,10 +134,7 @@ def corrupted(run, elf):
 
 
 def block_control(run, args, elf, head):
-    """The physical negative control: an image whose block is corrupted is
-    not booted, so the boot ROM falls back to USB BOOTSEL; then the good
-    image is flashed again, from BOOTSEL, which only --bootsel-attach
-    allows (D712)."""
+    """Disabled pending off-cascade UF2 recovery; no BOOTSEL probe attach."""
     pico2.require_leave(args)
     bad = corrupted(run, elf)
     _, device = pico2.corrupt(run, args, bad,
@@ -158,7 +153,7 @@ def flash(run, args, elf, head, what="the image's vector table and block"):
     attaches, and read HEAD back from the Arm image's cores, as pico2.flash
     does: a board the Hazard3 tool left running a RISC-V image refuses
     RP235x with a FAULT, and is flashed as RP235x_riscv and power-cycled
-    into this image; one in BOOTSEL is power-cycled at once (D712, D832).
+    into this image; BOOTSEL attachment is always refused (D712, D832).
     Returns the chip it flashed as."""
     return pico2.flash(run, args, elf, head, pico2.ARM_CHIP, what)
 
@@ -348,9 +343,8 @@ def main():
                         help='the slots a bridge this starts serves, every one of the probe')
     pico2.arguments(parser)
     parser.add_argument('--block-control', action='store_true',
-                        help='first flash an image whose block is corrupted and require the boot ROM'
-                             ' to refuse it, enumerating as BOOTSEL; then flash the good image, from'
-                             ' BOOTSEL, which needs --bootsel-attach')
+                        help='disabled pending an off-cascade UF2 recovery workflow;'
+                             ' BOOTSEL attachment is always refused')
     parser.add_argument('--indicator-pin', metavar='PIN',
                         help="the probe's GPIO wired to the Pico 2's GPIO3; without it the"
                              " indicator is checked by its pad's readback alone")

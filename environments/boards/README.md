@@ -82,8 +82,9 @@ remote Nix copy rejects it without a trusted signing key. On the Pi, point
 revision without opening a probe. The board tool checks these against its
 matching source before hardware access and refuses a stale helper.
 
-The probehive runtime needs its `scripts/dap_bridge.py`, `scripts/dap_udp.py`
-and `scripts/gpio.py`, and the loaded bitstream's
+The probehive runtime needs its `flake.nix` and `flake.lock` for the
+`#gpio` shell, `scripts/dap_bridge.py`, `scripts/dap_udp.py` and
+`scripts/gpio.py`, and the loaded bitstream's
 `build/slots_ci/generated/rig.json` and `csr.json`. GPIO uses its lightweight
 `#gpio` shell, available on arm64 and x86-64, rather than the FPGA shell.
 Prepare that environment before holding the rig lock:

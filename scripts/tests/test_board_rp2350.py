@@ -191,46 +191,18 @@ class Control(unittest.TestCase):
     def readback(self, head):
         return head
 
-    def control(self, after, bootsel_attach=True):
-        head = self.head()
-        bad = head[:-4] + struct.pack('<I', 0xab123579 ^ 0xffffffff)
-        run = Recorded(**answers(**{'flash-readback': self.readback(bad),
-                                    'hub-after-corrupt': after}))
-        args = paced_args(run, bootsel_attach=bootsel_attach)
-        with tempfile.TemporaryDirectory() as out:
-            path = Path(out) / 'board.elf'
-            path.write_bytes(image(BOARD.IMAGE_DEF))
-            run.out = Path(out)
-            with mock.patch.object(BOARD.time, 'sleep'):
-                return run, BOARD.block_control(run, args, path, head)
-
-    def test_a_refused_block_leaves_the_board_in_bootsel(self):
-        run, verdict = self.control([QUIET, BOOTSEL])
-        self.assertEqual(verdict['enumerated'], '2e8a:000f Raspberry Pi RP2350 ' + SERIAL)
-        self.assertEqual(run.calls, ['hub-before-attach', 'attach-RP235x', 'before download',
-                                     'flash', 'after download', 'hub-status', 'power-cycle',
-                                     'after power cycle at once', 'hub-wait', 'probe-ping',
-                                     'hub-after-corrupt', 'hub-after-corrupt'])
-
-    def test_the_corrupted_image_s_download_is_cycled_before_anything_reaches_the_chip(self):
-        # D832: probe-rs's RP235x reset leaves BOOTSEL's USB on the bus with
-        # its core halted, so the cycle comes straight after the download,
-        # unpaced but recorded, and no probe-rs attaches or reads the chip
-        # from the download to the end of the control.
-        run, _ = self.control([QUIET, BOOTSEL])
-        after = run.calls[run.calls.index('after download') + 1:]
-        self.assertEqual(after[:3], ['hub-status', 'power-cycle', 'after power cycle at once'])
-        self.assertNotIn('before power cycle', run.calls)
-        self.assertFalse([c for c in after if 'attach' in c or 'read' in c or c == 'flash'])
-
-    def test_a_board_that_boots_the_corrupted_image_fails_the_control(self):
-        with self.assertRaisesRegex(BOARD.Failed, 'did not enumerate as BOOTSEL'):
-            self.control([QUIET])
-
-    def test_the_control_needs_leave_to_attach_in_bootsel(self):
-        # D712: the good image is flashed again from BOOTSEL.
-        with self.assertRaisesRegex(BOARD.Failed, '--bootsel-attach'):
-            self.control([BOOTSEL], bootsel_attach=False)
+    def test_malformed_block_controls_refuse_before_any_file_or_hardware_action(self):
+        for allowed in (False, True):
+            with self.subTest(bootsel_attach=allowed):
+                run = Recorded()
+                args = SimpleNamespace(bootsel_attach=allowed)
+                with mock.patch.object(BOARD, 'corrupted') as corrupt:
+                    with self.assertRaisesRegex(BOARD.Failed, 'disabled pending an off-cascade UF2'):
+                        BOARD.block_control(run, args, 'missing.elf', b'')
+                    corrupt.assert_not_called()
+                with self.assertRaisesRegex(BOARD.Failed, 'BOOTSEL attachment is always refused'):
+                    BOARD.pico2.corrupt(run, args, 'missing.elf', b'', 'bad image')
+                self.assertEqual(run.calls, [])
 
     def test_even_explicit_bootsel_attach_is_refused_before_any_probe_command(self):
         run = Recorded(**answers(**{'hub-before-attach': BOOTSEL}))
@@ -274,7 +246,7 @@ class Control(unittest.TestCase):
         with self.assertRaisesRegex(BOARD.Failed, 'enumerates as BOOTSEL'):
             BOARD.flash(run, paced_args(run), 'board.elf', self.head())
         self.assertEqual(run.calls, ['hub-before-attach'])
-        # Allowed to attach, it never reads back while BOOTSEL still shows.
+        # The obsolete override cannot bypass the BOOTSEL guard.
         run = Recorded(**answers(**{'hub-before-attach': BOOTSEL}))
         with mock.patch.object(BOARD.time, 'sleep'), \
                 self.assertRaisesRegex(BOARD.Failed, 'enumerates as BOOTSEL'):
