@@ -83,6 +83,7 @@ def console_order(test, board, built, *, mode='ram', hazard=False):
         lock.acquire.return_value = lock
         console = mock.Mock(received=b'', sent=b'')
         console.close.side_effect = lambda: events.append('close')
+        pace = board.common.Pace(state=Path(tmp) / 'pace', kernel=lambda _: [])
         argv = ['board.py', '--mode=' + mode, '--refine=refine', '--ram-loader=loader',
                 '--probe-rs=probe', '--nm=nm', '--objdump=objdump',
                 '--probehive=' + tmp, '--output=' + tmp + '/run', '--cascade=1-1']
@@ -96,7 +97,7 @@ def console_order(test, board, built, *, mode='ram', hazard=False):
             patch(board.sys, 'argv', new=argv)
             patch(board.common, 'board_preflight')
             patch(board.common, 'place_hubs')
-            patch(board.common, 'Pace')
+            patch(board.common, 'Pace', return_value=pace)
             patch(board.common, 'rig_lock', return_value=lock)
             patch(board.common, 'shared_bridge', return_value=(None, {}))
             patch(board.common, 'TcpConsole', side_effect=lambda *_:
@@ -117,6 +118,10 @@ def console_order(test, board, built, *, mode='ram', hazard=False):
                 patch(board.pico2, 'boot_location')
                 patch(board.pico2, 'refuse_bootsel')
             test.assertEqual(board.main(), 0)
+            evidence = json.loads((Path(tmp) / 'run/result.json').read_text())['kernel_usb']
+            test.assertEqual(evidence['status'], 'captured')
+            test.assertEqual(evidence['lines'], [])
+            test.assertGreaterEqual(evidence['until'], evidence['since'])
         if mode == 'ram':
             test.assertLess(events.index('load'), events.index('console'))
             test.assertNotIn('power', events)
@@ -229,11 +234,16 @@ class Oracle(unittest.TestCase):
                 events.append('build')
                 return elf, b'', 0, {}
             console = mock.Mock(received=b'', sent=b'')
+            pace = BOARD.common.Pace(state=Path(tmp) / 'pace', kernel=lambda _: [])
+            description = SimpleNamespace(returncode=0, stderr='', stdout=json.dumps(dict(
+                protocol_version=1, probe_rs_revision=BOARD.common.HELPER_PROBE_REVISION,
+                source_sha256=BOARD.common.sha(ROOT / 'environments/boards/ram-run/main.rs'))))
             argv = ['board.py', '--refine=refine', '--ram-loader=loader', '--probe-rs=probe',
                     '--nm=nm', '--probehive=' + tmp, '--output=' + tmp + '/run', '--cascade=1-1']
             with mock.patch.object(BOARD.sys, 'argv', argv), \
+                    mock.patch.object(BOARD.common.subprocess, 'run', return_value=description), \
                     mock.patch.object(BOARD.common, 'place_hubs'), \
-                    mock.patch.object(BOARD.common, 'Pace'), \
+                    mock.patch.object(BOARD.common, 'Pace', return_value=pace), \
                     mock.patch.object(BOARD.common, 'rig_lock', return_value=lock), \
                     mock.patch.object(BOARD, 'build', side_effect=build), \
                     mock.patch.object(BOARD, 'flash') as flash, \

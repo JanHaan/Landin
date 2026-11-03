@@ -442,6 +442,8 @@ def restore(probe, image, offset, tries=20):
     for attempt in range(tries):
         try:
             return probe.download_bin(image, offset)
+        except common.USBGuardError:
+            raise
         except Failed:
             if attempt == tries - 1:
                 raise
@@ -573,7 +575,8 @@ def run_board(chip, args, console_for, cycle, settle):
         result['status'] = 'passed'
     except (Failed, subprocess.TimeoutExpired, OSError) as error:
         result['failure'] = str(error)
-        if lock.file and names and not any(USB in str(error) for USB in ('USB trouble', 'HC died')):
+        if lock.file and names and not isinstance(error, common.USBGuardError) \
+                and not any(USB in str(error) for USB in ('USB trouble', 'HC died')):
             # A failed run keeps what the unhandled entry recorded, if the
             # probe still reaches the chip.
             try:
@@ -586,6 +589,7 @@ def run_board(chip, args, console_for, cycle, settle):
         if lock.file:
             common.finish_boot(args, result, lambda: restore_fixed(
                 run, args, chip, probe, console_for, cycle, settle))
+        common.retain_kernel_usb(args.pace, result)
         lock.release()
         if console:
             console.close()

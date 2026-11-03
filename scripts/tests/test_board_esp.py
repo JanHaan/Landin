@@ -427,6 +427,14 @@ class PowerOn(unittest.TestCase):
 
 
 class Restore(unittest.TestCase):
+    def test_usb_guard_failure_is_never_retried(self):
+        probe = mock.Mock()
+        probe.download_bin.side_effect = COMMON.USBGuardError('xhci_hcd: HC died')
+        with mock.patch.object(ESP.time, 'sleep') as sleep, \
+                self.assertRaisesRegex(COMMON.USBGuardError, 'HC died'):
+            ESP.restore(probe, 'board.elf.bin', 0x2000)
+        probe.download_bin.assert_called_once()
+        sleep.assert_not_called()
     def test_resident_readiness_is_checked_after_the_cold_boot_log(self):
         events, proof = [], dict(value=COMMON.FIXED_READY_MAGIC)
         probe = mock.Mock()

@@ -19,6 +19,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / 'environments/boards'))
 SPEC = importlib.util.spec_from_file_location('common', ROOT / 'environments/boards/common.py')
 COMMON = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(COMMON)
@@ -295,6 +296,68 @@ class ResidentReadiness(unittest.TestCase):
             COMMON.finish_boot(args, result, lambda: None)
             self.assertEqual(result['fixed_restore']['status'], 'pending')
             self.assertEqual(result['status'], 'failed')
+
+
+class HelperIdentity(unittest.TestCase):
+    def identity(self):
+        return dict(protocol_version=1,
+            source_sha256=COMMON.sha(ROOT / 'environments/boards/ram-run/main.rs'),
+            probe_rs_revision=COMMON.HELPER_PROBE_REVISION)
+
+    def test_matching_helper_is_described_without_a_probe_or_plan(self):
+        args = SimpleNamespace(ram_loader=Path('/helper with spaces'))
+        reply = SimpleNamespace(returncode=0, stdout=json.dumps(self.identity()), stderr='')
+        with mock.patch.object(COMMON.subprocess, 'run', return_value=reply) as describe:
+            self.assertEqual(COMMON.verify_ram_helper(args), self.identity())
+        describe.assert_called_once_with(['/helper with spaces', '--describe'],
+            capture_output=True, text=True, timeout=10)
+        self.assertEqual(args.helper_identity, self.identity())
+        self.assertEqual(args.helper_source_sha256, self.identity()['source_sha256'])
+
+    def test_stale_and_malformed_helpers_name_the_rebuild_command(self):
+        valid = self.identity()
+        for broken in ('not JSON', '[]', json.dumps(dict(valid, protocol_version=True)),
+                json.dumps(dict(valid, source_sha256='old source')),
+                json.dumps(dict(valid, probe_rs_revision='another fork'))):
+            with self.subTest(metadata=broken), \
+                    mock.patch.object(COMMON.subprocess, 'run', return_value=SimpleNamespace(
+                        returncode=0, stdout=broken, stderr='')):
+                with self.assertRaisesRegex(COMMON.Failed, r'nix build .*board-ram-run'):
+                    COMMON.verify_ram_helper(SimpleNamespace(ram_loader='loader'))
+
+    def test_missing_timed_out_and_failed_describe_are_clear_preflight_failures(self):
+        for error in (FileNotFoundError('missing helper'),
+                      COMMON.subprocess.TimeoutExpired('loader', 10)):
+            with self.subTest(error=error), mock.patch.object(COMMON.subprocess, 'run', side_effect=error):
+                with self.assertRaisesRegex(COMMON.Failed, 'cannot describe SRAM helper.*rebuild'):
+                    COMMON.verify_ram_helper(SimpleNamespace(ram_loader='loader'))
+        reply = SimpleNamespace(returncode=2, stdout='', stderr='unknown option --describe')
+        with mock.patch.object(COMMON.subprocess, 'run', return_value=reply), \
+                self.assertRaisesRegex(COMMON.Failed, 'unknown option.*rebuild'):
+            COMMON.verify_ram_helper(SimpleNamespace(ram_loader='loader'))
+
+    def test_preflight_verifies_every_ram_and_rp_boot_helper_after_flag_validation(self):
+        reply = SimpleNamespace(returncode=0, stdout=json.dumps(self.identity()), stderr='')
+        with tempfile.TemporaryDirectory() as tmp:
+            fixed = Path(tmp) / 'fixed.elf'
+            fixed.write_bytes(b'fixed')
+            for mode in ('ram', 'boot'):
+                for board in ('rp2040', 'rp2350', 'rp2350_hazard3', 'stm32h753', 'esp32c3', 'esp32c5'):
+                    args = SimpleNamespace(mode=mode, ram_loader='loader', bundle=None,
+                        refine='refine', fixed_image=fixed, record=None)
+                    with self.subTest(mode=mode, board=board), \
+                            mock.patch.object(COMMON.subprocess, 'run', return_value=reply) as describe, \
+                            mock.patch.object(COMMON, 'validate_fixed_image'), \
+                            mock.patch.object(COMMON, 'fixed_elf', return_value=fixed), \
+                            mock.patch.object(COMMON, 'fixed_marker_address'):
+                        COMMON.board_preflight(args, board)
+                        self.assertEqual(describe.call_count, int(mode == 'ram' or board.startswith('rp')))
+            args = SimpleNamespace(mode='ram', ram_loader='loader', bundle=None,
+                                   refine='refine', recover=True)
+            with mock.patch.object(COMMON.subprocess, 'run') as describe:
+                with self.assertRaisesRegex(COMMON.Failed, 'require --mode=boot'):
+                    COMMON.board_preflight(args, 'rp2040')
+                describe.assert_not_called()
 
 
 class Probes(unittest.TestCase):
@@ -598,6 +661,12 @@ class Pins(unittest.TestCase):
 
 
 class Records(unittest.TestCase):
+    def test_record_retains_the_actual_kernel_usb_evidence(self):
+        evidence = dict(since=1.0, until=2.0, status='captured',
+                        lines=[dict(time=1.5, text='usb target disconnected')])
+        result = dict(status='passed', frames=[], kernel_usb=evidence)
+        self.assertEqual(COMMON.record(result, ('status',), b'', [], ())['kernel_usb'], evidence)
+
     def test_a_record_keeps_the_boot_frames_and_the_last(self):
         result = dict(status='passed', image_sha256='ab', extra=1,
                       frames=[dict(tag='b', r='1'), dict(tag='t', h='1'), dict(tag='t', h='2')])
@@ -685,7 +754,7 @@ class Pace(unittest.TestCase):
             clock[0] += seconds
         options = {} if spacing is None else dict(spacing=spacing, quiet=quiet)
         pace = COMMON.Pace(state=Path(tmp) / 'rig.pace',
-                           kernel=lambda seconds: [l for l in lines if l[0] >= clock[0] - seconds],
+                           kernel=lambda seconds: [l for l in lines if clock[0] - seconds <= l[0] <= clock[0]],
                            clock=lambda: clock[0], sleep=sleep, report=lambda text: None,
                            **options)
         return pace, clock, waited
@@ -753,6 +822,107 @@ class Pace(unittest.TestCase):
                 COMMON.paced(pace, 'power cycle', fails)
             self.assertEqual(pace.last(), clock[0])
             self.assertEqual(COMMON.paced(pace, 'download', lambda: 'done'), 'done')
+
+    def test_usb_errors_during_an_action_never_advance_or_allow_another_action(self):
+        for action_fails in (False, True):
+            with self.subTest(action_fails=action_fails), tempfile.TemporaryDirectory() as tmp:
+                lines = []
+                pace, clock, _ = self.pace(tmp, lines, spacing=0, quiet=0)
+                pace.state.write_text('900.0 previous action\n')
+                def action():
+                    lines.append((1001.0, 'xhci_hcd: HC died'))
+                    clock[0] = 1002.0
+                    if action_fails:
+                        raise COMMON.Failed('download failed')
+                    return 'done'
+                with self.assertRaisesRegex(COMMON.USBGuardError, 'HC died') as caught:
+                    COMMON.paced(pace, 'download', action)
+                if action_fails:
+                    self.assertIn('download failed', str(caught.exception))
+                self.assertEqual(pace.state.read_text(), '900.0 previous action\n')
+                with self.assertRaises(COMMON.USBGuardError):
+                    COMMON.paced(pace, 'power cycle', lambda: self.fail('guard retried hardware'))
+                self.assertEqual(pace.state.read_text(), '900.0 previous action\n')
+
+    def test_cancellation_checks_completion_without_hiding_the_interrupt(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            lines = []
+            pace, clock, _ = self.pace(tmp, lines, spacing=0, quiet=0)
+            def cancel():
+                lines.append((1001.0, 'xhci_hcd: HC died'))
+                clock[0] = 1002.0
+                raise KeyboardInterrupt()
+            with self.assertRaises(KeyboardInterrupt) as caught:
+                COMMON.paced(pace, 'download', cancel)
+            self.assertIsInstance(caught.exception.__cause__, COMMON.USBGuardError)
+            self.assertEqual(pace.last(), 0.0)
+
+    def test_scan_end_covers_concurrent_lines_without_advancing_the_saved_timestamp(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            pace, _, _ = self.pace(tmp, [], spacing=0, quiet=0)
+            pace.kernel = lambda _: [(1000.5, 'usb target connected during journal scan')]
+            pace.after('load')
+            self.assertEqual(pace.last(), 1000.0)
+            self.assertEqual(pace.evidence()['until'], 1000.5)
+
+    def test_snapshot_collects_only_run_lines_deduplicates_and_keeps_late_lines(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            lines = [(999.0, 'usb old event'), (1001.0, 'usb target disconnected')]
+            pace, clock, _ = self.pace(tmp, lines, spacing=0, quiet=0)
+            clock[0] = 1002.0
+            pace.before('load')
+            pace.after('load')
+            pace.before('read')
+            lines.append((1003.0, 'usb target connected'))
+            clock[0] = 1004.0
+            result = dict(status='passed')
+            COMMON.retain_kernel_usb(pace, result)
+            self.assertEqual(result['status'], 'passed')
+            self.assertEqual(result['kernel_usb'], dict(since=1000.0, until=1004.0,
+                status='captured', lines=[dict(time=1001.0, text='usb target disconnected'),
+                                         dict(time=1003.0, text='usb target connected')]))
+
+    def test_final_usb_failure_preserves_the_original_and_blocks_restoration(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            lines = []
+            pace, clock, _ = self.pace(tmp, lines, spacing=0, quiet=0)
+            pace.after('load')
+            lines.append((1001.0, 'usb descriptor read error -71'))
+            clock[0] = 1002.0
+            result = dict(status='failed', failure='original scenario failure')
+            COMMON.retain_kernel_usb(pace, result)
+            self.assertEqual(result['status'], 'failed')
+            self.assertIn('original scenario failure', result['failure'])
+            self.assertIn('error -71', result['failure'])
+            self.assertEqual(result['kernel_usb']['lines'], [dict(time=1001.0, text=lines[0][1])])
+            self.assertEqual(pace.last(), 1000.0)
+            restore = mock.Mock()
+            COMMON.finish_boot(SimpleNamespace(mode='boot', pace=pace), result, restore)
+            restore.assert_not_called()
+
+    def test_unreadable_journal_stops_completion_and_preserves_existing_failure(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            pace, _, _ = self.pace(tmp, [], spacing=0, quiet=0)
+            pace.state.write_text('900.0 previous action\n')
+            pace.kernel = mock.Mock(side_effect=OSError('journal unavailable'))
+            with self.assertRaisesRegex(COMMON.USBGuardError, 'journal unavailable'):
+                pace.after('load')
+            self.assertEqual(pace.last(), 900.0)
+            result = dict(status='failed', failure='the build failed')
+            COMMON.retain_kernel_usb(pace, result)
+            self.assertIn('the build failed', result['failure'])
+            self.assertEqual(result['kernel_usb']['status'], 'failed')
+
+    def test_a_late_usb_error_turns_a_pass_into_failure(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            lines = []
+            pace, clock, _ = self.pace(tmp, lines, spacing=0, quiet=0)
+            lines.append((1001.0, 'xhci_hcd: HC died'))
+            clock[0] = 1002.0
+            result = dict(status='passed')
+            COMMON.retain_kernel_usb(pace, result)
+            self.assertEqual(result['status'], 'failed')
+            self.assertIn('HC died', result['failure'])
 
     def test_a_guarded_paced_action_waits_for_nothing_while_the_arty_is_away(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -1005,9 +1175,16 @@ class RamRuns(unittest.TestCase):
         for text in ('xhci_hcd: HC died', 'host controller timeout', 'controller timed out',
                      'xHCI host controller not responding'):
             self.assertRegex(text, COMMON.USB_TROUBLE)
-        journal = SimpleNamespace(stdout='1.0 brcmfmac: firmware error -2\n2.0 xhci_hcd: HC died\n')
+        journal = SimpleNamespace(returncode=0, stderr='',
+            stdout='1.0 brcmfmac: firmware error -2\n2.0 xhci_hcd: HC died\n')
         with mock.patch.object(COMMON.subprocess, 'run', return_value=journal):
             self.assertEqual(COMMON.kernel_usb_lines(3), [(2.0, 'xhci_hcd: HC died')])
+
+    def test_failed_kernel_reader_is_not_empty_usb_evidence(self):
+        journal = SimpleNamespace(returncode=1, stderr='permission denied', stdout='')
+        with mock.patch.object(COMMON.subprocess, 'run', return_value=journal), \
+                self.assertRaisesRegex(COMMON.Failed, 'kernel USB journal.*permission denied'):
+            COMMON.kernel_usb_lines(3)
 
 
 if __name__ == '__main__':

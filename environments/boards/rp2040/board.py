@@ -401,6 +401,7 @@ def main():
             result['frames'] = common.frame_record(bytes(console.received))
         if lock and lock.file:
             common.finish_boot(args, result, lambda: restore_fixed(run, args))
+        common.retain_kernel_usb(args.pace, result)
         if bridge:
             bridge.close()
         if lock:

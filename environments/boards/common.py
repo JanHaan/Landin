@@ -73,6 +73,10 @@ class Failed(Exception):
     pass
 
 
+class USBGuardError(Failed):
+    """A USB stop that must never be treated as a retryable probe failure."""
+
+
 def require(condition, message):
     if not condition:
         raise Failed(message)
@@ -237,6 +241,9 @@ class Pace:
         self.kernel = kernel or kernel_usb_lines
         self.clock, self.sleep = clock, sleep
         self.report = report or (lambda text: print(text, file=sys.stderr, flush=True))
+        self.started = self.until = self.clock()
+        self.usb_lines = set()
+        self.blocked = None
 
     def last(self):
         try:
@@ -244,24 +251,44 @@ class Pace:
         except (OSError, ValueError, IndexError):
             return 0.0
 
-    def before(self, what):
+    def check(self, what, now=None):
+        """Retain this run's USB delta and stop on unacknowledged trouble."""
+        now = self.clock() if now is None else now
         last = self.last()
-        trouble = [text for when, text in self.kernel(max(1, int(self.clock() - last) + 1))
+        self.until = max(self.until, now)
+        try:
+            lines = self.kernel(max(1, int(now - min(last, self.started)) + 1))
+        except (Failed, OSError, subprocess.TimeoutExpired) as error:
+            self.blocked = self.blocked or 'cannot read the kernel USB journal: %s' % error
+            raise USBGuardError(self.blocked) from error
+        self.usb_lines.update((when, text) for when, text in lines if when >= self.started)
+        self.until = max(self.until, max((when for when, _ in self.usb_lines), default=now))
+        trouble = [text for when, text in lines
                    if when >= last and USB_TROUBLE.search(text)]
         if trouble:
-            raise Failed('the kernel logged USB trouble since the last action; stopping before'
+            self.blocked = self.blocked or ('the kernel logged USB trouble since the last action; stopping before'
                          ' %s: %s.  Once its cause is known and the rig is quiet,'
                          ' `python3 environments/boards/common.py acknowledge REASON` lets the'
                          ' next action go' % (what, trouble[0]))
+        if self.blocked:
+            raise USBGuardError(self.blocked)
+        return lines
+
+    def before(self, what):
+        self.check(what)
+        last = self.last()
         if self.spacing <= 0 and self.quiet <= 0:
             return
         began = self.clock()
         while True:
             now = self.clock()
-            require(now - began < self.limit, 'the kernel kept logging USB lines for %g s;'
+            lines = self.check(what, now)
+            if now - began >= self.limit:
+                self.blocked = ('the kernel kept logging USB lines for %g s;'
                     ' stopping before %s: a device on the cascade keeps resetting' % (self.limit, what))
+                raise USBGuardError(self.blocked)
             wait = max(last + self.spacing - now, 0)
-            recent = [when for when, _ in self.kernel(self.quiet)] if self.quiet > 0 else []
+            recent = [when for when, _ in lines if when >= now - self.quiet] if self.quiet > 0 else []
             if recent:
                 wait = max(wait, max(recent) + self.quiet - now)
             if wait <= 0:
@@ -270,30 +297,68 @@ class Pace:
             self.sleep(min(wait, 30))
 
     def after(self, what):
+        # Commit the checked timestamp, never a later timestamp that could
+        # hide an error logged between the scan and the state write.
+        completed = self.clock()
+        self.check('completion of ' + what, completed)
+        self._save(what, completed)
+
+    def _save(self, what, when):
         self.state.parent.mkdir(parents=True, exist_ok=True)
-        self.state.write_text('%f %s\n' % (self.clock(), what))
+        self.state.write_text('%f %s\n' % (when, what))
+
+    def evidence(self):
+        out = dict(since=self.started, until=self.until,
+                   lines=[dict(time=when, text=text) for when, text in sorted(self.usb_lines)],
+                   status='failed' if self.blocked else 'captured')
+        if self.blocked:
+            out['error'] = self.blocked
+        return out
 
     def acknowledge(self, reason):
         """Record that the USB trouble the kernel logged before now is
         understood, for REASON: only trouble logged after it stops a run,
         and a spacing, when the pace has one, counts from now (D835)."""
         require(reason.strip(), 'say why the trouble is understood')
-        self.after('acknowledged: ' + ' '.join(reason.split()))
+        self._save('acknowledged: ' + ' '.join(reason.split()), self.clock())
+        self.blocked = None
 
 
 def paced(pace, what, action, guard=None, cascade=None):
     """ACTION, which may disconnect a device on the rig's hub cascade, taken
     only while PACE finds no USB trouble since the last such action on the
-    host, and recorded as the last even when it fails; with GUARD,
+    host, with a completion check before recording it as the last even
+    when ACTION fails; a USB failure never advances that record. With GUARD,
     a USB serial, only while that device is present and off CASCADE, as
     the probe's Arty must be (D725)."""
     if guard:
         off_cascade(guard, cascade)
     pace.before(what)
     try:
-        return action()
-    finally:
+        result = action()
+    except BaseException as original:
+        try:
+            pace.after(what)
+        except (Failed, OSError, subprocess.TimeoutExpired) as completion:
+            if not isinstance(original, Exception):
+                raise original from completion
+            failure = USBGuardError if isinstance(completion, USBGuardError) else Failed
+            raise failure('%s; action completion: %s' % (original, completion)) from original
+        raise
+    else:
         pace.after(what)
+        return result
+
+
+def retain_kernel_usb(pace, result):
+    """Final read-only guard/evidence capture; preserve an earlier failure."""
+    try:
+        pace.check('run completion')
+    except (Failed, OSError, subprocess.TimeoutExpired) as error:
+        result['status'] = 'failed'
+        previous = result.get('failure', '')
+        result['failure'] = previous if str(error) in previous else (previous + '; ' if previous else '') + str(error)
+    result['kernel_usb'] = pace.evidence()
 
 
 def pace_arguments(parser):
@@ -308,8 +373,10 @@ def pace_arguments(parser):
 
 def kernel_usb_lines(seconds):
     """The kernel's USB lines of the last SECONDS, as (unix time, text)."""
-    found = subprocess.run(['journalctl', '-k', '--since', '-%ds' % seconds, '--no-pager',
-                            '-o', 'short-unix'], capture_output=True, text=True).stdout
+    journal = subprocess.run(['journalctl', '-k', '--since', '-%ds' % seconds, '--no-pager',
+                              '-o', 'short-unix'], capture_output=True, text=True)
+    require(journal.returncode == 0, 'cannot read the kernel USB journal: ' + journal.stderr.strip())
+    found = journal.stdout
     lines = []
     for line in found.splitlines():
         fields = line.split(None, 1)
@@ -359,6 +426,38 @@ def firmware_layout(args):
     return ['--firmware-layout=ram'] if getattr(args, 'mode', 'boot') == 'ram' else []
 
 
+HELPER_PROBE_REVISION = '6f9946fe748edd0e55604dc42bc0f7ea3e7485da'
+
+
+def verify_ram_helper(args):
+    """Describe the installed executable without opening a probe."""
+    rebuild = ('rebuild from this source with `nix build .#board-ram-run`'
+        ' (or `nix build .#board-ram-run-rigpi` on epycmicro for rigpi),'
+        ' then select the rebuilt bin/landin-ram-run with --ram-loader;'
+        ' see environments/boards/README.md')
+    try:
+        described = subprocess.run([str(args.ram_loader), '--describe'],
+            capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise Failed('cannot describe SRAM helper %s: %s; %s' % (args.ram_loader, error, rebuild)) from error
+    require(described.returncode == 0,
+            'SRAM helper --describe failed: %s; %s' % (described.stderr.strip(), rebuild))
+    try:
+        identity = json.loads(described.stdout)
+    except (ValueError, TypeError) as error:
+        raise Failed('SRAM helper --describe returned invalid JSON; ' + rebuild) from error
+    expected = dict(protocol_version=1, source_sha256=sha(Path(__file__).parent / 'ram-run/main.rs'),
+                    probe_rs_revision=HELPER_PROBE_REVISION)
+    require(isinstance(identity, dict), 'SRAM helper metadata is not an object; ' + rebuild)
+    for field, value in expected.items():
+        require(type(identity.get(field)) is type(value) and identity.get(field) == value,
+                'stale or incompatible SRAM helper: %s is %r, expected %r; %s'
+                % (field, identity.get(field), value, rebuild))
+    args.helper_identity = identity
+    args.helper_source_sha256 = expected['source_sha256']
+    return identity
+
+
 def board_preflight(args, board):
     """Pure preflight, before taking the lock or touching USB."""
     if board.startswith('rp'):
@@ -386,6 +485,8 @@ def board_preflight(args, board):
         fixed_marker_address(fixed_elf(args, board))
         require(not getattr(args, 'block_control', False),
                 'Pico 2 corrupt controls require physical off-cascade UF2 recovery; no probe attaches in BOOTSEL')
+    if args.mode == 'ram' or board.startswith('rp'):
+        verify_ram_helper(args)
 
 
 def validate_fixed_image(image, board):
@@ -1470,6 +1571,8 @@ def record(result, kept, sent, commands, keep_tags):
     SENT, the frames tagged one of KEEP_TAGS and the last frame, and the
     name of every command it ran."""
     out = {k: result[k] for k in kept}
+    if 'kernel_usb' in result:
+        out['kernel_usb'] = result['kernel_usb']
     out['sent_sha256'] = hashlib.sha256(bytes(sent)).hexdigest()
     out['frames'] = [f for f in result['frames'] if f['tag'] in keep_tags] + result['frames'][-1:]
     out['commands'] = [c['name'] for c in commands]

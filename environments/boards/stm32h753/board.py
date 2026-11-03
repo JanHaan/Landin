@@ -628,6 +628,7 @@ def main():
                                               echo_of(bytes(console.received)))
         if lock.file:
             common.finish_boot(args, result, lambda: restore_fixed(run, args))
+        common.retain_kernel_usb(args.pace, result)
         lock.release()
         result['seconds'] = round(time.monotonic() - began, 3)
         result['commands'] = run.commands
