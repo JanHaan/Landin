@@ -447,6 +447,16 @@ class Restore(unittest.TestCase):
             ESP.restore(Fake(), 'board.elf.bin', 0x2000, tries=4)
 
 
+class Console(unittest.TestCase):
+    def test_a_c3_run_without_a_bridge_or_probehive_is_refused_before_it_flashes(self):
+        board = load('board_esp32c3', 'environments/boards/esp32c3/board.py')
+        args = SimpleNamespace(uart_port=4461, slot=2, probehive=None)
+        self.assertRegex(board.unserved(args, lambda port: False), 'port 4463.*--probehive')
+        self.assertIsNone(board.unserved(args, lambda port: port == 4463))
+        args.probehive = Path('/src/probehive')
+        self.assertIsNone(board.unserved(args, lambda port: False))
+
+
 class Paced(unittest.TestCase):
     def test_nothing_is_done_while_the_arty_is_on_the_cascade(self):
         done = []

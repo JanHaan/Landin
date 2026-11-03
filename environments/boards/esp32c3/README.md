@@ -56,7 +56,8 @@ board's J-Link, front port 8), and probehive slot 2's UART, port 4463.
 ```sh
 python3 environments/boards/esp32c3/board.py \
     --refine compiler/ada/build/nix-x86_64-linux/debug/bin/refine \
-    --probe-rs PATH/TO/probe-rs --image-control --output NEW_DIRECTORY
+    --probehive ~/src/probehive --probe-rs PATH/TO/probe-rs \
+    --image-control --output NEW_DIRECTORY
 ```
 
 The output holds the ELF, `board.elf.bin` (the image refine wrote), the

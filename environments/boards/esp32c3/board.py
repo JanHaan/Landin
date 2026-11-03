@@ -3,7 +3,7 @@
 through its ROM and check its trace against the physical oracle.
 
     python3 environments/boards/esp32c3/board.py --refine REFINE \
-        --probe-rs PROBE_RS --output NEW_DIRECTORY
+        --probehive PROBEHIVE --probe-rs PROBE_RS --output NEW_DIRECTORY
 
 A developer tool, not a compiler dependency: refine builds the image at
 --level=rv32imc through devices/descriptions/esp32c3, and this checks what
@@ -59,6 +59,19 @@ class C3(esp.Chip):
         return dict(b=x, h=(x << 8) | y, w=(x << 24) | (y << 16) | (y << 8) | x)
 
 
+def unserved(args, listening=common.listening):
+    """Why the run could not reach its console, or None: no bridge serves
+    the slot's UART and none can be started without --probehive.  Asked
+    before anything is built or flashed, so that a run is not refused with
+    the board already holding a control's image."""
+    port = args.uart_port + args.slot
+    if listening(port) or args.probehive:
+        return None
+    return ('no bridge serves port %d, slot %d\'s UART: name a probehive checkout with'
+            ' --probehive for the tool to start one, or start its scripts/dap_bridge.py'
+            % (port, args.slot))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -81,6 +94,8 @@ def main():
     # --hub-group (D836).
     common.rerun_in_group(args.hub_group)
     common.place_hubs(parser, args, 'hub')
+    if unserved(args):
+        parser.error(unserved(args))
     esp.required_tools(args)
     chip = C3()
 
