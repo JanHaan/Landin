@@ -1161,7 +1161,8 @@ package body Landin.Tests.Cortex_Suite is
             begin
                Landin.Testing.Check_Equal
                  (Item, Result.Status, Landin.Driver.Status_Success,
-                  "Cortex frame variant emits" & Mode'Image);
+                  "Cortex frame variant emits" & Mode'Image & ": "
+                    & U.To_String (Result.Report));
                if Result.Status = Landin.Driver.Status_Success then
                   declare
                      Text : constant String :=
@@ -1169,6 +1170,10 @@ package body Landin.Tests.Cortex_Suite is
                      Report : constant String :=
                        Landin.Testing.Fakes.Written (Host, "build.json");
                   begin
+                     Landin.Testing.Check
+                       (Item, Ada.Strings.Fixed.Index
+                          (Report, """firmware"":") = 0,
+                        "a routine-only report has no firmware layout");
                      case Mode is
                         when 1 =>
                            declare

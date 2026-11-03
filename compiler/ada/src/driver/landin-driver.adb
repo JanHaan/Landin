@@ -2922,6 +2922,8 @@ package body Landin.Driver is
                if Report_Seen and then not Landin.Stages.Failed (Context) then
                   if On_Firmware
                     and then Emit in Emit_Linker_Script | Emit_Assembly
+                    and then Landin.IR.Firmware_Profile
+                      (Landin.Stages.Code (Context).all).Present
                   then
                      Firmware := Unbounded.To_Unbounded_String
                        (Landin.Build_Reports.Firmware.Limits
