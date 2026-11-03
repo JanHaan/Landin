@@ -16753,9 +16753,11 @@ implements the form.
 
 **Chosen:** an instance's address is valid while its thread runs, and every
 frame of that thread is inside that time, so the origin rules treat it as a
-module binding's: `addr`, an `inout` argument, a pointer kept in a local or
-in another of the thread's instances, and a result that returns it are all
-admitted as they are for module storage, and no new refusal applies. What
+module binding's: `addr`, an `inout` argument, a pointer kept in a local,
+and a result that returns it are all admitted as they are for module
+storage, and no new refusal applies. The thread's instances can keep the
+address only as an integer, since thread storage holds no pointer and no
+pointer union (L0328). What
 outlives the thread is another thread's storage or memory a thread hands
 another, and a pointer there is the program's to keep valid, as D446 leaves
 every reference shared with a thread to the program. A module binding can
