@@ -29,9 +29,11 @@ the USB device it belongs to, and the hub port that is switched. The tool
 switches only `--port` on `--hub`, and only after `uhubctl` shows that serial
 on that port and while the device with `--guard-serial`, the probe's Arty
 on the maintainer's rig, is present and not on `--cascade`; the port is
-switched off and on in one `uhubctl -a cycle`, run through
-`/run/wrappers/bin/sg GROUP -c`, `--hub-group`, `dialout` by default, when
-the session is not in that group. On the maintainer's rig the ST-LINK's
+switched off and on in one `uhubctl -a cycle`. The port's switch and the
+virtual COM port's tty belong to a group, `--hub-group`, `dialout` by
+default, and a session started before its user joined that group is not in
+it, so the tool then runs itself again through `/run/wrappers/bin/sg GROUP
+-c` (D836). On the maintainer's rig the ST-LINK's
 hub is one of a cascade, every hub of which re-enumerates, the
 ST-LINK and every other board's USB device with it, whenever any port of
 it is switched or any device on it resets (D725). So the run holds the

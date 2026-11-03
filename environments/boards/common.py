@@ -545,6 +545,18 @@ def as_group(argv, group, sg):
     return [str(sg), group, '-c', shlex.join(str(a) for a in argv)]
 
 
+def rerun_in_group(group, sg='/run/wrappers/bin/sg', argv=None, execv=os.execv):
+    """This tool run again, ARGV as Python was given it, through `sg GROUP
+    -c` when the session is not in GROUP, and nothing when it is (D836).
+    A process cannot join a group it lacks, as a session started before its
+    user joined one lacks it, and a tty such as a board's console belongs
+    to that group, so a tool that opens one runs wholly in it."""
+    if group is None or in_group(group):
+        return
+    execv(str(sg), [str(sg), group, '-c',
+                    shlex.join([sys.executable] + list(sys.argv if argv is None else argv))])
+
+
 class InGroup:
     """RUN's commands as GROUP runs them, through `as_group`: a hub's port
     files may belong to a group the session lacks."""
@@ -1045,15 +1057,30 @@ def tty_at(location, sysfs=Path('/sys/class/tty'), dev=Path('/dev')):
     return min(found)[1] if found else None
 
 
+def unopened(path, what, seconds):
+    """The refusal for WHAT's tty, which did not appear within SECONDS, or
+    appeared at PATH and could not be opened."""
+    if path is None or not Path(path).exists():
+        return Failed('no tty %s appeared within %g s' % (what, seconds))
+    try:
+        group = grp.getgrgid(os.stat(path).st_gid).gr_name
+    except (KeyError, OSError):
+        group = 'its group'
+    return Failed('the tty %s, %s, appeared but this process may not open it: it belongs to %s,'
+                  ' which the session is not in; a tool that opens a tty runs itself through'
+                  ' `sg GROUP -c` with --hub-group naming that group' % (what, path, group))
+
+
 def wait_for_tty_at(location, seconds, sysfs=Path('/sys/class/tty'), dev=Path('/dev')):
     """The tty at hub path LOCATION once it appears and can be opened."""
     deadline = time.time() + seconds
+    path = None
     while time.time() < deadline:
         path = tty_at(location, sysfs, dev)
         if path is not None and os.access(path, os.R_OK | os.W_OK):
             return path
         time.sleep(0.05)
-    raise Failed('no tty at USB location %s appeared within %g s' % (location, seconds))
+    raise unopened(path, 'at USB location %s' % location, seconds)
 
 
 def find_tty(serial, sysfs=Path('/sys/class/tty'), dev=Path('/dev')):
@@ -1080,12 +1107,13 @@ def wait_for_tty(serial, seconds, sysfs=Path('/sys/class/tty'), dev=Path('/dev')
     """The tty of SERIAL once it appears and can be opened, as a device that
     re-enumerates after its power cycle comes back."""
     deadline = time.time() + seconds
+    path = None
     while time.time() < deadline:
         path = find_tty(serial, sysfs, dev)
         if path is not None and os.access(path, os.R_OK | os.W_OK):
             return path
         time.sleep(0.1)
-    raise Failed('no tty for USB serial %s appeared within %g s' % (serial, seconds))
+    raise unopened(path, 'for USB serial %s' % serial, seconds)
 
 
 def gaps(sent, echo, probe=8):

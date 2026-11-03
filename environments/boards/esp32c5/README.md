@@ -19,7 +19,7 @@ with every board's [`../common.py`](../common.py) (D646).
 | What | Which | Why |
 |---|---|---|
 | the board | an Olimex ESP32-C5-DevKit-Lipo with both USB-C ports on the hub: the chip's own USB-Serial-JTAG, and USB-UART1, a CH340X bridge on UART0, GPIO11 (TX) and GPIO12 (RX), whose DTR and RTS drive EN and the GPIO28 boot strap through the board's auto-reset transistors | the chip, its flash and its ROM |
-| a console | the CH340X's tty, found by the hub port it is plugged into, `--console-port`, since it has no USB serial of its own, and opened with DTR and RTS inactive | UART0 |
+| a console | the CH340X's tty, found by the hub port it is plugged into, `--console-port`, since it has no USB serial of its own, and opened with DTR and RTS inactive; the tty belongs to `--hub-group`, and the tool runs itself through `/run/wrappers/bin/sg GROUP -c` when the session is not in it (D836) | UART0 |
 | probe-rs | one that reaches the board's USB-Serial-JTAG, `--probe 303a:1001:SERIAL`, with `--chip esp32c5` | flashing the image raw at 0x2000 with verification, and reading memory |
 | power | both ports on a hub with per-port power switching, and `uhubctl` with the right to switch them | a power cycle that cuts all the board's power |
 | the compiler | refine, `riscv64-elf-gcc`, `-nm` and `-objdump` (D532, D695), as `nix develop` gives them | the image and its disassembly |

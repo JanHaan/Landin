@@ -25859,6 +25859,13 @@ package body Landin.Diagnostics.Citations.Texts is
                & "from any other, and only trouble logged after it stops a"
                & " run. A run stopped by the pace names the command in its"
                & " refusal. Nothing clears the trouble on its own.",
+            when 836 =>
+               "Chosen: the ESP32-C5's, the ESP32-C3's and the STM32H753"
+               & "'s tools, which open a tty, run themselves again through"
+               & " `/run/wrappers/bin/sg GROUP -c`, `--hub-group`, before "
+               & "anything else when the session is not in that group, `co"
+               & "mmon.rerun_in_group`; a tty that appears but cannot be o"
+               & "pened is refused as such, naming its group.",
             when 645 =>
                "Chosen: the module names no device. Its `port` is a stru"
                & "ct of two function values ([1000]), `indicate: (on: bool"

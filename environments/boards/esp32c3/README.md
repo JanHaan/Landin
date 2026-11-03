@@ -32,9 +32,10 @@ the oracle checks first.
 The tool switches only `--port` on `--hub`, and only after `uhubctl` shows
 `--serial` on it and `--guard-device` on `--guard-port` of the same hub, the
 J-Link on the maintainer's rig, which is never switched. The port is
-switched off and on again, each through `/run/wrappers/bin/sg GROUP -c`,
-`--hub-group`, when the session is not in the group that may switch it,
-and each switch is paced and followed by a wait for the hub to list the
+switched off and on again; the tool runs itself through
+`/run/wrappers/bin/sg GROUP -c` when the session is not in the group that
+may switch it and open the tty `--recover` resets the chip through,
+`--hub-group` (D836), and each switch is paced and followed by a wait for the hub to list the
 board again, since every switch re-enumerates the rig's hub cascade (D725);
 a switch made while the cascade re-enumerates finds no hub and is made
 again. The run holds the rig's lock. A hub is named as `uhubctl -l` names

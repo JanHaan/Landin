@@ -116,6 +116,9 @@ def main():
     parser.add_argument('--reset-seconds', type=float, default=0.1,
                         help='how long RTS holds EN low for the chip-enable reset')
     args = parser.parse_args()
+    # The console's tty, and the JTAG's that --recover opens, belong to
+    # --hub-group (D836).
+    common.rerun_in_group(args.hub_group)
     common.place_hubs(parser, args, 'hub', 'console_hub')
     esp.required_tools(args)
     console_location = '%s.%d' % (args.console_hub, args.console_port)

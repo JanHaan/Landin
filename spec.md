@@ -23206,6 +23206,26 @@ reason.
 
 **Pinned by** `scripts/tests/test_board_common.py`'s `Pace`.
 
+### D836 — A board tool that opens a tty runs itself in the tty's group
+
+**The tour said** nothing; D646's tools ran `uhubctl` through `sg GROUP -c`
+when the session lacked the group that may switch a hub, and opened a
+console's tty directly, so in a session started before its user joined
+`dialout` the ESP32-C5's tool found the console's tty present, could not
+open it, and refused that no tty had appeared.
+
+**Chosen:** the ESP32-C5's, the ESP32-C3's and the STM32H753's tools, which
+open a tty, run themselves again through `/run/wrappers/bin/sg GROUP -c`,
+`--hub-group`, before anything else when the session is not in that group,
+`common.rerun_in_group`; a tty that appears but cannot be opened is refused
+as such, naming its group.
+
+**The alternatives:** the tty opened by a helper in the group and its
+descriptor passed back, which is more machinery than the one exec; and the
+user told to log in again, which is a refusal a newcomer cannot act on.
+
+**Pinned by** `scripts/tests/test_board_common.py`'s `Hubs` and `Consoles`.
+
 ### D645 — The shared command loop takes its indicator and transmitter as function values
 
 **The tour said** nothing; D593 shared `compiler/tests/driver/commands`

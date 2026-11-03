@@ -571,7 +571,7 @@ def arguments(parser, chip):
                         help='what the guarded port must show, or the hub is not switched')
     parser.add_argument('--hub-group', default='dialout',
                         help="the group that may switch the hub's ports and open the tty;"
-                             ' uhubctl runs through sg when the session is not in it')
+                             ' the tool runs itself through sg when the session is not in it')
     parser.add_argument('--off-seconds', type=float, default=1.0)
     parser.add_argument('--image-control', action='store_true',
                         help='first flash a copy whose checksum is flipped, which the ROM must'

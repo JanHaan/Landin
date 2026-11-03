@@ -522,8 +522,8 @@ def main():
                         " relative to the cascade; the maintainer's rig's by default")
     parser.add_argument('--port', type=int, default=2, help="the ST-LINK's port on it")
     parser.add_argument('--hub-group', default='dialout',
-                        help="the group that may switch the hub's ports; uhubctl runs through"
-                             " sg when the session is not in it")
+                        help="the group that may switch the hub's ports and open the virtual COM"
+                             " port; the tool runs itself through sg when the session is not in it")
     parser.add_argument('--off-seconds', type=float, default=1.0)
     parser.add_argument('--guard-serial', default='210319B3E738',
                         help="a device that must be present and off the switched cascade, the"
@@ -542,6 +542,8 @@ def main():
     parser.add_argument('--record', type=Path,
                         help="also write a passed run's record here")
     args = parser.parse_args()
+    # The virtual COM port's tty belongs to --hub-group (D836).
+    common.rerun_in_group(args.hub_group)
     common.place_hubs(parser, args, 'hub')
     require(args.probe_rs, 'no probe-rs: name one with --probe-rs')
     for name in ('nm', 'objdump', 'readelf'):

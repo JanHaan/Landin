@@ -255,6 +255,19 @@ class Hubs(unittest.TestCase):
                 'uhubctl -l 7-2.3 -p 2 -a cycle -d 1'])])
         self.assertEqual(COMMON.as_group(argv, None, 'sg'), argv)
 
+    def test_a_tool_that_opens_a_tty_runs_itself_in_the_group(self):
+        execs = []
+        tool = ['environments/boards/esp32c5/board.py', '--output', 'run 1']
+        with mock.patch.object(COMMON, 'in_group', return_value=True):
+            COMMON.rerun_in_group('dialout', argv=tool, execv=lambda *a: execs.append(a))
+        COMMON.rerun_in_group(None, argv=tool, execv=lambda *a: execs.append(a))
+        self.assertEqual(execs, [])
+        with mock.patch.object(COMMON, 'in_group', return_value=False):
+            COMMON.rerun_in_group('dialout', argv=tool, execv=lambda *a: execs.append(a))
+        self.assertEqual(execs, [('/run/wrappers/bin/sg', [
+            '/run/wrappers/bin/sg', 'dialout', '-c',
+            "%s environments/boards/esp32c5/board.py --output 'run 1'" % sys.executable])])
+
     def test_a_port_s_device_is_read_from_the_listing(self):
         self.assertTrue(COMMON.port_device(STATUS, 2).startswith('0483:374e'))
         self.assertIsNone(COMMON.port_device(STATUS, 1))
@@ -310,6 +323,16 @@ class Consoles(unittest.TestCase):
             self.assertIsNone(COMMON.find_tty('ELSE', root / 'class/tty', Path('/dev')))
             with self.assertRaises(COMMON.Failed):
                 COMMON.wait_for_tty('ELSE', 0.2, root / 'class/tty', Path('/dev'))
+            # Present but not to be opened, as a tty of a group the session
+            # lacks: refused as such, not as absent.
+            dev = root / 'dev'
+            dev.mkdir()
+            (dev / 'ttyACM0').write_text('')
+            with mock.patch.object(COMMON.os, 'access', return_value=False), \
+                    self.assertRaisesRegex(COMMON.Failed, 'appeared but this process may not open'):
+                COMMON.wait_for_tty('001900293137511339383538', 0.2, root / 'class/tty', dev)
+            with self.assertRaisesRegex(COMMON.Failed, 'no tty for USB serial ELSE appeared'):
+                COMMON.wait_for_tty('ELSE', 0.2, root / 'class/tty', dev)
 
     def test_a_tty_console_keeps_every_byte_each_way(self):
         controller, line = os.openpty()

@@ -2375,6 +2375,9 @@ package body Landin.Diagnostics.Citations is
             when 835 =>
                "USB trouble stops the pace until it is acknowledged with"
                & " a reason",
+            when 836 =>
+               "A board tool that opens a tty runs itself in the tty's g"
+               & "roup",
             when 645 =>
                "The shared command loop takes its indicator and transmit"
                & "ter as function values",
@@ -3859,6 +3862,8 @@ package body Landin.Diagnostics.Citations is
             when 833 =>
                "Decisions: The toolchain, C and the machine",
             when 835 =>
+               "Decisions: The toolchain, C and the machine",
+            when 836 =>
                "Decisions: The toolchain, C and the machine",
             when 645 =>
                "Decisions: The toolchain, C and the machine",
@@ -5662,6 +5667,9 @@ package body Landin.Diagnostics.Citations is
             when 835 =>
                "https://www.701.dev/spec.html#d835-usb-trouble-stops-the"
                & "-pace-until-it-is-acknowledged-with-a-reason",
+            when 836 =>
+               "https://www.701.dev/spec.html#d836-a-board-tool-that-ope"
+               & "ns-a-tty-runs-itself-in-the-tty-s-group",
             when 645 =>
                "https://www.701.dev/spec.html#d645-the-shared-command-lo"
                & "op-takes-its-indicator-and-transmitter-as-function-value"
