@@ -2452,6 +2452,12 @@ package body Landin.Diagnostics.Citations is
             when 810 =>
                "A hosted ELF program's assembly names its file symbol `l"
                & "andin`",
+            when 790 =>
+               "Frame preflight answers from a bound, and a routine's on"
+               & "e plan serves emission and its debugger",
+            when 791 =>
+               "Every backend fills every build-report counter with one "
+               & "meaning, and a routine's stack beside its frame",
             when 151 =>
                "Raw storage is a private library state machine",
             when 152 =>
@@ -3819,6 +3825,10 @@ package body Landin.Diagnostics.Citations is
             when 770 =>
                "Decisions: The toolchain, C and the machine",
             when 810 =>
+               "Decisions: The toolchain, C and the machine",
+            when 790 =>
+               "Decisions: The toolchain, C and the machine",
+            when 791 =>
                "Decisions: The toolchain, C and the machine",
             when 151 =>
                "Decisions: The core library and the derived programs",
@@ -5595,6 +5605,14 @@ package body Landin.Diagnostics.Citations is
             when 810 =>
                "https://www.701.dev/spec.html#d810-a-hosted-elf-program-"
                & "s-assembly-names-its-file-symbol-landin",
+            when 790 =>
+               "https://www.701.dev/spec.html#d790-frame-preflight-answe"
+               & "rs-from-a-bound-and-a-routine-s-one-plan-serves-emission"
+               & "-and-its-debugger",
+            when 791 =>
+               "https://www.701.dev/spec.html#d791-every-backend-fills-e"
+               & "very-build-report-counter-with-one-meaning-and-a-routine"
+               & "-s-stack-beside-its-frame",
             when 151 =>
                "https://www.701.dev/spec.html#d151-raw-storage-is-a-priv"
                & "ate-library-state-machine",

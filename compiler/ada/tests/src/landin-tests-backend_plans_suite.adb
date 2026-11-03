@@ -5,10 +5,12 @@ with Landin.Backend;
 with Landin.Backend.C_ABI;
 with Landin.Backend.RiscV_Instructions;
 with Landin.Backend.RiscV_ABI;
+with Landin.Backend.Site_Counts;
 with Landin.Backend.X86_64;
 with Landin.IR;
 with Landin.IR.Shape_Measurement;
 with Landin.Layouts;
+with Landin.Build_Reports;
 with Landin.Provenance;
 with Landin.Resolution;
 with Landin.Source;
@@ -1250,8 +1252,99 @@ package body Landin.Tests.Backend_Plans_Suite is
          "independent extensions select equivalent address arithmetic");
    end RiscV_Selection;
 
+   --  A load or store reaches the stack through the stack or frame
+   --  pointer, or through a register set from either until a label, a
+   --  call or another write; a push and a pop do too.  Labels and
+   --  directives are not instructions.
+   procedure Site_Counts_Follow_Frame_Addresses
+     (Item : in out Landin.Testing.Context);
+
+   procedure Site_Counts_Follow_Frame_Addresses
+     (Item : in out Landin.Testing.Context)
+   is
+      package Sites renames Landin.Backend.Site_Counts;
+      LF : constant Character := Character'Val (10);
+      HT : constant Character := Character'Val (9);
+
+      procedure Expect
+        (Of_Syntax : Sites.Syntax; Text : String;
+         Instructions, Loads, Stores, Direct, Indirect : Natural;
+         What : String);
+      procedure Expect
+        (Of_Syntax : Sites.Syntax; Text : String;
+         Instructions, Loads, Stores, Direct, Indirect : Natural;
+         What : String)
+      is
+         Counted : Sites.Counter (Of_Syntax);
+         Counts : Landin.Build_Reports.Routine_Statistics;
+      begin
+         Sites.Add_Lines (Counted, Text);
+         Sites.Fill (Counted, Counts);
+         Landin.Testing.Check
+           (Item, Counts.Instructions = Instructions
+              and then Counts.Stack_Loads = Loads
+              and then Counts.Stack_Stores = Stores
+              and then Counts.Direct_Calls = Direct
+              and then Counts.Indirect_Calls = Indirect,
+            What & ":" & Counts.Instructions'Image & Counts.Stack_Loads'Image
+            & Counts.Stack_Stores'Image & Counts.Direct_Calls'Image
+            & Counts.Indirect_Calls'Image);
+      end Expect;
+   begin
+      Expect
+        (Sites.A64,
+         HT & "stp x29, x30, [sp, #-16]!" & LF
+         & HT & "mov x29, sp" & LF
+         & HT & ".cfi_def_cfa w29, 16" & LF
+         & HT & "sub x15, x29, #4096" & LF
+         & HT & "str x0, [x15]" & LF
+         & HT & "ldr x1, [x2, #8]" & LF
+         & HT & "bl callee" & LF
+         & HT & "ldr x3, [x15]" & LF
+         & "L1:" & LF
+         & HT & "blr x16" & LF
+         & HT & "ldp x29, x30, [sp], #16" & LF
+         & HT & "ret" & LF,
+         10, 1, 2, 1, 1, "arm64 follows x15 until the call");
+      Expect
+        (Sites.RISC_V,
+         HT & "addi sp, sp, -16" & LF
+         & HT & "sd x8, 0(sp)" & LF
+         & HT & "addi x8, sp, 16" & LF
+         & HT & "addi x5, x8, -48" & LF
+         & HT & "sd x9, 0(x5)" & LF
+         & HT & "ld x5, 0(x5)" & LF
+         & HT & "lw x6, 0(x5)" & LF
+         & HT & "call callee" & LF
+         & HT & "jalr ra, 0(x30)" & LF
+         & HT & "jalr x0, 0(x30)" & LF
+         & HT & "jr x26" & LF,
+         11, 1, 2, 1, 1, "RISC-V follows x5 until a load replaces it");
+      Expect
+        (Sites.Thumb,
+         HT & "push {r4, r5, r6, r7}" & LF
+         & HT & "mov r11, sp" & LF
+         & HT & "sub sp, #24" & LF
+         & HT & "mov r6, r11" & LF
+         & HT & "subs r6, #24" & LF
+         & HT & "ldr r0, [r6]" & LF
+         & HT & "add r6, sp, #20" & LF
+         & HT & "str r0, [r6]" & LF
+         & "L101_1:" & LF
+         & HT & "str r0, [r6]" & LF
+         & HT & "ldr r1, .Lpool" & LF
+         & HT & "bl f99" & LF
+         & HT & "blx r4" & LF
+         & HT & "pop {r4, r5}" & LF
+         & HT & ".word 7" & LF,
+         13, 2, 2, 1, 1, "Thumb follows r6 until a label");
+   end Site_Counts_Follow_Frame_Addresses;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "backend plans", "site counts follow frame addresses",
+         Site_Counts_Follow_Frame_Addresses'Access);
       Landin.Testing.Register
         (Into, "backend plans", "RISC-V ilp32 carriers",
          RiscV_ILP32_Carriers'Access);

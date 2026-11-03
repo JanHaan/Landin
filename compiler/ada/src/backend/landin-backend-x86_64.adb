@@ -270,43 +270,16 @@ package body Landin.Backend.X86_64 is
       Largest_Displacement : constant Landin.Targets.Byte_Count :=
         2 ** 31 - 1;
       Layout : Frame;
-
-      --  Whether the reference frame, in which every slot and every scalar
-      --  value has a home of its own, leaves room for anything allocation
-      --  can add to it.  An allocated frame places a subset of the same
-      --  slot cells in the same order, which ends no lower; then at most
-      --  one spill home per value and one save per saved register, each
-      --  at most eight bytes padded to an alignment the stack's divides;
-      --  then the frame's own rounding.  So a frame within the bound is
-      --  addressable without being allocated twice, once here and once
-      --  by emission, and only one outside it needs the exact answer.
-      function Within_Reference_Bound return Boolean;
-      function Within_Reference_Bound return Boolean is
-         Cell : constant Landin.Targets.Byte_Count :=
-           8 + Landin.Targets.Byte_Count
-             (Landin.Targets.Stack_Alignment (Facts));
-         --  The rounding is counted as one more cell.
-         Cells : constant Landin.Targets.Byte_Count :=
-           Landin.Targets.Byte_Count (Landin.IR.Value_Count (Of_Unit, Item))
-           + Allocation.Register_Set'Length + 1;
-      begin
-         if Cells > Largest_Displacement / Cell then
-            return False;
-         end if;
-         return Extent
-           (Laid_Out (Of_Unit, Item, Facts, Largest_Displacement
-                        - Cells * Cell))
-           <= Largest_Displacement - Cells * Cell;
-      exception
-         when Stack_Limit_Exceeded =>
-            --  Over the bound is no answer: the exact frame may fit.
-            return False;
-      end Within_Reference_Bound;
    begin
       if Landin.IR.Is_External (Of_Unit, Item) then
          return True;
       end if;
-      if not Within_Reference_Bound then
+      --  Only emission plans the frame; preflight plans it only when the
+      --  reference frame cannot show it addressable.
+      if Landin.Backend.Frame_Bound
+        (Of_Unit, Item, Facts, Largest_Displacement,
+         Allocation.Register_Set'Length) > Largest_Displacement
+      then
          Layout := Allocation.Frame_For
            (Of_Unit, Item, Facts,
             Allocation.Make (Of_Unit, Item, Facts, Options), Options,
@@ -7550,8 +7523,7 @@ package body Landin.Backend.X86_64 is
             Counts.Frame_Bytes := Extent (Layout);
             Counts.Spill_Bytes := Spill_Bytes (Layout);
             Counts.Save_Bytes := Save_Bytes (Layout);
-            Counts.Register_Count := Allocation.Save_Count (Allocation_Plan)
-              + Allocation.SSE_Count (Allocation_Plan);
+            Counts.Register_Count := Allocation.Held_Count (Allocation_Plan);
             Counts.Spill_Count := Allocation_Plan.Spill_Homes;
             Counts.Stack_Bytes := 16 + Extent (Layout) + Deepest_Area;
             Counts.Calls_Panic := Calls_Panic;

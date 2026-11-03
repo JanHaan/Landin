@@ -922,8 +922,10 @@ def build(run, refine, inputs, optimize, specialize, extra=(), linker=None,
         raise said_why(error) from None
     preflight(assembly)
     report = json.loads((run.out / 'build.json').read_text())['build']
-    if any(r['frame_bytes'] > profile['stack_reserved'] for r in report['routines']):
-        raise ImageLimit('routine frame exceeds the selected %d-byte stack reservation'
+    #  A routine's own stack, its pushed registers and call areas
+    #  included; `frame_bytes` is only what its prologue reserves.
+    if any(r['stack_bytes'] > profile['stack_reserved'] for r in report['routines']):
+        raise ImageLimit("a routine's stack exceeds the selected %d-byte stack reservation"
                          % profile['stack_reserved'])
     elf = run.out / 'program.elf'
     objects = [harness_start(run, profile, level)]

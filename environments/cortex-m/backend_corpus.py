@@ -237,10 +237,10 @@ def image_limit(run, row, error, profile, level='armv6-m'):
         result['boundary'] = 'represented static image exceeds selected memory map'
     elif isinstance(error, ImageLimit):
         report = json.loads((run.out / 'build.json').read_text())['build']
-        result['minimum_frame_bytes'] = max(r['frame_bytes'] for r in report['routines'])
-        require(result['minimum_frame_bytes'] > profile['stack_reserved'],
-                'false frame-limit report')
-        result['boundary'] = 'single routine frame exceeds stack reservation'
+        result['minimum_stack_bytes'] = max(r['stack_bytes'] for r in report['routines'])
+        require(result['minimum_stack_bytes'] > profile['stack_reserved'],
+                'false stack-limit report')
+        result['boundary'] = "a single routine's stack exceeds the stack reservation"
         result['stack_reserved'] = profile['stack_reserved']
     elif isinstance(error, CommandFailed) and error.name == 'assemble-link':
         log = Path(error.log).read_text()
@@ -327,9 +327,9 @@ def corpus_line(result):
             text += '; ' + largest
     elif result.get('boundary') == 'represented static image exceeds selected memory map':
         text += ': its assembly materialises more than 8 MiB, past any region of the map'
-    elif 'minimum_frame_bytes' in result:
-        text += ': a routine frame of %d bytes exceeds the %d-byte stack reservation' % (
-            result['minimum_frame_bytes'], result.get('stack_reserved', 4096))
+    elif 'minimum_stack_bytes' in result:
+        text += ": a routine's stack of %d bytes exceeds the %d-byte stack reservation" % (
+            result['minimum_stack_bytes'], result.get('stack_reserved', 4096))
     elif 'refused_imports' in result:
         text += ': ' + ', '.join(result['codes']) + ' refuses ' + ', '.join(result['refused_imports'])
     return text
@@ -524,8 +524,8 @@ def against(parent, profile, result):
     else:
         image_contract(elf, profile)
         verdict.update(fits=True, image=image_sizes(run, elf, profile))
-    if 'minimum_frame_bytes' in result and result['minimum_frame_bytes'] > profile['stack_reserved']:
-        verdict.update(fits=False, minimum_frame_bytes=result['minimum_frame_bytes'],
+    if 'minimum_stack_bytes' in result and result['minimum_stack_bytes'] > profile['stack_reserved']:
+        verdict.update(fits=False, minimum_stack_bytes=result['minimum_stack_bytes'],
                        stack_reserved=profile['stack_reserved'])
     return verdict
 

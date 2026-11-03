@@ -127,6 +127,9 @@ package Landin.Backend.X86_64.Allocation is
    function Name (Register : SSE_Register) return String;
    function Save_Count (Of_Plan : Plan) return Natural;
    function SSE_Count (Of_Plan : Plan) return Natural;
+   --  The distinct registers any slot or value location holds, saved or
+   --  not, GP and XMM alike: the build report's register count.
+   function Held_Count (Of_Plan : Plan) return Natural;
    function Save_Index
      (Of_Plan : Plan; Register : Saved_Register) return Positive;
 

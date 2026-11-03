@@ -53,12 +53,19 @@ private
      (Index_Type => Positive,
       Element_Type => Ada.Strings.Unbounded.Unbounded_String,
       "=" => Ada.Strings.Unbounded."=");
+   type Derived_Set is array (0 .. 15) of Boolean;
    type Stream is record
       Tokens : Token_Vectors.Vector;
       --  Every recorded token's text, end to end.
       Spelled : Ada.Strings.Unbounded.Unbounded_String;
       Labels : Name_Vectors.Vector;
       Counts : Landin.Build_Reports.Routine_Statistics;
+      --  General registers, numbered as the encoding numbers them, that
+      --  hold an address the body set from %rbp or %rsp by `lea`, a move
+      --  or an addition since its last label or call: an access through
+      --  one is stack traffic, as Landin.Backend.Site_Counts counts it on
+      --  the other backends.
+      Derived : Derived_Set := [others => False];
       Recording : Boolean := True;
       Sealed : Boolean := False;
    end record;

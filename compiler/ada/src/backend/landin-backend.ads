@@ -93,6 +93,23 @@ package Landin.Backend is
       Maximum : Landin.Targets.Byte_Count :=
         Landin.Targets.Byte_Count'Last) return Frame;
 
+   --  An extent no frame a backend plans for Item can exceed, or a value
+   --  above Largest when the reference frame cannot show one within it.
+   --  A planned frame places a subset of the reference frame's slot cells
+   --  in the same order, which ends no lower; then at most one spill home
+   --  per value and at most Saves save homes, each at most eight bytes
+   --  padded to an alignment the stack's divides; then the frame's own
+   --  rounding, counted as one more such cell.  So frame preflight can
+   --  answer without planning the frame emission plans, and only a frame
+   --  this bound does not show addressable needs the exact answer.
+   function Frame_Bound
+     (Of_Unit : Landin.IR.Unit;
+      Item    : Landin.IR.Item_Id;
+      Facts   : Landin.Targets.Target_Facts;
+      Largest : Landin.Targets.Byte_Count;
+      Saves   : Natural) return Landin.Targets.Byte_Count
+     with Pre => Landin.IR.Holds (Of_Unit, Item);
+
    function Has_Slot_Home
      (Of_Frame : Frame; Slot : Landin.IR.Slot_Id) return Boolean;
    function Has_Value_Home

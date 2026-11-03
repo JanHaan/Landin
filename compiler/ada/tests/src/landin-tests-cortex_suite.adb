@@ -203,12 +203,12 @@ package body Landin.Tests.Cortex_Suite is
                  Landin.Build_Reports.Nth_Routine (Report, 1);
             begin
                if Index = 1 then
-                  Narrow_Frame := Stats.Frame_Bytes - Stats.Save_Bytes;
+                  Narrow_Frame := Stats.Frame_Bytes;
                end if;
                Landin.Testing.Check
                  (Item, Stats.Spill_Count = 3
                     and then Stats.Spill_Bytes = 3 * Bytes (Index)
-                    and then Stats.Frame_Bytes - Stats.Save_Bytes =
+                    and then Stats.Frame_Bytes =
                       Narrow_Frame + T.Align_Up
                         (3 * Bytes (Index), 8) - 8,
                   "three live homes use scalar widths and aligned frames");
@@ -1225,7 +1225,7 @@ package body Landin.Tests.Cortex_Suite is
                                and then Ada.Strings.Fixed.Index
                                  (Text, ".cfi_offset r11, -24" & LF) > 0
                                and then Ada.Strings.Fixed.Index
-                                 (Report, """save_bytes"":24") > 0,
+                                 (Report, """save_bytes"":16,") > 0,
                               "caller retains aligned frame and unwind");
                         when 3 =>
                            Landin.Testing.Check
@@ -1234,7 +1234,7 @@ package body Landin.Tests.Cortex_Suite is
                                and then Ada.Strings.Fixed.Index
                                  (Text, "push {r4, r5, r6, r7}" & LF) > 0
                                and then Ada.Strings.Fixed.Index
-                                 (Report, """save_bytes"":24") > 0,
+                                 (Report, """save_bytes"":16,") > 0,
                               "inline assembly register is preserved");
                         when others =>
                            Landin.Testing.Check
@@ -1255,7 +1255,7 @@ package body Landin.Tests.Cortex_Suite is
                              (Item, Ada.Strings.Fixed.Index
                                (Text, ".cfi_offset r5, -12" & LF) > 0
                                and then Ada.Strings.Fixed.Index
-                                 (Report, """save_bytes"":24") > 0,
+                                 (Report, """save_bytes"":16,") > 0,
                               "tab-separated clobber has unwind and report");
                      end case;
                   end;

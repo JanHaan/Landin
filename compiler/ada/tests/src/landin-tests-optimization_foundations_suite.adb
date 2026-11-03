@@ -282,7 +282,7 @@ package body Landin.Tests.Optimization_Foundations_Suite is
       Reports.Append
         (Report, Reports.Routine_Statistics'
            (Item => 1, Frame_Bytes => 2 ** 40, Instructions => 17,
-            others => <>));
+            Stack_Bytes => 2 ** 40 + 48, others => <>));
       Reports.Append_Layout (Report, 3, Landin.Layouts.Optimal, Placement);
       declare
          First : constant String := Reports.JSON
@@ -296,7 +296,8 @@ package body Landin.Tests.Optimization_Foundations_Suite is
            (Item, Ada.Strings.Fixed.Index
               (First, """reason"":""disabled""") > 0
             and then Ada.Strings.Fixed.Index
-              (First, """frame_bytes"":1099511627776") > 0
+              (First, """frame_bytes"":1099511627776,"
+                 & """stack_bytes"":1099511627824") > 0
             and then Ada.Strings.Fixed.Index
               (First, """offsets"": [16,0,17,8]") > 0,
             "negative decisions and target-byte measurements render exactly");
