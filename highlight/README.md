@@ -201,6 +201,7 @@ CLI version `tree-sitter/package.json` names, checked against the sha256 in
 committed one. `nix develop` puts the same release binary, held to the same
 checksum for its own system, on `PATH`, where the suite takes it when the
 grammar package has no CLI of its own; without Node it generates through the
-CLI's built-in QuickJS, which reproduces the committed parser byte for byte. `AGENTS.md` describes the verified explanatory-only reuse
-exception. Each editor directory contains the shortest installation path for
+CLI's built-in QuickJS, which reproduces the committed parser byte for byte.
+The [gate reference](../docs/process.md#the-mechanical-gate) describes the
+verified explanatory-only reuse exception. Each editor directory contains the shortest installation path for
 that editor.

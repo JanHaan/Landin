@@ -8823,6 +8823,39 @@ def check_named_files(full_run):
     return out
 
 
+AGENT_GUIDANCE_MAX_BYTES = 24 * 1024
+
+
+def check_agent_guidance(full_run):
+    """Keep the shared startup guide within its instruction budget.
+
+    Codex's default combined budget is 32 KiB.  Reserve 8 KiB for other
+    instructions instead of silently losing the end of this file again.
+    Claude's alias must keep both providers on the same source.
+    """
+    if not full_run:
+        return []
+    guide = os.path.join(ROOT, "AGENTS.md")
+    alias = os.path.join(ROOT, "CLAUDE.md")
+    missing = absent([guide, alias])
+    if missing:
+        return missing
+    out = []
+    with open(guide, "rb") as stream:
+        size = len(stream.read())
+    if size > AGENT_GUIDANCE_MAX_BYTES:
+        out.append(("AGENTS.md", 1,
+                    "agent guide is %d UTF-8 bytes; the limit is %d; move "
+                    "detail to a linked reference before instructions "
+                    "are truncated" % (size, AGENT_GUIDANCE_MAX_BYTES)))
+    if (not os.path.islink(alias) or
+            os.path.realpath(alias) != os.path.realpath(guide)):
+        out.append(("CLAUDE.md", 1,
+                    "must be a symlink to AGENTS.md so both providers "
+                    "read the same guide"))
+    return out
+
+
 def check_document_reachability(full_run):
     """Every tracked document is reachable from README.md.
 
@@ -10070,6 +10103,7 @@ def main(argv):
     extra = check_citations(citation_paths)
     stale_paths = LIVE_DOCS if full_run else paths
     extra += check_stale_backlog(stale_paths, full_run)
+    extra += check_agent_guidance(full_run)
     extra += check_document_reachability(full_run)
     extra += check_project_status(full_run)
     extra += check_roadmap_citations(full_run)

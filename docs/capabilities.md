@@ -706,7 +706,7 @@ Add `--target=darwin-arm64` for native macOS output, then open
 The recurring gate runs Linux and Darwin programs natively, FreeBSD programs
 in accelerated VMs and Cortex-M firmware under QEMU, with separate runtime,
 C ABI and debugger verdicts; RV64 Linux runs under QEMU's user emulation, as
-above. [`AGENTS.md`](../AGENTS.md#the-mechanical-gate) describes every job.
+above. The [gate reference](process.md#the-mechanical-gate) describes every job.
 Exact-revision runtime acceptance ran natively on Linux x86-64 and Darwin
 arm64 through 0.2.0, and is retired. The recorded boundaries stand as
 measured: the 32 KiB capacity verdicts, linked again against RP2040's,

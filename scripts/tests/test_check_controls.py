@@ -59,6 +59,48 @@ class BenchmarkGameOracles(unittest.TestCase):
         self.assertIn("needed by a check", said[0])
 
 
+class AgentGuidance(unittest.TestCase):
+    """A complete startup guide reaches both providers within its budget."""
+
+    def test_the_byte_limit_passes_and_one_more_byte_is_refused(self):
+        from check_controls import tree
+        limit = checker.AGENT_GUIDANCE_MAX_BYTES
+        with tree(written={"AGENTS.md": b"a" * limit}) as root:
+            (root / "CLAUDE.md").symlink_to("AGENTS.md")
+            self.assertEqual(checker.check_agent_guidance(True), [])
+            with (root / "AGENTS.md").open("ab") as stream:
+                stream.write(b"b")
+            said = checker.check_agent_guidance(True)
+            self.assertEqual([path for path, _, _ in said], ["AGENTS.md"])
+            self.assertIn("move detail", said[0][2])
+
+    def test_multibyte_text_is_counted_as_bytes(self):
+        from check_controls import tree
+        text = "é" * (checker.AGENT_GUIDANCE_MAX_BYTES // 2 + 1)
+        with tree(written={"AGENTS.md": text}) as root:
+            (root / "CLAUDE.md").symlink_to("AGENTS.md")
+            self.assertTrue(checker.check_agent_guidance(True))
+
+    def test_a_copied_or_divergent_claude_guide_is_refused(self):
+        from check_controls import tree
+        with tree(written={"AGENTS.md": "# Shared\n",
+                           "CLAUDE.md": "# Shared\n",
+                           "other.md": "# Different\n"}) as root:
+            self.assertEqual([path for path, _, _ in
+                              checker.check_agent_guidance(True)],
+                             ["CLAUDE.md"])
+            (root / "CLAUDE.md").unlink()
+            (root / "CLAUDE.md").symlink_to("other.md")
+            self.assertEqual([path for path, _, _ in
+                              checker.check_agent_guidance(True)],
+                             ["CLAUDE.md"])
+
+    def test_a_missing_guide_is_reported(self):
+        said = reasons(checker.check_agent_guidance,
+                       written={"AGENTS.md": "# Shared\n"})
+        self.assertTrue(any("needed by a check" in why for why in said))
+
+
 class DocumentReachability(unittest.TestCase):
     """Every tracked document is reachable from README.md."""
 

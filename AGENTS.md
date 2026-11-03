@@ -4,6 +4,26 @@ Guidance for coding agents working in this repository. `CLAUDE.md` is a
 symlink to this file, so Claude Code and any harness that reads `AGENTS.md`
 see the same text; edit this one.
 
+Read [the current development loop](docs/process.md#the-loop-that-runs-now)
+for implementation work, and its closing checklist before declaring an
+item complete. Load subsystem references for the task at hand; the gate
+matrix and historical process are reference material, not startup reading.
+Host-local notes and skills can supply paths and access details, but check
+their operational claims against the current checkout and tools. A request
+to evaluate or review should produce a reviewable result; publication and
+promotion follow the user's authorized scope.
+
+`check.py` limits this file to 24 KiB of UTF-8, leaving room below Codex's
+32 KiB default combined instruction budget, and verifies the shared Claude
+alias. Move detail to its maintained reference when the guide grows. Local
+or ancestor instructions can consume that remaining room; verify the
+loaded guidance when changing a host's agent configuration.
+
+For implementing or preparing a candidate, the
+[landin-change skill](.agents/skills/landin-change/SKILL.md) connects the
+current recipes. Its source is shared with Claude Code through a project
+skill alias. The rules here also apply when no skill is selected.
+
 ## Repository state
 
 Landin is a language specification with a working Ada bootstrap compiler.
@@ -26,88 +46,26 @@ programs.
 
 ## Commands
 
+Use the pinned environment for compiler work; the
+[local feedback recipe](docs/process.md#local-agent-feedback) also shows how
+to source it in a harness whose commands start fresh shells. The common
+commands are:
+
 ```sh
-# Run every available mechanical check over the live documents and fixtures
-python3 check.py
-
-# Build the release compiler and hold it to its scaling bound: the median
-# frontend and emission times, and peak compiler memory, may each grow at
-# most 2.5 times per doubling of the program.  Then scripts/image_bounds.py
-# assembles compact static images and holds the assembler to the source's size.
-./scripts/scaling.sh
-
-# Every scripts/tests module at once, check.py's controls in shards, as the
-# gate's scripts job runs them; about two minutes on sixteen workers.
-python3 scripts/script_tests.py
-
-# Follow HEAD's gate run and return at its first failed job, rather than
-# when its last lane ends; with --all, follow it to its end and name every
-# failed job, when a round's fixes should go in one push.
-python3 scripts/gate_watch.py
-python3 scripts/gate_watch.py --all
-
-# Regenerate every generated file: the matrices, catalogue, token dump and
-# editor files.  A stale one is named by the full run above.
-python3 check.py --generate
-
-# Check one specification/prototype file (the narrowest supported test scope)
-python3 check.py prototype-2-parser.md
-
-# Build the bootstrap compiler and run its own test program.  Both need the
-# pinned toolchain reachable; see compiler/ada/TOOLCHAIN.md.
-./scripts/build.sh
-./scripts/test.sh
-
-# Build only refine for a consumer that does not run the Ada test program.
-./scripts/build.sh --compiler-only
-
-# Fast checksum-safe developer feedback.  The selectors are exact names;
-# these runs are visibly FILTERED and do not replace the complete suite.
-./scripts/dev-test.sh --suite='fixture execution'
-./scripts/dev-test.sh --case='harness/filters select exact cases'
-./scripts/dev-test.sh --fixture=negative/variant-match-duplicate
-
-# The options and every suite name, without a build or Python.
-./scripts/dev-test.sh --help
-
-# An experiment in a build tree of its own, which nix develop leaves alone.
-LANDIN_BUILD_VARIANT=inliner ./scripts/dev-build.sh
-
-# Remove this host's build artefacts (--all removes every host's).
-./scripts/clean.sh
-
-# Mac compiler-host feedback.  The unfiltered suite needs Linux, and a Mac's
-# own compiler defaults to darwin-arm64, so the shared verdicts' lane is named.
-./scripts/dev-test.sh --host --target=linux-x86-64 --suite=checking
-
-# Another Linux target's corpus from this host: a cross lane, under QEMU's
-# user emulation and a cross driver, both of which `nix develop` provides.
-# Evidence about the emitted code, never about the pinned toolchain on its
-# own host.  The emulator's own failures are compiler/tests/cross-lanes.json's.
-./scripts/dev-test.sh --target=linux-arm64 --runner=qemu-aarch64 \
-    --suite='fixture execution'
-QEMU_CPU=max,xtheadba=true ./scripts/dev-test.sh --target=linux-rv64 \
-    --runner=qemu-riscv64 --suite='fixture execution'
-
-# Render the documents selected in docs/site/render_html.py as HTML,
-# verify their text was not dropped, and package them. It does not publish:
-# .github/workflows/pages.yml is the only publisher; see docs/site/README.md.
-./scripts/site.sh
-
-# On a nix machine, a shell holding the pinned toolchain and python3.  It
-# reads environments/pins.sh and tags its objects `nix-${system}`, so it does not
-# collide with the other environments; see docs/environments.md.
 nix develop
-
-# Build the compiler through the flake.  .#refine is the default and builds
-# this checkout from source -- about 140s on a fast Linux host, and the same
-# cold, because the 478MB of pinned toolchain fetches alongside the compile.
-# .#refine-bin fetches the published release asset instead, in about 5s, and
-# ignores the working tree: it answers "give me the compiler", not "build
-# what I have".
-nix build .#refine
-nix build .#refine-bin
+python3 check.py
+./scripts/dev-build.sh
+./scripts/dev-test.sh --help
+./scripts/dev-test.sh --case='harness/filters select exact cases'
+python3 scripts/gate_watch.py --all
 ```
+
+Choose the exact suites, cases and fixtures for the change, combining the
+selectors in one invocation. A filtered run is visibly `FILTERED` and is
+not complete-suite evidence. The [command reference](docs/process.md#command-reference)
+holds clean builds, generation, release/scaling, cross-target and Mac
+examples, site rendering and flake builds. Toolchain pins and the warning
+policy are in `compiler/ada/TOOLCHAIN.md`.
 
 ## Agent feedback without unnecessary round trips
 
@@ -128,11 +86,14 @@ requirements.
 
 For a long local command, use `scripts/run_logged.py` inside that environment
 and the agent's background-command facility. Wait for its completion
-notification while doing independent work;
-do not add sleep/log-probe loops. An agent that receives no notification, a
-subagent among them, waits with `python3 scripts/run_logged.py --wait DIR` in a
-foreground call whose own timeout exceeds the wait's 540 seconds, and makes the
-same call again while it exits 124. Never wait in a `sleep` loop, and never on
+notification while doing independent work; do not add sleep/log-probe
+loops. In Codex, retain a yielded command's session id and resume it with
+the native process continuation tool until it completes; keep the turn open
+while the result is required. When notifications or native continuation are
+unavailable, use `python3 scripts/run_logged.py --wait DIR`, with a wait
+shorter than the calling tool's timeout, and repeat it on exit 124. The
+recipe documents both the default 540-second wait and shorter tool limits.
+Never wait in a `sleep` loop, and never on
 `pgrep -f`, whose pattern matches the waiting shell's own command line, so the
 wait does not end. Inspect `result.json` and the retained log after completion.
 Report the
@@ -141,24 +102,37 @@ an exit-zero summary alone is not full-suite evidence. The wrapper retains full
 output and prints a bounded tail on failure. Never pipe a check through a
 filter that hides its failure status. See [the local feedback recipe](docs/process.md#local-agent-feedback).
 
-Push a candidate as soon as it builds and the checks for what it touches pass.
+Once a push is authorized, push the candidate as soon as it builds and the
+checks for what it touches pass.
 Further local lanes run beside its gate, never between the candidate and its
 push: the lanes that fail a gate are mostly ones no local host has, and an
 hour spent on the local matrix first only delays hearing from them. A change to
 the grammar, the highlighters or a fixture also runs
 `./highlight/test.sh --integration`, about a minute, before the push.
 
-A question to the user holds up only the work its answer decides. Promote a
-candidate whose gate passed, start what the answer cannot change, and say
-which answer you would take by default.
+A question to the user holds up only the work its answer decides. Complete
+an authorized promotion whose gate passed, start what the answer cannot
+change, and say which answer you would take by default. A stated default is
+not approval for an action that needs the user's answer.
 
 A brief to a subagent or a parallel stream carries these rules itself, because
 streams that were not told polled their logs and ran complete suites anyway.
 It names the exact selectors for what the stream changes, leaves the complete
-suite to the integrated tree or the gate, names `run_logged.py --wait` as the
-way to wait, and leaves the build's worker count and CPU placement at their
+suite to the integrated tree or the gate, names the harness's supported
+completion method with `run_logged.py --wait` as a fallback, and leaves the
+build's worker count and CPU placement at their
 defaults rather than choosing a `-j` or a `taskset`: a full build at `-j4`
 took two and a half times as long as at the default.
+
+For parallel sessions, follow the
+[ownership and integration rules](docs/process.md#parallel-sessions-and-shared-resources).
+Each writer gets its own worktree and branch from an explicit base; a new
+Paseo chat alone does not isolate a checkout. Name the integrator and who
+may push, rebase or promote. Coordinate overlaps and shared resources with
+their owner before using them. Hardware work uses the board tools and the
+rig's common lock; a different board or probe slot does not make hub power
+operations independent. Existing authorization carries into the brief;
+silence or an idle agent is not permission to take its resources.
 
 Reduce repeated orchestration, not reasoning effort, model capability, required
 checks or review depth. Keep relevant design context; return concise results
@@ -166,218 +140,27 @@ and log paths instead of repeatedly pasting complete transcripts.
 
 ## The mechanical gate
 
-`.github/workflows/gate.yml` is the mechanical gate, and it runs on every
-push and pull request. A new candidate runs every target the compiler has,
-in jobs that report separate verdicts. RV64 runs under QEMU's user
-emulation on an x86-64 runner, which is evidence about its emitted code and
-none about RV64 hardware; its jobs on RISE's physical runners stay skipped
-until they are dependable. A recent verified identical candidate
-or the explanatory-only exception below may reuse a full pass. Compiler
-builds supply checked executables to their same-host consumers, including
-the debug compilers used for cross-host determinism. The final `gate` job requires every build and verification
-job, including cross-host determinism, to succeed or be skipped under verified
-reuse; document and script checks must always succeed.
+The candidate's complete multi-host gate must pass before an authorized
+promotion to main, and the promoted tree must be the one tested. A changed
+merge tree needs new evidence. Filtered local checks are development
+feedback; they do not replace the gate. Green is not exact-revision
+acceptance: that process is retired.
 
-A branch push or same-repository pull request by an author with write access
-may reuse a complete successful push run from this repository from the
-preceding seven days when the entire tracked tree is identical. This key
-includes every byte, path and mode, the workflows and tool pins, and all
-documents. A pull request compares its merge checkout, not just its head.
-The complete GitHub job listing must contain every required matrix leg with
-success; filtered local runs, cache entries, incomplete listings and runs
-that themselves reused evidence cannot supply this pass. Main promotion
-therefore does not repeat a candidate's full matrix when its tree is unchanged.
-Manual dispatch always runs the full matrix. Superseded pushes to a branch
-and updates to a pull request are cancelled; manual runs have independent
-concurrency groups, and unrelated forks' pull requests cannot cancel each other.
+Read [the gate reference](docs/process.md#the-mechanical-gate) when changing
+CI, checking reuse, following a candidate or promoting it. It owns the job
+matrix, identical-tree and explanatory reuse conditions, runner scope,
+retained artifacts and historical timings. The workflows are executable
+truth; keep that reference current when they change. Document and script
+checks always run, including when a verified full pass is reused.
 
-A declared explanatory edit confined to the content of `README.md`,
-`ROADMAP.md`, `handoff.md` and `AGENTS.md` may reuse a complete successful
-push run of this repository from the preceding seven days, of `main` or of
-any other branch, whose commit is an ancestor of the edit (D586). So a
-documents-only commit that closes an item after its branch's full gate
-reuses that gate on the branch and again when main is promoted to it. A
-branch's run is as trustworthy a base as main's: only someone with write
-access can push to a branch, and the tree key covers the workflow that run
-executed and every tool pin. Live GitHub verification of a full main
-run, the classifier output and a skipped-lane aggregate gate completed before
-this path was enabled.
-Every intervening commit must carry the exact line `Gate: explanatory`;
-the event must be a push to a branch of this repository, `main` or another,
-or a same-repository pull request whose author has write access. Declare
-only changes to explanation, with no
-change to language rules, targets, scope or acceptance claims. The source
-tree key preserves all other bytes, paths and modes. Missing, partial,
-expired or mismatching evidence runs everything. Documents and script
-checks always run, and a reused run can never itself supply the full pass.
-The aggregate gate covers each build, test and determinism host separately.
-
-For a successful reuse, the `inputs` log names the source commit and links
-the full run being reused. Target and build jobs, including `determinism`,
-appear as skipped; `inputs`, `documents`, `scripts` and the final `gate`
-still succeed. The linked full run contains the target-test results.
-
-| job | runner | runs |
-|---|---|---|
-| `inputs` | `ubuntu-24.04-arm` | verify a recent full pass for an identical candidate, or a full push pass of main or a branch for a declared explanatory edit |
-| `documents` | `ubuntu-24.04` | `check.py`, about ninety seconds, needing neither the toolchain nor a built compiler |
-| `scripts` | `ubuntu-24.04` | every `scripts/tests` module at once through `scripts/script_tests.py`, `check.py`'s controls among them in shards, and the determinism, quality and debugging controls |
-| `linux-debug-build` | `ubuntu-24.04` | build the debug executables once for the `compiler` shards, `compiler-checks`, `build-modes` and the Linux x86-64 determinism manifest |
-| `compiler` matrix | `ubuntu-24.04` | the debug compiler's complete suite in three `--shard` jobs, `compiler-1` to `compiler-3`, at `LANDIN_TEST_JOBS=8` |
-| `compiler-checks` | `ubuntu-24.04` | with the same debug compiler: the default target, a required Emacs-to-`refine lsp` diagnostic smoke, the determinism closures, native report identity, the scripted server sessions through `refine lsp`, and the server under one round of mutated corpus sources |
-| `linux-release-build` | `ubuntu-24.04` | build the release executables once for the Linux release, outside-user-stock, build-modes, Cortex-M and scaling jobs |
-| `release` | `ubuntu-24.04` | the same with the release compiler and the scripted server sessions, then object quality and the GDB sessions |
-| `outside-user-stock` | `ubuntu-24.04` | the release compiler packaged and used outside the checkout on a stock Ubuntu with only its own GCC, refusing to run if the pinned driver is reachable: the first program, every `examples.md` program, the distribution's driver and a trap's report |
-| `build-modes` matrix | `ubuntu-24.04` | the debug and the release compiler of one tree emit the positive and runtime corpora, the firmware corpus and the Cortex-M counterparts at the four standard profiles and must agree byte for byte: Linux x86-64 and RV32 in `build-modes-1`, Linux arm64 and Cortex-M in `build-modes-2` |
-| `bindings` | `ubuntu-24.04` | `refine bindings`, with the debug compiler `linux-debug-build` made, against its pinned Clang |
-| `editor-grammar` | `ubuntu-24.04` | the structural grammar's integration pass with the pinned tree-sitter CLI |
-| `flake` | `ubuntu-24.04` | `nix build .#refine .#refine-bin`, every flake output of every system evaluated and the development shell entered, on every run that does not reuse a pass, manual dispatch included (D585) |
-| `cortex-m` matrix | `ubuntu-24.04` | every Cortex-M lane on the locked QEMU and GDB, at `LANDIN_CORTEX_JOBS=4`, as `run.py`'s two parts, which together are every lane once: the probes, firmware, device programs and debug evidence in `cortex-m-programs`, which keeps the stack-switch consumer's capacity report (D470) as an artifact, and the whole corpus on the M0, the M33 and the M7 in `cortex-m-corpus` |
-| `scaling` | `ubuntu-24.04` | `scripts/scaling.sh`, failing when frontend time, emission time or peak memory grows more than 2.5 times per doubling, or when a compact static image's assembly, object or assembler memory outgrows its bound |
-| `darwin-debug-build` | `macos-26` | build the debug executables once for the `darwin-host` job and the Darwin determinism manifest |
-| `darwin-release-build` | `macos-26` | build the release executables once for the `darwin-host-release` and `darwin-parity` jobs |
-| `darwin-host` | `macos-26` | the debug compiler host suite, determinism, report identity and the scripted server sessions |
-| `darwin-host-release` | `macos-26` | the release compiler host suite and the same follow-on checks, then the LLDB sessions, which had a job of their own until it was found holding one of the five macOS runners the account may use at once while `darwin-parity` queued for it |
-| `darwin-parity` | `macos-26` | the hosted corpus executed natively, every Darwin source verdict and the bindings |
-| `arm64-debug-build` | `ubuntu-24.04-arm` | build the debug executables once for the `arm64-compiler` shards, `arm64-compiler-checks` and the Linux arm64 determinism manifest |
-| `arm64-compiler` matrix | `ubuntu-24.04-arm` | the debug compiler's whole test program on the Linux arm64 lane in two `--shard` jobs, `arm64-compiler-1` and `arm64-compiler-2` |
-| `arm64-compiler-checks` | `ubuntu-24.04-arm` | with the same debug compiler: representative verifier resources, the default target, the determinism closures, native report identity and the scripted server sessions |
-| `arm64-release` | `ubuntu-24.04-arm` | the same corpus with the release compiler, the default target, the server sessions, the GDB sessions with the pinned aarch64 GDB and the generated bindings for the standard AAPCS64 |
-| `freebsd-amd64-runtime`, `freebsd-arm64-runtime-1`, `freebsd-arm64-runtime-2` | `ubuntu-24.04` | emit with the checked Linux release compiler and locked sysroot, check source verdicts, assembler boundaries and linked instructions, then execute the applicable runtime corpus in a fresh FreeBSD 14.4 VM, amd64 under KVM and arm64 emulated, including guest CPU confirmation; the emulated arm64 lane runs as two shards of whole fixtures |
-| `freebsd-amd64-debugger`, `freebsd-arm64-debugger` | `ubuntu-24.04` | the same emission, then native FreeBSD LLDB source stops, frames, local values and unwinding in the VM |
-| `freebsd-amd64-abi`, `freebsd-arm64-abi` | `ubuntu-24.04` | the same emission, then nonempty C ABI fixture sets against independently compiled FreeBSD C peers in the VM |
-| `rv64-qemu` matrix | `ubuntu-24.04` | the release compiler's whole test program on the Linux RV64 lane in two `--shard` jobs, `rv64-qemu-1` and `rv64-qemu-2`, linked by Ubuntu's riscv64 cross driver and run under the flake's pinned `qemu-riscv64`, its CPU's every level confirmed; the emulator's own failures listed in `compiler/tests/cross-lanes.json` are reported and not counted; the first shard also runs the RV64 GDB sessions, the stack switch's among them, under the same emulator's GDB stub |
-| `rv64-emit` matrix | `ubuntu-24.04` | suspended since 2026-10-13 and not required by `gate`; when running, cross-emit checked RV64 runtime, GDB, C ABI and ISA payloads for RISE; source/hash checks, invalid IR register regression and instruction inspection |
-| `rv64-runtime`, `rv64-debugger`, `rv64-abi`, `rv64-isa` | ubuntu-24.04-riscv | suspended since 2026-10-13 and not required by `gate`; when running, separate corpus, native GDB, nonempty independent C peers and hardware-confirmed baseline/extended ISA execution on physical RISE runners |
-| `determinism` | `ubuntu-24.04`, `ubuntu-24.04-arm`, `macos-26` | the called workflow emits the fixture manifest for all eight targets on each host in two jobs of four targets each, joins each host's parts and compares the three, starting once the three debug builds succeed rather than after their suites |
-
-Linux and Darwin lanes run on GitHub-hosted images for every event, as do
-the called determinism workflow and the links, Pages and release workflows;
-the registered runners measured slower and are no longer selected. The
-FreeBSD lanes boot their VMs inside the hosted job, arm64 under emulation
-because GitHub's arm64 images offer no KVM. See [the runner environment requirements](docs/environments.md#github-actions-runners).
-
-A compile error surfaces in its host's debug or release build job; Linux
-arm64's release lane still builds its own. In
-[run 37227405592](https://github.com/JanHaan/Landin/actions/runs/37227405592),
-the successful shared release-build jobs took 300 seconds on Linux and 447
-on Darwin; their compilation steps took 273 and 425 seconds respectively.
-Successful verification jobs took 328 seconds for `release`, 153 for
-`scaling`, 102 for the then separate `lldb` job and 486 for `darwin-parity`.
-These whole-job times
-include setup and artifact handling, but exclude queueing and waiting for
-the shared build dependency.
-
-The determinism manifest jobs covering all nine optimization/specialization
-combinations took 150 seconds on Linux x86-64, 137 on Linux arm64 and 276 on
-Darwin arm64; manifest emission itself took 50, 40 and 105 seconds
-respectively. The agreement job took five seconds. These are observations
-from a single run, excluding failed jobs whose durations cover only part
-of their work. They are not a controlled
-comparison with the earlier measurements before artifact sharing, and no
-CI time saving has been demonstrated. Same-run build archives are
-short-lived inputs, not acceptance records.
-
-The gate is **not** the retired acceptance: it retains no successful
-exact-revision acceptance record, and green is not a verdict on a revision.
-On a failed Cortex-M job, it is configured to upload diagnostic output if
-that output exists; uploaded artifacts are retained for 14 days. It is a
-safety net over every target.
-
-The gate calls `determinism.yml`, which
-requires every host in its matrix to emit the same bytes; it emits and hashes
-but never assembles, links or runs. It also supports manual dispatch.
-`pages.yml` publishes <https://www.701.dev>
-when a site input changes on `main`, or when dispatched manually. `links.yml`
-checks changed documents on a push and every document weekly or manually.
-Changes to link checker configuration and unknown changed ranges also check
-every document.
-`release.yml` is tag-driven: a `v*` tag builds and publishes the `refine`
-assets that `nix build .#refine-bin` consumes.
-
-The exact-revision native acceptance in `scripts/ci/` approved every revision
-through 0.2.0 and was removed when the project left SourceHut. Do not cite it
-as current and do not claim a change is accepted: nothing accepts revisions
-now, and the gate above is a safety net rather than a verdict on a revision.
-`environments/native-ci/README.md` and `environments/macos-arm64/README.md`
-describe the retired arrangement.
-
-The repository submits no build manifests. GitHub is canonical and takes
-pushes directly; git.sr.ht is a mirror, kept in step by a second push URL on
-the same remote rather than by a job. The mirror therefore holds only what a
-push through that remote sent it: a branch or tag made on GitHub itself —
-the release tags, a branch opened from the web — is not on it, and a ref
-deleted on GitHub alone stays on it. A deletion reaches it only when
-`git push origin --delete` runs from a clone with both push URLs, and git
-refuses that whole push to sr.ht when any ref it names is missing there,
-while GitHub still accepts it. Compare `git ls-remote` of
-<https://github.com/JanHaan/Landin> and <https://git.sr.ht/~sinnfrei/landin>
-before deleting, and delete what is only on one of them from that one by its
-URL. Nothing reports a disagreement between the two. `pages.yml` fetches the licensed code
-face from object storage because it is not in this repository; it renders and
-verifies, and runs no compiler test. `scripts/site.sh` renders and packages
-and does not publish. Nix CI is limited to the gate's `flake` job, which
-builds the flake on every run that does not reuse a pass (D585); no derivation is cached, `rv64-qemu` takes only its emulator from
-the flake, and the former automatic Nix manifest is retired. Historical SourceHut gate links
-remain evidence for their original revisions.
-
-`check.py` uses only the Python standard library and changes to its own directory, so it can also be invoked by absolute path from elsewhere. It is a heuristic invariant checker, not a parser, compiler, formatter, or semantic test suite. Run the full command after documentation changes; targeted checking of an absolute `tour.md` path does not run all citation checks.
-
-Use `scripts/dev-test.sh --host --target=linux-x86-64` on the Mac for
-compiler-host feedback, and expect every selected case to pass. The unfiltered harness includes Linux
-execution and fails without its target toolchain, so do not run Linux
-containers, Linux workload emission or repeated complete suites on the Mac as
-routine feedback. Run changed-component tests while editing, then push the
-final candidate to a branch for one complete CI matrix. Do not repeat the
-complete local matrix merely before pushing and watching the same CI tests.
-Before promoting the candidate to main, verify its complete gate succeeded
-and that the promoted tree is the one tested; merge changes require new
-evidence. A full local run remains useful when an investigation requires it,
-and is not a substitute for the multi-host gate.
-After documentation changes run the full `python3 check.py` and review the
-prose against what it describes. The explanatory reuse exception does not
-cover generated Ada or catalogues, executable examples or fixtures, or the
-grammar and semantic rules in `spec.md`. `LANDIN_TEST_JOBS` splits the corpus fixtures across
-workers, which is most of what the suite costs. One worker is still the
-default, and `scripts/parallel-equivalence.sh` is what holds a wider run to
-the same verdicts.
-
-Linux, Darwin and Cortex-M runtime and debugger evidence comes from the
-gate, or from a host you run yourself; the former exact-revision native
-acceptance runner is retired.
-A Darwin change receives focused checks on a Mac before it is pushed, and so,
-when a Mac is available, does a change to the harness or to fixtures the
-Darwin lanes run: `darwin-parity` and `darwin-host` were the lanes most often
-red in October's gate runs. The full Darwin suites run in the candidate's CI
-matrix. LLDB must inherit a
-graphical or terminal security audit session; an arbitrary background
-session may not launch a debugged process, regardless of debugger rights.
-The hosted macOS image's runner session may launch one. The first native Mac run's retained
-expected-refusal transcript, in which the unfiltered harness failed only for
-want of a Linux driver, is historical bootstrap evidence, never a current
-success rule.
-`docs/process.md` explains the workflow.
-
-`scripts/test.sh` builds and runs the complete Linux test program on native
-Linux. Its `--host` selector retains compiler checks on the Mac. `scripts/dev-build.sh` and
-`scripts/dev-test.sh` use GPRbuild's checksum mode for fast feedback, and the
-latter accepts exact `--suite`, `--case` and `--fixture` selectors, as many
-as a change reaches in one run; each named fixture executes in turn. A
-filtered run says `FILTERED` in its transcript and is not gate evidence. There
-is no separate lint or typecheck step: the pinned build treats every warning
-as an error and enforces GNAT style checks. Warnings are policy, not preference
-— do not silence one without a recorded reason.
-
-Staleness is decided by source checksums, not timestamps: `build.sh` rebuilds
-from clean when the manifest disagrees, because an edited-and-reverted file
-keeps a newer mtime than the object built from it and gprbuild would serve the
-stale object. The developer wrappers instead pass the pinned GPRbuild's `-m2`
-checksum mode; source inventory or project-file changes still force a clean
-tree, and a failed developer build is resumed rather than cleaned. A clean
-tree keeps `bin/`: executables are linked into `link/` and published into
-`bin/` by a rename, only while no corpus lane or manifest run holds the
-build's readers lock (`scripts/build_lock.py`). A compiler-only build records `refine` as current without claiming that
-`landin_tests` is current; the next full build still builds the test program.
+Before closing an implementation item, follow
+[closing an item](docs/process.md#closing-an-item): run activations against
+the item's starting commit, read unmatched rows, and run the build-modes
+comparison and scaling check when lowering or emission changed. After any
+documentation edit run the full `python3 check.py` and review the prose
+against what it describes. A change to the harness or fixtures that Darwin
+runs also receives focused native Mac checks when a Mac is available; the
+full Darwin lanes belong to the candidate's gate.
 
 ## Friction is a finding
 
@@ -412,58 +195,10 @@ Use the repository documents in this order:
 5. `handoff.md` summarizes the inherited design principles and decisions that should not be reversed without new evidence.
 6. `check.py` enforces cheap textual invariants across the specification, roadmap, prototypes, and the other live documents — including that the container recipe, `compiler/ada/TOOLCHAIN.md` and `flake.nix` pin the same toolchain, the flake by reading `environments/pins.sh` rather than naming a version of its own. Extend it when a new mechanically checkable invariant is introduced or when it misses a textual defect.
 
-`check.py` also checks the grammar in `spec.md`: it reads the productions, holds every rule to being defined and reachable, and derives every `.ldn` under `compiler/tests/fixtures/positive`. A negative fixture is held to being *underivable* only when the frontend is what refuses it: one a later stage refuses is legal source and must derive, which its `codes:` is what says (see below). A grammar change that breaks a fixture, or a fixture the grammar cannot derive, fails there. `check.py` does not parse the corpus with the structural editor grammar in `highlight/tree-sitter`; the gate's `editor-grammar` job does, and `./highlight/test.sh --integration` runs that pass inside `nix develop`, which `python3 scripts/activations.py` names whenever the changes reach the grammar, a positive, runtime or ABI fixture or `core/`. A change to the editor grammar or its queries takes two commits, the second moving the editors' pins with `python3 highlight/grammar_pin.py` (`highlight/README.md`). Do not weaken a fixture to make a grammar change pass — the corpus is the agreement the parser has to meet, and the parser suite requires the same verdict from the other side.
-
-A negative fixture's `codes:` is an ordered list, and it also says which stage refused the fixture: `check.py` reads which codes the frontend raises out of the two packages that raise them and requires the grammar to derive a program that only a later stage refused. Do not read a stage off a code's number — the catalogue's header forbids it, and `L0010` began in lexical refusal and is now raised only by the parser.
-
-Four tables in the compiler are transcriptions of the grammar rather than paraphrases of it, and `check.py` compares each with its source. `Landin.Tokens`' reserved words must be `spec.md`'s own `keyword` production. `Landin.Syntax.Precedence` must have [1820]'s levels in [1820]'s order, with the same operators at each, the same fold, the same prefix set and first sets that agree with the grammar's own. The parser's refusal tables cover the words [1760] does not reserve, so only the parser can meet them; the checker's refused-type table covers scalar type names the grammar admits but the kernel has deferred. Both tables must spell words the tour writes, cite paragraphs that exist, and state each refused form's standing: a recorded source-form boundary, a withdrawn form, or a transfer to a successor roadmap. `Landin.Types` spells the thirteen enabled scalar names separately because it maps each onto a machine width. Add a level, an operator, a refused construct or a type in one place and the check says which other place disagrees.
-
-The five documents are Markdown, and the form carries invariants rather than
-being a style. A construct is `### [NNNN] Title` at column 0 and nothing else
-is; a citation is inline and can never be mistaken for a definition, which in
-the `.txt` form it could — 33 lines looked like definitions and were
-citations, and 16 real definitions sat indented inside one example, which is
-how [1050] was missed twice. A Landin example is a fenced block tagged
-`landin`, a production is tagged `landin-grammar`, and an untagged fence is a
-fault: what a block *is* is stated rather than guessed, and the heuristic it
-replaced accepted 114 lines of English as code. Prose is never indented four
-spaces, because Markdown reads that as a code block — an aligned list belongs
-in a table.
-
-`R§n` and `H§n` citations preserved in the roadmap refer to an external design archive; the tracked repository does not depend on that archive.
-
-The documents selected in `docs/site/render_html.py` are published as reading
-copies at <https://www.701.dev>. The text files are the sources; the pages are
-generated and never edited by hand. See `docs/site/README.md` for the scope.
-
-The mark lives in `assets/`, not in the site renderer. `assets/icon.svg` is
-the drawing — `701` as a path, so no renderer needs Futura — and
-`assets/landin_icon.py` is every rendering of it: the light, dark, contrast,
-`currentColor`, monochrome and `prefers-color-scheme` variants, the inline
-fragment, and the `data:` URL a page carries. Its four colours are the
-site's own, and `check.py` holds them to the stylesheet in
-`docs/site/render_html.py` and to the drawing's own attributes. Add a
-variant there rather than in a consumer, and keep it standard-library-only
-so the site keeps its no-dependency build. See `assets/README.md`.
-
-The two faces the pages are set in are declared in `assets/fonts.py`, not
-in the site renderer. Each family is the subset webfont package its source
-delivers, and `assets/fonts.py` is every rendering of them: the
-`@font-face` block a page carries, the `--ui` and `--mono` stacks, and the
-list of files copied beside the pages. `Nunito Sans` is under the OFL and
-vendored in `assets/fonts/`; `MonoLisaCode` is under a foundry EULA that
-forbids passing the files on, so it lives in the private `landin-fonts`
-repository, found through `LANDIN_FONTS` or beside this one, and a host
-without it renders in the fallback stack while the publishing workflow
-refuses. The module reads each family's own stylesheet rather than
-transcribing thirty `unicode-range` lists, and `check.py` holds every
-character of every rendered document to falling inside a subset of both
-families, because a range nobody covers is a paragraph in a fallback face
-that no word count can see. Add a family there rather than in a consumer,
-keep it standard-library-only, and do not trim the subsets to today's
-documents. See `assets/fonts/README.md`.
-
-Syntax highlighting lives in `highlight/`, not in the site renderer. `highlight/landin_highlight.py` owns the lexical vocabulary rendered by the pages, Pygments, TextMate, Vim, Notepad++, Nano and Kate; `highlight/tree-sitter/` is the checked structural grammar whose queries feed Neovim, Helix and Zed. Emacs provides both native and tree-sitter modes. Generate copied artifacts with `highlight/generate.py`, add a keyword at the shared source rather than in a consumer, and keep the mandatory generator path standard-library-only so the site keeps its no-dependency build. `check.py`'s own list of reserved words is deliberately separate: that one is about legality, this one about colour. See `highlight/README.md`.
+The [document ownership and checks](docs/documents.md#mechanical-document-checks)
+reference explains the grammar/fixture agreement, transcription tables,
+Markdown invariants, generated pages, assets, fonts and highlighters. Read
+the affected part when editing those sources.
 
 ## Prototype coverage
 
