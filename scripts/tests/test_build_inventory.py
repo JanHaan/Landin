@@ -858,7 +858,13 @@ class DeveloperScripts(unittest.TestCase):
                         " ... --suite=NAME ... --case=SUITE/NAME ...]",
                         result.stdout)
                     self.assertIn("--shard=I/N", result.stdout)
-        source = (ROOT / "compiler/ada/tests/src/landin_tests.adb").read_text()
+                    # The slow suites are named with what they run, and
+                    # the worker count that shortens one of them.
+                    for said in ("fixture execution  emits every positive",
+                                 "LANDIN_TEST_JOBS=N splits",
+                                 "  parser  ", "  memory  "):
+                        self.assertIn(said, result.stdout)
+        source =(ROOT / "compiler/ada/tests/src/landin_tests.adb").read_text()
         declared = source[source.index("Expected_Suites : constant"):]
         declared = declared[:declared.index("];")]
         suites = [name.strip() for name in re.findall(r'"([^"]*)"', declared)]
