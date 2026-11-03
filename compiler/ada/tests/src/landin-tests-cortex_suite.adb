@@ -4006,6 +4006,173 @@ package body Landin.Tests.Cortex_Suite is
       end;
    end Script_Without_Program;
 
+   --  D900: :NONE can hide allocated sections from PT_LOAD, and startup
+   --  follows symbols even when a script rebinds them away from sections.
+   procedure RAM_Section_Contract (Item : in out Landin.Testing.Context);
+   procedure RAM_Section_Contract (Item : in out Landin.Testing.Context) is
+      Base : constant := 16#2000_0000#;
+      Bottom : constant := Base + 12 * 1024;
+
+      function Executable (Mode : Positive) return String;
+      function Executable (Mode : Positive) return String is
+         Data : String (1 .. 8192) := [others => ASCII.NUL];
+         Strings : U.Unbounded_String := U.To_Unbounded_String
+           (String'(1 => ASCII.NUL));
+         Symbols : Natural := 1;
+         procedure Put (At_Byte, Value : Natural; Width : Positive := 4);
+         procedure Put (At_Byte, Value : Natural; Width : Positive := 4) is
+            Rest : Natural := Value;
+         begin
+            for Index in 0 .. Width - 1 loop
+               Data (At_Byte + Index + 1) := Character'Val (Rest mod 256);
+               Rest := Rest / 256;
+            end loop;
+         end Put;
+         procedure Symbol (Name : String; Value : Natural);
+         procedure Symbol (Name : String; Value : Natural) is
+            At_Byte : constant Natural := 3072 + Symbols * 16;
+         begin
+            Put (At_Byte, U.Length (Strings));
+            Put (At_Byte + 4, Value);
+            Put (At_Byte + 12, 16#10#, 1);
+            Put (At_Byte + 14, 16#FFF1#, 2);
+            U.Append (Strings, Name & ASCII.NUL);
+            Symbols := Symbols + 1;
+         end Symbol;
+         procedure Section
+           (Index, Kind, Flags, Address, Offset, Size : Natural);
+         procedure Section
+           (Index, Kind, Flags, Address, Offset, Size : Natural) is
+            At_Byte : constant Natural := 4096 + Index * 40;
+         begin
+            Put (At_Byte + 4, Kind);
+            Put (At_Byte + 8, Flags);
+            Put (At_Byte + 12, Address);
+            Put (At_Byte + 16, Offset);
+            Put (At_Byte + 20, Size);
+         end Section;
+      begin
+         Data (1 .. 6) := Character'Val (127) & "ELF"
+           & Character'Val (1) & Character'Val (1);
+         Put (16, 2, 2);
+         Put (18, 40, 2);
+         Put (28, 52);
+         Put (32, 4096);
+         Put (42, 32, 2);
+         Put (44, 1, 2);
+         Put (46, 40, 2);
+         Put (48, 8, 2);
+         --  One in-place SRAM segment holds vectors and text. The valid
+         --  .bss below has no program header, as a :NONE NOLOAD output.
+         Put (52, 1);
+         Put (56, 256);
+         Put (60, Base);
+         Put (64, Base);
+         Put (68, 512);
+         Put (72, 512);
+         Put (256, Base + 16 * 1024);
+         Put (260, Base + 257);
+         Symbol ("_landin_firmware_vectors", Base);
+         Symbol ("_landin_firmware_reset", Base + 256);
+         Symbol ("_landin_firmware_unhandled", Base + 260);
+         Symbol ("_landin_firmware_stack_top", Base + 16 * 1024);
+         Symbol ("_landin_firmware_stack_bottom", Bottom);
+         Symbol ("_landin_firmware_data_load", Base + 512);
+         Symbol ("_landin_firmware_data_start", Base + 512);
+         Symbol ("_landin_firmware_data_end", Base + 512);
+         Symbol ("_landin_firmware_ramtext_load", Base + 512);
+         Symbol ("_landin_firmware_ramtext_start", Base + 512);
+         Symbol ("_landin_firmware_ramtext_end", Base + 512);
+         Symbol ("_landin_firmware_bss_start",
+           (if Mode in 6 | 9 then 16#1000_0000# else Base + 512));
+         Symbol ("_landin_firmware_bss_end",
+           (if Mode = 6 then 16#1000_0010#
+            elsif Mode = 9 then 16#1000_0000#
+            elsif Mode = 8 then Base + 508 else Base + 528));
+         Symbol ("_landin_firmware_region_RAM_data_load", Base + 528);
+         Symbol ("_landin_firmware_region_RAM_data_start", Base + 528);
+         Symbol ("_landin_firmware_region_RAM_data_end", Base + 528);
+         Symbol ("_landin_firmware_region_RAM_bss_start",
+           (if Mode in 7 | 9 then 16#1000_0000#
+            elsif Mode = 10 then Bottom else Base + 528));
+         Symbol ("_landin_firmware_region_RAM_bss_end",
+           (if Mode = 7 then 16#1000_0010#
+            elsif Mode = 9 then 16#1000_0000#
+            elsif Mode = 10 then Bottom + 16 else Base + 544));
+         Data (1025 .. 1024 + U.Length (Strings)) := U.To_String (Strings);
+         Section (1, 2, 0, 0, 3072, Symbols * 16);
+         Put (4096 + 40 + 24, 2);
+         Section (2, 3, 0, 0, 1024, U.Length (Strings));
+         Section (3, 1, 2, Base, 256, 192);
+         Section (4, 1, 6, Base + 256, 512, 16);
+         Section (5, 8, 3, Base + 512, 768, 32);
+         case Mode is
+            when 2 => Section (6, 8, 3, 16#1000_0000#, 0, 16);
+            when 3 => Section (6, 8, 3, Bottom, 0, 16);
+            when 4 => Section (6, 1, 3, Base + 1024, 800, 16);
+            when 5 => Section (6, 1, 2, Base + 256, 900, 16);
+            when others => null;
+         end case;
+         --  Debug/ELF metadata outside SRAM is not allocated target memory.
+         Section (7, 1, 0, 16#1000_0000#, 900, 16);
+         return Data;
+      end Executable;
+   begin
+      for Mode in 1 .. 10 loop
+         declare
+            Host : Landin.Testing.Fakes.Fake_Filesystem;
+            Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+            Args : Landin.Platform.Path_List;
+            Wanted : constant String :=
+              (case Mode is
+                 when 1 | 9 => "",
+                 when 2 => "an allocated RAM section must stay in SRAM",
+                 when 3 => "an allocated RAM section overlaps",
+                 when 4 | 5 => "file-backed section has no matching load",
+                 when 6 => "_landin_firmware BSS range must stay in SRAM",
+                 when 7 => "region_RAM BSS range must stay in SRAM",
+                 when 8 => "_bss_end precedes its start",
+                 when 10 => "region_RAM BSS range overlaps");
+         begin
+            Host.Add_Firmware_Library;
+            Host.Add_File ("p.ldn", "link(region: ""RAM"") mut z: u32 = zeroed"
+              & " start: () -> none = z = 1 end start");
+            Host.Add_File ("custom.ld", "PHDRS { ram PT_LOAD; } SECTIONS {"
+              & " .bss (NOLOAD) : { *(.bss*) } > "
+              & (if Mode = 2 then "FLASH" else "RAM") & " :NONE }");
+            Tools.Set_Output_Content (Executable (Mode));
+            Tools.Set_Result (0, "");
+            Args.Append ("--target=cortex-m0");
+            Args.Append ("--firmware-layout=ram");
+            Args.Append ("--firmware-entry=start");
+            Args.Append ("--emit=exe");
+            Args.Append ("--linker-script=custom.ld");
+            Args.Append ("-o");
+            Args.Append ("p.elf");
+            Args.Append ("p.ldn");
+            declare
+               Ran : constant Landin.Driver.Outcome :=
+                 Landin.Driver.Execute (Args, Host, Tools);
+            begin
+               if Wanted = "" then
+                  Landin.Testing.Check_Equal
+                    (Item, Ran.Status, Landin.Driver.Status_Success,
+                     "RAM NOLOAD/empty range control" & Mode'Image & ": "
+                     & U.To_String (Ran.Report));
+               else
+                  Landin.Testing.Check
+                    (Item, Ran.Status /= Landin.Driver.Status_Success
+                       and then Contains (U.To_String (Ran.Report), "L0519")
+                       and then Contains (U.To_String (Ran.Report), Wanted)
+                       and then not Host.Exists ("p.elf"),
+                     "RAM allocated-section refusal" & Mode'Image & ": "
+                     & U.To_String (Ran.Report));
+               end if;
+            end;
+         end;
+      end loop;
+   end RAM_Section_Contract;
+
    --  D900: a RAM build derives placement and never copies itself.
    procedure RAM_Layout (Item : in out Landin.Testing.Context);
    procedure RAM_Layout (Item : in out Landin.Testing.Context) is
@@ -4096,6 +4263,9 @@ package body Landin.Tests.Cortex_Suite is
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "cortex ABI", "RAM custom scripts validate allocated sections",
+         RAM_Section_Contract'Access);
       Landin.Testing.Register
         (Into, "cortex ABI", "RAM layout derives SRAM placement",
          RAM_Layout'Access);

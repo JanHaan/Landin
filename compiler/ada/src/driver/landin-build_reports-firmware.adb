@@ -629,6 +629,45 @@ package body Landin.Build_Reports.Firmware is
            is (First >= Of_Region.Origin
                and then First + Size <= Of_Region.Origin + Of_Region.Length);
 
+         function RAM_Range_Fault
+           (First, Size : Landin.Targets.Byte_Count; Name : String)
+            return String;
+         function RAM_Range_Fault
+           (First, Size : Landin.Targets.Byte_Count; Name : String)
+            return String is
+         begin
+            if Size = 0 then
+               return "";
+            elsif First < Value ("_landin_firmware_stack_top")
+              and then First + Size > Value ("_landin_firmware_stack_bottom")
+            then
+               return "clause 3, the stack: " & Name
+                 & " overlaps the reserved stack";
+            elsif not (for some Region in 1 .. Profile.Count =>
+              Firmware.RAM_Region (Profile, Region)
+              and then Within (First, Size, Profile.Regions (Region)))
+            then
+               return "clause 4, the RAM layout: " & Name
+                 & " must stay in SRAM; use --firmware-layout=boot"
+                 & " for the board boot check";
+            end if;
+            return "";
+         end RAM_Range_Fault;
+
+         function BSS_Fault (Stem : String) return String;
+         function BSS_Fault (Stem : String) return String is
+            First : constant Landin.Targets.Byte_Count :=
+              Value (Stem & "_bss_start");
+            Last : constant Landin.Targets.Byte_Count :=
+              Value (Stem & "_bss_end");
+         begin
+            if Last < First then
+               return "clause 4, the RAM layout: " & Stem
+                 & "_bss_end precedes its start";
+            end if;
+            return RAM_Range_Fault (First, Last - First, Stem & " BSS range");
+         end BSS_Fault;
+
          Required : US.Unbounded_String;
          Missing : US.Unbounded_String;
 
@@ -1001,6 +1040,103 @@ package body Landin.Build_Reports.Firmware is
                   end;
                end loop;
             end;
+            declare
+               Sections : constant Natural := Natural (Word (32));
+               Section_Size : constant Natural := Natural (Number (46, 2));
+               Programs : constant Natural := Natural (Word (28));
+               Program_Size : constant Natural := Natural (Number (42, 2));
+            begin
+               if Section_Size < 40 or else Program_Size /= 32 then
+                  return "the linked image is not a well-formed ELF"
+                    & " executable";
+               end if;
+               for Index in 0 .. Natural (Number (48, 2)) - 1 loop
+                  declare
+                     Header : constant Natural :=
+                       Sections + Index * Section_Size;
+                     First : constant Landin.Targets.Byte_Count :=
+                       Word (Header + 12);
+                     Size : constant Landin.Targets.Byte_Count :=
+                       Word (Header + 20);
+                     Offset : constant Landin.Targets.Byte_Count :=
+                       Word (Header + 16);
+                     Covered : Boolean := False;
+                  begin
+                     --  SHF_ALLOC, including SHT_NOBITS excluded from the
+                     --  program headers by a developer's :NONE placement.
+                     --  Nonallocated symbol/debug tables are ELF metadata.
+                     if (Word (Header + 8) / 2) mod 2 = 1 and then Size > 0
+                     then
+                        declare
+                           Fault : constant String := RAM_Range_Fault
+                             (First, Size, "an allocated RAM section");
+                        begin
+                           if Fault /= "" then
+                              return Fault;
+                           end if;
+                        end;
+                        if Word (Header + 4) /= 8 then
+                           for Part in 0 .. Natural (Number (44, 2)) - 1 loop
+                              declare
+                                 Program : constant Natural :=
+                                   Programs + Part * Program_Size;
+                                 Address : constant
+                                   Landin.Targets.Byte_Count :=
+                                     Word (Program + 8);
+                                 File_At : constant
+                                   Landin.Targets.Byte_Count :=
+                                     Word (Program + 4);
+                                 File_Size : constant
+                                   Landin.Targets.Byte_Count :=
+                                     Word (Program + 16);
+                              begin
+                                 Covered := Covered or else
+                                   (Word (Program) = 1
+                                    and then File_Size <=
+                                      Word (Program + 20)
+                                    and then First >= Address
+                                    and then First + Size <=
+                                      Address + File_Size
+                                    and then Offset =
+                                      File_At + First - Address
+                                    and then Offset + Size <=
+                                      Landin.Targets.Byte_Count (Data'Length));
+                              end;
+                           end loop;
+                           if not Covered then
+                              return "clause 4, the RAM layout: an allocated"
+                                & " file-backed section has no matching load"
+                                & " segment";
+                           end if;
+                        end if;
+                     end if;
+                  end;
+               end loop;
+            end;
+            --  Startup follows symbols, which a script can rebind without
+            --  moving the section itself. Check every span it will clear.
+            declare
+               Fault : constant String := BSS_Fault ("_landin_firmware");
+            begin
+               if Fault /= "" then
+                  return Fault;
+               end if;
+            end;
+            for Index in 1 .. Profile.Count loop
+               if Used (Index)
+                 and then Firmware.Writable (Profile.Regions (Index).Mode)
+               then
+                  declare
+                     Fault : constant String := BSS_Fault
+                       ("_landin_firmware_region_"
+                        & Firmware.Spelling (Profile.Regions (Index).Name));
+                  begin
+                     if Fault /= "" then
+                        return Fault;
+                     end if;
+                  end;
+               end if;
+            end loop;
          end if;
 
          --  Clause 4: each initialized image loads from flash.
