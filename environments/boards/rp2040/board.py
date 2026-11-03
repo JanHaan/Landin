@@ -144,11 +144,31 @@ def report(console, count):
     return common.ask(console, REPORT, 't', count)
 
 
+STARTUP = b'\x06'
+GO = b'\x07'
+
+
+def startup(console):
+    """Retry ACK before UART readiness; GO commits the fresh DMA epoch."""
+    for attempt in range(10):
+        console.send(STARTUP)
+        try:
+            stream = console.wait(lambda s: any(t == 'b' for t, _ in frames_safe(s)),
+                                  0.5, 'the boot frame')
+            break
+        except Failed:
+            if attempt == 9:
+                raise
+    console.send(GO)
+    console.wait(lambda s: any(t == 'r' for t, _ in frames_safe(s)), 5, 'startup readiness')
+    return stream, len(console.sent)
+
+
 def scenario(console, run, seed, pins=None, mode='boot', vector=None):
     """The board-port scenario and its oracle.  Returns the verdicts and
     the last telemetry frame."""
     verdicts = {}
-    stream = console.wait(lambda s: any(t == 'b' for t, _ in frames_safe(s)), 5, 'the boot frame')
+    stream, prefix = startup(console)
     boot = [f for t, f in frames_safe(stream) if t == 'b'][0]
     if mode == 'boot':
         require(boot['r'] == CHIP_RESET_HAD_POR,
@@ -234,7 +254,9 @@ def scenario(console, run, seed, pins=None, mode='boot', vector=None):
     echo = echo_of(console.wait(lambda s: True, 1, 'the stream'))
     sent = bytes(console.sent)
     discarded = [(sent.index(burst), len(burst)), (sent.index(lost) + 32, len(lost) - 32)]
-    expected, at = bytearray(), 0
+    # All ACK requests and GO precede the restarted DMA epoch. Retain them
+    # in sent.bin while excluding them from the echo and handled count.
+    expected, at = bytearray(), prefix
     for begin, length in discarded:
         expected += sent[at:begin]
         at = begin + length
@@ -354,10 +376,10 @@ def main():
         bridge, result['bridge'] = common.shared_bridge(
             run, args.probehive, args.probe_host, args.slot, args.bridge_slots, args.debug_port,
             args.uart_port)
-        console = common.TcpConsole(args.uart_port + args.slot)
         if args.mode == 'ram':
             result['warm_load'] = common.ram_load(run, args, 'rp2040', elf)
-        else:
+        console = common.TcpConsole(args.uart_port + args.slot)
+        if args.mode == 'boot':
             power_cycle(common.InGroup(run, args.hub_group), args)
         verdicts, final = scenario(console, run, args.seed, pins, args.mode,
             common.elf_sections(elf)[1]['.isr_vector'][0])

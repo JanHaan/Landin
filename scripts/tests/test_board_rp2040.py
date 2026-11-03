@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Controls for the RP2040 board tool's oracle, without a board (D595)."""
 import importlib.util
+import contextlib
 import tempfile
 from pathlib import Path
 from types import SimpleNamespace
@@ -43,7 +44,126 @@ STATUS = """Current status for hub 7-2.3.3 [0bda:5411 Generic USB2.1 Hub, USB 2.
 """
 
 
+def console_order(test, board, built, *, mode='ram', hazard=False):
+    """Run a simulated board entry point; debug and UART may never overlap."""
+    with tempfile.TemporaryDirectory() as tmp:
+        elf = Path(tmp) / 'image.elf'
+        elf.write_bytes(b'image')
+        events = []
+        lock = mock.Mock(file=True)
+        lock.acquire.return_value = lock
+        console = mock.Mock(received=b'', sent=b'')
+        console.close.side_effect = lambda: events.append('close')
+        argv = ['board.py', '--mode=' + mode, '--refine=refine', '--ram-loader=loader',
+                '--probe-rs=probe', '--nm=nm', '--objdump=objdump',
+                '--probehive=' + tmp, '--output=' + tmp + '/run', '--cascade=1-1']
+        if not hazard and board.__file__.endswith('/rp2040/board.py'):
+            argv.remove('--objdump=objdump')
+        if not hazard and board.__file__.endswith('/rp2350/board.py'):
+            argv.remove('--objdump=objdump')
+        with contextlib.ExitStack() as stack:
+            def patch(owner, name, **kwargs):
+                return stack.enter_context(mock.patch.object(owner, name, **kwargs))
+            patch(board.sys, 'argv', new=argv)
+            patch(board.common, 'board_preflight')
+            patch(board.common, 'place_hubs')
+            patch(board.common, 'Pace')
+            patch(board.common, 'rig_lock', return_value=lock)
+            patch(board.common, 'shared_bridge', return_value=(None, {}))
+            patch(board.common, 'TcpConsole', side_effect=lambda *_:
+                  events.append('console') or console)
+            patch(board.common, 'ram_load', side_effect=lambda *_:
+                  events.append('load') or {'mode': 'warm'})
+            patch(board.common, 'elf_sections', return_value=(b'', {'.isr_vector': (0x20000000, 0, 8)}))
+            patch(board, 'build', return_value=(elf,) + built)
+            patch(board, 'flash', return_value='RP235x')
+            patch(board, 'power_cycle', side_effect=lambda *_: events.append('power'))
+            patch(board, 'scenario', return_value=({}, {}, 0) if hazard else ({}, {}))
+            patch(board, 'cross_check', side_effect=lambda *_:
+                  events.append('check') or {})
+            if hasattr(board, 'restore_fixed'):
+                patch(board, 'restore_fixed')
+            patch(board.common, 'finish_boot')
+            if hasattr(board, 'pico2'):
+                patch(board.pico2, 'boot_location')
+                patch(board.pico2, 'refuse_bootsel')
+            test.assertEqual(board.main(), 0)
+        if mode == 'ram':
+            test.assertLess(events.index('load'), events.index('console'))
+            test.assertNotIn('power', events)
+        else:
+            test.assertLess(events.index('console'), events.index('power'))
+            test.assertNotIn('load', events)
+        test.assertLess(events.index('close'), events.index('check'))
+
+
+def startup_order(test, board, *, hazard=False):
+    """A boot frame is unavailable until ACK; normal traffic follows it."""
+    fields = dict(r=board.CHIP_RESET_HAD_POR, v=board.MTVEC if hazard else board.VECTORS,
+                  k=board.CLK_REF_XOSC)
+    if hazard:
+        fields['a'] = board.MARCHID_HAZARD3
+    boot = b'\x02b' + b''.join(b' %s=%08x' % (key.encode(), value)
+                                    for key, value in fields.items()) + b'\x03\n'
+    class Console:
+        def __init__(self):
+            self.sent = bytearray()
+            self.received = bytearray()
+        def send(self, data):
+            self.sent += data
+            if data == board.STARTUP:
+                self.received += boot
+            if data == board.GO:
+                self.received += b'\x02r\x03\n'
+        def wait(self, predicate, *_):
+            test.assertTrue(predicate(self.received))
+            return bytes(self.received)
+    console = Console()
+    with mock.patch.object(board, 'report', side_effect=RuntimeError('ready for traffic')):
+        with test.assertRaisesRegex(RuntimeError, 'ready for traffic'):
+            board.scenario(console, None, 1)
+    test.assertEqual(bytes(console.sent), board.STARTUP + board.GO + board.SHARED[:1])
+    test.assertEqual(board.echo_of(console.received), b'')
+
+
+def startup_retry(test, board):
+    """The first ACK is lost before UART setup; retries stay out of payload."""
+    class Console:
+        def __init__(self):
+            self.sent = bytearray()
+            self.received = bytearray()
+        def send(self, data):
+            self.sent += data
+            if data == board.STARTUP and len(self.sent) > 1:
+                self.received += b'\x02b r=00000001\x03\n'
+            if data == board.GO:
+                self.received += b'\x02r\x03\n'
+        def wait(self, predicate, *_):
+            if predicate(self.received):
+                return bytes(self.received)
+            raise board.Failed('waiting for frame')
+    console = Console()
+    _, prefix = board.startup(console)
+    test.assertEqual(console.sent, board.STARTUP * 2 + board.GO)
+    test.assertEqual(prefix, 3)
+    test.assertEqual(board.echo_of(console.received), b'')
+    with mock.patch.object(console, 'wait', side_effect=board.Failed('no board')):
+        with test.assertRaisesRegex(board.Failed, 'no board'):
+            board.startup(console)
+    test.assertEqual(console.sent.count(board.STARTUP), 12)
+
+
 class Oracle(unittest.TestCase):
+    def test_uart_opens_after_ram_loading_and_before_boot_power(self):
+        for mode in ('ram', 'boot'):
+            with self.subTest(mode=mode):
+                console_order(self, BOARD, (b'', 0, {}), mode=mode)
+
+    def test_startup_ack_precedes_boot_frame_and_application_traffic(self):
+        startup_order(self, BOARD)
+
+    def test_startup_retries_a_lost_ack_with_a_bounded_wait(self):
+        startup_retry(self, BOARD)
     def test_default_ram_run_builds_before_lock_and_never_flashes_or_cycles_power(self):
         with tempfile.TemporaryDirectory() as tmp:
             elf = Path(tmp) / 'image.elf'

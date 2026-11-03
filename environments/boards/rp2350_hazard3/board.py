@@ -251,11 +251,31 @@ def report(console, count):
     return common.ask(console, REPORT, 't', count)
 
 
+STARTUP = b'\x06'
+GO = b'\x07'
+
+
+def startup(console):
+    """Retry ACK before UART readiness; GO commits the fresh DMA epoch."""
+    for attempt in range(10):
+        console.send(STARTUP)
+        try:
+            stream = console.wait(lambda s: any(t == 'b' for t, _ in frames_safe(s)),
+                                  0.5, 'the boot frame')
+            break
+        except Failed:
+            if attempt == 9:
+                raise
+    console.send(GO)
+    console.wait(lambda s: any(t == 'r' for t, _ in frames_safe(s)), 5, 'startup readiness')
+    return stream, len(console.sent)
+
+
 def scenario(console, run, seed, pins=None, mode='boot', vector=None):
     """The board-port scenario and its oracle.  Returns the verdicts, the
     last telemetry frame and how many there were."""
     verdicts = {}
-    stream = console.wait(lambda s: any(t == 'b' for t, _ in frames_safe(s)), 5, 'the boot frame')
+    stream, prefix = startup(console)
     boot = [f for t, f in frames_safe(stream) if t == 'b'][0]
     if mode == 'boot':
         require(boot['r'] == CHIP_RESET_HAD_POR,
@@ -350,7 +370,9 @@ def scenario(console, run, seed, pins=None, mode='boot', vector=None):
     echo = echo_of(console.wait(lambda s: True, 1, 'the stream'))
     sent = bytes(console.sent)
     discarded = [(sent.index(burst), len(burst)), (sent.index(lost) + 32, len(lost) - 32)]
-    expected, at = bytearray(), 0
+    # All ACK requests and GO precede the restarted DMA epoch. Retain them
+    # in sent.bin while excluding them from the echo and handled count.
+    expected, at = bytearray(), prefix
     for begin, length in discarded:
         expected += sent[at:begin]
         at = begin + length
@@ -401,6 +423,7 @@ def main():
     parser.add_argument('--probehive', type=Path, required=True, help='a probehive checkout')
     parser.add_argument('--probe-rs', type=Path, default=shutil.which('probe-rs'),
                         help='a probe-rs whose CMSIS-DAP TCP transport reaches the bridge')
+    parser.add_argument('--probe', help="probe-rs's slot selector, direct UDP by default")
     parser.add_argument('--slot', type=int, default=SLOT, help='the probehive slot, 1 on the'
                         " maintainer's rig")
     parser.add_argument('--nm', default=shutil.which('riscv64-elf-nm')
@@ -465,15 +488,16 @@ def main():
             result['flash_readback'] = 'matches'
         if pins:
             pins.release()
-        console = common.TcpConsole(args.uart_port + args.slot)
         if args.mode == 'ram':
             pico2.refuse_bootsel(common.InGroup(run, args.hub_group), args, False)
             result['warm_load'] = common.ram_load(run, args, 'rp2350_hazard3', elf)
-        else:
+        console = common.TcpConsole(args.uart_port + args.slot)
+        if args.mode == 'boot':
             power_cycle(common.InGroup(run, args.hub_group), args)
         verdicts, final, reports = scenario(console, run, args.seed, pins, args.mode,
             common.elf_sections(elf)[1]['.isr_vector'][0] | 1)
         result['verdicts'] = verdicts
+        console.close()
         result['swd'] = cross_check(run, args, names, final, reports)
         args.pace.before('board scenario completion')
         result['status'] = 'passed'
