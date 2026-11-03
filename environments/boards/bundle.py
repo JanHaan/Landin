@@ -152,14 +152,21 @@ def consume(run, args, board):
     prepared = validate(args.bundle, board=board, mode=args.mode)
     destination = Path(run.out).resolve()
     destination.mkdir(parents=True, exist_ok=True)
+    retained = {}
     for name in prepared['files']:
         source = artifact(prepared, name)
         target = destination / prepared['files'][name]['path']
+        identity = (source.resolve(), prepared['files'][name]['sha256'])
+        if target in retained:
+            if retained[target] != identity:
+                raise Invalid('distinct bundle artifacts collide at: %s' % target)
+            continue
         target.parent.mkdir(parents=True, exist_ok=True)
         if target.exists() and target.resolve() != source.resolve():
             raise Invalid('refusing to replace run artifact: %s' % target)
         if target.resolve() != source.resolve():
             shutil.copyfile(source, target)
+        retained[target] = identity
     manifest = dict(prepared)
     manifest.pop('_directory')
     (destination / 'bundle.json').write_text(json.dumps(manifest, indent=2, sort_keys=True) + '\n')

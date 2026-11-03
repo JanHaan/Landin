@@ -103,14 +103,54 @@ class Bundles(unittest.TestCase):
 
     def test_consume_retains_checked_files_without_running_commands(self):
         output = self.root / 'run'
+        prepared = self.consume(output)
+        self.assertEqual(bundle.artifact(prepared, 'elf').read_bytes(), b'board.elf')
+        self.assertTrue((output / 'bundle.json').is_file())
+
+    def consume(self, output):
         # consume uses this module's runtime root, normally the transferred tree.
         original = bundle.validate
         with mock.patch.object(bundle, 'validate', side_effect=lambda directory, **kw:
                 original(directory, source_root=self.source, **kw)):
-            prepared = bundle.consume(SimpleNamespace(out=output),
+            return bundle.consume(SimpleNamespace(out=output),
                 SimpleNamespace(bundle=self.directory, mode='boot'), 'rp2040')
-        self.assertEqual(bundle.artifact(prepared, 'elf').read_bytes(), b'board.elf')
-        self.assertTrue((output / 'bundle.json').is_file())
+
+    def fixed_aliases(self):
+        fixed = self.directory / 'fixed.elf'
+        fixed.write_bytes(b'quiet resident image')
+        entry = dict(path='fixed.elf', sha256=bundle.sha(fixed))
+        self.alter(lambda manifest: manifest['files'].update(
+            fixed_elf=dict(entry), fixed_image=dict(entry)))
+        return fixed
+
+    def test_fixed_elf_and_fixed_image_aliases_copy_once(self):
+        fixed = self.fixed_aliases()
+        with mock.patch.object(bundle.shutil, 'copyfile', wraps=bundle.shutil.copyfile) as copy:
+            prepared = self.consume(self.root / 'run')
+        self.assertEqual(sum(call.args[0] == fixed for call in copy.call_args_list), 1)
+        self.assertEqual(bundle.artifact(prepared, 'fixed_elf'), bundle.artifact(prepared, 'fixed_image'))
+        self.assertEqual(bundle.artifact(prepared, 'fixed_image').read_bytes(), b'quiet resident image')
+
+    def test_aliases_do_not_allow_replacing_preexisting_run_inputs(self):
+        fixed = self.fixed_aliases()
+        for same_bytes in (False, True):
+            with self.subTest(same_bytes=same_bytes):
+                output = self.root / ('same' if same_bytes else 'different')
+                output.mkdir()
+                existing = output / 'fixed.elf'
+                original = fixed.read_bytes() if same_bytes else b'another input'
+                existing.write_bytes(original)
+                with self.assertRaisesRegex(bundle.Invalid, 'refusing to replace run artifact'):
+                    self.consume(output)
+                self.assertEqual(existing.read_bytes(), original)
+
+    def test_conflicting_alias_hashes_fail_before_copying(self):
+        self.fixed_aliases()
+        self.alter(lambda manifest: manifest['files']['fixed_image'].update(sha256='another input'))
+        output = self.root / 'run'
+        with self.assertRaisesRegex(bundle.Invalid, 'fixed_image artifact checksum'):
+            self.consume(output)
+        self.assertFalse(output.exists())
 
     def test_manifest_shape_errors_are_actionable(self):
         for value in ([], {'format_version': 1, 'board': 'rp2040', 'mode': 'boot', 'files': []}):
