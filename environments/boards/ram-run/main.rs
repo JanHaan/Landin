@@ -135,6 +135,21 @@ fn in_ram(board: &str, address: u64, size: u64) -> bool {
         ranges.iter().any(|(lo, hi)| address >= *lo && end <= *hi))
 }
 
+fn c3_instruction_ram(board: &str, address: u64) -> bool {
+    board == "esp32c3" && (0x40380000..0x403a0000).contains(&address)
+}
+
+fn validate_sram_access(board: &str, address: u64, size: u64, memory: u64) -> Result<()> {
+    // ESP-IDF C3 Memory Types: the instruction bus permits only aligned
+    // four-byte accesses. Validate both initialized and reserved storage
+    // before opening a probe; never round a transfer into adjacent storage.
+    if c3_instruction_ram(board, address) {
+        ensure!(address % 4 == 0 && size % 4 == 0 && memory % 4 == 0,
+            "C3 instruction SRAM segment {address:#x} requires aligned four-byte storage and transfers");
+    }
+    Ok(())
+}
+
 fn word(bytes: &[u8], at: usize) -> Result<u32> {
     Ok(u32::from_le_bytes(bytes.get(at..at + 4).context("truncated ELF word")?.try_into()?))
 }
@@ -188,6 +203,7 @@ fn image(plan: &Plan) -> Result<Image> {
         if memory == 0 { continue; }
         ensure!(physical == address && size as u64 <= memory && in_ram(&plan.board, address, memory),
             "segment at {address:#x} is not an in-place SRAM image; use the boot check");
+        validate_sram_access(&plan.board, address, size as u64, memory)?;
         ensure!(address + memory <= bottom as u64 || address >= stack as u64,
             "segment overlaps reserved stack");
         ensure!(ranges.iter().all(|(lo,hi)| address + memory <= *lo || address >= *hi),
@@ -276,7 +292,12 @@ fn cleanup(core: &mut Core<'_>, board: &str, arm: bool) -> Result<Value> {
             }
         }
         core.write_core_reg(RegisterId(0x300), 0x1800u32).with_context(|| format!("{board} cleanup write core register {:#x}", 0x300))?; // mstatus: MPP=M, MIE=0
-        core.write_core_reg(RegisterId(0x304), 0u32).with_context(|| format!("{board} cleanup write core register {:#x}", 0x304))?; // mie
+        // ESP32-C3 TRM v1.4 section 1.4.1 lists no mie CSR (0x304).
+        // Its interrupt enables are MMIO, masked below with mstatus.MIE clear.
+        if board != "esp32c3" {
+            core.write_core_reg(RegisterId(0x304), 0u32)
+                .with_context(|| format!("{board} cleanup write core register 0x304"))?;
+        }
         if board == "rp2350_hazard3" {
             // Abandoning an external handler without mret leaves its
             // priority stack active. MEICONTEXT is writable, so reset it
@@ -396,11 +417,25 @@ fn execute(plan: &Plan, image: &Image) -> Result<Value> {
     let mut written = Vec::new();
     for (address, body) in &image.segments {
         if body.is_empty() { continue; }
-        core.write_8(*address, body)
-            .with_context(|| format!("{} write SRAM segment {address:#x} ({} bytes)", plan.board, body.len()))?;
-        let mut back = vec![0; body.len()];
-        core.read_8(*address, &mut back)
-            .with_context(|| format!("{} verify SRAM segment {address:#x} ({} bytes)", plan.board, body.len()))?;
+        let back = if c3_instruction_ram(&plan.board, *address) {
+            // Offline validation guaranteed whole words. Explicit word I/O
+            // avoids probe-rs's byte-width program-buffer loads and stores.
+            let words: Vec<u32> = body.chunks_exact(4)
+                .map(|bytes| u32::from_le_bytes(bytes.try_into().unwrap())).collect();
+            core.write_32(*address, &words)
+                .with_context(|| format!("{} write instruction SRAM segment {address:#x} ({} words)", plan.board, words.len()))?;
+            let mut back = vec![0u32; words.len()];
+            core.read_32(*address, &mut back)
+                .with_context(|| format!("{} verify instruction SRAM segment {address:#x} ({} words)", plan.board, words.len()))?;
+            back.into_iter().flat_map(u32::to_le_bytes).collect::<Vec<u8>>()
+        } else {
+            core.write_8(*address, body)
+                .with_context(|| format!("{} write SRAM segment {address:#x} ({} bytes)", plan.board, body.len()))?;
+            let mut back = vec![0; body.len()];
+            core.read_8(*address, &mut back)
+                .with_context(|| format!("{} verify SRAM segment {address:#x} ({} bytes)", plan.board, body.len()))?;
+            back
+        };
         ensure!(back == *body, "SRAM readback differs at {address:#x}");
         written.push(json!({"address":address,"bytes":body.len(),"sha256":digest(body)}));
     }
@@ -588,6 +623,24 @@ mod tests {
             assert!(!in_ram(board, u64::MAX - 1, 4));
             assert!(!in_ram(board, 0x40000000, 4));
         }
+    }
+    #[test]
+    fn c3_instruction_storage_requires_whole_aligned_words_before_io() {
+        for (address, size, memory) in [(0x40380000, 4, 4),
+                (0x40380180, 0x5b50, 0x5b50), (0x4039fffc, 4, 4),
+                (0x40380200, 0, 16)] {
+            assert!(c3_instruction_ram("esp32c3", address));
+            assert!(validate_sram_access("esp32c3", address, size, memory).is_ok());
+        }
+        for (address, size, memory) in [(0x40380001, 4, 4),
+                (0x40380000, 3, 4), (0x40380000, 4, 5),
+                (0x40380002, 2, 2)] {
+            assert!(validate_sram_access("esp32c3", address, size, memory).is_err());
+        }
+        assert!(!c3_instruction_ram("esp32c3", 0x3fca0000));
+        assert!(!c3_instruction_ram("esp32c5", 0x40800000));
+        assert!(validate_sram_access("esp32c3", 0x3fca0001, 3, 5).is_ok());
+        assert!(validate_sram_access("esp32c5", 0x40800001, 3, 5).is_ok());
     }
     #[test]
     fn c3_aliases_have_disjoint_physical_storage() {
