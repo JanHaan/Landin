@@ -8,6 +8,7 @@ with Landin.Driver;
 with Landin.Platform;
 with Landin.Testing.Fakes;
 with Landin.Platform.Native;
+with Landin.Platform.Overlays;
 with Landin.Source.Names;
 with Landin.Source.Sets;
 with Landin.Source;
@@ -1591,7 +1592,13 @@ package body Landin.Tests.Parser_Suite is
    procedure Reports_Carry_The_Pinned_Codes
      (Item : in out Landin.Testing.Context)
    is
-      Real      : Landin.Platform.Native.Native_Filesystem;
+      Real      : aliased Landin.Platform.Native.Native_Filesystem;
+      --  What a rooted fixture is compiled through: the repository as it
+      --  is, every write refused.  A negative the compiler unexpectedly
+      --  accepts then reports the output it could not write, beside the
+      --  codes it was expected to carry, rather than leaving that output
+      --  where the test program runs.
+      Guarded   : Landin.Platform.Overlays.Overlay (Real'Access);
       Catalogue : Fixtures.Catalogue;
       Pinned    : Natural := 0;
       --  Negatives whose recorded `args` name a `--root=`, run as refine
@@ -1600,6 +1607,11 @@ package body Landin.Tests.Parser_Suite is
 
       function Arguments_Of (First : String; Written : String)
         return Landin.Platform.Path_List;
+
+      --  The report itself, for a failure to show when its codes are not
+      --  the fixture's: an output the run was refused is named there.
+      function Reported (Ran : Landin.Driver.Outcome) return String is
+        ("; the report: " & Unbounded.To_String (Ran.Report));
 
       --  The codes a rendered report carries, in the order it carries
       --  them.  Read out of the bytes rather than out of a list, because
@@ -1700,14 +1712,15 @@ package body Landin.Tests.Parser_Suite is
                   Ran   : constant Landin.Driver.Outcome :=
                     Landin.Driver.Execute
                       (Arguments_Of ("", Fixtures.Args (Fixture)),
-                       Real, Tools);
+                       Guarded, Tools);
                begin
                   Rooted_By_Args := Rooted_By_Args + 1;
                   Landin.Testing.Check_Equal
                     (Item, Codes_In (Unbounded.To_String (Ran.Report)),
                      Fixtures.Normalized_Codes (Fixtures.Codes (Fixture)),
                      Fixtures.Name (Fixture)
-                     & ": the report carries the codes the fixture names");
+                     & ": the report carries the codes the fixture names"
+                     & Reported (Ran));
                   Landin.Testing.Check_Equal
                     (Item, Ran.Status, Fixtures.Status (Fixture),
                      Fixtures.Name (Fixture)
@@ -1747,7 +1760,7 @@ package body Landin.Tests.Parser_Suite is
                                 (Fixtures.Codes (Fixture)),
                               Fixtures.Name (Fixture)
                               & ": the report carries the codes the"
-                              & " fixture names");
+                              & " fixture names" & Reported (Ran));
                            --  A negative whose report is only warnings is
                            --  a program the compiler accepts and says
                            --  something about, and its status says so.
@@ -1800,7 +1813,7 @@ package body Landin.Tests.Parser_Suite is
                                 (Fixture, Corpus, Arguments);
                               Check_Outcome
                                 (Landin.Driver.Execute
-                                   (Arguments, Real, Tools));
+                                   (Arguments, Guarded, Tools));
                            end;
                         end if;
                      end;
