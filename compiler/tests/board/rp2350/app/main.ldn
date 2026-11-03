@@ -127,17 +127,38 @@ start: () -> noreturn =
         _ = problem
         halt(1)
     end
-    report.open_frame(98)
-    report.field(114, reason)
-    report.field(118, table)
-    report.field(107, clocks.clk_ref_selected_read(clocks.base))
-    report.close_frame()
+    -- The host opens its UART only after debug loading has released the
+    -- probe. Each ACK (0x06) asks for the boot frame; the host can retry
+    -- if its first byte arrived before UART initialization. GO (0x07)
+    -- ends the handshake, then a fresh DMA epoch excludes all its bytes.
+    mut startup: [1]u8 = zeroed
+    loop do
+        count := serial.read(receiver, startup[0..<1]) else (problem)
+            _ = problem
+            halt(3)
+        end
+        if count == 0 then continue end if
+        break when startup[0] == 7
+        if startup[0] == 6 then
+            report.open_frame(98)
+            report.field(114, reason)
+            report.field(118, table)
+            report.field(107, clocks.clk_ref_selected_read(clocks.base))
+            report.close_frame()
+        end if
+    end loop
+    serial.restart(receiver) else (problem)
+        _ = problem
+        halt(3)
+    end
     mut scratch: [64]u8 = zeroed
     -- The alarm raises TIMER0_IRQ_0 only with its INTE bit set.  NVIC:
     -- TIMER0_IRQ_0 is IRQ0, DMA_IRQ_0 IRQ10 and USBCTRL_IRQ IRQ14.
     timer0.inte_write(timer0.base, 1)
     ppb.nvic_iser0_write(ppb.base, 0x4401)
     app_state = 2
+    report.open_frame(114)
+    report.close_frame()
     loop do
         -- An alarm fires only when the counter equals it, so one armed for a
         -- time already past waits for the 32-bit wrap, 71 minutes.  From

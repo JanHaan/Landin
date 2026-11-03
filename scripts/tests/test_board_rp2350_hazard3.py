@@ -24,6 +24,7 @@ def load(name, path):
 
 BOARD = load('board_rp2350_hazard3', 'environments/boards/rp2350_hazard3/board.py')
 ELF = load('test_board_common', 'scripts/tests/test_board_common.py').elf32
+HANDSHAKE = load('test_rp_startup', 'scripts/tests/test_board_rp2040.py')
 
 GUARD = '  Port 4: 0503 power highspeed enable connect [0403:6010 Digilent Digilent USB Device 210319B3E738]\n'
 QUIET = ('Current status for hub 7-2.3.3 [0bda:5411 Generic USB2.1 Hub, USB 2.10, 4 ports, ppps]\n'
@@ -37,6 +38,19 @@ NAMES = dict(HANDLER_AT, _landin_firmware_reset=RESET, _landin_firmware_external
              _landin_firmware_unhandled=UNHANDLED, reports=0x20000520)
 FIRMWARE = dict(vector_address=BOARD.TABLE, vector_words=BOARD.VECTOR_WORDS,
                 image_block=dict(address=BOARD.TABLE + 4 * BOARD.VECTOR_WORDS))
+
+
+class Startup(unittest.TestCase):
+    def test_uart_opens_after_ram_loading_and_before_boot_power(self):
+        for mode in ('ram', 'boot'):
+            with self.subTest(mode=mode):
+                HANDSHAKE.console_order(self, BOARD, (b'', {}, []), mode=mode, hazard=True)
+
+    def test_startup_ack_precedes_boot_frame_and_application_traffic(self):
+        HANDSHAKE.startup_order(self, BOARD, hazard=True)
+
+    def test_startup_retries_a_lost_ack_with_a_bounded_wait(self):
+        HANDSHAKE.startup_retry(self, BOARD)
 
 
 class Paced:
@@ -350,6 +364,11 @@ class Console:
 
     def send(self, data, pace=64):
         self.sent += data
+        if data == BOARD.STARTUP:
+            return
+        if data == BOARD.GO:
+            self.received += b'\x02r\x03\n'
+            return
         self.received += data
         if bytes([BOARD.REPORT]) in data:
             self.received += self.replies.pop(0)

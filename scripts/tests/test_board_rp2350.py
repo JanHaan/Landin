@@ -26,6 +26,7 @@ def load(name, path):
 
 BOARD = load('board_rp2350', 'environments/boards/rp2350/board.py')
 ELF = load('test_board_common', 'scripts/tests/test_board_common.py').elf32
+HANDSHAKE = load('test_rp_startup', 'scripts/tests/test_board_rp2040.py')
 
 SERIAL = 'E661A4D4171B5D2E'
 GUARD = '  Port 4: 0503 power highspeed enable connect [0403:6010 Digilent Digilent USB Device 210319B3E738]\n'
@@ -33,6 +34,19 @@ QUIET = ('Current status for hub 7-2.3.3 [0bda:5411 Generic USB2.1 Hub, USB 2.10
          '  Port 1: 0100 power\n  Port 2: 0101 power connect\n  Port 3: 0100 power\n' + GUARD)
 BOOTSEL = QUIET.replace('  Port 2: 0101 power connect\n',
                         '  Port 2: 0103 power enable connect [2e8a:000f Raspberry Pi RP2350 %s]\n' % SERIAL)
+
+
+class Startup(unittest.TestCase):
+    def test_uart_opens_after_ram_loading_and_before_boot_power(self):
+        for mode in ('ram', 'boot'):
+            with self.subTest(mode=mode):
+                HANDSHAKE.console_order(self, BOARD, (b'', {}), mode=mode)
+
+    def test_startup_ack_precedes_boot_frame_and_application_traffic(self):
+        HANDSHAKE.startup_order(self, BOARD)
+
+    def test_startup_retries_a_lost_ack_with_a_bounded_wait(self):
+        HANDSHAKE.startup_retry(self, BOARD)
 
 
 class Paced:
