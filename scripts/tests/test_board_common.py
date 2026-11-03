@@ -2,6 +2,7 @@
 """Controls for the shared board tooling, without a board, a probe or a hub
 (D646): every part environments/boards/common.py gives a board's tool, held
 to fixed inputs on the standard library alone."""
+import argparse
 import importlib.util
 import os
 import select
@@ -512,18 +513,48 @@ class RigLock(unittest.TestCase):
 
 
 class Pace(unittest.TestCase):
-    """The spacing of actions that disconnect a device on the hub cascade."""
-    def pace(self, tmp, lines, now=1000.0):
+    """The watch over actions that disconnect a device on the hub cascade,
+    with a spacing and a quiet time as options."""
+    def pace(self, tmp, lines, now=1000.0, spacing=120, quiet=60):
         clock = [now]
         waited = []
 
         def sleep(seconds):
             waited.append(seconds)
             clock[0] += seconds
-        pace = COMMON.Pace(120, 60, state=Path(tmp) / 'rig.pace',
+        options = {} if spacing is None else dict(spacing=spacing, quiet=quiet)
+        pace = COMMON.Pace(state=Path(tmp) / 'rig.pace',
                            kernel=lambda seconds: [l for l in lines if l[0] >= clock[0] - seconds],
-                           clock=lambda: clock[0], sleep=sleep, report=lambda text: None)
+                           clock=lambda: clock[0], sleep=sleep, report=lambda text: None,
+                           **options)
         return pace, clock, waited
+
+    def test_by_default_an_action_follows_the_last_at_once(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            lines = [(1001.0, 'usb 3-2.3.4.2: USB disconnect, device number 9'),
+                     (1003.0, 'usb 3-2.3.4.2: new full-speed USB device number 10 using xhci_hcd')]
+            pace, clock, waited = self.pace(tmp, lines, spacing=None)
+            pace.after('power cycle')
+            clock[0] = 1004.0
+            pace.before('power cycle')
+            self.assertEqual((waited, clock[0]), ([], 1004.0))
+
+    def test_by_default_trouble_since_the_last_action_still_stops_the_run(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            lines = [(1002.0, 'usb 3-2.3.4.3: device descriptor read/64, error -71')]
+            pace, clock, _ = self.pace(tmp, lines, spacing=None)
+            pace.after('power cycle')
+            clock[0] = 1004.0
+            with self.assertRaisesRegex(COMMON.Failed, 'error -71'):
+                pace.before('power cycle')
+
+    def test_the_options_wait_for_nothing_by_default(self):
+        parser = argparse.ArgumentParser()
+        COMMON.pace_arguments(parser)
+        args = parser.parse_args([])
+        self.assertEqual((args.spacing, args.quiet), (0.0, 0.0))
+        pace = COMMON.Pace(args.spacing, args.quiet)
+        self.assertEqual((pace.spacing, pace.quiet), (0.0, 0.0))
 
     def test_a_quiet_rig_long_after_the_last_action_goes_at_once(self):
         with tempfile.TemporaryDirectory() as tmp:

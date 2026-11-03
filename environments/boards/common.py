@@ -21,7 +21,7 @@ does not depend on the chip:
     hub placed relative to it;
   * the hub's power cycle: one `uhubctl -a cycle` of one port, or ports
     switched off and on together, and a wait for the hub to list again
-    after the cascade re-enumerates; each only after
+    and show the device the next step needs; each only after
     the hub's listing shows the device the port must hold, or a guarded
     port holding the device that must never lose power, run through
     `sg GROUP -c` when the session is not in the group that may switch it;
@@ -35,7 +35,8 @@ does not depend on the chip:
     its bytes, and the log those ROMs write while they load it;
   * the record a passed run writes;
   * the rig's one lock, held by every run's hardware phase, and the pace
-    of the actions that disconnect a device on its hub cascade, which
+    of the actions that disconnect a device on its hub cascade, which stops
+    a run at any USB trouble the kernel logged since the last one and which
     `python3 common.py acknowledge REASON` tells that the USB trouble the
     kernel logged so far is understood.
 
@@ -154,9 +155,10 @@ def ancestors(pid=None, proc=Path('/proc')):
 
 class RigLock:
     """The rig's one host-wide lock, an exclusive flock on PATH, held while
-    a run switches power, flashes or reads a board: the hub cascade
-    re-enumerates every inner hub when any port is switched, so two runs
-    at once disturb each other.  While another holds it, WHO waits and
+    a run switches power, flashes or reads a board: the runs share the
+    cascade's hubs, the probe and its bridge, and a switch or a reset one
+    run makes takes away a device another may be reading, so two runs at
+    once disturb each other.  While another holds it, WHO waits and
     says whom for; the holder's name and process are kept in the file.  A
     run started under `flock PATH` by hand already holds it through its
     parent, and goes on.  `acquire` and `release`, or a `with` block."""
@@ -212,17 +214,21 @@ USB_TROUBLE = re.compile(r'error -\d+|not accepting address|unable to enumerate|
 
 
 class Pace:
-    """The spacing of a run's actions that disconnect a USB device on the
-    rig's hub cascade: a download, which ends in the chip's reset, a port
-    switched off or on, or a chip reset through a bridge's modem lines.
-    Each waits until SPACING seconds have passed since the last one, by any
-    tool on the host, and until the kernel has logged nothing of USB for
-    QUIET seconds; any USB error the kernel logged since that last action
-    stops the run instead (D725), as does a cascade that is not quiet
-    within LIMIT seconds.  The last action's time is kept in
-    STATE beside the rig's lock; KERNEL(seconds) is the kernel's USB lines
-    of the last SECONDS, as (unix time, text)."""
-    def __init__(self, spacing=120, quiet=60, state=None, kernel=None, clock=time.time,
+    """The watch kept over a run's actions that disconnect a USB device on
+    the rig's hub cascade: a download, which ends in the chip's reset, a
+    port switched off or on, or a chip reset through a bridge's modem
+    lines.  Any USB error the kernel logged since the last such action, by
+    any tool on the host, stops the run before the next (D725); what an
+    action needs before it goes, the hub listing again and the device it
+    acts on present, each tool waits for itself.  With SPACING, an action
+    also waits until that many seconds have passed since the last one, and
+    with QUIET until the kernel has logged nothing of USB for that many
+    seconds, stopping when it is not quiet within LIMIT seconds; neither is
+    a default, since on the cascade's present port a switch disconnects
+    only the device on the port switched.  The last action's time is kept
+    in STATE beside the rig's lock; KERNEL(seconds) is the kernel's USB
+    lines of the last SECONDS, as (unix time, text)."""
+    def __init__(self, spacing=0, quiet=0, state=None, kernel=None, clock=time.time,
                  sleep=time.sleep, report=None, limit=600):
         self.spacing, self.quiet, self.limit = spacing, quiet, limit
         self.state = Path(state) if state else RIG_LOCK.with_name('rig.pace')
@@ -245,13 +251,15 @@ class Pace:
                          ' %s: %s.  Once its cause is known and the rig is quiet,'
                          ' `python3 environments/boards/common.py acknowledge REASON` lets the'
                          ' next action go' % (what, trouble[0]))
+        if self.spacing <= 0 and self.quiet <= 0:
+            return
         began = self.clock()
         while True:
             now = self.clock()
             require(now - began < self.limit, 'the kernel kept logging USB lines for %g s;'
                     ' stopping before %s: a device on the cascade keeps resetting' % (self.limit, what))
             wait = max(last + self.spacing - now, 0)
-            recent = [when for when, _ in self.kernel(self.quiet)]
+            recent = [when for when, _ in self.kernel(self.quiet)] if self.quiet > 0 else []
             if recent:
                 wait = max(wait, max(recent) + self.quiet - now)
             if wait <= 0:
@@ -265,15 +273,16 @@ class Pace:
 
     def acknowledge(self, reason):
         """Record that the USB trouble the kernel logged before now is
-        understood, for REASON: the next action is spaced from now, and only
-        trouble logged after it stops a run (D835)."""
+        understood, for REASON: only trouble logged after it stops a run,
+        and a spacing, when the pace has one, counts from now (D835)."""
         require(reason.strip(), 'say why the trouble is understood')
         self.after('acknowledged: ' + ' '.join(reason.split()))
 
 
 def paced(pace, what, action, guard=None, cascade=None):
-    """ACTION, which may disconnect a device on the rig's hub cascade,
-    spaced by PACE from every other such action on the host; with GUARD,
+    """ACTION, which may disconnect a device on the rig's hub cascade, taken
+    only while PACE finds no USB trouble since the last such action on the
+    host, and recorded as the last even when it fails; with GUARD,
     a USB serial, only while that device is present and off CASCADE, as
     the probe's Arty must be (D725)."""
     if guard:
@@ -286,12 +295,13 @@ def paced(pace, what, action, guard=None, cascade=None):
 
 
 def pace_arguments(parser):
-    """The options that set a tool's Pace (D725)."""
-    parser.add_argument('--spacing', type=float, default=120.0,
+    """The options that set a tool's Pace (D725): none waits by default."""
+    parser.add_argument('--spacing', type=float, default=0.0,
                         help='seconds between two actions that may disconnect a device on the'
-                             ' hub cascade, by any tool on the host')
-    parser.add_argument('--quiet', type=float, default=60.0,
-                        help='seconds the kernel must have logged nothing of USB before one')
+                             ' hub cascade, by any tool on the host; none by default')
+    parser.add_argument('--quiet', type=float, default=0.0,
+                        help='seconds the kernel must have logged nothing of USB before one;'
+                             ' none by default')
 
 
 def kernel_usb_lines(seconds):
@@ -678,11 +688,11 @@ def place_hubs(parser, args, *names, sysfs=Path('/sys/bus/usb/devices')):
 
 class Listings:
     """HUB's commands, a listing of a hub asked again while it fails until
-    SECONDS have passed: any port switched on the rig's hubs, by this tool
-    or another, re-enumerates the whole tree, and so does a listing that
-    resumes a hub the kernel had suspended, the listing itself among them;
-    a listing that meets the tree gone, or its nodes before udev has
-    regrouped them, fails.  A switch, `-a`, is never asked again."""
+    SECONDS have passed: a listing that meets a hub re-enumerating, or its
+    nodes before udev has regrouped them, fails, and on the cascade's
+    earlier port a switch, a device's reset or a listing that resumed a hub
+    the kernel had suspended re-enumerated the whole tree (D832).  A
+    switch, `-a`, is never asked again."""
     def __init__(self, hub, seconds):
         self.hub, self.seconds = hub, seconds
 
@@ -727,18 +737,20 @@ def power_cycle(hub, location, port, off_seconds, holds=None, keeps=None, holds_
         require(device is None or holds_if_any in device,
                 'port %d of hub %s holds %s, not %s; refusing to switch it'
                 % (port, location, device, holds_if_any))
-    # One call: switching the port off re-enumerates the hub's inner hubs,
-    # and a second call can meet their new device nodes before udev has
-    # given them the group that may switch them.
+    # One call: on the cascade's earlier port switching a port off
+    # re-enumerated the hub's inner hubs, and a second call could meet their
+    # new device nodes before udev had given them the group that may switch
+    # them.
     hub.command('power-cycle', ['uhubctl', '-l', location, '-p', str(port), '-a', 'cycle',
                                 '-d', '%g' % off_seconds])
 
 
 def wait_for_hub(hub, location, shows, seconds, interval=0.5):
     """The hub at LOCATION's listing once it lists again and each (port,
-    text) of SHOWS shows its text: switching any port of the rig's hub
-    cascade, or a USB device on it resetting, re-enumerates every hub in
-    it, and a listing taken meanwhile finds no hub.  With SHOWS empty, the
+    text) of SHOWS shows its text: what an action that disconnects a device
+    waits for before the next.  A device switched or reset comes back in a
+    few seconds, and a hub re-enumerating, as the whole cascade did on its
+    earlier port (D725), lists nothing meanwhile.  With SHOWS empty, the
     hub listing at all is what is waited for."""
     deadline = time.time() + seconds
     while True:
@@ -755,8 +767,8 @@ def wait_for_hub(hub, location, shows, seconds, interval=0.5):
 
 
 def listing(hub, location, seconds, interval=0.5, name='hub-status'):
-    """uhubctl's listing of the hub at LOCATION, once it lists again: the
-    cascade hides every hub while it re-enumerates, and a listing taken
+    """uhubctl's listing of the hub at LOCATION, once it lists again: a hub
+    lists nothing while it re-enumerates, and a listing taken
     while udev regroups the new nodes is refused for permissions.  NAME is
     the step the listing is logged under."""
     deadline = time.time() + seconds
@@ -793,7 +805,7 @@ def switch_ports(hub, location, ports, action, holds=(), keeps=None, name=None, 
         require(port in found and text in found[port],
                 'port %d of hub %s does not hold %s; refusing to switch it'
                 % (port, location, text))
-    # The cascade may be re-enumerating after the last switch, when uhubctl
+    # The hub may be re-enumerating after the last switch, when uhubctl
     # finds no hub and switches nothing: wait for it to list again, and
     # switch again.
     for attempt in range(tries):
@@ -1158,7 +1170,7 @@ def main(argv=None):
     commands = parser.add_subparsers(dest='command', required=True)
     acknowledge = commands.add_parser(
         'acknowledge', help='let the next board run go after USB trouble whose cause is known;'
-                            ' the next action is still spaced from now')
+                            ' only trouble logged after now stops one')
     acknowledge.add_argument('reason', help='what the trouble was, kept in the pace file')
     args = parser.parse_args(argv)
     pace = Pace()

@@ -102,9 +102,9 @@ def probe(run, args):
 def flash(run, args, elf, stage):
     """Flash and verify the image, paced with every other tool's actions on
     the rig, then, once the hub lists again, read the second stage back: a
-    download resets the chip, and on the rig the whole cascade above the
-    Pico once disconnected within a second of one, although the Pico
-    enumerates nothing (D725, D832)."""
+    download resets the chip, and on the cascade's earlier port the whole
+    cascade above the Pico once disconnected within a second of one,
+    although the Pico enumerates nothing (D725, D832)."""
     swd = probe(run, args)
     common.paced(args.pace, 'download', lambda: run.command(
         'flash', swd.argv('download', '--verify', elf), timeout=300),
@@ -119,8 +119,8 @@ def power_cycle(run, args):
     """The Pico's port, only while the probe's Arty is off the cascade,
     paced with every other tool's actions on the rig, and then the hub
     listing again (D725).  The first listing is asked again while it fails:
-    one that resumes a hub the kernel suspended re-enumerates the cascade
-    under it."""
+    one that resumed a hub the kernel had suspended re-enumerated the
+    cascade under it on its earlier port (D832)."""
     common.paced(args.pace, 'power cycle', lambda: common.power_cycle(
         common.Listings(run, args.hub_seconds), args.hub, args.port, args.off_seconds),
         args.guard_serial, args.cascade)

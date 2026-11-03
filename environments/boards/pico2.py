@@ -7,18 +7,19 @@ each reaches the hub and the bus the same way:
 
   * the Pico 2's port is switched only while the probe's Arty is present
     and off the cascade, each switch and download is paced with every
-    other tool's on the host (D725), and after each the tool waits for the
-    hub to list again, for the Arty to be found again and for the probe to
-    answer `ping`;
-  * a listing that meets the cascade re-enumerating is asked again;
+    other tool's on the host, stopping at USB trouble the kernel logged
+    since the last (D725), and after each the tool waits for the hub to
+    list again, for the Arty to be found again and for the probe to answer
+    `ping`;
+  * a listing that meets the hub re-enumerating is asked again;
   * probe-rs is told the chip as the architecture its cores run when it
     attaches, and an image flashed through the other one's side is booted
     by a power cycle before its head is read back (D712);
   * no probe-rs attaches while the port shows BOOTSEL unless the run was
     told it may, since an attach halts the boot ROM, whose USB then stops
     answering; and when one has flashed from BOOTSEL the power is cycled
-    at once, unpaced, rather than leaving the halted BOOTSEL on the bus for
-    the pace's two minutes (D712);
+    at once, unpaced, since the trouble the halted BOOTSEL makes the kernel
+    log would stop a paced cycle and leave it on the bus (D712, D832);
   * a block control's power cycle must end in BOOTSEL.
 
 Each tool's args carry `hub`, `port`, `pico_serial`, `guard_serial`,
@@ -51,14 +52,14 @@ Listings = common.Listings
 
 def paced(args, what, action):
     """ACTION, which may disconnect a device on the rig's hub cascade,
-    spaced by args.pace from every other such action on the host, and only
+    paced by args.pace with every other such action on the host, and only
     while the Arty is off the cascade."""
     return common.paced(args.pace, what, action, args.guard_serial, args.cascade)
 
 
 def settle(run, args):
     """Wait for the Pico 2's hub to list again after a download or a
-    switch, which re-enumerates the cascade (D725)."""
+    switch (D725)."""
     return common.wait_for_hub(run, args.hub, [], args.guard_seconds)
 
 
@@ -67,12 +68,11 @@ def power_cycle(run, args, at_once=False):
     cascade, and, with --pico-serial, only while the port holds that Pico 2
     or no USB device at all: a Pico 2 running its port's firmware does not
     enumerate.  The cycle is paced with every other tool's actions on the
-    rig, and waits until the kernel has logged nothing of USB for a while,
-    stopping on any trouble it logged since the last action (D725), since a
-    cycle met by a port failing enumeration reset the whole hub tree above
-    it on the rig (D712).  AT_ONCE takes the cycle without waiting, after a
-    flash from BOOTSEL, whose halted boot ROM is the trouble; it is still
-    recorded, so the next action waits for it.  After the cycle the hub
+    rig, stopping on any USB trouble the kernel logged since the last action
+    (D725), since a cycle met by a port failing enumeration reset the whole
+    hub tree above it on the rig (D712).  AT_ONCE takes the cycle without
+    that check, after a flash from BOOTSEL, whose halted boot ROM is the
+    trouble; it is still recorded as the last action.  After the cycle the hub
     must list again, the Arty be found off the cascade and the probe answer
     on the network, or the run stops."""
     def cycle():

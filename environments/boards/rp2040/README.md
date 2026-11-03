@@ -28,19 +28,22 @@ The tool switches only `--port` on `--hub`, and only while
 the device with `--guard-serial`, the probe's own Arty A7, is present and not on
 `--cascade`, the hub cascade the boards are on (by default the one `0bda:5411`
 hub whose parent is not one, wherever it is attached, D833), found by its serial wherever it is plugged in: its bitstream is held
-only in SRAM and would be lost with its power, and every switch on the
-cascade re-enumerates the whole of it (D725). The port is switched off and on in one
-`uhubctl -a cycle`: switching it off re-enumerates the hub's inner hubs, and
-a second call can meet their new device nodes before udev has given them
+only in SRAM and would be lost with its power, and on the cascade's earlier
+port a switch re-enumerated the whole of it (D725). The port is switched off and on in one
+`uhubctl -a cycle`: on that port switching it off re-enumerated the hub's inner hubs, and
+a second call could meet their new device nodes before udev had given them
 the group allowed to switch them. The run holds the rig's lock,
 `~/.cache/landin/rig.lock`, from its build to its last read; its download
-and its cycle are each spaced from every other tool's actions on the host,
-by `--spacing` seconds and until the kernel has logged nothing of USB for
-`--quiet` seconds, and stop on any USB trouble the kernel logged since the
-last one, since even a download to the Pico, which enumerates nothing, has
-been followed by the whole cascade disconnecting; and after
-the download and after the cycle the tool waits, up to `--hub-seconds`, for
-the hub to list again (D725, D832). `--hub` is named as `uhubctl -l` names
+and its cycle each stop on any USB trouble the kernel logged since the last
+such action by any tool on the host, since on that port even a download to
+the Pico, which enumerates nothing, was followed by the whole cascade
+disconnecting; and after the download and after the cycle the tool waits,
+up to `--hub-seconds`, for the hub to list again (D725, D832).
+No action waits for a fixed time: on the cascade's present port a switch
+drops only the device on the port switched, back within seconds, and
+`--spacing` and `--quiet`, a time between two actions and one the kernel
+must have logged nothing of USB for, are options, none by default. `--hub`
+is named as `uhubctl -l` names
 it, or relative to the cascade's root; the default is the maintainer's rig:
 hub `.3.3`, port 1.
 

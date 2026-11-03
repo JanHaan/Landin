@@ -35,10 +35,16 @@ J-Link on the maintainer's rig, which is never switched. The port is
 switched off and on again; the tool runs itself through
 `/run/wrappers/bin/sg GROUP -c` when the session is not in the group that
 may switch it and open the tty `--recover` resets the chip through,
-`--hub-group` (D836), and each switch is paced and followed by a wait for the hub to list the
-board again, since every switch re-enumerates the rig's hub cascade (D725);
-a switch made while the cascade re-enumerates finds no hub and is made
-again. The run holds the rig's lock. A hub is named as `uhubctl -l` names
+`--hub-group` (D836), and each switch, download and reset stops on any USB
+trouble the kernel logged since the last such action by any tool on the
+host, and is followed by a wait for the hub to list the board again (D725);
+a switch made while the hub re-enumerates finds no hub and is made
+again. The run holds the rig's lock. No action waits for a fixed time: on
+the cascade's present port a switch
+drops only the device on the port switched, back within seconds, and
+`--spacing` and `--quiet`, a time between two actions and one the kernel
+must have logged nothing of USB for, are options, none by default. A hub
+is named as `uhubctl -l` names
 it, or relative to the cascade's root, which `--cascade` names and which is
 found by default as the one `0bda:5411` hub whose parent is not one, wherever
 it is attached (D833). The defaults are the maintainer's rig:

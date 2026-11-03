@@ -41,9 +41,15 @@ The tool switches only `--port` on `--hub` and `--console-port` on
 is never switched: `--guard-device` on `--guard-port`, the Renesas board's
 J-Link, and `--console-guard-device` on `--console-guard-port`, the
 ESP32-S3's USB-Serial-JTAG. Both are switched off, then both on, each
-switch paced and followed by a wait for the hub to list again; a switch
-made while the cascade re-enumerates finds no hub and is made again
-(D725). The run holds the rig's lock. A hub is named as `uhubctl -l` names
+switch, download and reset stopping on any USB trouble the kernel logged
+since the last such action by any tool on the host, and followed by a wait
+for the hub to list again; a switch made while the hub re-enumerates finds
+no hub and is made again (D725). The run holds the rig's lock. No action
+waits for a fixed time: on the cascade's present port a switch
+drops only the device on the port switched, back within seconds, and
+`--spacing` and `--quiet`, a time between two actions and one the kernel
+must have logged nothing of USB for, are options, none by default. A hub
+is named as `uhubctl -l` names
 it, or relative to the cascade's root, which `--cascade` names and which is
 found by default as the one `0bda:5411` hub whose parent is not one, wherever
 it is attached (D833). The defaults are the maintainer's rig: the JTAG on

@@ -40,18 +40,21 @@ The tool switches only `--port` on `--hub`, and only while
 the device with `--guard-serial`, the probe's own Arty A7, is present and not on
 `--cascade`, the hub cascade the boards are on (by default the one `0bda:5411`
 hub whose parent is not one, wherever it is attached, D833), found by its serial wherever it is plugged in: its bitstream is held
-only in SRAM and would be lost with its power, and every switch on the
-cascade re-enumerates the whole of it (D725), as [the Pico 2's Arm tool](../rp2350/README.md) does. On
+only in SRAM and would be lost with its power, and on the cascade's earlier
+port a switch re-enumerated the whole of it (D725), as [the Pico 2's Arm tool](../rp2350/README.md) does. On
 the rig such a cycle coincided with a reset of the whole hub tree above it,
 the Arty's USB among it, while the kernel was failing to enumerate the
 port. So the tool holds the rig's lock, `~/.cache/landin/rig.lock`, from
-its first step on the rig to its last, and spaces each download and cycle
-from every other tool's on the host, by `--spacing` seconds and until the
-kernel has logged nothing of USB for `--quiet` seconds, stopping on any
-USB trouble the kernel logged since the last such action (D725). After
+its first step on the rig to its last, and stops before each download and
+cycle on any USB trouble the kernel logged since the last such action by
+any tool on the host (D725). No action waits for a fixed time: on the
+cascade's present port a switch drops only the device on the port
+switched, back within seconds, and `--spacing` and `--quiet`, a time
+between two actions and one the kernel must have logged nothing of USB
+for, are options, none by default. After
 the cycle it waits `--guard-seconds` for that device to be present again,
 still off the cascade, and pings `--probe-host`, and stops if either is missing. A
-listing of the hub that meets the tree re-enumerating is asked again until
+listing of the hub that meets it re-enumerating is asked again until
 `--guard-seconds` have passed, and after each download and cycle the tool
 waits as long for the hub to list again. How it switches, paces and waits
 is [`../pico2.py`](../pico2.py)'s, which [the Arm tool](../rp2350/README.md)
@@ -84,8 +87,9 @@ the port once and wait for it to stop enumerating before anything else.
 After flashing through the Arm side the tool cycles the power, gives the
 boot ROM `--boot-seconds`, and reads the head back from the cores the new
 image runs on, never from BOOTSEL; when the flash was from BOOTSEL that
-cycle is taken at once, unpaced, rather than after the pace's two minutes
-with the halted boot ROM on the bus (D832). The counters are read as
+cycle is taken at once, unpaced, since the trouble the halted boot ROM
+makes the kernel log would stop a paced one and leave it on the bus
+(D832). The counters are read as
 `RP235x_riscv` alone, from the cores the image booted on.
 
 The negative control ends in BOOTSEL and must then flash the image

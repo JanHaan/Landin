@@ -28,8 +28,8 @@ The tool switches only `--port` on `--hub`, and only while
 the device with `--guard-serial`, the probe's own Arty A7, is present and not on
 `--cascade`, the hub cascade the boards are on (by default the one `0bda:5411`
 hub whose parent is not one, wherever it is attached, D833), found by its serial wherever it is plugged in: its bitstream is held
-only in SRAM and would be lost with its power, and every switch on the
-cascade re-enumerates the whole of it (D725), as [the RP2040's tool](../rp2040/README.md) does: this
+only in SRAM and would be lost with its power, and on the cascade's earlier
+port a switch re-enumerated the whole of it (D725), as [the RP2040's tool](../rp2040/README.md) does: this
 firmware does not enumerate on USB, so the Pico 2's port shows no device of
 its own while it runs. With `--pico-serial`, the port must also show that
 serial whenever it shows a device, which a Pico 2 does in BOOTSEL. The
@@ -43,12 +43,15 @@ How the tool switches, paces, waits and flashes is [`../pico2.py`](../pico2.py)'
 which [the Hazard3 tool](../rp2350_hazard3/README.md) shares, since both run
 the same board on the same port (D832). The run holds the rig's lock,
 `~/.cache/landin/rig.lock`, from its first step on the rig to its last; it
-spaces each download and cycle from every other tool's on the host, by
-`--spacing` seconds and until the kernel has logged nothing of USB for
-`--quiet` seconds, stopping on any USB trouble the kernel logged since the
-last such action; and after each it waits up to `--guard-seconds` for the
-hub to list again and the Arty to be found off the cascade, and pings
-`--probe-host`. Every probe-rs attach as `RP235x` halts both cores, and a
+stops before each download and cycle on any USB trouble the kernel logged
+since the last such action by any tool on the host; and after each it
+waits up to `--guard-seconds` for the hub to list again and the Arty to be
+found off the cascade, and pings `--probe-host`. No action waits for a
+fixed time: on the cascade's present port a switch drops only the device
+on the port switched, back within seconds, and `--spacing` and `--quiet`,
+a time between two actions and one the kernel must have logged nothing of
+USB for, are options, none by default. Every probe-rs attach as `RP235x`
+halts both cores, and a
 Pico 2 in BOOTSEL halted so keeps its USB pull-up but stops answering,
 which on the rig reset the hub tree above it (D712). So the tool refuses
 to attach while the port shows BOOTSEL, 2e8a:000f, unless told

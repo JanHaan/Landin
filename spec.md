@@ -23058,6 +23058,23 @@ D832 extends the pace and the wait to every board tool, the RP2040's, the
 Pico 2's and the STM32H753's among them.
 D835 lets the pace be told that trouble it stopped at is understood.
 
+**Amended for the cascade's present port:** the whole-tree re-enumeration
+above was the cascade's top hub dropping from the host's front-panel USB2
+port it hung from. Since the cascade moved to the ASMedia xHCI, PCI
+0000:c2:00.0, `3-2` after the host's reboot, a switch disconnects only the
+device on the port switched: on 2026-11-03, under the rig's lock,
+`uhubctl -l 3-2.3.4 -p 2 -a cycle` dropped and re-enumerated the ESP32-C3
+alone, back in 2.8 s, and two cycles back to back, the Pico H's port and
+the ESP32-C5's, dropped the C5 alone, back in 1.8 s; no hub and no other
+device disconnected. The fixed spacing and the quiet minute defended
+against a cause that was gone, and made 86% to 96% of each run: the
+ESP32-C5's took 1108 s, about 1068 s of it waiting, and the STM32H753's 463
+s, about 397 s. So `common.Pace` waits for nothing fixed by default: an
+action still stops at any USB error the kernel logged since the last one,
+until it is acknowledged (D835), and waits only for what it needs, the hub
+listing again, `common.wait_for_hub`, and the device it acts on present;
+`--spacing` and `--quiet` remain options, zero by default.
+
 **Pinned by** `scripts/tests/test_board_common.py`'s `RigLock` and `Pace`.
 
 ### D726 — An ESP port resets its RX FIFO on an overflow and drains nothing of it
@@ -23130,10 +23147,10 @@ its image by a power cycle before reading the head back; neither
 attaches while the port shows BOOTSEL unless told `--bootsel-attach`,
 which their block controls need;
 after a flash from BOOTSEL the power is cycled at once, unpaced but
-recorded so the next action is spaced from it, since the pace's two
-minutes would leave the halted boot ROM on the bus that D712 found
-resetting the hub tree; and the head is never read back while the port
-still shows BOOTSEL. A download is paced even when the chip it resets
+recorded as the last action, since a paced cycle would stop at the trouble
+the halted boot ROM makes the kernel log, and the pace's two minutes, while
+D725 had them, would leave it on the bus that D712 found resetting the hub
+tree; and the head is never read back while the port still shows BOOTSEL. A download is paced even when the chip it resets
 enumerates nothing: on 2026-11-03 a download to the RP2040, whose
 firmware has no USB, was followed within a second by the whole cascade
 disconnecting. The cause was the listing that followed it: on the same
@@ -23143,6 +23160,14 @@ disconnecting and enumerating again. So every tool asks a hub's first
 listing again while it fails, `common.Listings`, which D725 declined as
 hiding trouble: the listing is what disturbs the cascade, and the pace
 still stops at any error the kernel logs.
+
+**Amended for the cascade's present port:** the cascade-wide disconnects
+above were met while it hung from the host's front-panel port `7-2`. On
+its present port a switch drops only its own device and the pace keeps no
+fixed spacing or quiet time (D725's amendment), so a paced action follows
+the last as soon as the hub lists again, and the cycle taken at once after
+a BOOTSEL flash differs from a paced one only in not stopping at the
+trouble the halted boot ROM causes.
 
 **The alternatives:** pacing the cycle after a BOOTSEL flash like any
 other, which waits two minutes beside a boot ROM the kernel is already

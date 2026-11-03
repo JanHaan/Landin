@@ -34,17 +34,19 @@ virtual COM port's tty belong to a group, `--hub-group`, `dialout` by
 default, and a session started before its user joined that group is not in
 it, so the tool then runs itself again through `/run/wrappers/bin/sg GROUP
 -c` (D836). On the maintainer's rig the ST-LINK's
-hub is one of a cascade, every hub of which re-enumerates, the
-ST-LINK and every other board's USB device with it, whenever any port of
-it is switched or any device on it resets (D725). So the run holds the
-rig's lock, `~/.cache/landin/rig.lock`, from its build to its last read;
-its download and its cycle are each spaced from every other tool's
-actions on the host, by `--spacing` seconds and until the kernel has
-logged nothing of USB for `--quiet` seconds, and stop on any USB trouble
-the kernel logged since the last one; and after the download and after
-the cycle the tool waits,
-up to `--hub-seconds`, for the hub to list the ST-LINK on its port again
-(D832). `--hub` is named as `uhubctl -l` names it, or relative to the
+hub is one of a cascade the other boards share, which on its earlier port
+re-enumerated whole, the ST-LINK and every other board's USB device with
+it, whenever any port of it was switched or any device on it reset (D725).
+So the run holds the rig's lock, `~/.cache/landin/rig.lock`, from its
+build to its last read; its download and its cycle each stop on any USB
+trouble the kernel logged since the last such action by any tool on the
+host; and after the download and after the cycle the tool waits, up to
+`--hub-seconds`, for the hub to list the ST-LINK on its port again (D832).
+No action waits for a fixed time: on the cascade's present port a switch
+drops only the device on the port switched, back within seconds, and
+`--spacing` and `--quiet`, a time between two actions and one the kernel
+must have logged nothing of USB for, are options, none by default. `--hub`
+is named as `uhubctl -l` names it, or relative to the
 cascade's root, which `--cascade` names and which is found by default as
 the one `0bda:5411` hub whose parent is not one, wherever it is attached
 (D833). The defaults are the maintainer's rig: hub `.3` of the cascade,
