@@ -426,6 +426,64 @@ class PowerOn(unittest.TestCase):
             C5_BOARD.chip_enable_reset(3, 0.1)
 
 
+class RunFailures(unittest.TestCase):
+    def failed_ram_run(self, directory, *, loader_error=None, scenario_error=None):
+        elf = directory / 'board.elf'
+        elf.write_bytes(elf32(0x40380000, [(0x40380000, TEXT, False)]))
+        names = {'_landin_firmware_trap_count': 0x3fca0000}
+        args = SimpleNamespace(output=directory / 'run', mode='ram', probe_rs='probe-rs',
+            probe='probe', nm='nm', seed=1, record=None,
+            prepared_bundle=dict(symbols=names, metadata=dict(instructions={})),
+            pace=COMMON.Pace(state=directory / 'pace', spacing=0, quiet=0,
+                             kernel=lambda _: []))
+        chip = SimpleNamespace(name='esp32c3', probe_chip='ESP32-C3',
+            mtvec=lambda *_: 0x40380101, mtvt=lambda *_: None)
+        console = SimpleNamespace(received=bytearray(), sent=bytearray(), close=mock.Mock())
+        lock = SimpleNamespace(file=None)
+        lock.acquire = lambda: setattr(lock, 'file', True)
+        lock.release = lambda: setattr(lock, 'file', None)
+        with mock.patch.object(ESP, 'build', return_value=(elf, None, {})), \
+                mock.patch.object(COMMON, 'validate_ram_image'), \
+                mock.patch.object(COMMON, 'elf_sections', return_value=(b'', {})), \
+                mock.patch.object(COMMON, 'Probe'), \
+                mock.patch.object(COMMON, 'rig_lock', return_value=lock), \
+                mock.patch.object(COMMON, 'ram_load', side_effect=loader_error,
+                    return_value=dict(status='passed', mode='warm')) as loader, \
+                mock.patch.object(ESP, 'scenario', side_effect=scenario_error) as scenario, \
+                mock.patch.object(ESP, 'trap_cells', return_value={'count': 1}) as traps:
+            self.assertEqual(ESP.run_board(chip, args, lambda _: console,
+                                          mock.Mock(), mock.Mock()), 1)
+        return COMMON.json.loads((args.output / 'result.json').read_text()), loader, scenario, traps
+
+    def test_failed_ram_loader_skips_unrelated_sram_trap_cells(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result, loader, scenario, traps = self.failed_ram_run(Path(tmp),
+                loader_error=COMMON.Failed('SRAM readback failed'))
+        loader.assert_called_once()
+        scenario.assert_not_called()
+        traps.assert_not_called()
+        self.assertNotIn('warm_load', result)
+        self.assertEqual(result['failure'], 'SRAM readback failed')
+        self.assertIn('skipped: RAM loader did not confirm starting', result['trap'])
+
+    def test_failure_after_confirmed_ram_entry_keeps_startup_traps_without_a_boot_frame(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result, _, scenario, traps = self.failed_ram_run(Path(tmp),
+                scenario_error=COMMON.Failed('no boot frame'))
+        scenario.assert_called_once()
+        traps.assert_called_once()
+        self.assertEqual(result['trap'], {'count': '0x1'})
+        self.assertEqual(result['failure'], 'no boot frame')
+
+    def test_usb_stop_after_ram_entry_never_attempts_trap_readback(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result, _, _, traps = self.failed_ram_run(Path(tmp),
+                scenario_error=COMMON.USBGuardError('xhci_hcd: HC died'))
+        traps.assert_not_called()
+        self.assertNotIn('trap', result)
+        self.assertEqual(result['failure'], 'xhci_hcd: HC died')
+
+
 class Restore(unittest.TestCase):
     def test_usb_guard_failure_is_never_retried(self):
         probe = mock.Mock()

@@ -577,12 +577,16 @@ def run_board(chip, args, console_for, cycle, settle):
         result['failure'] = str(error)
         if lock.file and names and not isinstance(error, common.USBGuardError) \
                 and not any(USB in str(error) for USB in ('USB trouble', 'HC died')):
-            # A failed run keeps what the unhandled entry recorded, if the
-            # probe still reaches the chip.
-            try:
-                result['trap'] = {k: '%#x' % v for k, v in trap_cells(probe, names).items()}
-            except (Failed, subprocess.TimeoutExpired, OSError) as reading:
-                result['trap'] = 'unread: %s' % reading
+            # Until the loader confirms entry into this RAM image, these
+            # addresses may hold unrelated SRAM from the preceding image.
+            if args.mode == 'ram' and 'warm_load' not in result:
+                result['trap'] = 'skipped: RAM loader did not confirm starting this application'
+            else:
+                # Keep startup traps too: entry may fail before a boot frame.
+                try:
+                    result['trap'] = {k: '%#x' % v for k, v in trap_cells(probe, names).items()}
+                except (Failed, subprocess.TimeoutExpired, OSError) as reading:
+                    result['trap'] = 'unread: %s' % reading
     finally:
         if console:
             console.close()
