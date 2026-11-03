@@ -30,5 +30,6 @@ pkgs.probe-rs-tools.overrideAttrs (old: {
     install -Dm755 target/${pkgs.stdenv.hostPlatform.rust.rustcTarget}/release/landin-ram-run $out/bin/landin-ram-run
     runHook postInstall
   '';
+  postInstall = "";
   meta = old.meta // { mainProgram = "landin-ram-run"; };
 })

@@ -361,6 +361,9 @@ def firmware_layout(args):
 
 def board_preflight(args, board):
     """Pure preflight, before taking the lock or touching USB."""
+    if board.startswith('rp'):
+        require(args.ram_loader,
+                'RP readback needs the pinned single-core helper: name --ram-loader')
     if getattr(args, 'bundle', None):
         import bundle
         prepared = bundle.validate(args.bundle, board=board, mode=args.mode)
@@ -768,8 +771,9 @@ def stlink(serial, vid_pid='0483:374e'):
 
 class Probe:
     """probe-rs for one CHIP through one PROBE, as probe-rs's --probe names it."""
-    def __init__(self, run, probe_rs, chip, probe):
+    def __init__(self, run, probe_rs, chip, probe, ram_loader=None):
         self.run, self.probe_rs, self.chip, self.probe = run, probe_rs, chip, probe
+        self.ram_loader = ram_loader
 
     def argv(self, *rest):
         pace = getattr(self.run, 'pace', None)
@@ -779,6 +783,32 @@ class Probe:
 
     def read_words(self, name, address, count):
         """COUNT words from ADDRESS, read while the core runs."""
+        boards = {'RP2040': 'rp2040', 'RP235x': 'rp2350',
+                  'RP235x_riscv': 'rp2350_hazard3'}
+        if self.chip in boards:
+            # A full two-core Session tries to access the reset-held RP
+            # core 1 on drop and can leave the executing core halted.
+            require(self.ram_loader, 'RP readback needs --ram-loader')
+            plan, output = self.run.out / (name + '-plan.json'), self.run.out / (name + '.json')
+            board = boards[self.chip]
+            write_json(plan, dict(format_version=1, board=board, mode='read',
+                                 probe=self.probe, address=address, count=count))
+            pace = getattr(self.run, 'pace', None)
+            if pace:
+                pace.before('probe read')
+            self.run.command(name, [self.ram_loader, '--plan', plan, '--output', output])
+            report = json.loads(output.read_text())
+            words = report.get('words')
+            require(report.get('format_version') == 1 and report.get('status') == 'passed'
+                    and report.get('mode') == 'read' and report.get('board') == board
+                    and report.get('flash_written') is False
+                    and report.get('address') == address and report.get('count') == count
+                    and isinstance(words, list) and len(words) == count
+                    and all(type(word) is int and 0 <= word <= 0xffffffff for word in words),
+                    'single-core readback returned invalid or mismatched evidence')
+            if pace:
+                pace.before('probe read completion')
+            return words
         text = self.run.command(name, self.argv('read', 'b32', hex(address), str(count)))
         # Each line begins with its address and a colon.
         words = [int(w, 16) for w in text.split() if not w.endswith(':')]

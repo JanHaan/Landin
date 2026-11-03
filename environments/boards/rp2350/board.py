@@ -149,7 +149,8 @@ def block_control(run, args, elf, head):
 
 
 def probe(run, args):
-    return common.Probe(run, args.probe_rs, 'RP235x', args.probe)
+    return common.Probe(run, args.probe_rs, 'RP235x', args.probe,
+                        ram_loader=getattr(args, 'ram_loader', None))
 
 
 def flash(run, args, elf, head, what="the image's vector table and block"):

@@ -108,7 +108,8 @@ def build(run, args):
 
 
 def probe(run, args):
-    return common.Probe(run, args.probe_rs, 'RP2040', args.probe)
+    return common.Probe(run, args.probe_rs, 'RP2040', args.probe,
+                        ram_loader=getattr(args, 'ram_loader', None))
 
 
 def flash(run, args, elf, stage):

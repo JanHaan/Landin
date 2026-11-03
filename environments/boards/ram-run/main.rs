@@ -4,6 +4,8 @@ use anyhow::{Context, Result, bail, ensure};
 use clap::Parser;
 use object::{Object, ObjectSection, ObjectSymbol};
 use probe_rs::{Core, MemoryInterface, Permissions, RegisterId, config::Registry, probe::{DebugProbeSelector, list::Lister}};
+use probe_rs::architecture::riscv::{Abstractcs, Dmcontrol, Progbuf0, Progbuf1};
+use probe_rs::architecture::riscv::communication_interface::AccessRegisterCommand;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
@@ -177,6 +179,17 @@ fn cleanup(core: &mut Core<'_>, board: &str, arm: bool) -> Result<Value> {
             core.write_word_32(0xe000e280 + offset, u32::MAX)?; // NVIC ICPR
         }
     } else {
+        let state = core.read_core_reg::<u32>(RegisterId(0x300))?;
+        core.write_core_reg(RegisterId(0x300), state & !8)?;
+        if board == "esp32c5" {
+            // CLIC mintstatus.MIL is read-only. A genuine mret restores it
+            // from mcause.MPIL; clearing the threshold cannot retire it.
+            let until = Instant::now() + Duration::from_secs(2);
+            while core.read_core_reg::<u32>(RegisterId(0xfb1))? & 0xff000000 != 0 {
+                ensure!(Instant::now() < until, "active CLIC handler did not retire; use the boot check");
+                core.step()?; // probe-rs steps with dcsr.stepie=0.
+            }
+        }
         core.write_core_reg(RegisterId(0x300), 0x1800u32)?; // mstatus: MPP=M, MIE=0
         core.write_core_reg(RegisterId(0x304), 0u32)?; // mie
     }
@@ -220,7 +233,7 @@ fn cleanup(core: &mut Core<'_>, board: &str, arm: bool) -> Result<Value> {
             let timer = if board == "esp32c3" {0x60023000} else {0x6000a000};
             core.write_word_32(timer + 0x64, 0)?;
             core.write_word_32(timer + 0x6c, 7)?;
-            update(core, timer, 0x07000000, 0)?;
+            update(core, timer, 0x01c00000, 0)?; // comparator work enables 0..2
             if board == "esp32c3" { core.write_word_32(0x600c2000 + 0x104, 0)?; }
             else { core.write_core_reg(RegisterId(0x347), 0u32)?; }
         }
@@ -228,6 +241,42 @@ fn cleanup(core: &mut Core<'_>, board: &str, arm: bool) -> Result<Value> {
     }
     Ok(json!({"contract":"warm-board-v1", "peripheral_sources_stopped":true,
         "other_core_parked":board.starts_with("rp"), "rom_reset":false}))
+}
+
+fn instruction_fence(session: &mut probe_rs::Session) -> Result<()> {
+    let mut interface = session.get_riscv_interface(0)?;
+    let control: Abstractcs = interface.read_dm_register()?;
+    ensure!((control.0 >> 24) & 31 >= 2, "debug module needs two program-buffer words for instruction fence");
+    let saved0: Progbuf0 = interface.read_dm_register()?;
+    let saved1: Progbuf1 = interface.read_dm_register()?;
+    let mut dm: Dmcontrol = interface.read_dm_register()?;
+    dm.set_haltreq(false);
+    dm.set_resumereq(false);
+    dm.set_ackhavereset(false);
+    interface.write_dm_register(dm)?;
+    let result = (|| -> Result<()> {
+        for opcode in [0x0330000f, 0x0000100f] { // fence rw,rw; fence.i
+            interface.write_dm_register(Abstractcs(0x700))?;
+            interface.write_dm_register(Progbuf0(opcode))?;
+            interface.write_dm_register(Progbuf1(0x00100073))?; // ebreak
+            interface.write_dm_register(AccessRegisterCommand(0x00241000))?;
+            let until = Instant::now() + Duration::from_secs(1);
+            loop {
+                let status: Abstractcs = interface.read_dm_register()?;
+                if status.0 & (1 << 12) == 0 {
+                    ensure!(status.0 & 0x700 == 0, "instruction fence failed: abstractcs={:#x}", status.0);
+                    break;
+                }
+                ensure!(Instant::now() < until, "instruction fence timed out");
+            }
+        }
+        Ok(())
+    })();
+    // Restore the words as well as hardware state: probe-rs caches its own
+    // program buffer and does not see these direct writes.
+    interface.write_dm_register(saved0)?;
+    interface.write_dm_register(saved1)?;
+    result
 }
 
 fn execute(plan: &Plan, image: &Image) -> Result<Value> {
@@ -252,6 +301,9 @@ fn execute(plan: &Plan, image: &Image) -> Result<Value> {
         ensure!(back == *body, "SRAM readback differs at {address:#x}");
         written.push(json!({"address":address,"bytes":body.len(),"sha256":digest(body)}));
     }
+    drop(core);
+    if !image.arm { instruction_fence(&mut session)?; }
+    let mut core = session.core(0)?;
     if image.arm {
         core.write_core_reg(RegisterId(16), 0x01000000u32)?;
         core.write_core_reg(RegisterId(20), 1u32)?;

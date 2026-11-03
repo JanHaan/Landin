@@ -230,7 +230,8 @@ def block_control(run, args, elf, head):
 def running(run, args):
     """probe-rs for the RISC-V image the Pico 2 booted, never another chip:
     what it reads is read from the cores the image runs on."""
-    return common.Probe(run, args.probe_rs, RISCV_CHIP, args.probe)
+    return common.Probe(run, args.probe_rs, RISCV_CHIP, args.probe,
+                        ram_loader=getattr(args, 'ram_loader', None))
 
 
 def flash(run, args, elf, head, what="the image's entry word, table and block"):

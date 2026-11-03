@@ -298,6 +298,32 @@ class ResidentReadiness(unittest.TestCase):
 
 
 class Probes(unittest.TestCase):
+    def test_rp_reads_use_one_core_and_reject_mismatched_evidence(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            report = dict(format_version=1, status='passed', mode='read', board='rp2350',
+                          address=0x20000000, count=2, words=[42, 7], flash_written=False)
+            run = mock.Mock(out=out, pace=mock.Mock())
+            def command(name, argv, **kwargs):
+                self.assertEqual(argv[0], 'loader')
+                plan = json.loads((out / 'cells-plan.json').read_text())
+                self.assertEqual(plan['mode'], 'read')
+                self.assertEqual(plan['board'], 'rp2350')
+                (out / 'cells.json').write_text(json.dumps(report))
+            run.command.side_effect = command
+            probe = COMMON.Probe(run, 'probe-rs', 'RP235x', 'P', ram_loader='loader')
+            self.assertEqual(probe.read_words('cells', 0x20000000, 2), [42, 7])
+            self.assertEqual(run.pace.before.call_args_list,
+                             [mock.call('probe read'), mock.call('probe read completion')])
+            for field, value in (('board', 'rp2040'), ('address', 0x20000004),
+                                 ('flash_written', True), ('count', 1),
+                                 ('words', [True, 7]), ('words', [-1, 7])):
+                with mock.patch.object(json, 'loads', return_value=dict(report, **{field: value})), \
+                        self.assertRaises(COMMON.Failed):
+                    probe.read_words('cells', 0x20000000, 2)
+            with self.assertRaisesRegex(COMMON.Failed, '--ram-loader'):
+                COMMON.Probe(run, 'probe-rs', 'RP235x', 'P').read_words('cells', 0x20000000, 2)
+
     def test_selectors_name_a_slot_or_an_st_link(self):
         self.assertEqual(COMMON.udp_slot('10.42.0.50'), '0000:0002:10.42.0.50/0')
         self.assertEqual(COMMON.stlink('001900293137511339383538'),
