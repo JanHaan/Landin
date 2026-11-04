@@ -420,7 +420,10 @@ jobs:
             sudo apt-get install -y gcc
           fi
           #  D532: the distribution's Arm GCC, under the name it gives it.
-          sudo apt-get install -y gcc-arm-none-eabi
+          #  Keep the C library and headers; newlib's recommendations also
+          #  pull the unused target C++ runtime, a much larger download.
+          sudo apt-get install -y --no-install-recommends \
+            gcc-arm-none-eabi libnewlib-arm-none-eabi
           for pinned in x86_64-pc-linux-gnu-gcc arm-eabi-gcc; do
             if PATH=/usr/bin:/bin command -v "$pinned"; then
               echo "the pinned $pinned is reachable; this is not a stock system" >&2
