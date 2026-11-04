@@ -168,7 +168,7 @@ package body Landin.Driver.ESP_Image is
           /= Character'Val (127) & "ELF" & Character'Val (1)
             & Character'Val (1)
         or else Half (16) /= 2
-        or else Address (Half (18))
+        or else Half (18)
           /= Address (Firmware.ELF_Machine (Profile.Core))
         or else Half (42) /= 32
       then
