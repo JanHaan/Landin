@@ -517,7 +517,15 @@ fn cleanup(core: &mut Core<'_>, board: &str, arm: bool) -> Result<Value> {
     Ok(report)
 }
 
-fn instruction_fence(session: &mut probe_rs::Session) -> Result<()> {
+fn debug_fence_opcodes(board: &str) -> &'static [u32] {
+    // Hazard3 86fc4e3f explicitly rejects FENCE.I in Debug mode. Debug
+    // resume redirects fetch to DPC and flushes prefetch/BTB state; normal
+    // compiler startup then executes its ordinary-mode fences.
+    if board == "rp2350_hazard3" { &[0x0330000f] }
+    else { &[0x0330000f, 0x0000100f] }
+}
+
+fn instruction_fence(session: &mut probe_rs::Session, board: &str) -> Result<()> {
     let mut interface = session.get_riscv_interface(0).context("select RISC-V fence interface")?;
     let control: Abstractcs = interface.read_dm_register()?;
     ensure!((control.0 >> 24) & 31 >= 2, "debug module needs two program-buffer words for instruction fence");
@@ -529,7 +537,7 @@ fn instruction_fence(session: &mut probe_rs::Session) -> Result<()> {
     dm.set_ackhavereset(false);
     interface.write_dm_register(dm)?;
     let result = (|| -> Result<()> {
-        for opcode in [0x0330000f, 0x0000100f] { // fence rw,rw; fence.i
+        for &opcode in debug_fence_opcodes(board) { // fence rw,rw; where legal, fence.i
             interface.write_dm_register(Abstractcs(0x700))?;
             interface.write_dm_register(Progbuf0(opcode))?;
             interface.write_dm_register(Progbuf1(0x00100073))?; // ebreak
@@ -539,10 +547,10 @@ fn instruction_fence(session: &mut probe_rs::Session) -> Result<()> {
             loop {
                 let status: Abstractcs = interface.read_dm_register()?;
                 if status.0 & (1 << 12) == 0 {
-                    ensure!(status.0 & 0x700 == 0, "instruction fence failed: abstractcs={:#x}", status.0);
+                    ensure!(status.0 & 0x700 == 0, "instruction fence opcode {opcode:#010x} failed: abstractcs={:#x}", status.0);
                     break;
                 }
-                ensure!(Instant::now() < until, "instruction fence timed out");
+                ensure!(Instant::now() < until, "instruction fence opcode {opcode:#010x} timed out");
             }
         }
         Ok(())
@@ -587,9 +595,11 @@ fn execute(plan: &Plan, image: &Image) -> Result<Value> {
     let mut written = Vec::new();
     for (address, body) in &image.segments {
         if body.is_empty() { continue; }
-        let back = if c3_instruction_ram(&plan.board, *address) {
-            // Offline validation guaranteed whole words. Explicit word I/O
-            // avoids probe-rs's byte-width program-buffer loads and stores.
+        let back = if c3_instruction_ram(&plan.board, *address)
+            || (plan.board == "rp2350_hazard3" && address % 4 == 0 && body.len() % 4 == 0) {
+            // C3 validation guarantees whole words. Use them for aligned
+            // Hazard3 segments too: program-buffer byte transfers cost a
+            // command per byte. Other segments retain exact byte bounds.
             let words: Vec<u32> = body.chunks_exact(4)
                 .map(|bytes| u32::from_le_bytes(bytes.try_into().unwrap())).collect();
             core.write_32(*address, &words)
@@ -610,7 +620,7 @@ fn execute(plan: &Plan, image: &Image) -> Result<Value> {
         written.push(json!({"address":address,"bytes":body.len(),"sha256":digest(body)}));
     }
     drop(core);
-    if !image.arm { instruction_fence(&mut session).with_context(|| format!("{} instruction fence", plan.board))?; }
+    if !image.arm { instruction_fence(&mut session, &plan.board).with_context(|| format!("{} instruction fence", plan.board))?; }
     let mut core = session.core(0).context("select warm-load core 0")?;
     if image.arm {
         core.write_core_reg(RegisterId(16), 0x01000000u32).context("entry write xPSR register 16")?;
@@ -623,6 +633,9 @@ fn execute(plan: &Plan, image: &Image) -> Result<Value> {
     core.write_core_reg(core.program_counter().id, image.entry & if image.arm {!1} else {!0})
         .context("entry write program counter")?;
     core.run().with_context(|| format!("{} resume loaded entry", plan.board))?;
+    if plan.board == "rp2350_hazard3" {
+        cleanup["instruction_visibility"] = json!("debug-resume-flush-and-startup-fences");
+    }
     Ok(json!({"format_version":1,"status":"passed","mode":"warm","board":plan.board,
         "elf_sha256":digest(&image.bytes),"flash_written":false,"previous_pc":previous_pc,
         "entry":image.entry,"vector":image.vector,"stack":image.stack,"segments":written,
@@ -675,6 +688,13 @@ fn main() -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn debug_fences_preserve_esp_visibility_and_avoid_hazard3_illegal_instruction() {
+        assert_eq!(debug_fence_opcodes("rp2350_hazard3"), &[0x0330000f]);
+        for board in ["esp32c3", "esp32c5"] {
+            assert_eq!(debug_fence_opcodes(board), &[0x0330000f, 0x0000100f]);
+        }
+    }
     #[test]
     fn hazard3_refuses_ambiguous_or_busy_debug_state_before_core_access() {
         assert!(validate_hazard3_debug_state(1, 0x02000001, 0x20040407).is_ok());

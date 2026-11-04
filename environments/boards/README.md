@@ -150,6 +150,12 @@ changes on reset or resume, while
 issues neither. Each independent RAM readback checks that hart 1 is still
 halted without halting it again. Boot and fixed-image setup reads do not
 require this warm-entry state.
+Hazard3 also rejects `fence.i` in Debug mode. The helper uses the legal
+data fence there; debug resume flushes its instruction frontend before
+fetching the SRAM entry, and compiler startup executes the normal-mode
+fences. The [decoder](https://github.com/Wren6991/Hazard3/blob/86fc4e3f/hdl/hazard3_decode.v)
+and [frontend](https://github.com/Wren6991/Hazard3/blob/86fc4e3f/hdl/hazard3_frontend.v)
+define that chip-specific boundary. ESP helper fences are unchanged.
 
 For Pico 2 RAM entry, the BOOTSEL guard reads the selected hub and physical
 port through Linux sysfs. It validates the hub, port and any device
