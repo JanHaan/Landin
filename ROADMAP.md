@@ -1529,10 +1529,10 @@ No warm run silently substitutes a reset through the ROM.
 
 The Pi's built-in hub reports ganged power switching and also carries the
 Arty, so no recovery or boot action switches it. The maintainer has no
-spare switching hub. Proposed next: off-cascade UF2 copies for each boot
+spare switching hub. Both ports use off-cascade UF2 copies for each boot
 image and its fixed restoration, with manual Pico-only cold power cycles
-and the existing exact power-on oracle; never use probe-rs's flash/reset
-path for this manual setup. The RAM-only BOOTSEL guard now reads the
+and the existing exact power-on oracle; this transport never uses
+probe-rs's flash/reset path. The RAM-only BOOTSEL guard now reads the
 selected hub and port through sysfs, validating topology and refusing
 unreadable or malformed identity. It needs no `uhubctl` access or power
 operation. Synthetic negative controls and 257 integrated board controls
@@ -1546,7 +1546,17 @@ cycles, unchanged boot oracles and fixed-image restoration. The wrapper
 streams instructions and names its status command. Independent review
 and regression controls cover deadline, USB-stop and cancellation
 failures (SR-751). Restoration also runs under a successfully borrowed
-parent rig lock (SR-752). Physical boot evidence remains pending.
+parent rig lock (SR-752). The Arm boot check passed in 907.098 seconds,
+including the operator's manual steps: exact power-on reset, complete
+application flash readback, UART/GPIO/interrupt scenarios, and restoration
+with all 464 fixed flash bytes and its startup marker verified. Its kernel
+delta contains only its own BOOTSEL enumeration and disconnects, without
+USB errors. Hazard3's boot check also passed, in 739.301 seconds including
+manual steps: exact power-on reset, core identity and trap vector, the
+full peripheral and atomic telemetry oracle, and fixed-image restoration.
+All 1,256 fixed flash bytes and its startup marker matched; the kernel
+delta contains only its own BOOTSEL enumeration and disconnects. Its RAM
+entry remains under investigation (SR-754).
 
 `environments/boards/build.py` builds every boot/RAM port without rig,
 USB or SSH access and compares each artifact with its separate hardware
@@ -1560,13 +1570,13 @@ have built. Boot checks passed on RP2040 (27.851 seconds), STM32H753
 (28.452 seconds), ESP32-C3 (32.758 seconds) and ESP32-C5 (40.839 seconds),
 including fixed-image restoration and startup markers. Their kernel deltas
 show only their own expected power cycles. Repeated RAM runs passed on
-all four; the retained records with the final helper took 17.276, 14.132,
+all four; the retained records took 17.276, 14.132,
 13.496 and 25.472 seconds respectively, with no kernel USB lines, flash
 writes or ROM resets. RP2040 also passed its physical IO32 indicator and
 the shared UART bridge (SR-739). Passed tool records are retained separately
-for boot and RAM. All nine available current records match offline
-rebuilds, including Arm Pico 2 RAM; both Pico 2 boot records still differ
-and the Hazard3 RAM record is missing.
+for boot and RAM. The four boards' boot/RAM records and Arm Pico 2 RAM
+match offline rebuilds. Both Pico 2 boot records have also been refreshed
+from the current images; the Hazard3 RAM record is still missing.
 
 Physical validation found and corrected C3-specific CSR and word-access
 requirements, and the helper now names failed debug operations (SR-746).
@@ -1574,9 +1584,9 @@ RP2040 ordinary traffic now waits for each piece's echo: its first boot
 attempt lost ordinary input before the intended DMA-exhaustion check.
 The deliberate ring and FIFO bursts, exact loss and DMA completion checks
 are unchanged. Neither initial failure met USB trouble, and the RP2040
-failure restored its fixed image. Pico 2 recovery and repeated Arm RAM
-runs are verified; both ports' complete boot checks and Hazard3 RAM
-evidence remain pending off-cascade setup.
+failure restored its fixed image. Pico 2 recovery, repeated Arm RAM runs
+and both architectures' boot checks are verified; repeated Hazard3 RAM
+evidence remains pending.
 
 Independent review found that a custom script could exclude an allocated
 NOLOAD section from every load segment and escape the SRAM contract;
@@ -1603,7 +1613,7 @@ scope. Its board controls found unresolved temporary-path comparisons,
 Linux process-discovery dependencies and a PTY drain ordering hang;
 canonical path assertions, deterministic kernel fixtures and a concurrent
 PTY peer correct those controls without changing production semantics.
-All 240 board controls pass on Linux; Darwin passes 238 and explicitly
+All 283 board controls pass on Linux; Darwin passes 281 and explicitly
 skips only the two live Linux process-discovery checks. The corrected
 tree also passes the same focused native compiler checks (SR-749).
 Re-record both Pico 2 ports (SR-684); keep SR-680 and SR-736 open until
@@ -3840,6 +3850,8 @@ SR-489, SR-499, SR-511, SR-517.
 | SR-750 | Usability | Preparing the recovered Pico 2's first direct-Pi RAM run, an ordinary read-only uhubctl listing failed USB permissions. Reading the RAM path showed that its BOOTSEL refusal still requires that listing although it never switches power. Root-only inspection also confirmed the Pi hub has ganged power and carries the Arty, so it cannot supply the separate boot check's port switching. The maintainer has no spare switching hub. | R12.45's off-cascade Pico 2 setup. | A fail-closed read-only USB identity guard for RAM entry, and a documented off-cascade boot path with exact power-on evidence that never switches the Arty or attaches in BOOTSEL. | open |
 | SR-751 | Usability | Independent review of the new manual UF2 boot path reproduced a 50 ms operator deadline accepting an acknowledgment after 154 ms, Ctrl-C during restoration skipping the final result and cleanup, and an unreadable USB identity hiding an attached cascade. Validation against real images also found that the first Hazard3 UF2 predicate expected ELF entry to name reset code, although it names the flash entry jump. Met preparing R12.45's first manual boot check. | R12.45's manual UF2 transport. | Globally bounded acknowledgments with USB checks between fragments, retained cancellation and restoration state, fail-closed USB identity, and both architectures' real ELF payloads reconstructed before hardware. | retired: independent reproductions and focused controls pass after the fixes; all four actual ordinary/fixed ELFs convert and reconstruct, and the unchanged power-on oracle remains required |
 | SR-752 | Usability | A tool successfully borrowing its parent's rig flock has no owned lock file. Boot cleanup tested that file instead of successful acquisition, so it could publish a passed run while skipping fixed-image restoration under an outer flock. Met reviewing R12.45's manual boot cleanup; the same condition affected every board port. | R12.45's boot restoration. | Successful owned and borrowed acquisition both retain restoration; failed acquisition and USB trouble permit no extra hardware actions. | retired: every board port tracks successful acquisition, and main-path controls cover owned and borrowed locks, failure, USB stops and failed acquisition without weakening the rig lock |
+| SR-753 | Usability | The capability inventory still said no STM32H753 or Arm Pico 2 board run was recorded and described the Arm corrupted-block control without its current recovery boundary, although passed records and the BOOTSEL refusal were present. Met checking the inventory against R12.45's physical evidence. | R12.45's capability update. | Describe the retained boot/RAM evidence and the current off-cascade boot and malformed-image recovery boundaries. | retired: the inventory names the passed records, RAM default and separate boot mode, manual Arm boot evidence and explicit recovery boundary |
+| SR-754 | Usability | The first Hazard3 RAM run timed out writing PSM_FRCE_OFF at 0x40018004 to hold PROC1 off. No flash was written and the kernel USB delta was empty. Pinned probe-rs prefers SBA, which shares core 1's bus port and has a documented clock-gating stall. Switching to core 0's program buffer alone still timed out at PROC1 assertion, and a later read-only diagnostic could not attach. A verified cold start and the SDK atomic SET sequence reproduced the stall after the preceding watchdog store succeeded. The generic "Timeout during DMI access" also names abstract-command timeouts, so it does not locate the mechanism or prove a Debug Module reset. | R12.45's Hazard3 warm entry. | Keep all Hazard3 accesses on core 0's program buffer; retain selected-core, architecture, debug-engine and PSM pre-cleanup state; replace PSM power-off with a debug halt whose retention independent readback sessions verify, and prove repeated physical RAM runs and cross-checks from a verified fixed-image baseline. | open |
 
 ## Retained positions
 

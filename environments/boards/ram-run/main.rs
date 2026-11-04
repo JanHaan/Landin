@@ -9,8 +9,10 @@ use probe_rs::{
     probe::{DebugProbeSelector, list::Lister},
 };
 use probe_rs::architecture::arm::sequences::DefaultArmSequence;
-use probe_rs::architecture::riscv::{Abstractcs, Dmcontrol, Progbuf0, Progbuf1};
-use probe_rs::architecture::riscv::communication_interface::AccessRegisterCommand;
+use probe_rs::architecture::riscv::{Abstractcs, Dmcontrol, Dmstatus, Progbuf0, Progbuf1};
+use probe_rs::architecture::riscv::communication_interface::{
+    AccessRegisterCommand, MemoryAccessConfig, MemoryAccessMethod, RiscvBusAccess, Sbcs,
+};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
@@ -41,11 +43,15 @@ struct ReadPlan {
     probe: String,
     address: u64,
     count: u32,
+    #[serde(default)]
+    require_hart1_halted: bool,
 }
 
 fn validate_read(plan: &ReadPlan) -> Result<()> {
     ensure!(plan.format_version == 1 && plan.mode == "read", "expected format 1 read plan");
     chip(&plan.board)?;
+    ensure!(!plan.require_hart1_halted || plan.board == "rp2350_hazard3",
+        "retained hart 1 halt evidence is supported only for Hazard3");
     ensure!((1..=65536).contains(&plan.count), "read count must be 1 to 65536 words");
     ensure!(plan.address % 4 == 0, "word read address must be aligned to four bytes");
     let end = plan.address.checked_add(u64::from(plan.count) * 4).context("read address overflow")?;
@@ -62,16 +68,26 @@ fn execute_read(plan: &ReadPlan) -> Result<Value> {
     let probe = Lister::new().open(selector).with_context(|| format!("{} open probe {}", plan.board, plan.probe))?;
     let mut session = probe.attach(target, Permissions::default())
         .with_context(|| format!("{} attach without reset", plan.board))?;
+    configure_memory_access(&mut session, &plan.board)?;
+    let other_core = if plan.require_hart1_halted {
+        Some(hazard3_hart1_state(&mut session, false)?)
+    } else { None };
     let mut words = vec![0u32; plan.count as usize];
     session.core(0).context("select readback core 0")?.read_32(plan.address, &mut words)
         .with_context(|| format!("{} read {} words at {:#x}", plan.board, plan.count, plan.address))?;
     // Session attach/drop clear debug breakpoints and may briefly halt the
-    // executing core. Truncation excludes the reset-held other RP core.
-    // No explicit halt, reset, peripheral cleanup or memory write occurs.
+    // executing core. Truncation excludes the parked other RP core.
+    // The hart 1 check observes its retained halt without issuing halt.
+    // No explicit reset, peripheral cleanup or memory write occurs.
     drop(session);
-    Ok(json!({"format_version":1,"status":"passed","mode":"read","board":plan.board,
+    let mut report = json!({"format_version":1,"status":"passed","mode":"read","board":plan.board,
         "address":plan.address,"count":plan.count,"words":words,"flash_written":false,
-        "debug_housekeeping":true,"core":0,"helper_source_sha256":source_digest()}))
+        "debug_housekeeping":true,"core":0,"helper_source_sha256":source_digest()});
+    if let Some(other_core) = other_core {
+        report["hart1_halted"] = json!(true);
+        report["other_core"] = other_core;
+    }
+    Ok(report)
 }
 
 struct Image {
@@ -117,6 +133,93 @@ fn attach_target(board: &str) -> Result<Target> {
         target.debug_sequence = DebugSequence::Arm(DefaultArmSequence::create());
     }
     Ok(target)
+}
+
+fn memory_access_policy(board: &str, config: &mut MemoryAccessConfig) {
+    if board == "rp2350_hazard3" {
+        // RP2350 datasheet 3.8.5 and E4: SBA shares core 1's load/store
+        // port and can stall when that core's clock is gated. Warm cleanup
+        // halts hart 1, so use halted core 0 for every access width,
+        // including later SRAM transfers and independent readback sessions.
+        for width in [RiscvBusAccess::A8, RiscvBusAccess::A16, RiscvBusAccess::A32] {
+            config.set_default_method(width, MemoryAccessMethod::ProgramBuffer);
+        }
+    }
+}
+
+fn configure_memory_access(session: &mut probe_rs::Session, board: &str) -> Result<()> {
+    if board == "rp2350_hazard3" {
+        let mut interface = session.get_riscv_interface(0)
+            .context("select Hazard3 core 0 memory interface")?;
+        memory_access_policy(board, interface.memory_access_config());
+    }
+    Ok(())
+}
+
+fn validate_hazard3_debug_state(control: u32, abstractcs: u32, sbcs: u32) -> Result<()> {
+    let control = Dmcontrol(control);
+    ensure!(control.dmactive() && control.hartsel() == 0 && !control.hasel()
+        && !control.hartreset() && !control.ndmreset(),
+        "Hazard3 warm entry requires only hart 0 selected without reset; use the boot check");
+    ensure!(abstractcs & 0x1700 == 0,
+        "Hazard3 abstract engine is busy or failed ({abstractcs:#x}); use the boot check");
+    ensure!(sbcs & 0x607000 == 0,
+        "Hazard3 system-bus engine is busy or failed ({sbcs:#x}); use the boot check");
+    Ok(())
+}
+
+fn hazard3_prestate(session: &mut probe_rs::Session) -> Result<Value> {
+    let (control, status, abstractcs, sbcs) = {
+        let mut interface = session.get_riscv_interface(0).context("select Hazard3 pre-state interface")?;
+        let control: Dmcontrol = interface.read_dm_register().context("read Hazard3 DMCONTROL")?;
+        let status: Dmstatus = interface.read_dm_register().context("read Hazard3 DMSTATUS")?;
+        let abstractcs: Abstractcs = interface.read_dm_register().context("read Hazard3 ABSTRACTCS")?;
+        let sbcs: Sbcs = interface.read_dm_register().context("read Hazard3 SBCS")?;
+        (control.0, status.0, abstractcs.0, sbcs.0)
+    };
+    let mut state = json!({"dmcontrol":control,"dmstatus":status,"abstractcs":abstractcs,"sbcs":sbcs});
+    eprintln!("Hazard3 debug pre-state: {state}");
+    validate_hazard3_debug_state(control, abstractcs, sbcs)?;
+    let mut core = session.core(0).context("select Hazard3 pre-state core")?;
+    let hart: u32 = core.read_core_reg(RegisterId(0xf14)).context("read Hazard3 MHARTID")?;
+    let cpuid = core.read_word_32(0xd0000000).context("read Hazard3 SIO CPUID")?;
+    state["mhartid"] = json!(hart);
+    state["sio_cpuid"] = json!(cpuid);
+    eprintln!("Hazard3 selected core: {state}");
+    ensure!(hart == 0 && cpuid == 0,
+        "Hazard3 warm entry found MHARTID={hart} CPUID={cpuid}; use the boot check");
+    let architecture = core.read_word_32(0x4012015c).context("read RP2350 ARCHSEL_STATUS")?;
+    state["archsel_status"] = json!(architecture);
+    ensure!(architecture & 3 == 3,
+        "Hazard3 warm entry requires both cores in RISC-V mode (ARCHSEL_STATUS={architecture:#x}); use the boot check");
+    state["psm_frce_off"] = json!(core.read_word_32(0x40018004).context("read Hazard3 prior PSM FRCE_OFF")?);
+    state["psm_done"] = json!(core.read_word_32(0x4001800c).context("read Hazard3 prior PSM DONE")?);
+    eprintln!("Hazard3 power pre-state: {state}");
+    Ok(state)
+}
+
+fn hazard3_hart1_state(session: &mut probe_rs::Session, halt: bool) -> Result<Value> {
+    let mut interface = session.get_riscv_interface(0).context("select Hazard3 other-core interface")?;
+    let result = (|| -> Result<Value> {
+        // Selection writes hardware before checking status, so even its
+        // failure must flow through the hart 0 restoration below.
+        interface.select_hart(1).context("select Hazard3 hart 1")?;
+        if halt {
+            interface.halt(Duration::from_secs(2)).context("halt Hazard3 hart 1 without reset")?;
+        }
+        let status: Dmstatus = interface.read_dm_register().context("read Hazard3 hart 1 halt state")?;
+        ensure!(status.allhalted() && !status.anyunavail() && !status.anynonexistent(),
+            "Hazard3 hart 1 is not halted and available (DMSTATUS={:#x}); use the boot check", status.0);
+        Ok(json!({"method":"debug-halt","hart":1,"dmstatus":status.0,"halted":true,"rom_reset":false}))
+    })();
+    // select_hart maintains probe-rs's selection and halted-state caches.
+    // Normal teardown disables the DM; Hazard3's per-core debug-mode flop
+    // changes only on reset/resume, so it leaves hart 1 halted. Independent
+    // readbacks observe that state without issuing another halt request.
+    let restored = interface.select_hart(0).context("reselect Hazard3 hart 0");
+    let report = result?;
+    restored?;
+    Ok(report)
 }
 
 // Board-tool policy, checked independently of the compiler report. ESP C3
@@ -362,8 +465,12 @@ fn cleanup(core: &mut Core<'_>, board: &str, arm: bool) -> Result<Value> {
             // without resetting core 0 or executing the ROM.
             let psm = if rp2 {0x40018000} else {0x40010000};
             let other = if rp2 {1 << 24} else {1 << 16};
-            update(core, psm + 4, 0, other)?;
-            poll(core, psm + 0xc, other, 0)?;
+            if board != "rp2350_hazard3" {
+                update(core, psm + 4, 0, other)?;
+                poll(core, psm + 0xc, other, 0)?;
+            }
+            // Hazard3 hart 1 was debug-halted before cleanup. PSM power-off
+            // strands core 0's debug commands even through the program buffer.
             core.write_word_32(if rp2 {0x400d8000} else {0x40058000}, 0).with_context(|| format!("{board} cleanup write MMIO {:#x}", if rp2 {0x400d8000} else {0x40058000}))?;
             // The same peripherals bringup.peripherals releases: asserting
             // reset stops DMA before any SRAM contents are changed.
@@ -405,6 +512,7 @@ fn cleanup(core: &mut Core<'_>, board: &str, arm: bool) -> Result<Value> {
         "other_core_parked":board.starts_with("rp"), "rom_reset":false});
     if board == "rp2350_hazard3" {
         report["hazard3_irq_state_reset"] = json!(true);
+        report["memory_access"] = json!("core0-program-buffer");
     }
     Ok(report)
 }
@@ -452,16 +560,30 @@ fn execute(plan: &Plan, image: &Image) -> Result<Value> {
     let probe = Lister::new().open(selector).with_context(|| format!("{} open probe {}", plan.board, plan.probe))?;
     // Expose only the executing core to Session, whose Drop otherwise tries
     // to halt the reset-held RP core 1 and can leave core 0 halted on failure.
-    // PSM below parks core 1 independently before changing any SRAM.
+    // Cleanup parks core 1 independently before changing any SRAM, by PSM
+    // on Arm and a retained debug halt on Hazard3.
     let mut session = probe.attach(target, Permissions::default())
         .with_context(|| format!("{} attach without reset", plan.board))?;
+    configure_memory_access(&mut session, &plan.board)?;
     session.core(0).context("select warm-load core 0")?.halt(Duration::from_secs(2))
         .with_context(|| format!("{} halt core 0", plan.board))?;
+    let prior_state = if plan.board == "rp2350_hazard3" {
+        Some(hazard3_prestate(&mut session)?)
+    } else { None };
+    let other_core = if plan.board == "rp2350_hazard3" {
+        Some(hazard3_hart1_state(&mut session, true)?)
+    } else { None };
     let mut core = session.core(0).context("select warm-load core 0")?;
     let previous_pc: u32 = core.read_core_reg(core.program_counter().id)
         .with_context(|| format!("{} read previous PC", plan.board))?;
-    let cleanup = cleanup(&mut core, &plan.board, image.arm)
+    let mut cleanup = cleanup(&mut core, &plan.board, image.arm)
         .with_context(|| format!("{} warm cleanup", plan.board))?;
+    if let Some(prior_state) = prior_state {
+        cleanup["prior_state"] = prior_state;
+    }
+    if let Some(other_core) = other_core {
+        cleanup["other_core"] = other_core;
+    }
     let mut written = Vec::new();
     for (address, body) in &image.segments {
         if body.is_empty() { continue; }
@@ -554,6 +676,39 @@ fn main() -> Result<()> {
 mod tests {
     use super::*;
     #[test]
+    fn hazard3_refuses_ambiguous_or_busy_debug_state_before_core_access() {
+        assert!(validate_hazard3_debug_state(1, 0x02000001, 0x20040407).is_ok());
+        for control in [0, 1 | (1 << 16), 1 | (1 << 26), 1 | (1 << 29), 3] {
+            assert!(validate_hazard3_debug_state(control, 0x02000001, 0x20040407).is_err());
+        }
+        for abstractcs in [0x02001001, 0x02000301] {
+            assert!(validate_hazard3_debug_state(1, abstractcs, 0x20040407).is_err());
+        }
+        for sbcs in [0x20240407, 0x20440407, 0x20041407] {
+            assert!(validate_hazard3_debug_state(1, 0x02000001, sbcs).is_err());
+        }
+    }
+    #[test]
+    fn hazard3_memory_policy_uses_core0_for_every_transfer_width() {
+        let widths = [RiscvBusAccess::A8, RiscvBusAccess::A16, RiscvBusAccess::A32];
+        for board in ["rp2040", "rp2350", "rp2350_hazard3", "stm32h753", "esp32c3", "esp32c5"] {
+            let mut config = MemoryAccessConfig::default();
+            // Reproduce probe-rs preferring the advertised SBA capability.
+            for width in widths {
+                config.set_default_method(width, MemoryAccessMethod::SystemBus);
+            }
+            memory_access_policy(board, &mut config);
+            for width in widths {
+                for address in [0x40018004, 0x40020000, 0x20000000, 0x20081ffc] {
+                    assert_eq!(config.method(address, width),
+                        if board == "rp2350_hazard3" { MemoryAccessMethod::ProgramBuffer }
+                        else { MemoryAccessMethod::SystemBus },
+                        "{board} {width:?} at {address:#x}");
+                }
+            }
+        }
+    }
+    #[test]
     fn hazard3_reset_clears_all_52_irqs_and_active_priority() {
         let mut enables = u64::MAX;
         let mut forced = u64::MAX;
@@ -621,7 +776,19 @@ mod tests {
     }
     fn read_plan(address: u64, count: u32) -> ReadPlan {
         ReadPlan { format_version: 1, board: "rp2040".into(), mode: "read".into(),
-            probe: "0000:0002:10.42.0.50/0".into(), address, count }
+            probe: "0000:0002:10.42.0.50/0".into(), address, count, require_hart1_halted: false }
+    }
+    #[test]
+    fn retained_hart1_halt_requests_are_scoped_to_hazard3_before_probe_access() {
+        let mut plan = read_plan(0x20000000, 1);
+        plan.require_hart1_halted = true;
+        assert!(validate_read(&plan).is_err());
+        plan.board = "rp2350_hazard3".into();
+        assert!(validate_read(&plan).is_ok());
+        let report = process_plan(&serde_json::to_vec(&json!({"format_version":1,
+            "board":"rp2350_hazard3","mode":"read","probe":"invalid without hardware",
+            "address":0x20000000u32,"count":1,"require_hart1_halted":true})).unwrap(), true).unwrap();
+        assert_eq!(report["status"], "validated");
     }
     #[test]
     fn attach_policy_keeps_one_core_and_avoids_rp2040_rescue_sequence() {

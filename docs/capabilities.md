@@ -53,8 +53,8 @@ entry that describes it, and put a new one where a reader would look for it.
   exercise, builds at `--level=armv7e-m` with an oracle of its own; its
   description's stage configures the supply from the reset vector before
   compiler-owned reset writes any RAM (D653), and it is checked by
-  [`board.py`](../environments/boards/stm32h753/README.md) (D647-D651), and
-  no board run of it is recorded yet; the board tools share
+  [`board.py`](../environments/boards/stm32h753/README.md) (D647-D651), with
+  passed cold-boot and repeated RAM records; the board tools share
   `environments/boards/common.py` (D646). RP2350's description, learnt from
   pico-sdk's SVD (D635), selects a Cortex-M33 with the Pico 2's 4 MiB
   flash, its 512 KiB of SRAM and scratch banks and all 52 of its
@@ -63,9 +63,11 @@ entry that describes it, and put a new one where a reader would look for it.
   and reads it back from the object it assembles (D636-D638); it compiles
   and links. The Pico 2's port of the RP2040 application, at
   `--level=armv8-m.main` with no float, is checked by an oracle of its own,
-  [`board.py`](../environments/boards/rp2350/README.md) (D654, D655), with a
-  negative control that a corrupted block is not booted; no board run of
-  it is recorded yet.
+  [`board.py`](../environments/boards/rp2350/README.md) (D654, D655), with
+  passed cold-boot and repeated RAM records. Its boot check uses manual
+  UF2 installation and Pico-only power cycles off the cascade, verifies
+  the exact power-on reset cause, and restores the quiet fixed image.
+  A malformed-block boot control requires separate off-cascade recovery.
   The derived linker script is written as `OUT.ld`, or alone with its
   limits by `--emit=linker-script` (D589), a developer's own is linked with
   `--linker-script=FILE` and held to a contract (D546), and
@@ -75,7 +77,12 @@ entry that describes it, and put a new one where a reader would look for it.
   stack, retaining BSS clearing and omitting ROM packaging. The
   [board tools](../environments/boards/README.md) prepare all six ports
   without hardware, compare boot and RAM records separately, and transfer
-  checked images and matching tool sources to the Pi board host.
+  checked images and matching tool sources to the Pi board host. Their
+  default development mode halts and reinitializes supported device state,
+  loads and verifies SRAM, and resumes without writing flash or resetting
+  through the ROM (D901, D902). A separate boot mode checks ROM packaging
+  and a cold start, then restores a fixed image with no application USB
+  service. Pico 2 architecture changes use that explicit off-cascade setup.
   Firmware runs on the pinned QEMU
   [emulator](../environments/cortex-m/README.md), with synthetic devices
   served through its debugger stub. Fifty-five RP2040 registers and

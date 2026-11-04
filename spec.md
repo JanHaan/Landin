@@ -23040,6 +23040,11 @@ It retires active Arm and C5 handlers, resets Hazard3's interrupt context,
 enable/force windows and priorities, and stops application DMA and interrupt
 sources before replacing SRAM. It parks the other RP core, checks the supported clock
 and cache baseline and configures the STM32 supply before writing RAM.
+Hazard3 requires both processors already selected as RISC-V, uses core 0's
+program buffer for memory access, and parks hart 1 with a debug halt rather
+than PSM power-off. Independent RAM readbacks require the retained halt
+without issuing another halt request; normal single-core session teardown
+does not resume hart 1. Boot/setup reads do not impose this warm state.
 Before hardware access the tool checks the helper's offline description
 against its compiled source identity and pinned probe-rs revision. It
 validates load ranges and vector bytes independently, verifies SRAM

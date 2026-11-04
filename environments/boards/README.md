@@ -136,6 +136,20 @@ RP loading and readback expose only the executing core to probe-rs; the
 parked core is excluded from session cleanup. RP2040 attachment uses the
 generic Arm sequence so a failed connection cannot fall back to a rescue
 reset. Readback retains probe-rs's brief debug housekeeping halts.
+Hazard3 loads and readbacks use core 0's program buffer for every transfer
+width. RP2350's system-bus debug access shares core 1's load/store port;
+the program buffer keeps memory access on the executing core.
+See the [RP2350 datasheet, section 3.8.5 and erratum E4](https://pip-assets.raspberrypi.com/categories/1214-rp2350/documents/RP-008373-DS-2-rp2350-datasheet.pdf?disposition=inline).
+Hazard3 requires both processors already in RISC-V mode and debug-halts
+hart 1 before peripheral cleanup or SRAM writes. It avoids the PSM power-off
+operation that stalled the debug link during validation. Normal session
+teardown leaves that halt in place: the chip's
+[per-core debug state](https://github.com/Wren6991/Hazard3/blob/86fc4e3f/hdl/hazard3_csr.v)
+changes on reset or resume, while
+[disabling its debug module](https://github.com/Wren6991/Hazard3/blob/86fc4e3f/hdl/debug/dm/hazard3_dm.v)
+issues neither. Each independent RAM readback checks that hart 1 is still
+halted without halting it again. Boot and fixed-image setup reads do not
+require this warm-entry state.
 
 For Pico 2 RAM entry, the BOOTSEL guard reads the selected hub and physical
 port through Linux sysfs. It validates the hub, port and any device
