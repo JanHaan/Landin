@@ -33,12 +33,74 @@ package body Landin.Tests.Commands_Suite is
             Landin.Commands.Catalogue.Usage
               (Landin.Commands.Catalogue.Compile),
             "all help routes describe the compile command");
+         Landin.Testing.Check
+           (Item, Contains (US.To_String (Result.Output),
+                            "firmware targets" & ASCII.LF
+                            & "support --debug lines")
+              and then Contains (US.To_String (Result.Output),
+                                 "Select the firmware entry routine"),
+            "compile help describes every firmware target");
       end Help;
    begin
       Host.Raise_On_Read;
       Help (["compile", "--help"]);
       Help (["--help", "compile"]);
       Help (["help", "compile"]);
+      declare
+         package J renames Landin.Json;
+         Machine : constant Landin.Driver.Outcome :=
+           Landin.Commands.Execute
+             (["targets", "--json"], Host, Tools, Meter);
+         Human : constant Landin.Driver.Outcome :=
+           Landin.Commands.Execute (["targets"], Host, Tools, Meter);
+         Doc : J.Document;
+         Seen_Xtensa : Boolean := False;
+      begin
+         Landin.Testing.Check
+           (Item, Machine.Status = 0 and then Human.Status = 0,
+            "both target queries succeed");
+         J.Parse (Doc, US.To_String (Machine.Output));
+         Landin.Testing.Check
+           (Item, J.Ok (Doc), "target query is structured JSON");
+         declare
+            Rows : constant J.Value :=
+              J.Member (Doc, J.Root (Doc), "targets");
+         begin
+            Landin.Testing.Check_Equal
+              (Item, J.Length (Doc, Rows), 10,
+               "every described target reports its debug capability");
+            for Index in 1 .. J.Length (Doc, Rows) loop
+               declare
+                  Row : constant J.Value := J.Element (Doc, Rows, Index);
+                  Name : constant String :=
+                    J.Text (Doc, J.Member (Doc, Row, "name"));
+                  Debug : constant J.Value := J.Member (Doc, Row, "debug");
+                  Expected : constant String :=
+                    (if Name = "synthetic-32" then "none"
+                     elsif Name in "cortex-m0" | "rv32" | "xtensa"
+                     then "lines" else "full");
+               begin
+                  Seen_Xtensa := Seen_Xtensa or Name = "xtensa";
+                  Landin.Testing.Check
+                    (Item, J.Is_Kind (Doc, Debug, J.String_Value),
+                     Name & " debug capability is a JSON string");
+                  Landin.Testing.Check_Equal
+                    (Item, J.Text (Doc, Debug), Expected,
+                     Name & " names the supported debug mode");
+                  Landin.Testing.Check
+                    (Item, Contains (US.To_String (Human.Output),
+                       Name
+                       & (if Name = "synthetic-32"
+                          then " (checking only)" else "") & ": "
+                       & J.Text (Doc, J.Member (Doc, Row, "levels"))
+                       & "; debug: " & Expected & ASCII.LF),
+                     Name & " plain query names the same debug mode");
+               end;
+            end loop;
+         end;
+         Landin.Testing.Check
+           (Item, Seen_Xtensa, "Xtensa is included in both target queries");
+      end;
       declare
          Result : constant Landin.Driver.Outcome :=
            Landin.Commands.Execute (["version", "--json"], Host, Tools, Meter);
