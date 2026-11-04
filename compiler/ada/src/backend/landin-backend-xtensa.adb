@@ -17,7 +17,6 @@ with Landin.Targets.Capabilities;
 with Landin.Backend.Xtensa_Machine;
 with Landin.Backend.Xtensa_Words;
 with Landin.Backend.ELF;
-with Landin.Backend.Entry_Point;
 with Landin.Backend.Site_Counts;
 with Landin.Backend.Trap_Reports;
 with Landin.Backend.Work_Arrays;
@@ -50,7 +49,6 @@ package body Landin.Backend.Xtensa is
    use type Landin.Types.Type_Kind;
 
    use type Landin.Targets.Target_Facts;
-   use type Landin.Targets.Architecture;
    use type Landin.Machine.Convention;
    use type Landin.Layouts.Policy;
 
@@ -137,14 +135,6 @@ package body Landin.Backend.Xtensa is
    --  So are the float ones a block declares, f8, f9 and f18-f27 (D630),
    --  numbered as DWARF numbers them, 32 above their own: 40, 41, 50-59.
    type Saved_Set is array (9 .. 59) of Boolean;
-
-   subtype Saved_Float is Natural range 40 .. 59;
-
-   --  A saved register as the assembler spells it.
-   function Saved_Name (Number : Natural) return String
-     is ((if Number in Saved_Float then "f" & Trimmed
-            (Natural'Image (Number - 32))
-          else "x" & Trimmed (Natural'Image (Number))));
 
    function Declared
      (Of_Unit : Landin.IR.Unit; Item : Landin.IR.Item_Id;
@@ -625,8 +615,6 @@ package body Landin.Backend.Xtensa is
       procedure Immediate (Register : String; Value : Pattern);
       procedure Add_Offset
         (Register : String; Offset : Landin.Targets.Byte_Count);
-      procedure Stack_Address
-        (Register : String; Offset : Landin.Targets.Byte_Count);
       procedure Restore_Stack (Bytes : Landin.Targets.Byte_Count);
       procedure Address (Register, Name : String; Imported : Boolean := False);
       procedure Memory
@@ -707,13 +695,6 @@ package body Landin.Backend.Xtensa is
             end if;
          end if;
       end Add_Offset;
-
-      procedure Stack_Address
-        (Register : String; Offset : Landin.Targets.Byte_Count) is
-      begin
-         Emit ("mv " & Register & ", sp");
-         Add_Offset (Register, Offset);
-      end Stack_Address;
 
       procedure Restore_Stack (Bytes : Landin.Targets.Byte_Count) is
       begin
@@ -1083,12 +1064,6 @@ package body Landin.Backend.Xtensa is
       function Evidence_Symbol (Id : Landin.IR.Evidence_Id) return String;
       function Is_Exported_Item (Item : Landin.IR.Item_Id) return Boolean;
 
-      --  The library's argument initializer the hosted entry calls with
-      --  C's argc, argv and envp, when the program defines one.
-      Initializer : constant Landin.IR.Item_Id :=
-        (if Hosted_Entry = Landin.IR.No_Item then Landin.IR.No_Item
-         else Landin.Backend.Entry_Point.Argument_Initializer
-           (Of_Unit, Names));
       Allocated_Symbols : array
         (1 .. Positive'Max (1, Landin.IR.Item_Count (Of_Unit))) of
           Unbounded.Unbounded_String;
@@ -1725,7 +1700,7 @@ package body Landin.Backend.Xtensa is
             Limit_Base ("x6");
             Emit (Load_Word & " x6, " & Limit_Offset & "(x6)");
             Emit ("bgeu x5, x6, " & Fits);
-            Put (Character'Val (9) & "lla x7, " & Limit_Trap);
+            Emit ("lla x7, " & Limit_Trap);
             Emit ("jr x7");
             Put (Fits & ":");
             Limit_Trapped := True;
@@ -1981,6 +1956,7 @@ package body Landin.Backend.Xtensa is
                Put (Character'Val (9) & "l32i a" & Image (Index + 2)
                     & ", a7, " & Image ((Index + 10) * 4));
             end loop;
+            Put (Character'Val (9) & "l32i a6, a7, 124");
             Put (Character'Val (9) & "mov a1, a7");
             Put (Character'Val (9) & "retw");
          end Epilogue;

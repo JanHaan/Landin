@@ -92,6 +92,7 @@ package body Landin.Backend.Xtensa_Machine is
             Raw ("s32i a" & Image (Index + 10)
                  & ", a7, " & Image ((Index + 10) * 4));
          end loop;
+         Raw ("s32i a14, a7, 124");
       end Call;
       procedure Boolean_Result (Condition, Left, Right : String);
       procedure Boolean_Result (Condition, Left, Right : String) is
