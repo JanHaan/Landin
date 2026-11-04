@@ -1,0 +1,9 @@
+--  The status and independent trap cells alone look successful. The remote
+--  oracle must reject this debug stop before the wrapper's completion label.
+--  The negative runner replaces this unique NOP with BREAK in a separately
+--  retained assembly/object/image: ordinary source assembly cannot branch.
+main: () -> (code: i32) =
+    landin_xtensa_fixture_status = 0
+    assembler.block("nop")
+    code = 0
+end main

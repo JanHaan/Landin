@@ -1,0 +1,12 @@
+--  A debugger stop here has successful status and no architectural trap.
+--  The runner installs an additional breakpoint at the source-authored
+--  function symbol and must reject it before wrapper completion.
+link(symbol: "_landin_xtensa_fixture_unexpected")
+unexpected_stop: () -> none =
+end unexpected_stop
+
+main: () -> (code: i32) =
+    landin_xtensa_fixture_status = 0
+    unexpected_stop()
+    code = 0
+end main
