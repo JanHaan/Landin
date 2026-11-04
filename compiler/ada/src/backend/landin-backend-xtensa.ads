@@ -1,6 +1,5 @@
 with Landin.Panics;
---  Native RISC-V assembly from verified IR: RV64 Linux LP64D and RV32
---  firmware at XLEN 32 (D671).
+--  Native windowed Xtensa assembly from verified IR for ESP32 and ESP32-S3.
 with Ada.Strings.Unbounded;
 
 with Landin.Build_Reports;
@@ -20,7 +19,7 @@ package Landin.Backend.Xtensa is
       Facts : Landin.Targets.Target_Facts;
       Options : Landin.Optimization.Options) return Boolean;
 
-   --  One compiler-framed RV32 routine's frame record, saved registers
+   --  One compiler-framed Xtensa routine's frame record, saved registers
    --  and homes must fit the selected firmware stack. This is not a
    --  call-depth bound.
    function Frame_Fits_Firmware_Stack
