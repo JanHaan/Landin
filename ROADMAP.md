@@ -1816,7 +1816,8 @@ required matrix leg, including called workflows; SR-725 by listing each
 target's debug mode; SR-757 through SR-760 through help, importer and
 installer controls; SR-761 through distinct command logs; SR-762 through
 explicit boot observations; SR-763 through transmitter draining and
-complete ROM trace lines. Their rows stay in the register until closure evidence
+complete ROM trace lines; and SR-764 through emulator cancellation ownership.
+Their rows stay in the register until closure evidence
 is complete. New findings are SR-758 through SR-764; SR-757 retains the
 identity of the carried local finding.
 
@@ -1834,6 +1835,23 @@ with no dependency supplied only by the development shell. SR-736 remains
 open: the Pi's Arty and cascade share a controller. Board work keeps the
 common lock, verifies no BOOTSEL device and stops on every new kernel USB
 fault; separate USB ports are not separate failure domains.
+
+The final unmatched-row review also keeps R551-07 open: the virtual corpus
+map and witnessed two-GiB refusal provide bounded placement evidence,
+not general large-image preflight. SR-649's activation is restated for a
+physical ESP image exceeding internal SRAM; virtual corpus memory supplies
+no flash mapping. SR-637 concerns RV32 scratch homes and is not changed by
+the new Xtensa stack. The unrelated usability triggers are narrowed to the
+behavior they describe: SR-266 to internal-defect caller reporting;
+SR-289 to module-value declared-option admission; SR-296 to diagnostic-note
+citation policy; SR-298 to installed panic-site resolution; SR-379 to hosted
+cross-runner child programs; SR-451 to C-layout refusal cascades; and
+SR-722 to generator failure reporting. New target facts, commands,
+freestanding execution and regenerated catalogues do not implement those
+changes. SR-721's shared subprocess hang-guard policy remains open; focused
+controls retain bounded, load-tolerant waits. SR-685 remains about a wedged
+RISC-V core's architectural register capture: the classic Xtensa reset
+diagnostic records its own scoped trace without claiming that facility.
 
 ### R12.60 — Boards in the gate
 
