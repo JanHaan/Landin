@@ -1,4 +1,5 @@
 """The bounded QEMU remote-protocol oracle; no guest instructions are changed."""
+import json
 import os
 import socket
 import subprocess
@@ -20,6 +21,9 @@ class Remote:
         payload = text.encode('ascii')
         packet = b'$' + payload + b'#' + ('%02x' % (sum(payload) & 255)).encode()
         self.socket.sendall(packet)
+        return self.reply(text)
+
+    def reply(self, text):
         while True:
             first = self.byte()
             if first == b'+':
@@ -66,14 +70,20 @@ def observe(qemu, chip, elf, symbols, output, timeout=20):
         process = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT,
                                    pass_fds=(listener.fileno(),), start_new_session=True)
         listener.close()
-        connection = socket.create_connection(('127.0.0.1', port), timeout=timeout)
-        connection.settimeout(timeout)
-        remote = Remote(connection)
+        connection = None
+        remote = None
         try:
+            connection = socket.create_connection(('127.0.0.1', port), timeout=timeout)
+            connection.settimeout(timeout)
+            remote = Remote(connection)
             remote.command('qSupported')
             stop = symbols['_landin_firmware_stopped']
             if remote.command('Z0,%x,3' % stop) != 'OK':
                 raise RuntimeError('QEMU refused the stopped-label breakpoint')
+            bottom = symbols['_landin_firmware_stack_bottom']
+            guard = bytes.fromhex('3cc35aa5') * 4
+            if remote.command('M%x,%x:%s' % (bottom, len(guard), guard.hex())) != 'OK':
+                raise RuntimeError('QEMU refused the stack guard write')
             stopped = remote.command('c')
             if not stopped.startswith(('S05', 'T05')):
                 raise RuntimeError('QEMU stopped unexpectedly: ' + stopped)
@@ -82,13 +92,26 @@ def observe(qemu, chip, elf, symbols, output, timeout=20):
                                   '_landin_firmware_trap_cause',
                                   '_landin_firmware_trap_pc',
                                   '_landin_xtensa_fixture_status')}
+            guard_after = remote.memory(bottom, len(guard))
+            if guard_after != guard:
+                raise RuntimeError('the guest overwrote the lowest 16 bytes of its stack reservation')
+            values['stack_guard'] = guard_after.hex()
             if values.get('_landin_firmware_trap_count'):
                 values['trap_instruction'] = remote.memory(
                     values['_landin_firmware_trap_pc'], 3).hex()
             return {'values': values, 'remote': remote.transcript,
                     'qemu_command': command, 'elapsed_seconds': time.monotonic() - tick}
+        except TimeoutError:
+            if remote is not None:
+                connection.sendall(b'\x03')
+                remote.reply('interrupt after timeout')
+                remote.command('g')
+                (output / 'timeout-remote.json').write_text(
+                    json.dumps(remote.transcript, indent=2) + '\n')
+            raise RuntimeError('guest timed out; inspect timeout-remote.json')
         finally:
-            connection.close()
+            if connection is not None:
+                connection.close()
             if process.poll() is None:
                 process.terminate()
             try:

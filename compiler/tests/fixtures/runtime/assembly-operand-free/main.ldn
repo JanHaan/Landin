@@ -9,6 +9,12 @@ elsif compiler.arch == arm64 then
 elsif compiler.arch == rv64 or compiler.arch == rv32 then
     idle: () -> none = assembler.block("nop") end idle
     through: (value: u32) -> (r: u32) = r = value + 7 end through
+elsif compiler.arch == xtensa then
+    idle: () -> none = assembler.block("nop") end idle
+    through: (value: u32) -> (r: u32) =
+        r = assembler.block("addi {r}, {r}, 7", inout r: u32 at general = value)
+    end through
+
 else
     idle: () -> none = assembler.block("nop\nyield") end idle
     through: (value: u32) -> (r: u32) =

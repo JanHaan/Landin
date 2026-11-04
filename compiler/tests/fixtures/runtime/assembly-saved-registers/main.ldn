@@ -32,6 +32,14 @@ elsif compiler.arch == rv32 then
             in s: u32 at general = u32(seed), out r: u32 at general,
             out _ at x9, out _ at x18, out _ at x19, out _ at x20, out _ at x21, out _ at x22, out _ at x23, out _ at x24, out _ at x25, out _ at x26, out _ at x27))
     end clobber
+elsif compiler.arch == xtensa then
+    clobber: (seed: u64) -> (r: u64) =
+        r = u64(assembler.block(
+            "mov a2, {s}\nmov a3, {s}\nmov a4, {s}\nmov a5, {s}\nmov a6, {s}\naddi {r}, a6, 1",
+            in s: u32 at a10 = u32(seed), out r: u32 at a11,
+            out _ at a2, out _ at a3, out _ at a4, out _ at a5, out _ at a6))
+    end clobber
+
 else
     clobber: (seed: u64) -> (r: u64) =
         r = u64(assembler.block(

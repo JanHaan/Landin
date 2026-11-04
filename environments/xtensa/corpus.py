@@ -12,7 +12,8 @@ ROOT = HERE.parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(HERE))
 from environments.xtensa.backend import (COUNTERPARTS, INVENTORY, PROFILES,
-    SPECIALIZATION_PROFILES, Run, disposition, execute, inventory, metadata, sha)  # noqa: E402
+    SPECIALIZATION_PROFILES, Run, disposition, execute, inventory, metadata, sha, workers)  # noqa: E402
+from environments.xtensa.tools import Tools  # noqa: E402
 
 
 def rows():
@@ -99,7 +100,8 @@ def execute_inventory(output, refine, qemu, chip, selected=(), profiles=()):
                         'run_args', 'run_files', 'run_expect', 'stdin')):
                     raise RuntimeError('execute row requires a hosted/compiler argument oracle')
                 result = execute(run, refine, qemu, inputs, chip,
-                                 expected=meta.status_at('xtensa-' + chip), traps=meta.traps,
+                                 expected=row.get('status', meta.status_at('xtensa-' + chip)),
+                                 traps=meta.traps,
                                  optimize=opt, specialize=spec)
                 record.update(verdict='executed', image_sha256=result['image_sha256'],
                               values=result['values'])
@@ -108,12 +110,12 @@ def execute_inventory(output, refine, qemu, chip, selected=(), profiles=()):
             #  A failure remains a failure until an explicit inventory
             #  disposition describes and witnesses its actual boundary.
             record.update(status='failed', error=str(error))
+        record['artifacts'] = {str(path.relative_to(run.out)): sha(path)
+                               for path in sorted(run.out.rglob('*')) if path.is_file()}
         (run.out / 'verdict.json').write_text(json.dumps(record, indent=2) + '\n')
         return record
 
-    jobs = int(__import__('os').environ.get('LANDIN_CORTEX_JOBS', '1'))
-    if not 1 <= jobs <= 64:
-        raise RuntimeError('LANDIN_CORTEX_JOBS must be 1 to 64')
+    jobs = workers()
     results = []
     with ThreadPoolExecutor(max_workers=jobs) as pool:
         for result in pool.map(one, work):
@@ -123,7 +125,7 @@ def execute_inventory(output, refine, qemu, chip, selected=(), profiles=()):
                 result.get('verdict', 'FAILED: ' + result.get('error', ''))), flush=True)
     summary = {'scope': 'FILTERED' if selected or profiles else 'COMPLETE',
                'chip': chip, 'compiler_sha256': sha(refine),
-               'inventory_sha256': sha(INVENTORY),
+               'inventory_sha256': sha(INVENTORY), 'counterparts_sha256': sha(COUNTERPARTS),
                'status': 'passed' if all(r['status'] == 'passed' for r in results) else 'failed',
                'results': results}
     (output / 'result.json').write_text(json.dumps(summary, indent=2) + '\n')
@@ -133,7 +135,8 @@ def execute_inventory(output, refine, qemu, chip, selected=(), profiles=()):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--refine', required=True, type=Path)
-    parser.add_argument('--qemu', required=True, type=Path)
+    parser.add_argument('--qemu', type=Path)
+    parser.add_argument('--tools', type=Path)
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--chip', choices=('esp32', 'esp32s3'), required=True)
     parser.add_argument('--fixture', action='append', default=[])
@@ -142,8 +145,15 @@ def main():
     args = parser.parse_args()
     if not args.all and not args.fixture:
         parser.error('select exact --fixture names or request --all')
-    result = execute_inventory(args.output, args.refine.resolve(), args.qemu.resolve(),
-                               args.chip, args.fixture, args.profile)
+    if args.all and not args.fixture and not args.profile and args.tools is None:
+        parser.error('a COMPLETE lane requires --tools DIRECTORY with its locked installation')
+    tools = Tools(args.tools, args.qemu)
+    try:
+        result = execute_inventory(args.output, args.refine.resolve(), tools.qemu,
+                                   args.chip, args.fixture, args.profile)
+    finally:
+        if args.output.is_dir():
+            tools.finish(args.output)
     return 0 if result['status'] == 'passed' else 1
 
 

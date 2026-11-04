@@ -1,0 +1,9 @@
+fixed if compiler.feature.salt then
+    main: () -> (status: i32) =
+        status = 7
+    end main
+else
+    main: () -> (status: i32) =
+        status = 6
+    end main
+end if
