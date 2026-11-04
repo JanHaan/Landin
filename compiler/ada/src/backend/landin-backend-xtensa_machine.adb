@@ -234,8 +234,8 @@ package body Landin.Backend.Xtensa_Machine is
               (if Op in "lw" | "sw" then 4
                elsif Op in "lh" | "lhu" | "sh" then 2 else 1);
          begin
-            --  x8 is the immutable CFA. Its home contains a7+Frame_Bytes,
-            --  including when outgoing arguments move the current SP.
+            --  x8 is the immutable CFA, a7+Frame_Bytes, including when
+            --  outgoing arguments move the current SP.
             if Frame_Bytes /= 0 and then Base = "x8"
               and then Frame_Offset in 0 .. Long_Long_Integer (255 * Scale)
               and then Frame_Offset mod Long_Long_Integer (Scale) = 0
