@@ -156,6 +156,26 @@ class NamedFiles(unittest.TestCase):
         self.assertTrue(reasons(checker.check_document_reachability,
                                 written=written))
 
+    def test_external_file_urls_are_not_repository_paths(self):
+        text = ('[ROM](https://example.org/commit/README.md#selection)\n'
+                '`https://example.org/reset.py`\n'
+                '<https://example.org/tool.py?name=remote.py#part>\n')
+        self.assertEqual(faults(checker.check_named_files,
+                                written={"README.md": text}), [])
+
+    def test_an_external_url_does_not_hide_the_neighboring_local_link(self):
+        said = reasons(checker.check_named_files, written={"README.md":
+            '[remote](https://example.org/README.md)[local](docs/absent.md)\n'})
+        self.assertEqual(len(said), 1)
+        self.assertIn('docs/absent.md', said[0])
+
+    def test_ada_comment_urls_leave_local_references_checked(self):
+        said = reasons(checker.check_named_files, written={
+            'compiler/ada/src/sample.ads':
+                '-- https://example.org/file.ads and `docs/absent.md`\n'})
+        self.assertEqual(len(said), 1)
+        self.assertIn('docs/absent.md', said[0])
+
 
 FAILING_MODULE = """\
 public out_of_memory: atom

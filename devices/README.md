@@ -609,7 +609,7 @@ and their literals: no callback table or further callee is reached. The
 oracle compares them with `esp32_rev300_rom.elf` in the already pinned
 vendor ELF archive. Silicon revision 3.1 uses that next lower available
 ROM, following the vendor's
-[selection rule](https://github.com/espressif/esp-rom-elfs/tree/37b4a88#choosing-the-rom-elf-file).
+[selection rule](https://github.com/espressif/esp-rom-elfs/blob/37b4a88/README.md#choosing-the-rom-elf-file).
 Physical ROM words must match the guards before support is claimed;
 the banner alone does not establish compatibility. `inputs.json` also
 pins the classic cache API header and symbol table. The offline stage

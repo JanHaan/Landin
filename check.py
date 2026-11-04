@@ -8774,6 +8774,7 @@ def check_named_files(full_run):
     #  `.ldn` is deliberately absent: a Landin file named in a comment is
     #  almost always an example program a case builds, not a file here.
     named = re.compile(
+        r"[A-Za-z][A-Za-z0-9+.-]*://[^\s<>()`\"']+|"
         r"(?<![\w/.-])((?:[A-Za-z0-9_./-]+/)?[A-Za-z0-9_-]+"
         r"\.(?:md|txt|py|sh|adb|ads|gpr|yml|nix|toml))(?![\w])")
 
@@ -8804,6 +8805,8 @@ def check_named_files(full_run):
                 line = line[comment:]
             for found in named.finditer(line):
                 target = found.group(1)
+                if target is None:  # An external URL, including its query/fragment.
+                    continue
                 if target in NAMED_FILE_ALLOWLIST:
                     continue
                 if present(target):
