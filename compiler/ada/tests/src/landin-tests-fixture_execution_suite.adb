@@ -175,6 +175,11 @@ package body Landin.Tests.Fixture_Execution_Suite is
       elsif Target = "cortex-m0" then
          "environments/cortex-m/backend_corpus.py --case=" & Label
          & " --refine=REFINE --output=DIR, or the gate's cortex-m job"
+      elsif Target = "xtensa" then
+         "environments/xtensa/corpus.py --memory-profile=sim --fixture="
+         & Label & " --chip=esp32 --tools=TOOLS --refine=REFINE"
+         & " --output=DIR; repeat with --chip=esp32s3 and a new output"
+         & " directory, or the gate's xtensa jobs"
       elsif Target = "rv32" then
          "environments/cortex-m/backend_corpus.py --lane=esp32c3 --case="
          & Label & " --refine=REFINE --output=DIR at rv32imc, or"
@@ -214,6 +219,15 @@ package body Landin.Tests.Fixture_Execution_Suite is
          Ada.Strings.Fixed.Index
            (Lane_Command ("runtime/example", "rv32"), "--lane=esp32c3") > 0,
          "rv32's note names the firmware corpus's RV32 lanes");
+      Landin.Testing.Check
+        (Item,
+         Ada.Strings.Fixed.Index
+           (Lane_Command ("runtime/example", "xtensa"),
+            "--memory-profile=sim --fixture=runtime/example") > 0
+         and then Ada.Strings.Fixed.Index
+           (Lane_Command ("runtime/example", "xtensa"),
+            "--chip=esp32s3") > 0,
+         "xtensa's note names the exact-core corpus on both levels");
    end Every_Target_Names_Its_Lane;
 
    function Lane_Note (Path : String) return String is

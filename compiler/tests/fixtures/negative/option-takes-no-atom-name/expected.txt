@@ -3,16 +3,16 @@ error[L0390]: this option name is compiler-owned
   |
 5 | option linux: bool = true
   | ^^^^^^^^^^^^^^^^^^^^^^^^^
-  = note: D855: an option cannot take a configuration atom's name: `x86_64`, `arm64`, `rv64`, `cortex_m0`, `rv32`, `synthetic_32`, `linux`, `darwin`, `freebsd`, `freestanding`, `little`, `big`, `debug` or `release`
+  = note: D855: an option cannot take a configuration atom's name: `x86_64`, `arm64`, `rv64`, `cortex_m0`, `rv32`, `xtensa`, `synthetic_32`, `linux`, `darwin`, `freebsd`, `freestanding`, `little`, `big`, `debug` or `release`
 error[L0390]: this option name is compiler-owned
   --> ../tests/fixtures/negative/option-takes-no-atom-name/main.ldn:6:1
   |
 6 | option freestanding: u32 = 0
   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  = note: D855: an option cannot take a configuration atom's name: `x86_64`, `arm64`, `rv64`, `cortex_m0`, `rv32`, `synthetic_32`, `linux`, `darwin`, `freebsd`, `freestanding`, `little`, `big`, `debug` or `release`
+  = note: D855: an option cannot take a configuration atom's name: `x86_64`, `arm64`, `rv64`, `cortex_m0`, `rv32`, `xtensa`, `synthetic_32`, `linux`, `darwin`, `freebsd`, `freestanding`, `little`, `big`, `debug` or `release`
 error[L0390]: this option name is compiler-owned
   --> ../tests/fixtures/negative/option-takes-no-atom-name/main.ldn:7:1
   |
 7 | option rv32: bool = false
   | ^^^^^^^^^^^^^^^^^^^^^^^^^
-  = note: D855: an option cannot take a configuration atom's name: `x86_64`, `arm64`, `rv64`, `cortex_m0`, `rv32`, `synthetic_32`, `linux`, `darwin`, `freebsd`, `freestanding`, `little`, `big`, `debug` or `release`
+  = note: D855: an option cannot take a configuration atom's name: `x86_64`, `arm64`, `rv64`, `cortex_m0`, `rv32`, `xtensa`, `synthetic_32`, `linux`, `darwin`, `freebsd`, `freestanding`, `little`, `big`, `debug` or `release`

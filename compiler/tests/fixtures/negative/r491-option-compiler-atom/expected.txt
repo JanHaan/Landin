@@ -3,4 +3,4 @@ error[L0390]: this option name is compiler-owned
   |
 1 | option debug: u32 = 1
   | ^^^^^^^^^^^^^^^^^^^^^
-  = note: D855: an option cannot take a configuration atom's name: `x86_64`, `arm64`, `rv64`, `cortex_m0`, `rv32`, `synthetic_32`, `linux`, `darwin`, `freebsd`, `freestanding`, `little`, `big`, `debug` or `release`
+  = note: D855: an option cannot take a configuration atom's name: `x86_64`, `arm64`, `rv64`, `cortex_m0`, `rv32`, `xtensa`, `synthetic_32`, `linux`, `darwin`, `freebsd`, `freestanding`, `little`, `big`, `debug` or `release`

@@ -3,4 +3,4 @@ error[L0399]: this is not a core refine builds for
   |
 2 | compiler.core("cortex-m99")
   |               ^^^^^^^^^^^^
-  = note: D542: compiler.core names "cortex-m0", "cortex-m0plus", "cortex-m3", "cortex-m4", "cortex-m7", "cortex-m33", "hazard3", "sifive-e31", "esp-rv32imc" or "esp-rv32imac-clic"
+  = note: D542: compiler.core names "cortex-m0", "cortex-m0plus", "cortex-m3", "cortex-m4", "cortex-m7", "cortex-m33", "hazard3", "sifive-e31", "esp-rv32imc", "esp-rv32imac-clic", "xtensa-lx6" or "xtensa-lx7"
