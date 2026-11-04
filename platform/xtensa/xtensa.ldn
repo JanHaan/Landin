@@ -1,0 +1,64 @@
+-- Xtensa CPU operations for the windowed LX6/LX7 configurations.
+-- Saved PS values are explicit and must be restored in lexical reverse
+-- order. Masking does not stop DMA, exceptions, NMI or the debugger.
+fixed if compiler.arch == xtensa then
+    --- Mask ordinary interrupts and return the preceding PS.
+    public disable_interrupts: () -> (previous: u32) =
+        previous = assembler.block("rsil {state}, 15", out state: u32 at general)
+    end disable_interrupts
+
+    --- Restore the PS that disable_interrupts or mask_level_one returned.
+    public restore_interrupts: (previous: u32) -> none =
+        assembler.block("wsr {state}, ps\nrsync", in state: u32 at general = previous)
+    end restore_interrupts
+
+    --- Mask level-one interrupts, leaving higher-priority interrupts able
+    --- to run. Call only when raising the current level from zero or one.
+    public mask_level_one: () -> (previous: u32) =
+        previous = assembler.block("rsil {state}, 1", out state: u32 at general)
+    end mask_level_one
+
+    --- The current PS.INTLEVEL: zero permits every enabled interrupt.
+    public interrupt_mask: () -> (current: u32) =
+        current = assembler.block("rsr {state}, ps\nextui {state}, {state}, 0, 4",
+                                  out state: u32 at general)
+    end interrupt_mask
+
+    --- Replace INTENABLE with the selected CPU interrupt lines. The
+    --- device's interrupt matrix routes its sources to these lines.
+    public set_enabled_lines: (lines: u32) -> none =
+        assembler.block("wsr {bits}, intenable\nrsync", in bits: u32 at general = lines)
+    end set_enabled_lines
+
+    --- Read the CPU interrupt enables.
+    public enabled_lines: () -> (lines: u32) =
+        lines = assembler.block("rsr {bits}, intenable", out bits: u32 at general)
+    end enabled_lines
+
+    --- Read the CPU interrupt-pending bits, before interrupt masking.
+    public pending_lines: () -> (lines: u32) =
+        lines = assembler.block("rsr {bits}, interrupt", out bits: u32 at general)
+    end pending_lines
+
+    --- Read the cycle counter; arithmetic across wrapping uses +% and -%.
+    public cycles: () -> (ticks: u32) =
+        ticks = assembler.block("rsr {value}, ccount", out value: u32 at general)
+    end cycles
+
+    --- Complete earlier accesses and wait with ordinary interrupts enabled.
+    --- WAITI sets INTLEVEL to zero. Recheck the condition after waking;
+    --- a wakeup need not mean the awaited device completed.
+    public wait_for_interrupt: () -> none =
+        assembler.block("memw\nwaiti 0")
+    end wait_for_interrupt
+
+    --- Order memory and peripheral accesses. The peripheral's completion
+    --- status must still be checked separately.
+    public device_barrier: () -> none = compiler.device_barrier() end device_barrier
+
+    --- Complete preceding explicit memory accesses as MEMW specifies.
+    public completion_barrier: () -> none = compiler.completion_barrier() end completion_barrier
+
+    --- Prevent compiler memory knowledge from crossing this point.
+    public compiler_barrier: () -> none = compiler.compiler_barrier() end compiler_barrier
+end if
