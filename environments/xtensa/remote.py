@@ -54,8 +54,8 @@ class Remote:
         return int.from_bytes(self.memory(address, 4), 'little')
 
 
-def observe(qemu, chip, elf, symbols, output, timeout=20):
-    """Stop before the compiler's stopped loop and read independent trap cells."""
+def observe(qemu, chip, elf, symbols, output, timeout=20, extra_breakpoint=None):
+    """Stop at wrapper completion or firmware failure; read independent cells."""
     listener = socket.socket()
     listener.bind(('127.0.0.1', 0))
     listener.listen(1)
@@ -80,6 +80,12 @@ def observe(qemu, chip, elf, symbols, output, timeout=20):
             stop = symbols['_landin_firmware_stopped']
             if remote.command('Z0,%x,3' % stop) != 'OK':
                 raise RuntimeError('QEMU refused the stopped-label breakpoint')
+            completed = symbols.get('_landin_xtensa_fixture_stopped')
+            if completed is not None and remote.command('Z0,%x,3' % completed) != 'OK':
+                raise RuntimeError('QEMU refused the fixture-completion breakpoint')
+            if extra_breakpoint is not None and remote.command(
+                    'Z0,%x,3' % extra_breakpoint) != 'OK':
+                raise RuntimeError('QEMU refused the negative-control breakpoint')
             bottom = symbols['_landin_firmware_stack_bottom']
             guard = bytes.fromhex('3cc35aa5') * 4
             if remote.command('M%x,%x:%s' % (bottom, len(guard), guard.hex())) != 'OK':
@@ -87,6 +93,13 @@ def observe(qemu, chip, elf, symbols, output, timeout=20):
             stopped = remote.command('c')
             if not stopped.startswith(('S05', 'T05')):
                 raise RuntimeError('QEMU stopped unexpectedly: ' + stopped)
+            # Both pinned core-esp32{,s3}/gdb-config.inc.c maps put the
+            # 32-bit virtual PC at register 0, packet offset 0; see
+            # https://github.com/espressif/qemu/tree/esp-develop-9.2.2-20260417/target/xtensa
+            registers = bytes.fromhex(remote.command('g'))
+            if len(registers) < 4:
+                raise RuntimeError('QEMU returned no program counter')
+            pc = int.from_bytes(registers[:4], 'little')
             values = {name: remote.word(address) for name, address in symbols.items()
                       if name in ('_landin_firmware_trap_count',
                                   '_landin_firmware_trap_cause',
@@ -99,8 +112,15 @@ def observe(qemu, chip, elf, symbols, output, timeout=20):
             if values.get('_landin_firmware_trap_count'):
                 values['trap_instruction'] = remote.memory(
                     values['_landin_firmware_trap_pc'], 3).hex()
-            return {'values': values, 'remote': remote.transcript,
-                    'qemu_command': command, 'elapsed_seconds': time.monotonic() - tick}
+            result = {'values': values, 'stop_pc': pc,
+                      'expected_stops': {'firmware': stop, 'completion': completed},
+                      'remote': remote.transcript, 'qemu_command': command,
+                      'elapsed_seconds': time.monotonic() - tick}
+            if pc != stop and (completed is None or pc != completed):
+                (output / 'unexpected-stop.json').write_text(
+                    json.dumps(result, indent=2) + '\n')
+                raise RuntimeError('unexpected guest stop PC: ' + hex(pc))
+            return result
         except TimeoutError:
             if remote is not None:
                 connection.sendall(b'\x03')

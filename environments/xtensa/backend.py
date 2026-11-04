@@ -100,10 +100,20 @@ def stage(run, inputs, chip):
     (app / 'xtensa-oracle.ldn').write_text(
         'import descriptions/' + module + '\n'
         'link(symbol: "_landin_xtensa_fixture_status")\n'
-        'mut landin_xtensa_fixture_status: i32 = 0\n'
+        'mut landin_xtensa_fixture_status: i32 = -999\n'
         'landin_xtensa_fixture_start: () -> none =\n'
         '    landin_xtensa_fixture_status = main()\n'
-        'end landin_xtensa_fixture_start\n')
+        # A returning firmware entry invokes a selected unreachable panic
+        # handler. Stop at the source wrapper's own completion boundary,
+        # after the result is stored, so a recovering handler is not called
+        # a second time merely because its test has completed.
+        '    landin_xtensa_fixture_stopped()\n'
+        'end landin_xtensa_fixture_start\n'
+        'link(symbol: "_landin_xtensa_fixture_stopped")\n'
+        'landin_xtensa_fixture_stopped: () -> noreturn =\n'
+        '    loop do\n'
+        '    end loop\n'
+        'end landin_xtensa_fixture_stopped\n')
     return [*flags, '--root=' + str(source), str(app)]
 
 
@@ -183,6 +193,55 @@ def main():
     results = []
     for name in args.control:
         run = Run(args.output / name)
+        if name == 'early-stop-control':
+            elf, named = build(run, args.refine.resolve(), [known[name]], args.chip)
+            try:
+                observe(tools.qemu, args.chip, elf, named, run.out,
+                        extra_breakpoint=named['_landin_xtensa_fixture_unexpected'])
+            except RuntimeError as error:
+                if 'unexpected guest stop PC' not in str(error):
+                    raise
+                record = json.loads((run.out / 'unexpected-stop.json').read_text())
+                if record['values']['_landin_xtensa_fixture_status'] != 0 or record[
+                        'values']['_landin_firmware_trap_count']:
+                    raise RuntimeError('early-stop control did not isolate the stop-PC oracle')
+                results.append({'status': 'passed', 'negative_oracle': str(error),
+                                'observation': record})
+            else:
+                raise RuntimeError('a breakpoint before completion was accepted')
+            print('FILTERED Xtensa control ' + args.chip + ' ' + name + ' rejected', flush=True)
+            continue
+        if name == 'break-control':
+            elf, named = build(run, args.refine.resolve(), [known[name]], args.chip)
+            assembly = (run.out / 'program.s').read_text()
+            changed, count = re.subn(r'(?m)^nop$', 'break 0, 0', assembly)
+            if count != 1:
+                raise RuntimeError('BREAK control requires exactly one source NOP')
+            negative = run.out / 'break-program.s'
+            negative.write_text(changed)
+            prefix = 'xtensa-' + args.chip + '-elf-'
+            obj, elf = run.out / 'break-program.o', run.out / 'break-program.elf'
+            run.command('break-assemble', [prefix + 'as', '--abi-windowed',
+                        '--auto-litpools', '--longcalls', '-o', obj, negative])
+            run.command('break-link', [prefix + 'gcc', '-mabi=windowed', '-nostdlib',
+                        '-Wl,-T,' + str(run.out / 'program.ld') + ',--gc-sections',
+                        '-o', elf, obj, '-lgcc'])
+            run.command('break-disassembly', [prefix + 'objdump', '-dr', elf])
+            named = symbols(run, prefix, elf)
+            record = observe(tools.qemu, args.chip, elf, named, run.out)
+            (run.out / 'observation.json').write_text(json.dumps(record, indent=2) + '\n')
+            try:
+                verify(record)
+            except RuntimeError as error:
+                if record['values']['_landin_xtensa_fixture_status'] != 0 or record[
+                        'values']['_landin_firmware_trap_count'] != 1:
+                    raise RuntimeError('BREAK control did not reach the independent trap oracle')
+                results.append({'status': 'passed', 'negative_oracle': str(error),
+                                'observation': record})
+            else:
+                raise RuntimeError('BREAK before completion was accepted')
+            print('FILTERED Xtensa control ' + args.chip + ' ' + name + ' rejected', flush=True)
+            continue
         results.append(execute(run, args.refine.resolve(), tools.qemu,
                                [known[name]], args.chip,
                                expected=(37 if name == 'status-control' else

@@ -1,4 +1,6 @@
+with Ada.Containers.Indefinite_Hashed_Maps;
 with Ada.Strings.Fixed;
+with Ada.Strings.Hash;
 
 package body Landin.Backend.Xtensa_Machine is
    package U renames Ada.Strings.Unbounded;
@@ -13,7 +15,9 @@ package body Landin.Backend.Xtensa_Machine is
    procedure Select_Word
      (Instruction : String;
       Into : in out U.Unbounded_String;
-      Serial : in out Natural)
+      Serial : in out Natural;
+      Frame_Bytes : Natural := 0;
+      Scratch_Registers : Boolean := False)
    is
       Text : constant String := Trim (Instruction);
       Space : constant Natural := Ada.Strings.Fixed.Index (Text, " ");
@@ -43,22 +47,48 @@ package body Landin.Backend.Xtensa_Machine is
          end if;
          raise Compiler_Defect with "invalid Xtensa logical word " & Name;
       end Number;
+      function Mapped (Name : String) return String;
+      function Mapped (Name : String) return String is
+      begin
+         if not Scratch_Registers then return ""; end if;
+         return (case Number (Name) is
+           when 5 => "a2", when 6 => "a3", when 7 => "a4", when 9 => "a5",
+           when others => "");
+      end Mapped;
       procedure Read (Name, Physical : String);
       procedure Read (Name, Physical : String) is
          Id : constant Natural := Number (Name);
       begin
-         if Id = 0 then Raw ("movi " & Physical & ", 0");
+         if Mapped (Name) /= "" then
+            if Mapped (Name) /= Physical then
+               Raw ("mov " & Physical & ", " & Mapped (Name));
+            end if;
+         elsif Id = 0 then Raw ("movi " & Physical & ", 0");
          elsif Id = 2 then Raw ("mov " & Physical & ", a1");
          elsif Id <= 31 then
             Raw ("l32i " & Physical & ", a7, " & Image (Id * 4));
          else raise Compiler_Defect with "Xtensa logical word exceeds bank";
          end if;
       end Read;
+      function Read_Only (Name, Physical : String) return String;
+      function Read_Only (Name, Physical : String) return String is
+      begin
+         if Mapped (Name) /= "" then return Mapped (Name); end if;
+         Read (Name, Physical);
+         return Physical;
+      end Read_Only;
+      function Destination (Name, Physical : String) return String;
+      function Destination (Name, Physical : String) return String
+        is (if Mapped (Name) /= "" then Mapped (Name) else Physical);
       procedure Write (Name, Physical : String);
       procedure Write (Name, Physical : String) is
          Id : constant Natural := Number (Name);
       begin
-         if Id = 0 then null;
+         if Mapped (Name) /= "" then
+            if Mapped (Name) /= Physical then
+               Raw ("mov " & Mapped (Name) & ", " & Physical);
+            end if;
+         elsif Id = 0 then null;
          elsif Id = 2 then
             Raw ("mov a1, " & Physical);
             --  Outgoing stack arguments can cover the previous spill
@@ -112,8 +142,12 @@ package body Landin.Backend.Xtensa_Machine is
       if Text'Length = 0 then return; end if;
       for Index in Text'Range loop
          if Text (Index) = LF then
-            Select_Word (Text (Text'First .. Index - 1), Into, Serial);
-            Select_Word (Text (Index + 1 .. Text'Last), Into, Serial);
+            Select_Word
+              (Text (Text'First .. Index - 1), Into, Serial, Frame_Bytes,
+               Scratch_Registers);
+            Select_Word
+              (Text (Index + 1 .. Text'Last), Into, Serial, Frame_Bytes,
+               Scratch_Registers);
             return;
          end if;
       end loop;
@@ -138,9 +172,14 @@ package body Landin.Backend.Xtensa_Machine is
          end if;
       end loop;
       if Op = "li" or else Op = "lui" then
-         Raw ("movi a10, " & Arg (2));
-         if Op = "lui" then Raw ("slli a10, a10, 12"); end if;
-         Write (Arg (1), "a10");
+         declare Into_Reg : constant String := Destination (Arg (1), "a10");
+         begin
+            Raw ("movi " & Into_Reg & ", " & Arg (2));
+            if Op = "lui" then
+               Raw ("slli " & Into_Reg & ", " & Into_Reg & ", 12");
+            end if;
+            Write (Arg (1), Into_Reg);
+         end;
       elsif Op in "la" | "lla" then
          Raw ("movi a10, " & Arg (2));
          Write (Arg (1), "a10");
@@ -149,7 +188,7 @@ package body Landin.Backend.Xtensa_Machine is
          if Op = "neg" then Raw ("neg a10, a8");
          elsif Op = "not" then
             Raw ("movi a9, -1"); Raw ("xor a10, a8, a9");
-         else Raw ("mov a10, a8"); end if;
+         else Write (Arg (1), "a8"); return; end if;
          Write (Arg (1), "a10");
       elsif Op in "lw" | "lbu" | "lb" | "lhu" | "lh"
         | "sw" | "sb" | "sh"
@@ -160,7 +199,41 @@ package body Landin.Backend.Xtensa_Machine is
             Offset : constant String := Memory (Memory'First .. Open - 1);
             Base : constant String := Memory (Open + 1 .. Memory'Last - 1);
             Store : constant Boolean := Op (Op'First) = 's';
+            Frame_Offset : constant Long_Long_Integer :=
+              Long_Long_Integer (Frame_Bytes)
+              + Long_Long_Integer'Value (Offset);
+            Scale : constant Positive :=
+              (if Op in "lw" | "sw" then 4
+               elsif Op in "lh" | "lhu" | "sh" then 2 else 1);
          begin
+            --  x8 is the immutable CFA. Its home contains a7+Frame_Bytes,
+            --  including when outgoing arguments move the current SP.
+            if Frame_Bytes /= 0 and then Base = "x8"
+              and then Frame_Offset in 0 .. Long_Long_Integer (255 * Scale)
+              and then Frame_Offset mod Long_Long_Integer (Scale) = 0
+            then
+               declare
+                  Value_Reg : constant String :=
+                    (if Store then Read_Only (Arg (1), "a8")
+                     else Destination (Arg (1), "a10"));
+               begin
+                  Raw ((if Op = "lw" then "l32i"
+                        elsif Op = "lbu" or else Op = "lb" then "l8ui"
+                        elsif Op = "lhu" then "l16ui"
+                        elsif Op = "lh" then "l16si"
+                        elsif Op = "sw" then "s32i"
+                        elsif Op = "sb" then "s8i" else "s16i")
+                       & " " & Value_Reg & ", a7, "
+                       & Image (Integer (Frame_Offset)));
+                  if not Store then
+                     if Op = "lb" then
+                        Raw ("sext " & Value_Reg & ", " & Value_Reg & ", 7");
+                     end if;
+                     Write (Arg (1), Value_Reg);
+                  end if;
+               end;
+               return;
+            end if;
             Read (Base, "a9");
             if Store then Read (Arg (1), "a8"); end if;
             if Offset /= "0" and then Offset /= "" then
@@ -183,6 +256,25 @@ package body Landin.Backend.Xtensa_Machine is
         | "and" | "or" | "xor" | "addi" | "andi" | "ori" | "xori"
         | "div" | "divu" | "rem" | "remu"
       then
+         if Op = "addi" and then Frame_Bytes /= 0 and then Arg (2) = "x8"
+         then
+            declare
+               Offset : constant Long_Long_Integer :=
+                 Long_Long_Integer (Frame_Bytes)
+                 + Long_Long_Integer'Value (Arg (3));
+            begin
+               if Offset in 0 .. Long_Long_Integer (Natural'Last) then
+                  if Offset <= 127 then
+                     Raw ("addi a10, a7, " & Image (Integer (Offset)));
+                  else
+                     Raw ("movi a10, " & Image (Integer (Offset)));
+                     Raw ("add a10, a7, a10");
+                  end if;
+                  Write (Arg (1), "a10");
+                  return;
+               end if;
+            end;
+         end if;
          Read (Arg (2), "a8");
          if Op in "addi" | "andi" | "ori" | "xori" then
             Raw ("movi a9, " & Arg (3));
@@ -276,4 +368,63 @@ package body Landin.Backend.Xtensa_Machine is
          raise Compiler_Defect with "unsupported Xtensa word operation " & Op;
       end if;
    end Select_Word;
+
+   procedure Compact_Jumps
+     (Into : in out U.Unbounded_String; First : Positive)
+   is
+      Text : constant String := U.To_String (Into);
+      package Positions is new Ada.Containers.Indefinite_Hashed_Maps
+        (String, Natural, Ada.Strings.Hash, "=");
+      Labels : Positions.Map;
+      Bound : Natural := 0;
+      Start : Positive := First;
+      Result : U.Unbounded_String;
+      Prefix : constant String := HT & "movi a10, ";
+      Suffix : constant String := HT & "jx a10" & LF;
+      Line_Bytes : constant := 16;
+   begin
+      --  Sixteen bytes per source line bounds native instructions, their
+      --  automatic literal entries, pool jumps and alignment in a routine.
+      --  The routine has no source assembly directives or embedded data.
+      --  Shortening a jump only decreases every intervening distance.
+      for Index in First .. Text'Last loop
+         if Text (Index) = LF then
+            if Index > Start and then Text (Index - 1) = ':' then
+               Labels.Include (Text (Start .. Index - 2), Bound);
+            end if;
+            Bound := Bound + Line_Bytes;
+            Start := Index + 1;
+         end if;
+      end loop;
+      Bound := 0;
+      Start := First;
+      while Start <= Text'Last loop
+         declare
+            Stop : constant Positive := Ada.Strings.Fixed.Index
+              (Text, String'(1 => LF), Start);
+            Line : constant String := Text (Start .. Stop - 1);
+            Target : constant String :=
+              (if Line'Length > Prefix'Length
+                 and then Line (Line'First .. Line'First + Prefix'Length - 1)
+                   = Prefix
+               then Line (Line'First + Prefix'Length .. Line'Last) else "");
+         begin
+            if Labels.Contains (Target)
+              and then abs (Integer (Labels.Element (Target))
+                            - Integer (Bound)) <= 131_000
+              and then Stop + Suffix'Length <= Text'Last
+              and then Text (Stop + 1 .. Stop + Suffix'Length) = Suffix
+            then
+               U.Append (Result, HT & "j " & Target & LF);
+               Start := Stop + Suffix'Length + 1;
+               Bound := Bound + 2 * Line_Bytes;
+            else
+               U.Append (Result, Line & LF);
+               Start := Stop + 1;
+               Bound := Bound + Line_Bytes;
+            end if;
+         end;
+      end loop;
+      U.Replace_Slice (Into, First, Text'Last, U.To_String (Result));
+   end Compact_Jumps;
 end Landin.Backend.Xtensa_Machine;
