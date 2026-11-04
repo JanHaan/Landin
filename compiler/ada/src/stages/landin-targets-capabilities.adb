@@ -81,7 +81,8 @@ package body Landin.Targets.Capabilities is
      (case Backend_For (Facts) is
          when X86_64_ELF | Darwin_Arm64_Mach_O | Arm64_ELF | RV64_ELF
             | Cortex_M0_ELF | RV32_ELF => True,
-         when No_Backend | Xtensa_ELF => False);
+         when Xtensa_ELF => True,
+         when No_Backend => False);
 
 
    function C_Signatures (Facts : Target_Facts) return Boolean is
