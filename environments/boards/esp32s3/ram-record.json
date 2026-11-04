@@ -1,0 +1,228 @@
+{
+  "status": "passed",
+  "image_sha256": "7368cfe9adc2ebac56d637b3420b98e8169a7fb9ee882789ef47a73195e46fa5",
+  "image_name": "board.elf",
+  "elf_sha256": "7368cfe9adc2ebac56d637b3420b98e8169a7fb9ee882789ef47a73195e46fa5",
+  "instructions": [
+    "call8",
+    "callx8",
+    "entry",
+    "retw.n"
+  ],
+  "verdicts": {
+    "boot": {
+      "reset_cause": 1,
+      "vecbase": "0x40378000",
+      "cache_enables": [
+        0,
+        0
+      ],
+      "cpu1_stall": 134
+    },
+    "shared": {
+      "input": "1A0",
+      "echo": "1A0",
+      "indicator_after_1": 64,
+      "indicator_after_0": 0
+    },
+    "interrupts": {
+      "receive_mcause": "0x18042",
+      "timer_mcause": "0x818040"
+    },
+    "atomics": {
+      "x": 116,
+      "y": 93,
+      "b": 116,
+      "h": 29789,
+      "w": 1952275828
+    },
+    "ring_overrun": {
+      "burst": 300,
+      "ring": 256,
+      "dropped": 44,
+      "restarts": 1
+    },
+    "threshold": {
+      "burst": 300,
+      "fifo_overflows": 1,
+      "restarts": 2,
+      "timer_interrupts_meanwhile": 100
+    },
+    "stream": {
+      "timer_events": 2499,
+      "receive_interrupts": 4031,
+      "echoed": 3014,
+      "sent": 3614
+    }
+  },
+  "jtag": {
+    "trap_count": 0,
+    "handled": 3014,
+    "recoveries": 2,
+    "dropped": 44,
+    "overflows": 1,
+    "entries": 4031,
+    "boot_reason": 1,
+    "byte_cell": 116,
+    "half_cell": 29789,
+    "word_cell": 1952275828
+  },
+  "readback": [
+    "0x40378000+0x404",
+    "0x40378404+0xb170",
+    "0x3fca8000+0x18"
+  ],
+  "uart_sha256": "c567369f26ccd5ae059b290c71f7ff1a05a675a9d3440ee4536f4e01b0d66f8c",
+  "mode": "ram",
+  "warm_load": {
+    "board": "esp32s3",
+    "cleanup": {
+      "cache_prestate": [
+        0,
+        0
+      ],
+      "clock_final": [
+        688128
+      ],
+      "clock_hz": 40000000,
+      "clock_prestate": [
+        688129
+      ],
+      "contract": "warm-board-v1",
+      "cpu1_stalled": true,
+      "elapsed_us": 10070,
+      "final_xtal_divider": 0,
+      "initial_xtal_divider": 1,
+      "instruction_visibility": {
+        "address": 1077380272,
+        "elapsed_us": 11558,
+        "method": "cacheless-sram-memw-isync-single-step",
+        "operations": [
+          "memw",
+          "isync"
+        ],
+        "restored_ps": 63,
+        "step_ps": 37,
+        "steps": [
+          {
+            "debugcause": 1,
+            "pc": 1077380275
+          },
+          {
+            "debugcause": 1,
+            "pc": 1077380278
+          }
+        ]
+      },
+      "other_core": {
+        "core": 1,
+        "cpu1_stalled": true,
+        "method": "hardware-stall",
+        "options_address": 1610645504,
+        "options_expected": 2,
+        "options_mask": 3,
+        "options_value": 469803010,
+        "rom_reset": false,
+        "stall_address": 1610645692,
+        "stall_code": 134,
+        "stall_expected": 34603008,
+        "stall_mask": 66060288,
+        "stall_value": 34603008
+      },
+      "other_core_parked": true,
+      "peripheral_sources_stopped": true,
+      "rom_reset": false
+    },
+    "elf_sha256": "7368cfe9adc2ebac56d637b3420b98e8169a7fb9ee882789ef47a73195e46fa5",
+    "entry": 1077380096,
+    "flash_written": false,
+    "format_version": 1,
+    "helper_source_sha256": "47d74e1639692ad1649ebc14f6b050efb10a98c93f3122e111a40397f58a22c1",
+    "mode": "warm",
+    "previous_pc": 1077382383,
+    "segments": [
+      {
+        "address": 1077379072,
+        "bytes": 1028,
+        "sha256": "674fe013b01c5638a1fdceb844d30592783ae34e46e6091c539c5ecb06b0c0c6"
+      },
+      {
+        "address": 1077380100,
+        "bytes": 45424,
+        "sha256": "c9c4ffccfc5d1dbef2a913a3a98a4716a1ed0e31904e8c21f1f4f6ebd375eebd"
+      },
+      {
+        "address": 1070235648,
+        "bytes": 24,
+        "sha256": "6291730acffbfe04acbc32646bae0363dc38ccee5df703d1048496252a2e8900"
+      },
+      {
+        "address": 1070235672,
+        "bytes": 84,
+        "sha256": "5d402a0cecb26ac81898b23843ad6b8181108302ec0dc62f16bfba8a543dde48"
+      }
+    ],
+    "stack": 1070399488,
+    "status": "passed",
+    "vector": 1077379072
+  },
+  "seconds": 12.76,
+  "kernel_usb": {
+    "since": 1793803164.557635,
+    "until": 1793803177.2770472,
+    "lines": [],
+    "status": "captured"
+  },
+  "sent_sha256": "5ac29a7d385819161814c8f23f97a6a82ba69ae0187502c8fd0c9b77f110ad06",
+  "frames": [
+    {
+      "tag": "b",
+      "r": "00000001",
+      "v": "40378000",
+      "d": "00000000",
+      "f": "00000000",
+      "p": "00000086"
+    },
+    {
+      "tag": "a",
+      "b": "00000074",
+      "h": "0000745d",
+      "w": "745d5d74"
+    },
+    {
+      "tag": "t",
+      "h": "00000bc6",
+      "c": "00000002",
+      "i": "00000fbf",
+      "m": "000009c3",
+      "p": "00018042",
+      "q": "00818040",
+      "k": "00000064",
+      "l": "0000002c",
+      "o": "00000001",
+      "e": "00000cc6",
+      "g": "00000000",
+      "s": "00000002"
+    }
+  ],
+  "commands": [
+    "ram-load",
+    "jtag-trap-cause",
+    "jtag-trap-pc",
+    "jtag-trap-value",
+    "jtag-trap-sp",
+    "jtag-trap-count",
+    "jtag-handled",
+    "jtag-recoveries",
+    "jtag-dropped",
+    "jtag-overflows",
+    "jtag-entries",
+    "jtag-boot_reason",
+    "jtag-byte_cell",
+    "jtag-half_cell",
+    "jtag-word_cell",
+    "jtag-readback-40378000",
+    "jtag-readback-40378404",
+    "jtag-readback-3fca8000"
+  ]
+}

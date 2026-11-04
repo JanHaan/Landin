@@ -1,0 +1,250 @@
+{
+  "status": "passed",
+  "image_sha256": "028543f5dd7ba114c4bcdf2b9a837888fbb22e1b19f672d8ea31a89bf5e59f2e",
+  "image_name": "board.elf.bin",
+  "elf_sha256": "31d280c62ce21359303dc31bbf98b0932f4dbfc0093368a003b302881a952b53",
+  "image": {
+    "chip": 0,
+    "revisions": [
+      0,
+      399
+    ],
+    "entry": "0x40080400",
+    "segments": [
+      "0x40080000+0x404",
+      "0x40080404+0xb290",
+      "0x3ffb0000+0x18",
+      "0x3ffb0018+0x58"
+    ],
+    "checksum": "0x0b",
+    "sha256": "a9dbca070df78d87f9ed6651560ec74ec8bf219fb04a4b1c9a1bb6084976e236"
+  },
+  "instructions": [
+    "call8",
+    "callx8",
+    "entry",
+    "retw.n"
+  ],
+  "flash": {
+    "offset": "0x1000",
+    "verified": true
+  },
+  "power_on": {
+    "reset_cause": 1,
+    "boot_reason": 1,
+    "app_state": 2,
+    "timer_events": [
+      797,
+      1201
+    ],
+    "trap_count": 0,
+    "startup_reset": "CHIP_PU",
+    "external_jtag_powered": true,
+    "rail_discharge": "not-established",
+    "rom_trace": "classic-startup-1.bin"
+  },
+  "rom": {
+    "reset": "POWERON_RESET",
+    "boot": "SPI_FAST_FLASH_BOOT",
+    "loads": [
+      "0x40080000+0x404",
+      "0x40080404+0xb290",
+      "0x3ffb0000+0x18",
+      "0x3ffb0018+0x58"
+    ],
+    "entry": "0x40080400"
+  },
+  "verdicts": {
+    "boot": {
+      "reset_cause": 1,
+      "vecbase": "0x40080000",
+      "cache_enables": [
+        0,
+        0
+      ],
+      "cpu1_stall": 134
+    },
+    "shared": {
+      "input": "1A0",
+      "echo": "1A0",
+      "indicator_after_1": 4194304,
+      "indicator_after_0": 0
+    },
+    "interrupts": {
+      "receive_mcause": "0x18042",
+      "timer_mcause": "0x818040"
+    },
+    "atomics": {
+      "x": 116,
+      "y": 93,
+      "b": 116,
+      "h": 29789,
+      "w": 1952275828
+    },
+    "ring_overrun": {
+      "burst": 300,
+      "ring": 256,
+      "dropped": 44,
+      "restarts": 1
+    },
+    "threshold": {
+      "burst": 300,
+      "fifo_overflows": 1,
+      "restarts": 2,
+      "timer_interrupts_meanwhile": 100
+    },
+    "stream": {
+      "timer_events": 4694,
+      "receive_interrupts": 3047,
+      "echoed": 3014,
+      "sent": 3614
+    }
+  },
+  "jtag": {
+    "trap_count": 0,
+    "handled": 3014,
+    "recoveries": 2,
+    "dropped": 44,
+    "overflows": 1,
+    "entries": 3047,
+    "boot_reason": 1,
+    "byte_cell": 116,
+    "half_cell": 29789,
+    "word_cell": 1952275828
+  },
+  "readback": [
+    "0x40080000+0x404",
+    "0x40080404+0xb290",
+    "0x3ffb0000+0x18"
+  ],
+  "uart_sha256": "174e7c20ae582906e72f3b2d3eff4bd18193a16e3264d06e96b0090cfa59e9a8",
+  "mode": "boot",
+  "fixed_restore": {
+    "status": "passed",
+    "sha256": "df2ea84a9ccb13a60dc754f7f733c52994bc8d64c96d399358c6e14f48aefef6",
+    "marker": {
+      "symbol": "_landin_fixed_ready",
+      "address": 1073414576,
+      "value": 1279678513,
+      "elf_sha256": "eeee52cd613a79be4f9a726cc13eac4cfa2f7e1269c909026df79e3cda3a474f",
+      "power_on": {
+        "reset_cause": 1,
+        "resident_ready": 1279678513,
+        "startup_reset": "CHIP_PU",
+        "external_jtag_powered": true,
+        "rail_discharge": "not-established",
+        "rom_trace": "classic-startup-2.bin"
+      }
+    }
+  },
+  "seconds": 25.513,
+  "kernel_usb": {
+    "since": 1793804558.3432562,
+    "until": 1793804583.830554,
+    "lines": [
+      {
+        "time": 1793804563.082905,
+        "text": "rigpi kernel: usb 1-1.2.3.4.4: USB disconnect, device number 69"
+      },
+      {
+        "time": 1793804565.632719,
+        "text": "rigpi kernel: usb 1-1.2.3.4.4: new full-speed USB device number 70 using xhci_hcd"
+      },
+      {
+        "time": 1793804565.734339,
+        "text": "rigpi kernel: usb 1-1.2.3.4.4: ch341-uart converter now attached to ttyUSB4"
+      },
+      {
+        "time": 1793804579.799175,
+        "text": "rigpi kernel: usb 1-1.2.3.4.4: USB disconnect, device number 70"
+      },
+      {
+        "time": 1793804582.340707,
+        "text": "rigpi kernel: usb 1-1.2.3.4.4: new full-speed USB device number 71 using xhci_hcd"
+      },
+      {
+        "time": 1793804582.442561,
+        "text": "rigpi kernel: usb 1-1.2.3.4.4: ch341-uart converter now attached to ttyUSB4"
+      }
+    ],
+    "status": "captured"
+  },
+  "sent_sha256": "5ac29a7d385819161814c8f23f97a6a82ba69ae0187502c8fd0c9b77f110ad06",
+  "frames": [
+    {
+      "tag": "b",
+      "r": "00000001",
+      "v": "40080000",
+      "d": "00000000",
+      "f": "00000000",
+      "p": "00000086"
+    },
+    {
+      "tag": "a",
+      "b": "00000074",
+      "h": "0000745d",
+      "w": "745d5d74"
+    },
+    {
+      "tag": "t",
+      "h": "00000bc6",
+      "c": "00000002",
+      "i": "00000be7",
+      "m": "00001256",
+      "p": "00018042",
+      "q": "00818040",
+      "k": "00000064",
+      "l": "0000002c",
+      "o": "00000001",
+      "e": "00000cc6",
+      "g": "00000000",
+      "s": "00000002"
+    }
+  ],
+  "commands": [
+    "flash",
+    "hub-wait",
+    "hub-status",
+    "power-off",
+    "hub-status",
+    "power-on",
+    "hub-wait",
+    "jtag-cold-reset-cause",
+    "jtag-cold-boot-reason",
+    "jtag-cold-app-state",
+    "jtag-cold-timer-first",
+    "jtag-cold-timer-second",
+    "jtag-trap-cause",
+    "jtag-trap-pc",
+    "jtag-trap-value",
+    "jtag-trap-sp",
+    "jtag-trap-count",
+    "jtag-trap-cause",
+    "jtag-trap-pc",
+    "jtag-trap-value",
+    "jtag-trap-sp",
+    "jtag-trap-count",
+    "jtag-handled",
+    "jtag-recoveries",
+    "jtag-dropped",
+    "jtag-overflows",
+    "jtag-entries",
+    "jtag-boot_reason",
+    "jtag-byte_cell",
+    "jtag-half_cell",
+    "jtag-word_cell",
+    "jtag-readback-40080000",
+    "jtag-readback-40080404",
+    "jtag-readback-3ffb0000",
+    "flash",
+    "hub-wait",
+    "hub-status",
+    "power-off",
+    "hub-status",
+    "power-on",
+    "hub-wait",
+    "jtag-cold-reset-cause",
+    "jtag-cold-fixed-ready",
+    "resident-ready"
+  ]
+}
