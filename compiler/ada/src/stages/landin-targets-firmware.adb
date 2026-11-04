@@ -5,6 +5,24 @@ with Landin.Targets.Assembly;
 
 package body Landin.Targets.Firmware is
 
+   --  XCHAL_INTLEVELn_MASK, independently read from xtensa_esp32 and
+   --  xtensa_esp32s3 in Espressif's xtensa-overlays commit
+   --  dd1cf19f6eb327a9db51043439974a6de13f5c7f. The configurations agree
+   --  here; the table keeps each chip explicit rather than assuming that.
+   type Interrupt_Masks is array (Xtensa_Core, Positive range 1 .. 7)
+     of Byte_Count;
+   Masks : constant Interrupt_Masks :=
+     [Xtensa_LX6 =>
+        [16#0006_37FF#, 16#0038_0000#, 16#28C0_8800#, 16#5300_0000#,
+         16#8401_0000#, 0, 16#0000_4000#],
+      Xtensa_LX7 =>
+        [16#0006_37FF#, 16#0038_0000#, 16#28C0_8800#, 16#5300_0000#,
+         16#8401_0000#, 0, 16#0000_4000#]];
+
+   function Interrupt_Level_Mask
+     (Core : Core_Kind; Level : Positive) return Byte_Count
+     is (Masks (Core, Level));
+
    function To_Name (Text : String) return Name_Text is
       Result : Name_Text;
    begin
