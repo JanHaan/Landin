@@ -83,6 +83,10 @@ package Landin.Targets.Firmware is
    function Family (Core : Core_Kind) return Architecture
      is (if Core in RISC_V_Core then RV32
          elsif Core in Xtensa_Core then Xtensa else Cortex_M0);
+   --  ELF's e_machine identity for an image of this core.
+   function ELF_Machine (Core : Core_Kind) return Positive
+     is (if Core in Xtensa_Core then 94
+         elsif Core in RISC_V_Core then 243 else 40);
    --  The feature level a core executes, as Landin.Targets.Levels names it.
    function Level_Name (Core : Core_Kind) return String;
    --  D543: whether a build at LEVEL runs on CORE: the core's own level or
@@ -233,7 +237,8 @@ package Landin.Targets.Firmware is
    --  stage is Thumb code and `esp-app-image` is an RV32 ESP32's.
    function Boots (Core : Core_Kind; Boot : Boot_Kind) return Boolean
      is (case Boot is
-           when Vector_Table | RP2350_Image_Block => True,
+           when Vector_Table => True,
+           when RP2350_Image_Block => Core in Arm_Core | RISC_V_Core,
            when RP2040_Boot2 => Core in Arm_Core,
            when ESP_App_Image => Core in RISC_V_Core | Xtensa_Core);
    --  The bytes a boot kind reserves at the start of the vectors' region,

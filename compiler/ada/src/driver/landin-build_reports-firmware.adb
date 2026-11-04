@@ -269,9 +269,7 @@ package body Landin.Build_Reports.Firmware is
              & Character'Val (1) & Character'Val (1)
            or else Number (16, 2) /= 2
            or else Number (18, 2)
-             /= (if Profile.Core in Firmware.RISC_V_Core then 243
-                 elsif Profile.Core in Firmware.Xtensa_Core then 94
-                 else 40)
+             /= Landin.Targets.Byte_Count (Firmware.ELF_Machine (Profile.Core))
            or else Word (20) /= 1
            or else Number (40, 2) /= 52
            or else Number (42, 2) /= 32
@@ -728,7 +726,7 @@ package body Landin.Build_Reports.Firmware is
              & Character'Val (1) & Character'Val (1)
            or else Number (16, 2) /= 2
            or else Number (18, 2)
-             /= (if RV32 then 243 elsif Xtensa then 94 else 40)
+             /= Landin.Targets.Byte_Count (Firmware.ELF_Machine (Profile.Core))
          then
             return "the linked image is not a 32-bit little-endian "
               & (if RV32 then "RISC-V" elsif Xtensa then "Xtensa"

@@ -32,6 +32,8 @@ package Landin.Testing.Fakes is
    --  unreadable-source diagnostic gets tested.
    procedure Add_Unreadable (Host : in out Fake_Filesystem; Path : String);
 
+   --  The last bytes written directly to Path, not its current contents:
+   --  moving a file onto Path does not update this write record.
    function Written (Host : Fake_Filesystem; Path : String) return String;
    --  Counts attempts, including refused and empty writes.
    function Write_Count (Host : Fake_Filesystem) return Natural;

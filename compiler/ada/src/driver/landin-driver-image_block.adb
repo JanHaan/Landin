@@ -100,7 +100,7 @@ package body Landin.Driver.Image_Block is
           /= Character'Val (127) & "ELF" & Character'Val (1)
             & Character'Val (1)
         or else Number (16, 2) /= 1
-        or else Number (18, 2) /= (if RISC_V then 243 else 40)
+        or else Number (18, 2) /= Firmware.ELF_Machine (Core)
       then
          return US.To_Unbounded_String
            ("the assembled object is not a 32-bit little-endian "

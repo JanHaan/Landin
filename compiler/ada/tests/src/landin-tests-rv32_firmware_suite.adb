@@ -324,12 +324,12 @@ package body Landin.Tests.RV32_Firmware_Suite is
         (Entry_At : Long_Long_Integer := Origin;
          Symbol_At : Long_Long_Integer := Origin;
          Second : Long_Long_Integer := Origin + 16#100#;
-         Headers : Boolean := False) return String;
+         Headers : Boolean := False; Machine : Natural := 243) return String;
       function Executable
         (Entry_At : Long_Long_Integer := Origin;
          Symbol_At : Long_Long_Integer := Origin;
          Second : Long_Long_Integer := Origin + 16#100#;
-         Headers : Boolean := False) return String
+         Headers : Boolean := False; Machine : Natural := 243) return String
       is
          Strings : constant String := NUL & "_landin_firmware_entry" & NUL;
          Symbols : constant String := Bytes (0, 16)
@@ -357,7 +357,8 @@ package body Landin.Tests.RV32_Firmware_Suite is
       begin
          return Character'Val (127) & "ELF" & Character'Val (1)
            & Character'Val (1) & Character'Val (1) & Bytes (0, 9)
-           & Bytes (2, 2) & Bytes (243, 2) & Word (1) & Word (Entry_At)
+           & Bytes (2, 2) & Bytes (Long_Long_Integer (Machine), 2)
+           & Word (1) & Word (Entry_At)
            & N (Programs) & N (Sections) & Word (0)
            & Bytes (52, 2) & Bytes (32, 2) & Bytes (3, 2) & Bytes (40, 2)
            & Bytes (5, 2) & Bytes (0, 2)
@@ -580,6 +581,20 @@ package body Landin.Tests.RV32_Firmware_Suite is
                end if;
             end;
          end;
+      end loop;
+      for Core in Firmware.Xtensa_Core loop
+         Profile.Core := Core;
+         Made := Landin.Driver.ESP_Image.Make (Executable (Machine => 94), Profile);
+         Landin.Testing.Check_Equal
+           (Item, U.To_String (Made.Fault), "", "an Xtensa ELF makes an ESP image");
+         Landin.Testing.Check_Equal
+           (Item, Landin.Driver.ESP_Image.Read_Back_Fault
+             (U.To_String (Made.Image), Executable (Machine => 94), Profile),
+            "", "the Xtensa ESP image reads back");
+         Made := Landin.Driver.ESP_Image.Make (Executable, Profile);
+         Landin.Testing.Check
+           (Item, Contains (U.To_String (Made.Fault), "little-endian Xtensa"),
+            "an Xtensa profile refuses a RISC-V ELF machine");
       end loop;
    end ESP_Image_Is_Made;
 

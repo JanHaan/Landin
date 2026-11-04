@@ -168,12 +168,13 @@ package body Landin.Driver.ESP_Image is
           /= Character'Val (127) & "ELF" & Character'Val (1)
             & Character'Val (1)
         or else Half (16) /= 2
-        or else Half (18) /= 243
+        or else Address (Half (18)) /= Address (Firmware.ELF_Machine (Profile.Core))
         or else Half (42) /= 32
       then
          Result.Fault := US.To_Unbounded_String
-           ("the linked image is not a 32-bit little-endian RISC-V"
-            & " executable");
+           ("the linked image is not a 32-bit little-endian "
+            & (if Profile.Core in Firmware.Xtensa_Core then "Xtensa"
+               else "RISC-V") & " executable");
          return Result;
       end if;
       Result.Entry_At := Word (24);
