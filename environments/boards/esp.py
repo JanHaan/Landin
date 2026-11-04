@@ -491,6 +491,7 @@ def run_board(chip, args, console_for, cycle, settle):
     console = None
     probe = common.Probe(run, args.probe_rs, chip.probe_chip, args.probe)
     lock = common.rig_lock('%s board.py' % chip.name)
+    lock_held = False
     names = None
     try:
         elf, path, made = build(run, args, chip)
@@ -521,6 +522,8 @@ def run_board(chip, args, console_for, cycle, settle):
         # The hardware phase, from the first flash to the last JTAG read,
         # holds the rig's lock.
         lock.acquire()
+        # A borrowed parent lock is held without owning a file here.
+        lock_held = True
         if ram:
             console = console_for(run)
             result['warm_load'] = common.ram_load(run, args, chip.name, elf)
@@ -575,7 +578,7 @@ def run_board(chip, args, console_for, cycle, settle):
         result['status'] = 'passed'
     except (Failed, subprocess.TimeoutExpired, OSError) as error:
         result['failure'] = str(error)
-        if lock.file and names and not isinstance(error, common.USBGuardError) \
+        if lock_held and names and not isinstance(error, common.USBGuardError) \
                 and not any(USB in str(error) for USB in ('USB trouble', 'HC died')):
             # Until the loader confirms entry into this RAM image, these
             # addresses may hold unrelated SRAM from the preceding image.
@@ -590,7 +593,7 @@ def run_board(chip, args, console_for, cycle, settle):
     finally:
         if console:
             console.close()
-        if lock.file:
+        if lock_held:
             common.finish_boot(args, result, lambda: restore_fixed(
                 run, args, chip, probe, console_for, cycle, settle))
         common.retain_kernel_usb(args.pace, result)

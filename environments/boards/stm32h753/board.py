@@ -581,9 +581,12 @@ def main():
     console = None
     # The run holds the rig's lock (D725).
     lock = common.rig_lock('stm32h753 board.py')
+    lock_held = False
     try:
         elf, table, names, image = build(run, args)
         lock.acquire()
+        # A borrowed parent lock is held without owning a file here.
+        lock_held = True
         result.update(image_sha256=common.sha(elf), image_name=elf.name, image=image)
         if args.mode == 'boot':
             flash(run, args, elf, table)
@@ -626,7 +629,7 @@ def main():
             result['frames'] = common.frame_record(bytes(console.received))
             result['echo_gaps'] = common.gaps(bytes(console.sent),
                                               echo_of(bytes(console.received)))
-        if lock.file:
+        if lock_held:
             common.finish_boot(args, result, lambda: restore_fixed(run, args))
         common.retain_kernel_usb(args.pace, result)
         lock.release()

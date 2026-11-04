@@ -347,5 +347,84 @@ class Oracle(unittest.TestCase):
                 self.assertRaisesRegex(BOARD.Failed, 'did not list within'):
             BOARD.power_cycle(hub, self.args(hub))
 
+
+class LockLifecycle(unittest.TestCase):
+    def run_boot(self, *, borrowed=False, failure=None, acquire_fails=False):
+        """Exercise cleanup through the entry point and the real restoration guard."""
+        with tempfile.TemporaryDirectory() as tmp:
+            elf = Path(tmp) / 'image.elf'
+            elf.write_bytes(b'image')
+            fixed = Path(tmp) / 'fixed.elf'
+            fixed.write_bytes(b'resident')
+            events, hardware = [], []
+            lock = mock.Mock(file=None)
+            def acquire():
+                events.append('acquire')
+                if acquire_fails:
+                    raise BOARD.Failed('rig is busy')
+                if not borrowed:
+                    lock.file = object()
+                return lock
+            lock.acquire.side_effect = acquire
+            lock.release.side_effect = lambda: events.append('release')
+            pace = BOARD.common.Pace(state=Path(tmp) / 'pace', kernel=lambda _: [])
+            console = mock.Mock(received=b'', sent=b'')
+            argv = ['board.py', '--mode=boot', '--refine=refine', '--probe-rs=probe',
+                    '--nm=nm', '--output=' + tmp + '/run', '--fixed-image=' + str(fixed),
+                    '--cascade=1-1']
+            argv += ['--probehive=' + tmp]
+            built = (elf, b'', 0, {})
+            def scenario(*_):
+                if failure == 'usb':
+                    pace.blocked = 'xhci_hcd: HC died'
+                    raise BOARD.common.USBGuardError(pace.blocked)
+                if failure:
+                    raise BOARD.Failed('application did not answer')
+                return ({}, {})
+            with contextlib.ExitStack() as stack:
+                def patch(owner, name, **kwargs):
+                    return stack.enter_context(mock.patch.object(owner, name, **kwargs))
+                patch(BOARD.sys, 'argv', new=argv)
+                patch(BOARD.common, 'board_preflight')
+                patch(BOARD.common, 'place_hubs')
+                patch(BOARD.common, 'Pace', return_value=pace)
+                patch(BOARD.common, 'rig_lock', return_value=lock)
+                patch(BOARD.common, 'elf_sections', return_value=(b'', {'.isr_vector': (0x20000000, 0, 8)}))
+                patch(BOARD, 'build', return_value=built)
+                hardware.append(patch(BOARD, 'flash'))
+                hardware.append(patch(BOARD, 'power_cycle'))
+                hardware.append(patch(BOARD, 'cross_check', return_value={}))
+                hardware.append(patch(BOARD.common, 'shared_bridge', return_value=(None, {})))
+                hardware.append(patch(BOARD.common, 'TcpConsole', return_value=console))
+                hardware.append(patch(BOARD, 'scenario', side_effect=scenario))
+                restore = patch(BOARD, 'restore_fixed', side_effect=lambda *_:
+                    events.append('restore') or {'value': BOARD.common.FIXED_READY_MAGIC})
+                status = BOARD.main()
+                result = json.loads((Path(tmp) / 'run/result.json').read_text())
+            return status, result, events, restore, hardware
+
+    def test_boot_cleanup_uses_successful_acquisition_for_owned_and_borrowed_locks(self):
+        for borrowed, failure, acquire_fails in (
+                (False, None, False), (True, None, False), (True, 'app', False),
+                (True, 'usb', False), (True, None, True)):
+            with self.subTest(borrowed=borrowed, failure=failure, acquire_fails=acquire_fails):
+                status, result, events, restore, hardware = self.run_boot(
+                    borrowed=borrowed, failure=failure, acquire_fails=acquire_fails)
+                self.assertEqual(status, int(bool(failure or acquire_fails)))
+                if acquire_fails:
+                    for action in hardware:
+                        action.assert_not_called()
+                    restore.assert_not_called()
+                    self.assertNotIn('fixed_restore', result)
+                elif failure == 'usb':
+                    restore.assert_not_called()
+                    self.assertEqual(result['fixed_restore']['status'], 'pending')
+                    self.assertIn('HC died', result['fixed_restore']['reason'])
+                else:
+                    restore.assert_called_once()
+                    self.assertEqual(result['fixed_restore']['status'], 'passed')
+                    self.assertLess(events.index('restore'), events.index('release'))
+
+
 if __name__ == '__main__':
     unittest.main()

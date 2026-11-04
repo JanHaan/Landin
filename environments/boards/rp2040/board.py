@@ -412,7 +412,7 @@ def main():
             (args.output / 'sent.bin').write_bytes(bytes(console.sent))
             result['uart_sha256'] = hashlib.sha256(bytes(console.received)).hexdigest()
             result['frames'] = common.frame_record(bytes(console.received))
-        if lock and lock.file:
+        if lock is not None:
             common.finish_boot(args, result, lambda: restore_fixed(run, args))
         common.retain_kernel_usb(args.pace, result)
         if bridge:

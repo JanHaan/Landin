@@ -6,6 +6,7 @@ scenario's oracle against a board simulated from what the ports are
 written to do, the tty found by its hub port with its modem lines held,
 and the hub's guard when two ports are switched together."""
 import hashlib
+import contextlib
 import importlib.util
 import os
 import random
@@ -440,7 +441,8 @@ class RunFailures(unittest.TestCase):
             mtvec=lambda *_: 0x40380101, mtvt=lambda *_: None)
         console = SimpleNamespace(received=bytearray(), sent=bytearray(), close=mock.Mock())
         lock = SimpleNamespace(file=None)
-        lock.acquire = lambda: setattr(lock, 'file', True)
+        # A successfully borrowed parent lock has no locally owned file.
+        lock.acquire = lambda: lock
         lock.release = lambda: setattr(lock, 'file', None)
         with mock.patch.object(ESP, 'build', return_value=(elf, None, {})), \
                 mock.patch.object(COMMON, 'validate_ram_image'), \
@@ -708,6 +710,96 @@ class Hub(unittest.TestCase):
         COMMON.switch_ports(hub, '7-2.3.4', [4], 'on', holds=self.HOLDS[1:],
                             keeps=(1, '1366:0105'))
         self.assertEqual(hub.calls[-1][1][-2:], ['-a', 'on'])
+
+
+class LockLifecycle(unittest.TestCase):
+    def run_boot(self, *, borrowed=False, failure=None, acquire_fails=False):
+        """Keep the real finish_boot guard while simulating the board's I/O."""
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            elf, data, _ = c3_build(directory)
+            image_path = directory / 'board.bin'
+            image_path.write_bytes(data)
+            fixed = directory / 'fixed.bin'
+            fixed.write_bytes(b'resident')
+            events = []
+            lock = mock.Mock(file=None)
+            def acquire():
+                events.append('acquire')
+                if acquire_fails:
+                    raise COMMON.Failed('rig is busy')
+                if not borrowed:
+                    lock.file = object()
+                return lock
+            lock.acquire.side_effect = acquire
+            lock.release.side_effect = lambda: events.append('release')
+            args = SimpleNamespace(output=directory / 'run', mode='boot', probe_rs='probe-rs',
+                probe='probe', nm='nm', seed=1, record=None, fixed_image=fixed,
+                image_control=False, recover=False,
+                prepared_bundle=dict(symbols={'_landin_firmware_trap_count': 0x3fca0000},
+                                     metadata=dict(instructions={})),
+                pace=COMMON.Pace(state=directory / 'pace', kernel=lambda _: []))
+            chip = SimpleNamespace(name='esp32c3', probe_chip='ESP32-C3', offset=0x2000,
+                mtvec=lambda *_: 0x40380101, mtvt=lambda *_: None)
+            console = mock.Mock(received=b'', sent=b'')
+            console.wait.return_value = b'entry 0x40380000\n\x02b'
+            probe = mock.Mock()
+            cycle = mock.Mock(return_value=(console, None))
+            settle, console_for = mock.Mock(), mock.Mock()
+            def scenario(*_):
+                if failure == 'usb':
+                    args.pace.blocked = 'xhci_hcd: HC died'
+                    raise COMMON.USBGuardError(args.pace.blocked)
+                if failure:
+                    raise COMMON.Failed('application did not answer')
+                return {}, {}, {}
+            with contextlib.ExitStack() as stack:
+                def patch(owner, name, **kwargs):
+                    return stack.enter_context(mock.patch.object(owner, name, **kwargs))
+                patch(ESP, 'build', return_value=(elf, image_path, {}))
+                patch(ESP, 'check_image', return_value=COMMON.esp_image(data))
+                patch(COMMON, 'elf_sections', return_value=(b'', {}))
+                patch(COMMON, 'Probe', return_value=probe)
+                patch(COMMON, 'rig_lock', return_value=lock)
+                patch(ESP, 'paced', side_effect=lambda args, what, action: action())
+                patch(ESP, 'boot_log', return_value={})
+                scenario_run = patch(ESP, 'scenario', side_effect=scenario)
+                cross_check = patch(ESP, 'cross_check', return_value={})
+                readback = patch(ESP, 'readback', return_value={})
+                traps = patch(ESP, 'trap_cells', return_value={'count': 1})
+                restore = patch(ESP, 'restore_fixed', side_effect=lambda *_:
+                    events.append('restore') or {'value': COMMON.FIXED_READY_MAGIC})
+                status = ESP.run_board(chip, args, console_for, cycle, settle)
+                result = COMMON.json.loads((args.output / 'result.json').read_text())
+            hardware = (probe.download_bin, cycle, settle, console_for, scenario_run,
+                        cross_check, readback, traps)
+            return status, result, events, restore, hardware, traps
+
+    def test_boot_cleanup_uses_successful_acquisition_for_owned_and_borrowed_locks(self):
+        for borrowed, failure, acquire_fails in (
+                (False, None, False), (True, None, False), (True, 'app', False),
+                (True, 'usb', False), (True, None, True)):
+            with self.subTest(borrowed=borrowed, failure=failure, acquire_fails=acquire_fails):
+                status, result, events, restore, hardware, traps = self.run_boot(
+                    borrowed=borrowed, failure=failure, acquire_fails=acquire_fails)
+                self.assertEqual(status, int(bool(failure or acquire_fails)))
+                if acquire_fails:
+                    for action in hardware:
+                        action.assert_not_called()
+                    restore.assert_not_called()
+                    self.assertNotIn('fixed_restore', result)
+                elif failure == 'usb':
+                    restore.assert_not_called()
+                    traps.assert_not_called()
+                    self.assertEqual(result['fixed_restore']['status'], 'pending')
+                    self.assertNotIn('trap', result)
+                else:
+                    restore.assert_called_once()
+                    self.assertEqual(result['fixed_restore']['status'], 'passed')
+                    self.assertLess(events.index('restore'), events.index('release'))
+                    if failure:
+                        traps.assert_called_once()
+                        self.assertEqual(result['trap'], {'count': '0x1'})
 
 
 if __name__ == '__main__':
