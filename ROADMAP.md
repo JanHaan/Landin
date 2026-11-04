@@ -1815,9 +1815,9 @@ runtime link policy in mode comparisons; SR-724 by checking every expanded
 required matrix leg, including called workflows; SR-725 by listing each
 target's debug mode; SR-757 through SR-760 through help, importer and
 installer controls; SR-761 through distinct command logs; SR-762 through
-explicit boot observations; and SR-763 through transmitter draining and
+explicit boot observations; SR-763 through transmitter draining and
 complete ROM trace lines. Their rows stay in the register until closure evidence
-is complete. New findings are SR-758 through SR-763; SR-757 retains the
+is complete. New findings are SR-758 through SR-764; SR-757 retains the
 identity of the carried local finding.
 
 SR-555 retains the existing FHS route and its single locked runtime source.
@@ -4003,6 +4003,7 @@ SR-756.
 | SR-761 | Usability | A physical ESP32 boot check fails its first flash command, then attempts resident-image restoration under the same command name. The restoration overwrites the first `flash.log`, so the retained commands name both attempts but only the restoration's diagnostic survives. Met in R12.50. | The next change to board-command logging. | Retain a distinct log for every invocation and link each command record and failure to its actual log, including restoration attempts. | open |
 | SR-762 | Usability | The new ESP32-S3 boot check refuses its first cold-state observation because the shared read helper requires the RAM contract's retained CPU1 stall, and says to use the boot check that is already running. It also blocks startup-trap diagnosis before that stall exists. Met in R12.50. | The next change to Xtensa boot readback or the RAM helper's read contract. | An explicit observational boot-read scope reporting actual CPU1 state, while every warm RAM read still requires and independently verifies the retained hardware stall. | open |
 | SR-763 | Usability | An ESP32-S3 cold application starts and its fixed-image restoration passes, but changing the UART clock cuts the ROM log during a segment length. The log parser accepts the surviving decimal prefix `0` and reports that the ROM loaded zero bytes, obscuring the incomplete trace. Met in R12.50. | The next change to ESP boot tracing or startup UART setup. | Drain the transmitter before changing its clock and require complete ROM load and entry lines, retaining an incomplete trace as a failed observation. | open |
+| SR-764 | Usability | Cancelling an Xtensa SIM investigation through its logged wrapper stops the corpus parent but leaves two QEMU processes consuming CPUs. The runner started each emulator in a separate session, outside the wrapper's cancellation group, and manual cleanup was required. Met in R12.50. | The next change to Xtensa emulator process ownership or cancellation. | Keep emulator children in the logged command's process group and verify cancellation also stops them, retaining normal bounded timeout cleanup. | open |
 
 
 ## Retained positions
