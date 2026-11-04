@@ -268,6 +268,166 @@
     "esp32c5/soc.h": {
       "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/soc/esp32c5/include/soc/soc.h",
       "sha256": "4daede6506a58ddbf4d8184952d0af1c6220a4a916e2173c058e8e456cbcd3cb"
+    },
+    "esp32/esp32.svd": {
+      "url": "https://raw.githubusercontent.com/espressif/svd/be20aa12560889d6125d144cdb48cf615ac17628/svd/esp32.svd",
+      "sha256": "f80fb973c19896eb904c00efcead9242f0027deb0a297b7b427d6982172dfcac"
+    },
+    "esp32/uart_reg.h": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/soc/esp32/register/soc/uart_reg.h",
+      "sha256": "6bc6ea8ef35bccb21b7c14b36ee9259165b9d9f2a7ae9d6e0b0f6149bf49a7dc"
+    },
+    "esp32/gpio_reg.h": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/soc/esp32/register/soc/gpio_reg.h",
+      "sha256": "92ddca4a5d81b328610560b80e0af48040c9cb7ed918f9887f1f61ffea8f5773"
+    },
+    "esp32/io_mux_reg.h": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/soc/esp32/register/soc/io_mux_reg.h",
+      "sha256": "6cf91d0e6e54f4e0f20dc89e3ed2797d5af22bafdf14a530600d41067c014cb1"
+    },
+    "esp32/timer_group_reg.h": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/soc/esp32/register/soc/timer_group_reg.h",
+      "sha256": "a19e0e273532939c9c4510b03e7b394efdf57e8ceb37fe064a3fcd3d745ec168"
+    },
+    "esp32/rtc_cntl_reg.h": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/soc/esp32/register/soc/rtc_cntl_reg.h",
+      "sha256": "3f8a815381f55479e97f54a491e5362ce064de89e92284526d833acabede01e3"
+    },
+    "esp32/dport_reg.h": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/soc/esp32/register/soc/dport_reg.h",
+      "sha256": "ae1f0f4790a5c3dcdc0b4bf8e429090c9ec5d335f8f5d6437402e1b84fd82597"
+    },
+    "esp32/apb_ctrl_reg.h": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/soc/esp32/register/soc/apb_ctrl_reg.h",
+      "sha256": "88de0f62909a9ad7d56d02b6b6acb2b298201668b908d27d06eda73bfd143eab"
+    },
+    "esp32/reg_base.h": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/soc/esp32/register/soc/reg_base.h",
+      "sha256": "0311746ce8cecb72e648f143dea5fc364b0f45f051a32a3b76146e6a29a455fc"
+    },
+    "esp32/soc.h": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/soc/esp32/include/soc/soc.h",
+      "sha256": "3682c67b5cc09e89fb9fe3b13a55e56e38dafa7d8867dcfd4712bac0ea750f03"
+    },
+    "esp32/interrupts.h": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/soc/esp32/include/soc/interrupts.h",
+      "sha256": "3d35a80d86e3009ce57016c47c846c501fa21a64c6fb4c431a5a23bdcb0d10d4"
+    },
+    "esp32/memory.ld.in": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/esp_system/ld/esp32/memory.ld.in",
+      "sha256": "1cac01e3e7ee06fae7bdf78d57b9178ba007bf62a1a414b2e890933ec49b7098"
+    },
+    "esp32/bootloader.memory.ld.in": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/bootloader/subproject/main/ld/esp32/bootloader.memory.ld.in",
+      "sha256": "143da52eca654e6ef061b740d59b4eb85aa6b4407459626480dc4ff391780a9a"
+    },
+    "esp32/cpu_utility_ll.h": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/hal/esp32/include/hal/cpu_utility_ll.h",
+      "sha256": "d8c37e299ecae8cdfe4cc2bebb1787b3e277ce252d861b0446d795747af13b95"
+    },
+    "esp32/cache_ll.h": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/hal/esp32/include/hal/cache_ll.h",
+      "sha256": "b8893a0758385d155f34b5edd1e300a309990cfffc65dbe23d01b2849f4d5d2d"
+    },
+    "esp32s3/esp32s3.svd": {
+      "url": "https://raw.githubusercontent.com/espressif/svd/be20aa12560889d6125d144cdb48cf615ac17628/svd/esp32s3.svd",
+      "sha256": "d7629249eba2ad660a960530d124966e9274c8228341380dd4102f251e879e17"
+    },
+    "esp32s3/uart_reg.h": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/soc/esp32s3/register/soc/uart_reg.h",
+      "sha256": "eead15594a1ae10e977ea17b6c35958dc5720fe74a766b11d7adaee4c2f1b6dc"
+    },
+    "esp32s3/gpio_reg.h": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/soc/esp32s3/register/soc/gpio_reg.h",
+      "sha256": "2a6618c112bceb25291b5a215ab6140560cff033ed169c92dfd765683f0a980e"
+    },
+    "esp32s3/io_mux_reg.h": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/soc/esp32s3/register/soc/io_mux_reg.h",
+      "sha256": "be80664117c532e67f516262ac0de4621a53b16d2139a4fea7b8acb0f7b45cf2"
+    },
+    "esp32s3/timer_group_reg.h": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/soc/esp32s3/register/soc/timer_group_reg.h",
+      "sha256": "45faca40791304837544863f06e4c4f35cfea06a8c31c9855886138806e28fe7"
+    },
+    "esp32s3/rtc_cntl_reg.h": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/soc/esp32s3/register/soc/rtc_cntl_reg.h",
+      "sha256": "37a0ec8e80e9531b83407de1fdd101ea0be1bb90b680d1b126b44e8484883e29"
+    },
+    "esp32s3/system_reg.h": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/soc/esp32s3/register/soc/system_reg.h",
+      "sha256": "61d7ab616c6339bfe2e3a704e24ea28ff6305641f064ddf6ceec17cc4ad0c9fd"
+    },
+    "esp32s3/extmem_reg.h": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/soc/esp32s3/register/soc/extmem_reg.h",
+      "sha256": "1867236e60642887d3b96e8c364e25f404c9750b4b5ac87508a663ac3edf512b"
+    },
+    "esp32s3/systimer_reg.h": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/soc/esp32s3/register/soc/systimer_reg.h",
+      "sha256": "f26ae60d40df3e7edb4b16fb25a14e2145212836e1eb12bd587d75f7102feac7"
+    },
+    "esp32s3/interrupt_core0_reg.h": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/soc/esp32s3/register/soc/interrupt_core0_reg.h",
+      "sha256": "da52ac01a268889fb80d47dd8f212cec05b388a39dcb0fbe98ebfb477d14cbeb"
+    },
+    "esp32s3/reg_base.h": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/soc/esp32s3/register/soc/reg_base.h",
+      "sha256": "c6df84d3d98549b89c36811ebf3c664316823c8901ead27bb98b5350774aec46"
+    },
+    "esp32s3/soc.h": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/soc/esp32s3/include/soc/soc.h",
+      "sha256": "5d71f9f79c73aad220e7436d17837eb678b476d9d5601a680e5eddf628e30caa"
+    },
+    "esp32s3/interrupts.h": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/soc/esp32s3/include/soc/interrupts.h",
+      "sha256": "ff3368997c620685080642e19c6f0385b190715b639c0c3dd4a5b0fd6ca50744"
+    },
+    "esp32s3/memory.ld.in": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/esp_system/ld/esp32s3/memory.ld.in",
+      "sha256": "442bd739004878091ef47ff3e681bde5a913b85bf4eb6f52396f572f590b3806"
+    },
+    "esp32s3/bootloader.memory.ld.in": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/bootloader/subproject/main/ld/esp32s3/bootloader.memory.ld.in",
+      "sha256": "17d7225880bfea6e746c782ee72ea88ed3497054575ce8133a23c3a45e0bebd9"
+    },
+    "esp32s3/cpu_utility_ll.h": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/hal/esp32s3/include/hal/cpu_utility_ll.h",
+      "sha256": "5b95ad128caef1bd8dd6edb9219dfc5affe3ea003f7d19b1cf5d8bc1cb7bcfd1"
+    },
+    "esp32s3/cache_ll.h": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/hal/esp32s3/include/hal/cache_ll.h",
+      "sha256": "6085f50145a73e52bd5fd09a348ec84975bad4c0ffef8399b9a221c302fb740a"
+    },
+    "esp32/Kconfig.hw_support": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/esp_hw_support/port/esp32/Kconfig.hw_support",
+      "sha256": "457c7b3f173e36d62edc174db4c107f96c0bcdbaba7a8ff1a267dd7c286d20cc"
+    },
+    "esp32s3/Kconfig.hw_support": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/esp_hw_support/port/esp32s3/Kconfig.hw_support",
+      "sha256": "b9518134fc181bdcf491a86c3aa2f164d260bbe7f48c61fe0930b9bbb6fbc764"
+    },
+    "esp32/uart_ll.h": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/esp_hal_uart/esp32/include/hal/uart_ll.h",
+      "sha256": "185554a9867faad385b4db847c0d8a8029b702530a313a6c96f8d950e8031cf9"
+    },
+    "esp32s3/uart_ll.h": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/esp_hal_uart/esp32s3/include/hal/uart_ll.h",
+      "sha256": "0b62f501a13d7f955fdf005e053da1f824349b4976c1454657bed17ae99c3d9d"
+    },
+    "esp32/gpio_ll.h": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/esp_hal_gpio/esp32/include/hal/gpio_ll.h",
+      "sha256": "c27406138e6dbbb7fcbeee156327f925dfe902de1e9623294c1d0a50f694a12b"
+    },
+    "esp32/gpio_sig_map.h": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/soc/esp32/include/soc/gpio_sig_map.h",
+      "sha256": "40d374f73e03922ac13f4a9d7b6fa780f54e5afde7178ac5369bef4a41cc7c49"
+    },
+    "esp32s3/gpio_ll.h": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/esp_hal_gpio/esp32s3/include/hal/gpio_ll.h",
+      "sha256": "74a29cfac197d9b9c599fdf91892a14b790af7308326960d1eafd1ac5306335b"
+    },
+    "esp32s3/gpio_sig_map.h": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/soc/esp32s3/include/soc/gpio_sig_map.h",
+      "sha256": "f4fe38cc217a2bdcd2c0ec192fa887df1cbbe3506da1c677656506dc3997d758"
     }
   }
 }

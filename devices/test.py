@@ -354,11 +354,13 @@ class Regeneration(unittest.TestCase):
 
 CORES = {'CM0': 'cortex-m0', 'CM0PLUS': 'cortex-m0plus',
          'CM3': 'cortex-m3', 'CM4': 'cortex-m4', 'CM7': 'cortex-m7',
-         'CM33': 'cortex-m33'}
+         'CM33': 'cortex-m33',
+         'Xtensa LX6': 'xtensa-lx6', 'Xtensa LX7': 'xtensa-lx7'}
 
 # D701: the two ESP cores' slots, which no interrupt-matrix source takes:
 # a vectored mtvec's 32 mcause codes, and the C5's CLIC's 48 identities.
-SOURCE_CORES = {'esp-rv32imc': 32, 'esp-rv32imac-clic': 48}
+SOURCE_CORES = {'esp-rv32imc': 32, 'esp-rv32imac-clic': 48,
+                'xtensa-lx6': 32, 'xtensa-lx7': 32}
 
 
 def render_d542(raw, policy):
@@ -1173,6 +1175,12 @@ class IdfHeader:
                 break
             text = expanded
         text = re.sub(r'\b(0x[0-9a-fA-F]+|\d+)[uUlL]+\b', r'\1', text)
+        # REG_UART_BASE(i) selects UART2's irregular offset with a C
+        # ternary. Its expanded arguments and both results are integers.
+        text = re.sub(
+            r'\(\s*\((\d+)\)\s*>\s*(\d+)\s*\?\s*(0x[0-9a-fA-F]+|\d+)'
+            r'\s*:\s*(0x[0-9a-fA-F]+|\d+)\s*\)',
+            lambda m: m.group(3) if int(m.group(1)) > int(m.group(2)) else m.group(4), text)
         if not re.fullmatch(r'[\s0-9a-fA-FxX()+\-*<>|&~]*', text):
             raise AssertionError('not evaluated: %s, %s' % (expression, text))
         return eval(text, {})
@@ -1253,9 +1261,14 @@ def compare_with_esp_idf(case, rows, chip, families, names, unshared, resets):
                     seen.add((key, field['name'], 'svd'))
                     case.assertNotIn(name, commented)
                     continue
-                case.assertEqual(header.value(name + '_S'), field['low'], name)
-                case.assertEqual(header.value(name + '_V'),
-                                 (1 << field['high'] - field['low'] + 1) - 1, name)
+                if name + '_S' in header.macros and name + '_V' in header.macros:
+                    case.assertEqual(header.value(name + '_S'), field['low'], name)
+                    case.assertEqual(header.value(name + '_V'),
+                                     (1 << field['high'] - field['low'] + 1) - 1, name)
+                else:
+                    # ESP32's older DPORT header gives clock/reset fields
+                    # as shifted masks alone, without _S/_V companions.
+                    case.assertEqual(header.value(name), field['mask'], name)
                 if name not in commented:
                     continue
                 matched.add(name)
@@ -1822,6 +1835,216 @@ class EspDescriptions(unittest.TestCase):
                            for address, value in stores]
                 self.assertEqual(written, [(a[1], a[3]) for a in
                                            want['reset_stage']['accesses'] if a[0] == 'w'])
+
+
+XTENSA_FAMILIES = {
+    'DPORT': ('dport_reg.h', 'DPORT', None),
+    'APB_CTRL': ('apb_ctrl_reg.h', 'APB_CTRL', None),
+    'SYSTEM': ('system_reg.h', 'SYSTEM', None),
+    'EXTMEM': ('extmem_reg.h', 'EXTMEM', None),
+    'UART0': ('uart_reg.h', 'UART', 0),
+    'GPIO': ('gpio_reg.h', 'GPIO', None),
+    'IO_MUX': ('io_mux_reg.h', 'IO_MUX', None),
+    'RTC_CNTL': ('rtc_cntl_reg.h', 'RTC_CNTL', None),
+    'TIMG0': ('timer_group_reg.h', 'TIMG', 0),
+    'TIMG1': ('timer_group_reg.h', 'TIMG', 1),
+    'INTERRUPT_CORE0': ('interrupt_core0_reg.h', 'INTERRUPT_CORE0', None),
+    'SYSTIMER': ('systimer_reg.h', 'SYSTIMER', None)}
+
+
+def xtensa_header_names(chip, rows):
+    """The reviewed spelling differences between the SVD and IDF headers."""
+    names = {('GPIO.IN', 'DATA_NEXT'): 'GPIO_IN_DATA',
+             ('GPIO.IN1', 'DATA_NEXT'): 'GPIO_IN1_DATA',
+             ('UART0.CLKDIV', 'FRAG'): 'UART_CLKDIV_FRAG'}
+    for row in rows:
+        key = row['source']
+        peripheral, register = key.split('.')
+        if peripheral == 'IO_MUX':
+            if chip == 'esp32':
+                names[(key, None)] = 'PERIPHS_IO_MUX_' + {
+                    'GPIO1': 'U0TXD_U', 'GPIO3': 'U0RXD_U',
+                    'GPIO22': 'GPIO22_U'}[register]
+            for field, spelled in IO_MUX_FIELDS.items():
+                names[(key, field)] = spelled
+        if peripheral == 'GPIO' and register.startswith('FUNC'):
+            for field in row['fields']:
+                spelled = {'INV_SEL': 'OUT_INV_SEL'}.get(field['name'], field['name'])
+                names[(key, field['name'])] = 'GPIO_' + register.split('_OUT')[0] + '_' + spelled
+        if peripheral == 'DPORT' and register.startswith('PERIP_'):
+            for field in row['fields']:
+                spelled = field['name'].replace('I2C0_EXT0', 'I2C_EXT0')
+                names[(key, field['name'])] = 'DPORT_' + spelled
+        if peripheral.startswith('TIMG') and register.startswith('T0'):
+            for field in row['fields']:
+                names[(key, field['name'])] = 'TIMG_T0_' + field['name']
+    return names
+
+
+def xtensa_stage(text, memory):
+    """Execute the small stack-free stage's actual assembly against MMIO.
+
+    Unknown instructions, accesses to unknown memory, and a nonterminating
+    path fail; the only exits admitted are reset and the cache refusal.
+    This checks both the good prestate and each forbidden cache prestate.
+    """
+    body = re.search(r'assembler\.block\("""(.*?)"""\)', text, re.S).group(1)
+    instructions = []
+    labels = {}
+    for line in body.splitlines():
+        line = line.split('#')[0].strip()
+        if not line or line.startswith('.global '):
+            continue
+        if line.endswith(':'):
+            labels[line[:-1]] = len(instructions)
+        else:
+            instructions.append(line)
+    registers = {}
+    stores = []
+    pc = 0
+    for _ in range(200):
+        op, _, rest = instructions[pc].partition(' ')
+        args = [a.strip() for a in rest.split(',')]
+        pc += 1
+        if op == 'movi':
+            registers[args[0]] = int(args[1], 0) & 0xffffffff
+        elif op in ('l32i', 's32i'):
+            address = registers[args[1]] + int(args[2], 0)
+            if op == 'l32i':
+                registers[args[0]] = memory[address]
+            else:
+                value = registers[args[0]]
+                memory[address] = value
+                stores.append((address, value))
+        elif op in ('and', 'or'):
+            a, b = registers[args[1]], registers[args[2]]
+            registers[args[0]] = a & b if op == 'and' else a | b
+        elif op == 'bbsi':
+            if registers[args[0]] & (1 << int(args[1], 0)):
+                if args[2] == '_landin_device_cache_refused':
+                    return args[2], stores
+                pc = labels[args[2]]
+        elif op == 'memw':
+            pass
+        elif op == 'j' and args[0] in ('_landin_firmware_reset', '_landin_device_cache_refused'):
+            return args[0], stores
+        else:
+            raise AssertionError('unexamined stage instruction: ' + op)
+    raise AssertionError('stage did not exit')
+
+
+class XtensaDescriptions(unittest.TestCase):
+    def test_memory_and_aliases(self):
+        for chip, code, data, data_size, identity, maximum, offset in (
+                ('esp32', 0x40080000, 0x3ffb0000, 128, 0, 399, '0x1000'),
+                ('esp32s3', 0x40378000, 0x3fca8000, 160, 9, 99, '0x0')):
+            with self.subTest(chip=chip):
+                text, regions, places = EspDescriptions.described(chip)
+                self.assertEqual(regions, {'IRAM': (code, 128 * 1024, 'rx'),
+                                          'DRAM': (data, data_size * 1024, 'rw')})
+                self.assertEqual(places, {'vectors': 'IRAM', 'text': 'IRAM',
+                                          'rodata': 'DRAM', 'data': 'DRAM',
+                                          'bss': 'DRAM', 'stack': 'DRAM'})
+                self.assertIn('compiler.boot("esp-app-image")', text)
+                self.assertIn('compiler.esp_image(%d, 0, %d, %s)' % (identity, maximum, offset), text)
+                if chip == 'esp32s3':
+                    # IDF's bootloader script fixes the I/D alias offset
+                    # and reserves ROM shared buffers from 0x3fcd7e00.
+                    self.assertEqual(code + 128 * 1024 - 0x6f0000, data)
+                    self.assertLess(data + data_size * 1024, 0x3fcd7e00)
+                else:
+                    self.assertLess(data + data_size * 1024, 0x3ffdc200)
+
+    def test_stack_free_stage_and_cache_refusals(self):
+        for chip, rtc, stall, config, protect, t0, t1, cache, bit in (
+                ('esp32', 0x3ff48000, 0xac, 0x8c, 0xa4, 0x3ff5f000, 0x3ff60000,
+                 (0x3ff00040, 0x3ff00058), 3),
+                ('esp32s3', 0x60008000, 0xbc, 0x98, 0xb0, 0x6001f000, 0x60020000,
+                 (0x600c4000, 0x600c4060), 0)):
+            text = (DESCRIPTIONS / chip / 'prepare.ldn').read_text()
+            body = re.search(r'assembler\.block\("""(.*?)"""\)', text, re.S).group(1)
+            self.assertNotRegex(body, r'\b(a0|a1|sp|call\w*|entry|retw?)\b')
+            expected = [(base + off, value) for base in (t0, t1)
+                        for off, value in ((0x64, 0x50d83aa1), (0x48, 0), (0x64, 0))]
+            expected += [(rtc + protect, 0x50d83aa1), (rtc + config, 0), (rtc + protect, 0)]
+            if chip == 'esp32s3':
+                expected += [(rtc + 0xb8, 0x8f1d312a), (rtc + 0xb4, 0xc0000000), (rtc + 0xb8, 0)]
+            # Exercise preservation of unrelated control bits, rather
+            # than accepting a stage that succeeds only from all-zero RAM.
+            initial = {rtc: 0x1c00a009, rtc + stall: 0x45800000,
+                       cache[0]: 0, cache[1]: 0}
+            expected += [(rtc, (initial[rtc] & ~3) | 2),
+                         (rtc + stall, (initial[rtc + stall] & ~0x03f00000) | 0x02100000)]
+            with self.subTest(chip=chip, state='cacheless'):
+                self.assertEqual(xtensa_stage(text, dict(initial)), ('_landin_firmware_reset', expected))
+            for address in cache:
+                memory = dict(initial)
+                memory[address] = 1 << bit
+                with self.subTest(chip=chip, forbidden_cache=hex(address)):
+                    self.assertEqual(xtensa_stage(text, memory), ('_landin_device_cache_refused', []))
+
+    def test_idf_uart_address_ternary(self):
+        header = IdfHeader('#define BASE 0x60000000\n'
+                           '#define REG_UART_BASE(i) (BASE + (i) * 0x10000 + ((i) > 1 ? 0xe000 : 0))\n')
+        self.assertEqual([header.value('REG_UART_BASE(%d)' % i) for i in (0, 1, 2)],
+                         [0x60000000, 0x60010000, 0x6002e000])
+
+
+class XtensaOracles(unittest.TestCase):
+    @staticmethod
+    def rows(chip):
+        return json.loads((GENERATED / chip / 'correspondence.json').read_text())
+
+    @requires_refine
+    def test_vendor_headers(self):
+        for chip in ('esp32', 'esp32s3'):
+            with self.subTest(chip=chip):
+                rows = self.rows(chip)
+                # The old DPORT header documents whole-register fields
+                # above its individual clock/reset masks. The S3 GPIO
+                # header's IN1 comment misnames its DATA field IN_DATA;
+                # its actual macros correctly say IN1_DATA and match the
+                # SVD's 22-bit field. Neither discrepancy adds an accessor.
+                unshared = ({('DPORT.PERIP_CLK_EN', 'DPORT_PERIP_CLK_EN', 'header'),
+                             ('DPORT.PERIP_RST_EN', 'DPORT_PERIP_RST', 'header'),
+                             ('UART0.MEM_RX_STATUS', 'UART_MEM_RX_STATUS', 'header')}
+                            if chip == 'esp32' else
+                            {('GPIO.IN1', 'GPIO_IN_DATA', 'header')})
+                compare_with_esp_idf(self, rows, chip, XTENSA_FAMILIES,
+                                    xtensa_header_names(chip, rows), unshared, set())
+
+    def test_selected_access_contract(self):
+        for chip, count in (('esp32', 51), ('esp32s3', 51)):
+            with self.subTest(chip=chip):
+                rows = {row['source']: row for row in self.rows(chip)}
+                self.assertEqual(len(rows), count)
+                self.assertEqual(rows['UART0.FIFO']['policy'],
+                                 {'read': 'modify', 'write': 'normal', 'reserved': 'zero', 'write_mask': '0xff'})
+                self.assertEqual(rows['UART0.INT_CLR']['policy']['read'], 'refused')
+                self.assertEqual(rows['UART0.INT_CLR']['policy']['write'], 'one_clears')
+                self.assertEqual(rows['UART0.STATUS']['policy']['write'], 'refused')
+                self.assertEqual(rows['RTC_CNTL.RESET_STATE']['known_reset_mask'], 0)
+                self.assertEqual(rows['RTC_CNTL.OPTIONS0']['policy']['write_mask'],
+                                 '0x7fffffcf' if chip == 'esp32' else '0x7f83ffcf')
+                for key in (('DPORT.PRO_CACHE_CTRL', 'DPORT.APP_CACHE_CTRL') if chip == 'esp32'
+                            else ('EXTMEM.ICACHE_CTRL', 'EXTMEM.DCACHE_CTRL')):
+                    self.assertEqual(rows[key]['policy']['write'], 'refused')
+
+    @requires_refine
+    def test_interrupt_sources(self):
+        renames = {'WIFI_NMI': 'WIFI_MAC_NMI', 'MCPWM0': 'PWM0',
+                   'MCPWM1': 'PWM1', 'TWAI0': 'TWAI'}
+        for chip in ('esp32', 'esp32s3'):
+            with self.subTest(chip=chip):
+                expected = dict(sources_of(chip))
+                aliases = dict(renames)
+                if chip == 'esp32s3':
+                    aliases.update({'GPIO_INTR_2': 'GPIO_INTR_SOURCE2',
+                                    'GPIO_NMI_2': 'GPIO_NMI_SOURCE2',
+                                    'USB_DEVICE': 'USB_SERIAL_JTAG'})
+                for svd, header in aliases.items():
+                    expected[svd] = expected.pop(header)
+                self.assertEqual(generated_sources(policies()[chip]), expected)
 
 
 def main():

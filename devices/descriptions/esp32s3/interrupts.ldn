@@ -1,0 +1,20 @@
+-- Interrupts of the ESP32-S3, from its SVD: vendor ESPRESSIF SYSTEMS (SHANGHAI) CO., LTD., version 21.
+-- SVD SHA-256 d7629249eba2ad660a960530d124966e9274c8228341380dd4102f251e879e17.
+-- Copyright 2024 Espressif Systems (Shanghai) PTE LTD
+-- Licensed under the Apache License, Version 2.0 (the "License");
+-- you may not use this file except in compliance with the License.
+-- You may obtain a copy of the License at
+-- http://www.apache.org/licenses/LICENSE-2.0
+-- Unless required by applicable law or agreed to in writing, software
+-- distributed under the License is distributed on an "AS IS" BASIS,
+-- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+-- See the License for the specific language governing permissions and
+-- limitations under the License.
+-- Generated from the SVD; memory.ldn beside it is written by hand.
+-- The policy adds AES at 77: ESP-IDF v6.1 esp32s3 interrupts.h ETS_AES_INTR_SOURCE is 77 and interrupt_core0_reg.h AES_INT_MAP follows RSA_INT_MAP.
+-- The policy moves SHA from 77 to 78: ESP-IDF v6.1 esp32s3 interrupts.h ETS_SHA_INTR_SOURCE is 78 and interrupt_core0_reg.h SHA_INT_MAP follows AES_INT_MAP; the SVD uses the AES source.
+-- Its interrupts are interrupt-matrix sources, not slots: esp32s3/sources.
+
+compiler.device("esp32-s3")
+compiler.core("xtensa-lx7")
+compiler.vectors(32)

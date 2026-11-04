@@ -1,0 +1,25 @@
+-- Internal SRAM-only firmware. The ROM loads the image directly from
+-- flash offset 0x0; there is no second stage or mapped flash.
+-- Written by hand against the pinned ESP-IDF v6.1 memory scripts,
+-- register headers; see devices/README.md.
+--
+-- SRAM1 is shared: instruction address minus 0x6F_0000 gives its data
+-- alias. The code ends at data address 0x3FCA_8000, exactly where DRAM
+-- begins, so the regions never allocate the same physical bytes. DRAM
+-- ends at 0x3FCD_0000, below the ROM buffers from 0x3FCD_7E00, as
+-- ESP-IDF v6.1 bootloader.memory.ld.in records.
+-- Cache banks and external memory are omitted. Startup and warm entry
+-- require disabled caches; no cached profile is admitted. The instruction
+-- bus permits only aligned word reads, so ordinary constants and strings
+-- are placed in byte-accessible DRAM with data, BSS and the stack.
+
+linker.region("IRAM", 0x4037_8000, 128 * 1024, "rx")
+linker.region("DRAM", 0x3FCA_8000, 160 * 1024, "rw")
+compiler.boot("esp-app-image")
+compiler.esp_image(9, 0, 99, 0x0)
+linker.place("vectors", "IRAM")
+linker.place("text", "IRAM")
+linker.place("rodata", "DRAM")
+linker.place("data", "DRAM")
+linker.place("bss", "DRAM")
+linker.place("stack", "DRAM", 16 * 1024)
