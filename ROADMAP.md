@@ -1727,7 +1727,8 @@ SR-757's identity. Other sessions' worktrees and rig resources remain theirs.
    the description retain one self-contained stage without helper
    declarations or a data table that its early entry cannot assume ready.
 
-   **Corpus capacity proposal for Jan:** keep both bounded chip machines
+   **Corpus capacity: Jan selected the exact-core virtual-RAM proposal.**
+   Keep both bounded chip machines
    and physical maps for architectural/startup controls and board runs.
    Run the complete unchanged freestanding inventory on the same locked
    Espressif QEMU's `sim` machine with `-cpu esp32` or `-cpu esp32s3`
