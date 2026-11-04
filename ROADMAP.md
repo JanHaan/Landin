@@ -1707,6 +1707,37 @@ SR-757's identity. Other sessions' worktrees and rig resources remain theirs.
    state before that state can be required. Warm independent readbacks
    retain their mandatory hardware-stall check.
 
+   **Classic cold-contract revision before building:** a bounded EN-reset
+   trace shows that the rev-3.1 ESP32 ROM accepts both fixed-image segments
+   and enters the exact entry, then the cache-off gate parks until the RTC
+   watchdog resets it. Independent inspection confirms PRO cache enabled,
+   APP cache disabled and CPU1 unstalled. Recommend the classic ROM's own
+   disable-both, flush-both sequence from the pinned
+   [bootloader](https://github.com/espressif/esp-idf/blob/fff9895c82d744c7237be8847347bdd1b07c6643/components/bootloader_support/src/esp32/bootloader_esp32.c)
+   and [cache API](https://github.com/espressif/esp-idf/blob/fff9895c82d744c7237be8847347bdd1b07c6643/components/esp_rom/esp32/include/esp32/rom/cache.h).
+   Select the already pinned ROM archive's `esp32_rev300_rom.elf` for
+   physical rev 3.1, SHA-256
+   `920b70635440517866aab2230964a570d2cf2b676658d93c52fbac108c1cca31`.
+   Guard every word of the leaf routines `Cache_Read_Disable` at
+   `0x40009ab8` and `Cache_Flush` at `0x40009a14`, and their four literal
+   dependencies, before any device write. Then stop watchdogs, stall CPU1,
+   disable both caches, flush both and verify enable bits clear. This is
+   only the direct ROM cold-entry contract with reset cause one, before
+   PSRAM initialization or any dirty external data. Flush invalidates;
+   it supplies no writeback guarantee. Arbitrary cached warm entry stays
+   refused, and the cache-off path makes no ROM call. Compiler entry
+   supplies the same architectural prelude as for S3.
+
+   The classic board's external JTAG remains powered during USB switching;
+   USB cycling alone retained the debug flash stub's software-reset state.
+   Its boot check therefore records a USB power cycle followed by a normal
+   CHIP_PU reset, with GPIO0 released, and independently checks reset cause
+   one, actual startup and the complete ROM trace. This is an explicit EN
+   cold-reset contract, with no claim that the power rail discharged.
+   S3 retains its independent power-on observation before UART opening.
+   The EN pulse follows pinned esptool's
+   [HardReset](https://github.com/espressif/esptool/blob/70afbaabee112e252136fef677ce09a0c141f29d/esptool/reset.py).
+
    **Architectural prelude proposal:** a windowed ROM call needs a valid
    window set, spill stack and vectors. Before an Xtensa pre-reset device
    stage, compiler-owned entry therefore establishes masked interrupts,
@@ -1818,7 +1849,7 @@ installer controls; SR-761 through distinct command logs; SR-762 through
 explicit boot observations; SR-763 through transmitter draining and
 complete ROM trace lines; and SR-764 through emulator cancellation ownership.
 Their rows stay in the register until closure evidence
-is complete. New findings are SR-758 through SR-764; SR-757 retains the
+is complete. New findings are SR-758 through SR-765; SR-757 retains the
 identity of the carried local finding.
 
 SR-555 retains the existing FHS route and its single locked runtime source.
@@ -4022,6 +4053,7 @@ SR-756.
 | SR-762 | Usability | The new ESP32-S3 boot check refuses its first cold-state observation because the shared read helper requires the RAM contract's retained CPU1 stall, and says to use the boot check that is already running. It also blocks startup-trap diagnosis before that stall exists. Met in R12.50. | The next change to Xtensa boot readback or the RAM helper's read contract. | An explicit observational boot-read scope reporting actual CPU1 state, while every warm RAM read still requires and independently verifies the retained hardware stall. | open |
 | SR-763 | Usability | An ESP32-S3 cold application starts and its fixed-image restoration passes, but changing the UART clock cuts the ROM log during a segment length. The log parser accepts the surviving decimal prefix `0` and reports that the ROM loaded zero bytes, obscuring the incomplete trace. Met in R12.50. | The next change to ESP boot tracing or startup UART setup. | Drain the transmitter before changing its clock and require complete ROM load and entry lines, retaining an incomplete trace as a failed observation. | open |
 | SR-764 | Usability | Cancelling an Xtensa SIM investigation through its logged wrapper stops the corpus parent but leaves two QEMU processes consuming CPUs. The runner started each emulator in a separate session, outside the wrapper's cancellation group, and manual cleanup was required. Met in R12.50. | The next change to Xtensa emulator process ownership or cancellation. | Keep emulator children in the logged command's process group and verify cancellation also stops them, retaining normal bounded timeout cleanup. | open |
+| SR-765 | Usability | A classic ESP32 boot check verifies its flash, cycles USB power, then reads the debug flash stub's software-reset cause three rather than new startup. Its external JTAG stays powered and continuously drives pins. A separate EN reset produces cause one and the complete ROM load trace, so calling USB cycling alone a proven power-on was unsupported. Met in R12.50. | The next change to classic ESP cold-reset coordination or its evidence. | Record a defined CHIP_PU cold reset after USB cycling, preserve complete ROM and independent startup oracles, and state that rail discharge is unmeasured. | open |
 
 
 ## Retained positions
