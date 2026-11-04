@@ -17,7 +17,7 @@ with Landin.Build_Reports;
 
 package Landin.Backend.Site_Counts is
 
-   type Syntax is (A64, RISC_V, Thumb);
+   type Syntax is (A64, RISC_V, Thumb, Xtensa);
 
    type Counter (Of_Syntax : Syntax) is private;
 
