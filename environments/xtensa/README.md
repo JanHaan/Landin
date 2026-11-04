@@ -59,7 +59,13 @@ python3 environments/xtensa/corpus.py \
 ```
 
 A complete lane uses `--all` without fixture or profile selectors, and
-reports `COMPLETE`. Run both chips separately. `result.json` contains the
+reports `COMPLETE`. Run both chips separately. Keep CPU headroom while the
+complete corpus runs: the oracle has a 20-second wall-clock guard, and the
+exhaustive memory-alignment fixture can exceed it when CPU-heavy closing
+jobs saturate the host. Preserve default workers; schedule those jobs
+separately. A timeout retains its stop/register evidence and remains failed
+until investigated; it supplies no source or capacity exemption.
+`result.json` contains the
 aggregate verdict; each selected case has `verdict.json` and its build and
 execution evidence. Source refusals require the inventory's exact diagnostic
 codes and no assembly output. A failed execution stays failed until its
