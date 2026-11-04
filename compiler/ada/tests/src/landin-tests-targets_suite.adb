@@ -2627,6 +2627,18 @@ package body Landin.Tests.Targets_Suite is
            (if Feature /= L.Salt then not L.Has (ESP32, Feature)
                                     and then not L.Has (S3, Feature))),
          "only S3 holds salt; architecture names do not select a level");
+      for Level of L.Family_Levels (Xtensa) loop
+         Landin.Testing.Check
+           (Item, Capabilities.Memory_Access
+              (Xtensa, Level, Landin.Memory.Atomic_Load, Byte_4)
+            and then Capabilities.Memory_Access
+              (Xtensa, Level, Landin.Memory.Atomic_Store, Byte_1)
+            and then not Capabilities.Memory_Access
+              (Xtensa, Level, Landin.Memory.Atomic_Load, Byte_8)
+            and then not Capabilities.Memory_Access
+              (Xtensa, Level, Landin.Memory.Atomic_Compare_Exchange, Byte_4),
+            "Xtensa admits aligned loads/stores through 32 bits, no RMW");
+      end loop;
       Landin.Testing.Check
         (Item, F.Core_Named ("xtensa-lx6") = F.Xtensa_LX6
          and then F.Core_Named ("xtensa-lx7") = F.Xtensa_LX7

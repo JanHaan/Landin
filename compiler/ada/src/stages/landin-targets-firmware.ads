@@ -51,7 +51,8 @@ package Landin.Targets.Firmware is
    --  The core with its article, as a sentence names it: "a cortex-m0",
    --  "an esp-rv32imc".
    function A_Core (Core : Core_Kind) return String
-     is ((if Core in ESP_RV32IMC | ESP_RV32IMAC_CLIC then "an " else "a ")
+     is ((if Core in ESP_RV32IMC | ESP_RV32IMAC_CLIC | Xtensa_Core
+          then "an " else "a ")
          & Spelling (Core));
    --  Every core's spelling, quoted, as a note lists them.
    function Core_Names return String;

@@ -1666,7 +1666,11 @@ package body Landin.Stages.Configuration is
                  (Bad.Reset_Stage_Stack, Stage_Site,
                   "this stage runs before reset and uses the stack, through "
                   & Ada.Strings.Unbounded.To_String (Stack_Word),
-                  (if RV32
+                  (if Xtensa then
+                     "the ESP image's entry enters the stage before reset"
+                     & " has initialized the stack; keep what it needs in"
+                     & " registers"
+                   elsif RV32
                    then "D653, D684: the entry word enters the stage before"
                      & " any memory may be written, before reset has set"
                      & " the stack pointer; keep what it needs in registers"
@@ -1680,7 +1684,10 @@ package body Landin.Stages.Configuration is
                  (Bad.Reset_Stage_Return, Stage_Site,
                   "this stage runs before reset and does not branch to "
                   & Firmware.Reset_Symbol,
-                  (if RV32
+                  (if Xtensa then
+                     "the ESP image's stage ends in compiler-owned reset;"
+                     & " finish it with j " & Firmware.Reset_Symbol
+                   elsif RV32
                    then "D653, D684: the entry word enters the stage, and"
                      & " the stage ends in compiler-owned reset; finish it"
                      & " with j " & Firmware.Reset_Symbol
