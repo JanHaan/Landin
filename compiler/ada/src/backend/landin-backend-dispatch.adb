@@ -142,7 +142,7 @@ package body Landin.Backend.Dispatch is
                     Limit_Margin => Margin, Unchecked => Unchecked,
                     Handler_Entry => Before);
          when Landin.Targets.Capabilities.Xtensa_ELF =>
-            return (Switch_Bytes => 0, Prepared_Bytes => 0,
+            return (Switch_Bytes => 336, Prepared_Bytes => 336,
                     Entry_Bytes => 0, Report_Bytes => 0,
                     Report_Foreign => False,
                     Limit_Margin => Margin, Unchecked => Unchecked,

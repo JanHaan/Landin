@@ -743,6 +743,7 @@ package body Landin.Backend.Firmware is
       --  mask, SAR and loop state. Interrupts remain masked throughout a
       --  handler: one complete context, with no nested handler claim.
       Context_Bytes : constant := 320;
+      Has_Stage : Boolean := False;
       procedure Line (Text : String);
       procedure Line (Text : String) is
       begin
@@ -774,6 +775,8 @@ package body Landin.Backend.Firmware is
             if Slot in Handlers'Range then
                Handlers (Slot) := Item;
             end if;
+            Has_Stage := Has_Stage
+              or else Landin.IR.Placement_Of (Of_Unit, Item).Boot_Stage;
          end;
       end loop;
       Line (".section .isr_vector,""ax"",@progbits");
@@ -838,7 +841,8 @@ package body Landin.Backend.Firmware is
       Line (".balign 4");
       Line (".global _landin_firmware_entry");
       Line ("_landin_firmware_entry:");
-      Line ("j " & (if Profiles.Stage_Before_Reset (Profile.Boot)
+      Line ("j " & (if Has_Stage
+                     and then Profiles.Stage_Before_Reset (Profile.Boot)
                    then Profiles.Reset_Stage_Symbol
                    else Profiles.Reset_Symbol));
       Line (".section .text.landin_firmware_reset,""ax"",@progbits");
