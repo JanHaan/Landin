@@ -701,6 +701,98 @@ package body Landin.Tests.Devices_Suite is
       end loop;
    end A_Policy_Names_The_Core;
 
+   procedure Enumerations_Reuse_A_Named_Group
+     (Item : in out Landin.Testing.Context);
+
+   procedure Enumerations_Reuse_A_Named_Group
+     (Item : in out Landin.Testing.Context)
+   is
+      Named : constant String :=
+        Replaced
+          (Replaced (Svd, "<enumeratedValues>",
+                     "<enumeratedValues><name>Modes</name>"),
+           "<bitRange>[0:0]</bitRange>", "<bitRange>[4:3]</bitRange>");
+      Derived : constant String :=
+        Replaced (Named,
+                  "<modifiedWriteValues>oneToClear</modifiedWriteValues>",
+                  "<modifiedWriteValues>oneToClear</modifiedWriteValues>"
+                  & "<enumeratedValues derivedFrom=""Modes""/>");
+      Made : Dev.Projection.Result;
+      Problem : Dev.Fault;
+
+      function Policy (Text : String) return String is
+        (Replaced (Policy_For (Text), "0x00000001", "0x00000018"));
+
+      procedure Refuses (Text : String; Kind : Dev.Fault_Kind; Words : String);
+
+      procedure Refuses (Text : String; Kind : Dev.Fault_Kind; Words : String)
+      is
+      begin
+         Dev.Projection.Project (Text, Policy (Text), Made, Problem);
+         Landin.Testing.Check
+           (Item, Problem.Kind = Kind
+            and then Contains (US.To_String (Problem.Message), Words)
+            and then Made.Outputs.Is_Empty,
+            Words & ": " & US.To_String (Problem.Message));
+      end Refuses;
+   begin
+      Dev.Projection.Project (Derived, Policy (Derived), Made, Problem);
+      Landin.Testing.Check
+        (Item, Problem.Kind = Dev.No_Fault
+         and then Contains (Output_Of (Made, "toy1/uarta/device.ldn"),
+                            "cr_en_value: type = u2 (cr_en_off = 0 |"
+                            & " cr_en_fast = 2)")
+         and then Contains (Output_Of (Made, "toy1/correspondence.json"),
+                            """encoding_derivation"": ""Modes"""),
+         "same-register enum reuse retains values and provenance: "
+         & US.To_String (Problem.Message));
+      Refuses (Replaced (Derived, "derivedFrom=""Modes""",
+                         "derivedFrom=""Missing"""),
+               Dev.Inconsistent_Device, "absent enumeratedValues");
+      Refuses (Replaced (Derived, "derivedFrom=""Modes""",
+                         "derivedFrom=""UARTA.Modes"""),
+               Dev.Unsupported_Form, "same register");
+      Refuses (Replaced
+                 (Derived, "<enumeratedValues derivedFrom=""Modes""/>",
+                  "<enumeratedValues><name>Modes</name></enumeratedValues>"
+                  & "<enumeratedValues derivedFrom=""Modes""/>"),
+               Dev.Inconsistent_Device, "ambiguous enumeratedValues");
+      Refuses (Replaced
+                 (Derived, "<enumeratedValues derivedFrom=""Modes""/>",
+                  "<enumeratedValues derivedFrom=""Modes"">"
+                  & "<name>Local</name></enumeratedValues>"),
+               Dev.Unsupported_Form, "children of its own");
+      Refuses (Replaced (Derived, "<enumeratedValues><name>Modes</name>",
+                         "<enumeratedValues derivedFrom=""Modes"">"
+                         & "<name>Modes</name>"),
+               Dev.Unsupported_Form, "chained or cyclic");
+   end Enumerations_Reuse_A_Named_Group;
+
+   procedure Interrupt_Corrections_Replace_Together
+     (Item : in out Landin.Testing.Context);
+
+   procedure Interrupt_Corrections_Replace_Together
+     (Item : in out Landin.Testing.Context)
+   is
+      Made : Dev.Projection.Result;
+      Problem : Dev.Fault;
+      Corrections : constant String :=
+        ", ""interrupt_corrections"": {"
+        & """UARTA_IRQ"": {""value"": 3, ""source"": ""reviewed A""},"
+        & """UARTB_IRQ"": {""value"": 2, ""source"": ""reviewed B""}}";
+   begin
+      Dev.Projection.Project
+        (Svd, Policy_For (Svd, Corrections), Made, Problem);
+      Landin.Testing.Check
+        (Item, Problem.Kind = Dev.No_Fault
+         and then Contains
+           (Output_Of (Made, "descriptions/toy1/interrupts.ldn"),
+            "compiler.interrupt(""UARTB_IRQ"", 2)" & LF
+            & "compiler.interrupt(""UARTA_IRQ"", 3)" & LF),
+         "corrected sources may exchange numbers without a transient"
+         & " collision: " & US.To_String (Problem.Message));
+   end Interrupt_Corrections_Replace_Together;
+
    procedure An_Array_Element_Is_A_Register
      (Item : in out Landin.Testing.Context);
 
@@ -1134,6 +1226,12 @@ package body Landin.Tests.Devices_Suite is
       Landin.Testing.Register
         (Into, "devices", "a policy names the core",
          A_Policy_Names_The_Core'Access);
+      Landin.Testing.Register
+        (Into, "devices", "enumerations reuse a named group",
+         Enumerations_Reuse_A_Named_Group'Access);
+      Landin.Testing.Register
+        (Into, "devices", "interrupt corrections replace together",
+         Interrupt_Corrections_Replace_Together'Access);
       Landin.Testing.Register
         (Into, "devices", "an array element is a register",
          An_Array_Element_Is_A_Register'Access);

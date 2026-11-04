@@ -467,25 +467,74 @@ package body Landin.Devices.Projection is
 
       --  Every enumeratedValue of every enumeratedValues block, in order.
       procedure Read_Encodings
-        (Field : X.Element; Where : String; Width : Natural;
+        (Field, Register : X.Element; Where : String; Width : Natural;
          Values : out Encoding_Vectors.Vector);
 
       procedure Read_Encodings
-        (Field : X.Element; Where : String; Width : Natural;
+        (Field, Register : X.Element; Where : String; Width : Natural;
          Values : out Encoding_Vectors.Vector)
       is
          Block : X.Element := X.First_Child (Document, Field);
+
+         function Resolved (Given : X.Element) return X.Element;
+
+         function Resolved (Given : X.Element) return X.Element is
+            Reference : constant String :=
+              X.Attribute (Document, Given, "derivedFrom");
+            Found : X.Element := X.No_Element;
+            Candidate_Field : X.Element :=
+              X.First_Child (Document, Child (Register, "fields"));
+         begin
+            if X.Attribute_Count (Document, Given) = 0 then
+               return Given;
+            elsif X.Attribute_Count (Document, Given) /= 1
+              or else not Is_Vendor_Name (Reference)
+            then
+               Fail (Unsupported_Form, Where & "'s enumeratedValues"
+                     & " must derive from a named group in the same"
+                     & " register", Given);
+            end if;
+            while X.Is_Present (Candidate_Field) loop
+               declare
+                  Candidate : X.Element :=
+                    X.First_Child (Document, Candidate_Field);
+               begin
+                  while X.Is_Present (Candidate) loop
+                     if X.Name (Document, Candidate) = "enumeratedValues"
+                       and then Value_Of (Candidate, "name") = Reference
+                     then
+                        if X.Is_Present (Found) then
+                           Fail (Inconsistent_Device, Where & " derives"
+                                 & " from an ambiguous enumeratedValues"
+                                 & " name " & Reference, Given);
+                        end if;
+                        Found := Candidate;
+                     end if;
+                     Candidate := X.Next_Sibling (Document, Candidate);
+                  end loop;
+               end;
+               Candidate_Field := X.Next_Sibling
+                 (Document, Candidate_Field);
+            end loop;
+            if not X.Is_Present (Found) then
+               Fail (Inconsistent_Device, Where & " derives from absent"
+                     & " enumeratedValues " & Reference, Given);
+            elsif X.Attribute_Count (Document, Found) /= 0 then
+               Fail (Unsupported_Form, Where & "'s enumeratedValues"
+                     & " inheritance is chained or cyclic", Given);
+            elsif X.Is_Present (X.First_Child (Document, Given)) then
+               Fail (Unsupported_Form, Where & "'s derived enumeratedValues"
+                     & " has children of its own", Given);
+            end if;
+            return Found;
+         end Resolved;
       begin
          Values.Clear;
          while X.Is_Present (Block) loop
             if X.Name (Document, Block) = "enumeratedValues" then
-               if X.Attribute_Count (Document, Block) /= 0 then
-                  Fail (Unsupported_Form, Where & "'s enumeratedValues"
-                        & " are derived from others, which is not"
-                        & " resolved", Block);
-               end if;
                declare
-                  Item : X.Element := X.First_Child (Document, Block);
+                  Item : X.Element :=
+                    X.First_Child (Document, Resolved (Block));
                begin
                   while X.Is_Present (Item) loop
                      if X.Name (Document, Item) = "enumeratedValue" then
@@ -532,6 +581,7 @@ package body Landin.Devices.Projection is
 
       --  What a register's fields have made so far.
       type Register_State is record
+         Register : X.Element := X.No_Element;
          Key : US.Unbounded_String;
          Reg : US.Unbounded_String;
          Register_Access : US.Unbounded_String;
@@ -610,7 +660,8 @@ package body Landin.Devices.Projection is
                   & " fields", Field);
          end if;
          State.Named_Mask := State.Named_Mask or Bits;
-         Read_Encodings (Field, Where, High - Low + 1, Values);
+         Read_Encodings
+           (Field, State.Register, Where, High - Low + 1, Values);
          Field_Type := US.To_Unbounded_String
            ("u" & Decimal (Word (High - Low + 1)));
          if not Numeric then
@@ -688,6 +739,18 @@ package body Landin.Devices.Projection is
             Member (Rows, "svd_low");
             Number_Value (Rows, Word (Svd_Low));
             Close (Rows, In_Object);
+         end if;
+         if Has (Field, "enumeratedValues") then
+            declare
+               Block : constant X.Element := Child (Field, "enumeratedValues");
+               Reference : constant String :=
+                 X.Attribute (Document, Block, "derivedFrom");
+            begin
+               if Reference /= "" then
+                  Member (Rows, "encoding_derivation");
+                  String_Value (Rows, Reference);
+               end if;
+            end;
          end if;
          Member (Rows, "encodings");
          Open (Rows, In_Array);
@@ -1089,6 +1152,7 @@ package body Landin.Devices.Projection is
             Key & "'s resetMask");
          State.Key := US.To_Unbounded_String (Key);
          State.Reg := US.To_Unbounded_String (Reg);
+         State.Register := Element;
          --  A register may leave its access to its fields, which must
          --  then each say theirs.
          for Owner of Owners'(Element, Instance, Template, Device) loop
@@ -1436,6 +1500,7 @@ package body Landin.Devices.Projection is
       procedure Project_Interrupts is
          Text : US.Unbounded_String;
          Pairs : Interrupt_Vectors.Vector;
+         Original_Pairs : Interrupt_Vectors.Vector;
          Cpu : constant X.Element := Child (Device, "cpu");
          Name : constant String := Value_Of (Device, "name");
          Vendor : constant String := Value_Of (Device, "vendor");
@@ -1590,6 +1655,23 @@ package body Landin.Devices.Projection is
                Current := X.Next_Sibling (Document, Current);
             end loop;
          end;
+         --  Remove every corrected source before inserting any replacement.
+         --  Moving SHA away from AES's number must not depend on which
+         --  JSON member the policy writes first. Notes retain policy order.
+         Original_Pairs := Pairs;
+         for Correction of Chosen.Interrupts loop
+            declare
+               Index : Positive := 1;
+            begin
+               while Index <= Pairs.Last_Index loop
+                  if Pairs (Index).Name = Correction.Name then
+                     Pairs.Delete (Index);
+                  else
+                     Index := Index + 1;
+                  end if;
+               end loop;
+            end;
+         end loop;
          --  D542: the policy's reviewed corrections, each said in a line.
          for Correction of Chosen.Interrupts loop
             declare
@@ -1597,16 +1679,12 @@ package body Landin.Devices.Projection is
                Source : constant String := US.To_String (Correction.Source);
                Where : constant String := "interrupt_corrections." & Named;
                Old : Interrupt_Vectors.Vector;
-               Index : Positive := 1;
                Place : Positive;
                Olds : US.Unbounded_String;
             begin
-               while Index <= Pairs.Last_Index loop
-                  if Pairs (Index).Name = Correction.Name then
-                     Old.Append (Pairs (Index));
-                     Pairs.Delete (Index);
-                  else
-                     Index := Index + 1;
+               for Pair of Original_Pairs loop
+                  if Pair.Name = Correction.Name then
+                     Old.Append (Pair);
                   end if;
                end loop;
                for Pair of Old loop
