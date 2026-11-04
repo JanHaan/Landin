@@ -6924,6 +6924,7 @@ package body Landin.Tests.Driver_Suite is
             Args.Append ("--level=" & Level);
          end if;
          Args.Append ("--emit=linker-script");
+         Args.Append ("--firmware-layout=ram");
          Args.Append ("--build-report=profile.json");
          Args.Append ("-o");
          Args.Append ("profile.ld");
@@ -6935,7 +6936,10 @@ package body Landin.Tests.Driver_Suite is
             Landin.Testing.Check
               (Item, Result.Status = Landin.Driver.Status_Success
                and then Contains (Host.Written ("profile.json"), Core)
-               and then Contains (Host.Written ("profile.ld"), Origin),
+               and then Contains (Host.Written ("profile.ld"), Origin)
+               and then Contains (Host.Written ("profile.ld"),
+                 ".rodata : { *(.rodata .rodata.*) . = ALIGN(4); }"
+                 & " > DRAM :rodata"),
                "the selected level loads its unconditional reference: "
                & Level & " " & Unbounded.To_String (Result.Report));
          end;
@@ -6992,6 +6996,31 @@ package body Landin.Tests.Driver_Suite is
          end loop;
       end Check_Zero_Dispatch;
 
+      procedure Check_High_Priority (Core, Level : String);
+
+      procedure Check_High_Priority (Core, Level : String) is
+      begin
+         for Which in 1 .. 2 loop
+            declare
+               Slot : constant String :=
+                 (if Which = 1 then "24" else "16");
+               Refused : constant Landin.Driver.Outcome := Ran
+                 (Core, Level, Program => "link(vector: " & Slot
+                  & ") extern(interrupt) high_irq: () -> none ="
+                  & " end high_irq" & LF);
+            begin
+               Landin.Testing.Check
+                 (Item, Refused.Status = Landin.Driver.Status_Reported
+                  and then Contains (Unbounded.To_String (Refused.Report),
+                                     "vector slot " & Slot & " is reserved")
+                  and then Contains (Unbounded.To_String (Refused.Report),
+                                     "level 1 to 3 CPU lines"),
+                  Core & " refuses a typed level 4/5 handler: "
+                  & Unbounded.To_String (Refused.Report));
+            end;
+         end loop;
+      end Check_High_Priority;
+
       LX6 : constant Landin.Driver.Outcome :=
         Ran ("xtensa-lx6", "xtensa-esp32");
       LX7 : constant Landin.Driver.Outcome :=
@@ -7011,6 +7040,8 @@ package body Landin.Tests.Driver_Suite is
          & "assembler.block(""rfi 1"") end h" & LF);
    begin
       Check_Zero_Dispatch;
+      Check_High_Priority ("xtensa-lx6", "xtensa-esp32");
+      Check_High_Priority ("xtensa-lx7", "xtensa-esp32s3");
       Check_Reference ("", "xtensa-lx6", "40080000");
       Check_Reference ("xtensa-esp32", "xtensa-lx6", "40080000");
       Check_Reference ("xtensa-esp32s3", "xtensa-lx7", "40378000");

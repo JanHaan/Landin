@@ -349,7 +349,11 @@ package body Landin.Targets.Firmware is
            and then Of_Profile.Boot /= RP2040_Boot2;
          Result.Placed (Vectors) := Code;
          Result.Placed (Text) := Code;
-         Result.Placed (Rodata) := Code;
+         --  Xtensa instruction SRAM has no byte access. Preserve the
+         --  description's byte-readable constant placement in data SRAM.
+         if Of_Profile.Core not in Xtensa_Core then
+            Result.Placed (Rodata) := Code;
+         end if;
       end if;
       return Result;
    end For_Layout;

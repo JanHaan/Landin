@@ -831,13 +831,19 @@ package body Landin.Backend.Firmware is
       --  Levels two to five have dedicated vectors; level six is debug.
       for Level in 2 .. 7 loop
          Line (".org " & N (16#180# + (Level - 2) * 64));
-         Line ("wsr a0, EXCSAVE1");
-         Line ("j _landin_firmware_interrupt_" & N (Level));
+         if Level <= 3 then
+            Line ("wsr a0, EXCSAVE1");
+            Line ("j _landin_firmware_interrupt_" & N (Level));
+         else
+            Line ("j _landin_firmware_high_interrupt_" & N (Level));
+         end if;
       end loop;
       for Offset in 0 .. 2 loop
          Line (".org " & N (16#300# + Offset * 64));
          Line ("wsr a0, EXCSAVE1");
-         Line ("j _landin_firmware_interrupt_1");
+         Line ("j " & (if Offset = 2
+                       then "_landin_firmware_double_exception"
+                       else "_landin_firmware_interrupt_1"));
       end loop;
       Line (".org 1024");
       Line (".section .text.landin_entry,""ax"",@progbits");
@@ -874,6 +880,9 @@ package body Landin.Backend.Firmware is
       Line ("movi a0, 1");
       Line ("wsr a0, CPENABLE");
       Line ("rsync");
+      Line ("movi a0, 0");
+      Line ("wur a0, FCR");
+      Line ("wur a0, FSR");
       Line ("movi a1, _landin_firmware_stack_top");
       Line ("addi a1, a1, -32");
       Line ("movi a2, _landin_firmware_stack_top");
@@ -954,7 +963,7 @@ package body Landin.Backend.Firmware is
       if Debug then
          Line (".cfi_endproc");
       end if;
-      for Level in 1 .. 7 loop
+      for Level in 1 .. 3 loop
          Line ("_landin_firmware_interrupt_" & N (Level) & ":");
          Line ("rsr a0, " & (if Level = 1 then "PS" else "EPS" & N (Level)));
          Line ("wsr a0, EXCSAVE2");
@@ -1028,7 +1037,7 @@ package body Landin.Backend.Firmware is
       Line ("rsr a2, INTERRUPT");
       Line ("rsr a4, INTENABLE");
       Line ("and a2, a2, a4");
-      for Level in 1 .. 7 loop
+      for Level in 1 .. 3 loop
          Line ("bnei a3, " & N (Level) & ", 1f");
          Line ("movi a4, " & Hex
            (Profiles.Interrupt_Level_Mask (Profile.Core, Level)));
@@ -1105,6 +1114,44 @@ package body Landin.Backend.Firmware is
       Line ("l32i a1, a0, 16");
       Line ("addi a1, a1, 1");
       Line ("s32i a1, a0, 16");
+      Line ("j _landin_firmware_stopped");
+      --  A fault while an exception is being entered cannot safely save
+      --  another register window or touch the floating-point bank. Keep
+      --  the original exception PC and stop using only integer registers.
+      Line ("_landin_firmware_double_exception:");
+      Line ("movi a0, " & Trap_Cell (Trap_Cause));
+      Line ("rsr a2, EXCCAUSE");
+      Line ("s32i a2, a0, 0");
+      Line ("rsr a2, EPC1");
+      Line ("s32i a2, a0, 4");
+      Line ("rsr a2, EXCVADDR");
+      Line ("s32i a2, a0, 8");
+      Line ("s32i a1, a0, 12");
+      Line ("l32i a2, a0, 16");
+      Line ("addi a2, a2, 1");
+      Line ("s32i a2, a0, 16");
+      Line ("j _landin_firmware_stopped");
+      --  The supported ordinary interrupt levels are bounded by EXCM's
+      --  architectural masking level, three on both configurations.
+      --  Higher priorities cannot borrow this nonnested context or stack.
+      for Level in 4 .. 7 loop
+         Line ("_landin_firmware_high_interrupt_" & N (Level) & ":");
+         Line ("movi a0, 0x3f");
+         Line ("wsr a0, PS");
+         Line ("rsync");
+         Line ("movi a0, " & Trap_Cell (Trap_Cause));
+         Line ("movi a2, " & Hex (16#8000_0000#
+           + Landin.Targets.Byte_Count (Level)));
+         Line ("s32i a2, a0, 0");
+         Line ("rsr a2, EPC" & N (Level));
+         Line ("s32i a2, a0, 4");
+         Line ("rsr a2, INTERRUPT");
+         Line ("s32i a2, a0, 8");
+         Line ("s32i a1, a0, 12");
+         Line ("movi a2, 1");
+         Line ("s32i a2, a0, 16");
+         Line ("j _landin_firmware_stopped");
+      end loop;
       Line (".global _landin_firmware_stopped");
       Line ("_landin_firmware_stopped: j _landin_firmware_stopped");
       Line (".section .bss.landin_firmware_trap,""aw"",@nobits");
@@ -1143,6 +1190,8 @@ package body Landin.Backend.Firmware is
       RV32 : constant Boolean := Profile.Core in Profiles.RISC_V_Core;
       Xtensa : constant Boolean := Profile.Core in Profiles.Xtensa_Core;
       Segmented : constant Boolean := RV32 or Xtensa;
+      Image_Alignment : constant String :=
+        (if Xtensa then " . = ALIGN(4);" else "");
       Entry_Address : constant String :=
         (if not RV32
            and then Profile.Layout = Profiles.RAM_Layout
@@ -1207,6 +1256,7 @@ package body Landin.Backend.Firmware is
                     & "    *(.landin_region." & Name & ".data.*)" & LF
                     & "    " & Region_Symbol (Name, "data_end")
                     & " = .;" & LF
+                    & (if Xtensa then Image_Alignment & LF else "")
                     & "  } > " & Name & Load_From_Text
                     & Segment ("region_" & Name & "_data") & LF
                     & "  " & Region_Symbol (Name, "data_load")
@@ -1232,6 +1282,7 @@ package body Landin.Backend.Firmware is
                     "  " & Section & " : {" & LF
                     & "    *(.landin_region." & Name & ".text.*"
                     & " .landin_region." & Name & ".rodata.*)" & LF
+                    & (if Xtensa then Image_Alignment & LF else "")
                     & "  } > " & Name & Segment ("region_" & Name) & LF);
                   US.Append (Segments, "  region_" & Name & " PT_LOAD;"
                     & LF);
@@ -1285,7 +1336,8 @@ package body Landin.Backend.Firmware is
         & " : { KEEP(*(.isr_vector)) } > " & Vectors
         & (if Xtensa then Segment ("image") else "") & LF
         & (if Xtensa
-           then "  .landin_entry : { KEEP(*(.text.landin_entry)) } > "
+           then "  .landin_entry : { KEEP(*(.text.landin_entry))"
+             & Image_Alignment & " } > "
              & Vectors & Segment ("image") & LF
            else "")
         & (if Profiles.Takes_Image_Block (Profile.Boot)
@@ -1294,7 +1346,8 @@ package body Landin.Backend.Firmware is
            else "")
         & "  .text : { "
         & (if Xtensa then "*(.literal .literal.*) " else "")
-        & "*(.text .text.*) } > " & Flash & Segment ("text")
+        & "*(.text .text.*)" & Image_Alignment & " } > "
+        & Flash & Segment ("text")
         & LF
         --  D900, D688: RAM code runs with text when the whole image is
         --  loaded into SRAM; a boot image otherwise copies it into data.
@@ -1302,7 +1355,8 @@ package body Landin.Backend.Firmware is
            then Ramtext & "  } > " & Flash & Segment ("text") & LF
            else "")
         & "  .rodata : { *(.rodata .rodata.*"
-        & (if RV32 then " .srodata .srodata.*" else "") & ") } > "
+        & (if RV32 then " .srodata .srodata.*" else "")
+        & ")" & Image_Alignment & " } > "
         & Placed (Profiles.Rodata)
         & (if Profile.Placed (Profiles.Rodata) = Profile.Placed (Profiles.Text)
            then "" else Segment ("rodata")) & LF
@@ -1313,6 +1367,7 @@ package body Landin.Backend.Firmware is
         & "    _landin_firmware_data_start = .;" & LF
         & "    *(.data .data.*" & (if RV32 then " .sdata .sdata.*" else "")
         & ")" & LF
+        & (if Xtensa then Image_Alignment & LF else "")
         & "    _landin_firmware_data_end = .;" & LF
         & "  } > " & Data & Load_From_Text & Segment ("data") & LF
         & "  _landin_firmware_data_load = LOADADDR(.data);" & LF

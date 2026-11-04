@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Install the pinned Cortex-M tools privately on Linux x86-64 (no sudo)."""
+"""Install the pinned embedded tools privately on Linux x86-64 (no sudo)."""
 import argparse
 import hashlib
 import json
@@ -18,7 +18,8 @@ PINS = HERE.parent / "pins.sh"
 #  GCC and binutils are GNAT's arm-elf archive, and for the RV32 lanes its
 #  riscv64-elf archive, from the release the host GNAT comes from, and
 #  pinned beside it in environments/pins.sh; the lock keeps QEMU, Espressif's
-#  QEMU for the RV32 lanes, and the GDB whose Python the sessions run.
+#  QEMU for RV32 and Xtensa, and the GDB whose Python the sessions run.
+#  Espressif's Xtensa compiler and its per-chip plugins share the same pins.
 ARM = "gnat-arm-elf"
 RISCV = "gnat-riscv64-elf"
 XTENSA = "xtensa-esp-elf"
@@ -70,6 +71,16 @@ def sha(path):
 
 #  What an installation holds, each inventoried whole.
 AREAS = ('root', ARM, RISCV, ESPRESSIF, XTENSA, ESPRESSIF_XTENSA)
+REQUIRED_TOOLS = (
+    'installation.json', ARM + '/bin/arm-eabi-gcc', RISCV + '/bin/riscv64-elf-gcc',
+    'root/usr/bin/qemu-system-arm', 'root/usr/bin/gdb-multiarch',
+    ESPRESSIF + '/bin/qemu-system-riscv32',
+    ESPRESSIF_XTENSA + '/bin/qemu-system-xtensa',
+    XTENSA + '/bin/xtensa-esp-elf-gcc', XTENSA + '/bin/xtensa-esp-elf-as',
+    *(XTENSA + '/bin/xtensa-%s-elf-%s' % (chip, tool)
+      for chip in ('esp32', 'esp32s3') for tool in ('gcc', 'as')),
+    *(XTENSA + '/lib/xtensa_%s.so' % chip for chip in ('esp32', 'esp32s3')),
+)
 
 
 def inventory(root):
@@ -153,14 +164,11 @@ def installed_tools(path):
     look elsewhere.
     """
     root = Path(path).expanduser().resolve()
-    missing = [relative for relative in ('installation.json', ARM + '/bin/arm-eabi-gcc',
-                                         RISCV + '/bin/riscv64-elf-gcc',
-                                         'root/usr/bin/qemu-system-arm', 'root/usr/bin/gdb-multiarch',
-                                         ESPRESSIF + '/bin/qemu-system-riscv32')
+    missing = [relative for relative in REQUIRED_TOOLS
                if not (root / relative).is_file()]
     if missing:
         raise SystemExit(
-            'cortex-m: the locked Cortex-M tools are not installed at %s (no %s).\n'
+            'cortex-m: the locked embedded tools are not installed at %s (no %s).\n'
             'Pass --tools DIRECTORY where `python3 environments/cortex-m/setup.py --tools DIRECTORY`'
             ' installed them, or install them there; the default is %s.'
             % (root, ', '.join(missing), DEFAULT))
@@ -206,11 +214,23 @@ def unpack(archive, into, mode):
                    check=True, timeout=600)
 
 
+def installer_tools():
+    """Name missing unpackers before creating any installation directory."""
+    missing = [name for name in ('dpkg-deb', 'tar', 'xz') if shutil.which(name) is None]
+    if missing:
+        raise RuntimeError(
+            'setup.py needs %s on PATH to unpack the locked archives; install dpkg'
+            ' (for dpkg-deb), tar and xz before retrying. On NixOS add dpkg and'
+            ' xz to the steam-run nix-shell; see environments/cortex-m/README.md#on-nixos.'
+            % ', '.join(missing))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--tools', type=Path, default=DEFAULT)
     args = parser.parse_args()
     supported_host(args.tools)
+    installer_tools()
     root = args.tools.resolve()
     if root.exists():
         raise RuntimeError("installation already exists; choose a fresh --tools directory")
@@ -235,7 +255,7 @@ def main():
               'xtensa': {key: xtensa_archive()[key] for key in ('version', 'sha256')},
               'files': {area: inventory(root / area) for area in AREAS}}
     (root / 'installation.json').write_text(json.dumps(record, sort_keys=True) + '\n')
-    print('installed pinned Cortex-M environment at', root)
+    print('installed pinned embedded environment at', root)
 
 
 if __name__ == '__main__':

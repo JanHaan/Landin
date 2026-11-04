@@ -1280,13 +1280,17 @@ class RV32Lanes(unittest.TestCase):
                          {'rv32imc', 'rv32imac'})
 
     def test_the_lock_unpacks_espressif_qemu_into_its_own_area(self):
-        from setup import AREAS, ESPRESSIF, riscv_archive
+        from setup import AREAS, ESPRESSIF, ESPRESSIF_XTENSA, riscv_archive, xtensa_archive
         lock = json.loads((HERE / 'tools.lock.json').read_text())
         self.assertEqual({item['kind'] for item in lock}, {'deb', 'tar.xz'})
         archives = [item for item in lock if item['kind'] == 'tar.xz']
-        self.assertEqual([item['into'] for item in archives], [ESPRESSIF])
+        self.assertEqual([item['into'] for item in archives], [ESPRESSIF, ESPRESSIF_XTENSA])
         self.assertIn(ESPRESSIF, AREAS)
-        self.assertIn('esp_develop_9.2.2_20260417', archives[0]['file'])
+        self.assertIn(ESPRESSIF_XTENSA, AREAS)
+        for item in archives:
+            self.assertIn('esp_develop_9.2.2_20260417', item['file'])
+        self.assertEqual(archives[1]['sha256'],
+                         '0eecb2a34a5586c0e59110f77b9343b7b336e82fdb0e1a30e1dc1bab8a547e35')
         for item in lock:
             self.assertRegex(item['sha256'], '^[0-9a-f]{64}$')
         files = [item['file'] for item in lock]
@@ -1295,6 +1299,110 @@ class RV32Lanes(unittest.TestCase):
         self.assertEqual(archive['file'],
                          'gnat-riscv64-elf-linux64-x86_64-%s.tar.gz' % archive['version'])
         self.assertTrue(archive['url'].endswith('/gnat-%s/%s' % (archive['version'], archive['file'])))
+        archive = xtensa_archive()
+        self.assertEqual(archive['file'],
+                         'xtensa-esp-elf-16.1.0_20260609-x86_64-linux-gnu.tar.xz')
+        self.assertEqual(archive['sha256'],
+                         'f708752ebb35cab21f184b2574114ed1187619db0edb8a4ba913c06ca2fa675e')
+        self.assertTrue(archive['url'].endswith('/esp-16.1.0_20260609/' + archive['file']))
+
+    def test_an_incomplete_xtensa_install_names_the_missing_chip_tool_or_plugin(self):
+        from setup import REQUIRED_TOOLS, installed_tools
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for relative in REQUIRED_TOOLS:
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text('installed')
+            self.assertEqual(installed_tools(root), root.resolve())
+            for relative in ('qemu-xtensa/bin/qemu-system-xtensa',
+                             'xtensa-esp-elf/bin/xtensa-esp-elf-as',
+                             'xtensa-esp-elf/bin/xtensa-esp32-elf-gcc',
+                             'xtensa-esp-elf/bin/xtensa-esp32s3-elf-as',
+                             'xtensa-esp-elf/lib/xtensa_esp32.so',
+                             'xtensa-esp-elf/lib/xtensa_esp32s3.so'):
+                path = root / relative
+                path.unlink()
+                with self.assertRaises(SystemExit) as refused:
+                    installed_tools(root)
+                self.assertIn(relative, str(refused.exception))
+                self.assertIn('--tools DIRECTORY', str(refused.exception))
+                path.write_text('installed')
+
+    def test_installation_inventories_every_unpacked_area_and_archive_identity(self):
+        import contextlib
+        import io
+        import setup
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / 'tools'
+            def fetch(packages, item):
+                path = packages / item['file']
+                path.write_bytes(item['file'].encode())
+                return path
+            def unpack(archive, into, mode):
+                into.mkdir()
+                (into / 'installed').write_bytes(archive.name.encode())
+            def deb(*args, **kwargs):
+                into = root / 'root'
+                into.mkdir(exist_ok=True)
+                (into / 'installed').write_bytes(b'debian tools')
+            with patch.object(sys, 'argv', ['setup.py', '--tools', str(root)]), \
+                    patch.object(setup, 'supported_host'), \
+                    patch.object(setup, 'installer_tools'), \
+                    patch.object(setup, 'fetch', side_effect=fetch), \
+                    patch.object(setup, 'unpack', side_effect=unpack) as unpacked, \
+                    patch.object(setup.subprocess, 'run', side_effect=deb), \
+                    patch.object(setup, 'compile_gdb_python'), \
+                    contextlib.redirect_stdout(io.StringIO()):
+                setup.main()
+            record = json.loads((root / 'installation.json').read_text())
+            self.assertEqual(record['lock_sha256'], setup.sha(HERE / 'tools.lock.json'))
+            self.assertEqual(set(record['files']), set(setup.AREAS))
+            for area in setup.AREAS:
+                self.assertEqual(record['files'][area], setup.inventory(root / area))
+                self.assertTrue(record['files'][area])
+            for name, archive in [('arm', setup.arm_archive()), ('riscv', setup.riscv_archive()),
+                                  ('xtensa', setup.xtensa_archive())]:
+                self.assertEqual(record[name], {key: archive[key] for key in ('version', 'sha256')})
+            self.assertEqual({call.args[1].name: call.args[2] for call in unpacked.call_args_list},
+                             {setup.ARM: '-xzf', setup.RISCV: '-xzf', setup.XTENSA: '-xJf',
+                              setup.ESPRESSIF: '-xJf', setup.ESPRESSIF_XTENSA: '-xJf'})
+            (root / setup.XTENSA / 'installed').write_bytes(b'changed compiler')
+            self.assertNotEqual(record['files'][setup.XTENSA], setup.inventory(root / setup.XTENSA))
+
+    def test_missing_dpkg_is_refused_before_creating_a_partial_installation(self):
+        import setup
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / 'tools'
+            with patch.object(sys, 'argv', ['setup.py', '--tools', str(root)]), \
+                    patch.object(setup, 'supported_host'), \
+                    patch.object(setup.shutil, 'which', side_effect=lambda tool:
+                                 None if tool == 'dpkg-deb' else '/tools/' + tool), \
+                    patch.object(setup, 'fetch') as fetch:
+                with self.assertRaisesRegex(RuntimeError, 'needs dpkg-deb on PATH') as refused:
+                    setup.main()
+            self.assertIn('add dpkg', str(refused.exception))
+            self.assertIn('README.md#on-nixos', str(refused.exception))
+            self.assertFalse(root.exists())
+            fetch.assert_not_called()
+
+    def test_an_archive_hash_is_checked_before_it_can_be_unpacked(self):
+        import hashlib
+        import io
+        import setup
+        from unittest.mock import patch
+        body = b'a pinned archive control'
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            item = {'file': 'control.tar.xz', 'url': 'https://invalid.example/control',
+                    'sha256': hashlib.sha256(body).hexdigest()}
+            with patch.object(setup.urllib.request, 'urlopen', return_value=io.BytesIO(body)):
+                self.assertEqual(setup.fetch(root, item).read_bytes(), body)
+            with patch.object(setup.urllib.request, 'urlopen', return_value=io.BytesIO(body + b'changed')):
+                with self.assertRaisesRegex(RuntimeError, 'archive hash mismatch: control.tar.xz'):
+                    setup.fetch(root, item)
 
     def test_the_atomics_probes_name_every_refused_use(self):
         from rv32_controls import READ_MODIFY_WRITE, REFUSED_USES, WIDE

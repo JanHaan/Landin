@@ -294,6 +294,10 @@ NIXPKGS_ALLOW_UNFREE=1 nix-shell -p steam-run python3 dpkg xz --run \
    --tools $HOME/.cache/landin/NEW-TOOL-ROOT"
 ```
 
+`dpkg` supplies the Debian archive unpacker; `xz` decompresses the release
+archives. `setup.py` checks these unpackers and `tar` before creating its
+tool directory, and names this recipe if one is missing.
+
 Both emulators run there, QEMU's `qemu-system-arm` and, for the RV32
 lanes, Espressif's `qemu-system-riscv32`, with `gdb-multiarch` for both;
 `--part=rv32` or `--lane rv32-controls` takes the same route.

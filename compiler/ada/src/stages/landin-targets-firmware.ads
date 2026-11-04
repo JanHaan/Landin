@@ -127,7 +127,8 @@ package Landin.Targets.Firmware is
 
    --  The pinned chip configuration's CPU lines at an interrupt level.
    --  Xtensa's level seven is the NMI; ordinary dispatch uses levels one
-   --  through six and only lines whose INTENABLE bit is set.
+   --  through three and only lines whose INTENABLE bit is set. Higher
+   --  levels cannot use the shared ordinary-handler context.
    function Interrupt_Level_Mask
      (Core : Core_Kind; Level : Positive) return Byte_Count
      with Pre => Core in Xtensa_Core and then Level <= 7;
@@ -166,7 +167,10 @@ package Landin.Targets.Firmware is
            when SiFive_E31 => Slot in 3 | 7 | 11,
            when Hazard3 => Slot in 3 | 7,
            when ESP_RV32IMC => Slot in 1 .. 31,
-           when Xtensa_Core => Slot in 0 .. 31 and then Slot /= 14,
+           --  Both pinned configurations have XCHAL_EXCM_LEVEL=3.
+           --  EXCM masks these lines across entry and window handling;
+           --  higher-priority vectors stop without a typed handler.
+           when Xtensa_Core => Slot in 0 .. 13 | 15 | 17 .. 23 | 27 | 29,
            when ESP_RV32IMAC_CLIC => Slot in 16 .. 47);
    --  Core_Slot's slots as a note names them.
    function Core_Slots_Text (Core : Core_Kind) return String
@@ -179,7 +183,8 @@ package Landin.Targets.Firmware is
            when SiFive_E31 => "interrupt codes 3, 7 and 11",
            when Hazard3 => "interrupt codes 3 and 7",
            when ESP_RV32IMC => "CPU lines 1 to 31",
-           when Xtensa_Core => "CPU lines 0 to 13 and 15 to 31",
+           when Xtensa_Core =>
+              "level 1 to 3 CPU lines 0 to 13, 15, 17 to 23, 27 and 29",
            when ESP_RV32IMAC_CLIC => "CLIC ids 16 to 47");
 
    --  D615: a float unit is a fact of a description, not of a level, since
