@@ -20941,7 +20941,12 @@ figure; the frame record a callee pushes before its check; the switch's
 save; and a failed check's call of the handler or the default report, and
 the handler's own depth; on Cortex-M0 also D461's thirty-six bytes, which an
 interrupt may stack at any instruction. The worst before a handler's own
-frames is two unchecked figures, a frame record and the call:
+frames is two unchecked figures, a frame record and the call, except on
+Xtensa: it checks every ordinary frame, including call-free routines. Its
+unchecked outgoing area is at most 256 bytes; the failed callee's 32-byte
+ENTRY and a 16-byte ABI spill cushion bring that to 304 bytes, below its
+conservative 416-byte allowance. Window exceptions use the existing ABI
+spill areas and recorded backchains without reserving another frame.
 
 | Target | Margin | Unchecked | Switch frame | Before the handler | Left for the handler |
 |---|---|---|---|---|---|
@@ -20949,6 +20954,7 @@ frames is two unchecked figures, a frame record and the call:
 | arm64 | 640 | 64 | 176 | 144 | 496 |
 | RV64 | 768 | 64 | 208 | 144 | 624 |
 | Cortex-M0 | 384 | 64 | 48 | 188 | 196 |
+| Xtensa | 1024 | 256 | 336 | 416 | 608 |
 
 The default report needs 8 to 24 bytes of that. What is left is sized from
 the depth report's `trap` figure, which counts a handler's frame twice
@@ -20956,8 +20962,14 @@ the depth report's `trap` figure, which counts a handler's frame twice
 stack, at every profile: those of `runtime/stack-exhausted-reaches-the-handler`
 and `runtime/stack-frame-past-limit-traps`, which match the kind and
 switch away, took at most 384 bytes on x86-64 and arm64 and 544 on RV64,
-at `none`, and 160 on Cortex-M0. A margin of 1 KiB, which covered handlers
-three times their size, made `runtime/fibre-turns-interleave`'s 4 KiB
+at `none`, and 160 on Cortex-M0. On both Xtensa configurations these
+handlers take at most 560 bytes across the six profiles, leaving 48 bytes
+within their 608-byte handler allowance. The complete window context is
+336 bytes. A 1536-byte margin left existing 2 KiB prepared stacks too
+little room for ordinary frames. Compact ordinary word homes and a
+1024-byte margin retain the measured handler bound while admitting those
+unchanged consumers. A margin of 1 KiB, which covered
+handlers three times their size, made `runtime/fibre-turns-interleave`'s 4 KiB
 stacks too small at `none`, and so was declined. The report's
 `margin_bytes` and `unchecked_bytes` give the two figures beside the
 `trap` depth, so a reader sees whether a program's handler fits; one that
@@ -20994,11 +21006,12 @@ stack's base, where it overwrites whatever the backing's owner keeps there.
 and whose entry module selects a `panic_handler` (D232) is refused with
 `L0508` when the handler does not fit the target's margin. What it needs is
 D472's worst before the handler, 152 bytes on x86-64, 144 on arm64 and
-RV64 and 188 on Cortex-M0, which the report gives as `handler_entry_bytes`,
-and the depth report's `trap` figure, which counts the handler's frame
-twice for a check failing in its own calls (D467); the margin is 640, 640,
-768 and 384 bytes. The refusal gives both, the margin and the target, and
-the handler's deepest path, at the handler. A handler whose calls reach an
+RV64, 188 on Cortex-M0 and 416 on Xtensa, which the report gives as
+`handler_entry_bytes`, and the depth report's `trap` figure, which counts
+the handler's frame twice for a check failing in its own calls (D467);
+the margin is 640, 640, 768, 384 and 1024 bytes. The refusal gives both,
+the margin and the target, and the handler's deepest path, at the handler.
+A handler whose calls reach an
 opening of D468, `any`, `evidence`, `function value`, `foreign`,
 `recursion`, `helper` or `assembly`, has no depth to compare and is refused
 too, though since D570 a call through `any`, a table or a function value
