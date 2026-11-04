@@ -1746,7 +1746,15 @@ SR-757's identity. Other sessions' worktrees and rig resources remain theirs.
    configurations retain their distinct ISA, window, FPU and interrupt
    facts. Runtime QOM and ITLB/DTLB inspection independently confirmed both
    CPU types and identity-mapped RWX bypass RAM at the proposed endpoints.
-   No guest image has yet run under this proposed profile. The alternative
+   The selected loader is QEMU's generic ELF loader with `cpu-num=0`:
+   its pinned [reset callback](https://github.com/espressif/qemu/blob/40edccac415693c5130f91c01d84176ae6008566/hw/core/generic-loader.c)
+   selects the ELF entry after CPU reset. The runner independently checks
+   the initial PC before continuing; SIM's `-kernel` initialization alone
+   loses its entry selection to the later machine reset. Initial window,
+   floating and feature controls have run on both exact CPUs. The existing
+   two-GiB static-array fixture also exceeds this virtual map; retain its
+   existing selected-image boundary only with actual link-map and object
+   section capacity evidence, never a runtime claim. The alternative
    is a smaller source counterpart for each oversized fixture, with each
    reduction individually preserving the semantic oracle; blanket capacity
    exemptions would not satisfy the shared-library matrix.

@@ -77,6 +77,12 @@ The SIM profile declares 64 MiB of emulator RAM, separate code/data regions
 and an 8 MiB stack. It retains the selected chip's actual ISA configuration;
 it supplies no physical SRAM, PSRAM, cache or peripheral claim. Chip-machine
 controls and physical runs retain their bounded internal-SRAM maps.
+SIM uses QEMU's generic ELF loader with `cpu-num=0`, whose reset callback
+selects the ELF entry; the runner independently verifies the initial PC
+against that entry before continuing. The unchanged two-GiB static-array
+fixture exceeds this virtual map too. Its existing selected-image limit
+requires an actual capacity-only link failure corroborated by the retained
+link map and object sections, and makes no execution claim.
 
 Configuration and compatibility controls run separately:
 
