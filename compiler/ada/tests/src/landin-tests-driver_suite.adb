@@ -6859,8 +6859,88 @@ package body Landin.Tests.Driver_Suite is
       end;
    end Xtensa_Selection_And_Assembly;
 
+   procedure Xtensa_Profile_Contracts
+     (Item : in out Landin.Testing.Context);
+
+   procedure Xtensa_Profile_Contracts
+     (Item : in out Landin.Testing.Context)
+   is
+      function Ran
+        (Core, Level : String; Stack : String := "1024";
+         Capacity : String := "4096"; Program : String := "")
+         return Landin.Driver.Outcome;
+
+      function Ran
+        (Core, Level : String; Stack : String := "1024";
+         Capacity : String := "4096"; Program : String := "")
+         return Landin.Driver.Outcome
+      is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      begin
+         Host.Add_Directory ("/w");
+         Host.Add_Directory ("/w/app");
+         Host.Add_Directory ("/w/descriptions");
+         Host.Add_Directory ("/w/descriptions/dev");
+         Host.Add_File ("/w/app/main.ldn", "import descriptions/dev" & LF
+           & "start: () -> none = end start" & LF & Program);
+         Host.Add_File ("/w/descriptions/dev/dev.ldn",
+           "compiler.device(""dev"")" & LF
+           & "compiler.core(""" & Core & """)" & LF
+           & "compiler.vectors(32)" & LF
+           & "compiler.boot(""esp-app-image"")" & LF
+           & "compiler.esp_image(0, 0, 299, 0)" & LF
+           & "linker.region(""SRAM"", 0x4008_0000, " & Capacity & ", ""rwx"")" & LF
+           & "linker.place(""vectors"", ""SRAM"")" & LF
+           & "linker.place(""text"", ""SRAM"")" & LF
+           & "linker.place(""rodata"", ""SRAM"")" & LF
+           & "linker.place(""data"", ""SRAM"")" & LF
+           & "linker.place(""bss"", ""SRAM"")" & LF
+           & "linker.place(""stack"", ""SRAM"", " & Stack & ")" & LF);
+         return Landin.Driver.Execute
+           (["--root=/w", "--target=xtensa", "--level=" & Level,
+             "/w/app"], Host, Tools);
+      end Ran;
+
+      LX6 : constant Landin.Driver.Outcome := Ran ("xtensa-lx6", "xtensa-esp32");
+      LX7 : constant Landin.Driver.Outcome := Ran ("xtensa-lx7", "xtensa-esp32s3");
+      Misaligned : constant Landin.Driver.Outcome :=
+        Ran ("xtensa-lx6", "xtensa-esp32", Stack => "24");
+      Too_Small : constant Landin.Driver.Outcome :=
+        Ran ("xtensa-lx6", "xtensa-esp32", Stack => "128", Capacity => "512");
+      Mismatch : constant Landin.Driver.Outcome := Ran ("xtensa-lx7", "xtensa-esp32");
+      NMI : constant Landin.Driver.Outcome := Ran
+        ("xtensa-lx6", "xtensa-esp32", Program =>
+         "link(vector: 14) extern(interrupt) h: () -> none = end h" & LF);
+      Naked : constant Landin.Driver.Outcome := Ran
+        ("xtensa-lx7", "xtensa-esp32s3", Program =>
+         "link(vector: 3) extern(naked) h: () -> none = "
+         & "assembler.block(""rfi 1"") end h" & LF);
+   begin
+      Landin.Testing.Check_Equal
+        (Item, LX6.Status, Landin.Driver.Status_Success,
+         "LX6 ESP image profile: " & Unbounded.To_String (LX6.Report));
+      Landin.Testing.Check_Equal
+        (Item, LX7.Status, Landin.Driver.Status_Success,
+         "LX7 ESP image profile: " & Unbounded.To_String (LX7.Report));
+      Landin.Testing.Check
+        (Item, Misaligned.Status = Landin.Driver.Status_Reported
+         and then Contains (Unbounded.To_String (Misaligned.Report), "multiple of 16")
+         and then Too_Small.Status = Landin.Driver.Status_Reported
+         and then Contains (Unbounded.To_String (Too_Small.Report), "vector table does not fit")
+         and then Mismatch.Status = Landin.Driver.Status_Reported
+         and then Contains (Unbounded.To_String (Mismatch.Report), "exact chip configuration")
+         and then NMI.Status = Landin.Driver.Status_Reported
+         and then Contains (Unbounded.To_String (NMI.Report), "vector slot 14 is reserved")
+         and then Naked.Status = Landin.Driver.Status_Reported
+         and then Contains (Unbounded.To_String (Naked.Report), "no naked routine takes it"),
+         "Xtensa profiles enforce stack, vectors, exact level and dispatched handlers");
+   end Xtensa_Profile_Contracts;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "driver", "Xtensa profile contracts", Xtensa_Profile_Contracts'Access);
       Landin.Testing.Register
         (Into, "driver", "Xtensa selection and assembly",
          Xtensa_Selection_And_Assembly'Access);
