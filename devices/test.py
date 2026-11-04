@@ -32,6 +32,8 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import struct
+import tarfile
 import unittest
 
 HERE = Path(__file__).resolve().parent
@@ -1881,12 +1883,12 @@ def xtensa_header_names(chip, rows):
     return names
 
 
-def xtensa_stage(text, memory):
-    """Execute the small stack-free stage's actual assembly against MMIO.
+def xtensa_stage(text, memory, calls=None, special=None, prepared=False, rom_effects=True):
+    """Execute the stage's assembly against explicit MMIO and ROM words.
 
-    Unknown instructions, accesses to unknown memory, and a nonterminating
-    path fail; the only exits admitted are reset and the cache refusal.
-    This checks both the good prestate and each forbidden cache prestate.
+    Unknown instructions, unknown memory and nonterminating paths fail.
+    ROM calls model only their contract; the pinned vendor ELF supplies
+    the independent implementation and calling-convention oracle.
     """
     body = re.search(r'assembler\.block\("""(.*?)"""\)', text, re.S).group(1)
     instructions = []
@@ -1901,13 +1903,24 @@ def xtensa_stage(text, memory):
             instructions.append(line)
     registers = {}
     stores = []
+    calls = [] if calls is None else calls
+    special = {} if special is None else special
+    symbols = {'_landin_firmware_stack_top': 0x3fcd0000,
+               '_landin_firmware_vectors': 0x40378000}
+    if prepared:
+        # The compiler-owned entry prelude is the cold stage's ABI root.
+        registers['a1'] = 0x3fccffe0
+        memory[0x3fccffd4] = 0x3fcd0000
+        special.update({'PS': 0x4002f, 'INTENABLE': 0, 'WINDOWBASE': 0,
+                        'WINDOWSTART': 1, 'VECBASE': 0x40378000})
     pc = 0
-    for _ in range(200):
+    for _ in range(400):
         op, _, rest = instructions[pc].partition(' ')
         args = [a.strip() for a in rest.split(',')]
         pc += 1
         if op == 'movi':
-            registers[args[0]] = int(args[1], 0) & 0xffffffff
+            registers[args[0]] = (symbols[args[1]] if args[1] in symbols
+                                   else int(args[1], 0)) & 0xffffffff
         elif op in ('l32i', 's32i'):
             address = registers[args[1]] + int(args[2], 0)
             if op == 'l32i':
@@ -1919,15 +1932,42 @@ def xtensa_stage(text, memory):
         elif op in ('and', 'or'):
             a, b = registers[args[1]], registers[args[2]]
             registers[args[0]] = a & b if op == 'and' else a | b
-        elif op == 'bbsi':
-            if registers[args[0]] & (1 << int(args[1], 0)):
-                if args[2] == '_landin_device_cache_refused':
-                    return args[2], stores
+        elif op in ('bbsi', 'bbci'):
+            taken = bool(registers[args[0]] & (1 << int(args[1], 0)))
+            if taken == (op == 'bbsi'):
                 pc = labels[args[2]]
-        elif op == 'memw':
+        elif op in ('bne', 'bnez'):
+            taken = (registers[args[0]] != registers[args[1]] if op == 'bne'
+                     else registers[args[0]] != 0)
+            if taken:
+                pc = labels[args[-1]]
+        elif op == 'callx8':
+            # Model only the specified API effects; actual vendor bodies
+            # and ABI are independently checked by the ROM ELF oracle.
+            address = registers[args[0]]
+            assert memory[0x60008000] & 3 == 2
+            assert memory[0x600080bc] & 0x03f00000 == 0x02100000
+            assert special == {'PS': 0x4002f, 'INTENABLE': 0,
+                               'WINDOWBASE': 0, 'WINDOWSTART': 1,
+                               'VECBASE': 0x40378000}
+            assert registers['a1'] == 0x3fccffe0
+            assert memory[0x3fccffd4] == 0x3fcd0000
+            calls.append(address)
+            if address not in (0x400016f8, 0x4000186c, 0x40001884):
+                raise AssertionError('unexamined ROM call')
+            if rom_effects and address == 0x4000186c:
+                memory[0x600c4060] &= ~1
+            elif rom_effects and address == 0x40001884:
+                memory[0x600c4000] &= ~1
+            # Exercise the caller-clobbered register contract explicitly.
+            for reg in range(2, 16):
+                registers.pop('a' + str(reg), None)
+        elif op in ('memw', 'isync'):
             pass
-        elif op == 'j' and args[0] in ('_landin_firmware_reset', '_landin_device_cache_refused'):
-            return args[0], stores
+        elif op == 'j':
+            if args[0] == '_landin_firmware_reset' or labels[args[0]] == pc - 1:
+                return args[0], stores
+            pc = labels[args[0]]
         else:
             raise AssertionError('unexamined stage instruction: ' + op)
     raise AssertionError('stage did not exit')
@@ -1963,7 +2003,10 @@ class XtensaDescriptions(unittest.TestCase):
                  (0x600c4000, 0x600c4060), 0)):
             text = (DESCRIPTIONS / chip / 'prepare.ldn').read_text()
             body = re.search(r'assembler\.block\("""(.*?)"""\)', text, re.S).group(1)
-            self.assertNotRegex(body, r'\b(a0|a1|sp|call\w*|entry|retw?)\b')
+            instructions = '\n'.join(line.split('#')[0] for line in body.splitlines())
+            self.assertNotRegex(instructions, r'\b(a0|a1|sp|entry|retw?)\b')
+            if chip == 'esp32':
+                self.assertNotRegex(instructions, r'\bcall\w*\b')
             expected = [(base + off, value) for base in (t0, t1)
                         for off, value in ((0x64, 0x50d83aa1), (0x48, 0), (0x64, 0))]
             expected += [(rtc + protect, 0x50d83aa1), (rtc + config, 0), (rtc + protect, 0)]
@@ -1972,16 +2015,76 @@ class XtensaDescriptions(unittest.TestCase):
             # Exercise preservation of unrelated control bits, rather
             # than accepting a stage that succeeds only from all-zero RAM.
             initial = {rtc: 0x1c00a009, rtc + stall: 0x45800000,
-                       cache[0]: 0, cache[1]: 0}
+                       cache[0]: 0, cache[1]: 0, rtc + 0x38: 2}
             expected += [(rtc, (initial[rtc] & ~3) | 2),
                          (rtc + stall, (initial[rtc + stall] & ~0x03f00000) | 0x02100000)]
             with self.subTest(chip=chip, state='cacheless'):
-                self.assertEqual(xtensa_stage(text, dict(initial)), ('_landin_firmware_reset', expected))
+                calls, special = [], {}
+                self.assertEqual(xtensa_stage(text, dict(initial), calls, special),
+                                 ('_landin_firmware_reset', expected))
+                self.assertEqual(calls, [])
+                self.assertEqual(special, {})
             for address in cache:
                 memory = dict(initial)
                 memory[address] = 1 << bit
                 with self.subTest(chip=chip, forbidden_cache=hex(address)):
                     self.assertEqual(xtensa_stage(text, memory), ('_landin_device_cache_refused', []))
+
+    @staticmethod
+    def cold_memory(dcache=1, icache=1):
+        contract = json.loads((HERE / 'esp32s3-rom.json').read_text())
+        memory = {0x60008000: 0x1c00a009, 0x600080bc: 0x45800000,
+                  0x60008038: 1, 0x600c4000: dcache, 0x600c4060: icache,
+                  int(contract['table_pointer'], 0): int(contract['table_address'], 0)}
+        for offset, value in contract['callbacks'].items():
+            memory[int(contract['table_address'], 0) + int(offset)] = int(value, 0)
+        for function in contract['functions']:
+            entry, body = int(function['entry'], 0), int(function['body'], 0)
+            memory.update({entry - 4: body, entry: 0xa0ffff91, entry + 4: 9,
+                           body: int(function['first_word'], 0)})
+        return memory
+
+    def test_s3_cold_rom_normalization(self):
+        text = (DESCRIPTIONS / 'esp32s3/prepare.ldn').read_text()
+        for dcache, icache in ((1, 1), (1, 0), (0, 1)):
+            with self.subTest(dcache=dcache, icache=icache):
+                memory = self.cold_memory(dcache, icache)
+                calls, special = [], {}
+                exit_at, stores = xtensa_stage(text, memory, calls, special, prepared=True)
+                self.assertEqual(exit_at, '_landin_firmware_reset')
+                self.assertEqual(calls, ([0x400016f8] if dcache else [])
+                                 + [0x4000186c, 0x40001884])
+                self.assertEqual((memory[0x600c4000], memory[0x600c4060]), (0, 0))
+                self.assertTrue(all(address >= 0x60000000 for address, _ in stores))
+                self.assertTrue(all(address not in (0x600c4000, 0x600c4060)
+                                    for address, value in stores))
+        with self.assertRaises(AssertionError):
+            xtensa_stage(text, self.cold_memory())  # missing compiler ABI prelude
+        calls = []
+        exit_at, stores = xtensa_stage(text, self.cold_memory(), calls,
+                                      prepared=True, rom_effects=False)
+        self.assertEqual(exit_at, '_landin_device_cache_refused')
+        self.assertEqual(calls, [0x400016f8, 0x4000186c, 0x40001884])
+        self.assertTrue(stores)  # failed postcondition parks after normalization
+        # A sticky cold cause is only a precondition: the documented caller
+        # must still be the direct ROM loader. Every other cause is refused.
+        for cause in range(64):
+            if cause == 1:
+                continue
+            memory = self.cold_memory()
+            memory[0x60008038] = cause
+            self.assertEqual(xtensa_stage(text, memory),
+                             ('_landin_device_cache_refused', []))
+        initial = self.cold_memory()
+        rom_words = [address for address in initial
+                     if address not in (0x60008000, 0x600080bc, 0x60008038,
+                                        0x600c4000, 0x600c4060)]
+        for address in rom_words:
+            with self.subTest(changed_rom_word=hex(address)):
+                memory = dict(initial)
+                memory[address] ^= 1
+                self.assertEqual(xtensa_stage(text, memory),
+                                 ('_landin_device_rom_refused', []))
 
     def test_idf_uart_address_ternary(self):
         header = IdfHeader('#define BASE 0x60000000\n'
@@ -2053,6 +2156,46 @@ class XtensaOracles(unittest.TestCase):
                 for key in (('DPORT.PRO_CACHE_CTRL', 'DPORT.APP_CACHE_CTRL') if chip == 'esp32'
                             else ('EXTMEM.ICACHE_CTRL', 'EXTMEM.DCACHE_CTRL')):
                     self.assertEqual(rows[key]['policy']['write'], 'refused')
+
+    @requires_refine
+    def test_s3_cold_rom_abi(self):
+        contract = json.loads((HERE / 'esp32s3-rom.json').read_text())
+        with tarfile.open(fetch_inputs.fetch(contract['elf_archive'])) as archive:
+            elf = archive.extractfile(contract['elf_member']).read()
+        self.assertEqual(elf[:7], b'\x7fELF\x01\x01\x01')
+        phoff = struct.unpack_from('<I', elf, 28)[0]
+        phsize, phnum = struct.unpack_from('<HH', elf, 42)
+        segments = [struct.unpack_from('<8I', elf, phoff + index * phsize)
+                    for index in range(phnum)]
+
+        def read(address, size):
+            matches = [elf[offset + address - start:offset + address - start + size]
+                       for kind, offset, start, _, length, _, _, _ in segments
+                       if kind == 1 and start <= address and address + size <= start + length]
+            self.assertEqual(len(matches), 1, hex(address))
+            return matches[0]
+
+        symbols = fetch_inputs.fetch('esp32s3/rom.ld').read_text()
+        header = fetch_inputs.fetch('esp32s3/rom-cache.h').read_text()
+        self.assertIn('rom_cache_internal_table_ptr = 0x3fceffc4', symbols)
+        for function in contract['functions']:
+            entry, body = int(function['entry'], 0), int(function['body'], 0)
+            self.assertIn(function['name'] + ' = ' + function['entry'], symbols)
+            self.assertIn(function['name'] + '(void)', header)
+            self.assertEqual(read(entry - 4, 12), struct.pack('<I', body)
+                             + bytes.fromhex('91ffffa009000000'))
+            implementation = read(body, function['size'])
+            self.assertEqual(digest(implementation), function['sha256'])
+            self.assertEqual(implementation[:3], bytes.fromhex('364100'))  # ENTRY32
+            self.assertEqual(implementation[-2:], bytes.fromhex('1df0'))  # RETW.N
+        for callback in contract['callback_bodies']:
+            implementation = read(int(callback['address'], 0), callback['size'])
+            self.assertEqual(digest(implementation), callback['sha256'])
+            self.assertEqual(implementation[:3], bytes.fromhex('364100'))
+            self.assertEqual(implementation[-2:], bytes.fromhex('1df0'))
+        for offset, value in contract['callbacks'].items():
+            self.assertEqual(read(int(contract['table_address'], 0) + int(offset), 4),
+                             struct.pack('<I', int(value, 0)))
 
     @requires_refine
     def test_interrupt_sources(self):

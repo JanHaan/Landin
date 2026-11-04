@@ -1,0 +1,68 @@
+{
+  "schema": 1,
+  "rom_sha256": "b5c7090cc22efce51c1323cef31ca96fcd673a5b1d1b1017e219d393f2659913",
+  "elf_archive": "esp32s3/esp-rom-elfs-20260528.tar.gz",
+  "elf_member": "esp32s3_rev0_rom.elf",
+  "table_pointer": "0x3fceffc4",
+  "table_address": "0x3ff1e2b4",
+  "callbacks": {
+    "16": "0x4004e4c0",
+    "20": "0x4004e514",
+    "28": "0x4004e5a4",
+    "52": "0x4004e680",
+    "60": "0x4004e6d8"
+  },
+  "functions": [
+    {
+      "name": "Cache_WriteBack_All",
+      "entry": "0x400016f8",
+      "body": "0x4004eaec",
+      "size": 19,
+      "sha256": "3512e963069f34e9916aef322681afc6646cdb2b907ade440a8beed2f26f9626",
+      "first_word": "0x81004136"
+    },
+    {
+      "name": "Cache_Disable_ICache",
+      "entry": "0x4000186c",
+      "body": "0x4004f2b8",
+      "size": 77,
+      "sha256": "2dfb99de8ac378489ff61c27a3f8ff2f53c3051229bb1c82753c071c239d86d3",
+      "first_word": "0x31004136"
+    },
+    {
+      "name": "Cache_Disable_DCache",
+      "entry": "0x40001884",
+      "body": "0x4004f32c",
+      "size": 77,
+      "sha256": "8a8422ca8177a38cddd7d20a587469f0348131ad98659cc179e1fa96c4939538",
+      "first_word": "0x31004136"
+    }
+  ],
+  "callback_bodies": [
+    {
+      "address": "0x4004e4c0",
+      "size": 70,
+      "sha256": "dadc4eddb38cf6871710a86907ce4e722a78d6f1d11c0a7e2198e4b1ed6aaff7"
+    },
+    {
+      "address": "0x4004e514",
+      "size": 70,
+      "sha256": "5a60fa98f04d77a75c8ad7d767efebed0e41d79130eb29b39c8accda0976b932"
+    },
+    {
+      "address": "0x4004e5a4",
+      "size": 70,
+      "sha256": "8ee9a9a14d2353acbabfa8c52f995364c90f67f05e937d10a24a6f65493111b3"
+    },
+    {
+      "address": "0x4004e680",
+      "size": 83,
+      "sha256": "a87c5207ab0a93b10562caf659c263566164788d3b913f89472d6fdbe569decf"
+    },
+    {
+      "address": "0x4004e6d8",
+      "size": 83,
+      "sha256": "a87c5207ab0a93b10562caf659c263566164788d3b913f89472d6fdbe569decf"
+    }
+  ]
+}

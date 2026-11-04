@@ -573,17 +573,51 @@ contains SRAM load segments and an entry address; no ESP-IDF second stage,
 partition table or cached execute-in-place path is implied. A RAM entry
 has no flash or ROM-reset operation and requires its own warm-state check.
 
-Each hand-written `prepare.ldn` is a naked stage before compiler reset. It
-checks that both cache enables are clear and parks at
-`_landin_device_cache_refused` before any store otherwise. This makes the
-ROM-entry premise observable; it does not attempt to discard an enabled
-cache's dirty external data. The stage stops watchdogs with the vendor's
-keys, asserts CPU1's RTC hardware stall code `0x86`, then enters compiler
-reset without calls, a stack or a RAM access. The compiler owns the
-windowed register setup, exception vectors, BSS clearing and application
-entry. `test.py` executes the stage's restricted instruction surface against
-independent MMIO values, including both cache refusal paths and preservation
-of unrelated RTC bits. Physical warm/ROM evidence belongs to the board tools.
+Each hand-written `prepare.ldn` is a naked stage before compiler reset.
+The classic stage requires both cache enables clear and parks at
+`_landin_device_cache_refused` before any store otherwise. The S3 takes the
+same path without device-stage stack use when both enables are clear. Both paths stop watchdogs
+with the vendor's keys, assert CPU1's RTC hardware stall code `0x86`, and
+enter compiler reset without device-stage calls or RAM accesses. Warm RAM loading still
+requires disabled caches before the helper writes SRAM on either chip.
+
+S3 direct entry from the cold ROM image loader also admits enabled caches.
+This path requires CPU0 reset cause 1 (POWERON/CHIP_PU), the pinned ROM cache
+entry words, and the unchanged default callback table. A reset cause is
+sticky state, not proof of caller provenance: an arbitrary application's
+jump to this stage is outside this contract. Other reset causes park at
+`_landin_device_cache_refused`; different ROM veneers, implementation
+prologues or callback tables park at `_landin_device_rom_refused`. These
+checks precede the stage's first MMIO write.
+
+Before entering a device stage, the compiler's Xtensa entry prelude prepares
+a 32-byte frame in the declared DRAM stack, VECBASE and window spill vectors,
+WINDOWBASE 0, WINDOWSTART 1, INTENABLE 0, and PS with WOE and UM set, EXCM
+clear and interrupt level 15. After stopping watchdogs and stalling CPU1,
+the S3 cold path calls the windowed ROM
+`Cache_WriteBack_All` if DCache is enabled, then `Cache_Disable_ICache` and
+`Cache_Disable_DCache`, in the vendor LL's order. The ROM routines suspend
+autoload, wait for the cache operation to finish and invalidate tags; raw
+cache-enable writes do not implement that contract. The stage verifies
+both enables clear and enters compiler reset, which initializes the full
+runtime and application. ROM table state at `0x3fceffc4` and its immutable
+default table at `0x3ff1e2b4` lie outside the image's DRAM range.
+
+[`esp32s3-rom.json`](esp32s3-rom.json) records the reviewed ROM entry,
+implementation and callback facts. `inputs.json` pins Espressif's
+[ROM ELF archive](https://github.com/espressif/esp-rom-elfs/releases/tag/20260528),
+the [ROM symbol table](https://github.com/espressif/esp-idf/blob/fff9895c82d744c7237be8847347bdd1b07c6643/components/esp_rom/esp32s3/ld/esp32s3.rom.ld)
+and [cache API](https://github.com/espressif/esp-idf/blob/fff9895c82d744c7237be8847347bdd1b07c6643/components/esp_rom/esp32s3/include/esp32s3/rom/cache.h).
+The offline oracle compares complete implementation hashes, ENTRY/RETW
+instructions, public veneers and callback words with that vendor ELF.
+The stage checks a bounded fingerprint at runtime; physical ROM revisions
+must be observed against this evidence before claiming support. The recorded
+whole-ROM hash identifies the corresponding vendor QEMU revision-0 ROM;
+no ROM binary is vendored. `test.py` executes the stage's restricted
+instruction surface against independent MMIO/ROM values, checks refusal
+before stores and preservation of unrelated RTC bits, and models the compiler entry precondition, caller
+register clobbering and the ROM call order. Those models establish source
+contracts; physical cold boot and dirty-cache behavior require board evidence.
 
 CPU1 must remain stalled across debugger sessions. At probe-rs revision
 [`6f9946fe748edd0e55604dc42bc0f7ea3e7485da`](https://github.com/JanHaan/probe-rs/blob/6f9946fe748edd0e55604dc42bc0f7ea3e7485da/probe-rs/src/architecture/xtensa/communication_interface.rs#L366),
