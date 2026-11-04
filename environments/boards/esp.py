@@ -1,10 +1,17 @@
 #!/usr/bin/env python3
 """What the ESP32-C3's and the ESP32-C5's board tools share (D723).
 
-The two chips' ROMs load the same application image, write the same boot
-log, and the two ports run the same scenario with interrupt-driven receive
-(D721); what differs is each chip's facts, which each board's tool gives as
-a `Chip`: its identity and revisions, where its ROM reads and enters the
+The default --mode=ram consumes a checked --bundle or builds an ELF with
+--refine, then uses --ram-loader for a warm halt/load/resume session. The
+loader reinitializes the running core, writes and verifies SRAM, sets the
+stack and vector/trap entry and resumes. The resident flash image stays
+in place; this run neither resets through the ROM nor proves a cold boot.
+The scenario, instruction checks and JTAG readback apply in both modes.
+
+With explicit --mode=boot, the chips' ROMs load the same application image
+and write the same boot log. The two ports run the same scenario with
+interrupt-driven receive (D721); what differs is each chip's facts, which
+each board's tool gives as a `Chip`: its identity and revisions, where its ROM reads and enters the
 image, the trap vector its core takes, its indicator, the causes its
 interrupts arrive with, the atomics its level executes and what they must
 leave, its console and how its power is cut.  Every expectation here is
@@ -12,7 +19,7 @@ written from what the host sent, the TRMs and ESP-IDF's image format,
 never from the firmware's idea of itself; nothing is taken from refine's
 own reading of the image but what the oracle compares it with.
 
-The steps, each recorded under the run's output directory:
+The boot-mode steps, each recorded under the run's output directory:
 
   1. build the image with refine: the ELF and OUT.bin;
   2. read OUT.bin apart from refine (common.esp_image): its header, chip,
@@ -32,7 +39,12 @@ The steps, each recorded under the run's output directory:
   7. drive the scenario and check every frame and the echo;
   8. read over JTAG the counters and atomic cells, which must equal the
      last frames, and the image's read-only segments as the ROM left
-     them in SRAM, which must be OUT.bin's.
+     them in SRAM, which must be OUT.bin's;
+  9. restore --fixed-image (or the bundle's resident image), cold-start it
+     and require its readiness marker. A failed restoration fails the run;
+     the USB stop guard can leave restoration pending for the operator.
+
+--image-control and --recover require --mode=boot.
 """
 
 import hashlib

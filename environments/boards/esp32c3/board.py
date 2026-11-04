@@ -1,9 +1,18 @@
 #!/usr/bin/env python3
-"""Flash the prototype-1 board port to an ESP32-C3, boot it from power-on
-through its ROM and check its trace against the physical oracle.
+"""Run the ESP32-C3 board port from SRAM by default and check its physical oracle.
+
+The default --mode=ram consumes --bundle or builds with --refine, then
+uses --ram-loader for a warm halt/load/resume session with SRAM readback.
+The resident flash image stays in place; RAM runs do not reset through
+the ROM, write flash or cycle power, and do not prove a cold boot.
+Explicit --mode=boot flashes the image, checks its ROM/cold boot and
+restores --fixed-image (or the bundle's resident image), cold-starting it
+and checking readiness afterward, subject to the USB stop guard.
+--image-control and --recover require --mode=boot.
 
     python3 environments/boards/esp32c3/board.py --refine REFINE \
-        --probehive PROBEHIVE --probe-rs PROBE_RS --output NEW_DIRECTORY
+        --probehive PROBEHIVE --probe-rs PROBE_RS --ram-loader LOADER \
+        --output NEW_DIRECTORY
 
 A developer tool, not a compiler dependency: refine builds the image at
 --level=rv32imc through devices/descriptions/esp32c3, and this checks what
@@ -12,7 +21,7 @@ probe-rs reaches the chip through its own USB-Serial-JTAG, which is also
 the port that powers it, on a hub uhubctl can switch, and its UART0, GPIO21
 transmitting and GPIO20 receiving, is wired to a probehive slot's UART,
 which the probe's bridge serves as a TCP port while the board is off and
-on, so the ROM's log from power-on is read whole.  The steps are
+on, so in boot mode the ROM's log from power-on is read whole. The steps are
 environments/boards/esp.py's; the oracle is written from what the host
 sent, the ESP32-C3 TRM v1.4 and ESP-IDF v6.1's image format, never from
 the firmware's own idea of itself; see environments/boards/esp32c3/README.md.
