@@ -1,22 +1,200 @@
--- Stack-free device preparation before compiler-owned Xtensa reset.
--- ESP-IDF v6.1's cache_ll.h defines the cache-enable bits; the supported
--- entry state has them clear. An enabled cache parks at the named failure
--- label before any store: this stage cannot discard dirty external data.
--- The warm helper checks the same baseline before overwriting SRAM.
---
--- Both MWDTs and the RWDT are unlocked with 0x50D8_3AA1, disabled, then
--- locked again. The CPU1 hardware stall follows cpu_utility_ll_stall_cpu:
--- RTC OPTIONS0's APP C0 is 2, SW_CPU_STALL's APP C1 is 0x21. It survives
--- debugger detach; a debug halt alone does not. Caches stay disabled and
--- their banks are never used. All addresses/fields are independently
--- checked against the pinned vendor headers; see devices/README.md.
+-- Device preparation before compiler-owned Xtensa reset.
+-- Cache-off entry makes no ROM call and stays stack-free in this stage.
+-- Cache-on entry requires the direct cold ROM loader, reset cause 1,
+-- and every checked word of the revision-3 cache routines and literals.
+-- This path covers read-only flash, not PSRAM or dirty external data.
+-- The warm helper still refuses enabled caches before any SRAM write.
+-- Watchdogs are stopped and CPU1 hardware-stalled before ROM calls.
+-- See devices/esp32-rom.json and devices/README.md for the exact contract.
 link(boot_stage) extern(naked) prepare: () -> none =
     assembler.block("""
-        movi a2, 0x3ff00000   # DPORT base
-        l32i a3, a2, 0x40     # PRO_CACHE_CTRL
-        bbsi a3, 3, _landin_device_cache_refused
-        l32i a3, a2, 0x58     # APP_CACHE_CTRL
-        bbsi a3, 3, _landin_device_cache_refused
+        movi a2, 0x3ff00000
+        l32i a3, a2, 0x40
+        bbsi a3, 3, _landin_device_cold_check
+        l32i a3, a2, 0x58
+        bbsi a3, 3, _landin_device_cold_check
+        movi a5, 0
+        j _landin_device_quiesce
+        _landin_device_cold_check:
+        movi a2, 0x3ff48000
+        l32i a3, a2, 0x34     # RESET_STATE, CPU0 cause in bits 5:0
+        movi a4, 0x3f
+        and a3, a3, a4
+        movi a4, 1
+        bne a3, a4, _landin_device_cache_refused
+        movi a2, 0x40009ab8
+        l32i a3, a2, 0
+        movi a4, 0x81004136
+        bne a3, a4, _landin_device_rom_refused
+        l32i a3, a2, 4
+        movi a4, 0x7a7cffa2
+        bne a3, a4, _landin_device_rom_refused
+        l32i a3, a2, 8
+        movi a4, 0xdcffa291
+        bne a3, a4, _landin_device_rom_refused
+        l32i a3, a2, 12
+        movi a4, 0x20c032
+        bne a3, a4, _landin_device_rom_refused
+        l32i a3, a2, 16
+        movi a4, 0xaba008b8
+        bne a3, a4, _landin_device_rom_refused
+        l32i a3, a2, 20
+        movi a4, 0x20c010
+        bne a3, a4, _landin_device_rom_refused
+        l32i a3, a2, 24
+        movi a4, 0x20c008a9
+        bne a3, a4, _landin_device_rom_refused
+        l32i a3, a2, 28
+        movi a4, 0x46099800
+        bne a3, a4, _landin_device_rom_refused
+        l32i a3, a2, 32
+        movi a4, 0x20c00004
+        bne a3, a4, _landin_device_rom_refused
+        l32i a3, a2, 36
+        movi a4, 0xa009b800
+        bne a3, a4, _landin_device_rom_refused
+        l32i a3, a2, 40
+        movi a4, 0x20c010ab
+        bne a3, a4, _landin_device_rom_refused
+        l32i a3, a2, 44
+        movi a4, 0xc009a900
+        bne a3, a4, _landin_device_rom_refused
+        l32i a3, a2, 48
+        movi a4, 0x8980020
+        bne a3, a4, _landin_device_rom_refused
+        l32i a3, a2, 52
+        movi a4, 0x8008a082
+        bne a3, a4, _landin_device_rom_refused
+        l32i a3, a2, 56
+        movi a4, 0xc8561089
+        bne a3, a4, _landin_device_rom_refused
+        l32i a3, a2, 60
+        movi a4, 0xffef9101
+        bne a3, a4, _landin_device_rom_refused
+        l32i a3, a2, 64
+        movi a4, 0x880020c0
+        bne a3, a4, _landin_device_rom_refused
+        l32i a3, a2, 68
+        movi a4, 0xff785609
+        bne a3, a4, _landin_device_rom_refused
+        l32i a3, a2, 72
+        movi a4, 0x7cff9381
+        bne a3, a4, _landin_device_rom_refused
+        l32i a3, a2, 76
+        movi a4, 0x20c0e9
+        bne a3, a4, _landin_device_rom_refused
+        l32i a3, a2, 80
+        movi a4, 0x9a9008a8
+        bne a3, a4, _landin_device_rom_refused
+        l32i a3, a2, 84
+        movi a4, 0x20c010
+        bne a3, a4, _landin_device_rom_refused
+        l32i a3, a2, 88
+        movi a4, 0xf01d0899
+        bne a3, a4, _landin_device_rom_refused
+        movi a2, 0x40009a14
+        l32i a3, a2, 0
+        movi a4, 0x6c004136
+        bne a3, a4, _landin_device_rom_refused
+        l32i a3, a2, 4
+        movi a4, 0x81b2ecf9
+        bne a3, a4, _landin_device_rom_refused
+        l32i a3, a2, 8
+        movi a4, 0x20c0ffca
+        bne a3, a4, _landin_device_rom_refused
+        l32i a3, a2, 12
+        movi a4, 0x9008a800
+        bne a3, a4, _landin_device_rom_refused
+        l32i a3, a2, 16
+        movi a4, 0x20c0109a
+        bne a3, a4, _landin_device_rom_refused
+        l32i a3, a2, 20
+        movi a4, 0xc0089900
+        bne a3, a4, _landin_device_rom_refused
+        l32i a3, a2, 24
+        movi a4, 0x8a80020
+        bne a3, a4, _landin_device_rom_refused
+        l32i a3, a2, 28
+        movi a4, 0x9a90091c
+        bne a3, a4, _landin_device_rom_refused
+        l32i a3, a2, 32
+        movi a4, 0x20c020
+        bne a3, a4, _landin_device_rom_refused
+        l32i a3, a2, 36
+        movi a4, 0x92c0899
+        bne a3, a4, _landin_device_rom_refused
+        l32i a3, a2, 40
+        movi a4, 0xa80020c0
+        bne a3, a4, _landin_device_rom_refused
+        l32i a3, a2, 44
+        movi a4, 0xf70a9708
+        bne a3, a4, _landin_device_rom_refused
+        l32i a3, a2, 48
+        movi a4, 0xa46
+        bne a3, a4, _landin_device_rom_refused
+        l32i a3, a2, 52
+        movi a4, 0xc0ffc081
+        bne a3, a4, _landin_device_rom_refused
+        l32i a3, a2, 56
+        movi a4, 0x8a80020
+        bne a3, a4, _landin_device_rom_refused
+        l32i a3, a2, 60
+        movi a4, 0xc0109a90
+        bne a3, a4, _landin_device_rom_refused
+        l32i a3, a2, 64
+        movi a4, 0x8990020
+        bne a3, a4, _landin_device_rom_refused
+        l32i a3, a2, 68
+        movi a4, 0xa80020c0
+        bne a3, a4, _landin_device_rom_refused
+        l32i a3, a2, 72
+        movi a4, 0x90091c08
+        bne a3, a4, _landin_device_rom_refused
+        l32i a3, a2, 76
+        movi a4, 0x20c0209a
+        bne a3, a4, _landin_device_rom_refused
+        l32i a3, a2, 80
+        movi a4, 0x2c089900
+        bne a3, a4, _landin_device_rom_refused
+        l32i a3, a2, 84
+        movi a4, 0x20c009
+        bne a3, a4, _landin_device_rom_refused
+        l32i a3, a2, 88
+        movi a4, 0xa9708a8
+        bne a3, a4, _landin_device_rom_refused
+        l32i a3, a2, 92
+        movi a4, 0x20c0f7
+        bne a3, a4, _landin_device_rom_refused
+        l32i a3, a2, 96
+        movi a4, 0xf96c08a8
+        bne a3, a4, _landin_device_rom_refused
+        l32i a3, a2, 100
+        movi a4, 0xc0109a90
+        bne a3, a4, _landin_device_rom_refused
+        l32i a3, a2, 104
+        movi a4, 0x8990020
+        bne a3, a4, _landin_device_rom_refused
+        l32i a3, a2, 108
+        movi a4, 0xf01d
+        bne a3, a4, _landin_device_rom_refused
+        movi a2, 0x40009944
+        l32i a3, a2, 0
+        movi a4, 0x3ff00040
+        bne a3, a4, _landin_device_rom_refused
+        movi a2, 0x40009948
+        l32i a3, a2, 0
+        movi a4, 0x3ff00058
+        bne a3, a4, _landin_device_rom_refused
+        movi a2, 0x4000994c
+        l32i a3, a2, 0
+        movi a4, 0x3ff43050
+        bne a3, a4, _landin_device_rom_refused
+        movi a2, 0x40009ab4
+        l32i a3, a2, 0
+        movi a4, 0x3ff430f8
+        bne a3, a4, _landin_device_rom_refused
+        movi a5, 1
+        _landin_device_quiesce:
         movi a3, 0x50d83aa1   # watchdog write key
         movi a4, 0
         movi a2, 0x3ff5f000   # TIMG0 base
@@ -44,7 +222,31 @@ link(boot_stage) extern(naked) prepare: () -> none =
         or a3, a3, a4
         s32i a3, a2, 0xac     # APP C1 = 0x21
         memw
+        bnez a5, _landin_device_cold_normalize
         j _landin_firmware_reset
+        _landin_device_cold_normalize:
+        movi a10, 0
+        movi a8, 0x40009ab8
+        callx8 a8
+        movi a10, 1
+        movi a8, 0x40009ab8
+        callx8 a8
+        movi a10, 0
+        movi a8, 0x40009a14
+        callx8 a8
+        movi a10, 1
+        movi a8, 0x40009a14
+        callx8 a8
+        movi a2, 0x3ff00000
+        l32i a3, a2, 0x40
+        bbsi a3, 3, _landin_device_cache_refused
+        l32i a3, a2, 0x58
+        bbsi a3, 3, _landin_device_cache_refused
+        memw
+        isync
+        j _landin_firmware_reset
+        _landin_device_rom_refused:
+        j _landin_device_rom_refused
         _landin_device_cache_refused:
         j _landin_device_cache_refused
         """)

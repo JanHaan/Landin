@@ -440,6 +440,14 @@
     "esp32s3/esp-rom-elfs-20260528.tar.gz": {
       "url": "https://github.com/espressif/esp-rom-elfs/releases/download/20260528/esp-rom-elfs-20260528.tar.gz",
       "sha256": "caa463d3cbef2430a5a35847c1d9f2f152403b17a802050927ff60c8da54fe46"
+    },
+    "esp32/rom-cache.h": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/esp_rom/esp32/include/esp32/rom/cache.h",
+      "sha256": "e7a3fd79858448d65cd2a9273012ae7d5e89600a53677178b7cc922357f1f814"
+    },
+    "esp32/rom.ld": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/esp_rom/esp32/ld/esp32.rom.ld",
+      "sha256": "470502c01c68b2869802461b0a97f6ac9ee2d3595ac67c4d7e7d0a7e2d5c7a43"
     }
   }
 }
