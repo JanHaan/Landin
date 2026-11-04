@@ -166,6 +166,54 @@ package body Landin.Tests.Xtensa_Backend_Suite is
          "scratch stays in the caller window across a helper call");
    end Register_Homes;
 
+   procedure Compact_Homes (Item : in out Landin.Testing.Context);
+   procedure Compact_Homes (Item : in out Landin.Testing.Context) is
+      Text : U.Unbounded_String;
+      Serial : Natural := 0;
+      Refused : Boolean := False;
+   begin
+      Landin.Backend.Xtensa_Machine.Select_Word
+        ("mv x10, x8" & LF & "li x18, 73" & LF & "call callee"
+         & LF & "mv x28, x18" & LF & "mv x28, x31"
+         & LF & "addi sp, sp, -32", Text, Serial,
+         Frame_Bytes => 256, Scratch_Registers => True);
+      Landin.Testing.Check
+        (Item, Contains (U.To_String (Text), "add a8, a7, a8")
+           and then Contains (U.To_String (Text), "s32i a8, a7, 0")
+           and then Contains (U.To_String (Text), "l32i a10, a7, 0")
+           and then Contains (U.To_String (Text), "s32i a14, a7, 76")
+           and then Contains (U.To_String (Text), "l32i a8, a7, 76")
+           and then Contains (U.To_String (Text), "add a11, a7, a11")
+           and then Contains (U.To_String (Text), "mov a8, a6"),
+         "CFA, call carriers, fifth result and outgoing backchain share"
+         & " the compact home map without aliasing each other");
+      begin
+         Landin.Backend.Xtensa_Machine.Select_Word
+           ("mv x26, x10", Text, Serial, Scratch_Registers => True);
+      exception
+         when Landin.Compiler_Defect => Refused := True;
+      end;
+      Landin.Testing.Check
+        (Item, Refused, "an omitted logical word cannot alias a live home");
+      Refused := False;
+      begin
+         Landin.Backend.Xtensa_Machine.Select_Word
+           ("mv x8, x10", Text, Serial, Scratch_Registers => True);
+      exception
+         when Landin.Compiler_Defect => Refused := True;
+      end;
+      Landin.Testing.Check
+        (Item, Refused, "a compact CFA write cannot alias an argument");
+      Text := U.Null_Unbounded_String;
+      Landin.Backend.Xtensa_Machine.Select_Word
+        ("mv x3, x10" & LF & "mv x10, x8", Text, Serial);
+      Landin.Testing.Check
+        (Item, Contains (U.To_String (Text), "s32i a8, a7, 12")
+           and then Contains (U.To_String (Text), "l32i a8, a7, 32")
+           and then Contains (U.To_String (Text), "s32i a8, a7, 40"),
+         "opaque assembly retains the complete original home map");
+   end Compact_Homes;
+
    procedure Jump_Ranges (Item : in out Landin.Testing.Context);
    procedure Jump_Ranges (Item : in out Landin.Testing.Context) is
       Text : U.Unbounded_String;
@@ -225,6 +273,9 @@ package body Landin.Tests.Xtensa_Backend_Suite is
       Landin.Testing.Register
         (Into, "xtensa backend", "scratch survives a helper window",
          Register_Homes'Access);
+      Landin.Testing.Register
+        (Into, "xtensa backend", "compact homes preserve native boundaries",
+         Compact_Homes'Access);
       Landin.Testing.Register
         (Into, "xtensa backend", "local jumps retain arbitrary range fallback",
          Jump_Ranges'Access);

@@ -12,6 +12,20 @@ package body Landin.Backend.Xtensa_Machine is
    function Image (Number : Integer) return String
      is (Trim (Number'Image));
 
+   function Word_Offset (Word : Natural; Compact : Boolean) return Natural is
+   begin
+      if not Compact and then Word <= 31 then
+         return Word * 4;
+      elsif Compact and then Word in 10 .. 17 then
+         return (Word - 10) * 4;
+      elsif Compact and then Word in 19 .. 25 then
+         return 32 + (Word - 19) * 4;
+      elsif Compact and then Word in 27 .. 31 then
+         return 60 + (Word - 27) * 4;
+      end if;
+      raise Compiler_Defect with "Xtensa logical word has no frame home";
+   end Word_Offset;
+
    procedure Select_Word
      (Instruction : String;
       Into : in out U.Unbounded_String;
@@ -53,6 +67,7 @@ package body Landin.Backend.Xtensa_Machine is
          if not Scratch_Registers then return ""; end if;
          return (case Number (Name) is
            when 5 => "a2", when 6 => "a3", when 7 => "a4", when 9 => "a5",
+           when 18 => "a6",
            when others => "");
       end Mapped;
       procedure Read (Name, Physical : String);
@@ -65,8 +80,15 @@ package body Landin.Backend.Xtensa_Machine is
             end if;
          elsif Id = 0 then Raw ("movi " & Physical & ", 0");
          elsif Id = 2 then Raw ("mov " & Physical & ", a1");
+         elsif Id = 8 and then Scratch_Registers then
+            if Frame_Bytes = 0 then
+               raise Compiler_Defect with "Xtensa CFA has no native frame";
+            end if;
+            Raw ("movi " & Physical & ", " & Image (Frame_Bytes));
+            Raw ("add " & Physical & ", a7, " & Physical);
          elsif Id <= 31 then
-            Raw ("l32i " & Physical & ", a7, " & Image (Id * 4));
+            Raw ("l32i " & Physical & ", a7, "
+                 & Image (Word_Offset (Id, Scratch_Registers)));
          else raise Compiler_Defect with "Xtensa logical word exceeds bank";
          end if;
       end Read;
@@ -93,10 +115,13 @@ package body Landin.Backend.Xtensa_Machine is
             Raw ("mov a1, " & Physical);
             --  Outgoing stack arguments can cover the previous spill
             --  backchain. Every new SP needs the current caller's link.
-            Raw ("l32i a11, a7, 32");
+            Read ("x8", "a11");
             Raw ("s32e a11, a1, -12");
+         elsif Id = 8 and then Scratch_Registers then
+            raise Compiler_Defect with "Xtensa CFA is immutable";
          elsif Id <= 31 then
-            Raw ("s32i " & Physical & ", a7, " & Image (Id * 4));
+            Raw ("s32i " & Physical & ", a7, "
+                 & Image (Word_Offset (Id, Scratch_Registers)));
          else raise Compiler_Defect with "Xtensa logical word exceeds bank";
          end if;
       end Write;
@@ -120,14 +145,17 @@ package body Landin.Backend.Xtensa_Machine is
          end if;
          for Index in 0 .. 5 loop
             Raw ("l32i a" & Image (Index + 10)
-                 & ", a7, " & Image ((Index + 10) * 4));
+                 & ", a7, "
+                 & Image (Word_Offset (Index + 10, Scratch_Registers)));
          end loop;
          Raw (if Indirect then "callx8 a9" else "call8 " & Target);
          for Index in 0 .. 3 loop
             Raw ("s32i a" & Image (Index + 10)
-                 & ", a7, " & Image ((Index + 10) * 4));
+                 & ", a7, "
+                 & Image (Word_Offset (Index + 10, Scratch_Registers)));
          end loop;
-         Raw ("s32i a14, a7, 124");
+         Raw ("s32i a14, a7, "
+              & Image (Word_Offset (31, Scratch_Registers)));
       end Call;
       procedure Boolean_Result (Condition, Left, Right : String);
       procedure Boolean_Result (Condition, Left, Right : String) is
