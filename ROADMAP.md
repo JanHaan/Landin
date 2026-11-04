@@ -1580,6 +1580,11 @@ SR-772 remains open for selected-target corpus restriction explanations;
 shared witnesses stay valid, but inherited Cortex-M wording does not name
 Xtensa's separate controls. New SR-773 remains open for a first-failure log
 command that works while the overall gate is still active.
+New SR-774 is settled through explicit stock C compiler, library and header
+packages without unused target C++ recommendations. A signed-index resolver
+comparison preserves the C dependencies, stock identity and PATH guards,
+and the existing twenty-minute budget; actual runner timing remains a gate
+verdict rather than a claim of that simulation.
 
 Activation review against `5d1bed296d7779a718d000baa687535a7d13d62d` includes
 all unmatched rows. SR-555 retains the existing locked runtime/FHS route;
@@ -3447,7 +3452,7 @@ SR-737, SR-738, SR-739, SR-741, SR-742, SR-743, SR-744, SR-745, SR-746,
 SR-747, SR-748, SR-749, SR-750, SR-751, SR-752, SR-753, SR-754, SR-755,
 SR-756, SR-614, SR-660, SR-671, SR-672, SR-709, SR-719, SR-723, SR-724,
 SR-725, SR-757, SR-758, SR-759, SR-760, SR-761, SR-762, SR-763, SR-764,
-SR-765, SR-766, SR-767, SR-770, SR-771.
+SR-765, SR-766, SR-767, SR-770, SR-771, SR-774.
 
 | Record | Family | What stands | Activation | Completion | Status |
 | --- | --- | --- | --- | --- | --- |
@@ -3776,7 +3781,6 @@ SR-765, SR-766, SR-767, SR-770, SR-771.
 | SR-769 | Usability | Reviewing the new Xtensa physical records, the shared ESP scenario names its interrupt snapshots `receive_mcause` and `timer_mcause`, and its refusal says mcause. These ports actually report the Xtensa INTERRUPT pending bits and use chip-specific masks for lines 1 and 23; the inherited RISC-V labels make the evidence look like another register was checked. | The next change to shared ESP scenario diagnostics or record field names. | Architecture-specific register labels in results and refusals, with controls for both architectures and an explicit interpretation of older records. | open |
 | SR-772 | Usability | Reading the complete Xtensa corpus's C ABI restrictions, its retained reason says Cortex-M0 disables the general C surface and points to Cortex transport controls. The Xtensa result inherits the shared inventory's text without naming the selected configuration or its separate independent C peers, so discovering why this target is restricted requires reading the runner. Met auditing R12.50's final evidence. | The next change to shared freestanding corpus restriction reporting. | Retain the shared restriction witness while rendering an explanation for the selected target and pointing to that target's actual independent controls. | open |
 | SR-773 | Usability | Following a candidate gate's first failed job, the watcher suggests `gh run view --job ... --log-failed`, but that command refuses while the overall run is still active and says logs are available only when it completes. The completed job's REST log endpoint already works, so getting the early diagnostic requires a different command discovered outside the watcher. Met following the first R12.50 gate. | The next change to gate-watcher diagnostics or failed-job log guidance. | An actionable completed-job log command while its run remains active, with controls retaining the run and job identities. | open |
-| SR-774 | Usability | The stock-user gate spends its entire twenty-minute budget installing the distribution's Arm C compiler, before Landin checks begin: APT follows newlib's recommendations into a 463 MB target C++ runtime that the C-only stock contract never uses. The toolchain requirement does not reveal that extra download, and a slow mirror turns it into a cancelled validation job. Met following the first R12.50 gate. | The next change to stock-user toolchain package installation. | Explicit C compiler, C library and header packages without unused target C++ recommendations, retaining the distribution identity, stock PATH guards and the existing job budget, with checked package-resolution evidence. | open |
 
 
 ## Retained positions
