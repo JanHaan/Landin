@@ -23053,9 +23053,13 @@ Each board retains a fixed application-silent flash image. A boot check
 loads and cold-starts the ordinary image, exercises its boot oracle, then
 restores and checks the fixed image. Boot image-format and startup changes,
 item closure and the physical board gate require this separate evidence.
-Pico 2 boot and corrupted-image work is off the cascade; probe attachment
-in BOOTSEL is always refused. Hardware USB-JTAG remains available on the
-ESP chips. Every hardware phase still holds the host rig lock and stops
+Pico 2 architecture changes are explicit setup/boot operations off the
+cascade: install and verify the intended architecture's fixed image before
+repeated RAM runs on that architecture. One resident image does not promise
+a ROM-free switch between Arm and Hazard3. Boot and corrupted-image work
+also stays off the cascade; probe attachment in BOOTSEL is always refused.
+Hardware USB-JTAG remains available on the ESP chips. Every hardware
+phase still holds the host rig lock and stops
 on kernel USB trouble. Runs record their mode, input identities, elapsed
 time, warm preparation or boot evidence and physical oracle results.
 

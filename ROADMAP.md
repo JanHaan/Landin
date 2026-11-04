@@ -1513,9 +1513,13 @@ The explicit boot mode retains ROM packaging, cold-start and copy/XIP
 checks, then restores a USB-silent fixed application and verifies its
 startup marker. Pico 2 recovery uses the prepared Arm UF2 off the cascade;
 no tool may attach to BOOTSEL. Every Pico 2 boot check stays off the
-cascade. The architecture-switch boundary and its setup procedure still
-need the maintainer's choice and physical evidence. No warm run silently
-substitutes a reset through the ROM.
+cascade. The maintainer selected an architecture change as an explicit
+off-cascade setup/boot operation: install and verify the intended port's
+fixed image, then keep repeated development runs RAM-only on that
+architecture. The two ports do not promise a ROM-free architecture switch
+from one resident image. Physical proof of that setup remains pending;
+on 2026-11-04 the maintainer confirmed the Pico 2 is not yet recovered.
+No warm run silently substitutes a reset through the ROM.
 
 `environments/boards/build.py` builds every boot/RAM port without rig,
 USB or SSH access and compares each artifact with its separate hardware
@@ -1563,7 +1567,12 @@ Streams used isolated branches and worktrees, exact affected selectors and
 one integrator; no stream may push or promote. Integration retains the
 complete suite, focused controls, offline images, native/cross helper
 builds, emission comparisons, scaling and activations against the starting
-tree. Native Mac feedback awaits the maintainer's availability notice.
+tree. Native Mac feedback from a throwaway checkout passed the same
+40 selected compiler cases and 981 checks, with FILTERED and HOST-ONLY
+scope. Its board controls found unresolved temporary-path comparisons,
+Linux process-discovery dependencies and a PTY drain ordering hang;
+their portability corrections and full focused recheck are in progress
+(SR-749).
 Re-record both Pico 2 ports (SR-684); keep SR-680 and SR-736 open until
 physical evidence supports a disposition. Every hardware run is timed and
 stops on kernel USB trouble.
@@ -3794,6 +3803,7 @@ SR-489, SR-499, SR-511, SR-517.
 | SR-746 | Usability | The first ESP32-C3 RAM attempt failed with only "Error occurred during execution of an abstract command: Exception", without naming whether attach, a CSR, a peripheral write or instruction synchronization failed. Its retained helper log could not locate the operation, forcing source inspection and another build. Inspection also found an unsupported generic mie CSR write and byte transfers to instruction SRAM, which permits only aligned words. Met validating R12.45's warm entry. | R12.45's helper diagnostics and C3 access contract. | A failed debug operation names its phase and relevant register or address while retaining the underlying probe error; C3 uses its MMIO interrupt mask and aligned word transfers. | retired: operations retain context, C3 omits the unsupported CSR and uses explicit word I/O with offline alignment controls; native and arm64 helpers build, all six real ELFs validate, and repeated C3 RAM runs pass without USB activity |
 | SR-747 | Usability | Reviewing the RAM image contract found that it checked load segments but not every allocated section. A developer linker script could put BSS in flash with NOLOAD and exclude it from all program headers, bypassing the SRAM bounds check while compiler startup still cleared it. Both board-side validators had the same segment-only gap. Met reviewing R12.45 before candidate readiness. | R12.45's RAM image validation. | Allocated sections and startup ranges must be in SRAM and outside the reserved stack; initialized sections must be covered by matching load bytes, with custom-script and offline negative controls. | retired: the compiler and both validators check allocated sections, load mapping and BSS ranges; focused compiler/Python/Rust controls, four real linker controls, all six real RAM images and the four connected boards pass |
 | SR-748 | Usability | The first C3 RAM loader failure was followed by reads of the new application's trap cells although the loader had not confirmed starting it. The result presented uninitialized SRAM values as a trap, obscuring the actual debug-command failure. Met reviewing R12.45's retained failure evidence. | R12.45's ESP failure reporting. | A failed RAM load must not read application trap cells until the loader confirms starting that image; later application failures retain their trap evidence and USB stops permit no extra reads. | retired: a missing successful warm-load result records an explicit skipped diagnostic without probe reads; post-entry failures retain trap cells, with focused controls for both paths and USB stops |
+| SR-749 | Usability | Focused native Mac board controls failed three path assertions because Darwin resolves temporary paths through /private/var, reached Linux /proc from lock-policy tests, and hung in a PTY drain because the peer read was ordered after the blocking send. Finding the hang required a retained process sample and interruption; the controls had passed on Linux. Met validating R12.45 on the available Mac. | R12.45's board-tool controls. | Canonical path comparisons, deterministic process-discovery fixtures, and a concurrent PTY peer, with complete selected board controls on Linux and Darwin and no weaker production lock or tty semantics. | open |
 
 ## Retained positions
 

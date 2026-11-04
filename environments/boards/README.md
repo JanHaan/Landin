@@ -162,6 +162,16 @@ a UF2 with [uf2.py](uf2.py), then copying it to BOOTSEL storage off the
 cascade. On the Pi, unplug the cascade before plugging a BOOTSEL Pico 2
 into another Pi port. Return it only after verifying its fixed image.
 
+Changing a Pico 2 between Arm and Hazard3 is an explicit setup/boot
+operation, also off the cascade. After UF2 recovery into Arm, use the
+intended port's boot check with an explicitly named off-cascade switching
+hub and port. Its flash step attaches as the architecture already running,
+cold-starts the selected image and finally restores that port's fixed
+image and verifies its startup marker. Only then run that port repeatedly
+in RAM mode. A RAM run does not change architectures or fall back to a
+ROM reset. Keep the board off the cascade through recovery, setup and boot
+validation; the physical setup must be checked before returning it.
+
 ## Shared rig rules
 
 Every hardware phase holds the same host lock,

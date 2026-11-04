@@ -57,10 +57,12 @@ The target follows the architecture already running on the board (D712):
 `RP235x` for Arm and `RP235x_riscv` for Hazard3. A running RISC-V image
 can make the Arm access ports fault; the RISC-V debug module does not
 answer while the ROM is in Arm BOOTSEL. That state never permits an
-attach. Prepare the fixed image for the intended architecture before a
-RAM run; warm entry does not establish an architecture switch through
-the ROM. Boot flashing selects the architecture that currently answers,
-then cold-starts the image. `result.json` records `flashed_as` only for
+attach. Changing between Arm and Hazard3 is an explicit off-cascade
+setup/boot operation. Prepare and verify the fixed image for the intended
+architecture before repeated RAM runs; warm entry does not switch
+architectures through the ROM. Boot flashing selects the architecture that
+currently answers, then cold-starts the selected port's image and restores
+that port's fixed image. `result.json` records `flashed_as` only for
 the boot check. Counters for this port are read as `RP235x_riscv`.
 
 ## Running it

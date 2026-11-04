@@ -39,6 +39,10 @@ The usual development connection is SWD slot 1 and hub `.3.3`, port 2.
 Boot checks require an explicitly named hub outside `--cascade`; the
 default development hub is refused for them. See the Arm/Hazard3 target
 selection described in [the other port](../rp2350_hazard3/README.md#which-chip-probe-rs-is-told).
+Changing from Hazard3 to Arm is an explicit off-cascade boot operation;
+its successful fixed-image restoration establishes Arm for subsequent
+RAM-only runs. A RAM run requires Arm already running and never changes
+the architecture through the ROM.
 
 Direct UDP debug completes before the tool opens the UART socket, and
 the socket closes before debug readback. The bridge remains available for
