@@ -89,15 +89,22 @@ def stage(run, inputs, chip):
         else:
             path = Path(part)
             files.extend(sorted(path.glob('*.ldn')) if path.is_dir() else [path])
-    if not files or len({p.parent for p in files}) != 1:
-        raise RuntimeError('entry sources must belong to one module')
+    if not files:
+        raise RuntimeError('the entry module has no source files')
+    staged = []
     for path in files:
-        shutil.copy2(path, app / path.name)
+        destination = app / path.name
+        if destination.exists():
+            if destination.read_bytes() != path.read_bytes():
+                raise RuntimeError('entry source basename has unequal contents: ' + path.name)
+        else:
+            shutil.copy2(path, destination)
+            staged.append(destination)
     module = 'xtensa_lane_' + chip
     desc = source / 'descriptions' / module
     desc.mkdir(parents=True)
     (desc / 'core.ldn').write_text(description(chip))
-    (app / 'xtensa-oracle.ldn').write_text(
+    wrapper = (
         'import descriptions/' + module + '\n'
         'link(symbol: "_landin_xtensa_fixture_status")\n'
         'mut landin_xtensa_fixture_status: i32 = -999\n'
@@ -114,7 +121,16 @@ def stage(run, inputs, chip):
         '    loop do\n'
         '    end loop\n'
         'end landin_xtensa_fixture_stopped\n')
-    return [*flags, '--root=' + str(source), str(app)]
+    oracle = app / 'xtensa-oracle.ldn'
+    if oracle.exists() and oracle.read_bytes() != wrapper.encode():
+        raise RuntimeError('entry source basename has unequal contents: ' + oracle.name)
+    oracle.write_text(wrapper)
+    if oracle not in staged:
+        staged.append(oracle)
+    # Metadata's ordered program/with operands form the same entry module,
+    # even when a with file lives in another directory. Existing import
+    # roots retain their order, followed by the staged description root.
+    return [*flags, '--root=' + str(source), *map(str, staged)]
 
 
 def symbols(run, tool, elf):
@@ -211,35 +227,53 @@ def main():
                 raise RuntimeError('a breakpoint before completion was accepted')
             print('FILTERED Xtensa control ' + args.chip + ' ' + name + ' rejected', flush=True)
             continue
-        if name == 'break-control':
+        if name in ('break-control', 'premature-stop-control'):
             elf, named = build(run, args.refine.resolve(), [known[name]], args.chip)
             assembly = (run.out / 'program.s').read_text()
-            changed, count = re.subn(r'(?m)^nop$', 'break 0, 0', assembly)
+            operation = ('break 0, 0' if name == 'break-control' else
+                         'movi a8, _landin_xtensa_fixture_status\n'
+                         'movi a9, 0\ns32i a9, a8, 0\nj _landin_firmware_stopped')
+            changed, count = re.subn(r'(?m)^nop$', operation, assembly)
             if count != 1:
-                raise RuntimeError('BREAK control requires exactly one source NOP')
-            negative = run.out / 'break-program.s'
+                raise RuntimeError(name + ' requires exactly one source NOP')
+            stem = 'break-program' if name == 'break-control' else 'premature-program'
+            negative = run.out / (stem + '.s')
             negative.write_text(changed)
             prefix = 'xtensa-' + args.chip + '-elf-'
-            obj, elf = run.out / 'break-program.o', run.out / 'break-program.elf'
-            run.command('break-assemble', [prefix + 'as', '--abi-windowed',
+            obj, elf = run.out / (stem + '.o'), run.out / (stem + '.elf')
+            run.command(stem + '-assemble', [prefix + 'as', '--abi-windowed',
                         '--auto-litpools', '--longcalls', '-o', obj, negative])
-            run.command('break-link', [prefix + 'gcc', '-mabi=windowed', '-nostdlib',
+            run.command(stem + '-link', [prefix + 'gcc', '-mabi=windowed', '-nostdlib',
                         '-Wl,-T,' + str(run.out / 'program.ld') + ',--gc-sections',
                         '-o', elf, obj, '-lgcc'])
-            run.command('break-disassembly', [prefix + 'objdump', '-dr', elf])
+            run.command(stem + '-disassembly', [prefix + 'objdump', '-dr', elf])
             named = symbols(run, prefix, elf)
-            record = observe(tools.qemu, args.chip, elf, named, run.out)
-            (run.out / 'observation.json').write_text(json.dumps(record, indent=2) + '\n')
             try:
-                verify(record)
+                record = observe(tools.qemu, args.chip, elf, named, run.out)
             except RuntimeError as error:
+                if name != 'premature-stop-control' or str(error) != (
+                        'firmware stopped before fixture completion without a trap'):
+                    raise
+                record = json.loads((run.out / 'unexpected-stop.json').read_text())
                 if record['values']['_landin_xtensa_fixture_status'] != 0 or record[
-                        'values']['_landin_firmware_trap_count'] != 1:
-                    raise RuntimeError('BREAK control did not reach the independent trap oracle')
-                results.append({'status': 'passed', 'negative_oracle': str(error),
-                                'observation': record})
+                        'values']['_landin_firmware_trap_count']:
+                    raise RuntimeError('premature stop did not isolate the completion oracle')
+                reason = str(error)
             else:
-                raise RuntimeError('BREAK before completion was accepted')
+                if name == 'premature-stop-control':
+                    raise RuntimeError('firmware stop before completion was accepted')
+                (run.out / 'observation.json').write_text(json.dumps(record, indent=2) + '\n')
+                try:
+                    verify(record)
+                except RuntimeError as error:
+                    if record['values']['_landin_xtensa_fixture_status'] != 0 or record[
+                            'values']['_landin_firmware_trap_count'] != 1:
+                        raise RuntimeError('BREAK did not reach the independent trap oracle')
+                    reason = str(error)
+                else:
+                    raise RuntimeError('BREAK before completion was accepted')
+            results.append({'status': 'passed', 'negative_oracle': reason,
+                            'observation': record})
             print('FILTERED Xtensa control ' + args.chip + ' ' + name + ' rejected', flush=True)
             continue
         results.append(execute(run, args.refine.resolve(), tools.qemu,
