@@ -2062,6 +2062,9 @@ package body Landin.Diagnostics.Citations is
                "RV64 Linux uses LP64D and ISA extension sets",
             when 660 =>
                "RV32 is a firmware target with ILP32 and its own levels",
+            when 903 =>
+               "Xtensa levels share the windowed ABI and retain distinct"
+               & " instruction configurations",
             when 661 =>
                "An rv32 program that reaches no description is given the"
                & " RISC-V reference",
@@ -3627,6 +3630,8 @@ package body Landin.Diagnostics.Citations is
             when 265 =>
                "Decisions: The toolchain, C and the machine",
             when 660 =>
+               "Decisions: The toolchain, C and the machine",
+            when 903 =>
                "Decisions: The toolchain, C and the machine",
             when 661 =>
                "Decisions: The toolchain, C and the machine",
@@ -5305,6 +5310,10 @@ package body Landin.Diagnostics.Citations is
             when 660 =>
                "https://www.701.dev/spec.html#d660-rv32-is-a-firmware-ta"
                & "rget-with-ilp32-and-its-own-levels",
+            when 903 =>
+               "https://www.701.dev/spec.html#d903-xtensa-levels-share-t"
+               & "he-windowed-abi-and-retain-distinct-instruction-configur"
+               & "ations",
             when 661 =>
                "https://www.701.dev/spec.html#d661-an-rv32-program-that-"
                & "reaches-no-description-is-given-the-risc-v-reference",

@@ -4929,7 +4929,7 @@ package body Landin.Diagnostics.Citations.Texts is
                & "|---|---|"
                & LF
                & "| `compiler.arch` | `x86_64`, `arm64`, `rv64`, `cortex_m"
-               & "0` or `synthetic_32` |"
+               & "0`, `rv32`, `xtensa` or `synthetic_32` |"
                & LF
                & "| `compiler.os` | `linux`, `darwin`, `freebsd` or `frees"
                & "tanding` |"
@@ -4942,8 +4942,10 @@ package body Landin.Diagnostics.Citations.Texts is
                & "ase` |"
                & LF
                & "| `compiler.c_sysv_lp64`, `compiler.c_darwin_lp64`, `com"
-               & "piler.c_aapcs64_lp64`, `compiler.c_riscv_lp64d` | which "
-               & "C ABI the target uses, each true for its own ABI alone |"
+               & "piler.c_aapcs64_lp64`, `compiler.c_riscv_lp64d`, `compil"
+               & "er.c_riscv_ilp32`, `compiler.c_xtensa_windowed_ilp32` | "
+               & "which C ABI the target uses, each true for its own ABI a"
+               & "lone |"
                & LF
                & "| `compiler.c_runtime` | whether C's runtime starts the "
                & "program and its library is linked |"
@@ -23236,6 +23238,10 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & "| | `rv32imac` | those, and `a` |"
                & LF
+               & "| Xtensa | `xtensa-esp32`, the default | none |"
+               & LF
+               & "| | `xtensa-esp32s3` | `salt` |"
+               & LF
                & LF
                & "The x86-64 levels are the x86-64 psABI's microarchitectu"
                & "re levels; the Arm ones are the architecture versions of"
@@ -23245,16 +23251,17 @@ package body Landin.Diagnostics.Citations.Texts is
                & "ds compressed instructions. Zba and XTheadBa are indepen"
                & "dent sets, not successive ranks. RV32's levels are D660'"
                & "s microcontroller ISA strings, `rv32imc` below `rv32imac"
-               & "`, each with Zicsr and Zifencei. Synthetic-32 describes "
-               & "no processor and has no level. Each default is the level"
-               & " every backend emitted for before levels existed, so a b"
-               & "uild that selects none is the build it was. `cortex_m0` "
-               & "names the M-profile backend's family, not its core: a bu"
-               & "ild at `armv7-m` is still `cortex-m0`'s description and "
-               & "ABI. Darwin's lowest processor, Apple's M1, has more tha"
-               & "n `armv8-a`; assuming less than a machine has is sound, "
-               & "so the default stays and a build for Apple silicon may s"
-               & "elect `armv8.1-a`."
+               & "`, each with Zicsr and Zifencei. Xtensa's levels are D90"
+               & "3's two Espressif configurations, whose instruction sets"
+               & " do not nest. Synthetic-32 describes no processor and ha"
+               & "s no level. Each default is the level every backend emit"
+               & "ted for before levels existed, so a build that selects n"
+               & "one is the build it was. `cortex_m0` names the M-profile"
+               & " backend's family, not its core: a build at `armv7-m` is"
+               & " still `cortex-m0`'s description and ABI. Darwin's lowes"
+               & "t processor, Apple's M1, has more than `armv8-a`; assumi"
+               & "ng less than a machine has is sound, so the default stay"
+               & "s and a build for Apple silicon may select `armv8.1-a`."
                & LF
                & LF
                & "A program reads its level as `compiler.feature.NAME`, a "
@@ -23498,6 +23505,76 @@ package body Landin.Diagnostics.Citations.Texts is
                & " kept, the derived script and a map. An ordinary block n"
                & "ames RV64's integer registers, at XLEN 32, and no float "
                & "register. Its emitter is RV64's at XLEN 32 (D671).",
+            when 903 =>
+               "Chosen: one firmware target, `xtensa`, with `compiler.ar"
+               & "ch == xtensa` and the two D255 levels. Both use little-e"
+               & "ndian ELF32 and windowed ILP32: four-byte pointers, `usi"
+               & "ze`, C `int` and C `long`, eight-byte alignment for 64-b"
+               & "it scalars, sixteen-byte alignment for 128-bit scalar st"
+               & "orage and the stack. C `char` is unsigned, and C `double"
+               & "` and `long double` are eight bytes. `compiler.c_xtensa_"
+               & "windowed_ilp32` identifies that ABI. As on the other fir"
+               & "mware targets, public C signatures, C records and variad"
+               & "ic calls remain disabled; the identity describes the run"
+               & "time boundary and does not admit those source forms."
+               & LF
+               & LF
+               & "Calls use `call8` or `callx8`, `entry` and `retw`. Argum"
+               & "ents use six words, `a2` through `a7` in the callee and "
+               & "`a10` through `a15` in the caller, with aligned multiwor"
+               & "d arguments. An argument that cannot fit the remaining r"
+               & "egisters goes wholly to the stack, and subsequent argume"
+               & "nts follow it. Results through sixteen bytes use `a2` th"
+               & "rough `a5`; larger results use a hidden first pointer. F"
+               & "loat carriers use integer registers even though both chi"
+               & "p configurations include single-precision floating-point"
+               & " hardware. `a0` and `a1` are the link and stack register"
+               & "s; the backend keeps `a7` as its frame pointer and reser"
+               & "ves optional FP, boolean, MAC and vector banks from ordi"
+               & "nary allocation. Every windowed frame includes the ABI's"
+               & " spill space. Compiler-owned startup initializes window "
+               & "state and provides all six CALL4/CALL8/CALL12 overflow a"
+               & "nd underflow vectors. CALL0 objects are not compatible p"
+               & "eers merely because their scalar layouts match."
+               & LF
+               & LF
+               & "The default and explicit baseline levels select the ESP3"
+               & "2 configuration; S3 selects its own. `salt` is the expos"
+               & "ed distinguishing fixed feature. The configurations both"
+               & " include density, loops, integer multiplication and divi"
+               & "sion, NSA, min/max, sign extension, MAC16, release synch"
+               & "ronization and S32C1I; optional instructions remain subj"
+               & "ect to their selected assembler configuration, not a gen"
+               & "eric Xtensa instruction list. A source can query `compil"
+               & "er.feature.salt` without changing layout or the ABI. Unk"
+               & "nown or foreign-family levels are L0009, including the s"
+               & "erver's initialization refusal. A common-baseline artifa"
+               & "ct is compatible only after its linked instructions and "
+               & "runtime helpers have been checked against both exact con"
+               & "figurations. An S3 execution of that artifact proves no "
+               & "ESP32-only instruction or arbitrary ESP32 helper compati"
+               & "ble."
+               & LF
+               & LF
+               & "The toolchain selects Espressif's chip-specific wrappers"
+               & " from `esp-16.1.0_20260609`, GCC 16.1.0 and Binutils 2.4"
+               & "6.0. The selected wrapper supplies the configuration plu"
+               & "gin to both compiler and assembler and selects the match"
+               & "ing runtime multilib; generated instructions and source "
+               & "assembly therefore reach the same assembler configuratio"
+               & "n. The assembler ABI tag is `--abi-windowed` and the com"
+               & "piler ABI is `-mabi=windowed`. Both default and explicit"
+               & " levels must reject valid Xtensa instructions absent fro"
+               & "m the selected configuration. Assembly operands use inte"
+               & "ger registers; `a0`, `a1` and `a7` are reserved. Atomic "
+               & "loads and stores through four bytes and fences are admit"
+               & "ted; atomic read-modify-writes and eight-byte atomics ar"
+               & "e refused."
+               & LF
+               & LF
+               & "Sources are Espressif's pinned GCC layout and ABI defini"
+               & "tions, argument and frame implementation, configuration "
+               & "overlays and tool wrappers.",
             when 661 =>
                "Chosen: on `rv32` the loader adds `platform/riscv/refere"
                & "nce` as D543 adds the Cortex-M reference, and its submod"

@@ -19,6 +19,7 @@ with Landin.Devices.Projection;
 with Landin.Driver;
 with Landin.Platform;
 with Landin.Testing.Fakes;
+with Landin.Targets.Firmware;
 with Landin.Xml;
 
 package body Landin.Tests.Devices_Suite is
@@ -343,7 +344,7 @@ package body Landin.Tests.Devices_Suite is
       Expect (Replaced (Svd, "<name>CM7</name>", "<name>RV32IMC</name>"),
               Dev.Unsupported_Form, "a RISC-V device's policy names its"
               & " core");
-      Expect (Svd, Dev.Invalid_Policy, "not hazard3, esp-rv32imc or",
+      Expect (Svd, Dev.Invalid_Policy, "not hazard3, esp-rv32imc,",
               Policy => Policy_For (Svd, ", ""core"": ""sifive-e31"""));
       Expect (Svd, Dev.Invalid_Policy, "which D542 does not admit",
               Policy => Policy_For (Svd, ", ""identity"": ""Toy_1"""));
@@ -666,6 +667,38 @@ package body Landin.Tests.Devices_Suite is
            = "absent: toy1/sources/device.ldn",
          "Hazard3 takes interrupt n at 16 + n, whatever the cpu says: "
          & US.To_String (Problem.Message));
+      for Core in Landin.Targets.Firmware.Xtensa_Core loop
+         declare
+            package F renames Landin.Targets.Firmware;
+            Name : constant String := F.Spelling (Core);
+            Xtensa : constant String :=
+              Replaced (Svd, "<name>CM7</name>",
+                        "<name>" & F.Svd_Name (Core) & "</name>");
+         begin
+            for Explicit in Boolean loop
+               Dev.Projection.Project
+                 (Xtensa, Policy_For
+                    (Xtensa, (if Explicit then
+                       ", ""core"": """ & Name & """" else "")),
+                  Made, Problem);
+               Landin.Testing.Check
+                 (Item, Problem.Kind = Dev.No_Fault
+                  and then Contains
+                    (Output_Of (Made, "descriptions/toy1/interrupts.ldn"),
+                     "compiler.core(""" & Name & """)" & LF
+                     & "compiler.vectors(32)" & LF)
+                  and then not Contains
+                    (Output_Of (Made, "descriptions/toy1/interrupts.ldn"),
+                     "compiler.interrupt(")
+                  and then Contains
+                    (Output_Of (Made, "toy1/sources/device.ldn"),
+                     "public uarta_irq: u32 = 2" & LF),
+                  Name & " keeps matrix sources separate from CPU lines,"
+                  & " with explicit or inferred core: "
+                  & US.To_String (Problem.Message));
+            end loop;
+         end;
+      end loop;
    end A_Policy_Names_The_Core;
 
    procedure An_Array_Element_Is_A_Register

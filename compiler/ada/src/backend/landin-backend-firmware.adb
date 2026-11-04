@@ -1022,6 +1022,9 @@ package body Landin.Backend.Firmware is
             Line ("bbci a2, " & N (Slot) & ", 1f");
             Line ("call8 " & Symbol (Handlers (Slot)));
             Line ("1:");
+         else
+            Line ("bbsi a2, " & N (Slot)
+              & ", _landin_firmware_unhandled");
          end if;
       end loop;
       Line ("movi a0, 0x3f");

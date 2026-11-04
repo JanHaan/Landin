@@ -107,7 +107,8 @@ package Landin.Devices.Policies is
    --  whose SVD interrupts are an interrupt matrix's sources takes none of
    --  them as a slot.
    type Core_Choice is
-     (From_Svd, Hazard3, Esp_Rv32imc, Esp_Rv32imac_Clic);
+     (From_Svd, Hazard3, Esp_Rv32imc, Esp_Rv32imac_Clic,
+      Xtensa_LX6, Xtensa_LX7);
 
    type Policy is record
       Device : US.Unbounded_String;

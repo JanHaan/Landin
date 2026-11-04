@@ -3996,12 +3996,12 @@ The compiler supplies these facts:
 
 | fact | what it says |
 |---|---|
-| `compiler.arch` | `x86_64`, `arm64`, `rv64`, `cortex_m0` or `synthetic_32` |
+| `compiler.arch` | `x86_64`, `arm64`, `rv64`, `cortex_m0`, `rv32`, `xtensa` or `synthetic_32` |
 | `compiler.os` | `linux`, `darwin`, `freebsd` or `freestanding` |
 | `compiler.word_size` | the width of `usize`, in bits |
 | `compiler.byte_order` | `little` or `big` |
 | `compiler.build_mode` | `debug`, the default, or `release` |
-| `compiler.c_sysv_lp64`, `compiler.c_darwin_lp64`, `compiler.c_aapcs64_lp64`, `compiler.c_riscv_lp64d` | which C ABI the target uses, each true for its own ABI alone |
+| `compiler.c_sysv_lp64`, `compiler.c_darwin_lp64`, `compiler.c_aapcs64_lp64`, `compiler.c_riscv_lp64d`, `compiler.c_riscv_ilp32`, `compiler.c_xtensa_windowed_ilp32` | which C ABI the target uses, each true for its own ABI alone |
 | `compiler.c_runtime` | whether C's runtime starts the program and its library is linked |
 | `compiler.feature.NAME` | whether the selected CPU level has feature NAME |
 
