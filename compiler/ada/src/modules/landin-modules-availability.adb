@@ -52,6 +52,11 @@ package body Landin.Modules.Availability is
          --  on RV32 alone.
          return Landin.Targets.Architecture_Of (Facts) =
            Landin.Targets.RV32;
+      elsif Logical = "platform/xtensa" then
+         return True;
+      elsif Under (Logical, "platform/xtensa") then
+         return Landin.Targets.Architecture_Of (Facts) =
+           Landin.Targets.Xtensa;
       elsif Under (Logical, "platform/c") then
          case Landin.Targets.C_ABI_Of (Facts) is
             when Landin.Targets.SysV_AMD64_LP64
@@ -61,7 +66,8 @@ package body Landin.Modules.Availability is
                return Landin.Targets.Capabilities.C_Signatures (Facts);
             when Landin.Targets.No_C_ABI
                | Landin.Targets.Arm_AAPCS32_Soft
-               | Landin.Targets.RiscV_ILP32 => return False;
+               | Landin.Targets.RiscV_ILP32
+               | Landin.Targets.Xtensa_Windowed_ILP32 => return False;
          end case;
       end if;
       return True;
@@ -78,6 +84,8 @@ package body Landin.Modules.Availability is
          return "D267: " & Logical & " requires an M-profile target";
       elsif Under (Logical, "platform/riscv") then
          return "D267: " & Logical & " requires the rv32 target";
+      elsif Under (Logical, "platform/xtensa") then
+         return "D267: " & Logical & " requires the xtensa target";
       else
          return "D267: platform/c requires an enabled LP64 C ABI";
       end if;

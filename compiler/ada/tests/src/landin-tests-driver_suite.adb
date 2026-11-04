@@ -6785,8 +6785,85 @@ package body Landin.Tests.Driver_Suite is
       Refused ("linux-x86-64", "platform/cortex_m/reference", False);
    end Namespace_Availability;
 
+   procedure Xtensa_Selection_And_Assembly
+     (Item : in out Landin.Testing.Context);
+
+   procedure Xtensa_Selection_And_Assembly
+     (Item : in out Landin.Testing.Context)
+   is
+      function Ran (Level, Text : String) return Landin.Driver.Outcome;
+
+      function Ran (Level, Text : String) return Landin.Driver.Outcome is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : Landin.Platform.Path_List := Arguments_Of ("--target=xtensa");
+      begin
+         Host.Add_File ("main.ldn", Text);
+         if Level /= "" then
+            Args.Append ("--level=" & Level);
+         end if;
+         Args.Append ("main.ldn");
+         return Landin.Driver.Execute (Args, Host, Tools);
+      end Ran;
+
+      procedure Check_Level (Level : String; Salt : Boolean);
+
+      procedure Check_Level (Level : String; Salt : Boolean) is
+         Source : constant String :=
+           "compiler.assert(compiler.arch == xtensa)" & LF
+           & "compiler.assert(compiler.word_size == 32)" & LF
+           & "compiler.assert(compiler.c_xtensa_windowed_ilp32)" & LF
+           & "fixed if compiler.feature.salt then" & LF
+           & "    compiler.assert(" & (if Salt then "true" else "false")
+           & ")" & LF & "else" & LF
+           & "    compiler.assert(" & (if Salt then "false" else "true")
+           & ")" & LF & "end if" & LF
+           & "increment: (v: u32) -> (r: u32) =" & LF
+           & "    r = assembler.block(""addi {r}, {r}, 1""," & LF
+           & "        inout r: u32 at general = v)" & LF
+           & "end increment" & LF;
+         Checked : constant Landin.Driver.Outcome := Ran (Level, Source);
+         Refused : constant Landin.Driver.Outcome := Ran
+           (Level, "f: () -> none = assembler.block(""call8 f"") end f");
+         Frame : constant Landin.Driver.Outcome := Ran
+           (Level, "f: (v: u32) -> (r: u32) = r = assembler.block("
+            & """addi {r}, {r}, 1"", inout r: u32 at a7 = v) end f");
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Checked.Status, Landin.Driver.Status_Success,
+            "Xtensa facts, selected salt branch and integer operand at "
+            & Level & ": " & Unbounded.To_String (Checked.Report));
+         Landin.Testing.Check
+           (Item, Refused.Status = Landin.Driver.Status_Reported
+            and then Contains (Unbounded.To_String (Refused.Report),
+                               "transfers no control")
+            and then Frame.Status = Landin.Driver.Status_Reported,
+            "Xtensa refuses an ordinary call and a frame-register operand");
+      end Check_Level;
+   begin
+      Check_Level ("", False);
+      Check_Level ("xtensa-esp32", False);
+      Check_Level ("xtensa-esp32s3", True);
+      declare
+         Unknown : constant Landin.Driver.Outcome := Ran ("xtensa-lx7", "");
+         Foreign : constant Landin.Driver.Outcome := Ran ("rv32imc", "");
+      begin
+         Landin.Testing.Check
+           (Item, Unknown.Status = Landin.Driver.Status_Reported
+            and then Foreign.Status = Landin.Driver.Status_Reported
+            and then Contains (Unbounded.To_String (Unknown.Report),
+                               "error[L0009]: unknown level for xtensa")
+            and then Contains (Unbounded.To_String (Foreign.Report),
+                               "error[L0009]: unknown level for xtensa"),
+            "L0009 refuses unknown and foreign levels on Xtensa");
+      end;
+   end Xtensa_Selection_And_Assembly;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "driver", "Xtensa selection and assembly",
+         Xtensa_Selection_And_Assembly'Access);
       Landin.Testing.Register
         (Into, "driver", "source namespaces enforce target availability",
          Namespace_Availability'Access);

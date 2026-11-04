@@ -1889,8 +1889,79 @@ package body Landin.Tests.Server_Suite is
       end;
    end Shared_Import_Parse_Is_Reused;
 
+   procedure Xtensa_Initialization_Selects_Exact_Levels
+     (Item : in out Landin.Testing.Context);
+
+   procedure Xtensa_Initialization_Selects_Exact_Levels
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Session (Target, Level : String; Salt, Refused : Boolean);
+
+      procedure Session (Target, Level : String; Salt, Refused : Boolean) is
+         Host : aliased Landin.Testing.Fakes.Fake_Filesystem;
+         Channel : Landin.Testing.Fakes.Fake_Channel;
+         Script : Unbounded.Unbounded_String;
+         Status : Landin.Server.Sessions.Exit_Status;
+         Source : constant String :=
+           "compiler.assert(compiler.arch == xtensa)" & LF
+           & "compiler.assert(compiler.word_size == 32)" & LF
+           & "compiler.assert(compiler.c_xtensa_windowed_ilp32)" & LF
+           & "compiler.assert(compiler.feature.salt == "
+           & (if Salt then "true" else "false") & ")" & LF;
+
+         procedure Send (Message : String);
+
+         procedure Send (Message : String) is
+         begin
+            Unbounded.Append (Script, Transport.Framed (Message));
+         end Send;
+      begin
+         Host.Add_Directory ("/workspace");
+         Send ("{""jsonrpc"":""2.0"",""id"":1,""method"":""initialize"","
+               & """params"":{""capabilities"":{},""initializationOptions"":"
+               & "{""target"":" & Landin.Json.Quoted (Target)
+               & (if Level = "" then "" else ",""level"":"
+                  & Landin.Json.Quoted (Level)) & "}}}");
+         Send ("{""jsonrpc"":""2.0"",""method"":""textDocument/didOpen"","
+               & """params"":{""textDocument"":{""uri"":"
+               & """file:///workspace/main.ldn"",""version"":1,""text"":"
+               & Landin.Json.Quoted (Source) & "}}}");
+         Send ("{""jsonrpc"":""2.0"",""id"":2,""method"":""shutdown""}");
+         Send ("{""jsonrpc"":""2.0"",""method"":""exit""}");
+         Channel.Script_Unbounded (Script);
+         Landin.Server.Sessions.Serve (Channel, Host'Access, Status);
+         declare
+            Output : constant String := Landin.Testing.Fakes.Output (Channel);
+         begin
+            Landin.Testing.Check
+              (Item, Status = 0
+               and then (if Refused then Ada.Strings.Fixed.Index
+                 (Output, "error[L0009]: unknown level for " & Target
+                          & ": " & Level) > 0
+                 else Ada.Strings.Fixed.Index
+                   (Output, """diagnostics"":[]") > 0
+                   and then Ada.Strings.Fixed.Index
+                     (Output, "window/showMessage") = 0
+                   and then Ada.Strings.Fixed.Index
+                     (Output, """severity"":1") = 0),
+               "server initialization " & Target & " at '" & Level
+               & "': " & Output);
+         end;
+      end Session;
+   begin
+      Session ("xtensa", "", False, False);
+      Session ("xtensa", "xtensa-esp32", False, False);
+      Session ("xtensa", "xtensa-esp32s3", True, False);
+      Session ("xtensa", "xtensa-lx7", False, True);
+      Session ("xtensa", "rv32imc", False, True);
+      Session ("rv32", "xtensa-esp32", False, True);
+   end Xtensa_Initialization_Selects_Exact_Levels;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "server", "Xtensa initialization selects exact levels",
+         Xtensa_Initialization_Selects_Exact_Levels'Access);
       Landin.Testing.Register
         (Into, "server", "a broken body is stood in for",
          A_Broken_Body_Is_Stood_In_For'Access);

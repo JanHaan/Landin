@@ -115,6 +115,13 @@ package Landin.Targets.Firmware is
    function Interrupts_Are_Slots (Core : Core_Kind) return Boolean
      is (Model_Of (Core) in NVIC | Xh3irq);
 
+   --  The pinned chip configuration's CPU lines at an interrupt level.
+   --  Xtensa's level seven is the NMI; ordinary dispatch uses levels one
+   --  through six and only lines whose INTENABLE bit is set.
+   function Interrupt_Level_Mask
+     (Core : Core_Kind; Level : Positive) return Byte_Count
+     with Pre => Core in Xtensa_Core and then Level <= 7;
+
    --  The longest vector table the core's architecture allows, in slots:
    --  ARMv6-M's 16 + 32, ARMv7-M's 16 + 496 and ARMv8-M's 16 + 480; the
    --  sixteen standard interrupt codes of the SiFive E31, the C3's 32
@@ -149,7 +156,7 @@ package Landin.Targets.Firmware is
            when SiFive_E31 => Slot in 3 | 7 | 11,
            when Hazard3 => Slot in 3 | 7,
            when ESP_RV32IMC => Slot in 1 .. 31,
-           when Xtensa_Core => Slot in 0 .. 31,
+           when Xtensa_Core => Slot in 0 .. 31 and then Slot /= 14,
            when ESP_RV32IMAC_CLIC => Slot in 16 .. 47);
    --  Core_Slot's slots as a note names them.
    function Core_Slots_Text (Core : Core_Kind) return String
@@ -162,7 +169,7 @@ package Landin.Targets.Firmware is
            when SiFive_E31 => "interrupt codes 3, 7 and 11",
            when Hazard3 => "interrupt codes 3 and 7",
            when ESP_RV32IMC => "CPU lines 1 to 31",
-           when Xtensa_Core => "CPU lines 0 to 31",
+           when Xtensa_Core => "CPU lines 0 to 13 and 15 to 31",
            when ESP_RV32IMAC_CLIC => "CLIC ids 16 to 47");
 
    --  D615: a float unit is a fact of a description, not of a level, since

@@ -1609,6 +1609,9 @@ package body Landin.Stages.Configuration is
             RV32 : constant Boolean :=
               Landin.Targets.Architecture_Of (Target (Context))
                 = Landin.Targets.RV32;
+            Xtensa : constant Boolean :=
+              Landin.Targets.Architecture_Of (Target (Context))
+                = Landin.Targets.Xtensa;
             Lines : constant String :=
               Landin.Targets.Assembly.Uncommented
                 (Landin.Targets.Architecture_Of (Target (Context)),
@@ -1640,7 +1643,8 @@ package body Landin.Stages.Configuration is
                         end loop;
                         if Word = Firmware.Reset_Symbol then
                            Names_Reset := True;
-                        elsif (if RV32
+                        elsif (if Xtensa then Lower in "a1" | "sp"
+                               elsif RV32
                                then Lower in "sp" | "x2" | "lwsp" | "swsp"
                                  | "addi16sp" | "addi4spn"
                                else Lower in "push" | "pop" | "sp" | "r13"
@@ -2197,9 +2201,11 @@ package body Landin.Stages.Configuration is
                                  (Target (Context)))
                           & " bytes",
                           (if Landin.Targets.Architecture_Of
-                                (Target (Context)) = Landin.Targets.RV32
+                                (Target (Context))
+                                  in Landin.Targets.RV32
+                                    | Landin.Targets.Xtensa
                            then "the stack's top stays aligned to sixteen"
-                             & " bytes, as the RISC-V psABI requires"
+                             & " bytes, as the target ABI requires"
                            else "the stack's top stays aligned to eight"
                              & " bytes, as the AAPCS requires at a call"));
                         return;
@@ -2376,14 +2382,18 @@ package body Landin.Stages.Configuration is
               & ", so its table holds at most"
               & Positive'Image (Firmware.Vector_Limit (Built.Core))
               & " slots",
-              "a slot is an mcause interrupt code (D662), and "
+              (if Built.Core in Firmware.Xtensa_Core
+               then "a slot is an Xtensa CPU interrupt line, and "
+               else "a slot is an mcause interrupt code (D662), and ")
               & Firmware.A_Core (Built.Core) & " takes "
               & Firmware.Core_Slots_Text (Built.Core)
               & (if Firmware.Interrupts_Are_Slots (Built.Core)
                  then " and 16 + IRQ" else ""));
          end if;
          for Item of Interrupts loop
-            if 16 + Item.IRQ >= Built.Vector_Count then
+            if not Firmware.Interrupts_Are_Slots (Built.Core) then
+               null;
+            elsif 16 + Item.IRQ >= Built.Vector_Count then
                Layout (Item.At_Site,
                  "IRQ" & Natural'Image (Item.IRQ) & " is slot"
                  & Natural'Image (16 + Item.IRQ) & ", past the"
@@ -2470,13 +2480,13 @@ package body Landin.Stages.Configuration is
             Report_At
               (Bad.Boot_Kind_Family, Boot_Site,
                "boot kind " & Firmware.Spelling (Built.Boot) & " is read by "
-               & (if Built.Core in Firmware.RISC_V_Core
+               & (if Built.Core not in Firmware.Arm_Core
                   then "an Arm core's boot ROM"
                   else "a RISC-V core's boot ROM")
                & ", and this description's core is "
                & Firmware.A_Core (Built.Core),
                "D681: " & Firmware.Spelling (Built.Boot) & " is "
-               & (if Built.Core in Firmware.RISC_V_Core
+               & (if Built.Core not in Firmware.Arm_Core
                   then "RP2040's" else "an ESP32's")
                & "; write compiler.boot(""vector-table""), or the kind the"
                & " core's boot ROM reads",
@@ -2520,7 +2530,9 @@ package body Landin.Stages.Configuration is
                & Landin.Targets.Name (Target (Context)),
                "D543: build it with --target="
                & (if Built.Core in Firmware.RISC_V_Core
-                  then "rv32" else "cortex-m0")
+                  then "rv32"
+                  elsif Built.Core in Firmware.Xtensa_Core then "xtensa"
+                  else "cortex-m0")
                & " --level=" & Firmware.Level_Name (Built.Core)
                & ", or import no description on this target");
          elsif not Built.Reference
@@ -2537,10 +2549,12 @@ package body Landin.Stages.Configuration is
                & Landin.Targets.Levels.Name (Level (Context))
                & ", which it does not execute",
                "D543: " & Firmware.A_Core (Built.Core)
-               & " executes its own level and the "
+               & (if Built.Core in Firmware.Xtensa_Core
+                  then " executes its exact chip configuration, --level="
+                  else " executes its own level and the "
                & (if Built.Core in Firmware.RISC_V_Core
                   then "RV32" else "M-profile")
-               & " levels below it, --level="
+               & " levels below it, --level=")
                & Firmware.Lower_Levels (Built.Core)
                & "; build at one of them");
          elsif Built.Float /= Firmware.No_Float_Unit

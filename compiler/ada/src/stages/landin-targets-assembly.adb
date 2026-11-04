@@ -88,6 +88,14 @@ package body Landin.Targets.Assembly is
          return Float_Class;
       end if;
       case Architecture_Of (Facts) is
+         when Xtensa =>
+            if Number_In (Name, "a", 2, 6)
+              or else Number_In (Name, "a", 8, 15)
+            then
+               return Operand_Register;
+            elsif Names_Reserved (Facts, Name) then
+               return Never_Named;
+            end if;
          when Cortex_M0 =>
             if Number_In (Name, "r", 0, 7) then
                return Operand_Register;
@@ -145,6 +153,7 @@ package body Landin.Targets.Assembly is
      (Facts : Target_Facts; Name : String;
       Unit : Float_Unit := No_Float_Unit) return Boolean
      is (case Architecture_Of (Facts) is
+            when Xtensa => True,
             when Cortex_M0 => Unit = No_Float_Unit
               or else not Number_In (Name, "d", 8, 15),
             when X86_64 => Name not in "rbx" | "r12" | "r13" | "r14" | "r15",
@@ -161,7 +170,9 @@ package body Landin.Targets.Assembly is
 
    function In_General_Class (Facts : Target_Facts; Name : String)
      return Boolean
-     is (Overwritten (Facts, Name));
+     is (if Architecture_Of (Facts) = Xtensa
+         then Number_In (Name, "a", 8, 13)
+         else Overwritten (Facts, Name));
 
    function General_Count (Facts : Target_Facts) return Natural
      is (case Architecture_Of (Facts) is
@@ -169,6 +180,7 @@ package body Landin.Targets.Assembly is
             when X86_64 => 9,
             when Arm64 => 18,
             when RV64 | RV32 => 15,
+            when Xtensa => 6,
             when Synthetic_32_Architecture => 0);
 
    function General_Register (Facts : Target_Facts; Index : Positive)
@@ -178,6 +190,12 @@ package body Landin.Targets.Assembly is
       Number : constant String := Image (Image'First + 1 .. Image'Last);
    begin
       case Architecture_Of (Facts) is
+         when Xtensa =>
+            declare
+               Image : constant String := Natural'Image (Index + 7);
+            begin
+               return "a" & Image (Image'First + 1 .. Image'Last);
+            end;
          when Cortex_M0 =>
             return "r" & Number;
          when X86_64 =>
@@ -212,7 +230,7 @@ package body Landin.Targets.Assembly is
 
    function Register_Width (Facts : Target_Facts) return Bit_Width
      is (case Architecture_Of (Facts) is
-            when Cortex_M0 | RV32 | Synthetic_32_Architecture => 32,
+            when Cortex_M0 | RV32 | Xtensa | Synthetic_32_Architecture => 32,
             when X86_64 | Arm64 | RV64 => 64);
 
    function Has_Registers (Facts : Target_Facts) return Boolean
@@ -238,7 +256,7 @@ package body Landin.Targets.Assembly is
             when Arm64 => 24,
             when RV64 => 20,
             when Cortex_M0 => (if Unit = No_Float_Unit then 0 else 8),
-            when RV32 => 0,
+            when RV32 | Xtensa => 0,
             when Synthetic_32_Architecture => 0);
 
    function Float_Class_Register
@@ -255,7 +273,7 @@ package body Landin.Targets.Assembly is
                           elsif Index <= 16 then Index + 1
                           else Index + 11),
             when Cortex_M0 => Index - 1,
-            when RV32 | Synthetic_32_Architecture =>
+            when RV32 | Xtensa | Synthetic_32_Architecture =>
               raise Program_Error with "the target has no float registers");
       Image : constant String := Natural'Image (Number);
       Digits_Of : constant String := Image (Image'First + 1 .. Image'Last);
@@ -277,7 +295,7 @@ package body Landin.Targets.Assembly is
             when Cortex_M0 =>
               (if Landin.Targets.Firmware.Double_Precision (Unit) then 64
                else 32),
-            when RV32 | Synthetic_32_Architecture =>
+            when RV32 | Xtensa | Synthetic_32_Architecture =>
               raise Program_Error with "the target has no float registers");
 
    function Canonical
@@ -285,6 +303,10 @@ package body Landin.Targets.Assembly is
       Unit : Float_Unit := No_Float_Unit) return String is
    begin
       case Architecture_Of (Facts) is
+         when Xtensa =>
+            if Classify (Facts, Word) = Operand_Register then
+               return Word;
+            end if;
          when Cortex_M0 =>
             if Number_In (Word, "r", 0, 7) then
                return Word;
@@ -394,6 +416,13 @@ package body Landin.Targets.Assembly is
    function Names_Reserved (Facts : Target_Facts; Word : String)
      return Boolean
      is (case Architecture_Of (Facts) is
+            when Xtensa =>
+               Word in "a0" | "a1" | "a7" | "sp" | "fp" | "sar"
+                 | "ps" | "windowbase" | "windowstart"
+               or else Number_In (Word, "f", 0, 15)
+               or else Number_In (Word, "b", 0, 15)
+               or else Number_In (Word, "m", 0, 3)
+               or else Number_In (Word, "q", 0, 7),
             when Cortex_M0 =>
                Number_In (Word, "r", 8, 15)
                or else Number_In (Word, "v", 1, 8)
@@ -518,7 +547,7 @@ package body Landin.Targets.Assembly is
          end;
       end if;
       case Architecture_Of (Facts) is
-         when Cortex_M0 | RV64 | RV32 =>
+         when Cortex_M0 | RV64 | RV32 | Xtensa =>
             return Register;
          when Arm64 =>
             return (if Bits > 32 then Register
@@ -651,7 +680,7 @@ package body Landin.Targets.Assembly is
      is (case On is
             when Cortex_M0 => "@",
             when Arm64 => "//",
-            when X86_64 | RV64 | RV32 => "#",
+            when X86_64 | RV64 | RV32 | Xtensa => "#",
             when Synthetic_32_Architecture => "");
 
    function Uncommented (On : Architecture; Text : String) return String is
@@ -726,6 +755,7 @@ package body Landin.Targets.Assembly is
             when X86_64 => "x86-64",
             when RV64 => "RV64",
             when RV32 => "RV32",
+            when Xtensa => "Xtensa",
             when Synthetic_32_Architecture => "synthetic");
       Clean : constant String := Ada.Strings.Fixed.Trim
         (Line, Ada.Strings.Both);
@@ -864,6 +894,12 @@ package body Landin.Targets.Assembly is
                               and then Mnemonic = "wfi")
                      or else (Architecture_Of (Facts) = RV32
                               and then Mnemonic = "ecall"),
+                  when Xtensa =>
+                     Starts ("b") or else Starts ("j")
+                     or else Starts ("call") or else Starts ("ret")
+                     or else Starts ("loop") or else Starts ("rfi")
+                     or else Mnemonic in "rfe" | "rfde" | "rfwo" | "rfwu"
+                       | "entry" | "rotw" | "simcall" | "syscall",
                   when others => False)
             then
                return "ordinary assembly is straight-line and transfers no"
