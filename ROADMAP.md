@@ -1727,6 +1727,30 @@ SR-757's identity. Other sessions' worktrees and rig resources remain theirs.
    the description retain one self-contained stage without helper
    declarations or a data table that its early entry cannot assume ready.
 
+   **Corpus capacity: Jan selected the exact-core virtual-RAM proposal.**
+   Keep both bounded chip machines
+   and physical maps for architectural/startup controls and board runs.
+   Run the complete unchanged freestanding inventory on the same locked
+   Espressif QEMU's `sim` machine with `-cpu esp32` or `-cpu esp32s3`
+   and an explicitly emulator-only 64 MiB memory profile. Several existing
+   fixtures require hundreds of KiB of static data or frames larger than
+   sixteen KiB, beyond the physical profiles; suppressing those executions
+   would lose semantic evidence. Recommend disjoint code/data regions in
+   `0x60000000..0x64000000` and a separately declared corpus stack budget.
+   This establishes no additional chip RAM, cache, PSRAM or peripheral
+   capability. Primary evidence: the pinned
+   [sim startup](https://github.com/espressif/qemu/blob/40edccac415693c5130f91c01d84176ae6008566/hw/xtensa/sim.c)
+   creates the selected CPU and sizes system RAM from `-m`; the exact
+   [ESP32](https://github.com/espressif/qemu/blob/40edccac415693c5130f91c01d84176ae6008566/target/xtensa/core-esp32.c)
+   and [S3](https://github.com/espressif/qemu/blob/40edccac415693c5130f91c01d84176ae6008566/target/xtensa/core-esp32s3.c)
+   configurations retain their distinct ISA, window, FPU and interrupt
+   facts. Runtime QOM and ITLB/DTLB inspection independently confirmed both
+   CPU types and identity-mapped RWX bypass RAM at the proposed endpoints.
+   No guest image has yet run under this proposed profile. The alternative
+   is a smaller source counterpart for each oversized fixture, with each
+   reduction individually preserving the semantic oracle; blanket capacity
+   exemptions would not satisfy the shared-library matrix.
+
    The helper's present Arm/RISC-V split needs a real Xtensa path; it must
    not apply RISC-V registers, fences or interrupt oracles to these ports.
 
