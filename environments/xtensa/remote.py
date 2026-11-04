@@ -105,6 +105,9 @@ def observe(qemu, chip, elf, symbols, output, timeout=20, extra_breakpoint=None,
         remote = None
         try:
             connection = socket.create_connection(('127.0.0.1', port), timeout=timeout)
+            # RSP sends a one-byte ACK immediately before the next request.
+            # Neither should wait for the peer's delayed TCP acknowledgement.
+            connection.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             connection.settimeout(timeout)
             remote = Remote(connection)
             remote.command('qSupported')
