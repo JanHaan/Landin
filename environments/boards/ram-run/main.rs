@@ -50,13 +50,16 @@ struct ReadPlan {
 }
 
 fn validate_read(plan: &ReadPlan) -> Result<()> {
-    ensure!(plan.format_version == 1 && plan.mode == "read", "expected format 1 read plan");
+    ensure!(plan.format_version == 1 && matches!(plan.mode.as_str(), "read" | "boot-read"),
+        "expected format 1 read or boot-read plan");
     chip(&plan.board)?;
+    let xtensa = architecture(&plan.board)? == Architecture::Xtensa;
+    ensure!(plan.mode != "boot-read" || xtensa, "boot-read is supported only for Xtensa");
     ensure!(!plan.require_hart1_halted || plan.board == "rp2350_hazard3",
         "retained hart 1 halt evidence is supported only for Hazard3");
     ensure!(!plan.require_cpu1_stalled || architecture(&plan.board)? == Architecture::Xtensa,
         "retained CPU1 stall evidence is supported only for Xtensa");
-    ensure!(architecture(&plan.board)? != Architecture::Xtensa || plan.require_cpu1_stalled,
+    ensure!(!xtensa || plan.mode == "boot-read" || plan.require_cpu1_stalled,
         "Xtensa reads require require_cpu1_stalled=true to verify the retained hardware stall");
     ensure!((1..=65536).contains(&plan.count), "read count must be 1 to 65536 words");
     ensure!(plan.address % 4 == 0, "word read address must be aligned to four bytes");
@@ -80,6 +83,8 @@ fn execute_read(plan: &ReadPlan) -> Result<Value> {
     } else { None };
     let cpu1 = if plan.require_cpu1_stalled {
         Some(xtensa_cpu1_state(&mut session.core(0)?, &plan.board, false)?)
+    } else if plan.mode == "boot-read" {
+        Some(xtensa_cpu1_observe(&mut session.core(0)?, &plan.board)?)
     } else { None };
     let mut words = vec![0u32; plan.count as usize];
     session.core(0).context("select readback core 0")?.read_32(plan.address, &mut words)
@@ -90,7 +95,7 @@ fn execute_read(plan: &ReadPlan) -> Result<Value> {
     // The Xtensa check only reads its retained hardware-stall fields.
     // No explicit reset, peripheral cleanup or SRAM write occurs.
     drop(session);
-    let mut report = json!({"format_version":1,"status":"passed","mode":"read","board":plan.board,
+    let mut report = json!({"format_version":1,"status":"passed","mode":plan.mode,"board":plan.board,
         "address":plan.address,"count":plan.count,"words":words,"flash_written":false,
         "debug_housekeeping":true,"core":0,"helper_source_sha256":source_digest()});
     if let Some(other_core) = other_core {
@@ -98,7 +103,7 @@ fn execute_read(plan: &ReadPlan) -> Result<Value> {
         report["other_core"] = other_core;
     }
     if let Some(cpu1) = cpu1 {
-        report["cpu1_stalled"] = json!(true);
+        report["cpu1_stalled"] = cpu1["cpu1_stalled"].clone();
         report["other_core"] = cpu1;
     }
     Ok(report)
@@ -531,16 +536,32 @@ fn xtensa_cpu1_state(core: &mut Core<'_>, board: &str, stall: bool) -> Result<Va
         poll(core, profile.rtc, 3, 2)?;
         poll(core, address, 0x3f << 20, 0x21 << 20)?;
     }
-    // Independent readbacks only observe these fields, never re-stall CPU1.
-    let options = core.read_word_32(profile.rtc).context("read CPU1 stall C0")?;
-    let value = core.read_word_32(address).context("read CPU1 stall C1")?;
-    let code = xtensa_stall_code(options, value);
+    let report = xtensa_cpu1_observe(core, board)?;
+    require_xtensa_cpu1_stalled(&report)?;
+    Ok(report)
+}
+
+fn require_xtensa_cpu1_stalled(report: &Value) -> Result<()> {
+    let code = report["stall_code"].as_u64().context("missing CPU1 stall code")?;
     ensure!(code == 0x86,
         "Xtensa CPU1 is not hardware stalled (code {code:#x}); use the boot check");
-    Ok(json!({"method":"hardware-stall","core":1,"cpu1_stalled":true,
+    Ok(())
+}
+
+fn xtensa_cpu1_observe(core: &mut Core<'_>, board: &str) -> Result<Value> {
+    let profile = xtensa_profile(board)?;
+    // Independent readbacks only observe these fields, never re-stall CPU1.
+    let options = core.read_word_32(profile.rtc).context("read CPU1 stall C0")?;
+    let value = core.read_word_32(profile.rtc + profile.stall_offset).context("read CPU1 stall C1")?;
+    Ok(xtensa_cpu1_evidence(&profile, options, value))
+}
+
+fn xtensa_cpu1_evidence(profile: &XtensaProfile, options: u32, value: u32) -> Value {
+    let code = xtensa_stall_code(options, value);
+    json!({"method":"hardware-stall","core":1,"cpu1_stalled":code == 0x86,
         "stall_code":code,"options_address":profile.rtc,"options_value":options,
-        "options_mask":3,"options_expected":2,"stall_address":address,"stall_value":value,
-        "stall_mask":0x3f << 20,"stall_expected":0x21 << 20,"rom_reset":false}))
+        "options_mask":3,"options_expected":2,"stall_address":profile.rtc + profile.stall_offset,
+        "stall_value":value,"stall_mask":0x3f << 20,"stall_expected":0x21 << 20,"rom_reset":false})
 }
 
 // The pinned probe's arch module is private. Its Register::try_from maps
@@ -917,12 +938,12 @@ fn execute(plan: &Plan, image: &Image) -> Result<Value> {
 
 fn process_plan(bytes: &[u8], validate: bool) -> Result<Value> {
     let envelope: Value = serde_json::from_slice(bytes)?;
-    let read = envelope.get("mode").and_then(Value::as_str) == Some("read");
+    let read = matches!(envelope.get("mode").and_then(Value::as_str), Some("read" | "boot-read"));
     if read {
         let plan: ReadPlan = serde_json::from_slice(bytes)?;
         validate_read(&plan)?; // Validate every input before opening a probe.
         if validate {
-            Ok(json!({"format_version":1,"status":"validated","mode":"read","board":plan.board,
+            Ok(json!({"format_version":1,"status":"validated","mode":plan.mode,"board":plan.board,
                 "address":plan.address,"count":plan.count,"flash_written":false,
                 "helper_source_sha256":source_digest()}))
         } else { execute_read(&plan) }
@@ -946,10 +967,12 @@ fn main() -> Result<()> {
     }
     let bytes = fs::read(args.plan.context("missing plan")?)?;
     let result = process_plan(&bytes, args.validate);
-    let mode = if args.validate { "validate" }
-        else if serde_json::from_slice::<Value>(&bytes).is_ok_and(|plan|
-            plan.get("mode").and_then(Value::as_str) == Some("read")) { "read" }
-        else { "warm" };
+    let envelope: Value = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
+    let mode = if args.validate { "validate" } else {
+        match envelope.get("mode").and_then(Value::as_str) {
+            Some("read") => "read", Some("boot-read") => "boot-read", _ => "warm",
+        }
+    };
     fs::write(args.output.context("missing output")?, serde_json::to_vec_pretty(&match &result {
         Ok(value) => value.clone(),
         Err(error) => json!({"status":"failed","mode":mode,
@@ -1105,6 +1128,33 @@ mod tests {
             plan.require_hart1_halted = true;
             assert!(validate_read(&plan).is_err());
             plan.require_hart1_halted = false;
+        }
+    }
+    #[test]
+    fn boot_reads_observe_cpu1_without_claiming_warm_stall_proof() {
+        for board in ["esp32", "esp32s3"] {
+            let profile = xtensa_profile(board).unwrap();
+            for (options, stall, stalled) in [(0, 0, false), (2, 0, false),
+                    (0, 0x21 << 20, false), (2, 0x21 << 20, true)] {
+                let state = xtensa_cpu1_evidence(&profile, options, stall);
+                assert_eq!(state["cpu1_stalled"], stalled);
+                assert_eq!(state["options_value"], options);
+                assert_eq!(state["stall_value"], stall);
+                assert_eq!(require_xtensa_cpu1_stalled(&state).is_ok(), stalled);
+            }
+            let bytes = serde_json::to_vec(&json!({"format_version":1,"board":board,
+                "mode":"boot-read","probe":"invalid without hardware","address":0u32,
+                "count":1})).unwrap();
+            let report = process_plan(&bytes, true).unwrap();
+            assert_eq!(report["status"], "validated");
+            assert_eq!(report["mode"], "boot-read");
+            assert!(report.get("cpu1_stalled").is_none());
+        }
+        for board in ["rp2040", "rp2350", "rp2350_hazard3", "stm32h753", "esp32c3", "esp32c5"] {
+            let mut plan = read_plan(0, 1);
+            plan.board = board.into();
+            plan.mode = "boot-read".into();
+            assert!(validate_read(&plan).is_err());
         }
     }
     #[test]

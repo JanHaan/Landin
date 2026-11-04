@@ -963,11 +963,18 @@ def stlink(serial, vid_pid='0483:374e'):
 class Probe:
     """probe-rs for one CHIP through one PROBE, as probe-rs's --probe names it."""
     def __init__(self, run, probe_rs, chip, probe, ram_loader=None, *, require_hart1_halted=False,
-                 require_cpu1_stalled=False):
+                 require_cpu1_stalled=False, read_mode='read'):
+        require(read_mode in ('read', 'boot-read'), 'unknown probe read mode')
+        require(read_mode != 'boot-read' or chip in ('esp32', 'esp32s3'),
+                'boot-read is supported only for Xtensa')
+        require(chip not in ('esp32', 'esp32s3') or read_mode == 'boot-read'
+                or require_cpu1_stalled,
+                'Xtensa read mode requires retained CPU1 stall evidence')
         self.run, self.probe_rs, self.chip, self.probe = run, probe_rs, chip, probe
         self.ram_loader = ram_loader
         self.require_hart1_halted = require_hart1_halted
         self.require_cpu1_stalled = require_cpu1_stalled
+        self.read_mode = read_mode
 
     def argv(self, *rest):
         pace = getattr(self.run, 'pace', None)
@@ -982,10 +989,10 @@ class Probe:
         if self.chip in boards:
             # A full two-core Session tries to access the reset-held RP
             # core 1 on drop and can leave the executing core halted.
-            require(self.ram_loader, 'RP readback needs --ram-loader')
+            require(self.ram_loader, 'single-core readback needs --ram-loader')
             plan, output = self.run.out / (name + '-plan.json'), self.run.out / (name + '.json')
             board = boards[self.chip]
-            request = dict(format_version=1, board=board, mode='read',
+            request = dict(format_version=1, board=board, mode=self.read_mode,
                            probe=self.probe, address=address, count=count)
             if board == 'rp2350_hazard3' and self.require_hart1_halted:
                 request['require_hart1_halted'] = True
@@ -999,7 +1006,7 @@ class Probe:
             report = json.loads(output.read_text())
             words = report.get('words')
             require(report.get('format_version') == 1 and report.get('status') == 'passed'
-                    and report.get('mode') == 'read' and report.get('board') == board
+                    and report.get('mode') == self.read_mode and report.get('board') == board
                     and report.get('flash_written') is False
                     and report.get('helper_source_sha256') == helper_source_hash()
                     and report.get('address') == address and report.get('count') == count
@@ -1012,6 +1019,16 @@ class Probe:
             if self.require_cpu1_stalled:
                 require(report.get('cpu1_stalled') is True,
                         'single-core readback did not prove CPU1 remains stalled')
+            if self.read_mode == 'boot-read':
+                state = report.get('other_core', {})
+                options, stall = state.get('options_value'), state.get('stall_value')
+                code = (((stall >> 20) & 0x3f) << 2 | (options & 3)
+                        if type(options) is int and type(stall) is int else None)
+                require(code is not None and state.get('stall_code') == code
+                        and type(report.get('cpu1_stalled')) is bool
+                        and report['cpu1_stalled'] == (code == 0x86)
+                        and state.get('cpu1_stalled') is report['cpu1_stalled'],
+                        'boot readback did not report the observed CPU1 stall state')
             if pace:
                 pace.before('probe read completion')
             return words
