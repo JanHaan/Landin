@@ -1,5 +1,7 @@
 with Ada.Strings.Fixed;
 with Landin.Platform.Native;
+with Landin.Targets.Firmware;
+with Landin.Targets.Selection;
 with Ada.Unchecked_Deallocation;
 
 package body Landin.Testing.Fakes is
@@ -199,29 +201,34 @@ package body Landin.Testing.Fakes is
       Host.Set_Executable_Directory ("/opt/landin/bin");
       Host.Add_Directory (Library);
       Host.Add_Directory (Library & "/platform");
-      Host.Add_Directory (Library & "/platform/cortex_m");
-      Host.Add_Directory (Library & "/platform/cortex_m/reference");
-      Host.Add_Directory (Library & "/platform/riscv");
-      Host.Add_Directory (Library & "/platform/riscv/reference");
-      --  Both targets' references (D543, D661).
-      for Family in 1 .. 2 loop
-         for Which in 1 .. 2 loop
-            declare
-               File : constant String :=
-                 (if Family = 1 then "cortex_m" else "riscv")
-                 & "/reference/"
-                 & (if Which = 1 then "interrupts.ldn" else "memory.ldn");
-            begin
-               Real.Read_File ("../../platform/" & File, Text, Status);
-               if Status /= Landin.Platform.Read_Ok then
-                  raise Program_Error with "the checkout's reference"
-                    & " description cannot be read: " & File;
-               end if;
-               Host.Add_File
-                 (Library & "/platform/" & File,
-                  Ada.Strings.Unbounded.To_String (Text));
-            end;
-         end loop;
+      --  Each firmware target's reference comes from the target table.
+      for Target in 1 .. Landin.Targets.Selection.Described_Count loop
+         declare
+            Module : constant String := Landin.Targets.Firmware.Reference_Module
+              (Landin.Targets.Selection.Described_At (Target));
+            Separator : constant Natural := Ada.Strings.Fixed.Index
+              (Module, "/", Ada.Strings.Backward);
+         begin
+            if Module /= "" then
+               Host.Add_Directory (Library & "/" & Module (1 .. Separator - 1));
+               Host.Add_Directory (Library & "/" & Module);
+               for Which in 1 .. 2 loop
+                  declare
+                     File : constant String := Module & "/"
+                       & (if Which = 1 then "interrupts.ldn" else "memory.ldn");
+                  begin
+                     Real.Read_File ("../../" & File, Text, Status);
+                     if Status /= Landin.Platform.Read_Ok then
+                        raise Program_Error with "the checkout's reference"
+                          & " description cannot be read: " & File;
+                     end if;
+                     Host.Add_File
+                       (Library & "/" & File,
+                        Ada.Strings.Unbounded.To_String (Text));
+                  end;
+               end loop;
+            end if;
+         end;
       end loop;
    end Add_Firmware_Library;
 

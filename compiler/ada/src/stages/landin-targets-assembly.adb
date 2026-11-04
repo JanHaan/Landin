@@ -417,8 +417,8 @@ package body Landin.Targets.Assembly is
      return Boolean
      is (case Architecture_Of (Facts) is
             when Xtensa =>
-               Word in "a0" | "a1" | "a7" | "sp" | "fp" | "sar"
-                 | "ps" | "windowbase" | "windowstart"
+               Word in "a0" | "a1" | "a7" | "sp" | "fp"
+                 | "windowbase" | "windowstart"
                or else Number_In (Word, "f", 0, 15)
                or else Number_In (Word, "b", 0, 15)
                or else Number_In (Word, "m", 0, 3)
