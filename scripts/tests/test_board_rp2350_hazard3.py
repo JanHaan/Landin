@@ -208,6 +208,16 @@ def cycling(**more):
 
 
 class Attach(unittest.TestCase):
+    def test_only_ram_readbacks_require_the_other_hart_to_remain_halted(self):
+        for mode in ('ram', 'boot', None):
+            with self.subTest(mode=mode):
+                args = SimpleNamespace(**dict(ARGS, mode=mode))
+                run = mock.Mock()
+                with mock.patch.object(BOARD.common, 'Probe') as probe:
+                    self.assertIs(BOARD.running(run, args), probe.return_value)
+                probe.assert_called_once_with(run, args.probe_rs, BOARD.RISCV_CHIP, args.probe,
+                    ram_loader=args.ram_loader, require_hart1_halted=mode == 'ram')
+
     def setUp(self):
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
