@@ -137,6 +137,18 @@ parked core is excluded from session cleanup. RP2040 attachment uses the
 generic Arm sequence so a failed connection cannot fall back to a rescue
 reset. Readback retains probe-rs's brief debug housekeeping halts.
 
+For Pico 2 RAM entry, the BOOTSEL guard reads the selected hub and physical
+port through Linux sysfs. It validates the hub, port and any device
+identity, failing on unreadable metadata; an absent device is normal for
+the quiet resident image. RAM mode needs no hub power-control permission.
+With the cascade unplugged, name its last root explicitly with `--cascade`
+and give the Pico's absolute `--hub` and `--port`. After the direct-Pi
+recovery at hub `1-1`, port `2`, the RAM arguments were
+`--hub=1-1 --port=2 --cascade=1-1.2`. Check live topology before reusing
+those locations. The Pi's built-in hub has ganged power and carries the
+Arty; these direct-Pi arguments are for RAM mode, never automatic boot
+power cycling.
+
 The RP ports use ACK `0x06`, boot frame, GO `0x07`, readiness frame before
 the scenario. This lets native UDP loading finish before the UART service
 opens, without losing a boot frame or including handshake bytes in DMA

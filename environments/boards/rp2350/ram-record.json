@@ -1,0 +1,107 @@
+{
+  "status": "passed",
+  "image_sha256": "9fece4afa033aef022707f0bbdb011743ae4d523ced20417170e57471e205b5d",
+  "image_name": "board.elf",
+  "verdicts": {
+    "boot": {
+      "chip_reset": 65536,
+      "vtor": 536870912,
+      "clk_ref_selected": 4
+    },
+    "shared": {
+      "input": "1A0",
+      "echo": "1A0",
+      "indicator_after_1": 8,
+      "indicator_after_0": 0
+    },
+    "irq14": {
+      "entries": 1,
+      "exception": 30
+    },
+    "overrun": {
+      "burst": 300,
+      "recoveries": 1
+    },
+    "epochs": {
+      "flagged_burst": 100,
+      "held_by_fifo": 32,
+      "restarts": 3,
+      "dma_completions": 2,
+      "timer_events": 1614,
+      "echoed": 11202,
+      "sent": 11572
+    }
+  },
+  "swd": {
+    "handled": 11202,
+    "recoveries": 3,
+    "dma_events": 2,
+    "usb_events": 1,
+    "trans_count": 1094
+  },
+  "uart_sha256": "d695ddccea03394b7ed6746ae1ff193c30b12a4ff0e0a2798826e969f76b1be4",
+  "mode": "ram",
+  "warm_load": {
+    "board": "rp2350",
+    "cleanup": {
+      "contract": "warm-board-v1",
+      "other_core_parked": true,
+      "peripheral_sources_stopped": true,
+      "rom_reset": false
+    },
+    "elf_sha256": "9fece4afa033aef022707f0bbdb011743ae4d523ced20417170e57471e205b5d",
+    "entry": 536871185,
+    "flash_written": false,
+    "format_version": 1,
+    "helper_source_sha256": "e75f0e0808b14629a7325bafec22fddb8e711e830745ca7b0c7a41200622268c",
+    "mode": "warm",
+    "previous_pc": 536877618,
+    "segments": [
+      {
+        "address": 536870912,
+        "bytes": 24916,
+        "sha256": "03ddb7b4b679da00c59077b4128befbf53d1107ccf5c81c62df9ee3b602e5b5c"
+      }
+    ],
+    "stack": 537403392,
+    "status": "passed",
+    "vector": 536870912
+  },
+  "seconds": 6.348,
+  "kernel_usb": {
+    "since": 1793779306.575704,
+    "until": 1793779312.9048212,
+    "lines": [],
+    "status": "captured"
+  },
+  "sent_sha256": "42d30ba70ef5520bca6b4ea8f3fa35323f4099963fccd9c112148a17b4b25365",
+  "frames": [
+    {
+      "tag": "b",
+      "r": "00010000",
+      "v": "20000000",
+      "k": "00000004"
+    },
+    {
+      "tag": "t",
+      "h": "00002bc2",
+      "c": "00000003",
+      "d": "00000002",
+      "m": "0000064e",
+      "u": "00000001",
+      "p": "0000001e",
+      "n": "00000446",
+      "e": "00000bba",
+      "g": "00000000",
+      "s": "00000002"
+    }
+  ],
+  "commands": [
+    "ram-load",
+    "swd-handled",
+    "swd-recoveries",
+    "swd-dma_events",
+    "swd-usb_events",
+    "swd-trans-count"
+  ]
+}

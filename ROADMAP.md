@@ -1532,9 +1532,15 @@ Arty, so no recovery or boot action switches it. The maintainer has no
 spare switching hub. Proposed next: off-cascade UF2 copies for each boot
 image and its fixed restoration, with manual Pico-only cold power cycles
 and the existing exact power-on oracle; never use probe-rs's flash/reset
-path for this manual setup. The RAM-only BOOTSEL guard also needs a
-read-only sysfs path: an ordinary `uhubctl` listing of the Pi hub requires
-extra access despite RAM mode switching no power (SR-750).
+path for this manual setup. The RAM-only BOOTSEL guard now reads the
+selected hub and port through sysfs, validating topology and refusing
+unreadable or malformed identity. It needs no `uhubctl` access or power
+operation. Synthetic negative controls and 257 integrated board controls
+pass. Two direct-Pi Arm RAM runs passed in 6.362 and 6.348 seconds, from
+the fixed image and then the running application, with identical images,
+no flash write or ROM reset and no kernel USB lines (SR-750). Its retained
+RAM record matches the candidate. Manual-UF2 boot transport is being
+prepared before asking for further physical steps.
 
 `environments/boards/build.py` builds every boot/RAM port without rig,
 USB or SSH access and compares each artifact with its separate hardware
@@ -1552,7 +1558,9 @@ all four; the retained records with the final helper took 17.276, 14.132,
 13.496 and 25.472 seconds respectively, with no kernel USB lines, flash
 writes or ROM resets. RP2040 also passed its physical IO32 indicator and
 the shared UART bridge (SR-739). Passed tool records are retained separately
-for boot and RAM, and all eight artifacts match offline rebuilds.
+for boot and RAM. All nine available current records match offline
+rebuilds, including Arm Pico 2 RAM; both Pico 2 boot records still differ
+and the Hazard3 RAM record is missing.
 
 Physical validation found and corrected C3-specific CSR and word-access
 requirements, and the helper now names failed debug operations (SR-746).
@@ -1560,8 +1568,9 @@ RP2040 ordinary traffic now waits for each piece's echo: its first boot
 attempt lost ordinary input before the intended DMA-exhaustion check.
 The deliberate ring and FIFO bursts, exact loss and DMA completion checks
 are unchanged. Neither initial failure met USB trouble, and the RP2040
-failure restored its fixed image. Pico 2 recovery is verified; both ports'
-complete boot and repeated RAM evidence remain pending off-cascade setup.
+failure restored its fixed image. Pico 2 recovery and repeated Arm RAM
+runs are verified; both ports' complete boot checks and Hazard3 RAM
+evidence remain pending off-cascade setup.
 
 Independent review found that a custom script could exclude an allocated
 NOLOAD section from every load segment and escape the SRAM contract;
