@@ -1,0 +1,3 @@
+main: () -> (status: i32) =
+    compiler.unreachable()
+end main
