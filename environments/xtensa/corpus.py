@@ -12,7 +12,8 @@ ROOT = HERE.parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(HERE))
 from environments.xtensa.backend import (COUNTERPARTS, INVENTORY, PROFILES,
-    SPECIALIZATION_PROFILES, Run, disposition, execute, inventory, metadata, sha, workers)  # noqa: E402
+    SPECIALIZATION_PROFILES, CommandFailed, Run, configuration, disposition, execute,
+    inventory, metadata, sha, workers)  # noqa: E402
 from environments.xtensa.tools import Tools  # noqa: E402
 
 
@@ -60,7 +61,78 @@ def refusal(run, refine, inputs, chip, row):
     return {'verdict': 'source-refusal', 'codes': codes}
 
 
-def execute_inventory(output, refine, qemu, chip, selected=(), profiles=()):
+def selected_image_limit(run, row, error, chip, memory_profile):
+    """Only a recorded limit plus actual independent link/section evidence."""
+    if (row.get('profile_limit') != 'selected-image'
+            or not isinstance(error, CommandFailed) or error.name != 'link'):
+        return None
+    log = Path(error.log).read_text()
+    if any(marker in log for marker in ('undefined reference', 'Assembler messages',
+                                       'relocation', 'cannot find')):
+        return None
+    overflows = {name: int(size) for name, size in re.findall(
+        r"region `(\w+)' overflowed by (\d+) bytes", log)}
+    if ((not overflows and 'image overlaps the reserved' not in log)
+            or set(overflows) - {'IRAM', 'DRAM'}):
+        return None
+    profile = configuration(chip, memory_profile)
+    script = (run.out / 'program.ld').read_text()
+    for name, region in profile['regions'].items():
+        expected = r'^  %s \(\w+\) : ORIGIN = %d, LENGTH = %d$' % (
+            name, region['origin'], region['bytes'])
+        if not re.search(expected, script, re.M):
+            return None
+    mapping = (run.out / 'program.map').read_text()
+    sections = {name: (int(address, 16), int(size, 16)) for name, address, size
+                in re.findall(r'^(\.\S+)\s+0x([0-9a-f]+)\s+0x([0-9a-f]+)(?:\s|$)',
+                              mapping, re.M)}
+    roles = {'IRAM': ('.isr_vector', '.landin_entry', '.text', '.ramtext'),
+             'DRAM': ('.rodata', '.data', '.bss')}
+    regions = {}
+    for name, members in roles.items():
+        region = profile['regions'][name]
+        present = [sections[part] for part in members if part in sections]
+        if not present or any(address < region['origin'] for address, _ in present):
+            return None
+        minimum = max(address + size for address, size in present) - region['origin']
+        reserved = profile['stack_bytes'] if name == 'DRAM' else 0
+        regions[name] = {'minimum_bytes': minimum, 'region_bytes': region['bytes'],
+                         'reserved_bytes': reserved, 'available_bytes': region['bytes'] - reserved}
+    if not any(part['minimum_bytes'] > part['available_bytes'] for part in regions.values()):
+        return None
+    listing = run.command('limit-object-sections',
+                          ['xtensa-' + chip + '-elf-objdump', '-h', run.out / 'program.o'])
+    extents = {name: int(size, 16) for name, size in re.findall(
+        r'^\s*\d+\s+(\S+)\s+([0-9a-f]+)\s+', listing, re.M)}
+    if not extents:
+        return None
+    retained = []
+    for name, size in extents.items():
+        pattern = r'^ ' + re.escape(name) + r'\s+0x([0-9a-f]+)\s+0x([0-9a-f]+)\s+' + re.escape(
+            str(run.out / 'program.o')) + r'$'
+        for address, mapped_size in re.findall(pattern, mapping, re.M):
+            address, mapped_size = int(address, 16), int(mapped_size, 16)
+            if size != mapped_size:
+                continue
+            for region_name, region in profile['regions'].items():
+                measured = regions[region_name]
+                if (region['origin'] <= address < region['origin'] + measured['minimum_bytes']
+                        and address + size > region['origin'] + measured['available_bytes']):
+                    retained.append({'section': name, 'address': address, 'bytes': size,
+                                     'region': region_name})
+    if not retained:
+        return None
+    result = {'verdict': 'selected-image-limit', 'boundary': 'selected external linker map',
+              'reason': row.get('reason', ''), 'regions': regions,
+              'overflow_bytes': overflows, 'largest_object_section_bytes': max(extents.values()),
+              'retained_object_sections_beyond_capacity': retained,
+              'minimum_static_bytes': regions['DRAM']['minimum_bytes'],
+              'execution': 'not attempted: the selected linker map cannot hold this image'}
+    (run.out / 'selected-image-limit.json').write_text(json.dumps(result, indent=2) + '\n')
+    return result
+
+
+def execute_inventory(output, refine, qemu, chip, selected=(), profiles=(), memory_profile='chip'):
     original = rows()
     if set(selected) - original.keys():
         raise RuntimeError('unknown exact fixture: ' + ', '.join(set(selected) - original.keys()))
@@ -85,7 +157,8 @@ def execute_inventory(output, refine, qemu, chip, selected=(), profiles=()):
     def one(item):
         name, row, meta, inputs, opt, spec = item
         run = Run(output / (name.replace('/', '--') + '--' + opt + '-' + spec))
-        record = {'fixture': name, 'chip': chip, 'optimize': opt, 'specialize': spec}
+        record = {'fixture': name, 'chip': chip, 'optimize': opt, 'specialize': spec,
+                  'configuration': configuration(chip, memory_profile)}
         try:
             if row['mode'] == 'restriction':
                 witness = ROOT / row['witness']
@@ -102,14 +175,23 @@ def execute_inventory(output, refine, qemu, chip, selected=(), profiles=()):
                 result = execute(run, refine, qemu, inputs, chip,
                                  expected=row.get('status', meta.status_at('xtensa-' + chip)),
                                  traps=meta.traps,
-                                 optimize=opt, specialize=spec)
+                                 optimize=opt, specialize=spec, memory_profile=memory_profile)
                 record.update(verdict='executed', image_sha256=result['image_sha256'],
-                              values=result['values'])
+                              values=result['values'], qemu_command=result['qemu_command'])
             record['status'] = 'passed'
         except Exception as error:
             #  A failure remains a failure until an explicit inventory
             #  disposition describes and witnesses its actual boundary.
-            record.update(status='failed', error=str(error))
+            try:
+                limit = selected_image_limit(run, row, error, chip, memory_profile)
+            except Exception as measurement_error:
+                record.update(status='failed', error=str(error)
+                              + '; image-limit measurement failed: ' + str(measurement_error))
+            else:
+                if limit is None:
+                    record.update(status='failed', error=str(error))
+                else:
+                    record.update(status='passed', **limit)
         record['artifacts'] = {str(path.relative_to(run.out)): sha(path)
                                for path in sorted(run.out.rglob('*')) if path.is_file()}
         (run.out / 'verdict.json').write_text(json.dumps(record, indent=2) + '\n')
@@ -125,8 +207,13 @@ def execute_inventory(output, refine, qemu, chip, selected=(), profiles=()):
                 result.get('verdict', 'FAILED: ' + result.get('error', ''))), flush=True)
     summary = {'scope': 'FILTERED' if selected or profiles else 'COMPLETE',
                'chip': chip, 'compiler_sha256': sha(refine),
+               'configuration': configuration(chip, memory_profile),
+               'memory_profile': memory_profile,
+               'evidence_scope': configuration(chip, memory_profile)['evidence_scope'],
                'inventory_sha256': sha(INVENTORY), 'counterparts_sha256': sha(COUNTERPARTS),
                'status': 'passed' if all(r['status'] == 'passed' for r in results) else 'failed',
+               'verdict_counts': {kind: sum(r.get('verdict', 'failed') == kind for r in results)
+                                  for kind in sorted({r.get('verdict', 'failed') for r in results})},
                'results': results}
     (output / 'result.json').write_text(json.dumps(summary, indent=2) + '\n')
     return summary
@@ -139,6 +226,7 @@ def main():
     parser.add_argument('--tools', type=Path)
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--chip', choices=('esp32', 'esp32s3'), required=True)
+    parser.add_argument('--memory-profile', choices=('chip', 'sim'), default='chip')
     parser.add_argument('--fixture', action='append', default=[])
     parser.add_argument('--profile', action='append', default=[])
     parser.add_argument('--all', action='store_true')
@@ -150,7 +238,7 @@ def main():
     tools = Tools(args.tools, args.qemu)
     try:
         result = execute_inventory(args.output, args.refine.resolve(), tools.qemu,
-                                   args.chip, args.fixture, args.profile)
+                                   args.chip, args.fixture, args.profile, args.memory_profile)
     finally:
         if args.output.is_dir():
             tools.finish(args.output)

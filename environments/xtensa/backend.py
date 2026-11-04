@@ -16,8 +16,8 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(ROOT / 'environments/cortex-m'))
 from backend_corpus import PROFILES, SPECIALIZATION_PROFILES, inventory  # noqa: E402
 from backend import metadata  # noqa: E402
-from remote import observe  # noqa: E402
-from run import workers  # noqa: E402
+from remote import configuration, observe  # noqa: E402
+from run import CommandFailed, workers  # noqa: E402
 
 CONTROLS = ROOT / 'compiler/tests/xtensa'
 INVENTORY = ROOT / 'compiler/tests/cortex-m/corpus.json'
@@ -57,27 +57,27 @@ class Run:
         self.commands.append({'name': name, 'command': command, 'exit': result.returncode})
         (self.out / 'commands.json').write_text(json.dumps(self.commands, indent=2) + '\n')
         if result.returncode != expected:
-            raise RuntimeError('%s exited %d; inspect %s' %
-                               (name, result.returncode, self.out / (name + '.log')))
+            raise CommandFailed(name, self.out / (name + '.log'),
+                                'exited %d' % result.returncode)
         return result.stdout
 
 
-def description(chip):
-    iram, dram = (('0x4008_0000', '0x3ffb_0000') if chip == 'esp32'
-                  else ('0x4037_8000', '0x3fca_8000'))
+def description(chip, memory_profile='chip'):
+    profile = configuration(chip, memory_profile)
+    iram, dram = (profile['regions'][region] for region in ('IRAM', 'DRAM'))
     core = 'xtensa-lx6' if chip == 'esp32' else 'xtensa-lx7'
     return '\n'.join([
-        'compiler.device("xtensa-test-' + chip + '")',
+        'compiler.device("xtensa-test-' + ('sim-' if memory_profile == 'sim' else '') + chip + '")',
         'compiler.core("' + core + '")', 'compiler.vectors(32)',
         'compiler.boot("vector-table")',
-        'linker.region("IRAM", ' + iram + ', 128 * 1024, "rwx")',
-        'linker.region("DRAM", ' + dram + ', 128 * 1024, "rw")',
+        'linker.region("IRAM", ' + str(iram['origin']) + ', ' + str(iram['bytes']) + ', "rwx")',
+        'linker.region("DRAM", ' + str(dram['origin']) + ', ' + str(dram['bytes']) + ', "rw")',
         *['linker.place("' + part + '", "IRAM")' for part in ('vectors', 'text')],
         *['linker.place("' + part + '", "DRAM")' for part in ('rodata', 'data', 'bss')],
-        'linker.place("stack", "DRAM", 16 * 1024)', ''])
+        'linker.place("stack", "DRAM", ' + str(profile['stack_bytes']) + ')', ''])
 
 
-def stage(run, inputs, chip):
+def stage(run, inputs, chip, memory_profile='chip'):
     """Copy the entry module unchanged and add a separate status wrapper."""
     source = run.out / 'source'
     app = source / 'app'
@@ -103,7 +103,7 @@ def stage(run, inputs, chip):
     module = 'xtensa_lane_' + chip
     desc = source / 'descriptions' / module
     desc.mkdir(parents=True)
-    (desc / 'core.ldn').write_text(description(chip))
+    (desc / 'core.ldn').write_text(description(chip, memory_profile))
     wrapper = (
         'import descriptions/' + module + '\n'
         'link(symbol: "_landin_xtensa_fixture_status")\n'
@@ -139,9 +139,9 @@ def symbols(run, tool, elf):
             re.findall(r'^([0-9a-fA-F]+)\s+(\S)\s+(\S+)$', listing, re.M)}
 
 
-def build(run, refine, inputs, chip, optimize='none', specialize='off'):
+def build(run, refine, inputs, chip, optimize='none', specialize='off', memory_profile='chip'):
     tool = 'xtensa-' + chip + '-elf-'
-    staged = stage(run, inputs, chip)
+    staged = stage(run, inputs, chip, memory_profile)
     base = [refine, *staged, '--target=xtensa', '--level=xtensa-' + chip,
             '--firmware-layout=ram', '--firmware-entry=landin_xtensa_fixture_start',
             '--optimize=' + optimize, '--specialize=' + specialize]
@@ -179,12 +179,14 @@ def verify(result, expected=0, traps=False):
 
 
 def execute(run, refine, qemu, inputs, chip, expected=0, traps=False,
-            optimize='none', specialize='off'):
-    elf, named = build(run, refine, inputs, chip, optimize, specialize)
-    result = observe(qemu, chip, elf, named, run.out)
+            optimize='none', specialize='off', memory_profile='chip'):
+    elf, named = build(run, refine, inputs, chip, optimize, specialize, memory_profile)
+    result = observe(qemu, chip, elf, named, run.out, memory_profile=memory_profile)
     (run.out / 'observation.json').write_text(json.dumps(result, indent=2) + '\n')
     verify(result, expected, traps)
     result.update(status='passed', chip=chip, optimize=optimize, specialize=specialize,
+                  memory_profile=memory_profile,
+                  evidence_scope=configuration(chip, memory_profile)['evidence_scope'],
                   compiler_sha256=sha(refine), image_sha256=sha(elf))
     (run.out / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
     return result
@@ -197,6 +199,7 @@ def main():
     parser.add_argument('--tools', type=Path)
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--chip', choices=('esp32', 'esp32s3'), required=True)
+    parser.add_argument('--memory-profile', choices=('chip', 'sim'), default='chip')
     parser.add_argument('--control', action='append', default=[])
     args = parser.parse_args()
     known = {p.stem: p for p in CONTROLS.glob('*.ldn')}
@@ -210,10 +213,12 @@ def main():
     for name in args.control:
         run = Run(args.output / name)
         if name == 'early-stop-control':
-            elf, named = build(run, args.refine.resolve(), [known[name]], args.chip)
+            elf, named = build(run, args.refine.resolve(), [known[name]], args.chip,
+                               memory_profile=args.memory_profile)
             try:
                 observe(tools.qemu, args.chip, elf, named, run.out,
-                        extra_breakpoint=named['_landin_xtensa_fixture_unexpected'])
+                        extra_breakpoint=named['_landin_xtensa_fixture_unexpected'],
+                        memory_profile=args.memory_profile)
             except RuntimeError as error:
                 if 'unexpected guest stop PC' not in str(error):
                     raise
@@ -228,7 +233,8 @@ def main():
             print('FILTERED Xtensa control ' + args.chip + ' ' + name + ' rejected', flush=True)
             continue
         if name in ('break-control', 'premature-stop-control'):
-            elf, named = build(run, args.refine.resolve(), [known[name]], args.chip)
+            elf, named = build(run, args.refine.resolve(), [known[name]], args.chip,
+                               memory_profile=args.memory_profile)
             assembly = (run.out / 'program.s').read_text()
             operation = ('break 0, 0' if name == 'break-control' else
                          'movi a8, _landin_xtensa_fixture_status\n'
@@ -249,7 +255,8 @@ def main():
             run.command(stem + '-disassembly', [prefix + 'objdump', '-dr', elf])
             named = symbols(run, prefix, elf)
             try:
-                record = observe(tools.qemu, args.chip, elf, named, run.out)
+                record = observe(tools.qemu, args.chip, elf, named, run.out,
+                                 memory_profile=args.memory_profile)
             except RuntimeError as error:
                 if name != 'premature-stop-control' or str(error) != (
                         'firmware stopped before fixture completion without a trap'):
@@ -278,6 +285,7 @@ def main():
             continue
         results.append(execute(run, args.refine.resolve(), tools.qemu,
                                [known[name]], args.chip,
+                               memory_profile=args.memory_profile,
                                expected=(37 if name == 'status-control' else
                                          (7 if args.chip == 'esp32s3' else 6)
                                          if name == 'feature-level' else 0),
@@ -292,7 +300,11 @@ def main():
         print('FILTERED Xtensa control ' + args.chip + ' ' + name + ' passed', flush=True)
     tools.finish(args.output)
     (args.output / 'result.json').write_text(json.dumps({
-        'scope': 'FILTERED', 'status': 'passed', 'results': results}, indent=2) + '\n')
+        'scope': 'FILTERED', 'status': 'passed',
+        'configuration': configuration(args.chip, args.memory_profile),
+        'memory_profile': args.memory_profile,
+        'evidence_scope': configuration(args.chip, args.memory_profile)['evidence_scope'],
+        'results': results}, indent=2) + '\n')
 
 
 if __name__ == '__main__':

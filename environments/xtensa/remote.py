@@ -6,6 +6,31 @@ import subprocess
 import time
 
 
+def configuration(chip, memory_profile='chip'):
+    """Keep real chip maps separate from explicitly virtual SIM memory."""
+    if chip not in ('esp32', 'esp32s3') or memory_profile not in ('chip', 'sim'):
+        raise ValueError('unknown Xtensa CPU or memory profile')
+    simulated = memory_profile == 'sim'
+    # The pinned SIM board sizes config->sysram from -m; both exact CPU
+    # configurations place it at 0x60000000. This is virtual memory only:
+    # https://github.com/espressif/qemu/blob/40edccac415693c5130f91c01d84176ae6008566/hw/xtensa/sim.c
+    iram, dram = ((0x60000000, 0x61000000) if simulated else
+                  (0x40080000, 0x3ffb0000) if chip == 'esp32' else
+                  (0x40378000, 0x3fca8000))
+    return {
+        'memory_profile': memory_profile,
+        'evidence_scope': 'EMULATOR_ONLY' if simulated else 'CHIP_MEMORY_MAP',
+        'machine': 'sim' if simulated else chip,
+        'cpu': chip, 'cpu_level': 'xtensa-' + chip,
+        'qemu_arguments': ['-M', 'sim', '-cpu', chip, '-m', '64M'] if simulated else ['-M', chip],
+        'regions': {'IRAM': {'origin': iram, 'bytes': 16 * 1024 * 1024 if simulated else 128 * 1024},
+                    'DRAM': {'origin': dram, 'bytes': 48 * 1024 * 1024 if simulated else 128 * 1024}},
+        'stack_bytes': 8 * 1024 * 1024 if simulated else 16 * 1024,
+        'startup': 'generic loader selects the ELF entry on reset' if simulated else 'chip ELF loader',
+        **({'virtual_ram': {'origin': 0x60000000, 'bytes': 64 * 1024 * 1024}}
+           if simulated else {})}
+
+
 class Remote:
     def __init__(self, connection):
         self.socket = connection
@@ -54,15 +79,19 @@ class Remote:
         return int.from_bytes(self.memory(address, 4), 'little')
 
 
-def observe(qemu, chip, elf, symbols, output, timeout=20, extra_breakpoint=None):
+def observe(qemu, chip, elf, symbols, output, timeout=20, extra_breakpoint=None,
+            memory_profile='chip'):
     """Stop at wrapper completion or firmware failure; read independent cells."""
     listener = socket.socket()
     listener.bind(('127.0.0.1', 0))
     listener.listen(1)
     os.set_inheritable(listener.fileno(), True)
     port = listener.getsockname()[1]
-    command = [str(qemu), '-M', chip, '-nographic', '-monitor', 'none',
-               '-serial', 'none', '-kernel', str(elf), '-S',
+    profile = configuration(chip, memory_profile)
+    image_arguments = (['-device', 'loader,file=' + str(elf).replace(',', ',,') + ',cpu-num=0']
+                       if memory_profile == 'sim' else ['-kernel', str(elf)])
+    command = [str(qemu), *profile['qemu_arguments'], '-nographic', '-monitor', 'none',
+               '-serial', 'none', *image_arguments, '-S',
                '-chardev', 'socket,id=gdb,fd=%d,server=on,wait=off,nodelay=on'
                % listener.fileno(), '-gdb', 'chardev:gdb']
     tick = time.monotonic()
@@ -77,6 +106,23 @@ def observe(qemu, chip, elf, symbols, output, timeout=20, extra_breakpoint=None)
             connection.settimeout(timeout)
             remote = Remote(connection)
             remote.command('qSupported')
+            startup = None
+            if memory_profile == 'sim':
+                # The generic loader selects e_entry on CPU reset; SIM's
+                # -kernel loader loses that selection to its later reset.
+                # Validate the actual starting PC before executing code.
+                with elf.open('rb') as image:
+                    header = image.read(28)
+                if header[:6] != b'\x7fELF\x01\x01' or len(header) != 28:
+                    raise RuntimeError('SIM startup requires a little-endian ELF32 image')
+                entry = int.from_bytes(header[24:28], 'little')
+                if entry != symbols['_landin_firmware_entry']:
+                    raise RuntimeError('SIM ELF entry differs from the emitted firmware entry')
+                initial = int.from_bytes(bytes.fromhex(remote.command('g'))[:4], 'little')
+                if initial != entry:
+                    raise RuntimeError('the generic loader did not select the SIM ELF entry')
+                startup = {'initial_pc': initial, 'entry_pc': entry, 'selected_pc': initial,
+                           'method': 'generic ELF loader reset'}
             stop = symbols['_landin_firmware_stopped']
             if remote.command('Z0,%x,3' % stop) != 'OK':
                 raise RuntimeError('QEMU refused the stopped-label breakpoint')
@@ -113,6 +159,8 @@ def observe(qemu, chip, elf, symbols, output, timeout=20, extra_breakpoint=None)
                 values['trap_instruction'] = remote.memory(
                     values['_landin_firmware_trap_pc'], 3).hex()
             result = {'values': values, 'stop_pc': pc,
+                      'configuration': profile,
+                      'startup': startup,
                       'expected_stops': {'firmware': stop, 'completion': completed},
                       'remote': remote.transcript, 'qemu_command': command,
                       'elapsed_seconds': time.monotonic() - tick}
