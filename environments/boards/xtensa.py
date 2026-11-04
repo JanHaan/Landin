@@ -74,9 +74,10 @@ class ESP32S3(Xtensa):
 
 
 def power_on_boot(probe, chip, names):
-    """Observe actual power-on before opening the board-powered UART bridge."""
+    """Check cause 1 and readiness; the caller identifies POR or CHIP_PU."""
     cause = probe.read_words('jtag-cold-reset-cause', chip.reset_cause, 1)[0] & 0x3f
-    require(cause == esp.POWER_ON, 'cold reset cause is %#x, not power-on' % cause)
+    expected = 'CHIP_PU' if chip.name == 'esp32' else 'power-on'
+    require(cause == esp.POWER_ON, 'cold reset cause is %#x, not %s' % (cause, expected))
     if common.FIXED_READY_SYMBOL in names:
         ready = probe.read_words('jtag-cold-fixed-ready', names[common.FIXED_READY_SYMBOL], 1)[0]
         require(ready == common.FIXED_READY_MAGIC, 'cold resident startup did not reach its park loop')
@@ -91,6 +92,116 @@ def power_on_boot(probe, chip, names):
     require(esp.trap_cells(probe, names)['count'] == 0, 'the cold application trapped')
     return dict(reset_cause=cause, boot_reason=reason, app_state=state,
                 timer_events=[first, second], trap_count=0)
+
+
+def cycle_boot(chip, args, run, open_console, probe, names, settle):
+    """Board USB cycle, then the chip's explicitly identified startup proof."""
+    require(args.mode == 'boot', 'a startup cycle requires --mode=boot')
+    classic = chip.name == 'esp32'
+    if classic:
+        require(names, 'classic CHIP_PU startup needs the checked image symbols')
+        require(args.reset_seconds == 0.1, 'classic CHIP_PU startup requires --reset-seconds=0.1')
+    hub = common.InGroup(run, args.hub_group)
+    dual = (args.hub, args.port) != (args.console_hub, args.console_port)
+    guard = (args.guard_port, args.guard_device)
+    console_guard = (args.console_guard_port, args.console_guard_device)
+
+    def off():
+        if dual:
+            common.switch_ports(hub, args.console_hub, [args.console_port], 'off',
+                                holds=[(args.console_port, args.console_device)], keeps=console_guard)
+        common.switch_ports(hub, args.hub, [args.port], 'off',
+                            holds=[(args.port, args.serial)], keeps=guard)
+
+    def on():
+        if dual:
+            common.switch_ports(hub, args.console_hub, [args.console_port], 'on', keeps=console_guard)
+        common.switch_ports(hub, args.hub, [args.port], 'on', keeps=guard)
+
+    esp.paced(args, 'power off', off)
+    time.sleep(args.off_seconds)
+    esp.paced(args, 'power on', on)
+    settle(run)
+    args.pace.before('startup proof')
+    # S3 retains the independent true-power-on proof before opening UART.
+    cold = power_on_boot(probe, chip, names) if names and not classic else None
+    args.pace.before('open startup console')
+    console = open_console(run)
+    prior = b''
+    trace = None
+    startup_evidence = None
+    failure = None
+    if classic:
+        index = getattr(run, 'classic_startup_count', 0) + 1
+        run.classic_startup_count = index
+        trace = run.out / ('classic-startup-%d.bin' % index)
+        startup_evidence = dict(startup_reset='CHIP_PU', external_jtag_powered=True,
+            rail_discharge='not-established', reset_requested=False, status='not-established')
+
+    def enable_reset():
+        nonlocal prior
+        require(not common.modem_lines(console.fd)['dtr'], 'DTR would select download mode')
+        if classic:
+            common.set_lines(console.fd, dtr=False)
+            startup_evidence['reset_requested'] = True
+        common.set_lines(console.fd, rts=True)
+        try:
+            time.sleep(args.reset_seconds)
+            if classic:
+                # EN is still low: preserve older bytes and start the
+                # stream before release, so only this reset can satisfy it.
+                with console.lock:
+                    prior = bytes(console.received)
+                    console.received.clear()
+        finally:
+            common.set_lines(console.fd, rts=False)
+
+    try:
+        esp.paced(args, 'chip-enable reset', enable_reset)
+        if classic:
+            fixed = common.FIXED_READY_SYMBOL in names
+
+            def startup(body):
+                log = common.rom_log(body.decode('latin-1'))
+                return (log['reset'] == (esp.POWER_ON, 'POWERON_RESET')
+                        and log['boot'] is not None and log['boot'][1] == 'SPI_FAST_FLASH_BOOT'
+                        and log['entry'] == chip.origin + 1024
+                        and (fixed or common.tagged(body, 'b')))
+            console.wait(startup, 10, 'the fresh CHIP_PU ROM entry' +
+                         ('' if fixed else ' and application boot frame'))
+            # Entry is observable before any debug read. A fixed image must
+            # have reached its marker; an app must also advance its timer.
+            cold = power_on_boot(probe, chip, names)
+            cold.update(startup_reset='CHIP_PU', external_jtag_powered=True,
+                        rail_discharge='not-established', rom_trace=trace.name)
+            startup_evidence.update(cold, status='checked')
+        return console, cold
+    except BaseException as error:
+        failure = error
+        if startup_evidence is not None:
+            startup_evidence['failure'] = str(error)
+        try:
+            console.close()
+        except OSError as cleanup:
+            if startup_evidence is not None:
+                startup_evidence['console_close_failure'] = str(cleanup)
+            raise error from cleanup  # Keep USBGuardError's no-fallback identity.
+        raise
+    finally:
+        if trace is not None:
+            def retain():
+                with console.lock:
+                    received = bytes(console.received)
+                trace.write_bytes(received)
+                trace.with_suffix('.txt').write_text(received.decode('latin-1'))
+                trace.with_name(trace.stem + '-prior.bin').write_bytes(prior)
+                common.write_json(trace.with_suffix('.json'), startup_evidence)
+            try:
+                retain()
+            except OSError as error:
+                if failure is None:
+                    raise
+                failure.add_note('startup evidence retention failed: ' + str(error))
 
 
 def inspection_contract(args):
@@ -415,6 +526,13 @@ def inspect_boot(chip, args):
             # gpio_reg.h GPIO_STRAP_REG and rtc_cntl_reg.h RTC_CNTL_SDIO_CONF_REG.
             read(probe, 'gpio-strap', 0x3ff44038, role='latched straps; read only')
             read(probe, 'rtc-sdio-conf', 0x3ff48074, role='VDD_SDIO configuration; read only')
+            for name, address, count in (
+                    ('classic-rom-cache-flush', 0x40009a14, 28),
+                    ('classic-rom-cache-read-disable', 0x40009ab8, 23),
+                    ('classic-rom-cache-control-literals', 0x40009944, 3),
+                    ('classic-rom-cache-idle-literal', 0x40009ab4, 1)):
+                read(probe, name, address, count,
+                     role='ROM cache implementation bytes; observations only, active image unknown')
             caches = (('pro-cache', 0x3ff00040, 8), ('app-cache', 0x3ff00058, 8))
             clocks = (('apb-clock', 0x3ff66000, 0x3ff), ('rtc-clock', 0x3ff48070, 3 << 27))
             options_address, stall_address = 0x3ff48000, 0x3ff480ac
@@ -534,35 +652,6 @@ def main(chip_class, description):
         common.wait_for_tty_at(console_location, args.enumerate_seconds)
 
     def cycle(run, open_console, probe, names):
-        hub = common.InGroup(run, args.hub_group)
-
-        def off():
-            if dual:
-                common.switch_ports(hub, args.console_hub, [args.console_port], 'off',
-                                    holds=[(args.console_port, args.console_device)], keeps=console_guard)
-            common.switch_ports(hub, args.hub, [args.port], 'off',
-                                holds=[(args.port, args.serial)], keeps=guard)
-
-        def on():
-            if dual:
-                common.switch_ports(hub, args.console_hub, [args.console_port], 'on', keeps=console_guard)
-            common.switch_ports(hub, args.hub, [args.port], 'on', keeps=guard)
-
-        esp.paced(args, 'power off', off)
-        time.sleep(args.off_seconds)
-        esp.paced(args, 'power on', on)
-        settle(run)
-        cold = power_on_boot(probe, chip, names) if names else None
-        console = open_console(run)
-        # The USB UART enumerates after ROM output. Observe true POR above,
-        # then collect the full ROM trace from a separate EN reset. DTR stays
-        # inactive so GPIO0 cannot request download mode.
-        def enable_reset():
-            require(not common.modem_lines(console.fd)['dtr'], 'DTR would select download mode')
-            common.set_lines(console.fd, rts=True)
-            time.sleep(args.reset_seconds)
-            common.set_lines(console.fd, rts=False)
-        esp.paced(args, 'chip-enable reset', enable_reset)
-        return console, cold
+        return cycle_boot(chip, args, run, open_console, probe, names, settle)
 
     return esp.run_board(chip, args, console_for, cycle, settle)
