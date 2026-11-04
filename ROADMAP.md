@@ -1521,378 +1521,100 @@ and reuse rules are unchanged.
 
 ### R12.50 — Xtensa, ESP32 and ESP32-S3
 
-Status: active
+Status: complete
 Depends on: R12.11
 
-A backend for the Xtensa LX6 and LX7, assembled with Espressif's toolchain and
-run on Espressif's QEMU, which emulates both chips; both are learnt through
-R12.11's importer. Decided here: the windowed
-calling convention, whose window overflow and underflow handlers compiler-owned
-startup then provides, or CALL0 throughout, which has none.
+Done: added the `xtensa` family, default `xtensa-esp32` LX6 and selectable
+`xtensa-esp32s3` LX7, with one windowed ILP32 layout (D903) and compiler-owned
+window overflow/underflow, interrupt, trap and stack-switch startup. CLI and
+server level selection, feature queries and L0009 refusals cover both levels;
+one unchanged source takes distinct `salt` feature branches. Pinned vendor
+assemblers accept available instructions and reject absent instructions in
+source blocks and generated code, including the default selection. Actual
+ESP32 objects run on S3 only after configuration, linked-instruction and
+helper compatibility checks; this supplies no general LX7-superset claim.
+Both strict configurations, independent C peers and helper-state audits pass.
+The compact frame plan retains ordinary checked frames, an independent opaque
+assembly bank and a measured prepared-stack handler reserve (D472, D474).
 
-Exit evidence: the freestanding corpus on Espressif's QEMU in the gate, and a
-recorded run on each board.
+Both exact CPUs pass the complete unchanged freestanding inventory on pinned
+Espressif QEMU's explicitly virtual 64 MiB SIM profile: 3,303 cases per CPU, comprising
+3,066 executions, 168 expected source refusals, 65 target restrictions and
+four witnessed selected-image limits for the unchanged two-GiB fixture.
+Separate chip controls retain the physical SRAM bounds. Both imported boards
+pass recorded RAM runs and separate packaging/cold-start checks, with verified
+fixed USB-silent images restored. ESP32 records USB cycling followed by
+CHIP_PU reset and unmeasured rail discharge; S3 separately observes power-on
+before UART. The common rig lock, USB stop rule and Hazard3 contract remain.
+No external memory, DMA or physical timing guarantee is claimed. The two new
+complete emulator lanes and required-job reuse inventory move together.
 
-Extend D255 with one Xtensa family and two selectable levels: the ESP32 LX6
-configuration `xtensa-esp32` as default and the ESP32-S3 LX7 configuration
-`xtensa-esp32s3`. Backend design must establish their compatibility and one
-shared layout and C ABI, choosing the calling convention here rather than
-assuming it now. Record their feature sets when implemented, including a
-feature present only in the S3 configuration.
+Focused Linux and native Mac compiler checks, script controls, independent
+assembler/C ABI controls, all sixteen offline board images, highlighter and
+flake checks pass. Debug/release emission has no disagreements across 24,548
+requests; the all-target manifest covers 52,272 entries. The full fixture-execution suite agrees at one and eight workers: all
+14 aggregate cases pass, with 16,024 checks and retained verdict/diagnostic
+diffs empty after progress-time normalization. Scaling passes alone on its
+host with the default parameters and worker settings.
+The local candidate awaits publication approval and its complete remote gate;
+main promotion needs separate authorization and the unchanged tested tree.
 
-Select levels through `--level=` and the server's `level` option, expose the
-features through `fixed if compiler.feature.NAME`, and refuse unknown or
-other-family selections with L0009. Pin assembler configurations that reject
-instructions outside each selected level, including the default, for both
-`assembler.block` and generated code.
+Settled SR-614 (including its merged SR-671) and SR-672 through the manual-text and policy-drafting recipes;
+SR-660 through emulator pointers; SR-709 through the public fake-filesystem
+contract; SR-719 through the configuration-atom catalogue; SR-723 through
+runtime link policy in mode comparisons; SR-724 through expanded required-job
+inventory checks; SR-725 through target debug-mode queries; and the carried
+SR-757 through RAM-default help. New findings SR-758 through SR-767 are also
+settled: grouped interrupt corrections, dimension documentation, installer
+preflight, distinct command logs, scoped boot reads, complete UART boot traces,
+owned emulator cancellation, explicit classic cold reset, external URL
+recognition and measured remote-protocol latency. SR-770 and SR-771 are
+settled through deterministic retained comparison evidence and canonical
+reader-lock fixtures with an inherited-marker alias control. SR-757 keeps
+its original identity. New SR-768 remains open: contended wall-clock timeouts stay failures,
+with scheduling guidance and controlled replay evidence, pending a general
+guest/transport budget policy. New SR-769 remains open for architecture-specific result/diagnostic labels
+in the shared ESP scenario; existing Xtensa records are
+documented as INTERRUPT pending bits, with the correct per-line masks. New
+SR-772 remains open for selected-target corpus restriction explanations;
+shared witnesses stay valid, but inherited Cortex-M wording does not name
+Xtensa's separate controls.
 
-Completion requires CLI and server selection checks, a feature-dependent
-source taking different branches at the two levels, and unknown/foreign-level
-refusals. Execute the same source at both selected levels only on compatible
-chips, recording the baseline compatibility evidence before relying on an S3
-run for an LX6-level build. At each level, require assembly acceptance of an
-available instruction and refusal of a valid Xtensa instruction absent from
-that level. Record the assembler commands and refusals; a corpus run alone
-does not satisfy the item. Neither level is added to today's compiler table
-by this plan.
+Activation review against `5d1bed296d7779a718d000baa687535a7d13d62d` includes
+all unmatched rows. SR-555 retains the existing locked runtime/FHS route;
+restate its trigger for a QEMU/GDB version or packaging change. SR-650 remains
+for RV32 watchdog-stage validation, SR-605 for RP2350 boot-kind/hash work,
+and SR-552 for script tests requiring development-shell-only tools; these
+new standard-Python controls and Xtensa stages do not implement those changes.
+SR-736 remains for rig failure isolation: Arty and the cascade still share a
+controller. R551-07 remains for general large-image placement, SR-649 for a
+physical ESP image beyond internal SRAM, and SR-637 for RV32 scratch homes;
+virtual corpus RAM and Xtensa frame changes do not settle them.
 
-Implementation plan and decision proposals, before building:
+SR-317 remains for handler-signature and L0506 diagnostics: the resource
+margin changed without improving its convention, constraint, site-type or
+error-set explanations. SR-510 remains for discovery of the fibre task-sizing
+row: compact frames change costs without naming the library's private first
+frame or adding per-task rows. R551-12 retains R16.20's indexed-check, Darwin
+home and atomic/barrier work despite the measured Xtensa frame improvement.
 
-The integration branch is `r1250-integration`, based on
-`5d1bed296d7779a718d000baa687535a7d13d62d`, in a separate worktree. The
-coordinating agent integrates local stream commits. No stream may push or
-promote; candidate publication and main promotion each await Jan's word.
-The local `board-help-finding` commit is carried into this branch, retaining
-SR-757's identity. Other sessions' worktrees and rig resources remain theirs.
+Other unmatched triggers remain attached to their described behavior:
+SR-266 internal-defect caller reporting; SR-289 module-value options;
+SR-296 diagnostic-note citations; SR-298 installed panic-site resolution;
+SR-379 hosted cross-runner children; SR-451 C-layout cascades; SR-722 generator
+failure reporting; SR-721 shared subprocess hang guards; SR-685 wedged
+RISC-V register capture; and SR-636 RV32 float operands or an F level.
+SR-740 retains the proposed local-path notation trigger. SR-291 is restated
+for named-file handling of fenced examples, SR-254 for the checker's command
+line and SR-530 for citation checking: external URL recognition changes none
+of those interfaces or policies.
 
-1. **Calling convention: Jan selected windowed throughout.** Use the vendor's
-   default windowed ILP32 ABI, with `call8`/`callx8`, `entry` and `retw`.
-   Arguments enter in `a2` to `a7`, with outgoing arguments in `a10` to
-   `a15`; `a0` is the return address and `a1` the stack pointer. Compiler
-   startup owns window initialization and overflow/underflow vectors, and
-   the corpus must force both through recursion. Frames reserve the ABI's
-   spill space and retain a frame pointer. The alternative is CALL0, which
-   avoids those handlers but requires matching C peers and runtime helpers
-   built with `-mabi=call0`; vendor-default objects cannot then be treated
-   as compatible. The recommendation accepts the startup work to retain
-   Espressif's ordinary C/runtime boundary. Sources: the pinned
-   [GCC ABI and register definitions](https://github.com/espressif/gcc/blob/673953b409379e2250f831307ba79579535b1b85/gcc/config/xtensa/xtensa.h),
-   its [argument and frame implementation](https://github.com/espressif/gcc/blob/673953b409379e2250f831307ba79579535b1b85/gcc/config/xtensa/xtensa.cc),
-   and Espressif's [Xtensa overview](https://dl.espressif.com/github_assets/espressif/xtensa-isa-doc/releases/download/latest/Xtensa.pdf).
-
-2. **One layout and ABI; configuration-specific instruction sets.** Add one
-   `xtensa` firmware target and the two requested levels. Recommend
-   little-endian ELF32, four-byte pointers and ILP32 C integers, eight-byte
-   alignment for 64-bit scalars, and a sixteen-byte stack alignment. Check
-   sizes, alignments, aggregate argument/return placement and soft-float
-   transport against independently compiled C peers before recording the
-   final ABI decision. Levels cannot change these facts. Reserve optional
-   FP, boolean, MAC and S3 vector registers from ordinary allocation.
-   Use `salt` as a feature query: S3 has the integer `salt`/`saltu`
-   instructions and ESP32 does not. The feature-dependent source compares
-   integers through different selected branches and executes on each
-   matching chip. ESP32's double-precision accelerator instructions are
-   absent from S3, so neither the LX7 name nor a shared ABI proves an ISA
-   superset. Before an S3 run can count for an LX6-level artifact, record
-   that artifact's linked instructions and helpers against both pinned
-   configurations and execute the common baseline on both machines. Keep
-   ESP32-specific inline assembly and helpers on ESP32. Sources: the pinned
-   [Espressif overlays](https://github.com/espressif/xtensa-overlays/tree/dd1cf19f6eb327a9db51043439974a6de13f5c7f),
-   the GCC definitions above and the independent Rust
-   [ESP32](https://github.com/rust-lang/rust/blob/1.91.0/compiler/rustc_target/src/spec/targets/xtensa_esp32_none_elf.rs)
-   and [ESP32-S3](https://github.com/rust-lang/rust/blob/1.91.0/compiler/rustc_target/src/spec/targets/xtensa_esp32s3_none_elf.rs)
-   layouts.
-
-3. **Exact tools and strict assemblers.** Recommend Espressif
-   `esp-16.1.0_20260609`, GCC 16.1.0 and Binutils 2.46.0, with its
-   chip-specific wrappers. The commands are `xtensa-esp32-elf-as
-   --abi-windowed` and `xtensa-esp32s3-elf-as --abi-windowed`; the compiler
-   driver uses `-mabi=windowed` and the same selected configuration for
-   generated code and assembly blocks. The wrappers select
-   `xtensa_esp32.so` or `xtensa_esp32s3.so` through `XTENSA_GNU_CONFIG` and
-   select the matching compiler multilib. A generic assembler without its
-   configuration is insufficient. At each level retain the exact command,
-   an accepted instruction and the refusal of a valid optional Xtensa
-   instruction absent there; additionally test S3's `salt` against ESP32
-   and ESP32's `rur.f64r_lo` against S3. Repeat the boundary through source
-   assembly and the generated-code assembly path. Source-established
-   expectations remain unvalidated until these commands run.
-
-   The toolchain archive names start `xtensa-esp-elf-16.1.0_20260609-`.
-   Their SHA-256 values, independently matched with release metadata, are:
-
-   | suffix | SHA-256 |
-   |---|---|
-   | `x86_64-linux-gnu.tar.xz` | `f708752ebb35cab21f184b2574114ed1187619db0edb8a4ba913c06ca2fa675e` |
-   | `aarch64-linux-gnu.tar.xz` | `785ee242bfbdb3ac4e764e85d2f87109c7c5f3da57d742da9a7c58c0d0906149` |
-   | `aarch64-apple-darwin.tar.xz` | `be4eb81c12c9bbf6ead79c758bfa81b8e6ec9a695372f946ac924c70c32f273d` |
-
-   Recommend QEMU's `esp-develop-9.2.2-20260417`, matching the current
-   RISC-V release pin, commit `40edccac415693c5130f91c01d84176ae6008566`.
-   Its Xtensa Linux archive's SHA-256 is
-   `0eecb2a34a5586c0e59110f77b9343b7b336e82fdb0e1a30e1dc1bab8a547e35`.
-   Use separate `esp32` and `esp32s3` machines with direct ELF loading and
-   debugger-observed result oracles; this bypasses ROM packaging and supplies no
-   physical boot evidence. Sources: the immutable
-   [Espressif tool manifest](https://raw.githubusercontent.com/espressif/esp-idf/0a1d19eba1fc6f9b5abe623df2dc4f60a703cf46/tools/tools.json),
-   [toolchain release](https://github.com/espressif/crosstool-NG/releases/tag/esp-16.1.0_20260609),
-   [wrapper implementation](https://raw.githubusercontent.com/espressif/esp-toolchain-bin-wrappers/d8844fa7d904aefcb9484ff3a37f4f5c476321f6/gnu-xtensa-toolchian/main.rs),
-   [assembler options](https://raw.githubusercontent.com/espressif/binutils-gdb/esp-2.46.0_20260609/gas/doc/c-xtensa.texi)
-   and [QEMU release](https://github.com/espressif/qemu/releases/tag/esp-develop-9.2.2-20260417).
-
-4. **RAM and boot: recommend internal SRAM profiles first.** Learn both
-   devices through the SVD importer with pinned inputs and reviewed policy.
-   Keep chip maps and peripheral initialization in their source descriptions;
-   compiler code owns architectural vectors, ABI and image kinds. Admit
-   internal IRAM/DRAM only, with no external flash/PSRAM cache or DMA claim.
-   RAM mode remains the development default: halt, retire interrupts and
-   device activity, establish CPU1 quiescence and the supported cache/clock
-   state, load and verify SRAM, prepare Xtensa state, then enter compiler
-   startup, which initializes windows, vectors, BSS and device state.
-   Unsupported prior state refuses with the explicit boot/setup route.
-   Separate boot checks validate the ROM header, segments, checksum/hash,
-   cold startup and restoration of a USB-silent fixed image. ESP32's ROM
-   loads at flash offset `0x1000`; S3's loads at `0`. Sources: Espressif's
-   [ESP32 startup](https://docs.espressif.com/projects/esp-idf/en/v6.1/esp32/api-guides/startup.html)
-   and [S3 startup](https://docs.espressif.com/projects/esp-idf/en/v6.1/esp32s3/api-guides/startup.html).
-   Detailed memory carve-outs, CPU state and physical oracles must be
-   checked against the manuals and pinned debug implementation before use.
-
-   The proposed SRAM carve-outs are ESP32 IRAM `0x40080000..0x400a0000`
-   and DRAM `0x3ffb0000..0x3ffd0000`, and S3 IRAM
-   `0x40378000..0x40398000` and DRAM `0x3fca8000..0x3fcd0000`, with
-   exclusive upper bounds. S3's instruction/data alias offset is
-   `0x6f0000`; the carve-outs must not overlap physically or use the ROM's
-   reserved buffers. Put byte-readable rodata in DRAM, and vectors, text
-   and aligned literals in IRAM. Reserve a 1 KiB-aligned vector block;
-   entry follows the block rather than being required to equal IRAM's
-   origin. The pinned
-   [ESP32 linker map](https://github.com/espressif/esp-idf/blob/fff9895c82d744c7237be8847347bdd1b07c6643/components/esp_system/ld/esp32/memory.ld.in),
-   [S3 linker map](https://github.com/espressif/esp-idf/blob/fff9895c82d744c7237be8847347bdd1b07c6643/components/esp_system/ld/esp32s3/memory.ld.in)
-   and [S3 ROM reservations](https://github.com/espressif/esp-idf/blob/fff9895c82d744c7237be8847347bdd1b07c6643/components/bootloader/subproject/main/ld/esp32s3/bootloader.memory.ld.in)
-   are the inputs to review, not proof that a linked image is correct.
-
-   CPU1 needs the device's hardware stall, checked before loading and
-   after independent readbacks. A debug halt alone is insufficient: the
-   pinned probe-rs Xtensa teardown resumes halted cores when leaving
-   debug mode. Expose CPU0 alone to the helper session, and retain the
-   architectural and device-state checks separately. The relevant sources
-   are probe-rs's
-   [session teardown](https://github.com/JanHaan/probe-rs/blob/6f9946fe748edd0e55604dc42bc0f7ea3e7485da/probe-rs/src/session.rs),
-   [Xtensa debug exit](https://github.com/JanHaan/probe-rs/blob/6f9946fe748edd0e55604dc42bc0f7ea3e7485da/probe-rs/src/architecture/xtensa/communication_interface.rs),
-   and Espressif's
-   [ESP32 stall primitive](https://github.com/espressif/esp-idf/blob/fff9895c82d744c7237be8847347bdd1b07c6643/components/hal/esp32/include/hal/cpu_utility_ll.h)
-   and [S3 stall primitive](https://github.com/espressif/esp-idf/blob/fff9895c82d744c7237be8847347bdd1b07c6643/components/hal/esp32s3/include/hal/cpu_utility_ll.h).
-   **Cold-contract revision before building the revised S3 images:** the
-   first physical ROM boot left S3's data cache enabled; the original
-   cache-off precondition parked before startup and cannot establish the
-   RAM baseline on that board. Recommend normalizing caches only on the
-   direct ROM-entry path after power-on/CHIP_PU reset cause one. Retire
-   watchdogs and stall CPU1, establish compiler-owned windows, masked
-   interrupts, VECBASE and a DRAM stack, then call the vendor's windowed
-   ROM writeback and disable APIs and verify both enable bits clear before
-   ordinary compiler reset. The cache-off path makes no ROM calls; RAM
-   loading still refuses enabled caches before writes. A sticky reset cause
-   is only a precondition, not proof of caller provenance: arbitrary jumps
-   from another application are outside the cold contract. Preserve dirty
-   data through the ROM writeback path rather than clearing enable bits.
-   Primary evidence: the pinned
-   [S3 cache API](https://github.com/espressif/esp-idf/blob/fff9895c82d744c7237be8847347bdd1b07c6643/components/esp_rom/esp32s3/include/esp32s3/rom/cache.h),
-   [cache HAL primitives](https://github.com/espressif/esp-idf/blob/fff9895c82d744c7237be8847347bdd1b07c6643/components/hal/esp32s3/include/hal/cache_ll.h)
-   and [ROM symbols](https://github.com/espressif/esp-idf/blob/fff9895c82d744c7237be8847347bdd1b07c6643/components/esp_rom/esp32s3/ld/esp32s3.rom.ld),
-   plus disassembly of the ROM shipped with the locked QEMU. Its API
-   veneers lead to windowed implementations that wait for autoload and
-   idle state; their dispatch table lies above this profile's DRAM end.
-   Boot observations receive an explicit scope that reports actual CPU1
-   state before that state can be required. Warm independent readbacks
-   retain their mandatory hardware-stall check.
-
-   **Classic cold-contract revision before building:** a bounded EN-reset
-   trace shows that the rev-3.1 ESP32 ROM accepts both fixed-image segments
-   and enters the exact entry, then the cache-off gate parks until the RTC
-   watchdog resets it. Independent inspection confirms PRO cache enabled,
-   APP cache disabled and CPU1 unstalled. Recommend the classic ROM's own
-   disable-both, flush-both sequence from the pinned
-   [bootloader](https://github.com/espressif/esp-idf/blob/fff9895c82d744c7237be8847347bdd1b07c6643/components/bootloader_support/src/esp32/bootloader_esp32.c)
-   and [cache API](https://github.com/espressif/esp-idf/blob/fff9895c82d744c7237be8847347bdd1b07c6643/components/esp_rom/esp32/include/esp32/rom/cache.h).
-   Select the already pinned ROM archive's `esp32_rev300_rom.elf` for
-   physical rev 3.1, SHA-256
-   `920b70635440517866aab2230964a570d2cf2b676658d93c52fbac108c1cca31`.
-   Guard every word of the leaf routines `Cache_Read_Disable` at
-   `0x40009ab8` and `Cache_Flush` at `0x40009a14`, and their four literal
-   dependencies, before any device write. Then stop watchdogs, stall CPU1,
-   disable both caches, flush both and verify enable bits clear. This is
-   only the direct ROM cold-entry contract with reset cause one, before
-   PSRAM initialization or any dirty external data. Flush invalidates;
-   it supplies no writeback guarantee. Arbitrary cached warm entry stays
-   refused, and the cache-off path makes no ROM call. Compiler entry
-   supplies the same architectural prelude as for S3.
-
-   The classic board's external JTAG remains powered during USB switching;
-   USB cycling alone retained the debug flash stub's software-reset state.
-   Its boot check therefore records a USB power cycle followed by a normal
-   CHIP_PU reset, with GPIO0 released, and independently checks reset cause
-   one, actual startup and the complete ROM trace. This is an explicit EN
-   cold-reset contract, with no claim that the power rail discharged.
-   S3 retains its independent power-on observation before UART opening.
-   The EN pulse follows pinned esptool's
-   [HardReset](https://github.com/espressif/esptool/blob/70afbaabee112e252136fef677ce09a0c141f29d/esptool/reset.py).
-
-   **Architectural prelude proposal:** a windowed ROM call needs a valid
-   window set, spill stack and vectors. Before an Xtensa pre-reset device
-   stage, compiler-owned entry therefore establishes masked interrupts,
-   WINDOWBASE/WINDOWSTART, VECBASE and the declared internal DRAM stack
-   with its ABI backchain. That stage may use this stack and the windowed
-   ROM boundary, but static data and BSS remain uninitialized and ordinary
-   Landin calls remain outside its naked form. Compiler reset repeats its
-   architectural initialization after the stage. Other target families'
-   stack-free stage requirements are unchanged. This replaces the rejected
-   idea of hiding unvalidated stack initialization inside a device stage;
-   the architectural guarantee belongs to the compiler and its tests.
-
-   The source's full ROM instruction/constant fingerprint needs about
-   twenty KiB of assembly text. Admit up to 32768 decoded ASCII bytes in a
-   naked Xtensa block, keeping the 4096-byte ceiling for ordinary blocks
-   and every other architecture. The existing instruction-only, single
-   literal and naked-body restrictions remain. This finite ceiling lets
-   the description retain one self-contained stage without helper
-   declarations or a data table that its early entry cannot assume ready.
-
-   **Corpus capacity: Jan selected the exact-core virtual-RAM proposal.**
-   Keep both bounded chip machines
-   and physical maps for architectural/startup controls and board runs.
-   Run the complete unchanged freestanding inventory on the same locked
-   Espressif QEMU's `sim` machine with `-cpu esp32` or `-cpu esp32s3`
-   and an explicitly emulator-only 64 MiB memory profile. Several existing
-   fixtures require hundreds of KiB of static data or frames larger than
-   sixteen KiB, beyond the physical profiles; suppressing those executions
-   would lose semantic evidence. Recommend disjoint code/data regions in
-   `0x60000000..0x64000000` and a separately declared corpus stack budget.
-   This establishes no additional chip RAM, cache, PSRAM or peripheral
-   capability. Primary evidence: the pinned
-   [sim startup](https://github.com/espressif/qemu/blob/40edccac415693c5130f91c01d84176ae6008566/hw/xtensa/sim.c)
-   creates the selected CPU and sizes system RAM from `-m`; the exact
-   [ESP32](https://github.com/espressif/qemu/blob/40edccac415693c5130f91c01d84176ae6008566/target/xtensa/core-esp32.c)
-   and [S3](https://github.com/espressif/qemu/blob/40edccac415693c5130f91c01d84176ae6008566/target/xtensa/core-esp32s3.c)
-   configurations retain their distinct ISA, window, FPU and interrupt
-   facts. Runtime QOM and ITLB/DTLB inspection independently confirmed both
-   CPU types and identity-mapped RWX bypass RAM at the proposed endpoints.
-   The selected loader is QEMU's generic ELF loader with `cpu-num=0`:
-   its pinned [reset callback](https://github.com/espressif/qemu/blob/40edccac415693c5130f91c01d84176ae6008566/hw/core/generic-loader.c)
-   selects the ELF entry after CPU reset. The runner independently checks
-   the initial PC before continuing; SIM's `-kernel` initialization alone
-   loses its entry selection to the later machine reset. Initial window,
-   floating and feature controls have run on both exact CPUs. The existing
-   two-GiB static-array fixture also exceeds this virtual map; retain its
-   existing selected-image boundary only with actual link-map and object
-   section capacity evidence, never a runtime claim. The alternative
-   is a smaller source counterpart for each oversized fixture, with each
-   reduction individually preserving the semantic oracle; blanket capacity
-   exemptions would not satisfy the shared-library matrix.
-
-   The helper's present Arm/RISC-V split needs a real Xtensa path; it must
-   not apply RISC-V registers, fences or interrupt oracles to these ports.
-
-   Physical evidence covers UART command/echo, GPIO state, timer progress,
-   interrupt masking and recovery, traps and independent readbacks. DMA
-   claims require actual transmit and receive consumers through each
-   chip's DMA path. Boot corruption checks establish what each ROM does;
-   C3/C5's SHA warning text is no evidence for these ROMs. Both boot modes
-   restore and verify their own quiet image, with the application and
-   fixed-image identities retained apart from the RAM records.
-
-After these decisions are settled, implementation proceeds in bounded
-streams from the agreed base, each writer in a separate worktree:
-
-- Target facts, levels, CLI/server refusals and source assembly admission;
-  combine the exact affected `targets`, `toolchain`, `server` and checking
-  cases in one developer invocation.
-- Xtensa emission and compiler-owned firmware startup; combine the new
-  backend/firmware cases, invalid-register IR refusal and integer-operand
-  assembly case, followed by focused corpus execution on both machines.
-- Reviewed device imports, board tools and helper contracts; combine their
-  exact Python controls, helper controls and offline boot/RAM builds.
-  Carry SR-757 into the help corrections.
-
-The integrator reconciles specification decisions, fixture inventories,
-library-consumer coverage and all target lists. Add both complete emulator
-corpora to the gate and update the reuse job inventory, build-mode and
-cross-host manifest coverage together. Complete suites belong to the
-integrated tree or gate, with default build workers and CPU placement.
-Run focused Mac checks in an isolated checkout when the integrated changes
-are ready. Run all closing activations against the starting commit, read
-unmatched rows, compare debug/release modes and manifests, run scaling alone,
-the highlighter integration pass and the full document check. Physical
-runs use checksummed bundles built on epycmicro and matching tool source
-transferred by `environments/boards/run.py`; rigpi alone operates boards
-under the common lock. Time every run, stop on USB trouble and retain its
-lines. Preserve Hazard3's parked-hart, instruction-visibility and TIMER0
-contract. Prepare the validated local candidate before requesting push
-approval; follow its complete gate and promote only with separate authority
-and unchanged-tree evidence. No release designation changes.
-
-The initial unmatched-activation review identified SR-555, SR-605, SR-614,
-SR-650, SR-660, SR-672, SR-719, SR-723, SR-725, SR-736 and SR-757 for
-explicit disposition as their areas change. This is an implementation
-agenda, not a claim that these rows are settled. SR-649's external-memory
-trigger remains outside the proposed internal-SRAM profiles. Repeat the
-activation audit over the final integrated changes before closure.
-
-The candidate takes SR-614 and SR-672 through the documented PDF-text and
-policy-drafting recipes; SR-660 through pointers from the target contract
-to both emulator recipes; SR-709 through the fakes' public declaration;
-SR-719 by removing the duplicated atom list; SR-723 by passing hosted
-runtime link policy in mode comparisons; SR-724 by checking every expanded
-required matrix leg, including called workflows; SR-725 by listing each
-target's debug mode; SR-757 through SR-760 through help, importer and
-installer controls; SR-761 through distinct command logs; SR-762 through
-explicit boot observations; SR-763 through transmitter draining and
-complete ROM trace lines; and SR-764 through emulator cancellation ownership.
-Their rows stay in the register until closure evidence
-is complete. New findings are SR-758 through SR-772; SR-757 retains the
-identity of the carried local finding. SR-768, SR-769 and SR-772 remain open for
-guest-budget policy, architecture-specific scenario labels and selected-target
-corpus restriction explanations.
-
-SR-555 retains the existing FHS route and its single locked runtime source.
-Its activation is restated for a QEMU/GDB version or packaging change: this
-item adds the Xtensa build of the already locked Espressif QEMU release,
-and checks its exact archives and inventories. SR-650's activation is
-restated for RV32 stage code or validation: the new stages are Xtensa and
-would not be checked by the requested RISC-V evaluator. Their source
-contracts and cold-start checks belong here; the RV32 evaluator remains
-open. SR-605's RP2350 boot-kind/hash trigger is not met by reusing ESP's
-existing image format. SR-552 retains its trigger: the added script
-controls use standard Python, fake processes and independent ELF inputs,
-with no dependency supplied only by the development shell. SR-736 remains
-open: the Pi's Arty and cascade share a controller. Board work keeps the
-common lock, verifies no BOOTSEL device and stops on every new kernel USB
-fault; separate USB ports are not separate failure domains.
-
-The final unmatched-row review also keeps R551-07 open: the virtual corpus
-map and witnessed two-GiB refusal provide bounded placement evidence,
-not general large-image preflight. SR-649's activation is restated for a
-physical ESP image exceeding internal SRAM; virtual corpus memory supplies
-no flash mapping. SR-637 concerns RV32 scratch homes and is not changed by
-the new Xtensa stack. The unrelated usability triggers are narrowed to the
-behavior they describe: SR-266 to internal-defect caller reporting;
-SR-289 to module-value declared-option admission; SR-296 to diagnostic-note
-citation policy; SR-298 to installed panic-site resolution; SR-379 to hosted
-cross-runner child programs; SR-451 to C-layout refusal cascades; and
-SR-722 to generator failure reporting. New target facts, commands,
-freestanding execution and regenerated catalogues do not implement those
-changes. SR-721's shared subprocess hang-guard policy remains open; focused
-controls retain bounded, load-tolerant waits. SR-685 remains about a wedged
-RISC-V core's architectural register capture: the classic Xtensa reset
-diagnostic records its own scoped trace without claiming that facility.
-SR-636 is restated for the RV32 float-operand refusal or an RV32 F level;
-the new target and naked-text limit do not change that refusal. SR-740's
-proposed local-path notation remains open: recognizing an external URL
-fixes SR-766 without introducing syntax for a file that does not exist.
-SR-291's activation is restated for named-file handling of fenced program
-examples; external URL recognition leaves the fenced-code policy unchanged.
-SR-254 and SR-530 retain their command-line and citation-check triggers:
-neither interface changed with the named-file fix.
+SR-734 remains for the fixture failure's re-recording hint: the lane-description
+message now names Xtensa's corpus, while that separate hint is unchanged.
+SR-281 retains stale-binary detection: the comparison wrapper builds once and
+records provenance without comparing an installed binary to its checkout.
+SR-324 retains a common non-host assembler command: adding configured Xtensa
+lanes does not change Mach-O/FreeBSD spelling or introduce that command.
 
 ### R12.60 — Boards in the gate
 
@@ -3722,7 +3444,9 @@ SR-366, SR-372, SR-388, SR-391, SR-393, SR-402, SR-428, SR-487, SR-488,
 SR-489, SR-499, SR-511, SR-517, SR-680, SR-684, SR-691, SR-706, SR-735,
 SR-737, SR-738, SR-739, SR-741, SR-742, SR-743, SR-744, SR-745, SR-746,
 SR-747, SR-748, SR-749, SR-750, SR-751, SR-752, SR-753, SR-754, SR-755,
-SR-756.
+SR-756, SR-614, SR-660, SR-671, SR-672, SR-709, SR-719, SR-723, SR-724,
+SR-725, SR-757, SR-758, SR-759, SR-760, SR-761, SR-762, SR-763, SR-764,
+SR-765, SR-766, SR-767, SR-770, SR-771.
 
 | Record | Family | What stands | Activation | Completion | Status |
 | --- | --- | --- | --- | --- | --- |
@@ -3978,7 +3702,6 @@ SR-756.
 | SR-573 | Usability | L0517's natural example, `link(region: "NOWHERE") table: u32 = 1` at `--target=cortex-m0`, is refused with it by `refine` beside its library, and the test program compiles an example on a file system holding the example alone, where no library holds the constrained reference, so the program is refused as L0518 and the section shows no example; a region placement cannot stand in a description's own module, so no one-file example raises it. L0518, L0519 and L0538 need a library without the reference, a linker script or the assembler's object, and show none either, and so does L0555, R12.30's image-block refusal, which needs the assembler's object. Met giving the Cortex-M codes their examples in R12.20. | The next diagnostic section whose code needs the library, or the next change to how the test program compiles the examples. | The examples compiled beside the repository's own library, or an example form that holds a second file, stated where the page describes its examples. | open |
 | SR-497 | Usability | ST's RM0433, the STM32H753's reference manual, cannot be fetched by a script: www.st.com resets the HTTP/2 stream and times out over HTTP/1.1. It is pinned in `devices/inputs.json` by URL and SHA-256 as Rev 9, which the STM32H753's reviewed literals cite by section and page, but marked `"fetch": "by hand"`, so a person must download it in a browser and put it in the cache before `scripts/fetch_inputs.py --all` can verify it, and no job can. Met learning the STM32H753 under R12.11; the maintainer supplied the copy. | R12.20's board run, or the next item that checks a chip against a manual its publisher serves only to a browser. | A source that serves the pinned manual to a script, or the maintainer's decision that hand-supplied manuals stay, recorded with how a reviewer obtains one. | retired: R12.12 keeps a manual its publisher serves only to a browser supplied by hand, pinned by URL and SHA-256, with how a reviewer obtains it beside the pin |
 | SR-670 | Usability | `environments/cortex-m/descriptions.json`'s `devices` is where a description's facts are recorded apart from the compiler, and its readers are Cortex-M's: `descriptions.py` and `backend.py` skip every record naming another target (D661), so the ESP32-C3's, the ESP32-C5's and RP2350's Hazard3 records, each naming `rv32`, are recorded and nothing compares a linked image with them; and the Hazard3 record holds no table address, boot prefix or suffix, since RP2350's RISC-V image puts its code before its trap table and block, a layout the boot kind decides and `backend_corpus.py`'s fixed `boot_prefix` does not describe. Met recording R12.40's three RISC-V descriptions. | R12.40's RV32 descriptions lane. | A lane that selects each RISC-V description by its identity and compares its linked image with its record, the Hazard3 record completed with the layout the boot kind gives. | retired: R12.40's descriptions lane links every RV32 description with the RV32 toolchain, selects each by its record's `target` and identity, and holds the linked image, its slots and the Hazard3's completed layout and block to the record |
-| SR-672 | Usability | A selection policy states each register's read, write and reserved policy by hand, and the ESP32-C3's 54 registers and the ESP32-C5's 53 each needed one, nearly all of them following from the SVD's field accesses: read-only fields refuse a write, write-only ones a read. Nothing drafts that table, so the policies were drafted by a scratch script outside the tree and then reviewed. Met writing R12.40's ESP policies. | The next device learnt. | `refine svd` able to print the access table it would infer from the SVD for a reviewer to correct, or the devices README saying how a reviewer drafts one. | open |
 | SR-673 | Usability | `import "esp32c5/clic"`, a module path in quotes as a text literal, is refused with L0100 "a name belongs here" at the quote, whose note cites [1760]'s rule for names and says nothing of an import taking a bare path, `import esp32c5/clic`. Met checking the generated ESP modules with `refine check` in R12.40. | The next change to the parser's import refusals. | The refusal at an import saying that a module path is written without quotes. | retired: R13.75: the refusal at a quoted import path says the path is written without quotes (D862) |
 | SR-515 | Usability | `environments/cortex-m/gdb_server.py` promises that a session cannot see the one before it and discards breakpoints between sessions, but a breakpoint a script makes with `internal=True` survives `delete`, so the corpus's first stack-guard watchpoint, made internal, fired in the paint loop of the next program on the same worker, at an armv7-m profile, and failed it as a stack overrun. Met adding the guard in R12.12, which now makes an ordinary watchpoint. | The next change to how `gdb_server.py` ends a session's breakpoints and watchpoints. | The server removing every breakpoint and watchpoint a session made, internal ones included, or its contract saying a session may make none. | retired: `gdb_server.py` deletes every breakpoint and watchpoint a session made, internal ones included; `test.py`'s fake-GDB control and the shared-debugger control hold the next session to seeing none |
 | SR-550 | Usability | A rooted negative fixture runs on the real host with its recorded `args`, so one the compiler unexpectedly accepts writes its output where the test program runs: `negative/stack-handler-opens-its-graph`, whose `args` say `--emit=asm` without `-o`, left `compiler/ada/a.s` in the checkout when a change to the stack report made it compile, beside the parser suite's verdict that its codes were missing. Met integrating R12.12. | The next change to the parser suite's pinned-codes case or to how a rooted fixture is run. | Such a run writing into a directory of its own, or its output named beside the failure. | retired: rooted negatives are compiled through an overlay that refuses writes; the failure shows the report naming the refused output |
@@ -3987,7 +3710,6 @@ SR-756.
 | SR-553 | Usability | `code = outcome when outcome > 30` is L0110 "this begins no statement" at `when`, whose note lists the statements; nothing says that `when` qualifies only `return`, `break` and `continue`, or that an assignment wants an `if`. Met making a fixture's status say which case failed in R12.12. | The next change to L0110's notes or to `when`. | The refusal naming the three statements `when` qualifies and `if` as the form for the rest. | retired: R13.75: the refusal names the four exits [0970] gives `when`, and `if` for the rest (D865) |
 | SR-554 | Usability | `compiler/tests/freebsd/check.py --case runtime/network-connect-within`, the name every other runner takes, and `--case runtime-network-connect-within`, the outcome's spelling in the lane's own transcript, are both "unknown exact case"; the lane wants the fixture directory's bare name, `network-connect-within`, which the refusal does not say and `--help` calls an "exact fixture name". Met rechecking three fixtures in the FreeBSD VM during R12.12's gate. | The next change to the FreeBSD lanes' selection. | The lane taking `CLASS/NAME` as the other runners do, or the refusal listing the names it knows. | open |
 | SR-555 | Usability | The Cortex-M lanes' QEMU 10.0.13 and GDB 16.3 with Python are Debian binaries locked in `environments/cortex-m/tools.lock.json`, and since the RV32 lanes so is Espressif's QEMU 9.2.2 release binary with the 36 Debian libraries it loads, so on NixOS every lane, three programs in all, runs only under `steam-run`, with `TMPDIR` and its output under `$HOME`, the route `environments/cortex-m/README.md` gives, and setup only with `dpkg` and `xz` added to that shell. A flake package building QEMU's ARM system emulator, Espressif's QEMU and GDB from upstream at the locked versions would let `nix develop` run every lane as the gate does; R12.12 declined it as a second source of the same pins beside the lock, and builds no cache holds. | The next version or packaging change to the locked QEMU/GDB runtimes, or a maintainer decision that the flake carries them. | The lanes' QEMUs and GDB built by the flake at the lock's versions, every lane run from `nix develop` without `steam-run`, and the gate's lanes on the same build or its lock checked against it. | open |
-| SR-660 | Usability | The RV32 emulator lanes live in `environments/cortex-m/`, under a README titled "Cortex-M execution profile", installed by `setup.py`'s "pinned Cortex-M tools" into a root that also holds the riscv64-elf archive and Espressif's QEMU, and reported by `run.py` as "Cortex-M lane esp32c3 passed"; someone looking for how RISC-V firmware is tested would not look there. Met adding the `esp32c3` and `sifive-e` lanes, which were added beside the Arm ones rather than renaming the directory, its scripts and the gate's `cortex-m-*` jobs in the same change. | The next change that adds a third architecture's lanes, or a maintainer decision to rename. | The directory, README, installer and lane lines named for microcontroller lanes of every architecture, or a pointer from where RV32 is documented that a reader meets first. | open |
 | SR-661 | Usability | `environments/cortex-m/README.md`'s "On NixOS" gave the `steam-run` route for `run.py` only; `setup.py` under the same route fails, because NixOS puts neither `dpkg-deb` nor, since the RV32 lanes' `tar.xz` archive, `xz` on the path that `steam-run` inherits, and finding that took trial. Met installing the RV32 lanes' tool root. | This change. | The README giving setup's own route on NixOS. | retired: the README gives setup's route, with `dpkg` and `xz` in the shell |
 | SR-662 | Usability | A tool root installed before the lock changed refused every lane with "tool lock mismatch", and one whose files differed from its record with "installed tools changed", neither saying which area differed or that a fresh root is the remedy, since setup refuses an existing one. Met moving to the RV32 lanes' lock with an older root. | This change. | Both refusals naming what differs and the fresh `--tools` root. | retired: both name the root, the differing areas and `setup.py` |
 | SR-569 | Usability | `refine --target=cortex-m0 FILE` closes "checked FILE and wrote nothing; run it with `refine run FILE`, or build it with `refine compile FILE -o program`": both commands drop the target it was given, so the first refuses a firmware source as L0502 "a hosted program needs public main", and with `--target=cortex-m0` put back `refine run` is L0002, since nothing runs a Cortex-M program on the host; a firmware build needs `--firmware-entry`, which the line does not name. Met recording `positive/assembly-comments-naked`'s expectation in R12.20; SR-470 is the same line on a source with no `main`. | The next change to the driver's closing line. | The closing line keeping the target it was given, and offering a firmware target `refine compile --target=... --firmware-entry=NAME --emit=exe` rather than `run`. | retired: the closing line keeps the target and offers a firmware target `compile` with `--firmware-entry` (D731) |
@@ -3995,7 +3717,6 @@ SR-756.
 | SR-556 | Competitive optimization | RP2040's description boots through a port of pico-sdk's generic second stage, which reads the flash with the serial 03h command at a quarter of the system clock, so every cache miss in flash costs one serial read; pico-sdk's default for the Pico, `boot2_w25q080.S`, reads four bits a clock, and it also writes the flash's non-volatile QE bit when that is clear, a path the Pico H's W25Q16JV, shipped with QE set, would never run. Chosen for the first board because every instruction of the generic stage runs on it and it fits any RP2040 board's flash. | A program whose speed in flash matters on an RP2040 board, or a board whose flash the generic stage cannot read. | A quad-read second stage for that flash in its description, every path of it executed on the board. | open |
 | SR-610 | Usability | `link(section: ".ramtext.handle")` on a generic routine, `handle: (port: type is device, bytes: []u8, p: port)`, is refused as L0347, "invalid or conflicting Cortex-M0 placement", whose note lists the section spellings, alignments and vectors [1640] admits, every one of which the declaration met; nothing in the refusal or in L0347's explanation says that a generic routine cannot be placed, or what to write instead. Met making the shared command loop device-neutral in R12.30, which took function values instead (D645). | The next change to a generic routine's placement, or to L0347's text for it. | The refusal naming the type parameter as what keeps the routine from being placed and offering a nongeneric routine that calls it, or placement of a generic routine's instances defined. | open |
 | SR-613 | Usability | The STM32H753's SVD describes none of the Cortex-M7's System Control Space, so the board application reaches VTOR, CPACR, CCR, the NVIC's enables and SysTick through a module of its own, `scs`, of volatile accesses at addresses read out of the Armv7-M Architecture Reference Manual; the RP2040's SVD gave its `ppb` module, and `platform/cortex_m` offers barriers and the interrupt mask but no System Control Space register, though every M-profile board has them at the same addresses. Met writing the STM32H753 board application in R12.30. | The next board whose SVD lacks the core's registers, or the next change to `platform/cortex_m`. | The architecture's System Control Space as a library module or a generated one of its own, which the STM32H753 board imports instead. | open |
-| SR-614 | Usability | A board's oracle and its policy cite the vendor's manual by section and page, and finding those takes a text copy of the PDF: `~/.cache/landin/inputs/rm0433/` held a text rendering beside the pinned PDF, made outside the repository, and `rp2350-datasheet/` held the PDF alone, so the RP2350 board's citations were read from a copy made by hand with `nix-shell -p poppler-utils --run 'pdftotext -layout ...'`; neither `scripts/fetch_inputs.py` nor `devices/README.md` names the step or the tool, and the dev shell carries no `pdftotext`. Met writing the RP2350 board's oracle in R12.30. Merged: SR-671, the same step met reviewing the ESP32-C3's 903-page and the ESP32-C5's 1,746-page TRMs in R12.40, where a PDF viewer's page number and the printed one also differ. | The next change to `scripts/fetch_inputs.py`, or the next board whose manual is a fetched PDF. | `scripts/fetch_inputs.py` writing a pinned text rendering beside each document input, with the tool that makes it in the dev shell, or `devices/README.md` naming the step. | open |
 | SR-615 | Usability | D265 says RV64's instruction selection "uses target XLEN and independent extension sets so a future RV32 emitter can share it", and `landin-backend-riscv_instructions` takes a width of 32 or 64, but every call in `landin-backend-riscv.adb` passes a literal 64, and its frames (`sd`, `ld`, CFI at −8 and −16), its 64-bit products and quotients, its float instructions and its atomics, which use AMOs and LR/SC whatever the level holds, are written for RV64 alone, so the decision promises a reuse a reader planning RV32 finds only by reading the emitter. Met planning R12.40. | R12.40's RV32 emitter. | The emitter parametric in XLEN as D265 says, or D265's note corrected to what is shared. | retired: D671 makes `Landin.Backend.RiscV` ask the target its XLEN, and RV32 is that emitter at 32, with eight-byte values in pairs, libgcc's soft float and division, word frames with CFI at −4 and −8, and A's instructions only where the level holds A; D265's note says so |
 | SR-616 | Usability | Once an RP2350's boot ROM has switched its cores to RISC-V for an IMAGE_DEF that asks for it, probe-rs's `RP235x` target, which flashed the image, fails every later read and write with "Target device responded with a FAULT response", which says nothing of the architecture, and only `--chip RP235x_riscv` reaches the chip's memory; `probe-rs reset` with `RP235x` hangs. Met booting a Hazard3 image on the Pico 2 for R12.40. | R12.40's Hazard3 board tool. | The board tool choosing the target by the image's architecture and its README saying which reaches the chip after each boot. | retired: R12.40's Hazard3 tool flashes and reads through the target that reaches the architecture running, `RP235x` in BOOTSEL or before the switch and `RP235x_riscv` after it, and its README says which reaches the chip after each boot (D712) |
 | SR-617 | Usability | `probe-rs reset` on an ESP32-C3 resets the chip's USB-Serial-JTAG with it, "A USB error occurred", so a console opened on the board's own CDC port before the reset receives nothing of what the ROM prints at boot, and the ROM's account of the image it loaded is lost. Met checking a RAM-only image on the C3 for R12.40. | R12.40's ESP board tools. | The board's oracle reading the ROM's boot log from UART0, wired to the rig, and the README saying why the CDC port cannot carry it. | retired: R12.40's ESP32-C3 board tool reads the ROM's boot log from UART0, wired to probehive's slot 2, and its README says why the USB-Serial-JTAG cannot carry it |
@@ -4032,18 +3753,13 @@ SR-756.
 | SR-705 | Usability | `Landin.Diagnostics.Checking.Report` silently discards a note given with a code whose notes come from the catalogue, as L0304's do: two raise sites in the checker, the substituted array element and a nested struct value, pass notes that never reach a report, and nothing refuses them. Met moving L0304's routes into a route note. | The next diagnostics item touching L0304. | A note given to a fixed-note code refused when the diagnostic is built, and the two sites' notes dropped or made routes. | retired: a note given to L0304 is a compiler defect when the diagnostic is built (D856); the `offsetof` refusals' notes are routes, and the array element's note, which restated its message, is dropped |
 | SR-707 | Usability | The build report's routine row and the depth report's both have `frame_bytes`, with different meanings: the depth report's is the build report's `stack_bytes`. Met in SR-342. | The next change to the depth report's format. | One name per quantity across both reports, or each format's documentation naming the other's field. | open |
 | SR-708 | Usability | `check.py --matrix` does not regenerate `compiler/tests/diagnostics.matrix`; only `--catalogue` does, though the usage line says `--catalogue`, `--coverage` and `--matrix` regenerate theirs. Met adding L0579 to L0582: after `--matrix` the new codes still showed no test owner. | The next change to `check.py`'s generators. | Each generated file named by the option that regenerates it, in the usage line and in the stale-file message. | retired: `check.py`'s usage names every generated file beside the flag that writes it, every stale-file message takes its flag from the same table, which a test holds to what each generator writes, and `check.py --help` prints it |
-| SR-709 | Usability | `Landin.Testing.Fakes.Written` returns the last bytes written to a path, not what the path holds now, so a file a command writes beside its destination and then moves into place reads as empty there; only a comment in the package's private part says so. Met writing the bindings suite. | The next change to the fakes. | `Written`'s declaration saying what it returns, or a reader of the live file. | open |
 | SR-710 | Usability | `option linux: bool = true` is accepted while `option big` is refused as L0390 "this option name is compiler-owned" (D202): the refusal covers the architecture, byte-order and build-mode atoms but not D264's `linux`, `darwin`, `freebsd` and `freestanding`, and an option of that name is then read in place of the atom, so `compiler.os == linux` compares a bool with a system. Met making the atom lists one table for SR-625, which kept the old set to change no behaviour. | The next change to configuration atoms or options. | Every configuration atom refused as an option name, with a decision and a negative fixture. | retired: every configuration atom is refused as an option's name from the one table, and the note lists them (D855); `negative/option-takes-no-atom-name` |
 | SR-711 | Usability | `refine --target=linux-x86` answers "did you mean linux-rv64?" rather than `linux-x86-64`. Met recording the driver's refusals for SR-625. | The next change to target selection or the suggestions. | A prefix of a described name ranked first, with a driver case. | retired: at one distance and depth the candidate whose head is nearest the misspelling ranks first, and a system named alone is offered its targets (D857) |
 | SR-712 | Usability | The fixture execution suite names no lane for a runtime fixture naming `rv32`, saying "rv32 is a layout model the targets suite measures", which is `synthetic-32`'s description; RV32 runs through the Cortex-M inventory. Met reading the harness's per-target lists for SR-625. | The first runtime fixture naming `targets: rv32`, or R12.50. | The suite naming which lane runs an RV32 fixture, or refusing `rv32` in a runtime fixture's `targets:` with that lane named. | retired: the harness's note names the firmware corpus's RV32 lanes, and `check.py` holds a runtime fixture naming `rv32` to a corpus row they execute (D842) |
 | SR-713 | Usability | Python lists that pick a subset of targets are held to the compiler's list by nothing, so a renamed or new target passes them silently: `check.py`'s `PRODUCT_TARGETS` and `TARGET_SCOPES`, which leave out `rv32`, `scripts/driver_manifest.py`'s and `compiler/tests/test_determinism.py`'s `TARGETS`, and `scripts/image_bounds.py`'s table. Met searching for SR-625's lists. | R12.50's Xtensa target. | Each such list checked to be a subset of `fixture_meta.described_targets()`, and the construct inventory saying whether `rv32` is a product target. | retired: `check.py` holds every subset target list to the compiler's described targets with a backend, and the construct inventory says `rv32` is no product target and why, while a fixture naming `rv32` is held to a run (D840) |
-| SR-719 | Usability | `docs/diagnostics.md`'s L0390 section lists the configuration atoms by hand, while the refusal's note reads them from `Landin.Configuration`'s table, so an atom a later target adds is refused and listed by the compiler but missing from `refine explain L0390`. Met writing D855. | The next change to configuration atoms or targets. | `check.py` holding L0390's listed atoms to the compiler's table, or the section not listing them. | open |
 | SR-720 | Usability | The formatting test's exemptions for fixtures whose layout is their evidence are a list of names inside the Ada test, with no key in `fixture.meta`; `add_fixture.py` mirrors the list to know which fixtures not to reformat, and a newcomer who wants such a fixture learns this only from the test's failure. Met extending `add_fixture.py` for SR-571. | The next fixture exempted from the layout. | The exemption declared in the fixture's metadata and read by both. | open |
 | SR-721 | Usability | Nothing stops a new script test from guarding a subprocess with a thin timeout: SR-310's list named four load-sensitive tests and six more were found, `test_fuzz_close.py` among them, because the fuzz driver's one-second bound also covered the stub server's start. Met proving SR-310. | The next new script test with a subprocess timeout. | A shared, stated hang guard in `scripts/tests`, or a check refusing a timeout below it. | open |
 | SR-722 | Usability | `check.py`'s catalogue and coverage generators stop with "the explanations could not be generated; run check.py" or "the coverage registers could not be read" and name no cause, as `--tokens` did before SR-323. Met reading the generators for SR-708. | The next change to the catalogue or coverage generation. | Each generator's refusal printing the problems that stopped it. | open |
-| SR-723 | Usability | `emit_manifest.py modes` compiles runtime fixtures without their `link:`, so the eighteen `link: libc` fixtures are compared as another program and three only as identical L0324 refusals. Met when `emit --corpus=runtime` learnt to pass `--link`. | The next change to `modes` or the gate's `build-modes` job. | `modes` passing a runtime fixture's `link:` on hosted targets, as the harness and `emit` do. | open |
-| SR-724 | Usability | The gate's `inputs` step names the jobs a reused pass must hold by hand, and it left out `cortex-m-rv32`, so a reused full pass could stand without its RV32 corpus leg; the name was added in the November sweep, but nothing holds the list to the workflow's jobs. Met looking up the RV32 lane's gate job. | The next change to `gate.yml`'s jobs or reuse list. | A check holding the reuse list to every required job and matrix leg. | open |
-| SR-725 | Usability | Each target takes one `--debug=` mode, `full` on hosted targets and `lines` on firmware, and nothing lists which: `refine targets` does not say, so it is learnt from L0500's "use --debug=lines". Met adding debug-information entries to `emit`. | The next change to `refine targets` or to debug-mode selection. | `refine targets` and its JSON naming each target's debug mode. | open |
 | SR-726 | Usability | `return a + b` as the body of a function with a named result is L0110 "this statement prefix cannot have a final value", whose note neither says that `return` carries no value nor to assign the named result first, as L0107 says elsewhere. Met reproducing SR-462's C-style function. | The next change to L0107 or to value prefixes. | The refusal saying `return` carries no value and to assign the named result. | open |
 | SR-727 | Usability | A variant case whose payload is written as a call, `full(n: i32)` among a variant part's cases, is L0103 "a variant part ends with `end` and its name" at the `(`, which does not say a payload is written `full: (n: i32)`. Met writing a reproducer for SR-264. | The next change to the parser's variant-part refusals. | The refusal at `(` after a case name naming the `case: (fields)` form. | open |
 | SR-728 | Usability | `mut done = false` in a body is L0103 "`mut` does not belong here", whose note and fix, removing `mut`, turn a declaration into an assignment to an undeclared name; the form is `mut done := false`. Met writing the SR-527 reproduction. | The next change to the line repair or to `mut`'s refusals. | `mut name = value` named as a declaration that needs `:=`, with that fix. | open |
@@ -4055,21 +3771,8 @@ SR-756.
 | SR-734 | Usability | A recorded fixture's failure says "./scripts/test.sh --record=CLASS/NAME re-records it", which runs a full build, while `scripts/dev-test.sh --record=` is the fast route the local recipe names. Met re-recording R13.75's fixtures. | The next change to the fixture harness's messages. | The hint naming `scripts/dev-test.sh --record=`. | open |
 | SR-736 | Usability | The rig's USB host failed three ways in a day. On the front-panel port the cascade's top hub dropped every 30-50 s with no device or kernel error before it, and autosuspend, turned off everywhere, was not the cause; on the ASMedia xHCI at PCI c2:00.0 a Pico 2 halted in BOOTSEL failing enumeration hard-locked a CPU in `xhci_handle_command_timeout` and the controller died, taking the Arty's USB, which shared it, with the cascade; and with the cascade on the onboard connector's second port, a Pico 2 left in BOOTSEL dropped the whole cascade 75 times in ten minutes until it was unplugged. A switch of one port drops only its own device where the host is sound. Met in the November board round. | The next rig change or board run. | The cascade and the Arty on separate controllers, no BOOTSEL on the bus (SR-680), and a run that meets a controller death stopping with recovery left to the maintainer. | open |
 | SR-740 | Usability | Writing R12.45's command proposals before implementation, `check.py` reported the explicitly provisional script paths as missing repository references. Its named-file check has no documented notation for proposed paths; finding that meant reading `check_named_files`, and the proposal had to use command placeholders. | The next change to the named-file check or its documentation. | A documented way to name a proposed path without claiming that it exists, held by a check control. | open |
-| SR-757 | Usability | Checking whether all supported board tools now run from RAM, the ESP32-C3 and ESP32-C5 tools' `--help` still begins by describing flashing and a power-on boot, because each parser uses its old module docstring; the shared `environments/boards/esp.py` header likewise lists only the flash workflow. Their actual default is `--mode=ram`. | The next change to board-tool help or its workflow documentation. | Help and source workflow descriptions state the RAM default and distinguish explicit boot mode, with focused help controls. | open |
-| SR-758 | Usability | Correcting ESP32-S3's SVD interrupt numbers with a policy that supplies AES at 77 and moves SHA from 77 to 78, the importer says 77 belongs to SHA and asks to correct it too, although that correction is already in the same policy. Sequential validation makes a complete correction look incomplete. Met in R12.50. | The next change to importer interrupt corrections. | Apply the corrections as a group before checking occupied numbers, with a control that swaps occupied slots. | open |
-| SR-759 | Usability | Planning the ESP32 register import from `devices/README.md`, its metadata table says selected dimensions are refused, although the importer already expands concrete registers whose names contain `%s`; discovering the supported shape required reading its source. Met in R12.50. | The next change to device-import metadata documentation. | Describe concrete dimension expansion and the draft-and-review recipe, agreeing with importer controls. | open |
-| SR-760 | Usability | Starting the embedded-tools installer inside an FHS shell prepared for lane execution, without the setup recipe's `dpkg`, it downloads a verified archive and creates a partial installation before failing with `FileNotFoundError: dpkg-deb`. The refusal neither names the setup prerequisites nor says how to recover the partial directory. Met in R12.50. | The next change to embedded-tool installation preflight. | Check required unpackers before creating the installation, with an actionable refusal naming the setup recipe and a no-partial-output control. | open |
-| SR-761 | Usability | A physical ESP32 boot check fails its first flash command, then attempts resident-image restoration under the same command name. The restoration overwrites the first `flash.log`, so the retained commands name both attempts but only the restoration's diagnostic survives. Met in R12.50. | The next change to board-command logging. | Retain a distinct log for every invocation and link each command record and failure to its actual log, including restoration attempts. | open |
-| SR-762 | Usability | The new ESP32-S3 boot check refuses its first cold-state observation because the shared read helper requires the RAM contract's retained CPU1 stall, and says to use the boot check that is already running. It also blocks startup-trap diagnosis before that stall exists. Met in R12.50. | The next change to Xtensa boot readback or the RAM helper's read contract. | An explicit observational boot-read scope reporting actual CPU1 state, while every warm RAM read still requires and independently verifies the retained hardware stall. | open |
-| SR-763 | Usability | An ESP32-S3 cold application starts and its fixed-image restoration passes, but changing the UART clock cuts the ROM log during a segment length. The log parser accepts the surviving decimal prefix `0` and reports that the ROM loaded zero bytes, obscuring the incomplete trace. Met in R12.50. | The next change to ESP boot tracing or startup UART setup. | Drain the transmitter before changing its clock and require complete ROM load and entry lines, retaining an incomplete trace as a failed observation. | open |
-| SR-764 | Usability | Cancelling an Xtensa SIM investigation through its logged wrapper stops the corpus parent but leaves two QEMU processes consuming CPUs. The runner started each emulator in a separate session, outside the wrapper's cancellation group, and manual cleanup was required. Met in R12.50. | The next change to Xtensa emulator process ownership or cancellation. | Keep emulator children in the logged command's process group and verify cancellation also stops them, retaining normal bounded timeout cleanup. | open |
-| SR-765 | Usability | A classic ESP32 boot check verifies its flash, cycles USB power, then reads the debug flash stub's software-reset cause three rather than new startup. Its external JTAG stays powered and continuously drives pins. A separate EN reset produces cause one and the complete ROM load trace, so calling USB cycling alone a proven power-on was unsupported. Met in R12.50. | The next change to classic ESP cold-reset coordination or its evidence. | Record a defined CHIP_PU cold reset after USB cycling, preserve complete ROM and independent startup oracles, and state that rail discharge is unmeasured. | open |
-| SR-766 | Usability | Adding immutable vendor README and Python source links, `check.py` starts matching a filename after the HTTPS scheme and treats the GitHub path as local. The README's section fragment is not the cause: the plain Python URL fails too. A tree link avoids the first false refusal but loses the direct file target. Met documenting classic ESP ROM and reset selection in R12.50. | The next change to Markdown reference recognition in `check.py`. | Recognize external URL spans, including queries and fragments, without hiding adjacent local references; cover document and Ada comment references. | open |
-| SR-767 | Usability | A local eleven-packet QEMU observation takes about half a second although guest work is tiny. The runner requests server-side no-delay but leaves client TCP coalescing enabled; alternating measurements show client no-delay preserves all oracles and reduces median latency by 4.8 to 7.5 times. Met running R12.50's corpus. | The next change to the Xtensa remote-protocol connection. | Disable client Nagle delay and retain actual scalar, trap, early-stop and SIM-entry equivalence controls, keeping default worker counts. | open |
 | SR-768 | Usability | The complete Xtensa corpus times out its exhaustive memory-alignment fixture while modes, manifests and a flake build saturate the host. Both the previously passing image and the new image complete with status 42, no trap and an intact guard under controlled replay, but need 21 to 45 wall seconds despite 12 to 18 CPU seconds; the runner applies a 20-second wall guard. Met closing R12.50 with default workers. | The next change to the Xtensa oracle's guest time budget. | A stated transport and guest budget policy, with finite heavy-fixture and nonterminating-guest controls under documented scheduling assumptions; a contended timeout cannot become a source exemption. | open |
 | SR-769 | Usability | Reviewing the new Xtensa physical records, the shared ESP scenario names its interrupt snapshots `receive_mcause` and `timer_mcause`, and its refusal says mcause. These ports actually report the Xtensa INTERRUPT pending bits and use chip-specific masks for lines 1 and 23; the inherited RISC-V labels make the evidence look like another register was checked. | The next change to shared ESP scenario diagnostics or record field names. | Architecture-specific register labels in results and refusals, with controls for both architectures and an explicit interpretation of older records. | open |
-| SR-770 | Usability | The mandatory parallel-equivalence run takes 98 minutes, then reports differences in elapsed progress times and a one-time build-recovery message even though both runs have the same two failing cases. It deletes both complete transcripts, so the actual case failures must be reproduced separately to learn what to fix. Met closing R12.50. | The next change to `scripts/parallel-equivalence.sh`. | Separate build and timing output from deterministic verdict comparison, preserve unexpected diagnostics, retain raw streams and commands on every outcome, and explicitly surface matching failures. | open |
-| SR-771 | Usability | Focused native Mac build-lock controls hang for five minutes and then fail cleanup because a fixture fabricates a reader marker using a `/var` temporary path while the real API mints its canonical `/private/var` path. Its synthetic publisher misses the recursive-reader refusal and waits for the reader the test has not released. | The next change to reader-lock controls or their native Mac coverage. | The fixture uses the actual canonical marker contract, with a symlinked-checkout control inheriting the marker from `reading()` and verifying immediate refusal without replacing the executable. | open |
 | SR-772 | Usability | Reading the complete Xtensa corpus's C ABI restrictions, its retained reason says Cortex-M0 disables the general C surface and points to Cortex transport controls. The Xtensa result inherits the shared inventory's text without naming the selected configuration or its separate independent C peers, so discovering why this target is restricted requires reading the runner. Met auditing R12.50's final evidence. | The next change to shared freestanding corpus restriction reporting. | Retain the shared restriction witness while rendering an explanation for the selected target and pointing to that target's actual independent controls. | open |
 
 

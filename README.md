@@ -243,7 +243,7 @@ buy, concurrency and optimization; a build tool, package acquisition,
 release versioning and self-hosting stay outside it.
 [`ROADMAP.md`](ROADMAP.md) is the sole authority for open work.
 
-**Current roadmap work: R12.50 — Xtensa, ESP32 and ESP32-S3.**
+**Next roadmap item: R12.60 — Boards in the gate (planned).**
 
 ## Questions, bugs and ideas
 
