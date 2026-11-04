@@ -1707,6 +1707,18 @@ SR-757's identity. Other sessions' worktrees and rig resources remain theirs.
    state before that state can be required. Warm independent readbacks
    retain their mandatory hardware-stall check.
 
+   **Architectural prelude proposal:** a windowed ROM call needs a valid
+   window set, spill stack and vectors. Before an Xtensa pre-reset device
+   stage, compiler-owned entry therefore establishes masked interrupts,
+   WINDOWBASE/WINDOWSTART, VECBASE and the declared internal DRAM stack
+   with its ABI backchain. That stage may use this stack and the windowed
+   ROM boundary, but static data and BSS remain uninitialized and ordinary
+   Landin calls remain outside its naked form. Compiler reset repeats its
+   architectural initialization after the stage. Other target families'
+   stack-free stage requirements are unchanged. This replaces the rejected
+   idea of hiding unvalidated stack initialization inside a device stage;
+   the architectural guarantee belongs to the compiler and its tests.
+
    The helper's present Arm/RISC-V split needs a real Xtensa path; it must
    not apply RISC-V registers, fences or interrupt oracles to these ports.
 
