@@ -117,6 +117,7 @@
           gnatVersion = pin "LANDIN_GNAT_VERSION";
           armElfVersion = pin "LANDIN_GNAT_ARM_ELF_VERSION";
           riscvElfVersion = pin "LANDIN_GNAT_RISCV64_ELF_VERSION";
+          xtensaElfVersion = pin "LANDIN_XTENSA_ESP_ELF_VERSION";
           gprbuildVersion = pin "LANDIN_GPRBUILD_VERSION";
 
           #  The archives are prebuilt, so on Linux they need their
@@ -208,6 +209,18 @@
             version = riscvElfVersion;
             url = "${releases}/gnat-${riscvElfVersion}/gnat-riscv64-elf-${armElfSystem}-${riscvElfVersion}.tar.gz";
             sha256 = pin "LANDIN_GNAT_RISCV64_ELF_SHA256_${suffix}";
+          };
+
+          xtensaElfSystem = {
+            x86_64-linux = "x86_64-linux-gnu";
+            aarch64-linux = "aarch64-linux-gnu";
+            aarch64-darwin = "aarch64-apple-darwin";
+          }.${system};
+          xtensaElf = fromArchive {
+            pname = "landin-xtensa-esp-elf";
+            version = xtensaElfVersion;
+            url = "${pin "LANDIN_XTENSA_ESP_ELF_RELEASES"}/${pin "LANDIN_XTENSA_ESP_ELF_RELEASE"}/xtensa-esp-elf-${xtensaElfVersion}-${xtensaElfSystem}.tar.xz";
+            sha256 = pin "LANDIN_XTENSA_ESP_ELF_SHA256_${suffix}";
           };
 
           #  The pinned Linux archive bundles its own binutils, and the
@@ -669,6 +682,7 @@
               gprbuild
               gnatArmElf
               gnatRiscvElf
+              xtensaElf
               pkgs.python3 #  check.py and docs/site/render_html.py
               #  The structural editor grammar's corpus, highlight/test.sh
               #  --integration, at the gate's pinned version.

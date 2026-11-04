@@ -79,7 +79,8 @@ package Landin.Backend.Toolchain is
 
    function Driver_For
      (Facts : Landin.Targets.Target_Facts;
-      Named : String) return String;
+      Named : String;
+      Level : String := "") return String;
 
    --  Every driver a link may use, in the order tried: Named alone when
    --  it is given, Driver_For's otherwise and, on Linux, the other
@@ -92,7 +93,8 @@ package Landin.Backend.Toolchain is
    function Driver_Candidates
      (Facts : Landin.Targets.Target_Facts;
       Named : String;
-      Native : Boolean) return Landin.Platform.Path_List;
+      Native : Boolean;
+      Level : String := "") return Landin.Platform.Path_List;
 
    --  What to install when no candidate can be started, as a note names
    --  it: the package a stock distribution gives the driver in, or the

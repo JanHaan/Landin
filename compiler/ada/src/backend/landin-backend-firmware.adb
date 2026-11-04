@@ -720,6 +720,369 @@ package body Landin.Backend.Firmware is
       return "0x" & Result (First .. Result'Last);
    end Hex;
 
+
+   function Xtensa_Image
+     (Of_Unit : Landin.IR.Unit;
+      Names : Landin.Source.Names.Table;
+      Entry_Symbol : String;
+      Symbol : not null access function
+        (Item : Landin.IR.Item_Id) return String;
+      Limit_Cell : String;
+      Returned : String;
+      Debug : Boolean) return String
+   is
+      use type Landin.IR.Item_Id;
+      Profile : constant Profiles.Profile :=
+        Landin.IR.Firmware_Profile (Of_Unit);
+      Used : constant Region_Use := Used_Regions (Of_Unit, Names);
+      Result : US.Unbounded_String;
+      Handlers : array (0 .. 31) of Landin.IR.Item_Id :=
+        [others => Landin.IR.No_Item];
+      Context : constant String := "_landin_firmware_interrupt_context";
+      --  All 64 physical address registers, then PS, PC, window base and
+      --  mask, SAR and loop state. Interrupts remain masked throughout a
+      --  handler: one complete context, with no nested handler claim.
+      Context_Bytes : constant := 320;
+      procedure Line (Text : String);
+      procedure Line (Text : String) is
+      begin
+         US.Append (Result, Text & LF);
+      end Line;
+      function N (Value : Natural) return String is
+        (Number (Landin.Targets.Byte_Count (Value)));
+      procedure Save_Group (Group : Natural);
+      procedure Save_Group (Group : Natural) is
+      begin
+         --  EXCM is set and WOE clear: ROTW cannot spill or underflow.
+         --  Preserve the group's a0 before using it as a context pointer.
+         Line ("wsr a0, EXCSAVE2");
+         Line ("rsr a0, EXCSAVE1");
+         for Reg in 1 .. 15 loop
+            Line ("s32i a" & N (Reg) & ", a0, " & N (Group * 64 + Reg * 4));
+         end loop;
+         Line ("rsr a1, EXCSAVE2");
+         Line ("s32i a1, a0, " & N (Group * 64));
+         Line ("rotw 4");
+      end Save_Group;
+   begin
+      for Index in 1 .. Landin.IR.Item_Count (Of_Unit) loop
+         declare
+            Item : constant Landin.IR.Item_Id := Landin.IR.Item_Id (Index);
+            Slot : constant Integer :=
+              Landin.IR.Placement_Of (Of_Unit, Item).Vector;
+         begin
+            if Slot in Handlers'Range then
+               Handlers (Slot) := Item;
+            end if;
+         end;
+      end loop;
+      Line (".section .isr_vector,""ax"",@progbits");
+      Line (".balign 1024");
+      Line (".global _landin_firmware_vectors");
+      Line ("_landin_firmware_vectors:");
+      --  The architectural spill/reload sequences use the ABI's base
+      --  save area and the preceding frame's recorded SP. There are
+      --  distinct vectors for CALL4, CALL8 and CALL12, including helpers.
+      for Count in 1 .. 3 loop
+         declare
+            Words : constant Natural := Count * 4;
+            Next_SP : constant String := "a" & N (Words + 1);
+            Scratch : constant String := "a" & N (Words - 1);
+         begin
+            Line (".org " & N ((Count - 1) * 128));
+            Line ("_landin_firmware_window_overflow" & N (Words) & ":");
+            Line ("s32e a0, " & Next_SP & ", -16");
+            if Words > 4 then
+               Line ("l32e a0, a1, -12");
+            end if;
+            for Reg in 1 .. 3 loop
+               Line ("s32e a" & N (Reg) & ", " & Next_SP & ", -"
+                 & N (16 - Reg * 4));
+            end loop;
+            for Reg in 4 .. Words - 1 loop
+               Line ("s32e a" & N (Reg) & ", a0, -"
+                 & N ((Words - Reg + 4) * 4));
+            end loop;
+            Line ("rfwo");
+            Line (".org " & N ((Count - 1) * 128 + 64));
+            Line ("_landin_firmware_window_underflow" & N (Words) & ":");
+            for Reg in 0 .. 2 loop
+               Line ("l32e a" & N (Reg) & ", " & Next_SP & ", -"
+                 & N (16 - Reg * 4));
+            end loop;
+            if Words > 4 then
+               Line ("l32e " & Scratch & ", a1, -12");
+            end if;
+            Line ("l32e a3, " & Next_SP & ", -4");
+            for Reg in 4 .. Words - 1 loop
+               Line ("l32e a" & N (Reg) & ", " & Scratch & ", -"
+                 & N ((Words - Reg + 4) * 4));
+            end loop;
+            Line ("rfwu");
+         end;
+      end loop;
+      --  Level one arrives through the user/kernel exception vector.
+      --  Levels two to five have dedicated vectors; level six is debug.
+      for Level in 2 .. 7 loop
+         Line (".org " & N (16#180# + (Level - 2) * 64));
+         Line ("wsr a0, EXCSAVE1");
+         Line ("j _landin_firmware_interrupt_" & N (Level));
+      end loop;
+      for Offset in 0 .. 2 loop
+         Line (".org " & N (16#300# + Offset * 64));
+         Line ("wsr a0, EXCSAVE1");
+         Line ("j _landin_firmware_interrupt_1");
+      end loop;
+      Line (".org 1024");
+      Line (".section .text.landin_entry,""ax"",@progbits");
+      Line (".balign 4");
+      Line (".global _landin_firmware_entry");
+      Line ("_landin_firmware_entry:");
+      Line ("j " & (if Profiles.Stage_Before_Reset (Profile.Boot)
+                   then Profiles.Reset_Stage_Symbol
+                   else Profiles.Reset_Symbol));
+      Line (".section .text.landin_firmware_reset,""ax"",@progbits");
+      Line (".balign 4");
+      Line (".global " & Profiles.Reset_Symbol);
+      Line (Profiles.Reset_Symbol & ":");
+      if Debug then
+         Line (".cfi_startproc simple");
+         Line (".cfi_def_cfa a1, 0");
+         Line (".cfi_undefined a0");
+      end if;
+      Line ("movi a0, 0x3f");
+      Line ("wsr a0, PS");
+      Line ("rsync");
+      Line ("movi a0, 0");
+      Line ("wsr a0, WINDOWBASE");
+      Line ("movi a0, 1");
+      Line ("wsr a0, WINDOWSTART");
+      Line ("rsync");
+      Line ("movi a0, 0");
+      Line ("wsr a0, INTENABLE");
+      Line ("wsr a0, LCOUNT");
+      Line ("wsr a0, CPENABLE");
+      Line ("wsr a0, SCOMPARE1");
+      Line ("movi a1, _landin_firmware_stack_top");
+      Line ("addi a1, a1, -32");
+      Line ("movi a2, _landin_firmware_stack_top");
+      Line ("s32e a2, a1, -12");
+      Line ("movi a2, _landin_firmware_vectors");
+      Line ("wsr a2, VECBASE");
+      Line ("rsync");
+      if Profile.Layout /= Profiles.RAM_Layout then
+         Line ("movi a2, _landin_firmware_data_load");
+         Line ("movi a3, _landin_firmware_data_start");
+         Line ("movi a4, _landin_firmware_data_end");
+         Line ("beq a2, a3, 2f");
+         Line ("1: bgeu a3, a4, 2f");
+         Line ("l8ui a5, a2, 0");
+         Line ("s8i a5, a3, 0");
+         Line ("addi a2, a2, 1");
+         Line ("addi a3, a3, 1");
+         Line ("j 1b");
+         Line ("2:");
+      end if;
+      Line ("movi a3, _landin_firmware_bss_start");
+      Line ("movi a4, _landin_firmware_bss_end");
+      Line ("movi a5, 0");
+      Line ("1: bgeu a3, a4, 2f");
+      Line ("s8i a5, a3, 0");
+      Line ("addi a3, a3, 1");
+      Line ("j 1b");
+      Line ("2:");
+      for Index in 1 .. Profile.Count loop
+         if Used (Index)
+           and then Profiles.Writable (Profile.Regions (Index).Mode)
+         then
+            declare
+               Name : constant String :=
+                 Profiles.Spelling (Profile.Regions (Index).Name);
+            begin
+               if Profile.Layout /= Profiles.RAM_Layout then
+                  Line ("movi a2, " & Region_Symbol (Name, "data_load"));
+                  Line ("movi a3, " & Region_Symbol (Name, "data_start"));
+                  Line ("movi a4, " & Region_Symbol (Name, "data_end"));
+                  Line ("beq a2, a3, 2f");
+                  Line ("1: bgeu a3, a4, 2f");
+                  Line ("l8ui a5, a2, 0");
+                  Line ("s8i a5, a3, 0");
+                  Line ("addi a2, a2, 1");
+                  Line ("addi a3, a3, 1");
+                  Line ("j 1b");
+                  Line ("2:");
+               end if;
+               Line ("movi a3, " & Region_Symbol (Name, "bss_start"));
+               Line ("movi a4, " & Region_Symbol (Name, "bss_end"));
+               Line ("movi a5, 0");
+               Line ("1: bgeu a3, a4, 2f");
+               Line ("s8i a5, a3, 0");
+               Line ("addi a3, a3, 1");
+               Line ("j 1b");
+               Line ("2:");
+            end;
+         end if;
+      end loop;
+      if Limit_Cell /= "" then
+         Line ("movi a2, " & Limit_Cell);
+         Line ("movi a3, _landin_firmware_stack_bottom");
+         Line ("s32i a3, a2, 0");
+      end if;
+      Line ("memw");
+      Line ("isync");
+      Line ("movi a2, 0x40020");
+      Line ("wsr a2, PS");
+      Line ("rsync");
+      Line ("call8 " & Entry_Symbol);
+      if Returned /= "" then
+         Line (Returned);
+      end if;
+      Line ("j _landin_firmware_stopped");
+      if Debug then
+         Line (".cfi_endproc");
+      end if;
+      for Level in 1 .. 7 loop
+         Line ("_landin_firmware_interrupt_" & N (Level) & ":");
+         Line ("rsr a0, " & (if Level = 1 then "PS" else "EPS" & N (Level)));
+         Line ("wsr a0, EXCSAVE2");
+         Line ("movi a0, 0x3f");
+         Line ("wsr a0, PS");
+         Line ("rsync");
+         Line ("movi a0, " & Context);
+         for Reg in 1 .. 15 loop
+            Line ("s32i a" & N (Reg) & ", a0, " & N (Reg * 4));
+         end loop;
+         Line ("rsr a1, EXCSAVE1");
+         Line ("s32i a1, a0, 0");
+         Line ("rsr a1, EXCSAVE2");
+         if Level = 1 then
+            Line ("movi a2, -17");
+            Line ("and a1, a1, a2");
+         end if;
+         Line ("s32i a1, a0, 256");
+         Line ("rsr a1, EPC" & N (Level));
+         Line ("s32i a1, a0, 260");
+         Line ("rsr a1, WINDOWBASE");
+         Line ("s32i a1, a0, 264");
+         Line ("rsr a1, WINDOWSTART");
+         Line ("s32i a1, a0, 268");
+         Line ("wsr a0, EXCSAVE1");
+         Line ("rotw 4");
+         for Group in 1 .. 3 loop
+            Save_Group (Group);
+         end loop;
+         Line ("rsr a0, EXCSAVE1");
+         Line ("movi a2, " & N (Level));
+         Line ("j _landin_firmware_interrupt_saved");
+      end loop;
+      Line ("_landin_firmware_interrupt_saved:");
+      Line ("rsr a1, SAR");
+      Line ("s32i a1, a0, 272");
+      Line ("rsr a1, LBEG");
+      Line ("s32i a1, a0, 276");
+      Line ("rsr a1, LEND");
+      Line ("s32i a1, a0, 280");
+      Line ("rsr a1, LCOUNT");
+      Line ("s32i a1, a0, 284");
+      Line ("s32i a2, a0, 288");
+      Line ("bnei a2, 1, 1f");
+      Line ("rsr a3, EXCCAUSE");
+      Line ("bnei a3, 4, _landin_firmware_unhandled");
+      Line ("1:");
+      Line ("movi a3, 0");
+      Line ("wsr a3, WINDOWBASE");
+      Line ("movi a3, 1");
+      Line ("wsr a3, WINDOWSTART");
+      Line ("rsync");
+      Line ("rsr a8, EXCSAVE1");
+      Line ("l32i a1, a8, 4");
+      Line ("mov a3, a1");
+      Line ("addi a1, a1, -32");
+      Line ("s32e a3, a1, -12");
+      Line ("movi a3, 0");
+      Line ("wsr a3, LCOUNT");
+      Line ("movi a3, 0x4002f");
+      Line ("wsr a3, PS");
+      Line ("rsync");
+      Line ("l32i a3, a8, 288");
+      Line ("rsr a2, INTERRUPT");
+      Line ("rsr a4, INTENABLE");
+      Line ("and a2, a2, a4");
+      for Level in 1 .. 7 loop
+         Line ("bnei a3, " & N (Level) & ", 1f");
+         Line ("movi a4, " & Hex
+           (Profiles.Interrupt_Level_Mask (Profile.Core, Level)));
+         Line ("and a2, a2, a4");
+         Line ("j 2f");
+         Line ("1:");
+      end loop;
+      Line ("2:");
+      for Slot in Handlers'Range loop
+         if Handlers (Slot) /= Landin.IR.No_Item then
+            Line ("bbci a2, " & N (Slot) & ", 1f");
+            Line ("call8 " & Symbol (Handlers (Slot)));
+            Line ("1:");
+         end if;
+      end loop;
+      Line ("movi a0, 0x3f");
+      Line ("wsr a0, PS");
+      Line ("rsync");
+      Line ("movi a0, " & Context);
+      Line ("l32i a1, a0, 256");
+      Line ("wsr a1, EPS2");
+      Line ("l32i a1, a0, 260");
+      Line ("wsr a1, EPC2");
+      Line ("l32i a1, a0, 272");
+      Line ("wsr a1, SAR");
+      Line ("l32i a1, a0, 276");
+      Line ("wsr a1, LBEG");
+      Line ("l32i a1, a0, 280");
+      Line ("wsr a1, LEND");
+      Line ("l32i a1, a0, 284");
+      Line ("wsr a1, LCOUNT");
+      Line ("l32i a1, a0, 268");
+      Line ("wsr a1, WINDOWSTART");
+      Line ("wsr a0, EXCSAVE1");
+      Line ("l32i a1, a0, 264");
+      Line ("wsr a1, WINDOWBASE");
+      Line ("rsync");
+      for Group in 0 .. 3 loop
+         Line ("rsr a0, EXCSAVE1");
+         for Reg in 1 .. 15 loop
+            Line ("l32i a" & N (Reg) & ", a0, " & N (Group * 64 + Reg * 4));
+         end loop;
+         Line ("l32i a0, a0, " & N (Group * 64));
+         Line ("rotw 4");
+      end loop;
+      Line ("rfi 2");
+      Line (".global _landin_firmware_unhandled");
+      Line ("_landin_firmware_unhandled:");
+      Line ("movi a0, " & Trap_Cell (Trap_Cause));
+      Line ("rsr a1, EXCCAUSE");
+      Line ("s32i a1, a0, 0");
+      Line ("movi a2, " & Context);
+      Line ("l32i a1, a2, 260");
+      Line ("s32i a1, a0, 4");
+      Line ("rsr a1, EXCVADDR");
+      Line ("s32i a1, a0, 8");
+      Line ("l32i a1, a2, 4");
+      Line ("s32i a1, a0, 12");
+      Line ("l32i a1, a0, 16");
+      Line ("addi a1, a1, 1");
+      Line ("s32i a1, a0, 16");
+      Line (".global _landin_firmware_stopped");
+      Line ("_landin_firmware_stopped: j _landin_firmware_stopped");
+      Line (".section .bss.landin_firmware_trap,""aw"",@nobits");
+      Line (".balign 4");
+      for Cell in Trap_Cell_Kind loop
+         Line (".global " & Trap_Cell (Cell));
+         Line (Trap_Cell (Cell) & ": .zero 4");
+      end loop;
+      Line (".balign 16");
+      Line (Context & ": .zero " & N (Context_Bytes));
+      return US.To_String (Result);
+   end Xtensa_Image;
+
    function Size_Words (Bytes : Landin.Targets.Byte_Count) return String is
      (if Bytes mod 1024 = 0 then Number (Bytes / 1024) & " KiB"
       else Number (Bytes) & " bytes");
@@ -743,6 +1106,8 @@ package body Landin.Backend.Firmware is
       --  D680: an RV32 image begins with its entry word, and its table is
       --  where the core's alignment puts it after that word.
       RV32 : constant Boolean := Profile.Core in Profiles.RISC_V_Core;
+      Xtensa : constant Boolean := Profile.Core in Profiles.Xtensa_Core;
+      Segmented : constant Boolean := RV32 or Xtensa;
       Entry_Address : constant String :=
         (if not RV32
            and then Profile.Layout = Profiles.RAM_Layout
@@ -758,14 +1123,14 @@ package body Landin.Backend.Firmware is
       --  mapped.  NAME's is " :NAME" on RV32 and "" on Cortex-M, whose
       --  script stays D229's.
       function Segment (Name : String) return String is
-        (if RV32 then " :" & Name else "");
+        (if Segmented then " :" & Name else "");
       --  The end of the last output section in the stack's region, which
       --  must stay below the stack, and the last load image in flash.
       In_Stack_Region : US.Unbounded_String;
       Ramtext_With_Text : constant Boolean := Profiles.RAM_Only (Profile);
       RAM : constant Boolean := Profile.Layout = Profiles.RAM_Layout;
       function Load_From_Text return String is
-        (if RAM then "" else " AT> " & Flash);
+        (if RAM or Xtensa then "" else " AT> " & Flash);
       Ramtext : constant String :=
         "  .ramtext : ALIGN(8) {" & LF
         & "    _landin_firmware_ramtext_start = .;" & LF
@@ -839,7 +1204,11 @@ package body Landin.Backend.Firmware is
             end;
          end if;
       end loop;
-      return (if RV32
+      return (if Xtensa
+              then "OUTPUT_FORMAT(""elf32-xtensa-le"")" & LF
+                & "OUTPUT_ARCH(xtensa)" & LF
+                & "ENTRY(_landin_firmware_entry)" & LF
+              elsif RV32
               then "OUTPUT_FORMAT(""elf32-littleriscv"")" & LF
                 & "OUTPUT_ARCH(riscv)" & LF
                 & "ENTRY(_landin_firmware_entry)" & LF
@@ -849,7 +1218,7 @@ package body Landin.Backend.Firmware is
         & "MEMORY {" & LF
         & US.To_String (Memory)
         & "}" & LF
-        & (if RV32
+        & (if Segmented
            then "PHDRS {" & LF & "  image PT_LOAD;" & LF
              & "  text PT_LOAD;" & LF
              & (if Profile.Placed (Profiles.Rodata)
@@ -868,19 +1237,29 @@ package body Landin.Backend.Firmware is
            then "  .boot2 ORIGIN(" & Vectors & ") : { KEEP(*(.boot2)) } > "
              & Vectors & LF
            else "")
-        & (if RV32
+        & (if Xtensa
+           then "  .isr_vector "
+             & Number (Profiles.Vector_Address (Profile))
+           elsif RV32
            then "  .landin_entry " & Entry_Address
              & " : { KEEP(*(.text.landin_entry)) } > " & Vectors
              & Segment ("image") & LF
              & "  .isr_vector "
              & Number (Profiles.Vector_Address (Profile))
            else "  .isr_vector " & Entry_Address)
-        & " : { KEEP(*(.isr_vector)) } > " & Vectors & LF
+        & " : { KEEP(*(.isr_vector)) } > " & Vectors
+        & (if Xtensa then Segment ("image") else "") & LF
+        & (if Xtensa
+           then "  .landin_entry : { KEEP(*(.text.landin_entry)) } > "
+             & Vectors & Segment ("image") & LF
+           else "")
         & (if Profiles.Takes_Image_Block (Profile.Boot)
            then "  .embedded_block : { KEEP(*(.embedded_block)) } > "
              & Vectors & LF
            else "")
-        & "  .text : { *(.text .text.*) } > " & Flash & Segment ("text")
+        & "  .text : { "
+        & (if Xtensa then "*(.literal .literal.*) " else "")
+        & "*(.text .text.*) } > " & Flash & Segment ("text")
         & LF
         --  D900, D688: RAM code runs with text when the whole image is
         --  loaded into SRAM; a boot image otherwise copies it into data.
@@ -892,7 +1271,7 @@ package body Landin.Backend.Firmware is
         & Placed (Profiles.Rodata)
         & (if Profile.Placed (Profiles.Rodata) = Profile.Placed (Profiles.Text)
            then "" else Segment ("rodata")) & LF
-        & (if RV32 then ""
+        & (if Segmented then ""
            else "  .ARM.extab : { *(.ARM.extab*) } > " & Flash & LF
              & "  .ARM.exidx : { *(.ARM.exidx*) } > " & Flash & LF)
         & "  .data : ALIGN(8) {" & LF
@@ -909,7 +1288,7 @@ package body Landin.Backend.Firmware is
         & "    _landin_firmware_bss_start = .;" & LF
         --  D656: the trap record first, at the same address in every
         --  image of the profile.
-        & (if RV32 then "    KEEP(*(.bss.landin_firmware_trap))" & LF
+        & (if Segmented then "    KEEP(*(.bss.landin_firmware_trap))" & LF
            else "")
         & "    *(.bss .bss.*" & (if RV32 then " .sbss .sbss.*" else "")
         & " COMMON)" & LF
@@ -951,7 +1330,7 @@ package body Landin.Backend.Firmware is
              & LF
            else "")
         & "ASSERT((_landin_firmware_stack_top & "
-        & (if RV32 then "15" else "7") & ") == 0, ""unaligne"
+        & (if Segmented then "15" else "7") & ") == 0, ""unaligne"
         & "d initial stack"")" & LF
         & (if US.Length (In_Stack_Region) = 0 then ""
            else "ASSERT(" & US.To_String (In_Stack_Region)

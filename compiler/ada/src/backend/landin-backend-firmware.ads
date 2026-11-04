@@ -38,6 +38,18 @@ package Landin.Backend.Firmware is
       Returned : String;
       Debug : Boolean) return String;
 
+   --  Windowed Xtensa firmware: native exception vectors, complete
+   --  physical-register interrupt context and compiler-owned reset.
+   function Xtensa_Image
+     (Of_Unit : Landin.IR.Unit;
+      Names : Landin.Source.Names.Table;
+      Entry_Symbol : String;
+      Symbol : not null access function
+        (Item : Landin.IR.Item_Id) return String;
+      Limit_Cell : String;
+      Returned : String;
+      Debug : Boolean) return String;
+
    --  The bytes an RV32 interrupt stub keeps below the interrupted stack:
    --  ra, t0-t6 and a0-a7, and with a limit cell its word, padded to the
    --  sixteen bytes the psABI keeps sp aligned to.

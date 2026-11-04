@@ -1229,7 +1229,8 @@ package body Landin.Driver is
            and then Facts = Landin.Targets.Selection.Host_Default (Built_For);
          Candidates : constant Landin.Platform.Path_List :=
            Landin.Backend.Toolchain.Driver_Candidates
-             (Facts, Unbounded.To_String (Toolchain), Native_Target);
+             (Facts, Unbounded.To_String (Toolchain), Native_Target,
+              Landin.Targets.Levels.Name (Level));
 
          --  The first candidate the host can start, or "".  Run asks the
          --  host again, so a driver removed meanwhile is still reported.

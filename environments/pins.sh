@@ -55,6 +55,15 @@ LANDIN_GNAT_ARM_ELF_VERSION=16.1.0-1
 #  fetches its own system's; the RV32 lane installs the Linux x86-64 one.
 LANDIN_GNAT_RISCV64_ELF_VERSION=16.1.0-1
 
+#  Espressif's configured Xtensa compiler and binutils. The chip wrappers
+#  select distinct ISA plugins and matching windowed-ABI multilibs.
+LANDIN_XTENSA_ESP_ELF_VERSION=16.1.0_20260609
+LANDIN_XTENSA_ESP_ELF_RELEASE=esp-16.1.0_20260609
+LANDIN_XTENSA_ESP_ELF_RELEASES=https://github.com/espressif/crosstool-NG/releases/download
+LANDIN_XTENSA_ESP_ELF_SHA256_X86_64_LINUX=f708752ebb35cab21f184b2574114ed1187619db0edb8a4ba913c06ca2fa675e
+LANDIN_XTENSA_ESP_ELF_SHA256_AARCH64_LINUX=785ee242bfbdb3ac4e764e85d2f87109c7c5f3da57d742da9a7c58c0d0906149
+LANDIN_XTENSA_ESP_ELF_SHA256_AARCH64_DARWIN=be4eb81c12c9bbf6ead79c758bfa81b8e6ec9a695372f946ac924c70c32f273d
+
 #  sha256 of each archive, verified before it is unpacked.
 LANDIN_GNAT_SHA256_X86_64_LINUX=9f74f58a827a2ad40dd84c72a413e75ea52888e0d8f7e252fba4d26762402703
 LANDIN_GPRBUILD_SHA256_X86_64_LINUX=e3f27f2515ec04d963f6badade6595993b1c091ba15d1919a7c75aad1b7ed49b

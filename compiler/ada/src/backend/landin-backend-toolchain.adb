@@ -107,6 +107,15 @@ package body Landin.Backend.Toolchain is
       Float : Landin.Targets.Firmware.Float_Unit) is
    begin
       if Landin.Targets.Capabilities.Backend_For (Facts)
+        = Landin.Targets.Capabilities.Xtensa_ELF
+      then
+         --  The selected chip wrapper supplies its exact ISA plugin to
+         --  both GCC and GAS, and its matching runtime multilib.
+         List.Append ("-mabi=windowed");
+         List.Append ("-Wa,--abi-windowed");
+         List.Append ("-Wa,--auto-litpools");
+         List.Append ("-Wa,--longcalls");
+      elsif Landin.Targets.Capabilities.Backend_For (Facts)
         = Landin.Targets.Capabilities.RV32_ELF
       then
          Add_RV32 (List, Level);
@@ -133,6 +142,7 @@ package body Landin.Backend.Toolchain is
       elsif Landin.Targets.Capabilities.Backend_For (Facts)
         in Landin.Targets.Capabilities.Cortex_M0_ELF
          | Landin.Targets.Capabilities.RV32_ELF
+         | Landin.Targets.Capabilities.Xtensa_ELF
       then
          --  Build identity belongs to the off-target debugger artifact.
          --  It must not consume the constrained firmware's load image.
@@ -217,13 +227,20 @@ package body Landin.Backend.Toolchain is
 
    function Driver_For
      (Facts : Landin.Targets.Target_Facts;
-      Named : String) return String
+      Named : String;
+      Level : String := "") return String
    is
       Triplet : constant String :=
         Landin.Targets.Capabilities.Triplet (Facts);
    begin
       if Named /= "" then
          return Named;
+      elsif Landin.Targets.Capabilities.Backend_For (Facts)
+        = Landin.Targets.Capabilities.Xtensa_ELF
+      then
+         return (if Level = "xtensa-esp32s3"
+                 then "xtensa-esp32s3-elf-gcc"
+                 else "xtensa-esp32-elf-gcc");
       elsif Landin.Targets.Capabilities.Backend_For (Facts)
         = Landin.Targets.Capabilities.Darwin_Arm64_Mach_O
       then
@@ -242,10 +259,11 @@ package body Landin.Backend.Toolchain is
    function Driver_Candidates
      (Facts : Landin.Targets.Target_Facts;
       Named : String;
-      Native : Boolean) return Landin.Platform.Path_List
+      Native : Boolean;
+      Level : String := "") return Landin.Platform.Path_List
    is
       Result : Landin.Platform.Path_List;
-      Preferred : constant String := Driver_For (Facts, Named);
+      Preferred : constant String := Driver_For (Facts, Named, Level);
       Triplet : constant String :=
         Landin.Targets.Capabilities.Triplet (Facts);
       Dash : constant Natural := Ada.Strings.Fixed.Index (Triplet, "-");

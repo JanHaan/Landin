@@ -21,8 +21,10 @@ PINS = HERE.parent / "pins.sh"
 #  QEMU for the RV32 lanes, and the GDB whose Python the sessions run.
 ARM = "gnat-arm-elf"
 RISCV = "gnat-riscv64-elf"
+XTENSA = "xtensa-esp-elf"
 #  Where Espressif's QEMU release, one of the lock's archives, is unpacked.
 ESPRESSIF = "qemu-espressif"
+ESPRESSIF_XTENSA = "qemu-xtensa"
 
 
 def pins():
@@ -50,13 +52,24 @@ def riscv_archive():
             "sha256": values["LANDIN_GNAT_RISCV64_ELF_SHA256_X86_64_LINUX"]}
 
 
+def xtensa_archive():
+    """Espressif's compiler with its two chip-specific configuration plugins."""
+    values = pins()
+    version = values['LANDIN_XTENSA_ESP_ELF_VERSION']
+    name = 'xtensa-esp-elf-%s-x86_64-linux-gnu.tar.xz' % version
+    return {'url': '%s/%s/%s' % (values['LANDIN_XTENSA_ESP_ELF_RELEASES'],
+                                values['LANDIN_XTENSA_ESP_ELF_RELEASE'], name),
+            'file': name, 'version': version,
+            'sha256': values['LANDIN_XTENSA_ESP_ELF_SHA256_X86_64_LINUX']}
+
+
 def sha(path):
     with path.open("rb") as stream:
         return hashlib.file_digest(stream, "sha256").hexdigest()
 
 
 #  What an installation holds, each inventoried whole.
-AREAS = ('root', ARM, RISCV, ESPRESSIF)
+AREAS = ('root', ARM, RISCV, ESPRESSIF, XTENSA, ESPRESSIF_XTENSA)
 
 
 def inventory(root):
@@ -208,16 +221,18 @@ def main():
         dest = fetch(packages, item)
         if item['kind'] == 'deb':
             subprocess.run(['dpkg-deb', '-x', str(dest), str(root / 'root')], check=True, timeout=30)
-        elif item['kind'] == 'tar.xz' and item.get('into') == ESPRESSIF:
+        elif item['kind'] == 'tar.xz' and item.get('into') in (ESPRESSIF, ESPRESSIF_XTENSA):
             unpack(dest, root / item['into'], '-xJf')
         else:
             raise RuntimeError('unknown archive kind: ' + item['kind'])
     for area, archive in ((ARM, arm_archive()), (RISCV, riscv_archive())):
         unpack(fetch(packages, archive), root / area, '-xzf')
+    unpack(fetch(packages, xtensa_archive()), root / XTENSA, '-xJf')
     compile_gdb_python(root)
     record = {'lock_sha256': sha(HERE / 'tools.lock.json'),
               'arm': {key: arm_archive()[key] for key in ('version', 'sha256')},
               'riscv': {key: riscv_archive()[key] for key in ('version', 'sha256')},
+              'xtensa': {key: xtensa_archive()[key] for key in ('version', 'sha256')},
               'files': {area: inventory(root / area) for area in AREAS}}
     (root / 'installation.json').write_text(json.dumps(record, sort_keys=True) + '\n')
     print('installed pinned Cortex-M environment at', root)

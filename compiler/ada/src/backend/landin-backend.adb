@@ -1685,6 +1685,10 @@ package body Landin.Backend is
          when Landin.Targets.Capabilities.RV64_ELF
             | Landin.Targets.Capabilities.RV32_ELF =>
             return 768;
+         when Landin.Targets.Capabilities.Xtensa_ELF =>
+            --  Native temporary homes, the complete window context and
+            --  a failure handler must fit below the checked stack limit.
+            return 1_536;
          when Landin.Targets.Capabilities.Cortex_M0_ELF =>
             --  D620: the extended exception frame below a checked frame,
             --  and the larger switch frame a handler that switches away
@@ -1709,6 +1713,8 @@ package body Landin.Backend is
             | Landin.Targets.Capabilities.Cortex_M0_ELF
             | Landin.Targets.Capabilities.RV32_ELF =>
             return 64;
+         when Landin.Targets.Capabilities.Xtensa_ELF =>
+            return 256;
          when Landin.Targets.Capabilities.No_Backend =>
             return 0;
       end case;
@@ -1730,6 +1736,8 @@ package body Landin.Backend is
             | Landin.Targets.Capabilities.RV64_ELF
             | Landin.Targets.Capabilities.RV32_ELF =>
             return 144;
+         when Landin.Targets.Capabilities.Xtensa_ELF =>
+            return 416;
          when Landin.Targets.Capabilities.Cortex_M0_ELF =>
             return 188 + (if Float then VFP_Exception_Bytes else 0);
          when Landin.Targets.Capabilities.No_Backend =>
