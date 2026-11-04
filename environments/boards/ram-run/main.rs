@@ -396,6 +396,10 @@ fn image(plan: &Plan) -> Result<Image> {
             ensure!(!matches!(section.flags(), object::SectionFlags::Elf { sh_flags, .. }
                 if sh_flags.contains(object::elf::SHF_WRITE)),
                 "Xtensa writable section {name} must use data SRAM");
+            ensure!(section.file_range().is_none() || matches!(section.flags(),
+                object::SectionFlags::Elf { sh_flags, .. }
+                if sh_flags.contains(object::elf::SHF_EXECINSTR)),
+                "Xtensa initialized section {name} must be executable in instruction SRAM; place constants in data SRAM");
             validate_sram_access(&plan.board, address, size, size)?;
         }
         ensure!(in_ram(&plan.board, address, size),
@@ -627,8 +631,8 @@ fn xtensa_instruction_visibility(core: &mut Core<'_>, address: u32) -> Result<Va
     core.write_core_reg(xtensa_register(XtensaRegister::IntEnable), 0u32)?;
     core.write_core_reg(xtensa_register(XtensaRegister::Windowbase), 0u32)?;
     core.write_core_reg(xtensa_register(XtensaRegister::Windowstart), 1u32)?;
-    // ICOUNT counts only below debug level 6. EXCM=1 and INTENABLE=0
-    // mask ordinary IRQs while INTLEVEL=5 permits the two single steps.
+    // ICOUNT counts only below debug level 6. INTENABLE=0 and INTLEVEL=5
+    // mask ordinary IRQs while permitting the two single steps; EXCM=0.
     core.write_core_reg(xtensa_register(XtensaRegister::CurrentPs), 0x25u32)?;
     core.write_core_reg(core.program_counter().id, address)?;
     let mut steps = Vec::new();
@@ -1305,7 +1309,7 @@ mod tests {
         bytes[0x900..0x900 + names.len()].copy_from_slice(&names);
         let sections = [
             [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            [offsets[1], 1, 2, iram, 0x100, 1024, 0, 0, 1024, 0],
+            [offsets[1], 1, 6, iram, 0x100, 1024, 0, 0, 1024, 0],
             [offsets[2], 1, 6, iram + 0x400, 0x500, 16, 0, 0, 4, 0],
             [offsets[3], 8, 3, dram, 0, 16, 0, 0, 4, 0],
             [offsets[4], 3, 0, 0, 0x900, names.len() as u32, 0, 0, 1, 0],
@@ -1365,6 +1369,24 @@ mod tests {
                 assert!(error.contains(message), "{board}: wanted {message}, got {error}");
                 assert!(!error.contains("parse probe selector"));
             }
+        }
+    }
+    #[test]
+    fn xtensa_initialized_constants_in_instruction_sram_are_refused_before_attach() {
+        for board in ["esp32", "esp32s3"] {
+            let mut bytes = xtensa_test_elf(board);
+            // Keep an executable PT_LOAD but turn its .text section into
+            // separately initialized read-only data. Section checks must
+            // enforce byte-accessible storage even under a custom script.
+            bytes[0x980..0x988].copy_from_slice(b".rodata\0");
+            elf_test_word(&mut bytes, 0xc00 + 4 * 40 + 20, 0x88);
+            elf_test_word(&mut bytes, 0xc00 + 2 * 40, 0x80);
+            elf_test_word(&mut bytes, 0xc00 + 2 * 40 + 8, 2); // SHF_ALLOC
+            bytes[0x500..0x508].copy_from_slice(b"literal\0");
+            let error = format!("{:#}", offline_board_elf_control(&bytes, board, false).unwrap_err());
+            assert!(error.contains("initialized section .rodata"), "{board}: {error}");
+            assert!(error.contains("place constants in data SRAM"));
+            assert!(!error.contains("parse probe selector"));
         }
     }
     #[test]
