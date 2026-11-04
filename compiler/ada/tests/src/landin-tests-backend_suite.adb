@@ -11017,27 +11017,34 @@ package body Landin.Tests.Backend_Suite is
                & "        inout r: u32 at general = v, out _ at a2)" & LF
                & "end f" & LF, Ran);
             Landin.Testing.Check_Equal
-              (Item, Ran, 5, "Xtensa integer operands lower at " & L.Name (Level));
+              (Item, Ran, 5, "Xtensa integer operands lower at "
+               & L.Name (Level));
             if not Landin.Stages.Failed (Work) then
                declare
-                  Code : constant not null access IR.Unit := Landin.Stages.Code (Work);
+                  Code : constant not null access IR.Unit :=
+                    Landin.Stages.Code (Work);
                   Block : IR.Value_Id := IR.No_Value;
                begin
                   for V in 1 .. IR.Value_Count (Code.all, 1) loop
-                     if IR.Op_Of (Code.all, 1, IR.Value_Id (V)) = IR.Assembly then
+                     if IR.Op_Of (Code.all, 1, IR.Value_Id (V)) = IR.Assembly
+                     then
                         Block := IR.Value_Id (V);
                      end if;
                   end loop;
                   Landin.Testing.Check
-                    (Item, IR.Verifier.Check (Code.all, Landin.Targets.Xtensa).Kind
-                     = IR.Verifier.Nothing_Wrong, "the lowered Xtensa block verifies");
+                    (Item, IR.Verifier.Check
+                       (Code.all, Landin.Targets.Xtensa).Kind
+                     = IR.Verifier.Nothing_Wrong,
+                     "the lowered Xtensa block verifies");
                   for Name of Refused loop
                      IR.Testing_Support.Overwrite_Assembly_Operand
                        (Code.all, 1, Block, 2,
-                        IR.Operand_At (IR.Discarded, Landin.Source.Names.No_Name,
-                                       Name.all, Landin.Types.Not_Typed));
+                        IR.Operand_At
+                          (IR.Discarded, Landin.Source.Names.No_Name,
+                           Name.all, Landin.Types.Not_Typed));
                      Landin.Testing.Check
-                       (Item, IR.Verifier.Check (Code.all, Landin.Targets.Xtensa).Kind
+                       (Item, IR.Verifier.Check
+                          (Code.all, Landin.Targets.Xtensa).Kind
                         = IR.Verifier.Assembly_Register_Refused,
                         L.Name (Level) & " refuses " & Name.all);
                   end loop;

@@ -584,9 +584,11 @@ package body Landin.Tests.RV32_Firmware_Suite is
       end loop;
       for Core in Firmware.Xtensa_Core loop
          Profile.Core := Core;
-         Made := Landin.Driver.ESP_Image.Make (Executable (Machine => 94), Profile);
+         Made := Landin.Driver.ESP_Image.Make
+           (Executable (Machine => 94), Profile);
          Landin.Testing.Check_Equal
-           (Item, U.To_String (Made.Fault), "", "an Xtensa ELF makes an ESP image");
+           (Item, U.To_String (Made.Fault), "",
+            "an Xtensa ELF makes an ESP image");
          Landin.Testing.Check_Equal
            (Item, Landin.Driver.ESP_Image.Read_Back_Fault
              (U.To_String (Made.Image), Executable (Machine => 94), Profile),

@@ -204,18 +204,21 @@ package body Landin.Testing.Fakes is
       --  Each firmware target's reference comes from the target table.
       for Target in 1 .. Landin.Targets.Selection.Described_Count loop
          declare
-            Module : constant String := Landin.Targets.Firmware.Reference_Module
-              (Landin.Targets.Selection.Described_At (Target));
+            Module : constant String :=
+              Landin.Targets.Firmware.Reference_Module
+                (Landin.Targets.Selection.Described_At (Target));
             Separator : constant Natural := Ada.Strings.Fixed.Index
               (Module, "/", Ada.Strings.Backward);
          begin
             if Module /= "" then
-               Host.Add_Directory (Library & "/" & Module (1 .. Separator - 1));
+               Host.Add_Directory
+                 (Library & "/" & Module (1 .. Separator - 1));
                Host.Add_Directory (Library & "/" & Module);
                for Which in 1 .. 2 loop
                   declare
                      File : constant String := Module & "/"
-                       & (if Which = 1 then "interrupts.ldn" else "memory.ldn");
+                       & (if Which = 1 then "interrupts.ldn"
+                          else "memory.ldn");
                   begin
                      Real.Read_File ("../../" & File, Text, Status);
                      if Status /= Landin.Platform.Read_Ok then
