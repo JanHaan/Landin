@@ -1,8 +1,8 @@
 {
   "status": "passed",
-  "image_sha256": "028543f5dd7ba114c4bcdf2b9a837888fbb22e1b19f672d8ea31a89bf5e59f2e",
+  "image_sha256": "8aec204806c449b66048bd64c5c677aeeaa408d414258a17e02a45bb6f07ba62",
   "image_name": "board.elf.bin",
-  "elf_sha256": "31d280c62ce21359303dc31bbf98b0932f4dbfc0093368a003b302881a952b53",
+  "elf_sha256": "308a8df875e7936397f041a5e2a14202a143958528b5fc8aab155d03909d0830",
   "image": {
     "chip": 0,
     "revisions": [
@@ -12,12 +12,12 @@
     "entry": "0x40080400",
     "segments": [
       "0x40080000+0x404",
-      "0x40080404+0xb290",
+      "0x40080404+0xaa64",
       "0x3ffb0000+0x18",
       "0x3ffb0018+0x58"
     ],
-    "checksum": "0x0b",
-    "sha256": "a9dbca070df78d87f9ed6651560ec74ec8bf219fb04a4b1c9a1bb6084976e236"
+    "checksum": "0x11",
+    "sha256": "3a7609f68710a5930f81ab185e93f5ae2545d0544367635f5095c4ac58f297ca"
   },
   "instructions": [
     "call8",
@@ -34,8 +34,8 @@
     "boot_reason": 1,
     "app_state": 2,
     "timer_events": [
-      797,
-      1201
+      812,
+      1217
     ],
     "trap_count": 0,
     "startup_reset": "CHIP_PU",
@@ -48,7 +48,7 @@
     "boot": "SPI_FAST_FLASH_BOOT",
     "loads": [
       "0x40080000+0x404",
-      "0x40080404+0xb290",
+      "0x40080404+0xaa64",
       "0x3ffb0000+0x18",
       "0x3ffb0018+0x58"
     ],
@@ -91,11 +91,11 @@
       "burst": 300,
       "fifo_overflows": 1,
       "restarts": 2,
-      "timer_interrupts_meanwhile": 100
+      "timer_interrupts_meanwhile": 101
     },
     "stream": {
-      "timer_events": 4694,
-      "receive_interrupts": 3047,
+      "timer_events": 4731,
+      "receive_interrupts": 3100,
       "echoed": 3014,
       "sent": 3614
     }
@@ -106,7 +106,7 @@
     "recoveries": 2,
     "dropped": 44,
     "overflows": 1,
-    "entries": 3047,
+    "entries": 3100,
     "boot_reason": 1,
     "byte_cell": 116,
     "half_cell": 29789,
@@ -114,19 +114,19 @@
   },
   "readback": [
     "0x40080000+0x404",
-    "0x40080404+0xb290",
+    "0x40080404+0xaa64",
     "0x3ffb0000+0x18"
   ],
-  "uart_sha256": "174e7c20ae582906e72f3b2d3eff4bd18193a16e3264d06e96b0090cfa59e9a8",
+  "uart_sha256": "86903c7b479cdde079029517cd752dc4e5b3401307f586311f4d12a79b092086",
   "mode": "boot",
   "fixed_restore": {
     "status": "passed",
-    "sha256": "df2ea84a9ccb13a60dc754f7f733c52994bc8d64c96d399358c6e14f48aefef6",
+    "sha256": "8556bf227028c6d9de3a2a492fa65bb673c20772996032e899a7abd87d302542",
     "marker": {
       "symbol": "_landin_fixed_ready",
       "address": 1073414576,
       "value": 1279678513,
-      "elf_sha256": "eeee52cd613a79be4f9a726cc13eac4cfa2f7e1269c909026df79e3cda3a474f",
+      "elf_sha256": "bd893fa123f5cd4666a061e9abcbfee5811ba02979722469fb7ae17d7b9c1ae7",
       "power_on": {
         "reset_cause": 1,
         "resident_ready": 1279678513,
@@ -137,33 +137,33 @@
       }
     }
   },
-  "seconds": 25.513,
+  "seconds": 25.597,
   "kernel_usb": {
-    "since": 1793804558.3432562,
-    "until": 1793804583.830554,
+    "since": 1793808035.4660234,
+    "until": 1793808061.035545,
     "lines": [
       {
-        "time": 1793804563.082905,
-        "text": "rigpi kernel: usb 1-1.2.3.4.4: USB disconnect, device number 69"
+        "time": 1793808040.170982,
+        "text": "rigpi kernel: usb 1-1.2.3.4.4: USB disconnect, device number 71"
       },
       {
-        "time": 1793804565.632719,
-        "text": "rigpi kernel: usb 1-1.2.3.4.4: new full-speed USB device number 70 using xhci_hcd"
+        "time": 1793808042.752709,
+        "text": "rigpi kernel: usb 1-1.2.3.4.4: new full-speed USB device number 78 using xhci_hcd"
       },
       {
-        "time": 1793804565.734339,
+        "time": 1793808042.856828,
         "text": "rigpi kernel: usb 1-1.2.3.4.4: ch341-uart converter now attached to ttyUSB4"
       },
       {
-        "time": 1793804579.799175,
-        "text": "rigpi kernel: usb 1-1.2.3.4.4: USB disconnect, device number 70"
+        "time": 1793808056.982893,
+        "text": "rigpi kernel: usb 1-1.2.3.4.4: USB disconnect, device number 78"
       },
       {
-        "time": 1793804582.340707,
-        "text": "rigpi kernel: usb 1-1.2.3.4.4: new full-speed USB device number 71 using xhci_hcd"
+        "time": 1793808059.552675,
+        "text": "rigpi kernel: usb 1-1.2.3.4.4: new full-speed USB device number 79 using xhci_hcd"
       },
       {
-        "time": 1793804582.442561,
+        "time": 1793808059.653928,
         "text": "rigpi kernel: usb 1-1.2.3.4.4: ch341-uart converter now attached to ttyUSB4"
       }
     ],
@@ -189,11 +189,11 @@
       "tag": "t",
       "h": "00000bc6",
       "c": "00000002",
-      "i": "00000be7",
-      "m": "00001256",
+      "i": "00000c1c",
+      "m": "0000127b",
       "p": "00018042",
       "q": "00818040",
-      "k": "00000064",
+      "k": "00000065",
       "l": "0000002c",
       "o": "00000001",
       "e": "00000cc6",
