@@ -1,0 +1,11 @@
+calculate: (x: f64, y: f32) -> (r: f64) =
+    r = x * f64(y) + 1.5
+end calculate
+
+main: () -> (status: i32) =
+    if calculate(2.5, 4.0) == 11.5 then
+        status = 0
+    else
+        status = 1
+    end if
+end main

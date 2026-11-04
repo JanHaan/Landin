@@ -322,6 +322,7 @@ package body Landin.Backend is
                 = Landin.Source.Names.No_Name
               and then Placed.Section = Landin.Source.Names.No_Name
               and then Placed.Vector = 0
+              and then not Placed.Vector_Present
               and then not Placed.Keep
               and then not IR.Signature_Uses_C_ABI (Of_Unit, Signature)
               and then IR.Signature_Machine (Of_Unit, Signature)

@@ -5118,6 +5118,7 @@ package body Landin.IR.Verifier is
                  Placement_Of (Of_Unit, Id);
                Present : constant Boolean := Attr.Keep
                  or else Attr.Alignment /= 0 or else Attr.Vector /= 0
+                 or else Attr.Vector_Present
                  or else Attr.Section /= Landin.Source.Names.No_Name
                  or else Attr.Region /= Landin.Source.Names.No_Name
                  or else Attr.Boot_Stage;
@@ -5132,7 +5133,7 @@ package body Landin.IR.Verifier is
                       (Of_Unit, Signature_Of (Of_Unit, Id))
                         /= Landin.Machine.Naked_Routine
                     or else Attr.Keep or else Attr.Alignment /= 0
-                    or else Attr.Vector /= 0
+                    or else (Attr.Vector /= 0 or else Attr.Vector_Present)
                     or else Attr.Section /= Landin.Source.Names.No_Name
                     or else Attr.Region /= Landin.Source.Names.No_Name
                   then
@@ -5156,7 +5157,7 @@ package body Landin.IR.Verifier is
                   return (Kind => Routine_Signature_Disagrees,
                           Item => Id, others => <>);
                end if;
-               if Attr.Vector /= 0 then
+               if (Attr.Vector /= 0 or else Attr.Vector_Present) then
                   --  D544: the slots the unit's own profile admits.
                   if Is_Datum or else Is_External (Of_Unit, Id)
                     or else not Landin.Targets.Firmware.Admits

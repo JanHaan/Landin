@@ -1,0 +1,12 @@
+double: (value: u32) -> (result: u32) =
+    result = assembler.block("add {result}, {value}, {value}",
+        in value: u32 at a10 = value, out result: u32 at a8, out _ at a9)
+end double
+
+main: () -> (status: i32) =
+    if double(21) == 42 then
+        status = 0
+    else
+        status = 1
+    end if
+end main

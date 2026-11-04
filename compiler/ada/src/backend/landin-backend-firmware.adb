@@ -742,7 +742,8 @@ package body Landin.Backend.Firmware is
       --  All 64 physical address registers, then PS, PC, window base and
       --  mask, SAR and loop state. Interrupts remain masked throughout a
       --  handler: one complete context, with no nested handler claim.
-      Context_Bytes : constant := 320;
+      Context_Bytes : constant := 400;
+      Has_Stage : Boolean := False;
       procedure Line (Text : String);
       procedure Line (Text : String) is
       begin
@@ -771,9 +772,14 @@ package body Landin.Backend.Firmware is
             Slot : constant Integer :=
               Landin.IR.Placement_Of (Of_Unit, Item).Vector;
          begin
-            if Slot in Handlers'Range then
+            if Slot in Handlers'Range
+              and then (Slot /= 0 or else
+                Landin.IR.Placement_Of (Of_Unit, Item).Vector_Present)
+            then
                Handlers (Slot) := Item;
             end if;
+            Has_Stage := Has_Stage
+              or else Landin.IR.Placement_Of (Of_Unit, Item).Boot_Stage;
          end;
       end loop;
       Line (".section .isr_vector,""ax"",@progbits");
@@ -838,7 +844,8 @@ package body Landin.Backend.Firmware is
       Line (".balign 4");
       Line (".global _landin_firmware_entry");
       Line ("_landin_firmware_entry:");
-      Line ("j " & (if Profiles.Stage_Before_Reset (Profile.Boot)
+      Line ("j " & (if Has_Stage
+                     and then Profiles.Stage_Before_Reset (Profile.Boot)
                    then Profiles.Reset_Stage_Symbol
                    else Profiles.Reset_Symbol));
       Line (".section .text.landin_firmware_reset,""ax"",@progbits");
@@ -861,8 +868,12 @@ package body Landin.Backend.Firmware is
       Line ("movi a0, 0");
       Line ("wsr a0, INTENABLE");
       Line ("wsr a0, LCOUNT");
-      Line ("wsr a0, CPENABLE");
       Line ("wsr a0, SCOMPARE1");
+      --  Both pinned configurations have the single-precision FPU. The
+      --  ABI uses integer carriers, but their libgcc helpers use FP state.
+      Line ("movi a0, 1");
+      Line ("wsr a0, CPENABLE");
+      Line ("rsync");
       Line ("movi a1, _landin_firmware_stack_top");
       Line ("addi a1, a1, -32");
       Line ("movi a2, _landin_firmware_stack_top");
@@ -928,6 +939,8 @@ package body Landin.Backend.Firmware is
          Line ("movi a3, _landin_firmware_stack_bottom");
          Line ("s32i a3, a2, 0");
       end if;
+      Line (".global _landin_firmware_instruction_visibility");
+      Line ("_landin_firmware_instruction_visibility:");
       Line ("memw");
       Line ("isync");
       Line ("movi a2, 0x40020");
@@ -985,6 +998,13 @@ package body Landin.Backend.Firmware is
       Line ("rsr a1, LCOUNT");
       Line ("s32i a1, a0, 284");
       Line ("s32i a2, a0, 288");
+      for Reg in 0 .. 15 loop
+         Line ("ssi f" & N (Reg) & ", a0, " & N (304 + Reg * 4));
+      end loop;
+      Line ("rur a1, FCR");
+      Line ("s32i a1, a0, 368");
+      Line ("rur a1, FSR");
+      Line ("s32i a1, a0, 372");
       Line ("bnei a2, 1, 1f");
       Line ("rsr a3, EXCCAUSE");
       Line ("bnei a3, 4, _landin_firmware_unhandled");
@@ -1017,7 +1037,12 @@ package body Landin.Backend.Firmware is
          Line ("1:");
       end loop;
       Line ("2:");
+      Line ("s32i a2, a8, 296");
       for Slot in Handlers'Range loop
+         --  A windowed handler may clobber a2. Retain this dispatch's
+         --  pending set independently of the handler's result registers.
+         Line ("movi a8, " & Context);
+         Line ("l32i a2, a8, 296");
          if Handlers (Slot) /= Landin.IR.No_Item then
             Line ("bbci a2, " & N (Slot) & ", 1f");
             Line ("call8 " & Symbol (Handlers (Slot)));
@@ -1043,6 +1068,13 @@ package body Landin.Backend.Firmware is
       Line ("wsr a1, LEND");
       Line ("l32i a1, a0, 284");
       Line ("wsr a1, LCOUNT");
+      for Reg in 0 .. 15 loop
+         Line ("lsi f" & N (Reg) & ", a0, " & N (304 + Reg * 4));
+      end loop;
+      Line ("l32i a1, a0, 368");
+      Line ("wur a1, FCR");
+      Line ("l32i a1, a0, 372");
+      Line ("wur a1, FSR");
       Line ("l32i a1, a0, 268");
       Line ("wsr a1, WINDOWSTART");
       Line ("wsr a0, EXCSAVE1");

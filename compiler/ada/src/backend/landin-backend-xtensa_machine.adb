@@ -59,7 +59,12 @@ package body Landin.Backend.Xtensa_Machine is
          Id : constant Natural := Number (Name);
       begin
          if Id = 0 then null;
-         elsif Id = 2 then Raw ("mov a1, " & Physical);
+         elsif Id = 2 then
+            Raw ("mov a1, " & Physical);
+            --  Outgoing stack arguments can cover the previous spill
+            --  backchain. Every new SP needs the current caller's link.
+            Raw ("l32i a11, a7, 32");
+            Raw ("s32e a11, a1, -12");
          elsif Id <= 31 then
             Raw ("s32i " & Physical & ", a7, " & Image (Id * 4));
          else raise Compiler_Defect with "Xtensa logical word exceeds bank";
