@@ -136,6 +136,42 @@ linker; every Darwin host links with Apple's.
 | Linux arm64 | `gnat-aarch64-linux-16.1.0-1.tar.gz` | `8e297497f2d6d6845920a363a277b6ef5bc454e48a66d0d606b89d71e31ee623` |
 | Linux arm64 | `gprbuild-aarch64-linux-26.0.0-1.tar.gz` | `c125424447144944973d24de43a53b3e7008dbda306e0d540db07e635dea24e4` |
 
+### Xtensa cross tools
+
+ESP32 and ESP32-S3 use Espressif's
+[`esp-16.1.0_20260609` release](https://github.com/espressif/crosstool-NG/releases/tag/esp-16.1.0_20260609).
+Both chip wrappers report GCC `16.1.0` and GNU binutils `2.46`, with
+`crosstool-NG esp-16.1.0_20260609` in their version response. The archive
+checksums below match the immutable
+[ESP-IDF tool manifest](https://github.com/espressif/esp-idf/blob/0a1d19eba1fc6f9b5abe623df2dc4f60a703cf46/tools/tools.json).
+`environments/pins.sh` supplies them to the flake and the private embedded
+installer; the selected archive is verified before extraction.
+
+| platform | archive | sha256 |
+|---|---|---|
+| Linux x86-64 | `xtensa-esp-elf-16.1.0_20260609-x86_64-linux-gnu.tar.xz` | `f708752ebb35cab21f184b2574114ed1187619db0edb8a4ba913c06ca2fa675e` |
+| Linux arm64 | `xtensa-esp-elf-16.1.0_20260609-aarch64-linux-gnu.tar.xz` | `785ee242bfbdb3ac4e764e85d2f87109c7c5f3da57d742da9a7c58c0d0906149` |
+| macOS arm64 | `xtensa-esp-elf-16.1.0_20260609-aarch64-apple-darwin.tar.xz` | `be4eb81c12c9bbf6ead79c758bfa81b8e6ec9a695372f946ac924c70c32f273d` |
+
+Select `xtensa-esp32-elf-*` for `xtensa-esp32` and
+`xtensa-esp32s3-elf-*` for `xtensa-esp32s3`. The wrappers load the matching
+`xtensa_esp32` or `xtensa_esp32s3` configuration plugin from their archive.
+The assembler receives `--abi-windowed`; the C driver receives
+`-mabi=windowed`. These chip configurations define the accepted instruction
+sets independently, including the S3's `salt` and `saltu` instructions.
+
+The private Linux x86-64 installation also carries
+[Espressif QEMU `esp-develop-9.2.2-20260417`](https://github.com/espressif/qemu/releases/tag/esp-develop-9.2.2-20260417)
+in its separate `qemu-xtensa` area. Its archive SHA256 is
+`0eecb2a34a5586c0e59110f77b9343b7b336e82fdb0e1a30e1dc1bab8a547e35`,
+recorded with its URL in `environments/cortex-m/tools.lock.json`.
+`qemu-system-xtensa` selects `-M esp32` or `-M esp32s3`; its version response
+is `9.2.2 (esp_develop_9.2.2_20260417)`. The installation record inventories
+the compiler, both chip plugins and the Xtensa emulator alongside the other
+embedded tools.
+
+### Editor grammar CLI
+
 The structural editor grammar's CLI is not a compiler tool, but the gate
 fetches it, so it is pinned the same way: tree-sitter `0.26.9`, the version
 `highlight/tree-sitter/package.json` names, as the release binary below.
