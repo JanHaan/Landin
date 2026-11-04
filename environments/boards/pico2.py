@@ -18,6 +18,8 @@ each reaches the hub and the bus the same way:
   * no probe attaches while the port shows BOOTSEL, including when the
     obsolete --bootsel-attach flag is supplied; install and verify the
     fixed image by UF2 off the cascade before attaching;
+  * RAM-only BOOTSEL checks read the selected hub and port through Linux
+    USB sysfs, requiring a valid hub even when the resident is USB-silent;
   * every download as RP235x is followed at once by a power cycle, before
     any wait or attach: probe-rs's RP235x reset leaves the boot ROM's USB
     on the bus with its core halted (D832);
@@ -30,6 +32,8 @@ Each tool's args carry `hub`, `port`, `pico_serial`, `guard_serial`,
 `arguments` adds the options that give them.
 """
 
+import re
+import stat
 import struct
 import sys
 import time
@@ -47,6 +51,7 @@ BOOTSEL = '2e8a:000f'
 FLASH = 0x10000000
 # probe-rs's names for the chip as each architecture's cores run it (D712).
 ARM_CHIP, RISCV_CHIP = 'RP235x', 'RP235x_riscv'
+USB_SYSFS = Path('/sys/bus/usb/devices')
 
 
 Listings = common.Listings
@@ -109,14 +114,81 @@ def bootsel(run, args, name='hub-before-attach'):
     return device if device and device.startswith(BOOTSEL) else None
 
 
+def ram_port_device(hub, port, sysfs=None):
+    """Read only the selected Linux USB port, without opening a USB device.
+
+    A resident image may leave the port USB-silent. Only an absent child
+    of a readable, validated hub counts as that case; missing or unreadable
+    identity attributes must never be mistaken for an absent device.
+    SYSFS is injectable for controls, and otherwise uses Linux's USB bus.
+    """
+    require(isinstance(hub, str) and re.fullmatch(
+        r'[1-9][0-9]*-(?:0|[1-9][0-9]*(?:\.[1-9][0-9]*)*)', hub),
+        'RAM BOOTSEL guard needs a concrete USB hub path, such as 1-1: %r' % hub)
+    require(type(port) is int and port > 0,
+            'RAM BOOTSEL guard needs a positive physical USB port: %r' % port)
+    sysfs = Path(sysfs) if sysfs is not None else USB_SYSFS
+    # uhubctl calls a root hub N-0; Linux calls its directory usbN.
+    root = hub.endswith('-0')
+    parent = sysfs / ('usb' + hub.split('-')[0] if root else hub)
+    child = sysfs / (hub.split('-')[0] + '-' + str(port) if root else hub + '.' + str(port))
+
+    def attribute(device, name, pattern):
+        path = device / name
+        try:
+            value = path.read_text(encoding='ascii').strip()
+        except (OSError, UnicodeError) as error:
+            raise Failed('RAM BOOTSEL guard cannot read %s: %s' % (path, error)) from error
+        require(re.fullmatch(pattern, value),
+                'RAM BOOTSEL guard found malformed %s: %r' % (path, value))
+        return value.lower()
+
+    def identity(device):
+        return ':'.join(attribute(device, name, r'[0-9a-fA-F]{4}')
+                        for name in ('idVendor', 'idProduct'))
+
+    def validate_hub():
+        try:
+            require(stat.S_ISDIR(parent.stat().st_mode),
+                    'RAM BOOTSEL guard USB hub is not a directory: %s' % parent)
+        except OSError as error:
+            raise Failed('RAM BOOTSEL guard cannot inspect USB hub %s: %s'
+                         % (parent, error)) from error
+        identity(parent)
+        require(attribute(parent, 'bDeviceClass', r'[0-9a-fA-F]{2}') == '09',
+                'RAM BOOTSEL guard selected USB device %s is not a hub' % parent)
+        ports = int(attribute(parent, 'maxchild', r'[0-9]{1,3}'))
+        require(1 <= ports <= 255,
+                'RAM BOOTSEL guard found invalid physical port count %d at %s' % (ports, parent))
+        require(port <= ports,
+                'RAM BOOTSEL guard port %d is outside USB hub %s physical ports 1..%d'
+                % (port, hub, ports))
+
+    validate_hub()
+    try:
+        child.lstat()
+    except FileNotFoundError:
+        # Recheck the parent: its disappearance is not a silent resident.
+        validate_hub()
+        return None
+    except OSError as error:
+        raise Failed('RAM BOOTSEL guard cannot inspect USB child %s: %s'
+                     % (child, error)) from error
+    return identity(child)
+
+
 def refuse_bootsel(run, args, allowed=None):
     """Never attach to BOOTSEL; install a valid fixed image by UF2 off
     the cascade first. ALLOWED is retained for callers but cannot bypass
     this guard."""
-    device = bootsel(run, args)
+    ram = getattr(args, 'mode', 'boot') == 'ram'
+    device = ram_port_device(args.hub, args.port) if ram else bootsel(run, args)
+    device = device if device and device.startswith(BOOTSEL) else None
+    recovery = ('Install a fixed image by UF2 off the cascade before a RAM run' if ram else
+                'Cycle port %d only off the cascade after installing a fixed image by UF2' % args.port)
     require(not device,
-            'the Pico 2 enumerates as BOOTSEL %s; no probe attaches to it there. Cycle port %d'
-            ' only off the cascade after installing a fixed image by UF2' % (device, args.port))
+            'the Pico 2 enumerates as BOOTSEL %s; no probe attaches to it there. %s'
+            % (device, recovery))
     return device
 
 

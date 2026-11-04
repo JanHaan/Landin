@@ -6,6 +6,7 @@ not enumerate, the pace and the wait for the hub around each download and
 cycle, every download as RP235x followed at once by a cycle (D712,
 D832), and the
 framing and accounting it shares with the RP2040's."""
+import argparse
 import importlib.util
 import struct
 import tempfile
@@ -136,6 +137,159 @@ def answers(**more):
              'hub-before-attach': QUIET}
     found.update(more)
     return found
+
+
+class RamGuard(unittest.TestCase):
+    """Read-only USB topology controls, including failures ordinary root-run
+    fixture permissions cannot reproduce with chmod alone."""
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.sysfs = Path(directory.name)
+        self.hub = self.sysfs / '1-1'
+        self.child = self.sysfs / '1-1.2'
+        self.device(self.hub, idVendor='0424', idProduct='2514',
+                    bDeviceClass='09', maxchild='4')
+        patcher = mock.patch.object(BOARD.pico2, 'USB_SYSFS', self.sysfs)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def device(self, path, **attributes):
+        path.mkdir(exist_ok=True)
+        for name, value in attributes.items():
+            (path / name).write_text(value + '\n')
+
+    def guard(self, **more):
+        run = Recorded()
+        args = SimpleNamespace(**dict(dict(mode='ram', hub='1-1', port=2,
+            bootsel_attach=True, cascade='9-9'), **more))
+        try:
+            return BOARD.pico2.refuse_bootsel(run, args, allowed=True)
+        finally:
+            self.assertEqual(run.calls, [], 'RAM guard must issue no USB or probe commands')
+
+    def test_silent_selected_port_needs_no_uhubctl_or_cascade(self):
+        # BOOTSEL at a different port must not be mistaken for our Pico.
+        self.device(self.sysfs / '1-1.3', idVendor='2e8a', idProduct='000f')
+        self.assertIsNone(self.guard())
+
+    def test_present_non_bootsel_identity_is_accepted_without_commands(self):
+        self.device(self.child, idVendor='2e8a', idProduct='000a')
+        self.assertIsNone(self.guard())
+
+    def test_bootsel_is_refused_even_with_both_legacy_overrides(self):
+        self.device(self.child, idVendor='2E8A', idProduct='000F')
+        with self.assertRaisesRegex(BOARD.Failed, 'enumerates as BOOTSEL 2e8a:000f'):
+            self.guard()
+
+    def test_missing_parent_is_not_a_silent_port(self):
+        with self.assertRaisesRegex(BOARD.Failed, 'cannot inspect USB hub'):
+            self.guard(hub='1-9')
+
+    def test_parent_must_be_a_valid_hub_with_a_valid_port_count(self):
+        controls = [('idVendor', 'garbled', 'malformed'),
+                    ('idProduct', '', 'malformed'),
+                    ('bDeviceClass', '00', 'not a hub'),
+                    ('bDeviceClass', '9', 'malformed'),
+                    ('maxchild', 'zero', 'malformed'),
+                    ('maxchild', '9' * 5000, 'malformed'),
+                    ('maxchild', '0', 'invalid physical port count'),
+                    ('maxchild', '256', 'invalid physical port count')]
+        for attribute, value, message in controls:
+            with self.subTest(attribute=attribute, value=value):
+                path = self.hub / attribute
+                original = path.read_bytes()
+                path.write_text(value)
+                try:
+                    with self.assertRaisesRegex(BOARD.Failed, message):
+                        self.guard()
+                finally:
+                    path.write_bytes(original)
+
+    def test_requested_port_must_exist_on_the_selected_hub(self):
+        for port in (0, -1, True, '2', 5):
+            with self.subTest(port=port), self.assertRaisesRegex(BOARD.Failed, 'port'):
+                self.guard(port=port)
+
+    def test_hub_name_cannot_escape_or_select_an_interface(self):
+        for hub in ('../1-1', '1-1/..', '1-1:1.0', '.1', '1-1.0'):
+            with self.subTest(hub=hub), self.assertRaisesRegex(BOARD.Failed, 'concrete USB hub'):
+                self.guard(hub=hub)
+
+    def test_missing_or_malformed_child_identity_is_not_silent(self):
+        self.device(self.child, idVendor='2e8a')
+        with self.assertRaisesRegex(BOARD.Failed, 'cannot read .*idProduct'):
+            self.guard()
+        for value in ('000f extra', '00f', 'not-a-product'):
+            with self.subTest(value=value):
+                (self.child / 'idProduct').write_text(value)
+                with self.assertRaisesRegex(BOARD.Failed, 'malformed .*idProduct'):
+                    self.guard()
+
+    def test_non_ascii_attribute_fails_with_its_path(self):
+        self.device(self.child, idVendor='2e8a', idProduct='000f')
+        (self.child / 'idProduct').write_bytes(b'\xff\n')
+        with self.assertRaisesRegex(BOARD.Failed, 'cannot read .*idProduct'):
+            self.guard()
+
+    def test_unreadable_parent_and_child_attributes_fail_closed(self):
+        self.device(self.child, idVendor='2e8a', idProduct='000f')
+        read_text = Path.read_text
+        for path in (self.hub / 'idVendor', self.hub / 'maxchild', self.child / 'idProduct'):
+            def unreadable(at, *args, **kwargs):
+                if at == path:
+                    raise PermissionError('synthetic read denial')
+                return read_text(at, *args, **kwargs)
+            with self.subTest(path=path), mock.patch.object(Path, 'read_text', unreadable), \
+                    self.assertRaisesRegex(BOARD.Failed, 'cannot read .*synthetic read denial'):
+                self.guard()
+
+    def test_unreadable_child_lookup_is_not_silent(self):
+        lstat = Path.lstat
+        def unreadable(at, *args, **kwargs):
+            if at == self.child:
+                raise PermissionError('synthetic lookup denial')
+            return lstat(at, *args, **kwargs)
+        with mock.patch.object(Path, 'lstat', unreadable), \
+                self.assertRaisesRegex(BOARD.Failed, 'cannot inspect USB child .*lookup denial'):
+            self.guard()
+
+    def test_disappearing_parent_is_not_a_silent_port(self):
+        lstat = Path.lstat
+        def disconnected(at, *args, **kwargs):
+            if at == self.child:
+                (self.hub / 'maxchild').unlink()
+                raise FileNotFoundError('synthetic disconnect')
+            return lstat(at, *args, **kwargs)
+        with mock.patch.object(Path, 'lstat', disconnected), \
+                self.assertRaisesRegex(BOARD.Failed, 'cannot read .*maxchild'):
+            self.guard()
+
+    def test_dangling_child_link_is_not_a_silent_port(self):
+        self.child.symlink_to(self.sysfs / 'gone')
+        with self.assertRaisesRegex(BOARD.Failed, 'cannot read .*idVendor'):
+            self.guard()
+
+    def test_root_hub_uses_its_linux_directory_and_physical_child(self):
+        self.hub.rename(self.sysfs / 'usb1')
+        self.assertIsNone(self.guard(hub='1-0'))
+        self.device(self.sysfs / '1-2', idVendor='2e8a', idProduct='000f')
+        with self.assertRaisesRegex(BOARD.Failed, 'enumerates as BOOTSEL'):
+            self.guard(hub='1-0')
+
+    def test_explicit_cascade_override_does_not_require_a_connected_cascade(self):
+        args = SimpleNamespace(cascade='9-9', hub='1-1')
+        with mock.patch.object(BOARD.common, 'cascade_root', side_effect=AssertionError('scan')):
+            BOARD.common.place_hubs(argparse.ArgumentParser(), args, 'hub', sysfs=self.sysfs)
+        self.assertEqual((args.cascade, args.hub), ('9-9', '1-1'))
+        self.assertIsNone(self.guard(cascade=args.cascade, hub=args.hub))
+
+    def test_explicit_boot_mode_still_uses_the_existing_listing(self):
+        run = Recorded(**answers(**{'hub-before-attach': BOOTSEL}))
+        with mock.patch.object(BOARD.pico2, 'ram_port_device', side_effect=AssertionError('sysfs')), \
+                self.assertRaisesRegex(BOARD.Failed, 'enumerates as BOOTSEL'):
+            BOARD.pico2.refuse_bootsel(run, paced_args(run, mode='boot'), allowed=True)
+        self.assertEqual(run.calls, ['hub-before-attach'])
 
 
 class Hub(unittest.TestCase):

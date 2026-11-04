@@ -250,6 +250,24 @@ class Attach(unittest.TestCase):
             BOARD.flash(run, paced_args(run, bootsel_attach=True), 'board.elf', b'')
         self.assertEqual(run.calls, ['hub-before-attach'])
 
+    def test_ram_attach_uses_read_only_sysfs_and_refuses_bootsel_before_probe(self):
+        sysfs = self.output / 'usb'
+        hub = sysfs / '1-1'
+        child = sysfs / '1-1.2'
+        hub.mkdir(parents=True)
+        child.mkdir()
+        for directory, attributes in ((hub, dict(idVendor='0424', idProduct='2514',
+                bDeviceClass='09', maxchild='4')),
+                (child, dict(idVendor='2e8a', idProduct='000f'))):
+            for name, value in attributes.items():
+                (directory / name).write_text(value + '\n')
+        run = Recorded()
+        args = SimpleNamespace(**dict(ARGS, mode='ram', hub='1-1', bootsel_attach=True))
+        with mock.patch.object(BOARD.pico2, 'USB_SYSFS', sysfs), \
+                self.assertRaisesRegex(BOARD.Failed, 'enumerates as BOOTSEL'):
+            BOARD.attached(run, args, 'attach', bootsel_allowed=True)
+        self.assertEqual(run.calls, [])
+
     def test_a_flash_through_the_risc_v_side_reads_back_at_once(self):
         head = struct.pack('<2I', 0x3900006f, 0)
         run = Recorded(statuses={'attach-RP235x': 1},
