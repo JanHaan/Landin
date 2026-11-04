@@ -2655,6 +2655,17 @@ package body Landin.Tests.Targets_Suite is
          and then not F.Executes (F.Xtensa_LX7, "xtensa-esp32")
          and then not F.Executes (F.Xtensa_LX6, "xtensa-esp32s3"),
          "neither chip configuration assumes the other's instructions");
+      --  XCHAL_INTLEVEL3_ANDBELOW_MASK in both pinned core-isa.h files:
+      --  independent of the implementation's selected slot ranges.
+      for Core in F.Xtensa_Core loop
+         for Slot in 0 .. 31 loop
+            Landin.Testing.Check
+              (Item, F.Core_Slot (Core, Slot)
+                 = ((Byte_Count'(16#28FE_BFFF#)
+                      / Byte_Count'(2) ** Slot) mod 2 = 1),
+               "ordinary Xtensa handlers stop at EXCM level three");
+         end loop;
+      end loop;
       Profile.Present := True;
       Profile.Core := F.Xtensa_LX6;
       Profile.Vector_Count := 32;
@@ -2668,7 +2679,10 @@ package body Landin.Tests.Targets_Suite is
          and then F.Vector_Bytes (Profile) = 1024
          and then F.Vector_Alignment (Profile) = 1024
          and then F.Vector_Address (Profile) = 16#4008_0000#
-         and then F.Admits (Profile, 0) and then F.Admits (Profile, 31)
+         and then F.Admits (Profile, 0) and then F.Admits (Profile, 29)
+         and then not F.Admits (Profile, 16)
+         and then not F.Admits (Profile, 24)
+         and then not F.Admits (Profile, 31)
          and then not F.Admits (Profile, 14)
          and then not F.Admits (Profile, 32)
          and then F.Dispatched_Slot (Profile.Core, 0)
@@ -2677,7 +2691,8 @@ package body Landin.Tests.Targets_Suite is
          and then F.Interrupt_Level_Mask (F.Xtensa_LX6, 6) = 0
          and then F.Interrupt_Level_Mask (F.Xtensa_LX7, 7) = 16#4000#
          and then F.Boots (Profile.Core, F.ESP_App_Image),
-         "32 CPU lines dispatch through one KiB of architectural vectors");
+         "ordinary CPU lines dispatch through one KiB of architectural"
+         & " vectors");
       Landin.Testing.Check
         (Item, Asm.Classify (Xtensa, "a2") = Asm.Operand_Register
          and then Asm.Classify (Xtensa, "a15") = Asm.Operand_Register
