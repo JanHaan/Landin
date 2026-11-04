@@ -441,10 +441,14 @@ package body Landin.Devices.Policies is
             Into.Core := Esp_Rv32imc;
          elsif Said = "esp-rv32imac-clic" then
             Into.Core := Esp_Rv32imac_Clic;
+         elsif Said = "xtensa-lx6" then
+            Into.Core := Xtensa_LX6;
+         elsif Said = "xtensa-lx7" then
+            Into.Core := Xtensa_LX7;
          elsif J.Is_Present (J.Member (Document, Root, "core")) then
             Fail ("the policy's core is '" & Said & "', not hazard3,"
-              & " esp-rv32imc or esp-rv32imac-clic; a Cortex-M core is the"
-              & " SVD's cpu");
+              & " esp-rv32imc, esp-rv32imac-clic, xtensa-lx6 or xtensa-lx7;"
+              & " a Cortex-M core is the SVD's cpu");
          end if;
       end;
       declare
@@ -1020,7 +1024,9 @@ package body Landin.Devices.Policies is
          when From_Svd => "",
          when Hazard3 => "hazard3",
          when Esp_Rv32imc => "esp-rv32imc",
-         when Esp_Rv32imac_Clic => "esp-rv32imac-clic");
+         when Esp_Rv32imac_Clic => "esp-rv32imac-clic",
+         when Xtensa_LX6 => "xtensa-lx6",
+         when Xtensa_LX7 => "xtensa-lx7");
 
    function Is_Numeric (Of_Policy : Policy; Key : String) return Boolean is
      (for some Field of Of_Policy.Numeric => Field = Key);

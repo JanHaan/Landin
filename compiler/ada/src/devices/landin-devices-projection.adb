@@ -1460,8 +1460,17 @@ package body Landin.Devices.Projection is
          end Line;
 
          Core : constant String := Value_Of (Cpu, "name");
+         --  Unknown SVD names are refused below. This fallback permits
+         --  that diagnostic before consulting the core's interrupt model.
+         Effective_Core : constant Firmware.Core_Kind :=
+           (if Chosen.Core /= P.From_Svd
+            then Firmware.Core_Named (P.Core_Name (Chosen.Core))
+            elsif Firmware.Is_Svd_Name (Core)
+            then Firmware.Core_Of_Svd (Core)
+            else Firmware.Cortex_M0);
          Sources : constant Boolean :=
-           Chosen.Core in P.Esp_Rv32imc | P.Esp_Rv32imac_Clic;
+           Effective_Core in Firmware.ESP_RV32IMC
+             | Firmware.ESP_RV32IMAC_CLIC | Firmware.Xtensa_Core;
          Module : constant String := US.To_String (Chosen.Prefix) & "/sources";
       begin
          if Vendor /= "" then
@@ -1668,18 +1677,15 @@ package body Landin.Devices.Projection is
          Line ("compiler.device(""" & US.To_String (Chosen.Identity)
                & """)");
          Line ("compiler.core("""
-               & (if Chosen.Core /= P.From_Svd then P.Core_Name (Chosen.Core)
-                  else Firmware.Spelling (Firmware.Core_Of_Svd (Core)))
+               & Firmware.Spelling (Effective_Core)
                & """)");
-         --  D701: a vectored core's table is its 32 mcause codes, and the
-         --  C5's CLIC's its 48 interrupt identities; neither takes an
-         --  interrupt-matrix source as a slot.
+         --  A matrix source is not a vector slot. Its CPU's own line
+         --  capacity comes from the central core facts, including when
+         --  an Xtensa core was inferred from the SVD instead of a policy.
          Line ("compiler.vectors("
-               & (case Chosen.Core is
-                     when P.Esp_Rv32imc => "32",
-                     when P.Esp_Rv32imac_Clic => "48",
-                     when others =>
-                        Decimal (16 + Word'Max (Declared_Count, Highest)))
+               & (if Sources then
+                     Decimal (Word (Firmware.Vector_Limit (Effective_Core)))
+                  else Decimal (16 + Word'Max (Declared_Count, Highest)))
                & ")");
          if not Sources then
             for Pair of Pairs loop
