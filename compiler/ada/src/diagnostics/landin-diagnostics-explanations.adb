@@ -645,14 +645,12 @@ package body Landin.Diagnostics.Explanations is
                & LF
                & LF
                & "The atom names are every value a fixed fact is compared "
-               & "with (D855): the architectures `x86_64`, `arm64`, `rv64`"
-               & ", `cortex_m0`, `rv32` and `synthetic_32`, the systems `l"
-               & "inux`, `darwin`, `freebsd` and `freestanding`, the byte "
-               & "orders `little` and `big`, and the build modes `debug` a"
-               & "nd `release`. An option of one of those names would be r"
-               & "ead in the atom's place, so `compiler.os == linux` would"
-               & " compare a system with the option. The refusal's note li"
-               & "sts them.",
+               & "with (D855), including architecture, operating-system, b"
+               & "yte-order and build-mode values. The refusal's note list"
+               & "s the current names from the compiler's table. An option"
+               & " of one of those names would be read in the atom's place"
+               & ", so `compiler.os == linux` would compare a system with "
+               & "the option. The refusal's note lists them.",
             when Catalogue.Invalid_Tool_Directive =>
                "A tool directive breaks [1510]/[1590]/D202 when it has o"
                & "ther than one positional argument, or when `linker.libra"

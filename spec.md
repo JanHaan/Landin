@@ -18698,6 +18698,8 @@ A level is a set of features; the levels and what each holds are:
 | | `rv64gc_zba_xtheadba` | baseline, `zba` and `xtheadba` |
 | RV32 | `rv32imc`, the default | `i`, `m`, `c`, `zicsr`, `zifencei` |
 | | `rv32imac` | those, and `a` |
+| Xtensa | `xtensa-esp32`, the default | none |
+| | `xtensa-esp32s3` | `salt` |
 
 The x86-64 levels are the [x86-64 psABI](https://gitlab.com/x86-psABIs/x86-64-ABI)'s
 microarchitecture levels; the Arm ones are the architecture versions of the
@@ -18707,7 +18709,8 @@ GCC's spelling. RV64 levels are the supported ISA strings of D265; `g`
 expands to I, M, A, F, D, Zicsr and Zifencei, and `c` adds compressed
 instructions. Zba and XTheadBa are independent sets, not successive ranks.
 RV32's levels are D660's microcontroller ISA strings, `rv32imc` below
-`rv32imac`, each with Zicsr and Zifencei. Synthetic-32 describes no
+`rv32imac`, each with Zicsr and Zifencei. Xtensa's levels are D903's two
+Espressif configurations, whose instruction sets do not nest. Synthetic-32 describes no
 processor and has no level. Each
 default is the level every backend emitted for before levels existed, so a
 build that selects none is the build it was. `cortex_m0` names the M-profile
@@ -19102,6 +19105,83 @@ library and the compiler state D255's levels`, `targets/alignments are
 stated per target`, `toolchain/RV32 names its level and ABI`,
 `driver/linux names every distribution's driver` and `driver/rv32 checks,
 lowers and emits`.
+
+### D903 — Xtensa levels share the windowed ABI and retain distinct instruction configurations
+
+**From** [1500], [1550], [1975], D255 and D660.
+
+**The discrepancy:** Xtensa core generation names do not specify the optional
+instructions or calling convention a particular chip implements. ESP32's LX6
+and ESP32-S3's LX7 differ in both directions: the former has double-precision
+acceleration instructions absent from the latter, while the latter has
+integer `salt`/`saltu` and PIE vector instructions absent from the former.
+A higher core number therefore establishes neither binary compatibility nor
+a different data layout.
+
+**Chosen:** one firmware target, `xtensa`, with `compiler.arch == xtensa`
+and the two D255 levels. Both use little-endian ELF32 and windowed ILP32:
+four-byte pointers, `usize`, C `int` and C `long`, eight-byte alignment for
+64-bit scalars, sixteen-byte alignment for 128-bit scalar storage and the
+stack. C `char` is unsigned, and C `double` and `long double` are eight
+bytes. `compiler.c_xtensa_windowed_ilp32` identifies that ABI. As on the
+other firmware targets, public C signatures, C records and variadic calls
+remain disabled; the identity describes the runtime boundary and does not
+admit those source forms.
+
+Calls use `call8` or `callx8`, `entry` and `retw`. Arguments use six words,
+`a2` through `a7` in the callee and `a10` through `a15` in the caller, with
+aligned multiword arguments. An argument that cannot fit the remaining
+registers goes wholly to the stack, and subsequent arguments follow it.
+Results through sixteen bytes use `a2` through `a5`; larger results use a
+hidden first pointer. Float carriers use integer registers even though both
+chip configurations include single-precision floating-point hardware.
+`a0` and `a1` are the link and stack registers; the backend keeps `a7` as
+its frame pointer and reserves optional FP, boolean, MAC and vector banks
+from ordinary allocation. Every windowed frame includes the ABI's spill
+space. Compiler-owned startup initializes window state and provides all six
+CALL4/CALL8/CALL12 overflow and underflow vectors. CALL0 objects are not
+compatible peers merely because their scalar layouts match.
+
+The default and explicit baseline levels select the ESP32 configuration;
+S3 selects its own. `salt` is the exposed distinguishing fixed feature.
+The configurations both include density, loops, integer multiplication and
+division, NSA, min/max, sign extension, MAC16, release synchronization and
+S32C1I; optional instructions remain subject to their selected assembler
+configuration, not a generic Xtensa instruction list. A source can query
+`compiler.feature.salt` without changing layout or the ABI. Unknown or
+foreign-family levels are L0009, including the server's initialization
+refusal. A common-baseline artifact is compatible only after its linked
+instructions and runtime helpers have been checked against both exact
+configurations. An S3 execution of that artifact proves no ESP32-only
+instruction or arbitrary ESP32 helper compatible.
+
+The toolchain selects Espressif's chip-specific wrappers from
+`esp-16.1.0_20260609`, GCC 16.1.0 and Binutils 2.46.0. The selected wrapper
+supplies the configuration plugin to both compiler and assembler and selects
+the matching runtime multilib; generated instructions and source assembly
+therefore reach the same assembler configuration. The assembler ABI tag is
+`--abi-windowed` and the compiler ABI is `-mabi=windowed`. Both default and
+explicit levels must reject valid Xtensa instructions absent from the
+selected configuration. Assembly operands use integer registers; `a0`, `a1`
+and `a7` are reserved. Atomic loads and stores through four bytes and fences
+are admitted; atomic read-modify-writes and eight-byte atomics are refused.
+
+Sources are Espressif's pinned
+[GCC layout and ABI definitions](https://github.com/espressif/gcc/blob/673953b409379e2250f831307ba79579535b1b85/gcc/config/xtensa/xtensa.h),
+[argument and frame implementation](https://github.com/espressif/gcc/blob/673953b409379e2250f831307ba79579535b1b85/gcc/config/xtensa/xtensa.cc),
+[configuration overlays](https://github.com/espressif/xtensa-overlays/tree/dd1cf19f6eb327a9db51043439974a6de13f5c7f)
+and [tool wrappers](https://github.com/espressif/esp-toolchain-bin-wrappers/blob/d8844fa7d904aefcb9484ff3a37f4f5c476321f6/gnu-xtensa-toolchian/main.rs).
+
+**The alternatives:** CALL0 throughout, which avoids window vectors but
+requires matching C peers and runtime helpers; one target per chip, which
+multiplies equal layouts and ABI facts; treating S3 as a complete ISA
+superset; or selecting a generic assembler with neither exact configuration.
+
+**Pinned by** `targets/Xtensa configurations are exact`,
+`driver/Xtensa selection and assembly`, `driver/Xtensa profile contracts`,
+`server/Xtensa initialization selects exact levels`,
+`backend/Xtensa verifier refuses invalid registers` and
+`xtensa backend/windowed routines carry paired scalars`.
 
 ### D661 — An rv32 program that reaches no description is given the RISC-V reference
 
