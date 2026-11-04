@@ -235,6 +235,131 @@ def diagnose_reset(chip, args):
     return 0 if result['status'] == 'observed' else 1
 
 
+def rom_trace_contract(chip, args):
+    """One reviewed EN reset and bounded UART observation, no board verdict."""
+    require(chip.name == 'esp32', '--trace-rom supports only classic ESP32')
+    require(args.mode == 'boot', '--trace-rom requires --mode=boot')
+    require(not args.record, '--trace-rom cannot write --record')
+    require(args.bundle, '--trace-rom needs the checked bundle prepared by environments/boards/run.py')
+    require(not args.inspect_boot and not args.diagnose_reset,
+            '--trace-rom cannot combine with --inspect-boot or --diagnose-reset')
+    require(not args.recover and not args.image_control,
+            '--trace-rom cannot run recovery or image controls')
+    require(args.arty_serial, '--trace-rom requires the off-cascade Arty guard')
+    require(args.serial == args.console_device == '1a86:7523',
+            '--trace-rom requires the reviewed CH340 identity 1a86:7523')
+    require(args.hub == args.console_hub and args.port == args.console_port,
+            '--trace-rom requires the board and CH340 at the same USB location')
+    require(args.port != args.guard_port and args.console_port != args.console_guard_port,
+            '--trace-rom cannot select a guarded USB port')
+
+
+def trace_rom(chip, args):
+    """Capture one normal-boot ROM trace; never flash, probe or switch power."""
+    rom_trace_contract(chip, args)
+    identity = common.verify_ram_helper(args)
+    args.output = args.output.resolve()
+    args.output.mkdir(parents=True)
+    run = common.Run(args.output)
+    run.pace = args.pace
+    result = dict(status='failed', scope='rom-trace', observational=True,
+        mode='boot', board=chip.name, helper_identity=identity,
+        flash_written=False, power_switched=False, reset_requested=False,
+        core_reset_invocations=0, capture_seconds=2.5, reset_assert_seconds=0.1,
+        phases=[], line_changes=[], final_state='not-established')
+    began = time.monotonic()
+    lock = common.rig_lock('esp32 ROM trace')
+    console = None
+    first = 0
+
+    def phase(name, operation):
+        started = time.monotonic()
+        entry = dict(name=name, status='failed')
+        try:
+            value = operation()
+            entry['status'] = 'completed'
+            return value
+        finally:
+            entry['seconds'] = round(time.monotonic() - started, 6)
+            result['phases'].append(entry)
+
+    def set_line(**setting):
+        common.set_lines(console.fd, **setting)
+        result['line_changes'].append(dict(setting=setting,
+            seconds=round(time.monotonic() - began, 6)))
+
+    try:
+        elf, _, _ = esp.build(run, args, chip)  # Checked bundle provenance only.
+        result['bundle_elf_sha256'] = common.sha(elf)
+        lock.acquire()
+        args.pace.before('ROM trace topology')
+        common.off_cascade(args.arty_serial, args.cascade)
+        hub = common.InGroup(run, args.hub_group)
+        phase('topology', lambda: common.wait_for_hub(hub, args.hub,
+            [(args.port, args.serial), (args.guard_port, args.guard_device),
+             (args.console_guard_port, args.console_guard_device)], args.enumerate_seconds))
+        location = '%s.%d' % (args.console_hub, args.console_port)
+        path = phase('find-console', lambda: common.wait_for_tty_at(location, args.enumerate_seconds))
+        args.pace.before('open ROM trace console')
+        console = common.TtyConsole(path, quiet=True)
+        result['initial_modem_lines'] = common.modem_lines(console.fd)
+        require(result['initial_modem_lines'] == dict(dtr=False, rts=False),
+                'the ROM trace console did not open with inactive lines')
+        with console.lock:
+            first = len(console.received)
+
+        def enable_reset():
+            # esptool v5.1.0 reset.py HardReset: GPIO0 stays released;
+            # active RTS holds EN low, then its release starts normal boot.
+            set_line(dtr=False)
+            result['reset_requested'] = True
+            set_line(rts=True)
+            try:
+                time.sleep(0.1)
+            finally:
+                set_line(rts=False)
+            result['released_modem_lines'] = common.modem_lines(console.fd)
+            require(result['released_modem_lines'] == dict(dtr=False, rts=False),
+                    'the ROM trace reset did not release DTR and RTS')
+        phase('chip-enable-reset', lambda: esp.paced(args, 'ROM trace EN reset', enable_reset))
+
+        def capture():
+            time.sleep(2.5)
+            args.pace.check('ROM trace capture')
+        phase('capture-rom', capture)
+        result['status'] = 'observed'
+    except (common.Failed, OSError, subprocess.TimeoutExpired) as error:
+        result['failure'] = str(error)
+    finally:
+        if console:
+            try:
+                common.quiet_lines(console.fd)
+                result['final_modem_lines'] = common.modem_lines(console.fd)
+                require(result['final_modem_lines'] == dict(dtr=False, rts=False),
+                        'ROM trace cleanup did not release DTR and RTS')
+            except (common.Failed, OSError) as error:
+                result['status'] = 'failed'
+                result['cleanup_failure'] = str(error)
+            try:
+                console.close()
+            except OSError as error:
+                result['status'] = 'failed'
+                result['console_close_failure'] = str(error)
+            received = bytes(console.received)
+            (args.output / 'uart.bin').write_bytes(received)
+            (args.output / 'rom-trace.bin').write_bytes(received[first:])
+            (args.output / 'rom-trace.txt').write_text(received[first:].decode('latin-1'))
+            result['uart_bytes'] = len(received)
+            result['rom_bytes'] = len(received) - first
+        common.retain_kernel_usb(args.pace, result)
+        lock.release()
+        result.update(seconds=round(time.monotonic() - began, 3), commands=run.commands)
+        common.write_json(args.output / 'result.json', result)
+    print('ROM trace %s: %s (reset requested; observations only, no board verdict)' %
+          (result['status'], args.output))
+    return 0 if result['status'] == 'observed' else 1
+
+
 def rom_table_count(address):
     """Reviewed S3 DRAM window or exact pinned ROM table, at most 64 bytes."""
     # The pinned ESP32-S3 ROM ELF defines cache_internal_func_obj here,
@@ -365,7 +490,11 @@ def main(chip_class, description):
                         help='with --mode=boot, observe current state without flashing, resetting or switching power; no record')
     parser.add_argument('--diagnose-reset', action='store_true',
                         help='classic ESP32 boot mode only: confirm ROM download setup and trace one reset-only invocation; no flash or record')
+    parser.add_argument('--trace-rom', action='store_true',
+                        help='classic ESP32 boot mode only: pulse EN once with GPIO0 released and capture 2.5 seconds of ROM UART; no flash, probe, power switch or record')
     args = parser.parse_args()
+    if args.trace_rom:
+        rom_trace_contract(chip, args)
     if args.diagnose_reset:
         reset_diagnostic_contract(chip, args)
     if args.inspect_boot:
@@ -377,6 +506,8 @@ def main(chip_class, description):
         return inspect_boot(chip, args)
     common.place_hubs(parser, args, 'hub', 'console_hub')
     esp.required_tools(args)
+    if args.trace_rom:
+        return trace_rom(chip, args)
     if args.diagnose_reset:
         return diagnose_reset(chip, args)
     require(not args.recover, 'Xtensa recovery is an explicit setup operation; this tool does not enter download mode')
