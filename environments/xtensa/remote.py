@@ -116,9 +116,13 @@ def observe(qemu, chip, elf, symbols, output, timeout=20, extra_breakpoint=None)
                       'expected_stops': {'firmware': stop, 'completion': completed},
                       'remote': remote.transcript, 'qemu_command': command,
                       'elapsed_seconds': time.monotonic() - tick}
-            if pc != stop and (completed is None or pc != completed):
+            premature = (pc == stop and completed is not None
+                         and not values['_landin_firmware_trap_count'])
+            if premature or (pc != stop and (completed is None or pc != completed)):
                 (output / 'unexpected-stop.json').write_text(
                     json.dumps(result, indent=2) + '\n')
+                if premature:
+                    raise RuntimeError('firmware stopped before fixture completion without a trap')
                 raise RuntimeError('unexpected guest stop PC: ' + hex(pc))
             return result
         except TimeoutError:
