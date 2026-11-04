@@ -406,7 +406,8 @@ class Main(unittest.TestCase):
                 ROOT / 'environments/boards' / board / 'board.py')
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)
-            for failure in ('none', 'application', 'usb', 'restore-interrupted', 'inherited-lock'):
+            for failure in ('none', 'application', 'usb', 'restore-interrupted', 'inherited-lock',
+                            'auto-inherited-lock', 'acquire-failed'):
                 with self.subTest(board=board, failure=failure), tempfile.TemporaryDirectory() as tmp:
                     root = Path(tmp)
                     elf = root / 'app.elf'
@@ -415,9 +416,15 @@ class Main(unittest.TestCase):
                     fixed.write_bytes(b'fixed')
                     events = []
                     lock = mock.Mock(file=True)
-                    if failure == 'inherited-lock':
+                    auto = failure == 'auto-inherited-lock'
+                    if 'inherited-lock' in failure:
                         lock.file = None
-                    lock.acquire.side_effect = lambda: events.append('lock') or lock
+                    def acquire():
+                        events.append('lock')
+                        if failure == 'acquire-failed':
+                            raise common.Failed('lock acquisition failed')
+                        return lock
+                    lock.acquire.side_effect = acquire
                     console = mock.Mock(received=b'', sent=b'')
                     manual_boot = mock.Mock()
                     manual_boot.start.side_effect = lambda: events.append('start')
@@ -439,6 +446,9 @@ class Main(unittest.TestCase):
                         '--probehive=' + tmp, '--fixed-image=' + str(fixed), '--output=' + tmp + '/run']
                     if hazard:
                         argv.append('--objdump=objdump')
+                    if auto:
+                        argv.remove('--boot-transport=manual-uf2')
+                        argv.append('--cascade=1-1.3')
                     with contextlib.ExitStack() as stack:
                         def patch(owner, name, **kwargs):
                             return stack.enter_context(mock.patch.object(owner, name, **kwargs))
@@ -452,24 +462,51 @@ class Main(unittest.TestCase):
                         patch(common, 'elf_sections', return_value=(b'', {'.isr_vector': (0x10000000, 0, 272)}))
                         patch(manual, 'Boot', return_value=manual_boot)
                         patch(module, 'build', return_value=(elf, b'head', {}, []) if hazard else (elf, b'head', {}))
-                        flash = patch(module, 'flash', side_effect=AssertionError('legacy flash'))
-                        power = patch(module, 'power_cycle', side_effect=AssertionError('hub switch'))
+                        flash = patch(module, 'flash', return_value='RP235x',
+                                      side_effect=None if auto else AssertionError('legacy flash'))
+                        power = patch(module, 'power_cycle',
+                                      side_effect=None if auto else AssertionError('hub switch'))
+                        if auto:
+                            restore = patch(module, 'restore_fixed', return_value={'value': common.FIXED_READY_MAGIC})
                         patch(module, 'scenario', side_effect=scenario)
                         patch(module, 'cross_check', return_value={})
-                        self.assertEqual(module.main(), 0 if failure in ('none', 'inherited-lock') else 1)
-                    self.assertEqual(events[:2], ['lock', 'start'])
-                    flash.assert_not_called()
-                    power.assert_not_called()
-                    place.assert_not_called()
-                    manual_boot.install.assert_called_once_with('application')
-                    manual_boot.readback.assert_called_once_with('application')
+                        self.assertEqual(module.main(), 0 if failure in ('none', 'inherited-lock', 'auto-inherited-lock') else 1)
+                    if auto or failure == 'acquire-failed':
+                        self.assertEqual(events, ['lock'])
+                        manual_boot.install.assert_not_called()
+                        manual_boot.readback.assert_not_called()
+                    else:
+                        self.assertEqual(events[:2], ['lock', 'start'])
+                        manual_boot.install.assert_called_once_with('application')
+                        manual_boot.readback.assert_called_once_with('application')
+                    if auto:
+                        flash.assert_called_once()
+                        power.assert_called_once()
+                        place.assert_called_once()
+                        restore.assert_called_once()
+                    else:
+                        flash.assert_not_called()
+                        power.assert_not_called()
+                        place.assert_not_called()
                     result = json.loads((root / 'run/result.json').read_text())
-                    manual_boot.close.assert_called_once()
-                    lock.release.assert_called_once()
-                    if failure == 'usb':
+                    if auto:
+                        manual_boot.close.assert_not_called()
+                    else:
+                        manual_boot.close.assert_called_once()
+                    if failure == 'acquire-failed':
+                        lock.release.assert_not_called()
+                        manual_boot.start.assert_not_called()
+                        manual_boot.restore.assert_not_called()
+                        self.assertNotIn('fixed_restore', result)
+                    else:
+                        lock.release.assert_called_once()
+                    if auto:
+                        manual_boot.restore.assert_not_called()
+                        self.assertEqual(result['fixed_restore']['status'], 'passed')
+                    elif failure == 'usb':
                         manual_boot.restore.assert_not_called()
                         self.assertEqual(result['fixed_restore']['status'], 'pending')
-                    else:
+                    elif failure != 'acquire-failed':
                         manual_boot.restore.assert_called_once()
                         self.assertEqual(result['fixed_restore']['status'],
                                          'pending' if failure == 'restore-interrupted' else 'passed')
