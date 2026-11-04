@@ -96,8 +96,10 @@ def observe(qemu, chip, elf, symbols, output, timeout=20, extra_breakpoint=None,
                % listener.fileno(), '-gdb', 'chardev:gdb']
     tick = time.monotonic()
     with (output / 'qemu.log').open('w') as log:
+        # Keep the guest in the logged command's process group so parent
+        # cancellation reaches it even if Python cannot run its finally.
         process = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT,
-                                   pass_fds=(listener.fileno(),), start_new_session=True)
+                                   pass_fds=(listener.fileno(),))
         listener.close()
         connection = None
         remote = None
