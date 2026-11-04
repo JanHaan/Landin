@@ -7147,19 +7147,28 @@ package body Landin.Tests.Driver_Suite is
             Assembly : constant String := Unbounded.To_String (Text);
             Entry_At : constant Natural := Ada.Strings.Fixed.Index
               (Assembly, "_landin_firmware_entry:" & LF);
+            Prelude_At : constant Natural := Ada.Strings.Fixed.Index
+              (Assembly, "_landin_firmware_stage_prelude:" & LF);
             Jump_At : constant Natural := Ada.Strings.Fixed.Index
               (Assembly, "j _landin_firmware_reset_stage" & LF);
             Reset_At : constant Natural := Ada.Strings.Fixed.Index
               (Assembly, "_landin_firmware_reset:" & LF);
          begin
             Landin.Testing.Check
-              (Item, Entry_At > 0 and then Jump_At > Entry_At
+              (Item, Entry_At > 0 and then Prelude_At > Entry_At
+               and then Jump_At > Prelude_At
                and then Reset_At > Jump_At,
                "stage entry follows a prelude and precedes normal reset");
-            if Entry_At > 0 and then Jump_At > Entry_At then
+            Landin.Testing.Check
+              (Item, Contains (Assembly, "_landin_firmware_entry:" & LF
+                 & "j _landin_firmware_stage_prelude" & LF
+                 & ".section .text.landin_stage_prelude,""ax"",@progbits"
+                 & LF),
+               "entry is one jump with no literals before its first byte");
+            if Prelude_At > 0 and then Jump_At > Prelude_At then
                declare
                   Prelude : constant String :=
-                    Assembly (Entry_At .. Jump_At - 1);
+                    Assembly (Prelude_At .. Jump_At - 1);
                begin
                   Landin.Testing.Check
                     (Item, Contains (Prelude, "movi a0, 0x3f" & LF

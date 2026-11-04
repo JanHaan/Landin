@@ -850,7 +850,17 @@ package body Landin.Backend.Firmware is
       Line (".balign 4");
       Line (".global _landin_firmware_entry");
       Line ("_landin_firmware_entry:");
+      Line ("j " & (if Has_Stage
+                     and then Profiles.Stage_Before_Reset (Profile.Boot)
+                   then "_landin_firmware_stage_prelude"
+                   else Profiles.Reset_Symbol));
       if Has_Stage and then Profiles.Stage_Before_Reset (Profile.Boot) then
+         --  Keep entry free of literals: assembler-generated pools for
+         --  the prelude belong to this separate executable section.
+         Line (".section .text.landin_stage_prelude,""ax"",@progbits");
+         Line (".balign 4");
+         Line (".global _landin_firmware_stage_prelude");
+         Line ("_landin_firmware_stage_prelude:");
          --  A naked Xtensa stage may call the pinned ROM's windowed
          --  routines. Establish their architectural and stack contract
          --  before entering it, without initializing static storage.
@@ -874,11 +884,8 @@ package body Landin.Backend.Firmware is
          Line ("movi a2, 0x4002f");
          Line ("wsr a2, PS");
          Line ("rsync");
+         Line ("j " & Profiles.Reset_Stage_Symbol);
       end if;
-      Line ("j " & (if Has_Stage
-                     and then Profiles.Stage_Before_Reset (Profile.Boot)
-                   then Profiles.Reset_Stage_Symbol
-                   else Profiles.Reset_Symbol));
       Line (".section .text.landin_firmware_reset,""ax"",@progbits");
       Line (".balign 4");
       Line (".global " & Profiles.Reset_Symbol);
