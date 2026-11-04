@@ -8,6 +8,7 @@ and the hub's guard when two ports are switched together."""
 import hashlib
 import contextlib
 import importlib.util
+import io
 import os
 import random
 import struct
@@ -34,6 +35,30 @@ ESP = load('esp', 'environments/boards/esp.py')
 C3 = load('board_esp32c3', 'environments/boards/esp32c3/board.py').C3()
 C5_BOARD = load('board_esp32c5', 'environments/boards/esp32c5/board.py')
 C5 = C5_BOARD.C5()
+
+
+class Help(unittest.TestCase):
+    def test_help_explains_the_default_ram_run_and_separate_boot_check(self):
+        for board, module in (('esp32c3', sys.modules['board_esp32c3']),
+                              ('esp32c5', C5_BOARD)):
+            with self.subTest(board=board):
+                output = io.StringIO()
+                with mock.patch.object(sys, 'argv', [str(module.__file__), '--help']), \
+                        contextlib.redirect_stdout(output), \
+                        mock.patch.object(COMMON, 'board_preflight') as preflight, \
+                        mock.patch.object(ESP, 'run_board') as run_board, \
+                        self.assertRaises(SystemExit) as exited:
+                    module.main()
+                self.assertEqual(exited.exception.code, 0)
+                preflight.assert_not_called()
+                run_board.assert_not_called()
+                description = output.getvalue().split('\n\n', 1)[1].split('\noptions:', 1)[0]
+                self.assertTrue(description.startswith(
+                    'Run the %s board port from SRAM by default' % board.replace('esp32c', 'ESP32-C')))
+                for phrase in ('default --mode=ram', 'warm halt/load/resume', '--ram-loader',
+                               'Explicit --mode=boot', 'ROM/cold boot', 'restores --fixed-image',
+                               'checking readiness afterward'):
+                    self.assertIn(phrase, description)
 
 
 def elf32(entry, segments):

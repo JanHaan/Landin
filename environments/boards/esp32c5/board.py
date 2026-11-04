@@ -1,9 +1,17 @@
 #!/usr/bin/env python3
-"""Flash the prototype-1 board port to an ESP32-C5, boot it from power-on
-through its ROM and check its trace against the physical oracle.
+"""Run the ESP32-C5 board port from SRAM by default and check its physical oracle.
+
+The default --mode=ram consumes --bundle or builds with --refine, then
+uses --ram-loader for a warm halt/load/resume session with SRAM readback.
+The resident flash image stays in place; RAM runs do not reset through
+the ROM, write flash or cycle power, and do not prove a cold boot.
+Explicit --mode=boot flashes the image, checks its ROM/cold boot and
+restores --fixed-image (or the bundle's resident image), cold-starting it
+and checking readiness afterward, subject to the USB stop guard.
+--image-control and --recover require --mode=boot.
 
     python3 environments/boards/esp32c5/board.py --refine REFINE \
-        --probe-rs PROBE_RS --output NEW_DIRECTORY
+        --probe-rs PROBE_RS --ram-loader LOADER --output NEW_DIRECTORY
 
 A developer tool, not a compiler dependency: refine builds the image at
 --level=rv32imac through devices/descriptions/esp32c5, and this checks what
@@ -15,10 +23,10 @@ the GPIO28 boot strap through the board's auto-reset transistors.  The
 bridge has no USB serial of its own, so its tty is found by the hub port
 it is plugged into, and it is opened with DTR and RTS inactive.
 
-Either port powers the board, so both are cut and restored together, and
-the chip runs before either has enumerated: the boot from power-on is
-shown by what the chip recorded, its reset cause and the application's own
-reading of it, running and counting, read over JTAG; then, with the tty
+In boot mode, either port powers the board, so both are cut and restored
+together, and the chip runs before either has enumerated. The boot from
+power-on is shown by what the chip recorded, its reset cause and the
+application's own reading of it, running and counting, read over JTAG; then, with the tty
 open, RTS alone pulls EN low, a chip-enable reset with GPIO28 high, and the
 ROM's log of that boot, which it reports as a power-on reset, is read
 (D724).  The other steps are environments/boards/esp.py's, and the oracle
