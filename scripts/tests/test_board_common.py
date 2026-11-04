@@ -543,21 +543,41 @@ class Consoles(unittest.TestCase):
 
     def test_a_tty_console_keeps_every_byte_each_way(self):
         controller, line = os.openpty()
+        sender = None
         try:
             console = COMMON.TtyConsole(os.ttyname(line))
+            errors = []
+
+            def send():
+                try:
+                    console.send(b'S1', pace=1)
+                except Exception as error:
+                    errors.append(error)
+
             try:
-                console.send(b'S1', pace=1)
+                # Darwin's pty drains only as its controller reads.  Keep
+                # the real tcdrain, with a peer consuming bytes concurrently.
+                # A broken transmit must also leave the test's waits bounded.
+                sender = threading.Thread(target=send, daemon=True)
+                sender.start()
                 self.assertEqual(read_exactly(controller, 2),
                                  b'S1')
                 os.write(controller, b'\x02b r=00fa0000\x03\nS')
+                sender.join(PATIENCE)
+                self.assertFalse(sender.is_alive(), 'tty transmit did not finish')
+                if errors:
+                    raise errors[0]
                 stream = console.wait(lambda s: s.endswith(b'S'), PATIENCE, 'the echo')
                 self.assertEqual(COMMON.tagged(stream, 'b'), [{'r': 0x00fa0000}])
+                self.assertEqual(COMMON.echo_of(stream), b'S')
                 self.assertEqual(bytes(console.sent), b'S1')
             finally:
                 console.close()
         finally:
             os.close(controller)
             os.close(line)
+            if sender is not None:
+                sender.join(1)
 
     def test_a_tcp_console_reads_a_bridge(self):
         server = socket.socket()
@@ -697,33 +717,66 @@ class RigLock(unittest.TestCase):
     def test_a_second_run_waits_and_says_for_whom(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / 'rig.lock'
-            said, done = [], threading.Event()
-            first = COMMON.RigLock('rp2350 board.py', path).acquire()
+            said, errors = [], []
+            reported, done = threading.Event(), threading.Event()
+            path.touch()
+            locks = Path(tmp) / 'locks'
+            locks.write_text('1: FLOCK  ADVISORY  WRITE 31 00:22:%d 0 EOF\n'
+                             % os.stat(path).st_ino)
+
+            def report(text):
+                said.append(text)
+                reported.set()
 
             def second():
-                with COMMON.RigLock('esp32c5 board.py', path, report=said.append):
-                    done.set()
-            waiter = threading.Thread(target=second)
-            waiter.start()
-            self.assertFalse(done.wait(0.3))
-            self.assertEqual(len(said), 1)
-            self.assertIn('esp32c5 board.py waits for the rig lock', said[0])
-            self.assertIn('held by rp2350 board.py, process %d' % os.getpid(), said[0])
-            first.release()
-            self.assertTrue(done.wait(5))
-            waiter.join(5)
+                try:
+                    with COMMON.RigLock('esp32c5 board.py', path, report=report, locks=locks):
+                        done.set()
+                except Exception as error:
+                    errors.append(error)
+
+            # The holder is this process itself, not one of its parents;
+            # the waiter must still acquire the real flock after release.
+            with COMMON.RigLock('rp2350 board.py', path) as first, \
+                    mock.patch.object(COMMON, 'ancestors', return_value=[31, 41, 9]):
+                waiter = threading.Thread(target=second, daemon=True)
+                try:
+                    waiter.start()
+                    self.assertTrue(reported.wait(PATIENCE), errors)
+                    self.assertFalse(done.is_set())
+                    self.assertEqual(len(said), 1)
+                    self.assertIn('esp32c5 board.py waits for the rig lock', said[0])
+                    self.assertIn('held by rp2350 board.py, process %d' % os.getpid(), said[0])
+                finally:
+                    first.release()
+                    waiter.join(PATIENCE)
+                self.assertFalse(waiter.is_alive(), 'rig lock waiter did not finish')
+                self.assertEqual(errors, [])
+                self.assertTrue(done.is_set())
 
     def test_a_run_under_its_parent_s_flock_goes_on(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / 'rig.lock'
-            outer = COMMON.RigLock('flock by hand', path).acquire()
-            locks = Path(tmp) / 'locks'
-            locks.write_text('1: FLOCK  ADVISORY  WRITE %d 00:22:%d 0 EOF\n'
-                             % (os.getppid(), os.stat(path).st_ino))
-            inner = COMMON.RigLock('esp32c3 board.py', path, report=self.fail, locks=locks)
-            inner.acquire()
-            inner.release()
-            outer.release()
+            with COMMON.RigLock('flock by hand', path):
+                locks = Path(tmp) / 'locks'
+                locks.write_text('1: FLOCK  ADVISORY  WRITE 41 00:22:%d 0 EOF\n'
+                                 % os.stat(path).st_ino)
+                flock = COMMON.fcntl.flock
+
+                def nonblocking_only(file, operation):
+                    self.assertNotEqual(operation, COMMON.fcntl.LOCK_EX,
+                                        'a child must not wait on its parent lock')
+                    return flock(file, operation)
+
+                with mock.patch.object(COMMON, 'ancestors', return_value=[31, 41, 9]), \
+                        mock.patch.object(COMMON.fcntl, 'flock', side_effect=nonblocking_only):
+                    with COMMON.RigLock('esp32c3 board.py', path, report=self.fail, locks=locks):
+                        self.assertTrue(path.read_text().startswith('flock by hand,'))
+                # Releasing a child that borrowed its parent's lock must
+                # neither unlock it nor clear its holder's description.
+                self.assertTrue(path.read_text().startswith('flock by hand,'))
+                with path.open() as contender, self.assertRaises(BlockingIOError):
+                    COMMON.fcntl.flock(contender, COMMON.fcntl.LOCK_EX | COMMON.fcntl.LOCK_NB)
 
     def test_holders_are_read_by_inode(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -737,7 +790,30 @@ class RigLock(unittest.TestCase):
                              % (inode, inode, inode + 1))
             self.assertEqual(COMMON.lock_holders(path, locks), {41})
 
-    def test_ancestors_begin_with_this_process(self):
+    def test_ancestors_follow_parent_ids_after_a_command_with_parentheses(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            for pid, parent in ((31, 23), (23, 9), (9, 1)):
+                process = Path(tmp) / str(pid)
+                process.mkdir()
+                (process / 'stat').write_text('%d (a command ) with (spaces)) S %d 0 0\n'
+                                             % (pid, parent))
+            with mock.patch.object(COMMON.os, 'getpid', return_value=31):
+                self.assertEqual(COMMON.ancestors(proc=Path(tmp)), [31, 23, 9])
+            self.assertEqual(COMMON.ancestors(23, proc=Path(tmp)), [23, 9])
+            self.assertEqual(COMMON.ancestors(1, proc=Path(tmp)), [])
+
+    @unittest.skipUnless(sys.platform == 'linux', 'live lock discovery uses Linux /proc/locks')
+    def test_live_linux_flock_holder_is_this_process(self):
+        # Deliberate Linux kernel integration; portable lock policy tests
+        # above supply their own kernel records instead.
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'rig.lock'
+            with COMMON.RigLock('live discovery', path):
+                self.assertEqual(COMMON.lock_holders(path), {os.getpid()})
+            self.assertEqual(COMMON.lock_holders(path), set())
+
+    @unittest.skipUnless(sys.platform == 'linux', 'live ancestry discovery uses Linux /proc/PID/stat')
+    def test_live_linux_ancestors_begin_with_this_process(self):
         found = COMMON.ancestors()
         self.assertEqual(found[0], os.getpid())
         self.assertEqual(found[1:2], [os.getppid()] if os.getppid() > 1 else [])
