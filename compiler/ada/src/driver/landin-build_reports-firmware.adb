@@ -269,7 +269,9 @@ package body Landin.Build_Reports.Firmware is
              & Character'Val (1) & Character'Val (1)
            or else Number (16, 2) /= 2
            or else Number (18, 2)
-             /= (if Profile.Core in Firmware.RISC_V_Core then 243 else 40)
+             /= (if Profile.Core in Firmware.RISC_V_Core then 243
+                 elsif Profile.Core in Firmware.Xtensa_Core then 94
+                 else 40)
            or else Word (20) /= 1
            or else Number (40, 2) /= 52
            or else Number (42, 2) /= 32
@@ -549,6 +551,7 @@ package body Landin.Build_Reports.Firmware is
       Status : Landin.Platform.Read_Status;
       Symbols : Symbol_Maps.Map;
       RV32 : constant Boolean := Profile.Core in Firmware.RISC_V_Core;
+      Xtensa : constant Boolean := Profile.Core in Firmware.Xtensa_Core;
    begin
       Host.Read_File (Executable, ELF, Status);
       if Status /= Landin.Platform.Read_Ok then
@@ -724,10 +727,12 @@ package body Landin.Build_Reports.Firmware is
            or else Data (1 .. 6) /= Character'Val (127) & "ELF"
              & Character'Val (1) & Character'Val (1)
            or else Number (16, 2) /= 2
-           or else Number (18, 2) /= (if RV32 then 243 else 40)
+           or else Number (18, 2)
+             /= (if RV32 then 243 elsif Xtensa then 94 else 40)
          then
             return "the linked image is not a 32-bit little-endian "
-              & (if RV32 then "RISC-V" else "Arm") & " executable";
+              & (if RV32 then "RISC-V" elsif Xtensa then "Xtensa"
+                 else "Arm") & " executable";
          end if;
          declare
             Sections : constant Natural := Natural (Word (32));
@@ -841,7 +846,7 @@ package body Landin.Build_Reports.Firmware is
                return "clause 1, the vector table: the image does not hold"
                  & " its" & Landin.Targets.Byte_Count'Image (Bytes)
                  & " bytes at its address";
-            elsif not RV32
+            elsif not RV32 and then not Xtensa
               and then
                 (Word (At_File) /= Value ("_landin_firmware_stack_top")
                  or else Word (At_File + 4)
@@ -967,9 +972,10 @@ package body Landin.Build_Reports.Firmware is
                   and then Within (Bottom, Top - Bottom,
                                    Profile.Regions (Index)));
             end loop;
-            if Top mod (if RV32 then 16 else 8) /= 0 then
+            if Top mod (if RV32 or Xtensa then 16 else 8) /= 0 then
                return "clause 3, the stack: its top is not aligned to "
-                 & (if RV32 then "sixteen" else "eight") & " bytes";
+                 & (if RV32 or Xtensa then "sixteen" else "eight")
+                 & " bytes";
             elsif not Held then
                return "clause 3, the stack: it does not lie in a writable"
                  & " region of " & Firmware.Spelling (Profile.Device);

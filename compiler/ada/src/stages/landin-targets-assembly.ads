@@ -207,6 +207,7 @@ package Landin.Targets.Assembly is
    function Text_Error
      (Facts : Target_Facts; Text : String; Naked : Boolean := False)
       return String
-     with Pre => Architecture_Of (Facts) in X86_64 | Arm64 | RV64 | RV32;
+     with Pre => Architecture_Of (Facts)
+                   in X86_64 | Arm64 | RV64 | RV32 | Xtensa;
 
 end Landin.Targets.Assembly;

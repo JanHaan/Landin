@@ -40,7 +40,9 @@ package body Landin.Targets.Firmware is
         when Hazard3 => "hazard3",
         when SiFive_E31 => "sifive-e31",
         when ESP_RV32IMC => "esp-rv32imc",
-        when ESP_RV32IMAC_CLIC => "esp-rv32imac-clic");
+        when ESP_RV32IMAC_CLIC => "esp-rv32imac-clic",
+        when Xtensa_LX6 => "xtensa-lx6",
+        when Xtensa_LX7 => "xtensa-lx7");
 
    function Core_Names return String is
       Result : Ada.Strings.Unbounded.Unbounded_String;
@@ -95,7 +97,9 @@ package body Landin.Targets.Firmware is
         when Cortex_M4 | Cortex_M7 => "armv7e-m",
         when Cortex_M33 => "armv8-m.main",
         when ESP_RV32IMC => "rv32imc",
-        when Hazard3 | SiFive_E31 | ESP_RV32IMAC_CLIC => "rv32imac");
+        when Hazard3 | SiFive_E31 | ESP_RV32IMAC_CLIC => "rv32imac",
+        when Xtensa_LX6 => "xtensa-esp32",
+        when Xtensa_LX7 => "xtensa-esp32s3");
 
    --  ARMv7E-M and ARMv8-M Mainline each hold all of ARMv7-M, and neither
    --  holds the other: Armv8-M's DSP instructions are an optional extension
@@ -103,7 +107,8 @@ package body Landin.Targets.Firmware is
    --  rv32imac holds all of rv32imc.
    function Executes (Core : Core_Kind; Level : String) return Boolean is
      (Level = Level_Name (Core)
-      or else (if Core in RISC_V_Core
+      or else (if Core in Xtensa_Core then False
+               elsif Core in RISC_V_Core
                then Level = "rv32imc"
                else Level = "armv6-m"
                     or else (Level = "armv7-m"
@@ -117,7 +122,9 @@ package body Landin.Targets.Firmware is
         when Cortex_M33 => "armv8-m.main, armv7-m or armv6-m",
         when ESP_RV32IMC => "rv32imc alone",
         when Hazard3 | SiFive_E31 | ESP_RV32IMAC_CLIC =>
-           "rv32imac or rv32imc");
+           "rv32imac or rv32imc",
+        when Xtensa_LX6 => "xtensa-esp32 alone",
+        when Xtensa_LX7 => "xtensa-esp32s3 alone");
 
    function Float_Unit_Named (Text : String) return Float_Unit is
      (if Text = "fpv5-d16" then FPv5_D16 else No_Float_Unit);
@@ -263,7 +270,8 @@ package body Landin.Targets.Firmware is
         (case Of_Profile.Core is
            when Arm_Core => 128,
            when SiFive_E31 | Hazard3 | ESP_RV32IMAC_CLIC => 64,
-           when ESP_RV32IMC => 256);
+           when ESP_RV32IMC => 256,
+           when Xtensa_Core => 1024);
    begin
       while Result < Vector_Bytes (Of_Profile) loop
          Result := Result * 2;
@@ -272,7 +280,10 @@ package body Landin.Targets.Firmware is
    end Vector_Alignment;
 
    function Vector_Address (Of_Profile : Profile) return Byte_Count is
-     (if Of_Profile.Core in Arm_Core
+     (if Of_Profile.Core in Xtensa_Core then Align_Up
+        (Placed_Region (Of_Profile, Vectors).Origin,
+         Byte_Alignment (Vector_Alignment (Of_Profile)))
+      elsif Of_Profile.Core in Arm_Core
       then (if Of_Profile.Layout = RAM_Layout
             then Align_Up
               (Placed_Region (Of_Profile, Vectors).Origin,

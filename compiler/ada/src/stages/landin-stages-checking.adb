@@ -41123,7 +41123,7 @@ package body Landin.Stages.Checking is
            and then Value.Vector < Landin.Targets.Firmware.Slot_Capacity
            and then (Value.Vector not in 0 | 1
                      or else Profile.Core
-                       in Landin.Targets.Firmware.RISC_V_Core)
+                       not in Landin.Targets.Firmware.Arm_Core)
            and then not Landin.Targets.Firmware.Admits
              (Profile, Value.Vector)
          then
@@ -41179,6 +41179,9 @@ package body Landin.Stages.Checking is
                     then "under the CLIC an interrupt enters one common"
                       & " entry, which reads mcause, or with its shv set a"
                       & " stub mtvt's table names"
+                    elsif Profile.Core in Landin.Targets.Firmware.Xtensa_Core
+                    then "Xtensa's architectural vectors dispatch a"
+                      & " CPU interrupt line"
                     else "Hazard3's external interrupts all arrive at"
                       & " code 11, whose entry reads meinext")
                  & ", saves the interrupted registers and calls the"
@@ -41215,7 +41218,10 @@ package body Landin.Stages.Checking is
                Message => "invalid or conflicting "
                  & (if Landin.Targets.Architecture_Of (Facts)
                       = Landin.Targets.RV32
-                    then "RV32" else "Cortex-M0") & " placement",
+                    then "RV32"
+                    elsif Landin.Targets.Architecture_Of (Facts)
+                      = Landin.Targets.Xtensa then "Xtensa"
+                    else "Cortex-M0") & " placement",
                Note => "[1640]: sections use .text.*, .ramtext.*, .rodata.*,"
                  & " .data.* or .bss.*; alignment is a decimal power of"
                  & " two through 256; decimal vectors require a unique"
