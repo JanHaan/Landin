@@ -17,6 +17,7 @@ sys.path.insert(0, str(ROOT / 'environments/cortex-m'))
 from backend_corpus import PROFILES, SPECIALIZATION_PROFILES, inventory  # noqa: E402
 from backend import metadata  # noqa: E402
 from remote import observe  # noqa: E402
+from run import workers  # noqa: E402
 
 CONTROLS = ROOT / 'compiler/tests/xtensa'
 INVENTORY = ROOT / 'compiler/tests/cortex-m/corpus.json'
@@ -40,9 +41,18 @@ class Run:
 
     def command(self, name, arguments, timeout=60, expected=0):
         command = [str(part) for part in arguments]
-        result = subprocess.run(command, cwd=self.out, text=True,
-                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                timeout=timeout)
+        try:
+            result = subprocess.run(command, cwd=self.out, text=True,
+                                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                    timeout=timeout)
+        except subprocess.TimeoutExpired as error:
+            captured = error.stdout or b''
+            if isinstance(captured, bytes):
+                captured = captured.decode('utf-8', errors='replace')
+            (self.out / (name + '.log')).write_text(captured)
+            self.commands.append({'name': name, 'command': command, 'exit': 'timeout'})
+            (self.out / 'commands.json').write_text(json.dumps(self.commands, indent=2) + '\n')
+            raise RuntimeError(name + ' timed out') from error
         (self.out / (name + '.log')).write_text(result.stdout)
         self.commands.append({'name': name, 'command': command, 'exit': result.returncode})
         (self.out / 'commands.json').write_text(json.dumps(self.commands, indent=2) + '\n')
@@ -130,10 +140,7 @@ def build(run, refine, inputs, chip, optimize='none', specialize='off'):
     return elf, symbols(run, tool, elf)
 
 
-def execute(run, refine, qemu, inputs, chip, expected=0, traps=False,
-            optimize='none', specialize='off'):
-    elf, named = build(run, refine, inputs, chip, optimize, specialize)
-    result = observe(qemu, chip, elf, named, run.out)
+def verify(result, expected=0, traps=False):
     values = result['values']
     count = values['_landin_firmware_trap_count']
     if traps:
@@ -143,6 +150,14 @@ def execute(run, refine, qemu, inputs, chip, expected=0, traps=False,
             raise RuntimeError('the trapped instruction is not the emitted ILL')
     elif count or values['_landin_xtensa_fixture_status'] != expected & 0xffffffff:
         raise RuntimeError('wrong native result: ' + repr(values))
+
+
+def execute(run, refine, qemu, inputs, chip, expected=0, traps=False,
+            optimize='none', specialize='off'):
+    elf, named = build(run, refine, inputs, chip, optimize, specialize)
+    result = observe(qemu, chip, elf, named, run.out)
+    (run.out / 'observation.json').write_text(json.dumps(result, indent=2) + '\n')
+    verify(result, expected, traps)
     result.update(status='passed', chip=chip, optimize=optimize, specialize=specialize,
                   compiler_sha256=sha(refine), image_sha256=sha(elf))
     (run.out / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
@@ -152,7 +167,8 @@ def execute(run, refine, qemu, inputs, chip, expected=0, traps=False,
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--refine', required=True, type=Path)
-    parser.add_argument('--qemu', required=True, type=Path)
+    parser.add_argument('--qemu', type=Path)
+    parser.add_argument('--tools', type=Path)
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--chip', choices=('esp32', 'esp32s3'), required=True)
     parser.add_argument('--control', action='append', default=[])
@@ -160,15 +176,28 @@ def main():
     known = {p.stem: p for p in CONTROLS.glob('*.ldn')}
     if not args.control or set(args.control) - known.keys():
         parser.error('select exact --control names: ' + ', '.join(sorted(known)))
+    # Import after the shared backend module has loaded its Cortex metadata.
+    from tools import Tools
+    tools = Tools(args.tools, args.qemu)
     args.output.mkdir(parents=True, exist_ok=False)
     results = []
     for name in args.control:
         run = Run(args.output / name)
-        results.append(execute(run, args.refine.resolve(), args.qemu.resolve(),
+        results.append(execute(run, args.refine.resolve(), tools.qemu,
                                [known[name]], args.chip,
-                               expected=37 if name == 'status-control' else 0,
+                               expected=(37 if name == 'status-control' else
+                                         (7 if args.chip == 'esp32s3' else 6)
+                                         if name == 'feature-level' else 0),
                                traps=name == 'trap-control'))
+        if name in ('status-control', 'trap-control'):
+            try:
+                verify(results[-1])
+            except RuntimeError:
+                results[-1]['negative_oracle'] = 'rejected when a normal zero result was required'
+            else:
+                raise RuntimeError('negative oracle accepted the control as an ordinary success')
         print('FILTERED Xtensa control ' + args.chip + ' ' + name + ' passed', flush=True)
+    tools.finish(args.output)
     (args.output / 'result.json').write_text(json.dumps({
         'scope': 'FILTERED', 'status': 'passed', 'results': results}, indent=2) + '\n')
 

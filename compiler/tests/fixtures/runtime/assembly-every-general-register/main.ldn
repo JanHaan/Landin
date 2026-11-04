@@ -60,6 +60,20 @@ elsif compiler.arch == rv32 then
         --  15 * 10 + 105
         code = if spread(10) == 255 then 42 else 1 end if
     end main
+elsif compiler.arch == xtensa then
+    spread: (base: u32) -> (total: u32) =
+        (a, b, c, d, e, f) := assembler.block(
+            "addi {b}, {a}, 1\naddi {c}, {a}, 2\naddi {d}, {a}, 3\naddi {e}, {a}, 4\naddi {f}, {a}, 5",
+            inout a: u32 at general = base, out b: u32 at general,
+            out c: u32 at general, out d: u32 at general,
+            out e: u32 at general, out f: u32 at general)
+        total = a + b + c + d + e + f
+    end spread
+    public main: () -> (code: i32) =
+        --  6 * 10 + 15
+        code = if spread(10) == 75 then 42 else 1 end if
+    end main
+
 else
     spread: (base: u32) -> (total: u32) =
         (a, b, c, d, e, f, g, h) := assembler.block(

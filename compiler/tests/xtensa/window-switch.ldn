@@ -3,11 +3,20 @@ mut main_saved: usize = 0
 mut fibre_saved: usize = 0
 mut observed: u32 = 0
 
+ratio: (a: f32, b: f32) -> (result: f32) =
+    result = a / b
+end ratio
+
 transfer: (depth: u32) -> (result: u32) =
     if depth == 0 then
+        before: f32 = ratio(7.0, 2.0)
         observed = observed + 1
         compiler.stack_switch(addr fibre_saved, main_saved)
-        result = 100
+        if before + ratio(9.0, 2.0) == 8.0 then
+            result = 100
+        else
+            result = 200
+        end if
     else
         result = transfer(depth - 1) + 1
     end if
@@ -29,11 +38,12 @@ resume: (depth: u32) -> none =
 end resume
 
 main: () -> (status: i32) =
+    before: f32 = ratio(5.0, 2.0)
     fibre_saved = compiler.stack_prepare(backing[0..<16384], fibre, 7)
     resume(12)
     if observed == 1 then
         resume(12)
-        if observed == 119 then
+        if observed == 119 and before + ratio(11.0, 2.0) == 8.0 then
             status = 0
         else
             status = 2
