@@ -1,0 +1,6 @@
+-- A constrained QEMU profile for the selected Xtensa configuration.
+-- CPU interrupt lines are vector-dispatch identities; device interrupt
+-- sources belong to each device's external interrupt matrix.
+compiler.device("xtensa-lx7-reference")
+compiler.core("xtensa-lx7")
+compiler.vectors(32)
