@@ -45,6 +45,8 @@ struct ReadPlan {
     count: u32,
     #[serde(default)]
     require_hart1_halted: bool,
+    #[serde(default)]
+    require_cpu1_stalled: bool,
 }
 
 fn validate_read(plan: &ReadPlan) -> Result<()> {
@@ -52,6 +54,10 @@ fn validate_read(plan: &ReadPlan) -> Result<()> {
     chip(&plan.board)?;
     ensure!(!plan.require_hart1_halted || plan.board == "rp2350_hazard3",
         "retained hart 1 halt evidence is supported only for Hazard3");
+    ensure!(!plan.require_cpu1_stalled || architecture(&plan.board)? == Architecture::Xtensa,
+        "retained CPU1 stall evidence is supported only for Xtensa");
+    ensure!(architecture(&plan.board)? != Architecture::Xtensa || plan.require_cpu1_stalled,
+        "Xtensa reads require require_cpu1_stalled=true to verify the retained hardware stall");
     ensure!((1..=65536).contains(&plan.count), "read count must be 1 to 65536 words");
     ensure!(plan.address % 4 == 0, "word read address must be aligned to four bytes");
     let end = plan.address.checked_add(u64::from(plan.count) * 4).context("read address overflow")?;
@@ -72,13 +78,17 @@ fn execute_read(plan: &ReadPlan) -> Result<Value> {
     let other_core = if plan.require_hart1_halted {
         Some(hazard3_hart1_state(&mut session, false)?)
     } else { None };
+    let cpu1 = if plan.require_cpu1_stalled {
+        Some(xtensa_cpu1_state(&mut session.core(0)?, &plan.board, false)?)
+    } else { None };
     let mut words = vec![0u32; plan.count as usize];
     session.core(0).context("select readback core 0")?.read_32(plan.address, &mut words)
         .with_context(|| format!("{} read {} words at {:#x}", plan.board, plan.count, plan.address))?;
     // Session attach/drop clear debug breakpoints and may briefly halt the
-    // executing core. Truncation excludes the parked other RP core.
+    // executing core. Truncation excludes the parked other processor.
     // The hart 1 check observes its retained halt without issuing halt.
-    // No explicit reset, peripheral cleanup or memory write occurs.
+    // The Xtensa check only reads its retained hardware-stall fields.
+    // No explicit reset, peripheral cleanup or SRAM write occurs.
     drop(session);
     let mut report = json!({"format_version":1,"status":"passed","mode":"read","board":plan.board,
         "address":plan.address,"count":plan.count,"words":words,"flash_written":false,
@@ -86,6 +96,10 @@ fn execute_read(plan: &ReadPlan) -> Result<Value> {
     if let Some(other_core) = other_core {
         report["hart1_halted"] = json!(true);
         report["other_core"] = other_core;
+    }
+    if let Some(cpu1) = cpu1 {
+        report["cpu1_stalled"] = json!(true);
+        report["other_core"] = cpu1;
     }
     Ok(report)
 }
@@ -96,7 +110,20 @@ struct Image {
     entry: u32,
     vector: u32,
     stack: u32,
-    arm: bool,
+    architecture: Architecture,
+    visibility: Option<u32>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Architecture { Arm, Riscv, Xtensa }
+
+fn architecture(board: &str) -> Result<Architecture> {
+    chip(board)?;
+    Ok(match board {
+        "rp2040" | "rp2350" | "stm32h753" => Architecture::Arm,
+        "esp32" | "esp32s3" => Architecture::Xtensa,
+        _ => Architecture::Riscv,
+    })
 }
 
 fn digest(bytes: &[u8]) -> String {
@@ -115,6 +142,8 @@ fn chip(board: &str) -> Result<&'static str> {
         "stm32h753" => "STM32H753ZITx",
         "esp32c3" => "esp32c3",
         "esp32c5" => "esp32c5",
+        "esp32" => "esp32",
+        "esp32s3" => "esp32s3",
         _ => bail!("unknown board {board}"),
     })
 }
@@ -222,8 +251,8 @@ fn hazard3_hart1_state(session: &mut probe_rs::Session, halt: bool) -> Result<Va
     Ok(report)
 }
 
-// Board-tool policy, checked independently of the compiler report. ESP C3
-// IRAM is an instruction alias of SRAM; its descriptor intentionally says rx.
+// Board-tool policy, checked independently of the compiler report. ESP
+// instruction SRAM descriptors intentionally say rx.
 fn in_ram(board: &str, address: u64, size: u64) -> bool {
     let ranges: &[(u64, u64)] = match board {
         "rp2040" => &[(0x20000000, 0x20042000)],
@@ -232,23 +261,33 @@ fn in_ram(board: &str, address: u64, size: u64) -> bool {
             (0x24000000, 0x24080000), (0x30000000, 0x30048000), (0x38000000, 0x38010000)],
         "esp32c3" => &[(0x40380000, 0x403a0000), (0x3fca0000, 0x3fcc8000)],
         "esp32c5" => &[(0x40800000, 0x4084e000)],
+        // Match the device descriptions: cache banks and ROM workspaces
+        // are excluded. S3's two ranges meet only in physical alias space:
+        // the IRAM range minus 0x6f0000 ends exactly at DRAM's start.
+        "esp32" => &[(0x40080000, 0x400a0000), (0x3ffb0000, 0x3ffd0000)],
+        "esp32s3" => &[(0x40378000, 0x40398000), (0x3fca8000, 0x3fcd0000)],
         _ => return false,
     };
     size > 0 && address.checked_add(size).is_some_and(|end|
         ranges.iter().any(|(lo, hi)| address >= *lo && end <= *hi))
 }
 
-fn c3_instruction_ram(board: &str, address: u64) -> bool {
-    board == "esp32c3" && (0x40380000..0x403a0000).contains(&address)
+fn instruction_ram(board: &str, address: u64) -> bool {
+    match board {
+        "esp32c3" => (0x40380000..0x403a0000).contains(&address),
+        "esp32" => (0x40080000..0x400a0000).contains(&address),
+        "esp32s3" => (0x40378000..0x40398000).contains(&address),
+        _ => false,
+    }
 }
 
 fn validate_sram_access(board: &str, address: u64, size: u64, memory: u64) -> Result<()> {
-    // ESP-IDF C3 Memory Types: the instruction bus permits only aligned
+    // ESP-IDF Memory Types: the instruction bus permits only aligned
     // four-byte accesses. Validate both initialized and reserved storage
     // before opening a probe; never round a transfer into adjacent storage.
-    if c3_instruction_ram(board, address) {
+    if instruction_ram(board, address) {
         ensure!(address % 4 == 0 && size % 4 == 0 && memory % 4 == 0,
-            "C3 instruction SRAM segment {address:#x} requires aligned four-byte storage and transfers");
+            "{board} instruction SRAM segment {address:#x} requires aligned four-byte storage and transfers");
     }
     Ok(())
 }
@@ -267,8 +306,14 @@ fn image(plan: &Plan) -> Result<Image> {
     let bytes = fs::read(&plan.elf)?;
     ensure!(bytes.get(..6) == Some(b"\x7fELF\x01\x01"), "expected little-endian ELF32");
     let file = object::File::parse(bytes.as_slice())?;
-    let arm = matches!(plan.board.as_str(), "rp2040" | "rp2350" | "stm32h753");
-    ensure!(file.architecture() == if arm {object::Architecture::Arm} else {object::Architecture::Riscv32},
+    let architecture = architecture(&plan.board)?;
+    let arm = architecture == Architecture::Arm;
+    let expected = match architecture {
+        Architecture::Arm => object::Architecture::Arm,
+        Architecture::Riscv => object::Architecture::Riscv32,
+        Architecture::Xtensa => object::Architecture::Xtensa,
+    };
+    ensure!(file.architecture() == expected,
         "ELF architecture does not match board");
     let symbol = |name: &str| -> Result<u32> {
         file.symbols().find(|s| s.name().ok() == Some(name) && linked_symbol_section(s.section()))
@@ -282,9 +327,15 @@ fn image(plan: &Plan) -> Result<Image> {
         "vector symbol and section differ");
     ensure!(vector as u64 % table_size.next_power_of_two().max(128) == 0,
         "unaligned vector table");
+    if architecture == Architecture::Xtensa {
+        ensure!(table_size == 1024 && instruction_ram(&plan.board, vector.into()),
+            "Xtensa requires a 1024-byte vector block in instruction SRAM");
+    }
     let stack = symbol("_landin_firmware_stack_top")?;
     let bottom = symbol("_landin_firmware_stack_bottom")?;
     ensure!(bottom < stack && in_ram(&plan.board, bottom.into(), (stack - bottom).into()), "stack is outside SRAM");
+    ensure!(architecture != Architecture::Xtensa || !instruction_ram(&plan.board, bottom.into()),
+        "Xtensa stack must use byte-accessible data SRAM");
     ensure!(stack % if arm {8} else {16} == 0, "unaligned stack");
     let mut entry = if arm {symbol("_landin_firmware_reset")?} else {symbol("_landin_firmware_entry")?};
     let phoff = word(&bytes, 28)? as usize;
@@ -341,6 +392,12 @@ fn image(plan: &Plan) -> Result<Image> {
         let address = section.address();
         let size = section.size();
         let name = section.name().context("invalid allocated section name")?;
+        if architecture == Architecture::Xtensa && instruction_ram(&plan.board, address) {
+            ensure!(!matches!(section.flags(), object::SectionFlags::Elf { sh_flags, .. }
+                if sh_flags.contains(object::elf::SHF_WRITE)),
+                "Xtensa writable section {name} must use data SRAM");
+            validate_sram_access(&plan.board, address, size, size)?;
+        }
         ensure!(in_ram(&plan.board, address, size),
             "allocated section {name} at {address:#x} is outside SRAM");
         ensure!(address + size <= bottom as u64 || address >= stack as u64,
@@ -372,6 +429,8 @@ fn image(plan: &Plan) -> Result<Image> {
         if end != first {
             ensure!(in_ram(&plan.board, first, end - first),
                 "BSS symbol range {stem} is outside SRAM");
+            ensure!(architecture != Architecture::Xtensa || !instruction_ram(&plan.board, first),
+                "Xtensa BSS symbol range {stem} must use data SRAM");
             ensure!(end <= bottom as u64 || first >= stack as u64,
                 "BSS symbol range {stem} overlaps reserved stack");
         }
@@ -380,7 +439,15 @@ fn image(plan: &Plan) -> Result<Image> {
         "vector table is not completely loaded in SRAM");
     let code = (entry & if arm {!1} else {!0}) as u64;
     ensure!(executable.iter().any(|(lo,hi)| code >= *lo && code < *hi), "entry is not loaded executable code");
-    Ok(Image { bytes, segments, entry, vector, stack, arm })
+    let visibility = if architecture == Architecture::Xtensa {
+        let address = symbol("_landin_firmware_instruction_visibility")?;
+        ensure!(instruction_ram(&plan.board, address.into()),
+            "Xtensa instruction visibility pair must use instruction SRAM");
+        validate_xtensa_visibility(address, &segments, &executable)?;
+        ensure!(instruction_ram(&plan.board, code), "Xtensa entry must use instruction SRAM");
+        Some(address)
+    } else { None };
+    Ok(Image { bytes, segments, entry, vector, stack, architecture, visibility })
 }
 
 fn poll(core: &mut Core<'_>, address: u64, mask: u32, expected: u32) -> Result<u32> {
@@ -401,6 +468,184 @@ fn update(core: &mut Core<'_>, address: u64, clear: u32, set: u32) -> Result<()>
     Ok(())
 }
 
+// ESP-IDF v6.1 fff9895c82d744c7237be8847347bdd1b07c6643:
+// cache_ll.h, cpu_utility_ll.h and the per-chip SoC
+// register headers. These match devices/descriptions/{esp32,esp32s3}.
+// CPU1's two fields form the hardware stall code 0x86; a debugger halt
+// would be undone by Session::drop and is deliberately never used here.
+struct XtensaProfile {
+    cache: [(u64, u32); 2],
+    clock: &'static [(u64, u32, u32)],
+    rtc: u64,
+    stall_offset: u64,
+    timers: [u64; 2],
+    rtc_wdt: (u64, u64),
+    uart: u64,
+}
+
+fn xtensa_profile(board: &str) -> Result<XtensaProfile> {
+    Ok(match board {
+        "esp32" => XtensaProfile {
+            cache: [(0x3ff00040, 8), (0x3ff00058, 8)],
+            clock: &[(0x3ff66000, 0x3ff, 1), (0x3ff48070, 3 << 27, 0)],
+            rtc: 0x3ff48000, stall_offset: 0xac,
+            timers: [0x3ff5f000, 0x3ff60000], rtc_wdt: (0x8c, 0xa4), uart: 0x3ff40000,
+        },
+        "esp32s3" => XtensaProfile {
+            cache: [(0x600c4000, 1), (0x600c4060, 1)],
+            clock: &[(0x600c0060, 0xfff, 1)],
+            rtc: 0x60008000, stall_offset: 0xbc,
+            timers: [0x6001f000, 0x60020000], rtc_wdt: (0x98, 0xb0), uart: 0x60000000,
+        },
+        _ => bail!("{board} has no Xtensa warm profile"),
+    })
+}
+
+fn validate_xtensa_prestate(profile: &XtensaProfile, cache: [u32; 2], clocks: &[u32]) -> Result<()> {
+    for ((address, mask), value) in profile.cache.iter().zip(cache) {
+        ensure!(value & mask == 0,
+            "warm Xtensa contract requires disabled caches ({address:#x}={value:#x}); use the boot check");
+    }
+    ensure!(clocks.len() == profile.clock.len(), "incomplete Xtensa clock pre-state");
+    for ((address, mask, maximum), value) in profile.clock.iter().zip(clocks) {
+        ensure!(value & mask <= *maximum,
+            "warm Xtensa contract requires XTAL source with divider 0 or 1 ({address:#x}={value:#x}); use the boot check");
+    }
+    Ok(())
+}
+
+fn xtensa_stall_code(options: u32, stall: u32) -> u32 {
+    ((stall >> 20) & 0x3f) << 2 | (options & 3)
+}
+
+fn xtensa_cpu1_state(core: &mut Core<'_>, board: &str, stall: bool) -> Result<Value> {
+    let profile = xtensa_profile(board)?;
+    let address = profile.rtc + profile.stall_offset;
+    if stall {
+        update(core, profile.rtc, 3, 2)?;
+        update(core, address, 0x3f << 20, 0x21 << 20)?;
+        poll(core, profile.rtc, 3, 2)?;
+        poll(core, address, 0x3f << 20, 0x21 << 20)?;
+    }
+    // Independent readbacks only observe these fields, never re-stall CPU1.
+    let options = core.read_word_32(profile.rtc).context("read CPU1 stall C0")?;
+    let value = core.read_word_32(address).context("read CPU1 stall C1")?;
+    let code = xtensa_stall_code(options, value);
+    ensure!(code == 0x86,
+        "Xtensa CPU1 is not hardware stalled (code {code:#x}); use the boot check");
+    Ok(json!({"method":"hardware-stall","core":1,"cpu1_stalled":true,
+        "stall_code":code,"options_address":profile.rtc,"options_value":options,
+        "options_mask":3,"options_expected":2,"stall_address":address,"stall_value":value,
+        "stall_mask":0x3f << 20,"stall_expected":0x21 << 20,"rom_reset":false}))
+}
+
+// The pinned probe's arch module is private. Its Register::try_from maps
+// 0x01xx to special-register numbers and 0xff01 to the current debug EPS.
+// These IDs are from that exact source, rather than GDB register numbers.
+#[derive(Clone, Copy)]
+enum XtensaRegister {
+    Windowbase = 0x148,
+    Windowstart = 0x149,
+    IntEnable = 0x1e4,
+    VecBase = 0x1e7,
+    DebugCause = 0x1e9,
+    CurrentPs = 0xff01,
+}
+
+fn xtensa_register(register: XtensaRegister) -> RegisterId { RegisterId(register as u16) }
+
+fn xtensa_cleanup(core: &mut Core<'_>, board: &str) -> Result<Value> {
+    let started = Instant::now();
+    let profile = xtensa_profile(board)?;
+    let mut caches = [0; 2];
+    for (index, (address, _)) in profile.cache.iter().enumerate() {
+        caches[index] = core.read_word_32(*address).context("read Xtensa cache pre-state")?;
+    }
+    let clocks: Vec<u32> = profile.clock.iter().map(|(address, _, _)|
+        core.read_word_32(*address)).collect::<std::result::Result<_, _>>()?;
+    validate_xtensa_prestate(&profile, caches, &clocks)?;
+    core.write_core_reg(xtensa_register(XtensaRegister::IntEnable), 0u32)?;
+    // CurrentPs is EPS at this core's debug level, the state RFDO resumes.
+    // Raw PS instead describes the debugger's own execution context.
+    core.write_core_reg(xtensa_register(XtensaRegister::CurrentPs), 0x3fu32)?;
+    let other_core = xtensa_cpu1_state(core, board, true)?;
+    for timer in profile.timers {
+        core.write_word_32(timer + 0x64, 0x50d83aa1)?;
+        core.write_word_32(timer + 0x48, 0)?;
+        core.write_word_32(timer + 0x64, 0)?;
+    }
+    core.write_word_32(profile.rtc + profile.rtc_wdt.1, 0x50d83aa1)?;
+    core.write_word_32(profile.rtc + profile.rtc_wdt.0, 0)?;
+    core.write_word_32(profile.rtc + profile.rtc_wdt.1, 0)?;
+    if board == "esp32s3" {
+        core.write_word_32(profile.rtc + 0xb8, 0x8f1d312a)?;
+        core.write_word_32(profile.rtc + 0xb4, 0xc0000000)?;
+        core.write_word_32(profile.rtc + 0xb8, 0)?;
+        core.write_word_32(0x60023064, 0)?; // SYSTIMER interrupt enables
+        update(core, 0x60023000, (7 << 24) | (1 << 30), 0)?;
+        core.write_word_32(0x6002306c, 7)?;
+    } else {
+        core.write_word_32(profile.timers[0], 0)?; // TIMG0 timer0 stop
+        core.write_word_32(profile.timers[0] + 0x98, 0)?;
+        core.write_word_32(profile.timers[0] + 0xa4, 1)?;
+    }
+    core.write_word_32(profile.uart + 0xc, 0)?;
+    core.write_word_32(profile.uart + 0x10, 0x111)?;
+    update(core, profile.uart + 0x20, 0, 3 << 17)?;
+    update(core, profile.uart + 0x20, 3 << 17, 0)?;
+    // A quiet fixed image can inherit XTAL / 2 from ROM. The preceding
+    // Landin app uses XTAL / 1. Admit only those reviewed states, then
+    // select 40 MHz after stopping their timer and UART sources.
+    let mut final_clocks = Vec::new();
+    for (address, mask, _) in profile.clock {
+        update(core, *address, *mask, 0)?;
+        final_clocks.push(poll(core, *address, *mask, 0)?);
+    }
+    Ok(json!({"contract":"warm-board-v1","peripheral_sources_stopped":true,
+        "other_core_parked":true,"other_core":other_core,"cpu1_stalled":true,
+        "cache_prestate":caches,"clock_prestate":clocks,"rom_reset":false,
+        "clock_final":final_clocks,"initial_xtal_divider":clocks[0] & 0x3ff,
+        "final_xtal_divider":0,"clock_hz":40000000,
+        "elapsed_us":started.elapsed().as_micros() as u64}))
+}
+
+const XTENSA_VISIBILITY: [u8; 6] = [0xc0, 0x20, 0x00, 0x00, 0x20, 0x00];
+
+fn validate_xtensa_visibility(address: u32, segments: &[(u64, Vec<u8>)], executable: &[(u64, u64)]) -> Result<()> {
+    let start = u64::from(address);
+    ensure!(executable.iter().any(|(lo, hi)| start >= *lo && start + 6 <= *hi),
+        "Xtensa instruction visibility pair is not loaded executable code");
+    ensure!(segments.iter().any(|(lo, bytes)| start.checked_sub(*lo)
+        .and_then(|offset| usize::try_from(offset).ok())
+        .and_then(|offset| bytes.get(offset..offset.saturating_add(6))) == Some(XTENSA_VISIBILITY.as_slice())),
+        "Xtensa instruction visibility symbol must name exact memw/isync instructions");
+    Ok(())
+}
+
+fn xtensa_instruction_visibility(core: &mut Core<'_>, address: u32) -> Result<Value> {
+    let started = Instant::now();
+    core.write_core_reg(xtensa_register(XtensaRegister::IntEnable), 0u32)?;
+    core.write_core_reg(xtensa_register(XtensaRegister::Windowbase), 0u32)?;
+    core.write_core_reg(xtensa_register(XtensaRegister::Windowstart), 1u32)?;
+    // ICOUNT counts only below debug level 6. EXCM=1 and INTENABLE=0
+    // mask ordinary IRQs while INTLEVEL=5 permits the two single steps.
+    core.write_core_reg(xtensa_register(XtensaRegister::CurrentPs), 0x25u32)?;
+    core.write_core_reg(core.program_counter().id, address)?;
+    let mut steps = Vec::new();
+    for offset in [3, 6] {
+        core.step().context("single-step Xtensa instruction visibility")?;
+        let pc: u32 = core.read_core_reg(core.program_counter().id)?;
+        let cause: u32 = core.read_core_reg(xtensa_register(XtensaRegister::DebugCause))?;
+        ensure!(pc == address + offset && cause & 0x3f == 1,
+            "Xtensa visibility step stopped unexpectedly (PC={pc:#x}, DEBUGCAUSE={cause:#x})");
+        steps.push(json!({"pc":pc,"debugcause":cause}));
+    }
+    core.write_core_reg(xtensa_register(XtensaRegister::CurrentPs), 0x3fu32)?;
+    Ok(json!({"method":"cacheless-sram-memw-isync-single-step","address":address,
+        "operations":["memw","isync"],"step_ps":0x25,"restored_ps":0x3f,
+        "steps":steps,"elapsed_us":started.elapsed().as_micros() as u64}))
+}
+
 fn hazard3_irq_reset_writes() -> impl Iterator<Item = (u16, u32)> {
     // pico-sdk 2.2.0 hardware/regs/rvcsr.h: MEICONTEXT resets to
     // 0x8000; MEIEA, MEIFA and MEIPRA reset to zero. Low write bits
@@ -411,7 +656,9 @@ fn hazard3_irq_reset_writes() -> impl Iterator<Item = (u16, u32)> {
         .chain((0..13).map(|window| (0xbe3, window)))
 }
 
-fn cleanup(core: &mut Core<'_>, board: &str, arm: bool) -> Result<Value> {
+fn cleanup(core: &mut Core<'_>, board: &str, architecture: Architecture) -> Result<Value> {
+    if architecture == Architecture::Xtensa { return xtensa_cleanup(core, board); }
+    let arm = architecture == Architecture::Arm;
     if arm {
         // ARM DCRSR selector 20 combines CONTROL:FAULTMASK:BASEPRI:PRIMASK.
         // Keep interrupts masked while retiring an interrupted handler.
@@ -599,7 +846,7 @@ fn execute(plan: &Plan, image: &Image) -> Result<Value> {
     let mut core = session.core(0).context("select warm-load core 0")?;
     let previous_pc: u32 = core.read_core_reg(core.program_counter().id)
         .with_context(|| format!("{} read previous PC", plan.board))?;
-    let mut cleanup = cleanup(&mut core, &plan.board, image.arm)
+    let mut cleanup = cleanup(&mut core, &plan.board, image.architecture)
         .with_context(|| format!("{} warm cleanup", plan.board))?;
     if let Some(prior_state) = prior_state {
         cleanup["prior_state"] = prior_state;
@@ -610,9 +857,9 @@ fn execute(plan: &Plan, image: &Image) -> Result<Value> {
     let mut written = Vec::new();
     for (address, body) in &image.segments {
         if body.is_empty() { continue; }
-        let back = if c3_instruction_ram(&plan.board, *address)
+        let back = if instruction_ram(&plan.board, *address)
             || (plan.board == "rp2350_hazard3" && address % 4 == 0 && body.len() % 4 == 0) {
-            // C3 validation guarantees whole words. Use them for aligned
+            // ESP instruction SRAM validation guarantees whole words. Use them for aligned
             // Hazard3 segments too: program-buffer byte transfers cost a
             // command per byte. Other segments retain exact byte bounds.
             let words: Vec<u32> = body.chunks_exact(4)
@@ -635,17 +882,24 @@ fn execute(plan: &Plan, image: &Image) -> Result<Value> {
         written.push(json!({"address":address,"bytes":body.len(),"sha256":digest(body)}));
     }
     drop(core);
-    if !image.arm { instruction_fence(&mut session, &plan.board).with_context(|| format!("{} instruction fence", plan.board))?; }
+    if image.architecture == Architecture::Riscv {
+        instruction_fence(&mut session, &plan.board).with_context(|| format!("{} instruction fence", plan.board))?;
+    }
     let mut core = session.core(0).context("select warm-load core 0")?;
-    if image.arm {
+    if image.architecture == Architecture::Arm {
         core.write_core_reg(RegisterId(16), 0x01000000u32).context("entry write xPSR register 16")?;
         core.write_core_reg(RegisterId(20), 1u32).context("entry write special register 20")?;
         core.write_word_32(0xe000ed08, image.vector).context("entry write VTOR 0xe000ed08")?;
-    } else {
+    } else if image.architecture == Architecture::Riscv {
         core.write_core_reg(RegisterId(0x305), image.vector).context("entry write mtvec CSR 0x305")?;
+    } else {
+        cleanup["instruction_visibility"] = xtensa_instruction_visibility(&mut core,
+            image.visibility.context("missing validated Xtensa visibility pair")?)?;
+        core.write_core_reg(xtensa_register(XtensaRegister::VecBase), image.vector)
+            .context("entry write Xtensa VECBASE")?;
     }
     core.write_core_reg(core.stack_pointer().id, image.stack).context("entry write stack pointer")?;
-    core.write_core_reg(core.program_counter().id, image.entry & if image.arm {!1} else {!0})
+    core.write_core_reg(core.program_counter().id, image.entry & if image.architecture == Architecture::Arm {!1} else {!0})
         .context("entry write program counter")?;
     core.run().with_context(|| format!("{} resume loaded entry", plan.board))?;
     if plan.board == "rp2350_hazard3" {
@@ -811,7 +1065,8 @@ mod tests {
     }
     fn read_plan(address: u64, count: u32) -> ReadPlan {
         ReadPlan { format_version: 1, board: "rp2040".into(), mode: "read".into(),
-            probe: "0000:0002:10.42.0.50/0".into(), address, count, require_hart1_halted: false }
+            probe: "0000:0002:10.42.0.50/0".into(), address, count,
+            require_hart1_halted: false, require_cpu1_stalled: false }
     }
     #[test]
     fn retained_hart1_halt_requests_are_scoped_to_hazard3_before_probe_access() {
@@ -826,8 +1081,80 @@ mod tests {
         assert_eq!(report["status"], "validated");
     }
     #[test]
-    fn attach_policy_keeps_one_core_and_avoids_rp2040_rescue_sequence() {
+    fn retained_cpu1_stall_requests_are_scoped_to_xtensa_before_probe_access() {
+        let mut plan = read_plan(0x20000000, 1);
+        plan.require_cpu1_stalled = true;
         for board in ["rp2040", "rp2350", "rp2350_hazard3", "stm32h753", "esp32c3", "esp32c5"] {
+            plan.board = board.into();
+            assert!(validate_read(&plan).is_err());
+        }
+        for board in ["esp32", "esp32s3"] {
+            plan.board = board.into();
+            assert!(validate_read(&plan).is_ok());
+            plan.require_cpu1_stalled = false;
+            assert!(validate_read(&plan).is_err());
+            plan.require_cpu1_stalled = true;
+            let report = process_plan(&serde_json::to_vec(&json!({"format_version":1,
+                "board":board,"mode":"read","probe":"invalid without hardware",
+                "address":0u32,"count":1,"require_cpu1_stalled":true})).unwrap(), true).unwrap();
+            assert_eq!(report["status"], "validated");
+            plan.require_hart1_halted = true;
+            assert!(validate_read(&plan).is_err());
+            plan.require_hart1_halted = false;
+        }
+    }
+    #[test]
+    fn xtensa_prestate_refuses_enabled_caches_and_changed_clocks() {
+        for board in ["esp32", "esp32s3"] {
+            let profile = xtensa_profile(board).unwrap();
+            let clocks = vec![0; profile.clock.len()];
+            assert!(validate_xtensa_prestate(&profile, [0; 2], &clocks).is_ok());
+            let mut divided = clocks.clone();
+            divided[0] = 1; // quiet fixed image's reviewed ROM XTAL / 2
+            assert!(validate_xtensa_prestate(&profile, [0; 2], &divided).is_ok());
+            // Unrelated fields can remain set; only the source, divider
+            // and actual cache-enable bits determine this baseline.
+            assert!(validate_xtensa_prestate(&profile,
+                [!profile.cache[0].1, !profile.cache[1].1], &clocks).is_ok());
+            for index in 0..2 {
+                let mut cache = [0; 2];
+                cache[index] = profile.cache[index].1;
+                assert!(validate_xtensa_prestate(&profile, cache, &clocks).is_err());
+            }
+            for index in 0..clocks.len() {
+                let mut changed = clocks.clone();
+                changed[index] = profile.clock[index].1;
+                assert!(validate_xtensa_prestate(&profile, [0; 2], &changed).is_err());
+            }
+            for divider in [2, 3, 1023] {
+                let mut changed = clocks.clone();
+                changed[0] = divider;
+                assert!(validate_xtensa_prestate(&profile, [0; 2], &changed).is_err());
+            }
+        }
+    }
+    #[test]
+    fn xtensa_stall_proof_requires_both_cpu1_fields_and_preserves_other_bits() {
+        assert_eq!(xtensa_stall_code(2, 0x21 << 20), 0x86);
+        assert_eq!(xtensa_stall_code(0xfffffffe, 0xfe1fffff), 0x86);
+        for (options, stall) in [(0, 0x21 << 20), (2, 0), (3, 0x21 << 20), (2, 0x20 << 20)] {
+            assert_ne!(xtensa_stall_code(options, stall), 0x86);
+        }
+        assert_eq!(xtensa_profile("esp32").unwrap().rtc + xtensa_profile("esp32").unwrap().stall_offset, 0x3ff480ac);
+        assert_eq!(xtensa_profile("esp32s3").unwrap().rtc + xtensa_profile("esp32s3").unwrap().stall_offset, 0x600080bc);
+    }
+    #[test]
+    fn xtensa_register_ids_match_the_pinned_probe_api_and_resume_context() {
+        assert_eq!(xtensa_register(XtensaRegister::IntEnable), RegisterId(0x1e4));
+        assert_eq!(xtensa_register(XtensaRegister::Windowbase), RegisterId(0x148));
+        assert_eq!(xtensa_register(XtensaRegister::Windowstart), RegisterId(0x149));
+        assert_eq!(xtensa_register(XtensaRegister::VecBase), RegisterId(0x1e7));
+        assert_eq!(xtensa_register(XtensaRegister::CurrentPs), RegisterId(0xff01));
+        assert_ne!(xtensa_register(XtensaRegister::CurrentPs), RegisterId(0x1e6));
+    }
+    #[test]
+    fn attach_policy_keeps_one_core_and_avoids_rp2040_rescue_sequence() {
+        for board in ["rp2040", "rp2350", "rp2350_hazard3", "stm32h753", "esp32c3", "esp32c5", "esp32", "esp32s3"] {
             let target = attach_target(board).unwrap();
             assert_eq!(target.cores.len(), 1);
             if board == "rp2040" {
@@ -868,7 +1195,7 @@ mod tests {
     }
     #[test]
     fn flash_and_wrapping_loads_are_refused_for_every_board() {
-        for board in ["rp2040","rp2350","rp2350_hazard3","stm32h753","esp32c3","esp32c5"] {
+        for board in ["rp2040","rp2350","rp2350_hazard3","stm32h753","esp32c3","esp32c5","esp32","esp32s3"] {
             assert!(!in_ram(board, 0x10000000, 4));
             assert!(!in_ram(board, u64::MAX - 1, 4));
             assert!(!in_ram(board, 0x40000000, 4));
@@ -939,15 +1266,106 @@ mod tests {
         bytes
     }
     fn offline_elf_control(bytes: &[u8], validate: bool) -> Result<Value> {
+        offline_board_elf_control(bytes, "rp2040", validate)
+    }
+    fn offline_board_elf_control(bytes: &[u8], board: &str, validate: bool) -> Result<Value> {
         static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
         let path = std::env::temp_dir().join(format!("landin-allocated-{}-{}.elf", std::process::id(),
             NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)));
         fs::write(&path, bytes)?;
-        let plan = serde_json::to_vec(&json!({"format_version":1,"board":"rp2040","mode":"ram",
+        let plan = serde_json::to_vec(&json!({"format_version":1,"board":board,"mode":"ram",
             "probe":"deliberately invalid probe selector","elf":path}))?;
         let result = process_plan(&plan, validate);
         fs::remove_file(path)?;
         result
+    }
+    fn xtensa_test_elf(board: &str) -> Vec<u8> {
+        let (iram, dram, stack) = if board == "esp32" {
+            (0x40080000u32, 0x3ffb0000u32, 0x3ffd0000u32)
+        } else { (0x40378000, 0x3fca8000, 0x3fcd0000) };
+        let mut bytes = vec![0u8; 0xe00];
+        bytes[..7].copy_from_slice(b"\x7fELF\x01\x01\x01");
+        bytes[16..20].copy_from_slice(&[2, 0, 94, 0]); // ET_EXEC, EM_XTENSA
+        for (at, value) in [(20, 1), (24, iram + 0x400), (28, 52), (32, 0xc00)] {
+            elf_test_word(&mut bytes, at, value);
+        }
+        for (at, value) in [(40, 52u16), (42, 32), (44, 1), (46, 40), (48, 7), (50, 4)] {
+            bytes[at..at + 2].copy_from_slice(&value.to_le_bytes());
+        }
+        for (index, value) in [1, 0x100, iram, iram, 0x410, 0x410, 5, 4].into_iter().enumerate() {
+            elf_test_word(&mut bytes, 52 + 4 * index, value);
+        }
+        bytes[0x504..0x50a].copy_from_slice(&XTENSA_VISIBILITY);
+        let mut names = vec![0u8];
+        let mut offsets = Vec::new();
+        for name in ["", ".isr_vector", ".text", ".bss", ".shstrtab", ".strtab", ".symtab"] {
+            offsets.push(names.len() as u32);
+            names.extend_from_slice(name.as_bytes()); names.push(0);
+        }
+        bytes[0x900..0x900 + names.len()].copy_from_slice(&names);
+        let sections = [
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [offsets[1], 1, 2, iram, 0x100, 1024, 0, 0, 1024, 0],
+            [offsets[2], 1, 6, iram + 0x400, 0x500, 16, 0, 0, 4, 0],
+            [offsets[3], 8, 3, dram, 0, 16, 0, 0, 4, 0],
+            [offsets[4], 3, 0, 0, 0x900, names.len() as u32, 0, 0, 1, 0],
+            [offsets[5], 3, 0, 0, 0xa00, 0, 0, 0, 1, 0],
+            [offsets[6], 2, 0, 0, 0xb00, 8 * 16, 5, 1, 4, 16],
+        ];
+        for (index, section) in sections.into_iter().enumerate() {
+            for (field, value) in section.into_iter().enumerate() {
+                elf_test_word(&mut bytes, 0xc00 + index * 40 + field * 4, value);
+            }
+        }
+        let mut names = vec![0u8];
+        for (index, (name, value, section)) in [
+            ("_landin_firmware_vectors", iram, 1u16),
+            ("_landin_firmware_stack_top", stack, 0xfff1),
+            ("_landin_firmware_stack_bottom", stack - 0x1000, 0xfff1),
+            ("_landin_firmware_entry", iram + 0x400, 2),
+            ("_landin_firmware_bss_start", dram, 3),
+            ("_landin_firmware_bss_end", dram + 16, 3),
+            ("_landin_firmware_instruction_visibility", iram + 0x404, 2),
+        ].into_iter().enumerate() {
+            let at = 0xb00 + (index + 1) * 16;
+            elf_test_word(&mut bytes, at, names.len() as u32);
+            elf_test_word(&mut bytes, at + 4, value);
+            bytes[at + 12] = 0x10;
+            bytes[at + 14..at + 16].copy_from_slice(&section.to_le_bytes());
+            names.extend_from_slice(name.as_bytes()); names.push(0);
+        }
+        bytes[0xa00..0xa00 + names.len()].copy_from_slice(&names);
+        elf_test_word(&mut bytes, 0xc00 + 5 * 40 + 20, names.len() as u32);
+        bytes
+    }
+    #[test]
+    fn xtensa_elf_machine_vectors_stack_and_visibility_are_checked_before_attach() {
+        for board in ["esp32", "esp32s3"] {
+            let baseline = xtensa_test_elf(board);
+            assert_eq!(offline_board_elf_control(&baseline, board, true).unwrap()["status"], "validated");
+            let cases: &[(&str, &[(usize, u32)])] = &[
+                ("architecture", &[(16, 0x00f30002)]), // RISC-V ELF
+                ("1024-byte", &[(0xc00 + 40 + 20, 512)]),
+                ("unaligned stack", &[(0xb00 + 2 * 16 + 4, if board == "esp32" {0x3ffcfff8} else {0x3fccfff8})]),
+                ("byte-accessible", &[(0xb00 + 2 * 16 + 4, if board == "esp32" {0x400a0000} else {0x40398000}),
+                    (0xb00 + 3 * 16 + 4, if board == "esp32" {0x4009f000} else {0x40397000})]),
+                ("writable section", &[(0xc00 + 3 * 40 + 12, if board == "esp32" {0x40080800} else {0x40378800})]),
+                ("BSS symbol range", &[(0xb00 + 5 * 16 + 4, if board == "esp32" {0x40080800} else {0x40378800}),
+                    (0xb00 + 6 * 16 + 4, if board == "esp32" {0x40080810} else {0x40378810})]),
+                ("missing _landin_firmware_instruction_visibility", &[(0xb00 + 7 * 16 + 12, 0x10)]),
+                ("instruction SRAM", &[(0xb00 + 7 * 16 + 4, 0)]),
+                ("not loaded executable", &[(0xb00 + 7 * 16 + 4, if board == "esp32" {0x40081000} else {0x40379000})]),
+                ("exact memw/isync", &[(0x504, 0)]),
+                ("in-place SRAM", &[(52 + 8, 0x42000000), (52 + 12, 0x42000000)]),
+            ];
+            for (message, mutations) in cases {
+                let mut bytes = baseline.clone();
+                for (at, value) in *mutations { elf_test_word(&mut bytes, *at, *value); }
+                let error = format!("{:#}", offline_board_elf_control(&bytes, board, false).unwrap_err());
+                assert!(error.contains(message), "{board}: wanted {message}, got {error}");
+                assert!(!error.contains("parse probe selector"));
+            }
+        }
     }
     #[test]
     fn allocated_sections_and_startup_ranges_are_checked_before_probe_parsing() {
@@ -991,7 +1409,7 @@ mod tests {
         for (address, size, memory) in [(0x40380000, 4, 4),
                 (0x40380180, 0x5b50, 0x5b50), (0x4039fffc, 4, 4),
                 (0x40380200, 0, 16)] {
-            assert!(c3_instruction_ram("esp32c3", address));
+            assert!(instruction_ram("esp32c3", address));
             assert!(validate_sram_access("esp32c3", address, size, memory).is_ok());
         }
         for (address, size, memory) in [(0x40380001, 4, 4),
@@ -999,8 +1417,8 @@ mod tests {
                 (0x40380002, 2, 2)] {
             assert!(validate_sram_access("esp32c3", address, size, memory).is_err());
         }
-        assert!(!c3_instruction_ram("esp32c3", 0x3fca0000));
-        assert!(!c3_instruction_ram("esp32c5", 0x40800000));
+        assert!(!instruction_ram("esp32c3", 0x3fca0000));
+        assert!(!instruction_ram("esp32c5", 0x40800000));
         assert!(validate_sram_access("esp32c3", 0x3fca0001, 3, 5).is_ok());
         assert!(validate_sram_access("esp32c5", 0x40800001, 3, 5).is_ok());
     }
@@ -1010,5 +1428,25 @@ mod tests {
         assert!(in_ram("esp32c3",0x3fca0000,0x28000));
         assert!(!in_ram("esp32c3",0x3fc80000,4));
         assert!(!in_ram("esp32c3",0x4039ffff,2));
+    }
+    #[test]
+    fn xtensa_sram_profiles_exclude_cache_rom_and_overlapping_aliases() {
+        for (board, iram, dram, size) in [("esp32", 0x40080000, 0x3ffb0000, 0x20000),
+                ("esp32s3", 0x40378000, 0x3fca8000, 0x28000)] {
+            assert!(in_ram(board, iram, 0x20000));
+            assert!(in_ram(board, dram, size));
+            for address in [iram - 4, iram + 0x20000, dram - 4, dram + size] {
+                assert!(!in_ram(board, address, 4), "{board} {address:#x}");
+            }
+            assert!(instruction_ram(board, iram));
+            assert!(!instruction_ram(board, dram));
+            assert!(validate_sram_access(board, iram, 4, 4).is_ok());
+            assert!(validate_sram_access(board, iram + 1, 4, 4).is_err());
+            assert!(validate_sram_access(board, iram, 3, 4).is_err());
+            assert!(validate_sram_access(board, iram, 4, 5).is_err());
+            assert!(validate_sram_access(board, dram + 1, 3, 5).is_ok());
+        }
+        // The shared S3 SRAM1 alias ends where writable DRAM begins.
+        assert_eq!(0x40398000u64 - 0x6f0000, 0x3fca8000);
     }
 }
