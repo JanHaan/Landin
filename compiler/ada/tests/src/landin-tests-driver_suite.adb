@@ -6940,7 +6940,8 @@ package body Landin.Tests.Driver_Suite is
            (Unbounded.To_String (Misaligned.Report), "multiple of 16")
          and then Too_Small.Status = Landin.Driver.Status_Reported
          and then Contains
-           (Unbounded.To_String (Too_Small.Report), "vector table does not fit")
+           (Unbounded.To_String (Too_Small.Report),
+            "vector table does not fit")
          and then Mismatch.Status = Landin.Driver.Status_Reported
          and then Contains
            (Unbounded.To_String (Mismatch.Report), "exact chip configuration")
