@@ -87,6 +87,10 @@ package body Landin.Backend.Site_Counts is
             elsif Name (Name'First) = 't' and then Value in 3 .. 6 then
                return 25 + Value;
             end if;
+         when Xtensa =>
+            if Name (Name'First) = 'a' and then Value in 0 .. 15 then
+               return Value;
+            end if;
          when Thumb =>
             if Name = "sp" then
                return 13;
@@ -114,7 +118,8 @@ package body Landin.Backend.Site_Counts is
      is (case Of_Syntax is
             when A64 => Register in 29 | 31,
             when RISC_V => Register in 2 | 8,
-            when Thumb => Register in 11 | 13);
+            when Thumb => Register in 11 | 13,
+            when Xtensa => Register in 1 | 7);
 
    function Holds_Address (Into : Counter; Name : String) return Boolean;
    function Holds_Address (Into : Counter; Name : String) return Boolean is
@@ -197,6 +202,9 @@ package body Landin.Backend.Site_Counts is
                  "beq bne blt bge bltu bgeu beqz bnez bltz bgez blez bgtz"
                  & " bgt ble bgtu bleu j jr ret unimp ecall ebreak fence"
                  & " fence.i nop wfi csrw csrs csrc csrwi csrsi csrci"),
+            when Xtensa =>
+               Starts (Mnemonic, "b") or else One_Of
+                 (Mnemonic, "j jx retw retw.n memw ill nop ssl ssr"),
             when Thumb =>
                Mnemonic = "b"
                or else (Mnemonic'Length = 3
@@ -268,6 +276,7 @@ package body Landin.Backend.Site_Counts is
             function Is_Call return Boolean is
               (case S is
                   when A64 | Thumb => Mnemonic = "bl",
+                  when Xtensa => Mnemonic in "call4" | "call8" | "call12",
                   when RISC_V =>
                      Mnemonic = "call"
                      or else (Mnemonic = "jal"
@@ -277,6 +286,7 @@ package body Landin.Backend.Site_Counts is
             function Is_Indirect_Call return Boolean is
               (case S is
                   when A64 => Starts (Mnemonic, "blr"),
+                  when Xtensa => Mnemonic in "callx4" | "callx8" | "callx12",
                   when Thumb => Mnemonic = "blx",
                   when RISC_V =>
                      Mnemonic = "jalr" and then Number (S, Operand (1)) /= 0);
@@ -284,6 +294,8 @@ package body Landin.Backend.Site_Counts is
             function Is_Load return Boolean is
               (case S is
                   when A64 => Starts (Mnemonic, "ld"),
+                  when Xtensa => One_Of
+                    (Mnemonic, "l8ui l16ui l16si l32i l32i.n l32e l32ai"),
                   when RISC_V =>
                      One_Of (Mnemonic, "lb lh lw ld lbu lhu lwu flh flw fld")
                      or else Starts (Mnemonic, "lr."),
@@ -296,6 +308,8 @@ package body Landin.Backend.Site_Counts is
             function Is_Store return Boolean is
               (case S is
                   when A64 => Starts (Mnemonic, "st"),
+                  when Xtensa => One_Of
+                    (Mnemonic, "s8i s16i s32i s32i.n s32e s32ri"),
                   when RISC_V =>
                      One_Of (Mnemonic, "sb sh sw sd fsh fsw fsd")
                      or else Starts (Mnemonic, "sc."),
@@ -309,6 +323,9 @@ package body Landin.Backend.Site_Counts is
                On_Stack : Boolean := Mnemonic in "push" | "pop" | "vpush"
                  | "vpop";
             begin
+               if S = Xtensa then
+                  On_Stack := Holds_Address (Into, Operand (2));
+               end if;
                for Index in 1 .. Count loop
                   declare
                      Part : constant String := Operand (Index);
@@ -375,7 +392,8 @@ package body Landin.Backend.Site_Counts is
                else
                   --  Every register before the address is loaded.
                   for Index in 1 .. Count loop
-                     exit when Is_Memory (S, Operand (Index));
+                     exit when Is_Memory (S, Operand (Index))
+                       or else (S = Xtensa and then Index = 2);
                      Set (Into, Operand (Index), False);
                   end loop;
                end if;

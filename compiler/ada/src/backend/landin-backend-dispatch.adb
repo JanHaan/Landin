@@ -2,6 +2,7 @@ with Landin.Backend.X86_64;
 with Landin.Backend.Arm64;
 with Landin.Backend.RiscV;
 with Landin.Backend.Cortex_M;
+with Landin.Backend.Xtensa;
 with Landin.Backend.Toolchain;
 with Landin.Targets.Capabilities;
 
@@ -22,6 +23,8 @@ package body Landin.Backend.Dispatch is
             "signed 32-bit frame budget of the RISC-V backend",
          when Landin.Targets.Capabilities.Cortex_M0_ELF =>
             "32-bit address budget of the Cortex-M backend",
+         when Landin.Targets.Capabilities.Xtensa_ELF =>
+            "32-bit frame budget of the Xtensa backend",
          when Landin.Targets.Capabilities.No_Backend =>
             "frame encoding of an unavailable backend");
 
@@ -46,6 +49,9 @@ package body Landin.Backend.Dispatch is
          when Landin.Targets.Capabilities.Cortex_M0_ELF =>
             return Landin.Backend.Cortex_M.Frame_Is_Addressable
               (Of_Unit, Item, Facts, Options);
+         when Landin.Targets.Capabilities.Xtensa_ELF =>
+            return Landin.Backend.Xtensa.Frame_Is_Addressable
+              (Of_Unit, Item, Facts, Options);
          when Landin.Targets.Capabilities.No_Backend => return False;
       end case;
    end Frame_Is_Addressable;
@@ -61,6 +67,9 @@ package body Landin.Backend.Dispatch is
               (Of_Unit, Item, Facts);
          when Landin.Targets.Capabilities.RV32_ELF =>
             return Landin.Backend.RiscV.Frame_Fits_Firmware_Stack
+              (Of_Unit, Item, Facts);
+         when Landin.Targets.Capabilities.Xtensa_ELF =>
+            return Landin.Backend.Xtensa.Frame_Fits_Firmware_Stack
               (Of_Unit, Item, Facts);
          when others =>
             return True;
@@ -132,6 +141,12 @@ package body Landin.Backend.Dispatch is
                     Report_Foreign => False,
                     Limit_Margin => Margin, Unchecked => Unchecked,
                     Handler_Entry => Before);
+         when Landin.Targets.Capabilities.Xtensa_ELF =>
+            return (Switch_Bytes => 0, Prepared_Bytes => 0,
+                    Entry_Bytes => 0, Report_Bytes => 0,
+                    Report_Foreign => False,
+                    Limit_Margin => Margin, Unchecked => Unchecked,
+                    Handler_Entry => Before);
          when Landin.Targets.Capabilities.No_Backend =>
             return (others => <>);
       end case;
@@ -176,6 +191,10 @@ package body Landin.Backend.Dispatch is
             Landin.Backend.Cortex_M.Emit
               (Of_Unit, Meanings, Names, Facts, Options, Assembly, Report,
                Hosted_Entry, Debug, Firmware_Entry, Panic, Level);
+         when Landin.Targets.Capabilities.Xtensa_ELF =>
+            Landin.Backend.Xtensa.Emit
+              (Of_Unit, Meanings, Names, Facts, Options, Assembly, Report,
+               Hosted_Entry, Debug, Panic, Level, Firmware_Entry);
          when Landin.Targets.Capabilities.No_Backend =>
             raise Compiler_Defect with "target has no assembly emitter";
       end case;
