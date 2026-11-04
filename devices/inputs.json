@@ -428,6 +428,18 @@
     "esp32s3/gpio_sig_map.h": {
       "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/soc/esp32s3/include/soc/gpio_sig_map.h",
       "sha256": "f4fe38cc217a2bdcd2c0ec192fa887df1cbbe3506da1c677656506dc3997d758"
+    },
+    "esp32s3/rom-cache.h": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/esp_rom/esp32s3/include/esp32s3/rom/cache.h",
+      "sha256": "0f8735a6db2ef0cbfc6cea6ff808d5f7cdd34dd598a28b6a10b7e966e9e84392"
+    },
+    "esp32s3/rom.ld": {
+      "url": "https://raw.githubusercontent.com/espressif/esp-idf/fff9895c82d744c7237be8847347bdd1b07c6643/components/esp_rom/esp32s3/ld/esp32s3.rom.ld",
+      "sha256": "3abed7ef1f85a810335b8f639ddee19f18fa9f7083253601548c25a17af62dc9"
+    },
+    "esp32s3/esp-rom-elfs-20260528.tar.gz": {
+      "url": "https://github.com/espressif/esp-rom-elfs/releases/download/20260528/esp-rom-elfs-20260528.tar.gz",
+      "sha256": "caa463d3cbef2430a5a35847c1d9f2f152403b17a802050927ff60c8da54fe46"
     }
   }
 }
