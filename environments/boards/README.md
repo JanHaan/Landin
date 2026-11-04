@@ -164,6 +164,13 @@ DMA and UART remain in reset until startup. This contract covers the
 port's TIMER0; future TIMER1 or SIO MTIME users must establish their own
 core 1 debug-pause policy. The watchdog is disabled during cleanup.
 
+The ESP scenario's historical `receive_mcause` and `timer_mcause` result
+keys name RISC-V `mcause` only on C3/C5. In ESP32 and ESP32-S3 records they
+contain snapshots of Xtensa's `INTERRUPT` pending bits: the receive check
+requires line 1 and the timer check requires line 23. Other pending bits
+may also be set. The inherited keys and refusal wording remain misleading;
+interpret them using the port's architecture rather than as RISC-V causes.
+
 The windowed Xtensa ports use their own bounded warm contract. CPU1 is
 hardware-stalled with code `0x86` before memory changes; each independent
 readback verifies that stall without applying it again. Only CPU0 is

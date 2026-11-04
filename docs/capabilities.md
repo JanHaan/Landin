@@ -19,7 +19,7 @@ entry that describes it, and put a new one where a reader would look for it.
 | `freebsd-x86-64` | hosted executables, emitted on Linux | a FreeBSD VM under KVM | LLDB in the VM |
 | `freebsd-arm64` | hosted executables, emitted on Linux | an emulated FreeBSD VM | LLDB in the VM |
 | `cortex-m0` | ARMv6-M firmware | the pinned QEMU | GDB, lines and functions |
-| `xtensa` | windowed LX6 and LX7 firmware, ILP32 | Espressif QEMU, `esp32` and `esp32s3` | lines with `--debug=lines`; no gate debugger session |
+| `xtensa` | windowed LX6 and LX7 firmware, ILP32; physical ESP32 and ESP32-S3 RAM and boot ports | Espressif QEMU chip controls and complete corpus on exact CPUs with explicitly virtual RAM | lines with `--debug=lines`; no gate debugger session |
 | `rv32` | RV32IMC and RV32IMAC firmware, ilp32 | Espressif's QEMU, `sifive_e` and `esp32c3` | lines with `--debug=lines`; no gate session |
 
 - **FreeBSD** runs in [architecture-specific VMs](../environments/freebsd/README.md)

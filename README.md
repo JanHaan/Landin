@@ -9,7 +9,8 @@ macOS and FreeBSD, and firmware builds for Cortex-M0, RV32 and windowed Xtensa.*
 
 `refine`, Landin's compiler, builds and runs programs on Linux (x86-64,
 arm64 and RV64), FreeBSD (x86-64 and arm64) and macOS (arm64), and builds
-firmware for Cortex-M0 and 32-bit RISC-V. The language is pre-v1 and still growing, and
+firmware for Cortex-M0, 32-bit RISC-V and windowed Xtensa. The language is
+pre-v1 and still growing, and
 [Current compiler capabilities](#current-compiler-capabilities) lists what
 works today.
 
@@ -208,7 +209,7 @@ short:
 | macOS arm64 | hosted executables | natively, with LLDB |
 | FreeBSD x86-64 and arm64 | hosted executables, emitted on Linux | in FreeBSD VMs, with LLDB |
 | Cortex-M0 | boot or debugger-loaded RAM firmware from the device description it imports, or within the 32 KiB flash and 16 KiB RAM reference; RP2040, RP2350 and STM32H753 ports have physical oracles; a Cortex-M7 description with its float unit builds hard-float | under the pinned QEMU, with GDB, for the reference, and the corpus on QEMU's Cortex-M33 and Cortex-M7 |
-| Xtensa | firmware at `xtensa-esp32` (LX6, default) or `xtensa-esp32s3` (LX7), with one windowed ILP32 ABI and distinct instruction configurations | configured Espressif QEMU machines, with strict assembler boundaries and the freestanding inventory |
+| Xtensa | firmware at `xtensa-esp32` (LX6, default) or `xtensa-esp32s3` (LX7), with one windowed ILP32 ABI and distinct instruction configurations; both boards have recorded RAM and boot checks | chip controls and the complete freestanding inventory on exact Espressif QEMU CPUs with explicitly virtual corpus RAM, plus strict assembler boundaries |
 | RV32 | firmware at `rv32imc` or `rv32imac` for the device description it imports, or within the same reference's capacities; ESP32-C3, ESP32-C5 and RP2350 Hazard3 firmware runs on its board, each recorded against its own oracle, the ESP chips booting an image refine writes with no second stage | the corpus under Espressif's QEMU, on its `esp32c3` and `sifive_e` machines |
 
 - **The language kernel:** functions, aggregates and variants, declared

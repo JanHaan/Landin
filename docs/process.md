@@ -80,6 +80,14 @@ artifacts. These are not a successful exact-revision acceptance record; green sa
 a revision is accepted. Documentation changes still receive the full
 `check.py`; its mechanical checks do not establish prose accuracy.
 
+The parallel-equivalence wrapper builds once under the standard mode lock,
+then holds the same binaries across both runs. Its printed evidence directory,
+or a new directory selected with `--output=DIR`, retains build output, both
+raw stdout/stderr streams, exact commands, exit statuses and full diffs.
+Verdict text is compared byte for byte; only the exact elapsed field of a
+progress line is normalized. Matching case failures establish equivalence
+but are printed explicitly and still need investigation.
+
 ## Closing an item
 
 Before an item closes:
