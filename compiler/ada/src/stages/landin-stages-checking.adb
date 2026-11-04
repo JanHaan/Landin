@@ -40420,7 +40420,7 @@ package body Landin.Stages.Checking is
                   = "__aeabi_")
              or else
                (Landin.Targets.Architecture_Of (Facts)
-                  = Landin.Targets.RV32
+                  in Landin.Targets.RV32 | Landin.Targets.Xtensa
                 and then Landin.Targets.Firmware.Is_RV32_Helper
                   (Spelled (Symbol))))
          then
@@ -40890,7 +40890,7 @@ package body Landin.Stages.Checking is
                      (Name, "__aeabi_") /= Name'First
                    and then not
                      (Landin.Targets.Architecture_Of (Facts)
-                        = Landin.Targets.RV32
+                        in Landin.Targets.RV32 | Landin.Targets.Xtensa
                       and then Landin.Targets.Firmware.Is_RV32_Helper (Name))
                  else Name (Name'First) in 'a' .. 'z' | 'A' .. 'Z'
                                          | '_' | '.' | '$'

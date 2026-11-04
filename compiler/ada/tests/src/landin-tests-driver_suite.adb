@@ -6828,6 +6828,8 @@ package body Landin.Tests.Driver_Suite is
          Frame : constant Landin.Driver.Outcome := Ran
            (Level, "f: (v: u32) -> (r: u32) = r = assembler.block("
             & """addi {r}, {r}, 1"", inout r: u32 at a7 = v) end f");
+         Helper : constant Landin.Driver.Outcome := Ran
+           (Level, "public link(symbol: ""__adddf3"") add: () -> none = end add");
       begin
          Landin.Testing.Check_Equal
            (Item, Checked.Status, Landin.Driver.Status_Success,
@@ -6837,8 +6839,11 @@ package body Landin.Tests.Driver_Suite is
            (Item, Refused.Status = Landin.Driver.Status_Reported
             and then Contains (Unbounded.To_String (Refused.Report),
                                "transfers no control")
-            and then Frame.Status = Landin.Driver.Status_Reported,
-            "Xtensa refuses an ordinary call and a frame-register operand");
+            and then Frame.Status = Landin.Driver.Status_Reported
+            and then Helper.Status = Landin.Driver.Status_Reported
+            and then Contains (Unbounded.To_String (Helper.Report),
+                               "belongs to compiler firmware startup"),
+            "Xtensa refuses ordinary calls, frame operands and helper collisions");
       end Check_Level;
    begin
       Check_Level ("", False);
