@@ -247,5 +247,71 @@
         "0xf01d08"
       ]
     }
+  ],
+  "literal_words": [
+    {
+      "address": "0x40037fc0",
+      "word": "0x7fffff"
+    },
+    {
+      "address": "0x4004ba30",
+      "word": "0x600c4060"
+    },
+    {
+      "address": "0x4004ba34",
+      "word": "0x600c4000"
+    },
+    {
+      "address": "0x4004e220",
+      "word": "0x3fceffc4"
+    },
+    {
+      "address": "0x4004e4b0",
+      "word": "0x600c408c"
+    },
+    {
+      "address": "0x4004e4b4",
+      "word": "0x600c4090"
+    },
+    {
+      "address": "0x4004e4b8",
+      "word": "0xff800000"
+    },
+    {
+      "address": "0x4004e4bc",
+      "word": "0x600c4088"
+    },
+    {
+      "address": "0x4004e508",
+      "word": "0x600c402c"
+    },
+    {
+      "address": "0x4004e50c",
+      "word": "0x600c4030"
+    },
+    {
+      "address": "0x4004e510",
+      "word": "0x600c4028"
+    },
+    {
+      "address": "0x4004e67c",
+      "word": "0x600c40a0"
+    },
+    {
+      "address": "0x4004e6d4",
+      "word": "0x600c404c"
+    },
+    {
+      "address": "0x4004eb44",
+      "word": "0x600c4094"
+    },
+    {
+      "address": "0x4004ebec",
+      "word": "0x600c4040"
+    },
+    {
+      "address": "0x4004f2b4",
+      "word": "0x600c4130"
+    }
   ]
 }

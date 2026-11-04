@@ -611,8 +611,8 @@ and [cache API](https://github.com/espressif/esp-idf/blob/fff9895c82d744c7237be8
 The offline oracle compares complete implementation hashes, ENTRY/RETW
 instructions, public veneers and callback words with that vendor ELF.
 The stage compares all aligned words of the eight reviewed routines,
-including each final word's adjacent padding, before any device-stage MMIO
-store or ROM call. It also checks the public veneers and callback table.
+including each final word's adjacent padding, and the sixteen ROM literal
+words those routines load, before any device-stage MMIO store or ROM call. It also checks the public veneers and callback table.
 The comparisons use ordinary instructions and assembler literal pools in
 executable IRAM; no static data initializer or extra description declaration
 is needed. Physical ROM revisions must be observed against this evidence

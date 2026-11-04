@@ -517,6 +517,70 @@ link(boot_stage) extern(naked) prepare: () -> none =
         l32i a3, a2, 48
         movi a4, 0x00f01d08
         bne a3, a4, _landin_device_rom_refused
+        movi a2, 0x40037fc0
+        l32i a3, a2, 0
+        movi a4, 0x007fffff
+        bne a3, a4, _landin_device_rom_refused
+        movi a2, 0x4004ba30
+        l32i a3, a2, 0
+        movi a4, 0x600c4060
+        bne a3, a4, _landin_device_rom_refused
+        movi a2, 0x4004ba34
+        l32i a3, a2, 0
+        movi a4, 0x600c4000
+        bne a3, a4, _landin_device_rom_refused
+        movi a2, 0x4004e220
+        l32i a3, a2, 0
+        movi a4, 0x3fceffc4
+        bne a3, a4, _landin_device_rom_refused
+        movi a2, 0x4004e4b0
+        l32i a3, a2, 0
+        movi a4, 0x600c408c
+        bne a3, a4, _landin_device_rom_refused
+        movi a2, 0x4004e4b4
+        l32i a3, a2, 0
+        movi a4, 0x600c4090
+        bne a3, a4, _landin_device_rom_refused
+        movi a2, 0x4004e4b8
+        l32i a3, a2, 0
+        movi a4, 0xff800000
+        bne a3, a4, _landin_device_rom_refused
+        movi a2, 0x4004e4bc
+        l32i a3, a2, 0
+        movi a4, 0x600c4088
+        bne a3, a4, _landin_device_rom_refused
+        movi a2, 0x4004e508
+        l32i a3, a2, 0
+        movi a4, 0x600c402c
+        bne a3, a4, _landin_device_rom_refused
+        movi a2, 0x4004e50c
+        l32i a3, a2, 0
+        movi a4, 0x600c4030
+        bne a3, a4, _landin_device_rom_refused
+        movi a2, 0x4004e510
+        l32i a3, a2, 0
+        movi a4, 0x600c4028
+        bne a3, a4, _landin_device_rom_refused
+        movi a2, 0x4004e67c
+        l32i a3, a2, 0
+        movi a4, 0x600c40a0
+        bne a3, a4, _landin_device_rom_refused
+        movi a2, 0x4004e6d4
+        l32i a3, a2, 0
+        movi a4, 0x600c404c
+        bne a3, a4, _landin_device_rom_refused
+        movi a2, 0x4004eb44
+        l32i a3, a2, 0
+        movi a4, 0x600c4094
+        bne a3, a4, _landin_device_rom_refused
+        movi a2, 0x4004ebec
+        l32i a3, a2, 0
+        movi a4, 0x600c4040
+        bne a3, a4, _landin_device_rom_refused
+        movi a2, 0x4004f2b4
+        l32i a3, a2, 0
+        movi a4, 0x600c4130
+        bne a3, a4, _landin_device_rom_refused
         movi a5, 1
         _landin_device_quiesce:
         movi a3, 0x50d83aa1

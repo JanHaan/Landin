@@ -2051,6 +2051,8 @@ class XtensaDescriptions(unittest.TestCase):
             address = int(region['address'], 0)
             for index, word in enumerate(region['words']):
                 memory[address + 4 * index] = int(word, 0)
+        for literal in contract['literal_words']:
+            memory[int(literal['address'], 0)] = int(literal['word'], 0)
         return memory
 
     def test_s3_cold_rom_normalization(self):
@@ -2200,6 +2202,10 @@ class XtensaOracles(unittest.TestCase):
         for region in contract['word_ranges']:
             expected = b''.join(struct.pack('<I', int(word, 0)) for word in region['words'])
             self.assertEqual(read(int(region['address'], 0), len(expected)), expected)
+        self.assertEqual(len(contract['literal_words']), 16)
+        for literal in contract['literal_words']:
+            self.assertEqual(read(int(literal['address'], 0), 4),
+                             struct.pack('<I', int(literal['word'], 0)))
         for callback in contract['callback_bodies']:
             implementation = read(int(callback['address'], 0), callback['size'])
             self.assertEqual(digest(implementation), callback['sha256'])
