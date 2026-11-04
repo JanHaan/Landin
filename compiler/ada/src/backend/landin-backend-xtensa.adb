@@ -3577,7 +3577,8 @@ package body Landin.Backend.Xtensa is
                         Emit ("add x5, x5, x6");
                         Emit ("addi x5, x5, -" & Image (Stack_Frame_Bytes));
                         Emit ("mv x28, x5");
-                        Zero_Bytes (Landin.Targets.Byte_Count (Stack_Frame_Bytes));
+                        Zero_Bytes
+                          (Landin.Targets.Byte_Count (Stack_Frame_Bytes));
                         Emit ("mv x5, x28");
                         Emit ("addi x7, x5, " & Image (Stack_Frame_Bytes));
                         Emit ("sw x7, 4(x5)"); --  Prepared a1 is the top.
