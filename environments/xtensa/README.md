@@ -84,3 +84,13 @@ then link the original ESP32 object against the S3 memory map and matching
 S3 libgcc and execute it on S3. The result establishes compatibility for
 those emitted scalar operations and selected helpers. It does not establish
 compatibility for arbitrary ESP32 assembly or the ESP32 helper library.
+
+The same boundary command links every compiler-reserved libgcc helper root
+and follows actual instruction PCs through all conditional branches and
+calls. The audit retains the linked image, map, helper-library hash, root
+list and each reachable instruction. It rejects undecodable instructions,
+unresolved edges and instructions outside the reviewed state policy. This
+checks that an interrupt wrapper preserving the integer windows, SAR,
+loop registers and the single-precision bank with FCR/FSR also preserves
+all state used by the selected helpers. It does not infer state use from
+linear disassembly of literal pools and alignment bytes.
