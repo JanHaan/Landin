@@ -272,6 +272,10 @@ package Landin.Targets.Firmware is
    --  Reset_Symbol; the table's reset word is Reset_Stage_Symbol.
    --  D684: an `esp-app-image` description may hold one too, which the
    --  entry word enters before reset, as the ESP32s' watchdogs need.
+   --  D903: Xtensa entry prepares window state, vectors and the declared
+   --  internal DRAM spill stack before its stage. That naked stage may
+   --  use the stack for windowed ROM calls; static data and BSS are still
+   --  uninitialized. Other architectures retain the stack-free contract.
    function Admits_Stage (Boot : Boot_Kind) return Boolean
      is (Boot in RP2040_Boot2 | Vector_Table | ESP_App_Image);
    function Stage_Before_Reset (Boot : Boot_Kind) return Boolean

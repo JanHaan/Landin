@@ -814,6 +814,9 @@ package body Landin.Targets.Assembly is
    is
       Start : Integer := Text'First;
       Seen : Boolean := False;
+      Limit : constant Positive :=
+        (if Naked and then Architecture_Of (Facts) = Xtensa
+         then 32_768 else 4096);
 
       function Check_Line (Line : String) return String;
 
@@ -909,8 +912,9 @@ package body Landin.Targets.Assembly is
          return "";
       end Check_Line;
    begin
-      if Text'Length > 4096 then
-         return "one assembly block exceeds 4096 bytes";
+      if Text'Length > Limit then
+         return "one assembly block exceeds"
+           & Positive'Image (Limit) & " bytes";
       end if;
       for Index in Text'Range loop
          if Text (Index) not in ASCII.HT | ASCII.LF | ' ' .. '~' then

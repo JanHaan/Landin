@@ -2370,10 +2370,11 @@ narrower one (D248). This compiler boundary alone issues no hardware barrier
 and establishes neither device completion nor cache coherence. D227's
 external-writer obligations remain.
 
-The text is at most 4096 decoded ASCII bytes, using LF, horizontal tabs and
-printable characters. A line may end in the selected target's own line
+The text is at most 4096 decoded ASCII bytes, or 32768 in a naked Xtensa
+body (D903), using LF, horizontal tabs and printable characters. A line may
+end in the selected target's own line
 comment, from its marker to the end of the line: `@` on Cortex-M0, `//` on
-arm64 and `#` on x86-64, RV64 and RV32, the spelling that target's GNU or Apple
+arm64 and `#` on x86-64, RV64, RV32 and Xtensa, the spelling that target's GNU or Apple
 assembler reads (D597). In an ordinary and a naked block alike the comment
 is removed before any other rule reads the text, so nothing in it is an
 instruction, a register, a label or a `{name}` slot, and the emitted assembly
@@ -19153,6 +19154,21 @@ entries stop; they cannot borrow that shared context or the interrupted
 stack. Read-only byte-addressed data remains in data SRAM even when the
 selected layout is RAM. CALL0 objects are not
 compatible peers merely because their scalar layouts match.
+
+Before an Xtensa pre-reset device stage, architectural entry establishes
+WINDOWBASE/WINDOWSTART, VECBASE and the declared internal DRAM stack with
+its ABI spill backchain, with ordinary interrupts masked and window
+exceptions enabled. The stage may use that stack for windowed ROM calls;
+static data and BSS remain uninitialized, and the naked stage form does
+not admit ordinary Landin calls. Compiler reset repeats architectural
+initialization after the stage. Other families retain their stack-free
+pre-reset stage contracts.
+
+A naked Xtensa assembly block admits at most 32768 decoded ASCII bytes,
+enough for a self-contained stage that compares its pinned ROM routines'
+instructions and literals before calling them. Ordinary blocks and all
+other target families retain the 4096-byte bound. The larger text allowance
+admits no directives, data emission or additional description declarations.
 
 The default and explicit baseline levels select the ESP32 configuration;
 S3 selects its own. `salt` is the exposed distinguishing fixed feature.
