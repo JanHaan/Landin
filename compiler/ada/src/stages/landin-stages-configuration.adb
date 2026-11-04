@@ -1575,9 +1575,10 @@ package body Landin.Stages.Configuration is
       end Find_Boot_Stages;
 
       --  D653: a stage the reset vector enters before compiler-owned
-      --  reset runs on the stack pointer the core loaded and may not use
-      --  the stack, and it ends by branching to the compiler's reset, which
-      --  it names.  Its text is read only when it has the shape [1570]
+      --  reset may not use the stack on Arm or RV32. Xtensa's architectural
+      --  prelude establishes its stack and windows before entering the
+      --  stage. Each ends by branching to the compiler's reset, which it
+      --  names. Its text is read only when it has the shape [1570]
       --  requires, one assembler.block of a literal, which checking holds.
       function Reset_Stage_Holds return Boolean;
       function Reset_Stage_Holds return Boolean is
@@ -1645,8 +1646,7 @@ package body Landin.Stages.Configuration is
                         end loop;
                         if Word = Firmware.Reset_Symbol then
                            Names_Reset := True;
-                        elsif (if Xtensa then Lower in "a1" | "sp"
-                               elsif RV32
+                        elsif not Xtensa and then (if RV32
                                then Lower in "sp" | "x2" | "lwsp" | "swsp"
                                  | "addi16sp" | "addi4spn"
                                else Lower in "push" | "pop" | "sp" | "r13"
@@ -1668,11 +1668,7 @@ package body Landin.Stages.Configuration is
                  (Bad.Reset_Stage_Stack, Stage_Site,
                   "this stage runs before reset and uses the stack, through "
                   & Ada.Strings.Unbounded.To_String (Stack_Word),
-                  (if Xtensa then
-                     "the ESP image's entry enters the stage before reset"
-                     & " has initialized the stack; keep what it needs in"
-                     & " registers"
-                   elsif RV32
+                  (if RV32
                    then "D653, D684: the entry word enters the stage before"
                      & " any memory may be written, before reset has set"
                      & " the stack pointer; keep what it needs in registers"

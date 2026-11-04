@@ -7072,8 +7072,159 @@ package body Landin.Tests.Driver_Suite is
          & " handlers");
    end Xtensa_Profile_Contracts;
 
+   procedure Xtensa_Stage_Architecture
+     (Item : in out Landin.Testing.Context);
+
+   procedure Xtensa_Stage_Architecture
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Level (Core, Level, IRAM, DRAM : String);
+
+      procedure Check_Level (Core, Level, IRAM, DRAM : String) is
+         function Compiled
+           (Stage : String; Text : out Unbounded.Unbounded_String)
+            return Landin.Driver.Outcome;
+
+         function Compiled
+           (Stage : String; Text : out Unbounded.Unbounded_String)
+            return Landin.Driver.Outcome
+         is
+            Host : Landin.Testing.Fakes.Fake_Filesystem;
+            Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+            Result : Landin.Driver.Outcome;
+         begin
+            Host.Add_Firmware_Library;
+            Host.Add_Directory ("/w");
+            Host.Add_Directory ("/w/app");
+            Host.Add_Directory ("/w/descriptions");
+            Host.Add_Directory ("/w/descriptions/dev");
+            Host.Add_File ("/w/app/main.ldn",
+              "import descriptions/dev" & LF
+              & "start: () -> none = end start" & LF);
+            Host.Add_File ("/w/descriptions/dev/dev.ldn",
+              "compiler.device(""dev"")" & LF
+              & "compiler.core(""" & Core & """)" & LF
+              & "compiler.vectors(32)" & LF
+              & "compiler.boot(""esp-app-image"")" & LF
+              & "compiler.esp_image(0, 0, 299, 0)" & LF
+              & "linker.region(""IRAM"", " & IRAM
+              & ", 32 * 1024, ""rx"")" & LF
+              & "linker.region(""DRAM"", " & DRAM
+              & ", 16 * 1024, ""rw"")" & LF
+              & "linker.place(""vectors"", ""IRAM"")" & LF
+              & "linker.place(""text"", ""IRAM"")" & LF
+              & "linker.place(""rodata"", ""DRAM"")" & LF
+              & "linker.place(""data"", ""DRAM"")" & LF
+              & "linker.place(""bss"", ""DRAM"")" & LF
+              & "linker.place(""stack"", ""DRAM"", 4096)" & LF
+              & (if Stage = "" then "" else
+                "link(boot_stage) extern(naked) feed: () -> none =" & LF
+                & "    assembler.block(""" & Stage & """)" & LF
+                & "end feed" & LF));
+            Result := Landin.Driver.Execute
+              (["--root=/w", "--target=xtensa", "--level=" & Level,
+                "--firmware-entry=start", "--emit=asm", "-o", "/w/out.s",
+                "/w/app"], Host, Tools);
+            Text := Unbounded.Null_Unbounded_String;
+            if Host.Exists ("/w/out.s") then
+               Text := Unbounded.To_Unbounded_String
+                 (Host.Written ("/w/out.s"));
+            end if;
+            return Result;
+         end Compiled;
+
+         Text : Unbounded.Unbounded_String;
+         Stage : constant String :=
+           "movi a8, 0x400016f8\ncallx8 a8\ns32i a2, a1, 0\n"
+           & "j _landin_firmware_reset";
+         Result : Landin.Driver.Outcome := Compiled (Stage, Text);
+      begin
+         Landin.Testing.Check
+           (Item, Result.Status = Landin.Driver.Status_Success,
+            Level & " admits stack and windowed ROM calls in a naked stage: "
+            & Unbounded.To_String (Result.Report));
+         declare
+            Assembly : constant String := Unbounded.To_String (Text);
+            Entry_At : constant Natural := Ada.Strings.Fixed.Index
+              (Assembly, "_landin_firmware_entry:" & LF);
+            Jump_At : constant Natural := Ada.Strings.Fixed.Index
+              (Assembly, "j _landin_firmware_reset_stage" & LF);
+            Reset_At : constant Natural := Ada.Strings.Fixed.Index
+              (Assembly, "_landin_firmware_reset:" & LF);
+         begin
+            Landin.Testing.Check
+              (Item, Entry_At > 0 and then Jump_At > Entry_At
+               and then Reset_At > Jump_At,
+               "stage entry follows a prelude and precedes normal reset");
+            if Entry_At > 0 and then Jump_At > Entry_At then
+               declare
+                  Prelude : constant String :=
+                    Assembly (Entry_At .. Jump_At - 1);
+               begin
+                  Landin.Testing.Check
+                    (Item, Contains (Prelude, "movi a0, 0x3f" & LF
+                       & "wsr a0, PS" & LF & "rsync")
+                     and then Contains (Prelude, "wsr a0, WINDOWBASE")
+                     and then Contains (Prelude, "wsr a0, WINDOWSTART")
+                     and then Contains (Prelude, "wsr a0, INTENABLE")
+                     and then Contains (Prelude, "wsr a0, LCOUNT")
+                     and then Contains (Prelude, "wsr a2, VECBASE")
+                     and then Contains (Prelude,
+                       "movi a1, _landin_firmware_stack_top" & LF
+                       & "addi a1, a1, -32" & LF
+                       & "movi a2, _landin_firmware_stack_top" & LF
+                       & "s32e a2, a1, -12")
+                     and then Contains (Prelude, "movi a2, 0x4002f" & LF
+                       & "wsr a2, PS" & LF & "rsync")
+                     and then not Contains (Prelude, "_bss_")
+                     and then not Contains (Prelude, "_data_"),
+                     "the stage has masked IRQs, windows, vectors and ABI"
+                     & " stack before any static initialization");
+               end;
+            end if;
+            Landin.Testing.Check
+              (Item, Contains (Assembly, "_landin_firmware_reset:" & LF
+                 & "movi a0, 0x3f")
+               and then Contains (Assembly,
+                 "movi a3, _landin_firmware_bss_start"),
+               "normal reset retains initialization after stage calls");
+         end;
+         Result := Compiled ("", Text);
+         Landin.Testing.Check
+           (Item, Result.Status = Landin.Driver.Status_Success
+            and then Contains (Unbounded.To_String (Text),
+              "_landin_firmware_entry:" & LF & "j _landin_firmware_reset"
+              & LF)
+            and then not Contains (Unbounded.To_String (Text),
+                                  "j _landin_firmware_reset_stage"),
+            "without a stage the existing direct reset entry is retained");
+         Result := Compiled ("movi a1, 0\nj feed", Text);
+         Landin.Testing.Check
+           (Item, Result.Status = Landin.Driver.Status_Reported
+            and then Contains (Unbounded.To_String (Result.Report),
+                               "error[L0560]")
+            and then Unbounded.Length (Text) = 0,
+            "stack availability still requires a stage to enter reset");
+         Result := Compiled
+           ("movi a1, 0 # j _landin_firmware_reset\nj feed", Text);
+         Landin.Testing.Check
+           (Item, Result.Status = Landin.Driver.Status_Reported
+            and then Contains (Unbounded.To_String (Result.Report),
+                               "error[L0560]"),
+            "a reset symbol in an Xtensa comment is still insufficient");
+      end Check_Level;
+   begin
+      Check_Level ("xtensa-lx6", "xtensa-esp32",
+                   "0x4008_0000", "0x3ffb_0000");
+      Check_Level ("xtensa-lx7", "xtensa-esp32s3",
+                   "0x4037_8000", "0x3fca_8000");
+   end Xtensa_Stage_Architecture;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "driver", "Xtensa stages have an architectural prelude",
+         Xtensa_Stage_Architecture'Access);
       Landin.Testing.Register
         (Into, "driver", "Xtensa profile contracts",
          Xtensa_Profile_Contracts'Access);
