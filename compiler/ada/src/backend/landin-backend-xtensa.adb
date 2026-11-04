@@ -1931,7 +1931,11 @@ package body Landin.Backend.Xtensa is
                     (Bytes, Place.Stack_At + (if Place.Pair then 8 else 4));
                end if;
             end loop;
-            return Stack_Align (Bytes, 16, 16#7fff_ffff#);
+            --  The current window's base save area may already hold
+            --  spilled ancestor registers. Keep outgoing arguments below
+            --  that 32-byte area when moving SP.
+            return (if Bytes = 0 then 0 else
+              Stack_Align (Bytes, 16, 16#7fff_ffff#) + 32);
          end Carrier_Bytes;
 
          function Argument_Register (Ordinal : Positive) return String
