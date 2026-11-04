@@ -1,0 +1,162 @@
+{
+  "status": "passed",
+  "image_sha256": "bfea8caf886c1e0bfc524a57648ea1567cc179e608fcb1efe807e4b0fe40d134",
+  "image_name": "board.elf",
+  "amoadd": [
+    {
+      "address": "20002478",
+      "function": "add_u32"
+    }
+  ],
+  "verdicts": {
+    "boot": {
+      "chip_reset": 65536,
+      "marchid": 27,
+      "mtvec": 536871425,
+      "clk_ref_selected": 4
+    },
+    "shared": {
+      "input": "1A0",
+      "echo": "1A0",
+      "indicator_after_1": 8,
+      "indicator_after_0": 0
+    },
+    "irq14": {
+      "entries": 1,
+      "mcause": 2147483659
+    },
+    "overrun": {
+      "burst": 300,
+      "recoveries": 1
+    },
+    "epochs": {
+      "flagged_burst": 100,
+      "held_by_fifo": 32,
+      "restarts": 3,
+      "dma_completions": 2,
+      "timer_events": 1601,
+      "echoed": 11202,
+      "sent": 11572
+    },
+    "amoadd": {
+      "frames": 7,
+      "results": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ]
+    }
+  },
+  "swd": {
+    "handled": 11202,
+    "recoveries": 3,
+    "dma_events": 2,
+    "usb_events": 1,
+    "reports": 7,
+    "trans_count": 1094
+  },
+  "uart_sha256": "325dda3946295b0cc424b2dbc8a4dc4a49d37a46b6ba74e18681ddec6041fba0",
+  "mode": "ram",
+  "warm_load": {
+    "board": "rp2350_hazard3",
+    "cleanup": {
+      "contract": "warm-board-v1",
+      "hazard3_irq_state_reset": true,
+      "instruction_visibility": "debug-resume-flush-and-startup-fences",
+      "memory_access": "core0-program-buffer",
+      "other_core": {
+        "dmstatus": 4195234,
+        "halted": true,
+        "hart": 1,
+        "method": "debug-halt",
+        "rom_reset": false
+      },
+      "other_core_parked": true,
+      "peripheral_sources_stopped": true,
+      "prior_state": {
+        "abstractcs": 33554433,
+        "archsel_status": 3,
+        "dmcontrol": 1,
+        "dmstatus": 4391842,
+        "mhartid": 0,
+        "psm_done": 33554431,
+        "psm_frce_off": 0,
+        "sbcs": 536871943,
+        "sio_cpuid": 0
+      },
+      "rom_reset": false,
+      "timer0_debug_pause": 2
+    },
+    "elf_sha256": "bfea8caf886c1e0bfc524a57648ea1567cc179e608fcb1efe807e4b0fe40d134",
+    "entry": 536870912,
+    "flash_written": false,
+    "format_version": 1,
+    "helper_source_sha256": "2a7158bc779e92db4cac4fb5ac559fc5c857661ad7d85dec9f37e1ff5eb7c7ba",
+    "mode": "warm",
+    "previous_pc": 536880478,
+    "segments": [
+      {
+        "address": 536870912,
+        "bytes": 784,
+        "sha256": "8dbf71c85e364394409677960da2c4e6039d6532647a5079f8a0e475c184e797"
+      },
+      {
+        "address": 536871696,
+        "bytes": 32012,
+        "sha256": "fc1d9638f4606b02ef1986abd595bbd321cc2943dc32e2f63a919677cd288aae"
+      },
+      {
+        "address": 536903712,
+        "bytes": 24,
+        "sha256": "0baeda3ef5f538e158d6ac7360696feeb17ae6c79c7051b93d129730e8a806e2"
+      }
+    ],
+    "stack": 537403392,
+    "status": "passed",
+    "vector": 536871424
+  },
+  "seconds": 15.898,
+  "kernel_usb": {
+    "since": 1793787096.4691055,
+    "until": 1793787112.3477058,
+    "lines": [],
+    "status": "captured"
+  },
+  "sent_sha256": "013836d186be194e72508c44e565d32a731b45fbba675df779428f330a7c8fe9",
+  "frames": [
+    {
+      "tag": "b",
+      "r": "00010000",
+      "v": "20000201",
+      "a": "0000001b",
+      "k": "00000004"
+    },
+    {
+      "tag": "t",
+      "h": "00002bc2",
+      "c": "00000003",
+      "d": "00000002",
+      "m": "00000641",
+      "u": "00000001",
+      "p": "8000000b",
+      "n": "00000446",
+      "e": "00000bba",
+      "g": "00000000",
+      "s": "00000002",
+      "q": "00000006"
+    }
+  ],
+  "commands": [
+    "ram-load",
+    "swd-handled",
+    "swd-recoveries",
+    "swd-dma_events",
+    "swd-usb_events",
+    "swd-reports",
+    "swd-trans-count"
+  ]
+}

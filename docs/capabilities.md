@@ -67,7 +67,8 @@ entry that describes it, and put a new one where a reader would look for it.
   passed cold-boot and repeated RAM records. Its boot check uses manual
   UF2 installation and Pico-only power cycles off the cascade, verifies
   the exact power-on reset cause, and restores the quiet fixed image.
-  A malformed-block boot control requires separate off-cascade recovery.
+  Malformed-block controls remain disabled pending separate off-cascade
+  recovery.
   The derived linker script is written as `OUT.ld`, or alone with its
   limits by `--emit=linker-script` (D589), a developer's own is linked with
   `--linker-script=FILE` and held to a contract (D546), and
@@ -115,13 +116,14 @@ entry that describes it, and put a new one where a reader would look for it.
   `rv32imac`, takes its interrupts through Xh3irq and counts its telemetry
   with an `amoadd.w` (D710), and is checked by an oracle of its own,
   [`board.py`](../environments/boards/rp2350_hazard3/README.md) (D711-D713).
-  Its recorded run on a Pico 2 boots from power-on into the cores' RISC-V
-  mode, takes TIMER0's, DMA's and a forced USBCTRL interrupt through the
-  meinext dispatch, numbers its seven telemetry frames by the results of
-  its `amoadd.w`, and echoes 11,202 bytes in order with the counters read
-  over SWD equal to the trace's; its negative control, a corrupted block,
-  is not run on the maintainer's rig. The ESP32-C3's and ESP32-C5's ports
-  of the same application receive UART0 by interrupt through each chip's
+  Its cold-boot record enters the cores' RISC-V mode from power-on; its
+  repeated RAM records load and resume SRAM without flash programming or
+  a ROM reset. Both modes take TIMER0's, DMA's and a forced USBCTRL
+  interrupt through the meinext dispatch, number all seven telemetry
+  frames with `amoadd.w`, and echo 11,202 bytes in order with the counters read
+  over SWD equal to the trace's. Its malformed-block control remains
+  disabled pending separate off-cascade recovery. The ESP32-C3's and
+  ESP32-C5's ports of the same application receive UART0 by interrupt through each chip's
   interrupt matrix, a vectored line on the C3 and a CLIC identity on the
   C5, hold it off by threshold while a 1 ms timer keeps interrupting, and
   run the level's atomics, stores and loads at `rv32imc` and an AMO and
