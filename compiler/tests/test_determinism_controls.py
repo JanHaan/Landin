@@ -230,12 +230,15 @@ class PlumbingControls(unittest.TestCase):
 class ContractControls(unittest.TestCase):
     def test_every_target_declares_a_debug_flag(self):
         self.assertEqual(set(CHECK.DEBUG_FLAG), set(CHECK.TARGETS))
-        self.assertEqual(CHECK.DEBUG_FLAG["cortex-m0"], "lines")
+        for target in ("cortex-m0", "rv32", "xtensa"):
+            with self.subTest(target=target):
+                self.assertEqual(CHECK.DEBUG_FLAG[target], "lines")
 
     def test_the_contract_covers_every_target(self):
         self.assertEqual(CHECK.TARGETS,
                          ("linux-x86-64", "linux-arm64", "darwin-arm64",
-                          "cortex-m0", "freebsd-x86-64", "freebsd-arm64", "linux-rv64"))
+                          "cortex-m0", "freebsd-x86-64", "freebsd-arm64",
+                          "linux-rv64", "rv32", "xtensa"))
 
     def test_the_corpus_is_shared_by_every_target(self):
         fixtures = CHECK.repository_root() / "compiler/tests/fixtures/runtime"
