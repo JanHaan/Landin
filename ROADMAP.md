@@ -1683,6 +1683,30 @@ SR-757's identity. Other sessions' worktrees and rig resources remain theirs.
    and Espressif's
    [ESP32 stall primitive](https://github.com/espressif/esp-idf/blob/fff9895c82d744c7237be8847347bdd1b07c6643/components/hal/esp32/include/hal/cpu_utility_ll.h)
    and [S3 stall primitive](https://github.com/espressif/esp-idf/blob/fff9895c82d744c7237be8847347bdd1b07c6643/components/hal/esp32s3/include/hal/cpu_utility_ll.h).
+   **Cold-contract revision before building the revised S3 images:** the
+   first physical ROM boot left S3's data cache enabled; the original
+   cache-off precondition parked before startup and cannot establish the
+   RAM baseline on that board. Recommend normalizing caches only on the
+   direct ROM-entry path after power-on/CHIP_PU reset cause one. Retire
+   watchdogs and stall CPU1, establish compiler-owned windows, masked
+   interrupts, VECBASE and a DRAM stack, then call the vendor's windowed
+   ROM writeback and disable APIs and verify both enable bits clear before
+   ordinary compiler reset. The cache-off path makes no ROM calls; RAM
+   loading still refuses enabled caches before writes. A sticky reset cause
+   is only a precondition, not proof of caller provenance: arbitrary jumps
+   from another application are outside the cold contract. Preserve dirty
+   data through the ROM writeback path rather than clearing enable bits.
+   Primary evidence: the pinned
+   [S3 cache API](https://github.com/espressif/esp-idf/blob/fff9895c82d744c7237be8847347bdd1b07c6643/components/esp_rom/esp32s3/include/esp32s3/rom/cache.h),
+   [cache HAL primitives](https://github.com/espressif/esp-idf/blob/fff9895c82d744c7237be8847347bdd1b07c6643/components/hal/esp32s3/include/hal/cache_ll.h)
+   and [ROM symbols](https://github.com/espressif/esp-idf/blob/fff9895c82d744c7237be8847347bdd1b07c6643/components/esp_rom/esp32s3/ld/esp32s3.rom.ld),
+   plus disassembly of the ROM shipped with the locked QEMU. Its API
+   veneers lead to windowed implementations that wait for autoload and
+   idle state; their dispatch table lies above this profile's DRAM end.
+   Boot observations receive an explicit scope that reports actual CPU1
+   state before that state can be required. Warm independent readbacks
+   retain their mandatory hardware-stall check.
+
    The helper's present Arm/RISC-V split needs a real Xtensa path; it must
    not apply RISC-V registers, fences or interrupt oracles to these ports.
 
