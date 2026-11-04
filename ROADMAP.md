@@ -1719,6 +1719,14 @@ SR-757's identity. Other sessions' worktrees and rig resources remain theirs.
    idea of hiding unvalidated stack initialization inside a device stage;
    the architectural guarantee belongs to the compiler and its tests.
 
+   The source's full ROM instruction/constant fingerprint needs about
+   twenty KiB of assembly text. Admit up to 32768 decoded ASCII bytes in a
+   naked Xtensa block, keeping the 4096-byte ceiling for ordinary blocks
+   and every other architecture. The existing instruction-only, single
+   literal and naked-body restrictions remain. This finite ceiling lets
+   the description retain one self-contained stage without helper
+   declarations or a data table that its early entry cannot assume ready.
+
    The helper's present Arm/RISC-V split needs a real Xtensa path; it must
    not apply RISC-V registers, fences or interrupt oracles to these ports.
 
@@ -1773,8 +1781,9 @@ to both emulator recipes; SR-709 through the fakes' public declaration;
 SR-719 by removing the duplicated atom list; SR-723 by passing hosted
 runtime link policy in mode comparisons; SR-724 by checking every expanded
 required matrix leg, including called workflows; SR-725 by listing each
-target's debug mode; and SR-757 through SR-760 through help, importer and
-installer controls. Their rows stay in the register until closure evidence
+target's debug mode; SR-757 through SR-760 through help, importer and
+installer controls; SR-761 through distinct command logs; and SR-762 through
+explicit boot observations. Their rows stay in the register until closure evidence
 is complete. New findings are SR-758 through SR-762; SR-757 retains the
 identity of the carried local finding.
 
