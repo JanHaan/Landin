@@ -919,9 +919,10 @@ def stlink(serial, vid_pid='0483:374e'):
 
 class Probe:
     """probe-rs for one CHIP through one PROBE, as probe-rs's --probe names it."""
-    def __init__(self, run, probe_rs, chip, probe, ram_loader=None):
+    def __init__(self, run, probe_rs, chip, probe, ram_loader=None, *, require_hart1_halted=False):
         self.run, self.probe_rs, self.chip, self.probe = run, probe_rs, chip, probe
         self.ram_loader = ram_loader
+        self.require_hart1_halted = require_hart1_halted
 
     def argv(self, *rest):
         pace = getattr(self.run, 'pace', None)
@@ -939,8 +940,11 @@ class Probe:
             require(self.ram_loader, 'RP readback needs --ram-loader')
             plan, output = self.run.out / (name + '-plan.json'), self.run.out / (name + '.json')
             board = boards[self.chip]
-            write_json(plan, dict(format_version=1, board=board, mode='read',
-                                 probe=self.probe, address=address, count=count))
+            request = dict(format_version=1, board=board, mode='read',
+                           probe=self.probe, address=address, count=count)
+            if board == 'rp2350_hazard3' and self.require_hart1_halted:
+                request['require_hart1_halted'] = True
+            write_json(plan, request)
             pace = getattr(self.run, 'pace', None)
             if pace:
                 pace.before('probe read')
@@ -955,6 +959,9 @@ class Probe:
                     and isinstance(words, list) and len(words) == count
                     and all(type(word) is int and 0 <= word <= 0xffffffff for word in words),
                     'single-core readback returned invalid or mismatched evidence')
+            if self.require_hart1_halted:
+                require(report.get('hart1_halted') is True,
+                        'single-core readback did not prove hart 1 remains halted')
             if pace:
                 pace.before('probe read completion')
             return words

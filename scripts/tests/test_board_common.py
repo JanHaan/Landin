@@ -373,6 +373,7 @@ class Probes(unittest.TestCase):
                 plan = json.loads((out / 'cells-plan.json').read_text())
                 self.assertEqual(plan['mode'], 'read')
                 self.assertEqual(plan['board'], 'rp2350')
+                self.assertNotIn('require_hart1_halted', plan)
                 (out / 'cells.json').write_text(json.dumps(report))
             run.command.side_effect = command
             probe = COMMON.Probe(run, 'probe-rs', 'RP235x', 'P', ram_loader='loader')
@@ -390,6 +391,45 @@ class Probes(unittest.TestCase):
                 report[field] = original
             with self.assertRaisesRegex(COMMON.Failed, '--ram-loader'):
                 COMMON.Probe(run, 'probe-rs', 'RP235x', 'P').read_words('cells', 0x20000000, 2)
+
+    def test_hazard3_ram_readback_requires_explicit_halted_hart_evidence(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            report = dict(format_version=1, status='passed', mode='read', board='rp2350_hazard3',
+                          address=0x20000000, count=1, words=[42], flash_written=False,
+                          helper_source_sha256=COMMON.helper_source_hash(), hart1_halted=True)
+            run = mock.Mock(out=out, pace=None)
+            def command(name, argv, **kwargs):
+                request = json.loads((out / 'cells-plan.json').read_text())
+                self.assertIs(request['require_hart1_halted'], True)
+                self.assertEqual(request['board'], 'rp2350_hazard3')
+                (out / 'cells.json').write_text(json.dumps(report))
+            run.command.side_effect = command
+            probe = COMMON.Probe(run, 'probe-rs', 'RP235x_riscv', 'P', ram_loader='loader',
+                                 require_hart1_halted=True)
+            self.assertEqual(probe.read_words('cells', 0x20000000, 1), [42])
+            for value in (False, None, 0, 1, 'true', [], {}):
+                with self.subTest(evidence=value):
+                    report['hart1_halted'] = value
+                    with self.assertRaisesRegex(COMMON.Failed, 'hart 1 remains halted'):
+                        probe.read_words('cells', 0x20000000, 1)
+            del report['hart1_halted']
+            with self.assertRaisesRegex(COMMON.Failed, 'hart 1 remains halted'):
+                probe.read_words('cells', 0x20000000, 1)
+
+    def test_hazard3_boot_readback_does_not_require_hart_halt(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            run = mock.Mock(out=out, pace=None)
+            def command(name, argv, **kwargs):
+                request = json.loads((out / 'cells-plan.json').read_text())
+                self.assertNotIn('require_hart1_halted', request)
+                report = dict(request, status='passed', words=[42], flash_written=False,
+                              helper_source_sha256=COMMON.helper_source_hash(), hart1_halted=False)
+                (out / 'cells.json').write_text(json.dumps(report))
+            run.command.side_effect = command
+            probe = COMMON.Probe(run, 'probe-rs', 'RP235x_riscv', 'P', ram_loader='loader')
+            self.assertEqual(probe.read_words('cells', 0x20000000, 1), [42])
 
     def test_selectors_name_a_slot_or_an_st_link(self):
         self.assertEqual(COMMON.udp_slot('10.42.0.50'), '0000:0002:10.42.0.50/0')
