@@ -124,6 +124,18 @@ Before an item closes:
    and list their identities among the records that have left the
    register, as `ROADMAP.md`'s mechanics ask.
 
+   Update the pointer in `README.md` and `handoff.md` too. Substitute the
+   item identity and title in these exact forms. Use the current form for
+   active work, the next form for the first dependency-ready planned item
+   when no item is active, and the endpoint form only when all roadmap
+   work is complete:
+
+   ```text
+   **Current roadmap work: ITEM — TITLE.**
+   **Next roadmap item: ITEM — TITLE (planned).**
+   **Roadmap endpoint: ITEM — TITLE (complete).**
+   ```
+
 An item worked in parallel streams merges each stream's branch with git.
 When a stream's work is passed as a patch instead, make it with
 `git add -N . && git diff HEAD --binary`: `git diff --binary` alone compares
