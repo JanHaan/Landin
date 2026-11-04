@@ -1517,9 +1517,24 @@ cascade. The maintainer selected an architecture change as an explicit
 off-cascade setup/boot operation: install and verify the intended port's
 fixed image, then keep repeated development runs RAM-only on that
 architecture. The two ports do not promise a ROM-free architecture switch
-from one resident image. Physical proof of that setup remains pending;
-on 2026-11-04 the maintainer confirmed the Pico 2 is not yet recovered.
+from one resident image. The Pico 2 was recovered on 2026-11-04 by UF2
+with the cascade unplugged, directly on rigpi at USB path `1-1.2`.
+The copy and device disconnect took 0.946 seconds; the complete copy phase
+took 1.305 seconds. Read-only single-core verification found the resident
+marker `0x4c465831` at `0x20000000` in 2.457 seconds, and all 464 fixed
+flash bytes matched in 0.264 seconds. No kernel USB error occurred;
+`environments/boards/rp2350/recovery-record.json` retains that evidence.
+This is fixed-image recovery, not a port's complete boot oracle.
 No warm run silently substitutes a reset through the ROM.
+
+The Pi's built-in hub reports ganged power switching and also carries the
+Arty, so no recovery or boot action switches it. The maintainer has no
+spare switching hub. Proposed next: off-cascade UF2 copies for each boot
+image and its fixed restoration, with manual Pico-only cold power cycles
+and the existing exact power-on oracle; never use probe-rs's flash/reset
+path for this manual setup. The RAM-only BOOTSEL guard also needs a
+read-only sysfs path: an ordinary `uhubctl` listing of the Pi hub requires
+extra access despite RAM mode switching no power (SR-750).
 
 `environments/boards/build.py` builds every boot/RAM port without rig,
 USB or SSH access and compares each artifact with its separate hardware
@@ -1545,8 +1560,8 @@ RP2040 ordinary traffic now waits for each piece's echo: its first boot
 attempt lost ordinary input before the intended DMA-exhaustion check.
 The deliberate ring and FIFO bursts, exact loss and DMA completion checks
 are unchanged. Neither initial failure met USB trouble, and the RP2040
-failure restored its fixed image. Pico 2 evidence remains pending
-off-cascade recovery and setup.
+failure restored its fixed image. Pico 2 recovery is verified; both ports'
+complete boot and repeated RAM evidence remain pending off-cascade setup.
 
 Independent review found that a custom script could exclude an allocated
 NOLOAD section from every load segment and escape the SRAM contract;
@@ -3807,6 +3822,7 @@ SR-489, SR-499, SR-511, SR-517.
 | SR-747 | Usability | Reviewing the RAM image contract found that it checked load segments but not every allocated section. A developer linker script could put BSS in flash with NOLOAD and exclude it from all program headers, bypassing the SRAM bounds check while compiler startup still cleared it. Both board-side validators had the same segment-only gap. Met reviewing R12.45 before candidate readiness. | R12.45's RAM image validation. | Allocated sections and startup ranges must be in SRAM and outside the reserved stack; initialized sections must be covered by matching load bytes, with custom-script and offline negative controls. | retired: the compiler and both validators check allocated sections, load mapping and BSS ranges; focused compiler/Python/Rust controls, four real linker controls, all six real RAM images and the four connected boards pass |
 | SR-748 | Usability | The first C3 RAM loader failure was followed by reads of the new application's trap cells although the loader had not confirmed starting it. The result presented uninitialized SRAM values as a trap, obscuring the actual debug-command failure. Met reviewing R12.45's retained failure evidence. | R12.45's ESP failure reporting. | A failed RAM load must not read application trap cells until the loader confirms starting that image; later application failures retain their trap evidence and USB stops permit no extra reads. | retired: a missing successful warm-load result records an explicit skipped diagnostic without probe reads; post-entry failures retain trap cells, with focused controls for both paths and USB stops |
 | SR-749 | Usability | Focused native Mac board controls failed three path assertions because Darwin resolves temporary paths through /private/var, reached Linux /proc from lock-policy tests, and hung in a PTY drain because the peer read was ordered after the blocking send. Finding the hang required a retained process sample and interruption; the controls had passed on Linux. Met validating R12.45 on the available Mac. | R12.45's board-tool controls. | Canonical path comparisons, deterministic process-discovery fixtures, and a concurrent PTY peer, with complete selected board controls on Linux and Darwin and no weaker production lock or tty semantics. | retired: symlink-root controls pass on both hosts; portable lock policy uses synthetic kernel records with real flock, the PTY retains real drain with concurrent consumption, and Linux keeps live discovery coverage; all 240 controls pass on Linux and 238 pass on Darwin with only the two live Linux checks explicitly skipped |
+| SR-750 | Usability | Preparing the recovered Pico 2's first direct-Pi RAM run, an ordinary read-only uhubctl listing failed USB permissions. Reading the RAM path showed that its BOOTSEL refusal still requires that listing although it never switches power. Root-only inspection also confirmed the Pi hub has ganged power and carries the Arty, so it cannot supply the separate boot check's port switching. The maintainer has no spare switching hub. | R12.45's off-cascade Pico 2 setup. | A fail-closed read-only USB identity guard for RAM entry, and a documented off-cascade boot path with exact power-on evidence that never switches the Arty or attaches in BOOTSEL. | open |
 
 ## Retained positions
 

@@ -1,0 +1,609 @@
+{
+  "format_version": 1,
+  "operation": "off-cascade Pico 2 fixed-image recovery",
+  "status": "passed",
+  "architecture": "Arm Secure",
+  "usb_location_during_bootsel": "1-1.2",
+  "cascade_connected": false,
+  "arty_usb_location": "1-1.1",
+  "identification": {
+    "status": "identified",
+    "started": 1793778495.7364292,
+    "usb_location": "1-1.2",
+    "device": "/dev/sda1",
+    "uf2_sha256": "d9862be2dc5d354d8333f15081032c68f57ba086d2d3c367767e5c421e91bd88",
+    "serial": "5ED092AAACF4A000",
+    "info": "UF2 Bootloader v1.0\nModel: Raspberry Pi RP2350\nBoard-ID: RP2350\n",
+    "commands": [
+      {
+        "name": "mkdir-mount",
+        "argv": [
+          "sudo",
+          "mkdir",
+          "-p",
+          "/run/landin-pico2-recovery"
+        ],
+        "status": 0,
+        "seconds": 0.089
+      },
+      {
+        "name": "mount-readonly",
+        "argv": [
+          "sudo",
+          "mount",
+          "-t",
+          "vfat",
+          "-o",
+          "ro",
+          "/dev/sda1",
+          "/run/landin-pico2-recovery"
+        ],
+        "status": 0,
+        "seconds": 0.171
+      }
+    ],
+    "kernel_usb": {
+      "since": 1793778269.1707182,
+      "until": 1793778496.0341735,
+      "lines": [
+        {
+          "time": 1793778369.288897,
+          "text": "rigpi kernel: usb 2-2: USB disconnect, device number 2"
+        },
+        {
+          "time": 1793778369.293284,
+          "text": "rigpi kernel: usb 2-2.3: USB disconnect, device number 3"
+        },
+        {
+          "time": 1793778369.2969,
+          "text": "rigpi kernel: usb 2-2.3.3: USB disconnect, device number 5"
+        },
+        {
+          "time": 1793778369.297713,
+          "text": "rigpi kernel: usb 2-2.3.4: USB disconnect, device number 6"
+        },
+        {
+          "time": 1793778369.300686,
+          "text": "rigpi kernel: usb 2-2.4: USB disconnect, device number 4"
+        },
+        {
+          "time": 1793778371.688072,
+          "text": "rigpi kernel: usb 1-1.2: USB disconnect, device number 4"
+        },
+        {
+          "time": 1793778371.692072,
+          "text": "rigpi kernel: usb 1-1.2.3: USB disconnect, device number 5"
+        },
+        {
+          "time": 1793778371.695864,
+          "text": "rigpi kernel: usb 1-1.2.3.1: USB disconnect, device number 7"
+        },
+        {
+          "time": 1793778371.696702,
+          "text": "rigpi kernel: usb 1-1.2.3.2: USB disconnect, device number 19"
+        },
+        {
+          "time": 1793778371.776668,
+          "text": "rigpi kernel: usb 1-1.2.3.3: USB disconnect, device number 10"
+        },
+        {
+          "time": 1793778371.780271,
+          "text": "rigpi kernel: usb 1-1.2.3.4: USB disconnect, device number 12"
+        },
+        {
+          "time": 1793778371.782067,
+          "text": "rigpi kernel: usb 1-1.2.3.4.1: USB disconnect, device number 14"
+        },
+        {
+          "time": 1793778371.782621,
+          "text": "rigpi kernel: usb 1-1.2.3.4.2: USB disconnect, device number 27"
+        },
+        {
+          "time": 1793778371.783187,
+          "text": "rigpi kernel: usb 1-1.2.3.4.3: USB disconnect, device number 25"
+        },
+        {
+          "time": 1793778371.784979,
+          "text": "rigpi kernel: usb 1-1.2.3.4.4: USB disconnect, device number 17"
+        },
+        {
+          "time": 1793778371.789963,
+          "text": "rigpi kernel: usb 1-1.2.4: USB disconnect, device number 6"
+        },
+        {
+          "time": 1793778371.791838,
+          "text": "rigpi kernel: usb 1-1.2.4.2: USB disconnect, device number 9"
+        },
+        {
+          "time": 1793778371.794911,
+          "text": "rigpi kernel: usb 1-1.2.4.3: USB disconnect, device number 23"
+        },
+        {
+          "time": 1793778371.797643,
+          "text": "rigpi kernel: usb 1-1.2.4.4: USB disconnect, device number 13"
+        },
+        {
+          "time": 1793778384.948939,
+          "text": "rigpi kernel: usb 1-1.2: new full-speed USB device number 28 using xhci_hcd"
+        },
+        {
+          "time": 1793778385.047107,
+          "text": "rigpi kernel: usb-storage 1-1.2:1.0: USB Mass Storage device detected"
+        },
+        {
+          "time": 1793778385.050421,
+          "text": "rigpi kernel: scsi host0: usb-storage 1-1.2:1.0"
+        },
+        {
+          "time": 1793778390.636748,
+          "text": "rigpi kernel: usb 1-1.2: USB disconnect, device number 28"
+        },
+        {
+          "time": 1793778396.724711,
+          "text": "rigpi kernel: usb 1-1.2: new full-speed USB device number 29 using xhci_hcd"
+        },
+        {
+          "time": 1793778396.823134,
+          "text": "rigpi kernel: usb-storage 1-1.2:1.0: USB Mass Storage device detected"
+        },
+        {
+          "time": 1793778396.826416,
+          "text": "rigpi kernel: scsi host0: usb-storage 1-1.2:1.0"
+        }
+      ],
+      "status": "captured"
+    }
+  },
+  "uf2_copy": {
+    "status": "passed",
+    "operation": "off-cascade UF2 recovery",
+    "started": 1793778525.6347373,
+    "usb_location": "1-1.2",
+    "serial": "5ED092AAACF4A000",
+    "uf2_sha256": "d9862be2dc5d354d8333f15081032c68f57ba086d2d3c367767e5c421e91bd88",
+    "flash_written": true,
+    "probe_used": false,
+    "copy_and_disconnect_seconds": 0.946,
+    "seconds": 1.305,
+    "commands": [
+      {
+        "name": "mount-writable",
+        "argv": [
+          "sudo",
+          "mount",
+          "-o",
+          "remount,rw,sync",
+          "/run/landin-pico2-recovery"
+        ],
+        "status": 0,
+        "seconds": 0.098
+      },
+      {
+        "name": "copy-uf2",
+        "argv": [
+          "sudo",
+          "cp",
+          "/tmp/landin-pico2-fixed.uf2",
+          "/run/landin-pico2-recovery/fixed.uf2"
+        ],
+        "status": 0,
+        "seconds": 0.143
+      },
+      {
+        "name": "unmount-recovery",
+        "argv": [
+          "sudo",
+          "umount",
+          "/run/landin-pico2-recovery"
+        ],
+        "status": 0,
+        "seconds": 0.162
+      }
+    ],
+    "kernel_usb": {
+      "since": 1793778269.1707182,
+      "until": 1793778526.9113164,
+      "lines": [
+        {
+          "time": 1793778369.288897,
+          "text": "rigpi kernel: usb 2-2: USB disconnect, device number 2"
+        },
+        {
+          "time": 1793778369.293284,
+          "text": "rigpi kernel: usb 2-2.3: USB disconnect, device number 3"
+        },
+        {
+          "time": 1793778369.2969,
+          "text": "rigpi kernel: usb 2-2.3.3: USB disconnect, device number 5"
+        },
+        {
+          "time": 1793778369.297713,
+          "text": "rigpi kernel: usb 2-2.3.4: USB disconnect, device number 6"
+        },
+        {
+          "time": 1793778369.300686,
+          "text": "rigpi kernel: usb 2-2.4: USB disconnect, device number 4"
+        },
+        {
+          "time": 1793778371.688072,
+          "text": "rigpi kernel: usb 1-1.2: USB disconnect, device number 4"
+        },
+        {
+          "time": 1793778371.692072,
+          "text": "rigpi kernel: usb 1-1.2.3: USB disconnect, device number 5"
+        },
+        {
+          "time": 1793778371.695864,
+          "text": "rigpi kernel: usb 1-1.2.3.1: USB disconnect, device number 7"
+        },
+        {
+          "time": 1793778371.696702,
+          "text": "rigpi kernel: usb 1-1.2.3.2: USB disconnect, device number 19"
+        },
+        {
+          "time": 1793778371.776668,
+          "text": "rigpi kernel: usb 1-1.2.3.3: USB disconnect, device number 10"
+        },
+        {
+          "time": 1793778371.780271,
+          "text": "rigpi kernel: usb 1-1.2.3.4: USB disconnect, device number 12"
+        },
+        {
+          "time": 1793778371.782067,
+          "text": "rigpi kernel: usb 1-1.2.3.4.1: USB disconnect, device number 14"
+        },
+        {
+          "time": 1793778371.782621,
+          "text": "rigpi kernel: usb 1-1.2.3.4.2: USB disconnect, device number 27"
+        },
+        {
+          "time": 1793778371.783187,
+          "text": "rigpi kernel: usb 1-1.2.3.4.3: USB disconnect, device number 25"
+        },
+        {
+          "time": 1793778371.784979,
+          "text": "rigpi kernel: usb 1-1.2.3.4.4: USB disconnect, device number 17"
+        },
+        {
+          "time": 1793778371.789963,
+          "text": "rigpi kernel: usb 1-1.2.4: USB disconnect, device number 6"
+        },
+        {
+          "time": 1793778371.791838,
+          "text": "rigpi kernel: usb 1-1.2.4.2: USB disconnect, device number 9"
+        },
+        {
+          "time": 1793778371.794911,
+          "text": "rigpi kernel: usb 1-1.2.4.3: USB disconnect, device number 23"
+        },
+        {
+          "time": 1793778371.797643,
+          "text": "rigpi kernel: usb 1-1.2.4.4: USB disconnect, device number 13"
+        },
+        {
+          "time": 1793778384.948939,
+          "text": "rigpi kernel: usb 1-1.2: new full-speed USB device number 28 using xhci_hcd"
+        },
+        {
+          "time": 1793778385.047107,
+          "text": "rigpi kernel: usb-storage 1-1.2:1.0: USB Mass Storage device detected"
+        },
+        {
+          "time": 1793778385.050421,
+          "text": "rigpi kernel: scsi host0: usb-storage 1-1.2:1.0"
+        },
+        {
+          "time": 1793778390.636748,
+          "text": "rigpi kernel: usb 1-1.2: USB disconnect, device number 28"
+        },
+        {
+          "time": 1793778396.724711,
+          "text": "rigpi kernel: usb 1-1.2: new full-speed USB device number 29 using xhci_hcd"
+        },
+        {
+          "time": 1793778396.823134,
+          "text": "rigpi kernel: usb-storage 1-1.2:1.0: USB Mass Storage device detected"
+        },
+        {
+          "time": 1793778396.826416,
+          "text": "rigpi kernel: scsi host0: usb-storage 1-1.2:1.0"
+        },
+        {
+          "time": 1793778526.592704,
+          "text": "rigpi kernel: usb 1-1.2: USB disconnect, device number 29"
+        }
+      ],
+      "status": "captured"
+    }
+  },
+  "resident_verification": {
+    "status": "passed",
+    "operation": "resident marker read",
+    "started": 1793778580.3440418,
+    "flash_written": false,
+    "system_reset_requested": false,
+    "probe": "0000:0002:10.42.0.50/1",
+    "physical_connection": "rigpi direct USB port, last enumerated 1-1.2; cascade unplugged",
+    "helper_identity": {
+      "probe_rs_revision": "6f9946fe748edd0e55604dc42bc0f7ea3e7485da",
+      "protocol_version": 1,
+      "source_sha256": "e75f0e0808b14629a7325bafec22fddb8e711e830745ca7b0c7a41200622268c"
+    },
+    "marker": {
+      "symbol": "_landin_fixed_ready",
+      "address": 536870912,
+      "value": 1279678513,
+      "elf_sha256": "dc4a18c992235303e77223963b86dc94a969479c38b23dbcb27632a13b028e27"
+    },
+    "seconds": 2.457,
+    "commands": [
+      {
+        "name": "resident-ready",
+        "argv": [
+          "/home/jan/.local/bin/landin-ram-run",
+          "--plan",
+          "/home/jan/.cache/landin/r1245/pico2-recovery/resident-ready-plan.json",
+          "--output",
+          "/home/jan/.cache/landin/r1245/pico2-recovery/resident-ready.json"
+        ],
+        "status": 0,
+        "seconds": 2.361
+      }
+    ],
+    "kernel_usb": {
+      "since": 1793778269.1707182,
+      "until": 1793778582.7813292,
+      "lines": [
+        {
+          "time": 1793778369.288897,
+          "text": "rigpi kernel: usb 2-2: USB disconnect, device number 2"
+        },
+        {
+          "time": 1793778369.293284,
+          "text": "rigpi kernel: usb 2-2.3: USB disconnect, device number 3"
+        },
+        {
+          "time": 1793778369.2969,
+          "text": "rigpi kernel: usb 2-2.3.3: USB disconnect, device number 5"
+        },
+        {
+          "time": 1793778369.297713,
+          "text": "rigpi kernel: usb 2-2.3.4: USB disconnect, device number 6"
+        },
+        {
+          "time": 1793778369.300686,
+          "text": "rigpi kernel: usb 2-2.4: USB disconnect, device number 4"
+        },
+        {
+          "time": 1793778371.688072,
+          "text": "rigpi kernel: usb 1-1.2: USB disconnect, device number 4"
+        },
+        {
+          "time": 1793778371.692072,
+          "text": "rigpi kernel: usb 1-1.2.3: USB disconnect, device number 5"
+        },
+        {
+          "time": 1793778371.695864,
+          "text": "rigpi kernel: usb 1-1.2.3.1: USB disconnect, device number 7"
+        },
+        {
+          "time": 1793778371.696702,
+          "text": "rigpi kernel: usb 1-1.2.3.2: USB disconnect, device number 19"
+        },
+        {
+          "time": 1793778371.776668,
+          "text": "rigpi kernel: usb 1-1.2.3.3: USB disconnect, device number 10"
+        },
+        {
+          "time": 1793778371.780271,
+          "text": "rigpi kernel: usb 1-1.2.3.4: USB disconnect, device number 12"
+        },
+        {
+          "time": 1793778371.782067,
+          "text": "rigpi kernel: usb 1-1.2.3.4.1: USB disconnect, device number 14"
+        },
+        {
+          "time": 1793778371.782621,
+          "text": "rigpi kernel: usb 1-1.2.3.4.2: USB disconnect, device number 27"
+        },
+        {
+          "time": 1793778371.783187,
+          "text": "rigpi kernel: usb 1-1.2.3.4.3: USB disconnect, device number 25"
+        },
+        {
+          "time": 1793778371.784979,
+          "text": "rigpi kernel: usb 1-1.2.3.4.4: USB disconnect, device number 17"
+        },
+        {
+          "time": 1793778371.789963,
+          "text": "rigpi kernel: usb 1-1.2.4: USB disconnect, device number 6"
+        },
+        {
+          "time": 1793778371.791838,
+          "text": "rigpi kernel: usb 1-1.2.4.2: USB disconnect, device number 9"
+        },
+        {
+          "time": 1793778371.794911,
+          "text": "rigpi kernel: usb 1-1.2.4.3: USB disconnect, device number 23"
+        },
+        {
+          "time": 1793778371.797643,
+          "text": "rigpi kernel: usb 1-1.2.4.4: USB disconnect, device number 13"
+        },
+        {
+          "time": 1793778384.948939,
+          "text": "rigpi kernel: usb 1-1.2: new full-speed USB device number 28 using xhci_hcd"
+        },
+        {
+          "time": 1793778385.047107,
+          "text": "rigpi kernel: usb-storage 1-1.2:1.0: USB Mass Storage device detected"
+        },
+        {
+          "time": 1793778385.050421,
+          "text": "rigpi kernel: scsi host0: usb-storage 1-1.2:1.0"
+        },
+        {
+          "time": 1793778390.636748,
+          "text": "rigpi kernel: usb 1-1.2: USB disconnect, device number 28"
+        },
+        {
+          "time": 1793778396.724711,
+          "text": "rigpi kernel: usb 1-1.2: new full-speed USB device number 29 using xhci_hcd"
+        },
+        {
+          "time": 1793778396.823134,
+          "text": "rigpi kernel: usb-storage 1-1.2:1.0: USB Mass Storage device detected"
+        },
+        {
+          "time": 1793778396.826416,
+          "text": "rigpi kernel: scsi host0: usb-storage 1-1.2:1.0"
+        },
+        {
+          "time": 1793778526.592704,
+          "text": "rigpi kernel: usb 1-1.2: USB disconnect, device number 29"
+        }
+      ],
+      "status": "captured"
+    }
+  },
+  "flash_verification": {
+    "status": "passed",
+    "operation": "fixed image flash readback",
+    "started": 1793778819.4173717,
+    "flash_written": false,
+    "system_reset_requested": false,
+    "address": 268435456,
+    "bytes": 464,
+    "sha256": "48a22d00a40212e3d8bab7c9e550b7ff0fae8a7d131f54ac9fd81d17edffe19f",
+    "seconds": 0.264,
+    "commands": [
+      {
+        "name": "resident-flash",
+        "argv": [
+          "/home/jan/.local/bin/landin-ram-run",
+          "--plan",
+          "/home/jan/.cache/landin/r1245/pico2-recovery/resident-flash-plan.json",
+          "--output",
+          "/home/jan/.cache/landin/r1245/pico2-recovery/resident-flash.json"
+        ],
+        "status": 0,
+        "seconds": 0.168
+      }
+    ],
+    "kernel_usb": {
+      "since": 1793778269.1707182,
+      "until": 1793778819.6816955,
+      "lines": [
+        {
+          "time": 1793778369.288897,
+          "text": "rigpi kernel: usb 2-2: USB disconnect, device number 2"
+        },
+        {
+          "time": 1793778369.293284,
+          "text": "rigpi kernel: usb 2-2.3: USB disconnect, device number 3"
+        },
+        {
+          "time": 1793778369.2969,
+          "text": "rigpi kernel: usb 2-2.3.3: USB disconnect, device number 5"
+        },
+        {
+          "time": 1793778369.297713,
+          "text": "rigpi kernel: usb 2-2.3.4: USB disconnect, device number 6"
+        },
+        {
+          "time": 1793778369.300686,
+          "text": "rigpi kernel: usb 2-2.4: USB disconnect, device number 4"
+        },
+        {
+          "time": 1793778371.688072,
+          "text": "rigpi kernel: usb 1-1.2: USB disconnect, device number 4"
+        },
+        {
+          "time": 1793778371.692072,
+          "text": "rigpi kernel: usb 1-1.2.3: USB disconnect, device number 5"
+        },
+        {
+          "time": 1793778371.695864,
+          "text": "rigpi kernel: usb 1-1.2.3.1: USB disconnect, device number 7"
+        },
+        {
+          "time": 1793778371.696702,
+          "text": "rigpi kernel: usb 1-1.2.3.2: USB disconnect, device number 19"
+        },
+        {
+          "time": 1793778371.776668,
+          "text": "rigpi kernel: usb 1-1.2.3.3: USB disconnect, device number 10"
+        },
+        {
+          "time": 1793778371.780271,
+          "text": "rigpi kernel: usb 1-1.2.3.4: USB disconnect, device number 12"
+        },
+        {
+          "time": 1793778371.782067,
+          "text": "rigpi kernel: usb 1-1.2.3.4.1: USB disconnect, device number 14"
+        },
+        {
+          "time": 1793778371.782621,
+          "text": "rigpi kernel: usb 1-1.2.3.4.2: USB disconnect, device number 27"
+        },
+        {
+          "time": 1793778371.783187,
+          "text": "rigpi kernel: usb 1-1.2.3.4.3: USB disconnect, device number 25"
+        },
+        {
+          "time": 1793778371.784979,
+          "text": "rigpi kernel: usb 1-1.2.3.4.4: USB disconnect, device number 17"
+        },
+        {
+          "time": 1793778371.789963,
+          "text": "rigpi kernel: usb 1-1.2.4: USB disconnect, device number 6"
+        },
+        {
+          "time": 1793778371.791838,
+          "text": "rigpi kernel: usb 1-1.2.4.2: USB disconnect, device number 9"
+        },
+        {
+          "time": 1793778371.794911,
+          "text": "rigpi kernel: usb 1-1.2.4.3: USB disconnect, device number 23"
+        },
+        {
+          "time": 1793778371.797643,
+          "text": "rigpi kernel: usb 1-1.2.4.4: USB disconnect, device number 13"
+        },
+        {
+          "time": 1793778384.948939,
+          "text": "rigpi kernel: usb 1-1.2: new full-speed USB device number 28 using xhci_hcd"
+        },
+        {
+          "time": 1793778385.047107,
+          "text": "rigpi kernel: usb-storage 1-1.2:1.0: USB Mass Storage device detected"
+        },
+        {
+          "time": 1793778385.050421,
+          "text": "rigpi kernel: scsi host0: usb-storage 1-1.2:1.0"
+        },
+        {
+          "time": 1793778390.636748,
+          "text": "rigpi kernel: usb 1-1.2: USB disconnect, device number 28"
+        },
+        {
+          "time": 1793778396.724711,
+          "text": "rigpi kernel: usb 1-1.2: new full-speed USB device number 29 using xhci_hcd"
+        },
+        {
+          "time": 1793778396.823134,
+          "text": "rigpi kernel: usb-storage 1-1.2:1.0: USB Mass Storage device detected"
+        },
+        {
+          "time": 1793778396.826416,
+          "text": "rigpi kernel: scsi host0: usb-storage 1-1.2:1.0"
+        },
+        {
+          "time": 1793778526.592704,
+          "text": "rigpi kernel: usb 1-1.2: USB disconnect, device number 29"
+        }
+      ],
+      "status": "captured"
+    }
+  }
+}
