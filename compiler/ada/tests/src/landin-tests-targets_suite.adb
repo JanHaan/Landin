@@ -2713,6 +2713,23 @@ package body Landin.Tests.Targets_Suite is
          and then Asm.Text_Error (Xtensa, "loop a2, end_loop") /= ""
          and then Asm.Text_Error (Xtensa, "j spin", Naked => True) = "",
          "ordinary operands preserve link, stack, frame and optional banks");
+      declare
+         Full : constant String := "nop" & String'(1 .. 32_765 => ' ');
+         Ordinary_Too_Long : constant String := Full (1 .. 4097);
+      begin
+         Landin.Testing.Check
+           (Item, Asm.Text_Error (Xtensa, Full, Naked => True) = ""
+            and then Asm.Text_Error (Xtensa, Full & " ", Naked => True)
+              = "one assembly block exceeds 32768 bytes"
+            and then Asm.Text_Error (Xtensa, Ordinary_Too_Long)
+              = "one assembly block exceeds 4096 bytes"
+            and then Asm.Text_Error
+              (Linux_RV64, Ordinary_Too_Long, Naked => True)
+              = "one assembly block exceeds 4096 bytes"
+            and then Asm.Text_Error
+              (Xtensa, ".word 1" & Full, Naked => True) /= "",
+            "only naked Xtensa text has the bounded bootstrap allowance");
+      end;
    end Xtensa_Configurations_Are_Exact;
 
    procedure Register (Into : in out Landin.Testing.Registry) is

@@ -199,7 +199,8 @@ package Landin.Targets.Assembly is
 
    --  [1990]'s uniform text rules on a hosted target and on RV32, or the
    --  empty string:
-   --  at most 4096 ASCII bytes in LF lines, instructions and no directive,
+   --  at most 4096 ASCII bytes (32768 in a naked Xtensa body) in LF lines,
+   --  instructions and no directive,
    --  statement separator or label, and straight-line control.  Each
    --  line's comment is removed first (D597).  A naked body's text may
    --  transfer control, since it owns its entry and its exit.  Which

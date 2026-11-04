@@ -2128,7 +2128,10 @@ message names the word that reaches the stack, `push`, `pop`, `sp`, `r13`,
 `msp` or `psp`; on `rv32`, where reset has not yet set the stack pointer
 when the entry word enters the stage (D684), `sp`, `x2` or a compressed
 instruction that addresses through it, `lwsp`, `swsp`, `addi16sp` or
-`addi4spn`. Keep what the stage needs in registers.
+`addi4spn`. Keep what the stage needs in registers. Xtensa entry prepares
+its window state, vectors and internal DRAM spill stack before its device
+stage; that architecture's stage may use the prepared stack for windowed
+ROM calls, while static storage remains uninitialized.
 
 ```landin
 -- refine: --target=cortex-m0 --level=armv7e-m

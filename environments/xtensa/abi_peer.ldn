@@ -1,0 +1,30 @@
+link(symbol: "_landin_xtensa_fixture_status")
+public mut abi_status: i32 = -999
+
+public link(symbol: "landin_abi_mix")
+mix: (a: u32, b: u64, c: u32, d: u64, e: u32) -> (r: u64) =
+    r = u64(a) + b + u64(c) + d + u64(e)
+end mix
+
+public link(symbol: "landin_abi_float")
+floating: (a: f64, b: f32) -> (r: f64) =
+    r = a * f64(b) + 1.5
+end floating
+
+public link(symbol: "landin_abi_single")
+single: (a: f32, b: f32) -> (r: f32) =
+    r = a / b
+end single
+
+-- This source-authored boundary is deliberately naked. It establishes a
+-- windowed C frame, calls the independent peer and records its returned
+-- status for the existing remote oracle. It adds no extern(c) admission.
+extern(naked) abi_entry: () -> none =
+    assembler.block("""
+        entry a1, 32
+        call8 xtensa_abi_run
+        movi a8, _landin_xtensa_fixture_status
+        s32i a10, a8, 0
+        retw
+        """)
+end abi_entry

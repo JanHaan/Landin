@@ -850,6 +850,31 @@ package body Landin.Backend.Firmware is
       Line (".balign 4");
       Line (".global _landin_firmware_entry");
       Line ("_landin_firmware_entry:");
+      if Has_Stage and then Profiles.Stage_Before_Reset (Profile.Boot) then
+         --  A naked Xtensa stage may call the pinned ROM's windowed
+         --  routines. Establish their architectural and stack contract
+         --  before entering it, without initializing static storage.
+         Line ("movi a0, 0x3f");
+         Line ("wsr a0, PS");
+         Line ("rsync");
+         Line ("movi a0, 0");
+         Line ("wsr a0, WINDOWBASE");
+         Line ("movi a0, 1");
+         Line ("wsr a0, WINDOWSTART");
+         Line ("rsync");
+         Line ("movi a0, 0");
+         Line ("wsr a0, INTENABLE");
+         Line ("wsr a0, LCOUNT");
+         Line ("movi a2, _landin_firmware_vectors");
+         Line ("wsr a2, VECBASE");
+         Line ("movi a1, _landin_firmware_stack_top");
+         Line ("addi a1, a1, -32");
+         Line ("movi a2, _landin_firmware_stack_top");
+         Line ("s32e a2, a1, -12");
+         Line ("movi a2, 0x4002f");
+         Line ("wsr a2, PS");
+         Line ("rsync");
+      end if;
       Line ("j " & (if Has_Stage
                      and then Profiles.Stage_Before_Reset (Profile.Boot)
                    then Profiles.Reset_Stage_Symbol

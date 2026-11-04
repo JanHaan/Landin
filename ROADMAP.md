@@ -1683,6 +1683,50 @@ SR-757's identity. Other sessions' worktrees and rig resources remain theirs.
    and Espressif's
    [ESP32 stall primitive](https://github.com/espressif/esp-idf/blob/fff9895c82d744c7237be8847347bdd1b07c6643/components/hal/esp32/include/hal/cpu_utility_ll.h)
    and [S3 stall primitive](https://github.com/espressif/esp-idf/blob/fff9895c82d744c7237be8847347bdd1b07c6643/components/hal/esp32s3/include/hal/cpu_utility_ll.h).
+   **Cold-contract revision before building the revised S3 images:** the
+   first physical ROM boot left S3's data cache enabled; the original
+   cache-off precondition parked before startup and cannot establish the
+   RAM baseline on that board. Recommend normalizing caches only on the
+   direct ROM-entry path after power-on/CHIP_PU reset cause one. Retire
+   watchdogs and stall CPU1, establish compiler-owned windows, masked
+   interrupts, VECBASE and a DRAM stack, then call the vendor's windowed
+   ROM writeback and disable APIs and verify both enable bits clear before
+   ordinary compiler reset. The cache-off path makes no ROM calls; RAM
+   loading still refuses enabled caches before writes. A sticky reset cause
+   is only a precondition, not proof of caller provenance: arbitrary jumps
+   from another application are outside the cold contract. Preserve dirty
+   data through the ROM writeback path rather than clearing enable bits.
+   Primary evidence: the pinned
+   [S3 cache API](https://github.com/espressif/esp-idf/blob/fff9895c82d744c7237be8847347bdd1b07c6643/components/esp_rom/esp32s3/include/esp32s3/rom/cache.h),
+   [cache HAL primitives](https://github.com/espressif/esp-idf/blob/fff9895c82d744c7237be8847347bdd1b07c6643/components/hal/esp32s3/include/hal/cache_ll.h)
+   and [ROM symbols](https://github.com/espressif/esp-idf/blob/fff9895c82d744c7237be8847347bdd1b07c6643/components/esp_rom/esp32s3/ld/esp32s3.rom.ld),
+   plus disassembly of the ROM shipped with the locked QEMU. Its API
+   veneers lead to windowed implementations that wait for autoload and
+   idle state; their dispatch table lies above this profile's DRAM end.
+   Boot observations receive an explicit scope that reports actual CPU1
+   state before that state can be required. Warm independent readbacks
+   retain their mandatory hardware-stall check.
+
+   **Architectural prelude proposal:** a windowed ROM call needs a valid
+   window set, spill stack and vectors. Before an Xtensa pre-reset device
+   stage, compiler-owned entry therefore establishes masked interrupts,
+   WINDOWBASE/WINDOWSTART, VECBASE and the declared internal DRAM stack
+   with its ABI backchain. That stage may use this stack and the windowed
+   ROM boundary, but static data and BSS remain uninitialized and ordinary
+   Landin calls remain outside its naked form. Compiler reset repeats its
+   architectural initialization after the stage. Other target families'
+   stack-free stage requirements are unchanged. This replaces the rejected
+   idea of hiding unvalidated stack initialization inside a device stage;
+   the architectural guarantee belongs to the compiler and its tests.
+
+   The source's full ROM instruction/constant fingerprint needs about
+   twenty KiB of assembly text. Admit up to 32768 decoded ASCII bytes in a
+   naked Xtensa block, keeping the 4096-byte ceiling for ordinary blocks
+   and every other architecture. The existing instruction-only, single
+   literal and naked-body restrictions remain. This finite ceiling lets
+   the description retain one self-contained stage without helper
+   declarations or a data table that its early entry cannot assume ready.
+
    The helper's present Arm/RISC-V split needs a real Xtensa path; it must
    not apply RISC-V registers, fences or interrupt oracles to these ports.
 
@@ -1737,9 +1781,10 @@ to both emulator recipes; SR-709 through the fakes' public declaration;
 SR-719 by removing the duplicated atom list; SR-723 by passing hosted
 runtime link policy in mode comparisons; SR-724 by checking every expanded
 required matrix leg, including called workflows; SR-725 by listing each
-target's debug mode; and SR-757 through SR-760 through help, importer and
-installer controls. Their rows stay in the register until closure evidence
-is complete. New findings are SR-758, SR-759 and SR-760; SR-757 retains the
+target's debug mode; SR-757 through SR-760 through help, importer and
+installer controls; SR-761 through distinct command logs; and SR-762 through
+explicit boot observations. Their rows stay in the register until closure evidence
+is complete. New findings are SR-758 through SR-762; SR-757 retains the
 identity of the carried local finding.
 
 SR-555 retains the existing FHS route and its single locked runtime source.
@@ -3922,6 +3967,8 @@ SR-756.
 | SR-758 | Usability | Correcting ESP32-S3's SVD interrupt numbers with a policy that supplies AES at 77 and moves SHA from 77 to 78, the importer says 77 belongs to SHA and asks to correct it too, although that correction is already in the same policy. Sequential validation makes a complete correction look incomplete. Met in R12.50. | The next change to importer interrupt corrections. | Apply the corrections as a group before checking occupied numbers, with a control that swaps occupied slots. | open |
 | SR-759 | Usability | Planning the ESP32 register import from `devices/README.md`, its metadata table says selected dimensions are refused, although the importer already expands concrete registers whose names contain `%s`; discovering the supported shape required reading its source. Met in R12.50. | The next change to device-import metadata documentation. | Describe concrete dimension expansion and the draft-and-review recipe, agreeing with importer controls. | open |
 | SR-760 | Usability | Starting the embedded-tools installer inside an FHS shell prepared for lane execution, without the setup recipe's `dpkg`, it downloads a verified archive and creates a partial installation before failing with `FileNotFoundError: dpkg-deb`. The refusal neither names the setup prerequisites nor says how to recover the partial directory. Met in R12.50. | The next change to embedded-tool installation preflight. | Check required unpackers before creating the installation, with an actionable refusal naming the setup recipe and a no-partial-output control. | open |
+| SR-761 | Usability | A physical ESP32 boot check fails its first flash command, then attempts resident-image restoration under the same command name. The restoration overwrites the first `flash.log`, so the retained commands name both attempts but only the restoration's diagnostic survives. Met in R12.50. | The next change to board-command logging. | Retain a distinct log for every invocation and link each command record and failure to its actual log, including restoration attempts. | open |
+| SR-762 | Usability | The new ESP32-S3 boot check refuses its first cold-state observation because the shared read helper requires the RAM contract's retained CPU1 stall, and says to use the boot check that is already running. It also blocks startup-trap diagnosis before that stall exists. Met in R12.50. | The next change to Xtensa boot readback or the RAM helper's read contract. | An explicit observational boot-read scope reporting actual CPU1 state, while every warm RAM read still requires and independently verifies the retained hardware stall. | open |
 
 
 ## Retained positions

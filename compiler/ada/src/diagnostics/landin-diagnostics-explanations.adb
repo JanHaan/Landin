@@ -1244,7 +1244,11 @@ package body Landin.Diagnostics.Explanations is
                & "the entry word enters the stage (D684), `sp`, `x2` or a "
                & "compressed instruction that addresses through it, `lwsp`"
                & ", `swsp`, `addi16sp` or `addi4spn`. Keep what the stage "
-               & "needs in registers.",
+               & "needs in registers. Xtensa entry prepares its window sta"
+               & "te, vectors and internal DRAM spill stack before its dev"
+               & "ice stage; that architecture's stage may use the prepare"
+               & "d stack for windowed ROM calls, while static storage rem"
+               & "ains uninitialized.",
             when Catalogue.Boot_Kind_Family =>
                "A device description selects a boot image kind its core'"
                & "s family does not boot (D681). An `rp2040-boot2` image b"

@@ -608,6 +608,8 @@ package body Landin.Backend.Xtensa is
         (if Pairs then ".long" else ".quad");
       Atomics : constant Boolean :=
         False;
+      Native_Frame_Bytes : Natural := 0;
+      Native_Scratch_Registers : Boolean := False;
 
       procedure Put (Line : String);
       procedure Emit (Instruction : String);
@@ -657,7 +659,8 @@ package body Landin.Backend.Xtensa is
       procedure Emit (Instruction : String) is
       begin
          Landin.Backend.Xtensa_Machine.Select_Word
-           (Instruction, Output, Serial);
+           (Instruction, Output, Serial, Native_Frame_Bytes,
+            Native_Scratch_Registers);
       end Emit;
 
       function Reg (Spelling : String) return
@@ -1581,6 +1584,7 @@ package body Landin.Backend.Xtensa is
       procedure Emit_Routine
         (Item : Landin.IR.Item_Id; Plan : Allocation_Plan; Layout : Frame)
       is
+         Assembly_First : constant Positive := Unbounded.Length (Output) + 1;
          --  D471's checks, unless the routine runs before its thread has
          --  a thread pointer (D504).
          --  An interrupt handler is unchecked: the compiler's trap entry
@@ -1599,6 +1603,7 @@ package body Landin.Backend.Xtensa is
          Hard_Trap : constant String := Label (Item, 1) & "_trap";
          Shared_Exit : constant String := Label (Item, 1) & "_exit";
          Terminal_Count : Natural := 0;
+         Has_Assembly : Boolean := False;
          Current_Value : Landin.IR.Value_Id := Landin.IR.No_Value;
          type Panic_Edge is record
             Reason : Landin.Panics.Kind;
@@ -4630,9 +4635,14 @@ package body Landin.Backend.Xtensa is
          end Instruction;
 
       begin
+         Native_Frame_Bytes := 0;
+         Native_Scratch_Registers := False;
          --  One terminal keeps its inline teardown; more than one pays for
          --  branches to a single restore sequence.
          for Index in 1 .. Landin.IR.Value_Count (Of_Unit, Item) loop
+            Has_Assembly := Has_Assembly or else
+              Landin.IR.Op_Of (Of_Unit, Item, Landin.IR.Value_Id (Index))
+                = Landin.IR.Assembly;
             if Landin.IR.Op_Of (Of_Unit, Item, Landin.IR.Value_Id (Index))
               in Landin.IR.Leave | Landin.IR.Fail
             then
@@ -4721,6 +4731,11 @@ package body Landin.Backend.Xtensa is
             Total : constant Landin.Targets.Byte_Count :=
               Stack_Align (Extent (Layout) + 240, 16, 16#7fff_ffff#);
          begin
+            Native_Frame_Bytes := Natural (Total);
+            --  Incoming a2-a6 are homed before any selected instruction.
+            --  CALL8 preserves the current window's a2-a5; opaque source
+            --  assembly keeps the original complete scratch-bank path.
+            Native_Scratch_Registers := not Has_Assembly;
             Put (Character'Val (9) & "entry a1, 32");
             if Checks then
                declare
@@ -5041,6 +5056,12 @@ package body Landin.Backend.Xtensa is
             Emit (".cfi_endproc");
          end if;
          Platform_Directive (ELF_Spelling.Size_To_Here (Symbol (Item)));
+         --  Opaque source assembly has no byte-size bound here. Keep all
+         --  arbitrary-range jumps when a routine contains any such block.
+         if not Has_Assembly then
+            Landin.Backend.Xtensa_Machine.Compact_Jumps
+              (Output, Assembly_First);
+         end if;
          --  Bank homes are part of the native frame at every objective.
          --  No value or slot is held in a register: every one has its
          --  home, and the saved registers are selection's fixed scratch.
@@ -5056,6 +5077,8 @@ package body Landin.Backend.Xtensa is
                         and then Landin.Panics.Calls_Out (Panic.all)),
              Helper_Calls => Helpers_Called,
              others => <>));
+         Native_Frame_Bytes := 0;
+         Native_Scratch_Registers := False;
       end Emit_Routine;
 
       --  The value a datum's block describes.  [1460] says nothing runs

@@ -176,7 +176,71 @@ class Commands(unittest.TestCase):
             run.command('tolerated', [sys.executable, '-c', 'raise SystemExit(4)'], check=False)
             self.assertEqual([(c['name'], c['status']) for c in run.commands],
                              [('say', 0), ('fail', 3), ('tolerated', 4)])
+            self.assertEqual([c['log'] for c in run.commands],
+                             ['say.log', 'fail.log', 'tolerated.log'])
             self.assertTrue((Path(out) / 'say.log').read_text().endswith('hi\n'))
+
+    def test_failed_flash_and_restoration_keep_distinct_logs_and_failure_links(self):
+        with tempfile.TemporaryDirectory() as out:
+            root = Path(out)
+            run = COMMON.Run(root)
+            failures = []
+            for status, message in ((3, 'initial flash stderr'), (4, 'restore stderr')):
+                with self.assertRaises(COMMON.Failed) as raised:
+                    run.command('flash', [sys.executable, '-c',
+                        'import sys; print(%r, file=sys.stderr); raise SystemExit(%d)'
+                        % (message, status)])
+                failures.append(str(raised.exception))
+            self.assertEqual(run.command('flash', [sys.executable, '-c', 'print("restored")']),
+                             'restored\n')
+            self.assertEqual([(c['name'], c['status'], c['log']) for c in run.commands],
+                             [('flash', 3, 'flash.log'), ('flash', 4, 'flash-2.log'),
+                              ('flash', 0, 'flash-3.log')])
+            for index, message in enumerate(('initial flash stderr', 'restore stderr', 'restored')):
+                path = root / run.commands[index]['log']
+                self.assertTrue(path.read_text().endswith(message + '\n'))
+                if index < 2:
+                    self.assertEqual(failures[index], 'flash failed (%d); see %s'
+                                     % (index + 3, path))
+            self.assertNotIn('restore stderr', (root / 'flash.log').read_text())
+
+    def test_existing_logs_and_suffix_collisions_are_never_overwritten(self):
+        with tempfile.TemporaryDirectory() as out:
+            root = Path(out)
+            (root / 'flash.log').write_text('previous attempt')
+            (root / 'flash-2.log').write_text('previous recovery')
+            first, second = COMMON.Run(root), COMMON.Run(root)
+            first.command('flash', [sys.executable, '-c', 'print("first")'])
+            second.command('flash', [sys.executable, '-c', 'print("second")'])
+            second.command('flash-3', [sys.executable, '-c', 'print("suffix")'])
+            self.assertEqual(first.commands[0]['log'], 'flash-3.log')
+            self.assertEqual([c['log'] for c in second.commands],
+                             ['flash-4.log', 'flash-3-2.log'])
+            self.assertEqual((root / 'flash.log').read_text(), 'previous attempt')
+            self.assertEqual((root / 'flash-2.log').read_text(), 'previous recovery')
+            for record, message in ((first.commands[0], 'first'),
+                                    (second.commands[0], 'second'),
+                                    (second.commands[1], 'suffix')):
+                self.assertTrue((root / record['log']).read_text().endswith(message + '\n'))
+
+    def test_launch_and_timeout_errors_keep_their_log_and_exception_semantics(self):
+        with tempfile.TemporaryDirectory() as out:
+            root = Path(out)
+            run = COMMON.Run(root)
+            errors = (COMMON.subprocess.TimeoutExpired(['tool'], 120,
+                          output=b'partial stdout\n', stderr=b'partial stderr\n'),
+                      FileNotFoundError('missing executable'))
+            for error in errors:
+                with mock.patch.object(COMMON.subprocess, 'run', side_effect=error), \
+                        self.assertRaises(type(error)) as raised:
+                    run.command('flash', ['tool'])
+                self.assertIs(raised.exception, error)
+            self.assertEqual([c['log'] for c in run.commands], ['flash.log', 'flash-2.log'])
+            self.assertTrue(all(c['status'] is None for c in run.commands))
+            self.assertIn('partial stdout\npartial stderr\n', (root / 'flash.log').read_text())
+            for record, error in zip(run.commands, errors):
+                self.assertEqual(record['error'], str(error))
+                self.assertIn(str(error), (root / record['log']).read_text())
 
 
 class Images(unittest.TestCase):
@@ -361,6 +425,51 @@ class HelperIdentity(unittest.TestCase):
 
 
 class Probes(unittest.TestCase):
+    def test_xtensa_boot_reads_observe_cpu1_but_ram_reads_require_stall_proof(self):
+        for board in ('esp32', 'esp32s3'):
+            with self.subTest(board=board), tempfile.TemporaryDirectory() as tmp:
+                out = Path(tmp)
+                state = dict(cpu1_stalled=False, stall_code=0, options_value=0, stall_value=0)
+                report = dict(format_version=1, status='passed', mode='boot-read', board=board,
+                              address=0x60008034, count=1, words=[1], flash_written=False,
+                              helper_source_sha256=COMMON.helper_source_hash(),
+                              cpu1_stalled=False, other_core=state)
+                run = mock.Mock(out=out, pace=None)
+                def command(name, argv, **kwargs):
+                    request = json.loads((out / 'cause-plan.json').read_text())
+                    self.assertIn(request['mode'], ('read', 'boot-read'))
+                    self.assertEqual(request.get('require_cpu1_stalled', False),
+                                     request['mode'] == 'read')
+                    (out / 'cause.json').write_text(json.dumps(report))
+                run.command.side_effect = command
+                boot = COMMON.Probe(run, 'probe-rs', board, 'P', ram_loader='loader',
+                                    read_mode='boot-read')
+                self.assertEqual(boot.read_words('cause', 0x60008034, 1), [1])
+                report['cpu1_stalled'] = True
+                with self.assertRaisesRegex(COMMON.Failed, 'observed CPU1 stall state'):
+                    boot.read_words('cause', 0x60008034, 1)
+                report['cpu1_stalled'] = False
+                state['stall_code'] = 0x86
+                with self.assertRaisesRegex(COMMON.Failed, 'observed CPU1 stall state'):
+                    boot.read_words('cause', 0x60008034, 1)
+                state.update(cpu1_stalled=True, options_value=2, stall_value=0x21 << 20)
+                report['cpu1_stalled'] = True
+                self.assertEqual(boot.read_words('cause', 0x60008034, 1), [1])
+                with self.assertRaisesRegex(COMMON.Failed, 'retained CPU1 stall evidence'):
+                    COMMON.Probe(run, 'probe-rs', board, 'P', ram_loader='loader')
+                ram = COMMON.Probe(run, 'probe-rs', board, 'P', ram_loader='loader',
+                                   require_cpu1_stalled=True)
+                with self.assertRaisesRegex(COMMON.Failed, 'mismatched evidence'):
+                    ram.read_words('cause', 0x60008034, 1)
+                report['mode'] = 'read'
+                self.assertEqual(ram.read_words('cause', 0x60008034, 1), [1])
+                report['cpu1_stalled'] = False
+                with self.assertRaisesRegex(COMMON.Failed, 'CPU1 remains stalled'):
+                    ram.read_words('cause', 0x60008034, 1)
+        for chip in ('RP2040', 'RP235x_riscv', 'ESP32-C3', 'ESP32-C5', 'STM32H753ZITx'):
+            with self.assertRaisesRegex(COMMON.Failed, 'only for Xtensa'):
+                COMMON.Probe(mock.Mock(), 'probe-rs', chip, 'P', read_mode='boot-read')
+
     def test_rp_reads_use_one_core_and_reject_mismatched_evidence(self):
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp)

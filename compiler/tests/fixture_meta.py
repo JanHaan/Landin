@@ -68,6 +68,7 @@ FAMILIES = {
              "rv64gc_zba_xtheadba"),
     "m-profile": ("armv6-m", "armv7-m", "armv7e-m", "armv8-m.main"),
     "rv32": ("rv32imc", "rv32imac"),
+    "xtensa": ("xtensa-esp32", "xtensa-esp32s3"),
     "none": (),
 }
 FAMILY_OF = {
@@ -75,6 +76,7 @@ FAMILY_OF = {
     "linux-arm64": "arm64", "darwin-arm64": "arm64",
     "freebsd-arm64": "arm64", "linux-rv64": "rv64",
     "cortex-m0": "m-profile", "rv32": "rv32", "synthetic-32": "none",
+    "xtensa": "xtensa",
 }
 PRODUCT_LEVELS = frozenset(level for levels in FAMILIES.values()
                            for level in levels)

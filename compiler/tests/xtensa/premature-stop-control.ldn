@@ -1,0 +1,11 @@
+--  The negative runner replaces this unique NOP in a separate native image
+--  with a zero status store and a jump to the firmware stopped label. The
+--  wrapper completion symbol remains reachable in the linked image.
+premature_stop: () -> none =
+    assembler.block("nop")
+end premature_stop
+
+main: () -> (code: i32) =
+    premature_stop()
+    code = 0
+end main

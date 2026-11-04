@@ -754,6 +754,9 @@ jobs:
             --refine "$PWD/compiler/ada/build/linux-amd64/release/bin/refine" \
             --qemu "$RUNNER_TEMP/embedded/qemu-xtensa/bin/qemu-system-xtensa" \
             --output "$RUNNER_TEMP/xtensa-boundaries"
+          python3 environments/xtensa/abi.py --tools "$RUNNER_TEMP/embedded" \
+            --refine "$PWD/compiler/ada/build/linux-amd64/release/bin/refine" \
+            --output "$RUNNER_TEMP/xtensa-abi"
           python3 environments/xtensa/corpus.py --all --tools "$RUNNER_TEMP/embedded" \
             --refine "$PWD/compiler/ada/build/linux-amd64/release/bin/refine" \
             --qemu "$RUNNER_TEMP/embedded/qemu-xtensa/bin/qemu-system-xtensa" \
@@ -767,6 +770,7 @@ jobs:
             ${{ runner.temp }}/xtensa-controls
             ${{ runner.temp }}/xtensa-corpus
             ${{ runner.temp }}/xtensa-boundaries
+            ${{ runner.temp }}/xtensa-abi
           if-no-files-found: ignore
           retention-days: 14
 
