@@ -6924,6 +6924,7 @@ package body Landin.Tests.Driver_Suite is
             Args.Append ("--level=" & Level);
          end if;
          Args.Append ("--emit=linker-script");
+         Args.Append ("--firmware-layout=ram");
          Args.Append ("--build-report=profile.json");
          Args.Append ("-o");
          Args.Append ("profile.ld");
@@ -6935,7 +6936,10 @@ package body Landin.Tests.Driver_Suite is
             Landin.Testing.Check
               (Item, Result.Status = Landin.Driver.Status_Success
                and then Contains (Host.Written ("profile.json"), Core)
-               and then Contains (Host.Written ("profile.ld"), Origin),
+               and then Contains (Host.Written ("profile.ld"), Origin)
+               and then Contains (Host.Written ("profile.ld"),
+                 ".rodata : { *(.rodata .rodata.*) . = ALIGN(4); }"
+                 & " > DRAM :rodata"),
                "the selected level loads its unconditional reference: "
                & Level & " " & Unbounded.To_String (Result.Report));
          end;
