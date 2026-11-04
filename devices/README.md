@@ -581,12 +581,40 @@ partition table or cached execute-in-place path is implied. A RAM entry
 has no flash or ROM-reset operation and requires its own warm-state check.
 
 Each hand-written `prepare.ldn` is a naked stage before compiler reset.
-The classic stage requires both cache enables clear and parks at
-`_landin_device_cache_refused` before any store otherwise. The S3 takes the
-same path without device-stage stack use when both enables are clear. Both paths stop watchdogs
+When both cache enables are clear, either stage takes the path without
+device-stage stack use or ROM calls. Both paths stop watchdogs
 with the vendor's keys, assert CPU1's RTC hardware stall code `0x86`, and
 enter compiler reset without device-stage calls or RAM accesses. Warm RAM loading still
 requires disabled caches before the helper writes SRAM on either chip.
+
+Classic ESP32 direct entry from the cold ROM image loader also admits
+enabled caches, for read-only flash and an internal-SRAM image. This
+contract excludes PSRAM initialization and dirty external data. It requires
+CPU0 reset cause 1 and every aligned word of the reviewed revision-3 ROM
+`Cache_Read_Disable` and `Cache_Flush` bodies, plus their four literal words,
+before any device-stage MMIO write. A different cause parks at
+`_landin_device_cache_refused`; a different ROM word parks at
+`_landin_device_rom_refused`. Cause 1 is sticky state, not proof of direct
+ROM entry: an arbitrary application's jump to the stage remains outside
+the contract, including one with dirty cached PSRAM.
+
+After disabling watchdogs and hardware-stalling CPU1, the classic stage
+calls `Cache_Read_Disable(0)`, `Cache_Read_Disable(1)`, `Cache_Flush(0)` and
+`Cache_Flush(1)`, following the order in the pinned vendor
+[bootloader reset routine](https://github.com/espressif/esp-idf/blob/fff9895c82d744c7237be8847347bdd1b07c6643/components/bootloader_support/src/esp32/bootloader_esp32.c#L40).
+Both cache enables must then be clear. Flush invalidates cache entries;
+this sequence does not establish preservation of dirty external data.
+[`esp32-rom.json`](esp32-rom.json) records the complete two leaf routines
+and their literals: no callback table or further callee is reached. The
+oracle compares them with `esp32_rev300_rom.elf` in the already pinned
+vendor ELF archive. Silicon revision 3.1 uses that next lower available
+ROM, following the vendor's
+[selection rule](https://github.com/espressif/esp-rom-elfs/tree/37b4a88#choosing-the-rom-elf-file).
+Physical ROM words must match the guards before support is claimed;
+the banner alone does not establish compatibility. `inputs.json` also
+pins the classic cache API header and symbol table. The offline stage
+controls mutate each of the 55 guarded words, exercise all cache-enable
+combinations and reject every other reset cause before writes or calls.
 
 S3 direct entry from the cold ROM image loader also admits enabled caches.
 This path requires CPU0 reset cause 1 (POWERON/CHIP_PU), the pinned ROM cache

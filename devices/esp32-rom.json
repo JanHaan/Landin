@@ -1,0 +1,125 @@
+{
+  "schema": 1,
+  "chip_revision": "3.0 ROM, next lower available vendor ROM for silicon 3.1",
+  "elf_archive": "esp32s3/esp-rom-elfs-20260528.tar.gz",
+  "elf_member": "esp32_rev300_rom.elf",
+  "elf_sha256": "920b70635440517866aab2230964a570d2cf2b676658d93c52fbac108c1cca31",
+  "scope": "Direct cold ROM image loader, read-only flash; no PSRAM or dirty external data",
+  "call_order": [
+    {
+      "name": "Cache_Read_Disable",
+      "cpu": 0
+    },
+    {
+      "name": "Cache_Read_Disable",
+      "cpu": 1
+    },
+    {
+      "name": "Cache_Flush",
+      "cpu": 0
+    },
+    {
+      "name": "Cache_Flush",
+      "cpu": 1
+    }
+  ],
+  "functions": [
+    {
+      "name": "Cache_Read_Disable",
+      "entry": "0x40009ab8",
+      "size": 92,
+      "sha256": "959306552a690a64d7f020fe4ea2cbf8736b5d43baa7837ad33ef996a5e3c680",
+      "leaf": true,
+      "frame_bytes": 32
+    },
+    {
+      "name": "Cache_Flush",
+      "entry": "0x40009a14",
+      "size": 110,
+      "sha256": "8648f5a2ebb5516967fc4dd842106872ee966b610438599826b9597adfc39e88",
+      "leaf": true,
+      "frame_bytes": 32
+    }
+  ],
+  "word_ranges": [
+    {
+      "address": "0x40009ab8",
+      "words": [
+        "0x81004136",
+        "0x7a7cffa2",
+        "0xdcffa291",
+        "0x20c032",
+        "0xaba008b8",
+        "0x20c010",
+        "0x20c008a9",
+        "0x46099800",
+        "0x20c00004",
+        "0xa009b800",
+        "0x20c010ab",
+        "0xc009a900",
+        "0x8980020",
+        "0x8008a082",
+        "0xc8561089",
+        "0xffef9101",
+        "0x880020c0",
+        "0xff785609",
+        "0x7cff9381",
+        "0x20c0e9",
+        "0x9a9008a8",
+        "0x20c010",
+        "0xf01d0899"
+      ]
+    },
+    {
+      "address": "0x40009a14",
+      "words": [
+        "0x6c004136",
+        "0x81b2ecf9",
+        "0x20c0ffca",
+        "0x9008a800",
+        "0x20c0109a",
+        "0xc0089900",
+        "0x8a80020",
+        "0x9a90091c",
+        "0x20c020",
+        "0x92c0899",
+        "0xa80020c0",
+        "0xf70a9708",
+        "0xa46",
+        "0xc0ffc081",
+        "0x8a80020",
+        "0xc0109a90",
+        "0x8990020",
+        "0xa80020c0",
+        "0x90091c08",
+        "0x20c0209a",
+        "0x2c089900",
+        "0x20c009",
+        "0xa9708a8",
+        "0x20c0f7",
+        "0xf96c08a8",
+        "0xc0109a90",
+        "0x8990020",
+        "0xf01d"
+      ]
+    }
+  ],
+  "literal_words": [
+    {
+      "address": "0x40009944",
+      "word": "0x3ff00040"
+    },
+    {
+      "address": "0x40009948",
+      "word": "0x3ff00058"
+    },
+    {
+      "address": "0x4000994c",
+      "word": "0x3ff43050"
+    },
+    {
+      "address": "0x40009ab4",
+      "word": "0x3ff430f8"
+    }
+  ]
+}
