@@ -264,7 +264,8 @@ echo "$LANDIN_BUILD_MODE"
         build = self.build_tree()
         reader = self.reader(build)
         self.ready(reader)
-        readers = self.root / "compiler/ada/.build-locks/test-debug.readers"
+        #  reading() mints canonical paths, including macOS /var aliases.
+        readers = (self.root / "compiler/ada/.build-locks/test-debug.readers").resolve()
         publisher = self.publish(
             build, LANDIN_BUILD_READER="%s:%d" % (readers, reader.pid))
         _, stderr = publisher.communicate(timeout=HANG)
@@ -273,6 +274,42 @@ echo "$LANDIN_BUILD_MODE"
                       stderr)
         self.assertIn("echo old", (build / "bin/refine").read_text())
         self.release(reader)
+
+    def test_a_reader_through_an_alias_refuses_its_nested_publisher(self):
+        build = self.build_tree()
+        alias = self.root / "checkout-alias"
+        alias.symlink_to(self.root, target_is_directory=True)
+        aliased_build = alias / build.relative_to(self.root)
+        #  Inherit the real marker from reading(), rather than constructing
+        #  it in the test. Both imported helper and build use an alias.
+        self.script("reader-publish.py", f'''#!/usr/bin/env python3
+import os
+import subprocess
+import sys
+sys.path.insert(0, {str(alias / "scripts")!r})
+import build_lock
+assert build_lock.reading({str(aliased_build / "bin/refine")!r})
+marker, _, pid = os.environ[build_lock.READER].rpartition(":")
+assert marker == str(build_lock.readers_lock(build_lock.LOCKS, "test", "debug"))
+assert pid == str(os.getpid())
+try:
+    child = subprocess.run(
+        [sys.executable, {str(alias / "scripts/build_lock.py")!r},
+         "--publish", {str(aliased_build)!r}, "refine"],
+        capture_output=True, text=True, timeout={HANG})
+    sys.stdout.write(child.stdout)
+    sys.stderr.write(child.stderr)
+    assert child.returncode == 2, child.returncode
+finally:
+    build_lock._release()
+''')
+        reader = self.start("reader-publish.py")
+        stdout, stderr = reader.communicate(timeout=HANG + 30)
+        self.assertEqual(reader.returncode, 0, (stdout, stderr))
+        self.assertIn("pid %d is running this build's refine" % reader.pid,
+                      stderr)
+        self.assertNotIn("waiting for build lock", stderr)
+        self.assertIn("echo old", (build / "bin/refine").read_text())
 
     def test_an_executable_outside_a_build_needs_no_lock(self):
         import sys
