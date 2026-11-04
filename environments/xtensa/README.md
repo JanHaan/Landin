@@ -86,6 +86,23 @@ S3 libgcc and execute it on S3. The result establishes compatibility for
 those emitted scalar operations and selected helpers. It does not establish
 compatibility for arbitrary ESP32 assembly or the ESP32 helper library.
 
+Independent vendor-C layout and calling-convention probes run beside them:
+
+```sh
+python3 environments/xtensa/abi.py \
+  --refine "$REFINE" --tools "$TOOLS" --output "$OUT/abi"
+```
+
+Both configurations check C sizes and alignments, integer and floating-point
+carriers, aggregate register/stack placement, 12/16/20-byte returns and
+sixteen-byte stack alignment. C peers call actual emitted Landin scalar
+routines through a source-authored entry thunk. Separate native peers test
+C aggregate transport; this does not admit Landin by-value C signatures.
+Each chip must return zero and a deliberate nonzero status, with no trap
+and an intact stack guard. Both vendor configurations refuse C
+`unsigned __int128`; sixteen-byte vector storage alignment is checked
+separately and supplies no C integer-mode claim.
+
 The same boundary command links every compiler-reserved libgcc helper root
 and follows actual instruction PCs through all conditional branches and
 calls. The audit retains the linked image, map, helper-library hash, root

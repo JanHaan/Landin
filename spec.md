@@ -19128,6 +19128,11 @@ other firmware targets, public C signatures, C records and variadic calls
 remain disabled; the identity describes the runtime boundary and does not
 admit those source forms.
 
+The pinned vendor C compilers do not admit `unsigned __int128`. The
+sixteen-byte scalar-storage alignment is Landin's layout fact, not a claim
+of a vendor C 128-bit integer mode; independent vector-storage alignment
+and the supported C scalar carriers are checked separately.
+
 Calls use `call8` or `callx8`, `entry` and `retw`. Arguments use six words,
 `a2` through `a7` in the callee and `a10` through `a15` in the caller, with
 aligned multiword arguments. An argument that cannot fit the remaining

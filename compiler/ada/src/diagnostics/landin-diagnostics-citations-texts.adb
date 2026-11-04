@@ -23519,6 +23519,13 @@ package body Landin.Diagnostics.Citations.Texts is
                & "time boundary and does not admit those source forms."
                & LF
                & LF
+               & "The pinned vendor C compilers do not admit `unsigned __i"
+               & "nt128`. The sixteen-byte scalar-storage alignment is Lan"
+               & "din's layout fact, not a claim of a vendor C 128-bit int"
+               & "eger mode; independent vector-storage alignment and the "
+               & "supported C scalar carriers are checked separately."
+               & LF
+               & LF
                & "Calls use `call8` or `callx8`, `entry` and `retw`. Argum"
                & "ents use six words, `a2` through `a7` in the callee and "
                & "`a10` through `a15` in the caller, with aligned multiwor"

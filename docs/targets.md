@@ -1234,7 +1234,7 @@ assumed; the native execution lane confirms XTheadBa before executing it.
 `--target=xtensa` selects the little-endian ELF32 windowed ABI, with
 `--level=xtensa-esp32` as default and `--level=xtensa-esp32s3` selecting
 its independent chip configuration. Both share ILP32 layout: four-byte
-pointers, eight-byte scalar alignment through 64 bits and a sixteen-byte
+pointers, eight-byte alignment for 64-bit scalars and a sixteen-byte
 stack. `compiler.c_xtensa_windowed_ilp32` identifies this ABI; the general
 C source boundary remains refused. Floating values travel in integer
 carriers; pinned runtime helpers may use the configured FPU.
@@ -1257,6 +1257,13 @@ The ESP32 and ESP32-S3 descriptions admit only their own exact level.
 Their images use internal executable SRAM and byte-accessible data SRAM,
 with caches disabled, CPU1 hardware-stalled and no external-memory claim.
 RAM development entry and ROM boot validation are separate workflows.
+
+Independent vendor-C peers check the shared sizes, alignments, scalar
+integer/float carriers and stack alignment, including calls into emitted
+Landin scalar routines. Native peers check C aggregate transport without
+admitting Landin by-value C signatures. Both vendor configurations refuse
+C `unsigned __int128`; Landin's 128-bit scalar layout therefore supplies
+no C integer-mode compatibility claim.
 
 The tool adapter selects `xtensa-esp32-elf-gcc` or
 `xtensa-esp32s3-elf-gcc` from the pinned Espressif archive and uses
