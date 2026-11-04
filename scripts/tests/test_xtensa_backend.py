@@ -9,10 +9,21 @@ import sys
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from environments.xtensa.backend import CommandFailed, configuration, description, stage
-from environments.xtensa.corpus import selected_image_limit
+from environments.xtensa.corpus import capacity_only, selected_image_limit
 
 
 class EntrySources(unittest.TestCase):
+    def test_capacity_mixed_with_any_other_linker_error_is_not_a_limit(self):
+        pure = ("/tools/bin/ld: program.elf section `.bss' will not fit in region `DRAM'\n"
+                "/tools/bin/ld: region `DRAM' overflowed by 10 bytes\n"
+                "collect2: error: ld returned 1 exit status\n")
+        self.assertTrue(capacity_only(pure))
+        for error in ('multiple definition of f', 'file format not recognized',
+                      'PHDR segment not covered by LOAD segment', 'undefined reference to f',
+                      'relocation truncated to fit', 'unrecognized new linker failure'):
+            with self.subTest(error=error):
+                self.assertFalse(capacity_only(pure + '/tools/bin/ld: ' + error + '\n'))
+
     def test_capacity_does_not_hide_assembler_or_undefined_symbol_failures(self):
         with tempfile.TemporaryDirectory() as directory:
             run = SimpleNamespace(out=Path(directory))

@@ -61,14 +61,35 @@ def refusal(run, refine, inputs, chip, row):
     return {'verdict': 'source-refusal', 'codes': codes}
 
 
+def capacity_only(log):
+    """Every linker diagnostic must describe capacity or its final consequence."""
+    patterns = (
+        r".+ section `[^']+' will not fit in region `(?:IRAM|DRAM)'",
+        r"region `(?:IRAM|DRAM)' overflowed by \d+ bytes",
+        r'DRAM RAM capacity exceeded: image overlaps the reserved \d+ KiB stack; '
+        r'use --firmware-layout=boot for the board boot check')
+    capacity = False
+    for line in log.splitlines():
+        if not line.strip():
+            continue
+        if line == 'collect2: error: ld returned 1 exit status':
+            continue
+        prefix, separator, diagnostic = line.partition(': ')
+        tool = prefix.rsplit('/', 1)[-1]
+        if (not separator or tool not in ('ld', 'ld.bfd')
+                or not any(re.fullmatch(pattern, diagnostic) for pattern in patterns)):
+            return False
+        capacity = True
+    return capacity
+
+
 def selected_image_limit(run, row, error, chip, memory_profile):
     """Only a recorded limit plus actual independent link/section evidence."""
     if (row.get('profile_limit') != 'selected-image'
             or not isinstance(error, CommandFailed) or error.name != 'link'):
         return None
     log = Path(error.log).read_text()
-    if any(marker in log for marker in ('undefined reference', 'Assembler messages',
-                                       'relocation', 'cannot find')):
+    if not capacity_only(log):
         return None
     overflows = {name: int(size) for name, size in re.findall(
         r"region `(\w+)' overflowed by (\d+) bytes", log)}
