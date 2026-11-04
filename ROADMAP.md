@@ -1556,8 +1556,8 @@ requests; the all-target manifest covers 52,272 entries. The full fixture-execut
 14 aggregate cases pass, with 16,024 checks and retained verdict/diagnostic
 diffs empty after progress-time normalization. Scaling passes alone on its
 host with the default parameters and worker settings.
-The local candidate awaits publication approval and its complete remote gate;
-main promotion needs separate authorization and the unchanged tested tree.
+The candidate must pass its complete remote gate before main promotion,
+which needs separate authorization and the unchanged tested tree.
 
 Settled SR-614 (including its merged SR-671) and SR-672 through the manual-text and policy-drafting recipes;
 SR-660 through emulator pointers; SR-709 through the public fake-filesystem
@@ -1578,7 +1578,8 @@ in the shared ESP scenario; existing Xtensa records are
 documented as INTERRUPT pending bits, with the correct per-line masks. New
 SR-772 remains open for selected-target corpus restriction explanations;
 shared witnesses stay valid, but inherited Cortex-M wording does not name
-Xtensa's separate controls.
+Xtensa's separate controls. New SR-773 remains open for a first-failure log
+command that works while the overall gate is still active.
 
 Activation review against `5d1bed296d7779a718d000baa687535a7d13d62d` includes
 all unmatched rows. SR-555 retains the existing locked runtime/FHS route;
@@ -3774,6 +3775,7 @@ SR-765, SR-766, SR-767, SR-770, SR-771.
 | SR-768 | Usability | The complete Xtensa corpus times out its exhaustive memory-alignment fixture while modes, manifests and a flake build saturate the host. Both the previously passing image and the new image complete with status 42, no trap and an intact guard under controlled replay, but need 21 to 45 wall seconds despite 12 to 18 CPU seconds; the runner applies a 20-second wall guard. Met closing R12.50 with default workers. | The next change to the Xtensa oracle's guest time budget. | A stated transport and guest budget policy, with finite heavy-fixture and nonterminating-guest controls under documented scheduling assumptions; a contended timeout cannot become a source exemption. | open |
 | SR-769 | Usability | Reviewing the new Xtensa physical records, the shared ESP scenario names its interrupt snapshots `receive_mcause` and `timer_mcause`, and its refusal says mcause. These ports actually report the Xtensa INTERRUPT pending bits and use chip-specific masks for lines 1 and 23; the inherited RISC-V labels make the evidence look like another register was checked. | The next change to shared ESP scenario diagnostics or record field names. | Architecture-specific register labels in results and refusals, with controls for both architectures and an explicit interpretation of older records. | open |
 | SR-772 | Usability | Reading the complete Xtensa corpus's C ABI restrictions, its retained reason says Cortex-M0 disables the general C surface and points to Cortex transport controls. The Xtensa result inherits the shared inventory's text without naming the selected configuration or its separate independent C peers, so discovering why this target is restricted requires reading the runner. Met auditing R12.50's final evidence. | The next change to shared freestanding corpus restriction reporting. | Retain the shared restriction witness while rendering an explanation for the selected target and pointing to that target's actual independent controls. | open |
+| SR-773 | Usability | Following a candidate gate's first failed job, the watcher suggests `gh run view --job ... --log-failed`, but that command refuses while the overall run is still active and says logs are available only when it completes. The completed job's REST log endpoint already works, so getting the early diagnostic requires a different command discovered outside the watcher. Met following the first R12.50 gate. | The next change to gate-watcher diagnostics or failed-job log guidance. | An actionable completed-job log command while its run remains active, with controls retaining the run and job identities. | open |
 
 
 ## Retained positions
