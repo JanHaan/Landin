@@ -214,11 +214,23 @@ def unpack(archive, into, mode):
                    check=True, timeout=600)
 
 
+def installer_tools():
+    """Name missing unpackers before creating any installation directory."""
+    missing = [name for name in ('dpkg-deb', 'tar', 'xz') if shutil.which(name) is None]
+    if missing:
+        raise RuntimeError(
+            'setup.py needs %s on PATH to unpack the locked archives; install dpkg'
+            ' (for dpkg-deb), tar and xz before retrying. On NixOS add dpkg and'
+            ' xz to the steam-run nix-shell; see environments/cortex-m/README.md#on-nixos.'
+            % ', '.join(missing))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--tools', type=Path, default=DEFAULT)
     args = parser.parse_args()
     supported_host(args.tools)
+    installer_tools()
     root = args.tools.resolve()
     if root.exists():
         raise RuntimeError("installation already exists; choose a fresh --tools directory")
