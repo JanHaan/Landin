@@ -20963,7 +20963,7 @@ stack, at every profile: those of `runtime/stack-exhausted-reaches-the-handler`
 and `runtime/stack-frame-past-limit-traps`, which match the kind and
 switch away, took at most 384 bytes on x86-64 and arm64 and 544 on RV64,
 at `none`, and 160 on Cortex-M0. On both Xtensa configurations these
-handlers take at most 560 bytes across the six profiles, leaving 48 bytes
+handlers take at most 544 bytes across the six profiles, leaving 64 bytes
 within their 608-byte handler allowance. The complete window context is
 336 bytes. A 1536-byte margin left existing 2 KiB prepared stacks too
 little room for ordinary frames. Compact ordinary word homes and a
