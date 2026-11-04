@@ -200,10 +200,15 @@ python3 environments/boards/run.py --board=esp32s3 --refine REFINE \
     --mode=boot --output NEW_DIRECTORY -- --ram-loader PI_HELPER
 ```
 
-The boot check observes true power-on and application progress over JTAG
-before opening the board-powered UART bridge. It then records a separate
-EN reset's full ROM trace and drives the scenario. Restoration repeats the
-power-on readiness proof for the fixed image. ESP32's ROM prints decimal
+S3's boot check observes power-on and application progress over JTAG before
+opening the board-powered UART bridge, then captures a separate EN reset's
+full ROM trace. Classic ESP32's external JTAG remains powered during USB
+cycling, so that cycle alone does not establish power-rail discharge. Its
+check follows USB cycling with one explicit CHIP_PU reset, with GPIO0
+released, and captures fresh ROM startup before the independent JTAG
+readiness checks. Its record identifies that EN cold-reset contract and
+unmeasured rail discharge. Both ports drive the scenario and repeat their
+readiness proof for the fixed image. ESP32's ROM prints decimal
 segment lengths and `POWERON_RESET`; S3 prints hexadecimal lengths and
 `POWERON`. These are separate chip-specific log oracles. Xtensa corruption
 and download-mode recovery controls are not admitted by these tools.
@@ -217,6 +222,9 @@ ROM download message through the selected CH340, then retains one traced
 probe reset command. This diagnostic performs no flash write and produces
 an observation rather than a board pass. Both paths use the common rig lock,
 topology guards, kernel USB checks and timing.
+Classic `--trace-rom` instead applies one normal 100 ms EN pulse with GPIO0
+released and retains 2.5 seconds of UART output. It performs no JTAG access,
+flash write or power switching, and cannot write a passed board record.
 
 For Pico 2 RAM entry, the BOOTSEL guard reads the selected hub and physical
 port through Linux sysfs. It validates the hub, port and any device

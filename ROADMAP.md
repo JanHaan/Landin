@@ -1849,7 +1849,7 @@ installer controls; SR-761 through distinct command logs; SR-762 through
 explicit boot observations; SR-763 through transmitter draining and
 complete ROM trace lines; and SR-764 through emulator cancellation ownership.
 Their rows stay in the register until closure evidence
-is complete. New findings are SR-758 through SR-766; SR-757 retains the
+is complete. New findings are SR-758 through SR-767; SR-757 retains the
 identity of the carried local finding.
 
 SR-555 retains the existing FHS route and its single locked runtime source.
@@ -4055,6 +4055,7 @@ SR-756.
 | SR-764 | Usability | Cancelling an Xtensa SIM investigation through its logged wrapper stops the corpus parent but leaves two QEMU processes consuming CPUs. The runner started each emulator in a separate session, outside the wrapper's cancellation group, and manual cleanup was required. Met in R12.50. | The next change to Xtensa emulator process ownership or cancellation. | Keep emulator children in the logged command's process group and verify cancellation also stops them, retaining normal bounded timeout cleanup. | open |
 | SR-765 | Usability | A classic ESP32 boot check verifies its flash, cycles USB power, then reads the debug flash stub's software-reset cause three rather than new startup. Its external JTAG stays powered and continuously drives pins. A separate EN reset produces cause one and the complete ROM load trace, so calling USB cycling alone a proven power-on was unsupported. Met in R12.50. | The next change to classic ESP cold-reset coordination or its evidence. | Record a defined CHIP_PU cold reset after USB cycling, preserve complete ROM and independent startup oracles, and state that rail discharge is unmeasured. | open |
 | SR-766 | Usability | Adding an immutable vendor README link with a section fragment, `check.py` treats its HTTPS GitHub path as a local file and says it is absent from the repository. Linking the same commit's tree and README section avoids the false refusal. Met documenting the classic ESP ROM selection in R12.50. | The next change to Markdown reference recognition in `check.py`. | Keep external URL schemes when stripping fragments and test external README section links beside local file references. | open |
+| SR-767 | Usability | A local eleven-packet QEMU observation takes about half a second although guest work is tiny. The runner requests server-side no-delay but leaves client TCP coalescing enabled; alternating measurements show client no-delay preserves all oracles and reduces median latency by 4.8 to 7.5 times. Met running R12.50's corpus. | The next change to the Xtensa remote-protocol connection. | Disable client Nagle delay and retain actual scalar, trap, early-stop and SIM-entry equivalence controls, keeping default worker counts. | open |
 
 
 ## Retained positions

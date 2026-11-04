@@ -491,8 +491,8 @@ def restore_fixed(run, args, chip, probe, console_for, cycle, settle):
     paced(args, 'restore resident image', lambda: probe.download_bin(args.fixed_image, chip.offset))
     settle(run)
     fixed_elf = common.fixed_elf(args, chip.name)
-    # Xtensa's UART bridge shares board power. Prove true POR over JTAG
-    # before a separate EN reset makes the complete ROM trace observable.
+    # Xtensa's UART bridge shares board power. The chip-specific cycle
+    # proves cold startup and retains its reset contract and ROM trace.
     names = common.elf_symbols(fixed_elf) if chip.target == 'xtensa' else None
     restored, cold = cycle(run, console_for, probe, names)
     try:
