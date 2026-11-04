@@ -416,3 +416,29 @@ public clk_conf_write: (device_base: usize, raw: u32) -> none =
     compiler.register_write(port, raw, compiler.normal_write,
                             compiler.write_zero, 0x0fffffff)
 end clk_conf_write
+
+public fsm_status_offset: usize = 0x6c
+public fsm_status_address: usize = 0x6000006c
+public fsm_status_named_mask: u32 = 0x000000ff
+public fsm_status_reset_mask: u32 = 0x00000000
+public fsm_status_reset_value: u32 = 0x00000000
+public fsm_status_image: type = layout(packed, u32) struct
+    f_st_urx_out: u4 at 0..3
+    f_st_utx_out: u4 at 4..7
+end fsm_status_image
+
+public fsm_status_decode: (raw: u32) -> (image: fsm_status_image) =
+    image = zeroed
+    bits: ptr mut u32 = ptr(usize(addr image))
+    bits.val = raw
+end fsm_status_decode
+
+public fsm_status_encode: (image: fsm_status_image) -> (raw: u32) =
+    bits: ptr u32 = ptr(usize(addr image))
+    raw = bits.val
+end fsm_status_encode
+
+public fsm_status_read: (device_base: usize) -> (raw: u32) =
+    port: ptr u32 = ptr(device_base + fsm_status_offset)
+    raw = compiler.register_read(port, compiler.normal_read)
+end fsm_status_read

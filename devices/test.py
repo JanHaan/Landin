@@ -23,6 +23,7 @@ tests are skipped, and say so, when there is none, unless --require-inputs
 is given, which the gate gives.
 """
 import argparse
+import ast
 import hashlib
 import json
 import os
@@ -2097,6 +2098,48 @@ class XtensaDescriptions(unittest.TestCase):
                 self.assertEqual(xtensa_stage(text, memory),
                                  ('_landin_device_rom_refused', []))
 
+    def test_board_uart_drain_before_reconfiguration(self):
+        # Evaluate the source condition with independent register snapshots:
+        # a FIFO-empty UART can still be transmitting its final byte.
+        def evaluate(node, images):
+            if isinstance(node, ast.BoolOp) and isinstance(node.op, ast.Or):
+                return any(evaluate(value, images) for value in node.values)
+            if isinstance(node, ast.Compare) and len(node.ops) == 1 and isinstance(node.ops[0], ast.NotEq):
+                return evaluate(node.left, images) != evaluate(node.comparators[0], images)
+            if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name):
+                return images[node.value.id][node.attr]
+            if isinstance(node, ast.Constant) and node.value == 0:
+                return 0
+            raise AssertionError('unexamined UART drain condition')
+
+        for chip in ('esp32', 'esp32s3'):
+            text = (ROOT / 'compiler/tests/board' / chip / 'bringup/bringup.ldn').read_text()
+            body = text.split('public clocks_and_uart: () -> none =', 1)[1].split('end clocks_and_uart', 1)[0]
+            before, after = body.split('end while', 1)
+            self.assertNotIn('_write(', before)
+            self.assertIn('_write(', after)
+            self.assertIn('tx = uart0.status_decode(uart0.status_read(uart0.base))', before)
+            if chip == 'esp32s3':
+                self.assertIn('state = uart0.fsm_status_decode(uart0.fsm_status_read(uart0.base))', before)
+            condition = ast.parse(re.search(r'while (.*?) do', before).group(1).replace('<>', '!='), mode='eval').body
+            rows = {row['source']: row for row in XtensaOracles.rows(chip)}
+
+            def image(register, raw):
+                return {'f_' + field['name'].lower(): (raw & field['mask']) >> field['low']
+                        for field in rows['UART0.' + register]['fields']}
+
+            for fifo, transmitter, pending in ((2, 0, True), (0, 3, True),
+                                               (1, 2, True), (0, 0, False)):
+                with self.subTest(chip=chip, fifo=fifo, transmitter=transmitter):
+                    # Unrelated RX count and pin status must not delay TX.
+                    status = (fifo << 16) | 0x80000001
+                    if chip == 'esp32':
+                        status |= transmitter << 24
+                    images = {'tx': image('STATUS', status)}
+                    if chip == 'esp32s3':
+                        images['state'] = image('FSM_STATUS', (transmitter << 4) | 5)
+                    self.assertEqual(evaluate(condition, images), pending)
+
     def test_idf_uart_address_ternary(self):
         header = IdfHeader('#define BASE 0x60000000\n'
                            '#define REG_UART_BASE(i) (BASE + (i) * 0x10000 + ((i) > 1 ? 0xe000 : 0))\n')
@@ -2152,7 +2195,7 @@ class XtensaOracles(unittest.TestCase):
                     self.assertIn('#define DRAM0_0_SEG_LEN 0x2c200', memory)
 
     def test_selected_access_contract(self):
-        for chip, count in (('esp32', 51), ('esp32s3', 51)):
+        for chip, count in (('esp32', 51), ('esp32s3', 52)):
             with self.subTest(chip=chip):
                 rows = {row['source']: row for row in self.rows(chip)}
                 self.assertEqual(len(rows), count)
@@ -2167,6 +2210,21 @@ class XtensaOracles(unittest.TestCase):
                 for key in (('DPORT.PRO_CACHE_CTRL', 'DPORT.APP_CACHE_CTRL') if chip == 'esp32'
                             else ('EXTMEM.ICACHE_CTRL', 'EXTMEM.DCACHE_CTRL')):
                     self.assertEqual(rows[key]['policy']['write'], 'refused')
+
+    @requires_refine
+    def test_uart_idle_contract(self):
+        for chip in ('esp32', 'esp32s3'):
+            with self.subTest(chip=chip):
+                header = fetch_inputs.fetch(chip + '/uart_ll.h').read_text()
+                idle = header.split('bool uart_ll_is_tx_idle', 1)[1].split('}', 1)[0]
+                self.assertRegex(idle, r'(?s)txfifo_cnt.*== 0.*&&.*st_utx_out == 0')
+                rows = {row['source']: row for row in self.rows(chip)}
+                register = rows['UART0.STATUS' if chip == 'esp32' else 'UART0.FSM_STATUS']
+                self.assertEqual(register['offset'], 0x1c if chip == 'esp32' else 0x6c)
+                field = next(field for field in register['fields'] if field['name'] == 'ST_UTX_OUT')
+                self.assertEqual((field['low'], field['high']), (24, 27) if chip == 'esp32' else (4, 7))
+                self.assertEqual(register['policy']['write'], 'refused')
+                self.assertEqual(register['known_reset_mask'], 0)
 
     @requires_refine
     def test_s3_cold_rom_abi(self):

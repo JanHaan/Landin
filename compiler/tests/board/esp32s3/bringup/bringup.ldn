@@ -32,6 +32,14 @@ public indicator: u32 = 0x40
 public ticks_per_ms: u32 = 16000
 
 public clocks_and_uart: () -> none =
+    -- The ROM can return with the last byte in the shift register.
+    -- Drain FIFO and transmitter before changing clocks or resetting UART0.
+    mut tx := uart0.status_decode(uart0.status_read(uart0.base))
+    mut state := uart0.fsm_status_decode(uart0.fsm_status_read(uart0.base))
+    while tx.f_txfifo_cnt <> 0 or state.f_st_utx_out <> 0 do
+        tx = uart0.status_decode(uart0.status_read(uart0.base))
+        state = uart0.fsm_status_decode(uart0.fsm_status_read(uart0.base))
+    end while
     -- SYSCLK_CONF: crystal source 0, PRE_DIV_CNT 0; write no RO status.
     system.sysclk_conf_write(system.base, 0)
     clocks := system.perip_clk_en0_read(system.base)
