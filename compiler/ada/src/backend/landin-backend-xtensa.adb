@@ -2501,6 +2501,7 @@ package body Landin.Backend.Xtensa is
                   Input := Input + 1;
                   Load_Value (Landin.IR.Nth_Operand
                     (Of_Unit, Item, Value, Input), "x5");
+                  Extend ("x5", Operand (Index).Kind);
                   Put (Character'Val (9) & "l32i a8, a7, 20");
                   Put (Character'Val (9) & "s32i a8, a7, "
                        & Image (128 + Number (Index) * 4));
