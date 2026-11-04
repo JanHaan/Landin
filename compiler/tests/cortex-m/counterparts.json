@@ -10,13 +10,13 @@
     "fixed-conditional-generic-runtime": [
       [
         "compiler.arch == rv64)",
-        "compiler.arch == rv64 or compiler.arch == cortex_m0\n          or compiler.arch == rv32)"
+        "compiler.arch == rv64 or compiler.arch == cortex_m0\n          or compiler.arch == rv32 or compiler.arch == xtensa)"
       ]
     ],
     "r430-fixed-tools": [
       [
         "compiler.arch == rv64)",
-        "compiler.arch == rv64 or compiler.arch == cortex_m0\n                 or compiler.arch == rv32)"
+        "compiler.arch == rv64 or compiler.arch == cortex_m0\n                 or compiler.arch == rv32 or compiler.arch == xtensa)"
       ]
     ],
     "pointer-unions": [

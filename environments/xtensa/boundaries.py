@@ -12,6 +12,7 @@ sys.path.insert(0, str(ROOT))
 from environments.xtensa.backend import (Run, build, sha, symbols, stage)  # noqa: E402
 from environments.xtensa.remote import observe  # noqa: E402
 from environments.xtensa.tools import Tools  # noqa: E402
+from environments.xtensa.helpers import audit  # noqa: E402
 
 
 def assemblers(output, refine):
@@ -132,7 +133,11 @@ def main():
     result = {'status': 'passed', 'scope': 'FILTERED configuration controls',
               'assemblers': assemblers(args.output, args.refine.resolve()),
               'baseline': [baseline(args.output, args.refine.resolve(), tools.qemu, c)
-                           for c in ('window-depth', 'scalars')]}
+                           for c in ('window-depth', 'scalars')],
+              'helper_state': [audit(args.output / ('helper-state--' + chip),
+                  args.output / ('window-depth--esp32' if chip == 'esp32' else
+                                 'window-depth--esp32s3-map'), chip)
+                  for chip in ('esp32', 'esp32s3')]}
     tools.finish(args.output)
     (args.output / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
     print('FILTERED Xtensa strict assembler and shared-object controls passed')
