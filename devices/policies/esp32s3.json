@@ -46,7 +46,8 @@
       "STATUS",
       "CONF0",
       "CONF1",
-      "CLK_CONF"
+      "CLK_CONF",
+      "FSM_STATUS"
     ],
     "INTERRUPT_CORE0": [
       "UART_INTR_MAP",
@@ -345,6 +346,11 @@
       "read": "normal",
       "write": "normal",
       "reserved": "zero"
+    },
+    "UART0.FSM_STATUS": {
+      "read": "normal",
+      "write": "refused",
+      "reserved": "zero"
     }
   },
   "reset_mask_overrides": {
@@ -361,7 +367,8 @@
     "RTC_CNTL.SW_CPU_STALL": "0x0",
     "RTC_CNTL.WDTWPROTECT": "0x0",
     "RTC_CNTL.SWD_WPROTECT": "0x0",
-    "RTC_CNTL.SWD_CONF": "0xfffe0000"
+    "RTC_CNTL.SWD_CONF": "0xfffe0000",
+    "UART0.FSM_STATUS": "0x0"
   },
   "interrupt_corrections": {
     "AES": {

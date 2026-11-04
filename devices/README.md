@@ -545,6 +545,13 @@ credible after APB reads. The policy keeps the two pointer fields and
 omits the overlapping aggregate status field. The S3 uses its direct FIFO
 and STATUS count. Each board program resets UART0 before configuring it,
 so the classic FIFO's default 128-byte capacity is an explicit premise.
+Both board bringup routines drain the ROM's UART0 output before changing
+system clocks, resetting UART0 or changing its divider. They wait for an
+empty transmit FIFO and an idle transmitter state machine, as the pinned
+`uart_ll_is_tx_idle` requires. Classic STATUS holds both fields; the S3 uses
+STATUS bits 25:16 and FSM_STATUS at offset `0x6c`, bits 7:4. The S3 policy
+selects that read-only register as well; waiting only for FIFO empty could
+truncate the final byte already in the transmitter.
 
 The ESP32 has 128 KiB IRAM at `0x40080000` and 128 KiB DRAM at
 `0x3ffb0000` in this conservative profile. The S3 has 128 KiB IRAM at

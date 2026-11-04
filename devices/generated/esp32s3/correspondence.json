@@ -3370,6 +3370,49 @@
     "width": 32
   },
   {
+    "address": 1610612844,
+    "alignment": 4,
+    "derived_from": null,
+    "fields": [
+      {
+        "access": "read-only",
+        "encodings": [],
+        "high": 3,
+        "low": 0,
+        "mask": 15,
+        "modified_write": null,
+        "name": "ST_URX_OUT",
+        "read_action": null,
+        "representation": "unsigned"
+      },
+      {
+        "access": "read-only",
+        "encodings": [],
+        "high": 7,
+        "low": 4,
+        "mask": 240,
+        "modified_write": null,
+        "name": "ST_UTX_OUT",
+        "read_action": null,
+        "representation": "unsigned"
+      }
+    ],
+    "known_reset_mask": 0,
+    "known_reset_value": 0,
+    "named_mask": 255,
+    "offset": 108,
+    "policy": {
+      "read": "normal",
+      "reserved": "zero",
+      "write": "refused"
+    },
+    "register_access": null,
+    "source": "UART0.FSM_STATUS",
+    "svd_reset_mask": 4294967295,
+    "svd_reset_value": 0,
+    "width": 32
+  },
+  {
     "address": 1611407468,
     "alignment": 4,
     "derived_from": null,
