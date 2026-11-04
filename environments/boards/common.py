@@ -913,14 +913,14 @@ def esp_image(data):
 
 
 ROM_RESET = re.compile(r'rst:0x([0-9a-f]+) \(([A-Z_]+)\),boot:0x([0-9a-f]+) \(([A-Z_]+)\)')
-ROM_LOAD = re.compile(r'^load:0x([0-9a-f]+),len:(0x[0-9a-f]+|[0-9]+)', re.MULTILINE)
-ROM_ENTRY = re.compile(r'^entry 0x([0-9a-f]+)', re.MULTILINE)
+ROM_LOAD = re.compile(r'^load:0x([0-9a-f]+),len:(0x[0-9a-f]+|[0-9]+)\r?\n', re.MULTILINE)
+ROM_ENTRY = re.compile(r'^entry 0x([0-9a-f]+)\r?\n', re.MULTILINE)
 ROM_CHECKSUM = re.compile(r'Checksum failure\. Calculated 0x([0-9a-f]+) stored 0x([0-9a-f]+)')
 ROM_SHA = re.compile(r'SHA-256 comparison failed:\s*Calculated: ([0-9a-f]{64})\s*Expected: ([0-9a-f]{64})')
 
 
 def rom_log(text):
-    """What an ESP32-C3's or ESP32-C5's ROM said while it booted: its reset
+    """What an ESP ROM said while it booted: its reset
     and boot mode, each segment it loaded, the entry it took, and a
     checksum or SHA-256 it found wrong, each None when it said nothing of
     it; only the first boot in TEXT is read."""

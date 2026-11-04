@@ -2727,7 +2727,7 @@ package body Landin.Tests.Targets_Suite is
               (Linux_RV64, Ordinary_Too_Long, Naked => True)
               = "one assembly block exceeds 4096 bytes"
             and then Asm.Text_Error
-              (Xtensa, ".word 1" & Full, Naked => True) /= "",
+              (Xtensa, ".word 1" & Full (1 .. 5000), Naked => True) /= "",
             "only naked Xtensa text has the bounded bootstrap allowance");
       end;
    end Xtensa_Configurations_Are_Exact;

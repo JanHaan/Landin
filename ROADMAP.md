@@ -1632,7 +1632,7 @@ SR-757's identity. Other sessions' worktrees and rig resources remain theirs.
    Its Xtensa Linux archive's SHA-256 is
    `0eecb2a34a5586c0e59110f77b9343b7b336e82fdb0e1a30e1dc1bab8a547e35`.
    Use separate `esp32` and `esp32s3` machines with direct ELF loading and
-   semihosted corpus oracles; this bypasses ROM packaging and supplies no
+   debugger-observed result oracles; this bypasses ROM packaging and supplies no
    physical boot evidence. Sources: the immutable
    [Espressif tool manifest](https://raw.githubusercontent.com/espressif/esp-idf/0a1d19eba1fc6f9b5abe623df2dc4f60a703cf46/tools/tools.json),
    [toolchain release](https://github.com/espressif/crosstool-NG/releases/tag/esp-16.1.0_20260609),
@@ -1806,9 +1806,10 @@ SR-719 by removing the duplicated atom list; SR-723 by passing hosted
 runtime link policy in mode comparisons; SR-724 by checking every expanded
 required matrix leg, including called workflows; SR-725 by listing each
 target's debug mode; SR-757 through SR-760 through help, importer and
-installer controls; SR-761 through distinct command logs; and SR-762 through
-explicit boot observations. Their rows stay in the register until closure evidence
-is complete. New findings are SR-758 through SR-762; SR-757 retains the
+installer controls; SR-761 through distinct command logs; SR-762 through
+explicit boot observations; and SR-763 through transmitter draining and
+complete ROM trace lines. Their rows stay in the register until closure evidence
+is complete. New findings are SR-758 through SR-763; SR-757 retains the
 identity of the carried local finding.
 
 SR-555 retains the existing FHS route and its single locked runtime source.
@@ -3993,6 +3994,7 @@ SR-756.
 | SR-760 | Usability | Starting the embedded-tools installer inside an FHS shell prepared for lane execution, without the setup recipe's `dpkg`, it downloads a verified archive and creates a partial installation before failing with `FileNotFoundError: dpkg-deb`. The refusal neither names the setup prerequisites nor says how to recover the partial directory. Met in R12.50. | The next change to embedded-tool installation preflight. | Check required unpackers before creating the installation, with an actionable refusal naming the setup recipe and a no-partial-output control. | open |
 | SR-761 | Usability | A physical ESP32 boot check fails its first flash command, then attempts resident-image restoration under the same command name. The restoration overwrites the first `flash.log`, so the retained commands name both attempts but only the restoration's diagnostic survives. Met in R12.50. | The next change to board-command logging. | Retain a distinct log for every invocation and link each command record and failure to its actual log, including restoration attempts. | open |
 | SR-762 | Usability | The new ESP32-S3 boot check refuses its first cold-state observation because the shared read helper requires the RAM contract's retained CPU1 stall, and says to use the boot check that is already running. It also blocks startup-trap diagnosis before that stall exists. Met in R12.50. | The next change to Xtensa boot readback or the RAM helper's read contract. | An explicit observational boot-read scope reporting actual CPU1 state, while every warm RAM read still requires and independently verifies the retained hardware stall. | open |
+| SR-763 | Usability | An ESP32-S3 cold application starts and its fixed-image restoration passes, but changing the UART clock cuts the ROM log during a segment length. The log parser accepts the surviving decimal prefix `0` and reports that the ROM loaded zero bytes, obscuring the incomplete trace. Met in R12.50. | The next change to ESP boot tracing or startup UART setup. | Drain the transmitter before changing its clock and require complete ROM load and entry lines, retaining an incomplete trace as a failed observation. | open |
 
 
 ## Retained positions

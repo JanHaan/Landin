@@ -120,6 +120,24 @@ STATUS = """Current status for hub 7-2.3 [0bda:5411 Generic USB2.1 Hub, USB 2.10
 """
 
 
+class ROMLog(unittest.TestCase):
+    def test_loads_require_complete_decimal_or_hexadecimal_lines(self):
+        text = ('load:0x40378000,len:1028\r\n'
+                'load:0x40378404,len:0xac40\n')
+        self.assertEqual(COMMON.rom_log(text)['loads'],
+                         [(0x40378000, 1028), (0x40378404, 44096)])
+        for damaged in ('0', '0x', '0x1z\n', '24garbage\r\n', '0\xf8\xff'):
+            with self.subTest(damaged=damaged):
+                self.assertEqual(COMMON.rom_log(
+                    text + 'load:0x3fca8000,len:' + damaged)['loads'],
+                    [(0x40378000, 1028), (0x40378404, 44096)])
+
+    def test_entry_requires_its_complete_line(self):
+        for suffix in ('', 'garbage\n'):
+            self.assertIsNone(COMMON.rom_log('entry 0x40378400' + suffix)['entry'])
+        self.assertEqual(COMMON.rom_log('entry 0x40378400\r\n')['entry'], 0x40378400)
+
+
 class Framing(unittest.TestCase):
     def test_frames_are_found_between_echoed_bytes(self):
         stream = b'ab\x02t h=0000000a g=00000004\x03\ncd\x02b r=00000100\x03\n'

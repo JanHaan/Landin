@@ -1,7 +1,9 @@
 # Xtensa execution checks
 
-These runners execute compiler-generated firmware on Espressif's QEMU
-`esp32` and `esp32s3` machines. They use the windowed ABI throughout, the
+These runners execute compiler-generated firmware on Espressif's QEMU.
+Chip controls use its `esp32` and `esp32s3` machines; the complete corpus
+uses its `sim` machine with the exact selected CPU and explicitly virtual
+RAM. They use the windowed ABI throughout, the
 chip-specific assembler configuration, and the matching windowed libgcc.
 The core names LX6 and LX7 identify configurable processor families; the
 selected levels describe the actual ESP32 and ESP32-S3 configurations.
@@ -27,15 +29,19 @@ python3 environments/xtensa/backend.py \
   --refine "$REFINE" --tools "$TOOLS" --output "$OUT/controls" \
   --chip esp32 --control status-control --control trap-control \
   --control window-depth --control window-switch --control scalars \
-  --control software-float --control assembly-operands --control feature-level
+  --control software-float --control assembly-operands --control feature-level \
+  --control break-control --control early-stop-control --control premature-stop-control
 ```
 
 Repeat with `--chip esp32s3` and a new output path. The source wrapper
-records `main()`'s result in a separate status cell. QEMU's remote protocol
-sets a breakpoint at the compiler's stopped label and reads that cell and
-the compiler's trap cells. Neither the emitted assembly nor the executable
-is rewritten. Trap controls also check that the recorded PC points to the
-emitted illegal instruction. The window controls exercise overflow and
+initializes a separate status cell to `-999`, records `main()`'s result,
+then enters its own nonreturning completion loop. QEMU's remote protocol
+checks the stop PC, that status cell and the compiler's trap cells. Normal
+corpus images use the emitted assembly unchanged. Separate negative controls
+exercise an illegal instruction, a debug break, an early debugger stop and
+a premature firmware stop; the latter two cannot count as completion even
+with zero status and no recorded trap. Trap controls also check the recorded
+PC against the emitted instruction. The window controls exercise overflow and
 underflow, and round trips between two stacks with live recursive frames.
 
 The corpus adapter reads the sole shared
@@ -64,8 +70,13 @@ object and are exposed to other tools by `backend.disposition`.
 ```sh
 python3 environments/xtensa/corpus.py \
   --refine "$REFINE" --tools "$TOOLS" --output "$OUT/corpus-esp32" \
-  --chip esp32 --all
+  --chip esp32 --memory-profile=sim --all
 ```
+
+The SIM profile declares 64 MiB of emulator RAM, separate code/data regions
+and an 8 MiB stack. It retains the selected chip's actual ISA configuration;
+it supplies no physical SRAM, PSRAM, cache or peripheral claim. Chip-machine
+controls and physical runs retain their bounded internal-SRAM maps.
 
 Configuration and compatibility controls run separately:
 

@@ -175,6 +175,13 @@ writes. Internal instruction SRAM receives word accesses; byte-addressed
 constants and mutable storage remain in data SRAM. External flash, PSRAM,
 cache maintenance and DMA are outside these profiles.
 
+The S3 cold ROM-entry stage has a separate cache contract. After checking
+its reset cause and pinned ROM instruction/constant fingerprints, it stops
+watchdogs, stalls CPU1 and uses the ROM's windowed writeback and cache-disable
+APIs. Compiler entry supplies windows, vectors and a spill stack before this
+stage; static storage is initialized afterward. The cache-off path calls no
+ROM routines. This cold path does not relax the warm loader's precondition.
+
 Before resuming the new entry, the helper checks and single-steps the
 compiler's exact normal-mode `memw`/`isync` pair with interrupts masked,
 recording both PCs and debug causes. Startup then establishes window and
@@ -200,6 +207,16 @@ power-on readiness proof for the fixed image. ESP32's ROM prints decimal
 segment lengths and `POWERON_RESET`; S3 prints hexadecimal lengths and
 `POWERON`. These are separate chip-specific log oracles. Xtensa corruption
 and download-mode recovery controls are not admitted by these tools.
+
+For a failed cold-start observation, append `--inspect-boot` to the explicit
+boot invocation. This reads actual cache, reset, CPU1 and selected ROM state
+without flashing, resetting or writing a passed record. Its helper uses
+`boot-read`; ordinary warm readbacks still require CPU1's retained stall.
+Classic ESP32 also accepts `--diagnose-reset` in boot mode: it confirms the
+ROM download message through the selected CH340, then retains one traced
+probe reset command. This diagnostic performs no flash write and produces
+an observation rather than a board pass. Both paths use the common rig lock,
+topology guards, kernel USB checks and timing.
 
 For Pico 2 RAM entry, the BOOTSEL guard reads the selected hub and physical
 port through Linux sysfs. It validates the hub, port and any device

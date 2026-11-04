@@ -1,7 +1,10 @@
 """The ABI peer cannot count a nonzero result or a processor trap as zero."""
 from copy import deepcopy
+from pathlib import Path
+import sys
 import unittest
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from environments.xtensa import abi
 
 

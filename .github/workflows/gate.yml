@@ -749,7 +749,8 @@ jobs:
             --chip "${{ matrix.chip }}" --output "$RUNNER_TEMP/xtensa-controls" \
             --control=status-control --control=trap-control --control=scalars \
             --control=software-float --control=assembly-operands \
-            --control=window-depth --control=window-switch --control=feature-level
+            --control=window-depth --control=window-switch --control=feature-level \
+            --control=break-control --control=early-stop-control --control=premature-stop-control
           python3 environments/xtensa/boundaries.py --tools "$RUNNER_TEMP/embedded" \
             --refine "$PWD/compiler/ada/build/linux-amd64/release/bin/refine" \
             --qemu "$RUNNER_TEMP/embedded/qemu-xtensa/bin/qemu-system-xtensa" \
@@ -758,6 +759,7 @@ jobs:
             --refine "$PWD/compiler/ada/build/linux-amd64/release/bin/refine" \
             --output "$RUNNER_TEMP/xtensa-abi"
           python3 environments/xtensa/corpus.py --all --tools "$RUNNER_TEMP/embedded" \
+            --memory-profile=sim \
             --refine "$PWD/compiler/ada/build/linux-amd64/release/bin/refine" \
             --qemu "$RUNNER_TEMP/embedded/qemu-xtensa/bin/qemu-system-xtensa" \
             --chip "${{ matrix.chip }}" --output "$RUNNER_TEMP/xtensa-corpus"
