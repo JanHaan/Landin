@@ -2276,6 +2276,7 @@ package body Landin.Tests.Targets_Suite is
          elsif Family = "arm64" then Linux_Arm64
          elsif Family = "M profile" then Cortex_M
          elsif Family = "RV32" then RV32
+         elsif Family = "Xtensa" then Xtensa
          else Linux_RV64);
 
       function Added (Level : String) return String is
@@ -2369,7 +2370,7 @@ package body Landin.Tests.Targets_Suite is
          end loop;
       end;
       Landin.Testing.Check_Equal
-        (Item, Count, 16, "D255's table states sixteen levels");
+        (Item, Count, 18, "D255's table states eighteen levels");
 
       --  The compiler holds exactly the features the table gives a level.
       for Index in 1 .. Count loop
@@ -2423,7 +2424,8 @@ package body Landin.Tests.Targets_Suite is
                Landin.Testing.Check
                  (Item, Row /= 0
                     and then Rows (Row).Family /= "M profile"
-                    and then Rows (Row).Family /= "RV32",
+                    and then Rows (Row).Family /= "RV32"
+                    and then Rows (Row).Family /= "Xtensa",
                   "platform/linux's level " & Spelled
                   & " is a hosted level of D255's table");
             end;
@@ -2582,8 +2584,110 @@ package body Landin.Tests.Targets_Suite is
          "a RISC-V table follows the entry word at its own alignment");
    end RISC_V_Cores_Take_Their_Own_Slots;
 
+   procedure Xtensa_Configurations_Are_Exact
+     (Item : in out Landin.Testing.Context);
+
+   procedure Xtensa_Configurations_Are_Exact
+     (Item : in out Landin.Testing.Context)
+   is
+      package L renames Landin.Targets.Levels;
+      package F renames Landin.Targets.Firmware;
+      package Asm renames Landin.Targets.Assembly;
+      use type L.Feature;
+      use type F.Core_Kind;
+      use type F.Interrupt_Model;
+      use type Asm.Register_Kind;
+      ESP32 : constant L.Feature_Level := L.Default_Level (Xtensa);
+      S3 : constant L.Feature_Level :=
+        L.Level_Named (Xtensa, "xtensa-esp32s3");
+      Profile : F.Profile;
+   begin
+      Check_Description (Item, Xtensa, "xtensa", 32, 4, 16, 16, 4);
+      Landin.Testing.Check
+        (Item, Architecture_Of (Xtensa) = Landin.Targets.Xtensa
+         and then C_ABI_Of (Xtensa) = Xtensa_Windowed_ILP32
+         and then Alignment_Of (Xtensa, Byte_8) = 8
+         and then Alignment_Of (Xtensa, Byte_16) = 16
+         and then Is_Firmware (Xtensa)
+         and then Selection.Described ("xtensa") = Xtensa
+         and then Capabilities.Backend_For (Xtensa) = Capabilities.Xtensa_ELF
+         and then Capabilities.Object_Format_Of (Xtensa) = Capabilities.ELF
+         and then not Capabilities.C_Signatures (Xtensa)
+         and then not Capabilities.C_Records (Xtensa)
+         and then not Capabilities.C_Variadic_Calls (Xtensa),
+         "Xtensa shares one explicit windowed ILP32 firmware ABI");
+      Landin.Testing.Check
+        (Item, L.Name (ESP32) = "xtensa-esp32"
+         and then L.Levels_Of (Xtensa) = "xtensa-esp32, xtensa-esp32s3"
+         and then not L.Has (ESP32, L.Salt) and then L.Has (S3, L.Salt)
+         and then not L.Is_Level_Of (Xtensa, "rv32imc")
+         and then not L.Is_Level_Of (Xtensa, "xtensa-lx7")
+         and then not L.Is_Level_Of (RV32, "xtensa-esp32")
+         and then (for all Feature in L.Feature =>
+           (if Feature /= L.Salt then not L.Has (ESP32, Feature)
+                                    and then not L.Has (S3, Feature))),
+         "only S3 holds salt; architecture names do not select a level");
+      Landin.Testing.Check
+        (Item, F.Core_Named ("xtensa-lx6") = F.Xtensa_LX6
+         and then F.Core_Named ("xtensa-lx7") = F.Xtensa_LX7
+         and then F.Svd_Name (F.Xtensa_LX6) = "Xtensa LX6"
+         and then F.Svd_Name (F.Xtensa_LX7) = "Xtensa LX7"
+         and then F.Reference_Module (Xtensa) = "platform/xtensa/reference"
+         and then F.Executes (F.Xtensa_LX6, "xtensa-esp32")
+         and then F.Executes (F.Xtensa_LX7, "xtensa-esp32s3")
+         and then not F.Executes (F.Xtensa_LX7, "xtensa-esp32")
+         and then not F.Executes (F.Xtensa_LX6, "xtensa-esp32s3"),
+         "neither chip configuration assumes the other's instructions");
+      Profile.Present := True;
+      Profile.Core := F.Xtensa_LX6;
+      Profile.Vector_Count := 32;
+      Profile.Count := 1;
+      Profile.Placed := [others => 1];
+      Profile.Regions (1) :=
+        (F.To_Name ("iram"), 16#4008_0000#, 16#1_0000#,
+         F.Read_Write_Execute);
+      Landin.Testing.Check
+        (Item, F.Model_Of (Profile.Core) = F.Xtensa_Interrupts
+         and then F.Vector_Bytes (Profile) = 1024
+         and then F.Vector_Alignment (Profile) = 1024
+         and then F.Vector_Address (Profile) = 16#4008_0000#
+         and then F.Admits (Profile, 0) and then F.Admits (Profile, 31)
+         and then not F.Admits (Profile, 14)
+         and then not F.Admits (Profile, 32)
+         and then F.Dispatched_Slot (Profile.Core, 0)
+         and then F.Interrupt_Level_Mask (F.Xtensa_LX6, 1) = 16#0006_37FF#
+         and then F.Interrupt_Level_Mask (F.Xtensa_LX7, 3) = 16#28C0_8800#
+         and then F.Interrupt_Level_Mask (F.Xtensa_LX6, 6) = 0
+         and then F.Interrupt_Level_Mask (F.Xtensa_LX7, 7) = 16#4000#
+         and then F.Boots (Profile.Core, F.ESP_App_Image),
+         "32 CPU lines dispatch through one KiB of architectural vectors");
+      Landin.Testing.Check
+        (Item, Asm.Classify (Xtensa, "a2") = Asm.Operand_Register
+         and then Asm.Classify (Xtensa, "a15") = Asm.Operand_Register
+         and then Asm.Classify (Xtensa, "a0") = Asm.Never_Named
+         and then Asm.Classify (Xtensa, "a1") = Asm.Never_Named
+         and then Asm.Classify (Xtensa, "a7") = Asm.Never_Named
+         and then Asm.Classify (Xtensa, "q0") = Asm.Never_Named
+         and then Asm.Classify (Xtensa, "f0") = Asm.Never_Named
+         and then Asm.Classify (Xtensa, "a16") = Asm.Not_A_Register
+         and then Asm.General_Count (Xtensa) = 6
+         and then Asm.General_Register (Xtensa, 1) = "a8"
+         and then Asm.General_Register (Xtensa, 6) = "a13"
+         and then not Asm.Has_Float_Registers (Xtensa)
+         and then Asm.Text_Error (Xtensa, "addi {r}, {r}, 1 # comment") = ""
+         and then Asm.Text_Error (Xtensa, "call8 other") /= ""
+         and then Asm.Text_Error (Xtensa, "retw") /= ""
+         and then Asm.Text_Error (Xtensa, "entry a1, 32") /= ""
+         and then Asm.Text_Error (Xtensa, "loop a2, end_loop") /= ""
+         and then Asm.Text_Error (Xtensa, "j spin", Naked => True) = "",
+         "ordinary operands preserve link, stack, frame and optional banks");
+   end Xtensa_Configurations_Are_Exact;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "targets", "Xtensa configurations are exact",
+         Xtensa_Configurations_Are_Exact'Access);
       Landin.Testing.Register
         (Into, "targets", "RISC-V cores take their own slots",
          RISC_V_Cores_Take_Their_Own_Slots'Access);

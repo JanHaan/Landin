@@ -10986,8 +10986,72 @@ package body Landin.Tests.Backend_Suite is
       end;
    end Arm64_Speed_Holds_Argument_And_Float_Registers;
 
+   procedure Xtensa_Verifier_Refuses_Invalid_Registers
+     (Item : in out Landin.Testing.Context);
+
+   procedure Xtensa_Verifier_Refuses_Invalid_Registers
+     (Item : in out Landin.Testing.Context)
+   is
+      package L renames Landin.Targets.Levels;
+      use type IR.Verifier.Fault_Kind;
+      use type IR.Opcode;
+      type Name_Access is access constant String;
+      A0 : aliased constant String := "a0";
+      A1 : aliased constant String := "a1";
+      A7 : aliased constant String := "a7";
+      A16 : aliased constant String := "a16";
+      F0 : aliased constant String := "f0";
+      Q0 : aliased constant String := "q0";
+      Refused : constant array (1 .. 6) of Name_Access :=
+        [A0'Access, A1'Access, A7'Access, A16'Access, F0'Access, Q0'Access];
+   begin
+      for Level of L.Family_Levels (Landin.Targets.Xtensa) loop
+         declare
+            Work : Landin.Stages.Compilation :=
+              Landin.Stages.Create (Landin.Targets.Xtensa, Level);
+            Ran : Natural;
+         begin
+            Lower
+              (Work, "f: (v: u32) -> (r: u32) =" & LF
+               & "    r = assembler.block(""addi {r}, {r}, 1""," & LF
+               & "        inout r: u32 at general = v, out _ at a2)" & LF
+               & "end f" & LF, Ran);
+            Landin.Testing.Check_Equal
+              (Item, Ran, 5, "Xtensa integer operands lower at " & L.Name (Level));
+            if not Landin.Stages.Failed (Work) then
+               declare
+                  Code : constant not null access IR.Unit := Landin.Stages.Code (Work);
+                  Block : IR.Value_Id := IR.No_Value;
+               begin
+                  for V in 1 .. IR.Value_Count (Code.all, 1) loop
+                     if IR.Op_Of (Code.all, 1, IR.Value_Id (V)) = IR.Assembly then
+                        Block := IR.Value_Id (V);
+                     end if;
+                  end loop;
+                  Landin.Testing.Check
+                    (Item, IR.Verifier.Check (Code.all, Landin.Targets.Xtensa).Kind
+                     = IR.Verifier.Nothing_Wrong, "the lowered Xtensa block verifies");
+                  for Name of Refused loop
+                     IR.Testing_Support.Overwrite_Assembly_Operand
+                       (Code.all, 1, Block, 2,
+                        IR.Operand_At (IR.Discarded, Landin.Source.Names.No_Name,
+                                       Name.all, Landin.Types.Not_Typed));
+                     Landin.Testing.Check
+                       (Item, IR.Verifier.Check (Code.all, Landin.Targets.Xtensa).Kind
+                        = IR.Verifier.Assembly_Register_Refused,
+                        L.Name (Level) & " refuses " & Name.all);
+                  end loop;
+               end;
+            end if;
+         end;
+      end loop;
+   end Xtensa_Verifier_Refuses_Invalid_Registers;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "backend", "Xtensa verifier refuses invalid registers",
+         Xtensa_Verifier_Refuses_Invalid_Registers'Access);
       Landin.Testing.Register
         (Into, "backend", "arm64 scalar homes reuse and promote",
          Arm64_Scalar_Homes_Reuse_And_Promote'Access);

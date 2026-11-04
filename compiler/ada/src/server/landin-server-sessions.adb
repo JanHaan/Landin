@@ -831,7 +831,8 @@ package body Landin.Server.Sessions is
                      Level := Landin.Targets.Levels.Level_Named (Facts, Name);
                   else
                      Add_Error
-                       ("unknown level for " & Landin.Targets.Name (Facts)
+                       ("error[L0009]: unknown level for "
+                        & Landin.Targets.Name (Facts)
                         & ": " & Name);
                   end if;
                end;
