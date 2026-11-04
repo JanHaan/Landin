@@ -14,10 +14,12 @@ gate to the one shape a reused pass may have.
 """
 from datetime import datetime, timedelta, timezone
 import importlib.util
+import itertools
 import os
 from pathlib import Path
 import re
 import shutil
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -450,35 +452,323 @@ class Candidate(unittest.TestCase):
         self.assertFalse(self.decide())
 
 
-class Workflow(unittest.TestCase):
-    """The reuse list in gate.yml names every job the aggregate needs.
+def workflow_jobs(workflow):
+    """Read job boundaries, not general YAML; unfamiliar shapes fail closed."""
+    sections = re.split(r"^jobs:[ \t]*$", workflow, flags=re.M)
+    if len(sections) != 2:
+        raise ValueError("expected one top-level jobs mapping")
+    jobs, current = {}, None
+    for line in sections[1].splitlines():
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        match = re.fullmatch(r"  ([\w-]+):", line)
+        if match:
+            current = match[1]
+            if current in jobs:
+                raise ValueError("duplicate job: " + current)
+            jobs[current] = []
+        elif current and line.startswith("    "):
+            jobs[current].append(line)
+        else:
+            raise ValueError("unsupported jobs mapping line: " + line)
+    return jobs
 
-    A job the `gate` job needs but `inputs` does not require would be
-    skipped under a reuse whose base never ran it: the list is written by
-    hand, three places from the job itself, so it is held here.
-    """
+
+def job_field(body, field):
+    matches = [line.split(":", 1)[1].strip() for line in body
+               if line.startswith("    " + field + ":")]
+    if len(matches) > 1:
+        raise ValueError("duplicate job field: " + field)
+    return matches[0] if matches else None
+
+
+def matrix_scalar(value):
+    value = value.strip()
+    # Deliberately exclude YAML aliases, tags, nulls and expressions. These
+    # values reach job names, so accepting an unknown conversion is unsafe.
+    if re.fullmatch(r"[\w./,-]+", value) and value not in ("null", "true", "false"):
+        return value
+    if re.fullmatch(r"'[^'\\]*'|\"[^\"\\]*\"", value):
+        return value[1:-1]
+    raise ValueError("unsupported matrix scalar: " + value)
+
+
+def matrix_rows(body):
+    starts = [n for n, line in enumerate(body) if line == "      matrix:"]
+    if not starts:
+        if job_field(body, "strategy") is not None:
+            raise ValueError("strategy has no supported matrix")
+        return None
+    if len(starts) != 1 or job_field(body, "strategy") != "":
+        raise ValueError("unsupported matrix declaration")
+    lines = []
+    for line in body[starts[0] + 1:]:
+        if len(line) - len(line.lstrip()) <= 6:
+            break
+        lines.append(line)
+    axes, included, row = {}, [], None
+    for line in lines:
+        axis = re.fullmatch(r"        ([\w-]+): \[(.*)\]", line)
+        if axis:
+            if included or axis[1] in axes or axis[1] in ("include", "exclude"):
+                raise ValueError("mixed or duplicate matrix axes")
+            axes[axis[1]] = [matrix_scalar(v) for v in axis[2].split(",")]
+        elif line == "        include:":
+            if axes or included:
+                raise ValueError("mixed or repeated matrix include")
+            included.append(None)  # Distinguish an empty include from no matrix.
+        elif included and line.startswith("          - {") and line.endswith("}"):
+            row = {}
+            for pair in line[len("          - {"):-1].split(","):
+                key, separator, value = pair.strip().partition(":")
+                if not separator or not re.fullmatch(r"[\w-]+", key) or key in row:
+                    raise ValueError("unsupported inline matrix row: " + line)
+                row[key] = matrix_scalar(value)
+            included.append(row)
+        elif included:
+            match = re.fullmatch(r"(          - |            )([\w-]+): (.+)", line)
+            if not match:
+                raise ValueError("unsupported matrix include: " + line)
+            if match[1] == "          - ":
+                row = {}
+                included.append(row)
+            if row is None or match[2] in row:
+                raise ValueError("missing or duplicate matrix row field")
+            row[match[2]] = matrix_scalar(match[3])
+        else:
+            raise ValueError("unsupported matrix line: " + line)
+    if included:
+        if len(included) == 1:
+            raise ValueError("empty matrix include")
+        return included[1:]
+    if not axes or any(not values for values in axes.values()):
+        raise ValueError("empty matrix")
+    return [dict(zip(axes, values)) for values in itertools.product(*axes.values())]
+
+
+def rendered_job_name(name, row):
+    def expression(match):
+        text = match[1].strip()
+        variable = re.fullmatch(r"matrix\.([\w-]+)", text)
+        if variable:
+            if variable[1] not in row:
+                raise ValueError("missing matrix name field: " + variable[1])
+            return row[variable[1]]
+        # gate.yml's FreeBSD suffix: absent part omits the entire suffix.
+        if text == "matrix.part && format('-{0}', matrix.part) || ''":
+            part = row.get("part", "")
+            if part and not re.fullmatch(r"[1-9][0-9]*", part):
+                raise ValueError("unsupported conditional matrix part: " + part)
+            return "-" + part if part else ""
+        raise ValueError("unsupported job-name expression: " + text)
+
+    result = re.sub(r"\$\{\{(.*?)\}\}", expression, name)
+    if "${" in result or not result:
+        raise ValueError("unsupported job name: " + name)
+    return result
+
+
+def job_needs(body):
+    value = job_field(body, "needs")
+    if value is None:
+        return []
+    if value.startswith("["):
+        # The aggregate's inline list wraps across source lines.
+        start = next(n for n, line in enumerate(body) if line.startswith("    needs:"))
+        text = body[start].split(":", 1)[1].strip()
+        for line in body[start + 1:]:
+            if text.endswith("]"):
+                break
+            if not line.startswith("      "):
+                raise ValueError("unsupported multiline needs")
+            text += " " + line.strip()
+        if not text.endswith("]"):
+            raise ValueError("unterminated needs list")
+        values = text[1:-1].split(",")
+    else:
+        values = [value]
+    needs = [name.strip() for name in values]
+    if not needs or any(not re.fullmatch(r"[\w-]+", name) for name in needs):
+        raise ValueError("unsupported needs list: " + str(needs))
+    if len(set(needs)) != len(needs):
+        raise ValueError("duplicate needed job")
+    return needs
+
+
+def required_workflow_names(workflow, called):
+    jobs = workflow_jobs(workflow)
+    names = []
+
+    def expand(identity, body, prefix="", stack=()):
+        name = job_field(body, "name")
+        rows = matrix_rows(body)
+        if rows is not None and name is None:
+            raise ValueError("matrix jobs must explicitly name their legs: " + identity)
+        uses = job_field(body, "uses")
+        for row in rows if rows is not None else [{}]:
+            rendered = prefix + rendered_job_name(name if name is not None else identity, row)
+            if uses is None:
+                names.append(rendered)
+            else:
+                if not re.fullmatch(r"\./\.github/workflows/[\w-]+\.yml", uses):
+                    raise ValueError("unsupported called workflow: " + uses)
+                path = uses[2:]
+                if path not in called or path in stack:
+                    raise ValueError("missing or cyclic called workflow: " + path)
+                for child, source in workflow_jobs(called[path]).items():
+                    expand(child, source, rendered + " / ", stack + (path,))
+
+    # Only aggregate dependencies count. Suspended physical jobs outside
+    # this closure must not become mandatory reuse evidence.
+    needed, seen = ["gate"], set()
+    while needed:
+        identity = needed.pop()
+        if identity in seen or identity == "inputs":
+            continue
+        seen.add(identity)
+        if identity not in jobs:
+            raise ValueError("aggregate needs an absent job: " + identity)
+        body = jobs[identity]
+        expand(identity, body)
+        needed.extend(job_needs(body))
+    if len(set(names)) != len(names):
+        raise ValueError("matrix legs have duplicate job names")
+    return set(names)
+
+
+def workflow_reuse_gaps(workflow, called):
+    inputs = "\n".join(workflow_jobs(workflow)["inputs"])
+    commands = re.findall(r"gate_inputs\.py reuse gate\.yml(.*?)>>", inputs, re.S)
+    if len(commands) != 1:
+        raise ValueError("expected one literal gate reuse command")
+    required = shlex.split(commands[0].replace("\\\n", " "))
+    if len(set(required)) != len(required) or any("${" in name for name in required):
+        raise ValueError("reuse names must be unique literals")
+    expected = required_workflow_names(workflow, called)
+    return expected - set(required), set(required) - expected
+
+
+class Workflow(unittest.TestCase):
+    """Hold every required matrix leg to the literal reuse inventory."""
 
     def test_every_needed_job_is_required_for_reuse(self):
-        workflow = (ROOT / ".github/workflows/gate.yml").read_text()
-        reuse = workflow.split("gate_inputs.py reuse gate.yml", 1)[1].split(">>", 1)[0]
-        required = set(re.findall(r"'[^']+'|[\w-]+", reuse.replace("\\\n", " ")))
-        required = {name.strip("'") for name in required}
-        needs = workflow.split("\n  gate:\n", 1)[1].split("runs-on", 1)[0]
-        needs = re.search(r"needs: \[([^\]]*)\]", needs).group(1)
-        for job in (name.strip() for name in needs.split(",")):
-            with self.subTest(job=job):
-                if job == "inputs":
-                    continue
-                body = workflow.split("\n  %s:\n" % job, 1)[1]
-                named = re.match(r"    name: ([\w-]*)", body)
-                prefix = named.group(1) if named else job
-                if job == "determinism":
-                    prefix = "determinism / "
-                legs = [name for name in required
-                        if name == job or (named or job == "determinism")
-                        and name.startswith(prefix)]
-                self.assertTrue(legs, "%s is needed by gate and required by no"
-                                      " name in the reuse list" % job)
+        directory = ROOT / ".github/workflows"
+        called = {".github/workflows/" + path.name: path.read_text()
+                  for path in directory.glob("*.yml")}
+        self.assertEqual(workflow_reuse_gaps((directory / "gate.yml").read_text(), called),
+                         (set(), set()))
+
+    def test_each_actual_reuse_name_is_independently_required(self):
+        directory = ROOT / ".github/workflows"
+        source = (directory / "gate.yml").read_text()
+        called = {".github/workflows/" + path.name: path.read_text()
+                  for path in directory.glob("*.yml")}
+        commands = list(re.finditer(r"gate_inputs\.py reuse gate\.yml(.*?)>>", source, re.S))
+        self.assertEqual(len(commands), 1)
+        command = commands[0]
+        arguments = shlex.split(command[1].replace("\\\n", " "))
+        for name in arguments:
+            with self.subTest(name=name):
+                changed = (source[:command.start(1)] + " "
+                           + shlex.join([other for other in arguments if other != name])
+                           + " " + source[command.end(1):])
+                self.assertEqual(workflow_reuse_gaps(changed, called), ({name}, set()))
+
+    @staticmethod
+    def sample(names="compiler-1 compiler-2"):
+        return """jobs:
+  inputs:
+    steps:
+      - run: |
+          python3 scripts/gate_inputs.py reuse gate.yml \
+            %s gate >> "$GITHUB_OUTPUT"
+  compiler:
+    name: compiler-${{ matrix.shard }}
+    strategy:
+      matrix:
+        shard: [1, 2]
+  suspended:
+    if: false
+    strategy:
+      matrix: ${{ fromJSON(inputs.dynamic) }}
+  gate:
+    needs: [inputs, compiler]
+""" % names
+
+    def test_removing_one_reuse_leg_cannot_hide_behind_the_other(self):
+        self.assertEqual(workflow_reuse_gaps(self.sample("compiler-1"), {}),
+                         ({"compiler-2"}, set()))
+
+    def test_adding_a_matrix_leg_requires_its_exact_name(self):
+        source = self.sample().replace("shard: [1, 2]", "shard: [1, 2, 3]")
+        self.assertEqual(workflow_reuse_gaps(source, {}), ({"compiler-3"}, set()))
+
+    def test_removing_a_matrix_leg_or_changing_its_name_exposes_stale_reuse(self):
+        source = self.sample().replace("shard: [1, 2]", "shard: [1]")
+        self.assertEqual(workflow_reuse_gaps(source, {}), (set(), {"compiler-2"}))
+        source = self.sample().replace("name: compiler-", "name: renamed-")
+        self.assertEqual(workflow_reuse_gaps(source, {}),
+                         ({"renamed-1", "renamed-2"}, {"compiler-1", "compiler-2"}))
+
+    def test_ordinary_and_transitively_needed_jobs_count(self):
+        source = self.sample().replace("  compiler:\n", "  build:\n    runs-on: ubuntu-24.04\n  compiler:\n    needs: build\n")
+        self.assertEqual(workflow_reuse_gaps(source, {}), ({"build"}, set()))
+
+    def test_unknown_matrix_shapes_and_name_expressions_fail_closed(self):
+        for source in (
+                self.sample().replace("shard: [1, 2]", "shard: ${{ fromJSON(inputs.parts) }}"),
+                self.sample().replace("matrix.shard", "matrix.unknown"),
+                self.sample().replace("matrix.shard", "format('leg-{0}', matrix.shard)"),
+                self.sample().replace("        shard: [1, 2]", "        exclude: [{shard: 2}]"),
+                self.sample().replace("    name: compiler-${{ matrix.shard }}\n", ""),
+                self.sample().replace("shard: [1, 2]", "shard: [1, 1]")):
+            with self.subTest(source=source), self.assertRaises(ValueError):
+                workflow_reuse_gaps(source, {})
+
+    def test_cartesian_axes_enumerate_every_combination(self):
+        source = self.sample().replace("name: compiler-${{ matrix.shard }}",
+            "name: compiler-${{ matrix.shard }}-${{ matrix.mode }}").replace(
+            "        shard: [1, 2]", "        shard: [1, 2]\n        mode: [debug, release]")
+        missing, extra = workflow_reuse_gaps(source, {})
+        self.assertEqual(missing, {"compiler-1-debug", "compiler-1-release",
+                                   "compiler-2-debug", "compiler-2-release"})
+        self.assertEqual(extra, {"compiler-1", "compiler-2"})
+
+    def test_inline_include_and_optional_freebsd_part_are_exact(self):
+        source = self.sample("'freebsd-amd64-runtime' 'freebsd-arm64-runtime-1'").replace(
+            "name: compiler-${{ matrix.shard }}",
+            "name: freebsd-${{ matrix.arch }}-${{ matrix.kind }}"
+            "${{ matrix.part && format('-{0}', matrix.part) || '' }}").replace(
+            "        shard: [1, 2]", """        include:
+          - {arch: amd64, kind: runtime}
+          - {arch: arm64, kind: runtime, part: 1}""")
+        self.assertEqual(workflow_reuse_gaps(source, {}), (set(), set()))
+        source = source.replace("part: 1}", "part: 2}")
+        self.assertEqual(workflow_reuse_gaps(source, {}),
+                         ({"freebsd-arm64-runtime-2"}, {"freebsd-arm64-runtime-1"}))
+
+    def test_called_workflow_names_every_manifest_leg_and_aggregate(self):
+        source = self.sample("'compiler / manifest (linux 1)' 'compiler / agree'").replace(
+            "    name: compiler-${{ matrix.shard }}\n    strategy:\n      matrix:\n        shard: [1, 2]",
+            "    uses: ./.github/workflows/determinism.yml")
+        path = ".github/workflows/determinism.yml"
+        called = {path: """jobs:
+  manifest:
+    name: manifest (${{ matrix.platform }} ${{ matrix.part }})
+    strategy:
+      matrix:
+        include:
+          - platform: linux
+            part: 1
+  agree:
+    needs: manifest
+"""}
+        self.assertEqual(workflow_reuse_gaps(source, called), (set(), set()))
+        called[path] = called[path].replace("            part: 1", "            part: 1\n          - platform: linux\n            part: 2")
+        self.assertEqual(workflow_reuse_gaps(source, called),
+                         ({"compiler / manifest (linux 2)"}, set()))
+        with self.assertRaises(ValueError):
+            workflow_reuse_gaps(source, {})
 
 
 def job(result, **outputs):
