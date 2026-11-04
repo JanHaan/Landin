@@ -93,9 +93,10 @@ Prepare that environment before holding the rig lock:
 nix develop /home/jan/src/probehive#gpio -c true
 ```
 
-The matching probehive change, commit
-`4f69b8269a664cf1e1c47b2b40365b482e9f30ec` on `landin-ram-gpio`, is local
-until separately published. Source
+The matching probehive change is published on
+[`landin-ram-gpio`](https://github.com/JanHaan/probehive/tree/landin-ram-gpio),
+commit `4f69b8269a664cf1e1c47b2b40365b482e9f30ec`. Use a checkout containing
+that commit. Source
 and runtime files must match the loaded bitstream. Loading a bitstream is
 an explicit rig operation; a run never switches the Arty's power.
 

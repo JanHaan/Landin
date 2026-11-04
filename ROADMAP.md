@@ -1498,10 +1498,10 @@ Mac compiler cases, native/Pi helper builds, fifteen Rust controls, six
 real RAM-image validations, modes/manifest comparisons, scaling,
 highlighter integration and document checks pass. The activation sweep
 uses the starting commit `eef9d3db5`. Settled SR-680, SR-684, SR-691,
-SR-706, SR-735, SR-738, SR-739 and SR-741 through SR-756. SR-736 remains open because the Pi's
-Arty and cascade share VL805; SR-737's LiteX-only companion shell is local
-pending separate publication. The candidate is local: publication needs
-the maintainer's word and promotion requires its complete multi-host gate.
+SR-706, SR-735, SR-737, SR-738, SR-739 and SR-741 through SR-756. SR-736 remains open because the Pi's
+Arty and cascade share VL805. The LiteX-only companion shell is published
+on probehive's `landin-ram-gpio` branch at `4f69b8269a664cf1e1c47b2b40365b482e9f30ec`
+(SR-737). Promotion requires the candidate's complete multi-host gate.
 
 The activation sweep also reached SR-266, SR-289, SR-296, SR-298 and
 SR-605: caller-aware internal-error reporting, language option values,
@@ -3382,8 +3382,9 @@ SR-283, SR-284, SR-305, SR-306, SR-318, SR-332, SR-333, SR-338, SR-343,
 SR-347, SR-349, SR-351, SR-352, SR-353, SR-356, SR-357, SR-362, SR-365,
 SR-366, SR-372, SR-388, SR-391, SR-393, SR-402, SR-428, SR-487, SR-488,
 SR-489, SR-499, SR-511, SR-517, SR-680, SR-684, SR-691, SR-706, SR-735,
-SR-738, SR-739, SR-741, SR-742, SR-743, SR-744, SR-745, SR-746, SR-747,
-SR-748, SR-749, SR-750, SR-751, SR-752, SR-753, SR-754, SR-755, SR-756.
+SR-737, SR-738, SR-739, SR-741, SR-742, SR-743, SR-744, SR-745, SR-746,
+SR-747, SR-748, SR-749, SR-750, SR-751, SR-752, SR-753, SR-754, SR-755,
+SR-756.
 
 | Record | Family | What stands | Activation | Completion | Status |
 | --- | --- | --- | --- | --- | --- |
@@ -3715,7 +3716,6 @@ SR-748, SR-749, SR-750, SR-751, SR-752, SR-753, SR-754, SR-755, SR-756.
 | SR-733 | Usability | A refusal spells a non-generic alias of a structural type by its structure: an alias `maybe` of the union of `absent` and `ptr u32` is spelt as that union in L0344, not as the `maybe` the program wrote, because the checker's descriptor keeps no alias. Met re-recording `negative/r630-optional`. | The next change to type spelling or to alias identity. | A written alias recovered where the refused node names one. | watch |
 | SR-734 | Usability | A recorded fixture's failure says "./scripts/test.sh --record=CLASS/NAME re-records it", which runs a full build, while `scripts/dev-test.sh --record=` is the fast route the local recipe names. Met re-recording R13.75's fixtures. | The next change to the fixture harness's messages. | The hint naming `scripts/dev-test.sh --record=`. | open |
 | SR-736 | Usability | The rig's USB host failed three ways in a day. On the front-panel port the cascade's top hub dropped every 30-50 s with no device or kernel error before it, and autosuspend, turned off everywhere, was not the cause; on the ASMedia xHCI at PCI c2:00.0 a Pico 2 halted in BOOTSEL failing enumeration hard-locked a CPU in `xhci_handle_command_timeout` and the controller died, taking the Arty's USB, which shared it, with the cascade; and with the cascade on the onboard connector's second port, a Pico 2 left in BOOTSEL dropped the whole cascade 75 times in ten minutes until it was unplugged. A switch of one port drops only its own device where the host is sound. Met in the November board round. | The next rig change or board run. | The cascade and the Arty on separate controllers, no BOOTSEL on the bus (SR-680), and a run that meets a controller death stopping with recovery left to the maintainer. | open |
-| SR-737 | Usability | The RP tools enter probehive's full FPGA development shell, Yosys and the nextpnr-xilinx chip database among it, only to read one GPIO through LiteX, so on a host that had not built it an RP2040 run held the rig 300 s and failed with a bare timeout; the tools now find the shell before taking the lock and name the command that builds it. Preparing the tools for rigpi also found that probehive's flake exposes only x86_64-linux, so the documented GPIO environment is unavailable on the arm64 board host. Met in the November board round and R12.45's planning. | R12.45's Pi tooling, or the next probehive change. | A light LiteX-only shell in probehive for the tools' GPIO reads, available on both x86_64-linux and aarch64-linux. | open |
 | SR-740 | Usability | Writing R12.45's command proposals before implementation, `check.py` reported the explicitly provisional script paths as missing repository references. Its named-file check has no documented notation for proposed paths; finding that meant reading `check_named_files`, and the proposal had to use command placeholders. | The next change to the named-file check or its documentation. | A documented way to name a proposed path without claiming that it exists, held by a check control. | open |
 
 
