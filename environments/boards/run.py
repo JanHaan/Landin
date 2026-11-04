@@ -29,14 +29,48 @@ import bundle  # noqa: E402
 import common  # noqa: E402
 
 
-def transport(command, log):
+def transport(command, log, *, live=False):
     """The only process boundary allowed to reach another host."""
-    with Path(log).open('w') as stream:
-        stream.write('$ ' + shlex.join([str(part) for part in command]) + '\n')
+    with Path(log).open('wb') as stream:
+        stream.write(('$ ' + shlex.join([str(part) for part in command]) + '\n').encode())
         stream.flush()
-        result = subprocess.run([str(part) for part in command], stdout=stream,
-                                stderr=subprocess.STDOUT, text=True)
-    return result.returncode
+        if not live:
+            return subprocess.run([str(part) for part in command], stdout=stream,
+                                  stderr=subprocess.STDOUT, text=True).returncode
+        process = subprocess.Popen([str(part) for part in command], stdout=subprocess.PIPE,
+                                   stderr=subprocess.STDOUT)
+        try:
+            for line in process.stdout:
+                stream.write(line)
+                stream.flush()
+                sys.stdout.write(line.decode('utf-8', errors='replace'))
+                sys.stdout.flush()
+            return process.wait()
+        except BaseException:
+            process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait()
+            raise
+        finally:
+            process.stdout.close()
+
+
+def manual_boot(arguments):
+    """Follow the last transport selector, including argparse's prefixes.
+
+    The board parser remains responsible for validity and ambiguity. An
+    invalid prefix may enable progress, but cannot permit hardware work.
+    """
+    selected = None
+    for index, value in enumerate(arguments):
+        option, separator, setting = value.partition('=')
+        if option.startswith('--') and '--boot-transport'.startswith(option):
+            selected = setting if separator else (arguments[index + 1]
+                if index + 1 < len(arguments) else None)
+    return selected == 'manual-uf2'
 
 
 def execute(args, board_args=()):
@@ -81,6 +115,13 @@ def execute(args, board_args=()):
         raise bundle.Invalid('remote staging failed; see remote-prepare.log')
     transfer = dict(host=args.host, directory=remote, board=args.board, mode=args.mode,
                     source_identity=source['sha256'])
+    live = args.mode == 'boot' and manual_boot(board_args)
+    if live:
+        helper = remote + '/prepared/source/environments/boards/manual.py'
+        status_command = ['python3', helper, 'status', '--output', remote + '/result']
+        transfer['manual_status_command'] = shlex.join([str(part) for part in ssh]
+                                                     + [shlex.join(status_command)])
+        transfer['manual_output'] = remote + '/result'
     (output / 'transfer.json').write_text(json.dumps(transfer, indent=2) + '\n')
     if transport(scp + ['-r', stage, args.host + ':' + remote + '/prepared'], output / 'copy.log'):
         raise bundle.Invalid('copy failed; see copy.log')
@@ -90,7 +131,12 @@ def execute(args, board_args=()):
     remote_record = remote + ('/ram-record.json' if args.mode == 'ram' else '/record.json')
     if record is not None:
         command.append('--record=' + remote_record)
-    status = transport(ssh + [shlex.join(command)], output / 'remote-run.log')
+    if live:
+        print('Manual boot results on %s: %s' % (args.host, transfer['manual_output']), flush=True)
+        print('Status: ' + transfer['manual_status_command'], flush=True)
+        status = transport(ssh + [shlex.join(command)], output / 'remote-run.log', live=True)
+    else:
+        status = transport(ssh + [shlex.join(command)], output / 'remote-run.log')
     copied = transport(scp + ['-r', args.host + ':' + remote + '/result', output / 'rigpi'],
                        output / 'retrieve.log')
     record_failed = False

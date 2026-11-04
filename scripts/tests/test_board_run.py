@@ -2,10 +2,13 @@
 """Build/copy/run boundary controls; every SSH/SCP operation is simulated."""
 import json
 import contextlib
+import io
 from pathlib import Path
+import socket
 import subprocess
 import sys
 import tempfile
+import threading
 from types import SimpleNamespace
 import unittest
 from unittest import mock
@@ -195,6 +198,102 @@ class Transfer(unittest.TestCase):
             with self.assertRaisesRegex(board_run.bundle.Invalid, 'remote staging failed'):
                 board_run.execute(self.args)
             copy.assert_not_called()
+
+    def test_manual_control_paths_are_published_before_remote_execution(self):
+        self.args.board, self.args.mode = 'rp2350', 'boot'
+        identity = {'sha256': 'source-bytes', 'files': {}}
+        seen = []
+        output = io.StringIO()
+
+        def snapshot(destination, _):
+            destination.mkdir()
+            return identity
+
+        def transport(command, log, **options):
+            seen.append((Path(log).name, options))
+            if command[0] == 'ssh':
+                transfer = json.loads((self.args.output / 'transfer.json').read_text())
+                self.assertIn('manual.py status --output /tmp/landin-board.ABC123/result',
+                              transfer['manual_status_command'])
+                self.assertIn(transfer['manual_status_command'], output.getvalue())
+                self.assertEqual(options, {'live': True})
+                return 7
+            return 0
+
+        with mock.patch.object(board_run.bundle, 'source_identity', return_value=identity), \
+                mock.patch.object(board_run.bundle, 'snapshot', side_effect=snapshot), \
+                mock.patch.object(board_run.build, 'prepare'), \
+                mock.patch.object(board_run, 'transport', side_effect=transport), \
+                mock.patch.object(subprocess, 'run', return_value=SimpleNamespace(
+                    returncode=0, stdout='/tmp/landin-board.ABC123\n', stderr='')), \
+                contextlib.redirect_stdout(output):
+            status = board_run.execute(self.args, ['--boot-transport=manual-uf2'])
+        self.assertEqual(status, 7)
+        self.assertEqual(seen, [('copy.log', {}), ('remote-run.log', {'live': True}),
+                                ('retrieve.log', {})])
+
+
+class LiveTransport(unittest.TestCase):
+    def test_manual_transport_selection_follows_the_last_argparse_selector(self):
+        for arguments, expected in (
+                ([], False), (['--boot-transport=manual-uf2'], True),
+                (['--boot-transport', 'manual-uf2'], True),
+                (['--boot-trans=manual-uf2'], True),
+                (['--boot-transport=manual-uf2', '--boot-transport=probe-rs'], False),
+                (['--boot-transport=probe-rs', '--boot-transport', 'manual-uf2'], True),
+                (['--boot-transport'], False), (['--boot-seconds=1'], False)):
+            with self.subTest(arguments=arguments):
+                self.assertEqual(board_run.manual_boot(arguments), expected)
+
+    def test_progress_is_visible_and_retained_before_the_child_exits(self):
+        # The child cannot finish until this test sees its flushed phase.
+        # This checks actual pipe buffering, not a mocked Popen iterator.
+        server = socket.socket()
+        server.bind(('127.0.0.1', 0))
+        server.listen(1)
+        server.settimeout(5)
+        visible = threading.Event()
+        class Console(io.StringIO):
+            def write(self, value):
+                result = super().write(value)
+                if 'MANUAL ' in self.getvalue():
+                    visible.set()
+                return result
+        console = Console()
+        code = ('import os,socket,sys; '
+                's=socket.create_connection(("127.0.0.1",%d)); '
+                'print("MANUAL phase",flush=True); '
+                'assert s.recv(1)==b"x"; '
+                'os.write(2,b"trailer\\xff\\n"); sys.exit(7)' % server.getsockname()[1])
+        status, errors = [], []
+        with tempfile.TemporaryDirectory() as temporary:
+            log = Path(temporary) / 'transport.log'
+            def run():
+                try:
+                    status.append(board_run.transport([sys.executable, '-u', '-c', code], log, live=True))
+                except BaseException as error:
+                    errors.append(error)
+            worker = threading.Thread(target=run, daemon=True)
+            peer = None
+            try:
+                with contextlib.redirect_stdout(console):
+                    worker.start()
+                    peer, _ = server.accept()
+                    self.assertTrue(visible.wait(5), 'phase was buffered until child exit')
+                    self.assertIn(b'MANUAL phase\n', log.read_bytes())
+                    self.assertTrue(worker.is_alive())
+                    peer.sendall(b'x')
+                    worker.join(5)
+                    self.assertFalse(worker.is_alive())
+                self.assertEqual(errors, [])
+                self.assertEqual(status, [7])
+                self.assertTrue(log.read_bytes().endswith(b'trailer\xff\n'))
+                self.assertIn('trailer\ufffd', console.getvalue())
+            finally:
+                if peer:
+                    peer.close()
+                server.close()
+                worker.join(5)
 
 
 if __name__ == '__main__':
