@@ -27,7 +27,7 @@ RISC-V IMAGE_DEF block.
 | a probe | a [probehive](https://github.com/JanHaan/probehive) SWD slot, slot 1 by default; direct UDP debug and `scripts/dap_bridge.py` for slot N's UART on TCP port 4461 + N | debug access and the UART trace |
 | probe-rs | the pinned fork in the [board guide](../README.md), reaching slot 1 directly as `0000:0002:10.42.0.50/1` by default; `--probe` overrides it | memory access and explicit boot flashing |
 | the indicator's wire | optionally, GPIO3 to a probe GPIO, named with `--indicator-pin`; `scripts/gpio.py` runs in `nix develop PROBEHIVE#gpio`, the light LiteX shell available on x86_64 and arm64 Linux | the physical wire level, in addition to pad readback |
-| power | the Pico 2's USB port on a hub with per-port power switching, and `uhubctl` with the right to switch it | power cycling for explicit boot checks |
+| power | an off-cascade hub with per-port switching for automatic boot checks, or the board guide's manual UF2 transport and Pico-only unplug/replug steps | cold starts for explicit boot checks |
 | the compiler | refine and `riscv64-elf-gcc` or `riscv64-unknown-elf-gcc` (D660), with that toolchain's `nm` and `objdump`, as `nix develop` gives them | the image, and the symbols and the `amoadd.w` it is checked for |
 | the RAM loader | `landin-ram-run`, named with `--ram-loader`, built from the pinned probe-rs library | one warm halt/load/resume session |
 
@@ -38,8 +38,10 @@ through final readback/restoration. Preserve the USB guard, protected Arty
 and shared pacing state described in the [board guide](../README.md).
 
 The usual development connection is SWD slot 1 and hub `.3.3`, port 2.
-Boot checks require an explicitly named hub outside `--cascade`; the
-default development hub is refused for them.
+Automatic boot checks require an explicitly named hub outside `--cascade`;
+the default development hub is refused for them. Manual UF2 boot checks
+require the cascade unplugged and an explicit direct hub, port and Pico
+serial, as the [board guide](../README.md#boot-checks-and-recovery) describes.
 
 Direct UDP debug completes before the tool opens the UART socket, and
 the socket closes before debug readback. The bridge remains available for
@@ -60,10 +62,12 @@ answer while the ROM is in Arm BOOTSEL. That state never permits an
 attach. Changing between Arm and Hazard3 is an explicit off-cascade
 setup/boot operation. Prepare and verify the fixed image for the intended
 architecture before repeated RAM runs; warm entry does not switch
-architectures through the ROM. Boot flashing selects the architecture that
+architectures through the ROM. Automatic boot flashing selects the architecture that
 currently answers, then cold-starts the selected port's image and restores
 that port's fixed image. `result.json` records `flashed_as` only for
-the boot check. Counters for this port are read as `RP235x_riscv`.
+the automatic boot check. Manual UF2 selects the image's architecture
+through its UF2 family and image block, then reads only that architecture
+after BOOTSEL disappears. Counters for this port are read as `RP235x_riscv`.
 
 ## Running it
 

@@ -184,6 +184,43 @@ in RAM mode. A RAM run does not change architectures or fall back to a
 ROM reset. Keep the board off the cascade through recovery, setup and boot
 validation; the physical setup must be checked before returning it.
 
+When no independent switching hub is available, both Pico 2 ports accept
+`--mode=boot --boot-transport=manual-uf2`. Keep the cascade unplugged and
+give the direct `--hub`, `--port` and known `--pico-serial`. For the recovered
+board these are `--hub=1-1 --port=2 --pico-serial=5ED092AAACF4A000`.
+The tool validates the normal and fixed UF2s against their ELFs, binds the
+BOOTSEL volume to that USB location and serial, and copies through a
+normally running boot ROM. It never uses probe flashing or hub switching
+in this mode. The Pi needs passwordless `sudo -n mount` and `umount` for
+the private VFAT mount; the copy runs as the invoking user.
+
+Use the same build-host wrapper with `--mode=boot` before `--` and the
+manual transport arguments afterward. It prints progress and a status
+command before starting the physical phase, and retains that command in
+`transfer.json`. Each flushed `MANUAL` request names a run, phase, token
+and physical instruction. From the matching source snapshot on the Pi,
+the operator commands are:
+
+```sh
+python3 environments/boards/manual.py status --output=RESULT
+python3 environments/boards/manual.py ack --output=RESULT --run=RUN --phase=PHASE --token=TOKEN
+python3 environments/boards/manual.py cancel --output=RESULT --run=RUN --phase=PHASE --token=TOKEN
+```
+
+Acknowledge only after completing the displayed instruction. The sequence
+installs the ordinary image through BOOTSEL, checks its flash bytes, then
+requests separate unplugged and replugged confirmations for a cold start.
+UART is ready before reconnect, and the existing exact power-on oracle
+still decides the run. Restoration repeats the process for that port's
+fixed image and checks its flash bytes and startup marker. The recorded
+off interval is measured between human confirmations; it does not measure
+the power rail. Wrong or stale tokens, timeout, cancellation and USB
+trouble cannot advance a step or resume a stopped run. A USB stop leaves
+recovery to the operator, without further prompts or hardware actions.
+The rig lock spans the whole physical sequence. Recovery records establish
+installation and readiness; only the complete scenario and fixed-image
+restoration produce a passed boot record.
+
 ## Shared rig rules
 
 Every hardware phase holds the same host lock,

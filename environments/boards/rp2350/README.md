@@ -25,7 +25,7 @@ The boot check additionally exercises the Arm IMAGE_DEF block.
 | a probe | a [probehive](https://github.com/JanHaan/probehive) SWD slot, slot 1 by default, `--slot`, and a checkout of probehive, whose `scripts/dap_bridge.py` serves slot N's UART as TCP port 4461 + N; a bridge already listening on the slot's ports is reused and left running, and otherwise the tool starts one for every slot of the probe, `--bridge-slots`, and leaves it running for the next tool | direct SWD debug and the independent UART trace |
 | probe-rs | the pinned fork in the [board guide](../README.md), reaching slot 1 directly as `0000:0002:10.42.0.50/1` by default; `--probe` overrides it | memory access and explicit boot flashing |
 | the indicator's wire | optionally, GPIO3 to a probe GPIO, named with `--indicator-pin`; `scripts/gpio.py` runs in `nix develop PROBEHIVE#gpio`, the light LiteX shell available on x86_64 and arm64 Linux | the physical wire level, in addition to pad readback |
-| power | the Pico 2's USB port on a hub with per-port power switching, and `uhubctl` with the right to switch it | power cycling for explicit boot checks |
+| power | an off-cascade hub with per-port switching for automatic boot checks, or the board guide's manual UF2 transport and Pico-only unplug/replug steps | cold starts for explicit boot checks |
 | the compiler | refine and `arm-eabi-gcc` or `arm-none-eabi-gcc` (D532), as `nix develop` gives them | the image |
 | the RAM loader | `landin-ram-run`, named with `--ram-loader`, built from the pinned probe-rs library | one warm halt/load/resume session |
 
@@ -36,8 +36,11 @@ through final readback/restoration. Preserve the USB guard, protected Arty
 and shared pacing state described in the [board guide](../README.md).
 
 The usual development connection is SWD slot 1 and hub `.3.3`, port 2.
-Boot checks require an explicitly named hub outside `--cascade`; the
-default development hub is refused for them. See the Arm/Hazard3 target
+Automatic boot checks require an explicitly named hub outside `--cascade`;
+the default development hub is refused for them. Manual UF2 boot checks
+require the cascade unplugged and an explicit direct hub, port and Pico
+serial, as the [board guide](../README.md#boot-checks-and-recovery) describes.
+See the Arm/Hazard3 target
 selection described in [the other port](../rp2350_hazard3/README.md#which-chip-probe-rs-is-told).
 Changing from Hazard3 to Arm is an explicit off-cascade boot operation;
 its successful fixed-image restoration establishes Arm for subsequent
