@@ -185,6 +185,10 @@ REFUSAL_PAIRS = {
     ("r630-memory-scalars", "rv32"),
     ("written-type-c-function", "rv32"),
 }
+# Xtensa's firmware surface has the same C-boundary refusals. The default
+# configuration also has no read-modify-write atomics or foreign asm arm.
+REFUSAL_PAIRS |= {(name, "xtensa") for name, target in REFUSAL_PAIRS
+                  if target == "rv32"}
 BASE_EXPECTED_REFUSALS = {
     "%s|%s|%s" % (fixture, target, mode)
     for fixture, target in REFUSAL_PAIRS for mode in MODES
@@ -212,7 +216,7 @@ def evidence_faults(manifest, diagnostics=None):
     for key, value in sorted(manifest.items()):
         if isinstance(value, str) and DIGEST.fullmatch(value):
             emitted += 1
-        elif value == "refused:1" and key.split("|debug=")[0] in EXPECTED_REFUSALS:
+        elif value == "refused:1" and re.sub(r"\|level=[^|]+", "", key).split("|debug=")[0] in EXPECTED_REFUSALS:
             continue
         else:
             said = (diagnostics or {}).get(key)
@@ -318,6 +322,16 @@ def compile_one(job):
     return key, hashlib.sha256(asm.read_bytes()).hexdigest(), None
 
 
+def configured_levels(target, requested=None):
+    """Both independent Xtensa configurations, unless the fixture fixes one."""
+    return (requested,) if requested or target != "xtensa" else (
+        "xtensa-esp32", "xtensa-esp32s3")
+
+
+def level_key(target, level):
+    return "|level=" + level if target == "xtensa" else ""
+
+
 def debug_information(target):
     """The source debugging TARGET emits: lines on firmware, full hosted."""
     return "lines" if target in FIRMWARE_TARGETS else "full"
@@ -344,19 +358,21 @@ def emit(refine, root, out, workers=None, targets=TARGETS, corpora=("positive",)
             link = (fixture_meta.read(directory, strict=False).get("link")
                     if name.startswith("runtime/") else None)
             for target in wanted:
-                for debug in (None, debug_information(target)) if debug_info else (None,):
-                    for mode in build_modes:
-                        for optimize, specialize in profiles:
-                            key = (f"{shown}|{target}|{mode}|"
-                                   f"optimize={optimize}|specialize={specialize}"
-                                   + (f"|debug={debug}" if debug else ""))
-                            asm = Path(tmp) / str(len(jobs)) / "out.s"
-                            jobs.append((key, refine, directory,
-                                         (["--link=" + link] if link and target
-                                          not in FIRMWARE_TARGETS else [])
-                                         + sources, target,
-                                         level.get(target), mode, optimize,
-                                         specialize, debug, asm))
+                for selected_level in configured_levels(target, level.get(target)):
+                    for debug in (None, debug_information(target)) if debug_info else (None,):
+                        for mode in build_modes:
+                            for optimize, specialize in profiles:
+                                key = (f"{shown}|{target}|{mode}|"
+                                       f"optimize={optimize}|specialize={specialize}"
+                                       + level_key(target, selected_level)
+                                       + (f"|debug={debug}" if debug else ""))
+                                asm = Path(tmp) / str(len(jobs)) / "out.s"
+                                jobs.append((key, refine, directory,
+                                             (["--link=" + link] if link and target
+                                              not in FIRMWARE_TARGETS else [])
+                                             + sources, target,
+                                             selected_level, mode, optimize,
+                                             specialize, debug, asm))
         with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
             # Preserve inventory order regardless of completion order.
             for key, value, said in pool.map(compile_one, jobs):
@@ -444,9 +460,9 @@ def compare(paths):
 #  own build differs.  One target per backend, and each firmware target,
 #  whose program is a different image; the standard profiles are the
 #  runtime corpus's own, so each pair is one the harness also executes.
-MODE_TARGETS = ("linux-x86-64", "linux-arm64", "cortex-m0", "rv32")
+MODE_TARGETS = ("linux-x86-64", "linux-arm64", "cortex-m0", "rv32", "xtensa")
 #  The targets the firmware corpus runs its inventory on (D658).
-FIRMWARE_TARGETS = ("cortex-m0", "rv32")
+FIRMWARE_TARGETS = ("cortex-m0", "rv32", "xtensa")
 STANDARD_PROFILES = (("none", "off"), ("size", "off"), ("size", "auto"),
                      ("speed", "auto"))
 def corpus_entries(root, targets, corpora=CORPORA, names=()):
@@ -547,14 +563,20 @@ def modes(debug, release, root, workers=None, targets=MODE_TARGETS):
     with tempfile.TemporaryDirectory() as tmp:
         jobs = []
         for name, directory, sources, wanted, level in entries:
+            link = (fixture_meta.read(directory, strict=False).get("link")
+                    if name.startswith("runtime/") else None)
             for target in wanted:
-                for optimize, specialize in STANDARD_PROFILES:
-                    key = (f"{name}|{target}|"
-                           f"optimize={optimize}|specialize={specialize}")
-                    scratch = Path(tmp) / str(len(jobs))
-                    scratch.mkdir()
-                    jobs.append((key, compilers, directory, sources, target,
-                                 level.get(target), optimize, specialize, scratch))
+                for selected_level in configured_levels(target, level.get(target)):
+                    for optimize, specialize in STANDARD_PROFILES:
+                        key = (f"{name}|{target}|"
+                               f"optimize={optimize}|specialize={specialize}"
+                               + level_key(target, selected_level))
+                        scratch = Path(tmp) / str(len(jobs))
+                        scratch.mkdir()
+                        arguments = (["--link=" + link] if link and target
+                                     not in FIRMWARE_TARGETS else []) + sources
+                        jobs.append((key, compilers, directory, arguments, target,
+                                     selected_level, optimize, specialize, scratch))
         with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
             for key, (first, second) in pool.map(emit_both, jobs):
                 if first != second:

@@ -19139,7 +19139,14 @@ chip configurations include single-precision floating-point hardware.
 its frame pointer and reserves optional FP, boolean, MAC and vector banks
 from ordinary allocation. Every windowed frame includes the ABI's spill
 space. Compiler-owned startup initializes window state and provides all six
-CALL4/CALL8/CALL12 overflow and underflow vectors. CALL0 objects are not
+CALL4/CALL8/CALL12 overflow and underflow vectors. Ordinary interrupt
+handlers admit CPU lines at levels one through three, which both exact
+configurations mask while PS.EXCM is set. The compiler saves all physical
+address registers and the floating state before calling a handler, with
+ordinary interrupts masked for its duration. Higher-priority, debug and NMI
+entries stop; they cannot borrow that shared context or the interrupted
+stack. Read-only byte-addressed data remains in data SRAM even when the
+selected layout is RAM. CALL0 objects are not
 compatible peers merely because their scalar layouts match.
 
 The default and explicit baseline levels select the ESP32 configuration;

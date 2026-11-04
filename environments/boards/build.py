@@ -3,7 +3,7 @@
 
     python3 environments/boards/build.py --refine REFINE --output NEW_DIRECTORY
 
-The default builds all six boot ports. --mode=both also prepares RAM images.
+The default builds all eight boot ports. --mode=both also prepares RAM images.
 --records=report reports drift but fails only builds, for continuous coverage.
 """
 import argparse
@@ -21,10 +21,12 @@ sys.path.insert(0, str(HERE))
 import bundle  # noqa: E402
 import common  # noqa: E402
 
-BOARDS = ('rp2040', 'rp2350', 'rp2350_hazard3', 'stm32h753', 'esp32c3', 'esp32c5')
+BOARDS = ('rp2040', 'rp2350', 'rp2350_hazard3', 'stm32h753', 'esp32c3', 'esp32c5',
+          'esp32', 'esp32s3')
 TARGETS = dict(rp2040=('cortex-m0', None), rp2350=('cortex-m0', 'armv8-m.main'),
                stm32h753=('cortex-m0', 'armv7e-m'), rp2350_hazard3=('rv32', 'rv32imac'),
-               esp32c3=('rv32', 'rv32imc'), esp32c5=('rv32', 'rv32imac'))
+               esp32c3=('rv32', 'rv32imc'), esp32c5=('rv32', 'rv32imac'),
+               esp32=('xtensa', 'xtensa-esp32'), esp32s3=('xtensa', 'xtensa-esp32s3'))
 
 
 def load(board):
@@ -60,9 +62,11 @@ def prepare(board, mode, refine, output, source=None):
     run = common.Run(output)
     arm = board in ('rp2040', 'rp2350', 'stm32h753')
     prefix = ('arm-eabi-', 'arm-none-eabi-') if arm else ('riscv64-elf-', 'riscv64-unknown-elf-')
+    if board in ('esp32', 'esp32s3'):
+        prefix = ('xtensa-%s-elf-' % board,)
     args = SimpleNamespace(refine=Path(refine).resolve(), mode=mode, image_name=image_name(board, mode),
                            nm=tool(*(p + 'nm' for p in prefix)))
-    if board in ('rp2350_hazard3', 'stm32h753', 'esp32c3', 'esp32c5'):
+    if board in ('rp2350_hazard3', 'stm32h753', 'esp32c3', 'esp32c5', 'esp32', 'esp32s3'):
         args.objdump = tool(*(p + 'objdump' for p in prefix))
     if board == 'stm32h753':
         args.readelf = tool(*(p + 'readelf' for p in prefix))
@@ -70,7 +74,8 @@ def prepare(board, mode, refine, output, source=None):
     files = {}
     if board.startswith('esp32'):
         import esp
-        chip = module.C3() if board == 'esp32c3' else module.C5()
+        chip = module.CHIP() if hasattr(module, 'CHIP') else (
+            module.C3() if board == 'esp32c3' else module.C5())
         elf, image, report = esp.build(run, args, chip)
         names = common.symbols(run, args.nm, elf)
         listing = esp.objdump(run, args, elf)
@@ -184,7 +189,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--refine', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
-    parser.add_argument('--board', choices=BOARDS, action='append', help='repeat to select ports; default all six')
+    parser.add_argument('--board', choices=BOARDS, action='append', help='repeat to select ports; default all eight')
     parser.add_argument('--mode', choices=('boot', 'ram', 'both'), default='boot')
     parser.add_argument('--records', choices=('strict', 'report'), default='strict')
     args = parser.parse_args(argv)

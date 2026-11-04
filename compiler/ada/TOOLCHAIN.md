@@ -98,8 +98,9 @@ Ubuntu's own `qemu-user`, 8.2.2, is not a substitute: it gives a riscv64
 
 ### Archives and checksums
 
-The releases below are the ones the pins name. Every checksum here has been
-verified against the archive it names, before that archive was unpacked: the
+The releases below are the ones the pins name. Each GNAT and GPRbuild
+checksum in the bootstrap table has been verified against its archive
+before unpacking: the
 macOS rows on the development machine, the Linux x86-64 rows inside the pinned
 linux/amd64 image built by `environments/linux-amd64/Containerfile`, which
 runs `sha256sum -c` before it unpacks anything, and the Linux arm64 rows by

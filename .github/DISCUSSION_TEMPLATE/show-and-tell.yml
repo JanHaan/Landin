@@ -29,6 +29,7 @@ body:
         - linux-rv64
         - cortex-m0
         - rv32
+        - xtensa
         - Not applicable
   - type: textarea
     id: hard

@@ -1384,7 +1384,7 @@ class RV32Lanes(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, 'needs dpkg-deb on PATH') as refused:
                     setup.main()
             self.assertIn('add dpkg', str(refused.exception))
-            self.assertIn('README.md#on-nixos', str(refused.exception))
+            self.assertIn('environments/cortex-m/README.md#on-nixos', str(refused.exception))
             self.assertFalse(root.exists())
             fetch.assert_not_called()
 

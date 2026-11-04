@@ -1219,6 +1219,7 @@ package body Landin.Backend.Firmware is
         "  .ramtext : ALIGN(8) {" & LF
         & "    _landin_firmware_ramtext_start = .;" & LF
         & "    *(.ramtext.*)" & LF
+        & (if Xtensa then Image_Alignment & LF else "")
         & "    _landin_firmware_ramtext_end = .;" & LF;
       Last_Load : US.Unbounded_String :=
         US.To_Unbounded_String

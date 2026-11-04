@@ -1834,6 +1834,9 @@
     "runtime/library-platform-riscv": {
       "mode": "execute"
     },
+    "runtime/library-platform-xtensa": {
+      "mode": "execute"
+    },
     "runtime/library-second-reading": {
       "mode": "execute"
     },

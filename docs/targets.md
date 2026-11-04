@@ -1093,7 +1093,9 @@ interrupt model decides which mcause codes a handler's slot may be (D662).
 The toolchain identity is `riscv64-elf`, GNAT's riscv64-elf archive; with
 no `--toolchain`, a link tries `riscv64-elf-gcc` and then
 `riscv64-unknown-elf-gcc`. C signatures, records and varargs are
-disabled, as on Cortex-M.
+disabled, as on Cortex-M. The [RV32 emulator recipe](../environments/cortex-m/README.md)
+locates its controls and corpus in the shared embedded-tool environment;
+[Xtensa has its own runner recipe](../environments/xtensa/README.md).
 
 A firmware image is compiler-owned text and the program's routines, laid
 out by `Landin.Backend.Firmware` from the profile (D680, D686). Its first
@@ -1226,3 +1228,48 @@ saved return address at CFA−8 and caller frame at CFA−16. The GNU target
 driver receives both `-march=ISA` and `-mabi=lp64d`, keeping user assembly
 within the selected extension set. Modern vector support and Zbb are not
 assumed; the native execution lane confirms XTheadBa before executing it.
+
+## Xtensa firmware
+
+`--target=xtensa` selects the little-endian ELF32 windowed ABI, with
+`--level=xtensa-esp32` as default and `--level=xtensa-esp32s3` selecting
+its independent chip configuration. Both share ILP32 layout: four-byte
+pointers, eight-byte scalar alignment through 64 bits and a sixteen-byte
+stack. `compiler.c_xtensa_windowed_ilp32` identifies this ABI; the general
+C source boundary remains refused. Floating values travel in integer
+carriers; pinned runtime helpers may use the configured FPU.
+
+The native backend uses CALL8/CALLX8, ENTRY and RETW, with compiler-owned
+window overflow and underflow vectors for CALL4, CALL8 and CALL12 helpers.
+Each firmware profile has an aligned 1 KiB architectural vector block,
+followed immediately by its image entry. Startup initializes register
+windows, the FPU controls, stack, VECBASE and static storage before calling
+the entry. Ordinary interrupt handlers save all 64 physical address
+registers, the floating bank and control state. They run with ordinary
+interrupts masked; nested handlers are not claimed. CPU line zero is an
+explicit vector placement, distinct from an unplaced routine. CPU line
+14 is reserved for NMI.
+
+`platform/xtensa` supplies explicit interrupt masks, pending/enabled lines,
+cycle counting, waiting and barriers. A program imports a device
+description, or receives the selected level's constrained reference map.
+The ESP32 and ESP32-S3 descriptions admit only their own exact level.
+Their images use internal executable SRAM and byte-accessible data SRAM,
+with caches disabled, CPU1 hardware-stalled and no external-memory claim.
+RAM development entry and ROM boot validation are separate workflows.
+
+The tool adapter selects `xtensa-esp32-elf-gcc` or
+`xtensa-esp32s3-elf-gcc` from the pinned Espressif archive and uses
+`-mabi=windowed`. Their matching assemblers use `--abi-windowed`,
+`--auto-litpools` and `--longcalls`, with the chip's configuration plugin.
+`compiler.feature.salt` selects source branches at the S3 level; its
+assembler admits SALT/SALTU. Ordinary generated comparisons currently use
+the common branch instructions at both levels. The configured instruction
+sets are not a superset relation:
+classic ESP32 has DFP accelerator instructions absent from S3.
+
+The [Xtensa emulator recipe](../environments/xtensa/README.md) explains
+configured-core controls and the sole freestanding corpus inventory;
+[board tools](../environments/boards/README.md) explain checked transport,
+RAM runs and separate boot checks. An S3 run of an LX6-level build requires
+compatibility evidence for that image and its helpers.

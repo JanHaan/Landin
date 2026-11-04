@@ -53,7 +53,7 @@ class Build(unittest.TestCase):
             with self.assertRaisesRegex(bundle.Invalid, 'must be a filename'):
                 build.image_name('esp32c3', 'boot')
 
-    def test_all_six_ports_both_modes_continue_after_failure(self):
+    def test_all_ports_both_modes_continue_after_failure(self):
         calls = []
         def prepare(board, mode, refine, directory, source):
             calls.append((board, mode))
@@ -64,11 +64,11 @@ class Build(unittest.TestCase):
                 mock.patch.object(bundle, 'source_identity', return_value={}), \
                 contextlib.redirect_stdout(io.StringIO()) as log:
             status = build.build_all(build.BOARDS, ('boot', 'ram'), 'refine', self.root / 'out', 'report')
-        self.assertEqual(len(calls), 12)
+        self.assertEqual(len(calls), 16)
         self.assertEqual(status, 1)
         self.assertIn('compile failed; see compile.log', log.getvalue())
         rows = json.loads((self.root / 'out/summary.json').read_text())
-        self.assertEqual(rows[-1]['board'], 'esp32c5')
+        self.assertEqual(rows[-1]['board'], 'esp32s3')
         self.assertEqual(rows[0]['status'], 'failed')
 
     def test_report_mode_does_not_fail_hardware_record_drift(self):

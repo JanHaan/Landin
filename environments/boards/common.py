@@ -467,6 +467,9 @@ def board_preflight(args, board):
     if board.startswith('rp'):
         require(args.ram_loader,
                 'RP readback needs the pinned single-core helper: name --ram-loader')
+    elif board in ('esp32', 'esp32s3'):
+        require(args.ram_loader,
+                'this board needs the pinned single-core helper: name --ram-loader')
     if getattr(args, 'bundle', None):
         import bundle
         prepared = bundle.validate(args.bundle, board=board, mode=args.mode)
@@ -489,15 +492,15 @@ def board_preflight(args, board):
         fixed_marker_address(fixed_elf(args, board))
         require(not getattr(args, 'block_control', False),
                 'Pico 2 corrupt controls require physical off-cascade UF2 recovery; no probe attaches in BOOTSEL')
-    if args.mode == 'ram' or board.startswith('rp'):
+    if args.mode == 'ram' or board.startswith('rp') or board in ('esp32', 'esp32s3'):
         verify_ram_helper(args)
 
 
 def validate_fixed_image(image, board):
     """Check the recovery artifact before a boot check can touch hardware."""
-    if board in ('esp32c3', 'esp32c5'):
+    if board in ('esp32c3', 'esp32c5', 'esp32', 'esp32s3'):
         parsed = esp_image(Path(image).read_bytes())
-        require(parsed['chip'] == (5 if board == 'esp32c3' else 23),
+        require(parsed['chip'] == dict(esp32c3=5, esp32c5=23, esp32=0, esp32s3=9)[board],
                 'the fixed image names another ESP chip')
         return
     data, sections = elf_sections(image)
@@ -542,6 +545,8 @@ RAM_REGIONS = {
                  (0x38000000, 0x38010000)),
     'esp32c3': ((0x40380000, 0x403a0000), (0x3fca0000, 0x3fcc8000)),
     'esp32c5': ((0x40800000, 0x4084e000),),
+    'esp32': ((0x40080000, 0x400a0000), (0x3ffb0000, 0x3ffd0000)),
+    'esp32s3': ((0x40378000, 0x40398000), (0x3fca8000, 0x3fcd0000)),
 }
 
 
@@ -549,6 +554,9 @@ def validate_ram_image(elf, board):
     """Check all allocated storage, including sections outside PT_LOAD."""
     data = Path(elf).read_bytes()
     headers, programs = _elf32_tables(data)
+    if board in ('esp32', 'esp32s3'):
+        require(struct.unpack_from('<H', data, 18)[0] == 94,
+                'Xtensa RAM image has another ELF machine')
     names_header = headers[struct.unpack_from('<H', data, 50)[0]]
     strings = data[names_header[4]:names_header[4] + names_header[5]]
     sections = {}
@@ -606,6 +614,14 @@ def validate_ram_image(elf, board):
             require(in_ram(start, end - start), 'BSS symbols exceed SRAM; use --mode=boot for the boot check')
             require(outside_stack(start, end - start), 'BSS symbols overlap reserved stack')
     require('.isr_vector' in sections, 'RAM image has no vector/trap table')
+    if board in ('esp32', 'esp32s3'):
+        vectors = sections['.isr_vector']
+        require(vectors[3] == RAM_REGIONS[board][0][0] and vectors[3] % 1024 == 0
+                and vectors[5] == 1024, 'Xtensa RAM image needs the aligned 1 KiB vector block')
+        entry = struct.unpack_from('<I', data, 24)[0]
+        require(entry == vectors[3] + 1024, 'Xtensa RAM entry is not immediately after vectors')
+        require(stack is not None and stack[0] % 16 == 0 and stack[1] % 16 == 0,
+                'Xtensa RAM image needs its aligned reserved stack')
     return sections['.isr_vector'][3]
 
 
@@ -871,7 +887,7 @@ def esp_image(data):
 
 
 ROM_RESET = re.compile(r'rst:0x([0-9a-f]+) \(([A-Z_]+)\),boot:0x([0-9a-f]+) \(([A-Z_]+)\)')
-ROM_LOAD = re.compile(r'^load:0x([0-9a-f]+),len:0x([0-9a-f]+)', re.MULTILINE)
+ROM_LOAD = re.compile(r'^load:0x([0-9a-f]+),len:(0x[0-9a-f]+|[0-9]+)', re.MULTILINE)
 ROM_ENTRY = re.compile(r'^entry 0x([0-9a-f]+)', re.MULTILINE)
 ROM_CHECKSUM = re.compile(r'Checksum failure\. Calculated 0x([0-9a-f]+) stored 0x([0-9a-f]+)')
 ROM_SHA = re.compile(r'SHA-256 comparison failed:\s*Calculated: ([0-9a-f]{64})\s*Expected: ([0-9a-f]{64})')
@@ -891,7 +907,8 @@ def rom_log(text):
     return dict(
         reset=(int(reset.group(1), 16), reset.group(2)) if reset else None,
         boot=(int(reset.group(3), 16), reset.group(4)) if reset else None,
-        loads=[(int(a, 16), int(n, 16)) for a, n in ROM_LOAD.findall(text)],
+        loads=[(int(a, 16), int(n, 16 if n.startswith('0x') else 10))
+               for a, n in ROM_LOAD.findall(text)],
         entry=int(entry.group(1), 16) if entry else None,
         checksum=(int(checksum.group(1), 16), int(checksum.group(2), 16)) if checksum else None,
         sha=(sha.group(1), sha.group(2)) if sha else None)
@@ -919,10 +936,12 @@ def stlink(serial, vid_pid='0483:374e'):
 
 class Probe:
     """probe-rs for one CHIP through one PROBE, as probe-rs's --probe names it."""
-    def __init__(self, run, probe_rs, chip, probe, ram_loader=None, *, require_hart1_halted=False):
+    def __init__(self, run, probe_rs, chip, probe, ram_loader=None, *, require_hart1_halted=False,
+                 require_cpu1_stalled=False):
         self.run, self.probe_rs, self.chip, self.probe = run, probe_rs, chip, probe
         self.ram_loader = ram_loader
         self.require_hart1_halted = require_hart1_halted
+        self.require_cpu1_stalled = require_cpu1_stalled
 
     def argv(self, *rest):
         pace = getattr(self.run, 'pace', None)
@@ -933,7 +952,7 @@ class Probe:
     def read_words(self, name, address, count):
         """COUNT words from ADDRESS, read while the core runs."""
         boards = {'RP2040': 'rp2040', 'RP235x': 'rp2350',
-                  'RP235x_riscv': 'rp2350_hazard3'}
+                  'RP235x_riscv': 'rp2350_hazard3', 'esp32': 'esp32', 'esp32s3': 'esp32s3'}
         if self.chip in boards:
             # A full two-core Session tries to access the reset-held RP
             # core 1 on drop and can leave the executing core halted.
@@ -944,6 +963,8 @@ class Probe:
                            probe=self.probe, address=address, count=count)
             if board == 'rp2350_hazard3' and self.require_hart1_halted:
                 request['require_hart1_halted'] = True
+            if board in ('esp32', 'esp32s3') and self.require_cpu1_stalled:
+                request['require_cpu1_stalled'] = True
             write_json(plan, request)
             pace = getattr(self.run, 'pace', None)
             if pace:
@@ -962,6 +983,9 @@ class Probe:
             if self.require_hart1_halted:
                 require(report.get('hart1_halted') is True,
                         'single-core readback did not prove hart 1 remains halted')
+            if self.require_cpu1_stalled:
+                require(report.get('cpu1_stalled') is True,
+                        'single-core readback did not prove CPU1 remains stalled')
             if pace:
                 pace.before('probe read completion')
             return words

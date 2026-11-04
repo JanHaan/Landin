@@ -1,7 +1,7 @@
 # Board tools
 
-These tools build and exercise six supported ports: RP2040, RP2350 Arm,
-RP2350 Hazard3, STM32H753, ESP32-C3 and ESP32-C5. Both RP2350 ports use the
+These tools build and exercise eight supported ports: RP2040, RP2350 Arm,
+RP2350 Hazard3, STM32H753, ESP32-C3, ESP32-C5, ESP32 and ESP32-S3. Both RP2350 ports use the
 same physical Pico 2. Other boards on the rig are not selected by these
 commands.
 
@@ -156,13 +156,50 @@ data fence there; debug resume flushes its instruction frontend before
 fetching the SRAM entry, and compiler startup executes the normal-mode
 fences. The [decoder](https://github.com/Wren6991/Hazard3/blob/86fc4e3f/hdl/hazard3_decode.v)
 and [frontend](https://github.com/Wren6991/Hazard3/blob/86fc4e3f/hdl/hazard3_frontend.v)
-define that chip-specific boundary. ESP helper fences are unchanged.
+define that chip-specific boundary. The ESP32-C3 and ESP32-C5 helper fences are unchanged.
 The Hazard3 port also releases TIMER0 from reset and configures its debug
 pause to follow core 0 alone. Otherwise the parked hart 1 freezes the
 shared timer, and the application's alarm cannot wake its event loop.
 DMA and UART remain in reset until startup. This contract covers the
 port's TIMER0; future TIMER1 or SIO MTIME users must establish their own
 core 1 debug-pause policy. The watchdog is disabled during cleanup.
+
+The windowed Xtensa ports use their own bounded warm contract. CPU1 is
+hardware-stalled with code `0x86` before memory changes; each independent
+readback verifies that stall without applying it again. Only CPU0 is
+exposed to session cleanup. Both caches must already be disabled. The
+helper accepts the XTAL clock with divider zero or one, stops the port's
+timer, UART interrupt sources and watchdogs, then normalizes the divider
+to zero for 40 MHz. Other clock/cache states are refused before SRAM
+writes. Internal instruction SRAM receives word accesses; byte-addressed
+constants and mutable storage remain in data SRAM. External flash, PSRAM,
+cache maintenance and DMA are outside these profiles.
+
+Before resuming the new entry, the helper checks and single-steps the
+compiler's exact normal-mode `memw`/`isync` pair with interrupts masked,
+recording both PCs and debug causes. Startup then establishes window and
+FPU controls, VECBASE, stack and static storage. The scenario uses UART
+receive at level one and a timer at level three, with GPIO22 on ESP32 and
+the active-low GPIO38 LED on ESP32-S3. Ordinary compiler-owned handlers
+admit only levels one through three, which EXCM masks while their shared
+context is saved; higher priority, debug and NMI vectors stop.
+
+Use the same wrapper for these ports:
+
+```sh
+python3 environments/boards/run.py --board=esp32 --refine REFINE \
+    --output NEW_DIRECTORY -- --ram-loader PI_HELPER
+python3 environments/boards/run.py --board=esp32s3 --refine REFINE \
+    --mode=boot --output NEW_DIRECTORY -- --ram-loader PI_HELPER
+```
+
+The boot check observes true power-on and application progress over JTAG
+before opening the board-powered UART bridge. It then records a separate
+EN reset's full ROM trace and drives the scenario. Restoration repeats the
+power-on readiness proof for the fixed image. ESP32's ROM prints decimal
+segment lengths and `POWERON_RESET`; S3 prints hexadecimal lengths and
+`POWERON`. These are separate chip-specific log oracles. Xtensa corruption
+and download-mode recovery controls are not admitted by these tools.
 
 For Pico 2 RAM entry, the BOOTSEL guard reads the selected hub and physical
 port through Linux sysfs. It validates the hub, port and any device

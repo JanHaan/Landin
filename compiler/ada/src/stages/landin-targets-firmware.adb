@@ -315,7 +315,12 @@ package body Landin.Targets.Firmware is
 
    function RAM_Text_Region (Of_Profile : Profile) return Region_Count is
    begin
-      if Of_Profile.Boot = ESP_App_Image then
+      if Of_Profile.Boot = ESP_App_Image
+        or else (Of_Profile.Reference and then Of_Profile.Core in Xtensa_Core)
+      then
+         --  ESP images and the selected Xtensa reference already name
+         --  writable instruction SRAM separately from byte-accessible
+         --  data. Preserve that executable window's read-only placement.
          return Of_Profile.Placed (Text);
       end if;
       if Of_Profile.Placed (Data) /= 0

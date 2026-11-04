@@ -2644,6 +2644,24 @@ protocol or supply a DMA lifetime discipline.
 
 [Executable example](../compiler/tests/fixtures/runtime/library-platform-riscv/main.ldn)
 
+## platform/xtensa
+
+Windowed Xtensa interrupt masking, enabled and pending CPU lines, the
+cycle counter, waiting and memory barriers, declared on `xtensa` alone.
+
+Save the PS from `disable_interrupts` or `mask_level_one` and restore it
+in reverse order, including on early returns. `mask_level_one` leaves
+higher-priority interrupts enabled; it may only raise the current level
+from zero or one. Masking does not stop exceptions, NMI or the debugger.
+Device descriptions route peripheral sources through the interrupt matrix
+to the CPU lines that `set_enabled_lines` selects.
+
+`wait_for_interrupt` enables ordinary interrupts and may wake spuriously.
+Recheck the condition after waking. Barriers order accesses; they do not
+prove a peripheral operation completed.
+
+[Executable example](../compiler/tests/fixtures/runtime/library-platform-xtensa/main.ldn)
+
 ## platform/riscv/hazard3
 
 Hazard3's external interrupt controller, the RP2350's RISC-V cores':

@@ -19,6 +19,7 @@ entry that describes it, and put a new one where a reader would look for it.
 | `freebsd-x86-64` | hosted executables, emitted on Linux | a FreeBSD VM under KVM | LLDB in the VM |
 | `freebsd-arm64` | hosted executables, emitted on Linux | an emulated FreeBSD VM | LLDB in the VM |
 | `cortex-m0` | ARMv6-M firmware | the pinned QEMU | GDB, lines and functions |
+| `xtensa` | windowed LX6 and LX7 firmware, ILP32 | Espressif QEMU, `esp32` and `esp32s3` | lines with `--debug=lines`; no gate debugger session |
 | `rv32` | RV32IMC and RV32IMAC firmware, ilp32 | Espressif's QEMU, `sifive_e` and `esp32c3` | lines with `--debug=lines`; no gate session |
 
 - **FreeBSD** runs in [architecture-specific VMs](../environments/freebsd/README.md)
@@ -73,10 +74,10 @@ entry that describes it, and put a new one where a reader would look for it.
   limits by `--emit=linker-script` (D589), a developer's own is linked with
   `--linker-script=FILE` and held to a contract (D546), and
   `link(region: ...)` places a declaration in a named region (D547).
-  Cortex-M and RV32 also derive an in-place SRAM layout with
+  Cortex-M, RV32 and Xtensa also derive an in-place SRAM layout with
   `--firmware-layout=ram` (D900), checking the linked vectors, sections and
   stack, retaining BSS clearing and omitting ROM packaging. The
-  [board tools](../environments/boards/README.md) prepare all six ports
+  [board tools](../environments/boards/README.md) prepare all eight ports
   without hardware, compare boot and RAM records separately, and transfer
   checked images and matching tool sources to the Pi board host. Their
   default development mode halts and reinitializes supported device state,
@@ -182,6 +183,7 @@ them, and [the target contracts](targets.md) say what each selects.
 | M profile | `armv6-m`, `armv7-m`, `armv7e-m`, `armv8-m.main` |
 | RV64 | `rv64gc` baseline; `rv64gc_zba` and `rv64gc_xtheadba` add independent address-generation extensions, and `rv64gc_zba_xtheadba` selects both |
 | RV32 | `rv32imc` baseline; `rv32imac` adds A |
+| Xtensa | `xtensa-esp32` default; `xtensa-esp32s3` exposes `compiler.feature.salt`; independent chip configurations |
 
 - A level changes instructions and never layout or ABI: BMI2 shifts at
   `x86-64-v3`, LSE atomics at `armv8.1-a` on Linux, macOS and FreeBSD,
@@ -298,7 +300,7 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   release name or `null` for development. The input digest covers compiler
   sources and build policy, so a prose edit changes dirty state without
   changing that digest.
-- `refine targets` lists described targets and their CPU feature levels;
+- `refine targets` lists described targets, their CPU feature levels and accepted debug modes;
   `--json` gives structured output, and `--identify` retains the older
   capability summary.
 
@@ -629,7 +631,7 @@ process ignores SIGPIPE and gives its children the default back.
 ## Code generation
 
 - **Determinism.** Target code and the build report are byte-identical
-  whatever the build directory, environment or order, on all eight targets;
+  whatever the build directory, environment or order, on all nine targets, with both Xtensa configurations;
   a hosted linked image without `--debug` is too, on one host's toolchain
   and under one output name (D810).
 - **Switches.** D209 to D211 specify compact numeric-array arithmetic,

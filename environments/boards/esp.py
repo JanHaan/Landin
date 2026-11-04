@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""What the ESP32-C3's and the ESP32-C5's board tools share (D723).
+"""Shared ESP board images, physical scenarios and RAM/boot workflows (D723).
 
 The default --mode=ram consumes a checked --bundle or builds an ELF with
 --refine, then uses --ram-loader for a warm halt/load/resume session. The
@@ -8,8 +8,8 @@ stack and vector/trap entry and resumes. The resident flash image stays
 in place; this run neither resets through the ROM nor proves a cold boot.
 The scenario, instruction checks and JTAG readback apply in both modes.
 
-With explicit --mode=boot, the chips' ROMs load the same application image
-and write the same boot log. The two ports run the same scenario with
+With explicit --mode=boot, each chip's ROM loads its application image
+and writes its chip-specific boot log. The ports run the same scenario with
 interrupt-driven receive (D721); what differs is each chip's facts, which
 each board's tool gives as a `Chip`: its identity and revisions, where its ROM reads and enters the
 image, the trap vector its core takes, its indicator, the causes its
@@ -26,8 +26,9 @@ The boot-mode steps, each recorded under the run's output directory:
      revisions, every segment against the ELF's loadable segments, its
      checksum, its SHA-256, and refine's build report against it; and the
      linked image's instructions against the level: no A-extension
-     instruction at rv32imc, an AMO and an LR/SC pair at rv32imac;
-  3. with --image-control, flash a copy whose checksum byte is flipped,
+     instruction at rv32imc, an AMO and an LR/SC pair at rv32imac, or
+     windowed frames and calls for Xtensa;
+  3. on C3/C5 with --image-control, flash a copy whose checksum byte is flipped,
      cut the power, and require the ROM to name the checksum it computed,
      the image's own, refuse the image and never enter it; then a copy
      whose SHA-256 is flipped, which the ROM, without secure boot, names
@@ -93,6 +94,12 @@ class Chip:
     indicator = uart_cause = timer_cause = cause_mask = None
     expected_mtvt = None
     a_extension = False
+    target = 'rv32'
+    tool_prefixes = ('riscv64-elf-', 'riscv64-unknown-elf-')
+    vector_register = 'mtvec'
+    entry_at_origin = True
+    uart_cause_mask = timer_cause_mask = None
+    power_on_names = ('POWERON',)
     cells = {}
 
     def mtvec(self, sections, names):
@@ -128,7 +135,7 @@ def build(run, args, chip):
     source = ROOT / 'compiler/tests/board' / chip.name
     run.command('compile', [args.refine, '--root=' + str(ROOT / 'devices'),
         '--root=' + str(ROOT / 'devices/generated'), '--root=' + str(ROOT / 'compiler/tests/driver'),
-        '--root=' + str(source), '--target=rv32', '--level=' + chip.level,
+        '--root=' + str(source), '--target=' + chip.target, '--level=' + chip.level,
         '--firmware-entry=start', '--emit=exe', *common.firmware_layout(args),
         '--build-report=' + str(run.out / 'build.json'), str(source / 'app'), '-o', str(elf)])
     if getattr(args, 'mode', 'boot') == 'ram':
@@ -152,9 +159,10 @@ def check_image(chip, data, elf, report):
     require((image['flash_mode'], image['size_freq']) == (FLASH_MODE_DIO, SIZE_FREQ),
             'the flash mode and size bytes are %#x and %#x' % (image['flash_mode'], image['size_freq']))
     entry = struct.unpack_from('<I', Path(elf).read_bytes(), 0x18)[0]
-    require(image['entry'] == entry == chip.origin,
-            'the image enters at %#x and the ELF at %#x, not the region origin %#x'
-            % (image['entry'], entry, chip.origin))
+    expected_entry = chip.origin if chip.entry_at_origin else chip.origin + 1024
+    require(image['entry'] == entry == expected_entry,
+            'the image enters at %#x and the ELF at %#x, expected entry %#x'
+            % (image['entry'], entry, expected_entry))
     segments = [(address, body) for address, body, _ in common.elf_segments(elf)]
     require(image['segments'] == segments,
             'the image\'s segments are not the ELF\'s: %s against %s'
@@ -173,6 +181,12 @@ def check_image(chip, data, elf, report):
 def instructions(chip, listing):
     """The linked image's A-extension instructions against the level: none
     at rv32imc (D696), and both an AMO and an LR/SC pair at rv32imac."""
+    if chip.target == 'xtensa':
+        found = sorted(set(re.findall(r'\t(entry|call8|callx8|retw(?:\.n)?)\s', listing)))
+        require('entry' in found and any(op.startswith('retw') for op in found),
+                'the image has no windowed routine frame and return')
+        require(any(op in found for op in ('call8', 'callx8')), 'the image has no windowed call')
+        return found
     found = sorted(set(m.group(1) for m in AMO.finditer(listing)))
     if chip.a_extension:
         require(any(f.startswith('amo') for f in found), 'the image holds no AMO')
@@ -191,10 +205,12 @@ def corrupted(data, where):
     return bytes(bad)
 
 
-def boot_log(text, image):
+def boot_log(text, image, chip=None):
     """The ROM's log of a good image's boot from power-on."""
     log = common.rom_log(text)
-    require(log['reset'] == (POWER_ON, 'POWERON'), 'the ROM reported reset %s, not 0x1 POWERON'
+    accepted = chip.power_on_names if chip else ('POWERON',)
+    require(log['reset'] is not None and log['reset'][0] == POWER_ON
+            and log['reset'][1] in accepted, 'the ROM reported reset %s, not power-on'
             % (log['reset'],))
     require(log['boot'] is not None and log['boot'][1] == 'SPI_FAST_FLASH_BOOT',
             'the ROM booted in mode %s, not from flash' % (log['boot'],))
@@ -259,9 +275,9 @@ def scenario(console, chip, seed, mode='boot'):
     if mode == 'boot':
         require(boot['r'] == POWER_ON, 'the reset cause reads %#x, not the chip reset of a power-on'
                 % boot['r'])
-    require(boot['v'] == chip.expected_mtvec, 'mtvec reads %#x, not %#x'
-            % (boot['v'], chip.expected_mtvec))
-    verdicts['boot'] = dict(reset_cause=boot['r'], mtvec='%#x' % boot['v'])
+    require(boot['v'] == chip.expected_mtvec, '%s reads %#x, not %#x'
+            % (chip.vector_register, boot['v'], chip.expected_mtvec))
+    verdicts['boot'] = dict(reset_cause=boot['r'], **{chip.vector_register: '%#x' % boot['v']})
     if chip.expected_mtvt is not None:
         require(boot.get('w') == chip.expected_mtvt, 'mtvt reads %s, not %#x'
                 % ('%#x' % boot['w'] if 'w' in boot else 'nothing', chip.expected_mtvt))
@@ -281,9 +297,9 @@ def scenario(console, chip, seed, mode='boot'):
             'the shared scenario was not echoed')
     verdicts['shared'] = dict(input=SHARED.decode(), echo=SHARED.decode(),
                               indicator_after_1=high['g'], indicator_after_0=low['g'])
-    require(high['p'] & chip.cause_mask == chip.uart_cause,
+    require(high['p'] & (chip.uart_cause_mask or chip.cause_mask) == chip.uart_cause,
             'the receive interrupt arrived with mcause %#x' % high['p'])
-    require(high['q'] & chip.cause_mask == chip.timer_cause,
+    require(high['q'] & (chip.timer_cause_mask or chip.cause_mask) == chip.timer_cause,
             'the timer interrupt arrived with mcause %#x' % high['q'])
     verdicts['interrupts'] = dict(receive_mcause='%#x' % high['p'], timer_mcause='%#x' % high['q'])
     # The atomics, over two operands the host chose.
@@ -474,13 +490,20 @@ def restore_fixed(run, args, chip, probe, console_for, cycle, settle):
     """Flash, cold-start and prove the fixed image reached its park loop."""
     paced(args, 'restore resident image', lambda: probe.download_bin(args.fixed_image, chip.offset))
     settle(run)
-    restored, _ = cycle(run, console_for, probe, None)
+    fixed_elf = common.fixed_elf(args, chip.name)
+    # Xtensa's UART bridge shares board power. Prove true POR over JTAG
+    # before a separate EN reset makes the complete ROM trace observable.
+    names = common.elf_symbols(fixed_elf) if chip.target == 'xtensa' else None
+    restored, cold = cycle(run, console_for, probe, names)
     try:
         fixed = common.esp_image(args.fixed_image.read_bytes())
         stream = restored.wait(lambda body: common.rom_log(body.decode('latin-1'))['entry']
             == fixed['entry'], 10, 'the resident image ROM entry')
-        boot_log(stream.decode('latin-1'), fixed)
-        return common.read_fixed_marker(probe, common.fixed_elf(args, chip.name))
+        boot_log(stream.decode('latin-1'), fixed, chip)
+        marker = common.read_fixed_marker(probe, fixed_elf)
+        if cold:
+            marker['power_on'] = cold
+        return marker
     finally:
         restored.close()
 
@@ -501,7 +524,9 @@ def run_board(chip, args, console_for, cycle, settle):
     result = dict(status='failed')
     began = time.monotonic()
     console = None
-    probe = common.Probe(run, args.probe_rs, chip.probe_chip, args.probe)
+    probe = common.Probe(run, args.probe_rs, chip.probe_chip, args.probe,
+                         ram_loader=getattr(args, 'ram_loader', None),
+                         require_cpu1_stalled=getattr(chip, 'target', 'rv32') == 'xtensa')
     lock = common.rig_lock('%s board.py' % chip.name)
     lock_held = False
     names = None
@@ -580,7 +605,7 @@ def run_board(chip, args, console_for, cycle, settle):
             stream = console.wait(lambda s: tagged(s, 'b'), 10, 'the ROM log and the boot frame')
             text = stream[:stream.index(b'\x02')].decode('latin-1')
             (run.out / 'rom.log').write_text(text)
-            result['rom'] = boot_log(text, image)
+            result['rom'] = boot_log(text, image, chip)
         verdicts, final, atomics = scenario(console, chip, args.seed, args.mode)
         result['verdicts'] = verdicts
         console.close()
@@ -637,10 +662,10 @@ def arguments(parser, chip):
     common.board_arguments(parser)
     parser.add_argument('--probe-rs', type=Path, default=shutil.which('probe-rs'),
                         help='a probe-rs that reaches the board\'s USB-Serial-JTAG')
-    parser.add_argument('--nm', default=shutil.which('riscv64-elf-nm')
-                        or shutil.which('riscv64-unknown-elf-nm'))
-    parser.add_argument('--objdump', default=shutil.which('riscv64-elf-objdump')
-                        or shutil.which('riscv64-unknown-elf-objdump'))
+    parser.add_argument('--nm', default=next((path for prefix in chip.tool_prefixes
+                                           if (path := shutil.which(prefix + 'nm'))), None))
+    parser.add_argument('--objdump', default=next((path for prefix in chip.tool_prefixes
+                                                if (path := shutil.which(prefix + 'objdump'))), None))
     parser.add_argument('--output', type=Path, required=True, help='a new directory')
     parser.add_argument('--hub', default='.3.4',
                         help="the board's hub, as uhubctl -l names it or relative to the cascade")

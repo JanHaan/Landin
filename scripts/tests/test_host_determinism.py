@@ -264,7 +264,7 @@ class Emission(unittest.TestCase):
             'exit 2\n')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(sum(value == "refused:1" for value in manifest.values()), 18)
-        self.assertEqual(sum(len(value) == 64 for value in manifest.values()), 126)
+        self.assertEqual(sum(len(value) == 64 for value in manifest.values()), 162)
 
     def test_every_profile_is_emitted_and_named(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -291,7 +291,7 @@ class Emission(unittest.TestCase):
             self.assertEqual(result.returncode, 1, result.stderr)
             self.assertIn("unexpected emission result", result.stderr)
             manifest = json.loads(out.read_text())
-            self.assertEqual(len(manifest), 8 * 2 * 3 * 3)
+            self.assertEqual(len(manifest), 10 * 2 * 3 * 3)
             for target in ("linux-x86-64", "linux-arm64", "darwin-arm64", "cortex-m0",
                            "freebsd-x86-64", "freebsd-arm64", "linux-rv64", "rv32"):
                 for mode in ("debug", "release"):
@@ -469,6 +469,10 @@ class Levels(unittest.TestCase):
                 said = "--target=" + target + (" --level=rv32imac" if target == "rv32" else "")
                 key = "example|%s|release|optimize=size|specialize=auto" % target
                 self.assertEqual(manifest[key], hashlib.sha256(said.encode()).hexdigest())
+            for level in ("xtensa-esp32", "xtensa-esp32s3"):
+                key = ("example|xtensa|release|optimize=size|specialize=auto|level=" + level)
+                said = "--target=xtensa --level=" + level
+                self.assertEqual(manifest[key], hashlib.sha256(said.encode()).hexdigest())
 
 
 class OwnTarget(unittest.TestCase):
@@ -509,7 +513,7 @@ class OwnTarget(unittest.TestCase):
             "targets: rv32, cortex-m0\nargs: --target=rv32\n")
         self.assertEqual(result.returncode, 1)
         self.assertIn("unexpected emission result", result.stderr)
-        self.assertEqual(len(manifest), 8 * 2 * 3 * 3)
+        self.assertEqual(len(manifest), 10 * 2 * 3 * 3)
 
     def test_the_build_modes_compare_it_on_its_target_alone(self):
         sys.path.insert(0, str(CHECK.parent))
@@ -546,7 +550,7 @@ def modes(debug_body, release_body):
             (directory / "main.ldn").write_text("unused by the stub\n")
         (positive / "fixture.meta").write_text("program: main.ldn\n")
         (runtime / "fixture.meta").write_text(
-            "program: main.ldn\ntargets: linux-x86-64, linux-rv64\n")
+            "program: main.ldn\ntargets: linux-x86-64, linux-rv64\nlink: libc\n")
         #  The firmware corpus executes one runtime fixture its `targets:`
         #  does not name, and one only through its counterpart.
         (executed / "fixture.meta").write_text(
@@ -576,6 +580,13 @@ def modes(debug_body, release_body):
 class BuildModes(unittest.TestCase):
     """The debug and release builds of one tree emit the same bytes."""
 
+    def test_runtime_link_policy_is_carried_into_both_build_modes(self):
+        debug = ("out.write_text('asm' + ('libc' if where == 'hosted' "
+                 "and '--link=libc' in args else ''))\n")
+        release = "out.write_text('asm' + ('libc' if where == 'hosted' else ''))\n"
+        result = modes(debug, release)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     SAME = "out.write_text(' '.join(args[:4]) + where)\n"
 
     def test_agreeing_builds_pass_over_every_source_and_profile(self):
@@ -585,7 +596,7 @@ class BuildModes(unittest.TestCase):
         #  the one of them its record names, and the one the firmware
         #  corpus executes on both firmware targets too; the counterpart on
         #  both firmware targets; each at the four standard profiles.
-        self.assertIn("sources 5  requests 44  emitted 44", result.stdout)
+        self.assertIn("sources 5  requests 68  emitted 68", result.stdout)
 
     def test_the_firmware_corpus_reaches_rv32(self):
         result = modes(self.SAME, self.SAME.replace(
@@ -607,7 +618,7 @@ class BuildModes(unittest.TestCase):
         refuse = "if where == 'counterpart':\n    print('%s'); sys.exit(1)\n"
         result = modes(refuse % "no" + self.SAME, refuse % "no" + self.SAME)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("refused alike 8", result.stdout)
+        self.assertIn("refused alike 16", result.stdout)
         result = modes(refuse % "no" + self.SAME, refuse % "not so" + self.SAME)
         self.assertEqual(result.returncode, 1)
         self.assertIn("cortex-m/counterpart|cortex-m0", result.stderr)

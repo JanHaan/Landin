@@ -59,6 +59,7 @@ body:
         - linux-rv64
         - cortex-m0
         - rv32
+        - xtensa
         - Not target-specific
     validations:
       required: true

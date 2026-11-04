@@ -1,0 +1,31 @@
+import platform/xtensa
+
+fixed if compiler.arch == xtensa then
+    nested_masks_restore: () -> (ok: bool) =
+        before := xtensa.interrupt_mask()
+        enabled := xtensa.enabled_lines()
+        outer := xtensa.disable_interrupts()
+        inner := xtensa.disable_interrupts()
+        masked := xtensa.interrupt_mask()
+        xtensa.compiler_barrier()
+        xtensa.restore_interrupts(inner)
+        still := xtensa.interrupt_mask()
+        xtensa.restore_interrupts(outer)
+        after := xtensa.interrupt_mask()
+        low := xtensa.mask_level_one()
+        only_low := xtensa.interrupt_mask()
+        xtensa.restore_interrupts(low)
+        xtensa.set_enabled_lines(enabled)
+        xtensa.device_barrier()
+        xtensa.completion_barrier()
+        ok = masked == 15 and still == 15 and after == before and only_low == 1
+             and xtensa.enabled_lines() == enabled
+    end nested_masks_restore
+else
+    nested_masks_restore: () -> (ok: bool) = ok = true end nested_masks_restore
+end if
+
+public main: () -> (code: i32) =
+    code = 1
+    if nested_masks_restore() then code = 42 end if
+end main

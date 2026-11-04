@@ -11,7 +11,7 @@
 #
 #  The cheap axis is the one that multiplies.  Emission needs no target
 #  assembler, linker or emulator, so a host job installs the pinned
-#  toolchain, builds the compiler and emits for all eight targets -- which
+#  toolchain, builds the compiler and emits for all nine targets -- which
 #  makes the matrix hosts + targets rather than hosts x targets.
 #  Called by gate.yml; also supports standalone manual dispatch.
 
@@ -52,7 +52,7 @@ jobs:
             platform: x86_64-linux
             build: linux-amd64
             part: 2
-            targets: linux-arm64,cortex-m0,freebsd-x86-64,rv32
+            targets: linux-arm64,cortex-m0,freebsd-x86-64,rv32,xtensa
           - runner: ubuntu-24.04-arm
             platform: aarch64-linux
             build: linux-arm64
@@ -62,7 +62,7 @@ jobs:
             platform: aarch64-linux
             build: linux-arm64
             part: 2
-            targets: linux-arm64,cortex-m0,freebsd-x86-64,rv32
+            targets: linux-arm64,cortex-m0,freebsd-x86-64,rv32,xtensa
           - runner: macos-26
             platform: aarch64-darwin
             build: darwin-arm64
@@ -73,7 +73,7 @@ jobs:
             platform: aarch64-darwin
             build: darwin-arm64
             part: 2
-            targets: linux-arm64,cortex-m0,freebsd-x86-64,rv32
+            targets: linux-arm64,cortex-m0,freebsd-x86-64,rv32,xtensa
             developer-dir: /Applications/Xcode_26.6.app/Contents/Developer
     runs-on: ${{ matrix.runner }}
     env:
