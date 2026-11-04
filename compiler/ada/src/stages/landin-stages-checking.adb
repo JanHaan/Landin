@@ -41062,7 +41062,8 @@ package body Landin.Stages.Checking is
                  & " program selects none",
                Note => "D543: import the device's description; with none,"
                  & " the library's "
-                 & Landin.Targets.Firmware.Reference_Module (Facts)
+                 & Landin.Targets.Firmware.Reference_Module
+                   (Facts, Landin.Targets.Levels.Name (Level (Context)))
                  & " applies, and this library holds none: name one that"
                  & " does with --library=DIR",
                Into => Found);

@@ -2645,6 +2645,11 @@ package body Landin.Tests.Targets_Suite is
          and then F.Svd_Name (F.Xtensa_LX6) = "Xtensa LX6"
          and then F.Svd_Name (F.Xtensa_LX7) = "Xtensa LX7"
          and then F.Reference_Module (Xtensa) = "platform/xtensa/reference"
+         and then F.Reference_Module (Xtensa, "xtensa-esp32")
+           = "platform/xtensa/reference"
+         and then F.Reference_Module (Xtensa, "xtensa-esp32s3")
+           = "platform/xtensa/reference_lx7"
+         and then F.Is_Reference_Module ("platform/xtensa/reference_lx7")
          and then F.Executes (F.Xtensa_LX6, "xtensa-esp32")
          and then F.Executes (F.Xtensa_LX7, "xtensa-esp32s3")
          and then not F.Executes (F.Xtensa_LX7, "xtensa-esp32")

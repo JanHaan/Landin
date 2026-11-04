@@ -3120,7 +3120,8 @@ package body Landin.Driver is
                      "firmware needs a device profile, and the program"
                      & " selects none: import the device's description, or"
                      & " name a library holding "
-                     & Landin.Targets.Firmware.Reference_Module (Facts)
+                     & Landin.Targets.Firmware.Reference_Module
+                       (Facts, Landin.Targets.Levels.Name (Level))
                      & " with --library=DIR (D543)");
                   return;
                end if;
@@ -3184,7 +3185,8 @@ package body Landin.Driver is
                      "a linker script is a device profile's, and the"
                      & " program selects none: import the device's"
                      & " description, or name a library holding "
-                     & Landin.Targets.Firmware.Reference_Module (Facts)
+                     & Landin.Targets.Firmware.Reference_Module
+                       (Facts, Landin.Targets.Levels.Name (Level))
                      & " with --library=DIR (D543)");
                   return;
                elsif Dry_Run then

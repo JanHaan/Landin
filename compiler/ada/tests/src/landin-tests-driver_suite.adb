@@ -6910,6 +6910,69 @@ package body Landin.Tests.Driver_Suite is
              "/w/app"], Host, Tools);
       end Ran;
 
+      procedure Check_Reference (Level, Core, Origin : String);
+
+      procedure Check_Reference (Level, Core, Origin : String) is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : Landin.Platform.Path_List;
+      begin
+         Host.Add_Firmware_Library;
+         Host.Add_File ("main.ldn", "start: () -> none = end start" & LF);
+         Args.Append ("--target=xtensa");
+         if Level /= "" then
+            Args.Append ("--level=" & Level);
+         end if;
+         Args.Append ("--emit=linker-script");
+         Args.Append ("--build-report=profile.json");
+         Args.Append ("-o");
+         Args.Append ("profile.ld");
+         Args.Append ("main.ldn");
+         declare
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Driver.Execute (Args, Host, Tools);
+         begin
+            Landin.Testing.Check
+              (Item, Result.Status = Landin.Driver.Status_Success
+               and then Contains (Host.Written ("profile.json"), Core)
+               and then Contains (Host.Written ("profile.ld"), Origin),
+               "the selected level loads its unconditional reference: "
+               & Level & " " & Unbounded.To_String (Result.Report));
+         end;
+      end Check_Reference;
+
+      procedure Check_Zero_Dispatch;
+
+      procedure Check_Zero_Dispatch is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      begin
+         Host.Add_Firmware_Library;
+         Host.Add_File ("main.ldn",
+           "start: () -> none = end start" & LF
+           & "link(vector: 0) extern(interrupt) zero_irq: () -> none ="
+           & " end zero_irq" & LF
+           & "public extern(interrupt) unplaced_irq: () -> none ="
+           & " end unplaced_irq" & LF);
+         declare
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Driver.Execute
+                (["--target=xtensa", "--firmware-entry=start", "--emit=asm",
+                  "-o", "dispatch.s", "main.ldn"], Host, Tools);
+         begin
+            Landin.Testing.Check
+              (Item, Result.Status = Landin.Driver.Status_Success
+               and then Contains (Host.Written ("dispatch.s"),
+                                  "call8 zero_irq")
+               and then Contains (Host.Written ("dispatch.s"),
+                                  "unplaced_irq:")
+               and then not Contains (Host.Written ("dispatch.s"),
+                                      "call8 unplaced_irq"),
+               "line zero dispatch requires explicit vector placement: "
+               & Unbounded.To_String (Result.Report));
+         end;
+      end Check_Zero_Dispatch;
+
       LX6 : constant Landin.Driver.Outcome :=
         Ran ("xtensa-lx6", "xtensa-esp32");
       LX7 : constant Landin.Driver.Outcome :=
@@ -6928,6 +6991,10 @@ package body Landin.Tests.Driver_Suite is
          "link(vector: 3) extern(naked) h: () -> none = "
          & "assembler.block(""rfi 1"") end h" & LF);
    begin
+      Check_Zero_Dispatch;
+      Check_Reference ("", "xtensa-lx6", "40080000");
+      Check_Reference ("xtensa-esp32", "xtensa-lx6", "40080000");
+      Check_Reference ("xtensa-esp32s3", "xtensa-lx7", "40378000");
       Landin.Testing.Check_Equal
         (Item, LX6.Status, Landin.Driver.Status_Success,
          "LX6 ESP image profile: " & Unbounded.To_String (LX6.Report));
