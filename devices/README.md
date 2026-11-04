@@ -587,7 +587,7 @@ entry words, and the unchanged default callback table. A reset cause is
 sticky state, not proof of caller provenance: an arbitrary application's
 jump to this stage is outside this contract. Other reset causes park at
 `_landin_device_cache_refused`; different ROM veneers, implementation
-prologues or callback tables park at `_landin_device_rom_refused`. These
+bodies or callback tables park at `_landin_device_rom_refused`. These
 checks precede the stage's first MMIO write.
 
 Before entering a device stage, the compiler's Xtensa entry prelude prepares
@@ -610,8 +610,13 @@ the [ROM symbol table](https://github.com/espressif/esp-idf/blob/fff9895c82d744c
 and [cache API](https://github.com/espressif/esp-idf/blob/fff9895c82d744c7237be8847347bdd1b07c6643/components/esp_rom/esp32s3/include/esp32s3/rom/cache.h).
 The offline oracle compares complete implementation hashes, ENTRY/RETW
 instructions, public veneers and callback words with that vendor ELF.
-The stage checks a bounded fingerprint at runtime; physical ROM revisions
-must be observed against this evidence before claiming support. The recorded
+The stage compares all aligned words of the eight reviewed routines,
+including each final word's adjacent padding, before any device-stage MMIO
+store or ROM call. It also checks the public veneers and callback table.
+The comparisons use ordinary instructions and assembler literal pools in
+executable IRAM; no static data initializer or extra description declaration
+is needed. Physical ROM revisions must be observed against this evidence
+before claiming support. The recorded
 whole-ROM hash identifies the corresponding vendor QEMU revision-0 ROM;
 no ROM binary is vendored. `test.py` executes the stage's restricted
 instruction surface against independent MMIO/ROM values, checks refusal

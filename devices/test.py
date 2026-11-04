@@ -1890,23 +1890,27 @@ def xtensa_stage(text, memory, calls=None, special=None, prepared=False, rom_eff
     ROM calls model only their contract; the pinned vendor ELF supplies
     the independent implementation and calling-convention oracle.
     """
-    body = re.search(r'assembler\.block\("""(.*?)"""\)', text, re.S).group(1)
     instructions = []
     labels = {}
-    for line in body.splitlines():
-        line = line.split('#')[0].strip()
-        if not line or line.startswith('.global '):
-            continue
-        if line.endswith(':'):
-            labels[line[:-1]] = len(instructions)
-        else:
-            instructions.append(line)
+    functions = re.finditer(
+        r'link\(([^)]*)\) extern\(naked\) \w+:.*?assembler\.block\("""(.*?)"""\)',
+        text, re.S)
+    for function in functions:
+        symbol = re.search(r'symbol: "([^"]+)"', function.group(1))
+        if symbol:
+            labels[symbol.group(1)] = len(instructions)
+        for line in function.group(2).splitlines():
+            line = line.split('#')[0].strip()
+            if not line:
+                continue
+            if line.endswith(':'):
+                labels[line[:-1]] = len(instructions)
+            else:
+                instructions.append(line)
     registers = {}
     stores = []
     calls = [] if calls is None else calls
     special = {} if special is None else special
-    symbols = {'_landin_firmware_stack_top': 0x3fcd0000,
-               '_landin_firmware_vectors': 0x40378000}
     if prepared:
         # The compiler-owned entry prelude is the cold stage's ABI root.
         registers['a1'] = 0x3fccffe0
@@ -1914,13 +1918,14 @@ def xtensa_stage(text, memory, calls=None, special=None, prepared=False, rom_eff
         special.update({'PS': 0x4002f, 'INTENABLE': 0, 'WINDOWBASE': 0,
                         'WINDOWSTART': 1, 'VECBASE': 0x40378000})
     pc = 0
-    for _ in range(400):
+    for _ in range(4096):
         op, _, rest = instructions[pc].partition(' ')
         args = [a.strip() for a in rest.split(',')]
         pc += 1
         if op == 'movi':
-            registers[args[0]] = (symbols[args[1]] if args[1] in symbols
-                                   else int(args[1], 0)) & 0xffffffff
+            registers[args[0]] = int(args[1], 0) & 0xffffffff
+        elif op == 'addi':
+            registers[args[0]] = registers[args[1]] + int(args[2], 0)
         elif op in ('l32i', 's32i'):
             address = registers[args[1]] + int(args[2], 0)
             if op == 'l32i':
@@ -2042,6 +2047,10 @@ class XtensaDescriptions(unittest.TestCase):
             entry, body = int(function['entry'], 0), int(function['body'], 0)
             memory.update({entry - 4: body, entry: 0xa0ffff91, entry + 4: 9,
                            body: int(function['first_word'], 0)})
+        for region in contract['word_ranges']:
+            address = int(region['address'], 0)
+            for index, word in enumerate(region['words']):
+                memory[address + 4 * index] = int(word, 0)
         return memory
 
     def test_s3_cold_rom_normalization(self):
@@ -2188,6 +2197,9 @@ class XtensaOracles(unittest.TestCase):
             self.assertEqual(digest(implementation), function['sha256'])
             self.assertEqual(implementation[:3], bytes.fromhex('364100'))  # ENTRY32
             self.assertEqual(implementation[-2:], bytes.fromhex('1df0'))  # RETW.N
+        for region in contract['word_ranges']:
+            expected = b''.join(struct.pack('<I', int(word, 0)) for word in region['words'])
+            self.assertEqual(read(int(region['address'], 0), len(expected)), expected)
         for callback in contract['callback_bodies']:
             implementation = read(int(callback['address'], 0), callback['size'])
             self.assertEqual(digest(implementation), callback['sha256'])
