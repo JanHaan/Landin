@@ -1786,7 +1786,7 @@ package body Landin.IR is
      (Into : in out Unit; Item : Item_Id; Value : Landin.Machine.Placement) is
    begin
       Into.Items (Positive (Item)).Placement := Value;
-      if Value.Keep or else Value.Vector /= 0
+      if Value.Keep or else (Value.Vector /= 0 or else Value.Vector_Present)
         or else Value.Section /= Landin.Source.Names.No_Name
         or else Value.Region /= Landin.Source.Names.No_Name
         or else Value.Boot_Stage

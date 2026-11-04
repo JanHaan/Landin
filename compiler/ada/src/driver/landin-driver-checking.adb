@@ -144,7 +144,8 @@ package body Landin.Driver.Checking is
                Item : constant Landin.IR.Item_Id := Landin.IR.Item_Id (Index);
             begin
                if Firmware_Entry = Landin.IR.No_Item
-                 and then Landin.IR.Placement_Of (Unit, Item).Vector /= 0
+                 and then (Landin.IR.Placement_Of (Unit, Item).Vector /= 0
+                   or else Landin.IR.Placement_Of (Unit, Item).Vector_Present)
                then
                   return;
                elsif Landin.IR.Kind_Of (Unit, Item) = Landin.IR.Routine

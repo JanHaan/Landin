@@ -3089,6 +3089,9 @@ package body Landin.Driver is
                   if Landin.IR.Placement_Of
                     (Landin.Stages.Code (Context).all,
                      Landin.IR.Item_Id (Index)).Vector /= 0
+                    or else Landin.IR.Placement_Of
+                      (Landin.Stages.Code (Context).all,
+                       Landin.IR.Item_Id (Index)).Vector_Present
                   then
                      Note_Failure
                        (Code_No_Entry, "vector placement requires an explicit"

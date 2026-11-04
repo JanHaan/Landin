@@ -552,7 +552,9 @@ package body Landin.IR.Simplification is
          if Held.Kind /= IR.Datum or else not Held.Immutable
            or else Held.External
            or else Held.Link_Name /= Landin.Source.Names.No_Name
-           or else Held.Placement.Keep or else Held.Placement.Vector /= 0
+           or else Held.Placement.Keep
+           or else Held.Placement.Vector /= 0
+           or else Held.Placement.Vector_Present
            or else Held.Placement.Section /= Landin.Source.Names.No_Name
            or else Held.Pointee /= No_Pointee
            or else Held.Signature /= No_Signature

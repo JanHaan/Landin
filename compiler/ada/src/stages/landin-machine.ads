@@ -7,6 +7,8 @@ package Landin.Machine is
       Section : Landin.Source.Names.Name_Id := Landin.Source.Names.No_Name;
       Alignment : Natural := 0;
       Vector : Natural := 0;
+      --  CPU line zero is a real Xtensa interrupt identity.
+      Vector_Present : Boolean := False;
       Keep : Boolean := False;
       --  D547: `link(region: "NAME")`, the region of the selected
       --  description the declaration is placed in.
