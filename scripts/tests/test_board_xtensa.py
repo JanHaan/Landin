@@ -217,7 +217,8 @@ class Inspection(unittest.TestCase):
 
     def test_rom_pointer_never_allows_arbitrary_or_out_of_bound_reads(self):
         for pointer, count in ((0, 0), (0x40000000, 0), (0x3fce0001, 0),
-                               (0x3fcf0000, 0), (0x3fcefffc, 1)):
+                               (0x3fcf0000, 0), (0x3fcefffc, 1), (0x3ff1e2b4, 16),
+                               (0x3ff1e2b0, 0), (0x3ff1e2b8, 0)):
             with self.subTest(pointer=pointer):
                 status, result, events = self.observe(xtensa.ESP32S3(), pointer)
                 tables = [event for event in events if event[0] == 'inspect-rom-table']

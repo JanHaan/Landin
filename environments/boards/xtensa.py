@@ -102,7 +102,11 @@ def inspection_contract(args):
 
 
 def rom_table_count(address):
-    """Only the reviewed S3 ROM table's DRAM window, at most 64 bytes."""
+    """Reviewed S3 DRAM window or exact pinned ROM table, at most 64 bytes."""
+    # The pinned ESP32-S3 ROM ELF defines cache_internal_func_obj here,
+    # inside immutable DROM PT_LOAD [0x3ff18c00, 0x3ff1eb3c).
+    if address == 0x3ff1e2b4:
+        return 16
     return min(16, (0x3fcf0000 - address) // 4) if (
         address % 4 == 0 and 0x3fce0000 <= address < 0x3fcf0000) else 0
 
@@ -185,12 +189,13 @@ def inspect_boot(chip, args):
             pointer = read(probe, 'rom-table-pointer', 0x3fceffc4)[0]
             count = rom_table_count(pointer)
             result['rom_table'] = dict(pointer=pointer, bound=[0x3fce0000, 0x3fcf0000],
-                                       maximum_bytes=64, callbacks_dereferenced=False)
+                                       pinned_rom_table=0x3ff1e2b4, maximum_bytes=64,
+                                       callbacks_dereferenced=False)
             if count:
                 result['rom_table']['callback_words'] = read(probe, 'rom-table', pointer, count,
                     role='ROM callback table words; targets not dereferenced')
             else:
-                result['rom_table']['skipped'] = 'pointer is unaligned or outside the reviewed DRAM window'
+                result['rom_table']['skipped'] = 'pointer is outside the reviewed DRAM window and exact pinned ROM table'
         result['status'] = 'observed'
     except (common.Failed, OSError, subprocess.TimeoutExpired) as error:
         result['failure'] = str(error)
