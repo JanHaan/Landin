@@ -65,6 +65,7 @@ SHARED_SOURCE = ROOT / 'compiler/tests/board/rp2350'
 sys.path.insert(0, str(HERE.parent))
 import common  # noqa: E402
 import pico2  # noqa: E402
+import manual  # noqa: E402
 from common import (Failed, echo_of, elf_sections, frames_safe,  # noqa: E402,F401
                     require, sha, symbols)
 from pico2 import ARM_CHIP, BOOTSEL, RISCV_CHIP, attached, paced  # noqa: E402,F401
@@ -223,6 +224,8 @@ def block_control(run, args, elf, head):
 
 
 def running(run, args):
+    if getattr(args, 'manual_boot', None):
+        args.manual_boot.guard.check('silent')
     """probe-rs for the RISC-V image the Pico 2 booted, never another chip:
     what it reads is read from the cores the image runs on."""
     return common.Probe(run, args.probe_rs, RISCV_CHIP, args.probe,
@@ -405,6 +408,8 @@ def cross_check(run, args, names, final, reports):
 
 def restore_fixed(run, args):
     """Restore and cold-start the board's validated resident image."""
+    if getattr(args, 'manual_boot', None):
+        return args.manual_boot.restore()
     _, sections = common.elf_sections(args.fixed_image)
     require('.embedded_block' in sections, 'fixed image has no Pico 2 IMAGE_DEF block')
     flash(run, args, args.fixed_image, common.loaded(args.fixed_image, 0x10000000, 64))
@@ -449,8 +454,11 @@ def main():
                         help="also write a passed run's record here")
     args = parser.parse_args()
     common.board_preflight(args, 'rp2350_hazard3')
-    common.place_hubs(parser, args, 'hub')
-    pico2.boot_location(args)
+    if manual.selected(args):
+        manual.preflight(args)
+    else:
+        common.place_hubs(parser, args, 'hub')
+        pico2.boot_location(args)
     require(args.probe_rs, 'no probe-rs: name one with --probe-rs')
     require(args.bundle or (args.nm and args.objdump), 'no riscv64-elf-nm and -objdump or riscv64-unknown-elf-nm and'
             ' -objdump on PATH: name them with --nm and --objdump')
@@ -464,7 +472,7 @@ def main():
     run.pace = args.pace
     result = dict(status='failed', mode=args.mode)
     began = time.monotonic()
-    bridge = console = lock = None
+    bridge = console = lock = manual_boot = None
     try:
         # The indicator's environment is found before the rig is held: it
         # touches nothing of the rig, and a host that has not built it
@@ -472,6 +480,8 @@ def main():
         pins = (common.ProbehivePins(run, args.probehive, args.probehive_build, args.indicator_pin)
                 if args.indicator_pin else None)
         elf, head, names, adds = build(run, args)
+        if manual.selected(args):
+            manual_boot = args.manual_boot = manual.Boot(run, args, 'rp2350_hazard3', elf)
         # Every step from here reaches the rig, which one run holds at a time.
         lock = common.rig_lock('rp2350_hazard3 board.py').acquire()
         result.update(image_sha256=sha(elf), image_name=elf.name,
@@ -480,7 +490,13 @@ def main():
             run, args.probehive, args.probe_host, args.slot, args.bridge_slots,
             args.debug_port, args.uart_port)
         if args.mode == 'boot':
-            result['flashed_as'] = flash(run, args, elf, head)
+            if manual_boot:
+                manual_boot.start()
+                manual_boot.install('application')
+                manual_boot.readback('application')
+                result['boot_transport'] = 'manual-uf2'
+            else:
+                result['flashed_as'] = flash(run, args, elf, head)
             result['flash_readback'] = 'matches'
         if pins:
             pins.release()
@@ -489,7 +505,10 @@ def main():
             result['warm_load'] = common.ram_load(run, args, 'rp2350_hazard3', elf)
         console = common.TcpConsole(args.uart_port + args.slot)
         if args.mode == 'boot':
-            power_cycle(common.InGroup(run, args.hub_group), args)
+            if manual_boot:
+                manual_boot.cold_cycle('application', console)
+            else:
+                power_cycle(common.InGroup(run, args.hub_group), args)
         verdicts, final, reports = scenario(console, run, args.seed, pins, args.mode,
             common.elf_sections(elf)[1]['.isr_vector'][0] | 1)
         result['verdicts'] = verdicts
@@ -499,6 +518,11 @@ def main():
         result['status'] = 'passed'
     except (Failed, subprocess.TimeoutExpired, OSError) as error:
         result['failure'] = str(error)
+    except KeyboardInterrupt:
+        if not manual_boot:
+            raise
+        manual_boot.stopped = True
+        result['failure'] = 'manual run interrupted; no automatic restoration'
     finally:
         if console:
             console.close()
@@ -509,6 +533,8 @@ def main():
         if lock and lock.file:
             common.finish_boot(args, result, lambda: restore_fixed(run, args))
         common.retain_kernel_usb(args.pace, result)
+        if manual_boot:
+            manual_boot.close(result)
         if bridge:
             # Detached: left running for the next tool.
             bridge.close()
@@ -521,7 +547,7 @@ def main():
         kept = ('status', 'image_sha256', 'image_name', 'image_block', 'amoadd', 'flashed_as', 'flash_readback',
                 'verdicts', 'swd', 'uart_sha256') + (('block_control',) if args.block_control else ())
         common.write_json(args.record, common.record(
-            result, tuple(k for k in (*kept, 'mode', 'warm_load', 'fixed_restore', 'seconds') if k in result), (args.output / 'sent.bin').read_bytes(), run.commands, ('b',)))
+            result, tuple(k for k in (*kept, 'mode', 'warm_load', 'boot_transport', 'manual_boot', 'fixed_restore', 'seconds') if k in result), (args.output / 'sent.bin').read_bytes(), run.commands, ('b',)))
     print('board %s: %s%s' % (result['status'], args.output,
                               '' if result['status'] == 'passed' else ': ' + result['failure']))
     return 0 if result['status'] == 'passed' else 1

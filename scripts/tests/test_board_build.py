@@ -134,9 +134,12 @@ class Build(unittest.TestCase):
                 mock.patch.object(uf2, 'convert', return_value=b'converted UF2') as convert, \
                 mock.patch.object(bundle, 'source_identity', return_value={'sha256': 'sources'}):
             manifest = build.prepare('rp2350', 'boot', refine, output)
-        convert.assert_called_once_with((output / 'fixed.elf').resolve())
+        self.assertEqual(convert.call_args_list, [
+            mock.call((output / 'fixed.elf').resolve(), 'arm'),
+            mock.call((output / 'board.elf').resolve(), 'arm')])
         self.assertEqual((output / 'fixed.uf2').read_bytes(), b'converted UF2')
         self.assertEqual(manifest['files']['fixed_uf2']['sha256'], bundle.sha(output / 'fixed.uf2'))
+        self.assertEqual(manifest['files']['uf2']['sha256'], bundle.sha(output / 'board.uf2'))
 
     def test_esp_preparation_keeps_binary_and_elf_and_serializes_header_bytes(self):
         refine = self.root / 'refine'

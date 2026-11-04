@@ -28,12 +28,72 @@ def executable(block=uf2.IMAGE_DEF, extra=(), segments=None):
     return bytes(data)
 
 
+def jal(address, target):
+    offset = (target - address) & 0x1fffff
+    return (((offset >> 20) & 1) << 31 | ((offset >> 1) & 0x3ff) << 21
+            | ((offset >> 11) & 1) << 20 | ((offset >> 12) & 0xff) << 12 | 0x6f)
+
+
+def riscv_executable(block=uf2.RISCV_IMAGE_DEF, bad_slot=None):
+    reset, handler = uf2.FLASH + 0x400, uf2.FLASH + 0x408
+    vectors = [jal(uf2.FLASH + 512 + index * 4, handler) for index in range(68)]
+    if bad_slot is not None:
+        vectors[bad_slot] = 0
+    sections = [('.entry', uf2.FLASH, struct.pack('<I', jal(uf2.FLASH, reset))),
+                ('.isr_vector', uf2.FLASH + 512, struct.pack('<68I', *vectors)),
+                ('.embedded_block', uf2.FLASH + 512 + 68 * 4, struct.pack('<5I', *block)),
+                ('.text', reset, bytes(range(16)))]
+    data = bytearray(ELF.elf32(sections, [(address, name) for name, address, _ in sections]))
+    struct.pack_into('<H', data, 18, 243)
+    struct.pack_into('<I', data, 24, reset)
+    return bytes(data)
+
+
 class RecoveryUF2(unittest.TestCase):
-    def convert(self, data):
+    def convert(self, data, architecture='arm'):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'fixed.elf'
             path.write_bytes(data)
-            return uf2.convert(path)
+            return uf2.convert(path, architecture)
+
+    def test_hazard3_family_framing_and_complete_payload(self):
+        source = riscv_executable()
+        result = self.convert(source, 'hazard3')
+        memory = {}
+        pages = []
+        for number in range(len(result) // 512):
+            block = result[number * 512:(number + 1) * 512]
+            header = struct.unpack_from('<8I', block)
+            self.assertEqual(header[:3], (0x0a324655, 0x9e5d5157, 0x2000))
+            self.assertEqual(header[4:], (256, number, len(result) // 512, 0xe48bff5a))
+            self.assertEqual(header[3] % 256, 0)
+            self.assertEqual(block[288:508], bytes(220))
+            self.assertEqual(struct.unpack_from('<I', block, 508)[0], 0x0ab16f30)
+            pages.append(header[3])
+            memory.update((header[3] + i, byte) for i, byte in enumerate(block[32:288]))
+        self.assertEqual(pages, sorted(set(pages)))
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'hazard3.elf'
+            path.write_bytes(source)
+            for address, body, _ in uf2.common.elf_segments(path):
+                self.assertEqual(bytes(memory[address + i] for i in range(len(body))), body)
+
+    def test_family_architecture_entry_and_every_hazard3_trap_are_checked(self):
+        for source, architecture in ((riscv_executable(), 'arm'), (executable(), 'hazard3'),
+                                     (riscv_executable(bad_slot=0), 'hazard3'),
+                                     (riscv_executable(bad_slot=67), 'hazard3'),
+                                     (riscv_executable(block=uf2.IMAGE_DEF), 'hazard3')):
+            with self.subTest(architecture=architecture), self.assertRaises(uf2.common.Failed):
+                self.convert(source, architecture)
+        bad_entry = bytearray(riscv_executable())
+        struct.pack_into('<I', bad_entry, 24, uf2.FLASH + 0x408)
+        with self.assertRaisesRegex(uf2.common.Failed, 'flash entry'):
+            self.convert(bad_entry, 'hazard3')
+        for index in range(5):
+            block = list(uf2.RISCV_IMAGE_DEF)
+            block[index] ^= 1
+            with self.subTest(index=index), self.assertRaisesRegex(uf2.common.Failed, 'IMAGE_DEF'):
+                self.convert(riscv_executable(block=block), 'hazard3')
 
     def test_headers_and_payload_reconstruct_every_flash_byte(self):
         source = executable(extra=[('.data', uf2.FLASH + 0x900, b'initialized')])

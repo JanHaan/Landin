@@ -182,7 +182,8 @@ def refuse_bootsel(run, args, allowed=None):
     the cascade first. ALLOWED is retained for callers but cannot bypass
     this guard."""
     ram = getattr(args, 'mode', 'boot') == 'ram'
-    device = ram_port_device(args.hub, args.port) if ram else bootsel(run, args)
+    direct = ram or getattr(args, 'boot_transport', 'auto') == 'manual-uf2'
+    device = ram_port_device(args.hub, args.port) if direct else bootsel(run, args)
     device = device if device and device.startswith(BOOTSEL) else None
     recovery = ('Install a fixed image by UF2 off the cascade before a RAM run' if ram else
                 'Cycle port %d only off the cascade after installing a fixed image by UF2' % args.port)
@@ -331,6 +332,10 @@ def await_bootsel(run, args):
 
 
 def arguments(parser):
+    parser.add_argument('--boot-transport', choices=('auto', 'manual-uf2'), default='auto',
+                        help='explicit manual UF2 and Pico-only unplug/replug for off-cascade boot checks')
+    parser.add_argument('--manual-timeout', type=float, default=600,
+                        help='seconds for each phase-bound physical acknowledgment; no automatic resume')
     """The options both tools take for the hub, the guard and the pace."""
     parser.add_argument('--hub', default='.3.3',
                         help="the Pico 2's hub, as uhubctl -l names it or relative to the cascade")
