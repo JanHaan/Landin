@@ -1521,7 +1521,7 @@ and reuse rules are unchanged.
 
 ### R12.50 — Xtensa, ESP32 and ESP32-S3
 
-Status: planned
+Status: active
 Depends on: R12.11
 
 A backend for the Xtensa LX6 and LX7, assembled with Espressif's toolchain and
@@ -1555,6 +1555,181 @@ available instruction and refusal of a valid Xtensa instruction absent from
 that level. Record the assembler commands and refusals; a corpus run alone
 does not satisfy the item. Neither level is added to today's compiler table
 by this plan.
+
+Implementation plan and decision proposals, before building:
+
+The integration branch is `r1250-integration`, based on
+`5d1bed296d7779a718d000baa687535a7d13d62d`, in a separate worktree. The
+coordinating agent integrates local stream commits. No stream may push or
+promote; candidate publication and main promotion each await Jan's word.
+The local `board-help-finding` commit is carried into this branch, retaining
+SR-757's identity. Other sessions' worktrees and rig resources remain theirs.
+
+1. **Calling convention: Jan selected windowed throughout.** Use the vendor's
+   default windowed ILP32 ABI, with `call8`/`callx8`, `entry` and `retw`.
+   Arguments enter in `a2` to `a7`, with outgoing arguments in `a10` to
+   `a15`; `a0` is the return address and `a1` the stack pointer. Compiler
+   startup owns window initialization and overflow/underflow vectors, and
+   the corpus must force both through recursion. Frames reserve the ABI's
+   spill space and retain a frame pointer. The alternative is CALL0, which
+   avoids those handlers but requires matching C peers and runtime helpers
+   built with `-mabi=call0`; vendor-default objects cannot then be treated
+   as compatible. The recommendation accepts the startup work to retain
+   Espressif's ordinary C/runtime boundary. Sources: the pinned
+   [GCC ABI and register definitions](https://github.com/espressif/gcc/blob/673953b409379e2250f831307ba79579535b1b85/gcc/config/xtensa/xtensa.h),
+   its [argument and frame implementation](https://github.com/espressif/gcc/blob/673953b409379e2250f831307ba79579535b1b85/gcc/config/xtensa/xtensa.cc),
+   and Espressif's [Xtensa overview](https://dl.espressif.com/github_assets/espressif/xtensa-isa-doc/releases/download/latest/Xtensa.pdf).
+
+2. **One layout and ABI; configuration-specific instruction sets.** Add one
+   `xtensa` firmware target and the two requested levels. Recommend
+   little-endian ELF32, four-byte pointers and ILP32 C integers, eight-byte
+   alignment for 64-bit scalars, and a sixteen-byte stack alignment. Check
+   sizes, alignments, aggregate argument/return placement and soft-float
+   transport against independently compiled C peers before recording the
+   final ABI decision. Levels cannot change these facts. Reserve optional
+   FP, boolean, MAC and S3 vector registers from ordinary allocation.
+   Use `salt` as a feature query: S3 has the integer `salt`/`saltu`
+   instructions and ESP32 does not. The feature-dependent source compares
+   integers through different selected branches and executes on each
+   matching chip. ESP32's double-precision accelerator instructions are
+   absent from S3, so neither the LX7 name nor a shared ABI proves an ISA
+   superset. Before an S3 run can count for an LX6-level artifact, record
+   that artifact's linked instructions and helpers against both pinned
+   configurations and execute the common baseline on both machines. Keep
+   ESP32-specific inline assembly and helpers on ESP32. Sources: the pinned
+   [Espressif overlays](https://github.com/espressif/xtensa-overlays/tree/dd1cf19f6eb327a9db51043439974a6de13f5c7f),
+   the GCC definitions above and the independent Rust
+   [ESP32](https://github.com/rust-lang/rust/blob/1.91.0/compiler/rustc_target/src/spec/targets/xtensa_esp32_none_elf.rs)
+   and [ESP32-S3](https://github.com/rust-lang/rust/blob/1.91.0/compiler/rustc_target/src/spec/targets/xtensa_esp32s3_none_elf.rs)
+   layouts.
+
+3. **Exact tools and strict assemblers.** Recommend Espressif
+   `esp-16.1.0_20260609`, GCC 16.1.0 and Binutils 2.46.0, with its
+   chip-specific wrappers. The commands are `xtensa-esp32-elf-as
+   --abi-windowed` and `xtensa-esp32s3-elf-as --abi-windowed`; the compiler
+   driver uses `-mabi=windowed` and the same selected configuration for
+   generated code and assembly blocks. The wrappers select
+   `xtensa_esp32.so` or `xtensa_esp32s3.so` through `XTENSA_GNU_CONFIG` and
+   select the matching compiler multilib. A generic assembler without its
+   configuration is insufficient. At each level retain the exact command,
+   an accepted instruction and the refusal of a valid optional Xtensa
+   instruction absent there; additionally test S3's `salt` against ESP32
+   and ESP32's `rur.f64r_lo` against S3. Repeat the boundary through source
+   assembly and the generated-code assembly path. Source-established
+   expectations remain unvalidated until these commands run.
+
+   The toolchain archive names start `xtensa-esp-elf-16.1.0_20260609-`.
+   Their SHA-256 values, independently matched with release metadata, are:
+
+   | suffix | SHA-256 |
+   |---|---|
+   | `x86_64-linux-gnu.tar.xz` | `f708752ebb35cab21f184b2574114ed1187619db0edb8a4ba913c06ca2fa675e` |
+   | `aarch64-linux-gnu.tar.xz` | `785ee242bfbdb3ac4e764e85d2f87109c7c5f3da57d742da9a7c58c0d0906149` |
+   | `aarch64-apple-darwin.tar.xz` | `be4eb81c12c9bbf6ead79c758bfa81b8e6ec9a695372f946ac924c70c32f273d` |
+
+   Recommend QEMU's `esp-develop-9.2.2-20260417`, matching the current
+   RISC-V release pin, commit `40edccac415693c5130f91c01d84176ae6008566`.
+   Its Xtensa Linux archive's SHA-256 is
+   `0eecb2a34a5586c0e59110f77b9343b7b336e82fdb0e1a30e1dc1bab8a547e35`.
+   Use separate `esp32` and `esp32s3` machines with direct ELF loading and
+   semihosted corpus oracles; this bypasses ROM packaging and supplies no
+   physical boot evidence. Sources: the immutable
+   [Espressif tool manifest](https://raw.githubusercontent.com/espressif/esp-idf/0a1d19eba1fc6f9b5abe623df2dc4f60a703cf46/tools/tools.json),
+   [toolchain release](https://github.com/espressif/crosstool-NG/releases/tag/esp-16.1.0_20260609),
+   [wrapper implementation](https://raw.githubusercontent.com/espressif/esp-toolchain-bin-wrappers/d8844fa7d904aefcb9484ff3a37f4f5c476321f6/gnu-xtensa-toolchian/main.rs),
+   [assembler options](https://raw.githubusercontent.com/espressif/binutils-gdb/esp-2.46.0_20260609/gas/doc/c-xtensa.texi)
+   and [QEMU release](https://github.com/espressif/qemu/releases/tag/esp-develop-9.2.2-20260417).
+
+4. **RAM and boot: recommend internal SRAM profiles first.** Learn both
+   devices through the SVD importer with pinned inputs and reviewed policy.
+   Keep chip maps and peripheral initialization in their source descriptions;
+   compiler code owns architectural vectors, ABI and image kinds. Admit
+   internal IRAM/DRAM only, with no external flash/PSRAM cache or DMA claim.
+   RAM mode remains the development default: halt, retire interrupts and
+   device activity, establish CPU1 quiescence and the supported cache/clock
+   state, load and verify SRAM, prepare Xtensa state, then enter compiler
+   startup, which initializes windows, vectors, BSS and device state.
+   Unsupported prior state refuses with the explicit boot/setup route.
+   Separate boot checks validate the ROM header, segments, checksum/hash,
+   cold startup and restoration of a USB-silent fixed image. ESP32's ROM
+   loads at flash offset `0x1000`; S3's loads at `0`. Sources: Espressif's
+   [ESP32 startup](https://docs.espressif.com/projects/esp-idf/en/v6.1/esp32/api-guides/startup.html)
+   and [S3 startup](https://docs.espressif.com/projects/esp-idf/en/v6.1/esp32s3/api-guides/startup.html).
+   Detailed memory carve-outs, CPU state and physical oracles must be
+   checked against the manuals and pinned debug implementation before use.
+
+   The proposed SRAM carve-outs are ESP32 IRAM `0x40080000..0x400a0000`
+   and DRAM `0x3ffb0000..0x3ffd0000`, and S3 IRAM
+   `0x40378000..0x40398000` and DRAM `0x3fca8000..0x3fcd0000`, with
+   exclusive upper bounds. S3's instruction/data alias offset is
+   `0x6f0000`; the carve-outs must not overlap physically or use the ROM's
+   reserved buffers. Put byte-readable rodata in DRAM, and vectors, text
+   and aligned literals in IRAM. Reserve a 1 KiB-aligned vector block;
+   entry follows the block rather than being required to equal IRAM's
+   origin. The pinned
+   [ESP32 linker map](https://github.com/espressif/esp-idf/blob/fff9895c82d744c7237be8847347bdd1b07c6643/components/esp_system/ld/esp32/memory.ld.in),
+   [S3 linker map](https://github.com/espressif/esp-idf/blob/fff9895c82d744c7237be8847347bdd1b07c6643/components/esp_system/ld/esp32s3/memory.ld.in)
+   and [S3 ROM reservations](https://github.com/espressif/esp-idf/blob/fff9895c82d744c7237be8847347bdd1b07c6643/components/bootloader/subproject/main/ld/esp32s3/bootloader.memory.ld.in)
+   are the inputs to review, not proof that a linked image is correct.
+
+   CPU1 needs the device's hardware stall, checked before loading and
+   after independent readbacks. A debug halt alone is insufficient: the
+   pinned probe-rs Xtensa teardown resumes halted cores when leaving
+   debug mode. Expose CPU0 alone to the helper session, and retain the
+   architectural and device-state checks separately. The relevant sources
+   are probe-rs's
+   [session teardown](https://github.com/JanHaan/probe-rs/blob/6f9946fe748edd0e55604dc42bc0f7ea3e7485da/probe-rs/src/session.rs),
+   [Xtensa debug exit](https://github.com/JanHaan/probe-rs/blob/6f9946fe748edd0e55604dc42bc0f7ea3e7485da/probe-rs/src/architecture/xtensa/communication_interface.rs),
+   and Espressif's
+   [ESP32 stall primitive](https://github.com/espressif/esp-idf/blob/fff9895c82d744c7237be8847347bdd1b07c6643/components/hal/esp32/include/hal/cpu_utility_ll.h)
+   and [S3 stall primitive](https://github.com/espressif/esp-idf/blob/fff9895c82d744c7237be8847347bdd1b07c6643/components/hal/esp32s3/include/hal/cpu_utility_ll.h).
+   The helper's present Arm/RISC-V split needs a real Xtensa path; it must
+   not apply RISC-V registers, fences or interrupt oracles to these ports.
+
+   Physical evidence covers UART command/echo, GPIO state, timer progress,
+   interrupt masking and recovery, traps and independent readbacks. DMA
+   claims require actual transmit and receive consumers through each
+   chip's DMA path. Boot corruption checks establish what each ROM does;
+   C3/C5's SHA warning text is no evidence for these ROMs. Both boot modes
+   restore and verify their own quiet image, with the application and
+   fixed-image identities retained apart from the RAM records.
+
+After these decisions are settled, implementation proceeds in bounded
+streams from the agreed base, each writer in a separate worktree:
+
+- Target facts, levels, CLI/server refusals and source assembly admission;
+  combine the exact affected `targets`, `toolchain`, `server` and checking
+  cases in one developer invocation.
+- Xtensa emission and compiler-owned firmware startup; combine the new
+  backend/firmware cases, invalid-register IR refusal and integer-operand
+  assembly case, followed by focused corpus execution on both machines.
+- Reviewed device imports, board tools and helper contracts; combine their
+  exact Python controls, helper controls and offline boot/RAM builds.
+  Carry SR-757 into the help corrections.
+
+The integrator reconciles specification decisions, fixture inventories,
+library-consumer coverage and all target lists. Add both complete emulator
+corpora to the gate and update the reuse job inventory, build-mode and
+cross-host manifest coverage together. Complete suites belong to the
+integrated tree or gate, with default build workers and CPU placement.
+Run focused Mac checks in an isolated checkout when the integrated changes
+are ready. Run all closing activations against the starting commit, read
+unmatched rows, compare debug/release modes and manifests, run scaling alone,
+the highlighter integration pass and the full document check. Physical
+runs use checksummed bundles built on epycmicro and matching tool source
+transferred by `environments/boards/run.py`; rigpi alone operates boards
+under the common lock. Time every run, stop on USB trouble and retain its
+lines. Preserve Hazard3's parked-hart, instruction-visibility and TIMER0
+contract. Prepare the validated local candidate before requesting push
+approval; follow its complete gate and promote only with separate authority
+and unchanged-tree evidence. No release designation changes.
+
+The initial unmatched-activation review identified SR-555, SR-605, SR-614,
+SR-650, SR-660, SR-672, SR-719, SR-723, SR-725, SR-736 and SR-757 for
+explicit disposition as their areas change. This is an implementation
+agenda, not a claim that these rows are settled. SR-649's external-memory
+trigger remains outside the proposed internal-SRAM profiles. Repeat the
+activation audit over the final integrated changes before closure.
 
 ### R12.60 — Boards in the gate
 
