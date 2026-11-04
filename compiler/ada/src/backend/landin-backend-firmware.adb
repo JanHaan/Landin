@@ -932,6 +932,8 @@ package body Landin.Backend.Firmware is
          Line ("movi a3, _landin_firmware_stack_bottom");
          Line ("s32i a3, a2, 0");
       end if;
+      Line (".global _landin_firmware_instruction_visibility");
+      Line ("_landin_firmware_instruction_visibility:");
       Line ("memw");
       Line ("isync");
       Line ("movi a2, 0x40020");
