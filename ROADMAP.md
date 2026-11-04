@@ -1887,6 +1887,10 @@ SR-636 is restated for the RV32 float-operand refusal or an RV32 F level;
 the new target and naked-text limit do not change that refusal. SR-740's
 proposed local-path notation remains open: recognizing an external URL
 fixes SR-766 without introducing syntax for a file that does not exist.
+SR-291's activation is restated for named-file handling of fenced program
+examples; external URL recognition leaves the fenced-code policy unchanged.
+SR-254 and SR-530 retain their command-line and citation-check triggers:
+neither interface changed with the named-file fix.
 
 ### R12.60 — Boards in the gate
 
