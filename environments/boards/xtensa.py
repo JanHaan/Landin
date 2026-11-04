@@ -355,8 +355,8 @@ def trace_rom(chip, args):
         lock.release()
         result.update(seconds=round(time.monotonic() - began, 3), commands=run.commands)
         common.write_json(args.output / 'result.json', result)
-    print('ROM trace %s: %s (reset requested; observations only, no board verdict)' %
-          (result['status'], args.output))
+    print('ROM trace %s: %s (reset_requested=%s; observations only, no board verdict)' %
+          (result['status'], args.output, result['reset_requested']))
     return 0 if result['status'] == 'observed' else 1
 
 

@@ -351,7 +351,7 @@ class ResetDiagnosis(unittest.TestCase):
                 mock.patch.object(common, 'switch_ports') as power, \
                 mock.patch.object(common, 'finish_boot') as restore, \
                 mock.patch.object(esp, 'run_board') as normal, \
-                contextlib.redirect_stdout(io.StringIO()):
+                contextlib.redirect_stdout(io.StringIO()) as printed:
             operation = xtensa.trace_rom if trace_rom else xtensa.diagnose_reset
             if helper_error:
                 with self.assertRaisesRegex(common.Failed, 'stale helper'):
@@ -385,6 +385,8 @@ class ResetDiagnosis(unittest.TestCase):
                 self.assertEqual((args.output / 'rom-trace.bin').read_bytes(), data)
                 self.assertEqual((args.output / 'rom-trace.txt').read_bytes().decode('utf-8'),
                                  data.decode('latin-1'))
+        if trace_rom:
+            self.assertIn('reset_requested=%s' % result['reset_requested'], printed.getvalue())
         self.assertIn('kernel_usb', result)
         return status, result, events, commands
 
