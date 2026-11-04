@@ -240,5 +240,187 @@ class Inspection(unittest.TestCase):
         self.observe(xtensa.ESP32S3(), helper_error=common.Failed('stale helper'))
 
 
+class ResetDiagnosis(unittest.TestCase):
+    ROM = b'rst:0x1 (POWERON_RESET),boot:0x3 (DOWNLOAD_BOOT(UART0/UART1/SDIO_REI_REO_V2))\r\n'
+
+    def test_invalid_diagnostic_modes_stop_before_preflight(self):
+        for chip, flags, phrase in ((xtensa.ESP32S3, ['--mode=boot'], 'classic ESP32'),
+                (xtensa.ESP32, [], '--mode=boot'),
+                (xtensa.ESP32, ['--mode=boot', '--record=record.json'], '--record'),
+                (xtensa.ESP32, ['--mode=boot'], 'checked bundle'),
+                (xtensa.ESP32, ['--mode=boot', '--bundle=bundle', '--inspect-boot'], '--inspect-boot')):
+            with self.subTest(flags=flags, chip=chip), \
+                    mock.patch.object(sys, 'argv', ['board.py', '--diagnose-reset', '--output=unused', *flags]), \
+                    mock.patch.object(common, 'board_preflight') as preflight, \
+                    mock.patch.object(xtensa, 'diagnose_reset') as diagnostic:
+                with self.assertRaisesRegex(common.Failed, phrase):
+                    xtensa.main(chip, 'diagnostic control')
+                preflight.assert_not_called()
+                diagnostic.assert_not_called()
+
+    def test_diagnostic_flag_routes_after_guarded_topology_resolution(self):
+        with mock.patch.object(sys, 'argv', ['board.py', '--diagnose-reset', '--mode=boot',
+                '--bundle=checked', '--output=diagnosis']), \
+                mock.patch.object(common, 'board_preflight'), \
+                mock.patch.object(common, 'rerun_in_group'), \
+                mock.patch.object(common, 'place_hubs') as topology, \
+                mock.patch.object(esp, 'required_tools'), \
+                mock.patch.object(xtensa, 'diagnose_reset', return_value=0) as diagnostic, \
+                mock.patch.object(xtensa, 'inspect_boot') as inspect, \
+                mock.patch.object(esp, 'run_board') as normal:
+            self.assertEqual(xtensa.main(xtensa.ESP32, 'diagnostic control'), 0)
+            topology.assert_called_once()
+            diagnostic.assert_called_once()
+            inspect.assert_not_called()
+            normal.assert_not_called()
+
+    def exercise(self, rom=None, reset_error=None, usb_error=False, helper_error=False,
+                 usb_before=False, close_error=False):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        path = Path(temporary.name)
+        args = SimpleNamespace(mode='boot', record=None, bundle=path / 'bundle', recover=False,
+            image_control=False, inspect_boot=False, ram_loader='loader', probe_rs='probe-rs',
+            probe='0000:0002:10.42.0.50/4', output=path / 'diagnosis',
+            arty_serial='ARTY', cascade='5-1', hub='5-1.3.4', console_hub='5-1.3.4',
+            port=4, console_port=4, serial='1a86:7523', console_device='1a86:7523',
+            guard_port=1, console_guard_port=1, guard_device='1366:0105',
+            console_guard_device='1366:0105', hub_group='dialout', enumerate_seconds=1,
+            control_seconds=1, pace=common.Pace(state=path / 'pace', kernel=lambda _: []))
+        elf = path / 'checked.elf'
+        elf.write_bytes(b'checked provenance')
+        lock = mock.Mock()
+        console = SimpleNamespace(fd=19, lock=contextlib.nullcontext(),
+            received=bytearray(b'old serial bytes'), close=mock.Mock())
+        events, commands = [], []
+        def lines(fd, **setting):
+            lock.acquire.assert_called_once()
+            lock.release.assert_not_called()
+            events.append(('line', setting))
+        def sleep(seconds):
+            events.append(('sleep', seconds))
+        def wait(predicate, seconds, what):
+            console.received.extend(self.ROM if rom is None else rom)
+            if not predicate(bytes(console.received)):
+                raise common.Failed('no ROM DOWNLOAD_BOOT')
+            return bytes(console.received)
+        console.wait = wait
+        def command(name, argv, **kw):
+            lock.acquire.assert_called_once()
+            self.assertIn(('line', dict(dtr=False)), events)
+            commands.append((name, [str(part) for part in argv]))
+            (args.output / 'reset-trace.jsonl').write_text('{"span":"reset control"}\n')
+            if reset_error:
+                raise common.Failed('reset control failed')
+            return ''
+        run = SimpleNamespace(out=args.output, commands=[], command=command)
+        original_after = args.pace.after
+        def after(what):
+            if usb_error:
+                args.pace.blocked = 'USB trouble control'
+                raise common.USBGuardError(args.pace.blocked)
+            return original_after(what)
+        args.pace.after = after
+        if usb_before:
+            args.pace.blocked = 'USB trouble before serial setup'
+        if close_error:
+            console.close.side_effect = OSError('disconnected console')
+        with mock.patch.object(common, 'verify_ram_helper', return_value={'source_sha256': 'checked'},
+                side_effect=common.Failed('stale helper') if helper_error else None), \
+                mock.patch.object(esp, 'build', return_value=(elf, None, {})), \
+                mock.patch.object(common, 'Run', return_value=run), \
+                mock.patch.object(common, 'rig_lock', return_value=lock), \
+                mock.patch.object(common, 'off_cascade') as guard, \
+                mock.patch.object(common, 'wait_for_hub') as hub, \
+                mock.patch.object(common, 'wait_for_tty_at', return_value=path / 'tty') as tty, \
+                mock.patch.object(common, 'TtyConsole', return_value=console) as opened, \
+                mock.patch.object(common, 'modem_lines', return_value=dict(dtr=False, rts=False)), \
+                mock.patch.object(common, 'set_lines', side_effect=lines), \
+                mock.patch.object(common, 'quiet_lines') as quiet, \
+                mock.patch.object(xtensa.time, 'sleep', side_effect=sleep), \
+                mock.patch.object(common, 'switch_ports') as power, \
+                mock.patch.object(common, 'finish_boot') as restore, \
+                mock.patch.object(esp, 'run_board') as normal, \
+                contextlib.redirect_stdout(io.StringIO()):
+            if helper_error:
+                with self.assertRaisesRegex(common.Failed, 'stale helper'):
+                    xtensa.diagnose_reset(xtensa.ESP32(), args)
+                lock.acquire.assert_not_called()
+                tty.assert_not_called()
+                return
+            status = xtensa.diagnose_reset(xtensa.ESP32(), args)
+            if usb_before:
+                opened.assert_not_called()
+                quiet.assert_not_called()
+                guard.assert_not_called()
+            else:
+                guard.assert_any_call('ARTY', '5-1')
+                self.assertEqual(hub.call_args.args[1], args.hub)
+                tty.assert_called_once_with('5-1.3.4.4', 1)
+                quiet.assert_called_once_with(19)
+            for action in (power, restore, normal):
+                action.assert_not_called()
+        lock.release.assert_called_once()
+        if usb_before:
+            console.close.assert_not_called()
+        else:
+            console.close.assert_called_once()
+        result = json.loads((args.output / 'result.json').read_text())
+        if not usb_before:
+            self.assertEqual((args.output / 'uart.bin').read_bytes(), bytes(console.received))
+        self.assertIn('kernel_usb', result)
+        return status, result, events, commands
+
+    def test_classic_pin_sequence_precedes_one_exact_reset_only_command(self):
+        status, result, events, commands = self.exercise()
+        self.assertEqual(events, [('line', dict(dtr=False)), ('line', dict(rts=True)), ('sleep', 0.1),
+            ('line', dict(dtr=True)), ('line', dict(rts=False)), ('sleep', 0.05), ('line', dict(dtr=False))])
+        self.assertEqual((status, result['status'], result['scope']), (0, 'observed', 'reset-diagnosis'))
+        self.assertEqual(result['download_rom'], dict(confirmed=True, boot_code=3))
+        self.assertEqual(len(commands), 1)
+        argv = commands[0][1]
+        self.assertEqual(argv[:2], ['probe-rs', '--log-file'])
+        self.assertTrue(argv[2].endswith('/reset-trace.jsonl'))
+        self.assertEqual(argv[3:], ['reset', '--method', 'core', '--core', '0', '--chip', 'esp32',
+                                  '--probe', '0000:0002:10.42.0.50/4'])
+        self.assertEqual(result['core_reset_invocations'], 1)
+        self.assertFalse(result['flash_written'])
+        self.assertFalse(result['power_switched'])
+        self.assertEqual(result['final_state'], 'not-established')
+        self.assertGreater(result['reset_trace']['bytes'], 0)
+
+    def test_missing_download_or_usb_fault_never_enters_probe_reset(self):
+        for options in (dict(rom=b'boot:0x13 (SPI_FAST_FLASH_BOOT)\r\n'), dict(usb_error=True)):
+            with self.subTest(options=options):
+                status, result, events, commands = self.exercise(**options)
+                self.assertEqual((status, result['status']), (1, 'failed'))
+                self.assertEqual(commands, [])
+                self.assertEqual(result['core_reset_invocations'], 0)
+                self.assertEqual(sum(event == ('line', dict(rts=True)) for event in events), 1)
+
+    def test_reset_failure_retains_trace_without_outer_retry(self):
+        status, result, events, commands = self.exercise(reset_error=True)
+        self.assertEqual((status, result['status']), (1, 'failed'))
+        self.assertEqual(len(commands), 1)
+        self.assertEqual(result['core_reset_invocations'], 1)
+        self.assertGreater(result['reset_trace']['bytes'], 0)
+        self.assertEqual(result['phases'][-1]['status'], 'failed')
+
+    def test_existing_usb_fault_prevents_even_console_open_and_line_changes(self):
+        status, result, events, commands = self.exercise(usb_before=True)
+        self.assertEqual((status, result['status']), (1, 'failed'))
+        self.assertEqual((events, commands), ([], []))
+
+    def test_console_disconnect_still_retains_reset_trace_and_kernel_evidence(self):
+        status, result, events, commands = self.exercise(close_error=True)
+        self.assertEqual((status, result['status']), (1, 'failed'))
+        self.assertEqual(len(commands), 1)
+        self.assertGreater(result['reset_trace']['bytes'], 0)
+        self.assertEqual(result['console_close_failure'], 'disconnected console')
+
+    def test_stale_helper_refuses_even_serial_setup(self):
+        self.exercise(helper_error=True)
+
+
 if __name__ == '__main__':
     unittest.main()

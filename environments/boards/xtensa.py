@@ -5,6 +5,7 @@ chip-specific image, USB identities and physical oracle under the common lock.
 """
 import argparse
 from pathlib import Path
+import re
 import struct
 import subprocess
 import time
@@ -99,6 +100,139 @@ def inspection_contract(args):
     require(args.bundle, '--inspect-boot needs the checked bundle prepared by environments/boards/run.py')
     require(not args.recover and not args.image_control,
             '--inspect-boot cannot run recovery or image controls')
+
+
+DOWNLOAD_BOOT = re.compile(rb'boot:0x([0-9a-fA-F]+)\s+\(DOWNLOAD_BOOT(?:\([^\r\n)]*\))?\)')
+
+
+def reset_diagnostic_contract(chip, args):
+    """The reviewed CH340 classic-ESP32 setup, never a board acceptance run."""
+    require(chip.name == 'esp32', '--diagnose-reset supports only classic ESP32')
+    require(args.mode == 'boot', '--diagnose-reset requires --mode=boot')
+    require(not args.record, '--diagnose-reset cannot write --record')
+    require(args.bundle, '--diagnose-reset needs the checked bundle prepared by environments/boards/run.py')
+    require(not args.inspect_boot, '--diagnose-reset cannot combine with --inspect-boot')
+    require(not args.recover and not args.image_control,
+            '--diagnose-reset cannot run recovery or image controls')
+    require(args.arty_serial, '--diagnose-reset requires the off-cascade Arty guard')
+    require(args.serial == args.console_device == '1a86:7523',
+            '--diagnose-reset requires the reviewed CH340 identity 1a86:7523')
+    require(args.hub == args.console_hub and args.port == args.console_port,
+            '--diagnose-reset requires the board and CH340 at the same USB location')
+    require(args.port != args.guard_port and args.console_port != args.console_guard_port,
+            '--diagnose-reset cannot select a guarded USB port')
+
+
+def classic_download_reset(fd):
+    """Espressif esptool v5.1.0 ClassicReset, reset.py lines 91-98."""
+    common.set_lines(fd, dtr=False)
+    common.set_lines(fd, rts=True)
+    time.sleep(0.1)
+    common.set_lines(fd, dtr=True)
+    common.set_lines(fd, rts=False)
+    time.sleep(0.05)
+    common.set_lines(fd, dtr=False)
+
+
+def diagnose_reset(chip, args):
+    """Confirm ROM download setup, then trace one reset-only invocation."""
+    reset_diagnostic_contract(chip, args)
+    identity = common.verify_ram_helper(args)
+    args.output = args.output.resolve()
+    args.output.mkdir(parents=True)
+    run = common.Run(args.output)
+    run.pace = args.pace
+    trace = args.output / 'reset-trace.jsonl'
+    result = dict(status='failed', scope='reset-diagnosis', mode='boot', observational=True,
+        board=chip.name, helper_identity=identity, flash_written=False, power_switched=False,
+        serial_reset_requested=False, core_reset_invocations=0, phases=[],
+        internal_reset_attempt_limit=3, final_state='not-established')
+    began = time.monotonic()
+    lock = common.rig_lock('esp32 reset diagnosis')
+    console = None
+
+    def phase(name, operation):
+        started = time.monotonic()
+        entry = dict(name=name, status='failed')
+        try:
+            value = operation()
+            entry['status'] = 'completed'
+            return value
+        finally:
+            entry['seconds'] = round(time.monotonic() - started, 6)
+            result['phases'].append(entry)
+
+    try:
+        elf, _, _ = esp.build(run, args, chip)  # Retain checked provenance, never flash it.
+        result['bundle_elf_sha256'] = common.sha(elf)
+        lock.acquire()
+        args.pace.before('reset diagnostic topology')
+        common.off_cascade(args.arty_serial, args.cascade)
+        hub = common.InGroup(run, args.hub_group)
+        phase('topology', lambda: common.wait_for_hub(hub, args.hub,
+            [(args.port, args.serial), (args.guard_port, args.guard_device),
+             (args.console_guard_port, args.console_guard_device)], args.enumerate_seconds))
+        location = '%s.%d' % (args.console_hub, args.console_port)
+        path = phase('find-console', lambda: common.wait_for_tty_at(location, args.enumerate_seconds))
+        args.pace.before('open diagnostic console')
+        console = common.TtyConsole(path, quiet=True)
+        lines = common.modem_lines(console.fd)
+        require(not lines['dtr'] and not lines['rts'], 'the diagnostic console did not open with inactive lines')
+        with console.lock:
+            first = len(console.received)
+
+        def select_download():
+            result['serial_reset_requested'] = True
+            classic_download_reset(console.fd)
+        phase('classic-download-reset', lambda: esp.paced(args, 'classic download reset', select_download))
+        stream = phase('confirm-download-rom', lambda: console.wait(
+            lambda body: DOWNLOAD_BOOT.search(body[first:]) is not None,
+            args.control_seconds, 'ROM DOWNLOAD_BOOT after the classic reset'))[first:]
+        boot = DOWNLOAD_BOOT.search(stream)
+        require(boot is not None, 'the classic reset did not produce a ROM DOWNLOAD_BOOT message')
+        (args.output / 'download-rom.bin').write_bytes(stream)
+        result['download_rom'] = dict(confirmed=True, boot_code=int(boot.group(1), 16))
+        require(common.modem_lines(console.fd) == dict(dtr=False, rts=False),
+                'the classic reset did not release DTR and RTS')
+        command = [args.probe_rs, '--log-file', trace, 'reset', '--method', 'core', '--core', '0',
+                   '--chip', chip.probe_chip, '--probe', args.probe]
+
+        def core_reset():
+            result['core_reset_invocations'] += 1
+            run.command('reset-diagnostic', command, timeout=120)
+        phase('core-reset', lambda: esp.paced(args, 'diagnostic core reset', core_reset))
+        require(trace.is_file() and trace.stat().st_size > 0, 'probe-rs produced no reset diagnostic trace')
+        result['status'] = 'observed'
+    except (common.Failed, OSError, subprocess.TimeoutExpired) as error:
+        result['failure'] = str(error)
+    finally:
+        if console:
+            # Deassert both lines together, including a partly completed
+            # sequence. This never pulses EN to return to the old app.
+            try:
+                common.quiet_lines(console.fd)
+                result['final_modem_lines'] = common.modem_lines(console.fd)
+                require(result['final_modem_lines'] == dict(dtr=False, rts=False),
+                        'diagnostic cleanup did not release DTR and RTS')
+            except (common.Failed, OSError) as error:
+                result['status'] = 'failed'
+                result['cleanup_failure'] = str(error)
+            try:
+                console.close()
+            except OSError as error:
+                result['status'] = 'failed'
+                result['console_close_failure'] = str(error)
+            (args.output / 'uart.bin').write_bytes(bytes(console.received))
+            (args.output / 'rom-trace.txt').write_text(bytes(console.received).decode('latin-1'))
+        result['reset_trace'] = (dict(path=trace.name, bytes=trace.stat().st_size, sha256=common.sha(trace))
+            if trace.is_file() else dict(path=trace.name, status='not-created'))
+        common.retain_kernel_usb(args.pace, result)
+        lock.release()
+        result.update(seconds=round(time.monotonic() - began, 3), commands=run.commands)
+        common.write_json(args.output / 'result.json', result)
+    print('reset diagnosis %s: %s (diagnostic only; final execution state not established)' %
+          (result['status'], args.output))
+    return 0 if result['status'] == 'observed' else 1
 
 
 def rom_table_count(address):
@@ -229,7 +363,11 @@ def main(chip_class, description):
     parser.add_argument('--reset-seconds', type=float, default=0.1)
     parser.add_argument('--inspect-boot', action='store_true',
                         help='with --mode=boot, observe current state without flashing, resetting or switching power; no record')
+    parser.add_argument('--diagnose-reset', action='store_true',
+                        help='classic ESP32 boot mode only: confirm ROM download setup and trace one reset-only invocation; no flash or record')
     args = parser.parse_args()
+    if args.diagnose_reset:
+        reset_diagnostic_contract(chip, args)
     if args.inspect_boot:
         inspection_contract(args)
     common.board_preflight(args, chip.name)
@@ -239,6 +377,8 @@ def main(chip_class, description):
         return inspect_boot(chip, args)
     common.place_hubs(parser, args, 'hub', 'console_hub')
     esp.required_tools(args)
+    if args.diagnose_reset:
+        return diagnose_reset(chip, args)
     require(not args.recover, 'Xtensa recovery is an explicit setup operation; this tool does not enter download mode')
     require(not args.image_control, 'Xtensa ROM corruption controls need their chip-specific oracle; no control is flashed')
     board_location = '%s.%d' % (args.hub, args.port)
