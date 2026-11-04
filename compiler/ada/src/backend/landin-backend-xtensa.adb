@@ -663,6 +663,10 @@ package body Landin.Backend.Xtensa is
             Native_Scratch_Registers);
       end Emit;
 
+      function Native_Word_Offset (Word : Natural) return String is
+        (Image (Landin.Backend.Xtensa_Machine.Word_Offset
+           (Word, Native_Scratch_Registers)));
+
       function Reg (Spelling : String) return
         Xtensa_Words.Register_Number is
         (Xtensa_Words.Register_Number'Value
@@ -1965,9 +1969,10 @@ package body Landin.Backend.Xtensa is
          begin
             for Index in 0 .. 3 loop
                Put (Character'Val (9) & "l32i a" & Image (Index + 2)
-                    & ", a7, " & Image ((Index + 10) * 4));
+                    & ", a7, " & Native_Word_Offset (Index + 10));
             end loop;
-            Put (Character'Val (9) & "l32i a6, a7, 124");
+            Put (Character'Val (9) & "l32i a6, a7, "
+                 & Native_Word_Offset (31));
             Put (Character'Val (9) & "mov a1, a7");
             Put (Character'Val (9) & "retw");
          end Epilogue;
@@ -4724,16 +4729,22 @@ package body Landin.Backend.Xtensa is
               ((Item => Item, Naked => True, others => <>));
             return;
          end if;
-         --  The top 32 bytes belong to window spills. The 192-byte
-         --  logical scratch bank starts at the fixed frame base a7.
-         --  Source homes lie between that bank and the spill area.
+         --  The top 32 bytes belong to window spills. Ordinary routines
+         --  need only 80 bytes for their twenty logical word homes;
+         --  zero, SP, the derived CFA and register-held scratch words
+         --  need no home, and unused x26 has no home either.
+         --  Source assembly retains all 128 logical bytes plus its
+         --  64-byte snapshot bank at 128 + physical register number * 4.
+         --  Source homes lie between the banks and the spill area.
          declare
             Total : constant Landin.Targets.Byte_Count :=
-              Stack_Align (Extent (Layout) + 240, 16, 16#7fff_ffff#);
+              Stack_Align
+                (Extent (Layout) + (if Has_Assembly then 240 else 128),
+                 16, 16#7fff_ffff#);
          begin
             Native_Frame_Bytes := Natural (Total);
-            --  Incoming a2-a6 are homed before any selected instruction.
-            --  CALL8 preserves the current window's a2-a5; opaque source
+            --  Incoming a2-a7 are homed before any selected instruction.
+            --  CALL8 preserves the current window's a2-a6; opaque source
             --  assembly keeps the original complete scratch-bank path.
             Native_Scratch_Registers := not Has_Assembly;
             Put (Character'Val (9) & "entry a1, 32");
@@ -4775,15 +4786,19 @@ package body Landin.Backend.Xtensa is
             Put (Character'Val (9) & "movi a8, "
                  & Trimmed (Landin.Targets.Byte_Count'Image (Total - 32)));
             Put (Character'Val (9) & "sub a1, a1, a8");
-            Put (Character'Val (9) & "s32i a7, a1, 60");
+            Put (Character'Val (9) & "s32i a7, a1, "
+                 & Native_Word_Offset (15));
             Put (Character'Val (9) & "mov a7, a1");
             for Index in 0 .. 4 loop
                Put (Character'Val (9) & "s32i a" & Image (Index + 2)
-                    & ", a7, " & Image ((Index + 10) * 4));
+                    & ", a7, " & Native_Word_Offset (Index + 10));
             end loop;
             Put (Character'Val (9) & "movi a8, " & Trimmed (Total'Image));
             Put (Character'Val (9) & "add a8, a7, a8");
-            Put (Character'Val (9) & "s32i a8, a7, 32");
+            if not Native_Scratch_Registers then
+               Put (Character'Val (9) & "s32i a8, a7, "
+                    & Native_Word_Offset (8));
+            end if;
             Put (Character'Val (9) & "s32e a8, a1, -12");
          end;
          if Panic /= null and then Item = Landin.Panics.Handler (Panic.all)
@@ -5066,12 +5081,14 @@ package body Landin.Backend.Xtensa is
          --  No value or slot is held in a register: every one has its
          --  home, and the saved registers are selection's fixed scratch.
          Append_Statistics
-           ((Item => Item, Frame_Bytes => Extent (Layout) + 240,
+           ((Item => Item, Frame_Bytes =>
+               Landin.Targets.Byte_Count (Native_Frame_Bytes),
              Spill_Bytes => Spill_Bytes (Layout),
              Save_Bytes => Save_Bytes (Layout),
              Register_Count => 0,
              Spill_Count => Plan.Homes,
-             Stack_Bytes => 256 + Extent (Layout) + Deepest_Area,
+             Stack_Bytes => Landin.Targets.Byte_Count (Native_Frame_Bytes)
+               + 16 + Deepest_Area,
              Calls_Panic => not Edges.Is_Empty
                or else (Limit_Trapped and then Panic /= null
                         and then Landin.Panics.Calls_Out (Panic.all)),

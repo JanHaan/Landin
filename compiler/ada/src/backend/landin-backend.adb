@@ -1687,9 +1687,14 @@ package body Landin.Backend is
             | Landin.Targets.Capabilities.RV32_ELF =>
             return 768;
          when Landin.Targets.Capabilities.Xtensa_ELF =>
-            --  Native temporary homes, the complete window context and
-            --  a failure handler must fit below the checked stack limit.
-            return 1_536;
+            --  Every ordinary native frame is checked. Before a failed
+            --  check, at most the unchecked outgoing area (256), ENTRY
+            --  (32) and its spill words (16) use the reserve. The retained
+            --  Handler_Entry_Bytes bound is 416; the selected handlers'
+            --  measured trap depth is at most 544, including the complete
+            --  336-byte window context. Reserve 1_024 for that 960-byte
+            --  sum, rather than excluding valid small prepared stacks.
+            return 1_024;
          when Landin.Targets.Capabilities.Cortex_M0_ELF =>
             --  D620: the extended exception frame below a checked frame,
             --  and the larger switch frame a handler that switches away

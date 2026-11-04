@@ -1,10 +1,15 @@
 --  Native Xtensa selection for the backend's 32-bit logical scratch words.
---  Logical words have fixed homes at a7 + 4*N. Assembly-free routines may
---  keep four scratch words in their window's a2-a5; a8-a13 are transient
+--  Opaque assembly retains homes at a7 + 4*N. Assembly-free routines may
+--  keep five scratch words in their window's a2-a6; a8-a13 are transient
 --  scratch. No logical instruction is stored in the emitted program.
 with Ada.Strings.Unbounded;
 
 package Landin.Backend.Xtensa_Machine is
+   --  Compact homes exclude zero, SP, the derived immutable CFA and
+   --  register-held scratch words; unused x26 also has no home.
+   --  Any other omitted logical word is refused rather than aliased.
+   function Word_Offset (Word : Natural; Compact : Boolean) return Natural;
+
    procedure Select_Word
      (Instruction : String;
       Into : in out Ada.Strings.Unbounded.Unbounded_String;
