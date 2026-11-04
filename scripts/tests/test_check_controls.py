@@ -2008,13 +2008,16 @@ class TargetLists(unittest.TestCase):
     def test_a_newly_described_target_is_reported_in_every_list(self):
         said = self.broken(checker.TARGET_SELECTION,
                            'when 8 => "rv32"', 'when 8 => "rv32e"')
-        self.assertEqual(len(said), 2, said)
+        self.assertEqual(len(said), 4, said)
         self.assertTrue(all("the compiler describes" in why and "rv32e" in why
-                            for why in said))
+                            for why in said[:2]))
+        self.assertEqual(said[2:], [
+            "TARGETS names rv32, which is not a target the compiler describes with a backend",
+            "DEBUG_FLAG names rv32, which is not a target the compiler describes with a backend"])
 
     def test_a_target_the_manifest_leaves_out_is_reported(self):
-        said = self.broken(checker.EMIT_MANIFEST, ', "linux-rv64", "rv32")',
-                           ', "linux-rv64")')
+        said = self.broken(checker.EMIT_MANIFEST, ', "rv32", "xtensa")',
+                           ', "rv32")')
         self.assertTrue(any(why.startswith("TARGETS names") for why in said),
                         said)
 

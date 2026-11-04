@@ -21,12 +21,15 @@ def assemblers(output, refine):
                     'salt': 'salt a2, a3, a4',
                     'dfp-accelerator': 'rur.f64r_lo a2',
                     'optional-const16': 'const16 a2, 0'}
-    for chip in ('esp32', 'esp32s3'):
+    selections = (('esp32', False), ('esp32s3', False), ('esp32', True))
+    for chip, default in selections:
+        label = chip + ('-default' if default else '')
+        level = [] if default else ['--level=xtensa-' + chip]
         for name, instruction in instructions.items():
             accepts = (name == 'integer-divide' or
                        name == 'salt' and chip == 'esp32s3' or
                        name == 'dfp-accelerator' and chip == 'esp32')
-            run = Run(output / (chip + '--' + name))
+            run = Run(output / (label + '--' + name))
             source = run.out / 'case.ldn'
             source.write_text('main: () -> (status: i32) =\n'
                               '    assembler.block("' + instruction + '")\n'
@@ -34,18 +37,20 @@ def assemblers(output, refine):
             assembly = run.out / 'program.s'
             staged = stage(run, [source], chip)
             run.command('compile', [refine, *staged, '--target=xtensa',
-                        '--level=xtensa-' + chip, '--emit=asm', '-o', assembly])
+                        *level, '--emit=asm', '-o', assembly])
             tool = 'xtensa-' + chip + '-elf-'
             run.command('assemble', [tool + 'as', '--abi-windowed',
                         '--auto-litpools', '--longcalls', '-o', run.out / 'program.o',
                         assembly], expected=0 if accepts else 1)
             if not accepts and 'Error:' not in (run.out / 'assemble.log').read_text():
                 raise RuntimeError('negative assembler control has no instruction error')
-            results.append({'chip': chip, 'instruction': instruction,
+            results.append({'chip': chip, 'default_level': default, 'instruction': instruction,
                             'accepted': accepts, 'source_sha256': sha(source),
                             'assembly_sha256': sha(assembly)})
-    for chip in ('esp32', 'esp32s3'):
-        run = Run(output / (chip + '--generated-divide'))
+    for chip, default in selections:
+        label = chip + ('-default' if default else '')
+        level = [] if default else ['--level=xtensa-' + chip]
+        run = Run(output / (label + '--generated-divide'))
         source = run.out / 'case.ldn'
         source.write_text('divide: (a: i32, b: i32) -> (r: i32) =\n'
                           '    r = a / b\nend divide\n'
@@ -53,12 +58,13 @@ def assemblers(output, refine):
                           '    r = divide(42, 2) - 21\nend main\n')
         assembly = run.out / 'program.s'
         run.command('compile', [refine, *stage(run, [source], chip), '--target=xtensa',
-                    '--level=xtensa-' + chip, '--emit=asm', '-o', assembly])
+                    *level, '--emit=asm', '-o', assembly])
         if not re.search(r'^\s*quos ', assembly.read_text(), re.M):
             raise RuntimeError('generated integer division has no native QUOS instruction')
         run.command('assemble', ['xtensa-' + chip + '-elf-as', '--abi-windowed',
                     '--auto-litpools', '--longcalls', '-o', run.out / 'program.o', assembly])
-        results.append({'chip': chip, 'generated': 'checked signed integer division',
+        results.append({'chip': chip, 'default_level': default,
+                        'generated': 'checked signed integer division',
                         'accepted': True, 'assembly_sha256': sha(assembly)})
         absent = {'optional-const16': 'const16 a2, 0',
                   'other-configuration': ('salt a2, a3, a4' if chip == 'esp32'
@@ -75,7 +81,8 @@ def assemblers(output, refine):
                         run.out / (name + '.o'), negative], expected=1)
             if 'Error:' not in (run.out / ('absent-' + name + '.log')).read_text():
                 raise RuntimeError('generated absence control has no instruction error')
-            results.append({'chip': chip, 'generated': 'checked signed integer division',
+            results.append({'chip': chip, 'default_level': default,
+                            'generated': 'checked signed integer division',
                             'appended_instruction': instruction, 'accepted': False,
                             'accepted_source_sha256': sha(assembly),
                             'negative_source_sha256': sha(negative)})

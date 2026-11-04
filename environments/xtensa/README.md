@@ -74,7 +74,8 @@ python3 environments/xtensa/boundaries.py \
   --refine "$REFINE" --tools "$TOOLS" --output "$OUT/boundaries"
 ```
 
-They compile real inline assembly blocks and invoke both strict assemblers.
+They compile real inline assembly blocks and invoke both strict assemblers,
+including real compiler invocations with `--level` omitted for the ESP32 default.
 Both accept emitted checked integer division and reject the optional `CONST16`; only the
 S3 configuration accepts `SALT`, and only the ESP32 configuration accepts
 the selected double-precision accelerator register instruction. The feature-level
