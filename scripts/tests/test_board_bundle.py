@@ -51,7 +51,7 @@ class Bundles(unittest.TestCase):
 
     def test_valid_bundle_and_artifact(self):
         prepared = self.validate()
-        self.assertEqual(bundle.artifact(prepared, 'elf'), self.directory / 'board.elf')
+        self.assertEqual(bundle.artifact(prepared, 'elf'), (self.directory / 'board.elf').resolve())
         self.assertEqual(prepared['symbols'], {'start': 123})
 
     def test_corrupt_artifact_is_refused(self):
@@ -127,7 +127,19 @@ class Bundles(unittest.TestCase):
         fixed = self.fixed_aliases()
         with mock.patch.object(bundle.shutil, 'copyfile', wraps=bundle.shutil.copyfile) as copy:
             prepared = self.consume(self.root / 'run')
-        self.assertEqual(sum(call.args[0] == fixed for call in copy.call_args_list), 1)
+        self.assertEqual(sum(call.args[0] == fixed.resolve() for call in copy.call_args_list), 1)
+        self.assertEqual(bundle.artifact(prepared, 'fixed_elf'), bundle.artifact(prepared, 'fixed_image'))
+        self.assertEqual(bundle.artifact(prepared, 'fixed_image').read_bytes(), b'quiet resident image')
+
+    def test_symlinked_root_preserves_artifact_identity_and_alias_copy_once(self):
+        fixed = self.fixed_aliases()
+        linked_root = self.root / 'linked'
+        linked_root.symlink_to(self.root, target_is_directory=True)
+        self.directory = linked_root / 'bundle'
+        with mock.patch.object(bundle.shutil, 'copyfile', wraps=bundle.shutil.copyfile) as copy:
+            prepared = self.consume(linked_root / 'run')
+        self.assertEqual(sum(call.args[0] == fixed.resolve() for call in copy.call_args_list), 1)
+        self.assertEqual(bundle.artifact(prepared, 'elf'), (self.root / 'run/board.elf').resolve())
         self.assertEqual(bundle.artifact(prepared, 'fixed_elf'), bundle.artifact(prepared, 'fixed_image'))
         self.assertEqual(bundle.artifact(prepared, 'fixed_image').read_bytes(), b'quiet resident image')
 

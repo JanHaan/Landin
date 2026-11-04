@@ -113,7 +113,10 @@ class Build(unittest.TestCase):
         import uf2
         refine = self.root / 'refine'
         refine.write_bytes(b'compiler')
-        output = self.root / 'pico2'
+        # Exercise a symlinked parent on every host, like Darwin's /var.
+        linked_root = self.root / 'linked'
+        linked_root.symlink_to(self.root, target_is_directory=True)
+        output = linked_root / 'pico2'
         class Run:
             def __init__(self, out):
                 self.out = out
@@ -131,7 +134,7 @@ class Build(unittest.TestCase):
                 mock.patch.object(uf2, 'convert', return_value=b'converted UF2') as convert, \
                 mock.patch.object(bundle, 'source_identity', return_value={'sha256': 'sources'}):
             manifest = build.prepare('rp2350', 'boot', refine, output)
-        convert.assert_called_once_with(output / 'fixed.elf')
+        convert.assert_called_once_with((output / 'fixed.elf').resolve())
         self.assertEqual((output / 'fixed.uf2').read_bytes(), b'converted UF2')
         self.assertEqual(manifest['files']['fixed_uf2']['sha256'], bundle.sha(output / 'fixed.uf2'))
 
