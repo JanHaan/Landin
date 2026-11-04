@@ -9,6 +9,7 @@ package body Landin.Targets.Levels is
    subtype RV64_Level is Level_Id range RV64GC .. RV64GC_Zba_Xtheadba;
    subtype RV32_Level is Level_Id range RV32IMC .. RV32IMAC;
    subtype RISC_V_Level is Level_Id range RV64GC .. RV32IMAC;
+   subtype Xtensa_Level is Level_Id range Xtensa_ESP32 .. Xtensa_ESP32S3;
 
    function Spelling (Of_Feature : Feature) return String
      is (case Of_Feature is
@@ -48,7 +49,8 @@ package body Landin.Targets.Levels is
             when Zicsr      => "zicsr",
             when Zifencei   => "zifencei",
             when Zba        => "zba",
-            when Xtheadba   => "xtheadba");
+            when Xtheadba   => "xtheadba",
+            when Salt       => "salt");
 
    function Is_Feature_Name (Name : String) return Boolean
      is (for some Each in Feature => Spelling (Each) = Name);
@@ -70,6 +72,7 @@ package body Landin.Targets.Levels is
                     when RV64 => RV64GC,
                     when Cortex_M0 => Armv6_M,
                     when RV32 => RV32IMC,
+                    when Xtensa => Xtensa_ESP32,
                     when Synthetic_32_Architecture => No_Level)));
 
    function Spelled (Id : Level_Id) return String
@@ -90,7 +93,9 @@ package body Landin.Targets.Levels is
             when RV64GC_Xtheadba => "rv64gc_xtheadba",
             when RV64GC_Zba_Xtheadba => "rv64gc_zba_xtheadba",
             when RV32IMC => "rv32imc",
-            when RV32IMAC => "rv32imac");
+            when RV32IMAC => "rv32imac",
+            when Xtensa_ESP32 => "xtensa-esp32",
+            when Xtensa_ESP32S3 => "xtensa-esp32s3");
 
    function In_Family (Id : Level_Id; Facts : Target_Facts) return Boolean
      is (case Architecture_Of (Facts) is
@@ -99,6 +104,7 @@ package body Landin.Targets.Levels is
             when RV64 => Id in RV64_Level,
             when Cortex_M0 => Id in M_Profile_Level,
             when RV32 => Id in RV32_Level,
+            when Xtensa => Id in Xtensa_Level,
             when Synthetic_32_Architecture => False);
 
    function Is_Level_Of (Facts : Target_Facts; Name : String) return Boolean
@@ -149,6 +155,8 @@ package body Landin.Targets.Levels is
    function Has (Level : Feature_Level; Wanted : Feature) return Boolean is
    begin
       case Wanted is
+         when Salt =>
+            return Level.Id = Xtensa_ESP32S3;
          when Cmpxchg16b | Lahf | Popcnt | Sse3 | Ssse3 | Sse4_1 | Sse4_2 =>
             return Level.Id in X86_64_V2 .. X86_64_V4;
          when Avx | Avx2 | Bmi1 | Bmi2 | F16c | Fma | Lzcnt | Movbe

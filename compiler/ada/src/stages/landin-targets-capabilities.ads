@@ -70,7 +70,7 @@ package Landin.Targets.Capabilities is
 
    type Backend_Kind is
      (No_Backend, X86_64_ELF, Darwin_Arm64_Mach_O, Arm64_ELF, RV64_ELF,
-      Cortex_M0_ELF, RV32_ELF);
+      Cortex_M0_ELF, RV32_ELF, Xtensa_ELF);
 
    function Backend_For (Facts : Target_Facts) return Backend_Kind;
 

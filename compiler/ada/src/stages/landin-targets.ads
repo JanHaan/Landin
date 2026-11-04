@@ -27,7 +27,8 @@ package Landin.Targets is
    --  Compiler-owned target identity for fixed configuration.  This is not
    --  parsed from the target label: a future constructor must choose it.
    type Architecture is
-     (X86_64, Arm64, RV64, Cortex_M0, RV32, Synthetic_32_Architecture);
+     (X86_64, Arm64, RV64, Cortex_M0, RV32, Xtensa,
+      Synthetic_32_Architecture);
 
    --  The configuration atom that names each architecture, the `rv32` of
    --  `compiler.arch == rv32` [1530]: the one table of them, which every
@@ -39,6 +40,7 @@ package Landin.Targets is
            when RV64 => "rv64",
            when Cortex_M0 => "cortex_m0",
            when RV32 => "rv32",
+           when Xtensa => "xtensa",
            when Synthetic_32_Architecture => "synthetic_32");
 
    function Is_Architecture_Atom (Word : String) return Boolean
@@ -90,6 +92,10 @@ package Landin.Targets is
    --  Cortex-M is; C signatures, records and variadic calls stay disabled.
    function RV32 return Target_Facts;
 
+   --  Espressif's Xtensa configurations share little-endian windowed
+   --  ILP32, with a sixteen-byte stack and natural scalar alignment.
+   function Xtensa return Target_Facts;
+
    --  A synthetic 32-bit little-endian description, used to keep layout and
    --  ABI code target-parametric long before a real 32-bit backend exists.
    function Synthetic_32 return Target_Facts;
@@ -103,13 +109,13 @@ package Landin.Targets is
    --  slots and a derived linker script, and no hosted system.  Cortex-M
    --  and RV32 are; what is Thumb's alone asks for Cortex_M0 itself.
    function Is_Firmware (Facts : Target_Facts) return Boolean
-     is (Architecture_Of (Facts) in Cortex_M0 | RV32);
+     is (Architecture_Of (Facts) in Cortex_M0 | RV32 | Xtensa);
 
    --  Named by convention rather than operating system: the standard
    --  AAPCS64 is Linux's and FreeBSD's alike, and Apple's is a variant.
    type C_ABI_Kind is
      (No_C_ABI, SysV_AMD64_LP64, Darwin_AAPCS64_LP64, AAPCS64_LP64,
-      RiscV_LP64D, Arm_AAPCS32_Soft, RiscV_ILP32);
+      RiscV_LP64D, Arm_AAPCS32_Soft, RiscV_ILP32, Xtensa_Windowed_ILP32);
 
    function C_ABI_Of (Facts : Target_Facts) return C_ABI_Kind;
 

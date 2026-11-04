@@ -19,12 +19,14 @@ package Landin.Targets.Firmware is
      is (case Architecture_Of (Facts) is
            when Cortex_M0 => "platform/cortex_m/reference",
            when RV32 => "platform/riscv/reference",
+           when Xtensa => "platform/xtensa/reference",
            when others => "");
 
    --  Whether LOGICAL is a reference description of any target.
    function Is_Reference_Module (Logical : String) return Boolean
      is (Logical in "platform/cortex_m/reference"
-                  | "platform/riscv/reference");
+                  | "platform/riscv/reference"
+                  | "platform/xtensa/reference");
 
    --  A description's name: a device, a region or an interrupt.
    Name_Capacity : constant := 64;
@@ -37,9 +39,11 @@ package Landin.Targets.Firmware is
    --  target that executes it, and its level (D543, D662).
    type Core_Kind is
      (Cortex_M0, Cortex_M0plus, Cortex_M3, Cortex_M4, Cortex_M7, Cortex_M33,
-      Hazard3, SiFive_E31, ESP_RV32IMC, ESP_RV32IMAC_CLIC);
+      Hazard3, SiFive_E31, ESP_RV32IMC, ESP_RV32IMAC_CLIC,
+      Xtensa_LX6, Xtensa_LX7);
    subtype Arm_Core is Core_Kind range Cortex_M0 .. Cortex_M33;
    subtype RISC_V_Core is Core_Kind range Hazard3 .. ESP_RV32IMAC_CLIC;
+   subtype Xtensa_Core is Core_Kind range Xtensa_LX6 .. Xtensa_LX7;
    function Is_Core_Name (Text : String) return Boolean;
    function Core_Named (Text : String) return Core_Kind
      with Pre => Is_Core_Name (Text);
@@ -64,6 +68,8 @@ package Landin.Targets.Firmware is
            when Cortex_M4 => "CM4",
            when Cortex_M7 => "CM7",
            when Cortex_M33 => "CM33",
+           when Xtensa_LX6 => "Xtensa LX6",
+           when Xtensa_LX7 => "Xtensa LX7",
            when RISC_V_Core => "");
    function Is_Svd_Name (Text : String) return Boolean
      is (Text /= "" and then (for some Core in Core_Kind =>
@@ -74,7 +80,8 @@ package Landin.Targets.Firmware is
    function Svd_Names return String;
    --  The target architecture whose builds run on CORE.
    function Family (Core : Core_Kind) return Architecture
-     is (if Core in RISC_V_Core then RV32 else Cortex_M0);
+     is (if Core in RISC_V_Core then RV32
+         elsif Core in Xtensa_Core then Xtensa else Cortex_M0);
    --  The feature level a core executes, as Landin.Targets.Levels names it.
    function Level_Name (Core : Core_Kind) return String;
    --  D543: whether a build at LEVEL runs on CORE: the core's own level or
@@ -93,13 +100,14 @@ package Landin.Targets.Firmware is
    --  ESP32-C5's CLIC, and Hazard3's Xh3irq, whose external interrupts
    --  all arrive as code 11 and are resolved through meinext into slot
    --  16 + IRQ.
-   type Interrupt_Model is (NVIC, Vectored, CLIC, Xh3irq);
+   type Interrupt_Model is (NVIC, Vectored, CLIC, Xh3irq, Xtensa_Interrupts);
    function Model_Of (Core : Core_Kind) return Interrupt_Model
      is (case Core is
            when Arm_Core => NVIC,
            when Hazard3 => Xh3irq,
            when SiFive_E31 | ESP_RV32IMC => Vectored,
-           when ESP_RV32IMAC_CLIC => CLIC);
+           when ESP_RV32IMAC_CLIC => CLIC,
+           when Xtensa_Core => Xtensa_Interrupts);
    --  Whether a description's interrupt n is slot 16 + n.  Under vectored
    --  mtvec and the CLIC a description names a peripheral source, which
    --  an interrupt matrix or a PLIC routes to a CPU line, and only the
@@ -119,6 +127,7 @@ package Landin.Targets.Firmware is
            when Cortex_M3 | Cortex_M4 | Cortex_M7 => 512,
            when SiFive_E31 => 16,
            when ESP_RV32IMC => 32,
+           when Xtensa_Core => 32,
            when ESP_RV32IMAC_CLIC => 48,
            when Hazard3 => 512);
    --  The core's own slots a handler may take.  On the NVIC the
@@ -140,6 +149,7 @@ package Landin.Targets.Firmware is
            when SiFive_E31 => Slot in 3 | 7 | 11,
            when Hazard3 => Slot in 3 | 7,
            when ESP_RV32IMC => Slot in 1 .. 31,
+           when Xtensa_Core => Slot in 0 .. 31,
            when ESP_RV32IMAC_CLIC => Slot in 16 .. 47);
    --  Core_Slot's slots as a note names them.
    function Core_Slots_Text (Core : Core_Kind) return String
@@ -152,6 +162,7 @@ package Landin.Targets.Firmware is
            when SiFive_E31 => "interrupt codes 3, 7 and 11",
            when Hazard3 => "interrupt codes 3 and 7",
            when ESP_RV32IMC => "CPU lines 1 to 31",
+           when Xtensa_Core => "CPU lines 0 to 31",
            when ESP_RV32IMAC_CLIC => "CLIC ids 16 to 47");
 
    --  D615: a float unit is a fact of a description, not of a level, since
@@ -198,6 +209,7 @@ package Landin.Targets.Firmware is
    function Dispatched_Slot (Core : Core_Kind; Slot : Natural) return Boolean
      is (case Model_Of (Core) is
            when CLIC => True,
+           when Xtensa_Interrupts => True,
            when Xh3irq => Slot >= 16,
            when NVIC | Vectored => False);
 
@@ -215,7 +227,7 @@ package Landin.Targets.Firmware is
      is (case Boot is
            when Vector_Table | RP2350_Image_Block => True,
            when RP2040_Boot2 => Core in Arm_Core,
-           when ESP_App_Image => Core in RISC_V_Core);
+           when ESP_App_Image => Core in RISC_V_Core | Xtensa_Core);
    --  The bytes a boot kind reserves at the start of the vectors' region,
    --  before the vector table: RP2040's 256-byte second stage.
    function Boot_Prefix (Boot : Boot_Kind) return Byte_Count
@@ -425,7 +437,8 @@ package Landin.Targets.Firmware is
    --  bytes on the E31 and Hazard3 and under the CLIC, and 256 on the
    --  ESP32-C3, whose ESP-IDF aligns its table so.
    function Vector_Bytes (Of_Profile : Profile) return Byte_Count
-     is (Byte_Count (Of_Profile.Vector_Count) * 4);
+     is (if Of_Profile.Core in Xtensa_Core then 1024
+         else Byte_Count (Of_Profile.Vector_Count) * 4);
    function Vector_Alignment (Of_Profile : Profile) return Byte_Count;
    --  D662: a RISC-V image begins with one word, the jump to reset that a
    --  boot ROM or reset vector enters, `_landin_firmware_entry`.
