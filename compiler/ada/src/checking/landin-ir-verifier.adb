@@ -5178,8 +5178,11 @@ package body Landin.IR.Verifier is
                              Item => Id, others => <>);
                   end if;
                   for Prior in 1 .. Which - 1 loop
-                     if Placement_Of (Of_Unit, Item_Id (Prior)).Vector
-                       = Attr.Vector
+                     if (Placement_Of (Of_Unit, Item_Id (Prior)).Vector /= 0
+                         or else Placement_Of
+                           (Of_Unit, Item_Id (Prior)).Vector_Present)
+                       and then Placement_Of
+                         (Of_Unit, Item_Id (Prior)).Vector = Attr.Vector
                      then
                         return (Kind => Routine_Signature_Disagrees,
                                 Item => Id, others => <>);
