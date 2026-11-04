@@ -6971,6 +6971,25 @@ package body Landin.Tests.Driver_Suite is
                "line zero dispatch requires explicit vector placement: "
                & Unbounded.To_String (Result.Report));
          end;
+         for Which in 1 .. 2 loop
+            declare
+               Target : constant String :=
+                 (if Which = 1 then "cortex-m0" else "rv32");
+               Refused : constant Landin.Driver.Outcome :=
+                 Landin.Driver.Execute
+                   (["--target=" & Target, "--firmware-entry=start",
+                     "--emit=asm", "-o", "reserved.s", "main.ldn"],
+                    Host, Tools);
+            begin
+               Landin.Testing.Check
+                 (Item, Refused.Status = Landin.Driver.Status_Reported
+                  and then Contains (Unbounded.To_String (Refused.Report),
+                                     "error[L0347]")
+                  and then not Host.Exists ("reserved.s"),
+                  Target & " still refuses vector zero before emission: "
+                  & Unbounded.To_String (Refused.Report));
+            end;
+         end loop;
       end Check_Zero_Dispatch;
 
       LX6 : constant Landin.Driver.Outcome :=
