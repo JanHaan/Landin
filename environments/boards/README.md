@@ -180,7 +180,11 @@ its reset cause and pinned ROM instruction/constant fingerprints, it stops
 watchdogs, stalls CPU1 and uses the ROM's windowed writeback and cache-disable
 APIs. Compiler entry supplies windows, vectors and a spill stack before this
 stage; static storage is initialized afterward. The cache-off path calls no
-ROM routines. This cold path does not relax the warm loader's precondition.
+ROM routines. Classic cold entry separately guards its revision-3 ROM's
+complete disable/flush routines and literals, then disables and flushes
+both read-only flash caches after watchdog shutdown and CPU1 stall. That
+contract excludes initialized PSRAM and dirty external data. Neither cold
+path relaxes the warm loader's precondition.
 
 Before resuming the new entry, the helper checks and single-steps the
 compiler's exact normal-mode `memw`/`isync` pair with interrupts masked,
