@@ -1349,6 +1349,7 @@ class RV32Lanes(unittest.TestCase):
                 (into / 'installed').write_bytes(b'debian tools')
             with patch.object(sys, 'argv', ['setup.py', '--tools', str(root)]), \
                     patch.object(setup, 'supported_host'), \
+                    patch.object(setup, 'installer_tools'), \
                     patch.object(setup, 'fetch', side_effect=fetch), \
                     patch.object(setup, 'unpack', side_effect=unpack) as unpacked, \
                     patch.object(setup.subprocess, 'run', side_effect=deb), \
@@ -1369,6 +1370,23 @@ class RV32Lanes(unittest.TestCase):
                               setup.ESPRESSIF: '-xJf', setup.ESPRESSIF_XTENSA: '-xJf'})
             (root / setup.XTENSA / 'installed').write_bytes(b'changed compiler')
             self.assertNotEqual(record['files'][setup.XTENSA], setup.inventory(root / setup.XTENSA))
+
+    def test_missing_dpkg_is_refused_before_creating_a_partial_installation(self):
+        import setup
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / 'tools'
+            with patch.object(sys, 'argv', ['setup.py', '--tools', str(root)]), \
+                    patch.object(setup, 'supported_host'), \
+                    patch.object(setup.shutil, 'which', side_effect=lambda tool:
+                                 None if tool == 'dpkg-deb' else '/tools/' + tool), \
+                    patch.object(setup, 'fetch') as fetch:
+                with self.assertRaisesRegex(RuntimeError, 'needs dpkg-deb on PATH') as refused:
+                    setup.main()
+            self.assertIn('add dpkg', str(refused.exception))
+            self.assertIn('README.md#on-nixos', str(refused.exception))
+            self.assertFalse(root.exists())
+            fetch.assert_not_called()
 
     def test_an_archive_hash_is_checked_before_it_can_be_unpacked(self):
         import hashlib
