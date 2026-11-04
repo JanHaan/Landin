@@ -389,23 +389,49 @@ def kernel_usb_lines(seconds):
 
 
 class Run:
-    """Every command a tool runs, its log under OUT and its record kept."""
+    """Every command and its distinct log under OUT, including retries."""
     def __init__(self, out):
         self.out = out
         self.commands = []
 
     def command(self, name, argv, timeout=120, check=True, **kw):
+        # Keep the first familiar name, then reserve a fresh file. Exclusive
+        # creation also preserves logs from another Run using this directory,
+        # and handles command names that collide with a generated suffix.
+        attempt = 1
+        while True:
+            path = self.out / ('%s%s.log' % (name, '' if attempt == 1 else '-%d' % attempt))
+            try:
+                log = path.open('x', encoding='utf-8')
+            except FileExistsError:
+                attempt += 1
+            else:
+                break
         started = time.time()
-        result = subprocess.run([str(a) for a in argv], capture_output=True, text=True,
-                                timeout=timeout, **kw)
-        (self.out / (name + '.log')).write_text(
-            '$ ' + ' '.join(map(str, argv)) + '\n' + result.stdout + result.stderr)
-        self.commands.append(dict(name=name, argv=[str(a) for a in argv],
-                                  status=result.returncode,
-                                  seconds=round(time.time() - started, 3)))
+        command = dict(name=name, argv=[str(a) for a in argv], log=path.name, status=None)
+        with log:
+            log.write('$ ' + ' '.join(command['argv']) + '\n')
+            log.flush()
+            try:
+                result = subprocess.run(command['argv'], capture_output=True, text=True,
+                                        timeout=timeout, **kw)
+            except (subprocess.TimeoutExpired, OSError) as error:
+                for output in (getattr(error, 'stdout', None), getattr(error, 'stderr', None)):
+                    if output:
+                        log.write(output.decode('utf-8', errors='replace')
+                                  if isinstance(output, bytes) else output)
+                log.write('\n' + str(error) + '\n')
+                command['error'] = str(error)
+                raise
+            else:
+                command['status'] = result.returncode
+                log.write(result.stdout + result.stderr)
+            finally:
+                command['seconds'] = round(time.time() - started, 3)
+                self.commands.append(command)
         if check:
-            require(result.returncode == 0, '%s failed (%d); see %s.log'
-                    % (name, result.returncode, self.out / name))
+            require(result.returncode == 0, '%s failed (%d); see %s'
+                    % (name, result.returncode, path))
         return result.stdout
 
 
