@@ -156,6 +156,12 @@ fetching the SRAM entry, and compiler startup executes the normal-mode
 fences. The [decoder](https://github.com/Wren6991/Hazard3/blob/86fc4e3f/hdl/hazard3_decode.v)
 and [frontend](https://github.com/Wren6991/Hazard3/blob/86fc4e3f/hdl/hazard3_frontend.v)
 define that chip-specific boundary. ESP helper fences are unchanged.
+The Hazard3 port also releases TIMER0 from reset and configures its debug
+pause to follow core 0 alone. Otherwise the parked hart 1 freezes the
+shared timer, and the application's alarm cannot wake its event loop.
+DMA and UART remain in reset until startup. This contract covers the
+port's TIMER0; future TIMER1 or SIO MTIME users must establish their own
+core 1 debug-pause policy. The watchdog is disabled during cleanup.
 
 For Pico 2 RAM entry, the BOOTSEL guard reads the selected hub and physical
 port through Linux sysfs. It validates the hub, port and any device

@@ -458,6 +458,7 @@ fn cleanup(core: &mut Core<'_>, board: &str, arm: bool) -> Result<Value> {
             }
         }
     }
+    let mut timer0_debug_pause = None;
     match board {
         "rp2040" | "rp2350" | "rp2350_hazard3" => {
             let rp2 = board != "rp2040";
@@ -476,6 +477,19 @@ fn cleanup(core: &mut Core<'_>, board: &str, arm: bool) -> Result<Value> {
             // reset stops DMA before any SRAM contents are changed.
             update(core, if rp2 {0x40020000} else {0x4000c000}, 0,
                 if rp2 {0x14800244} else {0x00600124})?;
+            if board == "rp2350_hazard3" {
+                // TIMER0 defaults to pausing for either processor's debug
+                // halt. Keep DBG0, but let the application's alarm wake it
+                // while hart 1 remains halted. Release only TIMER0 first:
+                // a write while reset is asserted would be discarded.
+                // Reset leaves all alarms and their interrupt enables off.
+                update(core, 0x40020000, 1 << 23, 0)?;
+                poll(core, 0x40020008, 1 << 23, 1 << 23)?;
+                core.write_word_32(0x400b002c, 2).context("TIMER0 debug pause follows core 0 only")?;
+                core.write_word_32(0x400b0030, 0).context("clear TIMER0 explicit pause")?;
+                timer0_debug_pause = Some(poll(core, 0x400b002c, 6, 2)?);
+                poll(core, 0x400b0030, 1, 0)?;
+            }
         }
         "stm32h753" => {
             let supply = core.read_word_32(0x5802480c).with_context(|| format!("{board} cleanup read MMIO {:#x}", 0x5802480c))?;
@@ -513,6 +527,7 @@ fn cleanup(core: &mut Core<'_>, board: &str, arm: bool) -> Result<Value> {
     if board == "rp2350_hazard3" {
         report["hazard3_irq_state_reset"] = json!(true);
         report["memory_access"] = json!("core0-program-buffer");
+        report["timer0_debug_pause"] = json!(timer0_debug_pause.unwrap());
     }
     Ok(report)
 }
