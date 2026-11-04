@@ -5,6 +5,8 @@ chip-specific image, USB identities and physical oracle under the common lock.
 """
 import argparse
 from pathlib import Path
+import struct
+import subprocess
 import time
 
 import common
@@ -90,6 +92,123 @@ def power_on_boot(probe, chip, names):
                 timer_events=[first, second], trap_count=0)
 
 
+def inspection_contract(args):
+    """Refuse workflow-changing combinations before any helper or rig access."""
+    require(args.mode == 'boot', '--inspect-boot requires --mode=boot')
+    require(not args.record, '--inspect-boot is observational and cannot write --record')
+    require(args.bundle, '--inspect-boot needs the checked bundle prepared by environments/boards/run.py')
+    require(not args.recover and not args.image_control,
+            '--inspect-boot cannot run recovery or image controls')
+
+
+def rom_table_count(address):
+    """Reviewed S3 DRAM window or exact pinned ROM table, at most 64 bytes."""
+    # The pinned ESP32-S3 ROM ELF defines cache_internal_func_obj here,
+    # inside immutable DROM PT_LOAD [0x3ff18c00, 0x3ff1eb3c).
+    if address == 0x3ff1e2b4:
+        return 16
+    return min(16, (0x3fcf0000 - address) // 4) if (
+        address % 4 == 0 and 0x3fce0000 <= address < 0x3fcf0000) else 0
+
+
+def inspect_boot(chip, args):
+    """Observe the current board once; never establish or repair startup."""
+    inspection_contract(args)
+    identity = common.verify_ram_helper(args)  # No probe is opened by --describe.
+    args.output = args.output.resolve()
+    args.output.mkdir(parents=True)
+    run = common.Run(args.output)
+    run.pace = args.pace
+    result = dict(status='failed', scope='boot-inspection', observational=True,
+                  board=chip.name, active_image='not-established', helper_identity=identity,
+                  flash_written=False, reset_requested=False, power_switched=False,
+                  observations=[])
+    began = time.monotonic()
+    lock = common.rig_lock('%s boot inspection' % chip.name)
+
+    def read(probe, name, address, count=1, role='chip state'):
+        observation = dict(name=name, address=address, count=count, role=role)
+        started = time.monotonic()
+        try:
+            words = probe.read_words('inspect-' + name, address, count)
+            observation.update(words=words, bytes_le=struct.pack('<%dI' % count, *words).hex())
+            return words
+        except (common.Failed, OSError, subprocess.TimeoutExpired) as error:
+            observation['error'] = str(error)
+            raise
+        finally:
+            observation['seconds'] = round(time.monotonic() - started, 6)
+            result['observations'].append(observation)
+
+    try:
+        elf, _, _ = esp.build(run, args, chip)  # Consume the checked bundle only.
+        names = args.prepared_bundle['symbols']
+        result['symbol_image_sha256'] = common.sha(elf)
+        fixed_marker = common.fixed_marker_address(common.fixed_elf(args, chip.name))
+        probe = common.Probe(run, args.probe_rs, chip.probe_chip, args.probe,
+                             ram_loader=args.ram_loader, read_mode='boot-read')
+        lock.acquire()
+        args.pace.before('boot inspection')
+        reset = read(probe, 'reset-cause', chip.reset_cause)[0]
+        result['reset_cause'] = dict(raw=reset, code=reset & 0x3f)
+        if chip.name == 'esp32':
+            # ESP-IDF fff9895c82d744c7237be8847347bdd1b07c6643,
+            # gpio_reg.h GPIO_STRAP_REG and rtc_cntl_reg.h RTC_CNTL_SDIO_CONF_REG.
+            read(probe, 'gpio-strap', 0x3ff44038, role='latched straps; read only')
+            read(probe, 'rtc-sdio-conf', 0x3ff48074, role='VDD_SDIO configuration; read only')
+            caches = (('pro-cache', 0x3ff00040, 8), ('app-cache', 0x3ff00058, 8))
+            clocks = (('apb-clock', 0x3ff66000, 0x3ff), ('rtc-clock', 0x3ff48070, 3 << 27))
+            options_address, stall_address = 0x3ff48000, 0x3ff480ac
+        else:
+            caches = (('data-cache', 0x600c4000, 1), ('instruction-cache', 0x600c4060, 1))
+            clocks = (('system-clock', 0x600c0060, 0xfff),)
+            options_address, stall_address = 0x60008000, 0x600080bc
+        result['caches'] = {name: dict(address=address, raw=(value := read(probe, name, address)[0]),
+                                      mask=mask, enabled=bool(value & mask))
+                            for name, address, mask in caches}
+        result['clocks'] = {name: dict(address=address, raw=(value := read(probe, name, address)[0]),
+                                      mask=mask, masked=value & mask)
+                            for name, address, mask in clocks}
+        options = read(probe, 'cpu1-stall-c0', options_address)[0]
+        stall = read(probe, 'cpu1-stall-c1', stall_address)[0]
+        code = (((stall >> 20) & 0x3f) << 2) | (options & 3)
+        result['cpu1'] = dict(stall_code=code, cpu1_stalled=code == 0x86,
+            options_address=options_address, options_value=options, options_mask=3,
+            stall_address=stall_address, stall_value=stall, stall_mask=0x3f << 20)
+        read(probe, 'fixed-marker', fixed_marker, role='bundled fixed ELF address; active image unknown')
+        for cell in esp.TRAP_CELLS:
+            read(probe, 'trap-' + cell, names['_landin_firmware_trap_' + cell],
+                 role='bundled application ELF address; active image unknown')
+        if chip.name == 'esp32s3':
+            for address in (0x400016f4, 0x40001868, 0x40001880):
+                read(probe, 'literal-%08x' % address, address, role='ROM veneer literal; observational')
+            for name, address in [('veneer-400016f8', 0x400016f8), ('veneer-4000186c', 0x4000186c),
+                    ('veneer-40001884', 0x40001884), ('prologue-4004eaec', 0x4004eaec),
+                    ('prologue-4004f2b8', 0x4004f2b8), ('prologue-4004f32c', 0x4004f32c)]:
+                read(probe, name, address, 4, role='ROM bytes; observational')
+            pointer = read(probe, 'rom-table-pointer', 0x3fceffc4)[0]
+            count = rom_table_count(pointer)
+            result['rom_table'] = dict(pointer=pointer, bound=[0x3fce0000, 0x3fcf0000],
+                                       pinned_rom_table=0x3ff1e2b4, maximum_bytes=64,
+                                       callbacks_dereferenced=False)
+            if count:
+                result['rom_table']['callback_words'] = read(probe, 'rom-table', pointer, count,
+                    role='ROM callback table words; targets not dereferenced')
+            else:
+                result['rom_table']['skipped'] = 'pointer is outside the reviewed DRAM window and exact pinned ROM table'
+        result['status'] = 'observed'
+    except (common.Failed, OSError, subprocess.TimeoutExpired) as error:
+        result['failure'] = str(error)
+    finally:
+        common.retain_kernel_usb(args.pace, result)
+        lock.release()
+        result.update(seconds=round(time.monotonic() - began, 3), commands=run.commands)
+        common.write_json(args.output / 'result.json', result)
+    print('boot inspection %s: %s (observations only; active image not established)' %
+          (result['status'], args.output))
+    return 0 if result['status'] == 'observed' else 1
+
+
 def main(chip_class, description):
     chip = chip_class()
     parser = argparse.ArgumentParser(description=description,
@@ -108,9 +227,16 @@ def main(chip_class, description):
     parser.add_argument('--console-guard-device', default=chip.console_guard_device_default)
     parser.add_argument('--enumerate-seconds', type=float, default=60)
     parser.add_argument('--reset-seconds', type=float, default=0.1)
+    parser.add_argument('--inspect-boot', action='store_true',
+                        help='with --mode=boot, observe current state without flashing, resetting or switching power; no record')
     args = parser.parse_args()
+    if args.inspect_boot:
+        inspection_contract(args)
     common.board_preflight(args, chip.name)
     common.rerun_in_group(args.hub_group)
+    if args.inspect_boot:
+        esp.required_tools(args)
+        return inspect_boot(chip, args)
     common.place_hubs(parser, args, 'hub', 'console_hub')
     esp.required_tools(args)
     require(not args.recover, 'Xtensa recovery is an explicit setup operation; this tool does not enter download mode')
