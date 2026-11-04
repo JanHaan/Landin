@@ -113,7 +113,7 @@ package body Landin.Commands.Catalogue is
          when Linker => "Select the native linker through that driver",
          when Link =>
            "Linux link: static (default) alone, or libc with C's runtime",
-         when Firmware_Entry => "Select the Cortex-M firmware entry routine",
+         when Firmware_Entry => "Select the firmware entry routine",
          when Firmware_Layout => "Firmware layout: boot (default), ram",
          when Linker_Script =>
            "Link firmware with FILE, checked against the contract",
@@ -503,8 +503,9 @@ package body Landin.Commands.Catalogue is
                  & LF & "with the same --target, --level and --link."
                  & LF & "--emit ir writes the IR the backend receives."
                  & LF
-                 & "Hosted targets use --debug full; Cortex-M uses --debug"
-                 & LF & "lines and requires --firmware-entry for executables."
+                 & "Hosted targets support --debug full; firmware targets"
+                 & LF & "support --debug lines. Firmware executables require"
+                 & LF & "--firmware-entry."
                  & LF
                  & "Example: refine compile --link=libc -L vendor/lib"
                  & " program.ldn -o program" & LF

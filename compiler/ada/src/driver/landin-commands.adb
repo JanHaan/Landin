@@ -643,6 +643,7 @@ package body Landin.Commands is
       end Identify;
       procedure List_Targets;
       procedure List_Targets is
+         package Caps renames Landin.Targets.Capabilities;
          B : J.Builder;
       begin
          if Asked.Structured then
@@ -656,6 +657,13 @@ package body Landin.Commands is
             declare
                Name : constant String :=
                  Landin.Targets.Selection.Described_Name (Index);
+               Facts : constant Landin.Targets.Target_Facts :=
+                 Landin.Targets.Selection.Described (Name);
+               Debug : constant String :=
+                 (case Caps.Debug_Format_Of (Facts) is
+                     when Caps.ELF_DWARF | Caps.Mach_O_DWARF => "full",
+                     when Caps.ELF_DWARF_Lines => "lines",
+                     when Caps.No_Debug_Format => "none");
             begin
                if Asked.Structured then
                   J.Begin_Object (B);
@@ -663,24 +671,23 @@ package body Landin.Commands is
                   J.Write_String (B, Name);
                   J.Name (B, "emission");
                   J.Write_Boolean
-                    (B, Landin.Targets.Capabilities.Backend_For
-                       (Landin.Targets.Selection.Described (Name)) /=
-                         Landin.Targets.Capabilities.No_Backend);
+                    (B, Caps.Backend_For (Facts) /= Caps.No_Backend);
+                  J.Name (B, "debug");
+                  J.Write_String (B, Debug);
                   J.Name (B, "levels");
                   J.Write_String (B, Landin.Targets.Levels.Levels_Of
-                    (Landin.Targets.Selection.Described (Name)));
+                    (Facts));
                   J.Name (B, "default_level");
                   J.Write_String (B, Landin.Targets.Levels.Name
                     (Landin.Targets.Levels.Default_Level
-                       (Landin.Targets.Selection.Described (Name))));
+                       (Facts)));
                   J.End_Object (B);
                else
                   US.Append (Result.Output, Name
-                    & (if Landin.Targets.Capabilities.Emits
-                            (Landin.Targets.Selection.Described (Name))
+                    & (if Caps.Emits (Facts)
                        then "" else " (checking only)")
                     & ": " & Landin.Targets.Levels.Levels_Of
-                      (Landin.Targets.Selection.Described (Name)) & LF);
+                      (Facts) & "; debug: " & Debug & LF);
                end if;
             end;
          end loop;
