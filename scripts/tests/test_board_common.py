@@ -361,6 +361,51 @@ class HelperIdentity(unittest.TestCase):
 
 
 class Probes(unittest.TestCase):
+    def test_xtensa_boot_reads_observe_cpu1_but_ram_reads_require_stall_proof(self):
+        for board in ('esp32', 'esp32s3'):
+            with self.subTest(board=board), tempfile.TemporaryDirectory() as tmp:
+                out = Path(tmp)
+                state = dict(cpu1_stalled=False, stall_code=0, options_value=0, stall_value=0)
+                report = dict(format_version=1, status='passed', mode='boot-read', board=board,
+                              address=0x60008034, count=1, words=[1], flash_written=False,
+                              helper_source_sha256=COMMON.helper_source_hash(),
+                              cpu1_stalled=False, other_core=state)
+                run = mock.Mock(out=out, pace=None)
+                def command(name, argv, **kwargs):
+                    request = json.loads((out / 'cause-plan.json').read_text())
+                    self.assertIn(request['mode'], ('read', 'boot-read'))
+                    self.assertEqual(request.get('require_cpu1_stalled', False),
+                                     request['mode'] == 'read')
+                    (out / 'cause.json').write_text(json.dumps(report))
+                run.command.side_effect = command
+                boot = COMMON.Probe(run, 'probe-rs', board, 'P', ram_loader='loader',
+                                    read_mode='boot-read')
+                self.assertEqual(boot.read_words('cause', 0x60008034, 1), [1])
+                report['cpu1_stalled'] = True
+                with self.assertRaisesRegex(COMMON.Failed, 'observed CPU1 stall state'):
+                    boot.read_words('cause', 0x60008034, 1)
+                report['cpu1_stalled'] = False
+                state['stall_code'] = 0x86
+                with self.assertRaisesRegex(COMMON.Failed, 'observed CPU1 stall state'):
+                    boot.read_words('cause', 0x60008034, 1)
+                state.update(cpu1_stalled=True, options_value=2, stall_value=0x21 << 20)
+                report['cpu1_stalled'] = True
+                self.assertEqual(boot.read_words('cause', 0x60008034, 1), [1])
+                with self.assertRaisesRegex(COMMON.Failed, 'retained CPU1 stall evidence'):
+                    COMMON.Probe(run, 'probe-rs', board, 'P', ram_loader='loader')
+                ram = COMMON.Probe(run, 'probe-rs', board, 'P', ram_loader='loader',
+                                   require_cpu1_stalled=True)
+                with self.assertRaisesRegex(COMMON.Failed, 'mismatched evidence'):
+                    ram.read_words('cause', 0x60008034, 1)
+                report['mode'] = 'read'
+                self.assertEqual(ram.read_words('cause', 0x60008034, 1), [1])
+                report['cpu1_stalled'] = False
+                with self.assertRaisesRegex(COMMON.Failed, 'CPU1 remains stalled'):
+                    ram.read_words('cause', 0x60008034, 1)
+        for chip in ('RP2040', 'RP235x_riscv', 'ESP32-C3', 'ESP32-C5', 'STM32H753ZITx'):
+            with self.assertRaisesRegex(COMMON.Failed, 'only for Xtensa'):
+                COMMON.Probe(mock.Mock(), 'probe-rs', chip, 'P', read_mode='boot-read')
+
     def test_rp_reads_use_one_core_and_reject_mismatched_evidence(self):
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp)

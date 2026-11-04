@@ -453,6 +453,25 @@ class PowerOn(unittest.TestCase):
 
 
 class RunFailures(unittest.TestCase):
+    def test_only_xtensa_boot_runs_select_observational_boot_reads(self):
+        for target in ('rv32', 'xtensa'):
+            for mode in ('ram', 'boot'):
+                with self.subTest(target=target, mode=mode), tempfile.TemporaryDirectory() as tmp:
+                    args = SimpleNamespace(output=Path(tmp) / 'run', mode=mode,
+                        probe_rs='probe-rs', probe='P', record=None, pace=mock.Mock())
+                    chip = SimpleNamespace(name='chip', probe_chip='chip', target=target)
+                    with mock.patch.object(ESP, 'build', side_effect=COMMON.Failed('build control')), \
+                            mock.patch.object(COMMON, 'Probe') as probe, \
+                            mock.patch.object(COMMON, 'rig_lock'), \
+                            mock.patch.object(COMMON, 'retain_kernel_usb'):
+                        self.assertEqual(ESP.run_board(chip, args, mock.Mock(),
+                                                      mock.Mock(), mock.Mock()), 1)
+                    contract = probe.call_args.kwargs
+                    self.assertEqual(contract['read_mode'],
+                                     'boot-read' if target == 'xtensa' and mode == 'boot' else 'read')
+                    self.assertEqual(contract['require_cpu1_stalled'],
+                                     target == 'xtensa' and mode == 'ram')
+
     def failed_ram_run(self, directory, *, loader_error=None, scenario_error=None):
         elf = directory / 'board.elf'
         elf.write_bytes(elf32(0x40380000, [(0x40380000, TEXT, False)]))

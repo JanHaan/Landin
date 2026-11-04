@@ -524,9 +524,11 @@ def run_board(chip, args, console_for, cycle, settle):
     result = dict(status='failed')
     began = time.monotonic()
     console = None
+    xtensa = getattr(chip, 'target', 'rv32') == 'xtensa'
     probe = common.Probe(run, args.probe_rs, chip.probe_chip, args.probe,
                          ram_loader=getattr(args, 'ram_loader', None),
-                         require_cpu1_stalled=getattr(chip, 'target', 'rv32') == 'xtensa')
+                         require_cpu1_stalled=xtensa and args.mode == 'ram',
+                         read_mode='boot-read' if xtensa and args.mode == 'boot' else 'read')
     lock = common.rig_lock('%s board.py' % chip.name)
     lock_held = False
     names = None
