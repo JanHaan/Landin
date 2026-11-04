@@ -1,0 +1,51 @@
+-- Stack-free device preparation before compiler-owned Xtensa reset.
+-- ESP-IDF v6.1's cache_ll.h defines the cache-enable bits; the supported
+-- entry state has them clear. An enabled cache parks at the named failure
+-- label before any store: this stage cannot discard dirty external data.
+-- The warm helper checks the same baseline before overwriting SRAM.
+--
+-- Both MWDTs and the RWDT are unlocked with 0x50D8_3AA1, disabled, then
+-- locked again. The CPU1 hardware stall follows cpu_utility_ll_stall_cpu:
+-- RTC OPTIONS0's APP C0 is 2, SW_CPU_STALL's APP C1 is 0x21. It survives
+-- debugger detach; a debug halt alone does not. Caches stay disabled and
+-- their banks are never used. All addresses/fields are independently
+-- checked against the pinned vendor headers; see devices/README.md.
+link(boot_stage) extern(naked) prepare: () -> none =
+    assembler.block("""
+        movi a2, 0x3ff00000   # DPORT base
+        l32i a3, a2, 0x40     # PRO_CACHE_CTRL
+        bbsi a3, 3, _landin_device_cache_refused
+        l32i a3, a2, 0x58     # APP_CACHE_CTRL
+        bbsi a3, 3, _landin_device_cache_refused
+        movi a3, 0x50d83aa1   # watchdog write key
+        movi a4, 0
+        movi a2, 0x3ff5f000   # TIMG0 base
+        s32i a3, a2, 0x64     # WDTWPROTECT unlock
+        s32i a4, a2, 0x48     # WDTCONFIG0 off
+        s32i a4, a2, 0x64     # lock
+        movi a2, 0x3ff60000   # TIMG1 base
+        s32i a3, a2, 0x64
+        s32i a4, a2, 0x48
+        s32i a4, a2, 0x64
+        movi a2, 0x3ff48000   # RTC_CNTL base
+        s32i a3, a2, 0xa4     # WDTWPROTECT unlock
+        s32i a4, a2, 0x8c     # WDTCONFIG0 off
+        s32i a4, a2, 0xa4     # lock
+        l32i a3, a2, 0        # OPTIONS0
+        movi a4, -4
+        and a3, a3, a4
+        movi a4, 2
+        or a3, a3, a4
+        s32i a3, a2, 0        # APP C0 = 2
+        l32i a3, a2, 0xac     # SW_CPU_STALL
+        movi a4, 0xfc0fffff
+        and a3, a3, a4
+        movi a4, 0x02100000
+        or a3, a3, a4
+        s32i a3, a2, 0xac     # APP C1 = 0x21
+        memw
+        j _landin_firmware_reset
+        _landin_device_cache_refused:
+        j _landin_device_cache_refused
+        """)
+end prepare

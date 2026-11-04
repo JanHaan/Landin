@@ -1,0 +1,163 @@
+-- UART interrupt reception into a bounded ring, GPIO commands, a 1 ms
+-- timer, atomics and overrun recovery on the Xtensa board. No DMA claim.
+-- Boot telemetry adds d/f cache enables and p, CPU1's hardware stall code.
+import bringup
+import commands
+import core/atomic
+import descriptions/esp32s3
+import esp32s3/rtc_cntl
+import platform/xtensa
+import report
+import serial
+
+mut rx_storage: [256]u8 = zeroed
+mut notification: atomic.cell(u32) = zeroed
+mut handled: u32 = 0
+mut recoveries: u32 = 0
+mut timer_events: atomic.cell(u32) = zeroed
+mut uart_cause: u32 = 0
+mut timer_cause: u32 = 0
+mut masked_ticks: u32 = 0
+mut app_state: u32 = 0
+-- The reset cause start read, which the probe reads beside the boot frame.
+mut boot_reason: u32 = 0
+-- The atomics' cells, which the probe reads beside the frame.
+mut byte_cell: atomic.cell(u8) = zeroed
+mut half_cell: atomic.cell(u16) = zeroed
+mut word_cell: u32 = 0
+
+indicate: (on: bool) -> none = bringup.indicate(on) end indicate
+
+transmit: (byte: u8) -> none = report.put(byte) end transmit
+
+port: commands.port = (indicate: indicate, transmit: transmit)
+budget: u32 = 4096
+
+cause: () -> (value: u32) = value = xtensa.pending_lines() end cause
+
+-- UART0 uses CPU line 1 at level 1; the timer uses line 23 at level 3.
+link(vector: 1)
+extern(interrupt) uart_irq: () -> none =
+    uart_cause = cause()
+    serial.receive(rx_storage[0..<256])
+    atomic.store(addr notification, 1)
+end uart_irq
+
+link(vector: 23)
+extern(interrupt) timer_irq: () -> none =
+    timer_cause = cause()
+    bringup.ack_timer()
+    _ = atomic.sole_add(addr timer_events, 1)
+    atomic.store(addr notification, 1)
+end timer_irq
+
+telemetry: (r: serial.rx) -> none =
+    report.open_frame(116)
+    report.field(104, handled)
+    report.field(99, recoveries)
+    report.field(105, serial.interrupts())
+    report.field(109, atomic.load(addr timer_events))
+    report.field(112, uart_cause)
+    report.field(113, timer_cause)
+    report.field(107, masked_ticks)
+    report.field(108, serial.bytes_dropped())
+    report.field(111, serial.fifo_overflows())
+    report.field(101, r.consumed)
+    report.field(103, bringup.indicator_state())
+    report.field(115, app_state)
+    report.close_frame()
+end telemetry
+
+-- Atomic memory operations: one-, two- and four-byte stores and loads at
+-- the orderings each admits, and a fence, over the operands x and y the
+-- host sent; each loaded value is what the store before it wrote.
+atomics: (x: u8, y: u8) -> none =
+    atomic.store(addr byte_cell, x)
+    b := atomic.load(addr byte_cell)
+    atomic.store_relaxed(addr half_cell, (u16(x) << 8) | u16(y))
+    h := atomic.load_relaxed(addr half_cell)
+    word := (u32(x) << 24) | (u32(y) << 16) | (u32(y) << 8) | u32(x)
+    compiler.atomic_store(addr word_cell, word, compiler.seq_cst)
+    compiler.thread_fence(compiler.seq_cst)
+    w := compiler.atomic_load(addr word_cell, compiler.acquire)
+    report.open_frame(97)
+    report.field(98, u32(b))
+    report.field(104, u32(h))
+    report.field(119, w)
+    report.close_frame()
+end atomics
+
+-- Waits 100 ms by the system timer's own count, counting the 1 ms
+-- interrupts taken meanwhile.
+pause: () -> (events: u32) =
+    first := atomic.load(addr timer_events)
+    began := bringup.now()
+    while bringup.now() -% began < 100 * bringup.ticks_per_ms do
+        continue
+    end while
+    events = atomic.load(addr timer_events) -% first
+end pause
+
+halt: (status: u32) -> noreturn =
+    app_state = status
+    report.open_frame(104)
+    report.field(115, status)
+    report.close_frame()
+    loop do xtensa.wait_for_interrupt() end loop
+end halt
+
+start: () -> noreturn =
+    -- Read before anything changes it: which reset this was, from
+    -- RTC_CNTL_RESET_CAUSE_PROCPU, and the exception-vector base
+    -- compiler-owned reset set.
+    reason := rtc_cntl.reset_state_read(rtc_cntl.base) & 0x3f
+    vector := assembler.block("rsr {value}, vecbase", out value: u32 at general)
+    boot_reason = reason
+    bringup.clocks_and_uart()
+    bringup.indicator_pin()
+    bringup.threshold(serial.priority)
+    bringup.timer()
+    mut receiver := serial.open(115200, budget, rx_storage[0..<256]) else (problem)
+        _ = problem
+        halt(1)
+    end
+    report.open_frame(98)
+    report.field(114, reason)
+    report.field(118, vector)
+    report.field(100, bringup.data_cache_enabled())
+    report.field(102, bringup.instruction_cache_enabled())
+    report.field(112, bringup.cpu1_stall())
+    report.close_frame()
+    mut scratch: [64]u8 = zeroed
+    mut previous: [2]u8 = zeroed
+    app_state = 2
+    loop do
+        atomic.store(addr notification, 0)
+        n := serial.read(receiver, scratch[0..<64]) else (error)
+            if error == serial.stop_timeout then halt(3) end if
+            recoveries = recoveries +% 1
+            serial.restart(receiver) else (problem)
+                _ = problem
+                halt(3)
+            end
+            continue
+        end
+        handled = handled +% commands.handle(scratch[0..<n], port)
+        for byte in scratch[0..<n] do
+            if byte == 6 then atomics(previous[0], previous[1]) end if
+            if byte == 17 then telemetry(receiver) end if
+            if byte == 18 then _ = pause() end if
+            if byte == 19 then
+                bringup.threshold(bringup.timer_priority)
+                masked_ticks = pause()
+                bringup.threshold(serial.priority)
+            end if
+            previous[0] = previous[1]
+            previous[1] = byte
+        end for
+        if n == 64 then continue end if
+        saved := xtensa.disable_interrupts()
+        if atomic.load(addr notification) == 0 then xtensa.wait_for_interrupt() end if
+        xtensa.restore_interrupts(saved)
+    end loop
+end start

@@ -1,0 +1,40 @@
+-- The board's trace: frames on UART0 between the echoed bytes, each STX, a
+-- tag letter, fields of a key letter, '=' and eight lowercase hex digits
+-- after a space, then ETX and LF, as the other boards write them (D595).
+-- The host never sends STX or ETX, so a frame is found wherever it falls in
+-- the echo.
+import esp32/uart0
+
+digits: [16]u8 = [48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 97, 98, 99, 100, 101, 102]
+
+-- UART_TXFIFO_CNT, STATUS bits 25:16, counts the bytes in the 128-byte
+-- transmit FIFO (TRM v1.4, 26.4.2; Register 26.19); a byte written while it
+-- is full is lost.  The echo goes out through this too.
+public put: (byte: u8) -> none =
+    while ((uart0.status_read(uart0.base) >> 16) & 0xff) >= 127 do
+        continue
+    end while
+    -- ESP-IDF uart_ll_write_txfifo uses the AHB alias for transmission.
+    uart0.fifo_write(0x60000000, u32(byte))
+end put
+
+public open_frame: (tag: u8) -> none =
+    put(2)
+    put(tag)
+end open_frame
+
+public field: (key: u8, value: u32) -> none =
+    put(32)
+    put(key)
+    put(61)
+    mut shift: u32 = 32
+    while shift > 0 do
+        shift -= 4
+        put(digits[usize((value >> shift) & 15)])
+    end while
+end field
+
+public close_frame: () -> none =
+    put(3)
+    put(10)
+end close_frame

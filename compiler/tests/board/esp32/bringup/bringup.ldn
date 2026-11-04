@@ -1,0 +1,105 @@
+-- The Olimex ESP32 board uses a 40 MHz crystal. Select it without a
+-- divider, give UART0 115200 8N1, use GPIO22 as the external indicator,
+-- and run TIMG0 timer 0 at 1 MHz with a 1 ms alarm. All values follow the
+-- pinned ESP-IDF register headers. Caches remain disabled; CPU1 is stalled.
+import esp32/apb_ctrl
+import esp32/dport
+import esp32/gpio
+import esp32/io_mux
+import esp32/rtc_cntl
+import esp32/timg0
+import esp32/uart0
+import platform/xtensa
+
+public timer_line: u32 = 23
+public timer_priority: u32 = 3
+
+-- Like the ESP board scenario's threshold: level 1 permits both lines;
+-- level 3 holds the UART's level 1 off while the level 3 timer keeps running.
+public threshold: (level: u32) -> none =
+    state := assembler.block("rsr {state}, ps", out state: u32 at general)
+    xtensa.restore_interrupts((state & 0xfffffff0) | (level - 1))
+end threshold
+
+public cpu1_stall: () -> (code: u32) =
+    code = ((rtc_cntl.sw_cpu_stall_read(rtc_cntl.base) >> 20) & 0x3f) << 2
+    code |= rtc_cntl.options0_read(rtc_cntl.base) & 3
+end cpu1_stall
+
+public indicator: u32 = 0x00400000
+public ticks_per_ms: u32 = 1000
+mut next_alarm: u32 = 1000
+
+public clocks_and_uart: () -> none =
+    -- APB_CTRL.PRE_DIV_CNT 9:0 = 0; RTC_CNTL.SOC_CLK_SEL 28:27 = XTAL.
+    divider := apb_ctrl.sysclk_conf_read(apb_ctrl.base)
+    apb_ctrl.sysclk_conf_write(apb_ctrl.base, divider & 0xfffffc00)
+    source := rtc_cntl.clk_conf_read(rtc_cntl.base)
+    rtc_cntl.clk_conf_write(rtc_cntl.base, source & 0xe7ffffff)
+    clocks := dport.perip_clk_en_read(dport.base)
+    dport.perip_clk_en_write(dport.base, clocks | 0x01002004)
+    resets := dport.perip_rst_en_read(dport.base)
+    dport.perip_rst_en_write(dport.base, resets | 4)
+    dport.perip_rst_en_write(dport.base, resets & 0xfeffdffb)
+    -- GPIO1/3 use their UART0 function 0; enable input on RX.
+    io_mux.gpio1_write(io_mux.base, 0xa00)
+    io_mux.gpio3_write(io_mux.base, 0xa00)
+    uart0.int_ena_write(uart0.base, 0)
+    uart0.conf0_write(uart0.base, 0x0806001c)
+    uart0.conf0_write(uart0.base, 0x0800001c)
+    -- APB 40 MHz / (347 + 4/16) = 115190 baud, within 0.01 percent.
+    uart0.clkdiv_write(uart0.base, 0x0040015b)
+end clocks_and_uart
+
+public indicator_pin: () -> none =
+    -- GPIO function 2, drive 2 and input enabled; signal 256 is GPIO_OUT; OEN_SEL selects GPIO_ENABLE.
+    io_mux.gpio22_write(io_mux.base, 0x2a00)
+    gpio.func22_out_sel_cfg_write(gpio.base, 0x500)
+    gpio.out_w1tc_write(gpio.base, indicator)
+    gpio.enable_w1ts_write(gpio.base, indicator)
+end indicator_pin
+
+public indicate: (on: bool) -> none =
+    if on then gpio.out_w1ts_write(gpio.base, indicator)
+    else gpio.out_w1tc_write(gpio.base, indicator) end if
+end indicate
+
+public indicator_state: () -> (state: u32) =
+    state = gpio.in_read(gpio.base) & indicator
+end indicator_state
+
+public data_cache_enabled: () -> (enabled: u32) =
+    enabled = (dport.pro_cache_ctrl_read(dport.base) >> 3) & 1
+end data_cache_enabled
+
+public instruction_cache_enabled: () -> (enabled: u32) =
+    enabled = (dport.app_cache_ctrl_read(dport.base) >> 3) & 1
+end instruction_cache_enabled
+
+public timer: () -> none =
+    timg0.t0config_write(timg0.base, 0)
+    timg0.t0loadlo_write(timg0.base, 0)
+    timg0.t0loadhi_write(timg0.base, 0)
+    timg0.t0load_write(timg0.base, 1)
+    timg0.t0alarmlo_write(timg0.base, 1000)
+    timg0.t0alarmhi_write(timg0.base, 0)
+    timg0.int_clr_timers_write(timg0.base, 1)
+    timg0.int_ena_timers_write(timg0.base, 1)
+    dport.pro_tg_t0_level_int_map_write(dport.base, timer_line)
+    -- EN, INCREASE, divider 40, LEVEL_INT_EN and ALARM_EN.
+    timg0.t0config_write(timg0.base, 0xc0050c00)
+    xtensa.set_enabled_lines(xtensa.enabled_lines() | (1 << timer_line))
+end timer
+
+public ack_timer: () -> none =
+    timg0.int_clr_timers_write(timg0.base, 1)
+    next_alarm = next_alarm +% 1000
+    timg0.t0alarmlo_write(timg0.base, next_alarm)
+    conf := timg0.t0config_read(timg0.base)
+    timg0.t0config_write(timg0.base, conf | 0x400)
+end ack_timer
+
+public now: () -> (ticks: u32) =
+    timg0.t0update_write(timg0.base, 1)
+    ticks = timg0.t0lo_read(timg0.base)
+end now

@@ -15,6 +15,11 @@ CASES = {
     'alias-write': ('import rp2040/dma\n', 'dma.ch0_al1_ctrl_write(dma.base, 0)', 'L0201'),
     'metadata-directive': ('compiler.vendor_svd("RP2040")\n', '', 'L0203'),
     'eight-byte-mmio': ('', 'port: ptr u64 = ptr(0x40070000)\n    _ = compiler.volatile_load(port)', 'L0344'),
+    'xtensa-cache-write': ('import esp32/dport\n', 'dport.pro_cache_ctrl_write(dport.base, 8)', 'L0201'),
+    'xtensa-s3-cache-write': ('import esp32s3/extmem\n', 'extmem.dcache_ctrl_write(extmem.base, 1)', 'L0201'),
+    'xtensa-atomic-cell': ('import core/atomic\n', 'mut cell: atomic.cell(u64) = zeroed', 'L0344'),
+    'xtensa-atomic-rmw': ('import core/atomic\n', 'mut cell := atomic.new(u32(0))\n    _ = atomic.add(addr cell, 1)', 'L0344'),
+    'xtensa-write-input': ('import esp32s3/gpio\n', 'gpio.in1_write(gpio.base, 0)', 'L0201'),
     'atomic-rmw': ('', 'port: ptr mut u32 = ptr(0x20000000)\n    _ = compiler.atomic_add(port, 1, compiler.relaxed)', 'L0344'),
 }
 
@@ -30,9 +35,12 @@ def main():
         folder = args.output / name
         folder.mkdir()
         source = folder / 'main.ldn'
+        if name.startswith('xtensa-'):
+            imports = 'import descriptions/esp32\n' + imports
         source.write_text(imports+'start: () -> none =\n    '+body+'\nend start\n')
-        command = [str(args.refine.resolve()), '--root='+str(HERE/'generated'),
-                   '--target=cortex-m0', str(folder.resolve())]
+        command = [str(args.refine.resolve()), '--root='+str(HERE/'generated'), '--root='+str(HERE),
+                   '--target='+('xtensa' if name.startswith('xtensa-') else 'cortex-m0'),
+                   str(folder.resolve())]
         result = subprocess.run(command, capture_output=True, text=True, timeout=30)
         (folder / 'stdout.txt').write_text(result.stdout)
         (folder / 'stderr.txt').write_text(result.stderr)

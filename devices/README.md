@@ -18,8 +18,8 @@ refine --root=devices/generated --root=. --target=cortex-m0 \
     --firmware-entry=start --emit=exe devices/consumers/images -o fixture.elf
 ```
 
-This tree holds five devices: Raspberry Pi's RP2040 and RP2350, ST's
-STM32H753 and Espressif's ESP32-C3 and ESP32-C5, and six descriptions,
+This tree holds seven devices: Raspberry Pi's RP2040 and RP2350, ST's
+STM32H753 and Espressif's ESP32, ESP32-S3, ESP32-C3 and ESP32-C5, and eight descriptions,
 RP2350's Hazard3 cores having one of their own. A
 description is imported as `descriptions/DEVICE` with `--root=devices`, and
 its register modules as `CHIP/PERIPHERAL` with `--root=devices/generated`,
@@ -82,11 +82,55 @@ flash and, directly after it, the IMAGE_DEF block refine emits and checks
 | [`inputs.json`](inputs.json) | the lock: each vendor input's URL and SHA-256 |
 | [`policies/`](policies) | one selection policy per device |
 | [`generated/`](generated) | the register modules, correspondences and manifests `refine svd` writes |
-| [`descriptions/`](descriptions) | each device's description: the generated `interrupts.ldn`, the hand-written `memory.ldn`, RP2040's second stage, `boot2.ldn`, and the stages before reset, the STM32H753's `supply.ldn` and the ESP chips' `watchdogs.ldn` |
+| [`descriptions/`](descriptions) | each device's description: the generated `interrupts.ldn`, the hand-written `memory.ldn`, RP2040's second stage, `boot2.ldn`, and the stages before reset, the STM32H753's `supply.ldn`, the RISC-V ESP chips' `watchdogs.ldn` and the Xtensa chips' `prepare.ldn` |
 | [`notices/`](notices) | the licences the generated files are derived under |
 | [`consumers/`](consumers) | firmware that uses the generated modules |
 | [`test.py`](test.py) | the offline checks, and with `--refine` the regeneration and the vendor-header oracles |
 | [`check_sources.py`](check_sources.py) | the precise source refusals against the generated interface |
+
+## Drafting and reviewing an access policy
+
+Start a policy by selecting the registers the consumer needs, then draft
+its `policies` table from the SVD's effective field accesses. A register of
+read-only fields gets `write: "refused"`; one of write-only fields gets
+`read: "refused"`; an ordinary mixed register starts with normal reads and
+writes. The policy is a reviewed interface, so this is only a draft:
+
+1. Resolve the peripheral's `derivedFrom` and the selected register-array
+   element before looking at fields. `refine svd` accepts a selected
+   concrete element of a `name%s` array with `dim`, `dimIncrement` and an
+   optional numeric range or explicit list in `dimIndex`. It does not
+   implicitly select the whole array.
+   A field may reuse an `enumeratedValues` group named in the same register
+   through `derivedFrom`; correspondence records `encoding_derivation` and
+   the resolved encodings. Missing or ambiguous groups, inheritance chains,
+   cycles, foreign qualified names and local overrides are refused.
+2. Read each selected register and field in the independent vendor header
+   and the manual. Record the address, bit range, access, reset knowledge,
+   enumerated encodings and any side effect. Status/input registers get no
+   writer; SET/CLEAR commands get no reader. A FIFO read consumes data even
+   when an SVD omits `readAction`, and an interrupt-clear register needs
+   `write: "one_clears"` with zero reserved bits. Mixed RO/WO registers need
+   an explicit reviewed `write_mask` rather than permission inferred from
+   their writable fields alone.
+3. Use `reset_mask_overrides` to withhold unknown reset bits and reviewed
+   corrections for facts the SVD gets wrong. Cite the independent source
+   in every correction. Keep the draft's selection small enough to review
+   every field; a field's existence alone does not establish that using it
+   is safe.
+4. Generate with `refine svd`, review the correspondence beside the policy,
+   and add independent header/literal assertions in `test.py`. Regenerate
+   again and require byte-for-byte agreement. A successful import does
+   not review the policy for its author.
+
+The existing policy and oracle for the closest peripheral family provide
+the table format. The Xtensa selections demonstrate both concrete array
+elements and policy corrections for missing or incorrect interrupt sources.
+The classic DPORT clock/reset writers use `reserved: "preserve"`: the
+header declares a whole R/W word above the named bits, and each caller
+explicitly transports the read image while changing its selected bits.
+The read-only cache-register interfaces deliberately have no generated
+writers: these profiles admit only internal SRAM with caches disabled.
 
 ## Inputs, fetched by hash
 
@@ -110,6 +154,20 @@ the file. A reviewer opens the pinned URL in a browser, saves the PDF as
 rm0433/RM0433.pdf`, whose refusal names the path and hash wanted. The URL
 serves the current revision, so once ST publishes a newer one than the
 pinned Rev 9, the copy wanted is the maintainer's, and no job verifies it.
+
+To read a pinned PDF as searchable text, first fetch or supply and verify
+it with the command above. Then run `pdftotext -layout` from Poppler. For
+example, render the already pinned C3 manual into a local text file:
+
+```sh
+nix-shell -p poppler-utils --run 'pdftotext -layout "$HOME/.cache/landin/inputs/esp32c3-trm/esp32-c3_technical_reference_manual_en.pdf" "/tmp/landin-c3-manual-text"'
+```
+
+Use `$LANDIN_INPUTS` instead of the default cache path when set. The text
+is a local reading aid, not a new authoritative or vendored input. Cite the
+PDF's printed section and page, which can differ from the viewer's page
+number. Poppler is needed for this optional review step, not to compile a
+program or run `refine svd`.
 
 | Input | Source | Licence |
 |---|---|---|
@@ -163,7 +221,7 @@ reviewer's notes and is not read.
 | `schema` | `2` |
 | `device`, `svd_version` | the SVD's `device/name` and `version`, which must match; a name with a hyphen, Espressif's, gives its `prefix` and `description` |
 | `identity` | the description's `compiler.device`; default the device's name in lowercase (D700) |
-| `core` | `hazard3`, `esp-rv32imc` or `esp-rv32imac-clic`, the description's core, which no RISC-V SVD's cpu says; without it the cpu must be a Cortex-M (D700) |
+| `core` | `hazard3`, `esp-rv32imc`, `esp-rv32imac-clic`, `xtensa-lx6` or `xtensa-lx7`; needed when the SVD cpu omits or misnames the core (D700) |
 | `svd_sha256` | the SHA-256 of the SVD the policy was reviewed against; another file is L0527 |
 | `notice` | the lines each module begins with, after `-- `: provenance and the licence |
 | `modules` | the import root under `--out-dir`; default `.` |
@@ -199,7 +257,7 @@ registers and fields, alternate groups, default enumerated values and widths
 other than 32 are refused by name (L0528), and what cannot be generated as
 described, such as overlapping fields, is L0529.
 
-On the two ESP cores the SVD's interrupts are the interrupt matrix's
+On the ESP cores the SVD's interrupts are the interrupt matrix's
 sources, not slots: `interrupts.ldn` holds the core's 32 or 48 slots and no
 interrupt, and the sources are a module of their own, `PREFIX/sources`, of
 `public NAME: u32 = N`, the number of each source's mapping register
@@ -470,6 +528,73 @@ Compiler-recognized directives remain D202's closed `compiler`, `assembler` and 
 module-directive namespaces and D229's machine annotations. Generator metadata remains JSON/comments,
 not new compiler directives. No language or compiler extension is needed.
 
+## ESP32 and ESP32-S3: internal SRAM and Xtensa entry
+
+Both descriptions use the pinned Espressif SVD revision
+`be20aa12560889d6125d144cdb48cf615ac17628` and independent ESP-IDF v6.1
+headers/scripts at `fff9895c82d744c7237be8847347bdd1b07c6643`.
+`inputs.json` pins each URL and hash. The ESP32 SVD is version 16, the S3
+SVD version 21; both are Apache-2.0 Espressif inputs under the notice already
+in this tree. Their selected surfaces cover UART0, indicator GPIO, timer,
+interrupt routing, watchdogs, clocks, cache-state observation and CPU1's
+hardware stall. Neither selection claims a DMA driver.
+The classic UART contract follows the pinned `uart_ll.h`: transmit through
+its AHB FIFO alias at `0x60000000`, receive through the APB FIFO, and count
+received bytes from `MEM_RX_STATUS` pointers because STATUS's count is not
+credible after APB reads. The policy keeps the two pointer fields and
+omits the overlapping aggregate status field. The S3 uses its direct FIFO
+and STATUS count. Each board program resets UART0 before configuring it,
+so the classic FIFO's default 128-byte capacity is an explicit premise.
+
+The ESP32 has 128 KiB IRAM at `0x40080000` and 128 KiB DRAM at
+`0x3ffb0000` in this conservative profile. The S3 has 128 KiB IRAM at
+`0x40378000` and 160 KiB DRAM at `0x3fca8000`. S3 instruction/data aliases
+refer to the same physical SRAM with an offset of `0x6f0000`: DRAM starts
+where code's alias ends. Its DRAM ends at `0x3fcd0000`, below the ROM
+buffers beginning at `0x3fcd7e00` that `bootloader.memory.ld.in` records.
+The scripts and independent address checks in `test.py` establish these
+bounds. Both profiles leave cache banks, external RAM and mapped flash
+unused. Constants and strings are in byte-accessible DRAM; the instruction
+bus permits aligned word accesses only.
+
+The descriptions select `xtensa-lx6` and `xtensa-lx7`, each with 32 CPU
+interrupt lines. Their generated `sources` modules name interrupt-matrix
+sources, which are distinct from those lines. The classic SVD omits SLC0
+and SLC1 and advertises two nonexistent MCPWM sources; the policy corrects
+those against `interrupts.h`. The S3 SVD omits AES at 77 and puts SHA there;
+the policy adds AES and moves SHA to 78, as both `interrupts.h` and the
+matrix register order require. Array elements such as `IO_MUX.GPIO38` are
+selected by their concrete names through the ordinary importer.
+
+The ROM-image header uses chip IDs 0 and 9, respectively, with revision
+bounds 0–399 and 0–99 from ESP-IDF's support configuration. The ESP32 ROM
+loads the image at flash offset `0x1000`, the S3 ROM at zero. The image
+contains SRAM load segments and an entry address; no ESP-IDF second stage,
+partition table or cached execute-in-place path is implied. A RAM entry
+has no flash or ROM-reset operation and requires its own warm-state check.
+
+Each hand-written `prepare.ldn` is a naked stage before compiler reset. It
+checks that both cache enables are clear and parks at
+`_landin_device_cache_refused` before any store otherwise. This makes the
+ROM-entry premise observable; it does not attempt to discard an enabled
+cache's dirty external data. The stage stops watchdogs with the vendor's
+keys, asserts CPU1's RTC hardware stall code `0x86`, then enters compiler
+reset without calls, a stack or a RAM access. The compiler owns the
+windowed register setup, exception vectors, BSS clearing and application
+entry. `test.py` executes the stage's restricted instruction surface against
+independent MMIO values, including both cache refusal paths and preservation
+of unrelated RTC bits. Physical warm/ROM evidence belongs to the board tools.
+
+CPU1 must remain stalled across debugger sessions. At probe-rs revision
+[`6f9946fe748edd0e55604dc42bc0f7ea3e7485da`](https://github.com/JanHaan/probe-rs/blob/6f9946fe748edd0e55604dc42bc0f7ea3e7485da/probe-rs/src/architecture/xtensa/communication_interface.rs#L366),
+Xtensa debug cleanup resumes a halted processor before leaving OCD; a
+debug halt alone is insufficient. The stall fields follow ESP-IDF's
+`cpu_utility_ll_stall_cpu`: APP C0 is 2, APP C1 is `0x21`, and debugger
+cleanup does not clear them. The board sources use CPU line 1 at level 1
+for UART reception and line 23 at level 3 for the timer, with cache and
+CPU1-state fields in their startup frame. Their physical evidence must
+verify those premises rather than inheriting RISC-V vector semantics.
+
 ## Metadata decisions
 
 [correspondence.json](generated/correspondence.json) preserves the original
@@ -480,7 +605,7 @@ engineering source code. Decisions below apply to the RP2040 selection.
 | Feature | Representation, normalization or refusal |
 |---|---|
 | Property inheritance | Register size/access/reset defaults resolve from register, peripheral, then device. UART1's only admitted peripheral inheritance copies UART0 registers and retains UART1's base. Register/field inheritance and other inheritance shapes are refused. |
-| Arrays, dimensions, clusters | This SVD flattens repeated registers; it contains no `dim`, cluster or alternate-register elements. Explicit names/offsets remain explicit; GPIO/alarm/channel strides have independent literal assertions. The helper refuses selected dimension/alternate structures and does not implement cluster expansion or a general array importer. |
+| Arrays, dimensions, clusters | This SVD flattens repeated registers; it contains no `dim`, cluster or alternate-register elements. Explicit names/offsets remain explicit; GPIO/alarm/channel strides have independent literal assertions. The importer expands explicitly selected concrete elements of a `name%s` array; arrays without that name form, clusters and alternate array elements remain refused. |
 | Sparse offsets and holes | Constants preserve actual addresses; no ordinary aggregate fills holes or permits bulk transactions. Size is inherited explicit 32-bit register size, never the sum of field widths. |
 | Alternate/overlapping views | CH0_AL1_CTRL remains a distinct raw type/address with unknown reset, and no write convenience. UARTRSR/UARTECR shares a read/error-clear address; the SVD's one-to-clear metadata and prose's write-to-clear semantics are insufficiently consistent for a safe generated write, which is refused. No alias is silently merged. Overlapping fields are refused. |
 | Encodings and incomplete lists | GPIO FUNCSEL and DMA DATA_SIZE/TREQ_SEL retain exact named values and holes. Raw images preserve unnamed values; extraction validates membership. RING_SIZE lists only RING_NONE but its description/manual defines numeric 0–15: the policy explicitly normalizes it to `u4`, retaining the original enum in correspondence. Unlisted request values remain invalid. |

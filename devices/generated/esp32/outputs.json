@@ -1,0 +1,12 @@
+{
+  "esp32/apb_ctrl/device.ldn": "77a45a3ef818a8404bf5fae0a22e1cec481aaeed7bed171bb5d8638dfd045ec7",
+  "esp32/correspondence.json": "c8fb60521d7cfd6a9c3f45548808e535d8604b7a2785bb1d368f3981191ddcdb",
+  "esp32/dport/device.ldn": "3f257e499a6116c68b4b20ed19127de9c5d031c8fb789ef76bc1cd2f4e831414",
+  "esp32/gpio/device.ldn": "c8f12b9a0cd6af97b9420664bf90e174e5ece7a8b401a3a2819958bd211638fc",
+  "esp32/io_mux/device.ldn": "8a3cc6efa16696ed8ceb61b9c6c678c40a34aa45ca623b6ec81a926653ae19bd",
+  "esp32/rtc_cntl/device.ldn": "11e8e56ab0db78d5fff7920517fac79de470f0656c6096d9904c7579931d6acb",
+  "esp32/sources/device.ldn": "54e856587cd38a7984e57e9ba84e3b9df106cc25f2e58937d0e0cd821bed8e58",
+  "esp32/timg0/device.ldn": "42126a0b123bfb9aad8919bf97ac6abed58688a799a36739ec82fc7ce52b4dc6",
+  "esp32/timg1/device.ldn": "25000c11cbd9ffe3ba5245b1e68722e8ed19ca2f29dc6be839e89e1d00489c2b",
+  "esp32/uart0/device.ldn": "d5e6269afd51b541e078ee3fa90ba8c69e204928745ee9beac1916f671736c1f"
+}

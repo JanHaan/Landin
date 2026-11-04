@@ -1,0 +1,98 @@
+-- The Olimex S3 board's UART0 uses GPIO43/44 and its active-low user
+-- LED uses GPIO38. Select the 40 MHz crystal without a CPU divider and
+-- program the UART explicitly. SYSTIMER's 16 MHz unit 0 drives a 1 ms
+-- comparator interrupt on CPU line 23, level 3. All values follow the
+-- pinned ESP-IDF register headers; caches stay off and CPU1 stays stalled.
+import esp32s3/extmem
+import esp32s3/gpio
+import esp32s3/interrupt_core0
+import esp32s3/io_mux
+import esp32s3/rtc_cntl
+import esp32s3/system
+import esp32s3/systimer
+import esp32s3/uart0
+import platform/xtensa
+
+public timer_line: u32 = 23
+public timer_priority: u32 = 3
+
+-- Like the ESP board scenario's threshold: level 1 permits both lines;
+-- level 3 holds the UART's level 1 off while the level 3 timer keeps running.
+public threshold: (level: u32) -> none =
+    state := assembler.block("rsr {state}, ps", out state: u32 at general)
+    xtensa.restore_interrupts((state & 0xfffffff0) | (level - 1))
+end threshold
+
+public cpu1_stall: () -> (code: u32) =
+    code = ((rtc_cntl.sw_cpu_stall_read(rtc_cntl.base) >> 20) & 0x3f) << 2
+    code |= rtc_cntl.options0_read(rtc_cntl.base) & 3
+end cpu1_stall
+
+public indicator: u32 = 0x40
+public ticks_per_ms: u32 = 16000
+
+public clocks_and_uart: () -> none =
+    -- SYSCLK_CONF: crystal source 0, PRE_DIV_CNT 0; write no RO status.
+    system.sysclk_conf_write(system.base, 0)
+    clocks := system.perip_clk_en0_read(system.base)
+    system.perip_clk_en0_write(system.base, clocks | 0x21000004)
+    resets := system.perip_rst_en0_read(system.base)
+    system.perip_rst_en0_write(system.base, resets | 4)
+    system.perip_rst_en0_write(system.base, resets & 0xdefffffb)
+    io_mux.gpio43_write(io_mux.base, 0xa00)
+    io_mux.gpio44_write(io_mux.base, 0xa00)
+    uart0.int_ena_write(uart0.base, 0)
+    -- XTAL source 3, divider NUM 0, UART/RX/TX clock enables.
+    uart0.clk_conf_write(uart0.base, 0x03700000)
+    uart0.conf0_write(uart0.base, 0x0006001c)
+    uart0.conf0_write(uart0.base, 0x0000001c)
+    uart0.clkdiv_write(uart0.base, 0x0040015b)
+end clocks_and_uart
+
+public indicator_pin: () -> none =
+    -- GPIO function 1, drive 2 and input enabled; signal 256 is GPIO_OUT; OEN_SEL selects GPIO_ENABLE.
+    io_mux.gpio38_write(io_mux.base, 0x1a00)
+    gpio.func38_out_sel_cfg_write(gpio.base, 0x500)
+    gpio.out1_w1ts_write(gpio.base, indicator)
+    gpio.enable1_w1ts_write(gpio.base, indicator)
+end indicator_pin
+
+public indicate: (on: bool) -> none =
+    if on then gpio.out1_w1tc_write(gpio.base, indicator)
+    else gpio.out1_w1ts_write(gpio.base, indicator) end if
+end indicate
+
+-- Normalize the active-low pad, so g has the same logical meaning as
+-- other board ports; the source and readback still name the real GPIO38.
+public indicator_state: () -> (state: u32) =
+    state = (~gpio.in1_read(gpio.base)) & indicator
+end indicator_state
+
+public data_cache_enabled: () -> (enabled: u32) =
+    enabled = extmem.dcache_ctrl_read(extmem.base) & 1
+end data_cache_enabled
+
+public instruction_cache_enabled: () -> (enabled: u32) =
+    enabled = extmem.icache_ctrl_read(extmem.base) & 1
+end instruction_cache_enabled
+
+public timer: () -> none =
+    systimer.target0_conf_write(systimer.base, ticks_per_ms)
+    systimer.comp0_load_write(systimer.base, 1)
+    systimer.target0_conf_write(systimer.base, ticks_per_ms | 0x40000000)
+    -- Unit 0 runs despite stalled CPU1. Comparator0+unit0+clock enabled.
+    conf := systimer.conf_read(systimer.base)
+    systimer.conf_write(systimer.base, (conf & 0xf7ffffff) | 0xc1000000)
+    systimer.int_clr_write(systimer.base, 1)
+    systimer.int_ena_write(systimer.base, 1)
+    interrupt_core0.systimer_target0_int_map_write(interrupt_core0.base, timer_line)
+    xtensa.set_enabled_lines(xtensa.enabled_lines() | (1 << timer_line))
+end timer
+
+public ack_timer: () -> none = systimer.int_clr_write(systimer.base, 1) end ack_timer
+
+public now: () -> (ticks: u32) =
+    systimer.unit0_op_write(systimer.base, 0x40000000)
+    while (systimer.unit0_op_read(systimer.base) & 0x20000000) == 0 do continue end while
+    ticks = systimer.unit0_value_lo_read(systimer.base)
+end now
