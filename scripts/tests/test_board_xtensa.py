@@ -210,6 +210,11 @@ class Inspection(unittest.TestCase):
                 if chip.name == 'esp32':
                     self.assertIn(('inspect-gpio-strap', 0x3ff44038, 1), events)
                     self.assertIn(('inspect-rtc-sdio-conf', 0x3ff48074, 1), events)
+                    for event in (('inspect-classic-rom-cache-flush', 0x40009a14, 28),
+                            ('inspect-classic-rom-cache-read-disable', 0x40009ab8, 23),
+                            ('inspect-classic-rom-cache-control-literals', 0x40009944, 3),
+                            ('inspect-classic-rom-cache-idle-literal', 0x40009ab4, 1)):
+                        self.assertIn(event, events)
                 else:
                     for address in (0x400016f8, 0x4000186c, 0x40001884, 0x4004eaec, 0x4004f2b8, 0x4004f32c):
                         self.assertIn(address, [event[1] for event in events])
@@ -351,7 +356,7 @@ class ResetDiagnosis(unittest.TestCase):
                 mock.patch.object(common, 'switch_ports') as power, \
                 mock.patch.object(common, 'finish_boot') as restore, \
                 mock.patch.object(esp, 'run_board') as normal, \
-                contextlib.redirect_stdout(io.StringIO()):
+                contextlib.redirect_stdout(io.StringIO()) as printed:
             operation = xtensa.trace_rom if trace_rom else xtensa.diagnose_reset
             if helper_error:
                 with self.assertRaisesRegex(common.Failed, 'stale helper'):
@@ -385,6 +390,8 @@ class ResetDiagnosis(unittest.TestCase):
                 self.assertEqual((args.output / 'rom-trace.bin').read_bytes(), data)
                 self.assertEqual((args.output / 'rom-trace.txt').read_bytes().decode('utf-8'),
                                  data.decode('latin-1'))
+        if trace_rom:
+            self.assertIn('reset_requested=%s' % result['reset_requested'], printed.getvalue())
         self.assertIn('kernel_usb', result)
         return status, result, events, commands
 
@@ -529,6 +536,185 @@ class ResetDiagnosis(unittest.TestCase):
 
     def test_rom_trace_stale_helper_refuses_serial_setup(self):
         self.exercise(trace_rom=True, helper_error=True)
+
+
+class StartupCycle(unittest.TestCase):
+    @staticmethod
+    def rom(chip):
+        reset = b'POWERON_RESET' if chip.name == 'esp32' else b'POWERON'
+        return (b'rst:0x1 (' + reset + b'),boot:0x13 (SPI_FAST_FLASH_BOOT)\r\n'
+                + ('entry 0x%x\r\n' % (chip.origin + 1024)).encode())
+
+    def exercise(self, chip=None, fixed=False, fresh=None, proof_error=False,
+                 usb_before=False, usb_after=False, close_error=False, mode='boot', repeats=1, usb_settle=False):
+        chip = chip or xtensa.ESP32()
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        out = Path(temporary.name)
+        args = SimpleNamespace(mode=mode, hub='1-1.2.3', console_hub='1-1.2.3',
+            port=4, console_port=4, serial='1a86:7523', console_device='1a86:7523',
+            guard_port=1, guard_device='1366:0105', console_guard_port=1,
+            console_guard_device='1366:0105', hub_group='dialout', off_seconds=0.5,
+            reset_seconds=0.1, arty_serial='ARTY', cascade='1-1.2',
+            pace=common.Pace(state=out / 'pace', kernel=lambda _: []))
+        run = SimpleNamespace(out=out)
+        probe = object()
+        names = {common.FIXED_READY_SYMBOL: 1} if fixed else {'boot_reason': 1}
+        old = self.rom(chip) + b'\x02b\x03\n'
+        console = SimpleNamespace(fd=23, lock=contextlib.nullcontext(),
+                                  received=bytearray(old), close=mock.Mock())
+        if close_error:
+            console.close.side_effect = OSError('console close control')
+        events = []
+        data = self.rom(chip) + (b'' if fixed else b'\x02b\x03\n') if fresh is None else fresh
+
+        def wait(predicate, seconds, what):
+            events.append(('wait', seconds))
+            console.received.extend(data)
+            if not predicate(bytes(console.received)):
+                raise common.Failed('startup wait control')
+            return bytes(console.received)
+        console.wait = wait
+        def opened(_):
+            events.append(('open',))
+            return console
+        def prove(actual_probe, actual_chip, actual_names):
+            self.assertIs(actual_probe, probe)
+            self.assertIs(actual_chip, chip)
+            self.assertEqual(actual_names, names)
+            events.append(('probe',))
+            if proof_error:
+                raise common.Failed('startup proof control')
+            return dict(reset_cause=1, resident_ready=common.FIXED_READY_MAGIC) if fixed else dict(
+                reset_cause=1, boot_reason=1, app_state=2, timer_events=[10, 11], trap_count=0)
+        if usb_before:
+            args.pace.blocked = 'USB trouble before startup'
+        original_after = args.pace.after
+        def after(what):
+            if usb_after and what == 'chip-enable reset':
+                args.pace.blocked = 'USB trouble after EN reset'
+                raise common.USBGuardError(args.pace.blocked)
+            return original_after(what)
+        args.pace.after = after
+        def settled(_):
+            events.append(('settle',))
+            if usb_settle:
+                args.pace.blocked = 'USB trouble during enumeration'
+        result, failure = None, None
+        with mock.patch.object(common, 'InGroup'), \
+                mock.patch.object(common, 'off_cascade'), \
+                mock.patch.object(common, 'switch_ports',
+                    side_effect=lambda *a, **kw: events.append(('power', a[3]))), \
+                mock.patch.object(common, 'modem_lines', return_value=dict(dtr=False, rts=False)), \
+                mock.patch.object(common, 'set_lines',
+                    side_effect=lambda fd, **setting: events.append(('line', setting))), \
+                mock.patch.object(xtensa.time, 'sleep', side_effect=lambda seconds: events.append(('sleep', seconds))), \
+                mock.patch.object(xtensa, 'power_on_boot', side_effect=prove) as proof:
+            try:
+                for _ in range(repeats):
+                    result = xtensa.cycle_boot(chip, args, run, opened, probe, names,
+                                               settled)
+            except common.Failed as error:
+                failure = error
+        traces = sorted(out.glob('classic-startup-[0-9]*.json'))
+        retained = [json.loads(path.read_text()) for path in traces]
+        return result, failure, events, console, traces, retained, old, data, proof.call_count
+
+    def test_classic_waits_for_fresh_entry_and_app_before_probe(self):
+        result, failure, events, console, traces, retained, old, data, count = self.exercise()
+        self.assertIsNone(failure)
+        self.assertEqual(events, [('power', 'off'), ('sleep', 0.5), ('power', 'on'), ('settle',),
+            ('open',), ('line', dict(dtr=False)), ('line', dict(rts=True)), ('sleep', 0.1),
+            ('line', dict(rts=False)), ('wait', 10), ('probe',)])
+        self.assertEqual(count, 1)
+        console.close.assert_not_called()
+        cold = result[1]
+        self.assertEqual((cold['startup_reset'], cold['external_jtag_powered'], cold['rail_discharge']),
+                         ('CHIP_PU', True, 'not-established'))
+        self.assertEqual(retained[0]['status'], 'checked')
+        self.assertEqual(traces[0].with_suffix('.bin').read_bytes(), data)
+        self.assertEqual(traces[0].with_name(traces[0].stem + '-prior.bin').read_bytes(), old)
+
+    def test_fixed_entry_then_marker_proof_and_separate_cycle_traces(self):
+        result, failure, events, console, traces, retained, old, data, count = self.exercise(fixed=True, repeats=2)
+        self.assertIsNone(failure)
+        self.assertEqual(count, 2)
+        self.assertEqual(len(traces), 2)
+        self.assertNotEqual(traces[0].name, traces[1].name)
+        self.assertTrue(all(path.with_suffix('.bin').read_bytes() == data for path in traces))
+        self.assertEqual(result[1]['resident_ready'], common.FIXED_READY_MAGIC)
+        self.assertEqual(events.count(('line', dict(rts=True))), 2)
+
+    def test_stale_or_incomplete_uart_never_reaches_jtag_proof(self):
+        for fresh in (b'', b'entry 0x40080400\r\n', b'entry 0x40080404\r\n\x02b\x03\n'):
+            with self.subTest(fresh=fresh):
+                result, failure, events, console, traces, retained, old, data, count = self.exercise(fresh=fresh)
+                self.assertIsInstance(failure, common.Failed)
+                self.assertEqual(count, 0)
+                self.assertEqual(events.count(('line', dict(rts=True))), 1)
+                console.close.assert_called_once()
+                self.assertEqual(retained[0]['status'], 'not-established')
+                self.assertEqual(traces[0].with_suffix('.bin').read_bytes(), fresh)
+
+    def test_fixed_image_needs_a_fresh_chip_pu_rom_header_before_probe(self):
+        for fresh in (b'entry 0x40080400\r\n',
+                      self.rom(xtensa.ESP32()).replace(b'rst:0x1 (POWERON_RESET)', b'rst:0x3 (SW_RESET)')):
+            with self.subTest(fresh=fresh):
+                result, failure, events, console, traces, retained, old, data, count = self.exercise(
+                    fixed=True, fresh=fresh)
+                self.assertIsInstance(failure, common.Failed)
+                self.assertEqual(count, 0)
+                console.close.assert_called_once()
+
+    def test_readiness_proof_failure_is_not_accepted_or_retried(self):
+        result, failure, events, console, traces, retained, old, data, count = self.exercise(proof_error=True)
+        self.assertIsInstance(failure, common.Failed)
+        self.assertEqual(count, 1)
+        console.close.assert_called_once()
+        self.assertEqual(events.count(('line', dict(rts=True))), 1)
+        self.assertEqual(retained[0]['failure'], 'startup proof control')
+
+    def test_usb_errors_have_no_fallback_or_extra_reset(self):
+        for before, after in ((True, False), (False, True)):
+            with self.subTest(before=before):
+                result, failure, events, console, traces, retained, old, data, count = self.exercise(
+                    usb_before=before, usb_after=after, close_error=after)
+                self.assertIsInstance(failure, common.USBGuardError)
+                self.assertEqual(count, 0)
+                self.assertEqual(events.count(('line', dict(rts=True))), int(after))
+                if before:
+                    self.assertEqual(events, [])
+                    console.close.assert_not_called()
+                else:
+                    console.close.assert_called_once()
+                    self.assertNotIn(('wait', 10), events)
+                    self.assertEqual(retained[0]['console_close_failure'], 'console close control')
+
+    def test_usb_trouble_during_enumeration_prevents_serial_or_jtag(self):
+        for chip in (xtensa.ESP32(), xtensa.ESP32S3()):
+            with self.subTest(chip=chip.name):
+                result, failure, events, console, traces, retained, old, data, count = self.exercise(
+                    chip=chip, usb_settle=True)
+                self.assertIsInstance(failure, common.USBGuardError)
+                self.assertNotIn(('open',), events)
+                self.assertEqual(count, 0)
+                self.assertFalse(any(event[0] == 'line' for event in events))
+                console.close.assert_not_called()
+
+    def test_s3_still_proves_true_power_on_before_opening_uart(self):
+        result, failure, events, console, traces, retained, old, data, count = self.exercise(chip=xtensa.ESP32S3())
+        self.assertIsNone(failure)
+        self.assertLess(events.index(('probe',)), events.index(('open',)))
+        self.assertNotIn(('wait', 10), events)
+        self.assertNotIn(('line', dict(dtr=False)), events)
+        self.assertNotIn('startup_reset', result[1])
+        self.assertEqual(traces, [])
+
+    def test_ram_workflow_cannot_invoke_a_startup_cycle(self):
+        result, failure, events, console, traces, retained, old, data, count = self.exercise(mode='ram')
+        self.assertIsInstance(failure, common.Failed)
+        self.assertEqual(events, [])
+        self.assertEqual(count, 0)
 
 
 if __name__ == '__main__':
