@@ -1,0 +1,17 @@
+wide: (a: u64, b: u64) -> (r: u64) =
+    r = (a * b) / b
+end wide
+
+stack_arguments: (a: u32, b: u64, c: u32, d: u64, e: u32) -> (r: u64) =
+    r = u64(a) + b + u64(c) + d + u64(e)
+end stack_arguments
+
+main: () -> (status: i32) =
+    if wide(0x1_0000_0001, 3) == 0x1_0000_0001
+      and stack_arguments(1, 0x1_0000_0001, 3, 0x2_0000_0002, 5)
+          == 0x3_0000_000c then
+        status = 0
+    else
+        status = 1
+    end if
+end main

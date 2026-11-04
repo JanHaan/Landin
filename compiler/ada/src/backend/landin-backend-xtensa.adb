@@ -544,10 +544,10 @@ package body Landin.Backend.Xtensa is
       end if;
       --  The frame the emitter lays out at the reference options, which
       --  give every value its own home and so bound every other's.
-      return Stack >= 240
+      return Stack >= 256
         and then Extent (Routine_Frame
           (Of_Unit, Item, Facts, Landin.Optimization.Reference_Options,
-           16#7fff_ffff#)) <= Stack - 240;
+           16#7fff_ffff#)) <= Stack - 256;
    exception
       when Stack_Limit_Exceeded => return False;
    end Frame_Fits_Firmware_Stack;
@@ -1586,6 +1586,8 @@ package body Landin.Backend.Xtensa is
          --  An interrupt handler is unchecked: the compiler's trap entry
          --  that calls it keeps zero in the cell while it runs (D675).
          Checks : constant Boolean := Prepares
+           and then (Panic = null
+             or else Item /= Landin.Panics.Handler (Panic.all))
            and then not Landin.Backend.Runs_Before_Thread_Pointer
              (Facts, Symbol (Item))
            and then Landin.IR.Signature_Machine
@@ -3557,7 +3559,10 @@ package body Landin.Backend.Xtensa is
                           (Landin.Targets.Byte_Count (Stack_Frame_Bytes));
                         Emit ("mv x5, x28");
                         Emit ("addi x7, x5, " & Image (Stack_Frame_Bytes));
-                        Emit ("sw x7, 4(x5)"); --  Prepared a1 is the top.
+                        Emit ("sw x7, 292(x5)"); --  Root backchain.
+                        Emit ("addi x7, x7, -32");
+                        Emit ("sw x7, 4(x5)"); --  Root ABI spill space.
+                        Emit ("addi x7, x7, 32");
                         Emit ("sub x7, x7, x6");
                         Add_Offset ("x7", Limit_Margin);
                         Emit ("sw x7, 288(x5)");
@@ -4711,16 +4716,45 @@ package body Landin.Backend.Xtensa is
             Total : constant Landin.Targets.Byte_Count :=
               Stack_Align (Extent (Layout) + 240, 16, 16#7fff_ffff#);
          begin
-            if Total <= 32752 then
-               Put (Character'Val (9) & "entry a1, "
-                    & Trimmed (Total'Image));
-            else
-               Put (Character'Val (9) & "entry a1, 32");
-               Put (Character'Val (9) & "movi a8, "
-                    & Trimmed (Landin.Targets.Byte_Count'Image (Total - 32)));
-               Put (Character'Val (9) & "sub a8, a1, a8");
-               Put (Character'Val (9) & "movsp a1, a8");
+            Put (Character'Val (9) & "entry a1, 32");
+            if Checks then
+               declare
+                  Fits : constant String := Fresh;
+               begin
+                  Put (Character'Val (9) & "movi a8, "
+                       & Trimmed (Landin.Targets.Byte_Count'Image
+                           (Total - 16)));
+                  Put (Character'Val (9) & "sub a8, a1, a8");
+                  Put (Character'Val (9) & "movi a9, " & Stack_Limit);
+                  Put (Character'Val (9) & "l32i a9, a9, 0");
+                  Put (Character'Val (9) & "bgeu a8, a9, " & Fits);
+                  if Panic /= null
+                    and then Landin.Panics.Handler (Panic.all)
+                      /= Landin.IR.No_Item
+                  then
+                     Put (Character'Val (9) & "movi a10, " & Trimmed
+                       (Positive'Image (Landin.Panics.Code
+                         (Panic.all, Landin.Panics.Stack_Exhausted))));
+                     Put (Character'Val (9) & "movi a11, " & Trimmed
+                       (Natural'Image (Natural (Landin.Panics.Site
+                         (Panic.all, Landin.IR.Origin_Of (Of_Unit, Item),
+                          Landin.Panics.Stack_Exhausted)))));
+                     Put (Character'Val (9) & "call8 "
+                          & Symbol (Landin.Panics.Handler (Panic.all)));
+                  end if;
+                  Put (Character'Val (9) & "ill");
+                  Put (Fits & ":");
+               end;
+            elsif Prepares and then Panic /= null
+              and then Item = Landin.Panics.Handler (Panic.all)
+            then
+               Put (Character'Val (9) & "movi a8, " & Stack_Limit);
+               Put (Character'Val (9) & "movi a9, 0");
+               Put (Character'Val (9) & "s32i a9, a8, 0");
             end if;
+            Put (Character'Val (9) & "movi a8, "
+                 & Trimmed (Landin.Targets.Byte_Count'Image (Total - 32)));
+            Put (Character'Val (9) & "sub a1, a1, a8");
             Put (Character'Val (9) & "s32i a7, a1, 60");
             Put (Character'Val (9) & "mov a7, a1");
             for Index in 0 .. 4 loop
@@ -4730,10 +4764,8 @@ package body Landin.Backend.Xtensa is
             Put (Character'Val (9) & "movi a8, " & Trimmed (Total'Image));
             Put (Character'Val (9) & "add a8, a7, a8");
             Put (Character'Val (9) & "s32i a8, a7, 32");
+            Put (Character'Val (9) & "s32e a8, a1, -12");
          end;
-         if Checks then
-            Check_Limit (0);
-         end if;
          if Panic /= null and then Item = Landin.Panics.Handler (Panic.all)
          then
             declare
@@ -4972,7 +5004,7 @@ package body Landin.Backend.Xtensa is
                Put (Dwarf.Source_Line
                  (Debug.all, Landin.IR.Origin_Of (Of_Unit, Item)));
             end if;
-            Emit ("addi sp, x8, -16");
+            Put (Character'Val (9) & "mov a1, a7");
             if Panic = null or else not Landin.Panics.Calls_Out (Panic.all)
             then
                null;
@@ -5013,7 +5045,7 @@ package body Landin.Backend.Xtensa is
              Save_Bytes => Save_Bytes (Layout),
              Register_Count => 0,
              Spill_Count => Plan.Homes,
-             Stack_Bytes => 240 + Extent (Layout) + Deepest_Area,
+             Stack_Bytes => 256 + Extent (Layout) + Deepest_Area,
              Calls_Panic => not Edges.Is_Empty
                or else (Limit_Trapped and then Panic /= null
                         and then Landin.Panics.Calls_Out (Panic.all)),
@@ -6630,7 +6662,8 @@ package body Landin.Backend.Xtensa is
             Native ("rsil a0, 15");
             Native ("s32i a0, a1, 256");
             Native ("rsr a0, PS");
-            Native ("extui a0, a0, 0, 18"); --  Clear PS.WOE.
+            Native ("slli a0, a0, 14"); --  Clear PS.WOE.
+            Native ("srli a0, a0, 14");
             Native ("wsr a0, PS");
             Native ("rsync");
             for Index in 0 .. 5 loop

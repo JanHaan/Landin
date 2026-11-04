@@ -1,0 +1,15 @@
+sum: (n: u32) -> (r: u32) =
+    if n == 0 then
+        r = 0
+    else
+        r = n + sum(n - 1)
+    end if
+end sum
+
+main: () -> (status: i32) =
+    if sum(24) == 300 then
+        status = 0
+    else
+        status = 1
+    end if
+end main

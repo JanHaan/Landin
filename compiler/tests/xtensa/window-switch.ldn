@@ -1,0 +1,44 @@
+mut backing: [16384]u8 = zeroed
+mut main_saved: usize = 0
+mut fibre_saved: usize = 0
+mut observed: u32 = 0
+
+transfer: (depth: u32) -> (result: u32) =
+    if depth == 0 then
+        observed = observed + 1
+        compiler.stack_switch(addr fibre_saved, main_saved)
+        result = 100
+    else
+        result = transfer(depth - 1) + 1
+    end if
+end transfer
+
+fibre: (argument: usize) -> noreturn =
+    observed = transfer(12) + u32(argument)
+    compiler.stack_switch(addr fibre_saved, main_saved)
+    loop do
+    end loop
+end fibre
+
+resume: (depth: u32) -> none =
+    if depth == 0 then
+        compiler.stack_switch(addr main_saved, fibre_saved)
+    else
+        resume(depth - 1)
+    end if
+end resume
+
+main: () -> (status: i32) =
+    fibre_saved = compiler.stack_prepare(backing[0..<16384], fibre, 7)
+    resume(12)
+    if observed == 1 then
+        resume(12)
+        if observed == 119 then
+            status = 0
+        else
+            status = 2
+        end if
+    else
+        status = 1
+    end if
+end main
