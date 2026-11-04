@@ -2,9 +2,5 @@
 -- CPU interrupt lines are vector-dispatch identities; device interrupt
 -- sources belong to each device's external interrupt matrix.
 compiler.device("xtensa-reference")
-fixed if compiler.feature.salt then
-    compiler.core("xtensa-lx7")
-else
-    compiler.core("xtensa-lx6")
-end if
+compiler.core("xtensa-lx6")
 compiler.vectors(32)

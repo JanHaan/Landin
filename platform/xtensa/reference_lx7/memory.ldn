@@ -1,0 +1,13 @@
+-- A constrained internal-SRAM test map: 32 KiB of executable memory,
+-- 16 KiB of byte-accessible data memory and a 4 KiB stack. Each selected
+-- configuration uses its QEMU machine's address map. This is a test
+-- profile and provides no ROM image, cache or external-memory support.
+linker.region("IRAM", 0x4037_8000, 32 * 1024, "rx")
+linker.region("DRAM", 0x3FC9_0000, 16 * 1024, "rw")
+compiler.boot("vector-table")
+linker.place("vectors", "IRAM")
+linker.place("text", "IRAM")
+linker.place("rodata", "DRAM")
+linker.place("data", "DRAM")
+linker.place("bss", "DRAM")
+linker.place("stack", "DRAM", 4 * 1024)

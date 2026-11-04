@@ -1481,7 +1481,9 @@ package body Landin.Stages.Configuration is
                Attr : constant Syn.Machine_Attributes :=
                  Syn.Attributes (Of_Tree, Node);
                Reference : constant String :=
-                 Firmware.Reference_Module (Target (Context));
+                 Firmware.Reference_Module
+                   (Target (Context),
+                    Landin.Targets.Levels.Name (Level (Context)));
                --  Whether the program imports a description of its own,
                --  rather than being given the library's reference.
                Imported : constant Boolean :=
@@ -2280,7 +2282,9 @@ package body Landin.Stages.Configuration is
             return;
          end if;
          Built.Reference :=
-           Logical = Firmware.Reference_Module (Target (Context));
+           Logical = Firmware.Reference_Module
+             (Target (Context),
+              Landin.Targets.Levels.Name (Level (Context)));
          if Core_Site = No_Site then
             Missing ("core", "compiler.core(""cortex-m0plus""), naming its"
               & " core");

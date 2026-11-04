@@ -14,19 +14,24 @@ package Landin.Targets.Firmware is
    --  constrained reference profile, which a program on that target that
    --  reaches no other description is given: platform/cortex_m/reference
    --  on Cortex-M and platform/riscv/reference on RV32 (D661).  "" on a
-   --  target that is not firmware.
-   function Reference_Module (Facts : Target_Facts) return String
+   --  target that is not firmware. Xtensa selects an unconditional LX6 or
+   --  LX7 description from the requested level; an empty level is LX6.
+   function Reference_Module
+     (Facts : Target_Facts; Level : String := "") return String
      is (case Architecture_Of (Facts) is
            when Cortex_M0 => "platform/cortex_m/reference",
            when RV32 => "platform/riscv/reference",
-           when Xtensa => "platform/xtensa/reference",
+           when Xtensa =>
+             (if Level = "xtensa-esp32s3" then "platform/xtensa/reference_lx7"
+              else "platform/xtensa/reference"),
            when others => "");
 
    --  Whether LOGICAL is a reference description of any target.
    function Is_Reference_Module (Logical : String) return Boolean
      is (Logical in "platform/cortex_m/reference"
                   | "platform/riscv/reference"
-                  | "platform/xtensa/reference");
+                  | "platform/xtensa/reference"
+                  | "platform/xtensa/reference_lx7");
 
    --  A description's name: a device, a region or an interrupt.
    Name_Capacity : constant := 64;

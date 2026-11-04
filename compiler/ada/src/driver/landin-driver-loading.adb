@@ -22,6 +22,7 @@ with Landin.Syntax;
 with Landin.Syntax.Forest;
 with Landin.Targets;
 with Landin.Targets.Firmware;
+with Landin.Targets.Levels;
 
 package body Landin.Driver.Loading is
 
@@ -781,7 +782,8 @@ package body Landin.Driver.Loading is
       Next  : Positive := 1;
       Reference_Description : constant String :=
         Landin.Targets.Firmware.Reference_Module
-          (Landin.Stages.Target (Context));
+          (Landin.Stages.Target (Context),
+           Landin.Targets.Levels.Name (Landin.Stages.Level (Context)));
 
       function Spelling (Name : Landin.Source.Names.Name_Id) return String
         is (Landin.Source.Names.Spelling

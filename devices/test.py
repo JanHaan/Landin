@@ -2013,6 +2013,30 @@ class XtensaOracles(unittest.TestCase):
                 compare_with_esp_idf(self, rows, chip, XTENSA_FAMILIES,
                                     xtensa_header_names(chip, rows), unshared, set())
 
+    @requires_refine
+    def test_memory_scripts_and_stall_contract(self):
+        for chip, prefix, maximum in (('esp32', 'ESP32', 399),
+                                      ('esp32s3', 'ESP32S3', 99)):
+            with self.subTest(chip=chip):
+                memory = fetch_inputs.fetch(chip + '/memory.ld.in').read_text()
+                boot = fetch_inputs.fetch(chip + '/bootloader.memory.ld.in').read_text()
+                config = fetch_inputs.fetch(chip + '/Kconfig.hw_support').read_text()
+                stall = fetch_inputs.fetch(chip + '/cpu_utility_ll.h').read_text()
+                self.assertRegex(config, r'config ' + prefix
+                                 + r'_REV_MAX_FULL\s+int\s+default ' + str(maximum))
+                self.assertIn('0x86', stall)
+                self.assertRegex(stall, r'2\s*<<\s*rtc_cntl_c0_s')
+                self.assertRegex(stall, r'0x21\s*<<\s*rtc_cntl_c1_s')
+                if chip == 'esp32s3':
+                    self.assertRegex(memory, r'SRAM_DIRAM_I_START\s+0x40378000')
+                    self.assertRegex(memory, r'SRAM_DRAM_START\s+0x3FC88000')
+                    self.assertIn('iram_dram_offset = 0x6f0000;', boot)
+                    self.assertIn('0x3fcd7e00 - 0x3fce9704: Shared buffers', boot)
+                else:
+                    self.assertIn('org = 0x40080000, len = 0x20000', memory)
+                    self.assertIn('org = 0x3FFB0000 + CONFIG_BTDM_RESERVE_DRAM', memory)
+                    self.assertIn('#define DRAM0_0_SEG_LEN 0x2c200', memory)
+
     def test_selected_access_contract(self):
         for chip, count in (('esp32', 51), ('esp32s3', 51)):
             with self.subTest(chip=chip):
