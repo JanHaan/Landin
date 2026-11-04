@@ -85,8 +85,10 @@ def convert(elf, architecture='arm'):
         common.require(all(FLASH + i in memory for i in range(4)),
                        'recovery RISC-V image has no flash entry word')
         word = int.from_bytes(bytes(memory[FLASH + i] for i in range(4)), 'little')
-        common.require(jal_target(word, FLASH) == entry,
-                       'recovery RISC-V flash entry does not jump to the ELF entry')
+        target = jal_target(word, FLASH)
+        common.require(entry == FLASH and target is not None
+                       and target in memory and target + 1 in memory,
+                       'recovery RISC-V flash entry is not a jump to loaded flash code at the ELF entry')
         for index, word in enumerate(struct.unpack_from('<68I', data, vectors[4])):
             target = jal_target(word, vectors[3] + index * 4)
             common.require(target is not None and target in memory and target + 1 in memory,

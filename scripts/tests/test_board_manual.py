@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path
 import queue
+import socket
 import stat
 import subprocess
 import sys
@@ -129,6 +130,60 @@ class Manual(ManualCase):
         self.assertFalse((self.root / 'manual/control.sock').exists())
         self.assertNotIn('pending', manual.control(self.root, 'status'))
 
+    def test_fragmented_ack_cannot_extend_the_phase_deadline(self):
+        boot = self.boot()
+        self.args.manual_timeout = 0.05
+        notices = queue.Queue()
+        with mock.patch('builtins.print', side_effect=lambda line, **_: notices.put(json.loads(line[7:]))), \
+                concurrent.futures.ThreadPoolExecutor(max_workers=1) as worker:
+            future = worker.submit(boot.request, 'unplug', 'Unplug Pico')
+            request = notices.get(timeout=1)
+            message = json.dumps(dict(action='ack', **{key: request[key]
+                for key in ('run', 'phase', 'token')})).encode() + b'\n'
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
+                client.settimeout(1)
+                client.connect(str(boot.directory / 'control.sock'))
+                client.sendall(message[:len(message) // 2])
+                # A retained partial message cannot borrow a new receive timeout.
+                with self.assertRaisesRegex(common.Failed, 'timed out'):
+                    future.result(timeout=0.5)
+                try:
+                    client.sendall(message[len(message) // 2:])
+                except BrokenPipeError:
+                    pass
+                self.assertEqual(client.recv(4096), b'')
+        self.assertTrue(boot.stopped)
+        self.assertFalse(any(event['event'] == 'acknowledged' for event in boot.state['events']))
+
+    def test_usb_trouble_during_fragmented_receive_stops_before_accepting_ack(self):
+        boot = self.boot()
+        notices, received, trouble = queue.Queue(), threading.Event(), threading.Event()
+        original_recv = socket.socket.recv
+        def recv(connection, *args):
+            data = original_recv(connection, *args)
+            if data:
+                received.set()
+            return data
+        def guard(*args):
+            if trouble.is_set():
+                raise common.USBGuardError('USB stopped during acknowledgment')
+        boot.guard.check.side_effect = guard
+        with mock.patch('builtins.print', side_effect=lambda line, **_: notices.put(json.loads(line[7:]))), \
+                mock.patch.object(socket.socket, 'recv', new=recv), \
+                concurrent.futures.ThreadPoolExecutor(max_workers=1) as worker:
+            future = worker.submit(boot.request, 'unplug', 'Unplug Pico')
+            notices.get(timeout=1)
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
+                client.settimeout(1)
+                client.connect(str(boot.directory / 'control.sock'))
+                client.sendall(b'{"action":')
+                self.assertTrue(received.wait(1))
+                trouble.set()
+                with self.assertRaisesRegex(common.USBGuardError, 'USB stopped during acknowledgment'):
+                    future.result(timeout=1)
+        self.assertTrue(boot.stopped)
+        self.assertFalse(any(event['event'] == 'acknowledged' for event in boot.state['events']))
+
     def test_wait_timeout_and_usb_stop_are_retained_and_block_the_next_prompt(self):
         boot = self.boot()
         self.args.manual_timeout = 0.01
@@ -229,6 +284,22 @@ class Identity(ManualCase):
         self.assertIsNone(guard.check('silent'))
         (guard.sysfs / '1-1/maxchild').unlink()
         with self.assertRaisesRegex(common.Failed, 'cannot read'):
+            guard.check()
+
+    def test_unreadable_or_incomplete_usb_identity_cannot_hide_a_cascade(self):
+        guard, _ = self.fixture()
+        cascade = self.usb('1-1.3', '0bda', '5411')
+        (cascade / 'idProduct').unlink()
+        with self.assertRaisesRegex(common.Failed, 'cannot establish USB identity'):
+            guard.check()
+        (cascade / 'idProduct').write_text('5411')
+        original = Path.read_text
+        def read(path, *args, **kwargs):
+            if path == cascade / 'idProduct':
+                raise PermissionError('identity unreadable')
+            return original(path, *args, **kwargs)
+        with mock.patch.object(Path, 'read_text', new=read), \
+                self.assertRaisesRegex(common.Failed, 'identity unreadable'):
             guard.check()
 
     def test_volume_ancestry_ambiguity_mounts_and_changed_major_minor_are_refused(self):
@@ -335,7 +406,7 @@ class Main(unittest.TestCase):
                 ROOT / 'environments/boards' / board / 'board.py')
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)
-            for failure in ('none', 'application', 'usb'):
+            for failure in ('none', 'application', 'usb', 'restore-interrupted', 'inherited-lock'):
                 with self.subTest(board=board, failure=failure), tempfile.TemporaryDirectory() as tmp:
                     root = Path(tmp)
                     elf = root / 'app.elf'
@@ -344,12 +415,16 @@ class Main(unittest.TestCase):
                     fixed.write_bytes(b'fixed')
                     events = []
                     lock = mock.Mock(file=True)
+                    if failure == 'inherited-lock':
+                        lock.file = None
                     lock.acquire.side_effect = lambda: events.append('lock') or lock
                     console = mock.Mock(received=b'', sent=b'')
                     manual_boot = mock.Mock()
                     manual_boot.start.side_effect = lambda: events.append('start')
                     manual_boot.cold_cycle.side_effect = lambda role, uart: self.assertIs(uart, console)
                     manual_boot.restore.return_value = {'value': common.FIXED_READY_MAGIC}
+                    if failure == 'restore-interrupted':
+                        manual_boot.restore.side_effect = KeyboardInterrupt
                     pace = common.Pace(state=root / 'pace', kernel=lambda _: [])
                     def scenario(*args):
                         if failure == 'usb':
@@ -381,7 +456,7 @@ class Main(unittest.TestCase):
                         power = patch(module, 'power_cycle', side_effect=AssertionError('hub switch'))
                         patch(module, 'scenario', side_effect=scenario)
                         patch(module, 'cross_check', return_value={})
-                        self.assertEqual(module.main(), 0 if failure == 'none' else 1)
+                        self.assertEqual(module.main(), 0 if failure in ('none', 'inherited-lock') else 1)
                     self.assertEqual(events[:2], ['lock', 'start'])
                     flash.assert_not_called()
                     power.assert_not_called()
@@ -389,12 +464,18 @@ class Main(unittest.TestCase):
                     manual_boot.install.assert_called_once_with('application')
                     manual_boot.readback.assert_called_once_with('application')
                     result = json.loads((root / 'run/result.json').read_text())
+                    manual_boot.close.assert_called_once()
+                    lock.release.assert_called_once()
                     if failure == 'usb':
                         manual_boot.restore.assert_not_called()
                         self.assertEqual(result['fixed_restore']['status'], 'pending')
                     else:
                         manual_boot.restore.assert_called_once()
-                        self.assertEqual(result['fixed_restore']['status'], 'passed')
+                        self.assertEqual(result['fixed_restore']['status'],
+                                         'pending' if failure == 'restore-interrupted' else 'passed')
+                        if failure == 'restore-interrupted':
+                            self.assertIn('restoration interrupted', result['failure'])
+                            self.assertTrue(manual_boot.stopped)
 
 
 if __name__ == '__main__':

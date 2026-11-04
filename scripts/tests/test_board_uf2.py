@@ -45,7 +45,7 @@ def riscv_executable(block=uf2.RISCV_IMAGE_DEF, bad_slot=None):
                 ('.text', reset, bytes(range(16)))]
     data = bytearray(ELF.elf32(sections, [(address, name) for name, address, _ in sections]))
     struct.pack_into('<H', data, 18, 243)
-    struct.pack_into('<I', data, 24, reset)
+    struct.pack_into('<I', data, 24, uf2.FLASH)
     return bytes(data)
 
 

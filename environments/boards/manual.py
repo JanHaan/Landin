@@ -41,6 +41,15 @@ def selected(args):
     return getattr(args, 'boot_transport', 'auto') == 'manual-uf2'
 
 
+def interrupted(boot, result, where):
+    """Cancel from either the main try block or restoration's finally block."""
+    boot.stopped = True
+    reason = 'manual %s interrupted; no automatic restoration' % where
+    result['status'] = 'failed'
+    result['failure'] = (result.get('failure', '') + '; ' + reason).lstrip('; ')
+    result['fixed_restore'] = dict(status='pending', reason=reason)
+
+
 def preflight(args):
     """No USB access, mount or prompt before arguments are coherent."""
     common.require(args.mode == 'boot', '--boot-transport=manual-uf2 requires --mode=boot')
@@ -74,9 +83,20 @@ class Guard:
         self.args.pace.check('manual UF2 guard')
         arty = []
         for entry in self.sysfs.iterdir():
-            if ':' in entry.name:
+            if not re.fullmatch(r'(?:usb[1-9][0-9]*|[1-9][0-9]*-[1-9][0-9]*(?:\.[1-9][0-9]*)*)', entry.name):
                 continue
-            identity = common.usb_identity(entry)
+            try:
+                attributes = [(entry / name).read_text(encoding='ascii').strip()
+                              for name in ('idVendor', 'idProduct')]
+            except (OSError, UnicodeError) as error:
+                # The selected Pico may disappear normally between listing
+                # and reading it. Its validated parent is checked below.
+                if isinstance(error, FileNotFoundError) and entry.name == self.node and not entry.exists():
+                    continue
+                raise common.Failed('cannot establish USB identity at %s: %s' % (entry, error)) from error
+            common.require(all(re.fullmatch('[0-9a-fA-F]{4}', value) for value in attributes),
+                           'malformed USB identity at %s' % entry)
+            identity = ':'.join(attributes).lower()
             common.require(identity != common.CASCADE_HUB,
                            'manual UF2 requires the entire Realtek cascade unplugged')
             try:
@@ -171,7 +191,7 @@ class Volume:
         try:
             self.verify(identity)
             self.run.command(self.prefix + 'mount', ['sudo', '-n', 'mount', '-t', 'vfat', '-o',
-                'rw,nodev,nosuid,noexec,uid=%d,gid=%d,umask=077' % (os.getuid(), os.getgid()),
+                'rw,sync,nodev,nosuid,noexec,uid=%d,gid=%d,umask=077' % (os.getuid(), os.getgid()),
                 identity['device'], mountpoint])
             mounted = True
             self.verify(identity, mountpoint)
@@ -269,28 +289,43 @@ class Boot:
         print('MANUAL ' + json.dumps(dict(run=self.state['run'], output=str(self.run.out),
             helper=str(helper), **pending)), flush=True)
         deadline = time.monotonic() + self.args.manual_timeout
+        self.server.settimeout(min(0.25, self.args.manual_timeout))
         try:
             while time.monotonic() < deadline:
                 self.check()
+                self.server.settimeout(min(0.25, max(0.001, deadline - time.monotonic())))
                 try:
                     connection, _ = self.server.accept()
                 except socket.timeout:
                     continue
                 with connection:
-                    connection.settimeout(1)
                     try:
                         raw = bytearray()
                         while b'\n' not in raw and len(raw) < 4096:
-                            piece = connection.recv(4096 - len(raw))
+                            self.check()
+                            remaining = deadline - time.monotonic()
+                            common.require(remaining > 0,
+                                           'timed out waiting for manual step ' + pending['phase'])
+                            connection.settimeout(min(0.25, remaining))
+                            try:
+                                piece = connection.recv(4096 - len(raw))
+                            except socket.timeout:
+                                continue
                             if not piece:
                                 break
                             raw.extend(piece)
+                        common.require(time.monotonic() < deadline,
+                                       'timed out waiting for manual step ' + pending['phase'])
+                        if b'\n' not in raw:
+                            raise ValueError('unterminated acknowledgment')
                         message = json.loads(raw)
                         valid = (isinstance(message, dict) and message.get('run') == self.state['run']
                                  and message.get('phase') == pending['phase']
                                  and message.get('token') == pending['token']
                                  and message.get('action') in ('ack', 'cancel'))
                         self.check()
+                        common.require(time.monotonic() < deadline,
+                                       'timed out waiting for manual step ' + pending['phase'])
                         connection.sendall(json.dumps(dict(accepted=valid)).encode())
                         if not valid:
                             self.event('rejected', phase=pending['phase'])

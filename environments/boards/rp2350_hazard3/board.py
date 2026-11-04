@@ -521,8 +521,7 @@ def main():
     except KeyboardInterrupt:
         if not manual_boot:
             raise
-        manual_boot.stopped = True
-        result['failure'] = 'manual run interrupted; no automatic restoration'
+        manual.interrupted(manual_boot, result, 'run')
     finally:
         if console:
             console.close()
@@ -530,8 +529,13 @@ def main():
             (args.output / 'sent.bin').write_bytes(bytes(console.sent))
             result['uart_sha256'] = hashlib.sha256(bytes(console.received)).hexdigest()
             result['frames'] = common.frame_record(bytes(console.received))
-        if lock and lock.file:
-            common.finish_boot(args, result, lambda: restore_fixed(run, args))
+        if lock and (lock.file or manual_boot):
+            try:
+                common.finish_boot(args, result, lambda: restore_fixed(run, args))
+            except KeyboardInterrupt:
+                if not manual_boot:
+                    raise
+                manual.interrupted(manual_boot, result, 'restoration')
         common.retain_kernel_usb(args.pace, result)
         if manual_boot:
             manual_boot.close(result)
