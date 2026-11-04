@@ -22,7 +22,7 @@ package Landin.Targets.Selection is
    --  identity and spellings, the language server, the test harness and
    --  the repository's Python checks all read it rather than keeping
    --  their own.
-   Described_Count : constant Positive := 9;
+   Described_Count : constant Positive := 10;
    function Described_Name (Index : Positive) return String
      with Pre => Index <= Described_Count;
 

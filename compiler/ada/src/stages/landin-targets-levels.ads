@@ -36,7 +36,9 @@ package Landin.Targets.Levels is
       Thumb2, Idiv, Dsp,
       --  RV64GC, RV32's microcontroller levels and independent
       --  address-generation extensions
-      I, M, A, F, D, C, Zicsr, Zifencei, Zba, Xtheadba);
+      I, M, A, F, D, C, Zicsr, Zifencei, Zba, Xtheadba,
+      --  ESP32-S3 integer comparisons, absent from ESP32.
+      Salt);
 
    --  The word a program writes after `compiler.feature.`.
    function Spelling (Of_Feature : Feature) return String;
@@ -88,7 +90,7 @@ private
       Armv8_A, Armv8_1_A,
       Armv6_M, Armv7_M, Armv7E_M, Armv8_M_Main,
       RV64GC, RV64GC_Zba, RV64GC_Xtheadba, RV64GC_Zba_Xtheadba,
-      RV32IMC, RV32IMAC);
+      RV32IMC, RV32IMAC, Xtensa_ESP32, Xtensa_ESP32S3);
 
    type Feature_Level is record
       Id : Level_Id;

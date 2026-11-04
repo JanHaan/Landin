@@ -8,6 +8,7 @@ package body Landin.Targets.Selection is
          when 3 => "darwin-arm64", when 4 => "freebsd-x86-64",
          when 5 => "freebsd-arm64", when 6 => "linux-rv64",
          when 7 => "cortex-m0", when 8 => "rv32", when 9 => "synthetic-32",
+         when 10 => "xtensa",
          when others => raise Compiler_Defect);
 
    function Described_At (Index : Positive) return Target_Facts is
@@ -16,6 +17,7 @@ package body Landin.Targets.Selection is
          when 3 => Darwin_Arm64, when 4 => FreeBSD_X86_64,
          when 5 => FreeBSD_Arm64, when 6 => Linux_RV64,
          when 7 => Cortex_M, when 8 => RV32, when 9 => Synthetic_32,
+         when 10 => Xtensa,
          when others => raise Compiler_Defect);
 
    function Is_Described (Name : String) return Boolean is

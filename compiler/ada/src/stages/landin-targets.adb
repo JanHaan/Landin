@@ -106,6 +106,17 @@ package body Landin.Targets is
       Keeps_Frame      => True,
       Widest_Alignment => 16);
 
+   function Xtensa return Target_Facts is
+     (Label            => Padded ("xtensa"),
+      Machine          => Xtensa,
+      C_ABI            => Xtensa_Windowed_ILP32,
+      Pointer          => 32,
+      Pointer_Align    => 4,
+      Stack_Align      => 16,
+      Order            => Little,
+      Keeps_Frame      => True,
+      Widest_Alignment => 16);
+
    function Synthetic_32 return Target_Facts is
      (Label            => Padded ("synthetic-32"),
       Machine          => Synthetic_32_Architecture,
