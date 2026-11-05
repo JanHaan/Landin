@@ -488,7 +488,8 @@ package body Landin.Tests.Commands_Suite is
             and then Contains (US.To_String (Result.Trace), "program.s")
             and then not Contains
               (US.To_String (Result.Trace), ".refine-publication"),
-            "verbose tool traces retain logical output paths");
+            "verbose tool traces retain logical output paths: "
+            & US.To_String (Result.Trace));
       end;
    end Response_Inputs_Survive;
 
