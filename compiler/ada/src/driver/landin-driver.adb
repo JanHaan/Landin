@@ -1517,6 +1517,37 @@ package body Landin.Driver is
             end if;
          end Protect_Input;
 
+         --  A stage report may publish even when loading or option checking
+         --  fails. Register selected tool names before either can fail, and
+         --  retain the current resolution as bounded executable evidence.
+         procedure Protect_Tool_Inputs (Driver : String);
+         procedure Protect_Tool_Inputs (Driver : String) is
+            procedure Protect_Program (Name : String);
+            procedure Protect_Program (Name : String) is
+            begin
+               Protect_Input (Name);
+               if Name /= "" then
+                  Protect_Input (Tools.Resolve_Program (Name));
+               end if;
+            end Protect_Program;
+         begin
+            Protect_Program (Unbounded.To_String (Toolchain));
+            Protect_Program (Driver);
+            if Linker_Seen then
+               Protect_Program (Unbounded.To_String (Linker));
+               if Unbounded.Length (Linker) > 0
+                 and then Ada.Strings.Fixed.Index
+                   (Unbounded.To_String (Linker), "/") = 0
+               then
+                  Protect_Program ("ld." & Unbounded.To_String (Linker));
+               end if;
+            else
+               --  A known default candidate, not evidence of whichever
+               --  implicit linker an arbitrary driver eventually chooses.
+               Protect_Program ("ld");
+            end if;
+         end Protect_Tool_Inputs;
+
          procedure Reserve_Output (Path : String);
          procedure Reserve_Output (Path : String) is
             Status : Landin.Platform.Write_Status;
@@ -2733,16 +2764,7 @@ package body Landin.Driver is
             Table : Landin.Configuration.Table renames
               Landin.Stages.Configurations (Context).all;
          begin
-            Protect_Input (Driver);
-            Protect_Input (Tools.Resolve_Program (Driver));
-            if Linker_Seen then
-               Protect_Input (Unbounded.To_String (Linker));
-               Protect_Input
-                 (Tools.Resolve_Program (Unbounded.To_String (Linker)));
-               Protect_Input
-                 (Tools.Resolve_Program
-                    ("ld." & Unbounded.To_String (Linker)));
-            end if;
+            Protect_Tool_Inputs (Driver);
             for Index in 1 .. Landin.Configuration.Library_Count (Table) loop
                declare
                   Files : constant Landin.Platform.Path_List :=
@@ -3254,7 +3276,7 @@ package body Landin.Driver is
               and then (Debug_Enabled or else Panic_Map
                 or else Landin.IR.Caller_Source_Count
                   (Landin.Stages.Code (Context).all) > 0);
-            Destinations : Landin.Platform.Path_List;
+            Destinations, Debug_Leaves : Landin.Platform.Path_List;
             Source_Paths : Landin.Platform.Path_List;
             On_Firmware : constant Boolean :=
               Landin.Targets.Is_Firmware (Facts);
@@ -3392,6 +3414,11 @@ package body Landin.Driver is
                     (Product_Path, Facts, Host)
                   loop
                      Destinations.Append (Path);
+                     if Path /= Product_Path & ".o"
+                       and then Path /= Product_Path & ".dSYM"
+                     then
+                        Debug_Leaves.Append (Path);
+                     end if;
                   end loop;
                end if;
             end if;
@@ -3587,7 +3614,7 @@ package body Landin.Driver is
             if not Dry_Run then
                for Path of Destinations loop
                   --  Existing dSYM leaves are protected by the whole bundle.
-                  if Ada.Strings.Fixed.Index (Path, ".dSYM/") = 0 then
+                  if not Debug_Leaves.Contains (Path) then
                      Reserve_Output (Path);
                   end if;
                end loop;
@@ -4228,7 +4255,7 @@ package body Landin.Driver is
                else Default_Executable);
             On_Firmware : constant Boolean :=
               Landin.Targets.Is_Firmware (Facts);
-            Destinations : Landin.Platform.Path_List;
+            Destinations, Debug_Leaves : Landin.Platform.Path_List;
          begin
             Destinations.Append (Product);
             if On_Firmware then
@@ -4241,6 +4268,11 @@ package body Landin.Driver is
                  (Product, Facts, Host)
                loop
                   Destinations.Append (Path);
+                  if Path /= Product & ".o"
+                    and then Path /= Product & ".dSYM"
+                  then
+                     Debug_Leaves.Append (Path);
+                  end if;
                end loop;
                if Landin.Backend.Toolchain.Debug_Overwrites
                  (Product, Operand, Facts, Host)
@@ -4327,7 +4359,7 @@ package body Landin.Driver is
                return;
             end if;
             for Path of Destinations loop
-               if Ada.Strings.Fixed.Index (Path, ".dSYM/") = 0 then
+               if not Debug_Leaves.Contains (Path) then
                   Reserve_Output (Path);
                end if;
             end loop;
@@ -4391,6 +4423,7 @@ package body Landin.Driver is
          end Operand_Problem;
 
       begin
+         Protect_Tool_Inputs (Planned_Driver);
          for Position in 1 .. Natural (Protected_Inputs.Length) loop
             if Position <= Natural (Protected_Identities.Length) then
                Observed_Input

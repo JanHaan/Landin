@@ -2546,6 +2546,179 @@ package body Landin.Tests.Driver_Suite is
       end loop;
    end Missing_Toolchain_Preserves_Stage_Report_Source;
 
+   procedure Early_Stage_Reports_Protect_Selected_Tools
+     (Item : in out Landin.Testing.Context);
+
+   procedure Early_Stage_Reports_Protect_Selected_Tools
+     (Item : in out Landin.Testing.Context)
+   is
+      type Failure_Kind is (Malformed, Invalid_Option, Unknown_Target,
+                            Target_Option, Missing_Source);
+      type Tool_Kind is (Selected_Driver, Default_Driver, Selected_Linker,
+                         Flavor_Linker, Default_Linker, Missing_Driver,
+                         Hard_Link, Symbolic_Link, Safe_Report);
+   begin
+      for Failure in Failure_Kind loop
+         for Tool in Tool_Kind loop
+            declare
+               Host : Landin.Testing.Fakes.Fake_Filesystem;
+               Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+               Path : constant String :=
+                 (case Tool is
+                    when Default_Driver => "x86_64-pc-linux-gnu-gcc",
+                    when Default_Linker => "ld",
+                    when Flavor_Linker => "ld.peer",
+                    when Hard_Link | Symbolic_Link => "tool-alias",
+                    when Safe_Report => "stages.json",
+                    when others => "owned-tool");
+               Args : Landin.Platform.Path_List :=
+                 ["--target=linux-x86-64", "--link=libc", "--emit=exe",
+                  "--stage-report=" & Path];
+               Result : Landin.Driver.Outcome;
+               Content : Unbounded.Unbounded_String;
+               Read : Landin.Platform.Read_Status;
+               Label_Text : constant String :=
+                 Failure'Image & "/" & Tool'Image;
+               Writes_Report : constant Boolean :=
+                 Failure in Malformed | Target_Option | Missing_Source;
+            begin
+               Host.Add_File ("main.ldn", "@" & LF);
+               if Tool /= Missing_Driver then
+                  Host.Add_File
+                    ((if Tool in Hard_Link | Symbolic_Link
+                      then "owned-tool" else Path), "saved tool");
+               end if;
+               case Tool is
+                  when Default_Driver | Default_Linker => null;
+                  when Selected_Linker =>
+                     Args.Append ("--linker=owned-tool");
+                  when Flavor_Linker => Args.Append ("--linker=peer");
+                  when Hard_Link =>
+                     Host.Add_Hard_Link (Path, "owned-tool");
+                     Args.Append ("--toolchain=owned-tool");
+                  when Symbolic_Link =>
+                     Host.Add_Symbolic_Link (Path, "owned-tool");
+                     Args.Append ("--toolchain=owned-tool");
+                  when Safe_Report | Selected_Driver | Missing_Driver =>
+                     Args.Append ("--toolchain=owned-tool");
+                     if Tool = Safe_Report then
+                        Host.Add_Directory ("/tools");
+                        Host.Add_File ("/tools/ld.peer", "selected linker");
+                        Args.Append ("--linker=/tools/ld.peer");
+                     end if;
+               end case;
+               if Tool = Missing_Driver then
+                  Tools.Set_Available (False);
+               end if;
+               case Failure is
+                  when Malformed => null;
+                  when Invalid_Option => Args.Append ("--option=invalid");
+                  when Unknown_Target => Args.Append ("--target=not-a-target");
+                  when Target_Option => Args.Append ("--debug=lines");
+                  when Missing_Source => null;
+               end case;
+               Args.Append
+                 ((if Failure = Missing_Source then "missing.ldn"
+                   else "main.ldn"));
+               Result := Landin.Driver.Execute (Args, Host, Tools);
+               Landin.Testing.Check_Equal
+                 (Item, Tools.Run_Count, 0,
+                  "early failure starts no tool: " & Label_Text);
+               if Tool = Safe_Report then
+                  Landin.Testing.Check_Equal
+                    (Item, Host.Write_Count,
+                     (if Writes_Report then 1 else 0),
+                     "only a publishable failure writes a safe report: "
+                     & Label_Text);
+                  if Writes_Report then
+                     Landin.Testing.Check
+                       (Item, Contains (Host.Written (Path),
+                          """format"":""landin-stage-report-1"""),
+                        "the positive report is valid: " & Label_Text);
+                  end if;
+               else
+                  Landin.Testing.Check_Equal
+                    (Item, Result.Status, Landin.Driver.Status_Misuse,
+                     "selected tool report is refused: " & Label_Text);
+                  if Writes_Report then
+                     Landin.Testing.Check
+                       (Item, Contains (Unbounded.To_String (Result.Report),
+                          "choose another output path and retry"),
+                        "the refusal gives a route: " & Label_Text);
+                  end if;
+                  Landin.Testing.Check_Equal
+                    (Item, Host.Write_Count, 0,
+                     "refusal writes nothing: " & Label_Text);
+                  Host.Read_File (Path, Content, Read);
+                  if Tool = Missing_Driver then
+                     Landin.Testing.Check
+                       (Item, Read = Landin.Platform.Not_Found,
+                        "absent selected spelling stays absent");
+                  else
+                     Landin.Testing.Check_Equal
+                       (Item, Unbounded.To_String (Content), "saved tool",
+                        "selected tool bytes survive: " & Label_Text);
+                  end if;
+               end if;
+               if Failure = Malformed then
+                  Landin.Testing.Check
+                    (Item, Contains (Unbounded.To_String (Result.Report),
+                       "L0012"), "source error survives: " & Label_Text);
+               end if;
+            end;
+         end loop;
+      end loop;
+   end Early_Stage_Reports_Protect_Selected_Tools;
+
+   procedure Ordinary_Outputs_Beneath_DSYM_Parents
+     (Item : in out Landin.Testing.Context);
+
+   procedure Ordinary_Outputs_Beneath_DSYM_Parents
+     (Item : in out Landin.Testing.Context)
+   is
+   begin
+      for Darwin in Boolean loop
+         for Assembly_Operand in Boolean loop
+            for Product_Is_DSYM in Boolean loop
+               declare
+                  Host : Landin.Testing.Fakes.Fake_Filesystem;
+                  Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+                  Product : constant String := "parent.dSYM/"
+                    & (if Product_Is_DSYM then "app.dSYM" else "app");
+                  Args : constant Landin.Platform.Path_List :=
+                    ["--target=" & (if Darwin then "darwin-arm64"
+                                   else "linux-x86-64"),
+                     "--emit=exe", "--link=libc", "--debug=full",
+                     "-o", Product,
+                     (if Assembly_Operand then "main.s" else "main.ldn")];
+                  Result : Landin.Driver.Outcome;
+               begin
+                  Host.Add_Directory ("parent.dSYM");
+                  Host.Add_File ("main.ldn", Entry_Program);
+                  Host.Add_File ("main.s", "saved assembly");
+                  Result := Landin.Driver.Execute (Args, Host, Tools);
+                  Landin.Testing.Check_Equal
+                    (Item, Result.Status, Landin.Driver.Status_Success,
+                     "an ordinary dSYM parent is staged: "
+                     & Unbounded.To_String (Result.Report));
+                  Landin.Testing.Check
+                    (Item, Host.Exists (Product),
+                     "the requested product is published: " & Product);
+                  Landin.Testing.Check_Equal
+                    (Item, Tools.Run_Count, 1,
+                     "the hosted link uses one driver call");
+                  if Darwin then
+                     Landin.Testing.Check
+                       (Item, Host.Exists (Product & ".o")
+                        and then Host.Exists (Product & ".dSYM"),
+                        "the actual Darwin bundle is grouped separately");
+                  end if;
+               end;
+            end loop;
+         end loop;
+      end loop;
+   end Ordinary_Outputs_Beneath_DSYM_Parents;
+
    --  The whole invocation, in order.  A containment check would pass on a
    --  command line that had lost its output.
    procedure An_Executable_Runs_The_Triplet_Driver
@@ -7638,6 +7811,12 @@ package body Landin.Tests.Driver_Suite is
       Landin.Testing.Register
         (Into, "driver", "missing toolchain precedes compilation",
          Missing_Toolchain_Precedes_Compilation'Access);
+      Landin.Testing.Register
+        (Into, "driver", "ordinary outputs beneath dSYM parents",
+         Ordinary_Outputs_Beneath_DSYM_Parents'Access);
+      Landin.Testing.Register
+        (Into, "driver", "early stage reports protect selected tools",
+         Early_Stage_Reports_Protect_Selected_Tools'Access);
       Landin.Testing.Register
         (Into, "driver", "missing toolchain preserves stage report source",
          Missing_Toolchain_Preserves_Stage_Report_Source'Access);
