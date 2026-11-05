@@ -380,7 +380,8 @@ class RV64Controls(unittest.TestCase):
         # comparison.
         for job in ('  rv64-emit:\n', '  rv64:\n'):
             body = workflow.split(job, 1)[1].split('\n\n', 1)[0]
-            self.assertIn("if: false && needs.inputs.outputs.reuse != 'true'", body)
+            self.assertIn("if: false && needs.inputs.outputs.software == 'true' && "
+                          "needs.inputs.outputs.reuse != 'true'", body)
         aggregate = workflow.split('  gate:\n', 1)[1]
         self.assertIn('arm64-release, freebsd, rv64-qemu,', aggregate)
         self.assertNotIn('rv64-emit', aggregate)
@@ -388,7 +389,8 @@ class RV64Controls(unittest.TestCase):
         self.assertIn('rv64-qemu-1 rv64-qemu-2', inputs)
         self.assertNotIn('rv64-runtime', inputs)
         emulated = workflow.split('  rv64-qemu:\n', 1)[1].split('\n  # Checked Linux', 1)[0]
-        self.assertIn("if: needs.inputs.outputs.reuse != 'true'", emulated)
+        self.assertIn("if: needs.inputs.outputs.software == 'true' && "
+                      "needs.inputs.outputs.reuse != 'true'", emulated)
         self.assertIn('shard: [1, 2]', emulated)
         self.assertIn('--target=linux-rv64 --runner=qemu-riscv64', emulated)
         self.assertIn('--shard=${{ matrix.shard }}/2', emulated)
