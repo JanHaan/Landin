@@ -54,8 +54,21 @@ package body Landin.Platform.Native.Tools is
       Input   : Interfaces.C.int;
       Capture : Interfaces.C.int;
       Errors  : Interfaces.C.int;
+      Directory : Interfaces.C.int;
       Child   : access Interfaces.C.int) return Interfaces.C.int
-     with Import, Convention => C, External_Name => "landin_tool_start";
+     with Import, Convention => C,
+       External_Name => "landin_tool_start_in_directory";
+
+   function Stage_Directory (Text : C_Strings.chars_ptr)
+      return Interfaces.C.int
+     with Import, Convention => C,
+       External_Name => "landin_publication_stage_directory";
+   function Rebase_Argument
+     (Text : C_Strings.chars_ptr; Directory : Interfaces.C.int;
+      Result : out Interfaces.C.char_array; Room : Interfaces.C.size_t)
+      return Interfaces.C.int
+     with Import, Convention => C,
+       External_Name => "landin_publication_rebase_argument";
 
    --  Creates one capture file in the host's temporary directory and
    --  returns its descriptor, or -1, with its NUL-terminated name in Path.
@@ -193,7 +206,8 @@ package body Landin.Platform.Native.Tools is
          return "";
       end if;
       declare
-         Path : constant String := Located.all;
+         Path : constant String :=
+           OS.Normalize_Pathname (Located.all, Resolve_Links => False);
       begin
          OS.Free (Located);
          return Path;
@@ -232,6 +246,7 @@ package body Landin.Platform.Native.Tools is
       Error_Name     : OS.String_Access := null;
       Error_FD       : OS.File_Descriptor := OS.Invalid_FD;
       Input_FD       : OS.File_Descriptor := OS.Invalid_FD;
+      Directory_FD   : OS.File_Descriptor := OS.Invalid_FD;
       Success        : Boolean;
       Status         : aliased Interfaces.C.int := 0;
       Pid            : aliased Interfaces.C.int := 0;
@@ -239,6 +254,27 @@ package body Landin.Platform.Native.Tools is
       Cancelled      : Boolean := False;
       Reader         : Native_Filesystem;
       Read           : Read_Status;
+
+      function Rebased (Argument : String) return String;
+
+      function Rebased (Argument : String) return String is
+         Text : C_Strings.chars_ptr := C_Strings.New_String (Argument);
+         Buffer : Interfaces.C.char_array (0 .. Argument'Length);
+         Answer : Interfaces.C.int;
+      begin
+         if Directory_FD = OS.Invalid_FD then
+            C_Strings.Free (Text);
+            return Argument;
+         end if;
+         Answer := Rebase_Argument
+           (Text, Interfaces.C.int (Directory_FD), Buffer, Buffer'Length);
+         C_Strings.Free (Text);
+         if Answer /= 0 then
+            raise External_Tool_Failed
+              with "tool outputs span incompatible staging directories";
+         end if;
+         return Interfaces.C.To_Ada (Buffer);
+      end Rebased;
 
       procedure Stop_Child;
 
@@ -303,6 +339,11 @@ package body Landin.Platform.Native.Tools is
             Clean := Clean and Closed_Input;
             Input_FD := OS.Invalid_FD;
          end if;
+         if Directory_FD /= OS.Invalid_FD then
+            OS.Close (Directory_FD, Closed_Input);
+            Clean := Clean and Closed_Input;
+            Directory_FD := OS.Invalid_FD;
+         end if;
          if not Clean then
             raise External_Tool_Failed
               with "could not remove temporary tool output";
@@ -328,10 +369,37 @@ package body Landin.Platform.Native.Tools is
            with "tool not found on PATH: " & Program;
       end if;
 
-      List (0) := C_Strings.New_String (Located.all);
+      for Argument of Arguments loop
+         declare
+            Text : C_Strings.chars_ptr := C_Strings.New_String (Argument);
+            Selected : constant Interfaces.C.int := Stage_Directory (Text);
+            Closed : Boolean;
+            Duplicate : OS.File_Descriptor;
+         begin
+            C_Strings.Free (Text);
+            if Selected = -2 then
+               raise External_Tool_Failed
+                 with "cannot pin tool output staging directory";
+            elsif Selected >= 0 then
+               if Directory_FD = OS.Invalid_FD then
+                  Directory_FD := OS.File_Descriptor (Selected);
+               else
+                  Duplicate := OS.File_Descriptor (Selected);
+                  OS.Close (Duplicate, Closed);
+                  if not Closed then
+                     raise External_Tool_Failed
+                       with "cannot close output staging directory";
+                  end if;
+               end if;
+            end if;
+         end;
+      end loop;
+
+      List (0) := C_Strings.New_String
+        (OS.Normalize_Pathname (Located.all, Resolve_Links => False));
       for Index in 1 .. Natural (Arguments.Length) loop
          List (Interfaces.C.size_t (Index)) :=
-           C_Strings.New_String (Arguments.Element (Index));
+           C_Strings.New_String (Rebased (Arguments.Element (Index)));
       end loop;
       declare
          Next : Interfaces.C.size_t := 0;
@@ -390,6 +458,8 @@ package body Landin.Platform.Native.Tools is
              else Interfaces.C.int (Input_FD)),
             Interfaces.C.int (FD),
             (if Capture = Merged then -1 else Interfaces.C.int (Error_FD)),
+            (if Directory_FD = OS.Invalid_FD then -1
+             else Interfaces.C.int (Directory_FD)),
             Pid'Access) /= 0
          then
             raise External_Tool_Failed with "could not run tool: " & Program;
