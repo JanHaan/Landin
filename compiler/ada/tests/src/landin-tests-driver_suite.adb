@@ -2574,7 +2574,8 @@ package body Landin.Tests.Driver_Suite is
             Expected : constant String :=
               (if Attempt = 1 then "L0505"
                elsif Attempt = 2 then "L0500"
-               elsif Attempt = 3 then "L0012" else "L0002");
+               elsif Attempt = 3 then "L0012"
+               elsif Attempt = 10 then "L0005" else "L0002");
             Content : Unbounded.Unbounded_String;
             Read : Landin.Platform.Read_Status;
          begin
@@ -2599,9 +2600,11 @@ package body Landin.Tests.Driver_Suite is
                else
                   Host.Add_File (Tool, "saved tool");
                end if;
-               Host.Add_Hard_Link (Report, Tool);
                if Attempt = 10 then
                   Host.Set_Identity_Uncertain (Tool);
+                  Host.Add_Alias (Report, Tool);
+               else
+                  Host.Add_Hard_Link (Report, Tool);
                end if;
             elsif Attempt = 11 then
                Host.Add_File (Report, "tool appeared later");
@@ -2610,7 +2613,8 @@ package body Landin.Tests.Driver_Suite is
             Result := Landin.Driver.Execute (Args, Host, Tools);
             Landin.Testing.Check_Equal
               (Item, Result.Status,
-               (if Attempt <= 3 then Landin.Driver.Status_Reported
+               (if Attempt <= 3 or else Attempt = 10
+                then Landin.Driver.Status_Reported
                 else Landin.Driver.Status_Misuse),
                "missing tool outcome: " & Attempt'Image
                & Unbounded.To_String (Result.Report));
@@ -2622,7 +2626,18 @@ package body Landin.Tests.Driver_Suite is
                "only an unrelated frontend-failure report writes");
             Landin.Testing.Check_Equal
               (Item, Tools.Run_Count, 0, "no tool runs after these refusals");
-            if Attempt = 11 then
+            if Attempt = 10 then
+               Landin.Testing.Check
+                 (Item, Contains (Unbounded.To_String (Result.Report),
+                  "aliases or cannot be proved separate")
+                  and then Contains (Unbounded.To_String (Result.Report),
+                   "check input/output paths and access before retrying"),
+                  "uncertain metadata has a truthful access repair route");
+               Host.Read_File (Tool, Content, Read);
+               Landin.Testing.Check_Equal
+                 (Item, Unbounded.To_String (Content), "saved tool",
+                  "uncertain tool bytes remain intact");
+            elsif Attempt = 11 then
                Host.Read_File (Report, Content, Read);
                Landin.Testing.Check_Equal
                  (Item, Unbounded.To_String (Content), "tool appeared later",

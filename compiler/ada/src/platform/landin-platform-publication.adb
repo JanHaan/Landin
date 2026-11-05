@@ -56,7 +56,9 @@ package body Landin.Platform.Publication is
                Status := Not_Writable;
                Reason := To_Unbounded_String
                  ("output " & Path
-                  & " aliases a protected input; choose another output");
+                  & " aliases or cannot be proved separate from a protected"
+                  & " input; check input/output paths and access before"
+                  & " retrying");
                if Cleanup_Status /= Write_Ok then
                   Append (Reason, "; " & To_String (Cleanup_Reason));
                end if;

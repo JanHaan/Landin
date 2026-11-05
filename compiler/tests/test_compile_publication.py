@@ -152,8 +152,8 @@ def main():
                                       '--toolchain=' + str(missing_tool),
                                       '--stage-report=' + str(root / 'missing-stages.json')], malformed, False),
     ])
-    # On a case-folding host, preparation creates the formerly missing
-    # parent before the driver can apply its actual name-equivalence policy.
+    # Keep missing-parent spelling refusal separate from the name-policy
+    # control in an existing directory. Public output parents are not created.
     case_probe = root / 'case-probe'
     case_probe.write_bytes(b'case probe')
     case_folding = (root / 'CASE-PROBE').exists()
@@ -162,6 +162,11 @@ def main():
         cases.append(('early-missing-parent-case-as-stage-report',
                       [str(malformed), '--toolchain=' + str(missing_tool),
                        '--stage-report=' + str(missing_tool.with_name('DRIVER'))],
+                      malformed, False))
+        cases.append(('early-missing-leaf-case-as-stage-report',
+                      [str(malformed),
+                       '--toolchain=' + str(selected_tools / 'missing-cc'),
+                       '--stage-report=' + str(selected_tools / 'MISSING-CC')],
                       malformed, False))
     for label, tool_name, report in [
         ('missing-parent', str(missing_tool), missing_tool),
