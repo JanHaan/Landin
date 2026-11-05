@@ -105,7 +105,9 @@ package body Landin.Commands.Devices is
 
          function Clear (Path : String) return Boolean is
          begin
-            if Host.Paths_Overlap_Any (Path, Inputs) then
+            if Host.Exists (Path)
+              and then Host.Paths_Overlap_Any (Path, Inputs)
+            then
                Report (Cat.Svd_Output_Refused, Path & " overlaps an input;"
                        & " name another output directory with --out-dir");
                return False;

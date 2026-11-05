@@ -319,7 +319,8 @@ class PublicationSafety(unittest.TestCase):
 
     @requires_refine
     def test_linked_outputs_parents_and_leftovers_are_preserved(self):
-        for kind in ('root', 'root-trailing', 'parent', 'final', 'stage', 'recovery', 'stale'):
+        for kind in ('root', 'root-trailing', 'parent', 'final', 'stage',
+                     'recovery', 'stale', 'stale-final'):
             with self.subTest(kind=kind), tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary)
                 svd, policy, out, command = self.make_tree(root)
@@ -337,14 +338,18 @@ class PublicationSafety(unittest.TestCase):
                     (out / 'toy').mkdir()
                     link = out / 'toy/gpio'
                     link.symlink_to(outside, target_is_directory=True)
-                elif kind == 'stale':
+                elif kind in ('stale', 'stale-final'):
                     initial = subprocess.run(command, capture_output=True, text=True)
                     self.assertEqual(initial.returncode, 0, initial.stderr)
                     link = out / 'linked'
-                    link.symlink_to(outside, target_is_directory=True)
+                    if kind == 'stale-final':
+                        link.symlink_to(outside / 'absent')
+                    else:
+                        link.symlink_to(outside, target_is_directory=True)
                     manifest = out / 'toy/outputs.json'
                     entries = json.loads(manifest.read_text())
-                    entries['linked/device.ldn'] = '0' * 64
+                    entries['linked' if kind == 'stale-final'
+                            else 'linked/device.ldn'] = '0' * 64
                     manifest.write_text(json.dumps(entries))
                 else:
                     (out / 'toy/gpio').mkdir(parents=True)

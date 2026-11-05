@@ -2066,7 +2066,8 @@ int main(void) { return f(36) != 37; }
 
     def test_publication_preserves_consumed_inputs(self) -> None:
         for kind in ("header", "policy", "tool", "path-tool", "response",
-                     "nested-response", "hardlink-header", "transitive-header"):
+                     "nested-response", "hardlink-header", "transitive-header",
+                     "adapter-header"):
             with self.subTest(kind=kind):
                 parent = self.root / kind
                 sysroot, includes, output = self.make_tree(
@@ -2103,11 +2104,17 @@ int main(void) { return f(36) != 37; }
                 elif kind == "hardlink-header":
                     source = output / "exports.h"
                     os.link(parent / "api.h", source)
-                else:
+                elif kind == "transitive-header":
                     source = output / "exports.h"
                     source.write_text("int f(void);\n")
-                    os.link(source, includes / "dependency.h")
-                    (parent / "api.h").write_text('#include <dependency.h>\n')
+                    os.link(source, includes / "dependency $.h")
+                    (parent / "api.h").write_text('#include <dependency $.h>\n')
+                else:
+                    source = output / "exports.h"
+                    os.link(includes / "stdlib.h", source)
+                    (parent / "api.h").write_text('typedef union Box { int value; } Box;\n')
+                    (parent / "policy.json").write_text(json.dumps(self.selection(
+                        self.record("Box", representation="opaque"))))
                 control = (self.command(parent, sysroot, includes, output)
                            if kind in ("response", "nested-response") else list(command))
                 control[control.index("--out-dir") + 1] = str(parent / "control")

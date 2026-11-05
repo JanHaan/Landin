@@ -441,7 +441,9 @@ package body Landin.Commands.Bindings is
             declare
                Path : constant String := Destination (Index);
             begin
-               if Host.Paths_Overlap_Any (Path, Input_Paths) then
+               if Host.Exists (Path)
+                 and then Host.Paths_Overlap_Any (Path, Input_Paths)
+               then
                   Report (Cat.Bindings_Output_Refused,
                           Path & " overlaps an input; name another output"
                           & " directory with --out-dir");

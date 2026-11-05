@@ -505,6 +505,7 @@ package body Landin.Tests.Bindings_Suite is
       procedure Input_Alias
         (Host : in out Landin.Testing.Fakes.Fake_Filesystem) is
       begin
+         Host.Add_File (Root & "/out/exports.h", Header);
          Host.Add_Alias (Root & "/out/exports.h", Root & "/api.h");
       end Input_Alias;
 
