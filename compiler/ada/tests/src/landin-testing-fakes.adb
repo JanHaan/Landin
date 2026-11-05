@@ -60,6 +60,37 @@ package body Landin.Testing.Fakes is
       return 0;
    end Find;
 
+   function Resolve_Find
+     (Host : Fake_Filesystem; Path : String) return Natural;
+   function Resolve_Find
+     (Host : Fake_Filesystem; Path : String) return Natural
+   is
+      Name : Unbounded.Unbounded_String :=
+        Unbounded.To_Unbounded_String (Path);
+      Index : Natural;
+   begin
+      for Depth in 1 .. 40 loop
+         Index := Find (Host, Unbounded.To_String (Name));
+         if Index = 0 then
+            return 0;
+         elsif Host.Writes.Data.Files (Index).Kind /= A_Link then
+            return Index;
+         end if;
+         declare
+            Target : constant String := Unbounded.To_String
+              (Host.Writes.Data.Files (Index).Content);
+            Current : constant String := Unbounded.To_String (Name);
+            Slash : constant Natural := Ada.Strings.Fixed.Index
+              (Current, "/", Ada.Strings.Backward);
+         begin
+            Name := Unbounded.To_Unbounded_String
+              ((if Target /= "" and then Target (Target'First) = '/'
+                then "" else Current (Current'First .. Slash)) & Target);
+         end;
+      end loop;
+      return 0;
+   end Resolve_Find;
+
    procedure Add
      (Host : in out Fake_Filesystem;
       Path : String;
@@ -95,6 +126,39 @@ package body Landin.Testing.Fakes is
    begin
       Add (Host, Path, Content, A_File);
    end Add_File;
+
+   procedure Add_Hard_Link
+     (Host : in out Fake_Filesystem; Path, Target : String)
+   is
+      Index : constant Natural := Resolve_Find (Host, Target);
+      Item : File_Entry;
+   begin
+      if Index = 0 or else Find (Host, Path) /= 0 then
+         raise Program_Error with "fake hard link needs an existing target";
+      end if;
+      Item := Host.Writes.Data.Files (Index);
+      Item.Path := Unbounded.To_Unbounded_String (Path);
+      Host.Writes.Data.Files.Append (Item);
+   end Add_Hard_Link;
+
+   procedure Add_Symbolic_Link
+     (Host : in out Fake_Filesystem; Path, Target : String) is
+   begin
+      Add (Host, Path, Target, A_Link);
+   end Add_Symbolic_Link;
+
+   procedure Replace_On_Publication
+     (Host : in out Fake_Filesystem;
+      Action : Landin.Platform.Publication_Action;
+      Path, Content : String; As_Link : Boolean := False) is
+   begin
+      Host.Writes.Data.Mutation_Armed := True;
+      Host.Writes.Data.Mutation_Action := Action;
+      Host.Writes.Data.Mutation_File :=
+        (Path => Unbounded.To_Unbounded_String (Path),
+         Content => Unbounded.To_Unbounded_String (Content),
+         Kind => (if As_Link then A_Link else A_File), Identity => 0);
+   end Replace_On_Publication;
 
    procedure Add_Directory (Host : in out Fake_Filesystem; Path : String) is
    begin
@@ -139,7 +203,7 @@ package body Landin.Testing.Fakes is
 
    overriding function Exists
      (Host : Fake_Filesystem; Path : String) return Boolean
-     is (Find (Host, Path) /= 0);
+     is (Resolve_Find (Host, Path) /= 0);
 
    procedure Add_Alias
      (Host : in out Fake_Filesystem; Left, Right : String) is
@@ -162,7 +226,7 @@ package body Landin.Testing.Fakes is
      (Host : Fake_Filesystem; Path : String)
       return Landin.Platform.File_Identity
    is
-      Index : constant Natural := Find (Host, Path);
+      Index : constant Natural := Resolve_Find (Host, Path);
    begin
       if Index = 0 then
          return (others => <>);
@@ -257,7 +321,7 @@ package body Landin.Testing.Fakes is
      (Host : Fake_Filesystem; Path : String)
       return Landin.Platform.File_Identity
    is
-      Index : constant Natural := Find (Host, Path);
+      Index : constant Natural := Resolve_Find (Host, Path);
    begin
       if Index = 0 then
          return (others => <>);
@@ -308,7 +372,7 @@ package body Landin.Testing.Fakes is
    overriding function Is_Directory
      (Host : Fake_Filesystem; Path : String) return Boolean
    is
-      Index : constant Natural := Find (Host, Path);
+      Index : constant Natural := Resolve_Find (Host, Path);
    begin
       return Index /= 0
         and then Host.Writes.Data.Files.Element (Index).Kind
@@ -317,7 +381,10 @@ package body Landin.Testing.Fakes is
 
    overriding function Is_Link
      (Host : Fake_Filesystem; Path : String) return Boolean
-     is (Host.Links.Contains (Path));
+     is (Host.Links.Contains (Path)
+         or else (Find (Host, Path) /= 0
+                  and then Host.Writes.Data.Files
+                    (Find (Host, Path)).Kind = A_Link));
 
    procedure Add_Link (Host : in out Fake_Filesystem; Path : String) is
    begin
@@ -348,7 +415,7 @@ package body Landin.Testing.Fakes is
       Content : out Ada.Strings.Unbounded.Unbounded_String;
       Status  : out Landin.Platform.Read_Status)
    is
-      Index : constant Natural := Find (Host, Path);
+      Index : constant Natural := Resolve_Find (Host, Path);
    begin
       Content := Unbounded.Null_Unbounded_String;
 
@@ -373,7 +440,7 @@ package body Landin.Testing.Fakes is
          when A_File =>
             Content := Host.Writes.Data.Files.Element (Index).Content;
             Status := Landin.Platform.Read_Ok;
-         when A_Directory | An_Unlistable_Directory |
+         when A_Link | A_Directory | An_Unlistable_Directory |
               An_Unreadable_File =>
             Status := Landin.Platform.Not_Readable;
       end case;
@@ -413,7 +480,17 @@ package body Landin.Testing.Fakes is
       if Existing = 0 then
          Host.Writes.Data.Files.Append (Entry_Value);
       else
-         Host.Writes.Data.Files.Replace_Element (Existing, Entry_Value);
+         Entry_Value.Identity := Host.Writes.Data.Files (Existing).Identity;
+         for Index in 1 .. Natural (Host.Writes.Data.Files.Length) loop
+            declare
+               Linked : File_Entry := Host.Writes.Data.Files (Index);
+            begin
+               if Linked.Identity = Entry_Value.Identity then
+                  Linked.Content := Entry_Value.Content;
+                  Host.Writes.Data.Files.Replace_Element (Index, Linked);
+               end if;
+            end;
+         end loop;
       end if;
       Status := Landin.Platform.Write_Ok;
       for Index in 1 .. Natural (Host.Writes.Data.Items.Length) loop
@@ -457,6 +534,60 @@ package body Landin.Testing.Fakes is
       Host.Writes.Data.Fails_Move := True;
       Host.Writes.Data.Moves_Before_Failure := At_Move - 1;
    end Fail_Move;
+
+   function Snapshot_Below
+     (Host : Fake_Filesystem; Root : String) return File_Vectors.Vector;
+   function Snapshot_Below
+     (Host : Fake_Filesystem; Root : String) return File_Vectors.Vector
+   is
+      Result : File_Vectors.Vector;
+   begin
+      for Item of Host.Writes.Data.Files loop
+         declare
+            Name : constant String := Unbounded.To_String (Item.Path);
+         begin
+            if Name'Length > Root'Length
+              and then Name (Name'First .. Name'First + Root'Length)
+                = Root & "/"
+            then
+               Result.Append (Item);
+            end if;
+         end;
+      end loop;
+      return Result;
+   end Snapshot_Below;
+
+   function Tree_Matches
+     (Host : Fake_Filesystem; Root, Original_Root : String;
+      Snapshot : File_Vectors.Vector) return Boolean;
+   function Tree_Matches
+     (Host : Fake_Filesystem; Root, Original_Root : String;
+      Snapshot : File_Vectors.Vector) return Boolean
+   is
+      use type Ada.Containers.Count_Type;
+      use type Unbounded.Unbounded_String;
+   begin
+      if Snapshot_Below (Host, Root).Length /= Snapshot.Length then
+         return False;
+      end if;
+      for Item of Snapshot loop
+         declare
+            Name : constant String := Unbounded.To_String (Item.Path);
+            At_Path : constant Natural := Find
+              (Host, Root & Name
+                 (Name'First + Original_Root'Length .. Name'Last));
+         begin
+            if At_Path = 0
+              or else Host.Writes.Data.Files (At_Path).Identity /= Item.Identity
+              or else Host.Writes.Data.Files (At_Path).Content /= Item.Content
+              or else Item.Kind = A_Link
+            then
+               return False;
+            end if;
+         end;
+      end loop;
+      return True;
+   end Tree_Matches;
 
    overriding procedure Read_Snapshot
      (Host : Fake_Filesystem; Path : String;
@@ -512,7 +643,8 @@ package body Landin.Testing.Fakes is
       Item.Deletion := Delete_Only;
       if Existing /= 0 then
          Item.Expected := Host.Writes.Data.Files (Existing);
-         if Item.Expected.Kind /= A_File then
+         Item.Expected_Tree := Snapshot_Below (Host, Path);
+         if Item.Expected.Kind not in A_File | A_Directory then
             Reason := Unbounded.To_Unbounded_String
               ("output is not an ordinary file; choose another output");
             return;
@@ -565,6 +697,25 @@ package body Landin.Testing.Fakes is
       if Item.Finished then
          return;
       end if;
+      if Host.Writes.Data.Mutation_Armed
+        and then Host.Writes.Data.Mutation_Action = Action
+      then
+         declare
+            Replacement : File_Entry := Host.Writes.Data.Mutation_File;
+            Old : constant Natural := Find
+              (Host, Unbounded.To_String (Replacement.Path));
+         begin
+            Host.Writes.Data.Mutation_Armed := False;
+            Replacement.Identity := Host.Writes.Data.Next_Identity;
+            Host.Writes.Data.Next_Identity :=
+              Host.Writes.Data.Next_Identity + 1;
+            if Old = 0 then
+               Host.Writes.Data.Files.Append (Replacement);
+            else
+               Host.Writes.Data.Files.Replace_Element (Old, Replacement);
+            end if;
+         end;
+      end if;
       case Action is
          when Landin.Platform.Validate_Stage =>
             if not Item.Deletion then
@@ -574,12 +725,9 @@ package body Landin.Testing.Fakes is
                   return;
                end if;
                Item.Fresh := Host.Writes.Data.Files (At_Path);
+               Item.Fresh_Tree := Snapshot_Below (Host, Stage);
             end if;
          when Landin.Platform.Capture_Previous =>
-            if Host.Is_Link (Path) then
-               Fail ("output became linked");
-               return;
-            end if;
             At_Path := Find (Host, Path);
             if At_Path = 0 then
                Move_File (Host, Path, Recovery, Moved);
@@ -606,6 +754,12 @@ package body Landin.Testing.Fakes is
                    /= Item.Expected.Content
                then
                   Fail ("output changed after its snapshot");
+                  return;
+               end if;
+               if not Tree_Matches
+                 (Host, Recovery, Path, Item.Expected_Tree)
+               then
+                  Fail ("output directory contents changed after snapshot");
                   return;
                end if;
                for Identity of Protected_Identities loop
@@ -678,7 +832,17 @@ package body Landin.Testing.Fakes is
                         Fail ("concurrent save preserved during rollback");
                         return;
                      end if;
-                     Remove_File (Host, Rollback, Removed);
+                     if Item.Fresh.Kind = A_Directory then
+                        if not Tree_Matches
+                          (Host, Rollback, Stage, Item.Fresh_Tree)
+                        then
+                           Fail ("new directory retained after changed contents");
+                           return;
+                        end if;
+                        Remove_Tree (Host, Rollback, Removed);
+                     else
+                        Remove_File (Host, Rollback, Removed);
+                     end if;
                      if Removed = Landin.Platform.Not_Removable then
                         Fail ("new output retained during rollback");
                         return;
@@ -697,14 +861,32 @@ package body Landin.Testing.Fakes is
             end if;
          when Landin.Platform.Finish_Publication =>
             if Item.Captured then
-               Remove_File (Host, Recovery, Removed);
+               if Item.Expected.Kind = A_Directory then
+                  if not Tree_Matches
+                    (Host, Recovery, Path, Item.Expected_Tree)
+                  then
+                     Fail ("old directory recovery contents changed");
+                     return;
+                  end if;
+                  Remove_Tree (Host, Recovery, Removed);
+               else
+                  Remove_File (Host, Recovery, Removed);
+               end if;
                if Removed = Landin.Platform.Not_Removable then
                   Fail ("cannot discard committed previous output");
                   return;
                end if;
                Item.Captured := False;
             end if;
-            Remove_File (Host, Stage, Removed);
+            if Host.Is_Directory (Stage) then
+               if not Tree_Matches (Host, Stage, Stage, Item.Fresh_Tree) then
+                  Fail ("private staged directory has unexplained entries");
+                  return;
+               end if;
+               Remove_Tree (Host, Stage, Removed);
+            else
+               Remove_File (Host, Stage, Removed);
+            end if;
             if Removed = Landin.Platform.Not_Removable then
                Fail ("cannot clean private stage");
                return;
@@ -895,14 +1077,29 @@ package body Landin.Testing.Fakes is
       end if;
       if Existing = 0 then
          Status := Landin.Platform.Move_Source_Absent;
-      elsif Host.Writes.Data.Refuses_Removal or else Destination /= 0
-        or else Host.Writes.Data.Files (Existing).Kind = A_Directory
-      then
+      elsif Host.Writes.Data.Refuses_Removal or else Destination /= 0 then
          Status := Landin.Platform.Not_Movable;
       else
          Item := Host.Writes.Data.Files (Existing);
          Item.Path := Unbounded.To_Unbounded_String (To);
          Host.Writes.Data.Files.Replace_Element (Existing, Item);
+         if Item.Kind = A_Directory then
+            for Index in 1 .. Natural (Host.Writes.Data.Files.Length) loop
+               declare
+                  Child : File_Entry := Host.Writes.Data.Files (Index);
+                  Name : constant String := Unbounded.To_String (Child.Path);
+               begin
+                  if Name'Length > From'Length
+                    and then Name (Name'First .. Name'First + From'Length)
+                      = From & "/"
+                  then
+                     Child.Path := Unbounded.To_Unbounded_String
+                       (To & Name (Name'First + From'Length .. Name'Last));
+                     Host.Writes.Data.Files.Replace_Element (Index, Child);
+                  end if;
+               end;
+            end loop;
+         end if;
          Status := Landin.Platform.Moved;
       end if;
    end Move_File;
@@ -1366,6 +1563,38 @@ package body Landin.Testing.Fakes is
             end;
          end if;
          Host.State.Data.Output_Store := null;
+      end if;
+      if Host.State.Data.Output_Store /= null
+        and then Host.State.Data.Produces_Output
+        and then Result.Ended = Landin.Platform.Exited
+        and then Result.Exit_Code = 0
+        and then Arguments.Contains ("-save-temps=obj")
+      then
+         declare
+            Data : constant Store_Access := Host.State.Data.Output_Store;
+            Main_Path : constant String :=
+              Unbounded.To_String (Host.State.Data.Output_Path);
+         begin
+            for Reservation of Data.Publications loop
+               declare
+                  Name : constant String :=
+                    Unbounded.To_String (Reservation.Stage);
+               begin
+                  if Name = Main_Path & ".o"
+                    or else Name = Main_Path & ".dSYM"
+                  then
+                     Data.Files.Append
+                       (File_Entry'
+                          (Path => Reservation.Stage,
+                           Content => Host.State.Data.Output_Content,
+                           Kind => (if Name = Main_Path & ".o" then A_File
+                                    else A_Directory),
+                           Identity => Data.Next_Identity));
+                     Data.Next_Identity := Data.Next_Identity + 1;
+                  end if;
+               end;
+            end loop;
+         end;
       end if;
    end Run;
 

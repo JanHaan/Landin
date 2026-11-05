@@ -24,6 +24,7 @@
 #endif
 #define _POSIX_C_SOURCE 200809L
 #define _XOPEN_SOURCE 700
+#include "landin_publication.h"
 #include <errno.h>
 #include <fcntl.h>
 #include <stdarg.h>
@@ -141,36 +142,9 @@ static int in_group(gid_t group)
 /* The directory that names the copy, synced so that the copy's name lasts
  * before the original's bytes begin to change.  A file system that cannot
  * sync a directory says EINVAL, and there is then nothing more to do. */
-static int sync_directory(const char *target)
-{
-    const char *slash = strrchr(target, '/');
-    size_t length = slash == NULL ? 0 : (size_t)(slash - target);
-    char *directory = malloc(length + 2);
-    if (!directory)
-        return -1;
-    if (length == 0) {
-        directory[0] = slash == NULL ? '.' : '/';
-        directory[1] = '\0';
-    } else {
-        memcpy(directory, target, length);
-        directory[length] = '\0';
-    }
-    int fd = open(directory, O_RDONLY);
-    free(directory);
-    if (fd < 0)
-        return -1;
-    int result = fsync(fd);
-    int error = errno;
-    close(fd);
-    if (result != 0 && error == EINVAL)
-        return 0;
-    errno = error;
-    return result;
-}
-
 struct update_lease {
-    int token, fd;
-    char *target, *original;
+    int token, fd, parent;
+    char *target, *name, *original;
     size_t original_size;
     struct stat before;
     struct update_lease *next;
@@ -192,10 +166,20 @@ int landin_open_update(const char *path, char **bytes, size_t *size,
     *bytes = NULL; *token = 0;
     say(reason, room, "%s", "");
     if (!lease) goto fail;
-    lease->fd = -1;
+    lease->fd = -1; lease->parent = -1;
     lease->target = realpath(path, NULL);
     if (!lease->target) goto fail;
-    lease->fd = open(lease->target, O_RDWR | O_NOFOLLOW | O_CLOEXEC | O_NONBLOCK);
+    char *directory = strdup(lease->target);
+    if (!directory) goto fail;
+    char *slash = strrchr(directory, '/');
+    lease->name = slash ? strdup(slash + 1) : NULL;
+    if (!lease->name) { free(directory); goto fail; }
+    if (slash == directory) slash[1] = 0; else *slash = 0;
+    lease->parent = open(directory, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+    free(directory);
+    if (lease->parent < 0) goto fail;
+    lease->fd = openat(lease->parent, lease->name,
+                       O_RDWR | O_NOFOLLOW | O_CLOEXEC | O_NONBLOCK);
     if (lease->fd < 0 || fstat(lease->fd, &lease->before) != 0) goto fail;
     if (!S_ISREG(lease->before.st_mode)) { errno = EINVAL; goto fail; }
     lease->original = read_all(lease->fd, &lease->original_size);
@@ -206,6 +190,7 @@ int landin_open_update(const char *path, char **bytes, size_t *size,
     *size = lease->original_size;
     lease->token = next_lease++; *token = lease->token;
     lease->next = leases; leases = lease;
+    landin_publication_notify("update-read", lease->target);
     return 0;
 fail:
     {
@@ -213,7 +198,8 @@ fail:
         say(reason, room, "cannot read it for updating: %s; use fmt --stdout", strerror(error));
         if (lease) {
             if (lease->fd >= 0) close(lease->fd);
-            free(lease->target); free(lease->original); free(lease);
+            if (lease->parent >= 0) close(lease->parent);
+            free(lease->target); free(lease->name); free(lease->original); free(lease);
         }
         return error == ENOENT ? 1 : -1;
     }
@@ -232,7 +218,8 @@ void landin_close_update(int token)
         struct update_lease *lease = *at;
         if (lease->token == token) {
             *at = lease->next;
-            close(lease->fd); free(lease->target); free(lease->original);
+            close(lease->fd); close(lease->parent);
+            free(lease->target); free(lease->name); free(lease->original);
             free(lease); return;
         }
         at = &lease->next;
@@ -244,7 +231,8 @@ int landin_replace_update(int token, const char *data,
 
 {
     struct update_lease *lease = find_lease(token);
-    static const char suffix[] = ".fmt-original-XXXXXX";
+    static unsigned recovery_counter;
+    char copy_name[96];
     char *target = NULL;
     char *copy = NULL;
     char *original = NULL;
@@ -328,18 +316,18 @@ int landin_replace_update(int token, const char *data,
     }
 
     size_t length = strlen(target);
-    if (length > SIZE_MAX - sizeof suffix) {
-        say(reason, room, "its path is too long");
-        goto done;
+    copy = malloc(length + sizeof copy_name + 4);
+    if (!copy) { say(reason, room, "no memory for recovery name"); goto done; }
+    for (unsigned attempt = 0; attempt < 100; ++attempt) {
+        snprintf(copy_name, sizeof copy_name, ".fmt-original-%ld-%u",
+                 (long)getpid(), ++recovery_counter);
+        kept = openat(lease->parent, copy_name,
+                       O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600);
+        if (kept >= 0 || errno != EEXIST) break;
     }
-    copy = malloc(length + sizeof suffix);
-    if (!copy) {
-        say(reason, room, "no memory for its copy's name");
-        goto done;
-    }
-    memcpy(copy, target, length);
-    memcpy(copy + length, suffix, sizeof suffix);
-    kept = mkstemp(copy);
+    char *last_slash = strrchr(target, '/');
+    snprintf(copy, length + sizeof copy_name + 4, "%.*s/%s",
+             (int)(last_slash - target), target, copy_name);
     if (kept < 0) {
         say(reason, room, "cannot keep a copy of it in its directory: %s",
             strerror(errno));
@@ -360,7 +348,7 @@ int landin_replace_update(int token, const char *data,
         goto done;
     }
     kept = -1;
-    if (sync_directory(target) != 0) {
+    if (fsync(lease->parent) != 0 && errno != EINVAL) {
         say(reason, room, "cannot sync its directory: %s", strerror(errno));
         goto done;
     }
@@ -373,6 +361,10 @@ int landin_replace_update(int token, const char *data,
         goto done;
     }
 
+    landin_publication_notify("update-before-write", target);
+    if (landin_cancellation_requested()) {
+        say(reason, room, "formatting interrupted before writing"); goto done;
+    }
     if (write_all(fd, data, size) != 0 || ftruncate(fd, (off_t)size) != 0
         || sync_file(fd) != 0) {
         int error = errno;
@@ -410,6 +402,7 @@ int landin_replace_update(int token, const char *data,
             " synced: %s", strerror(errno));
         goto done;
     }
+    landin_publication_notify("update-written", target);
     if (stat(target, &now) != 0 || now.st_dev != before.st_dev
         || now.st_ino != before.st_ino) {
         say(reason, room, "the public name changed during formatting; the original read object was formatted; original bytes retained in %s", copy);
@@ -424,7 +417,7 @@ done:
     if (fd >= 0)
         close(fd);
     if (copy) {
-        if (unlink(copy) != 0 && result == 0) {
+        if (unlinkat(lease->parent, copy_name, 0) != 0 && result == 0) {
             say(reason, room, "it is formatted, but its copy %s could not be"
                 " removed: %s", copy, strerror(errno));
             result = -1;
