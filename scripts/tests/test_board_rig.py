@@ -75,7 +75,10 @@ class Description(unittest.TestCase):
         self.assertEqual([(s['board'], s['mode']) for s in rig['ports']['pico2']['steps']],
                          [('rp2350', 'boot'), ('rp2350', 'ram'),
                           ('rp2350_hazard3', 'boot'), ('rp2350_hazard3', 'ram')])
-        self.assertEqual(rig['ports']['pico2']['location'], dict(hub=None, port=None))
+        # The Pico 2 runs on the cascade only through its power-only cable.
+        self.assertEqual(rig['ports']['pico2']['location'], dict(hub='.3.3', port=2))
+        for step in rig['ports']['pico2']['steps']:
+            self.assertIn('--power-only', step['arguments'])
 
     def test_a_description_without_its_pins_is_refused(self):
         with tempfile.TemporaryDirectory() as tmp:
