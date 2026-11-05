@@ -1550,6 +1550,21 @@ package body Landin.Driver is
                   & "; choose another output path and retry");
             else
                Reserved.Append (Path);
+               declare
+                  Stage : constant String :=
+                    Publication.Stage_Path (Artifacts, Path);
+               begin
+                  Result.Trace_Physical_Paths.Append (Stage);
+                  Result.Trace_Logical_Paths.Append (Path);
+                  if Stage'Length > 0 and then Stage (Stage'First) /= '/' then
+                     Result.Trace_Physical_Paths.Append
+                       (Host.Working_Directory & "/"
+                        & (if Starts_With (Stage, "./")
+                           then Stage (Stage'First + 2 .. Stage'Last)
+                           else Stage));
+                     Result.Trace_Logical_Paths.Append (Path);
+                  end if;
+               end;
             end if;
          end Reserve_Output;
 

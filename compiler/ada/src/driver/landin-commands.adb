@@ -455,6 +455,36 @@ package body Landin.Commands is
       Result : Landin.Driver.Outcome;
       Forwarded : Landin.Platform.Path_List := Asked.Forwarded;
       Transcript : aliased US.Unbounded_String;
+      procedure Normalize_Transcript;
+      procedure Normalize_Transcript is
+      begin
+         for Position in 1 .. Natural (Result.Trace_Physical_Paths.Length) loop
+            declare
+               Physical : constant String := J.Quoted
+                 (Result.Trace_Physical_Paths (Position));
+               Logical : constant String := J.Quoted
+                 (Result.Trace_Logical_Paths (Position));
+               Original : constant String :=
+                 Physical (Physical'First + 1 .. Physical'Last - 1);
+               Replacement : constant String :=
+                 Logical (Logical'First + 1 .. Logical'Last - 1);
+               From : Positive := 1;
+               Found : Natural;
+            begin
+               loop
+                  exit when From > US.Length (Transcript);
+                  Found := Ada.Strings.Fixed.Index
+                    (US.To_String (Transcript), Original, From);
+                  exit when Found = 0;
+                  US.Replace_Slice
+                    (Transcript, Found, Found + Original'Length - 1,
+                     Replacement);
+                  From := Found + Replacement'Length;
+               end loop;
+            end;
+         end loop;
+      end Normalize_Transcript;
+
       function Effective (Flag : C.Option; Default : String) return String;
 
       --  A Linux executable links static by default and every
@@ -850,6 +880,7 @@ package body Landin.Commands is
                         US.Append (Transcript, "  " & J.Quoted (Text) & LF);
                      end loop;
                   end if;
+                  Normalize_Transcript;
                   Result.Trace := Transcript & Result.Trace;
                   Finish_Run;
                end if;
@@ -924,6 +955,7 @@ package body Landin.Commands is
                      US.Append (Transcript, "  " & J.Quoted (Text) & LF);
                   end loop;
                end if;
+               Normalize_Transcript;
                Result.Trace := Transcript & Result.Trace;
             when C.Help => null;
          end case;

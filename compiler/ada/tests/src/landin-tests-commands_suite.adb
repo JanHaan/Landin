@@ -474,6 +474,23 @@ package body Landin.Tests.Commands_Suite is
                "nested response and its alias remain untouched");
          end;
       end loop;
+      declare
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Result : Landin.Driver.Outcome;
+      begin
+         Host.Add_File ("main.ldn", Source);
+         Result := Landin.Commands.Execute
+           (["compile", "--target=linux-x86-64", "--link=libc", "-vv",
+             "main.ldn", "-o=program"], Host, Tools, Meter);
+         Landin.Testing.Check
+           (Item, Result.Status = Landin.Driver.Status_Success
+            and then Contains (US.To_String (Result.Trace), "program.s")
+            and then not Contains
+              (US.To_String (Result.Trace), ".refine-publication"),
+            "verbose tool traces retain logical output paths: "
+            & US.To_String (Result.Trace));
+      end;
    end Response_Inputs_Survive;
 
    procedure Emission_And_Depfile (Item : in out Landin.Testing.Context);
