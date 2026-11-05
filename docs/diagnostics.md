@@ -127,8 +127,13 @@ an entry that names no firmware routine (D383).
 
 ### L0003
 
-A source named on the command line is missing or cannot be read. Check the
-path and its permissions.
+A source or supplied tool input is missing or cannot be read. Check the
+path and its permissions. Assembly `.include` and `.incbin`, and linker
+`INCLUDE`, `INPUT`, `GROUP`, `SEARCH_DIR` and `STARTUP` directives must use
+plain absolute paths so their inputs can be protected while the tool runs
+in private staging. Replace relative or indirect forms with plain absolute
+paths, or supply a standalone assembly input or linker script. Nested text
+inputs are limited to sixteen levels.
 
 ### L0004
 
@@ -141,19 +146,36 @@ every target of that system (D857).
 
 ### L0005
 
-An output file cannot be written, or `refine fmt` cannot rewrite its input.
-For emitted output, check that the destination directory exists and is
-writable, or choose another path with `-o`.
+An output cannot be written, published or recovered, or `refine fmt` cannot
+rewrite its input. Check the destination directory and its permissions, or
+choose another output path. A protected-input alias or changed destination
+requires a different output path or a fresh invocation after the change is
+understood (D907).
 
-Formatting writes into the file it read, so it needs a writable ordinary file
-and, for the copy of the original it keeps until the new bytes last, write
-permission in the file's directory (D358). The diagnostic names what it met:
-a read-only file, a directory that refuses the copy, a set-user-ID or
-set-group-ID bit the caller could not set again, a Linux file with
-capabilities, or a write that failed, and then whether the original bytes
-are back or where their copy is kept. `refine fmt --stdout` prints the
-layout without writing anything. See [formatter file handling](format.md)
-for the full contract.
+A late failure can follow successful staging or installation. The diagnostic
+names the previous recovery entry and any captured new or concurrent entry
+that could not be restored safely. Keep those paths: inspect the named
+`.refine-publication-...` directory's `destination-...` records, `stage` and
+`recovery` entries, recover the version you need without overwriting a
+concurrent save, then remove the retained workspace before retrying. An
+unresolved earlier publication is refused rather than discarded. A cleanup
+failure can leave the new output installed and its prior version retained;
+the diagnostic does not promise that nothing changed.
+
+Formatting retains its original read descriptor and writes into that inode.
+It needs a writable ordinary file and write permission in its directory for
+the recovery copy (D358). The diagnostic names a read-only file, a directory
+that refuses the copy, a set-user-ID or set-group-ID bit the caller cannot
+restore, a Linux file with capabilities, or a failed write. It says whether
+the original bytes were restored or names the retained `.fmt-original-...`
+copy. If an editor renamed a save over the source, refine leaves that save
+alone; a late name change can leave the original inode formatted, with its
+original bytes retained. Inspect the named copy before restoring it, and do
+not copy it over a newer save. A failure restoring mode bits can leave the
+file formatted and says which mode could not be restored. Concurrent writes
+through another descriptor to the same inode remain unsupported.
+`refine fmt --stdout` prints the layout without acquiring a writable lease.
+See [formatter file handling](format.md) for the full contract.
 
 ### L0006
 
@@ -1871,11 +1893,16 @@ peripheral has arrays. Correct the selection's spelling against the SVD.
 
 ### L0531
 
-`refine svd` will not replace its outputs (D558): the output directory is
-missing or not a directory, a destination is a directory, an earlier run left
-its staged or kept copies beside a destination, or the manifest it finds there
-names a file outside the directory. Nothing was written. Remove what the
-message names, or choose another `--out-dir`.
+`refine svd` cannot prepare its output group (D558, D907): the output
+root is missing, a link or not a directory; a destination is a directory or
+link, or aliases a protected input; a retained publication needs recovery;
+or the manifest names a file outside the output directory. Correct the
+named path or manifest, or choose another `--out-dir`. For a retained
+`.refine-publication-...` workspace, inspect its `destination-...` records
+and recover the previous or new output before removing it and retrying.
+Preparation can already have created private staging; later publication or
+cleanup failures are L0005 and can leave recovered or retained versions.
+Follow those recovery messages rather than assuming nothing was written.
 
 ### L0533
 
@@ -2264,7 +2291,13 @@ policy, or select another declaration.
 
 ### L0582
 
-`refine bindings` will not replace its outputs (D820): the output directory
-is a symbolic link or not a directory, an output is a directory or a link,
-or an earlier run left its staged or kept copies beside one. Nothing was
-written. Remove what the message names, or choose another `--out-dir`.
+`refine bindings` cannot prepare its output group (D820, D907): the output
+root is a symbolic link or not a directory, an output is a directory or link,
+an output aliases a protected header, policy, response file or selected tool,
+or an earlier publication needs recovery. Correct the named path or choose
+another `--out-dir`. Keep a named `.refine-publication-...` workspace until
+its `destination-...` records and retained previous or new outputs have been
+inspected and recovered; remove it only after recovery. Preparation can
+already have created private staging. A later publication or cleanup failure
+is L0005 and can leave outputs installed or recovery entries retained, as
+that diagnostic reports.

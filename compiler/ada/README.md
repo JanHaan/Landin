@@ -207,10 +207,11 @@ different responsibilities.
 | `Landin.Diagnostics.Syntactic` | turning a parse failure into a diagnostic, and naming the constructs only the parser can meet | invent a code, a construct, or a refused form's standing |
 | `Landin.Diagnostics.Resolution` | turning a duplicate or an unknown name into a diagnostic | invent a code, or attach a sentence to no place |
 | `Landin.Diagnostics.Checking` | turning a type that does not agree, a checker-recognised deferred use or D251's warning into a diagnostic, including the refused-type table and L0304 ownership | invent a code, a construct, or a refused form's standing |
-| `Landin.Platform` | the host interfaces every effect goes through, including the resource meter a stage report reads and the byte channel a server talks through | perform an effect, or let a measurement decide anything |
-| `Landin.Platform.Native` | the only filesystem implementation that reaches a disk, writing a formatted source into its own file through `landin_format_replace.c` (D358), the running executable's own directory through `landin_executable.c`, the process's own resource counters through its host C adapter, and standard input, output and error as a channel through `landin_channel.c` | be reached except through the interface |
+| `Landin.Platform` | the host interfaces every effect goes through, including descriptor-bound reads, protected input identities, prepared publication handles, retained formatter leases, the resource meter a stage report reads and the byte channel a server talks through | perform an effect, or let a measurement decide anything |
+| `Landin.Platform.Publication` | D907's shared artifact group: protected input paths and original read identities, preparation before generation, staged validation and installation, retention through group verification, rollback and final recovery cleanup | perform native filesystem effects, choose a command's outputs, or overwrite a concurrent change to complete recovery |
+| `Landin.Platform.Native` | the only filesystem implementation that reaches a disk: D907's descriptor-bound snapshot reads, pinned-directory, no-clobber publication and retained recovery through `landin_publication.c`, retained read leases and inode-preserving formatting through `landin_format_replace.c` (D358), the running executable's own directory through `landin_executable.c`, the process's own resource counters through its host C adapter, and standard input, output and error as a channel through `landin_channel.c` | be reached except through the interface |
 | `Landin.Platform.Overlays` | a filesystem over another with some files' bytes held in memory, listed in their directories, so a held buffer is read exactly as the saved file would be | write or remove through the host beneath, or decide which buffers are held |
-| `Landin.Platform.Native.Tools` | process supervision and capture, using its host POSIX C adapter for spawning, an environment of exactly the variables named when one is asked for (D821), and capture files, and GNAT for path lookup; `Landin.Source_Maps`, `Landin.Build_Reports.Sources`, `Landin.Devices.Projection` and `Landin.Bindings.Generation` use `GNAT.SHA256` as pure computation | grow a second host concern |
+| `Landin.Platform.Native.Tools` | process supervision and capture, using its host POSIX C adapter for spawning, pinned staging-directory tool output, cancellation forwarded to a tool's process group with bounded shutdown and direct-child reaping before cleanup, an environment of exactly the variables named when one is asked for (D821), and capture files, and GNAT for path lookup; `Landin.Source_Maps`, `Landin.Build_Reports.Sources`, `Landin.Devices.Projection` and `Landin.Bindings.Generation` use `GNAT.SHA256` as pure computation | grow a second host concern |
 | `Landin.Targets` | target facts, typed architecture identity and each architecture's configuration atom, layout arithmetic, physical evidence-cell offsets/extents and D147 any data/table offsets, extent and alignment derived from pointer facts | ask the host how wide a pointer is |
 | `Landin.Targets.Firmware` | the firmware profile a device description selects, its image budget (D537), the cores and the SVD `cpu/name` of each, their architectural vector slots and the closed set of boot image kinds with their second-stage slot and checksum and the image block's words and its reading (D542-D545, D588, D637), and source assembly admission | name a device, invoke tools or derive target widths from the host |
 | `Landin.Targets.Assembly` | each target's operand register table, the `general` class and the register it chooses, a register's spelling at a width, `{name}` substitution, the registers an ordinary block overwrites and those never named, each target's line comment and its removal from block text (D597), the refusals of other comment forms and digit separators, and hosted assembly text admission | decide an operand's type or read the host's registers |
@@ -235,9 +236,9 @@ different responsibilities.
 | `Landin.Commands.Response_Files` | bounded quoted argument expansion through the supplied filesystem | expand environment variables or execute shell text |
 | `Landin.Commands.Presentation` | human, short and structured rendering of the driver's retained diagnostics and positions | reread source files or alter a diagnostic's meaning |
 | `Landin.Commands.Tracing` | native argument-vector tracing through the supplied tool runner | execute a command outside that capability |
-| `Landin.Commands.Bindings` | `refine bindings` (D820): checking the request, reading the headers and policy and running the named Clang through `Landin.Platform` in an environment of its own (D821), from a private directory it removes, and D558's preflighted, staged and verified replacement of the four outputs, with rollback | generate a binding, parse C, or replace a file outside the output directory |
-| `Landin.Commands.Devices` | `refine svd`: reading the SVD and policy through `Landin.Platform`, reporting a projection's fault at its place, and D558's preflighted, staged and verified replacement of the outputs, with rollback and the removal of what the old manifest names and this run does not make | project an SVD, or replace a file outside the output directory |
-| `Landin.Driver` | argument and `--emit` classification, the `explain` and `fmt` subcommands, output/toolchain selection and the result, with its report as data beside its rendering | implement a language rule, acquire a package or expose a public orchestration protocol |
+| `Landin.Commands.Bindings` | `refine bindings` (D820): checking the request, reading the headers and policy and running the named Clang through `Landin.Platform` in an environment of its own (D821), from a private directory it removes, and selection of the four outputs for D907's shared `Landin.Platform.Publication` group through adapter compilation and verification | generate a binding, parse C, or replace a file outside the output directory |
+| `Landin.Commands.Devices` | `refine svd`: reading the SVD and policy through `Landin.Platform`, reporting a projection's fault at its place, and selection of generated and manifest-listed stale outputs for D907's shared `Landin.Platform.Publication` group | project an SVD, or replace a file outside the output directory |
+| `Landin.Driver` | argument and `--emit` classification, the `explain` and `fmt` subcommands, output/toolchain selection, protected input registration and artifact verification through `Landin.Platform.Publication`, and the result, with its report as data beside its rendering | implement a language rule, acquire a package or expose a public orchestration protocol |
 | `Landin.Driver.Loading` | reading named files, and the ordered-root discovery of an entry module and every module its imports reach, an import of `core`, `hosted` or `platform` from the library root alone, through `Landin.Platform` | decide what a buffer holds, cache a module across compilations, or acquire a package |
 | `Landin.Driver.Library` | where the repository-owned library is: beside the executable in an installed or a checkout layout, or a directory `--library=DIR` names, which imports name it, and where it looked when it found none | search any other default root, read a source, or acquire a package |
 | `Landin.Driver.Assembler_Sites` | placing an assembler's refusal of a `.s` line at the `assembler.block` whose text wrote it, by that text alone | change emitted assembly, or place a line two blocks share |
@@ -1244,6 +1245,43 @@ on XFS, ZFS or NFS is not refused for `prog` beside `prog.s`. An unresolved
 identity is refused conservatively;
 this does not protect against concurrent filesystem replacement. No host
 identity operation determines Landin target layout or emits program code.
+
+`Landin.Platform.Publication` supplies the group state machine used by the
+compiler driver and both generators; none owns a separate replacement or
+rollback protocol. `Prepare` captures each output's expected version or
+absence before generation; `Stage_Path` names its private staging location;
+`Protect` records consumed input names and original read identities. `Commit`
+validates every stage, captures and checks old entries, then installs into
+absent names without clobbering a concurrent entry. `Abort_Transaction`
+recovers in reverse order; `Finish` discards prior versions only after the
+command has verified the group. Directory artifacts have checked trees.
+Stale manifest outputs use the same delete-only preparation. Native recovery
+keeps uncertain entries in a journalled `.refine-publication-...` workspace
+and diagnoses that workspace before another invocation can reuse its outputs.
+A public name may briefly be absent, and readers do not get an atomic group
+snapshot. Synced files and entries do not establish power-loss durability.
+
+Compiler snapshot reads bind bytes and identity to one descriptor. The
+protected closure includes sources, response files, policies, supplied tool
+inputs, selected tools and known resolved libraries; bindings additionally
+records Clang's consumed-header dependencies. External tools report filenames,
+not the identities of their original read descriptors. Arbitrary wrappers,
+interpreters and implicit toolchain internals are outside this closure.
+The driver refuses relative or indirect assembly and linker file directives
+that would change meaning in staging, naming the route through plain absolute
+paths or a standalone assembly input or linker script.
+
+Formatting is the separate inode-preserving mode of the same publication
+contract: its original read descriptor remains open through the write, so
+renamed-in saves are not overwritten and invisible metadata and hard-link
+behavior are preserved. `--check` and `--stdout` acquire no writable lease.
+Concurrent writes through another descriptor to that inode, mutation through
+an already-open directory descriptor, and hostile same-credential or privileged
+processes remain outside the contract. Tool cancellation uses signal-safe
+notification and ordinary Ada cleanup, forwards to the active process group,
+stops its remaining ordinary members and reaps its direct child before
+recovery; group escape and credential changes are outside supervision.
+
 The separate `Same_File` query answers true only for existing host objects
 with matching identity. Explicit source arguments load each proven object
 once, retaining its first successful spelling and snapshot for diagnostics.
