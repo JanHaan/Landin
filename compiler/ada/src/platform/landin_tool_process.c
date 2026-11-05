@@ -239,8 +239,27 @@ int landin_tool_stop(int child, int *status)
     }
     /* The unreaped direct child reserves this group ID. Never signal a
        caller group, and never retry against a PID already reaped by Ada. */
-    if (kill(-(pid_t)child, SIGKILL) != 0 && errno != ESRCH)
+    if (kill(-(pid_t)child, SIGKILL) != 0 && errno != ESRCH) {
+#ifdef __APPLE__
+        /* Darwin reports EPERM for a group containing only its zombie
+           leader. Confirm the leader has exited without reaping it before
+           treating that result as no remaining ordinary signal target.
+           Tools that change credentials or escape their group are outside
+           this supervisor's process-family contract. */
+        siginfo_t info;
+        int error = errno;
+        memset(&info, 0, sizeof info);
+        if (error != EPERM
+            || waitid(P_PID, (id_t)child, &info,
+                      WEXITED | WNOHANG | WNOWAIT) != 0
+            || info.si_pid != (pid_t)child) {
+            errno = error;
+            return -1;
+        }
+#else
         return -1;
+#endif
+    }
     /* Still stop the direct child if it has changed its own group. It has
        not been reaped, so this PID cannot yet designate another process. */
     if (kill((pid_t)child, SIGKILL) != 0 && errno != ESRCH)
