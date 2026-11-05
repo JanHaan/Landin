@@ -1,0 +1,312 @@
+/* Native controls for the production POSIX tool-process helper.
+   No cancellation implementation is copied here. Each controller owns its
+   spawned group until the production helper stops and reaps its leader. */
+#define _POSIX_C_SOURCE 200809L
+#include <errno.h>
+#include <fcntl.h>
+#include <signal.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
+
+int landin_tool_start(char *const[], char *const[], int, int, int, int, int *);
+int landin_tool_wait(int, int *, int);
+int landin_tool_cancel(int, int *);
+int landin_tool_stop(int, int *);
+int landin_cancellation_begin(void);
+void landin_cancellation_end(void);
+int landin_cancellation_requested(void);
+
+static int owned_child;
+static volatile sig_atomic_t received;
+static volatile sig_atomic_t restored;
+static volatile sig_atomic_t timed_out;
+static const int numbers[] = {SIGINT, SIGTERM, SIGHUP};
+
+static void fail(const char *message)
+{
+    int status;
+    int saved = errno;
+    if (owned_child > 0) {
+        siginfo_t info;
+        memset(&info, 0, sizeof info);
+        /* A failed assertion never signals a group after losing its direct
+           child reservation. This is failure cleanup, not a test substitute. */
+        if (waitid(P_PID, (id_t)owned_child, &info,
+                   WEXITED | WNOHANG | WNOWAIT) == 0) {
+            int stopped = landin_tool_stop(owned_child, &status);
+            /* Preserve a failing stop assertion, but reap an already-dead
+               direct child even if the production stop helper refused it. */
+            if (stopped < 0 && info.si_pid == (pid_t)owned_child)
+                (void)waitpid((pid_t)owned_child, &status, 0);
+        }
+    }
+    fprintf(stderr, "FAIL: %s (errno=%d)\n", message, saved);
+    exit(2);
+}
+
+static void require(int yes, const char *message)
+{
+    if (!yes)
+        fail(message);
+}
+
+static void notification(int number)
+{
+    if (received == 0)
+        received = number;
+}
+
+static void original(int number)
+{
+    restored = number;
+}
+
+static void deadline(int number)
+{
+    (void)number;
+    timed_out = 1;
+}
+
+static void handler(int number, void (*function)(int))
+{
+    struct sigaction action;
+    memset(&action, 0, sizeof action);
+    action.sa_handler = function;
+    sigemptyset(&action.sa_mask);
+    sigaddset(&action.sa_mask, SIGUSR2);
+    require(sigaction(number, &action, NULL) == 0, "install handler");
+}
+
+static void byte_read(int fd)
+{
+    char byte;
+    ssize_t count;
+    do {
+        require(!timed_out, "read deadline");
+        count = read(fd, &byte, 1);
+    } while (count < 0 && errno == EINTR);
+    require(count == 1, "read readiness acknowledgement");
+}
+
+/* Block the signals before testing the flag, then atomically unblock them
+   while waiting. There is no readiness timing window or polling interval. */
+static void await_signal(int cancellation)
+{
+    sigset_t blocked, previous;
+    size_t index;
+    sigemptyset(&blocked);
+    for (index = 0; index < 3; ++index)
+        sigaddset(&blocked, numbers[index]);
+    sigaddset(&blocked, SIGALRM);
+    require(sigprocmask(SIG_BLOCK, &blocked, &previous) == 0, "block signals");
+    while ((cancellation ? landin_cancellation_requested() : received) == 0) {
+        require(!timed_out, "signal deadline");
+        (void)sigsuspend(&previous);
+    }
+    require(sigprocmask(SIG_SETMASK, &previous, NULL) == 0, "restore mask");
+}
+
+static void dispositions(int ignored)
+{
+    size_t index;
+    for (index = 0; index < 3; ++index)
+        handler(numbers[index], numbers[index] == ignored ? SIG_IGN : original);
+}
+
+static void check_restored(int ignored)
+{
+    size_t index;
+    for (index = 0; index < 3; ++index) {
+        struct sigaction action;
+        int number = numbers[index];
+        require(sigaction(number, NULL, &action) == 0, "get disposition");
+        require(action.sa_handler == (number == ignored ? SIG_IGN : original),
+                "original disposition restored");
+        require(sigismember(&action.sa_mask, SIGUSR2) == 1,
+                "original handler mask restored");
+        restored = 0;
+        require(raise(number) == 0, "raise restored signal");
+        require(restored == (number == ignored ? 0 : number),
+                "restored handler executes");
+    }
+    require(landin_cancellation_requested() == 0, "end resets request");
+}
+
+static void reaped(int child)
+{
+    int word;
+    owned_child = 0;
+    errno = 0;
+    require(waitpid((pid_t)child, &word, WNOHANG) == -1 && errno == ECHILD,
+            "direct child already reaped by production helper");
+    owned_child = 0;
+    puts("DIRECT_REAPED");
+}
+
+static void tool(int events, int ready, int stubborn)
+{
+    int acknowledgement[2];
+    pid_t descendant;
+    size_t index;
+    for (index = 0; index < 3; ++index)
+        handler(numbers[index], notification);
+    require(pipe(acknowledgement) == 0, "descendant acknowledgement pipe");
+    descendant = fork();
+    require(descendant >= 0, "fork descendant");
+    if (descendant == 0) {
+        close(acknowledgement[0]);
+        received = 0;
+        require(write(acknowledgement[1], "R", 1) == 1, "descendant ready");
+        close(acknowledgement[1]);
+        await_signal(0);
+        dprintf(events, "DESCENDANT_SIGNAL %d\n", (int)received);
+        if (stubborn) {
+            /* Only production's bounded SIGKILL escalation ends this role.
+               Keep the event descriptor open, so EOF proves it stopped. */
+            for (;;)
+                pause();
+        }
+        _exit(0);
+    }
+    close(acknowledgement[1]);
+    byte_read(acknowledgement[0]);
+    close(acknowledgement[0]);
+    require(write(ready, "R", 1) == 1, "tool and descendant ready");
+    close(ready);
+    await_signal(0);
+    dprintf(events, "TOOL_SIGNAL %d\n", (int)received);
+    if (stubborn) {
+        for (;;)
+            pause();
+    } else {
+        int word;
+        pid_t result;
+        do {
+            result = waitpid(descendant, &word, 0);
+        } while (result < 0 && errno == EINTR);
+        require(result == descendant && WIFEXITED(word)
+                && WEXITSTATUS(word) == 0, "tool reaps its own descendant");
+        dprintf(events, "DESCENDANT_REAPED_BY_TOOL\n");
+        _exit(0);
+    }
+}
+
+static int start(const char *self, const char *role, int number,
+                 int ready, int events)
+{
+    char ready_arg[32], event_arg[32], number_arg[32];
+    char *args[7];
+    int input, capture, child = 0;
+    snprintf(ready_arg, sizeof ready_arg, "%d", ready);
+    snprintf(event_arg, sizeof event_arg, "%d", events);
+    snprintf(number_arg, sizeof number_arg, "%d", number);
+    args[0] = (char *)self;
+    args[1] = (char *)role;
+    args[2] = event_arg;
+    args[3] = ready_arg;
+    args[4] = number_arg;
+    args[5] = NULL;
+    input = open("input", O_CREAT | O_EXCL | O_RDWR, 0600);
+    capture = open("capture", O_CREAT | O_EXCL | O_RDWR, 0600);
+    require(input >= 0 && capture >= 0, "owned input/capture files");
+    require(landin_tool_start(args, NULL, 0, input, capture, -1, &child) == 0,
+            "start actual production tool group");
+    owned_child = child;
+    close(input);
+    close(capture);
+    return child;
+}
+
+int main(int argc, char **argv)
+{
+    int number, events, child, status = 0;
+    int ready[2];
+    const char *mode;
+    require(argc >= 3, "mode and signal arguments");
+    mode = argv[1];
+    if (strcmp(mode, "tool") == 0 || strcmp(mode, "stubborn-tool") == 0) {
+        require(argc == 5, "tool arguments");
+        tool(atoi(argv[2]), atoi(argv[3]), strcmp(mode, "stubborn-tool") == 0);
+        return 2;
+    }
+    if (strcmp(mode, "quick") == 0) {
+        struct sigaction action;
+        require(argc == 5, "quick arguments");
+        number = atoi(argv[4]);
+        if (number != 0) {
+            require(sigaction(number, NULL, &action) == 0
+                    && action.sa_handler == SIG_IGN, "tool inherits ignore");
+            require(raise(number) == 0, "tool ignores inherited signal");
+            dprintf(atoi(argv[2]), "TOOL_INHERITED_IGNORE\n");
+        }
+        return 23;
+    }
+    setvbuf(stdout, NULL, _IONBF, 0);
+    handler(SIGALRM, deadline);
+    alarm(12);
+    number = atoi(argv[2]);
+    dispositions(strcmp(mode, "ignore") == 0 ? number : 0);
+    require(landin_cancellation_begin() == 0, "begin cancellation");
+    events = dup(STDOUT_FILENO);
+    require(events >= 0, "inheritable event descriptor");
+    if (strcmp(mode, "before") == 0) {
+        puts("READY");
+        await_signal(1);
+        require(landin_cancellation_requested() == number, "before spawn signal");
+    }
+    require(pipe(ready) == 0, "tool readiness pipe");
+    child = start(argv[0],
+                  strcmp(mode, "normal") == 0 || strcmp(mode, "ignore") == 0
+                      ? "quick" : strcmp(mode, "stubborn") == 0
+                          ? "stubborn-tool" : "tool",
+                  strcmp(mode, "ignore") == 0 ? number : 0, ready[1], events);
+    close(ready[1]);
+    if (strcmp(mode, "normal") == 0 || strcmp(mode, "ignore") == 0) {
+        int result = landin_tool_wait(child, &status, 0);
+        if (result == child)
+            owned_child = 0;
+        require(result == child && status == 23, "normal exit status");
+        reaped(child);
+        if (strcmp(mode, "ignore") == 0) {
+            puts("READY");
+            byte_read(STDIN_FILENO);
+            require(raise(number) == 0, "raise inherited ignored signal");
+        }
+        require(landin_cancellation_requested() == 0, "no cancellation");
+    } else {
+        byte_read(ready[0]);
+        if (strcmp(mode, "before") != 0) {
+            puts("READY");
+            await_signal(1);
+        }
+        require(landin_cancellation_requested() == number,
+                "original invocation signal recorded");
+        require(landin_cancellation_begin() == 0, "nested begin is idempotent");
+        require(raise(number == SIGINT ? SIGTERM : SIGINT) == 0,
+                "later signal delivered");
+        require(landin_cancellation_requested() == number,
+                "first cancellation signal retained");
+        {
+            int result = landin_tool_cancel(child, &status);
+            if (result == child)
+                owned_child = 0;
+            require(result == child,
+                    "production cancel stops and reaps direct child");
+        }
+        require(status == (strcmp(mode, "stubborn") == 0 ? -1 : 0),
+                "cooperative versus forced stop status");
+        reaped(child);
+    }
+    close(ready[0]);
+    close(events);
+    landin_cancellation_end();
+    check_restored(strcmp(mode, "ignore") == 0 ? number : 0);
+    landin_cancellation_end();
+    alarm(0);
+    puts("PASS");
+    return 0;
+}
