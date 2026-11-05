@@ -353,10 +353,13 @@ def outcomes(directory):
 
     Each leg uploads one directory named after its port, holding
     transfer.json from its first step and evidence/outcome.json from the
-    board tool.  download-artifact puts a single matched artifact directly
-    in DIRECTORY and several in a directory each, so both depths are read.
-    A port with no transfer.json never started on the rig; one with no
-    outcome stopped before the board tool wrote it.
+    board tool, in an artifact named for its port and run attempt.
+    download-artifact puts a single matched artifact directly in DIRECTORY
+    and several in a directory each, so both depths are read.  A rerun leg
+    leaves its earlier attempts' evidence in the run, so each port is judged
+    by its latest attempt, the one the job listing reports; two of the same
+    attempt are ambiguous.  A port with no transfer.json never started on the
+    rig; one with no outcome stopped before the board tool wrote it.
     """
     found = {}
     if directory is None:
@@ -368,10 +371,19 @@ def outcomes(directory):
         if not legs:
             found[port] = "no evidence: the job never started on the rig"
             continue
-        if len(legs) > 1:
-            found[port] = "ambiguous: %d evidence directories" % len(legs)
+        attempts = {}
+        for leg in legs:
+            try:
+                attempt = int(json.loads(leg.read_text(encoding="utf-8"))["run_attempt"])
+            except (OSError, ValueError, KeyError, TypeError):
+                attempt = 0
+            attempts.setdefault(attempt, []).append(leg)
+        latest = attempts[max(attempts)]
+        if len(latest) > 1:
+            found[port] = "ambiguous: %d evidence directories of attempt %d" % (
+                len(latest), max(attempts))
             continue
-        outcome = legs[0].parent / "evidence" / "outcome.json"
+        outcome = latest[0].parent / "evidence" / "outcome.json"
         try:
             label = json.loads(outcome.read_text(encoding="utf-8")).get("outcome")
         except (OSError, ValueError, AttributeError):

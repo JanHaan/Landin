@@ -1140,10 +1140,11 @@ class Outcomes(unittest.TestCase):
         self.root = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, self.root)
 
-    def leg(self, base, port, outcome=None):
+    def leg(self, base, port, outcome=None, attempt=None):
         leg = base / port
         leg.mkdir(parents=True)
-        (leg / "transfer.json").write_text("{}")
+        (leg / "transfer.json").write_text(
+            "{}" if attempt is None else json.dumps({"port": port, "run_attempt": str(attempt)}))
         if outcome is not None:
             (leg / "evidence").mkdir()
             (leg / "evidence/outcome.json").write_text(outcome)
@@ -1168,6 +1169,23 @@ class Outcomes(unittest.TestCase):
         self.leg(self.root, "esp32c3", '{"outcome": "passed"}')
         self.leg(self.root / "board-evidence-esp32c3", "esp32c3", '{"outcome": "passed"}')
         self.assertTrue(gate_inputs.outcomes(self.root)["esp32c3"].startswith("ambiguous"))
+
+    def test_a_rerun_leg_is_judged_by_its_latest_attempt(self):
+        # A rerun leaves the failed attempt's evidence in the run beside the
+        # passing one's; the aggregate once read the stale failure.
+        self.leg(self.root / "board-evidence-stm32h753-1", "stm32h753", '{"outcome": "failed"}', 1)
+        self.leg(self.root / "board-evidence-stm32h753-2", "stm32h753", '{"outcome": "passed"}', 2)
+        self.leg(self.root / "board-evidence-rp2040-1", "rp2040", '{"outcome": "passed"}', 1)
+        found = gate_inputs.outcomes(self.root)
+        self.assertEqual((found["stm32h753"], found["rp2040"]), ("passed", "passed"))
+        self.leg(self.root / "board-evidence-stm32h753-3", "stm32h753", '{"outcome": "cancelled"}', 3)
+        self.assertEqual(gate_inputs.outcomes(self.root)["stm32h753"], "cancelled")
+        self.leg(self.root / "board-evidence-stm32h753-3b", "stm32h753", '{"outcome": "passed"}', 3)
+        self.assertTrue(gate_inputs.outcomes(self.root)["stm32h753"].startswith("ambiguous"))
+
+    def test_each_attempt_of_a_leg_keeps_its_own_artifact(self):
+        board = "\n".join(workflow_jobs(GATE.read_text())["board"])
+        self.assertIn("name: board-evidence-${{ matrix.port }}-${{ github.run_attempt }}", board)
 
     def test_an_absent_directory_has_no_evidence_for_any_port(self):
         found = gate_inputs.outcomes(self.root / "absent")
