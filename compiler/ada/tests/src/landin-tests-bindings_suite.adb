@@ -146,7 +146,9 @@ package body Landin.Tests.Bindings_Suite is
       Tools.Add_Result (0, Preprocessed (Directory => Directory));
       Tools.Add_Result (0, Ast);
       Tools.Add_Result (0, Probe_Answers);
-      Tools.Add_Result (0, "");
+      Tools.Add_Result
+        (0, "refine-bindings: " & Directory & "/output/adapters.c "
+         & Directory & "/headers/api/api.h" & LF);
    end Script;
 
    function Report_Of (Result : Landin.Driver.Outcome) return String is
@@ -296,6 +298,23 @@ package body Landin.Tests.Bindings_Suite is
         ["PATH", "HOME", "TMPDIR", "TMP", "TEMP", "SystemRoot", "LC_ALL=C",
          "TZ=UTC"];
    begin
+      declare
+         Files : Landin.Platform.Path_List;
+         Valid : Boolean;
+      begin
+         B.Dependency_Files
+           ("refine-bindings: /one\ two.h /dollar$$.h \" & LF
+            & " /hash\#.h /slash\\.h" & LF, Files, Valid);
+         Landin.Testing.Check
+           (Item, Valid and then Landin.Platform.Path_Vectors."="
+              (Files, ["/one two.h", "/dollar$.h", "/hash#.h", "/slash\.h"]),
+            "Clang dependency filenames retain escaped physical spellings");
+         Landin.Testing.Check
+           (Item, Landin.Platform.Path_Vectors."="
+              (B.Marker_Files (Preprocessed),
+               [Work & "/translation.c", Work & "/headers/api/api.h"]),
+            "marker closure excludes synthetic built-in files");
+      end;
       Prepare (Host);
       Script (Tools);
       declare
@@ -473,6 +492,22 @@ package body Landin.Tests.Bindings_Suite is
          Host.Add_File (Root & "/out/exports.h.refine-old", "");
       end Leftover;
 
+      procedure Linked_Leftover
+        (Host : in out Landin.Testing.Fakes.Fake_Filesystem);
+      procedure Linked_Leftover
+        (Host : in out Landin.Testing.Fakes.Fake_Filesystem) is
+      begin
+         Host.Add_Link (Root & "/out/bindings.ldn.refine-new");
+      end Linked_Leftover;
+
+      procedure Input_Alias
+        (Host : in out Landin.Testing.Fakes.Fake_Filesystem);
+      procedure Input_Alias
+        (Host : in out Landin.Testing.Fakes.Fake_Filesystem) is
+      begin
+         Host.Add_Alias (Root & "/out/exports.h", Root & "/api.h");
+      end Input_Alias;
+
       procedure No_Sysroot
         (Host : in out Landin.Testing.Fakes.Fake_Filesystem);
       procedure No_Sysroot
@@ -532,20 +567,24 @@ package body Landin.Tests.Bindings_Suite is
               & " file", Arrange => Directory_In_The_Way'Access);
       Expect (Arguments, "L0582", "was left by an interrupted run of refine"
               & " bindings", Arrange => Leftover'Access);
+      Expect (Arguments, "L0582", "was left by an interrupted run of refine"
+              & " bindings", Arrange => Linked_Leftover'Access);
+      Expect (Arguments, "L0582", "overlaps an input",
+              Arrange => Input_Alias'Access);
    end Requests_Are_Refused_By_Code;
 
    procedure A_Failed_Replacement_Puts_Back
      (Item : in out Landin.Testing.Context);
 
-   --  After each move a replacement makes, one fails: every output is
-   --  what it was before, and nothing staged or kept is left.
+   --  Fail each capture and installation in the shared group: every
+   --  output is what it was before and all private staging is cleaned.
    procedure A_Failed_Replacement_Puts_Back
      (Item : in out Landin.Testing.Context)
    is
       Meter : Landin.Platform.Unmetered;
    begin
       for Existing in Boolean loop
-         for At_Move in 1 .. (if Existing then 8 else 4) loop
+         for At_Move in 1 .. 8 loop
             declare
                Host : Landin.Testing.Fakes.Fake_Filesystem;
                Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
@@ -568,9 +607,7 @@ package body Landin.Tests.Bindings_Suite is
                begin
                   Landin.Testing.Check
                     (Item, Result.Status = Landin.Driver.Status_Reported
-                     and then Contains (Report_Of (Result), "error[L0005]")
-                     and then Contains (Report_Of (Result),
-                                        "every old file was put back"),
+                     and then Contains (Report_Of (Result), "error[L0005]"),
                      Label & ": " & Report_Of (Result));
                   for Index in B.Output_Index loop
                      declare

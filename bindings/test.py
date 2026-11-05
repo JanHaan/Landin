@@ -16,6 +16,7 @@ import json
 import os
 import pathlib
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -2062,6 +2063,79 @@ int main(void) { return f(36) != 37; }
         self.assertIn("stale policy", process.stderr)
         for name in ("bindings.ldn", "adapters.c", "exports.h", "bindings.json"):
             self.assertEqual((output / name).read_text(encoding="utf-8"), "sentinel\n")
+
+    def test_publication_preserves_consumed_inputs(self) -> None:
+        for kind in ("header", "policy", "tool", "path-tool", "response",
+                     "nested-response", "hardlink-header", "transitive-header"):
+            with self.subTest(kind=kind):
+                parent = self.root / kind
+                sysroot, includes, output = self.make_tree(
+                    parent, header="int f(void);\n",
+                    selected_policy=self.selection(self.function("f")))
+                output.mkdir()
+                command = self.command(parent, sysroot, includes, output)
+                environment = dict(os.environ)
+                if kind == "header":
+                    source = output / "exports.h"
+                    shutil.move(parent / "api.h", source)
+                    command[-1] = f"api/api.h={source}"
+                elif kind == "policy":
+                    source = output / "bindings.json"
+                    shutil.move(parent / "policy.json", source)
+                    command[command.index("--policy") + 1] = str(source)
+                elif kind in ("tool", "path-tool"):
+                    source = output / "adapters.c"
+                    source.write_text("#!/bin/sh\nexec " + shlex.quote(str(self.clang))
+                                      + ' "$@"\n')
+                    source.chmod(0o755)
+                    command[command.index("--clang") + 1] = (
+                        str(source) if kind == "tool" else source.name)
+                    environment["PATH"] = str(output) + os.pathsep + environment["PATH"]
+                elif kind in ("response", "nested-response"):
+                    source = output / "exports.h"
+                    source.write_text(shlex.join(command[1:]) + "\n")
+                    if kind == "nested-response":
+                        outer = parent / "outer.rsp"
+                        outer.write_text("@" + shlex.quote(str(source)) + "\n")
+                        command = [refine(), "@" + str(outer)]
+                    else:
+                        command = [refine(), "@" + str(source)]
+                elif kind == "hardlink-header":
+                    source = output / "exports.h"
+                    os.link(parent / "api.h", source)
+                else:
+                    source = output / "exports.h"
+                    source.write_text("int f(void);\n")
+                    os.link(source, includes / "dependency.h")
+                    (parent / "api.h").write_text('#include <dependency.h>\n')
+                original = source.read_bytes()
+                identity = (source.stat().st_dev, source.stat().st_ino)
+                process = subprocess.run(command, env=environment,
+                                         stdout=subprocess.PIPE,
+                                         stderr=subprocess.PIPE, text=True)
+                self.assertIn(process.returncode, REFUSED, process.stderr)
+                self.assertEqual(source.read_bytes(), original)
+                self.assertEqual((source.stat().st_dev, source.stat().st_ino), identity)
+                self.assertFalse((output / "bindings.ldn").exists())
+
+    def test_dangling_publication_names_are_occupied(self) -> None:
+        for suffix in ("", ".refine-new", ".refine-old"):
+            with self.subTest(suffix=suffix):
+                parent = self.root / ("dangling" + suffix)
+                sysroot, includes, output = self.make_tree(
+                    parent, header="int f(void);\n",
+                    selected_policy=self.selection(self.function("f")))
+                output.mkdir()
+                outside = parent / "absent-outside"
+                link = output / ("bindings.ldn" + suffix)
+                link.symlink_to(outside)
+                process = subprocess.run(self.command(parent, sysroot, includes, output),
+                                         stdout=subprocess.PIPE,
+                                         stderr=subprocess.PIPE, text=True)
+                self.assertIn(process.returncode, REFUSED, process.stderr)
+                self.assertTrue(link.is_symlink())
+                self.assertFalse(outside.exists())
+                self.assertEqual(list(output.iterdir()), [link])
 
     def test_duplicate_policy_keys_are_rejected_before_generation(self) -> None:
         parent = self.root / "duplicate-keys"

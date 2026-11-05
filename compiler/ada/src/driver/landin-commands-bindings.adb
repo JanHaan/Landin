@@ -6,6 +6,7 @@ with Landin.Bindings;
 with Landin.Diagnostics;
 with Landin.Diagnostics.Catalogue;
 with Landin.Diagnostics.Text;
+with Landin.Platform.Publication;
 with Landin.Source;
 with Landin.Source.Sets;
 with Landin.Targets;
@@ -17,10 +18,10 @@ package body Landin.Commands.Bindings is
    package B renames Landin.Bindings;
    package Cat renames Landin.Diagnostics.Catalogue;
    package Platform renames Landin.Platform;
+   package Pub renames Landin.Platform.Publication;
 
    use type Platform.Read_Status;
    use type Platform.Write_Status;
-   use type Platform.Move_Status;
    use type Platform.Termination;
    use type B.Fault_Kind;
    use type B.Target;
@@ -162,13 +163,17 @@ package body Landin.Commands.Bindings is
       None : Landin.Source.Sets.Source_Set;
       Session : B.Session;
       Chosen : B.Target := B.Linux_X86_64;
-      Clang : constant String := US.To_String (Asked.Clang);
+      Clang : US.Unbounded_String;
       Logical_Names, Header_Paths, Header_Bytes : Platform.Path_List;
       Sysroot : US.Unbounded_String;
       Include_Dirs, System_Include_Dirs : Platform.Path_List;
       Out_Dir : US.Unbounded_String;
       Work : US.Unbounded_String;
       Has_Work : Boolean := False;
+      Group : Pub.Transaction;
+      Has_Group : Boolean := False;
+      Input_Paths : Platform.Path_List := Asked.Protected_Inputs;
+      Policy_Text : US.Unbounded_String;
 
       procedure Report (Code : Cat.Code_Name; Message : String);
 
@@ -183,6 +188,25 @@ package body Landin.Commands.Bindings is
          Result.Report := US.To_Unbounded_String
            (Landin.Diagnostics.Text.Render (Result.Found, None));
       end Report;
+
+      procedure Read_Input
+        (Path : String; Content : out US.Unbounded_String;
+         Status : out Platform.Read_Status);
+
+      procedure Read_Input
+        (Path : String; Content : out US.Unbounded_String;
+         Status : out Platform.Read_Status)
+      is
+         Identity : Platform.File_Identity;
+      begin
+         Host.Read_Snapshot (Path, Content, Identity, Status);
+         if Status = Platform.Read_Ok then
+            Pub.Protect (Group, Path, Identity);
+            if not Input_Paths.Contains (Path) then
+               Input_Paths.Append (Path);
+            end if;
+         end if;
+      end Read_Input;
 
       --  A request refine cannot carry out as written, refused as a
       --  command line is.
@@ -294,7 +318,7 @@ package body Landin.Commands.Bindings is
                            return False;
                         end if;
                      end loop;
-                     Host.Read_File (Path, Bytes, Read);
+                     Read_Input (Path, Bytes, Read);
                      if Read /= Platform.Read_Ok then
                         Report (Cat.Unreadable_Source, "cannot read the"
                                 & " header " & Repr (Logical));
@@ -366,6 +390,12 @@ package body Landin.Commands.Bindings is
                        & " is not a regular file");
                return False;
             end if;
+            Read_Input (Policy_Path, Policy_Text, Read);
+            if Read /= Platform.Read_Ok then
+               Report (Cat.Unreadable_Source, "cannot read the policy "
+                       & US.To_String (Asked.Policy));
+               return False;
+            end if;
          end;
          declare
             Written : constant String := US.To_String (Asked.Out_Dir);
@@ -411,6 +441,12 @@ package body Landin.Commands.Bindings is
             declare
                Path : constant String := Destination (Index);
             begin
+               if Host.Paths_Overlap_Any (Path, Input_Paths) then
+                  Report (Cat.Bindings_Output_Refused,
+                          Path & " overlaps an input; name another output"
+                          & " directory with --out-dir");
+                  return False;
+               end if;
                if Host.Is_Link (Path) or else Host.Is_Directory (Path) then
                   Report (Cat.Bindings_Output_Refused,
                           "cannot publish " & B.Output_Name (Index)
@@ -419,7 +455,9 @@ package body Landin.Commands.Bindings is
                end if;
                for Suffix of Platform.Path_List'[Staged_Suffix, Kept_Suffix]
                loop
-                  if Host.Exists (Path & Suffix) then
+                  if Host.Exists (Path & Suffix)
+                    or else Host.Is_Link (Path & Suffix)
+                  then
                      Report (Cat.Bindings_Output_Refused,
                              Path & Suffix & " was left by an interrupted"
                              & " run of refine bindings; compare it with "
@@ -599,11 +637,12 @@ package body Landin.Commands.Bindings is
          Arguments.Append (Extra);
          begin
             Tools.Run_In_Environment
-              (Clang, Arguments, Environment, Ran, Platform.Output_Only);
+              (US.To_String (Clang), Arguments, Environment, Ran,
+               Platform.Output_Only);
          exception
             when Failure : External_Tool_Failed =>
                Report (Cat.Bindings_Clang_Refused, "cannot execute Clang "
-                       & Clang & ": "
+                       & US.To_String (Clang) & ": "
                        & Ada.Exceptions.Exception_Message (Failure));
                return False;
          end;
@@ -692,21 +731,12 @@ package body Landin.Commands.Bindings is
       function Bind return Boolean;
 
       function Bind return Boolean is
-         Policy_Text : US.Unbounded_String;
-         Read : Platform.Read_Status;
          Made : Platform.Write_Status;
          Triple_Output, Macros, Preprocessed, Ast : US.Unbounded_String;
-         Stripped, Probe, Probe_Output, Ignored : US.Unbounded_String;
+         Stripped, Probe, Probe_Output, Dependencies : US.Unbounded_String;
          Headers : B.Header_Vectors.Vector;
          Roots : Platform.Path_List;
       begin
-         Host.Read_File (Absolute (US.To_String (Asked.Policy)), Policy_Text,
-                         Read);
-         if Read /= Platform.Read_Ok then
-            Report (Cat.Unreadable_Source, "cannot read the policy "
-                    & US.To_String (Asked.Policy));
-            return False;
-         end if;
          B.Load_Policy (Session, US.To_String (Policy_Text));
          if Report_Fault then
             return False;
@@ -797,6 +827,14 @@ package body Landin.Commands.Bindings is
          Roots.Append (US.To_String (Work));
          Roots.Append (Include_Dirs);
          Roots.Append (System_Include_Dirs);
+         for Path of B.Marker_Files (US.To_String (Preprocessed)) loop
+            --  Clang reports dependency names, not its read descriptors.
+            --  Invocation-owned header copies and probes are disposable.
+            if not Starts_With (Path, US.To_String (Work) & "/") then
+               Pub.Protect (Group, Host, Absolute (Path));
+               Input_Paths.Append (Absolute (Path));
+            end if;
+         end loop;
          B.Strip_Markers
            (Session, US.To_String (Preprocessed), Roots, Stripped);
          if Report_Fault
@@ -866,7 +904,8 @@ package body Landin.Commands.Bindings is
          declare
             Validation : Platform.Path_List :=
               ["-iquote", Work_Path ("output"), "-Wall", "-Wextra", "-Werror",
-               "-Wno-error=unused-command-line-argument", "-fsyntax-only"];
+               "-Wno-error=unused-command-line-argument", "-fsyntax-only",
+               "-MD", "-MF", "-", "-MT", "refine-bindings"];
          begin
             --  SDK 26.5 mixes annotated and unannotated declarations in
             --  _stdlib.h, and -Wsystem-headers exposes their
@@ -877,171 +916,143 @@ package body Landin.Commands.Bindings is
             end if;
             Validation.Append (Work_Path ("output/adapters.c"));
             if not Run_Clang (Validation, "validating generated adapters",
-                              Ignored)
+                              Dependencies)
             then
                return False;
             end if;
          end;
+         declare
+            Consumed : Platform.Path_List;
+            Valid : Boolean;
+         begin
+            B.Dependency_Files (US.To_String (Dependencies), Consumed, Valid);
+            if not Valid then
+               Report (Cat.Bindings_Clang_Refused,
+                       "Clang did not report the generated adapters' header"
+                       & " dependencies; use a Clang that supports -MD -MF");
+               return False;
+            end if;
+            for Path of Consumed loop
+               if not Starts_With (Path, US.To_String (Work) & "/") then
+                  Pub.Protect (Group, Host, Absolute (Path));
+                  Input_Paths.Append (Absolute (Path));
+               end if;
+            end loop;
+         end;
          return True;
       end Bind;
 
-      --  Replace the four outputs as refine svd replaces its own.
+      function Prepare_Outputs return Boolean;
+
+      function Prepare_Outputs return Boolean is
+         Status : Platform.Write_Status;
+         Reason : US.Unbounded_String;
+      begin
+         Has_Group := True;
+         for Index in B.Output_Index loop
+            Pub.Prepare (Group, Host, Destination (Index), Status, Reason,
+                         Root => US.To_String (Out_Dir));
+            if Status /= Platform.Write_Ok then
+               Report (Cat.Bindings_Output_Refused, US.To_String (Reason));
+               return False;
+            end if;
+         end loop;
+         return True;
+      end Prepare_Outputs;
+
       procedure Replace;
 
       procedure Replace is
-         type Plan is (Unchanged, Created, Replaced);
-         Steps : array (B.Output_Index) of Plan := [others => Created];
-         Done : Natural := 0;
-         Written : Platform.Write_Status;
-         Moved : Platform.Move_Status;
-         Gone : Platform.Remove_Status;
+         Status : Platform.Write_Status;
          Read : Platform.Read_Status;
-         Failure : US.Unbounded_String;
-
-         procedure Discard_Staged;
-
-         procedure Discard_Staged is
-         begin
-            for Index in B.Output_Index loop
-               if Steps (Index) /= Unchanged then
-                  Host.Remove_File (Destination (Index) & Staged_Suffix, Gone);
-               end if;
-            end loop;
-         end Discard_Staged;
-
-         procedure Roll_Back;
-
-         --  Put back what was replaced, newest first; say which kept copy
-         --  is the old file when one cannot be put back.
-         procedure Roll_Back is
-            Stuck : US.Unbounded_String;
-         begin
-            for Index in reverse 1 .. Done loop
-               declare
-                  Path : constant String := Destination (Index);
-               begin
-                  if Steps (Index) /= Unchanged then
-                     Host.Remove_File (Path, Gone);
-                  end if;
-                  if Steps (Index) = Replaced then
-                     Host.Move_File (Path & Kept_Suffix, Path, Moved);
-                     if Moved /= Platform.Moved then
-                        US.Append (Stuck, " " & Path & Kept_Suffix);
-                     end if;
-                  end if;
-               end;
-            end loop;
-            Discard_Staged;
-            if US.Length (Stuck) > 0 then
-               US.Append (Failure, "; the old files could not all be put"
-                          & " back, and are kept as" & US.To_String (Stuck));
-            else
-               US.Append (Failure, "; every old file was put back");
-            end if;
-         end Roll_Back;
+         Reason, Existing : US.Unbounded_String;
+         Changed : Natural := 0;
       begin
-         if not Make_Directories (US.To_String (Out_Dir)) then
-            Report (Cat.Unwritable_Output, "cannot make the output directory "
-                    & US.To_String (Out_Dir) & "; nothing was replaced");
-            return;
-         end if;
-         --  Stage and verify every new file before replacing any.
          for Index in B.Output_Index loop
             declare
                Path : constant String := Destination (Index);
                Content : constant String := B.Output (Session, Index);
-               Existing : US.Unbounded_String;
             begin
-               if Host.Exists (Path) then
-                  Host.Read_File (Path, Existing, Read);
-                  Steps (Index) :=
-                    (if Read = Platform.Read_Ok
-                       and then US.To_String (Existing) = Content
-                     then Unchanged else Replaced);
-               end if;
-               if Steps (Index) /= Unchanged then
-                  Host.Write_File (Path & Staged_Suffix, Content, Written);
-                  Host.Read_File (Path & Staged_Suffix, Existing, Read);
-                  if Written /= Platform.Write_Ok
-                    or else Read /= Platform.Read_Ok
-                    or else US.To_String (Existing) /= Content
-                  then
-                     Failure := US.To_Unbounded_String
-                       ("cannot write and read back " & Path & Staged_Suffix);
-                     Discard_Staged;
-                     Report (Cat.Unwritable_Output, US.To_String (Failure)
-                             & "; nothing was replaced");
-                     return;
-                  end if;
-               end if;
-            end;
-         end loop;
-         for Index in B.Output_Index loop
-            declare
-               Path : constant String := Destination (Index);
-            begin
-               if Steps (Index) = Replaced then
-                  Host.Move_File (Path, Path & Kept_Suffix, Moved);
-                  if Moved /= Platform.Moved then
-                     Failure := US.To_Unbounded_String
-                       ("cannot move " & Path & " aside to replace it");
-                  end if;
-               end if;
-               if US.Length (Failure) = 0 and then Steps (Index) /= Unchanged
+               Host.Read_File (Path, Existing, Read);
+               if Read /= Platform.Read_Ok
+                 or else US.To_String (Existing) /= Content
                then
-                  Host.Move_File (Path & Staged_Suffix, Path, Moved);
-                  if Moved /= Platform.Moved then
-                     Failure := US.To_Unbounded_String
-                       ("cannot move the new " & Path & " into place");
-                     if Steps (Index) = Replaced then
-                        Host.Move_File (Path & Kept_Suffix, Path, Moved);
-                     end if;
-                  end if;
-               end if;
-               if US.Length (Failure) > 0 then
-                  Roll_Back;
-                  Report (Cat.Unwritable_Output, US.To_String (Failure));
-                  return;
-               end if;
-               Done := Index;
-            end;
-         end loop;
-         --  Every new file is in place: the kept copies go.
-         for Index in B.Output_Index loop
-            if Steps (Index) = Replaced then
-               Host.Remove_File (Destination (Index) & Kept_Suffix, Gone);
-            end if;
-         end loop;
-         declare
-            Changed : Natural := 0;
-         begin
-            for Step of Steps loop
-               if Step /= Unchanged then
                   Changed := Changed + 1;
                end if;
-            end loop;
-            Result.Output := US.To_Unbounded_String
-              ("refine bindings: 4 files under " & US.To_String (Out_Dir)
-               & "," & Natural'Image (Changed) & " of them written" & LF);
-         end;
+               if not Write (Pub.Stage_Path (Group, Path), Content) then
+                  return;
+               end if;
+               Host.Read_File (Pub.Stage_Path (Group, Path), Existing, Read);
+               if Read /= Platform.Read_Ok
+                 or else US.To_String (Existing) /= Content
+               then
+                  Report (Cat.Unwritable_Output,
+                          "cannot read back " & Pub.Stage_Path (Group, Path)
+                          & "; nothing was replaced");
+                  return;
+               end if;
+            end;
+         end loop;
+         Pub.Commit (Group, Host, Status, Reason);
+         if Status /= Platform.Write_Ok then
+            Report (Cat.Unwritable_Output, US.To_String (Reason));
+            return;
+         end if;
+         Pub.Finish (Group, Host, Status, Reason);
+         Has_Group := False;
+         if Status /= Platform.Write_Ok then
+            Report (Cat.Unwritable_Output, US.To_String (Reason));
+            return;
+         end if;
+         Result.Output := US.To_Unbounded_String
+           ("refine bindings: 4 files under " & US.To_String (Out_Dir)
+            & "," & Natural'Image (Changed) & " of them written" & LF);
       end Replace;
 
       procedure Clean_Up;
 
       procedure Clean_Up is
          Removed : Platform.Remove_Status;
+         Status : Platform.Write_Status;
+         Reason : US.Unbounded_String;
       begin
+         if Has_Group then
+            Pub.Abort_Transaction (Group, Host, Status, Reason);
+            Has_Group := False;
+            if Status /= Platform.Write_Ok then
+               Report (Cat.Unwritable_Output, US.To_String (Reason));
+            end if;
+         end if;
          if Has_Work then
             Host.Remove_Tree (US.To_String (Work), Removed);
             Has_Work := False;
          end if;
       end Clean_Up;
    begin
-      if not Prepare or else not Preflight then
+      for Path of Asked.Protected_Inputs loop
+         Pub.Protect (Group, Host, Path);
+      end loop;
+      for Identity of Asked.Protected_Identities loop
+         Pub.Protect (Group, "", Identity);
+      end loop;
+      if not Prepare then
+         return;
+      end if;
+      Clang := US.To_Unbounded_String
+        (Tools.Resolve_Program (US.To_String (Asked.Clang)));
+      if US.Length (Clang) = 0 then
+         Report (Cat.Bindings_Clang_Refused, "cannot execute Clang "
+                 & US.To_String (Asked.Clang)
+                 & "; name an available executable with --clang");
+         return;
+      end if;
+      Pub.Protect (Group, Host, US.To_String (Clang));
+      Input_Paths.Append (US.To_String (Clang));
+      if not Preflight then
          return;
       end if;
       begin
-         if Bind and then Preflight then
+         if Prepare_Outputs and then Bind and then Preflight then
             Replace;
          end if;
       exception
