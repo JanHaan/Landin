@@ -290,6 +290,9 @@ package Landin.Testing.Fakes is
    function Last_Command (Host : Fake_Tool_Runner) return String;
    function Run_Count (Host : Fake_Tool_Runner) return Natural;
 
+   overriding function Resolve_Program
+     (Host : Fake_Tool_Runner; Program : String) return String;
+
    overriding procedure Run
      (Host      : Fake_Tool_Runner;
       Program   : String;

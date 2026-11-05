@@ -8,14 +8,6 @@ package body Landin.Platform is
       return (others => 0);
    end Sample;
 
-   function Resolve_Program (Host : Tool_Runner; Program : String)
-      return String
-   is
-      pragma Unreferenced (Host);
-   begin
-      return Program;
-   end Resolve_Program;
-
    function No_Arguments return Path_List is
       Empty : Path_List;
    begin
