@@ -167,6 +167,7 @@ int landin_open_update(const char *path, char **bytes, size_t *size,
     say(reason, room, "%s", "");
     if (!lease) goto fail;
     lease->fd = -1; lease->parent = -1;
+    landin_publication_notify("update-before-read", path);
     lease->target = realpath(path, NULL);
     if (!lease->target) goto fail;
     char *directory = strdup(lease->target);

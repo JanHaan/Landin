@@ -96,9 +96,8 @@ int landin_lock_output_directory(const char *path)
     fd = open(resolved, O_RDONLY | O_DIRECTORY | O_CLOEXEC);
     if (fd < 0)
         return -1;
-    while (flock(fd, LOCK_EX) != 0) {
-        if (errno == EINTR)
-            continue;
+    if (flock(fd, LOCK_EX) != 0) {
+        /* In particular EINTR must reach normal cancellation unwinding. */
         close(fd);
         return -1;
     }
