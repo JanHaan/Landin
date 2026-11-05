@@ -33,6 +33,7 @@ int landin_tool_start_in_directory(char *const args[], char *const env[],
                                     int isolated, int input, int capture,
                                     int errors, int directory, int *child);
 int landin_tool_wait(int child, int *status, int no_hang);
+int landin_tool_wait_reserved(int child, int *status, int no_hang, int *owned);
 int landin_tool_stop(int child, int *status);
 int landin_tool_cancel(int child, int *status);
 int landin_cancellation_begin(void);
@@ -41,6 +42,31 @@ int landin_cancellation_requested(void);
 int landin_program_run(char *const args[], int *signal_number,
                        int *status, int *child);
 const char *landin_signal_name(int signal_number);
+
+/* A direct child reserves its PID/PGID only while its exit status remains
+   waitable. Keep inherited SIGCHLD policy unchanged: reject automatic reaping
+   before spawning, including callers that bypass the Ada adapter. Process-wide
+   signal policy must stay quiescent while children are live, and no competing
+   waiter or SIGCHLD handler may reap children owned by these APIs. */
+enum { LANDIN_CHILD_IGNORED = -1, LANDIN_CHILD_NO_WAIT = -2 };
+static int landin_child_wait_policy(void)
+{
+    struct sigaction action;
+    if (sigaction(SIGCHLD, NULL, &action) != 0) return errno;
+    if (action.sa_handler == SIG_IGN) return LANDIN_CHILD_IGNORED;
+    if (action.sa_flags & SA_NOCLDWAIT) return LANDIN_CHILD_NO_WAIT;
+    return 0;
+}
+const char *landin_process_start_error(int error)
+{
+    if (error == LANDIN_CHILD_IGNORED)
+        return "SIGCHLD is ignored; start refine with SIGCHLD set to its default"
+               " disposition so child exit status remains waitable";
+    if (error == LANDIN_CHILD_NO_WAIT)
+        return "SIGCHLD has SA_NOCLDWAIT set; clear SA_NOCLDWAIT before starting"
+               " refine so child exit status remains waitable";
+    return NULL;
+}
 
 /* Invocation cancellation is notification only. No filesystem work, Ada
    cleanup, or potentially reused process-group identifier reaches a handler.
@@ -264,6 +290,8 @@ int landin_tool_start_in_directory(char *const args[], char *const env[],
     int index;
 
     *child = 0;
+    error = landin_child_wait_policy();
+    if (error != 0) return error;
     error = posix_spawnattr_init(&attributes);
     if (error != 0)
         return error;
@@ -339,11 +367,12 @@ int landin_tool_start(char *const args[], char *const env[], int isolated,
                                            capture, errors, -1, child);
 }
 
-int landin_tool_wait(int child, int *status, int no_hang)
+int landin_tool_wait_reserved(int child, int *status, int no_hang, int *owned)
 {
     int word;
     pid_t reaped;
 
+    *owned = child > 0;
     if (child <= 0) {
         errno = EINVAL;
         return -1;
@@ -351,9 +380,20 @@ int landin_tool_wait(int child, int *status, int no_hang)
     do {
         reaped = waitpid((pid_t)child, &word, no_hang ? WNOHANG : 0);
     } while (reaped < 0 && errno == EINTR);
-    if (reaped > 0)
+    if (reaped > 0) {
+        *owned = 0;
         *status = WIFEXITED(word) ? WEXITSTATUS(word) : -1;
+    } else if (reaped < 0 && errno == ECHILD) {
+        *owned = 0;
+    }
     return (int)reaped;
+}
+
+/* Preserve the original waitpid-compatible ABI for existing C callers. */
+int landin_tool_wait(int child, int *status, int no_hang)
+{
+    int owned;
+    return landin_tool_wait_reserved(child, status, no_hang, &owned);
 }
 
 int landin_tool_stop(int child, int *status)
@@ -485,6 +525,8 @@ int landin_program_run(char *const args[], int *signal_number,
     *signal_number = 0;
     *status = 0;
     *child = 0;
+    error = landin_child_wait_policy();
+    if (error != 0) return error;
     sigemptyset(&forwarded);
     sigaddset(&forwarded, SIGTERM);
     sigaddset(&forwarded, SIGHUP);

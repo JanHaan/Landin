@@ -358,7 +358,7 @@ class Lane:
         require(result.returncode == 0, 'native host adapter controls failed:\n'
                 + transcript.decode(errors='replace')[-8000:])
         require(b'publication native:' in result.stdout
-                and b'cancellation native: 13 controls passed' in result.stdout
+                and b'cancellation native: 15 controls passed' in result.stdout
                 and b'runtime ownership native: 7/7 controls passed' in result.stdout
                 and b'native registry threads: 8 workers, 24 rounds, 768 cross-thread handoffs passed'
                 in result.stdout,

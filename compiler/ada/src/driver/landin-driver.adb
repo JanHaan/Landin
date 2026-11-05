@@ -3095,8 +3095,8 @@ package body Landin.Driver is
                         else
                            Note_Failure
                              (Code_Toolchain_Failed,
-                              Driver & " could not be run to completion: "
-                              & Why);
+                              Why & "; " & Driver
+                              & " could not be run to completion");
                         end if;
                      end;
                      return;

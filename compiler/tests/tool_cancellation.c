@@ -8,6 +8,7 @@
 #define _XOPEN_SOURCE 700
 #include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -19,6 +20,11 @@
 
 int landin_tool_start(char *const[], char *const[], int, int, int, int, int *);
 int landin_tool_wait(int, int *, int);
+int landin_tool_wait_reserved(int, int *, int, int *);
+int landin_tool_start_in_directory(char *const[], char *const[], int, int, int,
+                                    int, int, int *);
+int landin_program_run(char *const[], int *, int *, int *);
+const char *landin_process_start_error(int);
 int landin_tool_cancel(int, int *);
 int landin_tool_stop(int, int *);
 int landin_cancellation_begin(void);
@@ -226,12 +232,85 @@ static int start(const char *self, const char *role, int number,
     return child;
 }
 
+/* The rejected program would write a byte through an inherited pipe. EOF
+   after closing our write end proves no writer was started, without signaling
+   any PID or invoking stop/cancel after a failed wait. */
+static int rejected_child_policy(const char *self, int no_wait)
+{
+    struct sigaction action, previous, configured, observed;
+    int channel[2], child, error, nullfd, status, number, owned = 1;
+    char descriptor[32], byte;
+    memset(&action, 0, sizeof action);
+    action.sa_handler = no_wait ? SIG_DFL : SIG_IGN;
+    action.sa_flags = no_wait ? SA_NOCLDWAIT : 0;
+    sigemptyset(&action.sa_mask);
+    sigaddset(&action.sa_mask, SIGUSR2);
+    require(sigaction(SIGCHLD, &action, &previous) == 0, "set child policy");
+    /* Darwin adds SA_NOCLDWAIT when SIG_IGN is installed for SIGCHLD.
+       Compare the actual installed policy, including its normalized flags. */
+    require(sigaction(SIGCHLD, NULL, &configured) == 0,
+            "observe installed child policy");
+    require(pipe(channel) == 0, "own rejected child notification pipe");
+    snprintf(descriptor, sizeof descriptor, "%d", channel[1]);
+    char *args[] = {(char *)self, "policy-child", descriptor, NULL};
+    nullfd = open("/dev/null", O_RDWR);
+    require(nullfd >= 0, "open rejected child streams");
+    for (int api = 0; api < 3; ++api) {
+        child = 123;
+        if (api == 0)
+            error = landin_tool_start(args, NULL, 0, nullfd, nullfd, -1, &child);
+        else if (api == 1)
+            error = landin_tool_start_in_directory(args, NULL, 0, nullfd,
+                                                    nullfd, -1, -1, &child);
+        else
+            error = landin_program_run(args, &number, &status, &child);
+        const char *reason = landin_process_start_error(error);
+        require(error != 0 && child == 0 && reason != NULL,
+                "C entrypoint refuses before creating any child");
+        require(strstr(reason, no_wait ? "SA_NOCLDWAIT" : "SIGCHLD is ignored")
+                    != NULL, "actionable inherited child policy reason");
+        require(sigaction(SIGCHLD, NULL, &observed) == 0
+                && observed.sa_handler == configured.sa_handler
+                && observed.sa_flags == configured.sa_flags,
+                "inherited child handler and flags remain unchanged");
+        /* Native sigsets cover at most their storage's bit capacity. Query
+           membership rather than comparing opaque storage or padding bytes. */
+        for (size_t signal = 1; signal <= sizeof(sigset_t) * CHAR_BIT; ++signal)
+            require(sigismember(&observed.sa_mask, (int)signal)
+                    == sigismember(&configured.sa_mask, (int)signal),
+                    "inherited child signal mask remains unchanged");
+    }
+    require(close(channel[1]) == 0 && read(channel[0], &byte, 1) == 0,
+            "no rejected child wrote its startup sentinel");
+    close(channel[0]); close(nullfd);
+    /* Our own PID cannot be our child: exercise the structured lost-reservation
+       result without creating, signaling, or risking reuse of any child PID. */
+    require(landin_tool_wait_reserved((int)getpid(), &status, 1, &owned) < 0
+            && errno == ECHILD && owned == 0, "lost reservation is explicit");
+    require(sigaction(SIGCHLD, &previous, NULL) == 0, "restore child policy");
+    puts("CHILD_POLICY_REFUSED"); puts("PASS");
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
     int number, events, child, status = 0;
     int automatic = 0;
     int ready[2];
     const char *mode;
+    if (argc >= 2 && strcmp(argv[1], "policy-child") == 0) {
+        require(argc == 3 && write(atoi(argv[2]), "X", 1) == 1,
+                "rejected child startup sentinel");
+        return 0;
+    }
+    if (argc >= 3 && strcmp(argv[1], "exec-ignored") == 0) {
+        struct sigaction action;
+        memset(&action, 0, sizeof action); action.sa_handler = SIG_IGN;
+        sigemptyset(&action.sa_mask);
+        require(sigaction(SIGCHLD, &action, NULL) == 0, "inherit ignored child policy");
+        execv(argv[2], argv + 2);
+        fail("exec actual refine with ignored child policy");
+    }
     if (argc == 2 && strcmp(argv[1], "--all") == 0) {
         const int selected_numbers[] = {SIGINT, SIGTERM, SIGHUP};
         const char *modes[] = {"cancel", "before", "ignore", "stubborn"};
@@ -240,10 +319,13 @@ int main(int argc, char **argv)
         unsigned int at;
         require(self != NULL && mkdtemp(root) != NULL,
                 "own automatic control root");
-        for (at = 0; at < 13; ++at) {
+        for (at = 0; at < 15; ++at) {
             char name[64], mode_arg[64], signal_arg[32], directory[256];
-            const char *selected = at == 0 ? "normal" : modes[(at - 1) / 3];
-            int selected_signal = at == 0 ? 0 : selected_numbers[(at - 1) % 3];
+            const char *selected = at == 0 ? "normal"
+                : at == 13 ? "reap-ignore" : at == 14 ? "reap-nowait"
+                : modes[(at - 1) / 3];
+            int selected_signal = at == 0 || at >= 13 ? 0
+                : selected_numbers[(at - 1) % 3];
             snprintf(name, sizeof name, "%s-%d", selected, selected_signal);
             snprintf(directory, sizeof directory, "%s/%s", root, name);
             snprintf(mode_arg, sizeof mode_arg, "auto-%s", selected);
@@ -262,7 +344,7 @@ int main(int argc, char **argv)
                     "automatic control passed");
         }
         free(self);
-        puts("cancellation native: 13 controls passed");
+        puts("cancellation native: 15 controls passed");
         return 0;
     }
     require(argc >= 3, "mode and signal arguments");
@@ -292,6 +374,8 @@ int main(int argc, char **argv)
     handler(SIGALRM, deadline);
     alarm(12);
     number = atoi(argv[2]);
+    if (!strcmp(mode, "reap-ignore") || !strcmp(mode, "reap-nowait"))
+        return rejected_child_policy(argv[0], !strcmp(mode, "reap-nowait"));
     dispositions(strcmp(mode, "ignore") == 0 ? number : 0);
     require(landin_cancellation_begin() == 0, "begin cancellation");
     events = dup(STDOUT_FILENO);
