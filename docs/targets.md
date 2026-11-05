@@ -308,8 +308,20 @@ produces `program.s`, `program.o`, `program`, `program.dSYM` and
 `program.sources.json`. Apple Clang receives `-gdwarf-4 -x assembler` and
 `-save-temps=obj`; explicit assembler input prevents preprocessing from
 rewriting the compiler assembly. The language selection resets before library
-arguments. Clang invokes its native dsymutil after linking. Output preflight
-protects the retained object and dSYM bundle as well as existing artifacts.
+arguments. Clang invokes its native dsymutil after linking. A direct assembly
+operand is assembled into the explicitly reserved object first, then linked
+as an object; refine invokes `/usr/bin/dsymutil` separately to build its
+matching bundle. This avoids deriving the object name from an assembly
+input whose basename differs from the executable's. Both paths keep the
+object and whole bundle in D907's publication group through packaging;
+selected tools and consumed inputs are protected before publication.
+
+The executable's debug map can retain the private staging object's path and
+modification time. After publication that path is gone, so a later
+`dsymutil --dump-debug-map` can warn that it cannot open the object even
+though the published object exists beside the executable. Full-debug linked
+images are not claimed reproducible, and regenerating a bundle from that
+debug map alone is not supported without resolving its object paths.
 
 Open `lldb ./program`, then use `breakpoint set -n main`,
 `breakpoint set -f program.ldn -l 12`, `run`, `next`, `step`, `bt` and
