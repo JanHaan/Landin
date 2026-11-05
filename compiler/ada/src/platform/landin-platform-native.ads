@@ -68,7 +68,8 @@ package Landin.Platform.Native is
       Reason  : out Ada.Strings.Unbounded.Unbounded_String);
 
    overriding procedure Open_Publication
-     (Host : Native_Filesystem; Path : String; Delete_Only : Boolean; Root : String;
+     (Host : Native_Filesystem; Path : String; Delete_Only : Boolean;
+      Root : String;
       Handle : out Publication_Handle;
       Stage : out Ada.Strings.Unbounded.Unbounded_String;
       Status : out Write_Status;
@@ -95,8 +96,8 @@ package Landin.Platform.Native is
    overriding function Update_Identity
      (Host : Native_Filesystem; Lease : Update_Handle)
       return File_Identity;
-   overriding procedure Close_Update (Host : Native_Filesystem; Lease : Update_Handle)
-     ;
+   overriding procedure Close_Update
+     (Host : Native_Filesystem; Lease : Update_Handle);
 
 
    overriding procedure Remove_File

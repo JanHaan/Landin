@@ -82,7 +82,8 @@ package Landin.Platform.Overlays is
       Reason  : out Ada.Strings.Unbounded.Unbounded_String);
 
    overriding procedure Open_Publication
-     (Host : Overlay; Path : String; Delete_Only : Boolean; Root : String;
+     (Host : Overlay; Path : String; Delete_Only : Boolean;
+      Root : String;
       Handle : out Publication_Handle;
       Stage : out Ada.Strings.Unbounded.Unbounded_String;
       Status : out Write_Status;
@@ -109,8 +110,8 @@ package Landin.Platform.Overlays is
    overriding function Update_Identity
      (Host : Overlay; Lease : Update_Handle)
       return File_Identity;
-   overriding procedure Close_Update (Host : Overlay; Lease : Update_Handle)
-     ;
+   overriding procedure Close_Update
+     (Host : Overlay; Lease : Update_Handle);
 
 
    overriding procedure Remove_File

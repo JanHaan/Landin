@@ -284,66 +284,12 @@ package body Landin.Platform.Native is
    end Close_After_Failure;
 
    overriding procedure Read_File
-     (Host    : Native_Filesystem;
-      Path    : String;
-      Content : out Ada.Strings.Unbounded.Unbounded_String;
-      Status  : out Read_Status)
+     (Host : Native_Filesystem; Path : String;
+      Content : out Unbounded.Unbounded_String; Status : out Read_Status)
    is
-      pragma Unreferenced (Host);
-      File : Stream_IO.File_Type;
+      Identity : File_Identity;
    begin
-      Content := Unbounded.Null_Unbounded_String;
-
-      if not Directories.Exists (Path) then
-         Status := Not_Found;
-         return;
-      end if;
-
-      --  Ordinary files only.  A FIFO or a character device answers a read
-      --  forever, and a compiler that will happily read /dev/zero into a
-      --  source snapshot does not fail, it hangs.
-      if Directories.Kind (Path) /= Directories.Ordinary_File then
-         Status := Not_Readable;
-         return;
-      end if;
-
-      --  Its own stream, even if this process already has the file open.
-      --  Without a sharing form GNAT refuses a second open of the same full
-      --  name with Use_Error, so two test workers reading one fixture's
-      --  golden at once saw it as unreadable, one run in four on the gate.
-      --  A read never needs another opener's position.
-      Stream_IO.Open (File, Stream_IO.In_File, Path, Form => "shared=no");
-
-      loop
-         declare
-            Buffer : Ada.Streams.Stream_Element_Array (1 .. Chunk_Size);
-            Last   : Ada.Streams.Stream_Element_Offset;
-         begin
-            Stream_IO.Read (File, Buffer, Last);
-            exit when Last < Buffer'First;
-
-            declare
-               Chunk : String (1 .. Natural (Last));
-            begin
-               for Index in Buffer'First .. Last loop
-                  Chunk (Natural (Index)) :=
-                    Character'Val (Natural (Buffer (Index)));
-               end loop;
-               Unbounded.Append (Content, Chunk);
-            end;
-
-            exit when Last < Buffer'Last;
-         end;
-      end loop;
-
-      Stream_IO.Close (File);
-      Status := Read_Ok;
-
-   exception
-      when Ada.IO_Exceptions.Name_Error | Ada.IO_Exceptions.Use_Error
-         | Ada.IO_Exceptions.Device_Error =>
-         Close_After_Failure (File);
-         Status := Not_Readable;
+      Read_Snapshot (Host, Path, Content, Identity, Status);
    end Read_File;
 
    overriding procedure Write_File
@@ -354,7 +300,21 @@ package body Landin.Platform.Native is
    is
       pragma Unreferenced (Host);
       File : Stream_IO.File_Type;
+      use type Interfaces.C.int;
+      function Stage_Write
+        (Path, Content : Interfaces.C.char_array;
+         Size : Interfaces.C.size_t) return Interfaces.C.int
+        with Import, Convention => C,
+             External_Name => "landin_publication_stage_write";
+      Staged : Interfaces.C.int;
    begin
+      Staged := Stage_Write
+        (Interfaces.C.To_C (Path), Interfaces.C.To_C (Content),
+         Content'Length);
+      if Staged /= -2 then
+         Status := (if Staged = 0 then Write_Ok else Not_Writable);
+         return;
+      end if;
       Stream_IO.Create (File, Stream_IO.Out_File, Path);
 
       --  Chunked, for the same reason reads are: the payload may be an
