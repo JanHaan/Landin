@@ -1139,6 +1139,7 @@ package body Landin.Tests.Devices_Suite is
          procedure Input_Alias
            (Host : in out Landin.Testing.Fakes.Fake_Filesystem) is
          begin
+            Host.Add_File ("out/toy1/correspondence.json", Svd);
             Host.Add_Alias ("out/toy1/correspondence.json", "toy.svd");
          end Input_Alias;
 
@@ -1197,7 +1198,7 @@ package body Landin.Tests.Devices_Suite is
          Refused (Protected_Stale'Access, "L0531", "overlaps an input");
          Refused (Directory_In_The_Way'Access, "L0531", "is a directory");
          Refused (No_Output_Directory'Access, "L0531", "not a directory");
-         Refused (Unwritable'Access, "L0005", "nothing was replaced");
+         Refused (Unwritable'Access, "L0531", "unwritable");
          Refused (Foreign_Manifest'Access, "L0531", "not a path below it");
          Refused (No_Svd'Access, "L0003", "cannot read the SVD");
       end;
