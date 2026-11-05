@@ -121,6 +121,38 @@ package Landin.Testing.Fakes is
    --  a replacement that fails part way, then puts back what it moved.
    procedure Fail_Move (Host : in out Fake_Filesystem; At_Move : Positive);
 
+   overriding procedure Open_Publication
+     (Host : Fake_Filesystem; Path : String; Delete_Only : Boolean; Root : String;
+      Handle : out Landin.Platform.Publication_Handle;
+      Stage : out Ada.Strings.Unbounded.Unbounded_String;
+      Status : out Landin.Platform.Write_Status;
+      Reason : out Ada.Strings.Unbounded.Unbounded_String);
+   overriding procedure Advance_Publication
+     (Host : Fake_Filesystem; Handle : Landin.Platform.Publication_Handle;
+      Action : Landin.Platform.Publication_Action; Protected_Paths : Landin.Platform.Path_List;
+      Protected_Identities : Landin.Platform.Identity_List; Status : out Landin.Platform.Write_Status;
+      Reason : out Ada.Strings.Unbounded.Unbounded_String);
+   --  Both results describe the same actually read object.
+   overriding procedure Read_Snapshot
+     (Host : Fake_Filesystem; Path : String;
+      Content : out Ada.Strings.Unbounded.Unbounded_String;
+      Identity : out Landin.Platform.File_Identity; Status : out Landin.Platform.Read_Status);
+   overriding procedure Read_For_Update
+     (Host : Fake_Filesystem; Path : String;
+      Content : out Ada.Strings.Unbounded.Unbounded_String;
+      Lease : out Landin.Platform.Update_Handle; Status : out Landin.Platform.Read_Status;
+      Reason : out Ada.Strings.Unbounded.Unbounded_String);
+   overriding procedure Replace_Update
+     (Host : Fake_Filesystem; Lease : Landin.Platform.Update_Handle; Content : String;
+      Status : out Landin.Platform.Write_Status;
+      Reason : out Ada.Strings.Unbounded.Unbounded_String);
+   overriding function Update_Identity
+     (Host : Fake_Filesystem; Lease : Landin.Platform.Update_Handle)
+      return Landin.Platform.File_Identity;
+   overriding procedure Close_Update (Host : Fake_Filesystem; Lease : Landin.Platform.Update_Handle)
+     ;
+
+
    overriding procedure Remove_File
      (Host   : Fake_Filesystem;
       Path   : String;
@@ -384,8 +416,25 @@ private
    package List_Call_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => List_Call);
 
+   type Fake_Publication is record
+      Path, Stage, Recovery : Unbounded.Unbounded_String;
+      Expected, Fresh : File_Entry;
+      Absent, Deletion, Captured, Installed, Finished : Boolean := False;
+   end record;
+   package Publication_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Fake_Publication);
+   type Fake_Update is record
+      Path : Unbounded.Unbounded_String;
+      Original : File_Entry;
+      Closed : Boolean := False;
+   end record;
+   package Update_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Fake_Update);
+
    type Store is record
       Files : File_Vectors.Vector;
+      Publications : Publication_Vectors.Vector;
+      Updates : Update_Vectors.Vector;
       --  Latest successful write per path, separate from the live namespace.
       Items : File_Vectors.Vector;
       --  Armed by Raise_On_Read or Raise_On_Read_After and cleared by the

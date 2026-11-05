@@ -16,6 +16,10 @@ package Landin.Platform.Publication is
      (Group : in out Transaction; Files : Filesystem'Class; Path : String);
    procedure Protect
      (Group : in out Transaction; Path : String; Identity : File_Identity);
+   procedure Discard
+     (Group : in out Transaction; Files : Filesystem'Class; Path : String;
+      Status : out Write_Status;
+      Reason : out Ada.Strings.Unbounded.Unbounded_String);
    procedure Commit
      (Group : in out Transaction; Files : Filesystem'Class;
       Status : out Write_Status;

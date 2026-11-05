@@ -168,9 +168,82 @@ static int sync_directory(const char *target)
     return result;
 }
 
-int landin_replace_existing_file(const char *path, const char *data,
-                                 size_t size, char *reason, size_t room)
+struct update_lease {
+    int token, fd;
+    char *target, *original;
+    size_t original_size;
+    struct stat before;
+    struct update_lease *next;
+};
+static struct update_lease *leases;
+static int next_lease = 1;
+extern int landin_cancellation_requested(void);
+static struct update_lease *find_lease(int token)
 {
+    struct update_lease *lease;
+    for (lease = leases; lease; lease = lease->next)
+        if (lease->token == token) return lease;
+    return NULL;
+}
+int landin_open_update(const char *path, char **bytes, size_t *size,
+                       int *token, char *reason, size_t room)
+{
+    struct update_lease *lease = calloc(1, sizeof *lease);
+    *bytes = NULL; *token = 0;
+    say(reason, room, "%s", "");
+    if (!lease) goto fail;
+    lease->fd = -1;
+    lease->target = realpath(path, NULL);
+    if (!lease->target) goto fail;
+    lease->fd = open(lease->target, O_RDWR | O_NOFOLLOW | O_CLOEXEC | O_NONBLOCK);
+    if (lease->fd < 0 || fstat(lease->fd, &lease->before) != 0) goto fail;
+    if (!S_ISREG(lease->before.st_mode)) { errno = EINVAL; goto fail; }
+    lease->original = read_all(lease->fd, &lease->original_size);
+    if (!lease->original) goto fail;
+    *bytes = malloc(lease->original_size ? lease->original_size : 1);
+    if (!*bytes) goto fail;
+    memcpy(*bytes, lease->original, lease->original_size);
+    *size = lease->original_size;
+    lease->token = next_lease++; *token = lease->token;
+    lease->next = leases; leases = lease;
+    return 0;
+fail:
+    {
+        int error = errno;
+        say(reason, room, "cannot read it for updating: %s; use fmt --stdout", strerror(error));
+        if (lease) {
+            if (lease->fd >= 0) close(lease->fd);
+            free(lease->target); free(lease->original); free(lease);
+        }
+        return error == ENOENT ? 1 : -1;
+    }
+}
+int landin_update_identity(int token, uint64_t *device, uint64_t *inode)
+{
+    struct update_lease *lease = find_lease(token);
+    if (!lease) return -1;
+    *device = lease->before.st_dev; *inode = lease->before.st_ino;
+    return 0;
+}
+void landin_close_update(int token)
+{
+    struct update_lease **at = &leases;
+    while (*at) {
+        struct update_lease *lease = *at;
+        if (lease->token == token) {
+            *at = lease->next;
+            close(lease->fd); free(lease->target); free(lease->original);
+            free(lease); return;
+        }
+        at = &lease->next;
+    }
+}
+
+int landin_replace_update(int token, const char *data,
+                          size_t size, char *reason, size_t room)
+
+{
+    struct update_lease *lease = find_lease(token);
     static const char suffix[] = ".fmt-original-XXXXXX";
     char *target = NULL;
     char *copy = NULL;
@@ -183,12 +256,13 @@ int landin_replace_existing_file(const char *path, const char *data,
     int result = -1;
 
     say(reason, room, "%s", "");
-    target = realpath(path, NULL);
-    if (!target) {
-        say(reason, room, "cannot find it: %s", strerror(errno));
-        goto done;
+    if (!lease) { say(reason, room, "update lease is closed"); goto done; }
+    if (landin_cancellation_requested()) {
+        say(reason, room, "formatting interrupted before writing"); goto done;
     }
-    fd = open(target, O_RDWR | O_NOFOLLOW);
+    target = strdup(lease->target);
+    if (!target) goto done;
+    fd = dup(lease->fd);
     if (fd < 0) {
         int error = errno;
         if (stat(target, &now) == 0 && !S_ISREG(now.st_mode))
@@ -201,6 +275,10 @@ int landin_replace_existing_file(const char *path, const char *data,
     }
     if (fstat(fd, &before) != 0) {
         say(reason, room, "cannot read its status: %s", strerror(errno));
+        goto done;
+    }
+    if (before.st_dev != lease->before.st_dev || before.st_ino != lease->before.st_ino) {
+        say(reason, room, "the original read object changed; rerun or use fmt --stdout");
         goto done;
     }
     if (!S_ISREG(before.st_mode)) {
@@ -240,6 +318,12 @@ int landin_replace_existing_file(const char *path, const char *data,
     original = read_all(fd, &original_size);
     if (!original) {
         say(reason, room, "cannot read it: %s", strerror(errno));
+        goto done;
+    }
+
+    if (original_size != lease->original_size
+        || memcmp(original, lease->original, original_size)) {
+        say(reason, room, "its bytes changed after the original read; rerun or use fmt --stdout");
         goto done;
     }
 
@@ -326,6 +410,12 @@ int landin_replace_existing_file(const char *path, const char *data,
             " synced: %s", strerror(errno));
         goto done;
     }
+    if (stat(target, &now) != 0 || now.st_dev != before.st_dev
+        || now.st_ino != before.st_ino) {
+        say(reason, room, "the public name changed during formatting; the original read object was formatted; original bytes retained in %s", copy);
+        free(copy); copy = NULL;
+        goto done;
+    }
     result = 0;
 
 done:
@@ -343,5 +433,20 @@ done:
     }
     free(original);
     free(target);
+    return result;
+}
+
+/* Compatibility seam: new callers acquire a lease at their original read. */
+int landin_replace_existing_file(const char *path, const char *data,
+                                 size_t size, char *reason, size_t room)
+{
+    char *bytes;
+    size_t length;
+    int token;
+    if (landin_open_update(path, &bytes, &length, &token, reason, room) != 0)
+        return -1;
+    free(bytes);
+    int result = landin_replace_update(token, data, size, reason, room);
+    landin_close_update(token);
     return result;
 }

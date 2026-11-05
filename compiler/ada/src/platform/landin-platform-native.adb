@@ -436,6 +436,211 @@ package body Landin.Platform.Native is
       end if;
    end Replace_File;
 
+   overriding procedure Open_Publication
+     (Host : Native_Filesystem; Path : String; Delete_Only : Boolean;
+      Root : String; Handle : out Publication_Handle;
+      Stage : out Unbounded.Unbounded_String; Status : out Write_Status;
+      Reason : out Unbounded.Unbounded_String)
+   is
+      pragma Unreferenced (Host);
+      package C renames Interfaces.C;
+      use type C.int;
+      function Open_Transaction
+        (Path : C.char_array; Deletion : C.int; Root : C.char_array;
+         Handle : out C.int; Stage : out C.char_array; Stage_Room : C.size_t;
+         Reason : out C.char_array; Reason_Room : C.size_t) return C.int
+        with Import, Convention => C,
+             External_Name => "landin_publication_open";
+      Token : C.int;
+      Stage_Buffer, Reason_Buffer : C.char_array (0 .. 8191);
+      Result : C.int;
+   begin
+      Result := Open_Transaction
+        (C.To_C (Path), Boolean'Pos (Delete_Only), C.To_C (Root), Token,
+         Stage_Buffer, Stage_Buffer'Length, Reason_Buffer,
+         Reason_Buffer'Length);
+      Handle := Publication_Handle (Token);
+      Stage := Unbounded.To_Unbounded_String (C.To_Ada (Stage_Buffer));
+      Reason := Unbounded.To_Unbounded_String (C.To_Ada (Reason_Buffer));
+      Status := (if Result = 0 then Write_Ok else Not_Writable);
+   end Open_Publication;
+
+   overriding procedure Advance_Publication
+     (Host : Native_Filesystem; Handle : Publication_Handle;
+      Action : Publication_Action; Protected_Paths : Path_List;
+      Protected_Identities : Identity_List; Status : out Write_Status;
+      Reason : out Unbounded.Unbounded_String)
+   is
+      pragma Unreferenced (Host);
+      package C renames Interfaces.C;
+      package Strings renames Interfaces.C.Strings;
+      use type C.int;
+      Paths : aliased Strings.chars_ptr_array
+        (1 .. C.size_t (Protected_Paths.Length)) :=
+          [others => Strings.Null_Ptr];
+      type Identity_Array is array (Positive range <>) of
+        Interfaces.Unsigned_64 with Convention => C;
+      Identities : aliased Identity_Array
+        (1 .. 2 * Natural (Protected_Identities.Length));
+      Buffer : C.char_array (0 .. 8191);
+      Result : C.int;
+      function Step
+        (Handle, Action : C.int; Paths : System.Address; Count : C.size_t;
+         Identities : System.Address; Identity_Count : C.size_t;
+         Reason : out C.char_array; Room : C.size_t) return C.int
+        with Import, Convention => C,
+             External_Name => "landin_publication_step";
+   begin
+      for Index in Paths'Range loop
+         Paths (Index) := Strings.New_String
+           (Protected_Paths (Positive (Index)));
+      end loop;
+      for Index in 1 .. Natural (Protected_Identities.Length) loop
+         Identities (2 * Index - 1) := Protected_Identities (Index).Device;
+         Identities (2 * Index) := Protected_Identities (Index).Inode;
+      end loop;
+      Result := Step
+        (C.int (Handle), C.int (Publication_Action'Pos (Action)),
+         Paths'Address, Paths'Length, Identities'Address,
+         C.size_t (Protected_Identities.Length), Buffer, Buffer'Length);
+      Reason := Unbounded.To_Unbounded_String (C.To_Ada (Buffer));
+      Status := (if Result = 0 then Write_Ok else Not_Writable);
+      for Index in Paths'Range loop
+         Strings.Free (Paths (Index));
+      end loop;
+   exception
+      when others =>
+         for Index in Paths'Range loop
+            Strings.Free (Paths (Index));
+         end loop;
+         raise;
+   end Advance_Publication;
+
+   overriding procedure Read_Snapshot
+     (Host : Native_Filesystem; Path : String;
+      Content : out Unbounded.Unbounded_String;
+      Identity : out File_Identity; Status : out Read_Status)
+   is
+      pragma Unreferenced (Host);
+      package C renames Interfaces.C;
+      package Strings renames Interfaces.C.Strings;
+      use type C.int;
+      function Read_Actual
+        (Path : C.char_array; Bytes : out Strings.chars_ptr;
+         Size : out C.size_t; Device, Inode : out Interfaces.Unsigned_64)
+         return C.int
+        with Import, Convention => C,
+             External_Name => "landin_read_snapshot";
+      procedure Free_Bytes (Bytes : Strings.chars_ptr)
+        with Import, Convention => C,
+             External_Name => "landin_snapshot_free";
+      Bytes : Strings.chars_ptr := Strings.Null_Ptr;
+      Size : C.size_t;
+      Result : C.int;
+   begin
+      Content := Unbounded.Null_Unbounded_String;
+      Identity := (others => <>);
+      Result := Read_Actual
+        (C.To_C (Path), Bytes, Size, Identity.Device, Identity.Inode);
+      if Result = 0 then
+         Content := Unbounded.To_Unbounded_String
+           (Strings.Value (Bytes, Size));
+         Identity.Valid := True;
+         Free_Bytes (Bytes);
+         Status := Read_Ok;
+      else
+         Status := (if Result = 1 then Not_Found else Not_Readable);
+      end if;
+   end Read_Snapshot;
+
+   overriding procedure Read_For_Update
+     (Host : Native_Filesystem; Path : String;
+      Content : out Unbounded.Unbounded_String;
+      Lease : out Update_Handle; Status : out Read_Status;
+      Reason : out Unbounded.Unbounded_String)
+   is
+      pragma Unreferenced (Host);
+      package C renames Interfaces.C;
+      package Strings renames Interfaces.C.Strings;
+      use type C.int;
+      function Open_Update
+        (Path : C.char_array; Bytes : out Strings.chars_ptr;
+         Size : out C.size_t; Token : out C.int;
+         Reason : out C.char_array; Room : C.size_t) return C.int
+        with Import, Convention => C,
+             External_Name => "landin_open_update";
+      procedure Free_Bytes (Bytes : Strings.chars_ptr)
+        with Import, Convention => C,
+             External_Name => "landin_snapshot_free";
+      Bytes : Strings.chars_ptr := Strings.Null_Ptr;
+      Size : C.size_t;
+      Token, Result : C.int;
+      Buffer : C.char_array (0 .. 8191);
+   begin
+      Content := Unbounded.Null_Unbounded_String;
+      Result := Open_Update
+        (C.To_C (Path), Bytes, Size, Token, Buffer, Buffer'Length);
+      Lease := Update_Handle (Token);
+      Reason := Unbounded.To_Unbounded_String (C.To_Ada (Buffer));
+      if Result = 0 then
+         Content := Unbounded.To_Unbounded_String
+           (Strings.Value (Bytes, Size));
+         Free_Bytes (Bytes);
+         Status := Read_Ok;
+      else
+         Status := (if Result = 1 then Not_Found else Not_Readable);
+      end if;
+   end Read_For_Update;
+
+   overriding procedure Replace_Update
+     (Host : Native_Filesystem; Lease : Update_Handle; Content : String;
+      Status : out Write_Status; Reason : out Unbounded.Unbounded_String)
+   is
+      pragma Unreferenced (Host);
+      package C renames Interfaces.C;
+      use type C.int;
+      function Replace_Lease
+        (Token : C.int; Data : C.char_array; Size : C.size_t;
+         Reason : out C.char_array; Room : C.size_t) return C.int
+        with Import, Convention => C,
+             External_Name => "landin_replace_update";
+      Buffer : C.char_array (0 .. 8191);
+      Result : C.int;
+   begin
+      Result := Replace_Lease
+        (C.int (Lease), C.To_C (Content), Content'Length, Buffer,
+         Buffer'Length);
+      Reason := Unbounded.To_Unbounded_String (C.To_Ada (Buffer));
+      Status := (if Result = 0 then Write_Ok else Not_Writable);
+   end Replace_Update;
+
+   overriding function Update_Identity
+     (Host : Native_Filesystem; Lease : Update_Handle) return File_Identity
+   is
+      pragma Unreferenced (Host);
+      use type Interfaces.C.int;
+      function Lease_Identity
+        (Token : Interfaces.C.int;
+         Device, Inode : out Interfaces.Unsigned_64) return Interfaces.C.int
+        with Import, Convention => C,
+             External_Name => "landin_update_identity";
+      Result : File_Identity;
+   begin
+      Result.Valid := Lease_Identity
+        (Interfaces.C.int (Lease), Result.Device, Result.Inode) = 0;
+      return Result;
+   end Update_Identity;
+
+   overriding procedure Close_Update
+     (Host : Native_Filesystem; Lease : Update_Handle)
+   is
+      pragma Unreferenced (Host);
+      procedure Close_Lease (Token : Interfaces.C.int)
+        with Import, Convention => C, External_Name => "landin_close_update";
+   begin
+      Close_Lease (Interfaces.C.int (Lease));
+   end Close_Update;
+
    overriding procedure Remove_File
      (Host   : Native_Filesystem;
       Path   : String;
