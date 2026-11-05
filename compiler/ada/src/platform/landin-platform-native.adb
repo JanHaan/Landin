@@ -89,6 +89,39 @@ package body Landin.Platform.Native is
       return Interfaces.C.To_Ada (Buffer);
    end Existing_File_Key;
 
+   overriding function Observe_Identity
+     (Host : Native_Filesystem; Path : String) return Identity_Observation
+   is
+      pragma Unreferenced (Host);
+      use type Interfaces.C.int;
+      function Observe
+        (Name : Interfaces.C.char_array;
+         Device, Inode : access Interfaces.Unsigned_64;
+         Parent : access Interfaces.C.int) return Interfaces.C.int
+        with Import, Convention => C,
+             External_Name => "landin_observe_identity";
+      Result : Identity_Observation;
+      Device, Inode : aliased Interfaces.Unsigned_64;
+      Found : Interfaces.C.int;
+      Parent : aliased Interfaces.C.int := 0;
+   begin
+      if Path = "" or else
+        (for some Byte of Path => Byte = Character'Val (0))
+      then
+         return Result;
+      end if;
+      Found := Observe
+        (Interfaces.C.To_C (Path), Device'Access, Inode'Access, Parent'Access);
+      if Found = 1 then
+         Result.Identity := (Device => Device, Inode => Inode, Valid => True);
+         Result.Status := Read_Ok;
+      elsif Found = 0 then
+         Result.Status := Not_Found;
+         Result.Parent_Resolved := Parent /= 0;
+      end if;
+      return Result;
+   end Observe_Identity;
+
    overriding function Identity_Of
      (Host : Native_Filesystem; Path : String) return File_Identity
    is

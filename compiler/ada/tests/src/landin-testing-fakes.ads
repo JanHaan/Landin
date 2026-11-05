@@ -20,6 +20,15 @@ package Landin.Testing.Fakes is
    procedure Add_File
      (Host : in out Fake_Filesystem; Path : String; Content : String);
 
+   --  Deterministic metadata race: create a hard link on the second probe.
+   procedure Appear_On_Identity_Observation
+     (Host : in out Fake_Filesystem; Path, Target : String);
+   procedure Set_Identity_Uncertain
+     (Host : in out Fake_Filesystem; Path : String);
+   overriding function Observe_Identity
+     (Host : Fake_Filesystem; Path : String)
+      return Landin.Platform.Identity_Observation;
+
    --  Real direntries sharing an object, and links whose target can dangle.
    procedure Add_Hard_Link
      (Host : in out Fake_Filesystem; Path, Target : String);
@@ -474,6 +483,8 @@ private
       Write_Attempts : Natural := 0;
       List_Calls     : List_Call_Vectors.Vector;
 
+      Observed_Path, Observed_Target : Unbounded.Unbounded_String;
+      Observations : Natural := 0;
       Next_Identity : Interfaces.Unsigned_64 := 1;
       Output_Is_Locked : Boolean := False;
       Identity_Comparisons : Natural := 0;
@@ -495,6 +506,7 @@ private
 
    type Fake_Filesystem is limited new Landin.Platform.Filesystem
    with record
+      Uncertain_Identities : Landin.Platform.Path_List;
       Aliases : Landin.Platform.Path_List;
       Links : Landin.Platform.Path_List;
       Executable : Unbounded.Unbounded_String;

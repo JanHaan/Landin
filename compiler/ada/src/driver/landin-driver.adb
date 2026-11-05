@@ -1258,7 +1258,7 @@ package body Landin.Driver is
          Intermediate_Assembly : Unbounded.Unbounded_String;
          package Publication renames Landin.Platform.Publication;
          Artifacts, Stage_Report : Publication.Transaction;
-         Reserved, Known_Inputs : Landin.Platform.Path_List;
+         Reserved, Known_Inputs, Absent_Tool_Names : Landin.Platform.Path_List;
          Publication_Failed : Boolean := False;
          Artifacts_Closed : Boolean := False;
          --  D685: what the build report records of the ESP application
@@ -1517,17 +1517,38 @@ package body Landin.Driver is
             end if;
          end Protect_Input;
 
+         function Absolute (Path : String) return String;
+
          --  A stage report may publish even when loading or option checking
          --  fails. Register selected tool names before either can fail, and
          --  retain the current resolution as bounded executable evidence.
          procedure Protect_Tool_Inputs (Driver : String);
          procedure Protect_Tool_Inputs (Driver : String) is
             procedure Protect_Program (Name : String);
+            procedure Observe_Program_Path (Path : String);
+            procedure Observe_Program_Path (Path : String) is
+               Seen : Landin.Platform.Identity_Observation;
+            begin
+               if Path = "" then
+                  return;
+               end if;
+               Seen := Host.Observe_Identity (Path);
+               if Seen.Status = Landin.Platform.Not_Found then
+                  if not Absent_Tool_Names.Contains (Path) then
+                     Absent_Tool_Names.Append (Path);
+                  end if;
+                  if Seen.Parent_Resolved then
+                     Observed_Input (Path, Seen.Identity);
+                  end if;
+               else
+                  Observed_Input (Path, Seen.Identity);
+               end if;
+            end Observe_Program_Path;
             procedure Protect_Program (Name : String) is
             begin
-               Protect_Input (Name);
+               Observe_Program_Path (Name);
                if Name /= "" then
-                  Protect_Input (Tools.Resolve_Program (Name));
+                  Observe_Program_Path (Tools.Resolve_Program (Name));
                end if;
             end Protect_Program;
          begin
@@ -1557,6 +1578,37 @@ package body Landin.Driver is
             end if;
          end Protect_Tool_Inputs;
 
+         --  A definitively absent selection has no object to alias. Keep its
+         --  spelling reserved without asking the object-overlap API to resolve
+         --  nonexistent parents, which must conservatively answer unknown.
+         function Is_Absent_Tool_Name (Path : String) return Boolean;
+         function Is_Absent_Tool_Name (Path : String) return Boolean is
+            Output : constant Landin.Platform.Identity_Observation :=
+              Host.Observe_Identity (Path);
+         begin
+            for Name of Absent_Tool_Names loop
+               if Path = Name or else Absolute (Path) = Absolute (Name) then
+                  return True;
+               end if;
+               if Output.Identity.Valid or else Output.Parent_Resolved then
+                  declare
+                     Seen : constant Landin.Platform.Identity_Observation :=
+                       Host.Observe_Identity (Name);
+                  begin
+                     if Seen.Status /= Landin.Platform.Not_Found
+                       or else Seen.Parent_Resolved
+                     then
+                        Observed_Input (Name, Seen.Identity);
+                        if Host.Paths_Overlap (Path, Name) then
+                           return True;
+                        end if;
+                     end if;
+                  end;
+               end if;
+            end loop;
+            return False;
+         end Is_Absent_Tool_Name;
+
          procedure Reserve_Output (Path : String);
          procedure Reserve_Output (Path : String) is
             Status : Landin.Platform.Write_Status;
@@ -1565,6 +1617,16 @@ package body Landin.Driver is
             if Dry_Run or else Reserved.Contains (Path)
               or else Publication_Failed
             then
+               return;
+            end if;
+            Protect_Tool_Inputs (Planned_Driver);
+            if Is_Absent_Tool_Name (Path) then
+               Bad_Use := True;
+               Publication_Failed := True;
+               Note_Failure
+                 (Code_Unknown_Option, "output " & Path
+                  & " names a selected tool; choose another output path"
+                  & " and retry");
                return;
             end if;
             for Input of Known_Inputs loop
@@ -1589,6 +1651,19 @@ package body Landin.Driver is
                   & Unbounded.To_String (Reason)
                   & "; choose another output path and retry");
             else
+               --  Prepare may just have created a formerly missing parent.
+               --  Upgrade selected names to host name-equivalence protection
+               --  before staged writes, even when the public leaf is absent.
+               Protect_Tool_Inputs (Planned_Driver);
+               if Is_Absent_Tool_Name (Path) then
+                  Publication_Failed := True;
+                  Bad_Use := True;
+                  Note_Failure
+                    (Code_Unknown_Option, "output " & Path
+                     & " names a selected tool; choose another output path"
+                     & " and retry");
+                  return;
+               end if;
                Reserved.Append (Path);
                declare
                   Stage : constant String :=
@@ -1660,7 +1735,16 @@ package body Landin.Driver is
                return;
             end if;
             if Publish and then not Publication_Failed then
+               Protect_Tool_Inputs (Planned_Driver);
                for Path of Reserved loop
+                  if Is_Absent_Tool_Name (Path) then
+                     Publication_Failed := True;
+                     Bad_Use := True;
+                     Note_Failure
+                       (Code_Unknown_Option, "output " & Path
+                        & " names a selected tool; choose another output path"
+                        & " and retry");
+                  end if;
                   for Input of Known_Inputs loop
                      if Path = Input
                        or else (Host.Exists (Path)
@@ -1731,8 +1815,6 @@ package body Landin.Driver is
 
          --  D524: a path as the link names it, absolute.  A relative one is
          --  read against the working directory the host reports.
-         function Absolute (Path : String) return String;
-
          function Absolute (Path : String) return String is
             Last : Natural := Path'Last;
          begin
@@ -1951,6 +2033,15 @@ package body Landin.Driver is
             then
                return;
             end if;
+            Protect_Tool_Inputs (Planned_Driver);
+            if Is_Absent_Tool_Name (Path) then
+               Bad_Use := True;
+               Note_Failure
+                 (Code_Unknown_Option, "stage report output " & Path
+                  & " names a selected tool; choose another output path"
+                  & " and retry");
+               return;
+            end if;
             --  A failed read has no source in Context, but its requested
             --  path must still be protected from the report writer.
             for Input of Inputs loop
@@ -2011,6 +2102,15 @@ package body Landin.Driver is
                   & "; choose another report path and retry");
                return;
             end if;
+            Protect_Tool_Inputs (Planned_Driver);
+            if Is_Absent_Tool_Name (Path) then
+               Bad_Use := True;
+               Note_Failure
+                 (Code_Unknown_Option, "stage report output " & Path
+                  & " names a selected tool; choose another output path"
+                  & " and retry");
+               return;
+            end if;
             Host.Write_File
               (Publication.Stage_Path (Stage_Report, Path),
                "{""format"":""landin-stage-report-1"",""stages"":[" & LF
@@ -2029,7 +2129,16 @@ package body Landin.Driver is
                Note_Failure (Code_Unwritable, "cannot write: " & Path);
             end if;
             if Written = Landin.Platform.Write_Ok then
-               Publication.Commit (Stage_Report, Host, Written, Reason);
+               Protect_Tool_Inputs (Planned_Driver);
+               if Is_Absent_Tool_Name (Path) then
+                  Bad_Use := True;
+                  Written := Landin.Platform.Not_Writable;
+                  Reason := Unbounded.To_Unbounded_String
+                    ("stage report names a selected tool;"
+                     & " choose another output path and retry");
+               else
+                  Publication.Commit (Stage_Report, Host, Written, Reason);
+               end if;
             end if;
             if Written /= Landin.Platform.Write_Ok then
                Note_Failure

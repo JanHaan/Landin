@@ -71,6 +71,13 @@ package body Landin.Platform.Overlays is
      (Host : Overlay; Path : String) return String
      is (Host.Under.Existing_File_Key (Path));
 
+   overriding function Observe_Identity
+     (Host : Overlay; Path : String) return Identity_Observation
+     is (if Host.Held.Contains (Path) then
+           (Identity => (others => <>), Status => Read_Ok,
+            Parent_Resolved => False)
+         else Host.Under.Observe_Identity (Path));
+
    overriding function Identity_Of
      (Host : Overlay; Path : String) return File_Identity
      is (if Host.Held.Contains (Path) then (others => <>)

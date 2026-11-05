@@ -20,6 +20,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+int landin_observe_identity(const char *, uint64_t *, uint64_t *, int *);
 int landin_entry_names_alias(int, const char *, const char *);
 int landin_names_alias(const char *, const char *, int);
 void landin_file_identity_set_hook(void (*)(const char *, const char *));
@@ -775,6 +776,48 @@ static void fmt_original_descriptor(void)
     REQUIRE(content(output, "editor-save") && content(original_alias, "formatted"));
     REQUIRE(strstr(why, "retained")); ++passed;
 }
+static void identity_observations(void)
+{
+    char parent[4096], leaf[8192], missing[8192], dangling[8192], invalid[8192];
+    uint64_t device = 0, inode = 0; int resolved = -1;
+    path(parent, sizeof parent, "identity-observation");
+    REQUIRE(mkdir(parent, 0700) == 0);
+    REQUIRE(snprintf(leaf, sizeof leaf, "%s/tool", parent) > 0);
+    REQUIRE(landin_observe_identity(leaf, &device, &inode, &resolved) == 0
+            && resolved == 1);
+    REQUIRE(snprintf(missing, sizeof missing, "%s/missing/tool", parent) > 0);
+    REQUIRE(landin_observe_identity(missing, &device, &inode, &resolved) == 0
+            && resolved == 0);
+    put(leaf, "not executable and not read");
+    struct stat before; REQUIRE(stat(leaf, &before) == 0);
+    REQUIRE(chmod(leaf, 0000) == 0);
+    int found = landin_observe_identity(leaf, &device, &inode, &resolved);
+    REQUIRE(chmod(leaf, 0600) == 0);
+    REQUIRE(found == 1 && device == (uint64_t)before.st_dev
+            && inode == (uint64_t)before.st_ino);
+    REQUIRE(snprintf(invalid, sizeof invalid, "%s/child", leaf) > 0);
+    REQUIRE(landin_observe_identity(invalid, &device, &inode, &resolved) < 0);
+    REQUIRE(snprintf(dangling, sizeof dangling, "%s/dangling", parent) > 0);
+    REQUIRE(symlink("missing/target", dangling) == 0);
+    REQUIRE(landin_observe_identity(dangling, &device, &inode, &resolved) < 0);
+    REQUIRE(snprintf(invalid, sizeof invalid, "%s/child/tool", dangling) > 0);
+    REQUIRE(landin_observe_identity(invalid, &device, &inode, &resolved) < 0);
+    if (geteuid() != 0) {
+        REQUIRE(chmod(parent, 0000) == 0);
+        int denied = landin_observe_identity(leaf, &device, &inode, &resolved);
+        REQUIRE(chmod(parent, 0700) == 0);
+        REQUIRE(denied < 0);
+    }
+    REQUIRE(snprintf(invalid, sizeof invalid, "%s/missing", parent) > 0);
+    REQUIRE(mkdir(invalid, 0700) == 0);
+    REQUIRE(landin_observe_identity(missing, &device, &inode, &resolved) == 0
+            && resolved == 1);
+    put(missing, "new tool");
+    REQUIRE(landin_observe_identity(missing, &device, &inode, &resolved) == 1);
+    REQUIRE(content(leaf, "not executable and not read") && content(missing, "new tool"));
+    ++passed;
+}
+
 int main(int argc, char **argv)
 {
     self_program = argv[0];
@@ -832,6 +875,12 @@ int main(int argc, char **argv)
     const char *tmp = getenv("TMPDIR"); if (!tmp || !*tmp) tmp = "/tmp";
     REQUIRE(snprintf(scratch, sizeof scratch, "%s/landin-publication-XXXXXX", tmp) > 0);
     REQUIRE(mkdtemp(scratch) != NULL);
+    if (argc == 2 && !strcmp(argv[1], "--identity-observation")) {
+        identity_observations();
+        printf("publication native: %u controls passed (identity observation)\n", passed);
+        return 0;
+    }
+    identity_observations();
     ordinary_group(); capture_actual(); absence_and_noclobber(); protected_alias();
     anchored_stage_and_roots(); directory_snapshot(); staged_rewrite();
     fmt_read_boundaries(); fmt_original_descriptor(); collision_names();

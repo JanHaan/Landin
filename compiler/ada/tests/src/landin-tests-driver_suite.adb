@@ -2546,6 +2546,92 @@ package body Landin.Tests.Driver_Suite is
       end loop;
    end Missing_Toolchain_Preserves_Stage_Report_Source;
 
+   procedure Missing_Tool_Parents_Keep_Diagnostics
+     (Item : in out Landin.Testing.Context);
+
+   procedure Missing_Tool_Parents_Keep_Diagnostics
+     (Item : in out Landin.Testing.Context)
+   is
+   begin
+      for Attempt in 1 .. 11 loop
+         declare
+            Host : Landin.Testing.Fakes.Fake_Filesystem;
+            Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+            Tool : constant String :=
+              (if Attempt = 5 then "missing/driver"
+               elsif Attempt in 7 .. 10 then "tools/driver"
+               else "/virtual/compile/missing/driver");
+            Report : constant String :=
+              (if Attempt = 4 then Tool
+               elsif Attempt = 5 then "/virtual/compile/missing/driver"
+               elsif Attempt = 6 then "missing/driver"
+               elsif Attempt = 7 then "tools/DRIVER"
+               else "stages.json");
+            Args : Landin.Platform.Path_List :=
+              ["--target=linux-x86-64", "--emit=exe", "--link=libc",
+               "--toolchain=" & Tool, "main.ldn", "-o=product"];
+            Result : Landin.Driver.Outcome;
+            Expected : constant String :=
+              (if Attempt = 1 then "L0505"
+               elsif Attempt = 2 then "L0500"
+               elsif Attempt = 3 then "L0012" else "L0002");
+            Content : Unbounded.Unbounded_String;
+            Read : Landin.Platform.Read_Status;
+         begin
+            Host.Add_File
+              ("main.ldn", (if Attempt = 1
+               then "mut image: [2147483649]u8 = [of 1]" & LF
+                 & "public main: () -> (code: i32) ="
+                 & " code = i32(image[1]) end main"
+               elsif Attempt = 2 then Entry_Program else "@" & LF));
+            Tools.Set_Available (False);
+            if Attempt >= 3 then
+               Args.Append ("--stage-report=" & Report);
+            end if;
+            if Attempt in 7 .. 10 then
+               Host.Add_Directory ("tools");
+            end if;
+            if Attempt = 7 then
+               Host.Add_Alias (Tool, Report);
+            elsif Attempt in 8 .. 10 then
+               if Attempt = 9 then
+                  Host.Add_Unreadable (Tool);
+               else
+                  Host.Add_File (Tool, "saved tool");
+               end if;
+               Host.Add_Hard_Link (Report, Tool);
+               if Attempt = 10 then
+                  Host.Set_Identity_Uncertain (Tool);
+               end if;
+            elsif Attempt = 11 then
+               Host.Add_File (Report, "tool appeared later");
+               Host.Appear_On_Identity_Observation (Tool, Report);
+            end if;
+            Result := Landin.Driver.Execute (Args, Host, Tools);
+            Landin.Testing.Check_Equal
+              (Item, Result.Status,
+               (if Attempt <= 3 then Landin.Driver.Status_Reported
+                else Landin.Driver.Status_Misuse),
+               "missing tool outcome: " & Attempt'Image
+               & Unbounded.To_String (Result.Report));
+            Landin.Testing.Check
+              (Item, Contains (Unbounded.To_String (Result.Report), Expected),
+               "the intended diagnostic wins: " & Expected);
+            Landin.Testing.Check_Equal
+              (Item, Host.Write_Count, (if Attempt = 3 then 1 else 0),
+               "only an unrelated frontend-failure report writes");
+            Landin.Testing.Check_Equal
+              (Item, Tools.Run_Count, 0, "no tool runs after these refusals");
+            if Attempt = 11 then
+               Host.Read_File (Report, Content, Read);
+               Landin.Testing.Check_Equal
+                 (Item, Unbounded.To_String (Content), "tool appeared later",
+                  "a newly observed tool is protected before a report");
+            end if;
+         end;
+      end loop;
+   end Missing_Tool_Parents_Keep_Diagnostics;
+
    procedure Early_Stage_Reports_Protect_Selected_Tools
      (Item : in out Landin.Testing.Context);
 
@@ -7946,6 +8032,9 @@ package body Landin.Tests.Driver_Suite is
       Landin.Testing.Register
         (Into, "driver", "ordinary outputs beneath dSYM parents",
          Ordinary_Outputs_Beneath_DSYM_Parents'Access);
+      Landin.Testing.Register
+        (Into, "driver", "missing tool parents keep diagnostics",
+         Missing_Tool_Parents_Keep_Diagnostics'Access);
       Landin.Testing.Register
         (Into, "driver", "early stage reports protect selected tools",
          Early_Stage_Reports_Protect_Selected_Tools'Access);

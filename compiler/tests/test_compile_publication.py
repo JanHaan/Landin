@@ -134,6 +134,46 @@ def main():
         cases.append(('early-default-driver-as-stage-report',
                       [str(malformed), '--stage-report=' + str(default_driver)],
                       early_tool, False))
+    missing_tool = root / 'missing-tools' / 'driver'
+    budget_source = root / 'past-budget.ldn'
+    budget_source.write_text('mut image: [2147483649]u8 = [of 1]\n' +
+                             'public main: () -> (code: i32) =\n'
+                             '    code = i32(image[1])\nend main\n')
+    for suffix in ('', '.s'):
+        (root / ('budget-product' + suffix)).write_bytes(b'prior-budget-artifact\x00\xff')
+    cases.extend([
+        ('missing-parent-budget', [str(budget_source), '--link=libc',
+                                  '--toolchain=' + str(missing_tool), '-o',
+                                  str(root / 'budget-product')], budget_source, False),
+        ('missing-parent-tool', [str(source), '--link=libc',
+                                '--toolchain=' + str(missing_tool), '-o',
+                                str(root / 'missing-product')], source, False),
+        ('early-safe-missing-parent', [str(malformed),
+                                      '--toolchain=' + str(missing_tool),
+                                      '--stage-report=' + str(root / 'missing-stages.json')], malformed, False),
+    ])
+    # On a case-folding host, preparation creates the formerly missing
+    # parent before the driver can apply its actual name-equivalence policy.
+    case_probe = root / 'case-probe'
+    case_probe.write_bytes(b'case probe')
+    case_folding = (root / 'CASE-PROBE').exists()
+    case_probe.unlink()
+    if case_folding:
+        cases.append(('early-missing-parent-case-as-stage-report',
+                      [str(malformed), '--toolchain=' + str(missing_tool),
+                       '--stage-report=' + str(missing_tool.with_name('DRIVER'))],
+                      malformed, False))
+    for label, tool_name, report in [
+        ('missing-parent', str(missing_tool), missing_tool),
+        ('missing-parent-relative', 'missing-tools/driver', missing_tool),
+        ('missing-parent-absolute', str(missing_tool), Path('missing-tools/driver')),
+        ('missing-leaf', str(selected_tools / 'missing-cc'), selected_tools / 'missing-cc'),
+        ('missing-leaf-relative', 'selected-tools/missing-cc', selected_tools / 'missing-cc'),
+        ('missing-leaf-absolute', str(selected_tools / 'missing-cc'), Path('selected-tools/missing-cc')),
+    ]:
+        cases.append(('early-' + label + '-as-stage-report',
+                      [str(malformed), '--toolchain=' + tool_name,
+                       '--stage-report=' + str(report)], malformed, False))
     dsym_parent = root / 'ordinary.dSYM'
     dsym_parent.mkdir()
     assembly = root / 'owned-main.s'
@@ -168,6 +208,8 @@ def main():
         cases = [case for case in cases if case[0] in args.case]
     results = []
     for name, operands, protected, succeeds in cases:
+        budget_artifacts = [root / 'budget-product', root / 'budget-product.s']
+        budget_before = [entry_snapshot(path) for path in budget_artifacts]
         before = protected.read_bytes()
         identity = protected.stat()
         refused_report = None
@@ -176,6 +218,8 @@ def main():
             refused_report = Path(next(value.split('=', 1)[1]
                                        for value in operands
                                        if value.startswith('--stage-report=')))
+            if not refused_report.is_absolute():
+                refused_report = root / refused_report
             report_before = entry_snapshot(refused_report)
         case_env = dict(env)
         if name.startswith('early-'):
@@ -186,6 +230,10 @@ def main():
         expected_failure = (result.returncode == 2 and b'L0002' in result.stderr)
         report_after = (entry_snapshot(refused_report)
                         if refused_report is not None else None)
+        if name == 'missing-parent-budget':
+            expected_failure = result.returncode == 1 and b'L0505' in result.stderr
+        elif name == 'missing-parent-tool':
+            expected_failure = result.returncode == 1 and b'L0500' in result.stderr
         if name.startswith('early-safe-'):
             safe_report = Path(next(value.split('=', 1)[1] for value in operands
                                     if value.startswith('--stage-report=')))
@@ -207,6 +255,7 @@ def main():
                               and dwarf.is_file() and dwarf.stat().st_size > 0)
         passed = ((result.returncode == 0 if succeeds else expected_failure)
                   and product_ok
+                  and budget_before == [entry_snapshot(path) for path in budget_artifacts]
                   and protected.read_bytes() == before
                   and (identity.st_dev, identity.st_ino, identity.st_mode)
                   == (after.st_dev, after.st_ino, after.st_mode)

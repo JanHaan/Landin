@@ -65,6 +65,47 @@ int landin_directory_access_denied(const char *path)
     return denied;
 }
 
+/* Metadata observation for selected tools: only ENOENT proves absence.
+   Inaccessible parents, ENOTDIR, loops and every other failure stay unknown.
+   Existing protected-path and existing-identity APIs retain their semantics. */
+int landin_observe_identity(const char *path, uint64_t *device, uint64_t *inode,
+                            int *parent_resolved)
+{
+    struct stat object;
+    char parent[PATH_MAX];
+    *parent_resolved = 0;
+    if (stat(path, &object) == 0) {
+        *device = (uint64_t)object.st_dev;
+        *inode = (uint64_t)object.st_ino;
+        return 1;
+    }
+    if (errno != ENOENT || lstat(path, &object) == 0 || errno != ENOENT)
+        return -1;
+    if (strlen(path) >= sizeof parent) { errno = ENAMETOOLONG; return -1; }
+    strcpy(parent, path);
+    char *slash = strrchr(parent, '/');
+    if (!slash) strcpy(parent, ".");
+    else if (slash == parent) slash[1] = 0;
+    else *slash = 0;
+    int immediate = 1;
+    for (;;) {
+        if (stat(parent, &object) == 0) {
+            if (!S_ISDIR(object.st_mode)) { errno = ENOTDIR; return -1; }
+            *parent_resolved = immediate;
+            return 0;
+        }
+        if (errno != ENOENT || lstat(parent, &object) == 0 || errno != ENOENT)
+            return -1;
+        /* A dangling link in any ancestor is occupied, not a missing name. */
+        immediate = 0;
+        if (!strcmp(parent, ".") || !strcmp(parent, "/")) return -1;
+        slash = strrchr(parent, '/');
+        if (!slash) strcpy(parent, ".");
+        else if (slash == parent) slash[1] = 0;
+        else *slash = 0;
+    }
+}
+
 int landin_file_identity(const char *path, uint64_t *device, uint64_t *inode)
 {
     struct stat object;

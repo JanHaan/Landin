@@ -85,6 +85,22 @@ package Landin.Platform is
       Valid  : Boolean := False;
    end record;
 
+   --  Metadata only: Not_Found proves ENOENT; inaccessible or uncertain
+   --  lookups stay Not_Readable. A selected but absent tool reserves a name,
+   --  not an unknown object that aliases every unrelated output. Callers
+   --  reobserve before publication; this does not pin future name lookup.
+   --  An absent leaf with Parent_Resolved keeps full host name-equivalence
+   --  protection; False with Not_Found proves the parent itself is missing.
+   type Identity_Observation is record
+      Identity : File_Identity;
+      Status : Read_Status := Not_Readable;
+      Parent_Resolved : Boolean := False;
+   end record;
+
+   function Observe_Identity
+     (Host : Filesystem; Path : String)
+      return Identity_Observation is abstract;
+
    function Identity_Of
      (Host : Filesystem; Path : String) return File_Identity is abstract;
 

@@ -14,6 +14,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--cc', default=os.environ.get('CC', 'cc'))
     parser.add_argument('--output', type=Path, help='new evidence directory')
+    parser.add_argument('--case', choices=['identity-observation'])
     args = parser.parse_args()
     repo = Path(__file__).resolve().parents[2]
     root = (args.output.absolute() if args.output else
@@ -39,7 +40,8 @@ def main():
                                       platform / 'landin_owned_directory.h']})
     if built.returncode == 0:
         env = dict(os.environ, TMPDIR=str(root))
-        ran = subprocess.run([str(binary)], cwd=root, env=env,
+        selected = ['--' + args.case] if args.case else []
+        ran = subprocess.run([str(binary), *selected], cwd=root, env=env,
                              capture_output=True, text=True, timeout=60)
         (root / 'controls.log').write_text(ran.stdout + ran.stderr)
         summary.update(exit_status=ran.returncode, stdout=ran.stdout,

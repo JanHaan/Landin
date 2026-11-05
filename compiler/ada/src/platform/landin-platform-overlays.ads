@@ -50,6 +50,9 @@ package Landin.Platform.Overlays is
    overriding function Existing_File_Key
      (Host : Overlay; Path : String) return String;
 
+   overriding function Observe_Identity
+     (Host : Overlay; Path : String) return Identity_Observation;
+
    overriding function Identity_Of
      (Host : Overlay; Path : String) return File_Identity;
 

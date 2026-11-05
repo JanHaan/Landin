@@ -318,6 +318,63 @@ package body Landin.Testing.Fakes is
       return "";
    end Existing_File_Key;
 
+   procedure Appear_On_Identity_Observation
+     (Host : in out Fake_Filesystem; Path, Target : String) is
+   begin
+      Host.Writes.Data.Observed_Path := Unbounded.To_Unbounded_String (Path);
+      Host.Writes.Data.Observed_Target :=
+        Unbounded.To_Unbounded_String (Target);
+      Host.Writes.Data.Observations := 0;
+   end Appear_On_Identity_Observation;
+
+   procedure Set_Identity_Uncertain
+     (Host : in out Fake_Filesystem; Path : String) is
+   begin
+      Host.Uncertain_Identities.Append (Path);
+   end Set_Identity_Uncertain;
+
+   overriding function Observe_Identity
+     (Host : Fake_Filesystem; Path : String)
+      return Landin.Platform.Identity_Observation
+   is
+      Found : Landin.Platform.File_Identity;
+      Slash : constant Natural := Ada.Strings.Fixed.Index
+        (Path, "/", Ada.Strings.Backward);
+      Parent : constant String :=
+        (if Slash = 0 then Host.Working_Directory
+         elsif Slash = Path'First then "/"
+         else Path (Path'First .. Slash - 1));
+   begin
+      if Path = "" then
+         return (others => <>);
+      end if;
+      if Path = Unbounded.To_String (Host.Writes.Data.Observed_Path) then
+         Host.Writes.Data.Observations := Host.Writes.Data.Observations + 1;
+         if Host.Writes.Data.Observations = 2 then
+            declare
+               Index : constant Natural := Resolve_Find
+                 (Host,
+                  Unbounded.To_String (Host.Writes.Data.Observed_Target));
+               Item : File_Entry := Host.Writes.Data.Files (Index);
+            begin
+               Item.Path := Unbounded.To_Unbounded_String (Path);
+               Host.Writes.Data.Files.Append (Item);
+            end;
+         end if;
+      end if;
+      Found := Identity_Of (Host, Path);
+      if Host.Uncertain_Identities.Contains (Path) then
+         return (others => <>);
+      end if;
+      return (Identity => Found,
+              Status => (if Found.Valid then Landin.Platform.Read_Ok
+                         elsif Host.Is_Link (Path)
+                         then Landin.Platform.Not_Readable
+                         else Landin.Platform.Not_Found),
+              Parent_Resolved => Parent in "/" | Host.Working_Directory
+                or else Host.Is_Directory (Parent));
+   end Observe_Identity;
+
    overriding function Identity_Of
      (Host : Fake_Filesystem; Path : String)
       return Landin.Platform.File_Identity
