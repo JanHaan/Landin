@@ -52,6 +52,10 @@ package Landin.Driver is
       Named  : Landin.Platform.Path_List;
       Positions : Position_Vectors.Vector;
       Trace  : Ada.Strings.Unbounded.Unbounded_String;
+      --  Internal transport for command tracing. Tool arguments use private
+      --  paths; the public trace names their deterministic destinations.
+      Trace_Physical_Paths : Landin.Platform.Path_List;
+      Trace_Logical_Paths : Landin.Platform.Path_List;
       --  D526: what `refine run` runs once the report above is written,
       --  and the private directory it is in, removed after it.  Empty
       --  when there is nothing to run.

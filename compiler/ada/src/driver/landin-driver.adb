@@ -1550,6 +1550,9 @@ package body Landin.Driver is
                   & "; choose another output path and retry");
             else
                Reserved.Append (Path);
+               Result.Trace_Physical_Paths.Append
+                 (Publication.Stage_Path (Artifacts, Path));
+               Result.Trace_Logical_Paths.Append (Path);
             end if;
          end Reserve_Output;
 
