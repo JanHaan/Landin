@@ -48,6 +48,7 @@ static struct arena *arenas;
 static struct publication *publications;
 static int next_token = 1;
 extern int landin_cancellation_requested(void);
+extern int landin_overlaps_any(const char *, const char *const *, size_t);
 static landin_publication_hook fault_hook;
 void landin_publication_set_hook(landin_publication_hook hook) { fault_hook = hook; }
 void landin_publication_notify(const char *event, const char *path)
@@ -570,6 +571,10 @@ int landin_publication_step(int token, int action, const char *const *paths,
         barrier("validated", p->path); return 0;
     }
     if (action == 1) {
+        if (path_count && landin_overlaps_any(p->path, paths, path_count) != 0) {
+            reason(why, room, "%s aliases a protected input name; choose another output",
+                   p->path); return -1;
+        }
         barrier("before-capture", p->path);
         if (renameat(parent, p->name, private_fd, p->recovery) != 0) {
             if (errno == ENOENT && p->absent) return 0;

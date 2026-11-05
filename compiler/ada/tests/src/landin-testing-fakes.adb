@@ -6,6 +6,7 @@ with Ada.Unchecked_Deallocation;
 
 package body Landin.Testing.Fakes is
 
+   use type Landin.Platform.File_Identity;
    use type Landin.Platform.Update_Handle;
    use type Landin.Platform.Read_Status;
    use type Landin.Platform.Write_Status;
@@ -337,7 +338,10 @@ package body Landin.Testing.Fakes is
    overriding function Paths_Overlap
      (Host : Fake_Filesystem; Left, Right : String) return Boolean is
    begin
-      if Left = Right
+      if (Identity_Of (Host, Left).Valid
+          and then Identity_Of (Host, Right).Valid
+          and then Identity_Of (Host, Left) = Identity_Of (Host, Right))
+        or else Left = Right
         or else (Directory_Path (Left) = Directory_Path (Right)
                  and then Host.Is_Directory (Left)
                  and then Host.Is_Directory (Right))
@@ -953,6 +957,9 @@ package body Landin.Testing.Fakes is
       Write_File (Host, Unbounded.To_String (Item.Path), Content, Status);
       if Status = Landin.Platform.Write_Ok then
          Reason := Unbounded.Null_Unbounded_String;
+      else
+         Reason := Unbounded.To_Unbounded_String
+           ("the fake host refuses writes");
       end if;
    end Replace_Update;
 
@@ -1564,13 +1571,13 @@ package body Landin.Testing.Fakes is
                end if;
             end;
          end if;
-         Host.State.Data.Output_Store := null;
       end if;
       if Host.State.Data.Output_Store /= null
         and then Host.State.Data.Produces_Output
         and then Result.Ended = Landin.Platform.Exited
         and then Result.Exit_Code = 0
-        and then Arguments.Contains ("-save-temps=obj")
+        and then (Arguments.Contains ("-save-temps=obj")
+                  or else Arguments.Contains ("-Map"))
       then
          declare
             Data : constant Store_Access := Host.State.Data.Output_Store;
@@ -1582,15 +1589,18 @@ package body Landin.Testing.Fakes is
                   Name : constant String :=
                     Unbounded.To_String (Reservation.Stage);
                begin
-                  if Name = Main_Path & ".o"
-                    or else Name = Main_Path & ".dSYM"
+                  if (Arguments.Contains ("-save-temps=obj")
+                      and then (Name = Main_Path & ".o"
+                                or else Name = Main_Path & ".dSYM"))
+                    or else (Arguments.Contains ("-Map")
+                             and then Name = Main_Path & ".map")
                   then
                      Data.Files.Append
                        (File_Entry'
                           (Path => Reservation.Stage,
                            Content => Host.State.Data.Output_Content,
-                           Kind => (if Name = Main_Path & ".o" then A_File
-                                    else A_Directory),
+                           Kind => (if Name = Main_Path & ".dSYM"
+                                    then A_Directory else A_File),
                            Identity => Data.Next_Identity));
                      Data.Next_Identity := Data.Next_Identity + 1;
                   end if;
@@ -1598,6 +1608,7 @@ package body Landin.Testing.Fakes is
             end loop;
          end;
       end if;
+      Host.State.Data.Output_Store := null;
    end Run;
 
    procedure Set_Output_Produced

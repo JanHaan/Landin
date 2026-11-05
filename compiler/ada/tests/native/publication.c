@@ -178,6 +178,42 @@ static void directory_snapshot(void)
 #endif
     REQUIRE(step(token, 4) == 0); ++passed;
 }
+static void staged_rewrite(void)
+{
+    char output[4096], stage[4096];
+    path(output, sizeof output, "stage-rewrite");
+    int token = prepare(output, 0, "", stage);
+    staged(stage, "object-before-checksum"); staged(stage, "patched");
+    char *bytes; size_t size; uint64_t dev, ino;
+    REQUIRE(landin_read_snapshot(stage, &bytes, &size, &dev, &ino) == 0);
+    REQUIRE(size == 7 && !memcmp(bytes, "patched", 7)); free(bytes);
+    REQUIRE(step(token, 0) == 0 && step(token, 1) == 0 && step(token, 2) == 0);
+    REQUIRE(content(output, "patched") && step(token, 4) == 0); ++passed;
+}
+static void fmt_read_boundaries(void)
+{
+    char output[4096], saved[4096];
+    path(output, sizeof output, "fmt-before-read");
+    path(saved, sizeof saved, "fmt-before-read-save");
+    put(output, "stale"); put(saved, "new-read-object");
+    int lease; char *bytes; size_t size;
+    arm("update-before-read", output, saved, 1);
+    REQUIRE(landin_open_update(output, &bytes, &size, &lease, why, sizeof why) == 0);
+    clear_hook();
+    REQUIRE(size == 15 && !memcmp(bytes, "new-read-object", 15)); free(bytes);
+    REQUIRE(landin_replace_update(lease, "formatted-new", 13, why, sizeof why) == 0);
+    landin_close_update(lease); REQUIRE(content(output, "formatted-new"));
+    path(output, sizeof output, "fmt-after-read");
+    path(saved, sizeof saved, "fmt-after-read-save");
+    put(output, "original-read"); put(saved, "editor-after-read");
+    arm("update-read", output, saved, 1);
+    REQUIRE(landin_open_update(output, &bytes, &size, &lease, why, sizeof why) == 0);
+    clear_hook();
+    REQUIRE(size == 13 && !memcmp(bytes, "original-read", 13)); free(bytes);
+    REQUIRE(landin_replace_update(lease, "formatted", 9, why, sizeof why) != 0);
+    landin_close_update(lease); REQUIRE(content(output, "editor-after-read"));
+    ++passed;
+}
 static void fmt_original_descriptor(void)
 {
     char output[4096], saved[4096], original_alias[4096];
@@ -199,7 +235,8 @@ int main(void)
     REQUIRE(snprintf(scratch, sizeof scratch, "%s/landin-publication-XXXXXX", tmp) > 0);
     REQUIRE(mkdtemp(scratch) != NULL);
     ordinary_group(); capture_actual(); absence_and_noclobber(); protected_alias();
-    anchored_stage_and_roots(); directory_snapshot(); fmt_original_descriptor();
+    anchored_stage_and_roots(); directory_snapshot(); staged_rewrite();
+    fmt_read_boundaries(); fmt_original_descriptor();
     printf("publication native: %u controls passed; retained scratch %s\n", passed, scratch);
     return 0;
 }
