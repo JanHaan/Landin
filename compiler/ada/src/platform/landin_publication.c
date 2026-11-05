@@ -4,8 +4,10 @@
 #ifdef __APPLE__
 #define _DARWIN_C_SOURCE
 #endif
+#ifndef __FreeBSD__
 #define _POSIX_C_SOURCE 200809L
 #define _XOPEN_SOURCE 700
+#endif
 #include "landin_publication.h"
 #include <errno.h>
 #include <dirent.h>
@@ -17,6 +19,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/file.h>
 #include <unistd.h>
 #ifdef __linux__
 #include <sys/syscall.h>
@@ -517,8 +520,58 @@ static int own_arena_name(int parent, const char *name)
         if (a->refs && same(&st, &a->parent_id) && !strcmp(name, a->name)) return 1;
     return 0;
 }
-/* Discovery reads exclusively-created records through the pinned parent.
-   A partial/unrecognised workspace refuses rather than guessing it is stale. */
+struct known_name {
+    char *name;
+    struct known_name *next;
+};
+static void free_names(struct known_name *names)
+{
+    while (names) {
+        struct known_name *next = names->next;
+        free(names->name); free(names); names = next;
+    }
+}
+static int add_name(struct known_name **names, const char *name, size_t length)
+{
+    struct known_name *item = malloc(sizeof *item);
+    if (!item) return -1;
+    item->name = malloc(length + 1);
+    if (!item->name) { free(item); return -1; }
+    memcpy(item->name, name, length); item->name[length] = 0;
+    item->next = *names; *names = item; return 0;
+}
+static int numbered(const char *name, const char *prefix)
+{
+    size_t length = strlen(prefix);
+    if (strncmp(name, prefix, length) || !name[length]
+        || strlen(name + length) > 10) return 0;
+    for (name += length; *name; ++name) if (*name < '0' || *name > '9') return 0;
+    return 1;
+}
+/* With no published records, an empty allow-list proves this is only setup:
+   stage/recovery may be absent or empty, never linked or unexplained. */
+static int entries_known(int root, const char *directory, struct known_name *names)
+{
+    int fd = openat(root, directory, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+    if (fd < 0) return errno == ENOENT;
+    DIR *listing = fdopendir(fd);
+    struct dirent *item;
+    int known = 1;
+    if (!listing) { close(fd); return 0; }
+    while (known) {
+        errno = 0; item = readdir(listing);
+        if (!item) { if (errno) known = 0; break; }
+        if (!strcmp(item->d_name, ".") || !strcmp(item->d_name, "..")) continue;
+        struct known_name *match;
+        for (match = names; match; match = match->next)
+            if (!strcmp(match->name, item->d_name)) break;
+        if (!match) known = 0;
+    }
+    closedir(listing); return known;
+}
+/* Records are atomically published. The shared root lock prevents a newly
+   completed record (and its later stage) from racing this allow-list scan;
+   record construction remains private and does not hold that lock. */
 static int retained_workspace(int parent, const char *parent_path,
                                const char *target, char *why, size_t room)
 {
@@ -526,79 +579,105 @@ static int retained_workspace(int parent, const char *parent_path,
     struct dirent *item;
     int refused = 0;
     if (!directory) return -1;
-    while ((item = readdir(directory)) != NULL) {
+    rewinddir(directory);
+    while (!refused) {
+        errno = 0; item = readdir(directory);
+        if (!item) { refused = errno != 0; break; }
         if (strncmp(item->d_name, ".refine-publication-", 20)
             || own_arena_name(parent, item->d_name)) continue;
         int root = openat(parent, item->d_name,
                            O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
-        DIR *records = root < 0 ? NULL : fdopendir(dup(root));
-        int seen = 0;
-        struct dirent *record;
+        if (root < 0 && errno == ENOENT) continue;
+        DIR *records = NULL;
+        struct known_name *stage_names = NULL, *recovery_names = NULL;
+        if (root >= 0 && flock(root, LOCK_SH) == 0) records = fdopendir(dup(root));
         if (!records) refused = 1;
-        while (records && (record = readdir(records)) != NULL) {
-            if (strncmp(record->d_name, "destination-", 12)) continue;
-            seen = 1;
-            int fd = openat(root, record->d_name,
-                            O_RDONLY | O_NOFOLLOW | O_CLOEXEC | O_NONBLOCK);
+        struct dirent *record;
+        while (records && !refused) {
+            errno = 0; record = readdir(records);
+            if (!record) { refused = errno != 0; break; }
+            const char *name = record->d_name;
+            if (!strcmp(name, ".") || !strcmp(name, "..")
+                || !strcmp(name, "stage") || !strcmp(name, "recovery")) continue;
+            if (numbered(name, ".destination-building-")) {
+                struct stat temporary;
+                if (fstatat(root, name, &temporary, AT_SYMLINK_NOFOLLOW) != 0
+                    || !S_ISREG(temporary.st_mode)) refused = 1;
+                continue;
+            }
+            if (!numbered(name, "destination-")) { refused = 1; break; }
+            int fd = openat(root, name, O_RDONLY | O_NOFOLLOW | O_CLOEXEC | O_NONBLOCK);
             size_t length = 0;
             struct stat record_id;
             char *bytes = fd < 0 || fstat(fd, &record_id) != 0
                 || !S_ISREG(record_id.st_mode) ? NULL : read_bytes(fd, &length);
             if (fd >= 0) close(fd);
             const char magic[] = "LANDIN-PUBLICATION-1\n";
-            if (!bytes || length <= sizeof magic - 1
-                || memcmp(bytes, magic, sizeof magic - 1)) refused = 1;
+            const char end[] = "END-LANDIN-PUBLICATION-1\n";
+            if (!bytes || length < sizeof magic + sizeof end - 2
+                || memcmp(bytes, magic, sizeof magic - 1)
+                || memcmp(bytes + length - (sizeof end - 1), end, sizeof end - 1)) refused = 1;
             else {
                 char *after = NULL;
                 size_t name_length = strtoul(bytes + sizeof magic - 1, &after, 10);
                 size_t offset = after ? (size_t)(after - bytes) + 1 : length;
                 if (!after || *after != '\n' || offset > length
-                    || name_length > length - offset) refused = 1;
-                else if (name_length == strlen(target)
-                         && !memcmp(bytes + offset, target, name_length)) refused = 1;
-                /* Case-insensitive or unknown name rules are compared by the
-                   existing host identity adapter, using the actual parent. */
+                    || name_length > length - offset || !name_length
+                    || memchr(bytes + offset, 0, name_length)
+                    || memchr(bytes + offset, '/', name_length)) refused = 1;
                 else {
-                    size_t n = strlen(parent_path) + name_length + 2;
-                    char *other = malloc(n);
-                    if (!other) refused = 1;
-                    else {
-                        snprintf(other, n, "%s/%.*s", parent_path,
-                                 (int)name_length, bytes + offset);
+                    char *record_target = bytes + offset;
+                    if (add_name(&stage_names, record_target, name_length) != 0) refused = 1;
+                    char slot[80];
+                    snprintf(slot, sizeof slot, ".previous-%.10s", name + 12);
+                    if (add_name(&recovery_names, slot, strlen(slot)) != 0) refused = 1;
+                    snprintf(slot, sizeof slot, ".rollback-%.10s", name + 12);
+                    if (add_name(&recovery_names, slot, strlen(slot)) != 0) refused = 1;
+                    if (name_length == strlen(target)
+                        && !memcmp(record_target, target, name_length)) refused = 1;
+                    else if (!refused) {
+                        size_t n = strlen(parent_path) + name_length + 2;
+                        char *other = malloc(n);
                         size_t wanted_size = strlen(parent_path) + strlen(target) + 2;
                         char *wanted = malloc(wanted_size);
-                        if (!wanted) refused = 1;
+                        if (!other || !wanted) refused = 1;
                         else {
+                            snprintf(other, n, "%s/%.*s", parent_path, (int)name_length, record_target);
                             snprintf(wanted, wanted_size, "%s/%s", parent_path, target);
                             const char *paths[] = {other};
                             if (landin_overlaps_any(wanted, paths, 1) != 0) refused = 1;
-                            free(wanted);
                         }
-                        free(other);
+                        free(other); free(wanted);
                     }
                 }
             }
             free(bytes);
-            if (refused) break;
         }
-        if (!seen) refused = 1;
+        if (!refused && (!entries_known(root, "stage", stage_names)
+                         || !entries_known(root, "recovery", recovery_names))) refused = 1;
+        free_names(stage_names); free_names(recovery_names);
         if (records) closedir(records);
-        if (root >= 0) close(root);
+        if (root >= 0) { (void)flock(root, LOCK_UN); close(root); }
         if (refused) {
             reason(why, room, "retained or active publication for %s in %s/%s; inspect its destination records and recover the previous or new output before retrying",
                    target, parent_path, item->d_name);
-            break;
         }
     }
+    if (refused && !item)
+        reason(why, room, "cannot inspect retained publication entries in %s; retry after checking the output directory",
+               parent_path);
     closedir(directory); return refused ? -1 : 0;
 }
 static int write_journal(struct publication *p)
 {
+    char building[80];
     snprintf(p->journal, sizeof p->journal, "destination-%d", p->token);
-    int fd = openat(p->arena->root_fd, p->journal,
+    snprintf(building, sizeof building, ".destination-building-%d", p->token);
+    int fd = openat(p->arena->root_fd, building,
                     O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600);
     if (fd < 0) return -1;
-    int result = dprintf(fd, "LANDIN-PUBLICATION-1\n%zu\n%s\nlogical=%s\nstaged=%s\nprevious=%s/%s\ncaptured-new=%s/%s\nexpected=%s device=%ju inode=%ju\n",
+    barrier("journal-building", p->path);
+    int result = dprintf(fd, "LANDIN-PUBLICATION-1\n%zu\n%s\nlogical=%s\nstaged=%s\nprevious=%s/%s\ncaptured-new=%s/%s\nexpected=%s device=%ju inode=%ju\nEND-LANDIN-PUBLICATION-1\n",
                          strlen(p->name), p->name, p->path, p->stage,
                          p->arena->recovery_path, p->recovery,
                          p->arena->recovery_path, p->rollback,
@@ -607,7 +686,15 @@ static int write_journal(struct publication *p)
     if (result >= 0) result = fstat(fd, &p->journal_id);
     if (result == 0) result = fsync(fd);
     close(fd);
-    if (result == 0 && fsync(p->arena->root_fd) != 0 && errno != EINVAL) result = -1;
+    if (result == 0) {
+        if (flock(p->arena->root_fd, LOCK_EX) != 0) return -1;
+        result = no_replace(p->arena->root_fd, building,
+                            p->arena->root_fd, p->journal, 0);
+        if (result == 0 && fsync(p->arena->root_fd) != 0 && errno != EINVAL) result = -1;
+        int error = errno;
+        (void)flock(p->arena->root_fd, LOCK_UN); errno = error;
+    }
+    if (result == 0) barrier("journal-ready", p->path);
     return result < 0 ? -1 : 0;
 }
 static int finish_journals(struct arena *arena)
@@ -661,6 +748,7 @@ int landin_publication_open(const char *path, int deletion, const char *root,
     p->arena = arena_for(parent, parent_path);
     if (!p->arena) goto fail;
     parent = -1;
+    barrier("arena-ready", p->path);
     p->token = next_token++; p->deletion = deletion;
     size_t n = strlen(p->arena->path) + strlen(p->name) + 2;
     p->stage = malloc(n); p->recovery = malloc(40); p->rollback = malloc(40);
@@ -929,17 +1017,20 @@ int landin_publication_step(int token, int action, const char *const *paths,
         } else if (errno != ENOENT) goto fail;
         p->finished = 1;
         if (--p->arena->refs == 0) {
+            if (flock(p->arena->root_fd, LOCK_EX) != 0) goto fail;
             /* rmdir succeeds only when every known artifact is gone. */
             if (unlinkat(p->arena->root_fd, "stage", AT_REMOVEDIR) != 0
                 || unlinkat(p->arena->root_fd, "recovery", AT_REMOVEDIR) != 0
                 || finish_journals(p->arena) != 0
                 || unlinkat(parent, p->arena->name, AT_REMOVEDIR) != 0) {
                 int error = errno;
+                (void)flock(p->arena->root_fd, LOCK_UN);
                 char location[PATH_MAX + 256];
                 describe_recovery(p->arena, location, sizeof location);
                 reason(why, room, "retained publication directory %s: %s",
                        location, strerror(error)); return -1;
             }
+            (void)flock(p->arena->root_fd, LOCK_UN);
             close(p->arena->private_fd); close(p->arena->recovery_fd);
             close(p->arena->root_fd); close(p->arena->parent);
         }
