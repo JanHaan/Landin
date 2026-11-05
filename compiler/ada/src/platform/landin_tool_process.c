@@ -2,6 +2,9 @@
    tool cannot spawn descendants before its timeout ownership is established.
    Capture files are created here, in the host's temporary directory; Ada
    owns deadlines, their removal, diagnostics and argument storage. */
+#ifdef __linux__
+#define _GNU_SOURCE
+#endif
 #define _POSIX_C_SOURCE 200809L
 #include <errno.h>
 #include <fcntl.h>
@@ -19,6 +22,9 @@ extern char **environ;
 int landin_tool_capture(char *path, size_t capacity);
 int landin_tool_start(char *const args[], char *const env[], int isolated,
                       int input, int capture, int errors, int *child);
+int landin_tool_start_in_directory(char *const args[], char *const env[],
+                                    int isolated, int input, int capture,
+                                    int errors, int directory, int *child);
 int landin_tool_wait(int child, int *status, int no_hang);
 int landin_tool_stop(int child, int *status);
 int landin_tool_cancel(int child, int *status);
@@ -144,8 +150,9 @@ static int landin_tool_source(int source, int moved[3])
 
    An isolated tool runs with exactly ENV, a NULL-terminated list of
    NAME=VALUE strings, rather than the caller's environment. */
-int landin_tool_start(char *const args[], char *const env[], int isolated,
-                      int input, int capture, int errors, int *child)
+int landin_tool_start_in_directory(char *const args[], char *const env[],
+                                    int isolated, int input, int capture,
+                                    int errors, int directory, int *child)
 {
     posix_spawnattr_t attributes;
     posix_spawn_file_actions_t actions;
@@ -153,10 +160,12 @@ int landin_tool_start(char *const args[], char *const env[], int isolated,
     int error;
     int moved[3] = {-1, -1, -1};
     const int no_input = input < 0
-        && (capture == STDIN_FILENO || errors == STDIN_FILENO);
+        && (capture == STDIN_FILENO || errors == STDIN_FILENO
+            || directory == STDIN_FILENO);
     const int given_input = input;
     const int given_capture = capture;
     const int given_errors = errors;
+    const int given_directory = directory;
     int index;
 
     *child = 0;
@@ -175,9 +184,20 @@ int landin_tool_start(char *const args[], char *const env[], int isolated,
         input = landin_tool_source(given_input, moved);
         capture = landin_tool_source(given_capture, moved);
         errors = landin_tool_source(given_errors, moved);
+        directory = landin_tool_source(given_directory, moved);
         if ((given_input >= 0 && input < 0) || capture < 0
-            || (given_errors >= 0 && errors < 0))
+            || (given_errors >= 0 && errors < 0)
+            || (given_directory >= 0 && directory < 0))
             error = errno != 0 ? errno : EBADF;
+    }
+    /* Tool output paths are relative to a directory already pinned by the
+       publication transaction, independent of a renamed public ancestor. */
+    if (error == 0 && directory >= 0) {
+#ifdef __APPLE__
+        error = posix_spawn_file_actions_addfchdir(&actions, directory);
+#else
+        error = posix_spawn_file_actions_addfchdir_np(&actions, directory);
+#endif
     }
     /* Every source is above 2 now, so no duplication below reads a
        descriptor an earlier one wrote. */
@@ -201,6 +221,9 @@ int landin_tool_start(char *const args[], char *const env[], int isolated,
         error = posix_spawn_file_actions_addclose(&actions, capture);
     if (error == 0 && errors >= 0 && errors != capture && errors != input)
         error = posix_spawn_file_actions_addclose(&actions, errors);
+    if (error == 0 && directory >= 0 && directory != capture
+        && directory != input && directory != errors)
+        error = posix_spawn_file_actions_addclose(&actions, directory);
     if (error == 0)
         error = posix_spawn(&pid, args[0], &actions, &attributes, args,
                             isolated ? env : environ);
@@ -212,6 +235,13 @@ int landin_tool_start(char *const args[], char *const env[], int isolated,
     if (error == 0)
         *child = (int)pid;
     return error;
+}
+
+int landin_tool_start(char *const args[], char *const env[], int isolated,
+                      int input, int capture, int errors, int *child)
+{
+    return landin_tool_start_in_directory(args, env, isolated, input,
+                                           capture, errors, -1, child);
 }
 
 int landin_tool_wait(int child, int *status, int no_hang)
@@ -239,8 +269,27 @@ int landin_tool_stop(int child, int *status)
     }
     /* The unreaped direct child reserves this group ID. Never signal a
        caller group, and never retry against a PID already reaped by Ada. */
-    if (kill(-(pid_t)child, SIGKILL) != 0 && errno != ESRCH)
+    if (kill(-(pid_t)child, SIGKILL) != 0 && errno != ESRCH) {
+#ifdef __APPLE__
+        /* Darwin reports EPERM for a group containing only its zombie
+           leader. Confirm the leader has exited without reaping it before
+           treating that result as no remaining ordinary signal target.
+           Tools that change credentials or escape their group are outside
+           this supervisor's process-family contract. */
+        siginfo_t info;
+        int error = errno;
+        memset(&info, 0, sizeof info);
+        if (error != EPERM
+            || waitid(P_PID, (id_t)child, &info,
+                      WEXITED | WNOHANG | WNOWAIT) != 0
+            || info.si_pid != (pid_t)child) {
+            errno = error;
+            return -1;
+        }
+#else
         return -1;
+#endif
+    }
     /* Still stop the direct child if it has changed its own group. It has
        not been reaped, so this PID cannot yet designate another process. */
     if (kill((pid_t)child, SIGKILL) != 0 && errno != ESRCH)
