@@ -3,12 +3,16 @@
 (D646): every part environments/boards/common.py gives a board's tool, held
 to fixed inputs on the standard library alone."""
 import argparse
+import contextlib
 import importlib.util
+import io
 import json
 import os
 import select
+import signal
 import socket
 import struct
+import subprocess
 import sys
 import tempfile
 import threading
@@ -1510,6 +1514,372 @@ class RamRuns(unittest.TestCase):
                 self.assertRaisesRegex(COMMON.Failed, 'kernel USB journal.*permission denied'):
             COMMON.kernel_usb_lines(3)
 
+
+
+class SharedState(unittest.TestCase):
+    """The rig's state directory, shared by the maintainer and the gate's
+    runner user through its group."""
+    def test_the_environment_names_the_state_and_must_be_an_absolute_directory(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            system, legacy = Path(tmp) / 'system', Path(tmp) / 'legacy'
+            self.assertEqual(COMMON.rig_state(dict(LANDIN_RIG_STATE=tmp), system, legacy),
+                             (Path(tmp), 'environment', None))
+            for named in ('', 'relative/state', str(Path(tmp) / 'absent')):
+                path, source, problem = COMMON.rig_state(dict(LANDIN_RIG_STATE=named), system, legacy)
+                self.assertEqual(source, 'environment')
+                self.assertIn('LANDIN_RIG_STATE', problem)
+            self.assertEqual(COMMON.rig_state({}, system, legacy), (legacy, 'legacy', None))
+            system.mkdir()
+            self.assertEqual(COMMON.rig_state({}, system, legacy), (system, 'system', None))
+
+    def test_a_lock_in_an_unusable_named_state_refuses_as_needs_setup(self):
+        with tempfile.TemporaryDirectory() as tmp, \
+                mock.patch.object(COMMON, 'RIG_LOCK', Path(tmp) / 'absent/rig.lock'), \
+                mock.patch.object(COMMON, 'RIG_STATE', Path(tmp) / 'absent'), \
+                mock.patch.object(COMMON, 'RIG_STATE_PROBLEM', 'LANDIN_RIG_STATE is wrong'):
+            with self.assertRaisesRegex(COMMON.NeedsSetup, 'LANDIN_RIG_STATE is wrong'):
+                COMMON.RigLock('board.py', report=self.fail).acquire()
+            self.assertFalse((Path(tmp) / 'absent').exists())
+
+    def umask(self, value):
+        previous = os.umask(value)
+        self.addCleanup(os.umask, previous)
+
+    def test_state_files_are_group_shared_whatever_the_umask_and_never_world_writable(self):
+        self.umask(0o022)
+        with tempfile.TemporaryDirectory() as tmp:
+            lock = Path(tmp) / 'rig.lock'
+            with COMMON.RigLock('board.py', lock, report=self.fail):
+                pass
+            self.assertEqual(lock.stat().st_mode & 0o7777, 0o660)
+            older = Path(tmp) / 'older.lock'
+            older.write_text('')
+            for before, after in ((0o644, 0o664), (0o666, 0o664), (0o600, 0o660)):
+                os.chmod(older, before)
+                with COMMON.RigLock('board.py', older, report=self.fail):
+                    pass
+                self.assertEqual(older.stat().st_mode & 0o7777, after, oct(before))
+            inode = lock.stat().st_ino
+            with COMMON.RigLock('board.py', lock, report=self.fail):
+                pass
+            self.assertEqual(lock.stat().st_ino, inode, 'the lock must keep its inode')
+            pace = COMMON.Pace(state=Path(tmp) / 'rig.pace', kernel=lambda _: [])
+            pace._save('download', 1000.0)
+            first = (Path(tmp) / 'rig.pace').stat()
+            self.assertEqual(first.st_mode & 0o7777, 0o660)
+            pace.acknowledge('understood')
+            second = (Path(tmp) / 'rig.pace').stat()
+            self.assertEqual(second.st_mode & 0o7777, 0o660)
+            self.assertNotEqual(first.st_ino, second.st_ino, 'state is replaced, not rewritten')
+            self.assertEqual([p.name for p in Path(tmp).iterdir() if p.name.startswith('.')], [])
+
+    def test_state_directories_made_inside_the_state_are_group_shared_and_setgid(self):
+        self.umask(0o022)
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp) / 'state'
+            base.mkdir(mode=0o755)
+            COMMON.write_state(base / 'runs/rp2040.json', '{}\n', base)
+            self.assertEqual((base / 'runs').stat().st_mode & 0o7777, 0o2770)
+            self.assertEqual((base / 'runs/rp2040.json').stat().st_mode & 0o7777, 0o660)
+            self.assertEqual(base.stat().st_mode & 0o7777, 0o755, 'the base is the deploy\'s')
+
+    def test_another_user_s_lock_that_this_one_may_not_write_still_locks(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            lock = Path(tmp) / 'rig.lock'
+            lock.write_text('')
+            said = []
+            real = COMMON.os.open
+
+            def refused(path, flags, *rest):
+                if str(path) == str(lock) and flags & os.O_RDWR:
+                    raise PermissionError(13, 'Permission denied')
+                return real(path, flags, *rest)
+            with mock.patch.object(COMMON.os, 'open', side_effect=refused):
+                with COMMON.RigLock('board.py', lock, report=said.append) as held:
+                    self.assertFalse(held.file.writable())
+                    with lock.open() as contender, self.assertRaises(BlockingIOError):
+                        COMMON.fcntl.flock(contender, COMMON.fcntl.LOCK_EX | COMMON.fcntl.LOCK_NB)
+            self.assertEqual(len(said), 1)
+            self.assertIn('group write', said[0])
+
+
+class BoundedLock(unittest.TestCase):
+    def held(self, tmp):
+        path = Path(tmp) / 'rig.lock'
+        holder = COMMON.RigLock('esp32 board.py', path, report=lambda _: None).acquire()
+        self.addCleanup(holder.release)
+        locks = Path(tmp) / 'locks'
+        locks.write_text('1: FLOCK  ADVISORY  WRITE 31 00:22:%d 0 EOF\n' % os.stat(path).st_ino)
+        stack = contextlib.ExitStack()
+        self.addCleanup(stack.close)
+        stack.enter_context(mock.patch.object(COMMON, 'ancestors', return_value=[1234, 5678]))
+        return path, locks, holder
+
+    def test_a_bounded_wait_names_the_holder_once_and_ends_rig_busy(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path, locks, _ = self.held(tmp)
+            clock, slept, said = [100.0], [], []
+
+            def sleep(seconds):
+                slept.append(seconds)
+                clock[0] += seconds
+            lock = COMMON.RigLock('gate.py rp2040', path, report=said.append, locks=locks, timeout=3.5,
+                                  clock=lambda: clock[0], sleep=sleep)
+            with self.assertRaises(COMMON.RigBusy) as raised:
+                lock.acquire()
+            self.assertEqual(COMMON.outcome_of(raised.exception), 'rig-busy')
+            self.assertIn('held by esp32 board.py, process %d' % os.getpid(), str(raised.exception))
+            self.assertIn(str(path), str(raised.exception))
+            self.assertEqual(len(said), 1)
+            self.assertEqual(slept, [1.0, 1.0, 1.0, 0.5])
+            self.assertIsNone(lock.file)
+
+    def test_a_bounded_wait_takes_the_lock_once_it_is_released(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path, locks, holder = self.held(tmp)
+            lock = COMMON.RigLock('gate.py rp2040', path, report=lambda _: None, locks=locks,
+                                  timeout=60, sleep=lambda _: holder.release())
+            with lock:
+                self.assertTrue(path.read_text().startswith('gate.py rp2040, process'))
+
+    def test_without_a_timeout_the_wait_has_no_end(self):
+        lock = COMMON.RigLock('board.py', '/unused')
+        lock.file = mock.Mock()
+        with mock.patch.object(COMMON.fcntl, 'flock') as flock:
+            lock.wait()
+        flock.assert_called_once_with(lock.file, COMMON.fcntl.LOCK_EX)
+
+    def test_a_held_legacy_lock_is_refused_while_the_system_state_is_used(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            legacy = Path(tmp) / 'home/.cache/landin/rig.lock'
+            legacy.parent.mkdir(parents=True)
+            legacy.write_text('old tool, process 77\n')
+            locks = Path(tmp) / 'locks'
+            locks.write_text('1: FLOCK  ADVISORY  WRITE 77 00:22:%d 0 EOF\n' % os.stat(legacy).st_ino)
+            system = Path(tmp) / 'system'
+            system.mkdir()
+            with mock.patch.object(COMMON, 'ancestors', return_value=[1234, 5678]), \
+                    mock.patch.object(COMMON, 'RIG_STATE', system), \
+                    mock.patch.object(COMMON, 'RIG_LOCK', system / 'rig.lock'), \
+                    mock.patch.object(COMMON, 'LEGACY_STATE', legacy.parent):
+                with self.assertRaises(COMMON.NeedsOperator) as raised:
+                    COMMON.RigLock('board.py', report=self.fail, locks=locks).acquire()
+                text = str(raised.exception)
+                self.assertIn('two rig lock files', text)
+                self.assertIn('retire %s' % legacy, text)
+                self.assertFalse((system / 'rig.lock').exists())
+                # The run's own parent holding it is the same run.
+                with mock.patch.object(COMMON, 'ancestors', return_value=[1234, 77]):
+                    with COMMON.RigLock('board.py', report=self.fail, locks=locks):
+                        pass
+                # The legacy state itself has no second file.
+                with mock.patch.object(COMMON, 'RIG_STATE', legacy.parent), \
+                        mock.patch.object(COMMON, 'RIG_LOCK', Path(tmp) / 'other.lock'):
+                    self.assertIsNone(COMMON.RigLock('board.py').legacy)
+            locks.write_text('')
+            with mock.patch.object(COMMON, 'RIG_STATE', system), \
+                    mock.patch.object(COMMON, 'RIG_LOCK', system / 'rig.lock'), \
+                    mock.patch.object(COMMON, 'LEGACY_STATE', legacy.parent):
+                with COMMON.RigLock('board.py', report=self.fail, locks=locks):
+                    pass
+
+
+class Outcomes(unittest.TestCase):
+    def test_every_refusal_has_its_outcome(self):
+        self.assertEqual(COMMON.OUTCOMES, ('passed', 'failed', 'usb-stopped', 'unavailable', 'rig-busy',
+                                           'rig-tool-mismatch', 'needs-setup', 'needs-operator',
+                                           'cancelled', 'incomplete'))
+        for kind, outcome in ((COMMON.Failed, 'failed'), (COMMON.USBGuardError, 'usb-stopped'),
+                              (COMMON.Unavailable, 'unavailable'), (COMMON.RigBusy, 'rig-busy'),
+                              (COMMON.ToolMismatch, 'rig-tool-mismatch'),
+                              (COMMON.NeedsSetup, 'needs-setup'),
+                              (COMMON.NeedsOperator, 'needs-operator'),
+                              (COMMON.Cancelled, 'cancelled'), (KeyboardInterrupt, 'cancelled'),
+                              (OSError, 'failed'), (subprocess.TimeoutExpired, 'failed')):
+            error = kind('cmd', 1) if kind is subprocess.TimeoutExpired else kind('x')
+            self.assertEqual(COMMON.outcome_of(error), outcome, kind)
+            self.assertIn(outcome, COMMON.OUTCOMES)
+            if kind not in (COMMON.Cancelled, KeyboardInterrupt, OSError, subprocess.TimeoutExpired):
+                self.assertTrue(issubclass(kind, COMMON.Failed))
+        with self.assertRaises(COMMON.Unavailable):
+            COMMON.require(False, 'gone', COMMON.Unavailable)
+
+    def test_a_decisive_outcome_outranks_and_a_specific_one_is_kept(self):
+        result = {}
+        for outcome, kept in (('failed', 'failed'), ('unavailable', 'unavailable'),
+                              ('failed', 'unavailable'), ('rig-tool-mismatch', 'unavailable'),
+                              ('usb-stopped', 'usb-stopped'), ('failed', 'usb-stopped'),
+                              ('cancelled', 'cancelled'), ('usb-stopped', 'cancelled')):
+            COMMON.note_outcome(result, outcome)
+            self.assertEqual(result['outcome'], kept, outcome)
+
+    def test_settling_keeps_status_and_says_the_outcome(self):
+        for result, outcome in ((dict(status='passed'), 'passed'), (dict(status='observed'), 'passed'),
+                                (dict(status='failed'), 'failed'), (dict(status='pending'), 'failed'),
+                                (dict(status='failed', outcome='unavailable'), 'unavailable'),
+                                (dict(status='failed', outcome='passed'), 'failed')):
+            status = result['status']
+            self.assertEqual(COMMON.settle_result(result)['outcome'], outcome)
+            self.assertEqual(result['status'], status)
+            self.assertNotIn('cancelled', result)
+
+    def test_a_result_written_while_a_cancellation_unwinds_is_cancelled_with_its_phase(self):
+        run = SimpleNamespace(current='flash', commands=[dict(name='compile')],
+                              pace=SimpleNamespace(last_action='download'))
+        try:
+            raise COMMON.Cancelled('SIGINT')
+        except KeyboardInterrupt:
+            result = COMMON.settle_result(dict(status='passed'), run)
+        self.assertEqual(result['outcome'], 'cancelled')
+        self.assertEqual(result['status'], 'failed')
+        self.assertEqual(result['cancelled']['phase'],
+                         dict(command='flash', command_state='running', action='download'))
+        self.assertEqual(result['failure'], 'cancelled by SIGINT')
+        with mock.patch.object(COMMON, 'CANCELLATION', dict(signal='SIGTERM', received=1.0)):
+            result = COMMON.settle_result(dict(status='failed', failure='hub did not list'),
+                                          SimpleNamespace(current=None, commands=[dict(name='hub-wait')]))
+        self.assertEqual(result['cancelled'], dict(signal='SIGTERM', received=1.0,
+                         phase=dict(command='hub-wait', command_state='completed')))
+        self.assertEqual(result['failure'], 'hub did not list; cancelled by SIGTERM')
+
+    def test_refusals_for_an_absent_rig_are_unavailable(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(COMMON.Unavailable):
+                COMMON.cascade_root(sysfs=Path(tmp))
+            with self.assertRaises(COMMON.Unavailable):
+                COMMON.off_cascade('210319B3E738', '1-1.2', Path(tmp))
+            self.assertIsInstance(COMMON.unopened(None, 'for USB serial X', 1), COMMON.Unavailable)
+        hub = mock.Mock()
+        hub.command.return_value = 'Current status for hub 1-1.2 [0bda:5411]\n  Port 1: 0100 power\n'
+        with self.assertRaises(COMMON.Unavailable):
+            COMMON.power_cycle(hub, '1-1.2', 1, 1.0, holds='A0:76')
+        hub.command.assert_called_once()
+
+    def test_a_missing_or_stale_helper_is_a_tool_mismatch(self):
+        with self.assertRaises(COMMON.ToolMismatch):
+            COMMON.verify_ram_helper(SimpleNamespace(ram_loader='/nonexistent/landin-ram-run'))
+        stale = SimpleNamespace(returncode=0, stderr='', stdout=json.dumps(dict(
+            protocol_version=1, source_sha256='0' * 64, probe_rs_revision=COMMON.HELPER_PROBE_REVISION)))
+        with mock.patch.object(COMMON.subprocess, 'run', return_value=stale), \
+                self.assertRaises(COMMON.ToolMismatch):
+            COMMON.verify_ram_helper(SimpleNamespace(ram_loader='loader'))
+
+    def test_a_pico_2_boot_check_on_the_cascade_needs_setup(self):
+        import pico2
+        with self.assertRaises(pico2.common.NeedsSetup):
+            pico2.boot_location(SimpleNamespace(mode='boot', hub='1-1.2.3', cascade='1-1.2'))
+        pico2.boot_location(SimpleNamespace(mode='ram', hub='1-1.2.3', cascade='1-1.2'))
+
+    def test_an_action_s_own_refusal_survives_a_failed_completion(self):
+        pace = mock.Mock()
+        pace.after.side_effect = COMMON.Failed('journal unreadable')
+        def action():
+            raise COMMON.Unavailable('port 2 holds nothing')
+        with self.assertRaises(COMMON.Unavailable) as raised:
+            COMMON.paced(pace, 'power cycle', action)
+        self.assertIn('action completion: journal unreadable', str(raised.exception))
+        pace.after.side_effect = COMMON.USBGuardError('HC died')
+        with self.assertRaises(COMMON.USBGuardError):
+            COMMON.paced(pace, 'power cycle', action)
+
+    def test_restoration_failures_and_usb_stops_keep_their_outcome(self):
+        args = SimpleNamespace(mode='boot', pace=mock.Mock(), fixed_image=Path('fixed.elf'))
+        args.pace.before.side_effect = COMMON.USBGuardError('HC died')
+        result = dict(status='passed')
+        COMMON.finish_boot(args, result, mock.Mock())
+        self.assertEqual(COMMON.settle_result(result)['outcome'], 'usb-stopped')
+        pace = mock.Mock()
+        pace.check.side_effect = COMMON.USBGuardError('HC died')
+        pace.evidence.return_value = {}
+        result = dict(status='passed')
+        COMMON.retain_kernel_usb(pace, result)
+        self.assertEqual((result['status'], result['outcome']), ('failed', 'usb-stopped'))
+
+
+class Cancellation(unittest.TestCase):
+    def setUp(self):
+        previous = {number: signal.getsignal(number) for number in (signal.SIGINT, signal.SIGTERM)}
+        for number, handler in previous.items():
+            self.addCleanup(signal.signal, number, handler)
+        patcher = mock.patch.object(COMMON, 'CANCELLATION', None)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        quiet = mock.patch('sys.stderr', new=io.StringIO())
+        quiet.start()
+        self.addCleanup(quiet.stop)
+        COMMON.handle_cancellation()
+
+    def test_the_first_signal_raises_once_and_later_ones_are_noted(self):
+        with self.assertRaises(COMMON.Cancelled):
+            os.kill(os.getpid(), signal.SIGINT)
+            time.sleep(PATIENCE)
+        self.assertTrue(COMMON.cancelled())
+        os.kill(os.getpid(), signal.SIGTERM)
+        self.assertEqual(COMMON.CANCELLATION['signal'], 'SIGINT')
+        self.assertEqual(COMMON.CANCELLATION['repeated'], ['SIGTERM'])
+
+    def test_an_action_that_disconnects_a_device_is_not_cut_short(self):
+        events = []
+        with self.assertRaises(COMMON.Cancelled):
+            with COMMON.uninterrupted():
+                os.kill(os.getpid(), signal.SIGTERM)
+                events.append('the cycle completed')
+            events.append('never')
+        self.assertEqual(events, ['the cycle completed'])
+        self.assertEqual(COMMON.CANCELLATION['signal'], 'SIGTERM')
+
+    def test_a_deferred_cancellation_does_not_hide_the_action_s_own_failure(self):
+        with self.assertRaises(COMMON.Unavailable):
+            with COMMON.uninterrupted():
+                os.kill(os.getpid(), signal.SIGINT)
+                raise COMMON.Unavailable('the hub did not list')
+        self.assertTrue(COMMON.cancelled())
+
+    def test_a_cancelled_boot_check_does_not_begin_or_finish_restoration(self):
+        args = SimpleNamespace(mode='boot', pace=mock.Mock(), fixed_image=Path('fixed.elf'))
+        restore = mock.Mock()
+        with mock.patch.object(COMMON, 'CANCELLATION', dict(signal='SIGINT')):
+            result = dict(status='passed')
+            COMMON.finish_boot(args, result, restore)
+        restore.assert_not_called()
+        self.assertEqual(result['fixed_restore'], dict(status='pending',
+                         reason='cancelled before resident image restoration'))
+        self.assertEqual(result['status'], 'failed')
+        result = dict(status='passed')
+        COMMON.finish_boot(args, result, mock.Mock(side_effect=COMMON.Cancelled('SIGINT')))
+        self.assertEqual(result['fixed_restore']['reason'], 'cancelled during resident image restoration')
+        self.assertEqual(result['outcome'], 'cancelled')
+        args.manual_boot = mock.Mock()
+        with self.assertRaises(KeyboardInterrupt):
+            COMMON.finish_boot(args, dict(status='passed'), mock.Mock(side_effect=COMMON.Cancelled('SIGINT')))
+
+    def test_a_tool_s_preflight_refusal_is_written_as_its_result(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / 'run'
+
+            def main():
+                raise COMMON.NeedsSetup('Pico 2 boot checks must be off the cascade')
+            with mock.patch('sys.stderr'):
+                self.assertEqual(COMMON.tool_main(main, ['--mode=boot', '--output', str(output)]), 1)
+            result = json.loads((output / 'result.json').read_text())
+            self.assertEqual((result['status'], result['outcome'], result['phase']),
+                             ('failed', 'needs-setup', 'preflight'))
+            # A tool that wrote its own result keeps it.
+            (output / 'result.json').write_text('{"status": "failed", "outcome": "unavailable"}\n')
+            with mock.patch('sys.stderr'):
+                COMMON.tool_main(main, ['--output=' + str(output)])
+            self.assertEqual(json.loads((output / 'result.json').read_text())['outcome'], 'unavailable')
+        self.assertEqual(COMMON.tool_main(lambda: 0, []), 0)
+
+    def test_a_cancelled_tool_exits_as_the_signal_says(self):
+        def cancelled(name):
+            def main():
+                os.kill(os.getpid(), getattr(signal, name))
+                time.sleep(PATIENCE)
+            return main
+        self.assertEqual(COMMON.tool_main(cancelled('SIGINT'), []), 130)
+        COMMON.CANCELLATION = None
+        self.assertEqual(COMMON.tool_main(cancelled('SIGTERM'), []), 143)
 
 if __name__ == '__main__':
     unittest.main()

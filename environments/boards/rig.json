@@ -1,0 +1,76 @@
+{
+  "format_version": 1,
+  "description": "The maintainer's rig as the physical board gate runs it: each port's steps in order, with the board tool arguments that rig needs, and the probehive runtime and bitstream it uses. gate.py replaces {probehive}, {ram_loader} and each name of a port's location in an argument; a location left null is not set up, and the gate ends that port needs-setup before any hardware.",
+  "arty_serial": "210319B3E738",
+  "probehive": {
+    "repository": "https://github.com/JanHaan/probehive",
+    "commit": "4f69b8269a664cf1e1c47b2b40365b482e9f30ec",
+    "files": {
+      "flake.nix": "9b65d550aafe25a70a16a741f2c5582a410e063a492e3a6a3fa5880240a63d46",
+      "flake.lock": "09157adc40989e64f0f67c516a35d27180fd7f526bed5cd936ec928a74a97d91",
+      "scripts/dap_bridge.py": "b9b9f2d2a6d9b84240e25e3a7d89402265c8f7d05f70feba44e876c1878f44a2",
+      "scripts/dap_udp.py": "f2f3b668d88a62ba5266e68cd9f9612a89f18ef6a895e6a685edee5536231b28",
+      "scripts/gpio.py": "fc881102a96ac4037f95c5bef95ac266e32f8b18ba61c2cc0689daa7d31be32f",
+      "build/slots_ci/generated/rig.json": "71feb9c8429de7fa81e2c5dd184bbdd41cb464732939876e606bc8d535dcb033",
+      "build/slots_ci/generated/csr.json": "720137a50d25aa484a00cbf5112241c7d5daaf16e09287cdafed0a4d03241c6f"
+    },
+    "bitstream": {
+      "path": "build/slots_ci/gateware/arty_slots.bit",
+      "sha256": "7a4600368d76f39c1d048c0afae42abe515c13875416303021b40b73bf83bc69"
+    }
+  },
+  "ports": {
+    "rp2040": {
+      "steps": [
+        {"board": "rp2040", "mode": "boot",
+         "arguments": ["--probehive", "{probehive}", "--indicator-pin", "IO32", "--ram-loader", "{ram_loader}"]},
+        {"board": "rp2040", "mode": "ram",
+         "arguments": ["--probehive", "{probehive}", "--indicator-pin", "IO32", "--ram-loader", "{ram_loader}"]}
+      ]
+    },
+    "pico2": {
+      "location": {"hub": null, "port": null},
+      "setup": "Pico 2 boot checks and its Arm/Hazard3 transition must run off the cascade; the rig has no unattended boot path for it yet.",
+      "steps": [
+        {"board": "rp2350", "mode": "boot",
+         "arguments": ["--probehive", "{probehive}", "--ram-loader", "{ram_loader}", "--hub", "{hub}", "--port", "{port}"]},
+        {"board": "rp2350", "mode": "ram",
+         "arguments": ["--probehive", "{probehive}", "--ram-loader", "{ram_loader}", "--hub", "{hub}", "--port", "{port}"]},
+        {"board": "rp2350_hazard3", "mode": "boot",
+         "arguments": ["--probehive", "{probehive}", "--ram-loader", "{ram_loader}", "--hub", "{hub}", "--port", "{port}"]},
+        {"board": "rp2350_hazard3", "mode": "ram",
+         "arguments": ["--probehive", "{probehive}", "--ram-loader", "{ram_loader}", "--hub", "{hub}", "--port", "{port}"]}
+      ]
+    },
+    "stm32h753": {
+      "steps": [
+        {"board": "stm32h753", "mode": "boot", "arguments": []},
+        {"board": "stm32h753", "mode": "ram", "arguments": ["--ram-loader", "{ram_loader}"]}
+      ]
+    },
+    "esp32c3": {
+      "steps": [
+        {"board": "esp32c3", "mode": "boot", "arguments": ["--probehive", "{probehive}"]},
+        {"board": "esp32c3", "mode": "ram", "arguments": ["--probehive", "{probehive}", "--ram-loader", "{ram_loader}"]}
+      ]
+    },
+    "esp32c5": {
+      "steps": [
+        {"board": "esp32c5", "mode": "boot", "arguments": []},
+        {"board": "esp32c5", "mode": "ram", "arguments": ["--ram-loader", "{ram_loader}"]}
+      ]
+    },
+    "esp32": {
+      "steps": [
+        {"board": "esp32", "mode": "boot", "arguments": ["--ram-loader", "{ram_loader}"]},
+        {"board": "esp32", "mode": "ram", "arguments": ["--ram-loader", "{ram_loader}"]}
+      ]
+    },
+    "esp32s3": {
+      "steps": [
+        {"board": "esp32s3", "mode": "boot", "arguments": ["--ram-loader", "{ram_loader}"]},
+        {"board": "esp32s3", "mode": "ram", "arguments": ["--ram-loader", "{ram_loader}"]}
+      ]
+    }
+  }
+}

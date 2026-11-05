@@ -616,7 +616,7 @@ def run_board(chip, args, console_for, cycle, settle):
         args.pace.before('board scenario completion')
         result['status'] = 'passed'
     except (Failed, subprocess.TimeoutExpired, OSError) as error:
-        result['failure'] = str(error)
+        common.fail(result, error)
         if lock_held and names and not isinstance(error, common.USBGuardError) \
                 and not any(USB in str(error) for USB in ('USB trouble', 'HC died')):
             # Until the loader confirms entry into this RAM image, these
@@ -645,7 +645,7 @@ def run_board(chip, args, console_for, cycle, settle):
             result['frames'] = common.frame_record(bytes(console.received))
         result['seconds'] = round(time.monotonic() - began, 3)
         result['commands'] = run.commands
-        common.write_json(args.output / 'result.json', result)
+        common.write_result(args.output / 'result.json', result, run)
     if args.record and result['status'] == 'passed':
         kept = ('status', 'source_commit', 'image_sha256', 'image_name', 'elf_sha256', 'image', 'instructions',
                 'flash', 'power_on', 'rom', 'verdicts', 'jtag', 'readback', 'uart_sha256') + (
