@@ -1937,6 +1937,31 @@ def record(result, kept, sent, commands, keep_tags):
     return out
 
 
+def icmp_echo(host, timeout=2.0, sock=None):
+    """One ICMP echo to HOST through an unprivileged ICMP datagram socket,
+    which Linux permits a group in net.ipv4.ping_group_range: True when
+    HOST answers within TIMEOUT.  The kernel fills in the identifier and
+    checksum; the reply carries this request's random payload back."""
+    address = socket.gethostbyname(host)
+    stream = sock or socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_ICMP)
+    try:
+        stream.settimeout(timeout)
+        payload = os.urandom(16)
+        stream.sendto(struct.pack('!BBHHH', 8, 0, 0, 0, 1) + payload, (address, 0))
+        deadline = time.monotonic() + timeout
+        while True:
+            stream.settimeout(max(0.01, deadline - time.monotonic()))
+            try:
+                data, source = stream.recvfrom(2048)
+            except socket.timeout:
+                return False
+            if source[0] == address and data[:1] == b'\x00' and data[8:] == payload:
+                return True
+    finally:
+        if sock is None:
+            stream.close()
+
+
 def write_json(path, value):
     Path(path).write_text(json.dumps(value, indent=2) + '\n')
 
@@ -2088,14 +2113,33 @@ def tool_main(main, argv=None):
 
 def main(argv=None):
     """`acknowledge REASON`: the rig's pace told that the USB trouble the
-    kernel logged so far is understood, under the rig's lock."""
+    kernel logged so far is understood, under the rig's lock; `echo HOST`:
+    one ICMP echo, as the Pico 2 tools ask probehive after each cycle."""
     parser = argparse.ArgumentParser(description=main.__doc__)
     commands = parser.add_subparsers(dest='command', required=True)
     acknowledge = commands.add_parser(
         'acknowledge', help='let the next board run go after USB trouble whose cause is known;'
                             ' only trouble logged after now stops one')
     acknowledge.add_argument('reason', help='what the trouble was, kept in the pace file')
+    echo = commands.add_parser(
+        'echo', help="one ICMP echo to HOST without ping or privilege, summarised as ping's"
+                     ' last line; needs the caller in net.ipv4.ping_group_range')
+    echo.add_argument('host')
+    echo.add_argument('--timeout', type=float, default=2.0)
     args = parser.parse_args(argv)
+    if args.command == 'echo':
+        try:
+            answered = icmp_echo(args.host, args.timeout)
+        except PermissionError as error:
+            print('cannot open an unprivileged ICMP socket: %s; the user needs a group inside'
+                  ' net.ipv4.ping_group_range' % error, file=sys.stderr)
+            return 2
+        except OSError as error:
+            print('cannot reach %s: %s' % (args.host, error), file=sys.stderr)
+            return 2
+        print('1 packets transmitted, %d received, %d%% packet loss'
+              % (int(answered), 0 if answered else 100))
+        return 0 if answered else 1
     pace = Pace()
     try:
         with rig_lock('common.py acknowledge'):

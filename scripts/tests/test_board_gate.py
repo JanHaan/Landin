@@ -298,9 +298,11 @@ class Refusals(unittest.TestCase):
     def test_a_host_tool_the_steps_run_is_found_before_the_lock(self):
         # The first Pico 2 leg on the rig flashed its board and then met a
         # missing ping, leaving the fixed image unrestored.
-        document = self.refused('pico2', 'needs-setup', 'lacks ping on PATH',
-                                which=lambda tool: None if tool == 'ping' else '/bin/' + tool)
+        document = self.refused('pico2', 'needs-setup', 'lacks uhubctl on PATH',
+                                which=lambda tool: None if tool == 'uhubctl' else '/bin/' + tool)
         self.assertIn('rp2350, rp2350_hazard3', document['failure'])
+        # The probe's echo after a cycle is common.py's own, never ping.
+        self.assertNotIn('ping', GATE.HOST_TOOLS['rp2350'] + GATE.HOST_TOOLS['rp2350_hazard3'])
         document = self.refused('rp2040', 'needs-setup', 'lacks nix, uhubctl on PATH',
                                 which=lambda tool: None if tool in ('nix', 'uhubctl') else '/bin/' + tool)
         self.assertNotIn('ping', document['failure'])

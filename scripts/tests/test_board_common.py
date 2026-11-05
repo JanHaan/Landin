@@ -1900,5 +1900,45 @@ class Cancellation(unittest.TestCase):
         COMMON.CANCELLATION = None
         self.assertEqual(COMMON.tool_main(cancelled('SIGTERM'), []), 143)
 
+
+class Echo(unittest.TestCase):
+    """The Pico 2 tools' probe check after a cycle: one ICMP echo through an
+    unprivileged socket, summarised as ping's last line, with no host tool."""
+    class Socket:
+        def __init__(self, replies):
+            self.replies, self.sent = replies, []
+
+        def settimeout(self, _):
+            pass
+
+        def sendto(self, packet, address):
+            self.sent.append((packet, address))
+
+        def recvfrom(self, _):
+            if not self.replies:
+                raise COMMON.socket.timeout()
+            reply = self.replies.pop(0)
+            return reply(self.sent[-1][0][8:]), ('10.42.0.50', 0)
+
+    def test_only_the_reply_carrying_this_request_s_payload_counts(self):
+        sock = self.Socket([lambda payload: b'\x00\x00\x00\x00\x00\x00\x00\x01' + b'x' * 16,
+                            lambda payload: b'\x08' + b'\x00' * 7 + payload,
+                            lambda payload: b'\x00' + b'\x00' * 7 + payload])
+        self.assertTrue(COMMON.icmp_echo('10.42.0.50', 1.0, sock))
+        packet, address = sock.sent[0]
+        self.assertEqual((packet[0], packet[1], address), (8, 0, ('10.42.0.50', 0)))
+        self.assertFalse(COMMON.icmp_echo('10.42.0.50', 0.05, self.Socket([])))
+
+    def test_the_command_prints_ping_s_summary_and_names_a_refused_socket(self):
+        for answered, status, line in ((True, 0, ' 0% packet loss'), (False, 1, ' 100% packet loss')):
+            with mock.patch.object(COMMON, 'icmp_echo', return_value=answered), \
+                    contextlib.redirect_stdout(io.StringIO()) as out:
+                self.assertEqual(COMMON.main(['echo', '10.42.0.50']), status)
+            self.assertIn(line, out.getvalue())
+        with mock.patch.object(COMMON, 'icmp_echo', side_effect=PermissionError('denied')), \
+                contextlib.redirect_stderr(io.StringIO()) as err:
+            self.assertEqual(COMMON.main(['echo', '10.42.0.50']), 2)
+        self.assertIn('ping_group_range', err.getvalue())
+
 if __name__ == '__main__':
     unittest.main()

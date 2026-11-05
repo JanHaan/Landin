@@ -111,7 +111,10 @@ def power_cycle(run, args, at_once=False):
         except Failed as error:
             require(time.time() < deadline, 'after the cycle: %s; stopping' % error)
         time.sleep(0.5)
-    answer = run.command('probe-ping', ['ping', '-c', '1', '-W', '2', args.probe_host], check=False)
+    # common.py's echo, not ping: the rig's runner forbids ping's capset,
+    # and an unprivileged ICMP socket needs no host tool.
+    answer = run.command('probe-ping', [sys.executable, '-I', str(HERE / 'common.py'), 'echo',
+                                        args.probe_host], check=False)
     require(' 0% packet loss' in answer,
             'after the cycle the probe at %s does not answer ping; stopping' % args.probe_host)
 
