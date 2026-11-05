@@ -27,6 +27,7 @@
 #include "landin_publication.h"
 #include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -143,7 +144,7 @@ static int in_group(gid_t group)
  * before the original's bytes begin to change.  A file system that cannot
  * sync a directory says EINVAL, and there is then nothing more to do. */
 struct update_lease {
-    int token, fd, parent;
+    int token, fd, parent, write_error;
     char *target, *name, *original;
     size_t original_size;
     struct stat before;
@@ -181,6 +182,13 @@ int landin_open_update(const char *path, char **bytes, size_t *size,
     if (lease->parent < 0) goto fail;
     lease->fd = openat(lease->parent, lease->name,
                        O_RDWR | O_NOFOLLOW | O_CLOEXEC | O_NONBLOCK);
+    if (lease->fd < 0 && (errno == EACCES || errno == EPERM || errno == EROFS)) {
+        /* Read the actual source even when writing is refused. This lease
+           never reacquires write access; Replace reports the write refusal. */
+        lease->write_error = errno;
+        lease->fd = openat(lease->parent, lease->name,
+                           O_RDONLY | O_NOFOLLOW | O_CLOEXEC | O_NONBLOCK);
+    }
     if (lease->fd < 0 || fstat(lease->fd, &lease->before) != 0) goto fail;
     if (!S_ISREG(lease->before.st_mode)) { errno = EINVAL; goto fail; }
     lease->original = read_all(lease->fd, &lease->original_size);
@@ -227,13 +235,30 @@ void landin_close_update(int token)
     }
 }
 
+static void describe_copy(const struct update_lease *lease, const char *entry,
+                           char *out, size_t room)
+{
+    const char *slash = strrchr(lease->target, '/');
+    size_t length = slash ? (size_t)(slash - lease->target) : 0;
+    char *directory = malloc(length + 2);
+    if (!directory) {
+        say(out, room, "current directory path unavailable; recovery entry %s; original directory could not be described", entry);
+        return;
+    }
+    if (!length) { directory[0] = '/'; directory[1] = 0; }
+    else { memcpy(directory, lease->target, length); directory[length] = 0; }
+    (void)landin_publication_describe_entry
+        (lease->parent, directory, entry, out, room);
+    free(directory);
+}
+
 int landin_replace_update(int token, const char *data,
                           size_t size, char *reason, size_t room)
 
 {
     struct update_lease *lease = find_lease(token);
     static unsigned recovery_counter;
-    char copy_name[96];
+    char copy_name[96], copy_location[PATH_MAX + 256];
     char *target = NULL;
     char *copy = NULL;
     char *original = NULL;
@@ -278,6 +303,11 @@ int landin_replace_update(int token, const char *data,
      * file nobody may write. */
     if ((before.st_mode & 0222) == 0) {
         say(reason, room, "it is read-only");
+        goto done;
+    }
+    if (lease->write_error) {
+        say(reason, room, "cannot open it to write: %s; use fmt --stdout",
+            strerror(lease->write_error));
         goto done;
     }
     if ((before.st_mode & (S_ISUID | S_ISGID)) != 0
@@ -375,8 +405,9 @@ int landin_replace_update(int token, const char *data,
             say(reason, room, "writing it failed: %s; its bytes are as they"
                 " were", strerror(error));
         } else {
+            describe_copy(lease, copy_name, copy_location, sizeof copy_location);
             say(reason, room, "writing it failed: %s; its original bytes are"
-                " kept in %s", strerror(error), copy);
+                " kept in %s", strerror(error), copy_location);
             free(copy);
             copy = NULL;
         }
@@ -406,7 +437,8 @@ int landin_replace_update(int token, const char *data,
     landin_publication_notify("update-written", target);
     if (stat(target, &now) != 0 || now.st_dev != before.st_dev
         || now.st_ino != before.st_ino) {
-        say(reason, room, "the public name changed during formatting; the original read object was formatted; original bytes retained in %s", copy);
+        describe_copy(lease, copy_name, copy_location, sizeof copy_location);
+        say(reason, room, "the public name changed during formatting; the original read object was formatted; original bytes retained in %s", copy_location);
         free(copy); copy = NULL;
         goto done;
     }
@@ -419,8 +451,10 @@ done:
         close(fd);
     if (copy) {
         if (unlinkat(lease->parent, copy_name, 0) != 0 && result == 0) {
+            int error = errno;
+            describe_copy(lease, copy_name, copy_location, sizeof copy_location);
             say(reason, room, "it is formatted, but its copy %s could not be"
-                " removed: %s", copy, strerror(errno));
+                " removed: %s", copy_location, strerror(error));
             result = -1;
         }
         free(copy);
