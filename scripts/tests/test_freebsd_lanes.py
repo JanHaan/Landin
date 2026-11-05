@@ -17,6 +17,27 @@ import vm
 
 
 class FreeBSDControls(unittest.TestCase):
+    def test_native_host_controls_require_success_and_all_completed_helpers(self):
+        markers = (b'publication native: 20 controls passed\n'
+                   b'cancellation native: 13 controls passed\n'
+                   b'runtime ownership native: 7/7 controls passed\n')
+        with tempfile.TemporaryDirectory() as tmp:
+            lane = LANE.Lane.__new__(LANE.Lane)
+            lane.output = Path(tmp)
+            lane.source_root = Path('/owned source')
+            lane.remote_prefix = '/owned guest'
+            for status, stdout in ((1, markers), (0, b''), (0, markers)):
+                guest = Mock()
+                guest.run.return_value = SimpleNamespace(
+                    returncode=status, stdout=stdout, stderr=b'')
+                with self.subTest(status=status, stdout=stdout):
+                    if status or not stdout:
+                        with self.assertRaises(ValueError):
+                            lane.native_host_controls(guest)
+                    else:
+                        lane.native_host_controls(guest)
+                    self.assertEqual((lane.output / 'native-host-controls.log').read_bytes(), stdout)
+
     def test_shards_partition_each_lane_by_whole_fixture(self):
         for arch in ('amd64', 'arm64'):
             for kind in ('runtime', 'abi'):

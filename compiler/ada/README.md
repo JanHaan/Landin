@@ -1268,6 +1268,8 @@ inputs, selected tools and known resolved libraries; bindings additionally
 records Clang's consumed-header dependencies. External tools report filenames,
 not the identities of their original read descriptors. Arbitrary wrappers,
 interpreters and implicit toolchain internals are outside this closure.
+Executable identity observations do not pin pathname-based execution against
+a noncooperating namespace replacement.
 The driver refuses relative or indirect assembly and linker file directives
 that would change meaning in staging, naming the route through plain absolute
 paths or a standalone assembly input or linker script.
@@ -1318,9 +1320,12 @@ constants. `Native.Tools` passes the already-open capture descriptors and
 literal argument vector. Merged capture retains one ordered byte stream;
 `Output_Only` retains stdout in `Output` and stderr in `Error_Output`, so the
 harness can enforce both expected stdout and empty stderr. The adapter creates
-both temporary files under `$TMPDIR`, or `/tmp`, never in the current
-directory, and both
-files share the owned cleanup path. The adapter starts each tool in its own
+captures in exclusive private directories under `$TMPDIR`, or `/tmp`, and
+unlinks each data file before launch, retaining its descriptor through the
+read. It never reopens or unlinks a capture by its earlier pathname. Private
+workspace reads, writes and tool outputs use pinned directory descriptors;
+cleanup captures and inspects the owned root before removing it, preserving
+any replacement and reporting uncertain recovery. The adapter starts each tool in its own
 process group and uses a monotonic deadline. On timeout it kills that group and reaps the direct child
 before reporting `Timed_Out`; adapter exceptions also stop an owned child.
 The group is established before execution through

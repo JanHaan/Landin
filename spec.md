@@ -18378,6 +18378,12 @@ tool's known input closure, not identities from its read descriptors. This
 does not sandbox arbitrary wrappers, interpreters or implicit toolchain
 internals. Unsupported indirect file directives refuse with an absolute-path
 or standalone-input route rather than changing their meaning silently.
+Executable launch still resolves a pathname: observing its identity does
+not pin execution against a noncooperating replacement of that namespace.
+Tool capture bytes stay in retained descriptors. Private scratch directories
+retain directory authority for reads, writes, tool output and cleanup, so
+replacing an ancestor does not redirect those effects or authorize deleting
+the replacement directory. Uncertain cleanup retains and names its recovery.
 
 Generated files are verified in exclusive private staging beside the
 destination. The output directory is pinned; lookups below its chosen root,

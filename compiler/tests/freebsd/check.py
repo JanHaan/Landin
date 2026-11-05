@@ -277,6 +277,7 @@ class Lane:
             for relative in (
                     'compiler/ada/src/platform/landin_publication.c',
                     'compiler/ada/src/platform/landin_publication.h',
+                    'compiler/ada/src/platform/landin_owned_directory.h',
                     'compiler/ada/src/platform/landin_format_replace.c',
                     'compiler/ada/src/platform/landin_tool_process.c',
                     'compiler/ada/src/platform/landin_file_identity.c',
@@ -330,16 +331,27 @@ class Lane:
                                  str(platform / 'landin_tool_process.c'),
                                  str(root / 'compiler/tests/tool_cancellation.c'),
                                  '-o', 'cancellation'])
-                   + '; ./cancellation --all')
+                   + '; ./cancellation --all; '
+                   + shlex.join(['cc', '-std=c11', '-Wall', '-Wextra',
+                                 '-Werror', '-pedantic', '-pthread',
+                                 '-I', str(platform),
+                                 str(platform / 'landin_publication.c'),
+                                 str(platform / 'landin_format_replace.c'),
+                                 str(platform / 'landin_tool_process.c'),
+                                 str(platform / 'landin_file_identity.c'),
+                                 str(root / 'compiler/tests/runtime_owned.c'),
+                                 '-o', 'runtime-owned'])
+                   + '; ./runtime-owned')
         result = guest.run(command, timeout=180)
         transcript = result.stdout + result.stderr
         (self.output / 'native-host-controls.log').write_bytes(transcript)
         require(result.returncode == 0, 'native host adapter controls failed:\n'
                 + transcript.decode(errors='replace')[-8000:])
         require(b'publication native:' in result.stdout
-                and b'cancellation native: 13 controls passed' in result.stdout,
+                and b'cancellation native: 13 controls passed' in result.stdout
+                and b'runtime ownership native: 7/7 controls passed' in result.stdout,
                 'native host adapter controls did not report their full scope')
-        print('FreeBSD native publication and cancellation adapters passed')
+        print('FreeBSD native publication, cancellation and private-directory adapters passed')
 
     def processor(self, guest):
         probe = self.bundle / 'processor'

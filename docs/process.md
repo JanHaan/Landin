@@ -554,7 +554,7 @@ reuse or the event's scope; document and script checks must always succeed,
 and on a board-scope event so must every physical board leg.
 
 Linux x86-64, Linux arm64 and Darwin host checks run the production C
-publication controls and cancellation controls alongside formatter write
+publication, private-directory and cancellation controls alongside formatter write
 safety, with cancellation also exercised through actual `compile` and
 `run` commands. Each FreeBSD architecture's first runtime shard compiles
 and executes the same C adapters inside its guest. That is native system

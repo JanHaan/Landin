@@ -35,7 +35,8 @@ def main():
                    command=command, compile_exit=built.returncode,
                    inputs={str(p.relative_to(repo)): hashlib.sha256(
                        p.read_bytes()).hexdigest() for p in
-                           sources + [platform / 'landin_publication.h']})
+                           sources + [platform / 'landin_publication.h',
+                                      platform / 'landin_owned_directory.h']})
     if built.returncode == 0:
         env = dict(os.environ, TMPDIR=str(root))
         ran = subprocess.run([str(binary)], cwd=root, env=env,

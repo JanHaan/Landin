@@ -22997,7 +22997,15 @@ package body Landin.Diagnostics.Citations.Texts is
                & "ppers, interpreters or implicit toolchain internals. Uns"
                & "upported indirect file directives refuse with an absolut"
                & "e-path or standalone-input route rather than changing th"
-               & "eir meaning silently."
+               & "eir meaning silently. Executable launch still resolves a"
+               & " pathname: observing its identity does not pin execution"
+               & " against a noncooperating replacement of that namespace."
+               & " Tool capture bytes stay in retained descriptors. Privat"
+               & "e scratch directories retain directory authority for rea"
+               & "ds, writes, tool output and cleanup, so replacing an anc"
+               & "estor does not redirect those effects or authorize delet"
+               & "ing the replacement directory. Uncertain cleanup retains"
+               & " and names its recovery."
                & LF
                & LF
                & "Generated files are verified in exclusive private stagin"

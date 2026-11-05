@@ -13,7 +13,8 @@ transferred payload. The sysroot and optional local VM base come from official 1
 
 Each architecture's first runtime shard also compiles the production
 publication, formatter and process C adapters with the guest's own `cc`
-and runs their deterministic publication and cancellation controls.
+and runs their deterministic publication, cancellation, capture and private
+directory controls.
 `native-host-controls.log` retains the transcript. These check FreeBSD's
 host system calls; they do not claim a FreeBSD-hosted Ada compiler or the
 compiler command corpus ran there. The compiler commands run on Linux and
