@@ -11,6 +11,7 @@
 #include <dirent.h>
 #include <fcntl.h>
 #include <inttypes.h>
+#include <limits.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -678,6 +679,40 @@ fail:
         free_tree(p->expected_tree); free_tree(p->fresh_tree); free(p); }
     free(parent_path); return -1;
 }
+/* The pinned directory can move after anchor selection. Report an observed
+   current pathname only after checking that spelling still names this fd;
+   other hosts retain an identity-qualified last-known location. */
+static void describe_recovery(const struct arena *a, char *out, size_t room)
+{
+    char observed[PATH_MAX];
+    int resolved = 0;
+#ifdef __linux__
+    char descriptor[64];
+    snprintf(descriptor, sizeof descriptor, "/proc/self/fd/%d", a->recovery_fd);
+    ssize_t size = readlink(descriptor, observed, sizeof observed - 1);
+    if (size >= 0 && (size_t)size < sizeof observed - 1) {
+        observed[size] = 0;
+        resolved = 1;
+    }
+#elif defined(__APPLE__)
+    resolved = fcntl(a->recovery_fd, F_GETPATH, observed) == 0;
+#endif
+    if (resolved) {
+        struct stat pinned, named;
+        int fd = open(observed, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+        resolved = fd >= 0 && fstat(fd, &named) == 0
+            && fstat(a->recovery_fd, &pinned) == 0 && same(&named, &pinned);
+        if (fd >= 0) close(fd);
+    }
+    if (resolved)
+        reason(out, room, "observed current path %s (output parent device=%ju inode=%ju)",
+               observed, (uintmax_t)a->parent_id.st_dev,
+               (uintmax_t)a->parent_id.st_ino);
+    else
+        reason(out, room, "current directory path unavailable; last-known spelling %s; directory may have moved; output parent device=%ju inode=%ju",
+               a->recovery_path, (uintmax_t)a->parent_id.st_dev,
+               (uintmax_t)a->parent_id.st_ino);
+}
 static int matches_bytes(int fd, const char *name, const char *bytes, size_t size)
 {
     int file = openat(fd, name, O_RDONLY | O_NOFOLLOW | O_CLOEXEC | O_NONBLOCK);
@@ -763,8 +798,10 @@ int landin_publication_step(int token, int action, const char *const *paths,
             || (S_ISREG(st.st_mode)
                 && !matches_bytes(recovery_fd, p->recovery, p->bytes, p->size))
             || (!S_ISREG(st.st_mode) && !S_ISDIR(st.st_mode))) {
-            reason(why, room, "%s changed or aliases an input; rerun or choose another output; recovery %s/%s",
-                   p->path, p->arena->recovery_path, p->recovery); return -1;
+            char location[PATH_MAX + 256];
+            describe_recovery(p->arena, location, sizeof location);
+            reason(why, room, "%s changed or aliases an input; rerun or choose another output; recovery directory %s; previous entry %s",
+                   p->path, location, p->recovery); return -1;
         }
         if (p->expected_tree) {
             struct tree_entry *captured = snapshot_entry(recovery_fd, p->recovery);
@@ -855,8 +892,11 @@ int landin_publication_step(int token, int action, const char *const *paths,
                 || unlinkat(p->arena->root_fd, "recovery", AT_REMOVEDIR) != 0
                 || finish_journals(p->arena) != 0
                 || unlinkat(parent, p->arena->name, AT_REMOVEDIR) != 0) {
+                int error = errno;
+                char location[PATH_MAX + 256];
+                describe_recovery(p->arena, location, sizeof location);
                 reason(why, room, "retained publication directory %s: %s",
-                       p->arena->recovery_path, strerror(errno)); return -1;
+                       location, strerror(error)); return -1;
             }
             close(p->arena->private_fd); close(p->arena->recovery_fd);
             close(p->arena->root_fd); close(p->arena->parent);
@@ -869,8 +909,12 @@ int landin_publication_step(int token, int action, const char *const *paths,
     }
     errno = EINVAL;
 fail:
-    reason(why, room, "publication of %s failed: %s; previous recovery %s/%s; captured new or concurrent entry %s/%s",
-           p->path, strerror(errno), p->arena->recovery_path, p->recovery,
-           p->arena->recovery_path, p->rollback);
-    return -1;
+    {
+        int error = errno;
+        char location[PATH_MAX + 256];
+        describe_recovery(p->arena, location, sizeof location);
+        reason(why, room, "publication of %s failed: %s; recovery directory %s; previous entry %s; captured new or concurrent entry %s",
+               p->path, strerror(error), location, p->recovery, p->rollback);
+        return -1;
+    }
 }

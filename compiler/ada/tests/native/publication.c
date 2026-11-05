@@ -11,6 +11,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <stdint.h>
+#include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -291,6 +292,44 @@ static void recovery_discovery(void)
     REQUIRE(landin_tool_wait(child, &status, 0) == child && status == 0);
     close(nullfd); ++passed;
 }
+static void moved_rollback_race(const char *event, const char *name)
+{
+    (void)name;
+    if (!strcmp(event, "before-rollback-capture"))
+        REQUIRE(rename(replacement, raced_path) == 0);
+    else if (!strcmp(event, "rollback-captured")) put(raced_path, "second-save");
+}
+static void moved_anchor_recovery_diagnostic(void)
+{
+    char root[4096], moved[4096], output[4096], moved_output[4096];
+    char stage[4096], save[4096], recovery[8192], parent_identity[160];
+    path(root, sizeof root, "diagnostic-root"); path(moved, sizeof moved, "diagnostic-moved");
+    path(save, sizeof save, "diagnostic-save"); REQUIRE(mkdir(root, 0700) == 0);
+    REQUIRE(snprintf(output, sizeof output, "%s/output", root) > 0); put(output, "old-output");
+    REQUIRE(snprintf(moved_output, sizeof moved_output, "%s/output", moved) > 0);
+    struct stat parent; REQUIRE(stat(root, &parent) == 0);
+    int token = prepare(output, 0, root, stage); staged(stage, "generated");
+    REQUIRE(step(token, 0) == 0 && step(token, 1) == 0 && step(token, 2) == 0);
+    REQUIRE(rename(root, moved) == 0 && mkdir(root, 0700) == 0); put(save, "first-save");
+    strcpy(raced_path, moved_output); strcpy(replacement, save);
+    landin_publication_set_hook(moved_rollback_race);
+    REQUIRE(step(token, 3) != 0); clear_hook();
+    REQUIRE(snprintf(parent_identity, sizeof parent_identity, "device=%ju inode=%ju",
+                      (uintmax_t)parent.st_dev, (uintmax_t)parent.st_ino) > 0);
+    REQUIRE(strstr(why, parent_identity) != NULL);
+#if defined(__linux__) || defined(__APPLE__)
+    REQUIRE(strstr(why, "observed current path") != NULL && strstr(why, moved) != NULL);
+#else
+    REQUIRE(strstr(why, "current directory path unavailable") != NULL
+            && strstr(why, "last-known spelling") != NULL);
+#endif
+    char *at = strstr(stage, "/stage/"); REQUIRE(at != NULL);
+    REQUIRE(snprintf(recovery, sizeof recovery, "%s%.*s/recovery/.previous-%d",
+                      moved, (int)(at - stage - (ptrdiff_t)strlen(root)),
+                      stage + strlen(root), token) > 0);
+    REQUIRE(content(recovery, "old-output") && content(moved_output, "second-save"));
+    ++passed;
+}
 static void child_staging_directory(void)
 {
     char root[4096], moved[4096], output[4096], stage[4096], relative[8192];
@@ -346,6 +385,7 @@ int main(int argc, char **argv)
     fmt_read_boundaries(); fmt_original_descriptor(); collision_names();
     repeated_abort_retains_recovery(); recovery_discovery();
     child_staging_directory(); mismatch_finish_preserves_tree();
+    moved_anchor_recovery_diagnostic();
     printf("publication native: %u controls passed; retained scratch %s\n", passed, scratch);
     return 0;
 }
