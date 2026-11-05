@@ -10,6 +10,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
+#include <inttypes.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,7 +25,7 @@ struct landin_owned_directory {
     int parent, root, finished, retained;
     struct stat identity;
     char path[PATH_MAX], parent_path[PATH_MAX], name[NAME_MAX + 1];
-    char reason[PATH_MAX * 2 + 256];
+    char reason[PATH_MAX * 2 + 1024];
 };
 static void (*landin_owned_hook)(const char *, const char *);
 static int landin_owned_same(const struct stat *a, const struct stat *b)
@@ -155,17 +156,58 @@ static int landin_owned_restore(int from, const char *name, int to,
     if (S_ISDIR(mode)) errno = ENOTSUP;
     return -1;
 }
+/* A retained parent may have moved. Only call a spelling current after
+   reopening it and comparing identity; portable fallback is explicitly stale. */
+static void landin_owned_describe(int directory, const char *last_known,
+                                   const char *entry, char *out, size_t room)
+{
+    char observed[PATH_MAX];
+    struct stat pinned, named;
+    int valid = fstat(directory, &pinned) == 0, resolved = 0;
+#ifdef __linux__
+    char descriptor[64];
+    snprintf(descriptor, sizeof descriptor, "/proc/self/fd/%d", directory);
+    ssize_t size = readlink(descriptor, observed, sizeof observed - 1);
+    if (size >= 0 && (size_t)size < sizeof observed - 1) {
+        observed[size] = 0; resolved = valid;
+    }
+#elif defined(__APPLE__)
+    resolved = valid && fcntl(directory, F_GETPATH, observed) == 0;
+#endif
+    if (resolved) {
+        int fd = open(observed, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+        resolved = fd >= 0 && fstat(fd, &named) == 0
+            && landin_owned_same(&named, &pinned);
+        if (fd >= 0) close(fd);
+    }
+    if (resolved) {
+        snprintf(out, room, "%s%s%s", observed,
+                 *entry && strcmp(observed, "/") ? "/" : "", entry);
+    } else if (valid) {
+        snprintf(out, room,
+                 "last-known spelling %s%s%s (parent device=%ju inode=%ju; current path unavailable; directory may have moved)",
+                 last_known, *entry && strcmp(last_known, "/") ? "/" : "",
+                 entry, (uintmax_t)pinned.st_dev, (uintmax_t)pinned.st_ino);
+    } else {
+        snprintf(out, room,
+                 "last-known spelling %s/%s (current path and parent identity unavailable)",
+                 last_known, entry);
+    }
+}
 static int landin_owned_remove(struct landin_owned_directory *owned)
 {
     struct landin_owned_directory retired;
     struct stat actual;
     int error, copied, replacement = 0;
+    char original[PATH_MAX + 256], recovery[PATH_MAX + 256];
+    landin_owned_describe(owned->parent, owned->parent_path, owned->name,
+                           original, sizeof original);
     if (owned->finished) {
         if (fstatat(owned->parent, owned->name, &actual,
                      AT_SYMLINK_NOFOLLOW) != 0 && errno == ENOENT) return 0;
         snprintf(owned->reason, sizeof owned->reason,
                  "replacement private-directory entry preserved at %s; inspect it before cleanup",
-                 owned->path);
+                 original);
         return -1;
     }
     if (owned->retained) return -1;
@@ -174,24 +216,32 @@ static int landin_owned_remove(struct landin_owned_directory *owned)
         || !landin_owned_same(&actual, &owned->identity)) {
         snprintf(owned->reason, sizeof owned->reason,
                  "private directory name changed at %s; replacement preserved; inspect the original parent before cleanup",
-                 owned->path);
+                 original);
         return -1;
     }
     if (landin_owned_allocate(owned->parent, owned->parent_path,
                                ".refine-cleanup-", &retired) != 0) {
         snprintf(owned->reason, sizeof owned->reason,
                  "cannot create private cleanup recovery for %s; retry cleanup in its original parent",
-                 owned->path);
+                 original);
         return -1;
     }
+    landin_owned_describe(retired.root, retired.path, "entry",
+                           recovery, sizeof recovery);
     if (landin_owned_hook) landin_owned_hook("before-capture", owned->path);
     if (renameat(owned->parent, owned->name, retired.root, "entry") != 0) {
+        landin_owned_describe(owned->parent, owned->parent_path, owned->name,
+                               original, sizeof original);
         snprintf(owned->reason, sizeof owned->reason,
                  "private directory changed before capture at %s; inspect its original parent",
-                 owned->path);
+                 original);
         goto fail_empty;
     }
     if (landin_owned_hook) landin_owned_hook("after-capture", owned->path);
+    landin_owned_describe(owned->parent, owned->parent_path, owned->name,
+                           original, sizeof original);
+    landin_owned_describe(retired.root, retired.path, "entry",
+                           recovery, sizeof recovery);
     if (fstatat(retired.root, "entry", &actual, AT_SYMLINK_NOFOLLOW) != 0
         || !landin_owned_same(&actual, &owned->identity)) {
         if (fstatat(retired.root, "entry", &actual, AT_SYMLINK_NOFOLLOW) == 0
@@ -199,13 +249,13 @@ static int landin_owned_remove(struct landin_owned_directory *owned)
                                      owned->name, actual.st_mode) == 0) {
             snprintf(owned->reason, sizeof owned->reason,
                      "replacement private directory restored at %s; inspect the original directory before retrying cleanup",
-                     owned->path);
+                     original);
             goto fail_empty;
         }
         owned->retained = 1;
         snprintf(owned->reason, sizeof owned->reason,
-                 "changed private-directory entry retained at %s/entry; inspect it and %s before restoring it without replacement",
-                 retired.path, owned->path);
+                 "changed private-directory entry retained at %s; inspect it and %s before restoring it without replacement",
+                 recovery, original);
         goto fail_retained;
     }
     copied = fcntl(owned->root, F_DUPFD_CLOEXEC, 3);
@@ -213,12 +263,14 @@ static int landin_owned_remove(struct landin_owned_directory *owned)
         || unlinkat(retired.root, "entry", AT_REMOVEDIR) != 0) {
         owned->retained = 1;
         snprintf(owned->reason, sizeof owned->reason,
-                 "owned private directory retained at %s/entry; inspect it before retrying cleanup",
-                 retired.path);
+                 "owned private directory retained at %s; inspect it before retrying cleanup",
+                 recovery);
         goto fail_retained;
     }
     replacement = fstatat(owned->parent, owned->name, &actual,
                           AT_SYMLINK_NOFOLLOW) == 0 || errno != ENOENT;
+    landin_owned_describe(retired.root, retired.path, "",
+                           recovery, sizeof recovery);
     close(retired.root);
     error = unlinkat(retired.parent, retired.name, AT_REMOVEDIR);
     close(retired.parent);
@@ -227,7 +279,7 @@ static int landin_owned_remove(struct landin_owned_directory *owned)
     if (replacement || error != 0) {
         snprintf(owned->reason, sizeof owned->reason,
                  "owned private directory removed; replacement or cleanup entry preserved at %s or %s; inspect these names",
-                 owned->path, retired.path);
+                 original, recovery);
         return -1;
     }
     return 1;

@@ -47,7 +47,7 @@ def main():
     (output / 'results.json').write_text(json.dumps(result, indent=2) + '\n')
     print('runtime ownership evidence: ' + str(output), flush=True)
     if (built.returncode != 0 or result.get('exit_status') != 0 or
-            'runtime ownership native: 6/6 controls passed' not in result.get('stdout', '')):
+            'runtime ownership native: 7/7 controls passed' not in result.get('stdout', '')):
         print(built.stdout + built.stderr, end='')
         print(result.get('stdout', '') + result.get('stderr', ''), end='')
         raise SystemExit(1)

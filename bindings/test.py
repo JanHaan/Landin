@@ -343,6 +343,55 @@ class GeneratorTests(unittest.TestCase):
         self.assertEqual(metadata["outputs"]["adapters.c"],
                          hashlib.sha256((first / "adapters.c").read_bytes()).hexdigest())
 
+    def test_private_workspace_survives_tmpdir_ancestor_replacement(self) -> None:
+        header = "int owned(int value);\n"
+        selected = self.selection(self.function("owned"))
+        _, control = self.generate(self.root / "control", header=header,
+                                   selected_policy=selected)
+        parent = self.root / "moved-workspace"
+        sysroot, includes, output = self.make_tree(
+            parent, header=header, selected_policy=selected)
+        temporary = self.root / "scratch"
+        temporary.mkdir()
+        moved = self.root / "scratch-original"
+        marker = self.root / "wrapper-ran"
+        wrapper = self.root / "moving-clang"
+        wrapper.write_text(
+            f"#!{sys.executable}\n"
+            "import os, pathlib, sys\n"
+            f"temporary = pathlib.Path({str(temporary)!r})\n"
+            f"moved = pathlib.Path({str(moved)!r})\n"
+            f"marker = pathlib.Path({str(marker)!r})\n"
+            "if not marker.exists():\n"
+            "    root_name = pathlib.Path.cwd().name\n"
+            "    temporary.rename(moved)\n"
+            "    temporary.mkdir()\n"
+            "    foreign = temporary / root_name\n"
+            "    (foreign / 'headers/api').mkdir(parents=True)\n"
+            "    (foreign / 'headers/api/api.h').write_text('#error foreign header\\n')\n"
+            "    (foreign / 'translation.i').write_text('foreign-save')\n"
+            "    marker.write_text(root_name)\n"
+            f"os.execv({str(self.clang)!r}, [{str(self.clang)!r}, *sys.argv[1:]])\n",
+            encoding="utf-8")
+        wrapper.chmod(0o700)
+        command = self.command(parent, sysroot, includes, output)
+        command[command.index("--clang") + 1] = str(wrapper)
+        process = subprocess.run(command, env=dict(os.environ, TMPDIR=str(temporary)),
+                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                 text=True, timeout=60)
+        self.assertEqual(process.returncode, 0, process.stderr)
+        self.assertTrue(marker.exists(), "the replacement boundary was reached")
+        foreign = temporary / marker.read_text()
+        self.assertEqual((foreign / "headers/api/api.h").read_text(),
+                         "#error foreign header\n")
+        self.assertEqual((foreign / "translation.i").read_text(), "foreign-save")
+        self.assertEqual(sorted(path.relative_to(foreign).as_posix()
+                                for path in foreign.rglob("*") if path.is_file()),
+                         ["headers/api/api.h", "translation.i"])
+        self.assertEqual(list(moved.iterdir()), [], "owned workspace and captures removed")
+        for name in ("bindings.ldn", "adapters.c", "exports.h", "bindings.json"):
+            self.assertEqual((control / name).read_bytes(), (output / name).read_bytes(), name)
+
     def test_committed_fixture_is_exactly_regenerable(self) -> None:
         parent = self.root / "fixture-regeneration"
         sysroot, includes, output = self.make_tree(
