@@ -839,7 +839,7 @@ def scope_gaps(workflow):
     for identity, body in jobs.items():
         on_rig = any("landin-rig" in line for line in body)
         if on_rig and (identity not in gate_inputs.PHYSICAL
-                       or job_field(body, "runs-on") != "[self-hosted, landin-rig]"):
+                       or job_field(body, "runs-on") != "[landin-rig]"):
             gaps.append("%s: only a physical job runs on the rig" % identity)
     return gaps
 
@@ -882,7 +882,7 @@ class Physical(unittest.TestCase):
     def test_the_rig_runs_physical_jobs_alone(self):
         source = self.source.replace("  scaling:\n    needs: [inputs, linux-release-build]\n",
                                      "  scaling:\n    needs: [inputs, linux-release-build]\n"
-                                     "    runs-on: [self-hosted, landin-rig]\n", 1)
+                                     "    runs-on: [landin-rig]\n", 1)
         self.assertIn("scaling: only a physical job runs on the rig", scope_gaps(source))
 
     def test_the_physical_names_are_every_board_leg_and_never_in_the_reuse_list(self):

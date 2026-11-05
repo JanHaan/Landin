@@ -1717,7 +1717,10 @@ jobs:
     name: board-${{ matrix.port }}
     needs: [inputs, board-bundles]
     if: needs.inputs.outputs.boards == 'true' && needs.board-bundles.result == 'success'
-    runs-on: [self-hosted, landin-rig]
+    #  The rig's runner carries this one label and none of GitHub's
+    #  defaults, so no workflow that asks only for `self-hosted` lands on
+    #  it; a job that also named `self-hosted` would queue there forever.
+    runs-on: [landin-rig]
     permissions:
       contents: read
       actions: read
