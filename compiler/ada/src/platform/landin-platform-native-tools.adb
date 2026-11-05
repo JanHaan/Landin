@@ -568,7 +568,8 @@ package body Landin.Platform.Native.Tools is
             Pid'Access);
          if Start_Error /= 0 then
             raise External_Tool_Failed
-              with Start_Failure (Start_Error, "could not run tool: " & Program);
+              with Start_Failure
+                (Start_Error, "could not run tool: " & Program);
          end if;
 
          --  Keep both descriptors: captures are anonymous, and reading
@@ -586,7 +587,8 @@ package body Landin.Platform.Native.Tools is
             end if;
             Reaped :=
               Wait_Tool
-                (Pid, Status'Access, No_Hang => 1, Owned => Child_Owned'Access);
+                (Pid, Status'Access, No_Hang => 1,
+                 Owned => Child_Owned'Access);
             if Child_Owned = 0 then
                Pid := 0;
             end if;
