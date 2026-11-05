@@ -8,6 +8,7 @@
 #define _XOPEN_SOURCE 700
 #include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -236,14 +237,19 @@ static int start(const char *self, const char *role, int number,
    any PID or invoking stop/cancel after a failed wait. */
 static int rejected_child_policy(const char *self, int no_wait)
 {
-    struct sigaction action, previous, observed;
+    struct sigaction action, previous, configured, observed;
     int channel[2], child, error, nullfd, status, number, owned = 1;
     char descriptor[32], byte;
     memset(&action, 0, sizeof action);
     action.sa_handler = no_wait ? SIG_DFL : SIG_IGN;
     action.sa_flags = no_wait ? SA_NOCLDWAIT : 0;
     sigemptyset(&action.sa_mask);
+    sigaddset(&action.sa_mask, SIGUSR2);
     require(sigaction(SIGCHLD, &action, &previous) == 0, "set child policy");
+    /* Darwin adds SA_NOCLDWAIT when SIG_IGN is installed for SIGCHLD.
+       Compare the actual installed policy, including its normalized flags. */
+    require(sigaction(SIGCHLD, NULL, &configured) == 0,
+            "observe installed child policy");
     require(pipe(channel) == 0, "own rejected child notification pipe");
     snprintf(descriptor, sizeof descriptor, "%d", channel[1]);
     char *args[] = {(char *)self, "policy-child", descriptor, NULL};
@@ -264,9 +270,15 @@ static int rejected_child_policy(const char *self, int no_wait)
         require(strstr(reason, no_wait ? "SA_NOCLDWAIT" : "SIGCHLD is ignored")
                     != NULL, "actionable inherited child policy reason");
         require(sigaction(SIGCHLD, NULL, &observed) == 0
-                && observed.sa_handler == action.sa_handler
-                && (observed.sa_flags & SA_NOCLDWAIT) == action.sa_flags,
-                "inherited child policy remains unchanged");
+                && observed.sa_handler == configured.sa_handler
+                && observed.sa_flags == configured.sa_flags,
+                "inherited child handler and flags remain unchanged");
+        /* Native sigsets cover at most their storage's bit capacity. Query
+           membership rather than comparing opaque storage or padding bytes. */
+        for (size_t signal = 1; signal <= sizeof(sigset_t) * CHAR_BIT; ++signal)
+            require(sigismember(&observed.sa_mask, (int)signal)
+                    == sigismember(&configured.sa_mask, (int)signal),
+                    "inherited child signal mask remains unchanged");
     }
     require(close(channel[1]) == 0 && read(channel[0], &byte, 1) == 0,
             "no rejected child wrote its startup sentinel");
