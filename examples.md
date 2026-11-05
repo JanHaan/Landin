@@ -1476,7 +1476,10 @@ are at the top of the file. Given a path, `./listing DIR` lists that
 directory, up to 256 entries. With no argument, so that it has something
 known to list, the program builds a small directory where it runs, lists it,
 checks the listing and removes the directory again; that code comes after
-the comment `Everything below`.
+the comment `Everything below`. It refuses to run the demonstration if
+`listing-scratch` already exists, leaving that directory untouched. Once
+it creates the directory, an `undo` attempts cleanup if setup or listing
+fails and reports any cleanup failure with the directory to remove.
 
 - `io.read_entry` lends each name from the directory's buffer until the
   next read [0790] [0800], so the program copies each name it keeps with
@@ -1706,7 +1709,7 @@ forget: (host: blocking.host, name: []u8, directory: bool) -> none ! ... =
     end
 end forget
 
---- Remove everything the program makes, whatever an earlier run left.
+--- Remove everything the program makes in the directory it created.
 clear: (host: blocking.host) -> none ! ... =
     try forget(host, "nested/gamma.log", false)
     try forget(host, "nested", true)
@@ -1716,6 +1719,17 @@ clear: (host: blocking.host) -> none ! ... =
     try forget(host, "empty", false)
     try forget(host, "", true)
 end clear
+
+--- Clean up after a failure, reporting why an owned scratch directory
+--- could not be removed as well as the original failure.
+abandon: (host: blocking.host) -> none =
+    clear(host) else (problem)
+        io.write(host, io.err(host),
+                 "listing: could not remove listing-scratch; remove it before rerunning\n")
+            else none
+        complain(host, problem)
+    end
+end abandon
 
 --- Make the directory `name` in the top directory, or the top directory
 --- itself when `name` is empty.
@@ -1729,8 +1743,6 @@ end make_directory
 --- Four files, one of them empty and one with a name beyond ASCII, and a
 --- subdirectory holding a fifth.
 build: (host: blocking.host) -> none ! ... =
-    try clear(host)
-    try make_directory(host, "")
     try make_file(host, "alpha.log", "alpha\n")
     line_of_beta: []u8 = "beta\n"
     mut lines: [1000]u8 = zeroed
@@ -1748,6 +1760,8 @@ end build
 --- directory.
 demonstrate: (host: blocking.host, inout out: io.buffered_writer(blocking.host))
              -> none ! ... =
+    try make_directory(host, "")
+    undo abandon(host)
     try build(host)
     blank: kept = (name: [255 of 0], length: 0, kind: io.special, size: 0)
     mut entries: [8]kept = [8 of blank]
@@ -1814,7 +1828,10 @@ up to 256 entries, a name up to 255 bytes and a path up to 256 bytes. With
 no arguments, so that it has something known to copy, the program builds a
 small tree where it runs, copies it twice, checks the copy, prints a listing
 of it and removes both; that code comes after the comment `Everything
-below`.
+below`. The demonstration refuses an existing `tree-copy-scratch`,
+leaving it untouched. Once it creates the directory, an `undo` attempts
+cleanup if setup or copying fails and reports any cleanup failure with
+the directory to remove.
 
 - Each file is written to a temporary file that `io.make_temporary` makes
   beside its destination. `io.synchronize` then puts its bytes on the disk
@@ -2173,6 +2190,17 @@ remove_tree: (host: blocking.host, path: []u8) -> none ! ... =
     try io.remove_directory(host, text.host_over(path))
 end remove_tree
 
+--- Clean up after a failure, reporting why an owned scratch directory
+--- could not be removed as well as the original failure.
+abandon: (host: blocking.host) -> none =
+    remove_tree(host, top) else (problem)
+        io.write(host, io.err(host),
+                 "tree-copy: could not remove tree-copy-scratch; remove it before rerunning\n")
+            else none
+        complain(host, problem)
+    end
+end abandon
+
 --- Make the file `name` in the source holding `contents`, with
 --- `permissions`.
 make_file: (host: blocking.host, name: []u8, contents: []u8,
@@ -2272,8 +2300,6 @@ end make_socket
 --- read-only one, one with two names, a sparse one, symbolic links to a
 --- directory, to a file and to nothing, and a socket, which no copy makes.
 build: (host: blocking.host) -> none ! ... =
-    try remove_tree(host, top)
-    try io.make_directory(host, text.host_over(top))
     try make_folder(host, "")
     try make_folder(host, "notes")
     try make_file(host, "readme", "a tree to copy\n", 0o644)
@@ -2527,6 +2553,8 @@ end report
 --- copy, check the copy, list it to `out` and remove both trees.
 demonstrate: (host: blocking.host, inout out: io.buffered_writer(blocking.host))
              -> none ! ... =
+    try io.make_directory(host, text.host_over(top))
+    undo abandon(host)
     try build(host)
     mut first: tally = (files: 0, links: 0, directories: 0, skipped: 0,
                         replaced: 0)
