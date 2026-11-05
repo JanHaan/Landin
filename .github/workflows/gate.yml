@@ -1707,7 +1707,7 @@ jobs:
           retention-days: 14
 
   #  One leg per port on the rig's one runner, one at a time; each leg is
-  #  self-contained, boot then RAM, so legs of two runs may interleave.
+  #  self-contained, RAM then boot, so legs of two runs may interleave.
   #  The checkout is exactly this commit, sparse to the bundle's source
   #  roots: cone mode also brings every file directly under an ancestor
   #  directory, which is how flake.nix, flake.lock and environments/pins.sh

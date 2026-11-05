@@ -23251,8 +23251,11 @@ approval setting for fork pull requests is a second layer, not the control.
 commit, strict against the hardware records; each port's leg checks out
 exactly that commit, takes the artifact by id against its digest, checks
 its file list and provenance, and runs `environments/boards/gate.py`:
-the port's boot check, then its RAM run, the Pico 2's four steps in order,
-one leg at a time under one lock. On a board-scope event the aggregate
+the port's RAM run from the verified fixed image the last run left, then
+its boot check, which restores and verifies that image again, so a board
+rests on its fixed image rather than on a RAM application left running; the
+Pico 2's four steps in order; one leg at a time under one lock. After an
+interrupted run a port first takes a boot check to restore its board. On a board-scope event the aggregate
 fails unless every leg succeeded with the outcome `passed`; physical jobs
 are never reused, so a `main` push that reuses a software pass runs the
 boards fresh, and a `main` run whose boards fail has a failed gate and
@@ -23341,9 +23344,9 @@ between Arm and Hazard3 on that port unattended, and attach a probe
 whatever the boot ROM runs. The port must show no device at all: any device
 it shows stops the run `needs-operator` before an attach or a switch, since
 it means the cable carries data. A power-only cable cannot copy a UF2, so
-`--boot-transport=manual-uf2` is refused with it. The gate runs `rp2350`
-boot, `rp2350` RAM, `rp2350_hazard3` boot and `rp2350_hazard3` RAM and ends
-on the fixed Hazard3 image. For a Pico 2 with a data cable D832's and
+`--boot-transport=manual-uf2` is refused with it. The gate runs
+`rp2350_hazard3` RAM from the resting fixed Hazard3 image, `rp2350` boot,
+`rp2350` RAM and `rp2350_hazard3` boot, and ends on the fixed Hazard3 image. For a Pico 2 with a data cable D832's and
 D901's rules stand, manual UF2 off the cascade among them; malformed-block
 controls stay refused in both arrangements. The maintainer's NixOS
 configuration for rigpi also sets `early_stop` on that port, a backstop no

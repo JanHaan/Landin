@@ -87,7 +87,7 @@ entry that describes it, and put a new one where a reader would look for it.
   through the ROM (D901, D902). A separate boot mode checks ROM packaging
   and a cold start, then restores a fixed image with no application USB
   service; Pico 2 architecture changes are such boot checks. In the gate,
-  `gate.py` runs each port's boot check and then its RAM run on the rig
+  `gate.py` runs each port's RAM run and then its boot check on the rig
   from bundles built for the commit, on every push to `main`, weekly and by
   dispatch, and never for a branch or a pull request; physical evidence is
   never reused, and every run reports one of a fixed set of outcomes

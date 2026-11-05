@@ -358,9 +358,10 @@ word for that cable. With it both Pico 2 tools:
   UF2.
 
 A boot check flashes over SWD as the architecture already running, so it
-also recovers a bad image without UF2. The gate runs `rp2350` boot,
-`rp2350` RAM, `rp2350_hazard3` boot and `rp2350_hazard3` RAM in that order,
-and ends on the fixed Hazard3 image, the board's resting state. The
+also recovers a bad image without UF2. The gate runs `rp2350_hazard3` RAM
+from the resting fixed Hazard3 image, `rp2350` boot, `rp2350` RAM and
+`rp2350_hazard3` boot in that order, and ends on the fixed Hazard3 image,
+the board's resting state. The
 maintainer's NixOS configuration for rigpi also sets `early_stop` on that
 hub port, a backstop the tools do not rely on. Malformed-block controls
 stay refused in this arrangement too.
@@ -446,9 +447,14 @@ the port's `setup` text says what the rig lacks. The gate itself passes
 `--mode`, `--bundle` and `--output`; rig.json may not pass them, nor
 `--record`.
 
-Every port runs its boot check first, which flashes, cold-starts, checks
-the physical oracle and restores the fixed image, then its RAM run from
-that verified image; the Pico 2 runs four steps
+Every port runs its RAM run first, from the verified fixed image the last
+run left, then its boot check, which flashes, cold-starts, checks the
+physical oracle and restores and verifies the fixed image, so the board
+rests on that image rather than on a RAM application left running; a RAM
+application left running for half an hour once left the Pico H answering
+no debug request until its power was cycled. After an interrupted run
+the port's board is in an unknown state, so it begins with a boot check
+as well. The Pico 2 runs four steps
 ([above](#the-pico-2-on-a-power-only-cable)). A RAM run's success never
 establishes power-on, ROM loading or fixed-image restoration, so no port
 runs RAM alone.
@@ -459,7 +465,7 @@ checkout's source, describes the helper, asks probe-rs for its version,
 hashes the probehive runtime, finds the cascade with the Arty off it and
 verifies the bitstream's load record, each for the ports that use them.
 Then it holds the rig lock across all the port's steps, so no other run
-comes between a boot check and its RAM run. It waits at most `--lock-wait`
+comes between its steps. It waits at most `--lock-wait`
 seconds for it, 2700 by default and 1200 in the gate's jobs, then ends
 `rig-busy`, naming the holder.
 

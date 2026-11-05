@@ -179,12 +179,13 @@ class Sequence(unittest.TestCase):
         self.addCleanup(self.temporary.cleanup)
         self.rig = Rig(self.temporary.name)
 
-    def test_a_port_runs_its_boot_check_then_its_ram_run_under_one_lock(self):
+    def test_a_port_runs_its_ram_run_then_its_boot_check_under_one_lock(self):
+        # The boot check comes last, so the board rests on its verified fixed image.
         document, output = self.rig.gate('rp2040')
         self.assertEqual(document['format_version'], 1)
         self.assertEqual(document['outcome'], 'passed')
         self.assertEqual([(s['board'], s['mode'], s['outcome'], s['status']) for s in document['steps']],
-                         [('rp2040', 'boot', 'passed', 'passed'), ('rp2040', 'ram', 'passed', 'passed')])
+                         [('rp2040', 'ram', 'passed', 'passed'), ('rp2040', 'boot', 'passed', 'passed')])
         for step in document['steps']:
             self.assertEqual(step['result'], 'rp2040-%s/result.json' % step['mode'])
             self.assertIsNone(step['failure'])
@@ -206,9 +207,9 @@ class Sequence(unittest.TestCase):
                           provenance['github']['event']), ('41', '2', 'push'))
         self.assertEqual([(b['board'], b['mode'], b['compiler_identity']['sha256'], b['source_identity'])
                           for b in provenance['bundles']],
-                         [('rp2040', 'boot', 'c' * 64, 's' * 64), ('rp2040', 'ram', 'c' * 64, 's' * 64)])
+                         [('rp2040', 'ram', 'c' * 64, 's' * 64), ('rp2040', 'boot', 'c' * 64, 's' * 64)])
         self.assertEqual(provenance['bundles'][0]['manifest_sha256'],
-                         sha((self.rig.bundles / 'rp2040/boot/bundle.json').read_bytes()))
+                         sha((self.rig.bundles / 'rp2040/ram/bundle.json').read_bytes()))
         self.assertEqual(provenance['rig']['sha256'], sha(self.rig.rig.read_bytes()))
         self.assertEqual(provenance['helper']['source_sha256'], 'h' * 64)
         self.assertIn('6f9946fe', provenance['probe_rs']['version'])
@@ -224,32 +225,35 @@ class Sequence(unittest.TestCase):
         self.assertIn('| rp2040 ram | passed |', summary)
 
     def test_the_sequence_stops_at_the_first_step_that_does_not_pass(self):
-        self.rig.environ['GATE_FAKE_RP2040_BOOT'] = 'unavailable'
+        self.rig.environ['GATE_FAKE_RP2040_RAM'] = 'unavailable'
         document, output = self.rig.gate('rp2040')
         self.assertEqual(document['outcome'], 'unavailable')
-        self.assertEqual([s['mode'] for s in document['steps']], ['boot'])
+        self.assertEqual([s['mode'] for s in document['steps']], ['ram'])
         self.assertEqual(document['steps'][0]['failure'], 'fake unavailable')
-        self.assertFalse((output / 'rp2040-ram').exists())
+        self.assertFalse((output / 'rp2040-boot').exists())
         self.assertFalse((self.rig.state / 'runs/rp2040.json').exists(),
                          'a step that ended with its own result completed the sequence')
-        self.assertIn('| rp2040 boot | unavailable |', self.rig.summary.read_text())
+        self.assertIn('| rp2040 ram | unavailable |', self.rig.summary.read_text())
 
     def test_a_step_without_a_result_is_incomplete_and_its_journal_stays(self):
         self.rig.environ['GATE_FAKE_RP2040_RAM'] = 'noresult'
         document, _ = self.rig.gate('rp2040')
         self.assertEqual(document['outcome'], 'incomplete')
-        step = document['steps'][1]
+        step = document['steps'][0]
         self.assertEqual((step['outcome'], step['result'], step['exit_status']), ('incomplete', None, 1))
         self.assertIn('Traceback: the tool died', step['failure'])
         journal = json.loads((self.rig.state / 'runs/rp2040.json').read_text())
         self.assertEqual((journal['port'], journal['step'], journal['board'], journal['mode']),
-                         ('rp2040', 1, 'rp2040', 'ram'))
+                         ('rp2040', 0, 'rp2040', 'ram'))
         self.assertEqual(journal['github']['run_id'], '41')
         self.assertEqual((self.rig.state / 'runs/rp2040.json').stat().st_mode & 0o7777, 0o660)
         del self.rig.environ['GATE_FAKE_RP2040_RAM']
         again, _ = self.rig.gate('rp2040', args=self.rig.args('rp2040', output=self.rig.tmp / 'again'))
-        self.assertEqual(again['outcome'], 'passed')
+        self.assertEqual(again['outcome'], 'passed', (again.get('failure'), again['steps']))
         self.assertEqual(again['previous_interrupted'], journal)
+        # The board's state is unknown, so a boot check restores it first.
+        self.assertEqual([s['mode'] for s in again['steps']], ['boot', 'ram', 'boot'])
+        self.assertEqual([s['output'] for s in again['steps']], ['rp2040-boot', 'rp2040-ram', 'rp2040-boot-2'])
         self.assertFalse((self.rig.state / 'runs/rp2040.json').exists())
 
     def test_a_port_without_probehive_skips_its_pins(self):
@@ -365,8 +369,8 @@ class Refusals(unittest.TestCase):
         rig = json.loads(self.rig.rig.read_text())
         values = dict(probehive='P', ram_loader='L')
         steps, used = GATE.port_steps(rig, 'esp32c3', values)
-        self.assertEqual(steps, [('esp32c3', 'boot', ['--probehive', 'P']),
-                                 ('esp32c3', 'ram', ['--probehive', 'P', '--ram-loader', 'L'])])
+        self.assertEqual(steps, [('esp32c3', 'ram', ['--probehive', 'P', '--ram-loader', 'L']),
+                                 ('esp32c3', 'boot', ['--probehive', 'P'])])
         self.assertEqual(used, {'probehive', 'ram_loader'})
         for change, text in (([dict(board='rp2040', mode='ram', arguments=['{unknown}'])], 'unknown'),
                              ([dict(board='rp2040', mode='ram', arguments=['--output=x'])], 'controls'),
@@ -399,8 +403,8 @@ class Cancellation(unittest.TestCase):
             self.addCleanup(signal.signal, number, handler)
 
     def test_a_signal_reaches_the_running_step_which_records_its_cancellation(self):
-        self.rig.environ['GATE_FAKE_RP2040_BOOT'] = 'wait-signal'
-        ready = self.rig.tmp / 'out-rp2040/rp2040-boot/ready'
+        self.rig.environ['GATE_FAKE_RP2040_RAM'] = 'wait-signal'
+        ready = self.rig.tmp / 'out-rp2040/rp2040-ram/ready'
         errors = []
 
         def cancel():
@@ -421,7 +425,7 @@ class Cancellation(unittest.TestCase):
         step, = document['steps']
         self.assertEqual((step['outcome'], step['exit_status'], step['phase']),
                          ('cancelled', 130, dict(command='flash')))
-        self.assertFalse((output / 'rp2040-ram').exists())
+        self.assertFalse((output / 'rp2040-boot').exists())
         self.assertTrue((self.rig.state / 'runs/rp2040.json').exists(), 'an interrupted run stays journaled')
         self.assertTrue(self.rig.free())
         self.assertIs(signal.getsignal(signal.SIGINT), signal.default_int_handler)

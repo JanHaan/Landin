@@ -22,9 +22,9 @@
   "ports": {
     "rp2040": {
       "steps": [
-        {"board": "rp2040", "mode": "boot",
-         "arguments": ["--probehive", "{probehive}", "--indicator-pin", "IO32", "--ram-loader", "{ram_loader}"]},
         {"board": "rp2040", "mode": "ram",
+         "arguments": ["--probehive", "{probehive}", "--indicator-pin", "IO32", "--ram-loader", "{ram_loader}"]},
+        {"board": "rp2040", "mode": "boot",
          "arguments": ["--probehive", "{probehive}", "--indicator-pin", "IO32", "--ram-loader", "{ram_loader}"]}
       ]
     },
@@ -32,44 +32,44 @@
       "location": {"hub": ".3.3", "port": 2},
       "setup": "Put the Pico 2 on a switchable cascade port through a cable that carries VBUS and ground alone, and set location.hub (relative to the cascade, as .3.3) and location.port; its boot checks and Arm/Hazard3 change then run unattended there.",
       "steps": [
+        {"board": "rp2350_hazard3", "mode": "ram",
+         "arguments": ["--probehive", "{probehive}", "--ram-loader", "{ram_loader}", "--hub", "{hub}", "--port", "{port}", "--power-only"]},
         {"board": "rp2350", "mode": "boot",
          "arguments": ["--probehive", "{probehive}", "--ram-loader", "{ram_loader}", "--hub", "{hub}", "--port", "{port}", "--power-only"]},
         {"board": "rp2350", "mode": "ram",
          "arguments": ["--probehive", "{probehive}", "--ram-loader", "{ram_loader}", "--hub", "{hub}", "--port", "{port}", "--power-only"]},
         {"board": "rp2350_hazard3", "mode": "boot",
-         "arguments": ["--probehive", "{probehive}", "--ram-loader", "{ram_loader}", "--hub", "{hub}", "--port", "{port}", "--power-only"]},
-        {"board": "rp2350_hazard3", "mode": "ram",
          "arguments": ["--probehive", "{probehive}", "--ram-loader", "{ram_loader}", "--hub", "{hub}", "--port", "{port}", "--power-only"]}
       ]
     },
     "stm32h753": {
       "steps": [
-        {"board": "stm32h753", "mode": "boot", "arguments": []},
-        {"board": "stm32h753", "mode": "ram", "arguments": ["--ram-loader", "{ram_loader}"]}
+        {"board": "stm32h753", "mode": "ram", "arguments": ["--ram-loader", "{ram_loader}"]},
+        {"board": "stm32h753", "mode": "boot", "arguments": []}
       ]
     },
     "esp32c3": {
       "steps": [
-        {"board": "esp32c3", "mode": "boot", "arguments": ["--probehive", "{probehive}"]},
-        {"board": "esp32c3", "mode": "ram", "arguments": ["--probehive", "{probehive}", "--ram-loader", "{ram_loader}"]}
+        {"board": "esp32c3", "mode": "ram", "arguments": ["--probehive", "{probehive}", "--ram-loader", "{ram_loader}"]},
+        {"board": "esp32c3", "mode": "boot", "arguments": ["--probehive", "{probehive}"]}
       ]
     },
     "esp32c5": {
       "steps": [
-        {"board": "esp32c5", "mode": "boot", "arguments": []},
-        {"board": "esp32c5", "mode": "ram", "arguments": ["--ram-loader", "{ram_loader}"]}
+        {"board": "esp32c5", "mode": "ram", "arguments": ["--ram-loader", "{ram_loader}"]},
+        {"board": "esp32c5", "mode": "boot", "arguments": []}
       ]
     },
     "esp32": {
       "steps": [
-        {"board": "esp32", "mode": "boot", "arguments": ["--ram-loader", "{ram_loader}"]},
-        {"board": "esp32", "mode": "ram", "arguments": ["--ram-loader", "{ram_loader}"]}
+        {"board": "esp32", "mode": "ram", "arguments": ["--ram-loader", "{ram_loader}"]},
+        {"board": "esp32", "mode": "boot", "arguments": ["--ram-loader", "{ram_loader}"]}
       ]
     },
     "esp32s3": {
       "steps": [
-        {"board": "esp32s3", "mode": "boot", "arguments": ["--ram-loader", "{ram_loader}"]},
-        {"board": "esp32s3", "mode": "ram", "arguments": ["--ram-loader", "{ram_loader}"]}
+        {"board": "esp32s3", "mode": "ram", "arguments": ["--ram-loader", "{ram_loader}"]},
+        {"board": "esp32s3", "mode": "boot", "arguments": ["--ram-loader", "{ram_loader}"]}
       ]
     }
   }

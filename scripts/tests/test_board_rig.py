@@ -71,10 +71,11 @@ class Description(unittest.TestCase):
             for step in port['steps']:
                 self.assertTrue((ROOT / 'environments/boards' / step['board'] / 'board.py').is_file())
             modes = [step['mode'] for step in port['steps']]
-            self.assertEqual(modes, ['boot', 'ram'] * (len(modes) // 2), name)
+            # The boot check comes last, so the board rests on its verified fixed image.
+            self.assertEqual(modes, ['ram', 'boot'] * (len(modes) // 2), name)
         self.assertEqual([(s['board'], s['mode']) for s in rig['ports']['pico2']['steps']],
-                         [('rp2350', 'boot'), ('rp2350', 'ram'),
-                          ('rp2350_hazard3', 'boot'), ('rp2350_hazard3', 'ram')])
+                         [('rp2350_hazard3', 'ram'), ('rp2350', 'boot'),
+                          ('rp2350', 'ram'), ('rp2350_hazard3', 'boot')])
         # The Pico 2 runs on the cascade only through its power-only cable.
         self.assertEqual(rig['ports']['pico2']['location'], dict(hub='.3.3', port=2))
         for step in rig['ports']['pico2']['steps']:

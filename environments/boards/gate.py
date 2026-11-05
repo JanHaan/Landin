@@ -17,11 +17,16 @@ identity, probe-rs's revision, the probehive runtime's pinned files, the
 hub cascade and the Arty, and rig.py's record of the loaded bitstream; each
 refusal ends the run with its outcome.  It then holds the rig lock, waiting
 at most --lock-wait seconds for it, across the whole sequence, so that no
-other run comes between the boot check and the RAM run.  Before each step
-it writes RIG_STATE/runs/PORT.json, and removes it once every step has run
-to its own result: an entry found there says an earlier gate run of the
-port was interrupted, which the outcome keeps as previous_interrupted, and
-for the Pico 2 stops the run for the operator.
+other run comes between its steps.  Each port runs its RAM run first, from
+the verified fixed image the last run left, and its boot check last, so the
+board rests on a freshly restored and verified fixed image rather than on a
+RAM application left running.  Before each step it writes
+RIG_STATE/runs/PORT.json, and removes it once every step has run to its own
+result: an entry found there says an earlier gate run of the port was
+interrupted, which the outcome keeps as previous_interrupted; the board's
+state is then unknown, so the port begins with its boot check, which
+reflashes and restores it, and the Pico 2, whose architecture is unknown
+too, stops the run for the operator.
 
 Each step runs as environments/boards/run.py runs it on the rig,
 `python3 environments/boards/BOARD/board.py --mode=MODE --bundle=...
@@ -194,7 +199,12 @@ class Forwarder:
 
 def run_step(root, board, mode, directory, output, arguments, forwarder, environ):
     """One board tool run; returns its step entry for outcome.json."""
-    name = '%s-%s' % (board, mode)
+    # A step repeated in one run, the boot check that restores a board
+    # after an interrupted run among them, keeps its own output.
+    name, again = '%s-%s' % (board, mode), 1
+    while (output / name).exists() or (output / (name + '.log')).exists():
+        again += 1
+        name = '%s-%s-%d' % (board, mode, again)
     out, log = output / name, output / (name + '.log')
     argv = [sys.executable, str(Path(root) / 'environments/boards' / board / 'board.py'),
             '--mode=' + mode, '--bundle=' + str(directory), '--output=' + str(out), *arguments]
@@ -337,6 +347,9 @@ def run_gate(args, *, root=ROOT, environ=None, state=None, lock_path=None,
                     ' may be left in either architecture or in its boot ROM.  Check it and restore its'
                     ' fixed image by hand, then remove %s' % (json.dumps(previous), journal),
                     NeedsOperator)
+            # A RAM run starts only from the verified fixed image; after an
+            # interruption the boot check restores one first.
+            steps = [step for step in steps if step[1] == 'boot'][:1] + steps
         for index, (board, mode, arguments) in enumerate(steps):
             if forwarder.signals:
                 raise common.Cancelled(forwarder.signals[0])
