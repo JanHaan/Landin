@@ -221,6 +221,11 @@ package Landin.Platform is
       Path   : String;
       Status : out Remove_Status) is abstract;
 
+   procedure Get_Removal_Failure_Reason
+     (Host : Filesystem;
+      Reason : in out Ada.Strings.Unbounded.Unbounded_String) is null;
+   function Removal_Failure_Reason (Host : Filesystem'Class) return String;
+
    --  Entry names only, without the directory prefix, sorted so that two
    --  runs discover fixtures in the same order on any host.
    procedure List_Directory

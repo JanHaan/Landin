@@ -307,11 +307,21 @@ package body Landin.Platform.Native is
          Size : Interfaces.C.size_t) return Interfaces.C.int
         with Import, Convention => C,
              External_Name => "landin_publication_stage_write";
+      function Private_Write
+        (Path, Content : Interfaces.C.char_array;
+         Size : Interfaces.C.size_t) return Interfaces.C.int
+        with Import, Convention => C,
+             External_Name => "landin_private_write";
       Staged : Interfaces.C.int;
    begin
       Staged := Stage_Write
         (Interfaces.C.To_C (Path), Interfaces.C.To_C (Content),
          Content'Length);
+      if Staged = -2 then
+         Staged := Private_Write
+           (Interfaces.C.To_C (Path), Interfaces.C.To_C (Content),
+            Content'Length);
+      end if;
       if Staged /= -2 then
          Status := (if Staged = 0 then Write_Ok else Not_Writable);
          return;
@@ -645,7 +655,18 @@ package body Landin.Platform.Native is
       Status : out Write_Status)
    is
       pragma Unreferenced (Host);
+      use type Interfaces.C.int;
+      function Private_Mkdir (Path : Interfaces.C.char_array)
+         return Interfaces.C.int
+        with Import, Convention => C,
+             External_Name => "landin_private_mkdir";
+      Result : Interfaces.C.int;
    begin
+      Result := Private_Mkdir (Interfaces.C.To_C (Path));
+      if Result /= -2 then
+         Status := (if Result = 0 then Write_Ok else Not_Writable);
+         return;
+      end if;
       if Ada.Directories.Exists (Path) then
          Status :=
            (if Ada.Directories.Kind (Path) = Ada.Directories.Directory
@@ -704,6 +725,19 @@ package body Landin.Platform.Native is
                  elsif Result = 0 then Already_Absent
                  else Not_Removable);
    end Remove_Tree;
+
+   overriding procedure Get_Removal_Failure_Reason
+     (Host : Native_Filesystem;
+      Reason : in out Ada.Strings.Unbounded.Unbounded_String)
+   is
+      pragma Unreferenced (Host);
+      function Last_Reason return Interfaces.C.Strings.chars_ptr
+        with Import, Convention => C,
+             External_Name => "landin_remove_tree_reason";
+   begin
+      Reason := Unbounded.To_Unbounded_String
+        (Interfaces.C.Strings.Value (Last_Reason));
+   end Get_Removal_Failure_Reason;
 
    overriding procedure Lock_Output
      (Host : Native_Filesystem; Path : String; Handle : out Integer)

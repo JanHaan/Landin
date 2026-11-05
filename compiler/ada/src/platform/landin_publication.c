@@ -22,6 +22,9 @@
 #include <sys/syscall.h>
 #endif
 
+int landin_private_open(const char *, int, mode_t);
+int landin_private_parent(const char *, char **, char **);
+
 struct arena {
     int parent, private_fd, recovery_fd, root_fd;
     struct stat parent_id;
@@ -289,6 +292,7 @@ int landin_read_snapshot(const char *path, char **bytes, size_t *size,
 {
     struct stat st;
     int fd = stage_open(path, O_RDONLY | O_NONBLOCK, 0), result = -1;
+    if (fd == -2) fd = landin_private_open(path, O_RDONLY | O_NONBLOCK, 0);
     if (fd == -2) fd = open(path, O_RDONLY | O_CLOEXEC | O_NONBLOCK);
     *bytes = NULL;
     if (fd < 0) return errno == ENOENT ? 1 : -1;
@@ -314,7 +318,9 @@ static int parent_for(const char *path, const char *root, char **parent_path,
                       char **name)
 {
     char *absolute = NULL, *root_abs = NULL, *walk = NULL, *save = NULL, *part;
-    int fd = -1;
+    int fd = landin_private_parent(path, parent_path, name);
+    if (fd != -2) return fd;
+    fd = -1;
     if (!*path) { errno = EINVAL; return -1; }
     char *cwd = getcwd(NULL, 0);
     if (!cwd) return -1;

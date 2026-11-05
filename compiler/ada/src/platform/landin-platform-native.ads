@@ -127,6 +127,10 @@ package Landin.Platform.Native is
       Path   : String;
       Status : out Remove_Status);
 
+   overriding procedure Get_Removal_Failure_Reason
+     (Host : Native_Filesystem;
+      Reason : in out Ada.Strings.Unbounded.Unbounded_String);
+
    overriding procedure Lock_Output
      (Host : Native_Filesystem; Path : String; Handle : out Integer);
    overriding procedure Unlock_Output
