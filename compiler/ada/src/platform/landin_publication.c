@@ -626,7 +626,30 @@ static int retained_workspace(int parent, const char *parent_path,
         if (root >= 0) barrier("discovery-opened", target);
         DIR *records = NULL;
         struct known_name *stage_names = NULL, *recovery_names = NULL;
-        if (root >= 0 && flock(root, LOCK_SH) == 0) records = fdopendir(dup(root));
+        if (root >= 0 && flock(root, LOCK_SH) == 0) {
+            struct stat pinned, named;
+            if (fstat(root, &pinned) == 0 && S_ISDIR(pinned.st_mode)) {
+                int found = fstatat(parent, item->d_name, &named, AT_SYMLINK_NOFOLLOW);
+                /* Finish can remove the empty root before this scanner locks
+                   its retained fd. A zero-link directory has passed rmdir's
+                   emptiness check and cannot receive new entries. Require the
+                   anchored name to be absent too: a replacement, renamed live
+                   root, or uncertain lookup must still be inspected/refused.
+                   FreeBSD fdopendir on this removed fd fails with ENOENT;
+                   Linux/glibc instead presents an ordinary end of directory. */
+                if (pinned.st_nlink == 0 && found < 0 && errno == ENOENT) {
+                    (void)flock(root, LOCK_UN); close(root); continue;
+                }
+                if (pinned.st_nlink > 0 && found == 0
+                    && S_ISDIR(named.st_mode) && same(&pinned, &named)) {
+                    int record_fd = dup(root);
+                    if (record_fd >= 0) {
+                        records = fdopendir(record_fd);
+                        if (!records) close(record_fd);
+                    }
+                }
+            }
+        }
         if (!records) refused = 1;
         struct dirent *record;
         while (records && !refused) {
