@@ -19,11 +19,14 @@ accepted. They record how those approvals were chosen and what they cost.
 | after touching the harness | `./scripts/parallel-equivalence.sh --suite='fixture execution'` | a wider run reaches the same verdicts, byte for byte |
 | before pushing a Darwin change | focused native Mac checks, with LLDB in an appropriate security audit session when affected | native developer feedback; full host/parity/debugger coverage runs in CI |
 | candidate push or pull request | `.github/workflows/gate.yml` | every target unless verified identical-candidate or explanatory-only reuse applies: both compiler modes on Linux x86-64 with GDB, quality and bindings; both on Linux arm64 with GDB and bindings; the host suite, hosted parity and LLDB on macOS arm64; Linux emission followed by separate runtime, LLDB and C ABI verdicts in each FreeBSD architecture's Linux-hosted VM; the RV64 Linux test program under QEMU's user emulation, its physical runtime, GDB, C ABI and ISA-level verdicts on RISE runners suspended until further notice; every QEMU lane on Cortex-M; the editor grammar, the flake, `scripts/tests`, cross-host assembly-manifest comparison and the scaling benchmark |
-| promotion to main | verify the candidate's complete successful gate and promote the unchanged tree | the gate reuses the full candidate pass; documents and script controls still run |
+| physical boards for a candidate | `gh workflow run gate.yml --ref BRANCH -f scope=boards`, by the maintainer | each port's boot check, then its RAM run, on the rig through `environments/boards/gate.py`, with `inputs`, documents and scripts; never a software pass |
+| promotion to main | the [promotion rule](#physical-boards-and-promotion): the candidate's complete software gate, a passed boards dispatch on the identical tree, then main's own push gate followed to its end | the push reuses the full candidate software pass and runs the boards fresh; documents and script controls still run |
 | closing an item | `python3 scripts/activations.py`, then the steps in [closing an item](#closing-an-item) | the register rows whose activation the item's changes met, and the passes only the gate runs that the changes reach |
 
-Every event runs every lane on GitHub-hosted images; the FreeBSD lanes boot
-their VMs inside the job.
+Every software lane runs on GitHub-hosted images; the FreeBSD lanes boot
+their VMs inside the job. Only the physical board legs run on the rig's
+self-hosted runner, and only for a push to `main`, the weekly schedule or a
+manual dispatch.
 See [the runner requirements](environments.md#github-actions-runners) for
 labels, tools and scheduling.
 
@@ -49,6 +52,9 @@ last lane ends, so follow it with `python3 scripts/gate_watch.py`, which
 returns at the first failed job with its step and log command; a pushed fix
 cancels the superseded run. Before promotion, verify the complete job
 listing and the tested tree; a changed merge tree needs its own full pass.
+Promotion also needs a passed boards dispatch on that tree, unless the edit
+is explanatory, and `main`'s own gate followed to its end, as the
+[promotion rule](#physical-boards-and-promotion) says.
 The item may be closed in the candidate itself or after its gate. A closing
 commit made after the branch's full gate that changes only the content of
 `README.md`, `ROADMAP.md`, `handoff.md` and `AGENTS.md`, and says
@@ -59,8 +65,9 @@ its own full gate.
 The [identical-candidate reuse policy](#the-mechanical-gate) compares all
 tracked bytes, paths and modes, including workflow definitions and tool pins, with
 a recent complete successful push run from this repository. It never uses
-local filtered transcripts or build caches as test evidence. Manual dispatch
-requests a fresh full matrix. Superseded runs on a branch are cancelled.
+local filtered transcripts or build caches as test evidence. A manual
+dispatch of scope `full` requests a fresh full matrix and the boards.
+Superseded runs on a branch are cancelled.
 
 The [explanatory-only remote reuse policy](#the-mechanical-gate) permits
 qualifying edits to reuse a complete successful push run, of main or of a
@@ -366,15 +373,26 @@ Within an authorized run, use that board's documented tool, current device
 identity and physical oracle; do not repeat permission questions for actions
 the brief already authorizes.
 
-All sessions using the rig must go through the same rig host/operator and
-the common lock in `environments/boards/common.py`, `RigLock`, whose default
-is `~/.cache/landin/rig.lock`. The board tools hold it for their hardware
-phase. An adjacent tool without that protection must join the same lock
-on the rig host before accessing hardware. Separate per-worktree locks,
-different user homes or a lock on a remote agent's machine do not serialize
-the rig. Different boards and probehive slots still share hub power and
-probe/bridge resources; the current protocol serializes their hardware
-phases even when compilation proceeds in parallel.
+All sessions using the rig, the gate's runner among them, must go through
+the same rig host/operator and the common lock in
+`environments/boards/common.py`, `RigLock`: `rig.lock` in the rig's shared
+state, which is `/var/lib/landin-rig` on rigpi. `LANDIN_RIG_STATE`
+overrides that directory, and a host without either uses
+`~/.cache/landin`. On rigpi the directory's group `rig` is shared by the
+maintainer and the runner's `landin-rig` user, so a manual run and a CI
+run take one lock and see one USB stop. The board tools hold the lock for
+their hardware phase, and `environments/boards/gate.py` across a port's
+whole boot-then-RAM sequence. A manual run waits for a CI leg as for any
+other holder; a CI leg waits 1200 seconds, then ends `rig-busy` naming the
+holder, which fails its gate. While the shared directory is used, a held
+`~/.cache/landin/rig.lock` stops a run `needs-operator`, since an older
+tool would hold that one. An adjacent tool without that protection must join
+the same lock on the rig host before accessing hardware. Separate
+per-worktree locks, a lock in another directory or a lock on a remote
+agent's machine do not serialize the rig. Different boards and probehive
+slots still share hub power and probe/bridge resources; the current
+protocol serializes their hardware phases even when compilation proceeds in
+parallel.
 
 Name the operator, boards, slots, consoles and affected power domain in
 the handoff. Verify the live serials and topology against local rig notes
@@ -386,8 +404,15 @@ the owner's coordinated handoff. Waiting for hardware does not prevent
 independent source work or CI.
 
 Close run-scoped connections and processes and release the lock on
-completion or cancellation. Preserve shared services that the board recipe
-leaves running, and hand off their owner and state. Report the rig's
+completion or cancellation. A board tool cancelled by SIGINT or SIGTERM,
+which is how GitHub cancels a job, does this itself: it stops at its next
+point, lets a power cycle or download under way finish, skips a fixed-image
+restoration it has not begun and records it pending for the port's next
+boot check,
+releases the lock and records the outcome `cancelled` with the signal and
+the phase. The [boards guide](../environments/boards/README.md#what-a-run-reports)
+lists every outcome a run reports. Preserve shared services that the board
+recipe leaves running, and hand off their owner and state. Report the rig's
 resulting state; a waiting session's silence is not a release. Retain the
 compiler/source/image identities, logs, oracle verdict
 and board record; evidence from one stream must match the inputs being
@@ -515,7 +540,8 @@ nix build .#refine-bin
 ## The mechanical gate
 
 `.github/workflows/gate.yml` is the mechanical gate, and it runs on every
-push and pull request. A new candidate runs every target the compiler has,
+push and pull request, weekly on `main` and on a manual dispatch. A new
+candidate runs every target the compiler has,
 in jobs that report separate verdicts. RV64 runs under QEMU's user
 emulation on an x86-64 runner, which is evidence about its emitted code and
 none about RV64 hardware; its jobs on RISE's physical runners stay skipped
@@ -524,7 +550,8 @@ or the explanatory-only exception below may reuse a full pass. Compiler
 builds supply checked executables to their same-host consumers, including
 the debug compilers used for cross-host determinism. The final `gate` job requires every build and verification
 job, including cross-host determinism, to succeed or be skipped under verified
-reuse; document and script checks must always succeed.
+reuse or the event's scope; document and script checks must always succeed,
+and on a board-scope event so must every physical board leg.
 
 A branch push or same-repository pull request by an author with write access
 may reuse a complete successful push run from this repository from the
@@ -535,9 +562,13 @@ The complete GitHub job listing must contain every required matrix leg with
 success; filtered local runs, cache entries, incomplete listings and runs
 that themselves reused evidence cannot supply this pass. Main promotion
 therefore does not repeat a candidate's full matrix when its tree is unchanged.
-Manual dispatch always runs the full matrix. Superseded pushes to a branch
-and updates to a pull request are cancelled; manual runs have independent
-concurrency groups, and unrelated forks' pull requests cannot cancel each other.
+A manual dispatch of scope `full`, the default, runs the full matrix and the
+boards. Superseded pushes to a branch and updates to a pull request are
+cancelled. A manual dispatch, a push to `main` and the schedule each have a
+concurrency group of their own, so none of them cancels another: a shared
+group would still cancel its pending run when a third arrived, whatever
+`cancel-in-progress` says. Unrelated forks' pull requests cannot cancel
+each other.
 
 A declared explanatory edit confined to the content of `README.md`,
 `ROADMAP.md`, `handoff.md` and `AGENTS.md` may reuse a complete successful
@@ -579,7 +610,7 @@ still succeed. The linked full run contains the target-test results.
 | `build-modes` matrix | `ubuntu-24.04` | the debug and the release compiler of one tree emit the positive and runtime corpora, the firmware corpus and the Cortex-M counterparts at the four standard profiles and must agree byte for byte: Linux x86-64 and RV32 in `build-modes-1`, Linux arm64 and Cortex-M in `build-modes-2`; `build-modes-1` also compares both Xtensa configurations |
 | `bindings` | `ubuntu-24.04` | `refine bindings`, with the debug compiler `linux-debug-build` made, against its pinned Clang |
 | `editor-grammar` | `ubuntu-24.04` | the structural grammar's integration pass with the pinned tree-sitter CLI |
-| `flake` | `ubuntu-24.04` | `nix build .#refine .#refine-bin`, the native and Pi board RAM helpers built (including native Rust controls), every flake output of every system evaluated and the development shell entered, on every run that does not reuse a pass, manual dispatch included (D585) |
+| `flake` | `ubuntu-24.04` | `nix build .#refine .#refine-bin`, the native and Pi board RAM helpers built (including native Rust controls), every flake output of every system evaluated and the development shell entered, on every run that does not reuse a pass, a full-scope dispatch included (D585) |
 | `cortex-m` matrix | `ubuntu-24.04` | every Cortex-M and RV32 lane on the locked QEMU and GDB, at `LANDIN_CORTEX_JOBS=4`, as `run.py`'s three parts, which together are every lane once: the probes, firmware, device programs and debug evidence in `cortex-m-programs`, which also builds all eight board ports in boot and RAM layouts without hardware and keeps their build/drift evidence and the stack-switch consumer's capacity report (D470); the whole corpus on the M0, the M33 and the M7 in `cortex-m-corpus`; and the RV32 controls and corpora on Espressif's QEMU in `cortex-m-rv32` |
 | `xtensa` matrix | `ubuntu-24.04` | `xtensa-esp32` and `xtensa-esp32s3` each run bounded chip-machine window, scalar, floating, assembly and completion-oracle controls, independent vendor-C layout/carrier probes, strict configured-assembler and baseline compatibility controls, plus the complete freestanding inventory on the pinned Espressif QEMU's `sim` machine with the exact selected CPU and explicitly virtual RAM; logs and per-fixture verdicts are retained |
 | `scaling` | `ubuntu-24.04` | `scripts/scaling.sh`, failing when frontend time, emission time or peak memory grows more than 2.5 times per doubling, or when a compact static image's assembly, object or assembler memory outgrows its bound |
@@ -598,11 +629,14 @@ still succeed. The linked full run contains the target-test results.
 | `rv64-qemu` matrix | `ubuntu-24.04` | the release compiler's whole test program on the Linux RV64 lane in two `--shard` jobs, `rv64-qemu-1` and `rv64-qemu-2`, linked by Ubuntu's riscv64 cross driver and run under the flake's pinned `qemu-riscv64`, its CPU's every level confirmed; the emulator's own failures listed in `compiler/tests/cross-lanes.json` are reported and not counted; the first shard also runs the RV64 GDB sessions, the stack switch's among them, under the same emulator's GDB stub |
 | `rv64-emit` matrix | `ubuntu-24.04` | suspended since 2026-10-13 and not required by `gate`; when running, cross-emit checked RV64 runtime, GDB, C ABI and ISA payloads for RISE; source/hash checks, invalid IR register regression and instruction inspection |
 | `rv64-runtime`, `rv64-debugger`, `rv64-abi`, `rv64-isa` | ubuntu-24.04-riscv | suspended since 2026-10-13 and not required by `gate`; when running, separate corpus, native GDB, nonempty independent C peers and hardware-confirmed baseline/extended ISA execution on physical RISE runners |
+| `board-bundles` | `ubuntu-24.04` | on a board-scope event only, whatever the software lanes reuse: the release compiler built from the commit, every board's boot and RAM bundles by `environments/boards/build.py --mode=both --records=strict`, so drift from a hardware record fails before a board runs, and one 14-day artifact with `provenance.json` and `files.sha256`; never reused |
+| `board` matrix | `[self-hosted, landin-rig]` | `board-rp2040`, `board-pico2`, `board-stm32h753`, `board-esp32c3`, `board-esp32c5`, `board-esp32` and `board-esp32s3`, one at a time on the rig's one runner: a sparse checkout of the exact commit, the bundles downloaded by artifact id against their digest, their file list and provenance checked, then `environments/boards/gate.py --lock-wait=1200`, each port's boot check and then its RAM run; 50 minutes a leg, 70 for the Pico 2's four steps; each leg's evidence, `board-evidence-PORT`, kept 90 days, also after a failure or a cancellation; never reused |
 | `determinism` | `ubuntu-24.04`, `ubuntu-24.04-arm`, `macos-26` | the called workflow emits the fixture manifest for all nine targets on each host in two jobs of four and five targets, including both Xtensa levels, joins each host's parts and compares the three, starting once the three debug builds succeed rather than after their suites |
 
 Linux and Darwin lanes run on GitHub-hosted images for every event, as do
 the called determinism workflow and the links, Pages and release workflows;
 the registered runners measured slower and are no longer selected. The
+board legs alone run on the self-hosted rig runner described below. The
 FreeBSD lanes boot their VMs inside the hosted job, arm64 under emulation
 because GitHub's arm64 images offer no KVM. See [the runner environment requirements](environments.md#github-actions-runners).
 
@@ -679,9 +713,10 @@ containers, Linux workload emission or repeated complete suites on the Mac as
 routine feedback. Run changed-component tests while editing, then push the
 final candidate to a branch for one complete CI matrix. Do not repeat the
 complete local matrix merely before pushing and watching the same CI tests.
-Before promoting the candidate to main, verify its complete gate succeeded
-and that the promoted tree is the one tested; merge changes require new
-evidence. A full local run remains useful when an investigation requires it,
+Before promoting the candidate to main, verify its complete gate succeeded,
+that a boards dispatch passed on the same tree unless the edit is
+explanatory, and that the promoted tree
+is the one tested; merge changes require new evidence. A full local run remains useful when an investigation requires it,
 and is not a substitute for the multi-host gate.
 After documentation changes run the full `python3 check.py` and review the
 prose against what it describes. The explanatory reuse exception does not
@@ -727,6 +762,63 @@ tree keeps `bin/`: executables are linked into `link/` and published into
 `bin/` by a rename, only while no corpus lane or manifest run holds the
 build's readers lock (`scripts/build_lock.py`). A compiler-only build records `refine` as current without claiming that
 `landin_tests` is current; the next full build still builds the test program.
+
+### Physical boards and promotion
+
+A board-scope event is a push to `main`, the weekly schedule at 04:00 UTC
+on Mondays, or a manual dispatch, in this repository only;
+`scripts/gate_inputs.py scope` decides it from the event. On such an event
+`board-bundles` and every board leg run whether or not the software lanes
+reuse a pass, and the aggregate requires each of them to succeed and every
+port's outcome to be `passed`. A skipped, cancelled or failed leg, a leg
+that never reached the rig, and any other outcome, `rig-busy`,
+`needs-setup` and `unavailable` among them, fail the gate: missing physical
+evidence is not a pass. On every other event, a branch push or a pull
+request, the board jobs must be skipped, and the gate's summary says
+"physical boards: not run for this event". A green gate there is software
+evidence only.
+
+A dispatch of scope `boards`, and the schedule, run `inputs`, `documents`,
+`scripts`, `board-bundles` and the board legs and no software lane. Their
+run is named "gate: boards only", their summary says "boards only: no
+software lanes", and they never supply a software pass, because reuse takes
+only push runs whose every software job ran and succeeded. Physical jobs are
+never reused: `gate_inputs.py`'s `PHYSICAL` keeps them out of the reuse
+list, so a main push that reuses its candidate's software pass still runs
+the boards fresh. A main run whose boards fail has a failed gate, and so
+cannot serve as a reuse base.
+
+The board legs run on one non-ephemeral GitHub Actions runner on rigpi,
+labelled `landin-rig` alone, as the system user `landin-rig`. That user is
+in the groups `dialout`, `systemd-journal` and `rig`, and has no wheel or
+sudo, no SSH keys and no secrets. The runner was registered once with a
+one-hour registration token, and is configured in the maintainer's NixOS
+configuration for rigpi, not in this repository. A pull request from a fork
+runs its own workflow files, so no `if:` in `gate.yml` keeps it off the
+runner. The control is the runner's job-started hook,
+[`environments/rig-runner/hook.py`](../environments/rig-runner/README.md),
+which accepts only a push to `main`, a schedule on `main` or a dispatch
+from a branch by the maintainer, each of `gate.yml` at the run's own ref
+with no pull request in its environment or payload. GitHub fails a job
+whose pre-job script exits nonzero before any of its steps
+([running scripts before or after a job](https://docs.github.com/en/actions/how-tos/manage-runners/self-hosted-runners/run-scripts)),
+so nothing from a refused job's checkout runs on the rig. The repository's
+setting for approving fork pull requests, the maintainer's and recommended
+at all external contributors, is a second layer. The board jobs read no
+secret, and their token can only read the contents and the actions.
+
+A candidate reaches `main` in three steps:
+
+1. Its complete software push gate passes on its branch.
+2. A dispatch of scope `boards` passes on the identical tree,
+   `gh workflow run gate.yml --ref BRANCH -f scope=boards`. An edit declared
+   `Gate: explanatory` skips this step; its main push still runs the boards.
+3. `main`'s own push gate, with its fresh boards, is followed to its end.
+   A failure there is investigated, never rerun blindly.
+
+An unavailable rig blocks promotion. A RAM run's success never establishes
+power-on, ROM loading or fixed-image restoration, so every leg runs each
+port's boot check before its RAM run.
 
 ### Proving a change emits the same bytes
 

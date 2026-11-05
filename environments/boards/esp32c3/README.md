@@ -38,8 +38,9 @@ needed to capture the ROM's complete log.
 
 Build tools are needed on the build host; consuming a checked bundle on
 rigpi uses its matching tool sources and prepared metadata. Hardware work
-holds the common rig lock, `~/.cache/landin/rig.lock`, after the build and
-through final readback/restoration. Preserve the USB guard, protected Arty
+holds the common rig lock, `rig.lock` in the rig's shared state,
+`/var/lib/landin-rig` on rigpi, after the build and through final
+readback/restoration. Preserve the USB guard, protected Arty
 and shared pacing state described in the [board guide](../README.md).
 
 Boot power uses hub `.3.4`, port 2 (front port 7), guarded by port 1's

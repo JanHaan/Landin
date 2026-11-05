@@ -37,8 +37,9 @@ through the board's auto-reset transistors.
 
 Build tools are needed on the build host; consuming a checked bundle on
 rigpi uses its matching tool sources and prepared metadata. Hardware work
-holds the common rig lock, `~/.cache/landin/rig.lock`, after the build and
-through final readback/restoration. Preserve the USB guard, protected Arty
+holds the common rig lock, `rig.lock` in the rig's shared state,
+`/var/lib/landin-rig` on rigpi, after the build and through final
+readback/restoration. Preserve the USB guard, protected Arty
 and shared pacing state described in the [board guide](../README.md).
 
 Either USB-C port powers the board. Boot checks therefore switch both:

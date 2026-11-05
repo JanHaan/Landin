@@ -23179,6 +23179,8 @@ cascade: install and verify the intended architecture's fixed image before
 repeated RAM runs on that architecture. One resident image does not promise
 a ROM-free switch between Arm and Hazard3. Boot and corrupted-image work
 also stays off the cascade; probe attachment in BOOTSEL is always refused.
+D906 lets a Pico 2 on a power-only cable do its boot checks and its
+architecture change on the cascade.
 Hardware USB-JTAG remains available on the ESP chips. Every hardware
 phase still holds the host rig lock and stops
 on kernel USB trouble. Runs record their mode, input identities, elapsed
@@ -23220,6 +23222,142 @@ unpushed tree; or automatically refreshing a hardware record from a build.
 
 **Pinned by** `scripts/tests/test_board_build.py`,
 `scripts/tests/test_board_bundle.py` and `scripts/tests/test_board_run.py`.
+
+### D904 — Physical boards run in the gate on trusted events only, and their evidence is never reused
+
+**The tour said** nothing about where physical evidence comes from; D901
+and D902 made boot checks and RAM runs the closing evidence of a board
+item, run by hand from the maintainer's host.
+
+**Chosen:** `gate.yml` runs every supported board port on the maintainer's
+rig through one non-ephemeral GitHub Actions runner on rigpi, labelled
+`landin-rig` alone and run as a system user with the device groups and no
+privilege, keys or secrets, registered once with a one-hour registration
+token and configured in the maintainer's NixOS configuration for rigpi. Its board-scope events are a
+push to `main`, a weekly schedule on `main` and a manual dispatch, in this
+repository only; a dispatch's `scope` is `full`, every software lane and
+the boards, or `boards`, the boards with the inputs, document and script
+jobs. A branch push or pull request never reaches the rig, and its green
+gate is software evidence only. A fork's pull request runs its own
+workflow files, so a workflow's `if:` is no control: the runner's
+job-started hook, `environments/rig-runner/hook.py`, refuses before any
+step every job but a push or schedule on `main` or a dispatch from a
+branch by an allowed actor, each of `gate.yml` at the run's ref with no
+pull request in its environment or payload. GitHub fails a job whose
+pre-job script exits nonzero before its first step. The repository's
+approval setting for fork pull requests is a second layer, not the control.
+
+`board-bundles` builds the release compiler and every bundle from the
+commit, strict against the hardware records; each port's leg checks out
+exactly that commit, takes the artifact by id against its digest, checks
+its file list and provenance, and runs `environments/boards/gate.py`:
+the port's boot check, then its RAM run, the Pico 2's four steps in order,
+one leg at a time under one lock. On a board-scope event the aggregate
+fails unless every leg succeeded with the outcome `passed`; physical jobs
+are never reused, so a `main` push that reuses a software pass runs the
+boards fresh, and a `main` run whose boards fail has a failed gate and
+serves as no reuse base. A candidate is promoted after its complete
+software gate and a passed boards dispatch on the identical tree, which a
+declared explanatory edit skips; `main`'s own push gate is then followed to
+its end, its failure investigated rather than rerun, and an unavailable rig
+blocks promotion.
+
+**The alternatives:** a runner on the build host, which holds the
+maintainer's keys; an ephemeral runner, whose registration needs a stored
+token with administration rights while the rig itself persists between
+jobs anyway; `if:` conditions as the boundary; boards on every branch push;
+reusing a candidate's board evidence at promotion; and promotion that lets
+missing hardware evidence pass as debt.
+
+**Pinned by** `scripts/tests/test_rig_runner_hook.py`, which holds the hook
+to simulated pushes, schedules, dispatches, pull requests and forks;
+`scripts/tests/test_gate_inputs.py`, which holds `gate.yml`'s scope, the
+physical jobs outside the reuse list, the board matrix and the aggregate's
+verdict; and `scripts/tests/test_board_gate.py`'s `Sequence`.
+
+### D905 — A board run reports one outcome, stops cleanly when cancelled, and shares one rig state
+
+**The tour said** nothing; a board tool's `result.json` said `passed` or
+`failed`, and each user's run kept its lock and pace in its own home.
+
+**Chosen:** every board tool's `result.json` keeps its `status` and adds
+an `outcome`, one of `passed`, `failed`, `usb-stopped`, `unavailable`,
+`rig-busy`, `rig-tool-mismatch`, `needs-setup`, `needs-operator` and
+`cancelled`, each refusal naming its own; `gate.py` adds `incomplete` for a
+step that left no readable result. A cancellation or USB stop outranks any
+other outcome, and of the rest the first specific one is kept. A preflight
+refusal is still written as a result under `--output`. SIGINT or SIGTERM
+stops a tool at its next point; a power cycle or download under way
+finishes first, a fixed-image restoration not yet begun is skipped and
+recorded pending, since it outlasts a cancelling runner's grace and the
+next boot check restores the board anyway, and the tool releases the lock
+and records `cancelled` with the signal and the phase reached. `gate.py`
+writes `runs/PORT.json` before each step and removes it only when every
+step ended with its own result: a later run keeps a leftover entry as
+`previous_interrupted` and begins with the boot check, except the Pico 2's,
+which stops `needs-operator`.
+
+The rig's state is one directory, `/var/lib/landin-rig` on rigpi when it
+exists, `LANDIN_RIG_STATE` when set, the home's `~/.cache/landin`
+otherwise: the lock, the pace, the journal, the bitstream's load record,
+the probehive runtime and the helper's link. Its group is shared by the
+maintainer and the runner's user, its files are made 0660 and its
+directories setgid 2770, and a held lock in the home's old place stops a
+run `needs-operator`. A board tool waits for the lock without end; `gate.py`
+waits a bounded time and ends `rig-busy`. The loaded bitstream cannot name
+itself, its LiteX identifier being the constant `probehive`, so
+`environments/boards/rig.py` records each load with the Pi's boot id and the
+Arty's enumeration, and the gate accepts the record only while both are
+unchanged.
+
+**The alternatives:** a pass/fail status alone, which leaves a busy rig,
+a stale tool and a broken board indistinguishable; restoring the fixed image
+inside the cancellation grace, which a kill would cut short; a lock per
+user, which lets a CI run and a manual one overlap; and trusting the
+bitstream file's hash as the loaded one's.
+
+**Pinned by** `scripts/tests/test_board_common.py`'s `SharedState`,
+`BoundedLock`, `Outcomes` and `Cancellation`;
+`scripts/tests/test_board_gate.py`'s `Refusals` and `Cancellation`; and
+`scripts/tests/test_board_rig.py`.
+
+### D906 — A power-only Pico 2 boots and changes architecture on the cascade
+
+**The tour said** nothing. D832 and D901 kept every Pico 2 boot check,
+architecture change and corrupted-image control off the cascade and
+refused every probe attach in BOOTSEL, because a BOOTSEL Pico 2, or the
+boot ROM's USB that probe-rs's RP235x download reset leaves halted, failed
+enumeration until the host's xHCI controller died; and the Pi's only
+other ports share the cascade's controller, so off the cascade meant the
+operator's manual UF2 transport.
+
+**Chosen:** on the rig the Pico 2 hangs from the cascade's hub `.3.3`, port
+2, through a cable carrying VBUS and ground alone, which `rig.json` names.
+Its SWD and UART are probehive's and its fixed images are USB-silent, so it
+needs no USB data, and without data lines neither BOOTSEL nor the halted
+ROM ever reaches a host controller. With `--power-only`, the maintainer's
+word for that cable, both Pico 2 tools run boot checks and the change
+between Arm and Hazard3 on that port unattended, and attach a probe
+whatever the boot ROM runs. The port must show no device at all: any device
+it shows stops the run `needs-operator` before an attach or a switch, since
+it means the cable carries data. A power-only cable cannot copy a UF2, so
+`--boot-transport=manual-uf2` is refused with it. The gate runs `rp2350`
+boot, `rp2350` RAM, `rp2350_hazard3` boot and `rp2350_hazard3` RAM and ends
+on the fixed Hazard3 image. For a Pico 2 with a data cable D832's and
+D901's rules stand, manual UF2 off the cascade among them; malformed-block
+controls stay refused in both arrangements. The maintainer's NixOS
+configuration for rigpi also sets `early_stop` on that port, a backstop no
+tool relies on.
+
+**The alternatives:** a gate leg that reports `needs-setup` until another
+controller exists; operator-assisted manual UF2 counted as unattended
+evidence; RAM-only Pico 2 evidence, or one architecture only; and a second
+Pico 2 resident in each architecture, which removes the change from the
+gate without removing the need for a cold start on the cascade.
+
+**Pinned by** `scripts/tests/test_board_rp2350.py`'s power-only controls,
+`scripts/tests/test_board_rig.py` and `scripts/tests/test_board_gate.py`'s
+`Refusals`.
 
 ### D725 — Every board run holds the rig's lock and paces what disconnects a device
 
@@ -23272,7 +23410,15 @@ until it is acknowledged (D835), and waits only for what it needs, the hub
 listing again, `common.wait_for_hub`, and the device it acts on present;
 `--spacing` and `--quiet` remain options, zero by default.
 
-**Pinned by** `scripts/tests/test_board_common.py`'s `RigLock` and `Pace`.
+**Amended for the shared rig state (D905):** the lock is no longer in each
+user's home. `common.rig_lock` holds `rig.lock` in the rig's shared state,
+`/var/lib/landin-rig` on rigpi, which `LANDIN_RIG_STATE` overrides and
+`~/.cache/landin` replaces on a host without it, so that the gate's runner
+user and the maintainer serialize on one lock and see one pace; a held lock
+in the old place stops a run for the operator.
+
+**Pinned by** `scripts/tests/test_board_common.py`'s `RigLock`, `Pace`,
+`SharedState` and `BoundedLock`.
 
 ### D726 — An ESP port resets its RX FIFO on an overflow and drains nothing of it
 
