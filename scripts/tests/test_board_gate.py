@@ -289,6 +289,9 @@ class Refusals(unittest.TestCase):
         return document
 
     def test_the_pico_2_without_a_boot_path_needs_setup_before_anything_else(self):
+        description = json.loads(self.rig.rig.read_text())
+        description['ports']['pico2']['location'] = dict(hub=None, port=None)
+        self.rig.rig.write_text(json.dumps(description))
         self.refused('pico2', 'needs-setup', 'leaves its hub, port null')
         self.assertEqual(self.rig.validated, [])
 

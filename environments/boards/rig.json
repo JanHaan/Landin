@@ -29,7 +29,7 @@
       ]
     },
     "pico2": {
-      "location": {"hub": null, "port": null},
+      "location": {"hub": ".3.3", "port": 2},
       "setup": "Put the Pico 2 on a switchable cascade port through a cable that carries VBUS and ground alone, and set location.hub (relative to the cascade, as .3.3) and location.port; its boot checks and Arm/Hazard3 change then run unattended there.",
       "steps": [
         {"board": "rp2350", "mode": "boot",
