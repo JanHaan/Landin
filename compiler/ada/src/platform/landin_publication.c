@@ -21,14 +21,15 @@
 #endif
 
 struct arena {
-    int parent, private_fd;
+    int parent, private_fd, recovery_fd, root_fd;
     struct stat parent_id;
-    char *path, *name;
+    char *path, *name, *recovery_path;
     unsigned refs;
     struct arena *next;
 };
 struct publication {
     int token, absent, deletion, captured, installed, unchanged, finished;
+    int rollback_pending;
     struct arena *arena;
     char *path, *name, *stage, *recovery, *rollback;
     struct stat expected, fresh;
@@ -447,9 +448,29 @@ static struct arena *arena_for(int parent, const char *path)
     if (mkdirat(parent, leaf, 0700) != 0) { free(a->path); free(a); return NULL; }
     snprintf(a->path, n, "%s/%s", path, leaf);
     a->name = strdup(strrchr(a->path, '/') + 1);
-    a->private_fd = openat(parent, a->name,
-                          O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
-    if (a->private_fd < 0) { free(a->name); free(a->path); free(a); return NULL; }
+    a->root_fd = openat(parent, a->name,
+                        O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+    if (a->root_fd < 0) { free(a->name); free(a->path); free(a); return NULL; }
+    if (mkdirat(a->root_fd, "stage", 0700) != 0
+        || mkdirat(a->root_fd, "recovery", 0700) != 0) {
+        close(a->root_fd); free(a->name); free(a->path); free(a); return NULL;
+    }
+    a->private_fd = openat(a->root_fd, "stage",
+                           O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+    a->recovery_fd = openat(a->root_fd, "recovery",
+                            O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+    if (a->private_fd < 0 || a->recovery_fd < 0) {
+        if (a->private_fd >= 0) close(a->private_fd);
+        if (a->recovery_fd >= 0) close(a->recovery_fd);
+        close(a->root_fd); free(a->name); free(a->path); free(a); return NULL;
+    }
+    a->recovery_path = malloc(n);
+    if (!a->recovery_path) {
+        close(a->private_fd); close(a->recovery_fd); close(a->root_fd);
+        free(a->name); free(a->path); free(a); return NULL;
+    }
+    snprintf(a->recovery_path, n, "%s/recovery", a->path);
+    strcat(a->path, "/stage");
     a->parent = parent; a->parent_id = st; a->refs = 1;
     a->next = arenas; arenas = a;
     return a;
@@ -545,10 +566,11 @@ int landin_publication_step(int token, int action, const char *const *paths,
 {
     struct publication *p = lookup(token);
     struct stat st;
-    int parent, private_fd;
+    int parent, private_fd, recovery_fd;
     reason(why, room, "");
     if (!p || p->finished) return 0;
     parent = p->arena->parent; private_fd = p->arena->private_fd;
+    recovery_fd = p->arena->recovery_fd;
     if (action <= 2 && landin_cancellation_requested()) { errno = EINTR; goto fail; }
     if (action == 0) {
         if (p->deletion) return 0;
@@ -571,28 +593,31 @@ int landin_publication_step(int token, int action, const char *const *paths,
         barrier("validated", p->path); return 0;
     }
     if (action == 1) {
+        if (p->captured || p->installed || p->rollback_pending) {
+            errno = EALREADY; goto fail;
+        }
         if (path_count && landin_overlaps_any(p->path, paths, path_count) != 0) {
             reason(why, room, "%s aliases a protected input name; choose another output",
                    p->path); return -1;
         }
         barrier("before-capture", p->path);
-        if (renameat(parent, p->name, private_fd, p->recovery) != 0) {
+        if (renameat(parent, p->name, recovery_fd, p->recovery) != 0) {
             if (errno == ENOENT && p->absent) return 0;
             goto fail;
         }
         p->captured = 1;
         barrier("captured", p->path);
-        if (fstatat(private_fd, p->recovery, &st, AT_SYMLINK_NOFOLLOW) != 0
+        if (fstatat(recovery_fd, p->recovery, &st, AT_SYMLINK_NOFOLLOW) != 0
             || p->absent || !same(&st, &p->expected)
             || protected_object(&st, paths, path_count, ids, count)
             || (S_ISREG(st.st_mode)
-                && !matches_bytes(private_fd, p->recovery, p->bytes, p->size))
+                && !matches_bytes(recovery_fd, p->recovery, p->bytes, p->size))
             || (!S_ISREG(st.st_mode) && !S_ISDIR(st.st_mode))) {
             reason(why, room, "%s changed or aliases an input; rerun or choose another output; recovery %s/%s",
-                   p->path, p->arena->path, p->recovery); return -1;
+                   p->path, p->arena->recovery_path, p->recovery); return -1;
         }
         if (p->expected_tree) {
-            struct tree_entry *captured = snapshot_entry(private_fd, p->recovery);
+            struct tree_entry *captured = snapshot_entry(recovery_fd, p->recovery);
             int matches = captured && equal_tree(p->expected_tree, captured, 1)
                 && !protected_tree(captured, paths, path_count, ids, count);
             free_tree(captured);
@@ -604,7 +629,7 @@ int landin_publication_step(int token, int action, const char *const *paths,
         if (p->deletion) return 0;
         barrier("before-install", p->path);
         if (p->unchanged) {
-            if (no_replace(private_fd, p->recovery, parent, p->name,
+            if (no_replace(recovery_fd, p->recovery, parent, p->name,
                            S_ISDIR(p->expected.st_mode)) != 0) goto fail;
             p->captured = 0; return 0;
         }
@@ -617,28 +642,33 @@ int landin_publication_step(int token, int action, const char *const *paths,
         return 0;
     }
     if (action == 3) {
+        if (p->rollback_pending) { errno = EALREADY; goto fail; }
         if (p->installed) {
             barrier("before-rollback-capture", p->path);
-            if (renameat(parent, p->name, private_fd, p->rollback) != 0) {
+            if (renameat(parent, p->name, recovery_fd, p->rollback) != 0) {
                 if (errno != ENOENT) goto fail;
             } else {
-                if (fstatat(private_fd, p->rollback, &st, AT_SYMLINK_NOFOLLOW) != 0)
+                p->rollback_pending = 1;
+                barrier("rollback-captured", p->path);
+                if (fstatat(recovery_fd, p->rollback, &st, AT_SYMLINK_NOFOLLOW) != 0)
                     goto fail;
                 if (!same(&st, &p->fresh)) {
-                    if (no_replace(private_fd, p->rollback, parent, p->name,
+                    if (no_replace(recovery_fd, p->rollback, parent, p->name,
                                    S_ISDIR(st.st_mode)) != 0) goto fail;
+                    p->rollback_pending = 0;
                     errno = EAGAIN; goto fail;
                 }
                 if (S_ISDIR(st.st_mode)) {
-                    if (!p->fresh_tree || discard_tree(private_fd, p->rollback,
+                    if (!p->fresh_tree || discard_tree(recovery_fd, p->rollback,
                                                         p->fresh_tree) != 0) goto fail;
-                } else if (unlinkat(private_fd, p->rollback, 0) != 0) goto fail;
+                } else if (unlinkat(recovery_fd, p->rollback, 0) != 0) goto fail;
+                p->rollback_pending = 0;
             }
             p->installed = 0;
         }
         if (p->captured) {
-            if (fstatat(private_fd, p->recovery, &st, AT_SYMLINK_NOFOLLOW) != 0) goto fail;
-            if (no_replace(private_fd, p->recovery, parent, p->name,
+            if (fstatat(recovery_fd, p->recovery, &st, AT_SYMLINK_NOFOLLOW) != 0) goto fail;
+            if (no_replace(recovery_fd, p->recovery, parent, p->name,
                            S_ISDIR(st.st_mode)) != 0) goto fail;
             p->captured = 0;
         }
@@ -648,13 +678,13 @@ int landin_publication_step(int token, int action, const char *const *paths,
         /* Only proven ordinary old outputs may be discarded. Exceptional
            captured entries are retained even when the group is abandoned. */
         if (p->captured) {
-            if (fstatat(private_fd, p->recovery, &st, AT_SYMLINK_NOFOLLOW) != 0
+            if (fstatat(recovery_fd, p->recovery, &st, AT_SYMLINK_NOFOLLOW) != 0
                 || p->absent || !same(&st, &p->expected)) goto fail;
             if (S_ISDIR(st.st_mode)) {
-                if (!p->expected_tree || discard_tree(private_fd, p->recovery,
+                if (!p->expected_tree || discard_tree(recovery_fd, p->recovery,
                                                        p->expected_tree) != 0) goto fail;
             } else if (!S_ISREG(st.st_mode)
-                       || unlinkat(private_fd, p->recovery, 0) != 0) goto fail;
+                       || unlinkat(recovery_fd, p->recovery, 0) != 0) goto fail;
             p->captured = 0;
         }
         if (fstatat(private_fd, p->name, &st, AT_SYMLINK_NOFOLLOW) == 0) {
@@ -669,16 +699,24 @@ int landin_publication_step(int token, int action, const char *const *paths,
         p->finished = 1;
         if (--p->arena->refs == 0) {
             /* rmdir succeeds only when every known artifact is gone. */
-            if (unlinkat(parent, p->arena->name, AT_REMOVEDIR) != 0) {
+            if (unlinkat(p->arena->root_fd, "stage", AT_REMOVEDIR) != 0
+                || unlinkat(p->arena->root_fd, "recovery", AT_REMOVEDIR) != 0
+                || unlinkat(parent, p->arena->name, AT_REMOVEDIR) != 0) {
                 reason(why, room, "retained publication directory %s: %s",
-                       p->arena->path, strerror(errno)); return -1;
+                       p->arena->recovery_path, strerror(errno)); return -1;
             }
+            close(p->arena->private_fd); close(p->arena->recovery_fd);
+            close(p->arena->root_fd); close(p->arena->parent);
         }
+        free(p->bytes); p->bytes = NULL;
+        free_tree(p->expected_tree); p->expected_tree = NULL;
+        free_tree(p->fresh_tree); p->fresh_tree = NULL;
         return 0;
     }
     errno = EINVAL;
 fail:
-    reason(why, room, "publication of %s failed: %s; retained recovery directory %s",
-           p->path, strerror(errno), p->arena->path);
+    reason(why, room, "publication of %s failed: %s; previous recovery %s/%s; captured new or concurrent entry %s/%s",
+           p->path, strerror(errno), p->arena->recovery_path, p->recovery,
+           p->arena->recovery_path, p->rollback);
     return -1;
 }

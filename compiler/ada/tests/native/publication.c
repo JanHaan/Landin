@@ -20,6 +20,9 @@
 int landin_open_update(const char *, char **, size_t *, int *, char *, size_t);
 int landin_replace_update(int, const char *, size_t, char *, size_t);
 void landin_close_update(int);
+int landin_tool_start_in_directory(char *const [], char *const [], int,
+                                    int, int, int, int, int *);
+int landin_tool_wait(int, int *, int);
 static char scratch[4096], why[8192];
 static unsigned passed;
 static const char *event_to_race;
@@ -214,6 +217,71 @@ static void fmt_read_boundaries(void)
     landin_close_update(lease); REQUIRE(content(output, "editor-after-read"));
     ++passed;
 }
+static void collision_names(void)
+{
+    char first[4096], other[4096], stage[4096], other_stage[4096];
+    path(first, sizeof first, "collision-first"); put(first, "first-old");
+    int one = prepare(first, 0, "", stage);
+    REQUIRE(snprintf(other, sizeof other, "%s/.previous-%d", scratch, one) > 0);
+    put(other, "other-old"); int two = prepare(other, 0, "", other_stage);
+    staged(stage, "first-new"); staged(other_stage, "other-new");
+    REQUIRE(step(one, 0) == 0 && step(two, 0) == 0);
+    REQUIRE(step(one, 1) == 0);
+    char *bytes; size_t size; uint64_t dev, ino;
+    REQUIRE(landin_read_snapshot(other_stage, &bytes, &size, &dev, &ino) == 0);
+    REQUIRE(size == 9 && !memcmp(bytes, "other-new", 9)); free(bytes);
+    REQUIRE(step(two, 1) == 0 && step(one, 2) == 0 && step(two, 2) == 0);
+    REQUIRE(step(one, 4) == 0 && step(two, 4) == 0);
+    REQUIRE(content(first, "first-new") && content(other, "other-new")); ++passed;
+}
+static void rollback_race(const char *event, const char *name)
+{
+    if (!strcmp(event, "before-rollback-capture"))
+        REQUIRE(rename(replacement, name) == 0);
+    else if (!strcmp(event, "rollback-captured")) put(name, "second-save");
+}
+static void repeated_abort_retains_recovery(void)
+{
+    char output[4096], stage[4096], save[4096], recovery[8192], rollback[8192];
+    path(output, sizeof output, "rollback-output"); path(save, sizeof save, "rollback-editor");
+    put(output, "old-output"); put(save, "first-save");
+    int token = prepare(output, 0, "", stage); staged(stage, "generated");
+    REQUIRE(step(token, 0) == 0 && step(token, 1) == 0 && step(token, 2) == 0);
+    strcpy(replacement, save); landin_publication_set_hook(rollback_race);
+    REQUIRE(step(token, 3) != 0); clear_hook();
+    char *at = strstr(stage, "/stage/"); REQUIRE(at != NULL);
+    REQUIRE(snprintf(recovery, sizeof recovery, "%.*s/recovery/.previous-%d",
+                      (int)(at - stage), stage, token) > 0);
+    REQUIRE(snprintf(rollback, sizeof rollback, "%.*s/recovery/.rollback-%d",
+                      (int)(at - stage), stage, token) > 0);
+    REQUIRE(content(output, "second-save") && content(recovery, "old-output")
+            && content(rollback, "first-save"));
+    REQUIRE(step(token, 3) != 0);
+    REQUIRE(content(output, "second-save") && content(recovery, "old-output")
+            && content(rollback, "first-save")); ++passed;
+}
+static void child_staging_directory(void)
+{
+    char root[4096], moved[4096], output[4096], stage[4096], relative[8192];
+    path(root, sizeof root, "child-root"); path(moved, sizeof moved, "child-moved");
+    REQUIRE(snprintf(output, sizeof output, "%s/child-output", root) > 0);
+    int token = prepare(output, 0, root, stage);
+    int directory = landin_publication_stage_directory(stage);
+    REQUIRE(directory >= 0);
+    REQUIRE(landin_publication_rebase_argument(stage, directory, relative, sizeof relative) == 0);
+    REQUIRE(rename(root, moved) == 0 && mkdir(root, 0700) == 0);
+    char *args[] = {"/bin/sh", "-c", "printf child-anchored > \"$1\"", "stage", relative, NULL};
+    int nullfd = open("/dev/null", O_RDWR); REQUIRE(nullfd >= 0);
+    int child, status;
+    REQUIRE(landin_tool_start_in_directory(args, NULL, 0, nullfd, nullfd,
+                                            nullfd, directory, &child) == 0);
+    REQUIRE(landin_tool_wait(child, &status, 0) == child && status == 0);
+    close(directory); close(nullfd);
+    char *bytes; size_t size; uint64_t dev, ino;
+    REQUIRE(landin_read_snapshot(stage, &bytes, &size, &dev, &ino) == 0);
+    REQUIRE(size == 14 && !memcmp(bytes, "child-anchored", 14)); free(bytes);
+    REQUIRE(step(token, 3) == 0 && step(token, 4) == 0); ++passed;
+}
 static void fmt_original_descriptor(void)
 {
     char output[4096], saved[4096], original_alias[4096];
@@ -236,7 +304,8 @@ int main(void)
     REQUIRE(mkdtemp(scratch) != NULL);
     ordinary_group(); capture_actual(); absence_and_noclobber(); protected_alias();
     anchored_stage_and_roots(); directory_snapshot(); staged_rewrite();
-    fmt_read_boundaries(); fmt_original_descriptor();
+    fmt_read_boundaries(); fmt_original_descriptor(); collision_names();
+    repeated_abort_retains_recovery(); child_staging_directory();
     printf("publication native: %u controls passed; retained scratch %s\n", passed, scratch);
     return 0;
 }
