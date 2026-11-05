@@ -2,6 +2,7 @@ with Ada.Directories;
 with Ada.Environment_Variables;
 with Ada.IO_Exceptions;
 with GNAT.OS_Lib;
+with Landin.Platform.Native.Byte_Strings;
 with Ada.Strings.Fixed;
 with Ada.Streams.Stream_IO;
 with Interfaces;
@@ -503,8 +504,7 @@ package body Landin.Platform.Native is
       Result := Read_Actual
         (C.To_C (Path), Bytes, Size, Identity.Device, Identity.Inode);
       if Result = 0 then
-         Content := Unbounded.To_Unbounded_String
-           (Strings.Value (Bytes, Size));
+         Content := Byte_Strings.Copy (Bytes, Size);
          Identity.Valid := True;
          Free_Bytes (Bytes);
          Status := Read_Ok;
@@ -543,8 +543,7 @@ package body Landin.Platform.Native is
       Lease := Update_Handle (Token);
       Reason := Unbounded.To_Unbounded_String (C.To_Ada (Buffer));
       if Result = 0 then
-         Content := Unbounded.To_Unbounded_String
-           (Strings.Value (Bytes, Size));
+         Content := Byte_Strings.Copy (Bytes, Size);
          Free_Bytes (Bytes);
          Status := Read_Ok;
       else
