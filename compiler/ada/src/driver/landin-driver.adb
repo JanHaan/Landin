@@ -21,6 +21,7 @@ with Landin.IR.Dump;
 with Landin.IR.Pipeline;
 with Landin.Optimization;
 with Landin.Panics;
+with Landin.Platform.Publication;
 with Landin.Diagnostics.Catalogue;
 with Landin.Diagnostics.Citations.Answers;
 with Landin.Diagnostics.Explanations;
@@ -76,8 +77,6 @@ package body Landin.Driver is
    use type Landin.IR.Item_Kind;
    use type Landin.Modules.Module_Id;
    use type Landin.Platform.Read_Status;
-   use type Landin.Platform.Remove_Status;
-   use type Landin.Platform.Move_Status;
    use type Landin.Platform.Termination;
    use type Landin.Platform.Write_Status;
    use type Landin.Platform.File_Identity;
@@ -341,11 +340,15 @@ package body Landin.Driver is
    ---------------------------------------------------------------------
 
    function Format (Arguments : Landin.Platform.Path_List;
-                    Host      : Landin.Platform.Filesystem'Class)
+                    Host      : Landin.Platform.Filesystem'Class;
+                    Protected_Inputs : Landin.Platform.Path_List;
+                    Protected_Identities : Landin.Platform.Identity_List)
      return Outcome;
 
    function Format (Arguments : Landin.Platform.Path_List;
-                    Host      : Landin.Platform.Filesystem'Class)
+                    Host      : Landin.Platform.Filesystem'Class;
+                    Protected_Inputs : Landin.Platform.Path_List;
+                    Protected_Identities : Landin.Platform.Identity_List)
      return Outcome
    is
       Result  : Outcome;
@@ -608,13 +611,38 @@ package body Landin.Driver is
             declare
                Content : Unbounded.Unbounded_String;
                Read    : Landin.Platform.Read_Status;
+               Lease : Landin.Platform.Update_Handle :=
+                 Landin.Platform.No_Update;
+               Lease_Reason : Unbounded.Unbounded_String;
             begin
-               Host.Read_File (Path, Content, Read);
+               if not Check and then not Printing
+                 and then
+                   (Host.Paths_Overlap_Any (Path, Protected_Inputs)
+                    or else
+                      (for some Identity of Protected_Identities =>
+                         Identity.Valid and then
+                           Host.Identity_Of (Path) = Identity))
+               then
+                  Lease_Reason := Unbounded.To_Unbounded_String
+                    ("consumed response input cannot be rewritten;"
+                     & " choose another source, or use fmt --stdout");
+                  Read := Landin.Platform.Not_Readable;
+               elsif Check or else Printing then
+                  Host.Read_File (Path, Content, Read);
+               else
+                  Host.Read_For_Update
+                    (Path, Content, Lease, Read, Lease_Reason);
+               end if;
                if Read /= Landin.Platform.Read_Ok then
                   Refuse (Code_Unreadable,
                           (if Read = Landin.Platform.Not_Found
                            then "source not found: "
-                           else "source not readable: ") & Path);
+                           else "source not readable: ") & Path
+                          & (if Unbounded.Length (Lease_Reason) > 0
+                             then ": " & Unbounded.To_String (Lease_Reason)
+                               & "; use fmt --stdout to format"
+                               & " without rewriting"
+                             else ""));
                else
                   declare
                      Answer : constant Landin.Formatting.Result :=
@@ -635,9 +663,17 @@ package body Landin.Driver is
                         null;
                      elsif Check then
                         Not_Formatted (Answer);
+                     elsif (for some Identity of Protected_Identities =>
+                              Identity.Valid and then
+                                Host.Update_Identity (Lease) = Identity)
+                     then
+                        Refuse
+                          (Code_Unwritable,
+                           "cannot rewrite consumed response input " & Path
+                           & "; choose another source, or use fmt --stdout");
                      else
-                        Host.Replace_File
-                          (Path, Unbounded.To_String (Answer.Text), Written,
+                        Host.Replace_Update
+                          (Lease, Unbounded.To_String (Answer.Text), Written,
                            Reason);
                         if Written /= Landin.Platform.Write_Ok then
                            declare
@@ -660,6 +696,11 @@ package body Landin.Driver is
                      end if;
                   end;
                end if;
+               Host.Close_Update (Lease);
+            exception
+               when others =>
+                  Host.Close_Update (Lease);
+                  raise;
             end;
          end loop;
       end if;
@@ -718,7 +759,11 @@ package body Landin.Driver is
       Dry_Run   : Boolean := False;
       Depfile   : String := "";
       Warnings  : Landin.Diagnostics.Warning_Policy.Policy :=
-        Landin.Diagnostics.Warning_Policy.Defaults) return Outcome
+        Landin.Diagnostics.Warning_Policy.Defaults;
+      Protected_Inputs : Landin.Platform.Path_List :=
+        Landin.Platform.No_Arguments;
+      Protected_Identities : Landin.Platform.Identity_List :=
+        Landin.Platform.Identity_Vectors.Empty_Vector) return Outcome
    is
       --  D257: the compiler's own host unless --target= names another.  A
       --  host no description covers has no default, and a build that then
@@ -850,7 +895,8 @@ package body Landin.Driver is
       if Arguments.Element (1) = Explain_Command then
          return Explain (Arguments);
       elsif Arguments.Element (1) = Format_Command then
-         return Format (Arguments, Host);
+         return Format
+           (Arguments, Host, Protected_Inputs, Protected_Identities);
       elsif Arguments.Element (1) = Server_Command then
          --  A server is started by the caller when Is_Server says so, so
          --  an argument list that reaches here is a misuse of it.
@@ -1209,6 +1255,11 @@ package body Landin.Driver is
          --  An executable's assembly once written, which D362 removes
          --  after the link unless --keep-asm asked for it.
          Intermediate_Assembly : Unbounded.Unbounded_String;
+         package Publication renames Landin.Platform.Publication;
+         Artifacts, Stage_Report : Publication.Transaction;
+         Reserved, Known_Inputs : Landin.Platform.Path_List;
+         Publication_Failed : Boolean := False;
+         Artifacts_Closed : Boolean := False;
          --  D685: what the build report records of the ESP application
          --  image the link was followed by, once written and read back.
          ESP_Image_Report : Unbounded.Unbounded_String;
@@ -1442,6 +1493,166 @@ package body Landin.Driver is
                   Message => Text));
          end Note_Failure;
 
+         --  Protect both the consumed object and its current public spelling.
+         --  Tools have a bounded known-input contract; this does not sandbox
+         --  arbitrary wrappers, compiler specs or unreported child inputs.
+         procedure Observed_Input
+           (Path : String; Identity : Landin.Platform.File_Identity);
+         procedure Observed_Input
+           (Path : String; Identity : Landin.Platform.File_Identity) is
+         begin
+            if not Known_Inputs.Contains (Path) then
+               Known_Inputs.Append (Path);
+            end if;
+            Publication.Protect (Artifacts, Path, Identity);
+            Publication.Protect (Stage_Report, Path, Identity);
+         end Observed_Input;
+
+         procedure Protect_Input (Path : String);
+         procedure Protect_Input (Path : String) is
+         begin
+            if Path /= "" then
+               Observed_Input (Path, Host.Identity_Of (Path));
+            end if;
+         end Protect_Input;
+
+         procedure Reserve_Output (Path : String);
+         procedure Reserve_Output (Path : String) is
+            Status : Landin.Platform.Write_Status;
+            Reason : Unbounded.Unbounded_String;
+         begin
+            if Dry_Run or else Reserved.Contains (Path)
+              or else Publication_Failed
+            then
+               return;
+            end if;
+            for Input of Known_Inputs loop
+               if Host.Paths_Overlap (Path, Input) then
+                  Bad_Use := True;
+                  Publication_Failed := True;
+                  Note_Failure
+                    (Code_Unknown_Option, "output " & Path
+                     & " collides with input " & Input
+                     & "; choose another output path and retry");
+                  return;
+               end if;
+            end loop;
+            Publication.Prepare (Artifacts, Host, Path, Status, Reason);
+            if Status /= Landin.Platform.Write_Ok then
+               Publication_Failed := True;
+               Note_Failure
+                 (Code_Unwritable, "cannot prepare output " & Path & ": "
+                  & Unbounded.To_String (Reason)
+                  & "; choose another output path and retry");
+            else
+               Reserved.Append (Path);
+            end if;
+         end Reserve_Output;
+
+         function Private_Path (Path : String) return String is
+           (Publication.Stage_Path (Artifacts, Path));
+
+         procedure Write_Output
+           (Path, Content : String; Status : out Landin.Platform.Write_Status);
+         procedure Write_Output
+           (Path, Content : String;
+            Status : out Landin.Platform.Write_Status) is
+         begin
+            Reserve_Output (Path);
+            if Publication_Failed then
+               Status := Landin.Platform.Not_Writable;
+            else
+               Host.Write_File (Private_Path (Path), Content, Status);
+            end if;
+         end Write_Output;
+
+         function Logical_Text (Text : String) return String;
+         function Logical_Text (Text : String) return String is
+            Result : Unbounded.Unbounded_String :=
+              Unbounded.To_Unbounded_String (Text);
+         begin
+            for Path of Reserved loop
+               declare
+                  Stage : constant String := Private_Path (Path);
+                  At_Position : Natural := 0;
+                  From : Positive := 1;
+               begin
+                  loop
+                     exit when From > Unbounded.Length (Result);
+                     At_Position := Ada.Strings.Fixed.Index
+                       (Unbounded.To_String (Result), Stage, From);
+                     exit when At_Position = 0;
+                     Unbounded.Replace_Slice
+                       (Result, At_Position, At_Position + Stage'Length - 1,
+                        Path);
+                     From := At_Position + Path'Length;
+                  end loop;
+               end;
+            end loop;
+            return Unbounded.To_String (Result);
+         end Logical_Text;
+
+         procedure Close_Artifacts (Publish : Boolean);
+         procedure Close_Artifacts (Publish : Boolean) is
+            Status : Landin.Platform.Write_Status;
+            Reason : Unbounded.Unbounded_String;
+         begin
+            if Artifacts_Closed and then Publish then
+               return;
+            end if;
+            if Publish and then not Publication_Failed then
+               for Path of Reserved loop
+                  for Input of Known_Inputs loop
+                     if Host.Paths_Overlap (Path, Input) then
+                        Publication_Failed := True;
+                        Bad_Use := True;
+                        Note_Failure
+                          (Code_Unknown_Option, "output " & Path
+                           & " collides with input " & Input
+                           & "; choose another output path and retry");
+                     end if;
+                  end loop;
+               end loop;
+            end if;
+            if Publish and then not Publication_Failed then
+               Publication.Commit (Artifacts, Host, Status, Reason);
+               if Status /= Landin.Platform.Write_Ok then
+                  Publication_Failed := True;
+                  Note_Failure
+                    (Code_Unwritable, "cannot publish artifact generation: "
+                     & Unbounded.To_String (Reason));
+               end if;
+            end if;
+            if not Publish or else Publication_Failed then
+               Publication.Abort_Transaction (Artifacts, Host, Status, Reason);
+               if Status /= Landin.Platform.Write_Ok then
+                  Note_Failure
+                    (Code_Unwritable, "artifact recovery needs attention: "
+                     & Unbounded.To_String (Reason));
+               end if;
+            end if;
+            Artifacts_Closed := True;
+         end Close_Artifacts;
+
+         procedure Finish_Publications;
+         procedure Finish_Publications is
+            Status : Landin.Platform.Write_Status;
+            Reason : Unbounded.Unbounded_String;
+         begin
+            Publication.Finish (Artifacts, Host, Status, Reason);
+            if Status /= Landin.Platform.Write_Ok then
+               Note_Failure (Code_Unwritable,
+                 "artifact recovery retained: "
+                 & Unbounded.To_String (Reason));
+            end if;
+            Publication.Finish (Stage_Report, Host, Status, Reason);
+            if Status /= Landin.Platform.Write_Ok then
+               Note_Failure (Code_Unwritable,
+                 "stage report recovery retained: "
+                 & Unbounded.To_String (Reason));
+            end if;
+         end Finish_Publications;
+
          procedure Check_Dependency_Path (Path : String);
 
          procedure Check_Dependency_Path (Path : String) is
@@ -1667,6 +1878,7 @@ package body Landin.Driver is
          procedure Write_Stage_Report is
             Path : constant String := Unbounded.To_String (Stage_Report_Path);
             Written : Landin.Platform.Write_Status;
+            Reason : Unbounded.Unbounded_String;
             Nodes : Natural := 0;
             function Image (Value : Natural) return String is
               (Ada.Strings.Fixed.Trim
@@ -1715,8 +1927,27 @@ package body Landin.Driver is
                   end;
                end loop;
             end;
+            for Input of Known_Inputs loop
+               if Host.Paths_Overlap (Path, Input) then
+                  Bad_Use := True;
+                  Note_Failure
+                    (Code_Unknown_Option, "stage report output " & Path
+                     & " collides with input " & Input
+                     & "; choose another output path and retry");
+                  return;
+               end if;
+            end loop;
+            Publication.Prepare
+              (Stage_Report, Host, Path, Written, Reason);
+            if Written /= Landin.Platform.Write_Ok then
+               Note_Failure
+                 (Code_Unwritable, "cannot prepare stage report " & Path
+                  & ": " & Unbounded.To_String (Reason)
+                  & "; choose another report path and retry");
+               return;
+            end if;
             Host.Write_File
-              (Path,
+              (Publication.Stage_Path (Stage_Report, Path),
                "{""format"":""landin-stage-report-1"",""stages"":[" & LF
                & Unbounded.To_String (Stage_Rows) & LF
                & "  ],""sizes"":{""sources"":"
@@ -1731,6 +1962,22 @@ package body Landin.Driver is
                Written);
             if Written /= Landin.Platform.Write_Ok then
                Note_Failure (Code_Unwritable, "cannot write: " & Path);
+            end if;
+            if Written = Landin.Platform.Write_Ok then
+               Publication.Commit (Stage_Report, Host, Written, Reason);
+            end if;
+            if Written /= Landin.Platform.Write_Ok then
+               Note_Failure
+                 (Code_Unwritable, "cannot publish stage report " & Path
+                  & ": " & Unbounded.To_String (Reason));
+               Publication.Abort_Transaction
+                 (Stage_Report, Host, Written, Reason);
+            end if;
+            Publication.Finish (Stage_Report, Host, Written, Reason);
+            if Written /= Landin.Platform.Write_Ok then
+               Note_Failure
+                 (Code_Unwritable, "stage report recovery retained: "
+                  & Unbounded.To_String (Reason));
             end if;
          end Write_Stage_Report;
 
@@ -2189,7 +2436,8 @@ package body Landin.Driver is
                        and then Asked.Exit_Code = 0
                      then
                         declare
-                           Path : constant String := Ada.Strings.Fixed.Trim
+                           Path : constant String :=
+                                   Ada.Strings.Fixed.Trim
                              (Unbounded.To_String (Asked.Output),
                               Ada.Strings.Maps.To_Set
                                 (ASCII.LF & ASCII.CR & ' '),
@@ -2261,6 +2509,76 @@ package body Landin.Driver is
             return Any;
          end Libraries_Missing;
 
+         procedure Protect_Link_Inputs (Driver : String);
+         procedure Protect_Link_Inputs (Driver : String) is
+            Directories : constant Landin.Platform.Path_List :=
+              Search_Directories;
+            Table : Landin.Configuration.Table renames
+              Landin.Stages.Configurations (Context).all;
+         begin
+            Protect_Input (Driver);
+            Protect_Input (Tools.Resolve_Program (Driver));
+            if Linker_Seen then
+               Protect_Input (Unbounded.To_String (Linker));
+               Protect_Input
+                 (Tools.Resolve_Program (Unbounded.To_String (Linker)));
+               Protect_Input
+                 (Tools.Resolve_Program
+                    ("ld." & Unbounded.To_String (Linker)));
+            end if;
+            for Index in 1 .. Landin.Configuration.Library_Count (Table) loop
+               declare
+                  Files : constant Landin.Platform.Path_List :=
+                    Landin.Backend.Toolchain.Library_Files
+                      (Facts, Landin.Configuration.Library_Name
+                         (Table, Index));
+                  Located : Boolean := False;
+               begin
+                  for Directory of Directories loop
+                     for File of Files loop
+                        if Host.Exists (Directory & "/" & File) then
+                           Protect_Input (Directory & "/" & File);
+                           Located := True;
+                        end if;
+                     end loop;
+                  end loop;
+                  if not Located then
+                     for File of Files loop
+                        declare
+                           Asked : Landin.Platform.Tool_Result;
+                        begin
+                           Tools.Run
+                             (Driver,
+                              Landin.Backend.Toolchain.Print_File_Arguments
+                                (File), Asked, Landin.Platform.Output_Only);
+                           if Asked.Ended = Landin.Platform.Exited
+                             and then Asked.Exit_Code = 0
+                           then
+                              declare
+                                 Path : constant String :=
+                                   Ada.Strings.Fixed.Trim
+                                   (Unbounded.To_String (Asked.Output),
+                                    Ada.Strings.Maps.To_Set
+                                      (ASCII.LF & ASCII.CR & ' '),
+                                    Ada.Strings.Maps.To_Set
+                                      (ASCII.LF & ASCII.CR & ' '));
+                              begin
+                                 if Path /= File
+                                   and then Host.Exists (Path)
+                                 then
+                                    Protect_Input (Path);
+                                 end if;
+                              end;
+                           end if;
+                        exception
+                           when Landin.External_Tool_Failed => null;
+                        end;
+                     end loop;
+                  end if;
+               end;
+            end loop;
+         end Protect_Link_Inputs;
+
          --  D683, D685: the ESP application image of the executable at
          --  TARGET_PATH, written as TARGET_PATH.bin and read back before the
          --  build succeeds.  A refusal removes the executable and any
@@ -2270,25 +2588,18 @@ package body Landin.Driver is
          procedure Write_ESP_Image (Target_Path : String) is
             Profile : constant Landin.Targets.Firmware.Profile :=
               Landin.IR.Firmware_Profile (Landin.Stages.Code (Context).all);
-            Image_Path : constant String := Target_Path & ".bin";
+            Image_Path : constant String :=
+              Private_Path (Target_Path & ".bin");
             Executable, Read_Back : Unbounded.Unbounded_String;
             Read : Landin.Platform.Read_Status;
             Written : Landin.Platform.Write_Status;
 
-            procedure Restore;
-            procedure Restore is
-               Removed : Landin.Platform.Remove_Status;
-            begin
-               Host.Remove_File (Target_Path, Removed);
-               Host.Remove_File (Image_Path, Removed);
-            end Restore;
          begin
-            Host.Read_File (Target_Path, Executable, Read);
+            Host.Read_File (Private_Path (Target_Path), Executable, Read);
             if Read /= Landin.Platform.Read_Ok then
                Note_Failure
                  (Code_Toolchain_Failed,
                   "cannot read the linked executable: " & Target_Path);
-               Restore;
                return;
             end if;
             declare
@@ -2301,23 +2612,20 @@ package body Landin.Driver is
                     (Rows.Code (Rows.ESP_Image_Object),
                      Unbounded.To_String (Made.Fault) & ", so no ESP"
                      & " application image can hold it (D685)");
-                  Restore;
                   return;
                end if;
                Host.Write_File
                  (Image_Path, Unbounded.To_String (Made.Image), Written);
                if Written /= Landin.Platform.Write_Ok then
                   Note_Failure
-                    (Code_Unwritable, "cannot write: " & Image_Path);
-                  Restore;
+                    (Code_Unwritable, "cannot write: " & Target_Path & ".bin");
                   return;
                end if;
                Host.Read_File (Image_Path, Read_Back, Read);
                if Read /= Landin.Platform.Read_Ok then
                   Note_Failure
                     (Code_Toolchain_Failed,
-                     "cannot read the written image: " & Image_Path);
-                  Restore;
+                     "cannot read the written image: " & Target_Path & ".bin");
                   return;
                end if;
                declare
@@ -2329,10 +2637,10 @@ package body Landin.Driver is
                   if Fault /= "" then
                      Note_Failure
                        (Rows.Code (Rows.ESP_Image_Object),
-                        Image_Path & " does not read back as the image of "
+                        Target_Path & ".bin does not read back"
+                        & " as the image of "
                         & Target_Path & ": " & Fault & " (D685)");
-                     Restore;
-                     return;
+                        return;
                   end if;
                end;
                ESP_Image_Report := Made.Report;
@@ -2351,75 +2659,37 @@ package body Landin.Driver is
            (Assembly_Path, Product_Path, Map_Id : String;
             Destinations : Landin.Platform.Path_List)
          is
-            Report_Path : constant String :=
-              Unbounded.To_String (Build_Report_Path);
             On_Firmware : constant Boolean :=
               Landin.Targets.Is_Firmware (Facts);
             Written : Landin.Platform.Write_Status;
+            pragma Unreferenced (Destinations);
          begin
             declare
                Driver : constant String :=
                  Unbounded.To_String (Chosen_Driver);
-               Target_Path : constant String :=
-                 (if Unbounded.Length (Output) > 0
-                  then Unbounded.To_String (Output)
-                  else Default_Executable);
+               Target_Path : constant String := Product_Path;
+               Input_Assembly : constant String := Absolute (Assembly_Path);
+               Input_Script : constant String :=
+                 (if Unbounded.Length (Script_Path) = 0 then ""
+                  else Absolute (Unbounded.To_String (Script_Path)));
+               Selected_Linker : constant String :=
+                 (if Ada.Strings.Fixed.Index
+                       (Unbounded.To_String (Linker), "/") > 0
+                  then Absolute (Unbounded.To_String (Linker))
+                  else Unbounded.To_String (Linker));
+               Staged_Product : constant String := Private_Path (Product_Path);
+               Prior_Identity : constant Landin.Platform.File_Identity :=
+                 Host.Identity_Of (Product_Path);
                Ran : Landin.Platform.Tool_Result;
                Libraries : Landin.Platform.Path_List;
                Directories : constant Landin.Platform.Path_List :=
                  Search_Directories;
-               Backup : Unbounded.Unbounded_String;
-               Prior_Identity : Landin.Platform.File_Identity;
-               Prepared : Boolean := False;
-               Removed : Landin.Platform.Remove_Status;
-               Moved : Landin.Platform.Move_Status;
-               Lock_Handle : Integer := -1;
-
-               procedure Release_Lock;
-
-               procedure Release_Lock is
-               begin
-                  if Lock_Handle >= 0 then
-                     Host.Unlock_Output (Lock_Handle);
-                     Lock_Handle := -1;
-                  end if;
-               end Release_Lock;
-
                procedure Restore_Output;
-
                procedure Restore_Output is
                begin
-                  if not Prepared then
-                     return;
-                  end if;
-                  if Unbounded.Length (Backup) > 0
-                    and then not Host.Exists (Unbounded.To_String (Backup))
-                    and then Host.Identity_Of (Target_Path) = Prior_Identity
-                  then
-                     --  The tool moved the old inode back itself.
-                     Prepared := False;
-                     return;
-                  end if;
-                  Host.Remove_File (Target_Path, Removed);
-                  if Removed = Landin.Platform.Not_Removable then
-                     Note_Failure
-                        (Code_Toolchain_Failed,
-                        "cannot clear failed executable: " & Target_Path
-                        & (if Unbounded.Length (Backup) > 0
-                           then "; prior executable retained at "
-                             & Unbounded.To_String (Backup)
-                           else ""));
-                  elsif Unbounded.Length (Backup) > 0 then
-                     Host.Move_File
-                       (Unbounded.To_String (Backup), Target_Path, Moved);
-                     if Moved /= Landin.Platform.Moved then
-                        Note_Failure
-                          (Code_Toolchain_Failed,
-                           "cannot restore prior executable from "
-                           & Unbounded.To_String (Backup));
-                     end if;
-                  end if;
-                  Prepared := False;
+                  --  Public entries have not been touched. The transaction
+                  --  discards only this invocation's private generation.
+                  null;
                end Restore_Output;
             begin
                if Driver = "" then
@@ -2430,6 +2700,7 @@ package body Landin.Driver is
                   return;
                end if;
 
+               Protect_Link_Inputs (Driver);
                for Index in 1 .. Landin.Configuration.Library_Count
                  (Landin.Stages.Configurations (Context).all)
                loop
@@ -2446,7 +2717,7 @@ package body Landin.Driver is
                begin
                   if On_Firmware then
                      Host.Write_File
-                       (Product_Path & ".ld",
+                       (Staged_Product & ".ld",
                         Landin.Backend.Firmware.Linker_Script
                           (Landin.IR.Firmware_Profile
                              (Landin.Stages.Code (Context).all),
@@ -2463,7 +2734,7 @@ package body Landin.Driver is
                      Tools.Run
                        (Driver,
                         Landin.Backend.Toolchain.Assemble_Arguments
-                          (Assembly_Path, Product_Path & ".o", Facts,
+                          (Input_Assembly, Staged_Product & ".o", Facts,
                            Debug => Debug_Enabled,
                            Level => Landin.Stages.Level (Context),
                            Float => Landin.IR.Firmware_Profile
@@ -2475,7 +2746,7 @@ package body Landin.Driver is
                         Note_Failure
                           (Code_Toolchain_Failed,
                            "firmware assembly failed" & LF
-                           & Unbounded.To_String (Ran.Output));
+                           & Logical_Text (Unbounded.To_String (Ran.Output)));
                         return;
                      end if;
                      --  D588: the boot ROM's checksum over the second
@@ -2490,7 +2761,8 @@ package body Landin.Driver is
                            Read : Landin.Platform.Read_Status;
                            Fault : Unbounded.Unbounded_String;
                         begin
-                           Host.Read_File (Product_Path & ".o", Object, Read);
+                           Host.Read_File
+                             (Staged_Product & ".o", Object, Read);
                            if Read /= Landin.Platform.Read_Ok then
                               Note_Failure
                                 (Code_Toolchain_Failed,
@@ -2506,7 +2778,7 @@ package body Landin.Driver is
                               return;
                            end if;
                            Host.Write_File
-                             (Product_Path & ".o",
+                             (Staged_Product & ".o",
                               Unbounded.To_String (Object), Written);
                            if Written /= Landin.Platform.Write_Ok then
                               Note_Failure
@@ -2526,7 +2798,8 @@ package body Landin.Driver is
                            Object : Unbounded.Unbounded_String;
                            Read : Landin.Platform.Read_Status;
                         begin
-                           Host.Read_File (Product_Path & ".o", Object, Read);
+                           Host.Read_File
+                             (Staged_Product & ".o", Object, Read);
                            if Read /= Landin.Platform.Read_Ok then
                               Note_Failure
                                 (Code_Toolchain_Failed,
@@ -2552,92 +2825,14 @@ package body Landin.Driver is
                         end;
                      end if;
                   end if;
-                  Host.Lock_Output (Target_Path, Lock_Handle);
-                  if Lock_Handle < 0 then
-                     Note_Failure
-                       (Code_Toolchain_Failed,
-                        "cannot lock executable destination: "
-                        & Target_Path);
-                     return;
-                  end if;
-
-                  --  A zero-exit tool must produce a new pathname for this
-                  --  invocation. Keep the old file aside until that is
-                  --  established, even when the new bytes are identical.
-                  if Host.Exists (Target_Path) then
-                     Prior_Identity := Host.Identity_Of (Target_Path);
-                     if not Prior_Identity.Valid then
-                        Note_Failure
-                          (Code_Toolchain_Failed,
-                           "cannot identify prior executable: "
-                           & Target_Path);
-                        Release_Lock;
-                        return;
-                     end if;
-                     for Index in 1 .. 100 loop
-                        declare
-                           Candidate : constant String := Target_Path
-                             & ".landin-backup-"
-                             & Ada.Strings.Fixed.Trim
-                                 (Positive'Image (Index), Ada.Strings.Both);
-                           Conflicts : Boolean := Host.Exists (Candidate)
-                             or else (Report_Seen and then
-                               Host.Paths_Overlap (Candidate, Report_Path));
-                        begin
-                           for Path of Destinations loop
-                              Conflicts := Conflicts or else
-                                Host.Paths_Overlap (Candidate, Path);
-                           end loop;
-                           for Source in 1 .. Landin.Stages.Source_Count
-                             (Context)
-                           loop
-                              Conflicts := Conflicts or else
-                                Host.Paths_Overlap
-                                  (Candidate, Landin.Source.Name
-                                     (Landin.Stages.Source
-                                        (Context,
-                                         Landin.Stages.Nth_Source
-                                           (Context, Source))));
-                           end loop;
-                           if not Conflicts then
-                              Host.Move_File
-                                (Target_Path, Candidate, Moved);
-                              if Moved = Landin.Platform.Moved then
-                                 Backup := Unbounded.To_Unbounded_String
-                                   (Candidate);
-                                 exit;
-                              end if;
-                           end if;
-                        end;
-                     end loop;
-                     if Unbounded.Length (Backup) = 0 then
-                        Note_Failure
-                          (Code_Toolchain_Failed,
-                           "cannot preserve prior executable: "
-                           & Target_Path);
-                        Release_Lock;
-                        return;
-                     end if;
-                  else
-                     Host.Remove_File (Target_Path, Removed);
-                     if Removed = Landin.Platform.Not_Removable then
-                        Note_Failure
-                          (Code_Toolchain_Failed,
-                           "cannot clear executable output: "
-                           & Target_Path);
-                        Release_Lock;
-                        return;
-                     end if;
-                  end if;
-                  Prepared := True;
-                  Tools.Prepare_Output (Host, Target_Path);
+                  Tools.Prepare_Output (Host, Staged_Product);
                   Tools.Run
                     (Program   => Driver,
                      Arguments =>
                        Landin.Backend.Toolchain.Link_Arguments
-                         (Assembly => Assembly_Path,
-                          Output   => Target_Path,
-                          Linker   => Unbounded.To_String (Linker),
+                         (Assembly => Input_Assembly,
+                          Output   => Staged_Product,
+                          Linker   => Selected_Linker,
                           Build_Id => Map_Id,
                           Full_Debug => Debug_Enabled,
                           Libraries => Libraries, Facts => Facts,
@@ -2645,7 +2840,7 @@ package body Landin.Driver is
                           Static => Static_Link,
                           Threads => Starts_C_Threads,
                           Directories => Directories,
-                          Script => Unbounded.To_String (Script_Path),
+                          Script => Input_Script,
                           Float => Landin.IR.Firmware_Profile
                             (Landin.Stages.Code (Context).all).Float),
                      Result    => Ran,
@@ -2671,7 +2866,6 @@ package body Landin.Driver is
                               & Why);
                         end if;
                      end;
-                     Release_Lock;
                      return;
                   when others =>
                      Restore_Output;
@@ -2687,7 +2881,7 @@ package body Landin.Driver is
                   Note_Failure
                     (Code_Toolchain_Failed,
                      Driver & " was stopped before it could finish" & LF
-                     & Unbounded.To_String (Ran.Output));
+                     & Logical_Text (Unbounded.To_String (Ran.Output)));
                elsif Ran.Exit_Code /= 0 then
                   Restore_Output;
                   --  A line the assembler refused inside an assembly
@@ -2703,7 +2897,8 @@ package body Landin.Driver is
                        and then Landin.Stages.Source_Count (Context) > 0
                      then
                         Landin.Driver.Assembler_Sites.Place
-                          (Output  => Unbounded.To_String (Ran.Output),
+                          (Output  => Logical_Text
+                             (Unbounded.To_String (Ran.Output)),
                            Emitted => Unbounded.To_String (Written_Assembly),
                            Code    => Landin.Stages.Code (Context).all,
                            Names   => Landin.Stages.Identities (Context).all,
@@ -2725,7 +2920,7 @@ package body Landin.Driver is
                           (Code_Toolchain_Failed,
                            Driver & " failed with status"
                            & Integer'Image (Ran.Exit_Code) & LF
-                           & Unbounded.To_String (Ran.Output)
+                           & Logical_Text (Unbounded.To_String (Ran.Output))
                            & (if Selected_Layout =
                                Landin.Targets.Firmware.RAM_Layout
                              then LF & "RAM layout capacity is bounded by"
@@ -2734,29 +2929,25 @@ package body Landin.Driver is
                                & " boot check" else ""));
                      end if;
                   end;
-               elsif not Tools.Output_Produced (Host, Target_Path) then
+               elsif not Tools.Output_Produced (Host, Staged_Product) then
                   Restore_Output;
                   Note_Failure
                     (Code_Toolchain_Failed,
                      Driver & " reported success but produced no executable"
                      & " at " & Target_Path & LF
-                     & Unbounded.To_String (Ran.Output));
-               elsif Unbounded.Length (Backup) > 0
-                 and then
-                   (Host.Same_File
-                      (Target_Path, Unbounded.To_String (Backup))
-                    or else Host.Identity_Of (Target_Path) = Prior_Identity)
+                     & Logical_Text (Unbounded.To_String (Ran.Output)));
+               elsif Prior_Identity.Valid
+                 and then Host.Identity_Of (Staged_Product) = Prior_Identity
                then
-                  Restore_Output;
                   Note_Failure
                     (Code_Toolchain_Failed,
                      Driver & " left executable output aliasing its prior"
-                     & " backup at " & Target_Path);
+                     & " output at " & Target_Path);
                elsif On_Firmware
                  and then (Script_Seen or else Selected_Layout =
                              Landin.Targets.Firmware.RAM_Layout)
                  and then Landin.Build_Reports.Firmware.Contract_Fault
-                   (Host, Target_Path,
+                   (Host, Staged_Product,
                     Landin.IR.Firmware_Profile
                       (Landin.Stages.Code (Context).all),
                     Landin.Backend.Firmware.Used_Regions
@@ -2770,7 +2961,7 @@ package body Landin.Driver is
                       else "the RAM layout")
                      & " breaks the firmware linker script contract, "
                      & Landin.Build_Reports.Firmware.Contract_Fault
-                         (Host, Target_Path,
+                         (Host, Staged_Product,
                           Landin.IR.Firmware_Profile
                             (Landin.Stages.Code (Context).all),
                           Landin.Backend.Firmware.Used_Regions
@@ -2783,14 +2974,6 @@ package body Landin.Driver is
                           & " or use --firmware-layout=boot for the board"
                           & " boot check"));
                   Restore_Output;
-               elsif Unbounded.Length (Backup) > 0 then
-                  Host.Remove_File (Unbounded.To_String (Backup), Removed);
-                  if Removed = Landin.Platform.Not_Removable then
-                     Note_Failure
-                       (Code_Toolchain_Failed,
-                        "cannot remove prior executable backup: "
-                        & Unbounded.To_String (Backup));
-                  end if;
                end if;
                if On_Firmware
                  and then Landin.Targets.Firmware.Takes_ESP_Image
@@ -2800,11 +2983,6 @@ package body Landin.Driver is
                then
                   Write_ESP_Image (Target_Path);
                end if;
-               Release_Lock;
-            exception
-               when others =>
-                  Release_Lock;
-                  raise;
             end;
          end Link_Assembly;
 
@@ -2869,7 +3047,7 @@ package body Landin.Driver is
                if Stack_Report_Seen
                  and then not Landin.Stages.Failed (Context)
                then
-                  Host.Write_File
+                  Write_Output
                     (Stack_Path,
                      Landin.Build_Reports.Stacks.JSON
                        (Evidence, Context, Optimization, Panic,
@@ -2932,7 +3110,8 @@ package body Landin.Driver is
                              (Landin.Stages.Code (Context).all)));
                   elsif On_Firmware and then Emit = Emit_Executable then
                      Landin.Build_Reports.Firmware.Measure
-                       (Host, Product_Path, Product_Path & ".map",
+                       (Host, Private_Path (Product_Path),
+                        Private_Path (Product_Path & ".map"),
                         Landin.IR.Firmware_Profile
                           (Landin.Stages.Code (Context).all),
                         Boot_Stage_Routine, Firmware, Valid,
@@ -2944,7 +3123,7 @@ package body Landin.Driver is
                         return;
                      end if;
                   end if;
-                  Host.Write_File
+                  Write_Output
                     (Report_Path,
                      Landin.Build_Reports.Sources.JSON
                        (Evidence, Context, Optimization,
@@ -3179,6 +3358,24 @@ package body Landin.Driver is
 
             --  D589: the profile's derived script, as a firmware build
             --  would write it beside its image, and nothing linked.
+            if not Dry_Run then
+               for Path of Destinations loop
+                  --  Existing dSYM leaves are protected by the whole bundle.
+                  if Ada.Strings.Fixed.Index (Path, ".dSYM/") = 0 then
+                     Reserve_Output (Path);
+                  end if;
+               end loop;
+               if Report_Seen then
+                  Reserve_Output (Report_Path);
+               end if;
+               if Stack_Report_Seen then
+                  Reserve_Output (Stack_Path);
+               end if;
+               if Publication_Failed then
+                  return;
+               end if;
+            end if;
+
             if Emit = Emit_Linker_Script then
                if not Landin.IR.Firmware_Profile
                  (Landin.Stages.Code (Context).all).Present
@@ -3197,7 +3394,7 @@ package body Landin.Driver is
                     "write " & Landin.Json.Quoted (Assembly_Path) & LF);
                   return;
                end if;
-               Host.Write_File
+               Write_Output
                  (Assembly_Path,
                   Landin.Backend.Firmware.Linker_Script
                     (Landin.IR.Firmware_Profile
@@ -3451,7 +3648,7 @@ package body Landin.Driver is
                      return Boolean
                   is (Landin.Backend.Is_Kept (Entries, Id, Which));
                begin
-                  Host.Write_File
+                  Write_Output
                     (Assembly_Path,
                      Landin.IR.Dump.Text
                        (Landin.Stages.Code (Context).all,
@@ -3657,7 +3854,7 @@ package body Landin.Driver is
                   return;
                end if;
 
-               Host.Write_File
+               Write_Output
                  (Assembly_Path, Unbounded.To_String (Emitted), Written);
                if Written /= Landin.Platform.Write_Ok then
                   Note_Failure
@@ -3671,7 +3868,7 @@ package body Landin.Driver is
                     Unbounded.To_Unbounded_String (Assembly_Path);
                end if;
                if Emit_Map then
-                  Host.Write_File
+                  Write_Output
                     (Map_Path, Unbounded.To_String (Map_JSON), Written);
                   if Written /= Landin.Platform.Write_Ok then
                      Note_Failure
@@ -3688,7 +3885,8 @@ package body Landin.Driver is
             end if;
 
             Link_Assembly
-              (Assembly_Path, Product_Path, Unbounded.To_String (Map_Id),
+              (Private_Path (Assembly_Path), Product_Path,
+               Unbounded.To_String (Map_Id),
                Destinations);
             Write_Build_Report;
             Write_Stack_Report;
@@ -3769,7 +3967,7 @@ package body Landin.Driver is
                return;
             end if;
             Landin.Build_Reports.Clear (Evidence);
-            Host.Write_File
+            Write_Output
               (Report_Path,
                Landin.Build_Reports.Sources.JSON
                  (Evidence, Context, Optimization,
@@ -3804,6 +4002,23 @@ package body Landin.Driver is
                Destinations.Append (Product & ".o");
                Destinations.Append (Product & ".ld");
                Destinations.Append (Product & ".map");
+            end if;
+            if Debug_Enabled then
+               for Path of Landin.Backend.Toolchain.Debug_Artifacts
+                 (Product, Facts, Host)
+               loop
+                  Destinations.Append (Path);
+               end loop;
+               if Landin.Backend.Toolchain.Debug_Overwrites
+                 (Product, Operand, Facts, Host)
+               then
+                  Bad_Use := True;
+                  Note_Failure
+                    (Code_Unknown_Option,
+                     "debug artifact collides with source: " & Product
+                     & "; choose another output path");
+                  return;
+               end if;
             end if;
             for Path of Destinations loop
                if Host.Paths_Overlap (Path, Operand) then
@@ -3874,7 +4089,14 @@ package body Landin.Driver is
                   else Candidates.First_Element);
                return;
             end if;
-            Link_Assembly (Operand, Product, "", Destinations);
+            for Path of Destinations loop
+               if Ada.Strings.Fixed.Index (Path, ".dSYM/") = 0 then
+                  Reserve_Output (Path);
+               end if;
+            end loop;
+            if not Publication_Failed then
+               Link_Assembly (Operand, Product, "", Destinations);
+            end if;
          end Link_Operand;
 
          --  D383: rooted operands that are the entry module's source
@@ -3932,6 +4154,20 @@ package body Landin.Driver is
          end Operand_Problem;
 
       begin
+         for Position in 1 .. Natural (Protected_Inputs.Length) loop
+            if Position <= Natural (Protected_Identities.Length) then
+               Observed_Input
+                 (Protected_Inputs (Position),
+                  Protected_Identities (Position));
+            end if;
+            Protect_Input (Protected_Inputs (Position));
+         end loop;
+         for Path of Inputs loop
+            Protect_Input (Path);
+         end loop;
+         if Script_Seen then
+            Protect_Input (Unbounded.To_String (Script_Path));
+         end if;
          Check_Dependency_Path (Depfile);
          Check_Dependency_Path (Unbounded.To_String (Output));
          Check_Dependency_Path (Unbounded.To_String (Build_Report_Path));
@@ -4348,7 +4584,8 @@ package body Landin.Driver is
                   else Landin.Driver.Library.Located (Host));
             begin
                if Natural (Roots.Length) > 0 and then Rooted_Files then
-                  Loading.Load_Files (Context, Host, Inputs);
+                  Loading.Load_Files
+                    (Context, Host, Inputs, Observed_Input'Access);
                   if Landin.Stages.Source_Count (Context) > 0
                     and then not Landin.Stages.Failed (Context)
                   then
@@ -4358,7 +4595,8 @@ package body Landin.Driver is
                           (if Depfile /= ""
                            then Dependency_Directories'Access else null),
                         Implicit => Implicit_Module,
-                        Parsing => Watch_Parsing'Access);
+                        Parsing => Watch_Parsing'Access,
+                        Observed => Observed_Input'Access);
                   end if;
                elsif Natural (Roots.Length) > 0 then
                   if Natural (Inputs.Length) = 1 then
@@ -4369,10 +4607,12 @@ package body Landin.Driver is
                            then Dependency_Directories'Access else null),
                         Library => Library_Root,
                         Implicit => Implicit_Module,
-                        Parsing => Watch_Parsing'Access);
+                        Parsing => Watch_Parsing'Access,
+                        Observed => Observed_Input'Access);
                   end if;
                else
-                  Loading.Load_Files (Context, Host, Inputs);
+                  Loading.Load_Files
+                    (Context, Host, Inputs, Observed_Input'Access);
                   --  Named files reach the library and nothing else, and
                   --  are parsed here to say what they import, as a rooted
                   --  request's modules are.  With no library found, an
@@ -4387,7 +4627,8 @@ package body Landin.Driver is
                           (if Depfile /= ""
                            then Dependency_Directories'Access else null),
                         Implicit => Implicit_Module,
-                        Parsing => Watch_Parsing'Access);
+                        Parsing => Watch_Parsing'Access,
+                        Observed => Observed_Input'Access);
                   end if;
                end if;
             end;
@@ -4465,17 +4706,29 @@ package body Landin.Driver is
                   --  link writes beside the image, which its report reads.
                   if Unbounded.Length (Intermediate_Assembly) > 0 then
                      declare
-                        Removed : Landin.Platform.Remove_Status;
+                        Removed : Landin.Platform.Write_Status;
+                        Reason : Unbounded.Unbounded_String;
                      begin
-                        Host.Remove_File
-                          (Unbounded.To_String (Intermediate_Assembly),
-                           Removed);
-                        if Removed = Landin.Platform.Not_Removable then
+                        Publication.Discard
+                          (Artifacts, Host,
+                           Unbounded.To_String (Intermediate_Assembly),
+                           Removed, Reason);
+                        if Removed /= Landin.Platform.Write_Ok then
                            Note_Failure
                              (Code_Unwritable,
                               "cannot remove the intermediate assembly "
                               & Unbounded.To_String (Intermediate_Assembly)
+                              & ": " & Unbounded.To_String (Reason)
                               & "; --keep-asm keeps it on purpose");
+                        else
+                           for Position in 1 .. Natural (Reserved.Length) loop
+                              if Reserved (Position) =
+                                Unbounded.To_String (Intermediate_Assembly)
+                              then
+                                 Reserved.Delete (Position);
+                                 exit;
+                              end if;
+                           end loop;
                         end if;
                      end;
                   end if;
@@ -4526,14 +4779,35 @@ package body Landin.Driver is
                     (Landin.Stages.Source
                        (Context, Landin.Stages.Nth_Source (Context, Index))));
                end loop;
+               for Path of Protected_Inputs loop
+                  Unbounded.Append (Text, " ");
+                  Append_Path (Path);
+               end loop;
                Unbounded.Append (Text, LF & "");
-               Host.Write_File (Depfile, Unbounded.To_String (Text), Written);
+               Write_Output (Depfile, Unbounded.To_String (Text), Written);
                if Written /= Landin.Platform.Write_Ok then
                   Note_Failure (Code_Unwritable, "cannot write: " & Depfile);
                end if;
             end;
          end if;
+         Close_Artifacts
+           (not Bad_Use and then not Policy_Denied
+            and then not Landin.Stages.Failed (Context));
          Write_Stage_Report;
+         if Landin.Stages.Failed (Context) and then not Reserved.Is_Empty then
+            declare
+               Status : Landin.Platform.Write_Status;
+               Reason : Unbounded.Unbounded_String;
+            begin
+               Publication.Abort_Transaction (Artifacts, Host, Status, Reason);
+               if Status /= Landin.Platform.Write_Ok then
+                  Note_Failure (Code_Unwritable,
+                    "artifact recovery needs attention: "
+                    & Unbounded.To_String (Reason));
+               end if;
+            end;
+         end if;
+         Finish_Publications;
 
          --  A rejected target is not a selected target, so nothing is
          --  echoed on the failing path.
@@ -4566,6 +4840,8 @@ package body Landin.Driver is
          --  require the same resource that has just run out.
          when Landin.Host_Exhausted | Storage_Error
             | Landin.External_Tool_Failed =>
+            Close_Artifacts (False);
+            Finish_Publications;
             raise;
 
          --  A defect is the compiler finding itself wrong, and it arrives
@@ -4579,6 +4855,8 @@ package body Landin.Driver is
          --  It names the stage it arose in and what it said, so a reader
          --  can say which construct broke it without a debugger.
          when Defect : others =>
+            Close_Artifacts (False);
+            Finish_Publications;
             Result.Report :=
               Unbounded.To_Unbounded_String
                 (Render_Report

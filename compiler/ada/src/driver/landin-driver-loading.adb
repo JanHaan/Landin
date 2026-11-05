@@ -136,7 +136,9 @@ package body Landin.Driver.Loading is
    procedure Load_Files
      (Context : in out Landin.Stages.Compilation;
       Host    : Landin.Platform.Filesystem'Class;
-      Paths   : Landin.Platform.Path_List)
+      Paths   : Landin.Platform.Path_List;
+      Observed : access procedure
+        (Path : String; Identity : Landin.Platform.File_Identity) := null)
    is
       Loaded    : Landin.Platform.Path_List;
       Unkeyed   : Landin.Platform.Path_List;
@@ -171,8 +173,14 @@ package body Landin.Driver.Loading is
                   declare
                      Content : Unbounded.Unbounded_String;
                      Status  : Landin.Platform.Read_Status;
+                     Identity : Landin.Platform.File_Identity;
                   begin
-                     Host.Read_File (Path, Content, Status);
+                     Host.Read_Snapshot (Path, Content, Identity, Status);
+                           if Status = Landin.Platform.Read_Ok
+                             and then Observed /= null
+                           then
+                              Observed (Path, Identity);
+                           end if;
 
                      case Status is
                         when Landin.Platform.Read_Ok =>
@@ -237,7 +245,9 @@ package body Landin.Driver.Loading is
       Implicit        : String;
       Cache           : access Landin.Stages.Syntax.Parse_Cache;
       Dependency_Directories : access Landin.Platform.Path_List;
-      Parsing         : access procedure (Finished : Boolean));
+      Parsing         : access procedure (Finished : Boolean);
+      Observed : access procedure
+        (Path : String; Identity : Landin.Platform.File_Identity));
 
    procedure Discover
      (Context         : in out Landin.Stages.Compilation;
@@ -252,7 +262,9 @@ package body Landin.Driver.Loading is
       Implicit        : String;
       Cache           : access Landin.Stages.Syntax.Parse_Cache;
       Dependency_Directories : access Landin.Platform.Path_List;
-      Parsing         : access procedure (Finished : Boolean))
+      Parsing         : access procedure (Finished : Boolean);
+      Observed : access procedure
+        (Path : String; Identity : Landin.Platform.File_Identity))
    is
       --  The roots in search order, the library's last unless a root
       --  already names its directory, and where the library is among
@@ -1010,6 +1022,7 @@ package body Landin.Driver.Loading is
                      declare
                         Content : Unbounded.Unbounded_String;
                         Status  : Landin.Platform.Read_Status;
+                        Identity : Landin.Platform.File_Identity;
                      begin
                         if Cache /= null
                           and then Directory /= Entry_Directory
@@ -1021,7 +1034,13 @@ package body Landin.Driver.Loading is
                                 (Cache.all, Path));
                            Status := Landin.Platform.Read_Ok;
                         else
-                           Host.Read_File (Path, Content, Status);
+                           Host.Read_Snapshot
+                             (Path, Content, Identity, Status);
+                           if Status = Landin.Platform.Read_Ok
+                             and then Observed /= null
+                           then
+                              Observed (Path, Identity);
+                           end if;
                         end if;
                         if Status = Landin.Platform.Read_Ok then
                            declare
@@ -1387,12 +1406,14 @@ package body Landin.Driver.Loading is
       Dependency_Directories : access Landin.Platform.Path_List := null;
       Library         : String := "";
       Implicit        : String := "";
-      Parsing         : access procedure (Finished : Boolean) := null) is
+      Parsing         : access procedure (Finished : Boolean) := null;
+      Observed : access procedure
+        (Path : String; Identity : Landin.Platform.File_Identity) := null) is
    begin
       Discover
         (Context, Host, Roots, Library, Entry_Directory, False,
          Missing_Directories, Previous, Watch_Syntax, Implicit, Cache,
-         Dependency_Directories, Parsing);
+         Dependency_Directories, Parsing, Observed);
    end Load_Reachable_Program;
 
    procedure Load_Library_Imports
@@ -1404,13 +1425,15 @@ package body Landin.Driver.Loading is
       Cache        : access Landin.Stages.Syntax.Parse_Cache := null;
       Dependency_Directories : access Landin.Platform.Path_List := null;
       Implicit     : String := "";
-      Parsing      : access procedure (Finished : Boolean) := null)
+      Parsing      : access procedure (Finished : Boolean) := null;
+      Observed : access procedure
+        (Path : String; Identity : Landin.Platform.File_Identity) := null)
    is
    begin
       Discover
         (Context, Host, Landin.Platform.No_Arguments, Library, "", True,
          null, Previous, Watch_Syntax, Implicit, Cache,
-         Dependency_Directories, Parsing);
+         Dependency_Directories, Parsing, Observed);
    end Load_Library_Imports;
 
    procedure Load_Rooted_Imports
@@ -1420,13 +1443,15 @@ package body Landin.Driver.Loading is
       Library : String;
       Dependency_Directories : access Landin.Platform.Path_List := null;
       Implicit : String := "";
-      Parsing  : access procedure (Finished : Boolean) := null)
+      Parsing  : access procedure (Finished : Boolean) := null;
+      Observed : access procedure
+        (Path : String; Identity : Landin.Platform.File_Identity) := null)
    is
    begin
       Discover
         (Context, Host, Roots, Library, "", True,
          null, null, null, Implicit, null, Dependency_Directories,
-         Parsing);
+         Parsing, Observed);
    end Load_Rooted_Imports;
 
 end Landin.Driver.Loading;

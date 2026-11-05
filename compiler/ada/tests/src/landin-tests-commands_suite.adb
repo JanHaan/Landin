@@ -429,6 +429,53 @@ package body Landin.Tests.Commands_Suite is
       end loop;
    end Response_Files;
 
+   procedure Response_Inputs_Survive
+     (Item : in out Landin.Testing.Context);
+   procedure Response_Inputs_Survive
+     (Item : in out Landin.Testing.Context) is
+      Meter : Landin.Platform.Unmetered;
+   begin
+      for Attempt in 1 .. 4 loop
+         declare
+            Host : Landin.Testing.Fakes.Fake_Filesystem;
+            Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+            Result : Landin.Driver.Outcome;
+            Read : Landin.Platform.Read_Status;
+            Content : US.Unbounded_String;
+            Outer : constant String := "@inner";
+            Inner : constant String :=
+              "check --target=linux-x86-64 main.ldn";
+            Option : constant String :=
+              (case Attempt is
+                  when 1 => "--build-report=outer",
+                  when 2 => "--stage-report=inner",
+                  when 3 => "--build-report=alias",
+                  when 4 => "--stage-report=alias");
+         begin
+            Host.Add_File ("main.ldn", Source);
+            Host.Add_File ("outer", Outer);
+            Host.Add_File ("inner", Inner);
+            Host.Add_Alias ("alias", "inner");
+            Result := Landin.Commands.Execute
+              (["@outer", Option], Host, Tools, Meter);
+            Landin.Testing.Check
+              (Item, Result.Status /= Landin.Driver.Status_Success
+               and then Contains (US.To_String (Result.Report), "output")
+               and then Contains (US.To_String (Result.Report), "retry"),
+               "a response collision is actionable: "
+               & US.To_String (Result.Report));
+            Host.Read_File ("outer", Content, Read);
+            Landin.Testing.Check_Equal
+              (Item, US.To_String (Content), Outer,
+               "outer response remains the consumed generation");
+            Host.Read_File ("inner", Content, Read);
+            Landin.Testing.Check_Equal
+              (Item, US.To_String (Content), Inner,
+               "nested response and its alias remain untouched");
+         end;
+      end loop;
+   end Response_Inputs_Survive;
+
    procedure Emission_And_Depfile (Item : in out Landin.Testing.Context);
    procedure Emission_And_Depfile (Item : in out Landin.Testing.Context) is
       Host : Landin.Testing.Fakes.Fake_Filesystem;
@@ -1438,6 +1485,9 @@ package body Landin.Tests.Commands_Suite is
         (Into, "commands", "command grammar", Grammar'Access);
       Landin.Testing.Register (Into, "commands", "placement and compatibility",
                               Placement_And_Compatibility'Access);
+      Landin.Testing.Register
+        (Into, "commands", "response inputs survive publication",
+         Response_Inputs_Survive'Access);
       Landin.Testing.Register (Into, "commands", "response files",
                               Response_Files'Access);
       Landin.Testing.Register (Into, "commands", "emission and dependencies",

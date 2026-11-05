@@ -28,7 +28,10 @@ package body Landin.Tests.Optimization_Driver_Suite is
      (Host : Report_Refusing_Host; Path : String; Content : String;
       Status : out Landin.Platform.Write_Status) is
    begin
-      if Path = "report.json" then
+      if Path = "report.json" or else
+        (Path'Length > 12
+         and then Path (Path'Last - 11 .. Path'Last) = "/report.json")
+      then
          Status := Landin.Platform.Not_Writable;
       else
          Landin.Testing.Fakes.Write_File
@@ -230,6 +233,7 @@ package body Landin.Tests.Optimization_Driver_Suite is
       First_Assembly : US.Unbounded_String;
    begin
       Host.Add_File ("main.ldn", Source);
+      Host.Add_File ("out.s", "prior assembly");
       Args.Append ("--build-report=report.json");
       Result := Landin.Driver.Execute (Args, Host, Tools);
       Landin.Testing.Check_Equal
@@ -304,6 +308,8 @@ package body Landin.Tests.Optimization_Driver_Suite is
    end Pass_Mode_Combinations;
 
    procedure Report_Failures (Item : in out Landin.Testing.Context) is
+      Content : US.Unbounded_String;
+      Read : Landin.Platform.Read_Status;
       Host : Report_Refusing_Host;
       Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
       Args : Landin.Platform.Path_List := Request;
@@ -315,9 +321,10 @@ package body Landin.Tests.Optimization_Driver_Suite is
       Landin.Testing.Check_Equal
         (Item, Result.Status, Landin.Driver.Status_Reported,
          "report write failure fails compilation");
+      Host.Read_File ("out.s", Content, Read);
       Landin.Testing.Check
-        (Item, Host.Written ("out.s") /= "",
-         "the injected failure is specifically the report write");
+        (Item, US.To_String (Content) = "prior assembly",
+         "a report write failure preserves the prior assembly generation");
       Landin.Testing.Check
         (Item, Ada.Strings.Fixed.Index
            (US.To_String (Result.Report), "cannot write: report.json") > 0,

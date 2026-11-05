@@ -7229,8 +7229,76 @@ package body Landin.Tests.Driver_Suite is
                    "0x4037_8000", "0x3fca_8000");
    end Xtensa_Stage_Architecture;
 
+   procedure Compilation_Generation
+     (Item : in out Landin.Testing.Context);
+   procedure Compilation_Generation
+     (Item : in out Landin.Testing.Context) is
+      Text : constant String :=
+        "public main: () -> (code: i32) = code = 0 end main";
+   begin
+      for Attempt in 1 .. 4 loop
+         declare
+            Host : Landin.Testing.Fakes.Fake_Filesystem;
+            Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+            Result : Landin.Driver.Outcome;
+            Content : Unbounded.Unbounded_String;
+            Read : Landin.Platform.Read_Status;
+            Args : Landin.Platform.Path_List :=
+              ["main.ldn", "--target=linux-x86-64", "--emit=exe",
+               "--link=libc", "-o=program"];
+         begin
+            Host.Add_File ("main.ldn", Text);
+            Host.Add_File ("program", "prior executable");
+            Host.Add_File ("program.s", "prior assembly");
+            Host.Add_File ("report.json", "prior build report");
+            if Attempt = 1 then
+               Tools.Set_Result (1, "link refused");
+               Args.Append ("--keep-asm");
+               Args.Append ("--build-report=report.json");
+            elsif Attempt = 3 then
+               Host.Add_File ("chosen-cc", "selected tool input");
+               Args.Append ("--toolchain=chosen-cc");
+               Args.Append ("--build-report=chosen-cc");
+            elsif Attempt = 4 then
+               Host.Add_File ("operand.s", "assembly source input");
+               Args.Replace_Element (1, "operand.s");
+               Tools.Set_Result (1, "link refused");
+            end if;
+            Result := Landin.Driver.Execute (Args, Host, Tools);
+            Landin.Testing.Check
+              (Item, (Result.Status = Landin.Driver.Status_Success)
+                = (Attempt = 2),
+               "only the successful generation publishes: "
+               & Unbounded.To_String (Result.Report));
+            Host.Read_File ("program.s", Content, Read);
+            Landin.Testing.Check_Equal
+              (Item, Unbounded.To_String (Content), "prior assembly",
+               "temporary assembly never replaces an existing sibling");
+            Host.Read_File ("report.json", Content, Read);
+            Landin.Testing.Check_Equal
+              (Item, Unbounded.To_String (Content), "prior build report",
+               "failed generations preserve prior reports");
+            if Attempt /= 2 then
+               Host.Read_File ("program", Content, Read);
+               Landin.Testing.Check_Equal
+                 (Item, Unbounded.To_String (Content), "prior executable",
+                  "failure preserves the prior executable");
+            end if;
+            if Attempt = 3 then
+               Host.Read_File ("chosen-cc", Content, Read);
+               Landin.Testing.Check_Equal
+                 (Item, Unbounded.To_String (Content), "selected tool input",
+                  "a selected compiler is protected from report publication");
+            end if;
+         end;
+      end loop;
+   end Compilation_Generation;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "driver", "compilation publishes one generation",
+         Compilation_Generation'Access);
       Landin.Testing.Register
         (Into, "driver", "Xtensa stages have an architectural prelude",
          Xtensa_Stage_Architecture'Access);
