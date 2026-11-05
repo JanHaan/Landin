@@ -2601,6 +2601,11 @@ package body Landin.Tests.Driver_Suite is
                      Args.Append ("--toolchain=owned-tool");
                   when Safe_Report | Selected_Driver | Missing_Driver =>
                      Args.Append ("--toolchain=owned-tool");
+                     if Tool = Safe_Report then
+                        Host.Add_Directory ("/tools");
+                        Host.Add_File ("/tools/ld.peer", "selected linker");
+                        Args.Append ("--linker=/tools/ld.peer");
+                     end if;
                end case;
                if Tool = Missing_Driver then
                   Tools.Set_Available (False);

@@ -1535,7 +1535,10 @@ package body Landin.Driver is
             Protect_Program (Driver);
             if Linker_Seen then
                Protect_Program (Unbounded.To_String (Linker));
-               if Unbounded.Length (Linker) > 0 then
+               if Unbounded.Length (Linker) > 0
+                 and then Ada.Strings.Fixed.Index
+                   (Unbounded.To_String (Linker), "/") = 0
+               then
                   Protect_Program ("ld." & Unbounded.To_String (Linker));
                end if;
             else

@@ -12,6 +12,20 @@ import sys
 import tempfile
 
 
+def entry_snapshot(path):
+    try:
+        identity = path.lstat()
+    except FileNotFoundError:
+        return None
+    result = dict(device=identity.st_dev, inode=identity.st_ino,
+                  mode=identity.st_mode)
+    if path.is_symlink():
+        result['link_target'] = os.readlink(path)
+    elif path.is_file():
+        result['sha256'] = hashlib.sha256(path.read_bytes()).hexdigest()
+    return result
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--refine', type=Path, required=True)
@@ -108,6 +122,9 @@ def main():
         ('early-option-failure-as-stage-report',
          [*early_operands, '--option=invalid'], early_tool),
         ('early-safe-stage-report', early_operands, root / 'early-stages.json'),
+        ('early-safe-absolute-linker-stage-report',
+         [*early_operands, '--linker=' + str(linker)],
+         root / 'early-absolute-linker-stages.json'),
     ]:
         cases.append((name, [*operands, '--stage-report=' + str(report)],
                       early_tool, False))
@@ -144,6 +161,13 @@ def main():
     for name, operands, protected, succeeds in cases:
         before = protected.read_bytes()
         identity = protected.stat()
+        refused_report = None
+        report_before = None
+        if name.startswith('early-') and not name.startswith('early-safe-'):
+            refused_report = Path(next(value.split('=', 1)[1]
+                                       for value in operands
+                                       if value.startswith('--stage-report=')))
+            report_before = entry_snapshot(refused_report)
         case_env = dict(env)
         if name.startswith('early-'):
             case_env['PATH'] = str(selected_tools) + os.pathsep + env['PATH']
@@ -151,10 +175,15 @@ def main():
                                 env=case_env, capture_output=True, timeout=45)
         after = protected.stat()
         expected_failure = (result.returncode == 2 and b'L0002' in result.stderr)
-        if name == 'early-safe-stage-report':
+        report_after = (entry_snapshot(refused_report)
+                        if refused_report is not None else None)
+        if name.startswith('early-safe-'):
+            safe_report = Path(next(value.split('=', 1)[1] for value in operands
+                                    if value.startswith('--stage-report=')))
             expected_failure = (result.returncode == 1 and b'L0012' in result.stderr
-                                and json.loads((root / 'early-stages.json').read_text())
-                                ['format'] == 'landin-stage-report-1')
+                                and safe_report.is_file()
+                                and json.loads(safe_report.read_text())['format']
+                                == 'landin-stage-report-1')
         product_ok = True
         if succeeds and '-o' in operands:
             product = Path(operands[operands.index('-o') + 1])
@@ -165,6 +194,7 @@ def main():
                   and protected.read_bytes() == before
                   and (identity.st_dev, identity.st_ino, identity.st_mode)
                   == (after.st_dev, after.st_ino, after.st_mode)
+                  and report_before == report_after
                   and not execution.exists()
                   and not list(temporary.iterdir())
                   and not list(root.glob('.refine-publication-*')))
@@ -175,6 +205,9 @@ def main():
                    before_identity=[identity.st_dev, identity.st_ino, identity.st_mode],
                    after_identity=[after.st_dev, after.st_ino, after.st_mode],
                    tool_executed=execution.exists(),
+                   refused_report=str(refused_report) if refused_report else None,
+                   report_entry_before=report_before,
+                   report_entry_after=report_after,
                    stdout=result.stdout.decode(errors='replace'),
                    stderr=result.stderr.decode(errors='replace'))
         results.append(row)
