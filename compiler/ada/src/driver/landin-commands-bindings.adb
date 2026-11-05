@@ -478,9 +478,51 @@ package body Landin.Commands.Bindings is
 
       --  Native Clang runs in the retained work directory. Its relative
       --  dependency names refer there, even when the original TMPDIR moved.
+      function Clang_Path (Path : String) return String;
+
       function Clang_Path (Path : String) return String is
-        (if Starts_With (Path, "/") then Normal (Path)
-         else Normal (Work_Path (Path)));
+         Root : constant String := Normal (US.To_String (Work));
+         Resolved : constant String :=
+           (if Starts_With (Path, "/") then Normal (Path)
+            else Normal (Work_Path (Path)));
+         Depth : Natural := 0;
+         First : Positive := Path'First;
+         Escapes : Boolean := False;
+      begin
+         if Starts_With (Path, "/") then
+            return Resolved;
+         end if;
+         for Index in Path'First .. Path'Last + 1 loop
+            if Index > Path'Last or else Path (Index) = '/' then
+               declare
+                  Part : constant String := Path (First .. Index - 1);
+               begin
+                  if Part = ".." then
+                     if Depth = 0 then
+                        Escapes := True;
+                        exit;
+                     end if;
+                     Depth := Depth - 1;
+                  elsif Part /= "" and then Part /= "." then
+                     Depth := Depth + 1;
+                  end if;
+               end;
+               First := Index + 1;
+            end if;
+         end loop;
+         if Escapes or else not Starts_With (Resolved, Root & "/") then
+            Report
+              (Cat.Bindings_Clang_Refused, "Clang reported a relative header"
+               & " outside its private workspace: " & Repr (Path)
+               & "; use an absolute include path, or include the header"
+               & " by a name under --include-dir or --system-include-dir");
+            return "";
+         end if;
+         --  Keep the registered spelling after normalizing components
+         --  inside the work root, so a moved ancestor is never reopened.
+         return US.To_String (Work)
+           & Resolved (Root'Last + 1 .. Resolved'Last);
+      end Clang_Path;
 
       --  What every Clang run is given before its own arguments.
       function Base_Arguments return Platform.Path_List;
@@ -838,11 +880,16 @@ package body Landin.Commands.Bindings is
          for Path of B.Marker_Files (US.To_String (Preprocessed)) loop
             --  Clang reports dependency names, not its read descriptors.
             --  Invocation-owned header copies and probes are disposable.
-            if not Starts_With (Clang_Path (Path), US.To_String (Work) & "/")
-            then
-               Pub.Protect (Group, Host, Clang_Path (Path));
-               Input_Paths.Append (Clang_Path (Path));
-            end if;
+            declare
+               Location : constant String := Clang_Path (Path);
+            begin
+               if Location = "" then
+                  return False;
+               elsif not Starts_With (Location, US.To_String (Work) & "/") then
+                  Pub.Protect (Group, Host, Location);
+                  Input_Paths.Append (Location);
+               end if;
+            end;
          end loop;
          B.Strip_Markers
            (Session, US.To_String (Preprocessed), Roots, Stripped);
@@ -942,12 +989,17 @@ package body Landin.Commands.Bindings is
                return False;
             end if;
             for Path of Consumed loop
-               if not Starts_With
-                 (Clang_Path (Path), US.To_String (Work) & "/")
-               then
-                  Pub.Protect (Group, Host, Clang_Path (Path));
-                  Input_Paths.Append (Clang_Path (Path));
-               end if;
+               declare
+                  Location : constant String := Clang_Path (Path);
+               begin
+                  if Location = "" then
+                     return False;
+                  elsif not Starts_With (Location, US.To_String (Work) & "/")
+                  then
+                     Pub.Protect (Group, Host, Location);
+                     Input_Paths.Append (Location);
+                  end if;
+               end;
             end loop;
          end;
          return True;

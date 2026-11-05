@@ -556,6 +556,13 @@ package body Landin.Tests.Bindings_Suite is
               "unsupported path-sensitive preprocessing outside explicit"
               & " roots",
               Marker => "# 1 ""/elsewhere/leak.h"" 1" & LF);
+      Expect (Arguments, "L0580",
+              "relative header outside its private workspace",
+              Marker => "# 1 ""../outside.h"" 1" & LF);
+      Expect (Arguments, "L0580",
+              "relative header outside its private workspace",
+              Marker => "# 1 ""../sibling/../refine-bindings-1/"
+                & "headers/api/api.h"" 1" & LF);
       Expect (["bindings", "--clang=clang-19", "--target=linux-x86-64",
                "--sysroot=sysroot.h", "--policy=policy.json",
                "--out-dir=out", "api.h"], "L0580",

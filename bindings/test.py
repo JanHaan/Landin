@@ -392,6 +392,66 @@ class GeneratorTests(unittest.TestCase):
         for name in ("bindings.ldn", "adapters.c", "exports.h", "bindings.json"):
             self.assertEqual((control / name).read_bytes(), (output / name).read_bytes(), name)
 
+    def test_relative_dependency_escape_preserves_consumed_header(self) -> None:
+        selected = self.selection(self.function("f"))
+        inside = self.root / "inside-workspace"
+        sysroot, includes, output = self.make_tree(
+            inside, header='#include "../common.h"\n', selected_policy=selected)
+        common = inside / "common.h"
+        common.write_text("int f(void);\n")
+        command = self.command(inside, sysroot, includes, output)
+        command.append(f"common.h={common}")
+        accepted = subprocess.run(command, capture_output=True, text=True, timeout=60)
+        self.assertEqual(accepted.returncode, 0, accepted.stderr)
+
+        actual = self.root / "actual-scratch"
+        replacement = self.root / "replacement-scratch"
+        (actual / "out").mkdir(parents=True)
+        (replacement / "out").mkdir(parents=True)
+        consumed = actual / "out/exports.h"
+        consumed.write_text("int f(void);\n")
+        temporary = self.root / "scratch-link"
+        temporary.symlink_to(actual, target_is_directory=True)
+        parent = self.root / "escaping-dependency"
+        sysroot, includes, _ = self.make_tree(
+            parent, header=f'#include "{consumed}"\n', selected_policy=selected)
+        control = self.command(parent, sysroot, includes, parent / "control")
+        control.extend(["--include-dir", str(consumed.parent)])
+        accepted = subprocess.run(control, env=dict(os.environ, TMPDIR=str(temporary)),
+                                  capture_output=True, text=True, timeout=60)
+        self.assertEqual(accepted.returncode, 0, accepted.stderr)
+
+        (parent / "api.h").write_text('#include "../../../out/exports.h"\n')
+        marker = self.root / "retargeted-clang"
+        wrapper = self.root / "retargeting-clang"
+        wrapper.write_text(
+            f"#!{sys.executable}\n"
+            "import os, pathlib, sys\n"
+            f"temporary = pathlib.Path({str(temporary)!r})\n"
+            f"marker = pathlib.Path({str(marker)!r})\n"
+            "if not marker.exists():\n"
+            "    temporary.unlink()\n"
+            f"    temporary.symlink_to({str(replacement)!r}, target_is_directory=True)\n"
+            "    marker.write_text(str(pathlib.Path.cwd()))\n"
+            f"os.execv({str(self.clang)!r}, [{str(self.clang)!r}, *sys.argv[1:]])\n")
+        wrapper.chmod(0o700)
+        command = self.command(parent, sysroot, includes, actual / "out")
+        command[command.index("--clang") + 1] = str(wrapper)
+        before = consumed.read_bytes()
+        identity = (consumed.stat().st_dev, consumed.stat().st_ino)
+        refused = subprocess.run(command, env=dict(os.environ, TMPDIR=str(temporary)),
+                                 capture_output=True, text=True, timeout=60)
+        self.assertTrue(marker.exists(), "the ancestor-substitution boundary was reached")
+        self.assertEqual(refused.returncode, 1, refused.stderr)
+        self.assertIn("relative header outside its private workspace", refused.stderr)
+        self.assertIn("--include-dir or --system-include-dir", refused.stderr)
+        self.assertEqual(consumed.read_bytes(), before)
+        self.assertEqual((consumed.stat().st_dev, consumed.stat().st_ino), identity)
+        self.assertEqual(sorted(path.name for path in (actual / "out").iterdir()),
+                         ["exports.h"])
+        self.assertEqual(sorted(path.name for path in actual.iterdir()), ["out"])
+        self.assertEqual(sorted(path.name for path in replacement.iterdir()), ["out"])
+
     def test_committed_fixture_is_exactly_regenerable(self) -> None:
         parent = self.root / "fixture-regeneration"
         sysroot, includes, output = self.make_tree(
