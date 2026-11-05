@@ -277,7 +277,7 @@ package Landin.Platform is
      return Boolean is abstract;
 
    function Resolve_Program (Host : Tool_Runner; Program : String)
-      return String;
+      return String is abstract;
 
    procedure Run
      (Host      : Tool_Runner;

@@ -1208,6 +1208,12 @@ package body Landin.Testing.Fakes is
       end;
    end Run_In_Environment;
 
+   overriding function Resolve_Program
+     (Host : Fake_Tool_Runner; Program : String) return String is
+   begin
+      return (if Available (Host, Program) then Program else "");
+   end Resolve_Program;
+
    overriding procedure Run
      (Host      : Fake_Tool_Runner;
       Program   : String;
