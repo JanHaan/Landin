@@ -29,6 +29,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location("gate_inputs", ROOT / "scripts/gate_inputs.py")
@@ -107,8 +108,16 @@ class Key(unittest.TestCase):
         self.assertFalse(self.same())
 
     def test_a_tree_that_cannot_be_read_is_an_error(self):
-        with self.assertRaises(subprocess.CalledProcessError):
+        # Git's own refusal is the evidence; it is kept out of a passing
+        # run's output rather than printed as if a control had failed.
+        run = subprocess.run
+
+        def quiet(*arguments, **options):
+            return run(*arguments, **dict(options, stderr=subprocess.PIPE))
+        with mock.patch.object(gate_inputs.subprocess, "run", quiet), \
+                self.assertRaises(subprocess.CalledProcessError) as raised:
             gate_inputs.key("0" * 40, self.root)
+        self.assertIn(b"not a tree object", raised.exception.stderr)
 
 
 NOW = datetime(2026, 10, 4, 12, tzinfo=timezone.utc)
