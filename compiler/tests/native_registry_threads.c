@@ -1,5 +1,8 @@
 /* Production registries are process-wide; resources may cross worker threads.
    No hook or process-wide signal/environment configuration changes while live. */
+#ifdef __APPLE__
+#define _DARWIN_C_SOURCE
+#endif
 #define _POSIX_C_SOURCE 200809L
 #include "landin_publication.h"
 #include <errno.h>
