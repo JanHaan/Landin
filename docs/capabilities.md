@@ -225,7 +225,28 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   `--emit asm` writes assembly, `--emit ir` writes the IR the backend would
   receive, and `refine compile program.s -o program` links an assembly file
   as a compiled program is linked. The compile leaves only the executable;
-  `--keep-asm` keeps the assembly beside it.
+  `--keep-asm` keeps the assembly beside it. Generated artifacts use one
+  loss-preserving publication group (D907): exclusive private staging beside
+  each destination, verification before installation, and prior versions kept
+  through verification of the whole group, including an ESP image or Darwin
+  debug bundle. Unchanged files retain their original inode. Failure or
+  cancellation restores prior versions without overwriting a concurrent
+  change, or reports the retained recovery paths. An earlier retained
+  publication is diagnosed before retrying. The group is not an atomic
+  snapshot for readers, and ordinary recovery is not power-loss durability.
+  Protected inputs include the source closure, response files, policies,
+  selected tools, supplied tool inputs and known resolved libraries; bindings
+  also records Clang's consumed headers. External dependency filenames do not
+  provide identities from the tool's read descriptors, and arbitrary wrappers
+  and implicit toolchain internals are outside that protection. Relative or
+  indirect file directives in assembly or linker scripts are refused: use
+  plain absolute file paths or a standalone assembly input or linker script.
+  On interrupt, termination or hangup, refine forwards cancellation to its
+  active tool's process group, allows bounded shutdown, stops remaining
+  ordinary group members and reaps its direct child before recovering outputs.
+  Tools that escape their group or change credentials are outside that
+  supervision contract. Cancellation exits with 128 plus the host signal
+  number; inherited ignored signals stay ignored.
 - `refine run program.ldn -- ARGUMENT ...` compiles into a new private
   directory under `TMPDIR` or `/tmp`, runs the program on this terminal with
   the arguments after `--` exactly, exits with its status, or with 128 and
@@ -248,16 +269,22 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   [`docs/format.md`](format.md) shows, changing its space and nothing else.
   `--check` writes nothing and reports every line that is not in it, showing
   the line as the layout writes it and marking where it differs; `--stdout`
-  prints one source in the layout. The library roots, the examples and the
-  tour's examples are kept in that layout.
+  prints one source in the layout. Rewriting retains the original read
+  descriptor and updates that inode, preserving metadata and hard links. A
+  save renamed over the source is never overwritten; a late name change can
+  leave the old inode formatted and the original bytes at a reported recovery
+  path. Concurrent writes to the same inode through another descriptor remain
+  unsupported. `--check` and `--stdout` acquire no writable lease. The library
+  roots, the examples and the tour's examples are kept in that layout.
 - `refine svd --policy=POLICY.json --out-dir=DIR DEVICE.svd` reads a
   vendor's CMSIS-SVD file and a reviewed selection policy, requires the SVD
   to be the file the policy names by SHA-256, and writes a register module
   per selected peripheral, their correspondence and manifest, and the
   device description's generated `interrupts.ldn` (D555-D558). It stages
-  every output beside its destination and reads it back before replacing
-  any, leaves unchanged files alone and removes what its old manifest names
-  and it no longer makes. [The device guide](../devices/README.md)
+  every output privately beside its destination and reads it back before
+  publishing the group through D907's shared contract, leaves unchanged files
+  alone and removes what its old manifest names and it no longer makes with
+  the same recovery checks. [The device guide](../devices/README.md)
   describes the policy.
 - `refine bindings --clang=CLANG --sysroot=DIR --policy=POLICY.json
   --out-dir=DIR HEADER.h ...` asks the named Clang, in an environment of
@@ -265,7 +292,8 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   policy selects: Landin declarations, C adapters for the forms Landin does
   not carry natively, the header that declares them, and metadata (D820,
   D821). It stages its four outputs and compiles the adapters before
-  replacing any, as `refine svd` does. [The binding guide](../bindings/README.md)
+  publishing them through the same protected-input and recovery contract as
+  `refine svd`. [The binding guide](../bindings/README.md)
   describes the policy.
 - `refine lsp` is a language server over standard input and output: an
   editor started with it gets diagnostics, definitions, hover types,
