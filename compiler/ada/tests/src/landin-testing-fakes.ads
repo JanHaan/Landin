@@ -122,7 +122,8 @@ package Landin.Testing.Fakes is
    procedure Fail_Move (Host : in out Fake_Filesystem; At_Move : Positive);
 
    overriding procedure Open_Publication
-     (Host : Fake_Filesystem; Path : String; Delete_Only : Boolean; Root : String;
+     (Host : Fake_Filesystem; Path : String; Delete_Only : Boolean;
+      Root : String;
       Handle : out Landin.Platform.Publication_Handle;
       Stage : out Ada.Strings.Unbounded.Unbounded_String;
       Status : out Landin.Platform.Write_Status;
@@ -149,8 +150,8 @@ package Landin.Testing.Fakes is
    overriding function Update_Identity
      (Host : Fake_Filesystem; Lease : Landin.Platform.Update_Handle)
       return Landin.Platform.File_Identity;
-   overriding procedure Close_Update (Host : Fake_Filesystem; Lease : Landin.Platform.Update_Handle)
-     ;
+   overriding procedure Close_Update
+     (Host : Fake_Filesystem; Lease : Landin.Platform.Update_Handle);
 
 
    overriding procedure Remove_File
