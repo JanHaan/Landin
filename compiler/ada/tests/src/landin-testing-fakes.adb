@@ -1558,7 +1558,8 @@ package body Landin.Testing.Fakes is
                Item : File_Entry :=
                  (Unbounded.To_Unbounded_String (Path),
                   Host.State.Data.Output_Content,
-                  A_File, 0);
+                  (if Program = "/usr/bin/dsymutil" then A_Directory
+                   else A_File), 0);
                Found : Natural := 0;
             begin
                Item.Identity := Store_Value.Next_Identity;

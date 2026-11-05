@@ -392,6 +392,10 @@ package body Landin.Backend.Toolchain is
      (if Path'Length > 0 and then Path (Path'First) in '-' | '@'
       then "./" & Path else Path);
 
+   function Debug_Bundle_Arguments (Executable, Output : String)
+     return Landin.Platform.Path_List is
+       ([File_Operand (Executable), "-o", File_Operand (Output)]);
+
    function Assemble_Arguments
      (Assembly, Output : String; Facts : Landin.Targets.Target_Facts;
       Debug : Boolean := False;
@@ -403,13 +407,22 @@ package body Landin.Backend.Toolchain is
    is
       List : Landin.Platform.Path_List;
    begin
-      if not Landin.Targets.Is_Firmware (Facts) then
-         raise Compiler_Defect with "firmware assembly requires firmware";
-      end if;
-      Add_Firmware_Machine (List, Level, Facts, Float);
-      List.Append ("-Wa,--fatal-warnings");
-      if Debug then
-         List.Append ("-Wa,--gdwarf-4");
+      if Landin.Targets.Capabilities.Backend_For (Facts)
+        = Landin.Targets.Capabilities.Darwin_Arm64_Mach_O
+      then
+         Landin.Platform.Add (List, "-arch");
+         Landin.Platform.Add (List, "arm64");
+         if Debug then
+            List.Append ("-gdwarf-4");
+         end if;
+      elsif Landin.Targets.Is_Firmware (Facts) then
+         Add_Firmware_Machine (List, Level, Facts, Float);
+         List.Append ("-Wa,--fatal-warnings");
+         if Debug then
+            List.Append ("-Wa,--gdwarf-4");
+         end if;
+      else
+         raise Compiler_Defect with "assembly requires firmware or Darwin";
       end if;
       List.Append ("-x");
       List.Append ("assembler");
@@ -454,7 +467,8 @@ package body Landin.Backend.Toolchain is
         Landin.Platform.No_Arguments;
       Script : String := "";
       Float : Landin.Targets.Firmware.Float_Unit :=
-        Landin.Targets.Firmware.No_Float_Unit)
+        Landin.Targets.Firmware.No_Float_Unit;
+      Assembly_Is_Object : Boolean := False)
       return Landin.Platform.Path_List
    is
       List : Landin.Platform.Path_List;
@@ -514,9 +528,11 @@ package body Landin.Backend.Toolchain is
             --  Apple Clang retains the object and invokes dsymutil after
             --  linking. The resulting dSYM carries the executable's UUID.
             Landin.Platform.Add (List, "-gdwarf-4");
-            Landin.Platform.Add (List, "-x");
-            Landin.Platform.Add (List, "assembler");
-            Landin.Platform.Add (List, "-save-temps=obj");
+            if not Assembly_Is_Object then
+               Landin.Platform.Add (List, "-x");
+               Landin.Platform.Add (List, "assembler");
+               Landin.Platform.Add (List, "-save-temps=obj");
+            end if;
          end if;
       end if;
       --  A static Linux executable is the program alone.  No C
@@ -555,7 +571,7 @@ package body Landin.Backend.Toolchain is
          end if;
       end loop;
       Landin.Platform.Add (List, File_Operand (Assembly));
-      if Full_Debug and then
+      if Full_Debug and then not Assembly_Is_Object and then
         Landin.Targets.Capabilities.Backend_For (Facts)
           = Landin.Targets.Capabilities.Darwin_Arm64_Mach_O
       then

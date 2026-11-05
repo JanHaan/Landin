@@ -1533,6 +1533,15 @@ package body Landin.Driver is
          begin
             Protect_Program (Unbounded.To_String (Toolchain));
             Protect_Program (Driver);
+            if Debug_Enabled
+              and then Landin.Targets.Capabilities.Backend_For (Facts)
+                = Landin.Targets.Capabilities.Darwin_Arm64_Mach_O
+              and then Natural (Inputs.Length) = 1
+              and then Is_Assembly_Operand (Inputs.First_Element)
+            then
+               Protect_Program
+                 (Landin.Backend.Toolchain.Darwin_Debug_Bundle_Tool);
+            end if;
             if Linker_Seen then
                Protect_Program (Unbounded.To_String (Linker));
                if Unbounded.Length (Linker) > 0
@@ -2330,6 +2339,20 @@ package body Landin.Driver is
                  (Facts, Unbounded.To_String (Toolchain), Native_Target));
          end Note_Unavailable_Toolchain;
 
+         procedure Note_Unavailable_Debug_Bundle;
+         procedure Note_Unavailable_Debug_Bundle is
+         begin
+            Note_No_Toolchain
+              ("cannot run "
+               & Landin.Backend.Toolchain.Darwin_Debug_Bundle_Tool
+               & " to package Darwin debug information",
+               (if Native_Target
+                then "install Apple's command line tools with"
+                else "run this debug build on macOS and install Apple's"
+                  & " command line tools with")
+               & " `xcode-select --install`, or use --debug=none");
+         end Note_Unavailable_Debug_Bundle;
+
          --  D525's report: the library at its directive, the files looked
          --  for, every named directory with where it was named, and that
          --  the driver's own directories were searched as well.
@@ -2899,11 +2922,13 @@ package body Landin.Driver is
          --  every failure said as the tool said it.
          procedure Link_Assembly
            (Assembly_Path, Product_Path, Map_Id : String;
-            Destinations : Landin.Platform.Path_List);
+            Destinations : Landin.Platform.Path_List;
+            Separate_Debug_Object : Boolean := False);
 
          procedure Link_Assembly
            (Assembly_Path, Product_Path, Map_Id : String;
-            Destinations : Landin.Platform.Path_List)
+            Destinations : Landin.Platform.Path_List;
+            Separate_Debug_Object : Boolean := False)
          is
             On_Firmware : constant Boolean :=
               Landin.Targets.Is_Firmware (Facts);
@@ -2961,6 +2986,36 @@ package body Landin.Driver is
                --  rather than an unhandled exception at the top of
                --  `refine`.
                begin
+                  if Separate_Debug_Object then
+                     --  Apple Clang derives -save-temps objects from input
+                     --  basenames. An assembly operand can have a different
+                     --  name from its product; assemble the reserved object
+                     --  explicitly before asking Clang to package its dSYM.
+                     Tools.Prepare_Output (Host, Staged_Product & ".o");
+                     Tools.Run
+                       (Driver,
+                        Landin.Backend.Toolchain.Assemble_Arguments
+                          (Input_Assembly, Staged_Product & ".o", Facts,
+                           Debug => True,
+                           Level => Landin.Stages.Level (Context)),
+                        Ran, Landin.Platform.Merged);
+                     if Ran.Ended /= Landin.Platform.Exited
+                       or else Ran.Exit_Code /= 0
+                     then
+                        Note_Failure
+                          (Code_Toolchain_Failed, "assembly failed" & LF
+                           & Logical_Text (Unbounded.To_String (Ran.Output)));
+                        return;
+                     elsif not Tools.Output_Produced
+                       (Host, Staged_Product & ".o")
+                     then
+                        Note_Failure
+                          (Code_Toolchain_Failed,
+                           Driver & " reported success but produced no object"
+                           & " at " & Product_Path & ".o");
+                        return;
+                     end if;
+                  end if;
                   if On_Firmware then
                      Host.Write_File
                        (Staged_Product & ".ld",
@@ -3086,7 +3141,9 @@ package body Landin.Driver is
                     (Program   => Driver,
                      Arguments =>
                        Landin.Backend.Toolchain.Link_Arguments
-                         (Assembly => Input_Assembly,
+                         (Assembly => (if Separate_Debug_Object
+                                       then Staged_Product & ".o"
+                                       else Input_Assembly),
                           Output   => Staged_Product,
                           Linker   => Selected_Linker,
                           Build_Id => Map_Id,
@@ -3098,7 +3155,8 @@ package body Landin.Driver is
                           Directories => Directories,
                           Script => Input_Script,
                           Float => Landin.IR.Firmware_Profile
-                            (Landin.Stages.Code (Context).all).Float),
+                            (Landin.Stages.Code (Context).all).Float,
+                          Assembly_Is_Object => Separate_Debug_Object),
                      Result    => Ran,
                      Capture   => Landin.Platform.Merged);
                exception
@@ -3222,6 +3280,53 @@ package body Landin.Driver is
                         else " (D900); keep every runtime section in SRAM,"
                           & " or use --firmware-layout=boot for the board"
                           & " boot check"));
+               end if;
+               if Separate_Debug_Object
+                 and then not Landin.Stages.Failed (Context)
+               then
+                  declare
+                     Program : constant String :=
+                       Landin.Backend.Toolchain.Darwin_Debug_Bundle_Tool;
+                     Packaged : Landin.Platform.Tool_Result;
+                  begin
+                     Tools.Prepare_Output (Host, Staged_Product & ".dSYM");
+                     Tools.Run
+                       (Program,
+                        Landin.Backend.Toolchain.Debug_Bundle_Arguments
+                          (Staged_Product, Staged_Product & ".dSYM"),
+                        Packaged, Landin.Platform.Merged);
+                     if Packaged.Ended /= Landin.Platform.Exited
+                       or else Packaged.Exit_Code /= 0
+                     then
+                        Note_Failure
+                          (Code_Toolchain_Failed,
+                           Program & " failed to package debug information"
+                           & LF & Logical_Text
+                             (Unbounded.To_String (Packaged.Output)));
+                     elsif not Host.Is_Directory
+                       (Staged_Product & ".dSYM")
+                     then
+                        Note_Failure
+                          (Code_Toolchain_Failed,
+                           Program & " reported success but produced no bundle"
+                           & " at " & Product_Path & ".dSYM");
+                     end if;
+                  exception
+                     when Failure : Landin.External_Tool_Failed =>
+                        declare
+                           Why : constant String :=
+                             Ada.Exceptions.Exception_Message (Failure);
+                        begin
+                           if Starts_With (Why, "tool not found") then
+                              Note_Unavailable_Debug_Bundle;
+                           else
+                              Note_Failure
+                                (Code_Toolchain_Failed,
+                                 Why & "; " & Program
+                                 & " could not be run to completion");
+                           end if;
+                        end;
+                  end;
                end if;
                if On_Firmware
                  and then Landin.Targets.Firmware.Takes_ESP_Image
@@ -4256,6 +4361,9 @@ package body Landin.Driver is
             On_Firmware : constant Boolean :=
               Landin.Targets.Is_Firmware (Facts);
             Destinations, Debug_Leaves : Landin.Platform.Path_List;
+            Separate_Debug_Object : constant Boolean := Debug_Enabled
+              and then Landin.Targets.Capabilities.Backend_For (Facts)
+                = Landin.Targets.Capabilities.Darwin_Arm64_Mach_O;
          begin
             Destinations.Append (Product);
             if On_Firmware then
@@ -4315,12 +4423,16 @@ package body Landin.Driver is
             end if;
             if Dry_Run then
                declare
-                  procedure Plan_Tool (Arguments : Landin.Platform.Path_List);
-                  procedure Plan_Tool (Arguments : Landin.Platform.Path_List)
+                  procedure Plan_Tool
+                    (Arguments : Landin.Platform.Path_List;
+                     Program : String := Planned_Driver);
+                  procedure Plan_Tool
+                    (Arguments : Landin.Platform.Path_List;
+                     Program : String := Planned_Driver)
                   is
                   begin
                      Unbounded.Append (Result.Output,
-                       "run [" & Landin.Json.Quoted (Planned_Driver));
+                       "run [" & Landin.Json.Quoted (Program));
                      for Argument of Arguments loop
                         Unbounded.Append (Result.Output,
                           "," & Landin.Json.Quoted (Argument));
@@ -4330,7 +4442,7 @@ package body Landin.Driver is
                begin
                   Unbounded.Append (Result.Output,
                     "write " & Landin.Json.Quoted (Product) & LF);
-                  if On_Firmware then
+                  if On_Firmware or else Separate_Debug_Object then
                      Plan_Tool
                        (Landin.Backend.Toolchain.Assemble_Arguments
                           (Operand, Product & ".o", Facts,
@@ -4338,12 +4450,21 @@ package body Landin.Driver is
                            Level => Landin.Stages.Level (Context)));
                   end if;
                   Plan_Tool (Landin.Backend.Toolchain.Link_Arguments
-                    (Assembly => Operand, Output => Product,
+                    (Assembly => (if Separate_Debug_Object
+                                  then Product & ".o" else Operand),
+                     Output => Product,
                      Linker => Unbounded.To_String (Linker),
                      Facts => Facts, Full_Debug => Debug_Enabled,
                      Level => Landin.Stages.Level (Context),
                      Static => Static_Link,
-                     Directories => Search_Directories));
+                     Directories => Search_Directories,
+                     Assembly_Is_Object => Separate_Debug_Object));
+                  if Separate_Debug_Object then
+                     Plan_Tool
+                       (Landin.Backend.Toolchain.Debug_Bundle_Arguments
+                          (Product, Product & ".dSYM"),
+                        Landin.Backend.Toolchain.Darwin_Debug_Bundle_Tool);
+                  end if;
                end;
                return;
             end if;
@@ -4352,6 +4473,12 @@ package body Landin.Driver is
                Note_Unavailable_Toolchain
                  (if Candidates.Is_Empty then ""
                   else Candidates.First_Element);
+               return;
+            end if;
+            if Separate_Debug_Object and then not Tools.Available
+              (Landin.Backend.Toolchain.Darwin_Debug_Bundle_Tool)
+            then
+               Note_Unavailable_Debug_Bundle;
                return;
             end if;
             Read_External_Input (Operand, True, 0);
@@ -4364,7 +4491,8 @@ package body Landin.Driver is
                end if;
             end loop;
             if not Publication_Failed then
-               Link_Assembly (Operand, Product, "", Destinations);
+               Link_Assembly
+                 (Operand, Product, "", Destinations, Separate_Debug_Object);
             end if;
          end Link_Operand;
 
