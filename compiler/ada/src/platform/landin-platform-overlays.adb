@@ -142,7 +142,8 @@ package body Landin.Platform.Overlays is
       Handle := No_Publication;
       Stage := Unbounded.Null_Unbounded_String;
       Status := Not_Writable;
-      Reason := Unbounded.To_Unbounded_String ("an editor overlay is read-only");
+      Reason := Unbounded.To_Unbounded_String
+        ("an editor overlay is read-only");
    end Open_Publication;
 
    overriding procedure Advance_Publication
@@ -155,7 +156,8 @@ package body Landin.Platform.Overlays is
         (Host, Handle, Action, Protected_Paths, Protected_Identities);
    begin
       Status := Not_Writable;
-      Reason := Unbounded.To_Unbounded_String ("an editor overlay is read-only");
+      Reason := Unbounded.To_Unbounded_String
+        ("an editor overlay is read-only");
    end Advance_Publication;
 
    overriding procedure Read_Snapshot
@@ -182,7 +184,8 @@ package body Landin.Platform.Overlays is
       Content := Unbounded.Null_Unbounded_String;
       Lease := No_Update;
       Status := Not_Readable;
-      Reason := Unbounded.To_Unbounded_String ("an editor overlay is read-only");
+      Reason := Unbounded.To_Unbounded_String
+        ("an editor overlay is read-only");
    end Read_For_Update;
 
    overriding procedure Replace_Update
@@ -192,7 +195,8 @@ package body Landin.Platform.Overlays is
       pragma Unreferenced (Host, Lease, Content);
    begin
       Status := Not_Writable;
-      Reason := Unbounded.To_Unbounded_String ("an editor overlay is read-only");
+      Reason := Unbounded.To_Unbounded_String
+        ("an editor overlay is read-only");
    end Replace_Update;
 
    overriding function Update_Identity

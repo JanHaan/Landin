@@ -43,7 +43,8 @@ package body Landin.Platform.Publication is
       end loop;
       if Paths_Overlap_Any (Files, Path, Group.Protected_Paths) then
          Reason := To_Unbounded_String
-           ("output " & Path & " aliases a protected input; choose another output");
+           ("output " & Path
+            & " aliases a protected input; choose another output");
          return;
       end if;
       Item.Path := To_Unbounded_String (Path);
