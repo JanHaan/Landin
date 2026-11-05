@@ -578,7 +578,8 @@ package body Landin.Testing.Fakes is
                  (Name'First + Original_Root'Length .. Name'Last));
          begin
             if At_Path = 0
-              or else Host.Writes.Data.Files (At_Path).Identity /= Item.Identity
+              or else Host.Writes.Data.Files (At_Path).Identity
+                /= Item.Identity
               or else Host.Writes.Data.Files (At_Path).Content /= Item.Content
               or else Item.Kind = A_Link
             then
@@ -781,7 +782,8 @@ package body Landin.Testing.Fakes is
             end if;
          when Landin.Platform.Install_Stage =>
             if not Item.Deletion then
-               if Item.Captured and then Item.Expected.Content
+               if Item.Captured and then Item.Expected.Kind = A_File
+                 and then Item.Expected.Content
                  = Item.Fresh.Content
                then
                   Move_File (Host, Recovery, Path, Moved);
@@ -836,7 +838,7 @@ package body Landin.Testing.Fakes is
                         if not Tree_Matches
                           (Host, Rollback, Stage, Item.Fresh_Tree)
                         then
-                           Fail ("new directory retained after changed contents");
+                           Fail ("new directory contents changed; retained");
                            return;
                         end if;
                         Remove_Tree (Host, Rollback, Removed);
