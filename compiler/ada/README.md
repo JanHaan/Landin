@@ -180,7 +180,7 @@ different responsibilities.
 | `Landin.Backend.Debug_Locations` | format-independent lexical visibility and definite initialization at IR instruction boundaries | choose storage, encode debugger records or read the host |
 | `Landin.Backend.Dwarf` | shared DWARF type/scope/location encoding parameterized by backend placement and section policy | change language types, choose variable storage, read the host or write files |
 | `Landin.Backend.X86_64.Dwarf` | x86 allocation adapter, register encodings and ELF entry points for the shared DWARF encoder | change source facts or choose variable storage |
-| `Landin.Backend.Toolchain` | the one command line that finishes a compilation, the triplet it is found by, D364's ordered driver candidates and what to install when none is found, and D202's ordered library arguments with D524's directories | infer target policy from the host, invoke a linker directly, or search a PATH |
+| `Landin.Backend.Toolchain` | target-specific assembly, link and debug-bundle command arguments, the triplet they use, D364's ordered driver candidates and what to install when none is found, and D202's ordered library arguments with D524's directories | infer target policy from the host, invoke a tool directly, or search a PATH |
 | `Landin.Backend.Firmware` | compiler-owned reset text and the linker script derived from the selected profile's regions, placements and boot kind (D545) | perform host effects or initialize user modules by executing source code |
 | `Landin.Backend.Images` | D537's one pre-emission measure of a unit's written, mutable and zero images against a budget the caller selects, and its refusal's message | choose a target's or a profile's budget, read a profile's capacities as constants, or ask the host's width |
 | `Landin.Backend.Entry_Point` | [1970]'s one hosted entry shape, asked of the IR | raise a defect for a module that simply has no `main` |
@@ -1056,7 +1056,10 @@ DWARF records them in `comp_dir` and `.file` (see
 The finishing
 half depends on the selected target's driver: Linux uses
 `x86_64-pc-linux-gnu-gcc` or `aarch64-linux-gnu-gcc`, Cortex-M uses `arm-eabi-gcc` and then `arm-none-eabi-gcc`, and Darwin uses
-`/usr/bin/clang` with `-arch arm64`. A host where that driver is absent
+`/usr/bin/clang` with `-arch arm64`. Direct Darwin assembly with full debugging
+uses an explicitly named object and `/usr/bin/dsymutil` before publication;
+the driver owns executing those commands through Platform, while Toolchain
+owns their argument policy. A host where that driver is absent
 reports `L0500` rather than falling back to whatever bare `gcc` names.
 The supported Linux finishing path is the triplet-selected GNU driver and
 its assembler/linker. A named driver override must accept that target's
