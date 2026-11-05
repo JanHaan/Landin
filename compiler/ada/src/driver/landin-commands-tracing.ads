@@ -9,6 +9,8 @@ package Landin.Commands.Tracing is
 
    overriding function Available (Host : Runner; Program : String)
       return Boolean;
+   overriding function Resolve_Program (Host : Runner; Program : String)
+      return String;
    overriding procedure Run
      (Host : Runner; Program : String;
       Arguments : Landin.Platform.Path_List;
