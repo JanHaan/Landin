@@ -434,6 +434,64 @@ static void fmt_readonly_is_write_refusal(void)
     REQUIRE(strstr(why, "it is read-only") != NULL && content(output, "original"));
     REQUIRE(chmod(output, 0600) == 0); ++passed;
 }
+static unsigned journal_hook_count;
+static void run_peer(const char *mode, const char *target)
+{
+    char *args[] = {(char *)self_program, (char *)mode, (char *)target, NULL};
+    int nullfd = open("/dev/null", O_RDWR), child, status; REQUIRE(nullfd >= 0);
+    REQUIRE(landin_tool_start_in_directory(args, NULL, 0, nullfd, nullfd,
+                                            nullfd, -1, &child) == 0);
+    REQUIRE(landin_tool_wait(child, &status, 0) == child && status == 0);
+    close(nullfd);
+}
+static void journal_concurrency_hook(const char *event, const char *target)
+{
+    if (strcmp(event, "arena-ready") && strcmp(event, "journal-building")
+        && strcmp(event, "journal-ready")) return;
+    char peer[8192];
+    REQUIRE(snprintf(peer, sizeof peer, "%s-peer-%u", target, ++journal_hook_count) > 0);
+    run_peer("--publish-peer", peer); REQUIRE(content(peer, "peer-generated"));
+    if (!strcmp(event, "journal-ready")) run_peer("--discover", target);
+}
+static void journal_concurrency(void)
+{
+    char parent[4096], output[8192], stage[4096];
+    path(parent, sizeof parent, "journal-concurrency"); REQUIRE(mkdir(parent, 0700) == 0);
+    REQUIRE(snprintf(output, sizeof output, "%s/main", parent) > 0);
+    journal_hook_count = 0; landin_publication_set_hook(journal_concurrency_hook);
+    int token = prepare(output, 0, "", stage); clear_hook();
+    REQUIRE(journal_hook_count == 3);
+    staged(stage, "generated");
+    REQUIRE(step(token, 0) == 0 && step(token, 1) == 0 && step(token, 2) == 0 && step(token, 4) == 0);
+    REQUIRE(content(output, "generated")); ++passed;
+}
+static void unknown_unready_recovery_refuses(void)
+{
+    for (unsigned kind = 0; kind < 3; ++kind) {
+        char parent[4096], arena[8192], entry[16384], output[8192], stage[4096];
+        REQUIRE(snprintf(parent, sizeof parent, "%s/unknown-unready-%u", scratch, kind) > 0);
+        REQUIRE(mkdir(parent, 0700) == 0);
+        REQUIRE(snprintf(arena, sizeof arena, "%s/.refine-publication-unknown", parent) > 0);
+        REQUIRE(mkdir(arena, 0700) == 0);
+        REQUIRE(snprintf(output, sizeof output, "%s/output", parent) > 0);
+        const char *bytes = "unexplained retained bytes";
+        if (kind == 0) REQUIRE(snprintf(entry, sizeof entry, "%s/foreign", arena) > 0);
+        else if (kind == 1) {
+            REQUIRE(snprintf(entry, sizeof entry, "%s/recovery", arena) > 0);
+            REQUIRE(mkdir(entry, 0700) == 0);
+            REQUIRE(snprintf(entry, sizeof entry, "%s/recovery/foreign", arena) > 0);
+        } else {
+            REQUIRE(snprintf(entry, sizeof entry, "%s/destination-1", arena) > 0);
+            bytes = "LANDIN-PUBLICATION-1\n1\nx\n";
+        }
+        put(entry, bytes);
+        int token;
+        REQUIRE(landin_publication_open(output, 0, "", &token, stage,
+                                        sizeof stage, why, sizeof why) != 0);
+        REQUIRE(strstr(why, "retained or active publication") != NULL && content(entry, bytes));
+        ++passed;
+    }
+}
 static void fmt_original_descriptor(void)
 {
     char output[4096], saved[4096], original_alias[4096];
@@ -452,6 +510,13 @@ static void fmt_original_descriptor(void)
 int main(int argc, char **argv)
 {
     self_program = argv[0];
+    if (argc == 3 && !strcmp(argv[1], "--publish-peer")) {
+        char stage[4096]; int token = prepare(argv[2], 0, "", stage);
+        staged(stage, "peer-generated");
+        REQUIRE(step(token, 0) == 0 && step(token, 1) == 0
+                && step(token, 2) == 0 && step(token, 4) == 0);
+        return 0;
+    }
     if (argc == 3 && !strcmp(argv[1], "--discover")) {
         int token; char stage[4096];
         REQUIRE(landin_publication_open(argv[2], 0, "", &token, stage,
@@ -469,6 +534,7 @@ int main(int argc, char **argv)
     child_staging_directory(); mismatch_finish_preserves_tree();
     moved_anchor_recovery_diagnostic(); fmt_moved_parent_diagnostic();
     fmt_readonly_is_write_refusal(); different_output_kind_is_refused();
+    journal_concurrency(); unknown_unready_recovery_refuses();
     printf("publication native: %u controls passed; retained scratch %s\n", passed, scratch);
     return 0;
 }
