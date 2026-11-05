@@ -57,8 +57,15 @@ package body Landin.Diagnostics.Explanations is
                & "` does, and refuses an entry that names no firmware rout"
                & "ine (D383).",
             when Catalogue.Unreadable_Source =>
-               "A source named on the command line is missing or cannot "
-               & "be read. Check the path and its permissions.",
+               "A source or supplied tool input is missing or cannot be "
+               & "read. Check the path and its permissions. Assembly `.inc"
+               & "lude` and `.incbin`, and linker `INCLUDE`, `INPUT`, `GRO"
+               & "UP`, `SEARCH_DIR` and `STARTUP` directives must use plai"
+               & "n absolute paths so their inputs can be protected while "
+               & "the tool runs in private staging. Replace relative or in"
+               & "direct forms with plain absolute paths, or supply a stan"
+               & "dalone assembly input or linker script. Nested text inpu"
+               & "ts are limited to sixteen levels.",
             when Catalogue.Unknown_Target =>
                "`--target=` names no target the compiler describes, or n"
                & "one was named and this compiler's own host is not a desc"
@@ -69,23 +76,47 @@ package body Landin.Diagnostics.Explanations is
                & "m named alone, `linux` or `macos`, every target of that "
                & "system (D857).",
             when Catalogue.Unwritable_Output =>
-               "An output file cannot be written, or `refine fmt` cannot"
-               & " rewrite its input. For emitted output, check that the d"
-               & "estination directory exists and is writable, or choose a"
-               & "nother path with `-o`."
+               "An output cannot be written, published or recovered, or "
+               & "`refine fmt` cannot rewrite its input. Check the destina"
+               & "tion directory and its permissions, or choose another ou"
+               & "tput path. A protected-input alias or changed destinatio"
+               & "n requires a different output path or a fresh invocation"
+               & " after the change is understood (D907)."
                & LF
                & LF
-               & "Formatting writes into the file it read, so it needs a w"
-               & "ritable ordinary file and, for the copy of the original "
-               & "it keeps until the new bytes last, write permission in t"
-               & "he file's directory (D358). The diagnostic names what it"
-               & " met: a read-only file, a directory that refuses the cop"
-               & "y, a set-user-ID or set-group-ID bit the caller could no"
-               & "t set again, a Linux file with capabilities, or a write "
-               & "that failed, and then whether the original bytes are bac"
-               & "k or where their copy is kept. `refine fmt --stdout` pri"
-               & "nts the layout without writing anything. See [formatter "
-               & "file handling](format.md) for the full contract.",
+               & "A late failure can follow successful staging or installa"
+               & "tion. The diagnostic names the previous recovery entry a"
+               & "nd any captured new or concurrent entry that could not b"
+               & "e restored safely. Keep those paths: inspect the named `"
+               & ".refine-publication-...` directory's `destination-...` r"
+               & "ecords, `stage` and `recovery` entries, recover the vers"
+               & "ion you need without overwriting a concurrent save, then"
+               & " remove the retained workspace before retrying. An unres"
+               & "olved earlier publication is refused rather than discard"
+               & "ed. A cleanup failure can leave the new output installed"
+               & " and its prior version retained; the diagnostic does not"
+               & " promise that nothing changed."
+               & LF
+               & LF
+               & "Formatting retains its original read descriptor and writ"
+               & "es into that inode. It needs a writable ordinary file an"
+               & "d write permission in its directory for the recovery cop"
+               & "y (D358). The diagnostic names a read-only file, a direc"
+               & "tory that refuses the copy, a set-user-ID or set-group-I"
+               & "D bit the caller cannot restore, a Linux file with capab"
+               & "ilities, or a failed write. It says whether the original"
+               & " bytes were restored or names the retained `.fmt-origina"
+               & "l-...` copy. If an editor renamed a save over the source"
+               & ", refine leaves that save alone; a late name change can "
+               & "leave the original inode formatted, with its original by"
+               & "tes retained. Inspect the named copy before restoring it"
+               & ", and do not copy it over a newer save. A failure restor"
+               & "ing mode bits can leave the file formatted and says whic"
+               & "h mode could not be restored. Concurrent writes through "
+               & "another descriptor to the same inode remain unsupported."
+               & " `refine fmt --stdout` prints the layout without acquiri"
+               & "ng a writable lease. See [formatter file handling](forma"
+               & "t.md) for the full contract.",
             when Catalogue.Module_Not_Found =>
                "No import root holds the module an import names [1420]. "
                & "Roots are searched in the order `--root=` gives them, an"
@@ -1549,13 +1580,20 @@ package body Landin.Diagnostics.Explanations is
                & "al has arrays. Correct the selection's spelling against "
                & "the SVD.",
             when Catalogue.Svd_Output_Refused =>
-               "`refine svd` will not replace its outputs (D558): the ou"
-               & "tput directory is missing or not a directory, a destinat"
-               & "ion is a directory, an earlier run left its staged or ke"
-               & "pt copies beside a destination, or the manifest it finds"
-               & " there names a file outside the directory. Nothing was w"
-               & "ritten. Remove what the message names, or choose another"
-               & " `--out-dir`.",
+               "`refine svd` cannot prepare its output group (D558, D907"
+               & "): the output root is missing, a link or not a directory"
+               & "; a destination is a directory or link, or aliases a pro"
+               & "tected input; a retained publication needs recovery; or "
+               & "the manifest names a file outside the output directory. "
+               & "Correct the named path or manifest, or choose another `-"
+               & "-out-dir`. For a retained `.refine-publication-...` work"
+               & "space, inspect its `destination-...` records and recover"
+               & " the previous or new output before removing it and retry"
+               & "ing. Preparation can already have created private stagin"
+               & "g; later publication or cleanup failures are L0005 and c"
+               & "an leave recovered or retained versions. Follow those re"
+               & "covery messages rather than assuming nothing was written"
+               & ".",
             when Catalogue.Bindings_Policy_Invalid =>
                "`refine bindings` cannot read its policy (D820): it is n"
                & "ot UTF-8 JSON, names a key twice, is not schema 1, lacks"
@@ -1589,12 +1627,19 @@ package body Landin.Diagnostics.Explanations is
                & "me two declarations would share is refused here too. Cor"
                & "rect the policy, or select another declaration.",
             when Catalogue.Bindings_Output_Refused =>
-               "`refine bindings` will not replace its outputs (D820): t"
-               & "he output directory is a symbolic link or not a director"
-               & "y, an output is a directory or a link, or an earlier run"
-               & " left its staged or kept copies beside one. Nothing was "
-               & "written. Remove what the message names, or choose anothe"
-               & "r `--out-dir`.");
+               "`refine bindings` cannot prepare its output group (D820,"
+               & " D907): the output root is a symbolic link or not a dire"
+               & "ctory, an output is a directory or link, an output alias"
+               & "es a protected header, policy, response file or selected"
+               & " tool, or an earlier publication needs recovery. Correct"
+               & " the named path or choose another `--out-dir`. Keep a na"
+               & "med `.refine-publication-...` workspace until its `desti"
+               & "nation-...` records and retained previous or new outputs"
+               & " have been inspected and recovered; remove it only after"
+               & " recovery. Preparation can already have created private "
+               & "staging. A later publication or cleanup failure is L0005"
+               & " and can leave outputs installed or recovery entries ret"
+               & "ained, as that diagnostic reports.");
 
    function Example (Of_Code : Catalogue.Code_Name) return String
      is (case Of_Code is

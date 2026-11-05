@@ -1012,7 +1012,8 @@ the editor grammar parses; and `python3 check.py`, which names a runtime or
 ABI fixture that has no row and the command that writes it. A fixture edited
 later is held to the same cases, the formatter's among them.
 
-The host gate also runs `test_publication_native.py` against the production
+The host gate also runs `test_compile_publication.py --refine PATH` against
+actual compiler input/output collisions, `test_publication_native.py` against the production
 C adapters, and `test_tool_cancellation.py --refine PATH` against both the
 production process adapter and actual `compile` and `run` commands. Their
 controls use owned scratch roots and readiness barriers for the formatter's

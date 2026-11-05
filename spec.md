@@ -18314,7 +18314,7 @@ those the caller cannot list among them, and every name a hard link gives
 it, which sees the formatted bytes too. Writing in place is not atomic, so
 before the first byte changes the original bytes, read back through the
 descriptor that will be written, are copied into a new file beside it,
-`NAME.fmt-original-` and six characters, and the copy and its directory are
+`.fmt-original-` and an exclusive per-invocation suffix, and the copy and its directory are
 synced. Then the new bytes are written from the start, the file is cut to
 their length and synced, and the copy is removed. A failed write puts the
 original bytes back from memory and removes the copy; a write that cannot
@@ -18399,8 +18399,8 @@ transactions are diagnosed rather than removed to make progress.
 Formatting is the inode-preserving mode, D358: its original read descriptor
 protects renamed-in saves without losing invisible metadata or changing
 hard-link behavior. `--check` and `--stdout` acquire no writable lease.
-Noncooperating writes through another descriptor to the same inode, and
-mutation through an already-open directory descriptor, remain unsupported.
+Noncooperating writes through another descriptor to the same inode remain
+unsupported.
 Identity is not a content-version lock. Private storage is not isolation
 from hostile processes with the same credentials or privileged processes.
 

@@ -211,6 +211,7 @@ different responsibilities.
 | `Landin.Platform.Publication` | D907's shared artifact group: protected input paths and original read identities, preparation before generation, staged validation and installation, retention through group verification, rollback and final recovery cleanup | perform native filesystem effects, choose a command's outputs, or overwrite a concurrent change to complete recovery |
 | `Landin.Platform.Native` | the only filesystem implementation that reaches a disk: D907's descriptor-bound snapshot reads, pinned-directory, no-clobber publication and retained recovery through `landin_publication.c`, retained read leases and inode-preserving formatting through `landin_format_replace.c` (D358), the running executable's own directory through `landin_executable.c`, the process's own resource counters through its host C adapter, and standard input, output and error as a channel through `landin_channel.c` | be reached except through the interface |
 | `Landin.Platform.Overlays` | a filesystem over another with some files' bytes held in memory, listed in their directories, so a held buffer is read exactly as the saved file would be | write or remove through the host beneath, or decide which buffers are held |
+| `Landin.Platform.Native.Byte_Strings` | exact, chunked copying of length-delimited foreign bytes, including embedded zero bytes in source snapshots, binary artifacts and tool captures | interpret bytes as NUL-terminated text or perform another host effect |
 | `Landin.Platform.Native.Tools` | process supervision and capture, using its host POSIX C adapter for spawning, pinned staging-directory tool output, cancellation forwarded to a tool's process group with bounded shutdown and direct-child reaping before cleanup, an environment of exactly the variables named when one is asked for (D821), and capture files, and GNAT for path lookup; `Landin.Source_Maps`, `Landin.Build_Reports.Sources`, `Landin.Devices.Projection` and `Landin.Bindings.Generation` use `GNAT.SHA256` as pure computation | grow a second host concern |
 | `Landin.Targets` | target facts, typed architecture identity and each architecture's configuration atom, layout arithmetic, physical evidence-cell offsets/extents and D147 any data/table offsets, extent and alignment derived from pointer facts | ask the host how wide a pointer is |
 | `Landin.Targets.Firmware` | the firmware profile a device description selects, its image budget (D537), the cores and the SVD `cpu/name` of each, their architectural vector slots and the closed set of boot image kinds with their second-stage slot and checksum and the image block's words and its reading (D542-D545, D588, D637), and source assembly admission | name a device, invoke tools or derive target widths from the host |
@@ -1275,9 +1276,11 @@ Formatting is the separate inode-preserving mode of the same publication
 contract: its original read descriptor remains open through the write, so
 renamed-in saves are not overwritten and invisible metadata and hard-link
 behavior are preserved. `--check` and `--stdout` acquire no writable lease.
-Concurrent writes through another descriptor to that inode, mutation through
-an already-open directory descriptor, and hostile same-credential or privileged
-processes remain outside the contract. Tool cancellation uses signal-safe
+Concurrent writes through another descriptor to that inode and hostile
+same-credential or privileged access to private storage remain outside the
+contract. Public directory-entry changes are handled through the capture
+and no-clobber protocol even when made through a directory descriptor.
+Tool cancellation uses signal-safe
 notification and ordinary Ada cleanup, forwards to the active process group,
 stops its remaining ordinary members and reaps its direct child before
 recovery; group escape and credential changes are outside supervision.

@@ -36,7 +36,7 @@ def command_controls(refine, output):
             temporary = root / 'temporary'
             temporary.mkdir()
             source = root / 'main.ldn'
-            source.write_text('main: () -> (code: i32) =\n    code = 5\nend main\n')
+            source.write_text('public main: () -> (code: i32) =\n    code = 5\nend main\n')
             product = root / 'program'
             product.write_bytes(b'prior product sentinel\x00\xff\n')
             prior = product.stat()

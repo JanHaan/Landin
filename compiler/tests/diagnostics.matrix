@@ -6,7 +6,7 @@ L0001  Retired  error   no-fix   true  empty-ok    0..0 1     -                 
 L0002  Live     error   no-fix   false empty-ok    0..0 0     driver,stages                       negative/driver-unknown-option,test:landin-tests-bindings_suite.adb,test:landin-tests-diagnostics_suite.adb,test:landin-tests-driver_suite.adb
 L0003  Live     error   no-fix   false empty-ok    0..0 0     driver                              test:landin-tests-bindings_suite.adb,test:landin-tests-devices_suite.adb,test:landin-tests-driver_suite.adb,test:landin-tests-stages_suite.adb
 L0004  Live     error   no-fix   false empty-ok    0..0 0     driver                              test:landin-tests-driver_suite.adb
-L0005  Live     error   no-fix   false empty-ok    0..0 0     driver                              test:landin-tests-devices_suite.adb,test:landin-tests-driver_suite.adb
+L0005  Live     error   no-fix   false empty-ok    0..0 0     driver                              test:landin-tests-driver_suite.adb
 L0006  Live     error   may-fix  true  nonempty    0..0 1     driver,stages                       negative/import-without-a-root-is-refused-there,negative/misspelt-module-is-offered-its-directory,negative/module-not-found,test:landin-tests-driver_suite.adb,test:landin-tests-server_suite.adb
 L0007  Live     error   no-fix   false empty-ok    0..0 1     driver                              negative/module-directory-invalid,test:landin-tests-driver_suite.adb
 L0015  Live     error   no-fix   true  nonempty    0..0 1     driver,stages                       negative/library-platform-cortex-m-reference-hosted,negative/library-platform-riscv-hazard3-hosted,test:landin-tests-driver_suite.adb

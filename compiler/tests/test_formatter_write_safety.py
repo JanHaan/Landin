@@ -218,7 +218,11 @@ class FormatterWriteSafety(unittest.TestCase):
                           + main)
         binary = self.root / name
         subprocess.run(["cc", "-std=c11", "-Wall", "-Wextra", "-Werror",
-                        str(source), "-o", str(binary)], check=True,
+                        "-I", str(ADAPTER.parent), str(source),
+                        *[str(ADAPTER.parent / name) for name in
+                          ("landin_publication.c", "landin_file_identity.c",
+                           "landin_tool_process.c")],
+                        "-o", str(binary)], check=True,
                        capture_output=True)
         return binary
 
@@ -265,7 +269,7 @@ class FormatterWriteSafety(unittest.TestCase):
         run = subprocess.run([str(binary), str(self.source), "2", "99"],
                              capture_output=True)
         self.assertEqual(run.returncode, 1)
-        kept = list(self.root.glob("source.ldn.fmt-original-*"))
+        kept = list(self.root.glob(".fmt-original-*"))
         self.assertEqual(len(kept), 1)
         # The adapter works on the resolved path, so it names the copy that
         # way: on macOS /tmp is a link to /private/tmp.

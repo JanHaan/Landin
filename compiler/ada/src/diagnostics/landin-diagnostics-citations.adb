@@ -2028,6 +2028,9 @@ package body Landin.Diagnostics.Citations is
                "A source has one layout, and the compiler lays it out",
             when 358 =>
                "`refine fmt` writes a source into its own file",
+            when 907 =>
+               "A command publishes its outputs without destroying confl"
+               & "icting inputs or saves",
             when 359 =>
                "`refine fmt --check` names every line, and `--stdout` pr"
                & "ints the layout",
@@ -3613,6 +3616,8 @@ package body Landin.Diagnostics.Citations is
             when 252 =>
                "Decisions: The toolchain, C and the machine",
             when 358 =>
+               "Decisions: The toolchain, C and the machine",
+            when 907 =>
                "Decisions: The toolchain, C and the machine",
             when 359 =>
                "Decisions: The toolchain, C and the machine",
@@ -5286,6 +5291,10 @@ package body Landin.Diagnostics.Citations is
             when 358 =>
                "https://www.701.dev/spec.html#d358-refine-fmt-writes-a-s"
                & "ource-into-its-own-file",
+            when 907 =>
+               "https://www.701.dev/spec.html#d907-a-command-publishes-i"
+               & "ts-outputs-without-destroying-conflicting-inputs-or-save"
+               & "s",
             when 359 =>
                "https://www.701.dev/spec.html#d359-refine-fmt-check-name"
                & "s-every-line-and-stdout-prints-the-layout",
