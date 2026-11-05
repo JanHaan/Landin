@@ -76,8 +76,10 @@ package body Landin.Platform.Native.Tools is
       use type C_Strings.chars_ptr;
       Reason : constant C_Strings.chars_ptr := Process_Start_Error (Error);
    begin
-      return Fallback & (if Reason = C_Strings.Null_Ptr then ""
-                         else ": " & C_Strings.Value (Reason));
+      --  GNAT bounds exception messages. Put the corrective action before
+      --  any tool path that could consume that bound by itself.
+      return (if Reason = C_Strings.Null_Ptr then Fallback
+              else C_Strings.Value (Reason) & "; " & Fallback);
    end Start_Failure;
 
    function Stage_Directory (Text : C_Strings.chars_ptr)

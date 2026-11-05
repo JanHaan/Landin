@@ -119,7 +119,7 @@ os.execv(driver, [driver] + sys.argv[1:])
 def child_policy_commands(refine, executable, output):
     """Inherited SIGCHLD ignore reaches GNAT unchanged; refuse before tool exec."""
     results = []
-    for command in ('compile', 'run'):
+    for command in ('compile', 'run', 'bindings'):
         root = output / ('child-policy-' + command)
         root.mkdir()
         temporary = root / 'temporary'
@@ -132,7 +132,10 @@ def child_policy_commands(refine, executable, output):
         assembly = root / 'program.s'
         assembly.write_bytes(b'pre-existing auxiliary sentinel\n')
         sentinel = root / 'tool-started'
-        driver = root / 'driver'
+        driver_root = root / ('toolchain-' + 'x' * 200)
+        driver_root.mkdir()
+        driver = driver_root / 'driver'
+        assert len(str(driver)) > 200
         driver.write_text('#!/bin/sh\nprintf started > ' + shlex.quote(str(sentinel))
                           + '\nexit 0\n')
         driver.chmod(0o700)
@@ -140,6 +143,29 @@ def child_policy_commands(refine, executable, output):
                 str(source), '--toolchain=' + str(driver)]
         if command == 'compile':
             argv.extend(['-o', str(product)])
+        bindings_before = {}
+        if command == 'bindings':
+            sysroot = root / 'sysroot'
+            sysroot.mkdir()
+            header = root / 'api.h'
+            header.write_text('typedef unsigned int word;\n')
+            policy = root / 'policy.json'
+            policy.write_text(json.dumps(dict(
+                schema_version=1, namespace='child_policy',
+                abi=dict(target='x86_64-pc-linux-gnu', data_model='lp64',
+                         plain_char='signed', enum_policy='clang-default'),
+                declarations=[dict(kind='alias', name='word')])) + '\n')
+            generated = root / 'generated'
+            generated.mkdir()
+            for name in ('bindings.ldn', 'adapters.c', 'exports.h', 'bindings.json'):
+                path = generated / name
+                path.write_bytes(b'prior generated sentinel\x00\xff\n')
+                stat = path.stat()
+                bindings_before[path] = (stat.st_dev, stat.st_ino, path.read_bytes())
+            argv = [str(executable), 'exec-ignored', str(refine), 'bindings',
+                    '--clang=' + str(driver), '--target=linux-x86-64',
+                    '--sysroot=' + str(sysroot), '--policy=' + str(policy),
+                    '--out-dir=' + str(generated), 'api.h=' + str(header)]
         process = subprocess.run(argv, cwd=root,
                                  env=dict(os.environ, TMPDIR=str(temporary)),
                                  capture_output=True, timeout=30)
@@ -148,12 +174,15 @@ def child_policy_commands(refine, executable, output):
         passed = (process.returncode != 0 and not sentinel.exists()
                   and 'SIGCHLD is ignored' in stderr
                   and 'SIGCHLD set to its default' in stderr
+                  and 'so child exit status remains waitable' in stderr
                   and product.read_bytes() == b'prior product sentinel\x00\xff\n'
                   and (prior.st_dev, prior.st_ino) == (after.st_dev, after.st_ino)
                   and assembly.read_bytes() == b'pre-existing auxiliary sentinel\n'
                   and not list(temporary.iterdir())
                   and not list(root.glob('.refine-publication-*'))
-                  and not process.stdout)
+                  and not process.stdout
+                  and all((path.stat().st_dev, path.stat().st_ino, path.read_bytes())
+                          == prior for path, prior in bindings_before.items()))
         row = dict(command=argv, exit_status=process.returncode, passed=passed,
                    stdout=process.stdout.decode(errors='replace'), stderr=stderr,
                    root=str(root))

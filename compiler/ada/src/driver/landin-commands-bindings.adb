@@ -691,9 +691,9 @@ package body Landin.Commands.Bindings is
                Platform.Output_Only);
          exception
             when Failure : External_Tool_Failed =>
-               Report (Cat.Bindings_Clang_Refused, "cannot execute Clang "
-                       & US.To_String (Clang) & ": "
-                       & Ada.Exceptions.Exception_Message (Failure));
+               Report (Cat.Bindings_Clang_Refused,
+                       Ada.Exceptions.Exception_Message (Failure)
+                       & "; cannot execute Clang " & US.To_String (Clang));
                return False;
          end;
          if Ran.Ended /= Platform.Exited or else Ran.Exit_Code /= 0 then
