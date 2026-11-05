@@ -1,3 +1,4 @@
+with Ada.Characters.Handling;
 with Ada.Containers.Indefinite_Hashed_Sets;
 with Ada.Exceptions;
 with Ada.Strings.Fixed;
@@ -1527,7 +1528,10 @@ package body Landin.Driver is
                return;
             end if;
             for Input of Known_Inputs loop
-               if Host.Paths_Overlap (Path, Input) then
+               if Path = Input
+                 or else (Host.Exists (Path)
+                          and then Host.Paths_Overlap (Path, Input))
+               then
                   Bad_Use := True;
                   Publication_Failed := True;
                   Note_Failure
@@ -1603,7 +1607,10 @@ package body Landin.Driver is
             if Publish and then not Publication_Failed then
                for Path of Reserved loop
                   for Input of Known_Inputs loop
-                     if Host.Paths_Overlap (Path, Input) then
+                     if Path = Input
+                       or else (Host.Exists (Path)
+                                and then Host.Paths_Overlap (Path, Input))
+                     then
                         Publication_Failed := True;
                         Bad_Use := True;
                         Note_Failure
@@ -1928,7 +1935,10 @@ package body Landin.Driver is
                end loop;
             end;
             for Input of Known_Inputs loop
-               if Host.Paths_Overlap (Path, Input) then
+               if Path = Input
+                 or else (Host.Exists (Path)
+                          and then Host.Paths_Overlap (Path, Input))
+               then
                   Bad_Use := True;
                   Note_Failure
                     (Code_Unknown_Option, "stage report output " & Path
@@ -2509,6 +2519,190 @@ package body Landin.Driver is
             return Any;
          end Libraries_Missing;
 
+         --  A staged tool works in its pinned private directory. Resolve
+         --  explicit file-reading directives before launch, and refuse
+         --  relative or indirect forms whose meaning that would change.
+         procedure Check_External_Text
+           (Text, Origin : String; Assembly : Boolean; Depth : Natural);
+         procedure Read_External_Input
+           (Path : String; Assembly : Boolean; Depth : Natural);
+
+         procedure Read_External_Input
+           (Path : String; Assembly : Boolean; Depth : Natural)
+         is
+            Content : Unbounded.Unbounded_String;
+            Identity : Landin.Platform.File_Identity;
+            Read : Landin.Platform.Read_Status;
+         begin
+            if Depth > 16 then
+               Note_Failure
+                 (Code_Unreadable, "tool input nesting exceeds sixteen at "
+                  & Path & "; use a standalone script or assembly input");
+               return;
+            end if;
+            Host.Read_Snapshot (Path, Content, Identity, Read);
+            if Read /= Landin.Platform.Read_Ok then
+               Note_Failure
+                 (Code_Unreadable, "cannot read tool input " & Path
+                  & "; name an existing readable absolute file");
+               return;
+            end if;
+            Observed_Input (Path, Identity);
+            if not (for some Byte of Unbounded.To_String (Content) =>
+                      Byte = ASCII.NUL)
+            then
+               Check_External_Text
+                 (Unbounded.To_String (Content), Path, Assembly, Depth);
+            end if;
+         end Read_External_Input;
+
+         procedure Check_External_Text
+           (Text, Origin : String; Assembly : Boolean; Depth : Natural)
+         is
+            Cursor : Natural := Text'First;
+            Quoted : Boolean := False;
+            function Next return String;
+            function Next return String is
+               First : Natural;
+               Quote : Character;
+            begin
+               Quoted := False;
+               loop
+                  while Cursor <= Text'Last
+                    and then Text (Cursor) in ' ' | ASCII.HT
+                      | ASCII.LF | ASCII.CR
+                  loop
+                     Cursor := Cursor + 1;
+                  end loop;
+                  exit when Cursor > Text'Last;
+                  if Cursor < Text'Last
+                    and then Text (Cursor .. Cursor + 1) = "/*"
+                  then
+                     Cursor := Cursor + 2;
+                     while Cursor < Text'Last
+                       and then Text (Cursor .. Cursor + 1) /= "*/"
+                     loop
+                        Cursor := Cursor + 1;
+                     end loop;
+                     Cursor := Natural'Min (Text'Last + 1, Cursor + 2);
+                  elsif Text (Cursor) = '#'
+                    or else (Assembly and then Text (Cursor) = '@')
+                    or else (Assembly and then Cursor < Text'Last
+                      and then Text (Cursor .. Cursor + 1) = "//")
+                  then
+                     while Cursor <= Text'Last
+                       and then Text (Cursor) /= ASCII.LF
+                     loop
+                        Cursor := Cursor + 1;
+                     end loop;
+                  else
+                     exit;
+                  end if;
+               end loop;
+               if Cursor > Text'Last then
+                  return "";
+               end if;
+               First := Cursor;
+               if Text (Cursor) in '(' | ')' | ',' | ';' | '{' | '}' | '=' then
+                  Cursor := Cursor + 1;
+                  return Text (First .. First);
+               elsif Text (Cursor) in '"' | ''' then
+                  Quoted := True;
+                  Quote := Text (Cursor);
+                  Cursor := Cursor + 1;
+                  First := Cursor;
+                  while Cursor <= Text'Last and then Text (Cursor) /= Quote
+                  loop
+                     Cursor := Cursor + 1;
+                  end loop;
+                  if Cursor > Text'Last then
+                     return "";
+                  end if;
+                  Cursor := Cursor + 1;
+                  return Text (First .. Cursor - 2);
+               end if;
+               while Cursor <= Text'Last
+                 and then Text (Cursor) not in ' ' | ASCII.HT
+                   | ASCII.LF | ASCII.CR | '(' | ')' | ',' | ';' | '{' | '}'
+                   | '='
+               loop
+                  Cursor := Cursor + 1;
+               end loop;
+               return Text (First .. Cursor - 1);
+            end Next;
+
+            procedure File_Reference (Path : String; Binary : Boolean);
+            procedure File_Reference (Path : String; Binary : Boolean) is
+            begin
+               if Path'Length = 0 or else Path (Path'First) /= '/'
+                 or else (for some Byte of Path => Byte = '\')
+               then
+                  Note_Failure
+                    (Code_Unreadable, "tool input " & Origin
+                     & " has a relative or indirect file directive: " & Path
+                     & "; use plain absolute file paths, or a standalone "
+                     & (if Assembly then "assembly input"
+                        else "linker script"));
+               elsif Binary then
+                  Protect_Input (Path);
+               else
+                  Read_External_Input (Path, Assembly, Depth + 1);
+               end if;
+            end File_Reference;
+         begin
+            loop
+               declare
+                  Token : constant String :=
+                    (if Assembly then Ada.Characters.Handling.To_Lower (Next)
+                     else Next);
+               begin
+                  exit when (Token = "" and then not Quoted)
+                    or else Landin.Stages.Failed (Context);
+                  if Quoted then
+                     null;
+                  elsif (Assembly and then Token in ".include" | ".incbin")
+                    or else (not Assembly and then Token = "INCLUDE")
+                  then
+                     File_Reference
+                       (Next, Assembly and then Token = ".incbin");
+                  elsif not Assembly
+                    and then Token in "INPUT" | "GROUP" | "SEARCH_DIR"
+                      | "STARTUP"
+                  then
+                     declare
+                        Opened : constant String := Next;
+                        Nesting : Natural := 1;
+                     begin
+                        if Opened /= "(" then
+                           Note_Failure
+                             (Code_Unreadable, "cannot establish inputs of "
+                              & Token & " in " & Origin
+                              & "; use plain absolute file directives");
+                           return;
+                        end if;
+                        loop
+                           declare
+                              File : constant String := Next;
+                           begin
+                              exit when File = "";
+                              if File = "(" then
+                                 Nesting := Nesting + 1;
+                              elsif File = ")" then
+                                 Nesting := Nesting - 1;
+                                 exit when Nesting = 0;
+                              elsif File not in "," | "AS_NEEDED" then
+                                 File_Reference
+                                   (File, Binary => Token = "SEARCH_DIR");
+                              end if;
+                              exit when Landin.Stages.Failed (Context);
+                           end;
+                        end loop;
+                     end;
+                  end if;
+               end;
+            end loop;
+         end Check_External_Text;
+
          procedure Protect_Link_Inputs (Driver : String);
          procedure Protect_Link_Inputs (Driver : String) is
             Directories : constant Landin.Platform.Path_List :=
@@ -2684,13 +2878,6 @@ package body Landin.Driver is
                Libraries : Landin.Platform.Path_List;
                Directories : constant Landin.Platform.Path_List :=
                  Search_Directories;
-               procedure Restore_Output;
-               procedure Restore_Output is
-               begin
-                  --  Public entries have not been touched. The transaction
-                  --  discards only this invocation's private generation.
-                  null;
-               end Restore_Output;
             begin
                if Driver = "" then
                   Note_No_Toolchain
@@ -2701,6 +2888,13 @@ package body Landin.Driver is
                end if;
 
                Protect_Link_Inputs (Driver);
+               if Script_Seen then
+                  Read_External_Input
+                    (Unbounded.To_String (Script_Path), False, 0);
+               end if;
+               if Landin.Stages.Failed (Context) then
+                  return;
+               end if;
                for Index in 1 .. Landin.Configuration.Library_Count
                  (Landin.Stages.Configurations (Context).all)
                loop
@@ -2731,6 +2925,7 @@ package body Landin.Driver is
                            "cannot write: " & Product_Path & ".ld");
                         return;
                      end if;
+                     Tools.Prepare_Output (Host, Staged_Product & ".o");
                      Tools.Run
                        (Driver,
                         Landin.Backend.Toolchain.Assemble_Arguments
@@ -2747,6 +2942,15 @@ package body Landin.Driver is
                           (Code_Toolchain_Failed,
                            "firmware assembly failed" & LF
                            & Logical_Text (Unbounded.To_String (Ran.Output)));
+                        return;
+                     end if;
+                     if not Tools.Output_Produced
+                       (Host, Staged_Product & ".o")
+                     then
+                        Note_Failure
+                          (Code_Toolchain_Failed,
+                           Driver & " reported success but produced no object"
+                           & " at " & Product_Path & ".o");
                         return;
                      end if;
                      --  D588: the boot ROM's checksum over the second
@@ -2847,7 +3051,6 @@ package body Landin.Driver is
                      Capture   => Landin.Platform.Merged);
                exception
                   when Failure : Landin.External_Tool_Failed =>
-                     Restore_Output;
                      --  The adapter says why.  Only a tool that is not
                      --  there is the reader's to install; a capture file
                      --  that could not be removed is a host fault after
@@ -2867,9 +3070,6 @@ package body Landin.Driver is
                         end if;
                      end;
                      return;
-                  when others =>
-                     Restore_Output;
-                     raise;
                end;
 
                --  How the run ended is asked before what it returned,
@@ -2877,13 +3077,11 @@ package body Landin.Driver is
                --  field beside it holds zero.  Reading that alone would
                --  make a dead assembler a success that wrote nothing.
                if Ran.Ended /= Landin.Platform.Exited then
-                  Restore_Output;
                   Note_Failure
                     (Code_Toolchain_Failed,
                      Driver & " was stopped before it could finish" & LF
                      & Logical_Text (Unbounded.To_String (Ran.Output)));
                elsif Ran.Exit_Code /= 0 then
-                  Restore_Output;
                   --  A line the assembler refused inside an assembly
                   --  block is the program's, and is reported there.
                   declare
@@ -2930,7 +3128,6 @@ package body Landin.Driver is
                      end if;
                   end;
                elsif not Tools.Output_Produced (Host, Staged_Product) then
-                  Restore_Output;
                   Note_Failure
                     (Code_Toolchain_Failed,
                      Driver & " reported success but produced no executable"
@@ -2973,7 +3170,6 @@ package body Landin.Driver is
                         else " (D900); keep every runtime section in SRAM,"
                           & " or use --firmware-layout=boot for the board"
                           & " boot check"));
-                  Restore_Output;
                end if;
                if On_Firmware
                  and then Landin.Targets.Firmware.Takes_ESP_Image
@@ -3854,6 +4050,13 @@ package body Landin.Driver is
                   return;
                end if;
 
+               if Emit = Emit_Executable then
+                  Check_External_Text
+                    (Unbounded.To_String (Emitted), Assembly_Path, True, 0);
+                  if Landin.Stages.Failed (Context) then
+                     return;
+                  end if;
+               end if;
                Write_Output
                  (Assembly_Path, Unbounded.To_String (Emitted), Written);
                if Written /= Landin.Platform.Write_Ok then
@@ -4087,6 +4290,10 @@ package body Landin.Driver is
                Note_Unavailable_Toolchain
                  (if Candidates.Is_Empty then ""
                   else Candidates.First_Element);
+               return;
+            end if;
+            Read_External_Input (Operand, True, 0);
+            if Landin.Stages.Failed (Context) then
                return;
             end if;
             for Path of Destinations loop

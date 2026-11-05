@@ -233,7 +233,6 @@ package body Landin.Tests.Optimization_Driver_Suite is
       First_Assembly : US.Unbounded_String;
    begin
       Host.Add_File ("main.ldn", Source);
-      Host.Add_File ("out.s", "prior assembly");
       Args.Append ("--build-report=report.json");
       Result := Landin.Driver.Execute (Args, Host, Tools);
       Landin.Testing.Check_Equal
@@ -316,6 +315,7 @@ package body Landin.Tests.Optimization_Driver_Suite is
       Result : Landin.Driver.Outcome;
    begin
       Host.Add_File ("main.ldn", Source);
+      Host.Add_File ("out.s", "prior assembly");
       Args.Append ("--build-report=report.json");
       Result := Landin.Driver.Execute (Args, Host, Tools);
       Landin.Testing.Check_Equal
