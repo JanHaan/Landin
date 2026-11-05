@@ -9,12 +9,17 @@ difference.  Decide holds reuse to GitHub's record of a push run, of main
 or of another branch, that ran every lane, never to anything a pull
 request writes, and to a trusted `Gate: explanatory` on every commit
 since, so a semantic edit nobody declared runs everything.  Workflow
-holds the reuse list to every job the aggregate needs.  Verdict holds the
-gate to the one shape a reused pass may have.
+holds the reuse list to every job the aggregate needs but the physical
+ones, which are never reused, and every job's condition to the event's
+scope.  Scope holds which events reach the boards.  Verdict holds the gate
+to the shapes a reused pass, a boards-only run and a board-scope event may
+have, and Bundles the provenance the rig checks before a board runs.
 """
 from datetime import datetime, timedelta, timezone
+import hashlib
 import importlib.util
 import itertools
+import json
 import os
 from pathlib import Path
 import re
@@ -595,9 +600,10 @@ def job_needs(body):
     return needs
 
 
-def required_workflow_names(workflow, called):
+def required_workflow_names(workflow, called, physical=()):
+    """Every job name the aggregate needs; with PHYSICAL, also those jobs' names apart."""
     jobs = workflow_jobs(workflow)
-    names = []
+    names, physical_names = [], []
 
     def expand(identity, body, prefix="", stack=()):
         name = job_field(body, "name")
@@ -609,6 +615,8 @@ def required_workflow_names(workflow, called):
             rendered = prefix + rendered_job_name(name if name is not None else identity, row)
             if uses is None:
                 names.append(rendered)
+                if not prefix and identity in physical:
+                    physical_names.append(rendered)
             else:
                 if not re.fullmatch(r"\./\.github/workflows/[\w-]+\.yml", uses):
                     raise ValueError("unsupported called workflow: " + uses)
@@ -633,10 +641,15 @@ def required_workflow_names(workflow, called):
         needed.extend(job_needs(body))
     if len(set(names)) != len(names):
         raise ValueError("matrix legs have duplicate job names")
+    if physical:
+        return set(names), set(physical_names)
     return set(names)
 
 
-def workflow_reuse_gaps(workflow, called):
+def workflow_reuse_gaps(workflow, called, physical=gate_inputs.PHYSICAL):
+    """(missing, extra): reuse names the aggregate needs and the list lacks,
+    and names the list has that the aggregate does not need or that are
+    physical, which are never reused."""
     inputs = "\n".join(workflow_jobs(workflow)["inputs"])
     commands = re.findall(r"gate_inputs\.py reuse gate\.yml(.*?)>>", inputs, re.S)
     if len(commands) != 1:
@@ -644,7 +657,8 @@ def workflow_reuse_gaps(workflow, called):
     required = shlex.split(commands[0].replace("\\\n", " "))
     if len(set(required)) != len(required) or any("${" in name for name in required):
         raise ValueError("reuse names must be unique literals")
-    expected = required_workflow_names(workflow, called)
+    expected, never = required_workflow_names(workflow, called, physical or ("",))
+    expected -= never
     return expected - set(required), set(required) - expected
 
 
@@ -771,6 +785,129 @@ class Workflow(unittest.TestCase):
             workflow_reuse_gaps(source, {})
 
 
+GATE = ROOT / ".github/workflows/gate.yml"
+SOFTWARE_IF = ("needs.inputs.outputs.software == 'true'",
+               "needs.inputs.outputs.reuse != 'true'")
+BOARDS_IF = "needs.inputs.outputs.boards == 'true'"
+ALWAYS_RUN = ("documents", "scripts")
+
+
+def gate_closure(workflow):
+    """The aggregate's needed job identities, `inputs` and `gate` among them."""
+    jobs = workflow_jobs(workflow)
+    needed, seen = ["gate"], set()
+    while needed:
+        identity = needed.pop()
+        if identity not in seen:
+            seen.add(identity)
+            needed.extend(job_needs(jobs[identity]))
+    return jobs, seen
+
+
+def scope_gaps(workflow):
+    """Jobs whose condition does not follow the event's scope, with why."""
+    jobs, needed = gate_closure(workflow)
+    gaps = []
+    for identity in sorted(needed):
+        body = jobs[identity]
+        condition = job_field(body, "if") or ""
+        text = "\n".join(body)
+        if identity in ("inputs", "gate") + ALWAYS_RUN:
+            wanted = "always()" if identity == "gate" else ""
+            if condition != wanted:
+                gaps.append("%s: if is %r, not %r" % (identity, condition, wanted))
+        elif identity in gate_inputs.PHYSICAL:
+            if BOARDS_IF not in condition or "reuse" in condition or "software" in condition:
+                gaps.append("%s: a physical job runs by the boards scope alone" % identity)
+            if "secrets." in text:
+                gaps.append("%s: a physical job reads a secret" % identity)
+        elif not all(part in condition for part in SOFTWARE_IF):
+            gaps.append("%s: a software lane must skip for a reused pass and a "
+                        "boards-only event" % identity)
+    for identity in gate_inputs.PHYSICAL:
+        if identity not in needed:
+            gaps.append("%s: the aggregate does not need a physical job" % identity)
+    for identity, body in jobs.items():
+        on_rig = any("landin-rig" in line for line in body)
+        if on_rig and (identity not in gate_inputs.PHYSICAL
+                       or job_field(body, "runs-on") != "[self-hosted, landin-rig]"):
+            gaps.append("%s: only a physical job runs on the rig" % identity)
+    return gaps
+
+
+class Physical(unittest.TestCase):
+    """Hold the physical jobs to their own category: never reused, by scope."""
+
+    def setUp(self):
+        self.source = GATE.read_text()
+
+    def test_every_job_follows_the_events_scope(self):
+        self.assertEqual(scope_gaps(self.source), [])
+
+    def test_a_software_lane_without_the_scope_is_refused(self):
+        source = self.source.replace(
+            "  scaling:\n    needs: [inputs, linux-release-build]\n"
+            "    if: needs.inputs.outputs.software == 'true' && needs.inputs.outputs.reuse != 'true'\n",
+            "  scaling:\n    needs: [inputs, linux-release-build]\n"
+            "    if: needs.inputs.outputs.reuse != 'true'\n")
+        self.assertNotEqual(source, self.source)
+        self.assertEqual(scope_gaps(source), [
+            "scaling: a software lane must skip for a reused pass and a boards-only event"])
+
+    def test_a_board_job_skipped_by_reuse_is_refused(self):
+        source = self.source.replace(
+            "    if: needs.inputs.outputs.boards == 'true'\n    runs-on: ubuntu-24.04\n",
+            "    if: needs.inputs.outputs.boards == 'true' && needs.inputs.outputs.reuse != 'true'\n"
+            "    runs-on: ubuntu-24.04\n")
+        self.assertNotEqual(source, self.source)
+        self.assertEqual(scope_gaps(source),
+                         ["board-bundles: a physical job runs by the boards scope alone"])
+
+    def test_a_secret_on_the_rig_is_refused(self):
+        source = self.source.replace(
+            "          PORT: ${{ matrix.port }}\n          MANIFEST:",
+            "          PORT: ${{ matrix.port }}\n          TOKEN: ${{ secrets.RIG }}\n          MANIFEST:")
+        self.assertNotEqual(source, self.source)
+        self.assertEqual(scope_gaps(source), ["board: a physical job reads a secret"])
+
+    def test_the_rig_runs_physical_jobs_alone(self):
+        source = self.source.replace("  scaling:\n    needs: [inputs, linux-release-build]\n",
+                                     "  scaling:\n    needs: [inputs, linux-release-build]\n"
+                                     "    runs-on: [self-hosted, landin-rig]\n", 1)
+        self.assertIn("scaling: only a physical job runs on the rig", scope_gaps(source))
+
+    def test_the_physical_names_are_every_board_leg_and_never_in_the_reuse_list(self):
+        called = {".github/workflows/" + path.name: path.read_text()
+                  for path in GATE.parent.glob("*.yml")}
+        _, never = required_workflow_names(self.source, called, gate_inputs.PHYSICAL)
+        self.assertEqual(never, {"board-bundles"} | {"board-" + port
+                                                     for port in gate_inputs.BOARD_PORTS})
+        inputs = "\n".join(workflow_jobs(self.source)["inputs"])
+        command = re.search(r"gate_inputs\.py reuse gate\.yml(.*?)>>", inputs, re.S)
+        for name in sorted(never):
+            with self.subTest(name=name):
+                changed = self.source.replace(command[1], " " + name + command[1], 1)
+                self.assertEqual(workflow_reuse_gaps(changed, called), (set(), {name}))
+
+    def test_the_board_matrix_is_every_port_once(self):
+        rows = matrix_rows(workflow_jobs(self.source)["board"])
+        self.assertEqual(tuple(row["port"] for row in rows), gate_inputs.BOARD_PORTS)
+        self.assertEqual({row["port"]: row["timeout"] for row in rows if row["timeout"] != "20"},
+                         {"pico2": "40"})
+
+    def test_the_aggregate_keeps_documents_and_scripts_always(self):
+        gate = "\n".join(workflow_jobs(self.source)["gate"])
+        self.assertIn("verdict", gate)
+        self.assertIn("--always documents scripts", gate)
+
+    def test_the_events_and_their_concurrency(self):
+        head = self.source.split("\njobs:\n", 1)[0]
+        self.assertIn("    - cron: '0 4 * * 1'", head)
+        self.assertIn("        options: [full, boards]\n        default: full", head)
+        self.assertIn("cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}", head)
+        self.assertIn("format('main-{0}', github.run_id)", head)
+
+
 def job(result, **outputs):
     return {"result": result, "outputs": outputs}
 
@@ -808,6 +945,291 @@ class Verdict(unittest.TestCase):
         needs["inputs"]["result"] = "failure"
         self.assertTrue(gate_inputs.verdict(needs, self.ALWAYS))
         self.assertTrue(gate_inputs.verdict({}, self.ALWAYS))
+
+
+PASSED = {port: "passed" for port in gate_inputs.BOARD_PORTS}
+
+
+class BoardVerdict(unittest.TestCase):
+    """The verdict on each event's scope, its board jobs and their outcomes."""
+    ALWAYS = ("inputs", "documents", "scripts")
+    MAIN = gate_inputs.scope("push", "refs/heads/main", "JanHaan/Landin", {})
+    BRANCH = gate_inputs.scope("push", "refs/heads/topic", "JanHaan/Landin", {})
+    BOARDS = gate_inputs.scope("workflow_dispatch", "refs/heads/topic", "JanHaan/Landin",
+                               {"inputs": {"scope": "boards"}})
+    SCHEDULE = gate_inputs.scope("schedule", "refs/heads/main", "JanHaan/Landin", {})
+
+    def needs(self, scope, lanes, boards, reuse="false"):
+        outputs = {"reuse": reuse, "software": gate_inputs.flag(scope["software"]),
+                   "boards": gate_inputs.flag(scope["boards"])}
+        return {"inputs": {"result": "success", "outputs": outputs},
+                "documents": job("success"), "scripts": job("success"),
+                "compiler": job(lanes), "cortex-m": job(lanes),
+                "board-bundles": job(boards), "board": job(boards)}
+
+    def verdict(self, scope, lanes, boards, reuse="false", evidence=PASSED):
+        return gate_inputs.verdict(self.needs(scope, lanes, boards, reuse), self.ALWAYS,
+                                   scope, evidence)
+
+    def test_a_main_push_with_every_board_passed(self):
+        self.assertEqual(self.verdict(self.MAIN, "success", "success"), [])
+
+    def test_a_main_push_whose_boards_did_not_pass_fails(self):
+        for result in ("failure", "skipped", "cancelled"):
+            with self.subTest(result=result):
+                problems = self.verdict(self.MAIN, "success", result)
+                self.assertTrue(problems)
+                self.assertTrue(all("physical evidence missing is not a pass" in problem
+                                    for problem in problems), problems)
+
+    def test_a_main_push_with_one_leg_not_passed_fails(self):
+        for label in ("rig-busy", "needs-setup: power-only port", "no outcome"):
+            with self.subTest(label=label):
+                evidence = dict(PASSED, pico2=label)
+                self.assertEqual(self.verdict(self.MAIN, "success", "success", evidence=evidence),
+                                 ["board-pico2: %s: physical evidence missing is not a pass"
+                                  % label])
+
+    def test_a_main_push_reusing_software_still_needs_fresh_boards(self):
+        self.assertEqual(self.verdict(self.MAIN, "skipped", "success", reuse="true"), [])
+        self.assertTrue(self.verdict(self.MAIN, "skipped", "skipped", reuse="true"))
+
+    def test_a_branch_push_skips_the_boards(self):
+        self.assertEqual(self.verdict(self.BRANCH, "success", "skipped", evidence={}), [])
+        self.assertEqual(self.verdict(self.BRANCH, "skipped", "skipped", reuse="true",
+                                      evidence={}), [])
+
+    def test_boards_that_ran_for_a_branch_push_fail(self):
+        problems = self.verdict(self.BRANCH, "success", "success", evidence={})
+        self.assertEqual(problems, [
+            "board is success, not skipped: a board job ran for an event outside board scope",
+            "board-bundles is success, not skipped: a board job ran for an event outside board scope"])
+
+    def test_a_boards_only_dispatch_runs_no_software_lane(self):
+        self.assertEqual(self.verdict(self.BOARDS, "skipped", "success"), [])
+        self.assertTrue(self.verdict(self.BOARDS, "success", "success"))
+        self.assertTrue(self.verdict(self.BOARDS, "skipped", "failure"))
+        needs = self.needs(self.BOARDS, "skipped", "success")
+        needs["scripts"] = job("skipped")
+        self.assertTrue(gate_inputs.verdict(needs, self.ALWAYS, self.BOARDS, PASSED))
+
+    def test_a_full_dispatch_runs_both(self):
+        full = gate_inputs.scope("workflow_dispatch", "refs/heads/topic", "JanHaan/Landin",
+                                 {"inputs": {"scope": "full"}})
+        self.assertEqual(self.verdict(full, "success", "success"), [])
+        self.assertTrue(self.verdict(full, "skipped", "success"))
+
+    def test_the_schedule_is_boards_only(self):
+        self.assertEqual(self.verdict(self.SCHEDULE, "skipped", "success"), [])
+        self.assertTrue(self.verdict(self.SCHEDULE, "success", "success"))
+        self.assertTrue(self.verdict(self.SCHEDULE, "skipped", "cancelled"))
+
+    def test_inputs_must_agree_with_the_event(self):
+        needs = self.needs(self.BRANCH, "success", "skipped")
+        self.assertEqual(gate_inputs.verdict(needs, self.ALWAYS, self.MAIN, PASSED)[0],
+                         "inputs says boards=false, but this event's scope is boards=true")
+
+    def test_a_boards_only_run_in_a_fork_has_nothing_to_pass(self):
+        fork = gate_inputs.scope("schedule", "refs/heads/main", "someone/Landin", {})
+        self.assertTrue(self.verdict(fork, "skipped", "skipped", evidence={}))
+
+    def test_the_summary_names_the_scope_and_every_leg(self):
+        needs = self.needs(self.BOARDS, "skipped", "success")
+        text = gate_inputs.report(needs, [], self.BOARDS, dict(PASSED, esp32="rig-busy"))
+        self.assertIn("boards only: no software lanes", text)
+        self.assertIn("board-esp32: rig-busy", text)
+        self.assertIn("board-rp2040: passed", text)
+        text = gate_inputs.report(self.needs(self.BRANCH, "success", "skipped"), [],
+                                  self.BRANCH, None)
+        self.assertIn("physical boards: not run for this event", text)
+
+    def test_the_command_writes_the_summary_and_judges_the_event(self):
+        directory = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, directory)
+        event = directory / "event.json"
+        event.write_text('{"inputs": {"scope": "boards"}}')
+        summary = directory / "summary.md"
+        needs = self.needs(self.BOARDS, "skipped", "success")
+        environment = dict(os.environ, NEEDS=json.dumps(needs), GITHUB_EVENT_PATH=str(event),
+                           GITHUB_EVENT_NAME="workflow_dispatch", GITHUB_REF="refs/heads/topic",
+                           GITHUB_REPOSITORY="JanHaan/Landin", GITHUB_STEP_SUMMARY=str(summary))
+        evidence = directory / "evidence"
+        for port in gate_inputs.BOARD_PORTS:
+            leg = evidence / ("board-evidence-" + port) / port
+            (leg / "evidence").mkdir(parents=True)
+            (leg / "transfer.json").write_text("{}")
+            (leg / "evidence/outcome.json").write_text('{"outcome": "passed"}')
+        command = [sys.executable, str(ROOT / "scripts/gate_inputs.py"), "verdict",
+                   "--evidence", str(evidence), "--always", "documents", "scripts"]
+        done = subprocess.run(command, env=environment, capture_output=True, text=True)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertIn("boards only: no software lanes", summary.read_text())
+        (evidence / "board-evidence-esp32/esp32/evidence/outcome.json").write_text(
+            '{"outcome": "rig-busy"}')
+        done = subprocess.run(command, env=environment, capture_output=True, text=True)
+        self.assertEqual(done.returncode, 1)
+        self.assertIn("board-esp32: rig-busy: physical evidence missing is not a pass",
+                      done.stderr)
+
+
+class Scope(unittest.TestCase):
+    def scope(self, event_name, ref="refs/heads/main", repository="JanHaan/Landin", event=None):
+        found = gate_inputs.scope(event_name, ref, repository, event or {})
+        return found["software"], found["boards"]
+
+    def test_main_pushes_run_both(self):
+        self.assertEqual(self.scope("push"), (True, True))
+
+    def test_branches_tags_and_pull_requests_run_software_only(self):
+        self.assertEqual(self.scope("push", "refs/heads/topic"), (True, False))
+        self.assertEqual(self.scope("push", "refs/tags/v1"), (True, False))
+        self.assertEqual(self.scope("pull_request", "refs/pull/7/merge"), (True, False))
+
+    def test_dispatch_runs_boards_with_or_without_software(self):
+        self.assertEqual(self.scope("workflow_dispatch", "refs/heads/topic"), (True, True))
+        self.assertEqual(self.scope("workflow_dispatch", "refs/heads/topic",
+                                    event={"inputs": {"scope": "full"}}), (True, True))
+        self.assertEqual(self.scope("workflow_dispatch", "refs/heads/topic",
+                                    event={"inputs": {"scope": "boards"}}), (False, True))
+
+    def test_the_schedule_is_boards_only(self):
+        self.assertEqual(self.scope("schedule"), (False, True))
+
+    def test_a_fork_never_reaches_the_boards(self):
+        self.assertEqual(self.scope("push", repository="someone/Landin"), (True, False))
+        self.assertEqual(self.scope("workflow_dispatch", repository="someone/Landin"),
+                         (True, False))
+
+    def test_dispatch_and_schedule_never_reuse(self):
+        for event_name in ("workflow_dispatch", "schedule"):
+            with self.subTest(event_name=event_name):
+                self.assertIsNone(gate_inputs.tips_of(event_name, {}, ("a", []))[0])
+
+
+class Outcomes(unittest.TestCase):
+    def setUp(self):
+        self.root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.root)
+
+    def leg(self, base, port, outcome=None):
+        leg = base / port
+        leg.mkdir(parents=True)
+        (leg / "transfer.json").write_text("{}")
+        if outcome is not None:
+            (leg / "evidence").mkdir()
+            (leg / "evidence/outcome.json").write_text(outcome)
+
+    def test_each_port_is_read_from_its_own_artifact(self):
+        self.leg(self.root / "board-evidence-rp2040", "rp2040", '{"outcome": "passed"}')
+        self.leg(self.root / "board-evidence-pico2", "pico2", '{"outcome": "needs-setup"}')
+        self.leg(self.root / "board-evidence-esp32", "esp32")
+        self.leg(self.root / "board-evidence-esp32s3", "esp32s3", "not json")
+        found = gate_inputs.outcomes(self.root)
+        self.assertEqual(found["rp2040"], "passed")
+        self.assertEqual(found["pico2"], "needs-setup")
+        self.assertTrue(found["esp32"].startswith("no outcome"))
+        self.assertTrue(found["esp32s3"].startswith("no outcome"))
+        self.assertTrue(found["stm32h753"].startswith("no evidence"))
+
+    def test_a_single_artifact_downloads_without_its_directory(self):
+        self.leg(self.root, "esp32c3", '{"outcome": "passed"}')
+        self.assertEqual(gate_inputs.outcomes(self.root)["esp32c3"], "passed")
+
+    def test_two_evidence_directories_for_one_port_are_ambiguous(self):
+        self.leg(self.root, "esp32c3", '{"outcome": "passed"}')
+        self.leg(self.root / "board-evidence-esp32c3", "esp32c3", '{"outcome": "passed"}')
+        self.assertTrue(gate_inputs.outcomes(self.root)["esp32c3"].startswith("ambiguous"))
+
+    def test_an_absent_directory_has_no_evidence_for_any_port(self):
+        found = gate_inputs.outcomes(self.root / "absent")
+        self.assertEqual(set(found), set(gate_inputs.BOARD_PORTS))
+        self.assertTrue(all(label.startswith("no evidence") for label in found.values()))
+
+
+class Bundles(unittest.TestCase):
+    """The provenance and file list the rig checks before a board runs."""
+
+    def setUp(self):
+        self.root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.root)
+        self.checkout = self.root / "checkout"
+        self.checkout.mkdir()
+        git(self.checkout, "init", "-q")
+        (self.checkout / "a").write_text("a\n")
+        git(self.checkout, "add", "a")
+        git(self.checkout, "commit", "-q", "-m", "a")
+        self.commit = git(self.checkout, "rev-parse", "HEAD")
+        self.refine = self.root / "refine"
+        self.refine.write_bytes(b"compiler")
+        self.compiler = gate_inputs.sha256_file(self.refine)
+        self.bundles = self.root / "bundles"
+        rows = []
+        for board, mode in (("rp2040", "boot"), ("rp2040", "ram"), ("esp32", "boot")):
+            directory = self.bundles / board / mode
+            directory.mkdir(parents=True)
+            (directory / "board.elf").write_bytes(board.encode() + mode.encode())
+            self.manifest(board, mode, "source", self.compiler)
+            rows.append({"board": board, "mode": mode, "status": "matches",
+                         "differences": [], "bundle": str(directory)})
+        self.summary(rows)
+        self.environ = {"GITHUB_SHA": self.commit, "GITHUB_RUN_ID": "41",
+                        "GITHUB_RUN_ATTEMPT": "1", "GITHUB_EVENT_NAME": "push",
+                        "GITHUB_REF": "refs/heads/main", "GITHUB_REPOSITORY": "JanHaan/Landin"}
+
+    def manifest(self, board, mode, source, compiler):
+        (self.bundles / board / mode / "bundle.json").write_text(json.dumps({
+            "source_identity": {"sha256": source, "files": {}},
+            "compiler_identity": {"name": "refine", "sha256": compiler}}))
+
+    def summary(self, rows):
+        (self.bundles / "summary.json").write_text(json.dumps(rows))
+
+    def provenance(self, environ=None):
+        return gate_inputs.bundle_provenance(self.bundles, self.refine,
+                                             environ or self.environ, self.checkout)
+
+    def test_the_list_covers_every_file_and_checks_with_coreutils(self):
+        digest = self.provenance()
+        listing = (self.bundles / "files.sha256").read_bytes()
+        self.assertEqual(digest, hashlib.sha256(listing).hexdigest())
+        names = [line.split("  ", 1)[1] for line in listing.decode().splitlines()]
+        self.assertEqual(names, sorted(names))
+        self.assertIn("provenance.json", names)
+        self.assertIn("rp2040/ram/board.elf", names)
+        self.assertIn("summary.json", names)
+        if shutil.which("sha256sum"):
+            subprocess.run(["sha256sum", "--check", "--strict", "--quiet", "files.sha256"],
+                           cwd=self.bundles, check=True)
+        provenance = json.loads((self.bundles / "provenance.json").read_text())
+        self.assertEqual((provenance["commit"], provenance["run_id"], provenance["source_identity"],
+                          provenance["compiler"]["sha256"]),
+                         (self.commit, "41", "source", self.compiler))
+        self.assertEqual(provenance["tree"], git(self.checkout, "rev-parse", "HEAD^{tree}"))
+        self.assertEqual(len(provenance["bundles"]), 3)
+
+    def test_a_record_mismatch_is_refused(self):
+        rows = json.loads((self.bundles / "summary.json").read_text())
+        rows[1]["status"] = "mismatch"
+        self.summary(rows)
+        with self.assertRaisesRegex(ValueError, "rp2040 ram is mismatch"):
+            self.provenance()
+
+    def test_another_compiler_or_a_second_source_is_refused(self):
+        self.manifest("esp32", "boot", "source", "0" * 64)
+        with self.assertRaisesRegex(ValueError, "another compiler"):
+            self.provenance()
+        self.manifest("esp32", "boot", "other", self.compiler)
+        with self.assertRaisesRegex(ValueError, "one source identity"):
+            self.provenance()
+
+    def test_a_checkout_that_is_not_the_runs_commit_is_refused(self):
+        with self.assertRaisesRegex(ValueError, "not this run's commit"):
+            self.provenance(dict(self.environ, GITHUB_SHA="0" * 40))
+
+    def test_no_bundle_is_refused(self):
+        self.summary([])
+        with self.assertRaisesRegex(ValueError, "one source identity"):
+            self.provenance()
 
 
 #  Every tracked file that names one of the four documents or reads

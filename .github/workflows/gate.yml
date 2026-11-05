@@ -28,25 +28,52 @@
 #
 #  AGENTS.md records observed job timings and their measurement limits.
 #  Shared build artifacts are not acceptance records.
+#
+#  The physical boards run on a board-scope event: a push to main, the
+#  weekly schedule and a manual dispatch, in this repository only.  The
+#  schedule, and a dispatch with scope `boards`, run boards, documents and
+#  scripts and no software lane; scripts/gate_inputs.py's `scope` decides.
 
 name: gate
+
+#  An empty name leaves GitHub's own, the commit message or the title.
+run-name: >-
+  ${{ github.event_name == 'schedule' && 'gate: boards only, weekly on main'
+  || inputs.scope == 'boards' && format('gate: boards only on {0}', github.ref_name)
+  || '' }}
 
 on:
   push:
   pull_request:
   workflow_dispatch:
+    inputs:
+      scope:
+        description: 'full: every lane and the boards; boards: the boards, documents and scripts only'
+        type: choice
+        options: [full, boards]
+        default: full
+  #  Recurring physical evidence while main is idle; GitHub runs a
+  #  schedule on the default branch's latest commit.
+  schedule:
+    - cron: '0 4 * * 1'
 
 permissions:
   contents: read
 
-# Superseded candidates on one branch must not occupy the native hosts.
-# Manual dispatch gets a separate group so a requested fresh run is retained.
+#  Superseded candidates on one branch must not occupy the native hosts.
+#  A manual dispatch, a push to main and the schedule each get a group of
+#  their own, so nothing cancels them: a shared group would still cancel
+#  its pending run when a third arrived, whatever cancel-in-progress says,
+#  and a main push's board evidence is its promotion's.  The rig's one
+#  runner takes board jobs one at a time across runs anyway.
 concurrency:
-  group: gate-${{ github.event_name == 'workflow_dispatch' && format('manual-{0}', github.run_id) || github.event.pull_request.number && format('pr-{0}', github.event.pull_request.number) || github.ref }}
-  cancel-in-progress: true
+  group: gate-${{ github.event_name == 'workflow_dispatch' && format('manual-{0}', github.run_id) || (github.event_name == 'schedule' || github.event_name == 'push' && github.ref == 'refs/heads/main') && format('main-{0}', github.run_id) || github.event.pull_request.number && format('pr-{0}', github.event.pull_request.number) || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   # Reuse requires the verified explanatory-only conditions in AGENTS.md.
+  # The physical jobs are never in the reuse list: their evidence is fresh
+  # on every board-scope event, and gate_inputs.py's PHYSICAL names them.
   inputs:
     runs-on: ubuntu-24.04-arm
     permissions:
@@ -54,8 +81,14 @@ jobs:
       contents: read
     outputs:
       reuse: ${{ steps.reuse.outputs.reuse }}
+      software: ${{ steps.scope.outputs.software }}
+      boards: ${{ steps.scope.outputs.boards }}
+      scope: ${{ steps.scope.outputs.scope }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Whether this event runs the software lanes and the physical boards
+        id: scope
+        run: python3 scripts/gate_inputs.py scope >> "$GITHUB_OUTPUT"
       - name: Inspect a full pass for an identical candidate or explanatory edit
         id: reuse
         env:
@@ -126,7 +159,7 @@ jobs:
   #  Four units at once on the hosted runner's four CPUs.
   linux-debug-build:
     needs: inputs
-    if: needs.inputs.outputs.reuse != 'true'
+    if: needs.inputs.outputs.software == 'true' && needs.inputs.outputs.reuse != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -159,7 +192,7 @@ jobs:
   compiler:
     name: compiler-${{ matrix.shard }}
     needs: [inputs, linux-debug-build]
-    if: needs.inputs.outputs.reuse != 'true'
+    if: needs.inputs.outputs.software == 'true' && needs.inputs.outputs.reuse != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     strategy:
@@ -207,7 +240,7 @@ jobs:
   #  shards rather than after one of them.
   compiler-checks:
     needs: [inputs, linux-debug-build]
-    if: needs.inputs.outputs.reuse != 'true'
+    if: needs.inputs.outputs.software == 'true' && needs.inputs.outputs.reuse != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:
@@ -273,7 +306,7 @@ jobs:
   #  build-modes, Cortex-M and scaling lanes.  The archive preserves executable permissions.
   linux-release-build:
     needs: inputs
-    if: needs.inputs.outputs.reuse != 'true'
+    if: needs.inputs.outputs.software == 'true' && needs.inputs.outputs.reuse != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
@@ -305,7 +338,7 @@ jobs:
   #  Measured: corpus 251 s, quality 26 s, GDB 36 s.
   release:
     needs: [inputs, linux-release-build]
-    if: needs.inputs.outputs.reuse != 'true'
+    if: needs.inputs.outputs.software == 'true' && needs.inputs.outputs.reuse != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:
@@ -401,7 +434,7 @@ jobs:
   #  nothing a stock system can do.
   outside-user-stock:
     needs: [inputs, linux-release-build]
-    if: needs.inputs.outputs.reuse != 'true'
+    if: needs.inputs.outputs.software == 'true' && needs.inputs.outputs.reuse != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -446,7 +479,7 @@ jobs:
   build-modes:
     name: build-modes-${{ matrix.part }}
     needs: [inputs, linux-debug-build, linux-release-build]
-    if: needs.inputs.outputs.reuse != 'true'
+    if: needs.inputs.outputs.software == 'true' && needs.inputs.outputs.reuse != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
@@ -499,7 +532,7 @@ jobs:
   #  including the byte-for-byte regeneration of the committed fixture.
   bindings:
     needs: [inputs, linux-debug-build]
-    if: needs.inputs.outputs.reuse != 'true'
+    if: needs.inputs.outputs.software == 'true' && needs.inputs.outputs.reuse != 'true'
     runs-on: ubuntu-24.04
     env:
       LANDIN_BUILD_REUSE: 'yes'
@@ -545,7 +578,7 @@ jobs:
   #  Regenerating the parser must reproduce the committed one.  10 s.
   editor-grammar:
     needs: inputs
-    if: needs.inputs.outputs.reuse != 'true'
+    if: needs.inputs.outputs.software == 'true' && needs.inputs.outputs.reuse != 'true'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -581,7 +614,7 @@ jobs:
   #  compilation once the toolchain is fetched.
   flake:
     needs: inputs
-    if: needs.inputs.outputs.reuse != 'true'
+    if: needs.inputs.outputs.software == 'true' && needs.inputs.outputs.reuse != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -609,7 +642,7 @@ jobs:
   cortex-m:
     name: cortex-m-${{ matrix.part }}
     needs: [inputs, linux-release-build]
-    if: needs.inputs.outputs.reuse != 'true'
+    if: needs.inputs.outputs.software == 'true' && needs.inputs.outputs.reuse != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     strategy:
@@ -716,7 +749,7 @@ jobs:
   xtensa:
     name: xtensa-${{ matrix.chip }}
     needs: [inputs, linux-release-build]
-    if: needs.inputs.outputs.reuse != 'true'
+    if: needs.inputs.outputs.software == 'true' && needs.inputs.outputs.reuse != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     strategy:
@@ -789,7 +822,7 @@ jobs:
   #  misses; the log gives the runner's load beside each row.
   scaling:
     needs: [inputs, linux-release-build]
-    if: needs.inputs.outputs.reuse != 'true'
+    if: needs.inputs.outputs.software == 'true' && needs.inputs.outputs.reuse != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
@@ -819,7 +852,7 @@ jobs:
   #  hosted parity and LLDB lanes.
   darwin-release-build:
     needs: inputs
-    if: needs.inputs.outputs.reuse != 'true'
+    if: needs.inputs.outputs.software == 'true' && needs.inputs.outputs.reuse != 'true'
     runs-on: macos-26
     timeout-minutes: 30
     env:
@@ -851,7 +884,7 @@ jobs:
   #  determinism, which then need not wait for the suite.
   darwin-debug-build:
     needs: inputs
-    if: needs.inputs.outputs.reuse != 'true'
+    if: needs.inputs.outputs.software == 'true' && needs.inputs.outputs.reuse != 'true'
     runs-on: macos-26
     timeout-minutes: 30
     env:
@@ -884,7 +917,7 @@ jobs:
   #  native report identity and the server.
   darwin-host:
     needs: [inputs, darwin-debug-build]
-    if: needs.inputs.outputs.reuse != 'true'
+    if: needs.inputs.outputs.software == 'true' && needs.inputs.outputs.reuse != 'true'
     runs-on: macos-26
     timeout-minutes: 60
     env:
@@ -946,7 +979,7 @@ jobs:
   #  checked artifact from this revision's Darwin release build.
   darwin-host-release:
     needs: [inputs, darwin-release-build]
-    if: needs.inputs.outputs.reuse != 'true'
+    if: needs.inputs.outputs.software == 'true' && needs.inputs.outputs.reuse != 'true'
     runs-on: macos-26
     timeout-minutes: 60
     env:
@@ -1040,7 +1073,7 @@ jobs:
   #  minutes.
   darwin-parity:
     needs: [inputs, darwin-release-build]
-    if: needs.inputs.outputs.reuse != 'true'
+    if: needs.inputs.outputs.software == 'true' && needs.inputs.outputs.reuse != 'true'
     runs-on: macos-26
     timeout-minutes: 90
     env:
@@ -1089,7 +1122,7 @@ jobs:
   #  determinism, which then need not wait for the suite.
   arm64-debug-build:
     needs: inputs
-    if: needs.inputs.outputs.reuse != 'true'
+    if: needs.inputs.outputs.software == 'true' && needs.inputs.outputs.reuse != 'true'
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 30
     steps:
@@ -1120,7 +1153,7 @@ jobs:
   arm64-compiler:
     name: arm64-compiler-${{ matrix.shard }}
     needs: [inputs, arm64-debug-build]
-    if: needs.inputs.outputs.reuse != 'true'
+    if: needs.inputs.outputs.software == 'true' && needs.inputs.outputs.reuse != 'true'
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 60
     strategy:
@@ -1158,7 +1191,7 @@ jobs:
   #  as `compiler-checks` on the other architecture.
   arm64-compiler-checks:
     needs: [inputs, arm64-debug-build]
-    if: needs.inputs.outputs.reuse != 'true'
+    if: needs.inputs.outputs.software == 'true' && needs.inputs.outputs.reuse != 'true'
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 60
     env:
@@ -1217,7 +1250,7 @@ jobs:
   #  Eight minutes as a job.
   arm64-release:
     needs: inputs
-    if: needs.inputs.outputs.reuse != 'true'
+    if: needs.inputs.outputs.software == 'true' && needs.inputs.outputs.reuse != 'true'
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 60
     env:
@@ -1318,7 +1351,7 @@ jobs:
   freebsd:
     name: freebsd-${{ matrix.arch }}-${{ matrix.kind }}${{ matrix.part && format('-{0}', matrix.part) || '' }}
     needs: [inputs, linux-release-build]
-    if: needs.inputs.outputs.reuse != 'true'
+    if: needs.inputs.outputs.software == 'true' && needs.inputs.outputs.reuse != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     strategy:
@@ -1406,7 +1439,7 @@ jobs:
   rv64-qemu:
     name: rv64-qemu-${{ matrix.shard }}
     needs: [inputs, linux-release-build]
-    if: needs.inputs.outputs.reuse != 'true'
+    if: needs.inputs.outputs.software == 'true' && needs.inputs.outputs.reuse != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     strategy:
@@ -1493,7 +1526,7 @@ jobs:
   rv64-emit:
     name: rv64-emit-${{ matrix.kind }}
     needs: [inputs, linux-release-build]
-    if: false && needs.inputs.outputs.reuse != 'true'
+    if: false && needs.inputs.outputs.software == 'true' && needs.inputs.outputs.reuse != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     strategy:
@@ -1552,7 +1585,7 @@ jobs:
   rv64:
     name: rv64-${{ matrix.kind }}
     needs: [inputs, rv64-emit]
-    if: false && needs.inputs.outputs.reuse != 'true'
+    if: false && needs.inputs.outputs.software == 'true' && needs.inputs.outputs.reuse != 'true'
     # RISE requires this exact label set; jobs are ephemeral physical machines.
     runs-on: ubuntu-24.04-riscv
     timeout-minutes: 45
@@ -1605,12 +1638,186 @@ jobs:
   #  that host's suite rather than after it.
   determinism:
     needs: [inputs, linux-debug-build, arm64-debug-build, darwin-debug-build]
-    if: needs.inputs.outputs.reuse != 'true'
+    if: needs.inputs.outputs.software == 'true' && needs.inputs.outputs.reuse != 'true'
     uses: ./.github/workflows/determinism.yml
     with:
       debug-artifacts: true
 
-  #  The one check a branch rule requires: every job above succeeded.
+  #  The physical boards.  Never for a pull request, a branch push or a
+  #  fork: only a push to main, the schedule and a manual dispatch in
+  #  JanHaan/Landin reach them (gate_inputs.py's `scope`).  That `if` is
+  #  not the control, because a fork's pull request can edit this file:
+  #  the runner-side job-started hook on rigpi is, refusing before any
+  #  step runs a job whose repository, event, ref or workflow it does not
+  #  accept.  These jobs read no secret, and their token can only read.
+  #
+  #  Physical evidence is never reused.  board-bundles and every board leg
+  #  run on each board-scope event whether or not the software lanes
+  #  reuse a pass, and the aggregate fails a board-scope event whose board
+  #  jobs were skipped, cancelled or failed.
+  #
+  #  board-bundles builds the release compiler from this commit and every
+  #  board's boot and RAM bundles, strict against the hardware records, so
+  #  a recorded image's drift fails here before a board runs.  One
+  #  artifact carries them with provenance.json and files.sha256; its id,
+  #  its digest and the list's sha256 are this job's outputs.
+  board-bundles:
+    needs: inputs
+    if: needs.inputs.outputs.boards == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      LANDIN_BUILD_MODE: release
+    outputs:
+      artifact-id: ${{ steps.upload.outputs.artifact-id }}
+      artifact-digest: ${{ steps.upload.outputs.artifact-digest }}
+      manifest: ${{ steps.provenance.outputs.manifest }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install the pinned toolchain
+        uses: ./.github/actions/pinned-toolchain
+
+      - name: Build release executables with bounded parallelism
+        run: ./scripts/build.sh -j4
+
+      - name: Install the locked Cortex-M, RV32 and Xtensa tools
+        run: python3 environments/cortex-m/setup.py --tools "$RUNNER_TEMP/cortex-m"
+
+      - name: Build every board's bundles against its hardware records
+        run: |
+          export PATH="$RUNNER_TEMP/cortex-m/gnat-arm-elf/bin:$RUNNER_TEMP/cortex-m/gnat-riscv64-elf/bin:$RUNNER_TEMP/cortex-m/xtensa-esp-elf/bin:$PATH"
+          python3 environments/boards/build.py \
+            --refine "$PWD/compiler/ada/build/linux-amd64/release/bin/refine" \
+            --mode=both --records=strict --output "$RUNNER_TEMP/board-bundles"
+
+      - name: Record the bundles' provenance and file list
+        id: provenance
+        run: >-
+          python3 scripts/gate_inputs.py bundles "$RUNNER_TEMP/board-bundles"
+          "$PWD/compiler/ada/build/linux-amd64/release/bin/refine" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        id: upload
+        with:
+          name: board-bundles
+          path: ${{ runner.temp }}/board-bundles
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 14
+
+  #  One leg per port on the rig's one runner, one at a time; each leg is
+  #  self-contained, boot then RAM, so legs of two runs may interleave.
+  #  The checkout is exactly this commit, sparse to the bundle's source
+  #  roots: cone mode also brings every file directly under an ancestor
+  #  directory, which is how flake.nix, flake.lock and environments/pins.sh
+  #  come.  The board tool refuses a bundle whose source identity is not
+  #  this checkout's.
+  board:
+    name: board-${{ matrix.port }}
+    needs: [inputs, board-bundles]
+    if: needs.inputs.outputs.boards == 'true' && needs.board-bundles.result == 'success'
+    runs-on: [self-hosted, landin-rig]
+    permissions:
+      contents: read
+      actions: read
+    timeout-minutes: ${{ matrix.timeout }}
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - {port: rp2040, timeout: 20}
+          - {port: pico2, timeout: 40}
+          - {port: stm32h753, timeout: 20}
+          - {port: esp32c3, timeout: 20}
+          - {port: esp32c5, timeout: 20}
+          - {port: esp32, timeout: 20}
+          - {port: esp32s3, timeout: 20}
+    steps:
+      #  First, so the aggregate can tell a leg that started from one that
+      #  never reached the rig.
+      - name: Name this leg's evidence
+        env:
+          PORT: ${{ matrix.port }}
+        run: |
+          set -eu
+          mkdir -p "$RUNNER_TEMP/board-leg/$PORT"
+          printf '{"port": "%s", "run_id": "%s", "run_attempt": "%s", "verified": false}\n' \
+            "$PORT" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" > "$RUNNER_TEMP/board-leg/$PORT/transfer.json"
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+          sparse-checkout-cone-mode: true
+          sparse-checkout: |
+            environments/boards
+            compiler/tests/board
+            compiler/tests/driver
+            devices
+            core
+            hosted
+            platform
+
+      #  By id, against the digest GitHub recorded at upload.
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ needs.board-bundles.outputs.artifact-id }}
+          path: ${{ runner.temp }}/board-bundles
+          digest-mismatch: error
+
+      - name: The bundles are the ones board-bundles built for this commit
+        env:
+          PORT: ${{ matrix.port }}
+          MANIFEST: ${{ needs.board-bundles.outputs.manifest }}
+          ARTIFACT_ID: ${{ needs.board-bundles.outputs.artifact-id }}
+          ARTIFACT_DIGEST: ${{ needs.board-bundles.outputs.artifact-digest }}
+        run: |
+          set -eu
+          leg="$RUNNER_TEMP/board-leg/$PORT"
+          cd "$RUNNER_TEMP/board-bundles"
+          printf '%s  files.sha256\n' "$MANIFEST" | sha256sum --check --strict -
+          sha256sum --check --strict --quiet files.sha256
+          sed 's/^[0-9a-f]\{64\}  //' files.sha256 | LC_ALL=C sort > "$RUNNER_TEMP/listed"
+          find . -type f ! -path ./files.sha256 | sed 's|^\./||' | LC_ALL=C sort > "$RUNNER_TEMP/present"
+          if ! cmp -s "$RUNNER_TEMP/listed" "$RUNNER_TEMP/present"; then
+            echo "the downloaded files are not the ones files.sha256 lists" >&2
+            diff "$RUNNER_TEMP/listed" "$RUNNER_TEMP/present" >&2 || true
+            exit 1
+          fi
+          python3 -I -c 'import json, os, sys
+          p = json.load(open(sys.argv[1]))
+          wanted = (os.environ["GITHUB_SHA"], os.environ["GITHUB_RUN_ID"])
+          if (p["commit"], p["run_id"]) != wanted:
+              sys.exit("provenance names %s of run %s, not %s of run %s"
+                       % (p["commit"], p["run_id"], *wanted))' provenance.json
+          cp provenance.json "$leg/bundles-provenance.json"
+          printf '{"port": "%s", "run_id": "%s", "run_attempt": "%s", "artifact_id": "%s", "artifact_digest": "%s", "manifest_sha256": "%s", "verified": true}\n' \
+            "$PORT" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$ARTIFACT_ID" "$ARTIFACT_DIGEST" "$MANIFEST" \
+            > "$leg/transfer.json"
+
+      - name: Boot and RAM runs of ${{ matrix.port }} on the rig
+        run: >-
+          python3 environments/boards/gate.py --port=${{ matrix.port }}
+          --bundles="$RUNNER_TEMP/board-bundles"
+          --output="$RUNNER_TEMP/board-leg/${{ matrix.port }}/evidence"
+
+      #  Also after a failure or a cancel, so the outcome the tool wrote
+      #  reaches the aggregate.
+      - name: Keep this board's evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: board-evidence-${{ matrix.port }}
+          path: ${{ runner.temp }}/board-leg
+          if-no-files-found: warn
+          include-hidden-files: true
+          retention-days: 90
+
+  #  The one check a branch rule requires: every job above succeeded, or
+  #  was skipped for a verified reused pass or for this event's scope.
   gate:
     if: always()
     needs: [inputs, documents, scripts, linux-debug-build, compiler,
@@ -1620,11 +1827,22 @@ jobs:
             darwin-release-build, darwin-host, darwin-host-release,
             darwin-parity, arm64-debug-build, arm64-compiler,
             arm64-compiler-checks, arm64-release, freebsd, rv64-qemu,
-            determinism]
+            determinism, board-bundles, board]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Every job succeeded, or was skipped for a verified reused pass
+      #  Each leg's outcome, so the verdict names it; a leg that never
+      #  started has no artifact, which the verdict reports by port.
+      - name: Every board leg's evidence
+        if: needs.inputs.outputs.boards == 'true'
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: board-evidence-*
+          path: ${{ runner.temp }}/board-evidence
+      - name: Every job succeeded, or was skipped for a verified reused pass or this event's scope
         env:
           NEEDS: ${{ toJSON(needs) }}
-        run: python3 scripts/gate_inputs.py verdict --always documents scripts
+        run: >-
+          python3 scripts/gate_inputs.py verdict
+          --evidence "$RUNNER_TEMP/board-evidence" --always documents scripts

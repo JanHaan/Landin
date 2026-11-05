@@ -46,12 +46,24 @@ uncertain runs every lane.
     same A B                        succeed only when A and B have one key
     reuse WORKFLOW JOB ...          print reuse=true or reuse=false, and why;
                                     each JOB is an exact job name
-    verdict [--always JOB ...]      judge the `needs` context in $NEEDS
+    scope                           print whether this event runs the
+                                    software lanes and the physical boards
+    bundles DIR REFINE              write DIR's provenance.json and
+                                    files.sha256; print the manifest's sha256
+    verdict [--evidence DIR] [--always JOB ...]
+                                    judge the `needs` context in $NEEDS
+
+Physical evidence is never reused.  The board jobs run on a board-scope
+event -- a push to main, the weekly schedule or a manual dispatch, in
+JanHaan/Landin -- whatever the software lanes do, and on every other event
+they must be skipped.  On a board-scope event a skipped, cancelled or
+failed board job fails the gate: missing physical evidence is not a pass.
 """
 from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 import os
+from pathlib import Path
 import re
 import subprocess
 import sys
@@ -64,6 +76,16 @@ MAX_AGE = timedelta(days=7)
 #  Exact repository paths.  scripts/tests/test_gate_inputs.py names every
 #  file that mentions one of these by name, so a new reader is a decision.
 CONTENT_FREE = ("AGENTS.md", "README.md", "ROADMAP.md", "handoff.md")
+
+#  The jobs whose evidence is physical: never reused, run by the event's
+#  scope alone.  scripts/tests/test_gate_inputs.py holds gate.yml to these:
+#  every job the aggregate needs is in the reuse list or here, and the
+#  board matrix is exactly BOARD_PORTS.
+PHYSICAL = ("board-bundles", "board")
+BOARD_PORTS = ("rp2040", "pico2", "stm32h753", "esp32c3", "esp32c5", "esp32",
+               "esp32s3")
+#  Only this repository's rig runs boards; a fork's runs never reach it.
+BOARD_REPOSITORY = "JanHaan/Landin"
 
 
 def entries(rev, cwd=None):
@@ -302,24 +324,223 @@ def fetched_candidate_key(rev):
     return fetched_key(rev, content_free=())
 
 
-def verdict(needs, always):
+def scope(event_name, ref, repository, event):
+    """Whether this event runs the software lanes and the physical boards.
+
+    Boards run on a push to main, the weekly schedule and a manual
+    dispatch of this repository, never for a pull request or another
+    branch: a branch candidate gets boards by a dispatch.  The software
+    lanes run unless the event asks for boards alone -- the schedule, or a
+    dispatch with scope `boards`; whether they may reuse a pass is
+    `reuse`'s question, and neither of those events ever reuses one.
+    """
+    boards = repository == BOARD_REPOSITORY and (
+        (event_name == "push" and ref == "refs/heads/main")
+        or event_name in ("schedule", "workflow_dispatch"))
+    requested = (event.get("inputs") or {}).get("scope") or "full"
+    boards_only = event_name == "schedule" or (
+        event_name == "workflow_dispatch" and requested == "boards")
+    return {"software": not boards_only, "boards": boards,
+            "scope": "boards" if boards_only else "full"}
+
+
+def flag(value):
+    return "true" if value else "false"
+
+
+def outcomes(directory):
+    """{port: outcome} from the board legs' evidence artifacts under DIRECTORY.
+
+    Each leg uploads one directory named after its port, holding
+    transfer.json from its first step and evidence/outcome.json from the
+    board tool.  download-artifact puts a single matched artifact directly
+    in DIRECTORY and several in a directory each, so both depths are read.
+    A port with no transfer.json never started on the rig; one with no
+    outcome stopped before the board tool wrote it.
+    """
+    found = {}
+    if directory is None:
+        return found
+    root = Path(directory)
+    for port in BOARD_PORTS:
+        legs = sorted(set(root.glob("%s/transfer.json" % port))
+                      | set(root.glob("*/%s/transfer.json" % port)))
+        if not legs:
+            found[port] = "no evidence: the job never started on the rig"
+            continue
+        if len(legs) > 1:
+            found[port] = "ambiguous: %d evidence directories" % len(legs)
+            continue
+        outcome = legs[0].parent / "evidence" / "outcome.json"
+        try:
+            label = json.loads(outcome.read_text(encoding="utf-8")).get("outcome")
+        except (OSError, ValueError, AttributeError):
+            label = None
+        found[port] = label if isinstance(label, str) and label else (
+            "no outcome: the job stopped before the board tool wrote one")
+    return found
+
+
+def inputs_scope(needs):
+    """The scope `inputs` reported; a run without the outputs ran software only."""
+    outputs = (needs.get("inputs") or {}).get("outputs") or {}
+    return {"software": outputs.get("software", "true") != "false",
+            "boards": outputs.get("boards") == "true"}
+
+
+def verdict(needs, always, expected=None, evidence=None):
     """Problems with NEEDS, the workflow's `needs` context; none is a pass.
 
-    The jobs in ALWAYS must succeed.  The rest must all succeed, or, when
-    `inputs` found a pass to reuse, must all be skipped: a lane that ran
-    anyway, or failed, is not explained by the reuse.
+    The jobs in ALWAYS must succeed.  The PHYSICAL jobs must succeed on a
+    board-scope event and be skipped on any other.  The rest must all
+    succeed, or must all be skipped when `inputs` found a pass to reuse or
+    the event asks for boards alone: a lane that ran anyway, or failed, is
+    not explained by the reuse.  EXPECTED is `scope` of this run's own
+    event, which `inputs` must agree with; without it, `inputs`' outputs
+    decide.  EVIDENCE is `outcomes`, each of which must be `passed` on a
+    board-scope event.
     """
     problems = []
     inputs = needs.get("inputs")
     if inputs is None:
         return ["no inputs job"]
-    reuse = (inputs.get("result") == "success"
-             and inputs.get("outputs", {}).get("reuse") == "true")
+    outputs = inputs.get("outputs") or {}
+    if expected is None:
+        expected = inputs_scope(needs)
+    elif inputs.get("result") == "success":
+        for name in ("software", "boards"):
+            if outputs.get(name) != flag(expected[name]):
+                problems.append("inputs says %s=%s, but this event's scope is %s=%s"
+                                % (name, outputs.get(name), name, flag(expected[name])))
+    software, boards = expected["software"], expected["boards"]
+    if not software and not boards:
+        problems.append("a boards-only event outside %s runs no board and no "
+                        "software lane, so there is nothing to pass" % BOARD_REPOSITORY)
+    reuse = inputs.get("result") == "success" and outputs.get("reuse") == "true"
     for name, job in sorted(needs.items()):
-        wanted = "success" if name in always or not reuse else "skipped"
-        if job.get("result") != wanted:
-            problems.append("%s is %s, not %s" % (name, job.get("result"), wanted))
+        if name in always:
+            wanted = "success"
+        elif name in PHYSICAL:
+            wanted = "success" if boards else "skipped"
+        else:
+            wanted = "success" if software and not reuse else "skipped"
+        result = job.get("result")
+        if result == wanted:
+            continue
+        problem = "%s is %s, not %s" % (name, result, wanted)
+        if name in PHYSICAL and boards:
+            problem += ": physical evidence missing is not a pass"
+        elif name in PHYSICAL:
+            problem += ": a board job ran for an event outside board scope"
+        problems.append(problem)
+    if boards and evidence is not None:
+        for port in BOARD_PORTS:
+            label = evidence.get(port, "no evidence")
+            if label != "passed":
+                problems.append("board-%s: %s: physical evidence missing is not a pass"
+                                % (port, label))
     return problems
+
+
+def report(needs, problems, expected, evidence):
+    """The gate's step summary: its scope, which physical legs ran, its verdict."""
+    inputs = needs.get("inputs") or {}
+    reuse = (inputs.get("outputs") or {}).get("reuse") == "true"
+    lines = ["## gate: %s" % ("passed" if not problems else "failed"), ""]
+    if not expected["software"]:
+        lines.append("- boards only: no software lanes")
+    elif reuse:
+        lines.append("- software lanes: skipped for a verified reused pass")
+    else:
+        lines.append("- software lanes: every lane ran")
+    if not expected["boards"]:
+        lines.append("- physical boards: not run for this event")
+    else:
+        lines.append("- physical boards, never reused:")
+        for port in BOARD_PORTS:
+            lines.append("  - board-%s: %s" % (port, (evidence or {}).get(port, "not read")))
+    lines.append("")
+    lines.extend("- %s: %s" % (name, job.get("result")) for name, job in sorted(needs.items()))
+    if problems:
+        lines.extend(["", "Problems:", ""])
+        lines.extend("- " + problem for problem in problems)
+    return "\n".join(lines) + "\n"
+
+
+def bundle_provenance(directory, refine, environ, cwd=None):
+    """Write DIRECTORY's provenance.json and files.sha256; return the manifest's sha256.
+
+    DIRECTORY is environments/boards/build.py's output.  Every bundle must
+    match its hardware record and name the one source identity and the
+    compiler REFINE, and the checkout must be the commit this run is for.
+    files.sha256 lists every file the artifact carries, in sha256sum's
+    format, so the rig checks the transfer with coreutils alone and the
+    digest of that list, a job output, binds it to this job.
+    """
+    directory = Path(directory)
+
+    def git(*arguments):
+        return subprocess.run(["git", *arguments], cwd=cwd, check=True,
+                              stdout=subprocess.PIPE, text=True).stdout.strip()
+
+    commit = git("rev-parse", "HEAD")
+    if environ.get("GITHUB_SHA") and environ["GITHUB_SHA"] != commit:
+        raise ValueError("the checkout %s is not this run's commit %s"
+                         % (commit, environ["GITHUB_SHA"]))
+    compiler = sha256_file(refine)
+    summary = json.loads((directory / "summary.json").read_text(encoding="utf-8"))
+    rows, sources = [], set()
+    for row in summary:
+        if row.get("status") != "matches":
+            raise ValueError("%s %s is %s, not matches" % (
+                row.get("board"), row.get("mode"), row.get("status")))
+        path = directory / row["board"] / row["mode"] / "bundle.json"
+        manifest = json.loads(path.read_text(encoding="utf-8"))
+        if manifest["compiler_identity"]["sha256"] != compiler:
+            raise ValueError("%s names another compiler" % path)
+        sources.add(manifest["source_identity"]["sha256"])
+        rows.append({"board": row["board"], "mode": row["mode"], "status": row["status"],
+                     "bundle_sha256": sha256_file(path)})
+    if not rows or len(sources) != 1:
+        raise ValueError("expected bundles of one source identity, found %d" % len(sources))
+    provenance = {
+        "commit": commit, "tree": git("rev-parse", "HEAD^{tree}"),
+        "repository": environ.get("GITHUB_REPOSITORY"),
+        "run_id": environ.get("GITHUB_RUN_ID"),
+        "run_attempt": environ.get("GITHUB_RUN_ATTEMPT"),
+        "event": environ.get("GITHUB_EVENT_NAME"), "ref": environ.get("GITHUB_REF"),
+        "compiler": {"name": Path(refine).name, "sha256": compiler},
+        "source_identity": sources.pop(), "bundles": rows}
+    (directory / "provenance.json").write_text(json.dumps(provenance, indent=2) + "\n")
+    listing = []
+    for path in sorted(directory.rglob("*")):
+        relative = path.relative_to(directory).as_posix()
+        if path.is_symlink() or not (path.is_file() or path.is_dir()):
+            raise ValueError("not a plain file: " + relative)
+        if path.is_dir() or relative == "files.sha256":
+            continue
+        if "\n" in relative or "\\" in relative:
+            raise ValueError("a name sha256sum would escape: %r" % relative)
+        listing.append("%s  %s\n" % (sha256_file(path), relative))
+    text = "".join(listing).encode("utf-8")
+    (directory / "files.sha256").write_bytes(text)
+    return hashlib.sha256(text).hexdigest()
+
+
+def sha256_file(path):
+    digest = hashlib.sha256()
+    with open(path, "rb") as stream:
+        for block in iter(lambda: stream.read(1 << 20), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def event_scope(environ):
+    """`scope` of the event in ENVIRON, the workflow's own variables."""
+    with open(environ["GITHUB_EVENT_PATH"], encoding="utf-8") as stream:
+        event = json.load(stream)
+    return scope(environ["GITHUB_EVENT_NAME"], environ.get("GITHUB_REF", ""),
+                 environ.get("GITHUB_REPOSITORY", ""), event)
 
 
 def main(argv):
@@ -349,17 +570,43 @@ def main(argv):
         print("gate_inputs: " + why, file=sys.stderr)
         print("reuse=" + ("true" if reuse else "false"))
         return 0
-    if argv[:1] == ["verdict"] and argv[1:2] in ([], ["--always"]):
-        always = ("inputs",) + tuple(argv[2:])
-        needs = json.loads(os.environ["NEEDS"])
-        problems = verdict(needs, always)
-        for name, job in sorted(needs.items()):
-            print("%s: %s" % (name, job.get("result")))
-        for problem in problems:
-            print("gate_inputs: " + problem, file=sys.stderr)
-        return 1 if problems else 0
+    if argv == ["scope"]:
+        found = event_scope(os.environ)
+        print("gate_inputs: software lanes %s, physical boards %s (%s)" % (
+            "run" if found["software"] else "do not run",
+            "run" if found["boards"] else "do not run",
+            found["scope"]), file=sys.stderr)
+        print("software=" + flag(found["software"]))
+        print("boards=" + flag(found["boards"]))
+        print("scope=" + found["scope"])
+        return 0
+    if len(argv) == 3 and argv[0] == "bundles":
+        print("manifest=" + bundle_provenance(argv[1], argv[2], os.environ))
+        return 0
+    if argv[:1] == ["verdict"]:
+        rest, directory = argv[1:], None
+        if rest[:1] == ["--evidence"] and len(rest) >= 2:
+            directory, rest = rest[1], rest[2:]
+        if rest[:1] in ([], ["--always"]):
+            always = ("inputs",) + tuple(rest[1:])
+            needs = json.loads(os.environ["NEEDS"])
+            expected = event_scope(os.environ) if "GITHUB_EVENT_PATH" in os.environ else None
+            evidence = outcomes(directory) if directory is not None else None
+            problems = verdict(needs, always, expected, evidence)
+            for name, job in sorted(needs.items()):
+                print("%s: %s" % (name, job.get("result")))
+            for port, label in sorted((evidence or {}).items()):
+                print("board-%s: %s" % (port, label))
+            for problem in problems:
+                print("gate_inputs: " + problem, file=sys.stderr)
+            if os.environ.get("GITHUB_STEP_SUMMARY"):
+                shown = expected or inputs_scope(needs)
+                with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as stream:
+                    stream.write(report(needs, problems, shown, evidence))
+            return 1 if problems else 0
     print("usage: gate_inputs.py key [REV] | same A B"
-          " | reuse WORKFLOW JOB ... | verdict [--always JOB ...]",
+          " | reuse WORKFLOW JOB ... | scope | bundles DIR REFINE"
+          " | verdict [--evidence DIR] [--always JOB ...]",
           file=sys.stderr)
     return 2
 
