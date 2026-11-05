@@ -107,6 +107,17 @@ package Landin.Bindings is
       Roots        : Landin.Platform.Path_List;
       Stripped     : out Ada.Strings.Unbounded.Unbounded_String);
 
+   --  Physical filenames reported by Clang before line markers are removed.
+   --  These are dependency-name evidence, not identities of Clang's read FDs.
+   function Marker_Files (Preprocessed : String)
+      return Landin.Platform.Path_List;
+
+   --  Clang's -MD -MF - output with a fixed -MT target. Decode Make's
+   --  filename escaping, continuation lines and doubled dollar signs.
+   procedure Dependency_Files
+     (Dependencies : String; Files : out Landin.Platform.Path_List;
+      Valid : out Boolean);
+
    --  One selected header: the name `exports.h` includes it by and the
    --  SHA-256 of its bytes.
    type Header is record

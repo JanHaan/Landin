@@ -1118,6 +1118,41 @@ package body Landin.Tests.Devices_Suite is
             Host.Add_Directory ("out/toy1/correspondence.json");
          end Directory_In_The_Way;
 
+         procedure Linked_Ancestor
+           (Host : in out Landin.Testing.Fakes.Fake_Filesystem);
+         procedure Linked_Ancestor
+           (Host : in out Landin.Testing.Fakes.Fake_Filesystem) is
+         begin
+            Host.Add_Link ("out/toy1");
+         end Linked_Ancestor;
+
+         procedure Linked_Leftover
+           (Host : in out Landin.Testing.Fakes.Fake_Filesystem);
+         procedure Linked_Leftover
+           (Host : in out Landin.Testing.Fakes.Fake_Filesystem) is
+         begin
+            Host.Add_Link ("out/toy1/outputs.json.refine-old");
+         end Linked_Leftover;
+
+         procedure Input_Alias
+           (Host : in out Landin.Testing.Fakes.Fake_Filesystem);
+         procedure Input_Alias
+           (Host : in out Landin.Testing.Fakes.Fake_Filesystem) is
+         begin
+            Host.Add_Alias ("out/toy1/correspondence.json", "toy.svd");
+         end Input_Alias;
+
+         procedure Protected_Stale
+           (Host : in out Landin.Testing.Fakes.Fake_Filesystem);
+         procedure Protected_Stale
+           (Host : in out Landin.Testing.Fakes.Fake_Filesystem) is
+         begin
+            Host.Add_File ("out/toy1/outputs.json",
+                           "{""old.svd"": ""0""}");
+            Host.Add_File ("out/old.svd", Svd);
+            Host.Add_Alias ("out/old.svd", "toy.svd");
+         end Protected_Stale;
+
          procedure No_Output_Directory
            (Host : in out Landin.Testing.Fakes.Fake_Filesystem);
 
@@ -1156,6 +1191,10 @@ package body Landin.Tests.Devices_Suite is
          end No_Svd;
       begin
          Refused (Leftover'Access, "L0531", "interrupted run");
+         Refused (Linked_Leftover'Access, "L0531", "interrupted run");
+         Refused (Linked_Ancestor'Access, "L0531", "symbolic link");
+         Refused (Input_Alias'Access, "L0531", "overlaps an input");
+         Refused (Protected_Stale'Access, "L0531", "overlaps an input");
          Refused (Directory_In_The_Way'Access, "L0531", "is a directory");
          Refused (No_Output_Directory'Access, "L0531", "not a directory");
          Refused (Unwritable'Access, "L0005", "nothing was replaced");
