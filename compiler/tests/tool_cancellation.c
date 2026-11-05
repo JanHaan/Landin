@@ -1,6 +1,9 @@
 /* Native controls for the production POSIX tool-process helper.
    No cancellation implementation is copied here. Each controller owns its
    spawned group until the production helper stops and reaps its leader. */
+#ifdef __APPLE__
+#define _DARWIN_C_SOURCE
+#endif
 #define _POSIX_C_SOURCE 200809L
 #define _XOPEN_SOURCE 700
 #include <errno.h>
