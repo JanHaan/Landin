@@ -614,7 +614,8 @@ package body Landin.Commands is
             Host.Remove_Tree (US.To_String (Run_Directory), Removed);
             if Removed = Landin.Platform.Not_Removable then
                US.Append (Result.Report, "refine: cannot remove "
-                 & US.To_String (Run_Directory) & LF);
+                 & US.To_String (Run_Directory) & ": "
+                 & Host.Removal_Failure_Reason & LF);
             end if;
          end if;
       end Finish_Run;
@@ -855,12 +856,20 @@ package body Landin.Commands is
                                 Asked.Consumed_Response_Identities);
                      end if;
                   exception
-                     when others =>
+                     when Failure : others =>
                         declare
                            Removed : Landin.Platform.Remove_Status;
+                           use type Landin.Platform.Remove_Status;
                         begin
                            Host.Remove_Tree
                              (US.To_String (Run_Directory), Removed);
+                           if Removed = Landin.Platform.Not_Removable then
+                              Ada.Exceptions.Raise_Exception
+                                (Ada.Exceptions.Exception_Identity (Failure),
+                                 Ada.Exceptions.Exception_Message (Failure)
+                                 & "; private run cleanup: "
+                                 & Host.Removal_Failure_Reason);
+                           end if;
                         end;
                         raise;
                   end;
@@ -1105,8 +1114,14 @@ package body Landin.Commands is
             Started := False;
             Why := US.To_Unbounded_String
               (Ada.Exceptions.Exception_Message (Failure));
-         when others =>
+         when Failure : others =>
             Host.Remove_Tree (Directory, Removed);
+            if Removed = Landin.Platform.Not_Removable then
+               Ada.Exceptions.Raise_Exception
+                 (Ada.Exceptions.Exception_Identity (Failure),
+                  Ada.Exceptions.Exception_Message (Failure)
+                  & "; private run cleanup: " & Host.Removal_Failure_Reason);
+            end if;
             raise;
       end;
       Host.Remove_Tree (Directory, Removed);
@@ -1124,7 +1139,8 @@ package body Landin.Commands is
       end if;
       if Removed = Landin.Platform.Not_Removable then
          US.Append (Result.Report,
-           "refine: cannot remove " & Directory & LF);
+           "refine: cannot remove " & Directory & ": "
+           & Host.Removal_Failure_Reason & LF);
       end if;
    end Launch;
 end Landin.Commands;

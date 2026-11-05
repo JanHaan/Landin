@@ -1010,12 +1010,19 @@ package body Landin.Tests.Platform_Suite is
 
       function Is_Empty (Directory : String) return Boolean is
          Search : Ada.Directories.Search_Type;
-         Found  : Boolean;
+         Found  : Boolean := False;
+         Found_Entry : Ada.Directories.Directory_Entry_Type;
       begin
          Ada.Directories.Start_Search
            (Search, Directory, "",
-            [Ada.Directories.Ordinary_File => True, others => False]);
-         Found := Ada.Directories.More_Entries (Search);
+            [others => True]);
+         while Ada.Directories.More_Entries (Search) loop
+            Ada.Directories.Get_Next_Entry (Search, Found_Entry);
+            if Ada.Directories.Simple_Name (Found_Entry) not in "." | ".." then
+               Found := True;
+               exit;
+            end if;
+         end loop;
          Ada.Directories.End_Search (Search);
          return not Found;
       end Is_Empty;
@@ -1025,7 +1032,8 @@ package body Landin.Tests.Platform_Suite is
       end if;
       Ada.Directories.Create_Path (Captures);
       Environment.Set ("TMPDIR", Ada.Directories.Full_Name (Captures));
-      Landin.Platform.Add (Args, "ls ""$TMPDIR""");
+      Landin.Platform.Add
+        (Args, "ls ""$TMPDIR""; find ""$TMPDIR"" -type f");
       begin
          Runner.Run ("sh", Args, Result, Landin.Platform.Output_Only);
       exception
@@ -1038,9 +1046,10 @@ package body Landin.Tests.Platform_Suite is
         (Item,
          Ada.Strings.Fixed.Count
            (Unbounded.To_String (Result.Output), "landin-tool-") = 2,
-         "both captures are created in TMPDIR");
+         "both anonymous captures have private roots in TMPDIR");
       Landin.Testing.Check
-        (Item, Is_Empty (Captures), "both captures are removed after the run");
+        (Item, Is_Empty (Captures),
+         "both private capture roots are removed after the run");
    end Native_Captures_Use_The_Temporary_Directory;
 
    procedure File_Removal_Preserves_Directories

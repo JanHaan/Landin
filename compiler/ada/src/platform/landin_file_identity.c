@@ -24,6 +24,7 @@
 #include <sys/file.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include "landin_owned_directory.h"
 #ifdef __APPLE__
 #include <sys/mount.h>
 #endif
@@ -45,6 +46,7 @@ int landin_directory_access_denied(const char *path);
 int landin_private_directory(const char *prefix, char *path,
                              size_t capacity);
 int landin_remove_tree(const char *path);
+int landin_private_parent(const char *, char **, char **);
 
 /* A failed Ada.Directories.Exists can mean either absence or a parent that
    refused traversal. Probe only that failure path, preserving the host's
@@ -131,80 +133,226 @@ int landin_move_file_noreplace(const char *from, const char *to)
 
 int landin_unlink_file(const char *path)
 {
+    char *directory = NULL, *name = NULL;
+    int parent = landin_private_parent(path, &directory, &name);
+    if (parent != -2) {
+        int result, error;
+        if (parent < 0) return -1;
+        result = unlinkat(parent, name, 0); error = errno;
+        close(parent); free(directory); free(name); errno = error;
+        return result == 0 ? 1 : (errno == ENOENT ? 0 : -1);
+    }
     if (unlink(path) == 0)
         return 1;
     return errno == ENOENT ? 0 : -1;
 }
 
-/* D526: a new directory only its user may enter, under $TMPDIR, or /tmp
-   when that is unset or empty, its name PREFIX and six random characters.
-   mkdtemp makes it with mode 0700.  0 with its name in PATH, or -1. */
+/* Roots made through the private-directory API retain their actual parent
+   and root descriptors until cleanup. Finished records remain tombstones so
+   a repeated cleanup cannot mistake a replacement for an unregistered tree. */
+struct landin_private_root {
+    struct landin_owned_directory owned;
+    struct landin_private_root *next;
+};
+static struct landin_private_root *landin_private_roots;
+static char landin_private_reason[PATH_MAX * 2 + 256];
+void landin_private_directory_set_hook(void (*hook)(const char *, const char *))
+{ landin_owned_hook = hook; }
+const char *landin_remove_tree_reason(void) { return landin_private_reason; }
 int landin_private_directory(const char *prefix, char *path, size_t capacity)
 {
-    const char *directory = getenv("TMPDIR");
-    int written;
-
-    if (directory == NULL || directory[0] == '\0')
-        directory = "/tmp";
-    written = snprintf(path, capacity, "%s/%sXXXXXX", directory, prefix);
-    if (written < 0 || (size_t)written >= capacity) {
-        errno = ENAMETOOLONG;
-        return -1;
+    struct landin_private_root *root = calloc(1, sizeof *root);
+    landin_private_reason[0] = '\0';
+    if (!root) return -1;
+    if (landin_owned_create(prefix, &root->owned) != 0) { free(root); return -1; }
+    if (strlen(root->owned.path) >= capacity) {
+        landin_owned_remove(&root->owned);
+        close(root->owned.parent); free(root); errno = ENAMETOOLONG; return -1;
     }
-    return mkdtemp(path) == NULL ? -1 : 0;
+    strcpy(path, root->owned.path);
+    root->next = landin_private_roots; landin_private_roots = root;
+    if (landin_owned_hook) landin_owned_hook("created", path);
+    return 0;
 }
 
-/* Remove what the directory open at FD holds, never following a link:
-   a link is removed as a name, and a directory is opened only with
-   O_NOFOLLOW.  0, or -1 at the first failure. */
-static int landin_empty_directory(int fd)
-{
-    DIR *listing = fdopendir(fd);
-    struct dirent *item;
-    struct stat about;
-    int failed = 0;
-
-    if (listing == NULL) {
-        close(fd);
-        return -1;
-    }
-    while (!failed && (errno = 0, item = readdir(listing)) != NULL) {
-        if (strcmp(item->d_name, ".") == 0 || strcmp(item->d_name, "..") == 0)
-            continue;
-        if (fstatat(dirfd(listing), item->d_name, &about,
-                    AT_SYMLINK_NOFOLLOW) != 0) {
-            failed = errno != ENOENT;
-            continue;
-        }
-        if (S_ISDIR(about.st_mode)) {
-            int inner = openat(dirfd(listing), item->d_name,
-                               O_RDONLY | O_DIRECTORY | O_NOFOLLOW
-                               | O_CLOEXEC);
-            if (inner < 0 || landin_empty_directory(inner) != 0
-                || unlinkat(dirfd(listing), item->d_name, AT_REMOVEDIR) != 0)
-                failed = 1;
-        } else if (unlinkat(dirfd(listing), item->d_name, 0) != 0
-                   && errno != ENOENT) {
-            failed = 1;
-        }
-    }
-    if (item == NULL && errno != 0)
-        failed = 1;
-    closedir(listing);
-    return failed ? -1 : 0;
-}
-
-/* D526: remove a directory refine made and everything in it.  1 when
-   removed, 0 when it was already absent, -1 otherwise. */
 int landin_remove_tree(const char *path)
 {
-    int fd = open(path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+    struct landin_private_root *root;
+    landin_private_reason[0] = '\0';
+    for (root = landin_private_roots; root; root = root->next) {
+        if (!strcmp(root->owned.path, path)) {
+            int result = landin_owned_remove(&root->owned);
+            if (result < 0) {
+                snprintf(landin_private_reason, sizeof landin_private_reason,
+                          "%s", root->owned.reason);
+            }
+            return result;
+        }
+    }
+    /* Explicit caller-owned fixture work trees predate this API. Live
+       compiler scratch roots always take the registered branch above. */
+    {
+        int fd = open(path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+        if (fd < 0) return errno == ENOENT ? 0 : -1;
+        if (landin_owned_empty(fd) != 0) return -1;
+        return rmdir(path) == 0 ? 1 : -1;
+    }
+}
 
-    if (fd < 0)
-        return errno == ENOENT ? 0 : -1;
-    if (landin_empty_directory(fd) != 0)
-        return -1;
-    return rmdir(path) == 0 ? 1 : -1;
+static struct landin_private_root *landin_private_match(const char *path,
+                                                        const char **relative)
+{
+    struct landin_private_root *root;
+    for (root = landin_private_roots; root; root = root->next) {
+        size_t n = strlen(root->owned.path);
+        if (!strncmp(path, root->owned.path, n)
+            && (path[n] == '/' || path[n] == '\0')) {
+            *relative = path + n;
+            if (**relative == '/') ++*relative;
+            return root;
+        }
+    }
+    return NULL;
+}
+/* -2 means this is not a registered private namespace. A registered but
+   finished/retained namespace never falls back to a new public pathname. */
+int landin_private_parent(const char *path, char **parent_path, char **name)
+{
+    const char *relative;
+    struct landin_private_root *root = landin_private_match(path, &relative);
+    char *copy, *save = NULL, *part, *next;
+    int fd;
+    if (!root) return -2;
+    if (root->owned.finished || root->owned.retained || !*relative) {
+        errno = ESTALE; return -1;
+    }
+    fd = fcntl(root->owned.root, F_DUPFD_CLOEXEC, 3);
+    copy = strdup(relative);
+    if (fd < 0 || !copy) { if (fd >= 0) close(fd); free(copy); return -1; }
+    part = strtok_r(copy, "/", &save);
+    while (part) {
+        next = strtok_r(NULL, "/", &save);
+        if (!strcmp(part, ".") || !strcmp(part, "..")) {
+            close(fd); free(copy); errno = EINVAL; return -1;
+        }
+        if (!next) break;
+        int inner = openat(fd, part,
+                           O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+        close(fd); fd = inner;
+        if (fd < 0) { free(copy); return -1; }
+        part = next;
+    }
+    if (!part) { close(fd); free(copy); errno = EINVAL; return -1; }
+    *name = strdup(part);
+    *parent_path = strdup(path);
+    if (!*name || !*parent_path) {
+        free(*name); free(*parent_path); close(fd); free(copy); return -1;
+    }
+    char *slash = strrchr(*parent_path, '/');
+    if (slash) *slash = '\0';
+    free(copy);
+    return fd;
+}
+int landin_private_open(const char *path, int flags, mode_t mode)
+{
+    char *parent_path = NULL, *name = NULL;
+    int parent = landin_private_parent(path, &parent_path, &name), result, error;
+    if (parent < 0) return parent;
+    result = openat(parent, name, flags | O_CLOEXEC | O_NOFOLLOW, mode);
+    error = errno;
+    close(parent); free(parent_path); free(name); errno = error;
+    return result;
+}
+int landin_private_read_descriptor(const char *path)
+{ return landin_private_open(path, O_RDONLY | O_NONBLOCK, 0); }
+int landin_private_path_current(const char *path)
+{
+    const char *relative;
+    struct landin_private_root *root = landin_private_match(path, &relative);
+    struct stat current;
+    if (!root) return 1;
+    return !root->owned.finished && !root->owned.retained
+        && stat(root->owned.path, &current) == 0
+        && landin_owned_same(&current, &root->owned.identity);
+}
+int landin_private_mkdir(const char *path)
+{
+    char *parent_path = NULL, *name = NULL;
+    const char *relative;
+    struct landin_private_root *root = landin_private_match(path, &relative);
+    int parent, result, error;
+    if (!root) return -2;
+    if (!*relative && !root->owned.finished && !root->owned.retained) return 0;
+    parent = landin_private_parent(path, &parent_path, &name);
+    if (parent < 0) return -1;
+    result = mkdirat(parent, name, 0700);
+    if (result != 0 && errno == EEXIST) {
+        int fd = openat(parent, name,
+                        O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+        if (fd >= 0) { close(fd); result = 0; }
+    }
+    error = errno;
+    close(parent); free(parent_path); free(name); errno = error;
+    return result;
+}
+int landin_private_write(const char *path, const char *bytes, size_t size)
+{
+    int fd = landin_private_open(path, O_WRONLY | O_CREAT, 0600), result;
+    size_t used = 0;
+    struct stat st;
+    if (fd < 0) return fd;
+    if (fstat(fd, &st) != 0 || !S_ISREG(st.st_mode)) {
+        close(fd); errno = EINVAL; return -1;
+    }
+    while (used < size) {
+        ssize_t count = write(fd, bytes + used, size - used);
+        if (count < 0 && errno == EINTR) continue;
+        if (count <= 0) { close(fd); return -1; }
+        used += (size_t)count;
+    }
+    result = ftruncate(fd, (off_t)size);
+    if (result == 0) result = fsync(fd);
+    close(fd); return result;
+}
+int landin_private_argument_directory(const char *argument)
+{
+    struct landin_private_root *root;
+    for (root = landin_private_roots; root; root = root->next) {
+        const char *at = strstr(argument, root->owned.path);
+        size_t n = strlen(root->owned.path);
+        if (at && (at[n] == '/' || at[n] == '\0')) {
+            if (root->owned.finished || root->owned.retained) {
+                errno = ESTALE; return -2;
+            }
+            return fcntl(root->owned.root, F_DUPFD_CLOEXEC, 3);
+        }
+    }
+    return -1;
+}
+int landin_private_rebase_argument(const char *argument, int directory,
+                                    char *result, size_t room)
+{
+    struct landin_private_root *root;
+    struct stat selected;
+    if (fstat(directory, &selected) != 0) return -1;
+    for (root = landin_private_roots; root; root = root->next) {
+        const char *at = strstr(argument, root->owned.path);
+        size_t n = strlen(root->owned.path), before;
+        if (!at || (at[n] && at[n] != '/')) continue;
+        if (!landin_owned_same(&selected, &root->owned.identity)
+            || root->owned.finished || root->owned.retained) {
+            errno = EXDEV; return -1;
+        }
+        before = (size_t)(at - argument);
+        if (before + 1 + strlen(at + n) + 1 > room) {
+            errno = ENAMETOOLONG; return -1;
+        }
+        memcpy(result, argument, before); result[before] = '.';
+        strcpy(result + before + 1, at + n);
+        return 0;
+    }
+    if (strlen(argument) >= room) { errno = ENAMETOOLONG; return -1; }
+    strcpy(result, argument); return 0;
 }
 
 struct destination {
