@@ -249,6 +249,9 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   Tools that escape their group or change credentials are outside that
   supervision contract. Cancellation exits with 128 plus the host signal
   number; inherited ignored signals stay ignored.
+  Tools are refused before spawning if ignored `SIGCHLD` or `SA_NOCLDWAIT`
+  would discard their exit status. Start refine with `SIGCHLD` at its default
+  disposition and `SA_NOCLDWAIT` clear; refine preserves the inherited policy.
 - `refine run program.ldn -- ARGUMENT ...` compiles into a new private
   directory under `TMPDIR` or `/tmp`, runs the program on this terminal with
   the arguments after `--` exactly, exits with its status, or with 128 and

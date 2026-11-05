@@ -1634,6 +1634,10 @@ Executable emission failed [1550]. The assembler or linker may have refused
 the emitted code, or the requested output could not be produced, verified, or
 restored. The note describes the failure, names paths needed for recovery,
 and includes tool output when available.
+Tools are refused before spawning when `SIGCHLD` is ignored or
+`SA_NOCLDWAIT` would discard their exit status. Start refine with `SIGCHLD`
+at its default disposition and `SA_NOCLDWAIT` clear. The refusal preserves
+the inherited policy and keeps this corrective action ahead of long paths.
 
 ### L0502
 
@@ -2281,6 +2285,10 @@ authority cannot be retained by normalizing the path. Use an absolute
 include under a declared root, or name the header through `--include-dir`.
 Name the pinned Clang with `--clang`, and every root a header needs with
 `--include-dir` or `--system-include-dir`.
+
+An incompatible child-exit signal policy also refuses Clang before it starts:
+use the default `SIGCHLD` disposition with `SA_NOCLDWAIT` clear, as L0501
+explains.
 
 ### L0581
 

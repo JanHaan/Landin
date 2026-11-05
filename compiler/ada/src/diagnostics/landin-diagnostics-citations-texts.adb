@@ -23052,7 +23052,15 @@ package body Landin.Diagnostics.Citations.Texts is
                & "ide this supervision contract. Filesystem and Ada cleanu"
                & "p run in ordinary control flow. Cancellation returns 128"
                & " plus the host signal number after recovery; inherited i"
-               & "gnored signals remain ignored."
+               & "gnored signals remain ignored. Spawning refuses before c"
+               & "reating a child when `SIGCHLD` is ignored or `SA_NOCLDWA"
+               & "IT` would discard its exit status. The refusal asks for "
+               & "a default, waitable child-exit policy rather than changi"
+               & "ng the inherited disposition. Native callers must leave "
+               & "that policy unchanged and must not reap these children t"
+               & "hrough another waiter or signal handler. An observed los"
+               & "s of wait-status ownership clears the saved identifier b"
+               & "efore exception cleanup."
                & LF
                & LF
                & "This is loss-preserving publication, not kernel conditio"

@@ -18418,6 +18418,12 @@ while signaling is possible. Tools that escape their group or change
 credentials are outside this supervision contract. Filesystem and Ada
 cleanup run in ordinary control flow. Cancellation returns 128 plus the host
 signal number after recovery; inherited ignored signals remain ignored.
+Spawning refuses before creating a child when `SIGCHLD` is ignored or
+`SA_NOCLDWAIT` would discard its exit status. The refusal asks for a default,
+waitable child-exit policy rather than changing the inherited disposition.
+Native callers must leave that policy unchanged and must not reap these
+children through another waiter or signal handler. An observed loss of
+wait-status ownership clears the saved identifier before exception cleanup.
 
 This is loss-preserving publication, not kernel conditional-inode rename.
 A destination can briefly be absent; a group is not an atomic snapshot for

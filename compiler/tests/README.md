@@ -1018,11 +1018,13 @@ the production C adapters, `test_runtime_owned.py` against capture and
 private-directory replacement, `test_native_registry_threads.py` against
 concurrent resource creation and cross-thread handoff, and
 `test_tool_cancellation.py --refine PATH` against both the
-production process adapter and actual `compile` and `run` commands. Their
+production process adapter and actual `compile`, `run` and `bindings` commands. Their
 controls use owned scratch roots and readiness barriers for the formatter's
 open window, publication conflicts and tool cancellation. The cancellation
 helper checks delivery to the process group and reaping of the direct child;
-it does not claim to reap arbitrary descendants. `--native-only` runs just
+it also checks refusal before spawning under automatic child reaping,
+unchanged OS-observed signal policy and complete advice with long tool paths.
+It does not claim to reap arbitrary descendants. `--native-only` runs just
 the process adapter controls. The FreeBSD runtime guests compile and run
 the same C controls with their own compiler, without claiming a native
 FreeBSD Ada compiler. Logs and JSON results retain their selected scope.

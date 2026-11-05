@@ -1367,7 +1367,12 @@ package body Landin.Diagnostics.Explanations is
                & "er may have refused the emitted code, or the requested o"
                & "utput could not be produced, verified, or restored. The "
                & "note describes the failure, names paths needed for recov"
-               & "ery, and includes tool output when available.",
+               & "ery, and includes tool output when available. Tools are "
+               & "refused before spawning when `SIGCHLD` is ignored or `SA"
+               & "_NOCLDWAIT` would discard their exit status. Start refin"
+               & "e with `SIGCHLD` at its default disposition and `SA_NOCL"
+               & "DWAIT` clear. The refusal preserves the inherited policy"
+               & " and keeps this corrective action ahead of long paths.",
             when Catalogue.Entry_Point_Missing =>
                "`--emit=exe` needs an entry: a hosted `main` of the one "
                & "shape [1970] in the entry module, or the firmware routin"
@@ -1619,7 +1624,12 @@ package body Landin.Diagnostics.Explanations is
                & "e under a declared root, or name the header through `--i"
                & "nclude-dir`. Name the pinned Clang with `--clang`, and e"
                & "very root a header needs with `--include-dir` or `--syst"
-               & "em-include-dir`.",
+               & "em-include-dir`."
+               & LF
+               & LF
+               & "An incompatible child-exit signal policy also refuses Cl"
+               & "ang before it starts: use the default `SIGCHLD` disposit"
+               & "ion with `SA_NOCLDWAIT` clear, as L0501 explains.",
             when Catalogue.Bindings_Declaration_Refused =>
                "A declaration the policy selects cannot be bound (D820),"
                & " and the message names the policy declaration and the po"

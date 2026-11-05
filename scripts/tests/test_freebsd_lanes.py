@@ -19,7 +19,7 @@ import vm
 class FreeBSDControls(unittest.TestCase):
     def test_native_host_controls_require_success_and_all_completed_helpers(self):
         markers = (b'publication native: 20 controls passed\n'
-                   b'cancellation native: 13 controls passed\n'
+                   b'cancellation native: 15 controls passed\n'
                    b'runtime ownership native: 7/7 controls passed\n'
                    b'native registry threads: 8 workers, 24 rounds, 768 cross-thread handoffs passed\n')
         with tempfile.TemporaryDirectory() as tmp:

@@ -1286,6 +1286,10 @@ Tool cancellation uses signal-safe
 notification and ordinary Ada cleanup, forwards to the active process group,
 stops its remaining ordinary members and reaps its direct child before
 recovery; group escape and credential changes are outside supervision.
+Automatic child reaping (`SIGCHLD` ignored or `SA_NOCLDWAIT`) is refused
+before spawning without changing the inherited policy. Native callers must
+not change that policy or let another waiter or handler reap owned children.
+A lost wait-status reservation clears the saved identifier before cleanup.
 
 The separate `Same_File` query answers true only for existing host objects
 with matching identity. Explicit source arguments load each proven object
@@ -1328,6 +1332,8 @@ cleanup captures and inspects the owned root before removing it, preserving
 any replacement and reporting uncertain recovery. The adapter starts each tool in its own
 process group and uses a monotonic deadline. On timeout it kills that group and reaps the direct child
 before reporting `Timed_Out`; adapter exceptions also stop an owned child.
+Expected host-policy refusals carry their cause and corrective action before
+optional tool paths, so GNAT's bounded exception message cannot hide the route.
 The group is established before execution through
 [POSIX spawn attributes](https://pubs.opengroup.org/onlinepubs/007904975/functions/posix_spawn.html).
 Descendants that deliberately leave the group are outside this supervision
