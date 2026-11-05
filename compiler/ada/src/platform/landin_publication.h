@@ -2,7 +2,8 @@
 #define LANDIN_PUBLICATION_H
 #include <stddef.h>
 #include <stdint.h>
-/* Callback is only installed by the deterministic native harness. */
+/* Test-only callback: configure while no adapter call is active. A callback
+   must not reenter the registry whose operation invoked it. */
 typedef void (*landin_publication_hook)(const char *event, const char *path);
 void landin_publication_set_hook(landin_publication_hook hook);
 void landin_publication_notify(const char *, const char *);

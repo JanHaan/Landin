@@ -26,6 +26,7 @@
 #define _XOPEN_SOURCE 700
 #include "landin_publication.h"
 #include <errno.h>
+#include <pthread.h>
 #include <fcntl.h>
 #include <limits.h>
 #include <stdarg.h>
@@ -143,6 +144,31 @@ static int in_group(gid_t group)
 /* The directory that names the copy, synced so that the copy's name lasts
  * before the original's bytes begin to change.  A file system that cannot
  * sync a directory says EINVAL, and there is then nothing more to do. */
+/* Registry operations are serialized, including descriptor borrowing and
+   teardown. Handles may be handed to another thread after caller synchronization.
+   Lock order is Publication -> Private; Format and Capture never take Private.
+   Test hooks are installed only while quiescent and must not reenter this
+   registry. Spawned/execed peer controls have independent process state. */
+static pthread_mutex_t registry_mutex = PTHREAD_MUTEX_INITIALIZER;
+static void registry_lock(void)
+{
+    int saved = errno;
+    if (pthread_mutex_lock(&registry_mutex) != 0) abort();
+    errno = saved;
+}
+static void registry_unlock(void)
+{
+    int saved = errno;
+    if (pthread_mutex_unlock(&registry_mutex) != 0) abort();
+    errno = saved;
+}
+static int landin_open_update_locked(const char *path, char **bytes, size_t *size,
+    int *token, char *reason, size_t room);
+static int landin_update_identity_locked(int token, uint64_t *device, uint64_t *inode);
+static void landin_close_update_locked(int token);
+static int landin_replace_update_locked(int token, const char *data, size_t size,
+    char *reason, size_t room);
+
 struct update_lease {
     int token, fd, parent, write_error;
     char *target, *name, *original;
@@ -160,7 +186,7 @@ static struct update_lease *find_lease(int token)
         if (lease->token == token) return lease;
     return NULL;
 }
-int landin_open_update(const char *path, char **bytes, size_t *size,
+static int landin_open_update_locked(const char *path, char **bytes, size_t *size,
                        int *token, char *reason, size_t room)
 {
     struct update_lease *lease = calloc(1, sizeof *lease);
@@ -213,14 +239,14 @@ fail:
         return error == ENOENT ? 1 : -1;
     }
 }
-int landin_update_identity(int token, uint64_t *device, uint64_t *inode)
+static int landin_update_identity_locked(int token, uint64_t *device, uint64_t *inode)
 {
     struct update_lease *lease = find_lease(token);
     if (!lease) return -1;
     *device = lease->before.st_dev; *inode = lease->before.st_ino;
     return 0;
 }
-void landin_close_update(int token)
+static void landin_close_update_locked(int token)
 {
     struct update_lease **at = &leases;
     while (*at) {
@@ -252,7 +278,7 @@ static void describe_copy(const struct update_lease *lease, const char *entry,
     free(directory);
 }
 
-int landin_replace_update(int token, const char *data,
+static int landin_replace_update_locked(int token, const char *data,
                           size_t size, char *reason, size_t room)
 
 {
@@ -465,16 +491,56 @@ done:
 }
 
 /* Compatibility seam: new callers acquire a lease at their original read. */
-int landin_replace_existing_file(const char *path, const char *data,
+static int landin_replace_existing_file_locked(const char *path, const char *data,
                                  size_t size, char *reason, size_t room)
 {
     char *bytes;
     size_t length;
     int token;
-    if (landin_open_update(path, &bytes, &length, &token, reason, room) != 0)
+    if (landin_open_update_locked(path, &bytes, &length, &token, reason, room) != 0)
         return -1;
     free(bytes);
-    int result = landin_replace_update(token, data, size, reason, room);
-    landin_close_update(token);
+    int result = landin_replace_update_locked(token, data, size, reason, room);
+    landin_close_update_locked(token);
+    return result;
+}
+
+/* Public registry boundaries. No lock spans a child process lifetime. */
+int landin_open_update(const char *path, char **bytes, size_t *size, int *token,
+    char *reason, size_t room)
+{
+    registry_lock();
+    int result = landin_open_update_locked(path, bytes, size, token, reason, room);
+    registry_unlock();
+    return result;
+}
+int landin_update_identity(int token, uint64_t *device, uint64_t *inode)
+{
+    registry_lock();
+    int result = landin_update_identity_locked(token, device, inode);
+    registry_unlock();
+    return result;
+}
+void landin_close_update(int token)
+{
+    registry_lock();
+    landin_close_update_locked(token);
+    registry_unlock();
+}
+int landin_replace_update(int token, const char *data, size_t size, char *reason,
+    size_t room)
+{
+    registry_lock();
+    int result = landin_replace_update_locked(token, data, size, reason, room);
+    registry_unlock();
+    return result;
+}
+
+int landin_replace_existing_file(const char *path, const char *data,
+                                 size_t size, char *reason, size_t room)
+{
+    registry_lock();
+    int result = landin_replace_existing_file_locked(path, data, size, reason, room);
+    registry_unlock();
     return result;
 }

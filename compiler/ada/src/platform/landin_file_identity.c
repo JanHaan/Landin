@@ -12,6 +12,7 @@
 #endif
 #endif
 #include <errno.h>
+#include <pthread.h>
 #include <dirent.h>
 #include <fcntl.h>
 #include <inttypes.h>
@@ -150,16 +151,49 @@ int landin_unlink_file(const char *path)
 /* Roots made through the private-directory API retain their actual parent
    and root descriptors until cleanup. Finished records remain tombstones so
    a repeated cleanup cannot mistake a replacement for an unregistered tree. */
+/* Registry operations are serialized, including descriptor borrowing and
+   teardown. Handles may be handed to another thread after caller synchronization.
+   Lock order is Publication -> Private; Format and Capture never take Private.
+   Test hooks are installed only while quiescent and must not reenter this
+   registry. Spawned/execed peer controls have independent process state. */
+static pthread_mutex_t registry_mutex = PTHREAD_MUTEX_INITIALIZER;
+static void registry_lock(void)
+{
+    int saved = errno;
+    if (pthread_mutex_lock(&registry_mutex) != 0) abort();
+    errno = saved;
+}
+static void registry_unlock(void)
+{
+    int saved = errno;
+    if (pthread_mutex_unlock(&registry_mutex) != 0) abort();
+    errno = saved;
+}
+static int landin_private_directory_locked(const char *prefix, char *path,
+    size_t capacity);
+static int landin_remove_tree_locked(const char *path);
+static int landin_private_parent_locked(const char *path, char **parent_path,
+    char **name);
+static int landin_private_open_locked(const char *path, int flags, mode_t mode);
+static int landin_private_read_descriptor_locked(const char *path);
+static int landin_private_path_current_locked(const char *path);
+static int landin_private_mkdir_locked(const char *path);
+static int landin_private_write_locked(const char *path, const char *bytes, size_t size);
+static int landin_private_argument_directory_locked(const char *argument);
+static int landin_private_rebase_argument_locked(const char *argument, int directory,
+    char *result, size_t room);
+
 struct landin_private_root {
     struct landin_owned_directory owned;
     struct landin_private_root *next;
 };
 static struct landin_private_root *landin_private_roots;
-static char landin_private_reason[PATH_MAX * 2 + 1024];
+static _Thread_local char landin_private_reason[PATH_MAX * 2 + 1024];
 void landin_private_directory_set_hook(void (*hook)(const char *, const char *))
 { landin_owned_hook = hook; }
 const char *landin_remove_tree_reason(void) { return landin_private_reason; }
-int landin_private_directory(const char *prefix, char *path, size_t capacity)
+static int landin_private_directory_locked(const char *prefix, char *path,
+    size_t capacity)
 {
     struct landin_private_root *root = calloc(1, sizeof *root);
     landin_private_reason[0] = '\0';
@@ -175,7 +209,7 @@ int landin_private_directory(const char *prefix, char *path, size_t capacity)
     return 0;
 }
 
-int landin_remove_tree(const char *path)
+static int landin_remove_tree_locked(const char *path)
 {
     struct landin_private_root *root;
     landin_private_reason[0] = '\0';
@@ -216,7 +250,8 @@ static struct landin_private_root *landin_private_match(const char *path,
 }
 /* -2 means this is not a registered private namespace. A registered but
    finished/retained namespace never falls back to a new public pathname. */
-int landin_private_parent(const char *path, char **parent_path, char **name)
+static int landin_private_parent_locked(const char *path, char **parent_path,
+    char **name)
 {
     const char *relative;
     struct landin_private_root *root = landin_private_match(path, &relative);
@@ -253,19 +288,19 @@ int landin_private_parent(const char *path, char **parent_path, char **name)
     free(copy);
     return fd;
 }
-int landin_private_open(const char *path, int flags, mode_t mode)
+static int landin_private_open_locked(const char *path, int flags, mode_t mode)
 {
     char *parent_path = NULL, *name = NULL;
-    int parent = landin_private_parent(path, &parent_path, &name), result, error;
+    int parent = landin_private_parent_locked(path, &parent_path, &name), result, error;
     if (parent < 0) return parent;
     result = openat(parent, name, flags | O_CLOEXEC | O_NOFOLLOW, mode);
     error = errno;
     close(parent); free(parent_path); free(name); errno = error;
     return result;
 }
-int landin_private_read_descriptor(const char *path)
-{ return landin_private_open(path, O_RDONLY | O_NONBLOCK, 0); }
-int landin_private_path_current(const char *path)
+static int landin_private_read_descriptor_locked(const char *path)
+{ return landin_private_open_locked(path, O_RDONLY | O_NONBLOCK, 0); }
+static int landin_private_path_current_locked(const char *path)
 {
     const char *relative;
     struct landin_private_root *root = landin_private_match(path, &relative);
@@ -275,7 +310,7 @@ int landin_private_path_current(const char *path)
         && stat(root->owned.path, &current) == 0
         && landin_owned_same(&current, &root->owned.identity);
 }
-int landin_private_mkdir(const char *path)
+static int landin_private_mkdir_locked(const char *path)
 {
     char *parent_path = NULL, *name = NULL;
     const char *relative;
@@ -283,7 +318,7 @@ int landin_private_mkdir(const char *path)
     int parent, result, error;
     if (!root) return -2;
     if (!*relative && !root->owned.finished && !root->owned.retained) return 0;
-    parent = landin_private_parent(path, &parent_path, &name);
+    parent = landin_private_parent_locked(path, &parent_path, &name);
     if (parent < 0) return -1;
     result = mkdirat(parent, name, 0700);
     if (result != 0 && errno == EEXIST) {
@@ -295,9 +330,9 @@ int landin_private_mkdir(const char *path)
     close(parent); free(parent_path); free(name); errno = error;
     return result;
 }
-int landin_private_write(const char *path, const char *bytes, size_t size)
+static int landin_private_write_locked(const char *path, const char *bytes, size_t size)
 {
-    int fd = landin_private_open(path, O_WRONLY | O_CREAT, 0600), result;
+    int fd = landin_private_open_locked(path, O_WRONLY | O_CREAT, 0600), result;
     size_t used = 0;
     struct stat st;
     if (fd < 0) return fd;
@@ -314,7 +349,7 @@ int landin_private_write(const char *path, const char *bytes, size_t size)
     if (result == 0) result = fsync(fd);
     close(fd); return result;
 }
-int landin_private_argument_directory(const char *argument)
+static int landin_private_argument_directory_locked(const char *argument)
 {
     struct landin_private_root *root;
     for (root = landin_private_roots; root; root = root->next) {
@@ -329,7 +364,7 @@ int landin_private_argument_directory(const char *argument)
     }
     return -1;
 }
-int landin_private_rebase_argument(const char *argument, int directory,
+static int landin_private_rebase_argument_locked(const char *argument, int directory,
                                     char *result, size_t room)
 {
     struct landin_private_root *root;
@@ -606,4 +641,78 @@ int landin_existing_file_key(const char *path, char *key, size_t length)
     written = snprintf(key, length, "%jx:%jx",
                        (uintmax_t)found.st_dev, (uintmax_t)found.st_ino);
     return written >= 0 && (size_t)written < length ? 0 : -1;
+}
+
+/* Public registry boundaries. No lock spans a child process lifetime. */
+int landin_private_directory(const char *prefix, char *path, size_t capacity)
+{
+    registry_lock();
+    int result = landin_private_directory_locked(prefix, path, capacity);
+    registry_unlock();
+    return result;
+}
+int landin_remove_tree(const char *path)
+{
+    registry_lock();
+    int result = landin_remove_tree_locked(path);
+    registry_unlock();
+    return result;
+}
+int landin_private_parent(const char *path, char **parent_path, char **name)
+{
+    registry_lock();
+    int result = landin_private_parent_locked(path, parent_path, name);
+    registry_unlock();
+    return result;
+}
+int landin_private_open(const char *path, int flags, mode_t mode)
+{
+    registry_lock();
+    int result = landin_private_open_locked(path, flags, mode);
+    registry_unlock();
+    return result;
+}
+int landin_private_read_descriptor(const char *path)
+{
+    registry_lock();
+    int result = landin_private_read_descriptor_locked(path);
+    registry_unlock();
+    return result;
+}
+int landin_private_path_current(const char *path)
+{
+    registry_lock();
+    int result = landin_private_path_current_locked(path);
+    registry_unlock();
+    return result;
+}
+int landin_private_mkdir(const char *path)
+{
+    registry_lock();
+    int result = landin_private_mkdir_locked(path);
+    registry_unlock();
+    return result;
+}
+int landin_private_write(const char *path, const char *bytes, size_t size)
+{
+    registry_lock();
+    int result = landin_private_write_locked(path, bytes, size);
+    registry_unlock();
+    return result;
+}
+int landin_private_argument_directory(const char *argument)
+{
+    registry_lock();
+    int result = landin_private_argument_directory_locked(argument);
+    registry_unlock();
+    return result;
+}
+int landin_private_rebase_argument(const char *argument, int directory, char *result,
+    size_t room)
+{
+    registry_lock();
+    int status = landin_private_rebase_argument_locked(argument, directory, result,
+    room);
+    registry_unlock();
+    return status;
 }

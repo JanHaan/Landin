@@ -27,6 +27,8 @@ struct landin_owned_directory {
     char path[PATH_MAX], parent_path[PATH_MAX], name[NAME_MAX + 1];
     char reason[PATH_MAX * 2 + 1024];
 };
+/* Test-only: configure while quiescent; callbacks do not reenter their
+   enclosing Capture or Private registry. */
 static void (*landin_owned_hook)(const char *, const char *);
 static int landin_owned_same(const struct stat *a, const struct stat *b)
 { return a->st_dev == b->st_dev && a->st_ino == b->st_ino; }

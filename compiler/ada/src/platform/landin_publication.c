@@ -10,6 +10,7 @@
 #endif
 #include "landin_publication.h"
 #include <errno.h>
+#include <pthread.h>
 #include <dirent.h>
 #include <fcntl.h>
 #include <inttypes.h>
@@ -27,6 +28,38 @@
 
 int landin_private_open(const char *, int, mode_t);
 int landin_private_parent(const char *, char **, char **);
+
+/* Registry operations are serialized, including descriptor borrowing and
+   teardown. Handles may be handed to another thread after caller synchronization.
+   Lock order is Publication -> Private; Format and Capture never take Private.
+   Test hooks are installed only while quiescent and must not reenter this
+   registry. Spawned/execed peer controls have independent process state. */
+static pthread_mutex_t registry_mutex = PTHREAD_MUTEX_INITIALIZER;
+static void registry_lock(void)
+{
+    int saved = errno;
+    if (pthread_mutex_lock(&registry_mutex) != 0) abort();
+    errno = saved;
+}
+static void registry_unlock(void)
+{
+    int saved = errno;
+    if (pthread_mutex_unlock(&registry_mutex) != 0) abort();
+    errno = saved;
+}
+static int landin_publication_stage_directory_locked(const char *text);
+static int landin_publication_rebase_argument_locked(const char *arg, int directory,
+    char *out, size_t room);
+static int landin_publication_stage_write_locked(const char *path, const char *bytes,
+    size_t size);
+static int landin_read_snapshot_locked(const char *path, char **bytes, size_t *size,
+    uint64_t *device, uint64_t *inode);
+static int landin_publication_open_locked(const char *path, int deletion,
+    const char *root, int *token, char *stage, size_t stage_room, char *why,
+    size_t room);
+static int landin_publication_step_locked(int token, int action,
+    const char *const *paths, size_t path_count, const uint64_t *ids, size_t count,
+    char *why, size_t room);
 
 struct arena {
     int parent, private_fd, recovery_fd, root_fd;
@@ -232,7 +265,7 @@ static int stage_open(const char *path, int flags, mode_t mode)
     if (fd >= 0) close(fd);
     free(walk); return result;
 }
-int landin_publication_stage_directory(const char *text)
+static int landin_publication_stage_directory_locked(const char *text)
 {
     struct arena *a;
     for (a = arenas; a; a = a->next) {
@@ -244,7 +277,7 @@ int landin_publication_stage_directory(const char *text)
     }
     return -1;
 }
-int landin_publication_rebase_argument(const char *arg, int directory,
+static int landin_publication_rebase_argument_locked(const char *arg, int directory,
                                        char *out, size_t room)
 {
     struct stat selected;
@@ -269,7 +302,8 @@ int landin_publication_rebase_argument(const char *arg, int directory,
     if (used >= room) return -1;
     out[used] = 0; return 0;
 }
-int landin_publication_stage_write(const char *path, const char *bytes, size_t size)
+static int landin_publication_stage_write_locked(const char *path, const char *bytes,
+    size_t size)
 {
     int fd = stage_open(path, O_WRONLY | O_CREAT | O_EXCL, 0600);
     if (fd < 0 && fd != -2 && errno == EEXIST)
@@ -290,7 +324,7 @@ int landin_publication_stage_write(const char *path, const char *bytes, size_t s
     if (result == 0) result = fsync(fd);
     close(fd); return result;
 }
-int landin_read_snapshot(const char *path, char **bytes, size_t *size,
+static int landin_read_snapshot_locked(const char *path, char **bytes, size_t *size,
                          uint64_t *device, uint64_t *inode)
 {
     struct stat st;
@@ -711,7 +745,8 @@ static int finish_journals(struct arena *arena)
         if (p->arena == arena && unlinkat(arena->root_fd, p->journal, 0) != 0) return -1;
     return 0;
 }
-int landin_publication_open(const char *path, int deletion, const char *root,
+static int landin_publication_open_locked(const char *path, int deletion,
+    const char *root,
                             int *token, char *stage, size_t stage_room,
                             char *why, size_t room)
 {
@@ -856,7 +891,8 @@ static int protected_tree(const struct tree_entry *tree,
             || protected_tree(tree->children, paths, path_count, ids, count)) return 1;
     return 0;
 }
-int landin_publication_step(int token, int action, const char *const *paths,
+static int landin_publication_step_locked(int token, int action,
+    const char *const *paths,
                             size_t path_count, const uint64_t *ids, size_t count,
                             char *why, size_t room)
 {
@@ -1050,4 +1086,54 @@ fail:
                p->path, strerror(error), location, p->recovery, p->rollback);
         return -1;
     }
+}
+
+/* Public registry boundaries. No lock spans a child process lifetime. */
+int landin_publication_stage_directory(const char *text)
+{
+    registry_lock();
+    int result = landin_publication_stage_directory_locked(text);
+    registry_unlock();
+    return result;
+}
+int landin_publication_rebase_argument(const char *arg, int directory, char *out,
+    size_t room)
+{
+    registry_lock();
+    int result = landin_publication_rebase_argument_locked(arg, directory, out, room);
+    registry_unlock();
+    return result;
+}
+int landin_publication_stage_write(const char *path, const char *bytes, size_t size)
+{
+    registry_lock();
+    int result = landin_publication_stage_write_locked(path, bytes, size);
+    registry_unlock();
+    return result;
+}
+int landin_read_snapshot(const char *path, char **bytes, size_t *size, uint64_t *device,
+    uint64_t *inode)
+{
+    registry_lock();
+    int result = landin_read_snapshot_locked(path, bytes, size, device, inode);
+    registry_unlock();
+    return result;
+}
+int landin_publication_open(const char *path, int deletion, const char *root, int *token,
+    char *stage, size_t stage_room, char *why, size_t room)
+{
+    registry_lock();
+    int result = landin_publication_open_locked(path, deletion, root, token, stage,
+    stage_room, why, room);
+    registry_unlock();
+    return result;
+}
+int landin_publication_step(int token, int action, const char *const *paths,
+    size_t path_count, const uint64_t *ids, size_t count, char *why, size_t room)
+{
+    registry_lock();
+    int result = landin_publication_step_locked(token, action, paths, path_count, ids,
+    count, why, room);
+    registry_unlock();
+    return result;
 }

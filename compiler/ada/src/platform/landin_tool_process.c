@@ -12,6 +12,7 @@
 #define _POSIX_C_SOURCE 200809L
 #endif
 #include <errno.h>
+#include <pthread.h>
 #include <fcntl.h>
 #include <signal.h>
 #include <spawn.h>
@@ -112,6 +113,28 @@ int landin_cancellation_requested(void)
 /* Captures are unlinked within a freshly created private directory and
    stay open through reading. A changed TMPDIR ancestor cannot substitute
    bytes or make cleanup unlink an unrelated public filename. */
+/* Registry operations are serialized, including descriptor borrowing and
+   teardown. Handles may be handed to another thread after caller synchronization.
+   Lock order is Publication -> Private; Format and Capture never take Private.
+   Test hooks are installed only while quiescent and must not reenter this
+   registry. Spawned/execed peer controls have independent process state. */
+static pthread_mutex_t registry_mutex = PTHREAD_MUTEX_INITIALIZER;
+static void registry_lock(void)
+{
+    int saved = errno;
+    if (pthread_mutex_lock(&registry_mutex) != 0) abort();
+    errno = saved;
+}
+static void registry_unlock(void)
+{
+    int saved = errno;
+    if (pthread_mutex_unlock(&registry_mutex) != 0) abort();
+    errno = saved;
+}
+static int landin_tool_capture_locked(char *path, size_t capacity);
+static int landin_tool_capture_read_locked(int fd, char **bytes, size_t *length);
+static int landin_tool_capture_close_locked(int fd, char *reason, size_t capacity);
+
 struct landin_capture {
     int fd;
     struct landin_owned_directory owned;
@@ -120,7 +143,7 @@ struct landin_capture {
 static struct landin_capture *landin_captures;
 void landin_tool_capture_set_hook(void (*hook)(const char *, const char *))
 { landin_owned_hook = hook; }
-int landin_tool_capture(char *path, size_t capacity)
+static int landin_tool_capture_locked(char *path, size_t capacity)
 {
     struct landin_capture *capture = calloc(1, sizeof *capture);
     int error;
@@ -146,7 +169,7 @@ failed:
     if (capture->owned.root >= 0) close(capture->owned.root);
     close(capture->owned.parent); free(capture); errno = error; return -1;
 }
-int landin_tool_capture_read(int fd, char **bytes, size_t *length)
+static int landin_tool_capture_read_locked(int fd, char **bytes, size_t *length)
 {
     size_t used = 0, room = 65536;
     char *data = malloc(room);
@@ -172,7 +195,7 @@ int landin_tool_capture_read(int fd, char **bytes, size_t *length)
 }
 void landin_tool_capture_free(char *bytes) { free(bytes); }
 /* Consumes the data descriptor even when directory cleanup refuses. */
-int landin_tool_capture_close(int fd, char *reason, size_t capacity)
+static int landin_tool_capture_close_locked(int fd, char *reason, size_t capacity)
 {
     struct landin_capture **entry = &landin_captures;
     int result, closed;
@@ -567,4 +590,27 @@ const char *landin_signal_name(int signal_number)
     case SIGSYS: return "SIGSYS";
     default: return NULL;
     }
+}
+
+/* Public registry boundaries. No lock spans a child process lifetime. */
+int landin_tool_capture(char *path, size_t capacity)
+{
+    registry_lock();
+    int result = landin_tool_capture_locked(path, capacity);
+    registry_unlock();
+    return result;
+}
+int landin_tool_capture_read(int fd, char **bytes, size_t *length)
+{
+    registry_lock();
+    int result = landin_tool_capture_read_locked(fd, bytes, length);
+    registry_unlock();
+    return result;
+}
+int landin_tool_capture_close(int fd, char *reason, size_t capacity)
+{
+    registry_lock();
+    int result = landin_tool_capture_close_locked(fd, reason, capacity);
+    registry_unlock();
+    return result;
 }
