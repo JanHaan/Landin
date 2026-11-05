@@ -53,7 +53,12 @@ gate, the called determinism workflow and the links, Pages and release
 workflows: `ubuntu-24.04` for Linux x86-64, `ubuntu-24.04-arm` for Linux
 arm64 and `macos-26` with `DEVELOPER_DIR` set to Xcode 26.6 for Darwin,
 which `environments/macos-arm64/policy.json` records. The repository is
-public, so these minutes are free. No job selects a self-hosted runner.
+public, so these minutes are free. The one exception is the gate's
+physical board legs, which run on the self-hosted `landin-rig` runner on
+the rig host for a push to `main`, the weekly schedule and a manual
+dispatch, and never for a pull request; its job-started hook refuses
+every other job. The [boards guide](../environments/boards/README.md#the-board-gate-on-the-rig)
+and the [gate reference](process.md#physical-boards-and-promotion) describe them.
 FreeBSD runs in a VM each job boots: amd64 under KVM, which the x86-64 image
 offers, and arm64 under QEMU's system emulation, because the arm64 images
 expose none. A probe on 2026-10-16 (run 38921327105) found `/dev/kvm` on
