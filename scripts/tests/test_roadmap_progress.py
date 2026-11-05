@@ -259,6 +259,12 @@ Depends on: none
         complete([identity for identity in headings.values()
                   if identity.startswith(device_phase + ".")
                   and CHECK.roadmap_statuses(text)[identity] == "planned"])
+        #  The second outside review's data-loss and other findings come
+        #  before the library is split.
+        for title in ("A command destroys nothing it did not create",
+                      "What the second outside review found"):
+            assert_next(headings[title], title)
+            complete([headings[title]])
         assert_next(freestanding, "The freestanding library")
 
     def test_the_endpoint_uses_its_own_pointer(self):
