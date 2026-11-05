@@ -338,6 +338,17 @@ remove_tree: (host: blocking.host, path: []u8) -> none ! ... =
     try io.remove_directory(host, text.host_over(path))
 end remove_tree
 
+--- Clean up after a failure, reporting why an owned scratch directory
+--- could not be removed as well as the original failure.
+abandon: (host: blocking.host) -> none =
+    remove_tree(host, top) else (problem)
+        io.write(host, io.err(host),
+                 "tree-copy: could not remove tree-copy-scratch; remove it before rerunning\n")
+            else none
+        complain(host, problem)
+    end
+end abandon
+
 --- Make the file `name` in the source holding `contents`, with
 --- `permissions`.
 make_file: (host: blocking.host, name: []u8, contents: []u8,
@@ -437,8 +448,6 @@ end make_socket
 --- read-only one, one with two names, a sparse one, symbolic links to a
 --- directory, to a file and to nothing, and a socket, which no copy makes.
 build: (host: blocking.host) -> none ! ... =
-    try remove_tree(host, top)
-    try io.make_directory(host, text.host_over(top))
     try make_folder(host, "")
     try make_folder(host, "notes")
     try make_file(host, "readme", "a tree to copy\n", 0o644)
@@ -692,6 +701,8 @@ end report
 --- copy, check the copy, list it to `out` and remove both trees.
 demonstrate: (host: blocking.host, inout out: io.buffered_writer(blocking.host))
              -> none ! ... =
+    try io.make_directory(host, text.host_over(top))
+    undo abandon(host)
     try build(host)
     mut first: tally = (files: 0, links: 0, directories: 0, skipped: 0,
                         replaced: 0)

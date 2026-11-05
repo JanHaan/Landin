@@ -211,7 +211,7 @@ forget: (host: blocking.host, name: []u8, directory: bool) -> none ! ... =
     end
 end forget
 
---- Remove everything the program makes, whatever an earlier run left.
+--- Remove everything the program makes in the directory it created.
 clear: (host: blocking.host) -> none ! ... =
     try forget(host, "nested/gamma.log", false)
     try forget(host, "nested", true)
@@ -221,6 +221,17 @@ clear: (host: blocking.host) -> none ! ... =
     try forget(host, "empty", false)
     try forget(host, "", true)
 end clear
+
+--- Clean up after a failure, reporting why an owned scratch directory
+--- could not be removed as well as the original failure.
+abandon: (host: blocking.host) -> none =
+    clear(host) else (problem)
+        io.write(host, io.err(host),
+                 "listing: could not remove listing-scratch; remove it before rerunning\n")
+            else none
+        complain(host, problem)
+    end
+end abandon
 
 --- Make the directory `name` in the top directory, or the top directory
 --- itself when `name` is empty.
@@ -234,8 +245,6 @@ end make_directory
 --- Four files, one of them empty and one with a name beyond ASCII, and a
 --- subdirectory holding a fifth.
 build: (host: blocking.host) -> none ! ... =
-    try clear(host)
-    try make_directory(host, "")
     try make_file(host, "alpha.log", "alpha\n")
     line_of_beta: []u8 = "beta\n"
     mut lines: [1000]u8 = zeroed
@@ -253,6 +262,8 @@ end build
 --- directory.
 demonstrate: (host: blocking.host, inout out: io.buffered_writer(blocking.host))
              -> none ! ... =
+    try make_directory(host, "")
+    undo abandon(host)
     try build(host)
     blank: kept = (name: [255 of 0], length: 0, kind: io.special, size: 0)
     mut entries: [8]kept = [8 of blank]
