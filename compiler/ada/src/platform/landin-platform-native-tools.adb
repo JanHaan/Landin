@@ -61,6 +61,25 @@ package body Landin.Platform.Native.Tools is
      with Import, Convention => C,
        External_Name => "landin_tool_start_in_directory";
 
+   --  Translate C policy refusals without assuming host errno numbers.
+   function Process_Start_Error (Error : Interfaces.C.int)
+     return C_Strings.chars_ptr
+     with Import, Convention => C,
+       External_Name => "landin_process_start_error";
+
+   function Start_Failure (Error : Interfaces.C.int; Fallback : String)
+     return String;
+
+   function Start_Failure (Error : Interfaces.C.int; Fallback : String)
+     return String
+   is
+      use type C_Strings.chars_ptr;
+      Reason : constant C_Strings.chars_ptr := Process_Start_Error (Error);
+   begin
+      return Fallback & (if Reason = C_Strings.Null_Ptr then ""
+                         else ": " & C_Strings.Value (Reason));
+   end Start_Failure;
+
    function Stage_Directory (Text : C_Strings.chars_ptr)
       return Interfaces.C.int
      with Import, Convention => C,
@@ -161,8 +180,10 @@ package body Landin.Platform.Native.Tools is
    function Wait_Tool
      (Child   : Interfaces.C.int;
       Status  : access Interfaces.C.int;
-      No_Hang : Interfaces.C.int) return Interfaces.C.int
-     with Import, Convention => C, External_Name => "landin_tool_wait";
+      No_Hang : Interfaces.C.int;
+      Owned   : access Interfaces.C.int) return Interfaces.C.int
+     with Import, Convention => C,
+       External_Name => "landin_tool_wait_reserved";
 
    function Stop_Tool
      (Child  : Interfaces.C.int;
@@ -221,8 +242,9 @@ package body Landin.Platform.Native.Tools is
       end loop;
       if Error /= 0 then
          raise External_Tool_Failed
-           with (if Child = 0 then "cannot start " else "cannot wait for ")
-             & Program;
+           with Start_Failure
+             (Error, (if Child = 0 then "cannot start "
+                      else "cannot wait for ") & Program);
       elsif Signal_Number /= 0 then
          Result.Ended := Signaled;
          Result.Signal := Natural (Signal_Number);
@@ -315,6 +337,8 @@ package body Landin.Platform.Native.Tools is
       Pid            : aliased Interfaces.C.int := 0;
       Exceeded_Limit : Boolean := False;
       Cancelled      : Boolean := False;
+      Start_Error    : Interfaces.C.int;
+      Child_Owned    : aliased Interfaces.C.int := 0;
 
 
       function Rebased (Argument : String) return String;
@@ -533,7 +557,7 @@ package body Landin.Platform.Native.Tools is
          Reaped : Interfaces.C.int := 0;
          Wait_Interval : Duration := 0.001;
       begin
-         if Start_Tool
+         Start_Error := Start_Tool
            (List, Env_List, (if Isolated then 1 else 0),
             (if Input_FD = OS.Invalid_FD then -1
              else Interfaces.C.int (Input_FD)),
@@ -541,9 +565,10 @@ package body Landin.Platform.Native.Tools is
             (if Capture = Merged then -1 else Interfaces.C.int (Error_FD)),
             (if Directory_FD = OS.Invalid_FD then -1
              else Interfaces.C.int (Directory_FD)),
-            Pid'Access) /= 0
-         then
-            raise External_Tool_Failed with "could not run tool: " & Program;
+            Pid'Access);
+         if Start_Error /= 0 then
+            raise External_Tool_Failed
+              with Start_Failure (Start_Error, "could not run tool: " & Program);
          end if;
 
          --  Keep both descriptors: captures are anonymous, and reading
@@ -560,7 +585,11 @@ package body Landin.Platform.Native.Tools is
                exit;
             end if;
             Reaped :=
-              Wait_Tool (Pid, Status'Access, No_Hang => 1);
+              Wait_Tool
+                (Pid, Status'Access, No_Hang => 1, Owned => Child_Owned'Access);
+            if Child_Owned = 0 then
+               Pid := 0;
+            end if;
             exit when Reaped /= 0;
             if Ada.Real_Time.Clock > Deadline then
                Stop_Child;
