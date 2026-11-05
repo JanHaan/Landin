@@ -488,6 +488,7 @@ static void discovery_retirement_case(unsigned replacement_kind)
     char parent[4096], owner[8192], peer[8192], stage[4096];
     char arena[4096], parked[8192], sentinel[8192];
     struct stat sentinel_before, sentinel_after;
+    struct stat observed_before, parked_after;
     char ready_arg[32], release_arg[32], byte;
     int ready[2], release[2], child, status;
     REQUIRE(snprintf(parent, sizeof parent, "%s/discovery-retirement-%u",
@@ -508,7 +509,7 @@ static void discovery_retirement_case(unsigned replacement_kind)
         REQUIRE(step(token, 0) == 0 && step(token, 1) == 0 && step(token, 2) == 0);
     }
     int observed = open(arena, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
-    REQUIRE(observed >= 0);
+    REQUIRE(observed >= 0 && fstat(observed, &observed_before) == 0);
     REQUIRE(pipe(ready) == 0 && pipe(release) == 0);
     REQUIRE(fcntl(ready[0], F_SETFD, FD_CLOEXEC) == 0
             && fcntl(release[1], F_SETFD, FD_CLOEXEC) == 0);
@@ -564,6 +565,12 @@ static void discovery_retirement_case(unsigned replacement_kind)
     REQUIRE(write(release[1], "R", 1) == 1); close(release[1]); close(ready[0]);
     REQUIRE(landin_tool_wait(child, &status, 0) == child && status == 0);
     REQUIRE(content(owner, "owner-generated"));
+    if (replacement_kind == 2 || replacement_kind == 3) {
+        REQUIRE(lstat(parked, &parked_after) == 0 && S_ISDIR(parked_after.st_mode)
+                && observed_before.st_dev == parked_after.st_dev
+                && observed_before.st_ino == parked_after.st_ino
+                && observed_before.st_mode == parked_after.st_mode);
+    }
     if (replacement_kind == 3) REQUIRE(access(peer, F_OK) != 0);
     else if (replacement_kind) {
         REQUIRE(content(sentinel, "unexplained-recovery") && access(peer, F_OK) != 0
