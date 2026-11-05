@@ -25,7 +25,9 @@ package Landin.Driver.Loading is
    procedure Load_Files
      (Context : in out Landin.Stages.Compilation;
       Host    : Landin.Platform.Filesystem'Class;
-      Paths   : Landin.Platform.Path_List);
+      Paths   : Landin.Platform.Path_List;
+      Observed : access procedure
+        (Path : String; Identity : Landin.Platform.File_Identity) := null);
 
    --  The entry module and every module its imports reach, first in first
    --  out, each loaded once.  Roots are searched in order and must be
@@ -50,7 +52,9 @@ package Landin.Driver.Loading is
       Dependency_Directories : access Landin.Platform.Path_List := null;
       Library         : String := "";
       Implicit        : String := "";
-      Parsing         : access procedure (Finished : Boolean) := null);
+      Parsing         : access procedure (Finished : Boolean) := null;
+      Observed : access procedure
+        (Path : String; Identity : Landin.Platform.File_Identity) := null);
 
    --  After Load_Files, for named files with a library root: what they
    --  read is parsed, and every library module their imports reach is
@@ -69,7 +73,9 @@ package Landin.Driver.Loading is
       Cache        : access Landin.Stages.Syntax.Parse_Cache := null;
       Dependency_Directories : access Landin.Platform.Path_List := null;
       Implicit     : String := "";
-      Parsing      : access procedure (Finished : Boolean) := null);
+      Parsing      : access procedure (Finished : Boolean) := null;
+      Observed : access procedure
+        (Path : String; Identity : Landin.Platform.File_Identity) := null);
 
    --  D383: named source files with roots.  The files are read already
    --  by Load_Files and are the entry module, as they are without a root;
@@ -82,7 +88,9 @@ package Landin.Driver.Loading is
       Library : String;
       Dependency_Directories : access Landin.Platform.Path_List := null;
       Implicit : String := "";
-      Parsing  : access procedure (Finished : Boolean) := null);
+      Parsing  : access procedure (Finished : Boolean) := null;
+      Observed : access procedure
+        (Path : String; Identity : Landin.Platform.File_Identity) := null);
 
    --  Parsing, when given, is told as each batch of newly read sources
    --  begins and finishes scanning and parsing, so a stage report can
