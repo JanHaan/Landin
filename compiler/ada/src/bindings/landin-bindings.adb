@@ -403,6 +403,108 @@ package body Landin.Bindings is
       return "";
    end Marker_File;
 
+   function Marker_Files (Preprocessed : String)
+      return Landin.Platform.Path_List
+   is
+      Result : Landin.Platform.Path_List;
+      First : Positive := Preprocessed'First;
+   begin
+      while First <= Preprocessed'Last loop
+         declare
+            Last : Natural := First;
+         begin
+            while Last <= Preprocessed'Last
+              and then Preprocessed (Last) not in ASCII.LF | ASCII.CR
+            loop
+               Last := Last + 1;
+            end loop;
+            declare
+               Quoted : constant String :=
+                 Marker_File (Preprocessed (First .. Last - 1));
+               Name : constant String :=
+                 (if Quoted = "" then "" else Unescape (Quoted));
+            begin
+               if Name /= "" and then Name (Name'First) /= '<'
+                 and then not Result.Contains (Name)
+               then
+                  Result.Append (Name);
+               end if;
+            end;
+            First := Last + 1;
+         end;
+      end loop;
+      return Result;
+   end Marker_Files;
+
+   procedure Dependency_Files
+     (Dependencies : String; Files : out Landin.Platform.Path_List;
+      Valid : out Boolean)
+   is
+      Position : Natural := Dependencies'First;
+      Name : US.Unbounded_String;
+
+      procedure Append_Name;
+      procedure Append_Name is
+      begin
+         if US.Length (Name) > 0 then
+            if not Files.Contains (US.To_String (Name)) then
+               Files.Append (US.To_String (Name));
+            end if;
+            Name := US.Null_Unbounded_String;
+         end if;
+      end Append_Name;
+   begin
+      Files.Clear;
+      Valid := False;
+      while Position <= Dependencies'Last
+        and then Dependencies (Position) /= ':'
+      loop
+         Position := Position + 1;
+      end loop;
+      if Position > Dependencies'Last then
+         return;
+      end if;
+      Position := Position + 1;
+      while Position <= Dependencies'Last loop
+         declare
+            Ch : constant Character := Dependencies (Position);
+         begin
+            if Ch = '\' then
+               Position := Position + 1;
+               if Position > Dependencies'Last then
+                  return;
+               elsif Dependencies (Position) = ASCII.LF then
+                  Append_Name;
+               elsif Dependencies (Position) = ASCII.CR then
+                  Append_Name;
+                  if Position < Dependencies'Last
+                    and then Dependencies (Position + 1) = ASCII.LF
+                  then
+                     Position := Position + 1;
+                  end if;
+               else
+                  US.Append (Name, Dependencies (Position));
+               end if;
+            elsif Ch = '$' then
+               Position := Position + 1;
+               if Position > Dependencies'Last
+                 or else Dependencies (Position) /= '$'
+               then
+                  return;
+               end if;
+               US.Append (Name, '$');
+            elsif Ch in ' ' | ASCII.HT | ASCII.LF | ASCII.CR then
+               Append_Name;
+            else
+               US.Append (Name, Ch);
+            end if;
+            Position := Position + 1;
+         end;
+      end loop;
+      Append_Name;
+      Valid := not Files.Is_Empty;
+   end Dependency_Files;
+
    procedure Strip_Markers
      (Into         : in out Session;
       Preprocessed : String;

@@ -29,6 +29,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -210,6 +211,141 @@ def checked_in(policy):
     interrupts = Path(policy['description']) / 'interrupts.ldn'
     files[str(interrupts)] = (HERE / interrupts).read_bytes()
     return files
+
+
+class PublicationSafety(unittest.TestCase):
+    """Owned toy inputs exercise publication without fetching vendor data."""
+
+    SVD = """<?xml version="1.0" encoding="utf-8"?>
+<device schemaVersion="1.1">
+  <name>TOY</name>
+  <version>1.0</version>
+  <addressUnitBits>8</addressUnitBits>
+  <width>32</width>
+  <size>32</size>
+  <access>read-write</access>
+  <resetValue>0</resetValue>
+  <resetMask>0xFFFFFFFF</resetMask>
+  <cpu><name>CM0</name><revision>r0p0</revision><endian>little</endian><mpuPresent>false</mpuPresent><fpuPresent>false</fpuPresent><nvicPrioBits>2</nvicPrioBits><vendorSystickConfig>false</vendorSystickConfig></cpu>
+  <peripherals>
+    <peripheral>
+      <name>GPIO</name>
+      <baseAddress>0x40000000</baseAddress>
+      <interrupt><name>GPIO_IRQ</name><value>3</value></interrupt>
+      <registers>
+        <register>
+          <name>CTRL</name>
+          <addressOffset>0x0</addressOffset>
+          <fields>
+            <field><name>EN</name><bitOffset>0</bitOffset><bitWidth>1</bitWidth></field>
+            <field><name>MODE</name><bitOffset>1</bitOffset><bitWidth>3</bitWidth></field>
+          </fields>
+        </register>
+      </registers>
+    </peripheral>
+  </peripherals>
+</device>
+"""
+
+    def make_tree(self, root):
+        svd, policy, out = root / 'toy.svd', root / 'toy.json', root / 'out'
+        svd.write_text(self.SVD)
+        policy.write_text(json.dumps({
+            'schema': 2, 'device': 'TOY', 'svd_version': '1.0',
+            'svd_sha256': digest(self.SVD.encode()), 'notice': ['toy'],
+            'selection': {'GPIO': ['CTRL']},
+            'policies': {'GPIO.CTRL': {'read': 'normal', 'write': 'normal',
+                                      'reserved': 'zero'}}}))
+        out.mkdir()
+        command = [str(REFINE), 'svd', '--policy=' + str(policy),
+                   '--out-dir=' + str(out), str(svd)]
+        return svd, policy, out, command
+
+    def refused(self, command):
+        process = subprocess.run(command, capture_output=True, text=True)
+        self.assertIn(process.returncode, (1, 2), process.stderr)
+        self.assertNotIn('internal compiler error', process.stderr)
+        return process
+
+    @requires_refine
+    def test_inputs_and_stale_aliases_are_preserved(self):
+        for kind in ('svd', 'policy', 'response', 'nested-response', 'stale'):
+            with self.subTest(kind=kind), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                svd, policy, out, command = self.make_tree(root)
+                if kind == 'svd':
+                    source = out / 'toy/gpio/device.ldn'
+                    source.parent.mkdir(parents=True)
+                    shutil.move(svd, source)
+                    command[-1] = str(source)
+                elif kind == 'policy':
+                    source = out / 'toy/correspondence.json'
+                    source.parent.mkdir(parents=True)
+                    shutil.move(policy, source)
+                    command[2] = '--policy=' + str(source)
+                elif kind in ('response', 'nested-response'):
+                    source = out / 'toy/correspondence.json'
+                    source.parent.mkdir(parents=True)
+                    source.write_text(shlex.join(command[1:]) + '\n')
+                    if kind == 'nested-response':
+                        outer = root / 'outer.rsp'
+                        outer.write_text('@' + shlex.quote(str(source)) + '\n')
+                        command = [str(REFINE), '@' + str(outer)]
+                    else:
+                        command = [str(REFINE), '@' + str(source)]
+                else:
+                    initial = subprocess.run(command, capture_output=True, text=True)
+                    self.assertEqual(initial.returncode, 0, initial.stderr)
+                    source = out / 'old.svd'
+                    os.link(svd, source)
+                    manifest = out / 'toy/outputs.json'
+                    entries = json.loads(manifest.read_text())
+                    entries['old.svd'] = '0' * 64
+                    manifest.write_text(json.dumps(entries))
+                original = source.read_bytes()
+                identity = (source.stat().st_dev, source.stat().st_ino)
+                self.refused(command)
+                self.assertEqual(source.read_bytes(), original)
+                self.assertEqual((source.stat().st_dev, source.stat().st_ino), identity)
+
+    @requires_refine
+    def test_linked_outputs_parents_and_leftovers_are_preserved(self):
+        for kind in ('root', 'parent', 'final', 'stage', 'recovery', 'stale'):
+            with self.subTest(kind=kind), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                svd, policy, out, command = self.make_tree(root)
+                outside = root / 'outside'
+                outside.mkdir()
+                sentinel = outside / 'device.ldn'
+                sentinel.write_text('foreign bytes\n')
+                if kind == 'root':
+                    out.rmdir()
+                    out.symlink_to(outside, target_is_directory=True)
+                    link = out
+                elif kind == 'parent':
+                    (out / 'toy').mkdir()
+                    link = out / 'toy/gpio'
+                    link.symlink_to(outside, target_is_directory=True)
+                elif kind == 'stale':
+                    initial = subprocess.run(command, capture_output=True, text=True)
+                    self.assertEqual(initial.returncode, 0, initial.stderr)
+                    link = out / 'linked'
+                    link.symlink_to(outside, target_is_directory=True)
+                    manifest = out / 'toy/outputs.json'
+                    entries = json.loads(manifest.read_text())
+                    entries['linked/device.ldn'] = '0' * 64
+                    manifest.write_text(json.dumps(entries))
+                else:
+                    (out / 'toy/gpio').mkdir(parents=True)
+                    suffix = {'final': '', 'stage': '.refine-new',
+                              'recovery': '.refine-old'}[kind]
+                    link = out / ('toy/gpio/device.ldn' + suffix)
+                    link.symlink_to(outside / 'absent')
+                original = sentinel.read_bytes()
+                self.refused(command)
+                self.assertTrue(link.is_symlink())
+                self.assertEqual(sentinel.read_bytes(), original)
+                self.assertFalse((outside / 'absent').exists())
 
 
 class Regeneration(unittest.TestCase):

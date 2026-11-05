@@ -6,6 +6,7 @@ with Landin.Diagnostics;
 with Landin.Diagnostics.Catalogue;
 with Landin.Diagnostics.Text;
 with Landin.Json;
+with Landin.Platform.Publication;
 with Landin.Source;
 with Landin.Source.Sets;
 
@@ -15,11 +16,11 @@ package body Landin.Commands.Devices is
    package Dev renames Landin.Devices;
    package Cat renames Landin.Diagnostics.Catalogue;
    package Platform renames Landin.Platform;
+   package Pub renames Landin.Platform.Publication;
    package J renames Landin.Json;
 
    use type Platform.Read_Status;
    use type Platform.Write_Status;
-   use type Platform.Move_Status;
    use type Dev.Fault_Kind;
    use type Dev.Input;
    use type J.Value_Kind;
@@ -40,13 +41,21 @@ package body Landin.Commands.Devices is
    procedure Import
      (Svd_Path, Policy_Path, Out_Dir : String;
       Host   : Landin.Platform.Filesystem'Class;
-      Result : in out Landin.Driver.Outcome)
+      Result : in out Landin.Driver.Outcome;
+      Protected_Inputs : Landin.Platform.Path_List :=
+        Landin.Platform.Path_Vectors.Empty_Vector;
+      Protected_Identities : Landin.Platform.Identity_List :=
+        Landin.Platform.Identity_Vectors.Empty_Vector)
    is
       Sources : Landin.Source.Sets.Source_Set;
       Svd_Text, Policy_Text : US.Unbounded_String;
       Read : Platform.Read_Status;
       Made : Dev.Projection.Result;
       Problem : Dev.Fault;
+      Group : Pub.Transaction;
+      Has_Group : Boolean := False;
+      Inputs : Platform.Path_List := Protected_Inputs;
+      Svd_Identity, Policy_Identity : Platform.File_Identity;
       Root : constant String :=
         (if Out_Dir'Length > 1 and then Out_Dir (Out_Dir'Last) = '/'
          then Out_Dir (Out_Dir'First .. Out_Dir'Last - 1) else Out_Dir);
@@ -87,6 +96,16 @@ package body Landin.Commands.Devices is
 
          function Clear (Path : String) return Boolean is
          begin
+            if Host.Paths_Overlap_Any (Path, Inputs) then
+               Report (Cat.Svd_Output_Refused, Path & " overlaps an input;"
+                       & " name another output directory with --out-dir");
+               return False;
+            end if;
+            if Host.Is_Link (Path) then
+               Report (Cat.Svd_Output_Refused, Path & " is a symbolic link;"
+                       & " remove it or name another output directory");
+               return False;
+            end if;
             if Host.Is_Directory (Path) then
                Report (Cat.Svd_Output_Refused, Path & " is a directory,"
                        & " where refine svd writes a file; remove it");
@@ -95,7 +114,9 @@ package body Landin.Commands.Devices is
             for Suffix of Platform.Path_List'
               [Staged_Suffix, Kept_Suffix]
             loop
-               if Host.Exists (Path & Suffix) then
+               if Host.Exists (Path & Suffix)
+                 or else Host.Is_Link (Path & Suffix)
+               then
                   Report (Cat.Svd_Output_Refused, Path & Suffix & " was"
                           & " left by an interrupted run of refine svd;"
                           & " compare it with " & Path & ", keep the one"
@@ -105,6 +126,15 @@ package body Landin.Commands.Devices is
             end loop;
             --  Each directory above it under the root must be one.
             for Index in Path'First + Root'Length + 1 .. Path'Last loop
+               if Path (Index) = '/'
+                 and then Host.Is_Link (Path (Path'First .. Index - 1))
+               then
+                  Report (Cat.Svd_Output_Refused,
+                          Path (Path'First .. Index - 1)
+                          & " is a symbolic link below the output directory;"
+                          & " remove it or name another output directory");
+                  return False;
+               end if;
                if Path (Index) = '/'
                  and then Host.Exists (Path (Path'First .. Index - 1))
                  and then not Host.Is_Directory
@@ -119,6 +149,12 @@ package body Landin.Commands.Devices is
             return True;
          end Clear;
       begin
+         if Host.Is_Link (Root) then
+            Report (Cat.Svd_Output_Refused, "the output directory " & Root
+                    & " is a symbolic link; name the directory it leads to"
+                    & " with --out-dir");
+            return False;
+         end if;
          if not Host.Is_Directory (Root) then
             Report (Cat.Svd_Output_Refused, "the output directory " & Root
                     & " is not a directory; make it, or name another with"
@@ -129,6 +165,21 @@ package body Landin.Commands.Devices is
             if not Clear (Destination (US.To_String (Item.Path))) then
                return False;
             end if;
+         end loop;
+         Has_Group := True;
+         for Item of Made.Outputs loop
+            declare
+               Status : Platform.Write_Status;
+               Reason : US.Unbounded_String;
+            begin
+               Pub.Prepare
+                 (Group, Host, Destination (US.To_String (Item.Path)),
+                  Status, Reason, Root => Root);
+               if Status /= Platform.Write_Ok then
+                  Report (Cat.Svd_Output_Refused, US.To_String (Reason));
+                  return False;
+               end if;
+            end;
          end loop;
          if Host.Exists (Manifest_Path) then
             declare
@@ -172,11 +223,25 @@ package body Landin.Commands.Devices is
                         end if;
                      end loop;
                      if not Still_Made
-                       and then Host.Exists (Destination (Whole))
+                       and then (Host.Exists (Destination (Whole))
+                                 or else Host.Is_Link (Destination (Whole)))
                      then
                         if not Clear (Destination (Whole)) then
                            return False;
                         end if;
+                        declare
+                           Status : Platform.Write_Status;
+                           Reason : US.Unbounded_String;
+                        begin
+                           Pub.Prepare
+                             (Group, Host, Destination (Whole), Status,
+                              Reason, Delete_Only => True, Root => Root);
+                           if Status /= Platform.Write_Ok then
+                              Report (Cat.Svd_Output_Refused,
+                                      US.To_String (Reason));
+                              return False;
+                           end if;
+                        end;
                         Stale.Append (Destination (Whole));
                      end if;
                   end;
@@ -186,214 +251,97 @@ package body Landin.Commands.Devices is
          return True;
       end Preflight;
 
-      --  What each output does: nothing when its bytes are already there.
-      type Plan is (Unchanged, Created, Replaced);
+      procedure Clean_Up;
 
-      type Plans is array (Positive range <>) of Plan;
+      procedure Clean_Up is
+         Status : Platform.Write_Status;
+         Reason : US.Unbounded_String;
+      begin
+         if Has_Group then
+            Pub.Abort_Transaction (Group, Host, Status, Reason);
+            Has_Group := False;
+            if Status /= Platform.Write_Ok then
+               Report (Cat.Unwritable_Output, US.To_String (Reason));
+            end if;
+         end if;
+      end Clean_Up;
 
       procedure Replace;
 
       procedure Replace is
-         Steps : Plans (1 .. Made.Outputs.Last_Index) := [others => Created];
-         Done : Natural := 0;
-         Removed_Stale : Natural := 0;
-         Written : Platform.Write_Status;
-         Moved : Platform.Move_Status;
-         Gone : Platform.Remove_Status;
-         Failure : US.Unbounded_String;
-
-         procedure Make_Parents (Path : String);
-
-         procedure Make_Parents (Path : String) is
-         begin
-            for Index in Path'First + Root'Length + 1 .. Path'Last loop
-               if Path (Index) = '/' then
-                  Host.Make_Directory (Path (Path'First .. Index - 1),
-                                       Written);
-                  if Written /= Platform.Write_Ok then
-                     Failure := US.To_Unbounded_String
-                       ("cannot make the directory "
-                        & Path (Path'First .. Index - 1));
-                     return;
-                  end if;
-               end if;
-            end loop;
-         end Make_Parents;
-
-         procedure Discard_Staged;
-
-         procedure Discard_Staged is
-         begin
-            for Index in 1 .. Made.Outputs.Last_Index loop
-               if Steps (Index) /= Unchanged then
-                  Host.Remove_File
-                    (Destination (US.To_String (Made.Outputs (Index).Path))
-                     & Staged_Suffix, Gone);
-               end if;
-            end loop;
-         end Discard_Staged;
-
-         procedure Roll_Back;
-
-         --  Put back what was replaced, newest first; say which kept copy
-         --  is the old file when one cannot be put back.
-         procedure Roll_Back is
-            Stuck : US.Unbounded_String;
-         begin
-            for Index in reverse 1 .. Removed_Stale loop
-               Host.Move_File (Stale (Index) & Kept_Suffix, Stale (Index),
-                               Moved);
-               if Moved /= Platform.Moved then
-                  US.Append (Stuck, " " & Stale (Index) & Kept_Suffix);
-               end if;
-            end loop;
-            for Index in reverse 1 .. Done loop
-               declare
-                  Path : constant String :=
-                    Destination (US.To_String (Made.Outputs (Index).Path));
-               begin
-                  if Steps (Index) /= Unchanged then
-                     Host.Remove_File (Path, Gone);
-                  end if;
-                  if Steps (Index) = Replaced then
-                     Host.Move_File (Path & Kept_Suffix, Path, Moved);
-                     if Moved /= Platform.Moved then
-                        US.Append (Stuck, " " & Path & Kept_Suffix);
-                     end if;
-                  end if;
-               end;
-            end loop;
-            Discard_Staged;
-            if US.Length (Stuck) > 0 then
-               US.Append (Failure, "; the old files could not all be put"
-                          & " back, and are kept as"
-                          & US.To_String (Stuck));
-            else
-               US.Append (Failure, "; every old file was put back");
-            end if;
-         end Roll_Back;
+         Status : Platform.Write_Status;
+         Reason, Existing : US.Unbounded_String;
+         Changed : Natural := 0;
       begin
-         --  Stage and verify every new file before replacing any.
-         for Index in 1 .. Made.Outputs.Last_Index loop
+         --  Every generated and stale path was prepared before staging.
+         for Item of Made.Outputs loop
             declare
-               Item : constant Dev.Output := Made.Outputs (Index);
                Path : constant String :=
                  Destination (US.To_String (Item.Path));
-               Existing : US.Unbounded_String;
             begin
-               if Host.Exists (Path) then
-                  Host.Read_File (Path, Existing, Read);
-                  Steps (Index) :=
-                    (if Read = Platform.Read_Ok
-                       and then US."=" (Existing, Item.Content)
-                     then Unchanged else Replaced);
+               Host.Read_File (Path, Existing, Read);
+               if Read /= Platform.Read_Ok
+                 or else not US."=" (Existing, Item.Content)
+               then
+                  Changed := Changed + 1;
                end if;
-               if Steps (Index) /= Unchanged then
-                  Make_Parents (Path);
-                  if US.Length (Failure) = 0 then
-                     Host.Write_File (Path & Staged_Suffix,
-                                      US.To_String (Item.Content), Written);
-                     Host.Read_File (Path & Staged_Suffix, Existing, Read);
-                     if Written /= Platform.Write_Ok
-                       or else Read /= Platform.Read_Ok
-                       or else not US."=" (Existing, Item.Content)
-                     then
-                        Failure := US.To_Unbounded_String
-                          ("cannot write and read back " & Path
-                           & Staged_Suffix);
-                     end if;
-                  end if;
+               Host.Write_File (Pub.Stage_Path (Group, Path),
+                                US.To_String (Item.Content), Status);
+               if Status /= Platform.Write_Ok then
+                  Report (Cat.Unwritable_Output,
+                          "cannot write " & Pub.Stage_Path (Group, Path)
+                          & "; nothing was replaced");
+                  return;
                end if;
-               if US.Length (Failure) > 0 then
-                  Discard_Staged;
-                  Report (Cat.Unwritable_Output, US.To_String (Failure)
+               Host.Read_File (Pub.Stage_Path (Group, Path), Existing, Read);
+               if Read /= Platform.Read_Ok
+                 or else not US."=" (Existing, Item.Content)
+               then
+                  Report (Cat.Unwritable_Output,
+                          "cannot read back " & Pub.Stage_Path (Group, Path)
                           & "; nothing was replaced");
                   return;
                end if;
             end;
          end loop;
-         for Index in 1 .. Made.Outputs.Last_Index loop
-            declare
-               Path : constant String :=
-                 Destination (US.To_String (Made.Outputs (Index).Path));
-            begin
-               if Steps (Index) = Replaced then
-                  Host.Move_File (Path, Path & Kept_Suffix, Moved);
-                  if Moved /= Platform.Moved then
-                     Failure := US.To_Unbounded_String
-                       ("cannot move " & Path & " aside to replace it");
-                  end if;
-               end if;
-               if US.Length (Failure) = 0 and then Steps (Index) /= Unchanged
-               then
-                  Host.Move_File (Path & Staged_Suffix, Path, Moved);
-                  if Moved /= Platform.Moved then
-                     Failure := US.To_Unbounded_String
-                       ("cannot move the new " & Path & " into place");
-                     if Steps (Index) = Replaced then
-                        Host.Move_File (Path & Kept_Suffix, Path, Moved);
-                     end if;
-                  end if;
-               end if;
-               if US.Length (Failure) > 0 then
-                  Roll_Back;
-                  Report (Cat.Unwritable_Output, US.To_String (Failure));
-                  return;
-               end if;
-               Done := Index;
-            end;
-         end loop;
-         for Path of Stale loop
-            Host.Move_File (Path, Path & Kept_Suffix, Moved);
-            if Moved /= Platform.Moved then
-               Failure := US.To_Unbounded_String
-                 ("cannot remove " & Path & ", which the old manifest names"
-                  & " and this run does not make");
-               Roll_Back;
-               Report (Cat.Unwritable_Output, US.To_String (Failure));
-               return;
-            end if;
-            Removed_Stale := Removed_Stale + 1;
-         end loop;
-         --  Every new file is in place: the kept copies go.
-         for Index in 1 .. Made.Outputs.Last_Index loop
-            if Steps (Index) = Replaced then
-               Host.Remove_File
-                 (Destination (US.To_String (Made.Outputs (Index).Path))
-                  & Kept_Suffix, Gone);
-            end if;
-         end loop;
-         for Path of Stale loop
-            Host.Remove_File (Path & Kept_Suffix, Gone);
-         end loop;
-         declare
-            Changed : Natural := 0;
-         begin
-            for Step of Steps loop
-               if Step /= Unchanged then
-                  Changed := Changed + 1;
-               end if;
-            end loop;
-            Result.Output := US.To_Unbounded_String
-              ("refine svd: " & Dev.Decimal (Dev.Word (Made.Outputs.Length))
-               & " files under " & Root & ", "
-               & Dev.Decimal (Dev.Word (Changed)) & " of them written"
-               & (if Stale.Is_Empty then ""
-                  else ", and " & Dev.Decimal (Dev.Word (Stale.Length))
-                    & " no longer made removed")
-               & ASCII.LF);
-         end;
+         Pub.Commit (Group, Host, Status, Reason);
+         if Status /= Platform.Write_Ok then
+            Report (Cat.Unwritable_Output, US.To_String (Reason));
+            return;
+         end if;
+         Pub.Finish (Group, Host, Status, Reason);
+         Has_Group := False;
+         if Status /= Platform.Write_Ok then
+            Report (Cat.Unwritable_Output, US.To_String (Reason));
+            return;
+         end if;
+         Result.Output := US.To_Unbounded_String
+           ("refine svd: " & Dev.Decimal (Dev.Word (Made.Outputs.Length))
+            & " files under " & Root & ", "
+            & Dev.Decimal (Dev.Word (Changed)) & " of them written"
+            & (if Stale.Is_Empty then ""
+               else ", and " & Dev.Decimal (Dev.Word (Stale.Length))
+                 & " no longer made removed")
+            & ASCII.LF);
       end Replace;
 
    begin
-      Host.Read_File (Svd_Path, Svd_Text, Read);
+      for Path of Protected_Inputs loop
+         Pub.Protect (Group, Host, Path);
+      end loop;
+      for Identity of Protected_Identities loop
+         Pub.Protect (Group, "", Identity);
+      end loop;
+      Host.Read_Snapshot (Svd_Path, Svd_Text, Svd_Identity, Read);
       if Read /= Platform.Read_Ok then
          Report (Cat.Unreadable_Source, "cannot read the SVD " & Svd_Path
                  & (if Read = Platform.Not_Found then ": it does not exist"
                     else ""));
          return;
       end if;
-      Host.Read_File (Policy_Path, Policy_Text, Read);
+      Pub.Protect (Group, Svd_Path, Svd_Identity);
+      Inputs.Append (Svd_Path);
+      Host.Read_Snapshot (Policy_Path, Policy_Text, Policy_Identity, Read);
       if Read /= Platform.Read_Ok then
          Report (Cat.Unreadable_Source, "cannot read the policy "
                  & Policy_Path
@@ -401,6 +349,8 @@ package body Landin.Commands.Devices is
                     else ""));
          return;
       end if;
+      Pub.Protect (Group, Policy_Path, Policy_Identity);
+      Inputs.Append (Policy_Path);
       declare
          Svd_Id : constant Landin.Source.Source_Id :=
            Sources.Add (Svd_Path, US.To_String (Svd_Text));
@@ -436,6 +386,11 @@ package body Landin.Commands.Devices is
       if Preflight then
          Replace;
       end if;
+      Clean_Up;
+   exception
+      when others =>
+         Clean_Up;
+         raise;
    end Import;
 
 end Landin.Commands.Devices;

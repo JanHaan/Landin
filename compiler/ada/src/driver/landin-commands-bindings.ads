@@ -8,12 +8,11 @@
 --  names, and an environment of PATH, HOME and the temporary directory
 --  alone.  Landin.Bindings makes the four outputs from what Clang printed.
 --
---  Replacement is refine svd's: every destination is checked first, every
---  new file is written beside its destination and read back, and only
---  then is each destination replaced, its old bytes kept beside it until
---  all are; a failure puts back what was replaced.  A file whose bytes are
---  already the new ones is left alone.  This is recovery from a failure,
---  not a snapshot for a concurrent reader.
+--  All destinations are snapshotted before Clang runs. The shared Platform
+--  transaction validates the complete staged set, captures prior versions
+--  and publishes without replacing a concurrently occupied name. Conflicts
+--  preserve foreign files and name retained recovery; equal outputs keep
+--  their original inode. Group visibility is not atomic.
 
 with Ada.Strings.Unbounded;
 with Landin.Driver;
@@ -33,6 +32,8 @@ package Landin.Commands.Bindings is
       Include_Dirs : Landin.Platform.Path_List;
       System_Include_Dirs : Landin.Platform.Path_List;
       Defines   : Landin.Platform.Path_List;
+      Protected_Inputs : Landin.Platform.Path_List;
+      Protected_Identities : Landin.Platform.Identity_List;
    end record;
 
    procedure Generate
