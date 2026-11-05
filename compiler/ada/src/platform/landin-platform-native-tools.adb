@@ -19,6 +19,32 @@ package body Landin.Platform.Native.Tools is
    use type OS.File_Descriptor;
    use type OS.String_Access;
 
+   function Begin_Cancellation return Interfaces.C.int
+     with Import, Convention => C,
+       External_Name => "landin_cancellation_begin";
+   procedure End_Cancellation
+     with Import, Convention => C,
+       External_Name => "landin_cancellation_end";
+   function Pending_Cancellation return Interfaces.C.int
+     with Import, Convention => C,
+       External_Name => "landin_cancellation_requested";
+
+   procedure Begin_Invocation is
+   begin
+      if Begin_Cancellation /= 0 then
+         raise External_Tool_Failed
+           with "could not establish command cancellation";
+      end if;
+   end Begin_Invocation;
+
+   procedure End_Invocation is
+   begin
+      End_Cancellation;
+   end End_Invocation;
+
+   function Cancellation_Requested return Natural is
+     (Natural (Pending_Cancellation));
+
    --  Host structs and wait/signal constants belong to the C adapter.
    --  The spawn action establishes a private process group before exec.
    function Start_Tool
@@ -72,6 +98,11 @@ package body Landin.Platform.Native.Tools is
      (Child  : Interfaces.C.int;
       Status : access Interfaces.C.int) return Interfaces.C.int
      with Import, Convention => C, External_Name => "landin_tool_stop";
+
+   function Cancel_Tool
+     (Child : Interfaces.C.int; Status : access Interfaces.C.int)
+      return Interfaces.C.int
+     with Import, Convention => C, External_Name => "landin_tool_cancel";
 
    function Start_Program
      (Args          : C_Strings.chars_ptr_array;
@@ -152,6 +183,23 @@ package body Landin.Platform.Native.Tools is
       return Found;
    end Available;
 
+   overriding function Resolve_Program
+     (Host : Native_Tool_Runner; Program : String) return String
+   is
+      pragma Unreferenced (Host);
+      Located : OS.String_Access := OS.Locate_Exec_On_Path (Program);
+   begin
+      if Located = null then
+         return "";
+      end if;
+      declare
+         Path : constant String := Located.all;
+      begin
+         OS.Free (Located);
+         return Path;
+      end;
+   end Resolve_Program;
+
    --  Run, with the caller's environment unless Isolated, and then with
    --  exactly the variables Environment names (D821).
    procedure Run_Tool
@@ -188,6 +236,7 @@ package body Landin.Platform.Native.Tools is
       Status         : aliased Interfaces.C.int := 0;
       Pid            : aliased Interfaces.C.int := 0;
       Exceeded_Limit : Boolean := False;
+      Cancelled      : Boolean := False;
       Reader         : Native_Filesystem;
       Read           : Read_Status;
 
@@ -265,6 +314,13 @@ package body Landin.Platform.Native.Tools is
                  Exit_Code => 0,
                  Output    => Unbounded.Null_Unbounded_String,
                  Error_Output => Unbounded.Null_Unbounded_String);
+      if Cancellation_Requested /= 0 then
+         Result.Ended := Landin.Platform.Signaled;
+         Result.Output := Unbounded.To_Unbounded_String
+           ("refine: command cancelled before starting " & Program
+            & ASCII.LF);
+         return;
+      end if;
       Located := OS.Locate_Exec_On_Path (Program);
 
       if Located = null then
@@ -356,6 +412,15 @@ package body Landin.Platform.Native.Tools is
 
          Exceeded_Limit := False;
          loop
+            if Cancellation_Requested /= 0 then
+               if Cancel_Tool (Pid, Status'Access) /= Pid then
+                  raise External_Tool_Failed
+                    with "could not stop cancelled tool: " & Program;
+               end if;
+               Pid := 0;
+               Cancelled := True;
+               exit;
+            end if;
             Reaped :=
               Wait_Tool (Pid, Status'Access, No_Hang => 1);
             exit when Reaped /= 0;
@@ -397,6 +462,12 @@ package body Landin.Platform.Native.Tools is
             & Duration'Image (Host.Limit) & " seconds and was stopped"
             & ASCII.LF);
       end if;
+      if Cancelled then
+         Unbounded.Append
+           (Result.Output,
+            "refine: command cancelled; tool stopped: " & Program
+            & ASCII.LF);
+      end if;
 
       --  The host adapter decodes wait status using the host's macros:
       --  an ordinary exit retains its status; signal termination is -1.
@@ -409,7 +480,7 @@ package body Landin.Platform.Native.Tools is
       if Exceeded_Limit then
          Result.Ended := Landin.Platform.Timed_Out;
          Result.Exit_Code := 0;
-      elsif Status = -1 then
+      elsif Cancelled or else Status = -1 then
          Result.Ended := Landin.Platform.Signaled;
          Result.Exit_Code := 0;
       else

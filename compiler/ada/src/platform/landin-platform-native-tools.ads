@@ -9,6 +9,12 @@ with Ada.Strings.Unbounded;
 
 package Landin.Platform.Native.Tools is
 
+   --  Command-scoped cancellation. Handlers only record a signal; tool
+   --  supervision and publication unwind in ordinary control flow.
+   procedure Begin_Invocation;
+   procedure End_Invocation;
+   function Cancellation_Requested return Natural;
+
    type Native_Tool_Runner is limited new Tool_Runner with private;
 
    --  How long a tool may run before it is stopped.  A fixture program
@@ -31,6 +37,9 @@ package Landin.Platform.Native.Tools is
 
    overriding function Available
      (Host : Native_Tool_Runner; Program : String) return Boolean;
+
+   overriding function Resolve_Program
+     (Host : Native_Tool_Runner; Program : String) return String;
 
    --  A tool that cannot be started, or whose capture cannot be read, raises
    --  External_Tool_Failed. A tool that ran and failed reports its exit code,

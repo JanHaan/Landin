@@ -131,6 +131,84 @@ package body Landin.Platform.Overlays is
         ("an editor's buffer is not written to the file it shows");
    end Replace_File;
 
+   overriding procedure Open_Publication
+     (Host : Overlay; Path : String; Delete_Only : Boolean; Root : String;
+      Handle : out Publication_Handle;
+      Stage : out Unbounded.Unbounded_String; Status : out Write_Status;
+      Reason : out Unbounded.Unbounded_String)
+   is
+      pragma Unreferenced (Host, Path, Delete_Only, Root);
+   begin
+      Handle := No_Publication;
+      Stage := Unbounded.Null_Unbounded_String;
+      Status := Not_Writable;
+      Reason := Unbounded.To_Unbounded_String ("an editor overlay is read-only");
+   end Open_Publication;
+
+   overriding procedure Advance_Publication
+     (Host : Overlay; Handle : Publication_Handle;
+      Action : Publication_Action; Protected_Paths : Path_List;
+      Protected_Identities : Identity_List; Status : out Write_Status;
+      Reason : out Unbounded.Unbounded_String)
+   is
+      pragma Unreferenced
+        (Host, Handle, Action, Protected_Paths, Protected_Identities);
+   begin
+      Status := Not_Writable;
+      Reason := Unbounded.To_Unbounded_String ("an editor overlay is read-only");
+   end Advance_Publication;
+
+   overriding procedure Read_Snapshot
+     (Host : Overlay; Path : String;
+      Content : out Unbounded.Unbounded_String;
+      Identity : out File_Identity; Status : out Read_Status) is
+   begin
+      if Host.Holds (Path) then
+         Read_File (Host, Path, Content, Status);
+         Identity := (others => <>);
+      else
+         Read_Snapshot (Host.Under.all, Path, Content, Identity, Status);
+      end if;
+   end Read_Snapshot;
+
+   overriding procedure Read_For_Update
+     (Host : Overlay; Path : String;
+      Content : out Unbounded.Unbounded_String;
+      Lease : out Update_Handle; Status : out Read_Status;
+      Reason : out Unbounded.Unbounded_String)
+   is
+      pragma Unreferenced (Host, Path);
+   begin
+      Content := Unbounded.Null_Unbounded_String;
+      Lease := No_Update;
+      Status := Not_Readable;
+      Reason := Unbounded.To_Unbounded_String ("an editor overlay is read-only");
+   end Read_For_Update;
+
+   overriding procedure Replace_Update
+     (Host : Overlay; Lease : Update_Handle; Content : String;
+      Status : out Write_Status; Reason : out Unbounded.Unbounded_String)
+   is
+      pragma Unreferenced (Host, Lease, Content);
+   begin
+      Status := Not_Writable;
+      Reason := Unbounded.To_Unbounded_String ("an editor overlay is read-only");
+   end Replace_Update;
+
+   overriding function Update_Identity
+     (Host : Overlay; Lease : Update_Handle) return File_Identity
+   is
+      pragma Unreferenced (Host, Lease);
+   begin
+      return (others => <>);
+   end Update_Identity;
+
+   overriding procedure Close_Update (Host : Overlay; Lease : Update_Handle) is
+      pragma Unreferenced (Host, Lease);
+   begin
+      null;
+   end Close_Update;
+
    overriding procedure Remove_File
      (Host   : Overlay;
       Path   : String;
