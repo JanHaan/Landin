@@ -50,8 +50,9 @@ static int next_token = 1;
 extern int landin_cancellation_requested(void);
 static landin_publication_hook fault_hook;
 void landin_publication_set_hook(landin_publication_hook hook) { fault_hook = hook; }
-static void barrier(const char *event, const char *path)
+void landin_publication_notify(const char *event, const char *path)
 { if (fault_hook) fault_hook(event, path); }
+#define barrier landin_publication_notify
 static void reason(char *out, size_t room, const char *format, ...)
 {
     va_list args;
@@ -245,7 +246,13 @@ int landin_publication_rebase_argument(const char *arg, int directory,
 int landin_publication_stage_write(const char *path, const char *bytes, size_t size)
 {
     int fd = stage_open(path, O_WRONLY | O_CREAT | O_EXCL, 0600);
+    if (fd < 0 && fd != -2 && errno == EEXIST)
+        fd = stage_open(path, O_WRONLY, 0);
     if (fd < 0) return fd;
+    struct stat st;
+    if (fstat(fd, &st) != 0 || !S_ISREG(st.st_mode)) {
+        close(fd); errno = EINVAL; return -1;
+    }
     size_t used = 0;
     while (used < size) {
         ssize_t wrote = write(fd, bytes + used, size - used);
@@ -253,7 +260,9 @@ int landin_publication_stage_write(const char *path, const char *bytes, size_t s
         if (wrote <= 0) { close(fd); return -1; }
         used += (size_t)wrote;
     }
-    int result = fsync(fd); close(fd); return result;
+    int result = ftruncate(fd, (off_t)size);
+    if (result == 0) result = fsync(fd);
+    close(fd); return result;
 }
 int landin_read_snapshot(const char *path, char **bytes, size_t *size,
                          uint64_t *device, uint64_t *inode)

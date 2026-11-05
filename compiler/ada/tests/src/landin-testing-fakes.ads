@@ -20,6 +20,16 @@ package Landin.Testing.Fakes is
    procedure Add_File
      (Host : in out Fake_Filesystem; Path : String; Content : String);
 
+   --  Real direntries sharing an object, and links whose target can dangle.
+   procedure Add_Hard_Link
+     (Host : in out Fake_Filesystem; Path, Target : String);
+   procedure Add_Symbolic_Link
+     (Host : in out Fake_Filesystem; Path, Target : String);
+   procedure Replace_On_Publication
+     (Host : in out Fake_Filesystem;
+      Action : Landin.Platform.Publication_Action;
+      Path, Content : String; As_Link : Boolean := False);
+
    --  A path that exists, can be listed, and cannot be read as a file.
    --  Trailing directory separators do not create a different entry.
    procedure Add_Directory (Host : in out Fake_Filesystem; Path : String);
@@ -404,7 +414,7 @@ private
    package Unbounded renames Ada.Strings.Unbounded;
 
    type Entry_Kind is
-     (A_File, A_Directory, An_Unreadable_File,
+     (A_File, A_Link, A_Directory, An_Unreadable_File,
       An_Unlistable_Directory);
 
    type File_Entry is record
@@ -428,6 +438,7 @@ private
    type Fake_Publication is record
       Path, Stage, Recovery : Unbounded.Unbounded_String;
       Expected, Fresh : File_Entry;
+      Expected_Tree, Fresh_Tree : File_Vectors.Vector;
       Absent, Deletion, Captured, Installed, Finished : Boolean := False;
    end record;
    package Publication_Vectors is new Ada.Containers.Vectors
@@ -442,6 +453,10 @@ private
 
    type Store is record
       Files : File_Vectors.Vector;
+      Mutation_Armed : Boolean := False;
+      Mutation_Action : Landin.Platform.Publication_Action :=
+        Landin.Platform.Capture_Previous;
+      Mutation_File : File_Entry;
       Publications : Publication_Vectors.Vector;
       Updates : Update_Vectors.Vector;
       --  Latest successful write per path, separate from the live namespace.

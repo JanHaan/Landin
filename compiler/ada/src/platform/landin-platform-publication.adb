@@ -41,18 +41,27 @@ package body Landin.Platform.Publication is
             return;
          end if;
       end loop;
-      if Paths_Overlap_Any (Files, Path, Group.Protected_Paths) then
-         Reason := To_Unbounded_String
-           ("output " & Path
-            & " aliases a protected input; choose another output");
-         return;
-      end if;
       Item.Path := To_Unbounded_String (Path);
       Open_Publication
         (Files, Path, Delete_Only, Root, Item.Handle, Item.Stage, Status,
          Reason);
       if Status = Write_Ok then
          Group.Entries.Append (Item);
+         if Paths_Overlap_Any (Files, Path, Group.Protected_Paths) then
+            declare
+               Cleanup_Status : Write_Status;
+               Cleanup_Reason : Unbounded_String;
+            begin
+               Discard (Group, Files, Path, Cleanup_Status, Cleanup_Reason);
+               Status := Not_Writable;
+               Reason := To_Unbounded_String
+                 ("output " & Path
+                  & " aliases a protected input; choose another output");
+               if Cleanup_Status /= Write_Ok then
+                  Append (Reason, "; " & To_String (Cleanup_Reason));
+               end if;
+            end;
+         end if;
       end if;
    end Prepare;
 
@@ -134,18 +143,23 @@ package body Landin.Platform.Publication is
          return;
       end if;
       for Action in Validate_Stage .. Install_Stage loop
-         for Item of Group.Entries loop
-            Advance_Publication
-              (Files, Item.Handle, Action, Group.Protected_Paths,
-               Group.Protected_Identities, Status, Reason);
-            if Status /= Write_Ok then
-               Abort_Transaction
-                 (Group, Files, Rollback_Status, Rollback_Reason);
-               if Rollback_Status /= Write_Ok then
-                  Append (Reason, "; " & To_String (Rollback_Reason));
+         for Index in 1 .. Natural (Group.Entries.Length) loop
+            declare
+               Handle : constant Publication_Handle :=
+                 Group.Entries (Index).Handle;
+            begin
+               Advance_Publication
+                 (Files, Handle, Action, Group.Protected_Paths,
+                  Group.Protected_Identities, Status, Reason);
+               if Status /= Write_Ok then
+                  Abort_Transaction
+                    (Group, Files, Rollback_Status, Rollback_Reason);
+                  if Rollback_Status /= Write_Ok then
+                     Append (Reason, "; " & To_String (Rollback_Reason));
+                  end if;
+                  return;
                end if;
-               return;
-            end if;
+            end;
          end loop;
       end loop;
       Group.Committed := True;

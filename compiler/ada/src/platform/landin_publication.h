@@ -5,6 +5,7 @@
 /* Callback is only installed by the deterministic native harness. */
 typedef void (*landin_publication_hook)(const char *event, const char *path);
 void landin_publication_set_hook(landin_publication_hook hook);
+void landin_publication_notify(const char *, const char *);
 int landin_publication_open(const char *, int, const char *, int *, char *, size_t,
                             char *, size_t);
 int landin_publication_step(int, int, const char *const *, size_t,
