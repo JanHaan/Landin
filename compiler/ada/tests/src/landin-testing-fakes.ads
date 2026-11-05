@@ -440,6 +440,7 @@ private
       Expected, Fresh : File_Entry;
       Expected_Tree, Fresh_Tree : File_Vectors.Vector;
       Absent, Deletion, Captured, Installed, Finished : Boolean := False;
+      Rollback_Pending : Boolean := False;
    end record;
    package Publication_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Fake_Publication);
