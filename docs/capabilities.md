@@ -241,6 +241,8 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   and implicit toolchain internals are outside that protection. Relative or
   indirect file directives in assembly or linker scripts are refused: use
   plain absolute file paths or a standalone assembly input or linker script.
+  A relative Clang dependency that escapes its private workspace is also
+  refused; use an absolute include path or a declared `--include-dir`.
   On interrupt, termination or hangup, refine forwards cancellation to its
   active tool's process group, allows bounded shutdown, stops remaining
   ordinary group members and reaps its direct child before recovering outputs.

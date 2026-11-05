@@ -53,6 +53,10 @@ not consume outputs during generation. Output names can briefly be absent.
 Concurrent writes through another descriptor to the same inode are
 unsupported. Dependency filenames establish Clang's known input closure;
 this does not sandbox arbitrary wrapper or implicit toolchain reads.
+Clang runs in a pinned private workspace. A dependency reported relative to
+that workspace may use `..` within it, but may not escape it, even if the
+path later reenters. Such a dependency is refused: use an absolute include
+path or a declared `--include-dir` so its physical input can be protected.
 
 ## Invocation
 
