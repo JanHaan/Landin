@@ -381,6 +381,10 @@ def main():
         if args.mode == 'boot':
             result.update(second_stage_crc32='%08x' % crc,
                           second_stage_sha256=hashlib.sha256(stage).hexdigest())
+            # A cold start first: the RAM helper's warm contract leaves core 1
+            # parked, and the RP2040's debug port then answers no download.
+            power_cycle(common.InGroup(run, args.hub_group), args)
+            time.sleep(1.0)
             flash(run, args, elf, stage)
             result['flash_readback'] = 'matches'
         if pins:

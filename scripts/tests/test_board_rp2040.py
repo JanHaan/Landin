@@ -106,7 +106,7 @@ def console_order(test, board, built, *, mode='ram', hazard=False):
                   events.append('load') or {'mode': 'warm'})
             patch(board.common, 'elf_sections', return_value=(b'', {'.isr_vector': (0x20000000, 0, 8)}))
             patch(board, 'build', return_value=(elf,) + built)
-            patch(board, 'flash', return_value='RP235x')
+            patch(board, 'flash', side_effect=lambda *_: events.append('flash') or 'RP235x')
             patch(board, 'power_cycle', side_effect=lambda *_: events.append('power'))
             patch(board, 'scenario', return_value=({}, {}, 0) if hazard else ({}, {}))
             patch(board, 'cross_check', side_effect=lambda *_:
@@ -126,7 +126,12 @@ def console_order(test, board, built, *, mode='ram', hazard=False):
             test.assertLess(events.index('load'), events.index('console'))
             test.assertNotIn('power', events)
         else:
-            test.assertLess(events.index('console'), events.index('power'))
+            # A cold start before the first attach, since a RAM run leaves the
+            # other core parked; the UART is open before the application's
+            # own cycle, the one after the flash.
+            test.assertEqual(events[:2], ['power', 'flash'])
+            test.assertLess(events.index('console'), len(events) - 1 - events[::-1].index('power'))
+            test.assertGreater(len(events) - 1 - events[::-1].index('power'), events.index('flash'))
             test.assertNotIn('load', events)
         test.assertLess(events.index('close'), events.index('check'))
 

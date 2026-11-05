@@ -497,6 +497,10 @@ def main():
                 manual_boot.readback('application')
                 result['boot_transport'] = 'manual-uf2'
             else:
+                # A cold start first: the RAM helper's warm contract leaves the
+                # other core parked, and a whole-chip download cannot attach then.
+                power_cycle(common.InGroup(run, args.hub_group), args)
+                time.sleep(args.boot_seconds)
                 result['flashed_as'] = flash(run, args, elf, head)
             result['flash_readback'] = 'matches'
         if pins:

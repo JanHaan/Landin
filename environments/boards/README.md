@@ -450,9 +450,10 @@ the port's `setup` text says what the rig lacks. The gate itself passes
 Every port runs its RAM run first, from the verified fixed image the last
 run left, then its boot check, which flashes, cold-starts, checks the
 physical oracle and restores and verifies the fixed image, so the board
-rests on that image rather than on a RAM application left running; a RAM
-application left running for half an hour once left the Pico H answering
-no debug request until its power was cycled. After an interrupted run
+rests on that image rather than on a RAM application left running. A RAM
+run leaves an RP chip's other core parked under the warm contract, which
+probe-rs's whole-chip download cannot attach to, so the RP boot checks
+begin with a cold start of the board's port before they flash. After an interrupted run
 the port's board is in an unknown state, so it begins with a boot check
 as well. The Pico 2 runs four steps
 ([above](#the-pico-2-on-a-power-only-cable)). A RAM run's success never
