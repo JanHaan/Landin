@@ -203,6 +203,36 @@ static void mismatch_finish_preserves_tree(void)
 #endif
     ++passed;
 }
+static void different_output_kind_is_refused(void)
+{
+    char output[4096], sentinel[8192], stage[4096];
+    struct stat before, after;
+    path(output, sizeof output, "firmware.bin"); REQUIRE(mkdir(output, 0700) == 0);
+    REQUIRE(snprintf(sentinel, sizeof sentinel, "%s/sentinel", output) > 0);
+    put(sentinel, "unowned directory contents"); REQUIRE(stat(output, &before) == 0);
+    int token = prepare(output, 0, "", stage); staged(stage, "generated image");
+    REQUIRE(step(token, 0) != 0 && strstr(why, "directory") != NULL);
+    REQUIRE(step(token, 3) == 0 && step(token, 4) == 0);
+    REQUIRE(stat(output, &after) == 0 && before.st_dev == after.st_dev
+            && before.st_ino == after.st_ino && content(sentinel, "unowned directory contents"));
+    ++passed;
+    path(output, sizeof output, "file-before-directory"); put(output, "unowned file");
+    REQUIRE(stat(output, &before) == 0);
+    token = prepare(output, 0, "", stage); REQUIRE(mkdir(stage, 0700) == 0);
+    REQUIRE(step(token, 0) != 0 && strstr(why, "regular file") != NULL);
+    REQUIRE(step(token, 3) == 0 && step(token, 4) == 0);
+    REQUIRE(stat(output, &after) == 0 && before.st_dev == after.st_dev
+            && before.st_ino == after.st_ino && content(output, "unowned file"));
+    ++passed;
+    path(output, sizeof output, "stale-directory"); REQUIRE(mkdir(output, 0700) == 0);
+    REQUIRE(snprintf(sentinel, sizeof sentinel, "%s/sentinel", output) > 0);
+    put(sentinel, "stale path is a directory"); REQUIRE(stat(output, &before) == 0);
+    token = prepare(output, 1, "", stage);
+    REQUIRE(step(token, 0) != 0 && step(token, 3) == 0 && step(token, 4) == 0);
+    REQUIRE(stat(output, &after) == 0 && before.st_dev == after.st_dev
+            && before.st_ino == after.st_ino && content(sentinel, "stale path is a directory"));
+    ++passed;
+}
 static void staged_rewrite(void)
 {
     char output[4096], stage[4096];
@@ -438,7 +468,7 @@ int main(int argc, char **argv)
     repeated_abort_retains_recovery(); recovery_discovery();
     child_staging_directory(); mismatch_finish_preserves_tree();
     moved_anchor_recovery_diagnostic(); fmt_moved_parent_diagnostic();
-    fmt_readonly_is_write_refusal();
+    fmt_readonly_is_write_refusal(); different_output_kind_is_refused();
     printf("publication native: %u controls passed; retained scratch %s\n", passed, scratch);
     return 0;
 }

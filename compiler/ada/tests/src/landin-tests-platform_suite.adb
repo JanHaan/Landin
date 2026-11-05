@@ -1857,8 +1857,59 @@ package body Landin.Tests.Platform_Suite is
          "fake hardlink writes affect the shared inode");
    end Publication_Uses_Actual_Entries;
 
+   procedure Publication_Preserves_Output_Kinds
+     (Item : in out Landin.Testing.Context);
+   procedure Publication_Preserves_Output_Kinds
+     (Item : in out Landin.Testing.Context)
+   is
+      use Landin.Platform;
+      package Pub renames Landin.Platform.Publication;
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Group : Pub.Transaction;
+      Status : Write_Status;
+      Reason, Text : Unbounded.Unbounded_String;
+      Read : Read_Status;
+      Identity : File_Identity;
+   begin
+      Host.Add_Directory ("firmware.bin");
+      Host.Add_File ("firmware.bin/sentinel", "unowned bytes");
+      Identity := Host.Identity_Of ("firmware.bin");
+      Pub.Prepare (Group, Host, "firmware.bin", Status, Reason);
+      Host.Write_File
+        (Pub.Stage_Path (Group, "firmware.bin"), "image", Status);
+      Pub.Commit (Group, Host, Status, Reason);
+      Landin.Testing.Check
+        (Item, Status = Not_Writable
+         and then Host.Is_Directory ("firmware.bin")
+         and then Host.Identity_Of ("firmware.bin") = Identity,
+         "a file artifact never replaces an existing directory");
+      Host.Read_File ("firmware.bin/sentinel", Text, Read);
+      Landin.Testing.Check_Equal
+        (Item, Unbounded.To_String (Text), "unowned bytes",
+         "a directory's unowned contents survive the refusal");
+      Host.Add_File ("old-file", "old bytes");
+      Identity := Host.Identity_Of ("old-file");
+      Pub.Prepare (Group, Host, "old-file", Status, Reason);
+      Host.Make_Directory (Pub.Stage_Path (Group, "old-file"), Status);
+      Pub.Commit (Group, Host, Status, Reason);
+      Landin.Testing.Check
+        (Item, Status = Not_Writable
+         and then Host.Identity_Of ("old-file") = Identity,
+         "a directory artifact never replaces an existing file");
+      Pub.Prepare
+        (Group, Host, "firmware.bin", Status, Reason, Delete_Only => True);
+      Pub.Commit (Group, Host, Status, Reason);
+      Landin.Testing.Check
+        (Item, Status = Not_Writable
+         and then Host.Is_Directory ("firmware.bin"),
+         "a stale generated-file claim never authorizes deleting a directory");
+   end Publication_Preserves_Output_Kinds;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "platform", "publication preserves output kinds",
+         Publication_Preserves_Output_Kinds'Access);
       Landin.Testing.Register
         (Into, "platform", "publication protects actual direntries",
          Publication_Uses_Actual_Entries'Access);
