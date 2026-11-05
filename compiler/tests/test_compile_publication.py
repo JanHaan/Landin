@@ -16,6 +16,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--refine', type=Path, required=True)
     parser.add_argument('--output', type=Path)
+    parser.add_argument('--case', action='append', default=[],
+                        help='select an exact control; repeat for a union')
     args = parser.parse_args()
     refine = args.refine.resolve(strict=True)
     root = (args.output.absolute() if args.output else
@@ -74,22 +76,105 @@ def main():
             ('library-script-payload-as-report', [*operands, '-o', str(root / 'script-refused'),
                                                   '--build-report=' + str(archive)], archive, False),
         ])
+    malformed = root / 'malformed.ldn'
+    malformed.write_text('@\n')
+    selected_tools = root / 'selected-tools'
+    selected_tools.mkdir()
+    execution = root / 'unexpected-tool-execution'
+    early_tool = selected_tools / 'early-cc'
+    early_tool.write_text('#!/bin/sh\nprintf executed > ' +
+                          shlex.quote(str(execution)) + '\nexit 97\n')
+    early_tool.chmod(0o751)
+    hard_alias = root / 'early-hardlink'
+    symbolic_alias = root / 'early-symlink'
+    os.link(early_tool, hard_alias)
+    symbolic_alias.symlink_to(early_tool)
+    linker = selected_tools / 'ld.peer'
+    os.link(early_tool, linker)
+    default_linker = selected_tools / 'ld'
+    os.link(early_tool, default_linker)
+    early_operands = [str(malformed), '--toolchain=' + str(early_tool)]
+    for name, operands, report in [
+        ('early-tool-as-stage-report', early_operands, early_tool),
+        ('early-tool-hardlink-as-stage-report', early_operands, hard_alias),
+        ('early-tool-symlink-as-stage-report', early_operands, symbolic_alias),
+        ('early-resolved-tool-as-stage-report',
+         [str(malformed), '--toolchain=early-cc'], early_tool),
+        ('early-linker-as-stage-report',
+         [*early_operands, '--linker=' + str(linker)], linker),
+        ('early-resolved-linker-as-stage-report',
+         [*early_operands, '--linker=peer'], linker),
+        ('early-default-linker-as-stage-report', early_operands, default_linker),
+        ('early-option-failure-as-stage-report',
+         [*early_operands, '--option=invalid'], early_tool),
+        ('early-safe-stage-report', early_operands, root / 'early-stages.json'),
+    ]:
+        cases.append((name, [*operands, '--stage-report=' + str(report)],
+                      early_tool, False))
+    if sys.platform == 'linux':
+        default_driver = selected_tools / 'x86_64-pc-linux-gnu-gcc'
+        os.link(early_tool, default_driver)
+        cases.append(('early-default-driver-as-stage-report',
+                      [str(malformed), '--stage-report=' + str(default_driver)],
+                      early_tool, False))
+    dsym_parent = root / 'ordinary.dSYM'
+    dsym_parent.mkdir()
+    assembly = root / 'owned-main.s'
+    emitted = subprocess.run(
+        [str(refine), 'compile', str(source), '--emit=asm', '--debug=full',
+         '-o', str(assembly)],
+        cwd=root, env=env, capture_output=True, timeout=45)
+    if emitted.returncode:
+        raise AssertionError(emitted.stderr.decode())
+    for suffix in ('app', 'app.dSYM'):
+        for operand in ('source', 'assembly'):
+            product = dsym_parent / (suffix + '-' + operand)
+            if suffix.endswith('.dSYM'):
+                product = product.with_name(product.name + '.dSYM')
+            input_path = assembly if operand == 'assembly' else source
+            cases.append(('dsym-parent-' + operand + '-' + suffix,
+                          [str(input_path), '--link=libc', '--debug=full',
+                           '-o', str(product)], input_path, True))
+    if args.case:
+        unknown = set(args.case) - {case[0] for case in cases}
+        if unknown:
+            parser.error('unknown controls: ' + ', '.join(sorted(unknown)))
+        cases = [case for case in cases if case[0] in args.case]
     results = []
     for name, operands, protected, succeeds in cases:
         before = protected.read_bytes()
         identity = protected.stat()
+        case_env = dict(env)
+        if name.startswith('early-'):
+            case_env['PATH'] = str(selected_tools) + os.pathsep + env['PATH']
         result = subprocess.run([str(refine), 'compile', *operands], cwd=root,
-                                env=env, capture_output=True, timeout=45)
+                                env=case_env, capture_output=True, timeout=45)
         after = protected.stat()
-        passed = ((result.returncode == 0 if succeeds else
-                   result.returncode == 2 and b'L0002' in result.stderr)
+        expected_failure = (result.returncode == 2 and b'L0002' in result.stderr)
+        if name == 'early-safe-stage-report':
+            expected_failure = (result.returncode == 1 and b'L0012' in result.stderr
+                                and json.loads((root / 'early-stages.json').read_text())
+                                ['format'] == 'landin-stage-report-1')
+        product_ok = True
+        if succeeds and '-o' in operands:
+            product = Path(operands[operands.index('-o') + 1])
+            product_ok = (product.is_file() and product.stat().st_size > 0
+                          and os.access(product, os.X_OK))
+        passed = ((result.returncode == 0 if succeeds else expected_failure)
+                  and product_ok
                   and protected.read_bytes() == before
-                  and (identity.st_dev, identity.st_ino) == (after.st_dev, after.st_ino)
+                  and (identity.st_dev, identity.st_ino, identity.st_mode)
+                  == (after.st_dev, after.st_ino, after.st_mode)
+                  and not execution.exists()
                   and not list(temporary.iterdir())
                   and not list(root.glob('.refine-publication-*')))
         row = dict(case=name, command=result.args, exit_status=result.returncode,
                    passed=passed, protected=str(protected),
                    before_sha256=hashlib.sha256(before).hexdigest(),
+                   after_sha256=hashlib.sha256(protected.read_bytes()).hexdigest(),
+                   before_identity=[identity.st_dev, identity.st_ino, identity.st_mode],
+                   after_identity=[after.st_dev, after.st_ino, after.st_mode],
+                   tool_executed=execution.exists(),
                    stdout=result.stdout.decode(errors='replace'),
                    stderr=result.stderr.decode(errors='replace'))
         results.append(row)
@@ -97,7 +182,9 @@ def main():
         print(('PASS ' if passed else 'FAIL ') + name, flush=True)
         if not passed:
             raise AssertionError(row)
-    print('compile publication: %d controls passed; evidence %s' % (len(results), root))
+    scope = ' FILTERED' if args.case else ''
+    print('compile publication%s: %d controls passed; evidence %s' %
+          (scope, len(results), root))
 
 
 if __name__ == '__main__':
