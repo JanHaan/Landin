@@ -953,6 +953,9 @@ package body Landin.Testing.Fakes is
       Write_File (Host, Unbounded.To_String (Item.Path), Content, Status);
       if Status = Landin.Platform.Write_Ok then
          Reason := Unbounded.Null_Unbounded_String;
+      else
+         Reason := Unbounded.To_Unbounded_String
+           ("the fake host refuses writes");
       end if;
    end Replace_Update;
 
