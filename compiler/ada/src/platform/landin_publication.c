@@ -93,6 +93,7 @@ static struct publication *publications;
 static int next_token = 1;
 extern int landin_cancellation_requested(void);
 extern int landin_overlaps_any(const char *, const char *const *, size_t);
+extern int landin_entry_names_alias(int, const char *, const char *);
 static landin_publication_hook fault_hook;
 void landin_publication_set_hook(landin_publication_hook hook) { fault_hook = hook; }
 void landin_publication_notify(const char *event, const char *path)
@@ -622,6 +623,7 @@ static int retained_workspace(int parent, const char *parent_path,
         int root = openat(parent, item->d_name,
                            O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
         if (root < 0 && errno == ENOENT) continue;
+        if (root >= 0) barrier("discovery-opened", target);
         DIR *records = NULL;
         struct known_name *stage_names = NULL, *recovery_names = NULL;
         if (root >= 0 && flock(root, LOCK_SH) == 0) records = fdopendir(dup(root));
@@ -670,18 +672,14 @@ static int retained_workspace(int parent, const char *parent_path,
                     if (name_length == strlen(target)
                         && !memcmp(record_target, target, name_length)) refused = 1;
                     else if (!refused) {
-                        size_t n = strlen(parent_path) + name_length + 2;
-                        char *other = malloc(n);
-                        size_t wanted_size = strlen(parent_path) + strlen(target) + 2;
-                        char *wanted = malloc(wanted_size);
-                        if (!other || !wanted) refused = 1;
-                        else {
-                            snprintf(other, n, "%s/%.*s", parent_path, (int)name_length, record_target);
-                            snprintf(wanted, wanted_size, "%s/%s", parent_path, target);
-                            const char *paths[] = {other};
-                            if (landin_overlaps_any(wanted, paths, 1) != 0) refused = 1;
-                        }
-                        free(other); free(wanted);
+                        /* Both records describe entries in this pinned parent.
+                           Their public objects change during Capture/Install;
+                           that must not turn an unrelated name into an alias.
+                           General protected-input identity checks remain below. */
+                        if (landin_entry_names_alias(parent, target,
+                                                     stage_names->name) != 0)
+                            refused = 1;
+                        else barrier("discovery-distinct", stage_names->name);
                     }
                 }
             }
@@ -797,8 +795,25 @@ static int landin_publication_open_locked(const char *path, int deletion,
     p->next = publications; publications = p;
     free(parent_path); reason(why, room, ""); return 0;
 fail:
-    reason(why, room, "cannot prepare %s: %s; choose an ordinary output root",
-           path, strerror(errno));
+    {
+        int failure = errno;
+        if (p && p->arena) {
+            char known[PATH_MAX + 80], location[PATH_MAX + 256];
+            size_t length = strlen(p->arena->path);
+            /* Arena paths end in /stage; the whole root remains inspectable
+               when construction fails before returning a publication handle. */
+            snprintf(known, sizeof known, "%.*s", (int)(length - 6),
+                     p->arena->path);
+            landin_publication_describe_entry
+                (p->arena->root_fd, known, "", location, sizeof location);
+            reason(why, room, "cannot prepare %s: %s; retained publication workspace %s; inspect its stage, recovery and destination records before retrying",
+                   path, strerror(failure), location);
+        } else {
+            reason(why, room, "cannot prepare %s: %s; choose an ordinary output root",
+                   path, strerror(failure));
+        }
+        errno = failure;
+    }
     if (fd >= 0) close(fd);
     if (parent >= 0) close(parent);
     if (p) {

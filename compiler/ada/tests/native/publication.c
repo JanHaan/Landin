@@ -11,6 +11,8 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <stdint.h>
+#include <signal.h>
+#include <sys/resource.h>
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -18,6 +20,9 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+int landin_entry_names_alias(int, const char *, const char *);
+int landin_names_alias(const char *, const char *, int);
+void landin_file_identity_set_hook(void (*)(const char *, const char *));
 int landin_open_update(const char *, char **, size_t *, int *, char *, size_t);
 int landin_replace_update(int, const char *, size_t, char *, size_t);
 void landin_close_update(int);
@@ -465,6 +470,193 @@ static void journal_concurrency(void)
     REQUIRE(step(token, 0) == 0 && step(token, 1) == 0 && step(token, 2) == 0 && step(token, 4) == 0);
     REQUIRE(content(output, "generated")); ++passed;
 }
+static int retirement_ready, retirement_release;
+static unsigned retirement_barriers;
+static void retirement_hook(const char *event, const char *target)
+{
+    (void)target;
+    if (strcmp(event, "discovery-opened")) return;
+    char byte;
+    ++retirement_barriers;
+    REQUIRE(write(retirement_ready, "R", 1) == 1);
+    REQUIRE(read(retirement_release, &byte, 1) == 1 && byte == 'R');
+}
+static void discovery_during_retirement(void)
+{
+    char parent[4096], owner[8192], peer[8192], stage[4096];
+    char ready_arg[32], release_arg[32], byte;
+    int ready[2], release[2], child, status;
+    path(parent, sizeof parent, "discovery-retirement");
+    REQUIRE(mkdir(parent, 0700) == 0);
+    REQUIRE(snprintf(owner, sizeof owner, "%s/owner", parent) > 0);
+    REQUIRE(snprintf(peer, sizeof peer, "%s/peer", parent) > 0);
+    int token = prepare(owner, 0, "", stage); staged(stage, "owner-generated");
+    REQUIRE(step(token, 0) == 0 && step(token, 1) == 0 && step(token, 2) == 0);
+    REQUIRE(pipe(ready) == 0 && pipe(release) == 0);
+    REQUIRE(fcntl(ready[0], F_SETFD, FD_CLOEXEC) == 0
+            && fcntl(release[1], F_SETFD, FD_CLOEXEC) == 0);
+    REQUIRE(snprintf(ready_arg, sizeof ready_arg, "%d", ready[1]) > 0);
+    REQUIRE(snprintf(release_arg, sizeof release_arg, "%d", release[0]) > 0);
+    char *args[] = {(char *)self_program, "--retirement-peer", peer,
+                    ready_arg, release_arg, NULL};
+    int nullfd = open("/dev/null", O_RDWR); REQUIRE(nullfd >= 0);
+    REQUIRE(landin_tool_start_in_directory(args, NULL, 0, nullfd,
+                STDOUT_FILENO, STDERR_FILENO, -1, &child) == 0);
+    close(nullfd); close(ready[1]); close(release[0]);
+    REQUIRE(read(ready[0], &byte, 1) == 1 && byte == 'R'); close(ready[0]);
+    /* The scanner has opened the arena but has not locked it. Retire the
+       owner's arena completely, then let discovery use its retained fd. */
+    REQUIRE(step(token, 4) == 0);
+    REQUIRE(write(release[1], "R", 1) == 1); close(release[1]);
+    REQUIRE(landin_tool_wait(child, &status, 0) == child && status == 0);
+    REQUIRE(content(owner, "owner-generated") && content(peer, "peer-generated"));
+    ++passed;
+}
+static int changing_ready, changing_release;
+static unsigned changing_barriers;
+static const char *changing_path;
+static void changing_wait(char phase)
+{
+    char byte;
+    ++changing_barriers;
+    REQUIRE(write(changing_ready, &phase, 1) == 1);
+    REQUIRE(read(changing_release, &byte, 1) == 1 && byte == 'R');
+}
+static void changing_identity_hook(const char *event, const char *name)
+{
+    if (!strcmp(event, "destination-absent") && !strcmp(name, changing_path))
+        changing_wait('S');
+}
+static void changing_publication_hook(const char *event, const char *name)
+{
+    const char *leaf = strrchr(changing_path, '/');
+    if (!strcmp(event, "discovery-distinct")
+        && !strcmp(name, leaf ? leaf + 1 : changing_path)) changing_wait('C');
+}
+static void discovery_during_publication(void)
+{
+    for (unsigned hard_link = 0; hard_link < 2; ++hard_link) {
+        char parent[4096], canonical[4096], owner[8192], peer[8192], stage[4096];
+        char ready_arg[32], release_arg[32], phase;
+        int ready[2], release[2], child, status;
+        REQUIRE(snprintf(parent, sizeof parent, "%s/discovery-changing-%u",
+                         scratch, hard_link) > 0);
+        REQUIRE(mkdir(parent, 0700) == 0 && realpath(parent, canonical));
+        REQUIRE(snprintf(owner, sizeof owner, "%s/owner", canonical) > 0);
+        REQUIRE(snprintf(peer, sizeof peer, "%s/peer", canonical) > 0);
+        put(owner, "old-output");
+        if (hard_link) REQUIRE(link(owner, peer) == 0);
+        else put(peer, "other-old");
+        int token = prepare(owner, 0, "", stage); staged(stage, "owner-generated");
+        REQUIRE(step(token, 0) == 0 && step(token, 1) == 0);
+        REQUIRE(content(peer, hard_link ? "old-output" : "other-old"));
+        REQUIRE(pipe(ready) == 0 && pipe(release) == 0);
+        REQUIRE(fcntl(ready[0], F_SETFD, FD_CLOEXEC) == 0
+                && fcntl(release[1], F_SETFD, FD_CLOEXEC) == 0);
+        REQUIRE(snprintf(ready_arg, sizeof ready_arg, "%d", ready[1]) > 0);
+        REQUIRE(snprintf(release_arg, sizeof release_arg, "%d", release[0]) > 0);
+        char *args[] = {(char *)self_program, "--changing-peer", peer, owner,
+                        ready_arg, release_arg, NULL};
+        int nullfd = open("/dev/null", O_RDWR); REQUIRE(nullfd >= 0);
+        REQUIRE(landin_tool_start_in_directory(args, NULL, 0, nullfd,
+                    STDOUT_FILENO, STDERR_FILENO, -1, &child) == 0);
+        close(nullfd); close(ready[1]); close(release[0]);
+        REQUIRE(read(ready[0], &phase, 1) == 1 && (phase == 'S' || phase == 'C'));
+        close(ready[0]);
+        /* S is the old stat-miss window; C is classification by stable entry
+           names. Keep both barriers so restoring the old path lookup reliably
+           recreates its failure, even when the two names began as hard links. */
+        REQUIRE(step(token, 2) == 0);
+        REQUIRE(write(release[1], "R", 1) == 1); close(release[1]);
+        REQUIRE(landin_tool_wait(child, &status, 0) == child);
+        REQUIRE(step(token, 4) == 0);
+        printf("discovery changing peer: hard_link=%u barrier=%c status=%d\n",
+               hard_link, phase, status);
+        REQUIRE(status == 0 && content(owner, "owner-generated")
+                && content(peer, "peer-generated"));
+        ++passed;
+    }
+}
+static void pinned_entry_name_equivalence(void)
+{
+    char parent[4096], first[8192], folded[8192], stage[4096];
+    path(parent, sizeof parent, "entry-name-equivalence");
+    REQUIRE(mkdir(parent, 0700) == 0);
+    int fd = open(parent, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
+    REQUIRE(fd >= 0);
+    REQUIRE(landin_entry_names_alias(fd, "same", "same") == 1);
+    REQUIRE(landin_entry_names_alias(fd, "first", "other") == 0);
+    REQUIRE(landin_entry_names_alias(-1, "first", "other") < 0);
+    REQUIRE(landin_entry_names_alias(fd, "../first", "other") < 0);
+    REQUIRE(landin_names_alias("\xC3\xA9", "e\xCC\x81", -1) < 0);
+    REQUIRE(landin_names_alias("Case", "case", -1) < 0);
+    REQUIRE(landin_names_alias("Case", "case", 0) == 1);
+    REQUIRE(snprintf(first, sizeof first, "%s/Case", parent) > 0);
+    REQUIRE(snprintf(folded, sizeof folded, "%s/case", parent) > 0);
+    put(first, "existing-owner");
+    int token = prepare(first, 0, "", stage);
+    int aliases = landin_entry_names_alias(fd, "Case", "case");
+    /* A case alias on this volume must refuse. An unknown volume's folded
+       name remains uncertain; a proven byte-sensitive directory can publish. */
+    run_peer(aliases == 0 ? "--publish-peer" : "--discover", folded);
+    REQUIRE(content(first, "existing-owner"));
+    REQUIRE(step(token, 4) == 0); close(fd);
+    ++passed;
+}
+static int constructor_failure_child(const char *output)
+{
+    struct stat before, after;
+    struct rlimit original, limited;
+    struct sigaction ignore, previous;
+    char stage[4096], parent[4096], canonical[4096], retained[8192] = "";
+    int token, status;
+    REQUIRE(stat(output, &before) == 0);
+    const char *slash = strrchr(output, '/'); REQUIRE(slash != NULL);
+    REQUIRE(snprintf(parent, sizeof parent, "%.*s", (int)(slash - output), output) > 0
+            && realpath(parent, canonical));
+    REQUIRE(getrlimit(RLIMIT_FSIZE, &original) == 0);
+    memset(&ignore, 0, sizeof ignore); ignore.sa_handler = SIG_IGN;
+    sigemptyset(&ignore.sa_mask);
+    REQUIRE(sigaction(SIGXFSZ, &ignore, &previous) == 0);
+    limited = original; limited.rlim_cur = 0;
+    REQUIRE(setrlimit(RLIMIT_FSIZE, &limited) == 0);
+    status = landin_publication_open(output, 0, "", &token, stage,
+                                     sizeof stage, why, sizeof why);
+    REQUIRE(setrlimit(RLIMIT_FSIZE, &original) == 0
+            && sigaction(SIGXFSZ, &previous, NULL) == 0);
+    REQUIRE(status != 0 && token == 0 && stat(output, &after) == 0);
+    REQUIRE(before.st_dev == after.st_dev && before.st_ino == after.st_ino
+            && before.st_mode == after.st_mode && content(output, "original-output"));
+    DIR *directory = opendir(canonical); REQUIRE(directory != NULL);
+    struct dirent *entry; unsigned count = 0;
+    while ((entry = readdir(directory)) != NULL) {
+        if (strncmp(entry->d_name, ".refine-publication-", 20)) continue;
+        ++count;
+        REQUIRE(snprintf(retained, sizeof retained, "%s/%s", canonical, entry->d_name) > 0);
+    }
+    closedir(directory);
+    REQUIRE(count == 1 && stat(retained, &after) == 0 && S_ISDIR(after.st_mode));
+    printf("constructor failure retained: %s; diagnostic: %s\n", retained, why);
+    REQUIRE(strstr(why, retained) != NULL && strstr(why, "inspect") != NULL);
+    return 0;
+}
+static void constructor_failure_is_discoverable(void)
+{
+    char parent[4096], output[8192]; struct stat before, after;
+    path(parent, sizeof parent, "constructor-failure"); REQUIRE(mkdir(parent, 0700) == 0);
+    REQUIRE(snprintf(output, sizeof output, "%s/output", parent) > 0);
+    put(output, "original-output"); REQUIRE(stat(output, &before) == 0);
+    char *args[] = {(char *)self_program, "--constructor-failure", output, NULL};
+    int nullfd = open("/dev/null", O_RDWR), child, status; REQUIRE(nullfd >= 0);
+    REQUIRE(landin_tool_start_in_directory(args, NULL, 0, nullfd,
+                STDOUT_FILENO, STDERR_FILENO, -1, &child) == 0);
+    close(nullfd);
+    REQUIRE(landin_tool_wait(child, &status, 0) == child);
+    REQUIRE(stat(output, &after) == 0 && before.st_dev == after.st_dev
+            && before.st_ino == after.st_ino && before.st_mode == after.st_mode
+            && content(output, "original-output"));
+    REQUIRE(status == 0); ++passed;
+}
 static void unknown_unready_recovery_refuses(void)
 {
     for (unsigned kind = 0; kind < 3; ++kind) {
@@ -510,6 +702,33 @@ static void fmt_original_descriptor(void)
 int main(int argc, char **argv)
 {
     self_program = argv[0];
+    if (argc == 3 && !strcmp(argv[1], "--constructor-failure"))
+        return constructor_failure_child(argv[2]);
+    if (argc == 6 && !strcmp(argv[1], "--changing-peer")) {
+        changing_path = argv[3];
+        changing_ready = atoi(argv[4]); changing_release = atoi(argv[5]);
+        landin_file_identity_set_hook(changing_identity_hook);
+        landin_publication_set_hook(changing_publication_hook);
+        char stage[4096]; int token = prepare(argv[2], 0, "", stage);
+        clear_hook(); landin_file_identity_set_hook(NULL);
+        REQUIRE(changing_barriers == 1);
+        close(changing_ready); close(changing_release);
+        staged(stage, "peer-generated");
+        REQUIRE(step(token, 0) == 0 && step(token, 1) == 0
+                && step(token, 2) == 0 && step(token, 4) == 0);
+        return 0;
+    }
+    if (argc == 5 && !strcmp(argv[1], "--retirement-peer")) {
+        retirement_ready = atoi(argv[3]); retirement_release = atoi(argv[4]);
+        landin_publication_set_hook(retirement_hook);
+        char stage[4096]; int token = prepare(argv[2], 0, "", stage);
+        clear_hook(); REQUIRE(retirement_barriers == 1);
+        close(retirement_ready); close(retirement_release);
+        staged(stage, "peer-generated");
+        REQUIRE(step(token, 0) == 0 && step(token, 1) == 0
+                && step(token, 2) == 0 && step(token, 4) == 0);
+        return 0;
+    }
     if (argc == 3 && !strcmp(argv[1], "--publish-peer")) {
         char stage[4096]; int token = prepare(argv[2], 0, "", stage);
         staged(stage, "peer-generated");
@@ -534,7 +753,9 @@ int main(int argc, char **argv)
     child_staging_directory(); mismatch_finish_preserves_tree();
     moved_anchor_recovery_diagnostic(); fmt_moved_parent_diagnostic();
     fmt_readonly_is_write_refusal(); different_output_kind_is_refused();
-    journal_concurrency(); unknown_unready_recovery_refuses();
+    journal_concurrency(); discovery_during_retirement();
+    discovery_during_publication(); pinned_entry_name_equivalence();
+    unknown_unready_recovery_refuses(); constructor_failure_is_discoverable();
     printf("publication native: %u controls passed; retained scratch %s\n", passed, scratch);
     return 0;
 }

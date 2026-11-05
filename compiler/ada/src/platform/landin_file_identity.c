@@ -398,6 +398,12 @@ struct destination {
     char name[PATH_MAX];
 };
 
+/* Test-only observer: configure while quiescent; it does not reenter path
+   identity checks. Production leaves it NULL. */
+static void (*landin_identity_hook)(const char *, const char *);
+void landin_file_identity_set_hook(void (*hook)(const char *, const char *))
+{ landin_identity_hook = hook; }
+
 /* Resolve the actual parent, not a lexical collapse of the entire path.
    A dangling final symlink still denotes its target when opened for writing.
    Missing intermediate directories and loops are indeterminate, not distinct.
@@ -422,6 +428,11 @@ static int destination(const char *path, struct destination *out, int links)
     if (errno != ENOENT)
         return -1;
     out->exists = 0;
+    if (landin_identity_hook) {
+        int error = errno;
+        landin_identity_hook("destination-absent", path);
+        errno = error;
+    }
     strcpy(copy, path);
     slash = strrchr(copy, '/');
     if (slash) {
@@ -459,27 +470,23 @@ static int destination(const char *path, struct destination *out, int links)
    0: case-insensitive, Unicode equivalence unknown; -1: unknown filesystem.
    Never infer volume behaviour from the host OS or lowercase a whole path.
    Linux casefold is a directory property, not just a filesystem property. */
-static int name_rules(const char *directory)
+#ifdef __APPLE__
+static int apple_name_rules(const struct statfs *fs, long sensitive)
+{
+    if (strcmp(fs->f_fstypename, "apfs") != 0
+        && strcmp(fs->f_fstypename, "hfs") != 0) return -1;
+    return sensitive < 0 ? -1 : sensitive ? 2 : 0;
+}
+#endif
+static int name_rules_fd(int fd)
 {
 #ifdef __APPLE__
     struct statfs fs;
-    long sensitive;
-
-    if (statfs(directory, &fs) != 0
-        || (strcmp(fs.f_fstypename, "apfs") != 0
-            && strcmp(fs.f_fstypename, "hfs") != 0))
-        return -1;
-    sensitive = pathconf(directory, _PC_CASE_SENSITIVE);
-    return sensitive < 0 ? -1 : sensitive ? 2 : 0;
+    if (fstatfs(fd, &fs) != 0) return -1;
+    return apple_name_rules(&fs, fpathconf(fd, _PC_CASE_SENSITIVE));
 #elif defined(__linux__)
     struct statfs fs;
-    int fd;
-    int result = -1;
-    int flags;
-
-    fd = open(directory, O_RDONLY | O_DIRECTORY | O_CLOEXEC);
-    if (fd < 0)
-        return -1;
+    int result = -1, flags;
     if (fstatfs(fd, &fs) == 0) {
         switch ((unsigned long)fs.f_type) {
         case EXT4_SUPER_MAGIC:
@@ -500,6 +507,24 @@ static int name_rules(const char *directory)
             break;
         }
     }
+    return result;
+#else
+    (void)fd;
+    return -1;
+#endif
+}
+static int name_rules(const char *directory)
+{
+#ifdef __APPLE__
+    /* Retain the existing pathname preflight semantics. Peer discovery uses
+       the fd variant and never reopens its already-pinned parent path. */
+    struct statfs fs;
+    if (statfs(directory, &fs) != 0) return -1;
+    return apple_name_rules(&fs, pathconf(directory, _PC_CASE_SENSITIVE));
+#elif defined(__linux__)
+    int fd = open(directory, O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+    if (fd < 0) return -1;
+    int result = name_rules_fd(fd);
     close(fd);
     return result;
 #else
@@ -562,6 +587,22 @@ int landin_names_alias(const char *left_name, const char *right_name,
     if (left[i] != right[i])
         return 0;
     return rules < 0 ? -1 : 1;
+}
+
+/* Compare namespace entries under an already-pinned directory, without
+   inspecting their temporarily absent/replaced public objects. Unknown name
+   equivalence stays indeterminate. Distinct hard-link names are independent
+   publication slots: capture/restore operates on names and retains old versions;
+   protected input object identities are checked separately at publication. */
+int landin_entry_names_alias(int directory, const char *left, const char *right)
+{
+    struct stat parent;
+    if (!left || !right || !*left || !*right
+        || strchr(left, '/') || strchr(right, '/')
+        || !strcmp(left, ".") || !strcmp(left, "..")
+        || !strcmp(right, ".") || !strcmp(right, "..")
+        || fstat(directory, &parent) != 0 || !S_ISDIR(parent.st_mode)) return -1;
+    return landin_names_alias(left, right, name_rules_fd(directory));
 }
 
 static int same_name(const struct destination *a, const struct destination *b)
