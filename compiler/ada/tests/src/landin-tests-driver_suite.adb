@@ -2727,7 +2727,7 @@ package body Landin.Tests.Driver_Suite is
      (Item : in out Landin.Testing.Context)
    is
    begin
-      for Attempt in 1 .. 6 loop
+      for Attempt in 1 .. 8 loop
          declare
             Host : Landin.Testing.Fakes.Fake_Filesystem;
             Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
@@ -2763,9 +2763,15 @@ package body Landin.Tests.Driver_Suite is
                Host.Add_Directory ("/usr/bin");
                Host.Add_File ("/usr/bin/dsymutil", "selected debug tool");
                Args.Append ("--stage-report=/usr/bin/dsymutil");
+            elsif Attempt in 7 | 8 then
+               Args.Append ("--toolchain=chosen-cc");
+               Tools.Set_Absent ("/usr/bin/dsymutil");
             end if;
             Result := Landin.Driver.Execute
-              (Args, Host, Tools, Meter, Dry_Run => Attempt = 5);
+              (Args, Host, Tools, Meter, Dry_Run => Attempt = 5,
+               Built_For => (if Attempt = 8
+                 then "aarch64-apple-darwin24.6.0"
+                 else "x86_64-pc-linux-gnu"));
             Landin.Testing.Check_Equal
               (Item, Result.Status,
                (if Attempt in 1 | 5 then Landin.Driver.Status_Success
@@ -2773,6 +2779,23 @@ package body Landin.Tests.Driver_Suite is
                 else Landin.Driver.Status_Reported),
                "Darwin assembly publication: "
                & Unbounded.To_String (Result.Report));
+            if Attempt in 7 | 8 then
+               Landin.Testing.Check
+                 (Item, Contains (Unbounded.To_String (Result.Report),
+                    "/usr/bin/dsymutil")
+                  and then Contains (Unbounded.To_String (Result.Report),
+                    "xcode-select --install")
+                  and then Contains (Unbounded.To_String (Result.Report),
+                    "--debug=none")
+                  and then not Contains
+                    (Unbounded.To_String (Result.Report),
+                     "install chosen-cc"),
+                  "missing packaging advice names the actual missing tool");
+               Landin.Testing.Check
+                 (Item, Contains (Unbounded.To_String (Result.Report),
+                    "run this debug build on macOS") = (Attempt = 7),
+                  "a cross host gets the native Mac route");
+            end if;
             if Attempt = 6 then
                Host.Read_File ("/usr/bin/dsymutil", Content, Read);
                Landin.Testing.Check_Equal

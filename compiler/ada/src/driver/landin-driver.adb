@@ -2339,6 +2339,20 @@ package body Landin.Driver is
                  (Facts, Unbounded.To_String (Toolchain), Native_Target));
          end Note_Unavailable_Toolchain;
 
+         procedure Note_Unavailable_Debug_Bundle;
+         procedure Note_Unavailable_Debug_Bundle is
+         begin
+            Note_No_Toolchain
+              ("cannot run "
+               & Landin.Backend.Toolchain.Darwin_Debug_Bundle_Tool
+               & " to package Darwin debug information",
+               (if Native_Target
+                then "install Apple's command line tools with"
+                else "run this debug build on macOS and install Apple's"
+                  & " command line tools with")
+               & " `xcode-select --install`, or use --debug=none");
+         end Note_Unavailable_Debug_Bundle;
+
          --  D525's report: the library at its directive, the files looked
          --  for, every named directory with where it was named, and that
          --  the driver's own directories were searched as well.
@@ -3304,7 +3318,7 @@ package body Landin.Driver is
                              Ada.Exceptions.Exception_Message (Failure);
                         begin
                            if Starts_With (Why, "tool not found") then
-                              Note_Unavailable_Toolchain (Program);
+                              Note_Unavailable_Debug_Bundle;
                            else
                               Note_Failure
                                 (Code_Toolchain_Failed,
@@ -4464,8 +4478,7 @@ package body Landin.Driver is
             if Separate_Debug_Object and then not Tools.Available
               (Landin.Backend.Toolchain.Darwin_Debug_Bundle_Tool)
             then
-               Note_Unavailable_Toolchain
-                 (Landin.Backend.Toolchain.Darwin_Debug_Bundle_Tool);
+               Note_Unavailable_Debug_Bundle;
                return;
             end if;
             Read_External_Input (Operand, True, 0);
