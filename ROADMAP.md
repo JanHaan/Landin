@@ -1624,7 +1624,7 @@ lanes does not change Mach-O/FreeBSD spelling or introduce that command.
 
 ### R12.60 — Boards in the gate
 
-Status: active
+Status: complete
 Depends on: R12.20, R12.30, R12.40, R12.45, R12.50
 
 A self-hosted runner with the boards attached, run for `main` and by hand and
@@ -1634,6 +1634,53 @@ readiness evidence to recurring smoke runs on every supported board.
 Exit evidence: every board this phase supports runs its smoke procedure
 against a device-specific physical oracle in the gate, beside the emulator
 lanes it does not replace.
+
+Done: `gate.yml` runs every port on the rig for a push to `main`, a weekly
+schedule and a manual dispatch, whose `boards` scope runs the boards with
+the document and script jobs alone; branch pushes and pull requests skip
+them and say so (D904). A hosted `board-bundles` job builds the release
+compiler and every bundle strictly against the hardware records; seven
+legs on rigpi's runner, labelled `landin-rig` alone and run as an
+unprivileged system user, check out exactly that commit, take the artifact
+by id and digest, check its file list and provenance and run
+`environments/boards/gate.py`. The runner's job-started hook,
+`environments/rig-runner/hook.py`, refuses before any step every job but
+a push or schedule on `main` and a dispatch by the maintainer, of
+`gate.yml`, since a fork's pull request runs workflow files of its own. Physical evidence is never reused; the
+aggregate fails on any leg whose latest attempt is not `passed`.
+
+`gate.py` checks bundles, helper, probe-rs, host tools, the probehive
+runtime's pins, the cascade and a bitstream load record before it takes
+the shared rig lock in `/var/lib/landin-rig`, then runs each port's RAM run
+and ends on its boot check, so every board rests on its verified fixed
+image; a board left elsewhere is restored by a boot check first. Every run
+reports one outcome and stops cleanly when cancelled (D905). The Pico 2
+hangs from the cascade on a power-only cable, so its boot checks and
+Arm/Hazard3 changes run unattended there (D906). RP boot checks cold-start
+the board first, since a RAM run leaves its other core parked.
+
+Boards dispatch [run 42036978603](https://github.com/JanHaan/Landin/actions/runs/42036978603)
+on `d1a3fc1dc` passed all seven legs on its first attempt in six minutes of
+rig time: each RAM run and boot check passed its physical oracle and every
+fixed image was restored and verified, the Pico 2's four steps through both
+architectures in 109 seconds, with 58 retained kernel USB lines and no USB
+error. The same tree's complete software gate,
+[run 42035466905](https://github.com/JanHaan/Landin/actions/runs/42035466905),
+passed 49 jobs with only the board and suspended RV64 jobs skipped. Each
+leg retains commit, tree, run attempt, artifact digest, compiler, source,
+helper and probe-rs identities, board steps, timings, oracle results,
+restoration and kernel USB lines for 90 days.
+
+Settled SR-777, SR-778, SR-780, SR-781, SR-786, SR-789, SR-791, SR-794,
+SR-795, SR-796 and SR-800. New SR-779, SR-782 to SR-785, SR-787, SR-788,
+SR-790, SR-792, SR-793 and SR-797 to SR-799 remain open with their
+activations, among them the STM32H753 console's missing first echo and an
+ESP32-C3 trap read inconsistently, each passing on its rerun. The
+activation sweep against `72547271d` matched no row by path; of the rows
+read by hand SR-736 is restated for the Arty and cascade still sharing the
+VL805, and SR-685, SR-605, SR-768, SR-773 and SR-776 keep their
+activations, none of their behaviour having changed. A second Pico 2 will
+remove the architecture change from every gate run.
 
 ### R12 gate
 
