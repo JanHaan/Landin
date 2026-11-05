@@ -261,4 +261,4 @@ def chip_enable_reset(fd, seconds):
 
 
 if __name__ == '__main__':
-    sys.exit(main())
+    sys.exit(common.tool_main(main))

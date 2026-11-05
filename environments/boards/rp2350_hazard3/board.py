@@ -518,7 +518,7 @@ def main():
         args.pace.before('board scenario completion')
         result['status'] = 'passed'
     except (Failed, subprocess.TimeoutExpired, OSError) as error:
-        result['failure'] = str(error)
+        common.fail(result, error)
     except KeyboardInterrupt:
         if not manual_boot:
             raise
@@ -547,7 +547,7 @@ def main():
             lock.release()
         result['seconds'] = round(time.monotonic() - began, 3)
         result['commands'] = run.commands
-        common.write_json(args.output / 'result.json', result)
+        common.write_result(args.output / 'result.json', result, run)
     if args.record and result['status'] == 'passed':
         kept = ('status', 'image_sha256', 'image_name', 'image_block', 'amoadd', 'flashed_as', 'flash_readback',
                 'verdicts', 'swd', 'uart_sha256') + (('block_control',) if args.block_control else ())
@@ -559,4 +559,4 @@ def main():
 
 
 if __name__ == '__main__':
-    sys.exit(main())
+    sys.exit(common.tool_main(main))

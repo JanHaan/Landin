@@ -33,12 +33,16 @@ does not depend on the chip:
     its modem lines drive a board's reset, with DTR and RTS inactive;
   * the ESP application image both ESP32 ROMs load, read on its own from
     its bytes, and the log those ROMs write while they load it;
-  * the record a passed run writes;
-  * the rig's one lock, held by every run's hardware phase, and the pace
-    of the actions that disconnect a device on its hub cascade, which stops
-    a run at any USB trouble the kernel logged since the last one and which
-    `python3 common.py acknowledge REASON` tells that the USB trouble the
-    kernel logged so far is understood.
+  * the record a passed run writes, and the result every run writes with
+    its machine-readable `outcome`, one of OUTCOMES;
+  * the rig's shared state directory, RIG_STATE, and its one lock, held by
+    every run's hardware phase, waited for without end or for a bounded
+    time, and the pace of the actions that disconnect a device on its hub
+    cascade, which stops a run at any USB trouble the kernel logged since
+    the last one and which `python3 common.py acknowledge REASON` tells
+    that the USB trouble the kernel logged so far is understood;
+  * a tool's cancellation by SIGINT or SIGTERM, which stops it at the next
+    point outside an action that disconnects a device, and is recorded.
 
 Nothing here touches a board unless a tool calls it, and nothing needs more
 than the standard library, so scripts/tests/test_board_common.py runs it on
@@ -55,10 +59,12 @@ import re
 import select
 import shlex
 import shutil
+import signal
 import socket
 import struct
 import subprocess
 import sys
+import tempfile
 import termios
 import threading
 import time
@@ -69,17 +75,66 @@ STX, ETX, LF = 0x02, 0x03, 0x0A
 FIELD = re.compile(r' ([a-z])=([0-9a-f]{8})')
 
 
+# What a run's result.json says in `outcome`, beside its `status`, which
+# stays `passed` or `failed` for records and older readers: each refusal
+# below names its own, and the gate reports the first step's that did not
+# pass.  `incomplete` is the gate's, for a step that left no result.
+OUTCOMES = ('passed', 'failed', 'usb-stopped', 'unavailable', 'rig-busy', 'rig-tool-mismatch',
+            'needs-setup', 'needs-operator', 'cancelled', 'incomplete')
+
+
 class Failed(Exception):
-    pass
+    outcome = 'failed'
 
 
 class USBGuardError(Failed):
     """A USB stop that must never be treated as a retryable probe failure."""
+    outcome = 'usb-stopped'
 
 
-def require(condition, message):
+class Unavailable(Failed):
+    """A board, debugger, console, hub or the cascade is absent, or another
+    identity holds its place: the rig is not as the run expects."""
+    outcome = 'unavailable'
+
+
+class ToolMismatch(Failed):
+    """A rig tool is not the one this source pins: a stale SRAM helper, a
+    probe-rs of another revision, a probehive runtime or bitstream that is
+    not the pinned one."""
+    outcome = 'rig-tool-mismatch'
+
+
+class NeedsSetup(Failed):
+    """The rig lacks a setup this run requires; nothing was attempted."""
+    outcome = 'needs-setup'
+
+
+class NeedsOperator(Failed):
+    """The rig's state needs a person's look before any run continues."""
+    outcome = 'needs-operator'
+
+
+class RigBusy(Failed):
+    """The rig lock stayed held by another run for the whole bounded wait."""
+    outcome = 'rig-busy'
+
+
+class Cancelled(KeyboardInterrupt):
+    """SIGINT or SIGTERM, raised once by `handle_cancellation`'s handler."""
+    outcome = 'cancelled'
+
+
+def outcome_of(error):
+    """The OUTCOMES entry for ERROR, an exception a run stopped on."""
+    if isinstance(error, KeyboardInterrupt):
+        return 'cancelled'
+    return getattr(error, 'outcome', 'failed') if isinstance(error, Failed) else 'failed'
+
+
+def require(condition, message, kind=Failed):
     if not condition:
-        raise Failed(message)
+        raise kind(message)
 
 
 def frames(stream):
@@ -133,7 +188,98 @@ def ask(console, byte, tag, count, seconds=5):
     return tagged(stream, tag)[count]
 
 
-RIG_LOCK = Path.home() / '.cache/landin/rig.lock'
+# The rig's shared state: its lock, its pace, the gate's interrupted-run
+# journal and the record of the loaded probehive bitstream.  A system
+# directory, when the rig has one, is shared by the maintainer's manual
+# runs and the gate's runner user, so that both serialize on one lock and
+# see one USB stop; a home's cache serves a host without one.
+LEGACY_STATE = Path.home() / '.cache/landin'
+SYSTEM_STATE = Path('/var/lib/landin-rig')
+STATE_FILE_MODE, STATE_DIRECTORY_MODE = 0o660, 0o2770
+
+
+def rig_state(environ=None, system=SYSTEM_STATE, legacy=None):
+    """The rig's state directory as (path, source, problem): LANDIN_RIG_STATE
+    when it is set, which must name an absolute existing directory, else
+    SYSTEM when it is a directory, else LEGACY, the home's cache.  PROBLEM is
+    None or why the named directory cannot be used; a lock refuses then."""
+    environ = os.environ if environ is None else environ
+    legacy = LEGACY_STATE if legacy is None else Path(legacy)
+    if 'LANDIN_RIG_STATE' in environ:
+        named = environ['LANDIN_RIG_STATE']
+        path = Path(named)
+        if not named or not path.is_absolute() or not path.is_dir():
+            return path, 'environment', ('LANDIN_RIG_STATE=%r does not name an absolute existing'
+                                         ' directory; create it or unset LANDIN_RIG_STATE' % named)
+        return path, 'environment', None
+    if Path(system).is_dir():
+        return Path(system), 'system', None
+    return legacy, 'legacy', None
+
+
+RIG_STATE, RIG_STATE_SOURCE, RIG_STATE_PROBLEM = rig_state()
+RIG_LOCK = RIG_STATE / 'rig.lock'
+
+
+def group_shared(fd):
+    """Give the file at FD, when this user owns it, group read and write
+    and never write for others: the state is shared through its directory's
+    group by users whose umask would drop it."""
+    status = os.fstat(fd)
+    mode = status.st_mode & 0o7777
+    wanted = (mode | 0o060) & ~0o002
+    if status.st_uid == os.geteuid() and wanted != mode:
+        os.fchmod(fd, wanted)
+
+
+def state_directory(path, base=None):
+    """PATH made with its missing parents; each made inside BASE, by default
+    RIG_STATE, is group-shared and setgid, as the state directory is."""
+    path, base = Path(path), Path(RIG_STATE if base is None else base)
+    missing, at = [], path
+    while not at.exists() and at != at.parent:
+        missing.append(at)
+        at = at.parent
+    path.mkdir(parents=True, exist_ok=True)
+    for made in reversed(missing):
+        if made != base and made.is_relative_to(base):
+            os.chmod(made, STATE_DIRECTORY_MODE)
+    return path
+
+
+def open_state_file(path):
+    """PATH opened for reading and writing, made group-shared when this
+    creates it or owns it; another user's file that this one may not write
+    is opened for reading, as a lock needs no more."""
+    try:
+        fd = os.open(path, os.O_RDWR | os.O_CREAT, STATE_FILE_MODE)
+    except PermissionError:
+        return open(path, 'r')
+    group_shared(fd)
+    return os.fdopen(fd, 'r+')
+
+
+def write_state(path, text, base=None):
+    """TEXT as PATH's whole content, written to a group-shared file beside
+    it that replaces it: a reader never sees half of it, and the directory's
+    group may replace a file another user wrote.  Directories made for it
+    inside BASE, by default RIG_STATE, are group-shared."""
+    path = Path(path)
+    state_directory(path.parent, base)
+    fd, temporary = tempfile.mkstemp(dir=path.parent, prefix='.' + path.name + '.')
+    try:
+        os.fchmod(fd, STATE_FILE_MODE)
+        with os.fdopen(fd, 'w') as stream:
+            stream.write(text)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+    except BaseException:
+        try:
+            os.unlink(temporary)
+        except OSError:
+            pass
+        raise
 
 
 def lock_holders(path, locks='/proc/locks'):
@@ -165,16 +311,48 @@ class RigLock:
     run makes takes away a device another may be reading, so two runs at
     once disturb each other.  While another holds it, WHO waits and
     says whom for; the holder's name and process are kept in the file.  A
-    run started under `flock PATH` by hand already holds it through its
-    parent, and goes on.  `acquire` and `release`, or a `with` block."""
-    def __init__(self, who, path=RIG_LOCK, report=None, locks='/proc/locks'):
-        self.who, self.path, self.locks = who, Path(path), locks
+    run started under `flock PATH` by hand, or by the gate's entry, already
+    holds it through its parent, and goes on.  `acquire` and `release`, or
+    a `with` block.
+
+    PATH is RIG_LOCK by default, in RIG_STATE.  With TIMEOUT, seconds, the
+    wait polls about once a second and ends in RigBusy, naming the holder;
+    without it the wait has no end.  When RIG_STATE is not the home's
+    cache, a LEGACY lock there that another process holds is refused: two
+    lock files would let a run of an older tool and one of these overlap."""
+    def __init__(self, who, path=None, report=None, locks='/proc/locks', timeout=None,
+                 legacy=None, clock=time.monotonic, sleep=time.sleep, poll=1.0):
+        self.who, self.locks, self.timeout = who, locks, timeout
+        self.path = Path(RIG_LOCK if path is None else path)
+        self.problem = RIG_STATE_PROBLEM if path is None else None
+        if legacy is None and path is None:
+            old = LEGACY_STATE / 'rig.lock'
+            legacy = None if old.parent.resolve() == RIG_STATE.resolve() else old
+        self.legacy = Path(legacy) if legacy is not None else None
+        self.clock, self.sleep, self.poll = clock, sleep, poll
         self.report = report or (lambda text: print(text, file=sys.stderr, flush=True))
         self.file = None
 
+    def refuse_legacy(self):
+        if self.legacy is None or not self.legacy.exists():
+            return
+        others = lock_holders(self.legacy, self.locks) - set(ancestors())
+        require(not others,
+                'two rig lock files exist: %s, which processes %s hold, and %s, which this run'
+                ' uses; a tool reading the old one would not serialize against this one.  Let'
+                ' that run finish, update it to a source that uses %s, then retire %s'
+                % (self.legacy, ', '.join(str(pid) for pid in sorted(others)), self.path,
+                   self.path.parent, self.legacy), NeedsOperator)
+
+    def holder(self):
+        self.file.seek(0)
+        return self.file.read().strip() or 'a process that names none'
+
     def acquire(self):
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.file = open(self.path, 'a+')
+        require(not self.problem, self.problem or '', NeedsSetup)
+        self.refuse_legacy()
+        state_directory(self.path.parent, self.path.parent)
+        self.file = open_state_file(self.path)
         try:
             fcntl.flock(self.file, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
@@ -182,22 +360,46 @@ class RigLock:
                 self.file.close()
                 self.file = None
                 return self
+            self.report('%s waits for the rig lock %s, held by %s' % (self.who, self.path, self.holder()))
+            try:
+                self.wait()
+            except BaseException:
+                self.file.close()
+                self.file = None
+                raise
+        if self.file.writable():
             self.file.seek(0)
-            holder = self.file.read().strip() or 'a process that names none'
-            self.report('%s waits for the rig lock %s, held by %s' % (self.who, self.path, holder))
-            fcntl.flock(self.file, fcntl.LOCK_EX)
-        self.file.seek(0)
-        self.file.truncate()
-        self.file.write('%s, process %d, since %s\n'
-                        % (self.who, os.getpid(), time.strftime('%Y-%m-%d %H:%M:%S')))
-        self.file.flush()
+            self.file.truncate()
+            self.file.write('%s, process %d, since %s\n'
+                            % (self.who, os.getpid(), time.strftime('%Y-%m-%d %H:%M:%S')))
+            self.file.flush()
+        else:
+            self.report('%s holds the rig lock %s but may not write its holder there; give the'
+                        ' file group write' % (self.who, self.path))
         return self
+
+    def wait(self):
+        if self.timeout is None:
+            fcntl.flock(self.file, fcntl.LOCK_EX)
+            return
+        deadline = self.clock() + self.timeout
+        while True:
+            try:
+                fcntl.flock(self.file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                return
+            except BlockingIOError:
+                left = deadline - self.clock()
+                if left <= 0:
+                    raise RigBusy('%s waited %g s for the rig lock %s, still held by %s'
+                                  % (self.who, self.timeout, self.path, self.holder()))
+                self.sleep(min(self.poll, left))
 
     def release(self):
         if self.file:
-            self.file.seek(0)
-            self.file.truncate()
-            self.file.flush()
+            if self.file.writable():
+                self.file.seek(0)
+                self.file.truncate()
+                self.file.flush()
             fcntl.flock(self.file, fcntl.LOCK_UN)
             self.file.close()
             self.file = None
@@ -209,9 +411,9 @@ class RigLock:
         self.release()
 
 
-def rig_lock(who, path=RIG_LOCK, report=None):
+def rig_lock(who, path=None, report=None, timeout=None):
     """The rig lock for WHO, a board tool's name."""
-    return RigLock(who, path, report)
+    return RigLock(who, path, report, timeout=timeout)
 
 
 USB_TROUBLE = re.compile(r'error -\d+|not accepting address|unable to enumerate|attempt power cycle'
@@ -244,6 +446,7 @@ class Pace:
         self.started = self.until = self.clock()
         self.usb_lines = set()
         self.blocked = None
+        self.last_action = None
 
     def last(self):
         try:
@@ -275,6 +478,7 @@ class Pace:
         return lines
 
     def before(self, what):
+        self.last_action = what
         self.check(what)
         last = self.last()
         if self.spacing <= 0 and self.quiet <= 0:
@@ -304,8 +508,7 @@ class Pace:
         self._save(what, completed)
 
     def _save(self, what, when):
-        self.state.parent.mkdir(parents=True, exist_ok=True)
-        self.state.write_text('%f %s\n' % (when, what))
+        write_state(self.state, '%f %s\n' % (when, what))
 
     def evidence(self):
         out = dict(since=self.started, until=self.until,
@@ -335,14 +538,18 @@ def paced(pace, what, action, guard=None, cascade=None):
         off_cascade(guard, cascade)
     pace.before(what)
     try:
-        result = action()
+        # A cancellation waits for the action: a power cycle or a download
+        # cut short leaves a port off or a chip halted in its boot ROM.
+        with uninterrupted():
+            result = action()
     except BaseException as original:
         try:
             pace.after(what)
         except (Failed, OSError, subprocess.TimeoutExpired) as completion:
             if not isinstance(original, Exception):
                 raise original from completion
-            failure = USBGuardError if isinstance(completion, USBGuardError) else Failed
+            failure = (USBGuardError if isinstance(completion, USBGuardError)
+                       else type(original) if isinstance(original, Failed) else Failed)
             raise failure('%s; action completion: %s' % (original, completion)) from original
         raise
     else:
@@ -358,6 +565,7 @@ def retain_kernel_usb(pace, result):
         result['status'] = 'failed'
         previous = result.get('failure', '')
         result['failure'] = previous if str(error) in previous else (previous + '; ' if previous else '') + str(error)
+        note_outcome(result, outcome_of(error))
     result['kernel_usb'] = pace.evidence()
 
 
@@ -393,6 +601,7 @@ class Run:
     def __init__(self, out):
         self.out = out
         self.commands = []
+        self.current = None
 
     def command(self, name, argv, timeout=120, check=True, **kw):
         # Keep the first familiar name, then reserve a fresh file. Exclusive
@@ -412,6 +621,7 @@ class Run:
         with log:
             log.write('$ ' + ' '.join(command['argv']) + '\n')
             log.flush()
+            self.current = name
             try:
                 result = subprocess.run(command['argv'], capture_output=True, text=True,
                                         timeout=timeout, **kw)
@@ -427,6 +637,7 @@ class Run:
                 command['status'] = result.returncode
                 log.write(result.stdout + result.stderr)
             finally:
+                self.current = None
                 command['seconds'] = round(time.time() - started, 3)
                 self.commands.append(command)
         if check:
@@ -469,20 +680,21 @@ def verify_ram_helper(args):
         described = subprocess.run([str(args.ram_loader), '--describe'],
             capture_output=True, text=True, timeout=10)
     except (OSError, subprocess.TimeoutExpired) as error:
-        raise Failed('cannot describe SRAM helper %s: %s; %s' % (args.ram_loader, error, rebuild)) from error
+        raise ToolMismatch('cannot describe SRAM helper %s: %s; %s'
+                           % (args.ram_loader, error, rebuild)) from error
     require(described.returncode == 0,
-            'SRAM helper --describe failed: %s; %s' % (described.stderr.strip(), rebuild))
+            'SRAM helper --describe failed: %s; %s' % (described.stderr.strip(), rebuild), ToolMismatch)
     try:
         identity = json.loads(described.stdout)
     except (ValueError, TypeError) as error:
-        raise Failed('SRAM helper --describe returned invalid JSON; ' + rebuild) from error
+        raise ToolMismatch('SRAM helper --describe returned invalid JSON; ' + rebuild) from error
     expected = dict(protocol_version=1, source_sha256=helper_source_hash(),
                     probe_rs_revision=HELPER_PROBE_REVISION)
-    require(isinstance(identity, dict), 'SRAM helper metadata is not an object; ' + rebuild)
+    require(isinstance(identity, dict), 'SRAM helper metadata is not an object; ' + rebuild, ToolMismatch)
     for field, value in expected.items():
         require(type(identity.get(field)) is type(value) and identity.get(field) == value,
                 'stale or incompatible SRAM helper: %s is %r, expected %r; %s'
-                % (field, identity.get(field), value, rebuild))
+                % (field, identity.get(field), value, rebuild), ToolMismatch)
     args.helper_identity = identity
     args.helper_source_sha256 = expected['source_sha256']
     return identity
@@ -549,6 +761,15 @@ def finish_boot(args, result, restore):
     """Restore a resident image, unless the USB guard forbids further hardware work."""
     if args.mode != 'boot':
         return
+    if cancelled():
+        # A restoration outlasts the grace a cancelling runner gives before
+        # it kills the run; begun and killed, it would leave less than none.
+        # The next boot check flashes and restores the board anyway.
+        reason = 'cancelled before resident image restoration'
+        result['fixed_restore'] = dict(status='pending', reason=reason)
+        result['status'] = 'failed'
+        result['failure'] = result.get('failure', '') + '; ' + reason
+        return
     try:
         args.pace.before('resident image restoration')
         marker = restore()
@@ -560,6 +781,16 @@ def finish_boot(args, result, restore):
         result['fixed_restore'] = dict(status='pending', reason=str(error))
         result['status'] = 'failed'
         result['failure'] = result.get('failure', '') + '; resident image restoration pending: ' + str(error)
+        note_outcome(result, outcome_of(error))
+    except KeyboardInterrupt:
+        # A manual boot's own handler records its interruption.
+        if getattr(args, 'manual_boot', None):
+            raise
+        reason = 'cancelled during resident image restoration'
+        result['fixed_restore'] = dict(status='pending', reason=reason)
+        result['status'] = 'failed'
+        result['failure'] = result.get('failure', '') + '; ' + reason
+        note_outcome(result, 'cancelled')
 
 
 RAM_REGIONS = {
@@ -1134,10 +1365,10 @@ def off_cascade(serial, cascade, sysfs=Path('/sys/bus/usb/devices')):
     lose power or re-enumerate, the probe's Arty on the rig, is kept off
     the cascade whose ports the tools switch (D725).  Returns where it is."""
     found = device_location(serial, sysfs)
-    require(found is not None, 'no USB device with serial %s: refusing to switch' % serial)
+    require(found is not None, 'no USB device with serial %s: refusing to switch' % serial, Unavailable)
     require(found != cascade and not found.startswith(cascade + '.'),
             'the device with serial %s is at %s, on the cascade %s whose ports are switched;'
-            ' refusing to switch' % (serial, found, cascade))
+            ' refusing to switch' % (serial, found, cascade), Unavailable)
     return found
 
 
@@ -1171,10 +1402,10 @@ def cascade_root(identity=CASCADE_HUB, sysfs=Path('/sys/bus/usb/devices')):
         if not parent or usb_identity(Path(sysfs) / parent) != identity:
             roots.append(entry.name)
     require(roots, 'no USB hub %s whose parent is another is attached, so no hub cascade was'
-            ' found: attach it, or name its root with --cascade' % identity)
+            ' found: attach it, or name its root with --cascade' % identity, Unavailable)
     require(len(roots) == 1, 'the hubs %s are each a USB hub %s whose parent is another, so the'
             ' hub cascade is not one of them alone: name its root with --cascade'
-            % (', '.join(roots), identity))
+            % (', '.join(roots), identity), Unavailable)
     return roots[0]
 
 
@@ -1254,18 +1485,18 @@ def power_cycle(hub, location, port, off_seconds, holds=None, keeps=None, holds_
         guard_port, guard_serial = keeps
         require(guard_port in ports and guard_serial in ports[guard_port],
                 'port %d of hub %s does not hold %s; refusing to switch this hub'
-                % (guard_port, location, guard_serial))
+                % (guard_port, location, guard_serial), Unavailable)
         require(port != guard_port, 'refusing to switch the guarded port')
     if holds:
         require(port in ports and holds in ports[port],
                 'port %d of hub %s does not hold %s; refusing to switch it'
-                % (port, location, holds))
+                % (port, location, holds), Unavailable)
     if holds_if_any:
-        require(port in ports, 'hub %s has no port %d' % (location, port))
+        require(port in ports, 'hub %s has no port %d' % (location, port), Unavailable)
         device = port_device(status, port)
         require(device is None or holds_if_any in device,
                 'port %d of hub %s holds %s, not %s; refusing to switch it'
-                % (port, location, device, holds_if_any))
+                % (port, location, device, holds_if_any), Unavailable)
     # One call: on the cascade's earlier port switching a port off
     # re-enumerated the hub's inner hubs, and a second call could meet their
     # new device nodes before udev had given them the group that may switch
@@ -1327,13 +1558,13 @@ def switch_ports(hub, location, ports, action, holds=(), keeps=None, name=None, 
         guard_port, guard_text = keeps
         require(guard_port in found and guard_text in found[guard_port],
                 'port %d of hub %s does not hold %s; refusing to switch this hub'
-                % (guard_port, location, guard_text))
+                % (guard_port, location, guard_text), Unavailable)
         require(guard_port not in ports, 'refusing to switch the guarded port')
     for port, text in holds if action == 'off' else ():
         require(port in ports, 'port %d is held but not switched' % port)
         require(port in found and text in found[port],
                 'port %d of hub %s does not hold %s; refusing to switch it'
-                % (port, location, text))
+                % (port, location, text), Unavailable)
     # The hub may be re-enumerating after the last switch, when uhubctl
     # finds no hub and switches nothing: wait for it to list again, and
     # switch again.
@@ -1610,12 +1841,12 @@ def unopened(path, what, seconds):
     """The refusal for WHAT's tty, which did not appear within SECONDS, or
     appeared at PATH and could not be opened."""
     if path is None or not Path(path).exists():
-        return Failed('no tty %s appeared within %g s' % (what, seconds))
+        return Unavailable('no tty %s appeared within %g s' % (what, seconds))
     try:
         group = grp.getgrgid(os.stat(path).st_gid).gr_name
     except (KeyError, OSError):
         group = 'its group'
-    return Failed('the tty %s, %s, appeared but this process may not open it: it belongs to %s,'
+    return NeedsSetup('the tty %s, %s, appeared but this process may not open it: it belongs to %s,'
                   ' which the session is not in; a tool that opens a tty runs itself through'
                   ' `sg GROUP -c` with --hub-group naming that group' % (what, path, group))
 
@@ -1700,6 +1931,151 @@ def record(result, kept, sent, commands, keep_tags):
 
 def write_json(path, value):
     Path(path).write_text(json.dumps(value, indent=2) + '\n')
+
+
+# How much each outcome outranks another when a run meets several: a
+# cancellation or a USB stop decides what a person must do next, and of
+# the rest the first specific one is kept over a plain failure.
+_DECIDING = ('cancelled', 'usb-stopped')
+
+
+def note_outcome(result, outcome):
+    """Record OUTCOME in RESULT unless an earlier one says more."""
+    def rank(name):
+        return _DECIDING.index(name) if name in _DECIDING else len(_DECIDING)
+    current = result.get('outcome')
+    if current in (None, 'passed', 'failed') or rank(outcome) < rank(current):
+        result['outcome'] = outcome
+
+
+def fail(result, error):
+    """RESULT failed on ERROR: its text and its outcome."""
+    result['failure'] = str(error)
+    note_outcome(result, outcome_of(error))
+
+
+CANCELLATION = None
+_UNINTERRUPTED = [0]
+
+
+def cancelled():
+    """Whether this process has been told to stop."""
+    return CANCELLATION is not None
+
+
+def _cancel(number, frame):
+    global CANCELLATION
+    name = signal.Signals(number).name
+    if CANCELLATION is not None:
+        CANCELLATION.setdefault('repeated', []).append(name)
+        print('%s again: already stopping' % name, file=sys.stderr, flush=True)
+        return
+    CANCELLATION = dict(signal=name, received=time.time())
+    if _UNINTERRUPTED[0]:
+        CANCELLATION['deferred'] = True
+        print('%s: stopping once the current action completes' % name, file=sys.stderr, flush=True)
+        return
+    print('%s: stopping' % name, file=sys.stderr, flush=True)
+    raise Cancelled(name)
+
+
+class uninterrupted:
+    """A block a cancellation does not cut: the signal waits for its end,
+    and is raised then unless the block failed of itself."""
+    def __enter__(self):
+        _UNINTERRUPTED[0] += 1
+        return self
+
+    def __exit__(self, kind, value, traceback):
+        _UNINTERRUPTED[0] -= 1
+        if (not _UNINTERRUPTED[0] and kind is None and CANCELLATION is not None
+                and CANCELLATION.pop('deferred', False)):
+            raise Cancelled(CANCELLATION['signal'])
+        return False
+
+
+def handle_cancellation():
+    """SIGINT and SIGTERM, each, raise Cancelled once, at once or after an
+    `uninterrupted` block; later ones are only noted, so that the tool's own
+    cleanup, closing its probe-rs, console and bridge, releasing the lock
+    and writing its result, is not itself cut short.  A GitHub runner
+    cancelling a job sends SIGINT, SIGTERM 7.5 s later and kills 2.5 s
+    after that."""
+    signal.signal(signal.SIGINT, _cancel)
+    signal.signal(signal.SIGTERM, _cancel)
+
+
+def phase(run=None, pace=None):
+    """Where a run was: the command running or last run, and the pace's
+    last action."""
+    reached = {}
+    if run is not None:
+        current = getattr(run, 'current', None)
+        if current:
+            reached['command'], reached['command_state'] = current, 'running'
+        elif getattr(run, 'commands', None):
+            reached['command'], reached['command_state'] = run.commands[-1]['name'], 'completed'
+        pace = pace or getattr(run, 'pace', None)
+    if pace is not None and getattr(pace, 'last_action', None):
+        reached['action'] = pace.last_action
+    return reached
+
+
+def settle_result(result, run=None):
+    """RESULT's final `outcome`, beside its unchanged `status`: `passed` for
+    a run that passed or completed its observation, `cancelled` for one
+    stopped by a signal, which also fails it, else the outcome of what it
+    stopped on, `failed` by default."""
+    in_flight = sys.exc_info()[1]
+    if (CANCELLATION is not None or isinstance(in_flight, KeyboardInterrupt)
+            or result.get('outcome') == 'cancelled'):
+        # Without the handler, a KeyboardInterrupt is Python's own SIGINT.
+        received = dict(CANCELLATION or dict(signal='SIGINT'))
+        received.pop('deferred', None)
+        received['phase'] = phase(run)
+        result['cancelled'] = received
+        result['status'] = 'failed'
+        reason = 'cancelled by %s' % received['signal']
+        if reason not in result.get('failure', ''):
+            result['failure'] = (result.get('failure', '') + '; ' + reason).lstrip('; ')
+        result['outcome'] = 'cancelled'
+    elif result.get('status') in ('passed', 'observed'):
+        result['outcome'] = 'passed'
+    elif result.get('outcome') in (None, 'passed'):
+        result['outcome'] = 'failed'
+    return result
+
+
+def write_result(path, result, run=None):
+    """A run's result.json, with its outcome settled."""
+    write_json(path, settle_result(result, run))
+
+
+def tool_main(main, argv=None):
+    """A board tool's entry: MAIN under `handle_cancellation`.  A refusal
+    that escapes MAIN before it wrote a result, a preflight's, is written as
+    one under --output when that names no directory with a result yet, so
+    a caller reads its outcome; the exit status is 1, or 130 or 143 for a
+    cancellation by SIGINT or SIGTERM."""
+    handle_cancellation()
+    try:
+        return main()
+    except KeyboardInterrupt:
+        return 143 if CANCELLATION and CANCELLATION['signal'] == 'SIGTERM' else 130
+    except Failed as error:
+        parser = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
+        parser.add_argument('--output', type=Path)
+        output = parser.parse_known_args(sys.argv[1:] if argv is None else argv)[0].output
+        if output is not None and not (output / 'result.json').exists():
+            try:
+                output.mkdir(parents=True, exist_ok=True)
+                result = dict(status='failed', phase='preflight')
+                fail(result, error)
+                write_result(output / 'result.json', result)
+            except OSError:
+                pass
+        print('board %s: %s' % (outcome_of(error), error), file=sys.stderr)
+        return 1
 
 
 def main(argv=None):

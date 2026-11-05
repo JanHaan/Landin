@@ -315,7 +315,7 @@ def diagnose_reset(chip, args):
         require(trace.is_file() and trace.stat().st_size > 0, 'probe-rs produced no reset diagnostic trace')
         result['status'] = 'observed'
     except (common.Failed, OSError, subprocess.TimeoutExpired) as error:
-        result['failure'] = str(error)
+        common.fail(result, error)
     finally:
         if console:
             # Deassert both lines together, including a partly completed
@@ -340,7 +340,7 @@ def diagnose_reset(chip, args):
         common.retain_kernel_usb(args.pace, result)
         lock.release()
         result.update(seconds=round(time.monotonic() - began, 3), commands=run.commands)
-        common.write_json(args.output / 'result.json', result)
+        common.write_result(args.output / 'result.json', result, run)
     print('reset diagnosis %s: %s (diagnostic only; final execution state not established)' %
           (result['status'], args.output))
     return 0 if result['status'] == 'observed' else 1
@@ -440,7 +440,7 @@ def trace_rom(chip, args):
         phase('capture-rom', capture)
         result['status'] = 'observed'
     except (common.Failed, OSError, subprocess.TimeoutExpired) as error:
-        result['failure'] = str(error)
+        common.fail(result, error)
     finally:
         if console:
             try:
@@ -465,7 +465,7 @@ def trace_rom(chip, args):
         common.retain_kernel_usb(args.pace, result)
         lock.release()
         result.update(seconds=round(time.monotonic() - began, 3), commands=run.commands)
-        common.write_json(args.output / 'result.json', result)
+        common.write_result(args.output / 'result.json', result, run)
     print('ROM trace %s: %s (reset_requested=%s; observations only, no board verdict)' %
           (result['status'], args.output, result['reset_requested']))
     return 0 if result['status'] == 'observed' else 1
@@ -575,12 +575,12 @@ def inspect_boot(chip, args):
                 result['rom_table']['skipped'] = 'pointer is outside the reviewed DRAM window and exact pinned ROM table'
         result['status'] = 'observed'
     except (common.Failed, OSError, subprocess.TimeoutExpired) as error:
-        result['failure'] = str(error)
+        common.fail(result, error)
     finally:
         common.retain_kernel_usb(args.pace, result)
         lock.release()
         result.update(seconds=round(time.monotonic() - began, 3), commands=run.commands)
-        common.write_json(args.output / 'result.json', result)
+        common.write_result(args.output / 'result.json', result, run)
     print('boot inspection %s: %s (observations only; active image not established)' %
           (result['status'], args.output))
     return 0 if result['status'] == 'observed' else 1

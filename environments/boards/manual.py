@@ -48,6 +48,7 @@ def interrupted(boot, result, where):
     result['status'] = 'failed'
     result['failure'] = (result.get('failure', '') + '; ' + reason).lstrip('; ')
     result['fixed_restore'] = dict(status='pending', reason=reason)
+    common.note_outcome(result, 'cancelled')
 
 
 def preflight(args):

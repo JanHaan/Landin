@@ -88,7 +88,8 @@ def power_cycle(run, args, at_once=False):
     if at_once:
         common.off_cascade(args.guard_serial, args.cascade)
         try:
-            cycle()
+            with common.uninterrupted():
+                cycle()
         finally:
             args.pace.after('power cycle at once')
     else:
@@ -196,7 +197,8 @@ def refuse_bootsel(run, args, allowed=None):
 def boot_location(args):
     require(args.mode != 'boot' or not (args.hub == args.cascade
             or args.hub.startswith(args.cascade + '.')),
-            'Pico 2 boot checks must be off the cascade; install its fixed image by UF2 there first')
+            'Pico 2 boot checks must be off the cascade; install its fixed image by UF2 there first',
+            common.NeedsSetup)
 
 
 def attached(run, args, name, bootsel_allowed=None):

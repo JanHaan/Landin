@@ -375,6 +375,11 @@ class LockLifecycle(unittest.TestCase):
             argv += ['--probehive=' + tmp]
             built = (elf, b'', 0, {})
             def scenario(*_):
+                if failure == 'cancel':
+                    # What the handler records before it raises.
+                    BOARD.common.CANCELLATION = dict(signal='SIGTERM', received=1.0)
+                    pace.last_action = 'power cycle'
+                    raise BOARD.common.Cancelled('SIGTERM')
                 if failure == 'usb':
                     pace.blocked = 'xhci_hcd: HC died'
                     raise BOARD.common.USBGuardError(pace.blocked)
@@ -399,7 +404,11 @@ class LockLifecycle(unittest.TestCase):
                 hardware.append(patch(BOARD, 'scenario', side_effect=scenario))
                 restore = patch(BOARD, 'restore_fixed', side_effect=lambda *_:
                     events.append('restore') or {'value': BOARD.common.FIXED_READY_MAGIC})
-                status = BOARD.main()
+                patch(BOARD.common, 'CANCELLATION', new=None)
+                try:
+                    status = BOARD.main()
+                except KeyboardInterrupt:
+                    status = 'cancelled'
                 result = json.loads((Path(tmp) / 'run/result.json').read_text())
             return status, result, events, restore, hardware
 
@@ -424,6 +433,21 @@ class LockLifecycle(unittest.TestCase):
                     restore.assert_called_once()
                     self.assertEqual(result['fixed_restore']['status'], 'passed')
                     self.assertLess(events.index('restore'), events.index('release'))
+                self.assertEqual(result['outcome'], {None: 'passed', 'app': 'failed', 'usb': 'usb-stopped'}[
+                    failure] if not acquire_fails else 'failed')
+
+    def test_a_cancelled_boot_check_releases_the_lock_and_records_where_it_stopped(self):
+        status, result, events, restore, hardware = self.run_boot(failure='cancel')
+        self.assertEqual(status, 'cancelled')
+        restore.assert_not_called()
+        self.assertEqual(events, ['acquire', 'release'])
+        self.assertEqual((result['status'], result['outcome']), ('failed', 'cancelled'))
+        self.assertEqual(result['cancelled']['signal'], 'SIGTERM')
+        self.assertEqual(result['cancelled']['phase'], dict(action='power cycle'))
+        self.assertEqual(result['fixed_restore'], dict(
+            status='pending', reason='cancelled before resident image restoration'))
+        self.assertIn('cancelled by SIGTERM', result['failure'])
+        self.assertIn('kernel_usb', result)
 
 
 if __name__ == '__main__':
