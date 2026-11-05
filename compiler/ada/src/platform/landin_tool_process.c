@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/wait.h>
+#include <time.h>
 #include <unistd.h>
 
 extern char **environ;
@@ -20,9 +21,81 @@ int landin_tool_start(char *const args[], char *const env[], int isolated,
                       int input, int capture, int errors, int *child);
 int landin_tool_wait(int child, int *status, int no_hang);
 int landin_tool_stop(int child, int *status);
+int landin_tool_cancel(int child, int *status);
+int landin_cancellation_begin(void);
+void landin_cancellation_end(void);
+int landin_cancellation_requested(void);
 int landin_program_run(char *const args[], int *signal_number,
                        int *status, int *child);
 const char *landin_signal_name(int signal_number);
+
+/* Invocation cancellation is notification only. No filesystem work, Ada
+   cleanup, or potentially reused process-group identifier reaches a handler.
+   The supervising thread forwards the signal while it still owns an
+   unreaped child. Inherited ignored signals stay ignored. */
+static volatile sig_atomic_t landin_cancel_signal = 0;
+static int landin_cancel_active = 0;
+static const int landin_cancel_numbers[] = {SIGINT, SIGTERM, SIGHUP};
+static struct sigaction landin_cancel_saved[3];
+
+static void landin_cancel_notify(int number)
+{
+    int saved = errno;
+    if (landin_cancel_signal == 0)
+        landin_cancel_signal = number;
+    errno = saved;
+}
+
+int landin_cancellation_begin(void)
+{
+    struct sigaction action;
+    size_t index;
+    if (landin_cancel_active)
+        return 0;
+    memset(&action, 0, sizeof action);
+    action.sa_handler = landin_cancel_notify;
+    sigemptyset(&action.sa_mask);
+    for (index = 0; index < 3; ++index)
+        sigaddset(&action.sa_mask, landin_cancel_numbers[index]);
+    landin_cancel_signal = 0;
+    for (index = 0; index < 3; ++index) {
+        int number = landin_cancel_numbers[index];
+        if (sigaction(number, NULL, &landin_cancel_saved[index]) != 0)
+            goto failed;
+        if (landin_cancel_saved[index].sa_handler != SIG_IGN
+            && sigaction(number, &action, NULL) != 0)
+            goto failed;
+    }
+    landin_cancel_active = 1;
+    return 0;
+failed:
+    {
+        int error = errno;
+        while (index != 0) {
+            --index;
+            sigaction(landin_cancel_numbers[index],
+                       &landin_cancel_saved[index], NULL);
+        }
+        return error;
+    }
+}
+
+void landin_cancellation_end(void)
+{
+    size_t index;
+    if (!landin_cancel_active)
+        return;
+    for (index = 0; index < 3; ++index)
+        sigaction(landin_cancel_numbers[index], &landin_cancel_saved[index],
+                   NULL);
+    landin_cancel_active = 0;
+    landin_cancel_signal = 0;
+}
+
+int landin_cancellation_requested(void)
+{
+    return (int)landin_cancel_signal;
+}
 
 /* Create one capture file under $TMPDIR, or /tmp when that is unset or
    empty, and return its open descriptor with its name in path. GNAT's own
@@ -173,6 +246,36 @@ int landin_tool_stop(int child, int *status)
     if (kill((pid_t)child, SIGKILL) != 0 && errno != ESRCH)
         return -1;
     return landin_tool_wait(child, status, 0);
+}
+
+/* Forward the original cancellation, allow a bounded ordinary shutdown,
+   then stop remaining group members before reaping the leader. waitid's
+   WNOWAIT keeps its PID reserved throughout signaling. This supervises
+   descendants that keep the tool's group; it is not a daemon sandbox. */
+int landin_tool_cancel(int child, int *status)
+{
+    int number = landin_cancellation_requested();
+    unsigned int attempts;
+    if (child <= 0 || number == 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (kill(-(pid_t)child, number) != 0 && errno != ESRCH)
+        return -1;
+    if (kill((pid_t)child, number) != 0 && errno != ESRCH)
+        return -1;
+    for (attempts = 0; attempts < 50; ++attempts) {
+        siginfo_t info;
+        const struct timespec interval = {0, 20000000};
+        memset(&info, 0, sizeof info);
+        if (waitid(P_PID, (id_t)child, &info,
+                   WEXITED | WNOHANG | WNOWAIT) != 0 && errno != EINTR)
+            return -1;
+        if (info.si_pid != 0)
+            break;
+        nanosleep(&interval, NULL);
+    }
+    return landin_tool_stop(child, status);
 }
 
 /* The program landin_program_run is waiting for, and a termination or

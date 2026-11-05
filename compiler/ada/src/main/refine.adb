@@ -29,6 +29,23 @@ procedure Refine is
    Tools     : Landin.Platform.Native.Tools.Native_Tool_Runner;
    Meter     : Landin.Platform.Native.Native_Meter;
 
+   procedure Finish_Command (Status : Command_Line.Exit_Status);
+
+   procedure Finish_Command (Status : Command_Line.Exit_Status) is
+      Signal_Number : constant Natural :=
+        Landin.Platform.Native.Tools.Cancellation_Requested;
+   begin
+      if Signal_Number /= 0 then
+         Text_IO.Put_Line
+           (Text_IO.Standard_Error, "refine: cancelled by signal"
+            & Natural'Image (Signal_Number));
+      end if;
+      Landin.Platform.Native.Tools.End_Invocation;
+      Command_Line.Set_Exit_Status
+        (if Signal_Number = 0 then Status
+         else Command_Line.Exit_Status (128 + Signal_Number));
+   end Finish_Command;
+
 begin
    for Index in 1 .. Command_Line.Argument_Count loop
       Arguments.Append (Command_Line.Argument (Index));
@@ -47,12 +64,35 @@ begin
       end;
    end if;
 
+   Landin.Platform.Native.Tools.Begin_Invocation;
    declare
       Result : Landin.Driver.Outcome :=
         Landin.Commands.Execute
           (Arguments, Host, Tools, Meter,
            Terminal_Color => Landin.Platform.Native.Diagnostic_Color);
    begin
+      --  Compilation can finish just as cancellation arrives. A pending
+      --  run still owns its private directory, but must not launch a program.
+      if Landin.Platform.Native.Tools.Cancellation_Requested /= 0
+        and then Unbounded.Length (Result.Launch_Directory) > 0
+      then
+         declare
+            use type Landin.Platform.Remove_Status;
+            Removed : Landin.Platform.Remove_Status;
+         begin
+            Host.Remove_Tree
+              (Unbounded.To_String (Result.Launch_Directory), Removed);
+            if Removed = Landin.Platform.Not_Removable then
+               Unbounded.Append
+                 (Result.Report, "refine: could not remove cancelled run's "
+                  & "private directory: "
+                  & Unbounded.To_String (Result.Launch_Directory)
+                  & ASCII.LF);
+            end if;
+            Result.Launch_Program := Unbounded.Null_Unbounded_String;
+            Result.Launch_Directory := Unbounded.Null_Unbounded_String;
+         end;
+      end if;
       --  Written as bytes, not as text.  Ada.Text_IO does not recognise
       --  the line feeds inside these strings, so it believes the last line
       --  is unterminated and appends a terminator of its own: a blank line
@@ -88,7 +128,7 @@ begin
          end if;
       end if;
 
-      Command_Line.Set_Exit_Status
+      Finish_Command
         (Command_Line.Exit_Status (Result.Status));
    end;
 
@@ -101,17 +141,17 @@ exception
    when Landin.Compiler_Defect =>
       Text_IO.Put_Line
         (Text_IO.Standard_Error, "refine: internal compiler defect");
-      Command_Line.Set_Exit_Status (Landin.Driver.Status_Defect);
+      Finish_Command (Landin.Driver.Status_Defect);
 
    when Landin.Host_Exhausted =>
       Text_IO.Put_Line
         (Text_IO.Standard_Error, "refine: host resources exhausted");
-      Command_Line.Set_Exit_Status (71);
+      Finish_Command (71);
 
    when Landin.External_Tool_Failed =>
       Text_IO.Put_Line
         (Text_IO.Standard_Error, "refine: an external tool could not be run");
-      Command_Line.Set_Exit_Status (72);
+      Finish_Command (72);
 
    --  Storage_Error is the host running out, not the compiler being
    --  wrong, and it is the way an exhausted host actually shows up: the
@@ -119,12 +159,12 @@ exception
    when Storage_Error =>
       Text_IO.Put_Line
         (Text_IO.Standard_Error, "refine: host resources exhausted");
-      Command_Line.Set_Exit_Status (71);
+      Finish_Command (71);
 
    --  Anything else arriving here is a defect as well, and the point of a
    --  handler is that a user reads a sentence instead of a traceback.
    when others =>
       Text_IO.Put_Line
         (Text_IO.Standard_Error, "refine: internal compiler defect");
-      Command_Line.Set_Exit_Status (Landin.Driver.Status_Defect);
+      Finish_Command (Landin.Driver.Status_Defect);
 end Refine;
