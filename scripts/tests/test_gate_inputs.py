@@ -892,8 +892,19 @@ class Physical(unittest.TestCase):
     def test_the_board_matrix_is_every_port_once(self):
         rows = matrix_rows(workflow_jobs(self.source)["board"])
         self.assertEqual(tuple(row["port"] for row in rows), gate_inputs.BOARD_PORTS)
-        self.assertEqual({row["port"]: row["timeout"] for row in rows if row["timeout"] != "20"},
-                         {"pico2": "40"})
+        self.assertEqual({row["port"]: row["timeout"] for row in rows if row["timeout"] != "50"},
+                         {"pico2": "70"})
+
+    def test_a_busy_rig_ends_in_its_own_outcome_inside_every_timeout(self):
+        # A lock wait the job's timeout cuts short would be a killed job,
+        # not the board gate's rig-busy outcome; exec lets the runner's
+        # cancel signal reach the board gate rather than its shell.
+        board = "\n".join(workflow_jobs(self.source)["board"])
+        step = re.search(r"exec python3 environments/boards/gate\.py .*?--lock-wait=(\d+)", board, re.S)
+        self.assertIsNotNone(step, "the board step must exec gate.py with an explicit --lock-wait")
+        for row in matrix_rows(workflow_jobs(self.source)["board"]):
+            with self.subTest(port=row["port"]):
+                self.assertLessEqual(int(step[1]) + 20 * 60, int(row["timeout"]) * 60)
 
     def test_the_aggregate_keeps_documents_and_scripts_always(self):
         gate = "\n".join(workflow_jobs(self.source)["gate"])

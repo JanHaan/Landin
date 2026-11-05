@@ -1727,13 +1727,13 @@ jobs:
       max-parallel: 1
       matrix:
         include:
-          - {port: rp2040, timeout: 20}
-          - {port: pico2, timeout: 40}
-          - {port: stm32h753, timeout: 20}
-          - {port: esp32c3, timeout: 20}
-          - {port: esp32c5, timeout: 20}
-          - {port: esp32, timeout: 20}
-          - {port: esp32s3, timeout: 20}
+          - {port: rp2040, timeout: 50}
+          - {port: pico2, timeout: 70}
+          - {port: stm32h753, timeout: 50}
+          - {port: esp32c3, timeout: 50}
+          - {port: esp32c5, timeout: 50}
+          - {port: esp32, timeout: 50}
+          - {port: esp32s3, timeout: 50}
     steps:
       #  First, so the aggregate can tell a leg that started from one that
       #  never reached the rig.
@@ -1798,10 +1798,13 @@ jobs:
             "$PORT" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$ARTIFACT_ID" "$ARTIFACT_DIGEST" "$MANIFEST" \
             > "$leg/transfer.json"
 
+      #  exec, so that the runner's SIGINT on a cancel reaches the board
+      #  gate itself rather than the shell.  The lock wait ends in rig-busy
+      #  well inside the job's timeout.
       - name: Boot and RAM runs of ${{ matrix.port }} on the rig
         run: >-
-          python3 environments/boards/gate.py --port=${{ matrix.port }}
-          --bundles="$RUNNER_TEMP/board-bundles"
+          exec python3 environments/boards/gate.py --port=${{ matrix.port }}
+          --bundles="$RUNNER_TEMP/board-bundles" --lock-wait=1200
           --output="$RUNNER_TEMP/board-leg/${{ matrix.port }}/evidence"
 
       #  Also after a failure or a cancel, so the outcome the tool wrote

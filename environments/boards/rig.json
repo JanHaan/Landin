@@ -30,16 +30,16 @@
     },
     "pico2": {
       "location": {"hub": null, "port": null},
-      "setup": "Pico 2 boot checks and its Arm/Hazard3 transition must run off the cascade; the rig has no unattended boot path for it yet.",
+      "setup": "Put the Pico 2 on a switchable cascade port through a cable that carries VBUS and ground alone, and set location.hub (relative to the cascade, as .3.3) and location.port; its boot checks and Arm/Hazard3 change then run unattended there.",
       "steps": [
         {"board": "rp2350", "mode": "boot",
-         "arguments": ["--probehive", "{probehive}", "--ram-loader", "{ram_loader}", "--hub", "{hub}", "--port", "{port}"]},
+         "arguments": ["--probehive", "{probehive}", "--ram-loader", "{ram_loader}", "--hub", "{hub}", "--port", "{port}", "--power-only"]},
         {"board": "rp2350", "mode": "ram",
-         "arguments": ["--probehive", "{probehive}", "--ram-loader", "{ram_loader}", "--hub", "{hub}", "--port", "{port}"]},
+         "arguments": ["--probehive", "{probehive}", "--ram-loader", "{ram_loader}", "--hub", "{hub}", "--port", "{port}", "--power-only"]},
         {"board": "rp2350_hazard3", "mode": "boot",
-         "arguments": ["--probehive", "{probehive}", "--ram-loader", "{ram_loader}", "--hub", "{hub}", "--port", "{port}"]},
+         "arguments": ["--probehive", "{probehive}", "--ram-loader", "{ram_loader}", "--hub", "{hub}", "--port", "{port}", "--power-only"]},
         {"board": "rp2350_hazard3", "mode": "ram",
-         "arguments": ["--probehive", "{probehive}", "--ram-loader", "{ram_loader}", "--hub", "{hub}", "--port", "{port}"]}
+         "arguments": ["--probehive", "{probehive}", "--ram-loader", "{ram_loader}", "--hub", "{hub}", "--port", "{port}", "--power-only"]}
       ]
     },
     "stm32h753": {

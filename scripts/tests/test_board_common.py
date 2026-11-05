@@ -1770,6 +1770,25 @@ class Outcomes(unittest.TestCase):
             pico2.boot_location(SimpleNamespace(mode='boot', hub='1-1.2.3', cascade='1-1.2'))
         pico2.boot_location(SimpleNamespace(mode='ram', hub='1-1.2.3', cascade='1-1.2'))
 
+    def test_a_power_only_pico_2_may_boot_on_the_cascade_but_never_by_uf2(self):
+        import pico2
+        pico2.boot_location(SimpleNamespace(mode='boot', hub='1-1.2.3', cascade='1-1.2',
+                                            power_only=True))
+        with self.assertRaisesRegex(pico2.common.Failed, 'cannot copy a UF2'):
+            pico2.boot_location(SimpleNamespace(mode='boot', hub='1-1.2.3', cascade='1-1.2',
+                                                power_only=True, boot_transport='manual-uf2'))
+
+    def test_a_power_only_port_is_switched_only_while_it_shows_no_device(self):
+        quiet = STATUS.replace('0103 power enable connect [0483:374e STMicroelectronics STLINK-V3'
+                               ' 001900293137511339383538]', '0100 power')
+        hub = Recorded(**{'hub-status': quiet})
+        COMMON.power_cycle(hub, '7-2.3', 2, 1.0, holds_nothing=True)
+        self.assertEqual([n for n, _ in hub.calls], ['hub-status', 'power-cycle'])
+        hub = Recorded(**{'hub-status': STATUS})
+        with self.assertRaisesRegex(COMMON.NeedsOperator, 'declared power-only'):
+            COMMON.power_cycle(hub, '7-2.3', 2, 1.0, holds_nothing=True)
+        self.assertEqual([n for n, _ in hub.calls], ['hub-status'])
+
     def test_an_action_s_own_refusal_survives_a_failed_completion(self):
         pace = mock.Mock()
         pace.after.side_effect = COMMON.Failed('journal unreadable')

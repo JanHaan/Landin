@@ -1469,7 +1469,8 @@ class Listings:
                 time.sleep(0.5)
 
 
-def power_cycle(hub, location, port, off_seconds, holds=None, keeps=None, holds_if_any=None):
+def power_cycle(hub, location, port, off_seconds, holds=None, keeps=None, holds_if_any=None,
+                holds_nothing=False):
     """Cut PORT of the hub at LOCATION and restore it, in one call.
 
     HOLDS is the serial the switched port must show, so that only the
@@ -1477,8 +1478,9 @@ def power_cycle(hub, location, port, off_seconds, holds=None, keeps=None, holds_
     show that serial and is never switched, so that a hub whose listing is
     not the one expected is never touched.  HOLDS_IF_ANY is a serial the
     switched port must show if it shows a device at all, for a board whose
-    firmware does not enumerate.  HUB has `command(name, argv)`:
-    an `InGroup`, or a `Run`."""
+    firmware does not enumerate.  HOLDS_NOTHING requires the port to show no
+    device at all, for a board whose cable carries no USB data.  HUB has
+    `command(name, argv)`: an `InGroup`, or a `Run`."""
     status = hub.command('hub-status', ['uhubctl', '-l', location])
     ports = hub_ports(status)
     if keeps:
@@ -1497,6 +1499,12 @@ def power_cycle(hub, location, port, off_seconds, holds=None, keeps=None, holds_
         require(device is None or holds_if_any in device,
                 'port %d of hub %s holds %s, not %s; refusing to switch it'
                 % (port, location, device, holds_if_any), Unavailable)
+    if holds_nothing:
+        require(port in ports, 'hub %s has no port %d' % (location, port), Unavailable)
+        device = port_device(status, port)
+        require(device is None,
+                'port %d of hub %s shows %s, but its board is declared power-only: USB data'
+                ' reaches it; refusing to switch it' % (port, location, device), NeedsOperator)
     # One call: on the cascade's earlier port switching a port off
     # re-enumerated the hub's inner hubs, and a second call could meet their
     # new device nodes before udev had given them the group that may switch

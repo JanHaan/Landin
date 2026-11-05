@@ -24,11 +24,18 @@ each reaches the hub and the bus the same way:
     any wait or attach: probe-rs's RP235x reset leaves the boot ROM's USB
     on the bus with its core halted (D832);
   * malformed-block controls are disabled pending an off-cascade UF2
-    recovery workflow.
+    recovery workflow;
+  * with --power-only, the maintainer's word that the board's cable
+    carries VBUS and ground alone, no USB data reaches the host, so neither
+    BOOTSEL nor the boot ROM's halted USB can trouble a controller: boot
+    checks and the architecture change may then run on the cascade, and a
+    probe may attach whatever the boot ROM runs, but the port must never
+    show a device, and one it shows stops the run before any attach or
+    switch, since it means the cable carries data.
 
 Each tool's args carry `hub`, `port`, `pico_serial`, `guard_serial`,
 `cascade`, `off_seconds`, `guard_seconds`, `enumerate_seconds`,
-`probe_host`, `bootsel_attach`, `hub_group` and `pace`, a common.Pace;
+`probe_host`, `bootsel_attach`, `power_only`, `hub_group` and `pace`, a common.Pace;
 `arguments` adds the options that give them.
 """
 
@@ -84,7 +91,8 @@ def power_cycle(run, args, at_once=False):
     on the network, or the run stops."""
     def cycle():
         return common.power_cycle(Listings(run, args.guard_seconds), args.hub, args.port,
-                                  args.off_seconds, holds_if_any=args.pico_serial)
+                                  args.off_seconds, holds_if_any=args.pico_serial,
+                                  holds_nothing=getattr(args, 'power_only', False))
     if at_once:
         common.off_cascade(args.guard_serial, args.cascade)
         try:
@@ -181,9 +189,21 @@ def ram_port_device(hub, port, sysfs=None):
 def refuse_bootsel(run, args, allowed=None):
     """Never attach to BOOTSEL; install a valid fixed image by UF2 off
     the cascade first. ALLOWED is retained for callers but cannot bypass
-    this guard."""
+    this guard.  A power-only board's port must show no device at all: its
+    BOOTSEL never enumerates, so a device there means the cable carries
+    data, and the run stops before the probe attaches."""
     ram = getattr(args, 'mode', 'boot') == 'ram'
     direct = ram or getattr(args, 'boot_transport', 'auto') == 'manual-uf2'
+    if getattr(args, 'power_only', False):
+        device = (ram_port_device(args.hub, args.port) if direct else common.port_device(
+            Listings(run, args.guard_seconds).command('hub-before-attach', ['uhubctl', '-l', args.hub]),
+            args.port))
+        require(device is None,
+                'the Pico 2 is declared power-only, but its port shows %s: USB data reaches it, so'
+                ' BOOTSEL could enumerate; no probe attaches. Fit a cable that carries VBUS and'
+                ' ground alone, or drop --power-only and work off the cascade' % device,
+                common.NeedsOperator)
+        return None
     device = ram_port_device(args.hub, args.port) if direct else bootsel(run, args)
     device = device if device and device.startswith(BOOTSEL) else None
     recovery = ('Install a fixed image by UF2 off the cascade before a RAM run' if ram else
@@ -195,6 +215,12 @@ def refuse_bootsel(run, args, allowed=None):
 
 
 def boot_location(args):
+    require(not (getattr(args, 'power_only', False)
+                 and getattr(args, 'boot_transport', 'auto') == 'manual-uf2'),
+            'a power-only cable carries no USB data, so it cannot copy a UF2; use the automatic'
+            ' boot transport, or a data cable off the cascade for manual UF2')
+    if getattr(args, 'power_only', False):
+        return
     require(args.mode != 'boot' or not (args.hub == args.cascade
             or args.hub.startswith(args.cascade + '.')),
             'Pico 2 boot checks must be off the cascade; install its fixed image by UF2 there first',
@@ -357,6 +383,10 @@ def arguments(parser):
     parser.add_argument('--boot-seconds', type=float, default=1.0,
                         help='how long the boot ROM is given after a power cycle before the probe'
                              ' attaches')
+    parser.add_argument('--power-only', action='store_true',
+                        help="the maintainer's word that the board's cable carries VBUS and ground"
+                             " alone: boot checks and the architecture change may run on the"
+                             " cascade, and any device its port shows stops the run")
     parser.add_argument('--bootsel-attach', action='store_true',
                         help='obsolete compatibility flag; BOOTSEL attachment is always refused')
     parser.add_argument('--hub-group', default='dialout',

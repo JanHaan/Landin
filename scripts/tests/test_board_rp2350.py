@@ -292,6 +292,23 @@ class RamGuard(unittest.TestCase):
         self.assertEqual(run.calls, ['hub-before-attach'])
 
 
+    def test_a_power_only_port_must_show_no_device_at_all(self):
+        self.assertIsNone(self.guard(power_only=True))
+        self.device(self.child, idVendor='0403', idProduct='6001')
+        with self.assertRaisesRegex(BOARD.common.NeedsOperator, 'USB data reaches it'):
+            self.guard(power_only=True)
+
+    def test_a_power_only_boot_check_reads_the_listing_and_refuses_any_device(self):
+        run = Recorded(**answers(**{'hub-before-attach': QUIET.replace(
+            '  Port 2: 0101 power connect\n', '  Port 2: 0100 power\n')}))
+        self.assertIsNone(BOARD.pico2.refuse_bootsel(run, paced_args(run, mode='boot', power_only=True)))
+        for shown in (BOOTSEL, BOOTSEL.replace('2e8a:000f', '2e8a:0009')):
+            run = Recorded(**answers(**{'hub-before-attach': shown}))
+            with self.assertRaisesRegex(BOARD.common.NeedsOperator, 'declared power-only'):
+                BOARD.pico2.refuse_bootsel(run, paced_args(run, mode='boot', power_only=True))
+            self.assertEqual(run.calls, ['hub-before-attach'])
+
+
 class Hub(unittest.TestCase):
     def setUp(self):
         patcher = mock.patch.object(BOARD.common, 'device_location', return_value='7-1.4')
@@ -304,6 +321,12 @@ class Hub(unittest.TestCase):
             BOARD.power_cycle(hub, paced_args(hub))
             self.assertEqual(hub.calls, ['before power cycle', 'hub-status', 'power-cycle',
                                          'after power cycle', 'hub-wait', 'probe-ping'])
+
+    def test_a_power_only_port_is_not_switched_while_it_shows_any_device(self):
+        hub = Recorded(**answers(**{'hub-status': BOOTSEL}))
+        with self.assertRaisesRegex(BOARD.common.NeedsOperator, 'declared power-only'):
+            BOARD.power_cycle(hub, paced_args(hub, power_only=True))
+        self.assertNotIn('power-cycle', hub.calls)
 
     def test_a_port_holding_another_device_is_not(self):
         hub = Recorded(**answers(**{'hub-status': BOOTSEL.replace(SERIAL, 'SOMEONE-ELSE')}))
