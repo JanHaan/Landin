@@ -36,6 +36,7 @@ int landin_tool_wait(int child, int *status, int no_hang);
 int landin_tool_wait_reserved(int child, int *status, int no_hang, int *owned);
 int landin_tool_stop(int child, int *status);
 int landin_tool_cancel(int child, int *status);
+int landin_tool_cancel_reserved(int child, int *status, int *owned);
 int landin_cancellation_begin(void);
 void landin_cancellation_end(void);
 int landin_cancellation_requested(void);
@@ -451,10 +452,11 @@ static int landin_cancel_forward(pid_t target, int number)
    then stop remaining group members before reaping the leader. waitid's
    WNOWAIT keeps its PID reserved throughout signaling. This supervises
    descendants that keep the tool's group; it is not a daemon sandbox. */
-int landin_tool_cancel(int child, int *status)
+int landin_tool_cancel_reserved(int child, int *status, int *owned)
 {
     int number = landin_cancellation_requested();
     unsigned int attempts;
+    *owned = child > 0;
     if (child <= 0 || number == 0) {
         errno = EINVAL;
         return -1;
@@ -478,7 +480,10 @@ int landin_tool_cancel(int child, int *status)
             observed = waitid(P_PID, (id_t)child, &info,
                                WEXITED | WNOHANG | WNOWAIT);
         } while (observed != 0 && errno == EINTR);
-        if (observed != 0) return -1;
+        if (observed != 0) {
+            if (errno == ECHILD) *owned = 0;
+            return -1;
+        }
         if (info.si_pid == 0) {
             /* A missing group can leave the live direct child elsewhere.
                EPERM does not authorize retrying a live target. */
@@ -486,7 +491,7 @@ int landin_tool_cancel(int child, int *status)
             if (landin_cancel_forward((pid_t)child, number) != 0
                 && errno != ESRCH) return -1;
         } else if (info.si_pid != (pid_t)child) {
-            errno = ECHILD; return -1;
+            *owned = 0; errno = ECHILD; return -1;
         }
         /* No catchable signal is needed for an exited child. In particular,
            Darwin can report EPERM for its zombie-only group; Stop below
@@ -497,13 +502,24 @@ int landin_tool_cancel(int child, int *status)
         const struct timespec interval = {0, 20000000};
         memset(&info, 0, sizeof info);
         if (waitid(P_PID, (id_t)child, &info,
-                   WEXITED | WNOHANG | WNOWAIT) != 0 && errno != EINTR)
+                   WEXITED | WNOHANG | WNOWAIT) != 0 && errno != EINTR) {
+            if (errno == ECHILD) *owned = 0;
             return -1;
+        }
         if (info.si_pid != 0)
             break;
         nanosleep(&interval, NULL);
     }
-    return landin_tool_stop(child, status);
+    int result = landin_tool_stop(child, status);
+    if (result == child || (result < 0 && errno == ECHILD)) *owned = 0;
+    return result;
+}
+
+/* Preserve the original cancellation ABI for C callers owning their child. */
+int landin_tool_cancel(int child, int *status)
+{
+    int owned;
+    return landin_tool_cancel_reserved(child, status, &owned);
 }
 
 /* The program landin_program_run is waiting for, and a termination or
