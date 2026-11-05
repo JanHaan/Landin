@@ -74,6 +74,8 @@ package body Landin.Commands is
       Depfile : US.Unbounded_String;
       Policy : WP.Policy := WP.Defaults;
       Forwarded : Landin.Platform.Path_List;
+      Consumed_Response_Files : Landin.Platform.Path_List;
+      Consumed_Response_Identities : Landin.Platform.Identity_List;
       Operands : Landin.Platform.Path_List;
       --  D526: what follows `run`'s `--`, the program's, exactly.
       Program_Arguments : Landin.Platform.Path_List;
@@ -153,7 +155,9 @@ package body Landin.Commands is
          end if;
       end Refuse;
    begin
-      Response_Files.Expand (Arguments, Host, Expanded, Result.Problem);
+      Response_Files.Expand
+        (Arguments, Host, Expanded, Result.Problem,
+         Result.Consumed_Response_Files, Result.Consumed_Response_Identities);
       if US.Length (Result.Problem) /= 0 then
          return Result;
       end if;
@@ -728,7 +732,10 @@ package body Landin.Commands is
                  (Svd_Path => Asked.Operands.First_Element,
                   Policy_Path => Effective (C.Policy, ""),
                   Out_Dir => Effective (C.Out_Dir, ""),
-                  Host => Host, Result => Result);
+                  Host => Host, Result => Result,
+                  Protected_Inputs =>
+                                Asked.Consumed_Response_Files,
+                  Protected_Identities => Asked.Consumed_Response_Identities);
             when C.Bindings =>
                declare
                   Request : Landin.Commands.Bindings.Request;
@@ -767,6 +774,9 @@ package body Landin.Commands is
                   Request.Out_Dir := US.To_Unbounded_String
                     (Effective (C.Out_Dir, ""));
                   Request.Headers := Asked.Operands;
+                  Request.Protected_Inputs := Asked.Consumed_Response_Files;
+                  Request.Protected_Identities :=
+                    Asked.Consumed_Response_Identities;
                   Request.Include_Dirs := Every (C.Include_Dir);
                   Request.System_Include_Dirs :=
                     Every (C.System_Include_Dir);
@@ -799,12 +809,20 @@ package body Landin.Commands is
                         begin
                            Result := Landin.Driver.Execute
                              (Forwarded, Host, Wrapped, Meter, Built_For,
-                              Warnings => Asked.Policy);
+                              Warnings => Asked.Policy,
+                              Protected_Inputs =>
+                                Asked.Consumed_Response_Files,
+                              Protected_Identities =>
+                                Asked.Consumed_Response_Identities);
                         end;
                      else
                         Result := Landin.Driver.Execute
                           (Forwarded, Host, Tools, Meter, Built_For,
-                           Warnings => Asked.Policy);
+                           Warnings => Asked.Policy,
+                              Protected_Inputs =>
+                                Asked.Consumed_Response_Files,
+                              Protected_Identities =>
+                                Asked.Consumed_Response_Identities);
                      end if;
                   exception
                      when others =>
@@ -869,13 +887,15 @@ package body Landin.Commands is
                      Result := Landin.Driver.Execute
                        (Forwarded, Host, Wrapped, Meter, Built_For,
                         Asked.Dry_Run, US.To_String (Asked.Depfile),
-                        Asked.Policy);
+                        Asked.Policy, Asked.Consumed_Response_Files,
+                        Asked.Consumed_Response_Identities);
                   end;
                else
                   Result := Landin.Driver.Execute
                     (Forwarded, Host, Tools, Meter, Built_For,
                      Asked.Dry_Run, US.To_String (Asked.Depfile),
-                        Asked.Policy);
+                        Asked.Policy, Asked.Consumed_Response_Files,
+                        Asked.Consumed_Response_Identities);
                end if;
                if Asked.Verbosity > 0 then
                   US.Append (Transcript, "refine " & C.Name (Asked.Command)

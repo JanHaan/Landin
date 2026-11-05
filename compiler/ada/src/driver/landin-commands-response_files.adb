@@ -6,7 +6,9 @@ package body Landin.Commands.Response_Files is
      (Arguments : Landin.Platform.Path_List;
       Host : Landin.Platform.Filesystem'Class;
       Result : out Landin.Platform.Path_List;
-      Problem : out US.Unbounded_String)
+      Problem : out US.Unbounded_String;
+      Consumed : out Landin.Platform.Path_List;
+      Identities : out Landin.Platform.Identity_List)
    is
       Active : Landin.Platform.Path_List;
       Literal : Boolean := False;
@@ -16,6 +18,7 @@ package body Landin.Commands.Response_Files is
       procedure Add (Argument : String; Depth : Natural) is
          Content : US.Unbounded_String;
          Status : Landin.Platform.Read_Status;
+         Identity : Landin.Platform.File_Identity;
       begin
          if US.Length (Problem) > 0 then
             return;
@@ -44,7 +47,11 @@ package body Landin.Commands.Response_Files is
                      return;
                   end if;
                end loop;
-               Host.Read_File (Path, Content, Status);
+               Host.Read_Snapshot (Path, Content, Identity, Status);
+               if Status = Landin.Platform.Read_Ok then
+                  Consumed.Append (Path);
+                  Identities.Append (Identity);
+               end if;
                if Status /= Landin.Platform.Read_Ok then
                   Problem := US.To_Unbounded_String
                     ("cannot read response file: " & Path);
@@ -113,6 +120,8 @@ package body Landin.Commands.Response_Files is
       end Add;
    begin
       Result.Clear;
+      Consumed.Clear;
+      Identities.Clear;
       Problem := US.Null_Unbounded_String;
       for Argument of Arguments loop
          Add (Argument, 0);

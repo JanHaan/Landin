@@ -85,7 +85,11 @@ package Landin.Driver is
       Dry_Run   : Boolean := False;
       Depfile   : String := "";
       Warnings  : Landin.Diagnostics.Warning_Policy.Policy :=
-        Landin.Diagnostics.Warning_Policy.Defaults) return Outcome;
+        Landin.Diagnostics.Warning_Policy.Defaults;
+      Protected_Inputs : Landin.Platform.Path_List :=
+        Landin.Platform.No_Arguments;
+      Protected_Identities : Landin.Platform.Identity_List :=
+        Landin.Platform.Identity_Vectors.Empty_Vector) return Outcome;
 
    --  Identity without a version.  This roadmap assigns no release
    --  designation, so neither does the executable.
