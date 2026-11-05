@@ -169,6 +169,9 @@ package Landin.Platform is
      (Host : Filesystem; Lease : Update_Handle; Content : String;
       Status : out Write_Status;
       Reason : out Ada.Strings.Unbounded.Unbounded_String) is abstract;
+   function Update_Identity
+     (Host : Filesystem; Lease : Update_Handle) return File_Identity
+      is abstract;
    procedure Close_Update (Host : Filesystem; Lease : Update_Handle)
       is abstract;
 
@@ -274,7 +277,7 @@ package Landin.Platform is
      return Boolean is abstract;
 
    function Resolve_Program (Host : Tool_Runner; Program : String)
-      return String;
+      return String is abstract;
 
    procedure Run
      (Host      : Tool_Runner;

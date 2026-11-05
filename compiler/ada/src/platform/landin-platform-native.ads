@@ -67,6 +67,38 @@ package Landin.Platform.Native is
       Status  : out Write_Status;
       Reason  : out Ada.Strings.Unbounded.Unbounded_String);
 
+   overriding procedure Open_Publication
+     (Host : Native_Filesystem; Path : String; Delete_Only : Boolean; Root : String;
+      Handle : out Publication_Handle;
+      Stage : out Ada.Strings.Unbounded.Unbounded_String;
+      Status : out Write_Status;
+      Reason : out Ada.Strings.Unbounded.Unbounded_String);
+   overriding procedure Advance_Publication
+     (Host : Native_Filesystem; Handle : Publication_Handle;
+      Action : Publication_Action; Protected_Paths : Path_List;
+      Protected_Identities : Identity_List; Status : out Write_Status;
+      Reason : out Ada.Strings.Unbounded.Unbounded_String);
+   --  Both results describe the same actually read object.
+   overriding procedure Read_Snapshot
+     (Host : Native_Filesystem; Path : String;
+      Content : out Ada.Strings.Unbounded.Unbounded_String;
+      Identity : out File_Identity; Status : out Read_Status);
+   overriding procedure Read_For_Update
+     (Host : Native_Filesystem; Path : String;
+      Content : out Ada.Strings.Unbounded.Unbounded_String;
+      Lease : out Update_Handle; Status : out Read_Status;
+      Reason : out Ada.Strings.Unbounded.Unbounded_String);
+   overriding procedure Replace_Update
+     (Host : Native_Filesystem; Lease : Update_Handle; Content : String;
+      Status : out Write_Status;
+      Reason : out Ada.Strings.Unbounded.Unbounded_String);
+   overriding function Update_Identity
+     (Host : Native_Filesystem; Lease : Update_Handle)
+      return File_Identity;
+   overriding procedure Close_Update (Host : Native_Filesystem; Lease : Update_Handle)
+     ;
+
+
    overriding procedure Remove_File
      (Host   : Native_Filesystem;
       Path   : String;

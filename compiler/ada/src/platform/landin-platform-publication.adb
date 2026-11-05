@@ -4,7 +4,7 @@ package body Landin.Platform.Publication is
    procedure Protect
      (Group : in out Transaction; Path : String; Identity : File_Identity) is
    begin
-      if not Group.Protected_Paths.Contains (Path) then
+      if Path /= "" and then not Group.Protected_Paths.Contains (Path) then
          Group.Protected_Paths.Append (Path);
       end if;
       if Identity.Valid then
@@ -78,13 +78,47 @@ package body Landin.Platform.Publication is
          Advance_Publication
            (Files, Item.Handle, Restore_Previous, Group.Protected_Paths,
             Group.Protected_Identities, Part_Status, Part_Reason);
+         if Part_Status = Write_Ok then
+            Advance_Publication
+              (Files, Item.Handle, Finish_Publication, Group.Protected_Paths,
+               Group.Protected_Identities, Part_Status, Part_Reason);
+         end if;
          if Part_Status /= Write_Ok then
             Status := Not_Writable;
             Append (Reason, To_String (Part_Reason) & "; ");
          end if;
       end loop;
       Group.Committed := False;
+      if Status = Write_Ok then
+         Group.Entries.Clear;
+      end if;
    end Abort_Transaction;
+
+   procedure Discard
+     (Group : in out Transaction; Files : Filesystem'Class; Path : String;
+      Status : out Write_Status; Reason : out Unbounded_String) is
+   begin
+      Status := Write_Ok;
+      Reason := Null_Unbounded_String;
+      for Index in 1 .. Natural (Group.Entries.Length) loop
+         if To_String (Group.Entries (Index).Path) = Path then
+            Advance_Publication
+              (Files, Group.Entries (Index).Handle, Restore_Previous,
+               Group.Protected_Paths, Group.Protected_Identities,
+               Status, Reason);
+            if Status = Write_Ok then
+               Advance_Publication
+                 (Files, Group.Entries (Index).Handle, Finish_Publication,
+                  Group.Protected_Paths, Group.Protected_Identities,
+                  Status, Reason);
+            end if;
+            if Status = Write_Ok then
+               Group.Entries.Delete (Index);
+            end if;
+            return;
+         end if;
+      end loop;
+   end Discard;
 
    procedure Commit
      (Group : in out Transaction; Files : Filesystem'Class;
@@ -123,6 +157,10 @@ package body Landin.Platform.Publication is
       Part_Status : Write_Status;
       Part_Reason : Unbounded_String;
    begin
+      if not Group.Committed then
+         Abort_Transaction (Group, Files, Status, Reason);
+         return;
+      end if;
       Status := Write_Ok;
       Reason := Null_Unbounded_String;
       for Item of Group.Entries loop

@@ -178,7 +178,7 @@ package body Landin.Testing.Fakes is
          end if;
       end loop;
       return (Valid => True, Device => 1,
-              Inode => Interfaces.Unsigned_64 (Index));
+              Inode => Host.Writes.Data.Files (Index).Identity);
    end Existing_Identity;
 
    function Same_File_Count (Host : Fake_Filesystem) return Natural
@@ -456,6 +456,318 @@ package body Landin.Testing.Fakes is
       Host.Writes.Data.Fails_Move := True;
       Host.Writes.Data.Moves_Before_Failure := At_Move - 1;
    end Fail_Move;
+
+   overriding procedure Read_Snapshot
+     (Host : Fake_Filesystem; Path : String;
+      Content : out Unbounded.Unbounded_String;
+      Identity : out Landin.Platform.File_Identity;
+      Status : out Landin.Platform.Read_Status) is
+   begin
+      Read_File (Host, Path, Content, Status);
+      Identity := (if Status = Landin.Platform.Read_Ok
+                   then Identity_Of (Host, Path) else (others => <>));
+   end Read_Snapshot;
+
+   overriding procedure Open_Publication
+     (Host : Fake_Filesystem; Path : String; Delete_Only : Boolean;
+      Root : String; Handle : out Landin.Platform.Publication_Handle;
+      Stage : out Unbounded.Unbounded_String;
+      Status : out Landin.Platform.Write_Status;
+      Reason : out Unbounded.Unbounded_String)
+   is
+      pragma Unreferenced (Root);
+      Existing : constant Natural := Find (Host, Path);
+      Slash : constant Natural := Ada.Strings.Fixed.Index
+        (Path, "/", Ada.Strings.Backward);
+      Parent : constant String :=
+        (if Slash = 0 then "." else Path (Path'First .. Slash - 1));
+      Name : constant String := Path (Slash + 1 .. Path'Last);
+      Item : Fake_Publication;
+   begin
+      Handle := Landin.Platform.No_Publication;
+      Stage := Unbounded.Null_Unbounded_String;
+      Reason := Unbounded.Null_Unbounded_String;
+      Status := Landin.Platform.Not_Writable;
+      if Host.Writes.Data.Refuses_Write or else Host.Is_Link (Path) then
+         Reason := Unbounded.To_Unbounded_String
+           ("output is linked or unwritable; choose another ordinary output");
+         return;
+      end if;
+      for Index in Path'Range loop
+         if Path (Index) = '/' and then Index > Path'First
+           and then Host.Is_Link (Path (Path'First .. Index - 1))
+         then
+            Reason := Unbounded.To_Unbounded_String
+              ("output parent is linked; choose an ordinary output root");
+            return;
+         end if;
+      end loop;
+      Item.Path := Unbounded.To_Unbounded_String (Path);
+      Item.Stage := Unbounded.To_Unbounded_String
+        (Parent & "/.refine-publication/" & Name);
+      Item.Recovery := Unbounded.To_Unbounded_String
+        (Parent & "/.refine-publication/.previous-" & Name);
+      Item.Absent := Existing = 0;
+      Item.Deletion := Delete_Only;
+      if Existing /= 0 then
+         Item.Expected := Host.Writes.Data.Files (Existing);
+         if Item.Expected.Kind /= A_File then
+            Reason := Unbounded.To_Unbounded_String
+              ("output is not an ordinary file; choose another output");
+            return;
+         end if;
+      end if;
+      Host.Writes.Data.Publications.Append (Item);
+      Handle := Landin.Platform.Publication_Handle
+        (Host.Writes.Data.Publications.Length);
+      Stage := Item.Stage;
+      Status := Landin.Platform.Write_Ok;
+   end Open_Publication;
+
+   overriding procedure Advance_Publication
+     (Host : Fake_Filesystem; Handle : Landin.Platform.Publication_Handle;
+      Action : Landin.Platform.Publication_Action;
+      Protected_Paths : Landin.Platform.Path_List;
+      Protected_Identities : Landin.Platform.Identity_List;
+      Status : out Landin.Platform.Write_Status;
+      Reason : out Unbounded.Unbounded_String)
+   is
+      use type Landin.Platform.Publication_Action;
+      use type Landin.Platform.Move_Status;
+      use type Landin.Platform.Remove_Status;
+      use type Unbounded.Unbounded_String;
+      Index : constant Positive := Positive (Handle);
+      Item : Fake_Publication := Host.Writes.Data.Publications (Index);
+      Path : constant String := Unbounded.To_String (Item.Path);
+      Stage : constant String := Unbounded.To_String (Item.Stage);
+      Recovery : constant String := Unbounded.To_String (Item.Recovery);
+      At_Path : Natural;
+      Moved : Landin.Platform.Move_Status;
+      Removed : Landin.Platform.Remove_Status;
+
+      procedure Save;
+      procedure Save is
+      begin
+         Host.Writes.Data.Publications.Replace_Element (Index, Item);
+      end Save;
+      procedure Fail (Text : String);
+      procedure Fail (Text : String) is
+      begin
+         Status := Landin.Platform.Not_Writable;
+         Reason := Unbounded.To_Unbounded_String
+           (Text & "; recovery " & Recovery);
+         Save;
+      end Fail;
+   begin
+      Status := Landin.Platform.Write_Ok;
+      Reason := Unbounded.Null_Unbounded_String;
+      if Item.Finished then
+         return;
+      end if;
+      case Action is
+         when Landin.Platform.Validate_Stage =>
+            if not Item.Deletion then
+               At_Path := Find (Host, Stage);
+               if At_Path = 0 or else Host.Is_Link (Stage) then
+                  Fail ("staged output missing or linked");
+                  return;
+               end if;
+               Item.Fresh := Host.Writes.Data.Files (At_Path);
+            end if;
+         when Landin.Platform.Capture_Previous =>
+            if Host.Is_Link (Path) then
+               Fail ("output became linked");
+               return;
+            end if;
+            At_Path := Find (Host, Path);
+            if At_Path = 0 then
+               if not Item.Absent then
+                  Fail ("expected output disappeared");
+                  return;
+               end if;
+            else
+               Move_File (Host, Path, Recovery, Moved);
+               if Moved /= Landin.Platform.Moved then
+                  Fail ("cannot capture previous output");
+                  return;
+               end if;
+               Item.Captured := True;
+               At_Path := Find (Host, Recovery);
+               if Item.Absent
+                 or else Host.Writes.Data.Files (At_Path).Identity
+                   /= Item.Expected.Identity
+                 or else Host.Writes.Data.Files (At_Path).Content
+                   /= Item.Expected.Content
+               then
+                  Fail ("output changed after its snapshot");
+                  return;
+               end if;
+               for Identity of Protected_Identities loop
+                  if Identity.Valid and then Identity.Device = 1
+                    and then Identity.Inode = Item.Expected.Identity
+                  then
+                     Fail ("output aliases an original read input");
+                     return;
+                  end if;
+               end loop;
+               for Input of Protected_Paths loop
+                  if Input = Path
+                    or else Host.Paths_Overlap (Recovery, Input)
+                  then
+                     Fail ("output aliases a protected input");
+                     return;
+                  end if;
+               end loop;
+            end if;
+         when Landin.Platform.Install_Stage =>
+            if not Item.Deletion then
+               if Item.Captured and then Item.Expected.Content
+                 = Item.Fresh.Content
+               then
+                  Move_File (Host, Recovery, Path, Moved);
+                  if Moved /= Landin.Platform.Moved then
+                     Fail ("cannot restore unchanged output");
+                     return;
+                  end if;
+                  Item.Captured := False;
+               else
+                  Move_File (Host, Stage, Path, Moved);
+                  if Moved /= Landin.Platform.Moved then
+                     Fail ("cannot install output without replacement");
+                     return;
+                  end if;
+                  Item.Installed := True;
+                  --  Existing observation API reports successful publication.
+                  declare
+                     Written_Item : File_Entry := Item.Fresh;
+                  begin
+                     Written_Item.Path := Item.Path;
+                     Host.Writes.Data.Items.Append (Written_Item);
+                  end;
+               end if;
+            end if;
+         when Landin.Platform.Restore_Previous =>
+            if Item.Installed then
+               At_Path := Find (Host, Path);
+               if At_Path /= 0 then
+                  declare
+                     Rollback : constant String := Recovery & ".new";
+                  begin
+                     Move_File (Host, Path, Rollback, Moved);
+                     if Moved /= Landin.Platform.Moved then
+                        Fail ("cannot capture output during rollback");
+                        return;
+                     end if;
+                     At_Path := Find (Host, Rollback);
+                     if Host.Writes.Data.Files (At_Path).Identity
+                       /= Item.Fresh.Identity
+                     then
+                        Move_File (Host, Rollback, Path, Moved);
+                        Fail ("concurrent save preserved during rollback");
+                        return;
+                     end if;
+                     Remove_File (Host, Rollback, Removed);
+                     if Removed = Landin.Platform.Not_Removable then
+                        Fail ("new output retained during rollback");
+                        return;
+                     end if;
+                  end;
+               end if;
+               Item.Installed := False;
+            end if;
+            if Item.Captured then
+               Move_File (Host, Recovery, Path, Moved);
+               if Moved /= Landin.Platform.Moved then
+                  Fail ("previous output retained during rollback");
+                  return;
+               end if;
+               Item.Captured := False;
+            end if;
+         when Landin.Platform.Finish_Publication =>
+            if Item.Captured then
+               Remove_File (Host, Recovery, Removed);
+               if Removed = Landin.Platform.Not_Removable then
+                  Fail ("cannot discard committed previous output");
+                  return;
+               end if;
+               Item.Captured := False;
+            end if;
+            Remove_File (Host, Stage, Removed);
+            if Removed = Landin.Platform.Not_Removable then
+               Fail ("cannot clean private stage");
+               return;
+            end if;
+            Item.Finished := True;
+      end case;
+      Save;
+   end Advance_Publication;
+
+   overriding procedure Read_For_Update
+     (Host : Fake_Filesystem; Path : String;
+      Content : out Unbounded.Unbounded_String;
+      Lease : out Landin.Platform.Update_Handle;
+      Status : out Landin.Platform.Read_Status;
+      Reason : out Unbounded.Unbounded_String)
+   is
+      Item : Fake_Update;
+   begin
+      Read_File (Host, Path, Content, Status);
+      Reason := Unbounded.Null_Unbounded_String;
+      Lease := Landin.Platform.No_Update;
+      if Status /= Landin.Platform.Read_Ok then
+         Reason := Unbounded.To_Unbounded_String ("cannot read original update object");
+         return;
+      end if;
+      Item.Path := Unbounded.To_Unbounded_String (Path);
+      Item.Original := Host.Writes.Data.Files (Find (Host, Path));
+      Host.Writes.Data.Updates.Append (Item);
+      Lease := Landin.Platform.Update_Handle (Host.Writes.Data.Updates.Length);
+   end Read_For_Update;
+
+   overriding function Update_Identity
+     (Host : Fake_Filesystem; Lease : Landin.Platform.Update_Handle)
+      return Landin.Platform.File_Identity is
+   begin
+      return (Valid => True, Device => 1,
+              Inode => Host.Writes.Data.Updates
+                (Positive (Lease)).Original.Identity);
+   end Update_Identity;
+
+   overriding procedure Replace_Update
+     (Host : Fake_Filesystem; Lease : Landin.Platform.Update_Handle;
+      Content : String; Status : out Landin.Platform.Write_Status;
+      Reason : out Unbounded.Unbounded_String)
+   is
+      use type Unbounded.Unbounded_String;
+      Item : constant Fake_Update := Host.Writes.Data.Updates (Positive (Lease));
+      Index : constant Natural := Find (Host, Unbounded.To_String (Item.Path));
+   begin
+      Status := Landin.Platform.Not_Writable;
+      Reason := Unbounded.To_Unbounded_String
+        ("original read object changed; rerun or use fmt --stdout");
+      if Item.Closed or else Index = 0
+        or else Host.Writes.Data.Files (Index).Identity /= Item.Original.Identity
+        or else Host.Writes.Data.Files (Index).Content /= Item.Original.Content
+      then
+         return;
+      end if;
+      Write_File (Host, Unbounded.To_String (Item.Path), Content, Status);
+      if Status = Landin.Platform.Write_Ok then
+         Reason := Unbounded.Null_Unbounded_String;
+      end if;
+   end Replace_Update;
+
+   overriding procedure Close_Update
+     (Host : Fake_Filesystem; Lease : Landin.Platform.Update_Handle)
+   is
+      Item : Fake_Update;
+   begin
+      if Lease /= Landin.Platform.No_Update then
+         Item := Host.Writes.Data.Updates (Positive (Lease));
+         Item.Closed := True;
+         Host.Writes.Data.Updates.Replace_Element (Positive (Lease), Item);
+      end if;
+   end Close_Update;
 
    overriding procedure Remove_File
      (Host   : Fake_Filesystem;
@@ -895,6 +1207,12 @@ package body Landin.Testing.Fakes is
            (Host.State.Data.Calls.Last_Index, Last);
       end;
    end Run_In_Environment;
+
+   overriding function Resolve_Program
+     (Host : Fake_Tool_Runner; Program : String) return String is
+   begin
+      return (if Available (Host, Program) then Program else "");
+   end Resolve_Program;
 
    overriding procedure Run
      (Host      : Fake_Tool_Runner;
