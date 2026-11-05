@@ -904,6 +904,15 @@ class Physical(unittest.TestCase):
         self.assertEqual({row["port"]: row["timeout"] for row in rows if row["timeout"] != "50"},
                          {"pico2": "70"})
 
+    def test_the_board_legs_need_no_host_tool_the_rig_runner_lacks(self):
+        # The rig's runner carries git, python3, coreutils, findutils, sed and
+        # the board tools; a missing diffutils once made a leg's file-list
+        # check report a mismatch for a command it could not find.
+        board = "\n".join(workflow_jobs(self.source)["board"])
+        for tool in ("cmp", "diff", "jq", "curl", "wget"):
+            with self.subTest(tool=tool):
+                self.assertIsNone(re.search(r"(^|[\s|;(!])%s\s" % tool, board), tool)
+
     def test_a_busy_rig_ends_in_its_own_outcome_inside_every_timeout(self):
         # A lock wait the job's timeout cuts short would be a killed job,
         # not the board gate's rig-busy outcome; exec lets the runner's

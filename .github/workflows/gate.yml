@@ -1783,13 +1783,15 @@ jobs:
           cd "$RUNNER_TEMP/board-bundles"
           printf '%s  files.sha256\n' "$MANIFEST" | sha256sum --check --strict -
           sha256sum --check --strict --quiet files.sha256
-          sed 's/^[0-9a-f]\{64\}  //' files.sha256 | LC_ALL=C sort > "$RUNNER_TEMP/listed"
-          find . -type f ! -path ./files.sha256 | sed 's|^\./||' | LC_ALL=C sort > "$RUNNER_TEMP/present"
-          if ! cmp -s "$RUNNER_TEMP/listed" "$RUNNER_TEMP/present"; then
-            echo "the downloaded files are not the ones files.sha256 lists" >&2
-            diff "$RUNNER_TEMP/listed" "$RUNNER_TEMP/present" >&2 || true
-            exit 1
-          fi
+          #  Python, not cmp and diff: the rig's runner carries few host
+          #  tools, and a missing one must not read as a mismatch.
+          python3 -I -c 'import pathlib, sys
+          listed = {line[66:] for line in pathlib.Path("files.sha256").read_text().splitlines()}
+          present = {str(path) for path in pathlib.Path(".").rglob("*")
+                     if path.is_file() and str(path) != "files.sha256"}
+          if listed != present:
+              sys.exit("the downloaded files are not the ones files.sha256 lists:"
+                       " missing %s, unlisted %s" % (sorted(listed - present), sorted(present - listed)))'
           python3 -I -c 'import json, os, sys
           p = json.load(open(sys.argv[1]))
           wanted = (os.environ["GITHUB_SHA"], os.environ["GITHUB_RUN_ID"])
