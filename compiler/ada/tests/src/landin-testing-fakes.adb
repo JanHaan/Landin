@@ -746,6 +746,15 @@ package body Landin.Testing.Fakes is
                end if;
                Item.Fresh := Host.Writes.Data.Files (At_Path);
                Item.Fresh_Tree := Snapshot_Below (Host, Stage);
+               if not Item.Absent
+                 and then Item.Fresh.Kind /= Item.Expected.Kind
+               then
+                  Fail ("output and staged artifact have different kinds");
+                  return;
+               end if;
+            elsif not Item.Absent and then Item.Expected.Kind /= A_File then
+               Fail ("a directory is not a stale generated file");
+               return;
             end if;
          when Landin.Platform.Capture_Previous =>
             At_Path := Find (Host, Path);

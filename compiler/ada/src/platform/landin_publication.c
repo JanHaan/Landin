@@ -775,9 +775,28 @@ int landin_publication_step(int token, int action, const char *const *paths,
     recovery_fd = p->arena->recovery_fd;
     if (action <= 2 && landin_cancellation_requested()) { errno = EINTR; goto fail; }
     if (action == 0) {
-        if (p->deletion) return 0;
+        if (p->deletion) {
+            if (!p->absent && !S_ISREG(p->expected.st_mode)) {
+                reason(why, room, "%s is a directory, not a stale generated file; choose another output",
+                       p->path); return -1;
+            }
+            return 0;
+        }
         if (fstatat(private_fd, p->name, &p->fresh, AT_SYMLINK_NOFOLLOW) != 0
             || (!S_ISREG(p->fresh.st_mode) && !S_ISDIR(p->fresh.st_mode))) goto fail;
+        if (!p->absent
+            && S_ISDIR(p->expected.st_mode) != S_ISDIR(p->fresh.st_mode)) {
+            /* Snapshot a private staged directory so abort may remove only
+               this verified tree. The public destination remains untouched. */
+            if (S_ISDIR(p->fresh.st_mode)) {
+                p->fresh_tree = snapshot_entry(private_fd, p->name);
+                if (!p->fresh_tree) goto fail;
+            }
+            reason(why, room, "%s is %s, but the generated artifact is %s; choose another output",
+                   p->path, S_ISDIR(p->expected.st_mode) ? "a directory" : "a regular file",
+                   S_ISDIR(p->fresh.st_mode) ? "a directory" : "a regular file");
+            return -1;
+        }
         if (S_ISREG(p->fresh.st_mode)) {
             int fd = openat(private_fd, p->name, O_RDWR | O_NOFOLLOW | O_CLOEXEC);
             if (fd < 0) goto fail;
