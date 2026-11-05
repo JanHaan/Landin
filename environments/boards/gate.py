@@ -104,6 +104,30 @@ def port_steps(rig, port, values):
             for step in steps], used
 
 
+# The host commands each board tool runs besides probe-rs and the SRAM
+# helper, which have checks of their own.  A missing one is found before the
+# lock, never in the middle of a sequence that has already flashed a board.
+HOST_TOOLS = dict(rp2040=('uhubctl', 'journalctl'), rp2350=('uhubctl', 'journalctl', 'ping'),
+                  rp2350_hazard3=('uhubctl', 'journalctl', 'ping'),
+                  stm32h753=('uhubctl', 'journalctl'), esp32c3=('uhubctl', 'journalctl'),
+                  esp32c5=('uhubctl', 'journalctl'), esp32=('uhubctl', 'journalctl'),
+                  esp32s3=('uhubctl', 'journalctl'))
+
+
+def host_tools(steps, used, which=shutil.which):
+    """Each host command STEPS' tools run, found on PATH, or needs-setup
+    naming every one that is missing; probehive's GPIO shell needs nix."""
+    wanted = sorted({tool for board, _, _ in steps for tool in HOST_TOOLS[board]}
+                    | ({'nix'} if 'probehive' in used else set()))
+    found = {tool: which(tool) for tool in wanted}
+    missing = [tool for tool, path in found.items() if not path]
+    require(not missing, 'this rig lacks %s on PATH, which the %s steps run: install %s for the'
+            ' user that runs the board gate' % (', '.join(missing), ', '.join(
+                sorted({board for board, _, _ in steps})), 'them' if len(missing) > 1 else 'it'),
+            NeedsSetup)
+    return found
+
+
 def probe_rs_identity(which=shutil.which, run=subprocess.run):
     """probe-rs on PATH and its --version, refused unless it is the pinned
     revision the SRAM helper is built from."""
@@ -234,7 +258,8 @@ def summary(document):
 
 def run_gate(args, *, root=ROOT, environ=None, state=None, lock_path=None,
              sysfs=rigs.USB_SYSFS, boot_id_path=rigs.BOOT_ID, validate_bundle=bundle.validate,
-             verify_helper=common.verify_ram_helper, probe_rs=probe_rs_identity, locks='/proc/locks',
+             verify_helper=common.verify_ram_helper, probe_rs=probe_rs_identity, which=shutil.which,
+             locks='/proc/locks',
              report=None, signals=True):
     environ = os.environ if environ is None else environ
     state = Path(common.RIG_STATE if state is None else state)
@@ -282,6 +307,7 @@ def run_gate(args, *, root=ROOT, environ=None, state=None, lock_path=None,
             require(Path(args.ram_loader).is_file(), 'no SRAM helper at %s: install the pinned'
                     ' landin-ram-run there or name it with --ram-loader' % args.ram_loader, NeedsSetup)
             provenance['helper'] = verify_helper(SimpleNamespace(ram_loader=args.ram_loader))
+        provenance['host_tools'] = host_tools(steps, used, which)
         provenance['probe_rs'] = probe_rs()
         if 'probehive' in used:
             provenance['probehive'] = dict(directory=str(args.probehive),

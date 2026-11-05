@@ -152,7 +152,7 @@ class Rig:
                          validate_bundle=self.validate,
                          verify_helper=lambda args: dict(protocol_version=1, source_sha256='h' * 64),
                          probe_rs=lambda: dict(path='/bin/probe-rs', version='probe-rs 0.32.0 6f9946fe'),
-                         report=lambda _: None)
+                         which=lambda tool: '/bin/' + tool, report=lambda _: None)
         arguments.update(options)
         args = arguments.pop('args', None) or self.args(port)
         with redirect_stdout(io.StringIO()), mock.patch.object(GATE.sys.stdout, 'buffer', io.BytesIO(),
@@ -294,6 +294,16 @@ class Refusals(unittest.TestCase):
         self.rig.rig.write_text(json.dumps(description))
         self.refused('pico2', 'needs-setup', 'leaves its hub, port null')
         self.assertEqual(self.rig.validated, [])
+
+    def test_a_host_tool_the_steps_run_is_found_before_the_lock(self):
+        # The first Pico 2 leg on the rig flashed its board and then met a
+        # missing ping, leaving the fixed image unrestored.
+        document = self.refused('pico2', 'needs-setup', 'lacks ping on PATH',
+                                which=lambda tool: None if tool == 'ping' else '/bin/' + tool)
+        self.assertIn('rp2350, rp2350_hazard3', document['failure'])
+        document = self.refused('rp2040', 'needs-setup', 'lacks nix, uhubctl on PATH',
+                                which=lambda tool: None if tool in ('nix', 'uhubctl') else '/bin/' + tool)
+        self.assertNotIn('ping', document['failure'])
 
     def test_a_bundle_from_other_source_fails(self):
         def stale(directory, **_):
