@@ -30,7 +30,7 @@ struct arena {
 };
 struct publication {
     int token, absent, deletion, captured, installed, unchanged, finished;
-    int rollback_pending, expected_fd;
+    int rollback_pending, expected_fd, capture_valid;
     char journal[64];
     struct stat journal_id;
     struct arena *arena;
@@ -169,7 +169,7 @@ static int equal_tree(const struct tree_entry *a, const struct tree_entry *b,
 }
 /* Remove exactly the snapshotted private entries. Unknown names prevent the
    final rmdir; they are never swept recursively. */
-static int discard_tree(int parent, const char *name, const struct tree_entry *tree)
+static int discard_known_tree(int parent, const char *name, const struct tree_entry *tree)
 {
     struct stat actual;
     if (fstatat(parent, name, &actual, AT_SYMLINK_NOFOLLOW) != 0
@@ -179,11 +179,19 @@ static int discard_tree(int parent, const char *name, const struct tree_entry *t
         const struct tree_entry *child;
         if (fd < 0) return -1;
         for (child = tree->children; child; child = child->next)
-            if (discard_tree(fd, child->name, child) != 0) { close(fd); return -1; }
+            if (discard_known_tree(fd, child->name, child) != 0) { close(fd); return -1; }
         close(fd);
         return unlinkat(parent, name, AT_REMOVEDIR);
     }
     return unlinkat(parent, name, 0);
+}
+static int discard_tree(int parent, const char *name, const struct tree_entry *tree)
+{
+    struct tree_entry *current = snapshot_entry(parent, name);
+    int matches = current && equal_tree(tree, current, 1);
+    free_tree(current);
+    if (!matches) { errno = EAGAIN; return -1; }
+    return discard_known_tree(parent, name, tree);
 }
 static struct arena *stage_arena(const char *path, const char **relative)
 {
@@ -765,6 +773,7 @@ int landin_publication_step(int token, int action, const char *const *paths,
             free_tree(captured);
             if (!matches) { errno = EAGAIN; goto fail; }
         }
+        p->capture_valid = 1;
         return 0;
     }
     if (action == 2) {
@@ -821,7 +830,8 @@ int landin_publication_step(int token, int action, const char *const *paths,
            captured entries are retained even when the group is abandoned. */
         if (p->captured) {
             if (fstatat(recovery_fd, p->recovery, &st, AT_SYMLINK_NOFOLLOW) != 0
-                || p->absent || !same(&st, &p->expected)) goto fail;
+                || p->absent || !p->capture_valid
+                || !same(&st, &p->expected)) goto fail;
             if (S_ISDIR(st.st_mode)) {
                 if (!p->expected_tree || discard_tree(recovery_fd, p->recovery,
                                                        p->expected_tree) != 0) goto fail;

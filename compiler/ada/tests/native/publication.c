@@ -182,6 +182,26 @@ static void directory_snapshot(void)
 #endif
     REQUIRE(step(token, 4) == 0); ++passed;
 }
+static void mismatch_finish_preserves_tree(void)
+{
+    char output[4096], stage[4096], first[8192], changed[8192], old[8192];
+    path(output, sizeof output, "mismatch.dSYM"); REQUIRE(mkdir(output, 0700) == 0);
+    REQUIRE(snprintf(first, sizeof first, "%s/first", output) > 0); put(first, "keep-first");
+    REQUIRE(snprintf(changed, sizeof changed, "%s/changed", output) > 0); put(changed, "old-child");
+    int token = prepare(output, 0, "", stage); REQUIRE(mkdir(stage, 0700) == 0);
+    REQUIRE(step(token, 0) == 0);
+    REQUIRE(unlink(changed) == 0); put(changed, "new-child");
+    REQUIRE(step(token, 1) != 0 && step(token, 4) != 0);
+    char *at = strstr(stage, "/stage/"); REQUIRE(at != NULL);
+    REQUIRE(snprintf(old, sizeof old, "%.*s/recovery/.previous-%d/first",
+                      (int)(at - stage), stage, token) > 0);
+    REQUIRE(content(old, "keep-first"));
+#if defined(__linux__) || defined(__APPLE__)
+    REQUIRE(step(token, 3) == 0 && content(first, "keep-first")
+            && content(changed, "new-child"));
+#endif
+    ++passed;
+}
 static void staged_rewrite(void)
 {
     char output[4096], stage[4096];
@@ -325,7 +345,7 @@ int main(int argc, char **argv)
     anchored_stage_and_roots(); directory_snapshot(); staged_rewrite();
     fmt_read_boundaries(); fmt_original_descriptor(); collision_names();
     repeated_abort_retains_recovery(); recovery_discovery();
-    child_staging_directory();
+    child_staging_directory(); mismatch_finish_preserves_tree();
     printf("publication native: %u controls passed; retained scratch %s\n", passed, scratch);
     return 0;
 }
