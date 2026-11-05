@@ -432,6 +432,21 @@ int landin_tool_stop(int child, int *status)
     return landin_tool_wait(child, status, 0);
 }
 
+/* Test-only observer: configure while no cancellation call is active; it must
+   not reenter cancellation. Production leaves it NULL. Count delivery attempts
+   rather than relying on standard signals not coalescing in a fast handler. */
+static void (*landin_cancel_delivery_hook)(int, int, int);
+void landin_tool_cancel_set_hook(void (*hook)(int, int, int))
+{ landin_cancel_delivery_hook = hook; }
+static int landin_cancel_forward(pid_t target, int number)
+{
+    int result = kill(target, number), error = errno;
+    if (landin_cancel_delivery_hook)
+        landin_cancel_delivery_hook((int)target, number, result);
+    errno = error;
+    return result;
+}
+
 /* Forward the original cancellation, allow a bounded ordinary shutdown,
    then stop remaining group members before reaping the leader. waitid's
    WNOWAIT keeps its PID reserved throughout signaling. This supervises
@@ -444,10 +459,39 @@ int landin_tool_cancel(int child, int *status)
         errno = EINVAL;
         return -1;
     }
-    if (kill(-(pid_t)child, number) != 0 && errno != ESRCH)
-        return -1;
-    if (kill((pid_t)child, number) != 0 && errno != ESRCH)
-        return -1;
+    /* The group includes its ordinary leader. A successful delivery must
+       never be repeated to that leader: a catchable handler may already be
+       running by the time kill returns. */
+    if (landin_cancel_forward(-(pid_t)child, number) != 0) {
+        int error = errno, observed;
+        siginfo_t info;
+        if (error != ESRCH
+#ifdef __APPLE__
+            && error != EPERM
+#endif
+            ) return -1;
+        /* Only an unreaped child permits the direct fallback. WNOWAIT checks
+           its state without releasing that reservation; no competing reaper
+           or signal-policy change is allowed during this owned lifetime. */
+        do {
+            memset(&info, 0, sizeof info);
+            observed = waitid(P_PID, (id_t)child, &info,
+                               WEXITED | WNOHANG | WNOWAIT);
+        } while (observed != 0 && errno == EINTR);
+        if (observed != 0) return -1;
+        if (info.si_pid == 0) {
+            /* A missing group can leave the live direct child elsewhere.
+               EPERM does not authorize retrying a live target. */
+            if (error != ESRCH) { errno = error; return -1; }
+            if (landin_cancel_forward((pid_t)child, number) != 0
+                && errno != ESRCH) return -1;
+        } else if (info.si_pid != (pid_t)child) {
+            errno = ECHILD; return -1;
+        }
+        /* No catchable signal is needed for an exited child. In particular,
+           Darwin can report EPERM for its zombie-only group; Stop below
+           handles that state while retaining the leader through cleanup. */
+    }
     for (attempts = 0; attempts < 50; ++attempts) {
         siginfo_t info;
         const struct timespec interval = {0, 20000000};

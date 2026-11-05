@@ -26,6 +26,7 @@ int landin_tool_start_in_directory(char *const[], char *const[], int, int, int,
 int landin_program_run(char *const[], int *, int *, int *);
 const char *landin_process_start_error(int);
 int landin_tool_cancel(int, int *);
+void landin_tool_cancel_set_hook(void (*)(int, int, int));
 int landin_tool_stop(int, int *);
 int landin_cancellation_begin(void);
 void landin_cancellation_end(void);
@@ -36,6 +37,14 @@ static volatile sig_atomic_t received;
 static volatile sig_atomic_t restored;
 static volatile sig_atomic_t timed_out;
 static const int numbers[] = {SIGINT, SIGTERM, SIGHUP};
+
+static unsigned int delivery_calls;
+static int delivery_target, delivery_number, delivery_result;
+static void record_delivery(int target, int number, int result)
+{
+    ++delivery_calls;
+    delivery_target = target; delivery_number = number; delivery_result = result;
+}
 
 static void fail(const char *message)
 {
@@ -426,11 +435,17 @@ int main(int argc, char **argv)
         require(landin_cancellation_requested() == number,
                 "first cancellation signal retained");
         {
+            delivery_calls = 0;
+            landin_tool_cancel_set_hook(record_delivery);
             int result = landin_tool_cancel(child, &status);
+            landin_tool_cancel_set_hook(NULL);
             if (result == child)
                 owned_child = 0;
             require(result == child,
                     "production cancel stops and reaps direct child");
+            require(delivery_calls == 1 && delivery_target == -child
+                    && delivery_number == number && delivery_result == 0,
+                    "one original-signal delivery to the ordinary tool group");
         }
         require(status == (strcmp(mode, "stubborn") == 0 ? -1 : 0),
                 "cooperative versus forced stop status");
