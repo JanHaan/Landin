@@ -5,7 +5,12 @@
 #ifdef __linux__
 #define _GNU_SOURCE
 #endif
+#ifdef __APPLE__
+#define _DARWIN_C_SOURCE
+#endif
+#ifndef __FreeBSD__
 #define _POSIX_C_SOURCE 200809L
+#endif
 #include <errno.h>
 #include <fcntl.h>
 #include <signal.h>
@@ -16,6 +21,7 @@
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
+#include "landin_owned_directory.h"
 
 extern char **environ;
 
@@ -103,23 +109,89 @@ int landin_cancellation_requested(void)
     return (int)landin_cancel_signal;
 }
 
-/* Create one capture file under $TMPDIR, or /tmp when that is unset or
-   empty, and return its open descriptor with its name in path. GNAT's own
-   temporary files are relative to the current directory, which put every
-   capture beside the caller's sources and failed in a read-only one. */
+/* Captures are unlinked within a freshly created private directory and
+   stay open through reading. A changed TMPDIR ancestor cannot substitute
+   bytes or make cleanup unlink an unrelated public filename. */
+struct landin_capture {
+    int fd;
+    struct landin_owned_directory owned;
+    struct landin_capture *next;
+};
+static struct landin_capture *landin_captures;
+void landin_tool_capture_set_hook(void (*hook)(const char *, const char *))
+{ landin_owned_hook = hook; }
 int landin_tool_capture(char *path, size_t capacity)
 {
-    const char *directory = getenv("TMPDIR");
-    int written;
-
-    if (directory == NULL || directory[0] == '\0')
-        directory = "/tmp";
-    written = snprintf(path, capacity, "%s/landin-tool-XXXXXX", directory);
-    if (written < 0 || (size_t)written >= capacity) {
-        errno = ENAMETOOLONG;
-        return -1;
+    struct landin_capture *capture = calloc(1, sizeof *capture);
+    int error;
+    if (!capture) return -1;
+    if (landin_owned_create("landin-tool-", &capture->owned) != 0) {
+        free(capture); return -1;
     }
-    return mkstemp(path);
+    capture->fd = openat(capture->owned.root, "capture",
+                         O_RDWR | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600);
+    if (capture->fd < 0 || unlinkat(capture->owned.root, "capture", 0) != 0)
+        goto failed;
+    if (strlen(capture->owned.path) >= capacity) {
+        errno = ENAMETOOLONG; goto failed;
+    }
+    strcpy(path, capture->owned.path);
+    capture->next = landin_captures; landin_captures = capture;
+    if (landin_owned_hook) landin_owned_hook("created", path);
+    return capture->fd;
+failed:
+    error = errno;
+    if (capture->fd >= 0) close(capture->fd);
+    landin_owned_remove(&capture->owned);
+    if (capture->owned.root >= 0) close(capture->owned.root);
+    close(capture->owned.parent); free(capture); errno = error; return -1;
+}
+int landin_tool_capture_read(int fd, char **bytes, size_t *length)
+{
+    size_t used = 0, room = 65536;
+    char *data = malloc(room);
+    if (!data) return -1;
+    *bytes = NULL; *length = 0;
+    for (;;) {
+        ssize_t count;
+        if (used == room) {
+            char *larger;
+            if (room > SIZE_MAX / 2) { free(data); errno = EOVERFLOW; return -1; }
+            room *= 2;
+            larger = realloc(data, room);
+            if (!larger) { free(data); return -1; }
+            data = larger;
+        }
+        count = pread(fd, data + used, room - used, (off_t)used);
+        if (count < 0 && errno == EINTR) continue;
+        if (count < 0) { free(data); return -1; }
+        if (count == 0) break;
+        used += (size_t)count;
+    }
+    *bytes = data; *length = used; return 0;
+}
+void landin_tool_capture_free(char *bytes) { free(bytes); }
+/* Consumes the data descriptor even when directory cleanup refuses. */
+int landin_tool_capture_close(int fd, char *reason, size_t capacity)
+{
+    struct landin_capture **entry = &landin_captures;
+    int result, closed;
+    if (capacity) reason[0] = '\0';
+    while (*entry && (*entry)->fd != fd) entry = &(*entry)->next;
+    if (!*entry) { errno = EBADF; return -1; }
+    {
+        struct landin_capture *capture = *entry;
+        *entry = capture->next;
+        result = landin_owned_remove(&capture->owned);
+        closed = close(fd);
+        if (result < 0 && capacity)
+            snprintf(reason, capacity, "%s", capture->owned.reason);
+        else if (closed != 0 && capacity)
+            snprintf(reason, capacity, "cannot close anonymous tool capture");
+        if (capture->owned.root >= 0) close(capture->owned.root);
+        close(capture->owned.parent); free(capture);
+    }
+    return result >= 0 && closed == 0 ? 0 : -1;
 }
 
 /* Move SOURCE above the standard descriptors when it is one of them, once

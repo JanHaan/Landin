@@ -86,8 +86,8 @@ begin
                Unbounded.Append
                  (Result.Report, "refine: could not remove cancelled run's "
                   & "private directory: "
-                  & Unbounded.To_String (Result.Launch_Directory)
-                  & ASCII.LF);
+                  & Unbounded.To_String (Result.Launch_Directory) & ": "
+                  & Host.Removal_Failure_Reason & ASCII.LF);
             end if;
             Result.Launch_Program := Unbounded.Null_Unbounded_String;
             Result.Launch_Directory := Unbounded.Null_Unbounded_String;

@@ -1,8 +1,10 @@
 with Ada.Environment_Variables;
+with Ada.Exceptions;
 with Ada.Real_Time;
 with Ada.Strings.Fixed;
 
 with GNAT.OS_Lib;
+with Landin.Platform.Native.Byte_Strings;
 
 with Interfaces.C;
 with Interfaces.C.Strings;
@@ -70,12 +72,67 @@ package body Landin.Platform.Native.Tools is
      with Import, Convention => C,
        External_Name => "landin_publication_rebase_argument";
 
+   function Private_Directory
+     (Text : C_Strings.chars_ptr) return Interfaces.C.int
+     with Import, Convention => C,
+       External_Name => "landin_private_argument_directory";
+   function Rebase_Private
+     (Text : C_Strings.chars_ptr; Directory : Interfaces.C.int;
+      Result : out Interfaces.C.char_array; Room : Interfaces.C.size_t)
+      return Interfaces.C.int
+     with Import, Convention => C,
+       External_Name => "landin_private_rebase_argument";
+
+   function Private_Read_Descriptor
+     (Text : Interfaces.C.char_array) return Interfaces.C.int
+     with Import, Convention => C,
+       External_Name => "landin_private_read_descriptor";
+   function Private_Path_Current
+     (Text : Interfaces.C.char_array) return Interfaces.C.int
+     with Import, Convention => C,
+       External_Name => "landin_private_path_current";
+
    --  Creates one capture file in the host's temporary directory and
    --  returns its descriptor, or -1, with its NUL-terminated name in Path.
    function Create_Capture
      (Path     : out Interfaces.C.char_array;
       Capacity : Interfaces.C.size_t) return Interfaces.C.int
      with Import, Convention => C, External_Name => "landin_tool_capture";
+
+   function Read_Capture
+     (FD : Interfaces.C.int; Bytes : out C_Strings.chars_ptr;
+      Size : out Interfaces.C.size_t) return Interfaces.C.int
+     with Import, Convention => C,
+       External_Name => "landin_tool_capture_read";
+   procedure Free_Capture (Bytes : C_Strings.chars_ptr)
+     with Import, Convention => C,
+       External_Name => "landin_tool_capture_free";
+   function Close_Capture
+     (FD : Interfaces.C.int; Reason : out Interfaces.C.char_array;
+      Room : Interfaces.C.size_t) return Interfaces.C.int
+     with Import, Convention => C,
+       External_Name => "landin_tool_capture_close";
+
+   procedure Capture_Bytes
+     (FD : OS.File_Descriptor; Content : out Unbounded.Unbounded_String);
+   procedure Capture_Bytes
+     (FD : OS.File_Descriptor; Content : out Unbounded.Unbounded_String)
+   is
+      Bytes : C_Strings.chars_ptr := C_Strings.Null_Ptr;
+      Size : Interfaces.C.size_t;
+   begin
+      if Read_Capture (Interfaces.C.int (FD), Bytes, Size) /= 0 then
+         raise External_Tool_Failed with "could not read retained tool output";
+      end if;
+      begin
+         Content := Byte_Strings.Copy (Bytes, Size);
+      exception
+         when others =>
+            Free_Capture (Bytes);
+            raise;
+      end;
+      Free_Capture (Bytes);
+   end Capture_Bytes;
 
    --  Not GNAT.OS_Lib's temporary files: those are created relative to the
    --  current directory whatever TMPDIR says, so every capture landed beside
@@ -145,6 +202,13 @@ package body Landin.Platform.Native.Tools is
       Error : Interfaces.C.int;
    begin
       Result := (others => <>);
+      if Private_Path_Current (Interfaces.C.To_C (Program)) = 0 then
+         raise External_Tool_Failed
+           with "private program directory changed before launch: " & Program
+             & "; rerun to compile in a fresh private directory";
+      end if;
+      --  Execution is still pathname based after this observed-change
+      --  refusal. It is not a pinned executable-object guarantee.
       List (0) := C_Strings.New_String (Program);
       for Index in 1 .. Natural (Arguments.Length) loop
          List (Interfaces.C.size_t (Index)) :=
@@ -247,20 +311,20 @@ package body Landin.Platform.Native.Tools is
       Error_FD       : OS.File_Descriptor := OS.Invalid_FD;
       Input_FD       : OS.File_Descriptor := OS.Invalid_FD;
       Directory_FD   : OS.File_Descriptor := OS.Invalid_FD;
-      Success        : Boolean;
       Status         : aliased Interfaces.C.int := 0;
       Pid            : aliased Interfaces.C.int := 0;
       Exceeded_Limit : Boolean := False;
       Cancelled      : Boolean := False;
-      Reader         : Native_Filesystem;
-      Read           : Read_Status;
+
 
       function Rebased (Argument : String) return String;
 
       function Rebased (Argument : String) return String is
          Text : C_Strings.chars_ptr := C_Strings.New_String (Argument);
-         Buffer : Interfaces.C.char_array (0 .. Argument'Length);
+         Buffer, Private_Buffer :
+           Interfaces.C.char_array (0 .. Argument'Length);
          Answer : Interfaces.C.int;
+         Intermediate : C_Strings.chars_ptr;
       begin
          if Directory_FD = OS.Invalid_FD then
             C_Strings.Free (Text);
@@ -273,7 +337,17 @@ package body Landin.Platform.Native.Tools is
             raise External_Tool_Failed
               with "tool outputs span incompatible staging directories";
          end if;
-         return Interfaces.C.To_Ada (Buffer);
+         Intermediate := C_Strings.New_String (Interfaces.C.To_Ada (Buffer));
+         Answer := Rebase_Private
+           (Intermediate, Interfaces.C.int (Directory_FD), Private_Buffer,
+            Private_Buffer'Length);
+         C_Strings.Free (Intermediate);
+         if Answer /= 0 then
+            raise External_Tool_Failed
+              with "tool inputs span incompatible private directories;"
+                & " keep generated inputs in one private workspace";
+         end if;
+         return Interfaces.C.To_Ada (Private_Buffer);
       end Rebased;
 
       procedure Stop_Child;
@@ -307,29 +381,28 @@ package body Landin.Platform.Native.Tools is
       procedure Cleanup_Capture is
          Clean : Boolean := True;
          Closed_Input : Boolean := True;
-
+         Reason : Unbounded.Unbounded_String;
          procedure Remove
            (File : in out OS.File_Descriptor;
             Path : in out OS.String_Access);
-
          procedure Remove
            (File : in out OS.File_Descriptor;
             Path : in out OS.String_Access)
          is
-            Closed : Boolean := True;
-            Deleted : Boolean := True;
+            Message : Interfaces.C.char_array (0 .. 16383);
+            Room : constant Interfaces.C.size_t := Message'Length;
          begin
             if File /= OS.Invalid_FD then
-               OS.Close (File, Closed);
-               if Closed then
-                  File := OS.Invalid_FD;
+               if Close_Capture
+                 (Interfaces.C.int (File), Message, Room) /= 0
+               then
+                  Clean := False;
+                  Unbounded.Append
+                    (Reason, Interfaces.C.To_Ada (Message) & "; ");
                end if;
+               File := OS.Invalid_FD;
             end if;
-            if Path /= null then
-               OS.Delete_File (Path.all, Deleted);
-               OS.Free (Path);
-            end if;
-            Clean := Clean and Closed and Deleted;
+            OS.Free (Path);
          end Remove;
       begin
          Remove (FD, Name);
@@ -346,7 +419,8 @@ package body Landin.Platform.Native.Tools is
          end if;
          if not Clean then
             raise External_Tool_Failed
-              with "could not remove temporary tool output";
+              with "could not release temporary tool output: "
+                & Unbounded.To_String (Reason);
          end if;
       end Cleanup_Capture;
 
@@ -372,10 +446,13 @@ package body Landin.Platform.Native.Tools is
       for Argument of Arguments loop
          declare
             Text : C_Strings.chars_ptr := C_Strings.New_String (Argument);
-            Selected : constant Interfaces.C.int := Stage_Directory (Text);
+            Selected : Interfaces.C.int := Stage_Directory (Text);
             Closed : Boolean;
             Duplicate : OS.File_Descriptor;
          begin
+            if Selected = -1 then
+               Selected := Private_Directory (Text);
+            end if;
             C_Strings.Free (Text);
             if Selected = -2 then
                raise External_Tool_Failed
@@ -437,8 +514,12 @@ package body Landin.Platform.Native.Tools is
       --  Opened here, before the tool starts, so that an input which is
       --  not there is the caller's fault and not the tool's.
       if Unbounded.Length (Host.Input) > 0 then
-         Input_FD := OS.Open_Read
-           (Unbounded.To_String (Host.Input), OS.Binary);
+         Input_FD := OS.File_Descriptor (Private_Read_Descriptor
+           (Interfaces.C.To_C (Unbounded.To_String (Host.Input))));
+         if Input_FD = -2 then
+            Input_FD := OS.Open_Read
+              (Unbounded.To_String (Host.Input), OS.Binary);
+         end if;
          if Input_FD = OS.Invalid_FD then
             raise External_Tool_Failed
               with "could not open standard input: "
@@ -465,21 +546,8 @@ package body Landin.Platform.Native.Tools is
             raise External_Tool_Failed with "could not run tool: " & Program;
          end if;
 
-         OS.Close (FD, Success);
-         if not Success then
-            raise External_Tool_Failed
-              with "could not close temporary tool output";
-         end if;
-         FD := OS.Invalid_FD;
-         if Error_FD /= OS.Invalid_FD then
-            OS.Close (Error_FD, Success);
-            if not Success then
-               raise External_Tool_Failed
-                 with "could not close temporary tool error output";
-            end if;
-            Error_FD := OS.Invalid_FD;
-         end if;
-
+         --  Keep both descriptors: captures are anonymous, and reading
+         --  after the child exits must not resolve a temporary pathname.
          Exceeded_Limit := False;
          loop
             if Cancellation_Requested /= 0 then
@@ -513,17 +581,9 @@ package body Landin.Platform.Native.Tools is
          Pid := 0;
       end;
 
-      Reader.Read_File (Name.all, Result.Output, Read);
-      if Read /= Read_Ok then
-         raise External_Tool_Failed
-           with "could not read temporary tool output";
-      end if;
-      if Error_Name /= null then
-         Reader.Read_File (Error_Name.all, Result.Error_Output, Read);
-         if Read /= Read_Ok then
-            raise External_Tool_Failed
-              with "could not read temporary tool error output";
-         end if;
+      Capture_Bytes (FD, Result.Output);
+      if Error_FD /= OS.Invalid_FD then
+         Capture_Bytes (Error_FD, Result.Error_Output);
       end if;
       if Exceeded_Limit then
          Unbounded.Append
@@ -561,18 +621,32 @@ package body Landin.Platform.Native.Tools is
       Cleanup_Capture;
       Release_Arguments;
    exception
-      when others =>
+      when Failure : others =>
+         declare
+            Notes : Unbounded.Unbounded_String;
          begin
-            Stop_Child;
-         exception
-            when others => null;
+            begin
+               Stop_Child;
+            exception
+               when Cleanup : others =>
+                  Unbounded.Append
+                    (Notes, Ada.Exceptions.Exception_Message (Cleanup) & "; ");
+            end;
+            begin
+               Cleanup_Capture;
+            exception
+               when Cleanup : others =>
+                  Unbounded.Append
+                    (Notes, Ada.Exceptions.Exception_Message (Cleanup) & "; ");
+            end;
+            Release_Arguments;
+            if Unbounded.Length (Notes) > 0 then
+               Ada.Exceptions.Raise_Exception
+                 (Ada.Exceptions.Exception_Identity (Failure),
+                  Ada.Exceptions.Exception_Message (Failure) & "; cleanup: "
+                  & Unbounded.To_String (Notes));
+            end if;
          end;
-         begin
-            Cleanup_Capture;
-         exception
-            when others => null;
-         end;
-         Release_Arguments;
          raise;
    end Run_Tool;
 

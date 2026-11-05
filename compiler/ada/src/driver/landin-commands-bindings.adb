@@ -1014,6 +1014,7 @@ package body Landin.Commands.Bindings is
       procedure Clean_Up;
 
       procedure Clean_Up is
+         use type Platform.Remove_Status;
          Removed : Platform.Remove_Status;
          Status : Platform.Write_Status;
          Reason : US.Unbounded_String;
@@ -1027,6 +1028,11 @@ package body Landin.Commands.Bindings is
          end if;
          if Has_Work then
             Host.Remove_Tree (US.To_String (Work), Removed);
+            if Removed = Platform.Not_Removable then
+               Report
+                 (Cat.Unwritable_Output, "cannot remove private bindings work "
+                  & US.To_String (Work) & ": " & Host.Removal_Failure_Reason);
+            end if;
             Has_Work := False;
          end if;
       end Clean_Up;

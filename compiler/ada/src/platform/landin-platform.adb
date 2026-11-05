@@ -8,6 +8,13 @@ package body Landin.Platform is
       return (others => 0);
    end Sample;
 
+   function Removal_Failure_Reason (Host : Filesystem'Class) return String is
+      Reason : Unbounded.Unbounded_String;
+   begin
+      Get_Removal_Failure_Reason (Host, Reason);
+      return Unbounded.To_String (Reason);
+   end Removal_Failure_Reason;
+
    function No_Arguments return Path_List is
       Empty : Path_List;
    begin
