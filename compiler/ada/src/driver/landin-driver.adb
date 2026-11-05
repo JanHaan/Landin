@@ -1638,8 +1638,10 @@ package body Landin.Driver is
                   Publication_Failed := True;
                   Note_Failure
                     (Code_Unknown_Option, "output " & Path
-                     & " collides with input " & Input
-                     & "; choose another output path and retry");
+                     & " collides with or cannot be proved separate"
+                     & " from input " & Input
+                     & "; check paths and access or choose another"
+                     & " output path and retry");
                   return;
                end if;
             end loop;
@@ -1651,9 +1653,9 @@ package body Landin.Driver is
                   & Unbounded.To_String (Reason)
                   & "; choose another output path and retry");
             else
-               --  Prepare may just have created a formerly missing parent.
-               --  Upgrade selected names to host name-equivalence protection
-               --  before staged writes, even when the public leaf is absent.
+               --  Refresh after preparation so newly observable tool parents
+               --  get full host name-equivalence protection before staged
+               --  writes, even when the public leaf is absent.
                Protect_Tool_Inputs (Planned_Driver);
                if Is_Absent_Tool_Name (Path) then
                   Publication_Failed := True;
@@ -1754,8 +1756,10 @@ package body Landin.Driver is
                         Bad_Use := True;
                         Note_Failure
                           (Code_Unknown_Option, "output " & Path
-                           & " collides with input " & Input
-                           & "; choose another output path and retry");
+                           & " collides with or cannot be proved separate"
+                           & " from input " & Input
+                           & "; check paths and access or choose"
+                           & " another output path and retry");
                      end if;
                   end loop;
                end loop;
@@ -2088,8 +2092,10 @@ package body Landin.Driver is
                   Bad_Use := True;
                   Note_Failure
                     (Code_Unknown_Option, "stage report output " & Path
-                     & " collides with input " & Input
-                     & "; choose another output path and retry");
+                     & " collides with or cannot be proved separate"
+                     & " from input " & Input
+                     & "; check paths and access or choose another"
+                     & " output path and retry");
                   return;
                end if;
             end loop;

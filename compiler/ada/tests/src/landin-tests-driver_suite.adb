@@ -2553,13 +2553,13 @@ package body Landin.Tests.Driver_Suite is
      (Item : in out Landin.Testing.Context)
    is
    begin
-      for Attempt in 1 .. 11 loop
+      for Attempt in 1 .. 12 loop
          declare
             Host : Landin.Testing.Fakes.Fake_Filesystem;
             Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
             Tool : constant String :=
               (if Attempt = 5 then "missing/driver"
-               elsif Attempt in 7 .. 10 then "tools/driver"
+               elsif Attempt in 7 .. 10 | 12 then "tools/driver"
                else "/virtual/compile/missing/driver");
             Report : constant String :=
               (if Attempt = 4 then Tool
@@ -2589,19 +2589,22 @@ package body Landin.Tests.Driver_Suite is
             if Attempt >= 3 then
                Args.Append ("--stage-report=" & Report);
             end if;
-            if Attempt in 7 .. 10 then
+            if Attempt in 7 .. 10 | 12 then
                Host.Add_Directory ("tools");
             end if;
             if Attempt = 7 then
                Host.Add_Alias (Tool, Report);
-            elsif Attempt in 8 .. 10 then
+            elsif Attempt in 8 .. 10 | 12 then
                if Attempt = 9 then
                   Host.Add_Unreadable (Tool);
                else
                   Host.Add_File (Tool, "saved tool");
                end if;
-               if Attempt = 10 then
+               if Attempt in 10 | 12 then
                   Host.Set_Identity_Uncertain (Tool);
+                  if Attempt = 12 then
+                     Host.Add_File (Report, "prior report");
+                  end if;
                   Host.Add_Alias (Report, Tool);
                else
                   Host.Add_Hard_Link (Report, Tool);
@@ -2626,17 +2629,27 @@ package body Landin.Tests.Driver_Suite is
                "only an unrelated frontend-failure report writes");
             Landin.Testing.Check_Equal
               (Item, Tools.Run_Count, 0, "no tool runs after these refusals");
-            if Attempt = 10 then
+            if Attempt in 10 | 12 then
                Landin.Testing.Check
                  (Item, Contains (Unbounded.To_String (Result.Report),
-                  "aliases or cannot be proved separate")
+                  (if Attempt = 10
+                   then "aliases or cannot be proved separate"
+                   else "collides with or cannot be proved separate"))
                   and then Contains (Unbounded.To_String (Result.Report),
-                   "check input/output paths and access before retrying"),
+                   (if Attempt = 10
+                    then "check input/output paths and access before retrying"
+                    else "check paths and access or choose another output")),
                   "uncertain metadata has a truthful access repair route");
                Host.Read_File (Tool, Content, Read);
                Landin.Testing.Check_Equal
                  (Item, Unbounded.To_String (Content), "saved tool",
                   "uncertain tool bytes remain intact");
+               if Attempt = 12 then
+                  Host.Read_File (Report, Content, Read);
+                  Landin.Testing.Check_Equal
+                    (Item, Unbounded.To_String (Content), "prior report",
+                     "a preexisting report survives metadata uncertainty");
+               end if;
             elsif Attempt = 11 then
                Host.Read_File (Report, Content, Read);
                Landin.Testing.Check_Equal
