@@ -130,21 +130,26 @@ package Landin.Testing.Fakes is
       Reason : out Ada.Strings.Unbounded.Unbounded_String);
    overriding procedure Advance_Publication
      (Host : Fake_Filesystem; Handle : Landin.Platform.Publication_Handle;
-      Action : Landin.Platform.Publication_Action; Protected_Paths : Landin.Platform.Path_List;
-      Protected_Identities : Landin.Platform.Identity_List; Status : out Landin.Platform.Write_Status;
+      Action : Landin.Platform.Publication_Action;
+      Protected_Paths : Landin.Platform.Path_List;
+      Protected_Identities : Landin.Platform.Identity_List;
+      Status : out Landin.Platform.Write_Status;
       Reason : out Ada.Strings.Unbounded.Unbounded_String);
    --  Both results describe the same actually read object.
    overriding procedure Read_Snapshot
      (Host : Fake_Filesystem; Path : String;
       Content : out Ada.Strings.Unbounded.Unbounded_String;
-      Identity : out Landin.Platform.File_Identity; Status : out Landin.Platform.Read_Status);
+      Identity : out Landin.Platform.File_Identity;
+      Status : out Landin.Platform.Read_Status);
    overriding procedure Read_For_Update
      (Host : Fake_Filesystem; Path : String;
       Content : out Ada.Strings.Unbounded.Unbounded_String;
-      Lease : out Landin.Platform.Update_Handle; Status : out Landin.Platform.Read_Status;
+      Lease : out Landin.Platform.Update_Handle;
+      Status : out Landin.Platform.Read_Status;
       Reason : out Ada.Strings.Unbounded.Unbounded_String);
    overriding procedure Replace_Update
-     (Host : Fake_Filesystem; Lease : Landin.Platform.Update_Handle; Content : String;
+     (Host : Fake_Filesystem; Lease : Landin.Platform.Update_Handle;
+      Content : String;
       Status : out Landin.Platform.Write_Status;
       Reason : out Ada.Strings.Unbounded.Unbounded_String);
    overriding function Update_Identity

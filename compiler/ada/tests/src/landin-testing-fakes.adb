@@ -6,6 +6,7 @@ with Ada.Unchecked_Deallocation;
 
 package body Landin.Testing.Fakes is
 
+   use type Landin.Platform.Update_Handle;
    use type Landin.Platform.Read_Status;
    use type Landin.Platform.Write_Status;
    use type Landin.Platform.Termination;
@@ -581,6 +582,11 @@ package body Landin.Testing.Fakes is
             end if;
             At_Path := Find (Host, Path);
             if At_Path = 0 then
+               Move_File (Host, Path, Recovery, Moved);
+               if Moved = Landin.Platform.Not_Movable then
+                  Fail ("cannot establish expected absence");
+                  return;
+               end if;
                if not Item.Absent then
                   Fail ("expected output disappeared");
                   return;
@@ -630,6 +636,12 @@ package body Landin.Testing.Fakes is
                      return;
                   end if;
                   Item.Captured := False;
+                  declare
+                     Observed : File_Entry := Item.Expected;
+                  begin
+                     Observed.Path := Item.Path;
+                     Host.Writes.Data.Items.Append (Observed);
+                  end;
                else
                   Move_File (Host, Stage, Path, Moved);
                   if Moved /= Landin.Platform.Moved then
@@ -715,7 +727,8 @@ package body Landin.Testing.Fakes is
       Reason := Unbounded.Null_Unbounded_String;
       Lease := Landin.Platform.No_Update;
       if Status /= Landin.Platform.Read_Ok then
-         Reason := Unbounded.To_Unbounded_String ("cannot read original update object");
+         Reason := Unbounded.To_Unbounded_String
+           ("cannot read original update object");
          return;
       end if;
       Item.Path := Unbounded.To_Unbounded_String (Path);
@@ -739,14 +752,16 @@ package body Landin.Testing.Fakes is
       Reason : out Unbounded.Unbounded_String)
    is
       use type Unbounded.Unbounded_String;
-      Item : constant Fake_Update := Host.Writes.Data.Updates (Positive (Lease));
+      Item : constant Fake_Update :=
+        Host.Writes.Data.Updates (Positive (Lease));
       Index : constant Natural := Find (Host, Unbounded.To_String (Item.Path));
    begin
       Status := Landin.Platform.Not_Writable;
       Reason := Unbounded.To_Unbounded_String
         ("original read object changed; rerun or use fmt --stdout");
       if Item.Closed or else Index = 0
-        or else Host.Writes.Data.Files (Index).Identity /= Item.Original.Identity
+        or else Host.Writes.Data.Files (Index).Identity
+          /= Item.Original.Identity
         or else Host.Writes.Data.Files (Index).Content /= Item.Original.Content
       then
          return;
@@ -1263,6 +1278,19 @@ package body Landin.Testing.Fakes is
                Path : constant String :=
                  Unbounded.To_String (Host.State.Data.Output_Path);
             begin
+               for Reservation of Store_Value.Publications loop
+                  if Unbounded.To_String (Reservation.Stage) = Path
+                    and then not Reservation.Absent
+                  then
+                     declare
+                        Item : File_Entry := Reservation.Expected;
+                     begin
+                        Item.Path := Unbounded.To_Unbounded_String (Path);
+                        Store_Value.Files.Append (Item);
+                     end;
+                     exit;
+                  end if;
+               end loop;
                for Index in 1 .. Natural (Store_Value.Files.Length) loop
                   if Unbounded.To_String
                     (Store_Value.Files.Element (Index).Path) =

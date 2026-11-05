@@ -37,6 +37,13 @@ struct publication {
     struct tree_entry *expected_tree, *fresh_tree;
     struct publication *next;
 };
+struct root_anchor {
+    char *path;
+    int fd;
+    struct stat identity;
+    struct root_anchor *next;
+};
+static struct root_anchor *roots;
 static struct arena *arenas;
 static struct publication *publications;
 static int next_token = 1;
@@ -327,6 +334,27 @@ static int parent_for(const char *path, const char *root, char **parent_path,
             free(walk); walk = NULL;
         }
         if (fd < 0) goto done;
+        struct stat selected;
+        if (fstat(fd, &selected) != 0) { close(fd); fd = -1; goto done; }
+        struct root_anchor *known;
+        for (known = roots; known; known = known->next)
+            if (!strcmp(known->path, root_abs)) break;
+        if (known) {
+            if (!same(&selected, &known->identity)) {
+                close(fd); fd = -1; errno = ESTALE; goto done;
+            }
+        } else {
+            known = calloc(1, sizeof *known);
+            if (!known || !(known->path = strdup(root_abs))) {
+                free(known); close(fd); fd = -1; goto done;
+            }
+            known->fd = dup(fd);
+            if (known->fd < 0) {
+                free(known->path); free(known); close(fd); fd = -1; goto done;
+            }
+            known->identity = selected;
+            known->next = roots; roots = known;
+        }
         walk = strdup(absolute + len + (absolute[len] == '/'));
         if (!walk) { close(fd); fd = -1; goto done; }
         save = NULL;
@@ -492,6 +520,15 @@ static int protected_object(const struct stat *st, const char *const *paths,
     }
     return 0;
 }
+static int protected_tree(const struct tree_entry *tree,
+                           const char *const *paths, size_t path_count,
+                           const uint64_t *ids, size_t count)
+{
+    for (; tree; tree = tree->next)
+        if (protected_object(&tree->identity, paths, path_count, ids, count)
+            || protected_tree(tree->children, paths, path_count, ids, count)) return 1;
+    return 0;
+}
 int landin_publication_step(int token, int action, const char *const *paths,
                             size_t path_count, const uint64_t *ids, size_t count,
                             char *why, size_t room)
@@ -542,7 +579,8 @@ int landin_publication_step(int token, int action, const char *const *paths,
         }
         if (p->expected_tree) {
             struct tree_entry *captured = snapshot_entry(private_fd, p->recovery);
-            int matches = captured && equal_tree(p->expected_tree, captured, 1);
+            int matches = captured && equal_tree(p->expected_tree, captured, 1)
+                && !protected_tree(captured, paths, path_count, ids, count);
             free_tree(captured);
             if (!matches) { errno = EAGAIN; goto fail; }
         }
@@ -570,8 +608,9 @@ int landin_publication_step(int token, int action, const char *const *paths,
             if (renameat(parent, p->name, private_fd, p->rollback) != 0) {
                 if (errno != ENOENT) goto fail;
             } else {
-                if (fstatat(private_fd, p->rollback, &st, AT_SYMLINK_NOFOLLOW) != 0
-                    || !same(&st, &p->fresh)) {
+                if (fstatat(private_fd, p->rollback, &st, AT_SYMLINK_NOFOLLOW) != 0)
+                    goto fail;
+                if (!same(&st, &p->fresh)) {
                     if (no_replace(private_fd, p->rollback, parent, p->name,
                                    S_ISDIR(st.st_mode)) != 0) goto fail;
                     errno = EAGAIN; goto fail;
