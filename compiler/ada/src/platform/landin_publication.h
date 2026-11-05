@@ -12,6 +12,8 @@ int landin_publication_step(int, int, const char *const *, size_t,
                             const uint64_t *, size_t, char *, size_t);
 int landin_read_snapshot(const char *, char **, size_t *, uint64_t *, uint64_t *);
 void landin_snapshot_free(char *);
+/* Returns 1 for a verified observed pathname, 0 for a qualified fallback. */
+int landin_publication_describe_entry(int, const char *, const char *, char *, size_t);
 int landin_publication_stage_directory(const char *);
 int landin_publication_rebase_argument(const char *, int, char *, size_t);
 int landin_publication_stage_write(const char *, const char *, size_t);

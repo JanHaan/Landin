@@ -352,6 +352,58 @@ static void child_staging_directory(void)
     REQUIRE(size == 14 && !memcmp(bytes, "child-anchored", 14)); free(bytes);
     REQUIRE(step(token, 3) == 0 && step(token, 4) == 0); ++passed;
 }
+static void fmt_moved_race(const char *event, const char *name)
+{
+    if (strcmp(event, "update-before-write")) return;
+    REQUIRE(rename(raced_path, replacement) == 0 && mkdir(raced_path, 0700) == 0);
+    put(name, "editor-save");
+}
+static void fmt_moved_parent_diagnostic(void)
+{
+    char root[4096], moved[4096], output[4096], moved_output[4096];
+    char recovered[8192], identity[160];
+    path(root, sizeof root, "fmt-diagnostic-root");
+    path(moved, sizeof moved, "fmt-diagnostic-moved"); REQUIRE(mkdir(root, 0700) == 0);
+    REQUIRE(snprintf(output, sizeof output, "%s/source", root) > 0); put(output, "original");
+    REQUIRE(snprintf(moved_output, sizeof moved_output, "%s/source", moved) > 0);
+    struct stat parent; REQUIRE(stat(root, &parent) == 0);
+    int lease; char *bytes; size_t size;
+    REQUIRE(landin_open_update(output, &bytes, &size, &lease, why, sizeof why) == 0); free(bytes);
+    strcpy(raced_path, root); strcpy(replacement, moved);
+    landin_publication_set_hook(fmt_moved_race);
+    REQUIRE(landin_replace_update(lease, "formatted", 9, why, sizeof why) != 0);
+    clear_hook(); landin_close_update(lease);
+    REQUIRE(content(output, "editor-save") && content(moved_output, "formatted"));
+    REQUIRE(snprintf(identity, sizeof identity, "device=%ju inode=%ju",
+                      (uintmax_t)parent.st_dev, (uintmax_t)parent.st_ino) > 0);
+    REQUIRE(strstr(why, identity) != NULL);
+#if defined(__linux__) || defined(__APPLE__)
+    REQUIRE(strstr(why, moved) != NULL);
+#else
+    REQUIRE(strstr(why, "current directory path unavailable") != NULL
+            && strstr(why, "last-known spelling") != NULL);
+#endif
+    DIR *directory = opendir(moved); REQUIRE(directory != NULL);
+    struct dirent *item; int found = 0;
+    while ((item = readdir(directory)) != NULL) {
+        if (strncmp(item->d_name, ".fmt-original-", 14)) continue;
+        REQUIRE(snprintf(recovered, sizeof recovered, "%s/%s", moved, item->d_name) > 0);
+        REQUIRE(content(recovered, "original")); ++found;
+    }
+    closedir(directory); REQUIRE(found == 1); ++passed;
+}
+static void fmt_readonly_is_write_refusal(void)
+{
+    char output[4096]; path(output, sizeof output, "fmt-readonly"); put(output, "original");
+    REQUIRE(chmod(output, 0444) == 0);
+    int lease; char *bytes; size_t size;
+    REQUIRE(landin_open_update(output, &bytes, &size, &lease, why, sizeof why) == 0);
+    REQUIRE(size == 8 && !memcmp(bytes, "original", 8)); free(bytes);
+    REQUIRE(landin_replace_update(lease, "formatted", 9, why, sizeof why) != 0);
+    landin_close_update(lease);
+    REQUIRE(strstr(why, "it is read-only") != NULL && content(output, "original"));
+    REQUIRE(chmod(output, 0600) == 0); ++passed;
+}
 static void fmt_original_descriptor(void)
 {
     char output[4096], saved[4096], original_alias[4096];
@@ -385,7 +437,8 @@ int main(int argc, char **argv)
     fmt_read_boundaries(); fmt_original_descriptor(); collision_names();
     repeated_abort_retains_recovery(); recovery_discovery();
     child_staging_directory(); mismatch_finish_preserves_tree();
-    moved_anchor_recovery_diagnostic();
+    moved_anchor_recovery_diagnostic(); fmt_moved_parent_diagnostic();
+    fmt_readonly_is_write_refusal();
     printf("publication native: %u controls passed; retained scratch %s\n", passed, scratch);
     return 0;
 }

@@ -682,36 +682,53 @@ fail:
 /* The pinned directory can move after anchor selection. Report an observed
    current pathname only after checking that spelling still names this fd;
    other hosts retain an identity-qualified last-known location. */
-static void describe_recovery(const struct arena *a, char *out, size_t room)
+int landin_publication_describe_entry(int directory, const char *last_known,
+                                      const char *entry, char *out, size_t room)
 {
-    char observed[PATH_MAX];
+    char observed[PATH_MAX], identity[128];
+    struct stat pinned, named;
+    int valid = fstat(directory, &pinned) == 0;
     int resolved = 0;
+    if (valid)
+        reason(identity, sizeof identity, "directory device=%ju inode=%ju",
+               (uintmax_t)pinned.st_dev, (uintmax_t)pinned.st_ino);
+    else
+        reason(identity, sizeof identity, "directory identity unavailable");
 #ifdef __linux__
     char descriptor[64];
-    snprintf(descriptor, sizeof descriptor, "/proc/self/fd/%d", a->recovery_fd);
+    snprintf(descriptor, sizeof descriptor, "/proc/self/fd/%d", directory);
     ssize_t size = readlink(descriptor, observed, sizeof observed - 1);
     if (size >= 0 && (size_t)size < sizeof observed - 1) {
         observed[size] = 0;
-        resolved = 1;
+        resolved = valid;
     }
 #elif defined(__APPLE__)
-    resolved = fcntl(a->recovery_fd, F_GETPATH, observed) == 0;
+    resolved = valid && fcntl(directory, F_GETPATH, observed) == 0;
 #endif
     if (resolved) {
-        struct stat pinned, named;
         int fd = open(observed, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
-        resolved = fd >= 0 && fstat(fd, &named) == 0
-            && fstat(a->recovery_fd, &pinned) == 0 && same(&named, &pinned);
+        resolved = fd >= 0 && fstat(fd, &named) == 0 && same(&named, &pinned);
         if (fd >= 0) close(fd);
     }
-    if (resolved)
-        reason(out, room, "observed current path %s (output parent device=%ju inode=%ju)",
-               observed, (uintmax_t)a->parent_id.st_dev,
-               (uintmax_t)a->parent_id.st_ino);
-    else
-        reason(out, room, "current directory path unavailable; last-known spelling %s; directory may have moved; output parent device=%ju inode=%ju",
-               a->recovery_path, (uintmax_t)a->parent_id.st_dev,
-               (uintmax_t)a->parent_id.st_ino);
+    if (resolved) {
+        size_t n = strlen(observed);
+        const char *slash = *entry && (n != 1 || observed[0] != '/') ? "/" : "";
+        reason(out, room, "%s%s%s (%s)", observed, slash, entry, identity);
+    } else {
+        const char *slash = *entry && strcmp(last_known, "/") ? "/" : "";
+        reason(out, room, "current directory path unavailable; last-known spelling %s%s%s; directory may have moved; %s",
+               last_known, slash, entry, identity);
+    }
+    return resolved;
+}
+static void describe_recovery(const struct arena *a, char *out, size_t room)
+{
+    char location[PATH_MAX + 256];
+    int resolved = landin_publication_describe_entry
+        (a->recovery_fd, a->recovery_path, "", location, sizeof location);
+    reason(out, room, "%s%s (output parent device=%ju inode=%ju)",
+           resolved ? "observed current path " : "", location,
+           (uintmax_t)a->parent_id.st_dev, (uintmax_t)a->parent_id.st_ino);
 }
 static int matches_bytes(int fd, const char *name, const char *bytes, size_t size)
 {
