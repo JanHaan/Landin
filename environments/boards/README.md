@@ -453,9 +453,10 @@ physical oracle and restores and verifies the fixed image, so the board
 rests on that image rather than on a RAM application left running. A RAM
 run leaves an RP chip's other core parked under the warm contract, which
 probe-rs's whole-chip download cannot attach to, so the RP boot checks
-begin with a cold start of the board's port before they flash. After an interrupted run
-the port's board is in an unknown state, so it begins with a boot check
-as well. The Pico 2 runs four steps
+begin with a cold start of the board's port before they flash. After a
+run that did not end on its passed boot check, the board's state is
+unknown, so the port begins with the boot check of its resting image as
+well. The Pico 2 runs four steps
 ([above](#the-pico-2-on-a-power-only-cable)). A RAM run's success never
 establishes power-on, ROM loading or fixed-image restoration, so no port
 runs RAM alone.
@@ -483,13 +484,13 @@ files' hashes, the topology and the load record. A summary is appended to
 passed port.
 
 Before each step `gate.py` writes `runs/PORT.json` in the shared state,
-naming the port, the step, the commit and the run, and removes it once
-every step has ended with a result of its own and none was cancelled. A
-run that finds one keeps it in `outcome.json` as `previous_interrupted` and
-goes on, because its first step's boot check flashes and restores the board
-anyway. For the Pico 2, which an interrupted run may have left in either
-architecture or in its boot ROM, it stops `needs-operator`: check the
-board, restore its fixed image by hand, then remove the file.
+naming the port, the step, the commit and the run, and removes it only
+when the sequence ended on its passed boot check, which leaves the board on
+its restored and verified fixed image. A run that finds one keeps it in
+`outcome.json` as `previous_interrupted` and begins with the boot check of
+the resting image, the sequence's last, which flashes over SWD whatever the
+board runs. That holds for the Pico 2 too, in either architecture or in its
+boot ROM, since its power-only cable keeps that ROM's USB off the bus.
 
 ## Shared rig rules
 

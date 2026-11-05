@@ -231,8 +231,8 @@ class Sequence(unittest.TestCase):
         self.assertEqual([s['mode'] for s in document['steps']], ['ram'])
         self.assertEqual(document['steps'][0]['failure'], 'fake unavailable')
         self.assertFalse((output / 'rp2040-boot').exists())
-        self.assertFalse((self.rig.state / 'runs/rp2040.json').exists(),
-                         'a step that ended with its own result completed the sequence')
+        self.assertTrue((self.rig.state / 'runs/rp2040.json').exists(),
+                        'only a passed final boot check leaves the board on its verified image')
         self.assertIn('| rp2040 ram | unavailable |', self.rig.summary.read_text())
 
     def test_a_step_without_a_result_is_incomplete_and_its_journal_stays(self):
@@ -352,17 +352,18 @@ class Refusals(unittest.TestCase):
         self.assertIn('held by esp32 board.py', document['failure'])
         self.assertEqual(document['steps'], [])
 
-    def test_an_interrupted_pico_2_needs_the_operator_before_hardware(self):
+    def test_a_pico_2_left_off_its_resting_image_is_restored_first(self):
+        # Its power-only cable lets the resting image's boot check flash it
+        # over SWD whatever it runs, so no operator is needed.
         (self.rig.state / 'runs').mkdir()
         (self.rig.state / 'runs/pico2.json').write_text('{"port": "pico2", "step": 2}')
-        description = json.loads(self.rig.rig.read_text())
-        description['ports']['pico2']['location'] = dict(hub='1-1', port=2)
-        self.rig.rig.write_text(json.dumps(description))
         document, output = self.rig.gate('pico2')
-        self.assertEqual(document['outcome'], 'needs-operator')
+        self.assertEqual(document['outcome'], 'passed', document.get('failure'))
         self.assertEqual(document['previous_interrupted'], dict(port='pico2', step=2))
-        self.assertEqual(document['steps'], [])
-        self.assertTrue((self.rig.state / 'runs/pico2.json').exists())
+        self.assertEqual([(s['board'], s['mode']) for s in document['steps']],
+                         [('rp2350_hazard3', 'boot'), ('rp2350_hazard3', 'ram'), ('rp2350', 'boot'),
+                          ('rp2350', 'ram'), ('rp2350_hazard3', 'boot')])
+        self.assertFalse((self.rig.state / 'runs/pico2.json').exists())
         self.assertTrue(self.rig.free())
 
     def test_the_steps_are_checked_before_they_run(self):

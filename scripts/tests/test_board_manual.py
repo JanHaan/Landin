@@ -481,7 +481,8 @@ class Main(unittest.TestCase):
                         manual_boot.readback.assert_called_once_with('application')
                     if auto:
                         flash.assert_called_once()
-                        power.assert_called_once()
+                        # The cold start before the flash, then the application's cycle.
+                        self.assertEqual(power.call_count, 2)
                         place.assert_called_once()
                         restore.assert_called_once()
                     else:

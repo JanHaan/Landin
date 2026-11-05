@@ -22,11 +22,12 @@ the verified fixed image the last run left, and its boot check last, so the
 board rests on a freshly restored and verified fixed image rather than on a
 RAM application left running.  Before each step it writes
 RIG_STATE/runs/PORT.json, and removes it once every step has run to its own
-result: an entry found there says an earlier gate run of the port was
-interrupted, which the outcome keeps as previous_interrupted; the board's
-state is then unknown, so the port begins with its boot check, which
-reflashes and restores it, and the Pico 2, whose architecture is unknown
-too, stops the run for the operator.
+result and the sequence has ended on its passed boot check: an entry found
+there says an earlier gate run of the port did not leave the board on its
+verified fixed image, which the outcome keeps as previous_interrupted. The
+board's state is then unknown, so the port begins with the boot check of
+its resting image, the sequence's last, which flashes over SWD whatever the
+board runs and restores and verifies that image.
 
 Each step runs as environments/boards/run.py runs it on the rig,
 `python3 environments/boards/BOARD/board.py --mode=MODE --bundle=...
@@ -342,14 +343,12 @@ def run_gate(args, *, root=ROOT, environ=None, state=None, lock_path=None,
         except (OSError, ValueError) as error:
             previous = dict(unreadable=str(error))
         if previous is not None:
+            # The last run did not leave the board on its verified fixed
+            # image.  A RAM run starts only from that image, so the boot check
+            # of the resting image, the sequence's last, restores it first:
+            # it flashes over SWD whatever the board runs, the Pico 2 too.
             document['previous_interrupted'] = previous
-            require(args.port != 'pico2', 'an earlier gate run of pico2 was interrupted (%s): the Pico 2'
-                    ' may be left in either architecture or in its boot ROM.  Check it and restore its'
-                    ' fixed image by hand, then remove %s' % (json.dumps(previous), journal),
-                    NeedsOperator)
-            # A RAM run starts only from the verified fixed image; after an
-            # interruption the boot check restores one first.
-            steps = [step for step in steps if step[1] == 'boot'][:1] + steps
+            steps = [step for step in steps if step[1] == 'boot'][-1:] + steps
         for index, (board, mode, arguments) in enumerate(steps):
             if forwarder.signals:
                 raise common.Cancelled(forwarder.signals[0])
@@ -362,10 +361,11 @@ def run_gate(args, *, root=ROOT, environ=None, state=None, lock_path=None,
             document['steps'].append(entry)
             if entry['outcome'] != 'passed':
                 break
-        # A step that ended without its own result, or a cancelled one, may
-        # have left the board anywhere: the entry stays for the next run.
-        if not forwarder.signals and all(s['outcome'] not in ('incomplete', 'cancelled')
-                                         for s in document['steps']):
+        # Only a sequence that ended on its passed boot check leaves the
+        # board on its restored and verified fixed image; anything less keeps
+        # the entry, and the next run restores the board first.
+        if (not forwarder.signals and len(document['steps']) == len(steps)
+                and all(s['outcome'] == 'passed' for s in document['steps'])):
             journal.unlink(missing_ok=True)
         failing = next((s for s in document['steps'] if s['outcome'] != 'passed'), None)
         if failing:

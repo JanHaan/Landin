@@ -23255,7 +23255,8 @@ the port's RAM run from the verified fixed image the last run left, then
 its boot check, which restores and verifies that image again, so a board
 rests on its fixed image rather than on a RAM application left running; the
 Pico 2's four steps in order; one leg at a time under one lock. After an
-interrupted run a port first takes a boot check to restore its board. On a board-scope event the aggregate
+run that did not leave its board on that image, a port first takes the
+boot check that restores it. On a board-scope event the aggregate
 fails unless every leg succeeded with the outcome `passed`; physical jobs
 are never reused, so a `main` push that reuses a software pass runs the
 boards fresh, and a `main` run whose boards fail has a failed gate and
@@ -23295,10 +23296,12 @@ finishes first, a fixed-image restoration not yet begun is skipped and
 recorded pending, since it outlasts a cancelling runner's grace and the
 next boot check restores the board anyway, and the tool releases the lock
 and records `cancelled` with the signal and the phase reached. `gate.py`
-writes `runs/PORT.json` before each step and removes it only when every
-step ended with its own result: a later run keeps a leftover entry as
-`previous_interrupted` and begins with the boot check, except the Pico 2's,
-which stops `needs-operator`.
+writes `runs/PORT.json` before each step and removes it only when the
+sequence ended on its passed boot check, the board on its restored and
+verified fixed image: a later run keeps a leftover entry as
+`previous_interrupted` and begins with the boot check of the resting image,
+the sequence's last, which flashes over SWD whatever the board runs; the
+power-only Pico 2 needs no operator for it.
 
 The rig's state is one directory, `/var/lib/landin-rig` on rigpi when it
 exists, `LANDIN_RIG_STATE` when set, the home's `~/.cache/landin`
