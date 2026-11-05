@@ -1015,7 +1015,9 @@ later is held to the same cases, the formatter's among them.
 The host gate also runs `test_compile_publication.py --refine PATH` against
 actual compiler input/output collisions, `test_publication_native.py` against
 the production C adapters, `test_runtime_owned.py` against capture and
-private-directory replacement, and `test_tool_cancellation.py --refine PATH` against both the
+private-directory replacement, `test_native_registry_threads.py` against
+concurrent resource creation and cross-thread handoff, and
+`test_tool_cancellation.py --refine PATH` against both the
 production process adapter and actual `compile` and `run` commands. Their
 controls use owned scratch roots and readiness barriers for the formatter's
 open window, publication conflicts and tool cancellation. The cancellation

@@ -288,6 +288,7 @@ jobs:
           python3 compiler/tests/test_formatter_write_safety.py --refine "$refine"
           python3 compiler/tests/test_publication_native.py
           python3 compiler/tests/test_runtime_owned.py
+          python3 compiler/tests/test_native_registry_threads.py
           python3 compiler/tests/test_compile_publication.py --refine "$refine"
           python3 compiler/tests/test_tool_cancellation.py --refine "$refine"
           python3 compiler/tests/test_formatter_write_safety.py --refine "$refine" --scratch /dev/shm/landin-loop
@@ -395,6 +396,7 @@ jobs:
           python3 compiler/tests/test_formatter_write_safety.py --refine "$refine"
           python3 compiler/tests/test_publication_native.py
           python3 compiler/tests/test_runtime_owned.py
+          python3 compiler/tests/test_native_registry_threads.py
           python3 compiler/tests/test_compile_publication.py --refine "$refine"
           python3 compiler/tests/test_tool_cancellation.py --refine "$refine"
           python3 compiler/tests/test_formatter_write_safety.py --refine "$refine" --scratch /dev/shm/landin-loop
@@ -983,6 +985,7 @@ jobs:
           python3 compiler/tests/test_formatter_write_safety.py --refine "$refine"
           python3 compiler/tests/test_publication_native.py
           python3 compiler/tests/test_runtime_owned.py
+          python3 compiler/tests/test_native_registry_threads.py
           python3 compiler/tests/test_compile_publication.py --refine "$refine"
           python3 compiler/tests/test_tool_cancellation.py --refine "$refine"
           python3 compiler/tests/server/native_session.py --refine "$refine"
@@ -1047,6 +1050,7 @@ jobs:
           python3 compiler/tests/test_formatter_write_safety.py --refine "$refine"
           python3 compiler/tests/test_publication_native.py
           python3 compiler/tests/test_runtime_owned.py
+          python3 compiler/tests/test_native_registry_threads.py
           python3 compiler/tests/test_compile_publication.py --refine "$refine"
           python3 compiler/tests/test_tool_cancellation.py --refine "$refine"
           python3 compiler/tests/server/native_session.py --refine "$refine"
@@ -1259,6 +1263,7 @@ jobs:
           python3 compiler/tests/test_formatter_write_safety.py --refine "$refine"
           python3 compiler/tests/test_publication_native.py
           python3 compiler/tests/test_runtime_owned.py
+          python3 compiler/tests/test_native_registry_threads.py
           python3 compiler/tests/test_compile_publication.py --refine "$refine"
           python3 compiler/tests/test_tool_cancellation.py --refine "$refine"
           python3 compiler/tests/test_formatter_write_safety.py --refine "$refine" --scratch /dev/shm/landin-loop
@@ -1313,6 +1318,7 @@ jobs:
           python3 compiler/tests/test_formatter_write_safety.py --refine "$refine"
           python3 compiler/tests/test_publication_native.py
           python3 compiler/tests/test_runtime_owned.py
+          python3 compiler/tests/test_native_registry_threads.py
           python3 compiler/tests/test_compile_publication.py --refine "$refine"
           python3 compiler/tests/test_tool_cancellation.py --refine "$refine"
           python3 compiler/tests/test_formatter_write_safety.py --refine "$refine" --scratch /dev/shm/landin-loop

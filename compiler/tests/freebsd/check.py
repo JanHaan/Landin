@@ -341,7 +341,17 @@ class Lane:
                                  str(platform / 'landin_file_identity.c'),
                                  str(root / 'compiler/tests/runtime_owned.c'),
                                  '-o', 'runtime-owned'])
-                   + '; ./runtime-owned')
+                   + '; ./runtime-owned; '
+                   + shlex.join(['cc', '-std=c11', '-Wall', '-Wextra',
+                                 '-Werror', '-pedantic', '-pthread',
+                                 '-I', str(platform),
+                                 str(platform / 'landin_publication.c'),
+                                 str(platform / 'landin_format_replace.c'),
+                                 str(platform / 'landin_tool_process.c'),
+                                 str(platform / 'landin_file_identity.c'),
+                                 str(root / 'compiler/tests/native_registry_threads.c'),
+                                 '-o', 'registry-threads'])
+                   + '; ./registry-threads')
         result = guest.run(command, timeout=180)
         transcript = result.stdout + result.stderr
         (self.output / 'native-host-controls.log').write_bytes(transcript)
@@ -349,9 +359,11 @@ class Lane:
                 + transcript.decode(errors='replace')[-8000:])
         require(b'publication native:' in result.stdout
                 and b'cancellation native: 13 controls passed' in result.stdout
-                and b'runtime ownership native: 7/7 controls passed' in result.stdout,
+                and b'runtime ownership native: 7/7 controls passed' in result.stdout
+                and b'native registry threads: 8 workers, 24 rounds, 768 cross-thread handoffs passed'
+                in result.stdout,
                 'native host adapter controls did not report their full scope')
-        print('FreeBSD native publication, cancellation and private-directory adapters passed')
+        print('FreeBSD native publication, cancellation, private-directory and registry-thread controls passed')
 
     def processor(self, guest):
         probe = self.bundle / 'processor'

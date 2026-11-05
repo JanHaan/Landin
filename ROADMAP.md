@@ -3095,7 +3095,8 @@ window and an interrupted link; the publication rule written into
 
 Done: the implementation candidate gives commands D907's shared,
 loss-preserving publication, D358's original-read formatter descriptor and
-owned capture and scratch lifetimes. The starting-commit reproducers were
+owned capture and scratch lifetimes. Native registries serialize overlapping
+worker operations while preserving cross-thread resource handoff. The starting-commit reproducers were
 confirmed before the fixes; fake controls and native Linux and isolated
 Darwin controls cover the findings, including renamed saves, interrupted
 links and failed ESP publication. Native FreeBSD C controls pass on amd64;

@@ -20,18 +20,22 @@ class FreeBSDControls(unittest.TestCase):
     def test_native_host_controls_require_success_and_all_completed_helpers(self):
         markers = (b'publication native: 20 controls passed\n'
                    b'cancellation native: 13 controls passed\n'
-                   b'runtime ownership native: 7/7 controls passed\n')
+                   b'runtime ownership native: 7/7 controls passed\n'
+                   b'native registry threads: 8 workers, 24 rounds, 768 cross-thread handoffs passed\n')
         with tempfile.TemporaryDirectory() as tmp:
             lane = LANE.Lane.__new__(LANE.Lane)
             lane.output = Path(tmp)
             lane.source_root = Path('/owned source')
             lane.remote_prefix = '/owned guest'
-            for status, stdout in ((1, markers), (0, b''), (0, markers)):
+            attempts = [(1, markers), (0, b''), (0, markers)]
+            attempts.extend((0, markers.replace(line, b''))
+                            for line in markers.splitlines(keepends=True))
+            for status, stdout in attempts:
                 guest = Mock()
                 guest.run.return_value = SimpleNamespace(
                     returncode=status, stdout=stdout, stderr=b'')
                 with self.subTest(status=status, stdout=stdout):
-                    if status or not stdout:
+                    if status or stdout != markers:
                         with self.assertRaises(ValueError):
                             lane.native_host_controls(guest)
                     else:
