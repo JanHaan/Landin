@@ -6,6 +6,9 @@ package body Landin.Commands.Tracing is
    overriding function Available (Host : Runner; Program : String)
       return Boolean is (Host.Original.Available (Program));
 
+   overriding function Resolve_Program (Host : Runner; Program : String)
+      return String is (Host.Original.Resolve_Program (Program));
+
    overriding procedure Run
      (Host : Runner; Program : String;
       Arguments : Landin.Platform.Path_List;
