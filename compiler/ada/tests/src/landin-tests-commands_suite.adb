@@ -1033,8 +1033,10 @@ package body Landin.Tests.Commands_Suite is
       Landin.Testing.Check
         (Item, Tools.Run_Count = 1
            and then (for some Argument of Tools.Call_At (1).Arguments =>
-                       Argument = "/virtual/tmp/refine-run-1/main"),
-         "the link writes the executable into the directory");
+                       Contains (Argument, "/main")
+                       and then Argument /=
+                         "/virtual/tmp/refine-run-1/main"),
+         "the link writes a private generation before public launch");
       Landin.Testing.Check
         (Item, Host.Is_Directory ("/virtual/tmp/refine-run-1"),
          "the directory stays until the program has run");

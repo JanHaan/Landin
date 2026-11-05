@@ -5315,7 +5315,8 @@ package body Landin.Tests.Driver_Suite is
               (Item, Result.Status,
                (if Refused then Landin.Driver.Status_Misuse
                 else Landin.Driver.Status_Success),
-               "artifact identity determines whether emission is allowed");
+               "artifact identity determines whether emission is allowed: "
+               & Unbounded.To_String (Result.Report));
             if Refused then
                Landin.Testing.Check
                  (Item, Contains (Unbounded.To_String (Result.Report),
@@ -7294,8 +7295,74 @@ package body Landin.Tests.Driver_Suite is
       end loop;
    end Compilation_Generation;
 
+   procedure Tool_File_Directives
+     (Item : in out Landin.Testing.Context);
+   procedure Tool_File_Directives
+     (Item : in out Landin.Testing.Context) is
+   begin
+      for Attempt in 1 .. 5 loop
+         declare
+            Host : Landin.Testing.Fakes.Fake_Filesystem;
+            Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+            Result : Landin.Driver.Outcome;
+            Content : Unbounded.Unbounded_String;
+            Read : Landin.Platform.Read_Status;
+            Args : Landin.Platform.Path_List :=
+              ["--target=linux-x86-64", "--emit=exe", "--link=libc"];
+         begin
+            Host.Add_File ("program", "prior executable");
+            Host.Add_File ("/external.inc", "nop");
+            if Attempt = 5 then
+               Host.Add_Firmware_Library;
+               Host.Add_File
+                 ("main.ldn", "start: () -> none = end start");
+               Host.Add_File ("custom.ld", "INCLUDE relative.ld");
+               Args := ["--target=cortex-m0", "--emit=exe",
+                        "--firmware-entry=start", "--linker-script=custom.ld",
+                        "main.ldn", "-o=program"];
+            else
+               Host.Add_File
+                 ("operand.s",
+                  (if Attempt = 1 then ".include ""relative.inc"""
+                   elsif Attempt = 3 then ".incbin ""/external.inc"""
+                   else ".include ""/external.inc"""));
+               Args.Append ("operand.s");
+               Args.Append
+                 (if Attempt in 2 | 3 then "-o=/external.inc"
+                  else "-o=program");
+            end if;
+            Result := Landin.Driver.Execute (Args, Host, Tools);
+            Landin.Testing.Check
+              (Item, (Result.Status = Landin.Driver.Status_Success)
+                = (Attempt = 4),
+               "tool input directives are guarded: "
+               & Unbounded.To_String (Result.Report));
+            if Attempt /= 4 then
+               Host.Read_File ("program", Content, Read);
+               Landin.Testing.Check_Equal
+                 (Item, Unbounded.To_String (Content), "prior executable",
+                  "refused directives preserve the prior executable");
+               if Attempt in 1 | 5 then
+                  Landin.Testing.Check
+                    (Item, Contains (Unbounded.To_String (Result.Report),
+                                     "absolute file paths")
+                     and then Tools.Run_Count = 0,
+                     "relative file directives refuse before tool launch");
+               end if;
+            end if;
+            Host.Read_File ("/external.inc", Content, Read);
+            Landin.Testing.Check_Equal
+              (Item, Unbounded.To_String (Content), "nop",
+               "the external assembly input remains unchanged");
+         end;
+      end loop;
+   end Tool_File_Directives;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "driver", "tool file directives protect their inputs",
+         Tool_File_Directives'Access);
       Landin.Testing.Register
         (Into, "driver", "compilation publishes one generation",
          Compilation_Generation'Access);
