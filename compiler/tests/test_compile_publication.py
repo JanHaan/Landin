@@ -143,6 +143,15 @@ def main():
         cwd=root, env=env, capture_output=True, timeout=45)
     if emitted.returncode:
         raise AssertionError(emitted.stderr.decode())
+    assembly_object = assembly.with_suffix('.o')
+    assembly_object.write_bytes(b'preserved input-side object\x00\xff')
+    assembly_object_before = entry_snapshot(assembly_object)
+    if sys.platform == 'darwin':
+        object_input = root / 'uses-object.s'
+        object_input.write_text('.incbin "' + str(assembly_object) + '"\n')
+        cases.append(('assembly-object-input-as-product-object',
+                      [str(object_input), '--link=libc', '--debug=full',
+                       '-o', str(assembly.with_suffix(''))], assembly_object, False))
     for suffix in ('app', 'app.dSYM'):
         for operand in ('source', 'assembly'):
             product = dsym_parent / (suffix + '-' + operand)
@@ -189,15 +198,23 @@ def main():
             product = Path(operands[operands.index('-o') + 1])
             product_ok = (product.is_file() and product.stat().st_size > 0
                           and os.access(product, os.X_OK))
+            if sys.platform == 'darwin' and '--debug=full' in operands:
+                debug_object = product.with_name(product.name + '.o')
+                debug_bundle = product.with_name(product.name + '.dSYM')
+                dwarf = debug_bundle / 'Contents/Resources/DWARF' / product.name
+                product_ok = (product_ok and debug_object.is_file()
+                              and debug_object.stat().st_size > 0
+                              and dwarf.is_file() and dwarf.stat().st_size > 0)
         passed = ((result.returncode == 0 if succeeds else expected_failure)
                   and product_ok
                   and protected.read_bytes() == before
                   and (identity.st_dev, identity.st_ino, identity.st_mode)
                   == (after.st_dev, after.st_ino, after.st_mode)
                   and report_before == report_after
+                  and entry_snapshot(assembly_object) == assembly_object_before
                   and not execution.exists()
                   and not list(temporary.iterdir())
-                  and not list(root.glob('.refine-publication-*')))
+                  and not list(root.rglob('.refine-publication-*')))
         row = dict(case=name, command=result.args, exit_status=result.returncode,
                    passed=passed, protected=str(protected),
                    before_sha256=hashlib.sha256(before).hexdigest(),
@@ -205,6 +222,8 @@ def main():
                    before_identity=[identity.st_dev, identity.st_ino, identity.st_mode],
                    after_identity=[after.st_dev, after.st_ino, after.st_mode],
                    tool_executed=execution.exists(),
+                   assembly_object_before=assembly_object_before,
+                   assembly_object_after=entry_snapshot(assembly_object),
                    refused_report=str(refused_report) if refused_report else None,
                    report_entry_before=report_before,
                    report_entry_after=report_after,

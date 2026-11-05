@@ -552,8 +552,48 @@ package body Landin.Tests.Toolchain_Suite is
       end loop;
    end A_Hosted_ELF_Program_Names_Its_File;
 
+   procedure Darwin_Debug_Objects_Name_Their_Output
+     (Item : in out Landin.Testing.Context);
+
+   procedure Darwin_Debug_Objects_Name_Their_Output
+     (Item : in out Landin.Testing.Context)
+   is
+      Assemble : constant Landin.Platform.Path_List :=
+        Landin.Backend.Toolchain.Assemble_Arguments
+          ("input.s", "different.o", Landin.Targets.Darwin_Arm64,
+           Debug => True, Level => Landin.Targets.Levels.Default_Level
+             (Landin.Targets.Darwin_Arm64));
+      Link : constant Landin.Platform.Path_List :=
+        Landin.Backend.Toolchain.Link_Arguments
+          ("different.o", "different", "",
+           Facts => Landin.Targets.Darwin_Arm64, Full_Debug => True,
+           Level => Landin.Targets.Levels.Default_Level
+             (Landin.Targets.Darwin_Arm64), Assembly_Is_Object => True);
+   begin
+      Landin.Testing.Check_Equal
+        (Item, Landin.Platform.Joined (Assemble),
+         "-arch" & LF & "arm64" & LF & "-gdwarf-4" & LF & "-x" & LF
+         & "assembler" & LF & "-c" & LF & "input.s" & LF & "-o" & LF
+         & "different.o" & LF,
+         "the assembler receives an explicit owned object output");
+      Landin.Testing.Check
+        (Item, Link.Contains ("different.o")
+         and then not Link.Contains ("assembler")
+         and then not Link.Contains ("-save-temps=obj"),
+         "an object link cannot create an input-derived temporary object");
+      Landin.Testing.Check_Equal
+        (Item, Landin.Platform.Joined
+           (Landin.Backend.Toolchain.Debug_Bundle_Arguments
+              ("different", "different.dSYM")),
+         "different" & LF & "-o" & LF & "different.dSYM" & LF,
+         "dsymutil receives the reserved bundle output");
+   end Darwin_Debug_Objects_Name_Their_Output;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "toolchain", "Darwin debug objects name their output",
+         Darwin_Debug_Objects_Name_Their_Output'Access);
       Landin.Testing.Register
         (Into, "toolchain", "a hosted ELF program names its file",
          A_Hosted_ELF_Program_Names_Its_File'Access);

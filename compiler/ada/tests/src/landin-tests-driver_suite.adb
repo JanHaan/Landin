@@ -2705,8 +2705,9 @@ package body Landin.Tests.Driver_Suite is
                     (Item, Host.Exists (Product),
                      "the requested product is published: " & Product);
                   Landin.Testing.Check_Equal
-                    (Item, Tools.Run_Count, 1,
-                     "the hosted link uses one driver call");
+                    (Item, Tools.Run_Count,
+                     (if Darwin and Assembly_Operand then 3 else 1),
+                     "assembly, link and packaging use explicit tools");
                   if Darwin then
                      Landin.Testing.Check
                        (Item, Host.Exists (Product & ".o")
@@ -2718,6 +2719,111 @@ package body Landin.Tests.Driver_Suite is
          end loop;
       end loop;
    end Ordinary_Outputs_Beneath_DSYM_Parents;
+
+   procedure Darwin_Assembly_Debug_Publication
+     (Item : in out Landin.Testing.Context);
+
+   procedure Darwin_Assembly_Debug_Publication
+     (Item : in out Landin.Testing.Context)
+   is
+   begin
+      for Attempt in 1 .. 6 loop
+         declare
+            Host : Landin.Testing.Fakes.Fake_Filesystem;
+            Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+            Args : Landin.Platform.Path_List :=
+              ["--target=darwin-arm64", "--emit=exe", "--debug=full",
+               "-o=/out/product", "/input/main.s"];
+            Result : Landin.Driver.Outcome;
+            Meter : Landin.Platform.Unmetered;
+            Content : Unbounded.Unbounded_String;
+            Read : Landin.Platform.Read_Status;
+         begin
+            Host.Add_Directory ("/input");
+            Host.Add_Directory ("/out");
+            Host.Add_File
+              ("/input/main.s", (if Attempt = 4
+               then ".incbin ""/out/product.o"""
+               elsif Attempt = 6 then ".include ""relative.inc"""
+               else "saved assembly"));
+            Host.Add_File ("/input/main.o", "source sibling object");
+            Host.Add_File ("/out/product", "prior executable");
+            Host.Add_File ("/out/product.o", "prior debug object");
+            Host.Add_Directory ("/out/product.dSYM");
+            Host.Add_File ("/out/product.dSYM/keep", "prior bundle");
+            if Attempt in 2 | 3 then
+               Tools.Add_Result (0, "assembled");
+               Tools.Add_Result (0, "linked");
+               Tools.Add_Result
+                 ((if Attempt = 2 then 1 else 0), "packaging refused",
+                  (if Attempt = 3 then Landin.Platform.Signaled
+                   else Landin.Platform.Exited));
+            elsif Attempt = 6 then
+               Host.Add_Directory ("/usr");
+               Host.Add_Directory ("/usr/bin");
+               Host.Add_File ("/usr/bin/dsymutil", "selected debug tool");
+               Args.Append ("--stage-report=/usr/bin/dsymutil");
+            end if;
+            Result := Landin.Driver.Execute
+              (Args, Host, Tools, Meter, Dry_Run => Attempt = 5);
+            Landin.Testing.Check_Equal
+              (Item, Result.Status,
+               (if Attempt in 1 | 5 then Landin.Driver.Status_Success
+                elsif Attempt in 4 | 6 then Landin.Driver.Status_Misuse
+                else Landin.Driver.Status_Reported),
+               "Darwin assembly publication: "
+               & Unbounded.To_String (Result.Report));
+            if Attempt = 6 then
+               Host.Read_File ("/usr/bin/dsymutil", Content, Read);
+               Landin.Testing.Check_Equal
+                 (Item, Unbounded.To_String (Content), "selected debug tool",
+                  "the packaging tool is protected before an early report");
+            end if;
+            Host.Read_File ("/input/main.o", Content, Read);
+            Landin.Testing.Check_Equal
+              (Item, Unbounded.To_String (Content), "source sibling object",
+               "the operand-derived object is never an output");
+            if Attempt /= 1 then
+               Host.Read_File ("/out/product", Content, Read);
+               Landin.Testing.Check_Equal
+                 (Item, Unbounded.To_String (Content), "prior executable",
+                  "failure or planning retains the executable");
+               Host.Read_File ("/out/product.o", Content, Read);
+               Landin.Testing.Check_Equal
+                 (Item, Unbounded.To_String (Content), "prior debug object",
+                  "failure or planning retains the debug object");
+               Host.Read_File ("/out/product.dSYM/keep", Content, Read);
+               Landin.Testing.Check_Equal
+                 (Item, Unbounded.To_String (Content), "prior bundle",
+                  "failure or planning retains the complete debug bundle");
+            end if;
+            if Attempt in 1 .. 3 then
+               Landin.Testing.Check_Equal
+                 (Item, Tools.Run_Count, 3,
+                  "assembly, object link and bundle packaging are explicit");
+               Landin.Testing.Check
+                 (Item, Tools.Call_At (1).Arguments.Contains ("-c")
+                  and then not Tools.Call_At (2).Arguments.Contains
+                    ("assembler")
+                  and then not Tools.Call_At (2).Arguments.Contains
+                    ("-save-temps=obj")
+                  and then Unbounded.To_String
+                    (Tools.Call_At (3).Program) = "/usr/bin/dsymutil",
+                  "the linker consumes an object and dsymutil owns packaging");
+            else
+               Landin.Testing.Check_Equal
+                 (Item, Tools.Run_Count, 0,
+                  "a collision or dry run starts no tool");
+               if Attempt = 5 then
+                  Landin.Testing.Check
+                    (Item, Contains (Unbounded.To_String (Result.Output),
+                       "run [""/usr/bin/dsymutil"",""/out/product"""),
+                     "the plan includes explicit debug packaging");
+               end if;
+            end if;
+         end;
+      end loop;
+   end Darwin_Assembly_Debug_Publication;
 
    --  The whole invocation, in order.  A containment check would pass on a
    --  command line that had lost its output.
@@ -7811,6 +7917,9 @@ package body Landin.Tests.Driver_Suite is
       Landin.Testing.Register
         (Into, "driver", "missing toolchain precedes compilation",
          Missing_Toolchain_Precedes_Compilation'Access);
+      Landin.Testing.Register
+        (Into, "driver", "Darwin assembly debug publication",
+         Darwin_Assembly_Debug_Publication'Access);
       Landin.Testing.Register
         (Into, "driver", "ordinary outputs beneath dSYM parents",
          Ordinary_Outputs_Beneath_DSYM_Parents'Access);

@@ -156,6 +156,10 @@ package Landin.Backend.Toolchain is
    --  D617: a Cortex-M description's float unit selects hard float and
    --  the unit for the assembler and the linker, and through them the
    --  libgcc multilib; without one the tools are told soft float.
+   Darwin_Debug_Bundle_Tool : constant String := "/usr/bin/dsymutil";
+   function Debug_Bundle_Arguments (Executable, Output : String)
+     return Landin.Platform.Path_List;
+
    function Assemble_Arguments
      (Assembly, Output : String; Facts : Landin.Targets.Target_Facts;
       Debug : Boolean := False;
@@ -182,9 +186,11 @@ package Landin.Backend.Toolchain is
         Landin.Platform.No_Arguments;
       Script : String := "";
       Float : Landin.Targets.Firmware.Float_Unit :=
-        Landin.Targets.Firmware.No_Float_Unit)
+        Landin.Targets.Firmware.No_Float_Unit;
+      Assembly_Is_Object : Boolean := False)
       return Landin.Platform.Path_List
      with Pre => Landin.Targets.Levels.Belongs_To (Level, Facts);
+   --  Assembly_Is_Object selects a separately assembled Darwin debug object.
    --  Script, when given, is a developer's linker script for a firmware
    --  link (D546), passed where the derived OUTPUT.ld would be.
 
