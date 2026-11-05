@@ -252,9 +252,11 @@ The README has [the commands in brief](../README.md#refine-in-brief);
 - `refine run program.ldn -- ARGUMENT ...` compiles into a new private
   directory under `TMPDIR` or `/tmp`, runs the program on this terminal with
   the arguments after `--` exactly, exits with its status, or with 128 and
-  the number of the signal that ended it and a line naming it, and removes
-  the directory on every way out, a termination or hangup sent to refine
-  among them, which it passes on to the program. It takes `compile`'s
+  the number of the signal that ended it and a line naming it. It cleans up
+  its directory after every outcome, including termination or hangup sent
+  to refine, which it passes on to the program. If a changed directory or
+  cleanup failure prevents safe removal, it retains the entries and reports
+  their recovery location and what to do. It takes `compile`'s
   options except those that say what is written, and runs only the
   compiler's own host. A bare `refine program.ldn` checks and says that it
   wrote nothing, naming the commands that run and build what it checked,

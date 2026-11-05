@@ -2275,8 +2275,12 @@ names that do not depend on where it ran, or it describes another ABI than
 the target's: another triple, data model, byte order or sign of plain
 `char`. A header reached through an absolute path under none of the roots
 the request names is refused too, since what is generated could then depend
-on where it was. Name the pinned Clang with `--clang`, and every root a
-header needs with `--include-dir` or `--system-include-dir`.
+on where it was. A relative dependency that escapes Clang's retained
+workspace, even if it reenters, is also refused: its external directory
+authority cannot be retained by normalizing the path. Use an absolute
+include under a declared root, or name the header through `--include-dir`.
+Name the pinned Clang with `--clang`, and every root a header needs with
+`--include-dir` or `--system-include-dir`.
 
 ### L0581
 

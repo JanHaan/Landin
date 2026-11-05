@@ -1612,9 +1612,14 @@ package body Landin.Diagnostics.Explanations is
                & "e order or sign of plain `char`. A header reached throug"
                & "h an absolute path under none of the roots the request n"
                & "ames is refused too, since what is generated could then "
-               & "depend on where it was. Name the pinned Clang with `--cl"
-               & "ang`, and every root a header needs with `--include-dir`"
-               & " or `--system-include-dir`.",
+               & "depend on where it was. A relative dependency that escap"
+               & "es Clang's retained workspace, even if it reenters, is a"
+               & "lso refused: its external directory authority cannot be "
+               & "retained by normalizing the path. Use an absolute includ"
+               & "e under a declared root, or name the header through `--i"
+               & "nclude-dir`. Name the pinned Clang with `--clang`, and e"
+               & "very root a header needs with `--include-dir` or `--syst"
+               & "em-include-dir`.",
             when Catalogue.Bindings_Declaration_Refused =>
                "A declaration the policy selects cannot be bound (D820),"
                & " and the message names the policy declaration and the po"

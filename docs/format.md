@@ -48,7 +48,7 @@ them, and every other name a hard link gives it, which sees the formatted
 bytes too (D358). It needs no privilege. It follows a symlink to its target,
 and needs a writable ordinary file and write permission in that file's
 directory, because before the first byte changes it copies the original bytes
-into a file beside it, `NAME.fmt-original-` and six characters, and syncs
+into a file beside it, `.fmt-original-` and an exclusive invocation suffix, and syncs
 that copy and the directory. When the new bytes are synced the copy is
 removed. A write that fails puts the original bytes back and removes the
 copy; one that cannot even do that keeps the copy and says where it is, as a
@@ -57,8 +57,9 @@ set-group-ID bit, so the formatter sets it again and reads the mode back; a
 file whose bit the caller could not set again, because it is not the owner
 or for set-group-ID not in the file's group, is refused before it is
 written, as is a Linux file with capabilities, which a write removes. A
-read-only file is refused. Each refusal says which of these it met, and
-leaves the original bytes as they were. The modification time changes, as
+read-only file is refused. These checks refuse before writing and leave
+the original bytes as they were. A later failure says whether the original
+bytes were restored or where their recovery copy remains. The modification time changes, as
 for any write. The copy and the parent directory are pinned while used.
 A save renamed over the source is never overwritten. If the name changes
 after the last check, the formatter can have updated the old inode, which
