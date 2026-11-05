@@ -413,12 +413,14 @@ int landin_tool_stop(int child, int *status)
            Tools that change credentials or escape their group are outside
            this supervisor's process-family contract. */
         siginfo_t info;
-        int error = errno;
+        int error = errno, observed = 0;
         memset(&info, 0, sizeof info);
         if (error != EPERM
-            || waitid(P_PID, (id_t)child, &info,
-                      WEXITED | WNOHANG | WNOWAIT) != 0
+            || (observed = waitid(P_PID, (id_t)child, &info,
+                                  WEXITED | WNOHANG | WNOWAIT)) != 0
             || info.si_pid != (pid_t)child) {
+            /* Ownership-aware callers must see a known lost reservation. */
+            if (error == EPERM && observed != 0 && errno == ECHILD) return -1;
             errno = error;
             return -1;
         }
