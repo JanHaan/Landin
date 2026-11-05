@@ -461,7 +461,7 @@ package body Landin.Testing.Fakes is
       Content : String;
       Status  : out Landin.Platform.Write_Status)
    is
-      Existing : constant Natural := Find (Host, Path);
+      Existing : constant Natural := Resolve_Find (Host, Path);
       Entry_Value : File_Entry :=
         (Path    => Unbounded.To_Unbounded_String (Path),
          Content => Unbounded.To_Unbounded_String (Content),
@@ -473,6 +473,9 @@ package body Landin.Testing.Fakes is
         Host.Writes.Data.Next_Identity + 1;
       Host.Writes.Data.Write_Attempts := Host.Writes.Data.Write_Attempts + 1;
       if Host.Writes.Data.Refuses_Write
+        or else (Host.Is_Link (Path)
+                 and then Ada.Strings.Fixed.Index
+                   (Path, "/.refine-publication/") /= 0)
         or else (Existing /= 0
                  and then Host.Writes.Data.Files (Existing).Kind
                    in A_Directory | An_Unlistable_Directory)
@@ -683,6 +686,18 @@ package body Landin.Testing.Fakes is
       Moved : Landin.Platform.Move_Status;
       Removed : Landin.Platform.Remove_Status;
 
+      procedure Record_Publication (Written_Item : File_Entry);
+      procedure Record_Publication (Written_Item : File_Entry) is
+      begin
+         for Index in 1 .. Natural (Host.Writes.Data.Items.Length) loop
+            if Host.Writes.Data.Items (Index).Path = Item.Path then
+               Host.Writes.Data.Items.Replace_Element (Index, Written_Item);
+               return;
+            end if;
+         end loop;
+         Host.Writes.Data.Items.Append (Written_Item);
+      end Record_Publication;
+
       procedure Save;
       procedure Save is
       begin
@@ -800,7 +815,7 @@ package body Landin.Testing.Fakes is
                      Observed : File_Entry := Item.Expected;
                   begin
                      Observed.Path := Item.Path;
-                     Host.Writes.Data.Items.Append (Observed);
+                     Record_Publication (Observed);
                   end;
                else
                   Move_File (Host, Stage, Path, Moved);
@@ -814,11 +829,15 @@ package body Landin.Testing.Fakes is
                      Written_Item : File_Entry := Item.Fresh;
                   begin
                      Written_Item.Path := Item.Path;
-                     Host.Writes.Data.Items.Append (Written_Item);
+                     Record_Publication (Written_Item);
                   end;
                end if;
             end if;
          when Landin.Platform.Restore_Previous =>
+            if Item.Rollback_Pending then
+               Fail ("previous captured concurrent entry retained");
+               return;
+            end if;
             if Item.Installed then
                At_Path := Find (Host, Path);
                if At_Path /= 0 then
@@ -830,11 +849,14 @@ package body Landin.Testing.Fakes is
                         Fail ("cannot capture output during rollback");
                         return;
                      end if;
+                     Item.Rollback_Pending := True;
                      At_Path := Find (Host, Rollback);
                      if Host.Writes.Data.Files (At_Path).Identity
                        /= Item.Fresh.Identity
                      then
                         Move_File (Host, Rollback, Path, Moved);
+                        Item.Rollback_Pending :=
+                          Moved /= Landin.Platform.Moved;
                         Fail ("concurrent save preserved during rollback");
                         return;
                      end if;
@@ -853,6 +875,7 @@ package body Landin.Testing.Fakes is
                         Fail ("new output retained during rollback");
                         return;
                      end if;
+                     Item.Rollback_Pending := False;
                   end;
                end if;
                Item.Installed := False;
@@ -920,7 +943,7 @@ package body Landin.Testing.Fakes is
          return;
       end if;
       Item.Path := Unbounded.To_Unbounded_String (Path);
-      Item.Original := Host.Writes.Data.Files (Find (Host, Path));
+      Item.Original := Host.Writes.Data.Files (Resolve_Find (Host, Path));
       Host.Writes.Data.Updates.Append (Item);
       Lease := Landin.Platform.Update_Handle (Host.Writes.Data.Updates.Length);
    end Read_For_Update;
@@ -942,7 +965,8 @@ package body Landin.Testing.Fakes is
       use type Unbounded.Unbounded_String;
       Item : constant Fake_Update :=
         Host.Writes.Data.Updates (Positive (Lease));
-      Index : constant Natural := Find (Host, Unbounded.To_String (Item.Path));
+      Index : constant Natural :=
+        Resolve_Find (Host, Unbounded.To_String (Item.Path));
    begin
       Status := Landin.Platform.Not_Writable;
       Reason := Unbounded.To_Unbounded_String

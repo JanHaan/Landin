@@ -25,6 +25,7 @@ int landin_tool_start_in_directory(char *const [], char *const [], int,
 int landin_tool_wait(int, int *, int);
 static char scratch[4096], why[8192];
 static unsigned passed;
+static const char *self_program;
 static const char *event_to_race;
 static char raced_path[4096], replacement[4096];
 static int race_kind;
@@ -260,6 +261,16 @@ static void repeated_abort_retains_recovery(void)
     REQUIRE(content(output, "second-save") && content(recovery, "old-output")
             && content(rollback, "first-save")); ++passed;
 }
+static void recovery_discovery(void)
+{
+    char output[4096]; path(output, sizeof output, "rollback-output");
+    char *args[] = {(char *)self_program, "--discover", output, NULL};
+    int nullfd = open("/dev/null", O_RDWR), child, status; REQUIRE(nullfd >= 0);
+    REQUIRE(landin_tool_start_in_directory(args, NULL, 0, nullfd, nullfd,
+                                            nullfd, -1, &child) == 0);
+    REQUIRE(landin_tool_wait(child, &status, 0) == child && status == 0);
+    close(nullfd); ++passed;
+}
 static void child_staging_directory(void)
 {
     char root[4096], moved[4096], output[4096], stage[4096], relative[8192];
@@ -297,15 +308,24 @@ static void fmt_original_descriptor(void)
     REQUIRE(content(output, "editor-save") && content(original_alias, "formatted"));
     REQUIRE(strstr(why, "retained")); ++passed;
 }
-int main(void)
+int main(int argc, char **argv)
 {
+    self_program = argv[0];
+    if (argc == 3 && !strcmp(argv[1], "--discover")) {
+        int token; char stage[4096];
+        REQUIRE(landin_publication_open(argv[2], 0, "", &token, stage,
+                                        sizeof stage, why, sizeof why) != 0);
+        REQUIRE(strstr(why, "retained or active publication") != NULL);
+        return 0;
+    }
     const char *tmp = getenv("TMPDIR"); if (!tmp || !*tmp) tmp = "/tmp";
     REQUIRE(snprintf(scratch, sizeof scratch, "%s/landin-publication-XXXXXX", tmp) > 0);
     REQUIRE(mkdtemp(scratch) != NULL);
     ordinary_group(); capture_actual(); absence_and_noclobber(); protected_alias();
     anchored_stage_and_roots(); directory_snapshot(); staged_rewrite();
     fmt_read_boundaries(); fmt_original_descriptor(); collision_names();
-    repeated_abort_retains_recovery(); child_staging_directory();
+    repeated_abort_retains_recovery(); recovery_discovery();
+    child_staging_directory();
     printf("publication native: %u controls passed; retained scratch %s\n", passed, scratch);
     return 0;
 }

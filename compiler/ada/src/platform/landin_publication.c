@@ -10,6 +10,7 @@
 #include <errno.h>
 #include <dirent.h>
 #include <fcntl.h>
+#include <inttypes.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -29,7 +30,9 @@ struct arena {
 };
 struct publication {
     int token, absent, deletion, captured, installed, unchanged, finished;
-    int rollback_pending;
+    int rollback_pending, expected_fd;
+    char journal[64];
+    struct stat journal_id;
     struct arena *arena;
     char *path, *name, *stage, *recovery, *rollback;
     struct stat expected, fresh;
@@ -85,11 +88,13 @@ static char *read_bytes(int fd, size_t *size)
         if (!got) break;
         used += (size_t)got;
     }
+    bytes[used] = 0;
     *size = used;
     return bytes;
 }
 struct tree_entry {
     char *name, *bytes;
+    int fd;
     size_t size;
     struct stat identity;
     struct tree_entry *children, *next;
@@ -98,7 +103,9 @@ static void free_tree(struct tree_entry *tree)
 {
     while (tree) {
         struct tree_entry *next = tree->next;
-        free_tree(tree->children); free(tree->name); free(tree->bytes);
+        free_tree(tree->children);
+        if (tree->fd >= 0) close(tree->fd);
+        free(tree->name); free(tree->bytes);
         free(tree); tree = next;
     }
 }
@@ -108,6 +115,7 @@ static struct tree_entry *snapshot_entry(int parent, const char *name)
     int fd = -1;
     struct stat actual;
     if (!entry) return NULL;
+    entry->fd = -1;
     entry->name = strdup(name);
     if (!entry->name || fstatat(parent, name, &entry->identity,
                                 AT_SYMLINK_NOFOLLOW) != 0) goto fail;
@@ -136,7 +144,8 @@ static struct tree_entry *snapshot_entry(int parent, const char *name)
         entry->bytes = read_bytes(fd, &entry->size);
         if (!entry->bytes) goto fail;
     }
-    close(fd); return entry;
+    entry->fd = fd;
+    return entry;
 fail:
     if (fd >= 0) close(fd);
     free_tree(entry); return NULL;
@@ -285,6 +294,13 @@ int landin_read_snapshot(const char *path, char **bytes, size_t *size,
 void landin_snapshot_free(char *bytes) { free(bytes); }
 /* Anchor selection is permitted to resolve ancestors once. The chosen root
    itself, and every component below it, must be ordinary directories. */
+static void strip_dots(char *path)
+{
+    char *dot;
+    while ((dot = strstr(path, "/./")) != NULL) memmove(dot, dot + 2, strlen(dot + 2) + 1);
+    size_t n = strlen(path);
+    if (n >= 2 && !strcmp(path + n - 2, "/.")) path[n-2 ? n-2 : 1] = 0;
+}
 static int parent_for(const char *path, const char *root, char **parent_path,
                       char **name)
 {
@@ -305,13 +321,15 @@ static int parent_for(const char *path, const char *root, char **parent_path,
     if (!*name) goto done;
     if (slash == absolute) slash[1] = 0;
     else *slash = 0;
+    strip_dots(absolute);
     if (*root) {
         snprintf(root_abs, n, "%s%s%s", *root == '/' ? "" : cwd,
                  *root == '/' ? "" : "/", root);
+        strip_dots(root_abs);
         size_t len = strlen(root_abs);
         while (len > 1 && root_abs[len-1] == '/') root_abs[--len] = 0;
         if (strncmp(absolute, root_abs, len)
-            || (absolute[len] && absolute[len] != '/')) { errno = EINVAL; goto done; }
+            || (len > 1 && absolute[len] && absolute[len] != '/')) { errno = EINVAL; goto done; }
         fd = open(root_abs, O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
         if (fd < 0 && errno == ENOENT) {
             /* Create an explicitly requested root through pinned, no-follow
@@ -475,6 +493,122 @@ static struct arena *arena_for(int parent, const char *path)
     a->next = arenas; arenas = a;
     return a;
 }
+static int own_arena_name(int parent, const char *name)
+{
+    struct stat st;
+    struct arena *a;
+    if (fstat(parent, &st) != 0) return 0;
+    for (a = arenas; a; a = a->next)
+        if (a->refs && same(&st, &a->parent_id) && !strcmp(name, a->name)) return 1;
+    return 0;
+}
+/* Discovery reads exclusively-created records through the pinned parent.
+   A partial/unrecognised workspace refuses rather than guessing it is stale. */
+static int retained_workspace(int parent, const char *parent_path,
+                               const char *target, char *why, size_t room)
+{
+    DIR *directory = fdopendir(dup(parent));
+    struct dirent *item;
+    int refused = 0;
+    if (!directory) return -1;
+    while ((item = readdir(directory)) != NULL) {
+        if (strncmp(item->d_name, ".refine-publication-", 20)
+            || own_arena_name(parent, item->d_name)) continue;
+        int root = openat(parent, item->d_name,
+                           O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+        DIR *records = root < 0 ? NULL : fdopendir(dup(root));
+        int seen = 0;
+        struct dirent *record;
+        if (!records) refused = 1;
+        while (records && (record = readdir(records)) != NULL) {
+            if (strncmp(record->d_name, "destination-", 12)) continue;
+            seen = 1;
+            int fd = openat(root, record->d_name,
+                            O_RDONLY | O_NOFOLLOW | O_CLOEXEC | O_NONBLOCK);
+            size_t length = 0;
+            struct stat record_id;
+            char *bytes = fd < 0 || fstat(fd, &record_id) != 0
+                || !S_ISREG(record_id.st_mode) ? NULL : read_bytes(fd, &length);
+            if (fd >= 0) close(fd);
+            const char magic[] = "LANDIN-PUBLICATION-1\n";
+            if (!bytes || length <= sizeof magic - 1
+                || memcmp(bytes, magic, sizeof magic - 1)) refused = 1;
+            else {
+                char *after = NULL;
+                size_t name_length = strtoul(bytes + sizeof magic - 1, &after, 10);
+                size_t offset = after ? (size_t)(after - bytes) + 1 : length;
+                if (!after || *after != '\n' || offset > length
+                    || name_length > length - offset) refused = 1;
+                else if (name_length == strlen(target)
+                         && !memcmp(bytes + offset, target, name_length)) refused = 1;
+                /* Case-insensitive or unknown name rules are compared by the
+                   existing host identity adapter, using the actual parent. */
+                else {
+                    size_t n = strlen(parent_path) + name_length + 2;
+                    char *other = malloc(n);
+                    if (!other) refused = 1;
+                    else {
+                        snprintf(other, n, "%s/%.*s", parent_path,
+                                 (int)name_length, bytes + offset);
+                        size_t wanted_size = strlen(parent_path) + strlen(target) + 2;
+                        char *wanted = malloc(wanted_size);
+                        if (!wanted) refused = 1;
+                        else {
+                            snprintf(wanted, wanted_size, "%s/%s", parent_path, target);
+                            const char *paths[] = {other};
+                            if (landin_overlaps_any(wanted, paths, 1) != 0) refused = 1;
+                            free(wanted);
+                        }
+                        free(other);
+                    }
+                }
+            }
+            free(bytes);
+            if (refused) break;
+        }
+        if (!seen) refused = 1;
+        if (records) closedir(records);
+        if (root >= 0) close(root);
+        if (refused) {
+            reason(why, room, "retained or active publication for %s in %s/%s; inspect its destination records and recover the previous or new output before retrying",
+                   target, parent_path, item->d_name);
+            break;
+        }
+    }
+    closedir(directory); return refused ? -1 : 0;
+}
+static int write_journal(struct publication *p)
+{
+    snprintf(p->journal, sizeof p->journal, "destination-%d", p->token);
+    int fd = openat(p->arena->root_fd, p->journal,
+                    O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600);
+    if (fd < 0) return -1;
+    int result = dprintf(fd, "LANDIN-PUBLICATION-1\n%zu\n%s\nlogical=%s\nstaged=%s\nprevious=%s/%s\ncaptured-new=%s/%s\nexpected=%s device=%ju inode=%ju\n",
+                         strlen(p->name), p->name, p->path, p->stage,
+                         p->arena->recovery_path, p->recovery,
+                         p->arena->recovery_path, p->rollback,
+                         p->absent ? "absent" : "existing",
+                         (uintmax_t)p->expected.st_dev, (uintmax_t)p->expected.st_ino);
+    if (result >= 0) result = fstat(fd, &p->journal_id);
+    if (result == 0) result = fsync(fd);
+    close(fd);
+    if (result == 0 && fsync(p->arena->root_fd) != 0 && errno != EINVAL) result = -1;
+    return result < 0 ? -1 : 0;
+}
+static int finish_journals(struct arena *arena)
+{
+    struct publication *p;
+    for (p = publications; p; p = p->next) {
+        struct stat st;
+        if (p->arena != arena) continue;
+        if (!p->finished || fstatat(arena->root_fd, p->journal, &st,
+                                   AT_SYMLINK_NOFOLLOW) != 0
+            || !same(&st, &p->journal_id)) { errno = EAGAIN; return -1; }
+    }
+    for (p = publications; p; p = p->next)
+        if (p->arena == arena && unlinkat(arena->root_fd, p->journal, 0) != 0) return -1;
+    return 0;
+}
 int landin_publication_open(const char *path, int deletion, const char *root,
                             int *token, char *stage, size_t stage_room,
                             char *why, size_t room)
@@ -484,10 +618,15 @@ int landin_publication_open(const char *path, int deletion, const char *root,
     int parent = -1, fd = -1;
     *token = 0; if (stage_room) *stage = 0;
     if (!p) goto fail;
+    p->expected_fd = -1;
     if (landin_cancellation_requested()) { errno = EINTR; goto fail; }
     p->path = strdup(path);
     parent = parent_for(path, root, &parent_path, &p->name);
     if (parent < 0) goto fail;
+    if (retained_workspace(parent, parent_path, p->name, why, room) != 0) {
+        close(parent); free(parent_path); free(p->path); free(p->name); free(p);
+        return -1;
+    }
     if (fstatat(parent, p->name, &p->expected, AT_SYMLINK_NOFOLLOW) == 0) {
         if (S_ISDIR(p->expected.st_mode)) {
             p->expected_tree = snapshot_entry(parent, p->name);
@@ -499,8 +638,8 @@ int landin_publication_open(const char *path, int deletion, const char *root,
         if (fd < 0 || fstat(fd, &actual) != 0 || !same(&actual, &p->expected))
             { errno = EAGAIN; goto fail; }
         p->bytes = read_bytes(fd, &p->size);
-        close(fd); fd = -1;
         if (!p->bytes) goto fail;
+        p->expected_fd = fd; fd = -1;
         }
     } else if (errno == ENOENT) p->absent = 1;
     else goto fail;
@@ -515,6 +654,7 @@ int landin_publication_open(const char *path, int deletion, const char *root,
     snprintf(p->recovery, 40, ".previous-%d", p->token);
     snprintf(p->rollback, 40, ".rollback-%d", p->token);
     if (strlen(p->stage) >= stage_room) { errno = ENAMETOOLONG; goto fail; }
+    if (write_journal(p) != 0) goto fail;
     strcpy(stage, p->stage); *token = p->token;
     p->next = publications; publications = p;
     free(parent_path); reason(why, room, ""); return 0;
@@ -523,7 +663,9 @@ fail:
            path, strerror(errno));
     if (fd >= 0) close(fd);
     if (parent >= 0) close(parent);
-    if (p) { free(p->path); free(p->name); free(p->bytes); free(p->stage);
+    if (p) {
+        if (p->expected_fd >= 0) close(p->expected_fd);
+        free(p->path); free(p->name); free(p->bytes); free(p->stage);
         free(p->recovery); free(p->rollback);
         free_tree(p->expected_tree); free_tree(p->fresh_tree); free(p); }
     free(parent_path); return -1;
@@ -701,6 +843,7 @@ int landin_publication_step(int token, int action, const char *const *paths,
             /* rmdir succeeds only when every known artifact is gone. */
             if (unlinkat(p->arena->root_fd, "stage", AT_REMOVEDIR) != 0
                 || unlinkat(p->arena->root_fd, "recovery", AT_REMOVEDIR) != 0
+                || finish_journals(p->arena) != 0
                 || unlinkat(parent, p->arena->name, AT_REMOVEDIR) != 0) {
                 reason(why, room, "retained publication directory %s: %s",
                        p->arena->recovery_path, strerror(errno)); return -1;
@@ -708,6 +851,7 @@ int landin_publication_step(int token, int action, const char *const *paths,
             close(p->arena->private_fd); close(p->arena->recovery_fd);
             close(p->arena->root_fd); close(p->arena->parent);
         }
+        if (p->expected_fd >= 0) { close(p->expected_fd); p->expected_fd = -1; }
         free(p->bytes); p->bytes = NULL;
         free_tree(p->expected_tree); p->expected_tree = NULL;
         free_tree(p->fresh_tree); p->fresh_tree = NULL;
