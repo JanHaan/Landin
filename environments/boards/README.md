@@ -6,10 +6,11 @@ same physical Pico 2. Other boards on the rig are not selected by these
 commands.
 
 Build on epycmicro in Landin's pinned environment. The tools and physical
-oracles run on rigpi. A RAM run is a warm debugger entry; it does not
-establish power-on or boot-ROM behavior. `refine` retains the default boot
-layout; board tools default to `--mode=ram` and select the compiler's
-`--firmware-layout=ram` explicitly.
+oracles run on rigpi, by hand through `run.py` or in the gate through
+[`gate.py`](#the-board-gate-on-the-rig). A RAM run is a warm debugger entry;
+it does not establish power-on or boot-ROM behavior. `refine` retains the
+default boot layout; board tools default to `--mode=ram` and select the
+compiler's `--firmware-layout=ram` explicitly.
 
 On NixOS the foreign cross-toolchain archives need an FHS environment, as
 the [emulator recipe](../cortex-m/README.md#on-nixos) explains.
@@ -60,45 +61,97 @@ uhubctl and probe-rs. Debug reaches probehive directly by UDP, for example
 `--probe 0000:0002:10.42.0.50/0`; the UART service remains a separate
 runtime dependency of the RP and ESP32-C3 tools.
 
+The SRAM helper, the probehive runtime and the record of the loaded
+bitstream live in the rig's shared state, `/var/lib/landin-rig` on rigpi
+([shared rig rules](#shared-rig-rules)), where the maintainer's manual runs
+and the gate's runner user both find them.
+
 The pinned probe-rs source is JanHaan/probe-rs revision
 `6f9946fe748edd0e55604dc42bc0f7ea3e7485da`, branch `rig/2026-11-03`.
 The Pi reports `v0.32.0-344-g6f9946fe`. The helper uses the same source and
 vendor hashes in [package.nix](ram-run/package.nix). Build the helper on
-epycmicro and import its closure on the Pi:
+epycmicro, import its closure on the Pi, and root it there in a profile:
 
 ```sh
 nix build .#board-ram-run-rigpi --out-link /tmp/landin-ram-run
-nix-store --export $(nix-store -qR /tmp/landin-ram-run) > /tmp/landin-ram-run.closure
+helper=$(readlink -f /tmp/landin-ram-run)
+nix-store --export $(nix-store -qR "$helper") > /tmp/landin-ram-run.closure
 ssh -i ~/.ssh/epycmicro-2026-09-17 jan@10.42.0.60 \
     'sudo nix-store --import' < /tmp/landin-ram-run.closure
+ssh -i ~/.ssh/epycmicro-2026-09-17 jan@10.42.0.60 \
+    "sudo nix-env -p /nix/var/nix/profiles/landin-ram-run --set $helper &&
+     install -d -m 2770 /var/lib/landin-rig/bin &&
+     ln -sfn /nix/var/nix/profiles/landin-ram-run/bin/landin-ram-run \
+         /var/lib/landin-rig/bin/landin-ram-run"
 ```
 
 This explicit import accepts a locally built, unsigned closure; a normal
-remote Nix copy rejects it without a trusted signing key. On the Pi, point
-`~/.local/bin/landin-ram-run` at the imported store path's
-`bin/landin-ram-run`, or pass that path directly with `--ram-loader`.
+remote Nix copy rejects it without a trusted signing key. An imported store
+path is not a garbage-collection root, and neither is a symlink to it from
+a home directory or from the state directory: the Pi's weekly garbage
+collection deletes the path and leaves the link dangling. The profile is the
+root. Each `--set` adds a generation;
+`sudo nix-env -p /nix/var/nix/profiles/landin-ram-run --delete-generations old`
+drops the earlier ones. `readlink -f /var/lib/landin-rig/bin/landin-ram-run`
+names the store path the profile holds. Do not check roots with
+`nix-store --query --roots`: although it is a query, on rigpi it removed
+stale automatic root links and temporary-root files as it ran.
+
+The gate runs `/var/lib/landin-rig/bin/landin-ram-run` by default; a manual
+run names it with `--ram-loader`.
 `nix build .#board-ram-run` builds and tests the host executable.
 `landin-ram-run --describe` reports the compiled source hash and probe-rs
 revision without opening a probe. The board tool checks these against its
-matching source before hardware access and refuses a stale helper.
+matching source before hardware access and refuses a stale helper as
+`rig-tool-mismatch`.
 
 The probehive runtime needs its `flake.nix` and `flake.lock` for the
 `#gpio` shell, `scripts/dap_bridge.py`, `scripts/dap_udp.py` and
 `scripts/gpio.py`, and the loaded bitstream's
 `build/slots_ci/generated/rig.json` and `csr.json`. GPIO uses its lightweight
 `#gpio` shell, available on arm64 and x86-64, rather than the FPGA shell.
-Prepare that environment before holding the rig lock:
+The gate takes the runtime from `/var/lib/landin-rig/probehive`, and a
+manual run names it with `--probehive`. Prepare that environment before
+holding the rig lock:
 
 ```sh
-nix develop /home/jan/src/probehive#gpio -c true
+nix develop /var/lib/landin-rig/probehive#gpio -c true
 ```
 
 The matching probehive change is published on
 [`landin-ram-gpio`](https://github.com/JanHaan/probehive/tree/landin-ram-gpio),
-commit `4f69b8269a664cf1e1c47b2b40365b482e9f30ec`. Use a checkout containing
-that commit. Source
-and runtime files must match the loaded bitstream. Loading a bitstream is
-an explicit rig operation; a run never switches the Arty's power.
+commit `4f69b8269a664cf1e1c47b2b40365b482e9f30ec`.
+[rig.json](rig.json) pins that commit and the SHA-256 of each of the seven
+runtime files above, and `gate.py` checks them before the lock: a missing
+file is `needs-setup`, a different one `rig-tool-mismatch`. A plain copy of
+the files serves as well as a checkout, since the hashes are the identity.
+Source and runtime files must match the loaded bitstream.
+
+The Arty holds its bitstream in SRAM, and the gateware's LiteX identifier
+is the constant `probehive`, so which bitstream is loaded cannot be read
+back from it. [`rig.py`](rig.py) keeps the answer instead, in
+`probehive-loaded.json` in the shared state: the file's SHA-256, when it
+was loaded, the Pi's kernel boot id then and the Arty FTDI's location, bus
+and device numbers. With `PATH` the pinned build's
+`build/slots_ci/gateware/arty_slots.bit`:
+
+```sh
+python3 environments/boards/rig.py load-probehive --bitstream PATH
+python3 environments/boards/rig.py record-probehive-load --bitstream PATH --reason TEXT
+python3 environments/boards/rig.py verify
+```
+
+`load-probehive` takes the rig lock, refuses any bitstream but the one
+rig.json pins, loads it with `openFPGALoader -b arty` and records it; it is
+the only command here that touches the Arty. `record-probehive-load`
+records a bitstream the operator knows is already loaded, with the reason,
+and loads nothing. `verify`, which the gate runs before any hardware,
+accepts the record only while its hash is the pin, its boot is the current
+one and the Arty has not enumerated again since; otherwise the gate stops
+with `rig-tool-mismatch` for another hash and `needs-operator` for a reboot
+or a re-enumeration, either of which may have cost the Arty its power and
+its bitstream. Load or record again after either. Loading a bitstream is an
+explicit rig operation; a run never switches the Arty's power.
 
 ## Run a prepared candidate
 
@@ -108,8 +161,8 @@ From the Landin checkout on epycmicro:
 python3 environments/boards/run.py --board=rp2040 \
     --refine compiler/ada/build/nix-x86_64-linux/debug/bin/refine \
     --output NEW_DIRECTORY -- \
-    --ram-loader /home/jan/.local/bin/landin-ram-run \
-    --probehive /home/jan/src/probehive --indicator-pin IO32
+    --ram-loader /var/lib/landin-rig/bin/landin-ram-run \
+    --probehive /var/lib/landin-rig/probehive --indicator-pin IO32
 ```
 
 This one command builds the current source, copies its checked bundle and
@@ -122,6 +175,20 @@ Each board tool records elapsed time, helper operations and oracle results.
 Add `--record NEW_LOCAL_PATH` before `--` to retrieve a successful tool's
 record without replacing an existing file. Use `ram-record.json` for RAM
 evidence; a build never produces hardware records.
+
+[rig.json](rig.json) writes out each port's arguments in both modes, as the
+gate passes them. Both RP ports and both Xtensa ports need `--ram-loader`
+in boot mode as well as RAM mode, because their tools read a running
+core's memory only through the helper's single-core readback: a full
+probe-rs session would try to access the RP's reset-held core 1 when it
+closes and can leave the executing core halted, and an Xtensa read goes
+through the helper's `boot-read` in boot mode and checks CPU1's retained
+stall in RAM mode. The STM32H753, ESP32-C3 and ESP32-C5 boot checks read
+memory with probe-rs itself, so only their RAM runs name the helper.
+`--probehive` names the runtime for the ports whose probe or UART is a
+probehive slot's: both RP ports and the ESP32-C3. The Pico 2 also takes
+its `--hub`, `--port` and, on the rig, `--power-only`
+([below](#the-pico-2-on-a-power-only-cable)).
 
 The warm helper halts the executing core, retires Arm and C5 handlers,
 resets Hazard3 interrupt state, stops the port's DMA and interrupt sources,
@@ -240,8 +307,10 @@ flash write or power switching, and cannot write a passed board record.
 For Pico 2 RAM entry, the BOOTSEL guard reads the selected hub and physical
 port through Linux sysfs. It validates the hub, port and any device
 identity, failing on unreadable metadata; an absent device is normal for
-the quiet resident image. RAM mode needs no hub power-control permission.
-With the cascade unplugged, name its last root explicitly with `--cascade`
+the quiet resident image. With `--power-only` any device there at all stops
+the run. RAM mode needs no hub power-control permission.
+For a Pico 2 on a data cable with the cascade unplugged, name the
+cascade's last root explicitly with `--cascade`
 and give the Pico's absolute `--hub` and `--port`. After the direct-Pi
 recovery at hub `1-1`, port `2`, the RAM arguments were
 `--hub=1-1 --port=2 --cascade=1-1.2`. Check live topology before reusing
@@ -267,12 +336,45 @@ execution from flash where supported, and flash-sized programs.
 ESP boot images still load into SRAM; their boot mode checks the ROM
 header and loading, and does not raise the SRAM limit.
 
-Every Pico 2 boot check and malformed-image control belongs off the
-cascade. A Pico 2 in BOOTSEL must never be attached through probe-rs, even
-with an override. Recover corrupt flash by preparing the fixed Arm ELF as
-a UF2 with [uf2.py](uf2.py), then copying it to BOOTSEL storage off the
+### The Pico 2 on a power-only cable
+
+On the rig the Pico 2 hangs from the cascade's hub `.3.3`, port 2, through
+a cable that carries VBUS and ground alone; [rig.json](rig.json) names that
+location. Its SWD and UART come from probehive and its fixed images are
+USB-silent, so it needs no USB data. Without data lines nothing the chip
+does reaches a host controller: neither BOOTSEL nor the boot ROM's USB
+device, which probe-rs's RP235x download reset leaves connected with its
+core halted (D832). Those two are what stopped the xHCI before. Uhubctl
+still cuts VBUS for a real cold start. `--power-only` is the maintainer's
+word for that cable. With it both Pico 2 tools:
+
+- run boot checks and the change between Arm and Hazard3 on the cascade
+  port, unattended;
+- permit a probe attach whatever the boot ROM runs, BOOTSEL included;
+- require the port to show no device at all before any attach or switch: a
+  device there means the cable carries data, and the run stops
+  `needs-operator` before anything attaches or switches;
+- refuse `--boot-transport=manual-uf2`, since such a cable cannot copy a
+  UF2.
+
+A boot check flashes over SWD as the architecture already running, so it
+also recovers a bad image without UF2. The gate runs `rp2350` boot,
+`rp2350` RAM, `rp2350_hazard3` boot and `rp2350_hazard3` RAM in that order,
+and ends on the fixed Hazard3 image, the board's resting state. The
+maintainer's NixOS configuration for rigpi also sets `early_stop` on that
+hub port, a backstop the tools do not rely on. Malformed-block controls
+stay refused in this arrangement too.
+
+### A Pico 2 with a data cable
+
+A Pico 2 whose cable carries USB data, run without `--power-only`, keeps
+the earlier rules. Every boot check and malformed-image control belongs off
+the cascade. A Pico 2 in BOOTSEL must never be attached through probe-rs,
+even with an override. Recover corrupt flash by preparing the fixed Arm ELF
+as a UF2 with [uf2.py](uf2.py), then copying it to BOOTSEL storage off the
 cascade. On the Pi, unplug the cascade before plugging a BOOTSEL Pico 2
-into another Pi port. Return it only after verifying its fixed image.
+into another Pi port. Return it only after verifying its fixed image, and
+on the rig return it on its power-only cable.
 
 Changing a Pico 2 between Arm and Hazard3 is an explicit setup/boot
 operation, also off the cascade. After UF2 recovery into Arm, use the
@@ -321,11 +423,100 @@ The rig lock spans the whole physical sequence. Recovery records establish
 installation and readiness; only the complete scenario and fixed-image
 restoration produce a passed boot record.
 
+## The board gate on the rig
+
+[`gate.py`](gate.py) runs one port of [rig.json](rig.json) on rigpi from
+the bundles `build.py --mode=both` prepared, as the gate's board jobs do:
+
+```sh
+python3 environments/boards/gate.py --port=PORT --bundles=BUNDLES \
+    --output=NEW_DIRECTORY [--lock-wait=SECONDS]
+```
+
+rig.json describes the maintainer's rig: the Arty's serial, the probehive
+commit with the SHA-256 of its seven runtime files and of its bitstream,
+and for each of seven ports, `rp2040`, `pico2`, `stm32h753`, `esp32c3`,
+`esp32c5`, `esp32` and `esp32s3`, its steps in order with the arguments
+that rig needs. `{probehive}` and `{ram_loader}` in an argument become
+`--probehive` and `--ram-loader`, by default `probehive/` and
+`bin/landin-ram-run` in the shared state, and a name from the port's
+`location`, such as the Pico 2's `{hub}` and `{port}`, becomes its value.
+A location left null ends the port `needs-setup` before any hardware, and
+the port's `setup` text says what the rig lacks. The gate itself passes
+`--mode`, `--bundle` and `--output`; rig.json may not pass them, nor
+`--record`.
+
+Every port runs its boot check first, which flashes, cold-starts, checks
+the physical oracle and restores the fixed image, then its RAM run from
+that verified image; the Pico 2 runs four steps
+([above](#the-pico-2-on-a-power-only-cable)). A RAM run's success never
+establishes power-on, ROM loading or fixed-image restoration, so no port
+runs RAM alone.
+
+Before it takes the lock, and before anything touches a board, a probe or
+a hub, `gate.py` reads rig.json, validates every bundle against this
+checkout's source, describes the helper, asks probe-rs for its version,
+hashes the probehive runtime, finds the cascade with the Arty off it and
+verifies the bitstream's load record, each for the ports that use them.
+Then it holds the rig lock across all the port's steps, so no other run
+comes between a boot check and its RAM run. It waits at most `--lock-wait`
+seconds for it, 2700 by default and 1200 in the gate's jobs, then ends
+`rig-busy`, naming the holder.
+
+Each step runs `python3 environments/boards/BOARD/board.py --mode=MODE
+--bundle=BUNDLES/BOARD/MODE --output=NEW_DIRECTORY/BOARD-MODE ARGUMENTS`,
+as `run.py` runs it, in a process group of its own, and the sequence stops
+at the first step that does not pass. `NEW_DIRECTORY/outcome.json` keeps
+each step's outcome, exit status, elapsed time and failure, and the run's
+provenance: the commit and GitHub run, the host and its boot id, the state
+directory, rig.json's hash, each bundle's manifest, compiler and source
+identities, the helper's description, probe-rs's version, the probehive
+files' hashes, the topology and the load record. A summary is appended to
+`$GITHUB_STEP_SUMMARY` when that is set. The exit status is 0 only for a
+passed port.
+
+Before each step `gate.py` writes `runs/PORT.json` in the shared state,
+naming the port, the step, the commit and the run, and removes it once
+every step has ended with a result of its own and none was cancelled. A
+run that finds one keeps it in `outcome.json` as `previous_interrupted` and
+goes on, because its first step's boot check flashes and restores the board
+anyway. For the Pico 2, which an interrupted run may have left in either
+architecture or in its boot ROM, it stops `needs-operator`: check the
+board, restore its fixed image by hand, then remove the file.
+
 ## Shared rig rules
 
-Every hardware phase holds the same host lock,
-`~/.cache/landin/rig.lock`. Compilation and environment preparation happen
-before that phase. Hub paths are discovered by IDs, relative to the
+The rig's state is one directory. It is `LANDIN_RIG_STATE` when that is
+set, which must name an absolute existing directory or every lock refuses
+`needs-setup`; otherwise `/var/lib/landin-rig` when it exists, as it does on
+rigpi; otherwise `~/.cache/landin`, the default on any other host.
+
+| entry | what it holds |
+|---|---|
+| `rig.lock` | the one lock, naming its holder |
+| `rig.pace` | the last action that disconnected a device, and acknowledgements |
+| `runs/PORT.json` | `gate.py`'s journal of a port's step under way |
+| `probehive-loaded.json` | `rig.py`'s record of the loaded bitstream |
+| `probehive/` | the pinned probehive runtime |
+| `bin/landin-ram-run` | the SRAM helper's link into its profile |
+
+On rigpi the directory belongs to group `rig`, which the maintainer and
+the gate runner's `landin-rig` user share, so manual runs and the gate's
+take one lock and see one USB stop. The tools make what they write there
+group-shared whatever the user's umask: files 0660, directories setgid
+2770, never writable by others. They replace a file by renaming a complete
+one beside it, so a reader never sees half of one.
+
+While the state is anywhere but the home's cache, a `~/.cache/landin/rig.lock`
+that another process holds stops the run `needs-operator`: a tool from an
+older source holds that file, and would not serialize against this one.
+Let that run finish, update its source, then retire the old file.
+
+Every hardware phase holds the lock. A board tool waits for it without end,
+naming the holder; `gate.py` waits for a bounded time and ends `rig-busy`.
+A run started by hand under `flock` on the same file already holds it
+through its parent, and goes on. Compilation and environment preparation
+happen before that phase. Hub paths are discovered by IDs, relative to the
 cascade; verify live board and debugger identities rather than copying an
 old absolute USB path. The Arty must be present and outside the cascade
 before a port can be switched, and its own port is never switched.
@@ -338,3 +529,41 @@ explicit `python3 environments/boards/common.py acknowledge REASON`
 records that recovery under the same lock; it is not an automatic retry.
 The Pi's cascade and Arty share its VL805 controller, so separate ports do
 not establish separate controller failure domains.
+
+### What a run reports
+
+Every board tool's `result.json` keeps its `status`, `passed` or `failed`
+for records and older readers, and adds an `outcome` that says what to do
+next:
+
+| outcome | what it means |
+|---|---|
+| `passed` | the run passed, or a diagnostic completed its observation |
+| `failed` | the board, its image or its oracle failed |
+| `usb-stopped` | the kernel logged USB trouble and the run stopped; recovery and acknowledgement are the maintainer's |
+| `unavailable` | a board, debugger, console, hub or the cascade is absent, or another device holds its place |
+| `rig-busy` | the lock stayed held for the whole bounded wait |
+| `rig-tool-mismatch` | the helper, probe-rs, the probehive runtime or the loaded bitstream is not the pinned one |
+| `needs-setup` | the rig lacks a setup the run requires; nothing was attempted |
+| `needs-operator` | the rig's state needs a person's look before any run continues |
+| `cancelled` | SIGINT or SIGTERM stopped the run |
+
+`gate.py`'s `outcome.json` adds `incomplete`, for a step that exited
+without a readable `result.json`. A run that meets several keeps a
+cancellation or a USB stop over anything else, and otherwise its first
+specific outcome over a plain failure. A refusal before a tool has written
+its result, in its preflight, is still written as a `result.json` under
+`--output`; one its argument parser raises is not, and the gate reports
+that step `incomplete`.
+
+SIGINT or SIGTERM stops a tool at its next point. A power cycle or a
+download under way finishes first, because one cut short leaves a port off
+or a chip halted in its boot ROM. A boot check cancelled before its fixed
+image is restored skips the restoration and records it pending: GitHub's
+runner sends SIGTERM 7.5 s after SIGINT and kills the step 2.5 s later,
+and a restoration begun and killed would leave less than none. The port's
+next boot check restores it. The tool then closes the probe sessions and
+consoles it opened, releases the lock and records `cancelled` with the signal and the
+phase: the command running or last run, and the last paced action. Later
+signals are only noted. `gate.py` passes each signal to the step running,
+and between steps stops itself.

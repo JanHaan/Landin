@@ -48,8 +48,8 @@ entry that describes it, and put a new one where a reader would look for it.
   boots such an image from power-on and runs prototype 1's UART, DMA,
   timer, GPIO and interrupt port at the RP2040's own addresses, checked
   against a physical oracle by a developer tool,
-  [`board.py`](../environments/boards/rp2040/README.md) (D593-D596); no job
-  runs it. The NUCLEO-H753ZI's port of the same application, its supply,
+  [`board.py`](../environments/boards/rp2040/README.md) (D593-D596), which
+  the gate's physical board legs run. The NUCLEO-H753ZI's port of the same application, its supply,
   clocks, USART3 received through DMA in laps, PB0's indicator and a float
   exercise, builds at `--level=armv7e-m` with an oracle of its own; its
   description's stage configures the supply from the reset vector before
@@ -65,11 +65,13 @@ entry that describes it, and put a new one where a reader would look for it.
   and links. The Pico 2's port of the RP2040 application, at
   `--level=armv8-m.main` with no float, is checked by an oracle of its own,
   [`board.py`](../environments/boards/rp2350/README.md) (D654, D655), with
-  passed cold-boot and repeated RAM records. Its boot check uses manual
-  UF2 installation and Pico-only power cycles off the cascade, verifies
-  the exact power-on reset cause, and restores the quiet fixed image.
-  Malformed-block controls remain disabled pending separate off-cascade
-  recovery.
+  passed cold-boot and repeated RAM records. Its boot check verifies the
+  exact power-on reset cause and restores the quiet fixed image. On the rig
+  the Pico 2's cable carries VBUS and ground alone, so its boot checks
+  flash over SWD and cold-start it by switching its cascade port, with any
+  USB device on that port stopping the run (D906); with a data cable they
+  run off the cascade, by manual UF2 installation and Pico-only power
+  cycles. Malformed-block controls remain disabled.
   The derived linker script is written as `OUT.ld`, or alone with its
   limits by `--emit=linker-script` (D589), a developer's own is linked with
   `--linker-script=FILE` and held to a contract (D546), and
@@ -84,7 +86,12 @@ entry that describes it, and put a new one where a reader would look for it.
   loads and verifies SRAM, and resumes without writing flash or resetting
   through the ROM (D901, D902). A separate boot mode checks ROM packaging
   and a cold start, then restores a fixed image with no application USB
-  service. Pico 2 architecture changes use that explicit off-cascade setup.
+  service; Pico 2 architecture changes are such boot checks. In the gate,
+  `gate.py` runs each port's boot check and then its RAM run on the rig
+  from bundles built for the commit, on every push to `main`, weekly and by
+  dispatch, and never for a branch or a pull request; physical evidence is
+  never reused, and every run reports one of a fixed set of outcomes
+  (D904, D905).
   Firmware runs on the pinned QEMU
   [emulator](../environments/cortex-m/README.md), with synthetic devices
   served through its debugger stub. Fifty-five RP2040 registers and
@@ -123,7 +130,7 @@ entry that describes it, and put a new one where a reader would look for it.
   interrupt through the meinext dispatch, number all seven telemetry
   frames with `amoadd.w`, and echo 11,202 bytes in order with the counters read
   over SWD equal to the trace's. Its malformed-block control remains
-  disabled pending separate off-cascade recovery. The ESP32-C3's and
+  disabled. The ESP32-C3's and
   ESP32-C5's ports of the same application receive UART0 by interrupt through each chip's
   interrupt matrix, a vectored line on the C3 and a CLIC identity on the
   C5, hold it off by threshold while a 1 ms timer keeps interrupting, and
@@ -724,7 +731,8 @@ Add `--target=darwin-arm64` for native macOS output, then open
 The recurring gate runs Linux and Darwin programs natively, FreeBSD programs
 in accelerated VMs and Cortex-M firmware under QEMU, with separate runtime,
 C ABI and debugger verdicts; RV64 Linux runs under QEMU's user emulation, as
-above. The [gate reference](process.md#the-mechanical-gate) describes every job.
+above. On a push to `main`, weekly and by dispatch it also runs all eight
+board ports on the physical rig, each boot check followed by its RAM run. The [gate reference](process.md#the-mechanical-gate) describes every job.
 Exact-revision runtime acceptance ran natively on Linux x86-64 and Darwin
 arm64 through 0.2.0, and is retired. The recorded boundaries stand as
 measured: the 32 KiB capacity verdicts, linked again against RP2040's,

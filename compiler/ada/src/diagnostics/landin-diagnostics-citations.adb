@@ -2366,6 +2366,15 @@ package body Landin.Diagnostics.Citations is
             when 902 =>
                "Offline board builds compare artifact records and carry "
                & "checked inputs",
+            when 904 =>
+               "Physical boards run in the gate on trusted events only, "
+               & "and their evidence is never reused",
+            when 905 =>
+               "A board run reports one outcome, stops cleanly when canc"
+               & "elled, and shares one rig state",
+            when 906 =>
+               "A power-only Pico 2 boots and changes architecture on th"
+               & "e cascade",
             when 725 =>
                "Every board run holds the rig's lock and paces what disc"
                & "onnects a device",
@@ -3868,6 +3877,12 @@ package body Landin.Diagnostics.Citations is
             when 901 =>
                "Decisions: The toolchain, C and the machine",
             when 902 =>
+               "Decisions: The toolchain, C and the machine",
+            when 904 =>
+               "Decisions: The toolchain, C and the machine",
+            when 905 =>
+               "Decisions: The toolchain, C and the machine",
+            when 906 =>
                "Decisions: The toolchain, C and the machine",
             when 725 =>
                "Decisions: The toolchain, C and the machine",
@@ -5677,6 +5692,17 @@ package body Landin.Diagnostics.Citations is
             when 902 =>
                "https://www.701.dev/spec.html#d902-offline-board-builds-"
                & "compare-artifact-records-and-carry-checked-inputs",
+            when 904 =>
+               "https://www.701.dev/spec.html#d904-physical-boards-run-i"
+               & "n-the-gate-on-trusted-events-only-and-their-evidence-is-"
+               & "never-reused",
+            when 905 =>
+               "https://www.701.dev/spec.html#d905-a-board-run-reports-o"
+               & "ne-outcome-stops-cleanly-when-cancelled-and-shares-one-r"
+               & "ig-state",
+            when 906 =>
+               "https://www.701.dev/spec.html#d906-a-power-only-pico-2-b"
+               & "oots-and-changes-architecture-on-the-cascade",
             when 725 =>
                "https://www.701.dev/spec.html#d725-every-board-run-holds"
                & "-the-rig-s-lock-and-paces-what-disconnects-a-device",

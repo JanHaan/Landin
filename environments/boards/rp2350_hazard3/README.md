@@ -27,40 +27,49 @@ RISC-V IMAGE_DEF block.
 | a probe | a [probehive](https://github.com/JanHaan/probehive) SWD slot, slot 1 by default; direct UDP debug and `scripts/dap_bridge.py` for slot N's UART on TCP port 4461 + N | debug access and the UART trace |
 | probe-rs | the pinned fork in the [board guide](../README.md), reaching slot 1 directly as `0000:0002:10.42.0.50/1` by default; `--probe` overrides it | memory access and explicit boot flashing |
 | the indicator's wire | optionally, GPIO3 to a probe GPIO, named with `--indicator-pin`; `scripts/gpio.py` runs in `nix develop PROBEHIVE#gpio`, the light LiteX shell available on x86_64 and arm64 Linux | the physical wire level, in addition to pad readback |
-| power | an off-cascade hub with per-port switching for automatic boot checks, or the board guide's manual UF2 transport and Pico-only unplug/replug steps | cold starts for explicit boot checks |
+| power | on the rig, a switched cascade port through a cable carrying VBUS and ground alone, with `--power-only`; with a data cable, an off-cascade hub with per-port switching for automatic boot checks, or the board guide's manual UF2 transport and Pico-only unplug/replug steps | cold starts for explicit boot checks |
 | the compiler | refine and `riscv64-elf-gcc` or `riscv64-unknown-elf-gcc` (D660), with that toolchain's `nm` and `objdump`, as `nix develop` gives them | the image, and the symbols and the `amoadd.w` it is checked for |
 | the RAM loader | `landin-ram-run`, named with `--ram-loader`, built from the pinned probe-rs library | one warm halt/load/resume session |
 
 Build tools are needed on the build host; consuming a checked bundle on
 rigpi uses its matching tool sources and prepared metadata. Hardware work
-holds the common rig lock, `~/.cache/landin/rig.lock`, after the build and
-through final readback/restoration. Preserve the USB guard, protected Arty
+holds the common rig lock, `rig.lock` in the rig's shared state,
+`/var/lib/landin-rig` on rigpi, after the build and through final
+readback/restoration. Preserve the USB guard, protected Arty
 and shared pacing state described in the [board guide](../README.md).
 
-The usual development connection is SWD slot 1 and hub `.3.3`, port 2.
-Automatic boot checks require an explicitly named hub outside `--cascade`;
-the default development hub is refused for them. Manual UF2 boot checks
-require the cascade unplugged and an explicit direct hub, port and Pico
-serial, as the [board guide](../README.md#boot-checks-and-recovery) describes.
+The usual connection is SWD slot 1 and hub `.3.3`, port 2. On the rig that
+port's cable carries VBUS and ground alone, and with `--power-only` boot
+checks and the change between Arm and Hazard3 run there, as the
+[board guide](../README.md#the-pico-2-on-a-power-only-cable) describes; any
+device the port shows stops the run before an attach or a switch. With a
+data cable, automatic boot checks require an explicitly named hub outside
+`--cascade`, and the default development hub is refused for them; manual
+UF2 boot checks require the cascade unplugged and an explicit direct hub,
+port and Pico serial, as the
+[board guide](../README.md#a-pico-2-with-a-data-cable) describes.
 
 Direct UDP debug completes before the tool opens the UART socket, and
 the socket closes before debug readback. The bridge remains available for
 UART service between runs; it does not own the native debug session.
 
-Never attach a probe while the Pico 2 enumerates as BOOTSEL, `2e8a:000f`.
-Install and verify the quiet fixed image by UF2 off the cascade first.
-The current probe-based corrupted-image control is refused: it would
-require attaching again in BOOTSEL. `--bootsel-attach` cannot bypass the
-guard. Boot and any future malformed-image checks stay off the cascade.
+With a data cable, never attach a probe while the Pico 2 enumerates as
+BOOTSEL, `2e8a:000f`. Install and verify the quiet fixed image by UF2 off
+the cascade first. `--bootsel-attach` cannot bypass the guard, and boot and
+any future malformed-image checks stay off the cascade. On the power-only
+cable BOOTSEL never reaches the host, so a probe may attach whatever the
+boot ROM runs. The current probe-based corrupted-image control is refused
+either way.
 
 ## Which chip probe-rs is told
 
 The target follows the architecture already running on the board (D712):
 `RP235x` for Arm and `RP235x_riscv` for Hazard3. A running RISC-V image
 can make the Arm access ports fault; the RISC-V debug module does not
-answer while the ROM is in Arm BOOTSEL. That state never permits an
-attach. Changing between Arm and Hazard3 is an explicit off-cascade
-setup/boot operation. Prepare and verify the fixed image for the intended
+answer while the ROM is in Arm BOOTSEL. With a data cable that state
+never permits an attach. Changing between Arm and Hazard3 is an explicit setup/boot
+operation, on the power-only cascade port or, with a data cable, off the
+cascade. Prepare and verify the fixed image for the intended
 architecture before repeated RAM runs; warm entry does not switch
 architectures through the ROM. Automatic boot flashing selects the architecture that
 currently answers, then cold-starts the selected port's image and restores
@@ -87,8 +96,9 @@ For a boot check, replace the mode and bundle with `--mode=boot` and
 `--bundle=BOOT_BUNDLE`, retain `--ram-loader` for single-core readback, and provide
 `--fixed-image=PATH/TO/fixed.elf` if the bundle does not already carry it.
 The fixed image is the quiet resident program restored and cold-started
-afterward, subject to the USB stop guard. Name the off-cascade `--hub` and its
-`--port` explicitly. A failed restoration is a failed check; a USB fault
+afterward, subject to the USB stop guard. Name the `--hub` and its `--port`
+explicitly: the power-only cascade port with `--power-only`, or an
+off-cascade hub for a data cable. A failed restoration is a failed check; a USB fault
 stops further hardware actions and requires the operator's recovery.
 
 The output retains the ELF, build report, command logs, `uart.bin`,
@@ -133,7 +143,7 @@ reading for 100 ms.
 | the ELF's trap table (boot artifact) | 68 words at 0x1000_0200, the build report's `vector_address`, 512-aligned as D662 aligns 272 bytes; slot 11, the machine external interrupt, a jump to the meinext dispatch, slots 16, 26 and 30, TIMER0_IRQ_0, DMA_IRQ_0 and USBCTRL_IRQ (3.2, Table 95, p. 81), jumps to their handlers, and every other slot a jump to the unhandled loop |
 | the ELF's block (boot artifact) | directly after the table and inside the first 4 KiB, at the report's address, the minimum RISC-V IMAGE_DEF (5.9.5.1, Table 503, p. 390): the start and end markers (5.1.5.1, p. 329), IMAGE_TYPE a RISC-V executable for RP2350, LAST and a link to itself |
 | the read-modify-write | an `amoadd.w` in the image's disassembly, on a counter in SRAM, where Hazard3's atomics reach (3.8.9, MCAUSE, Table 403) |
-| the malformed block (boot-only, currently refused by the tool) | a corrupted IMAGE_DEF must be refused by the ROM; testing it requires off-cascade physical UF2 recovery, because probe attachment in BOOTSEL is forbidden |
+| the malformed block (boot-only, currently refused by the tool) | a corrupted IMAGE_DEF must be refused by the ROM; testing it requires off-cascade physical UF2 recovery with a data cable, because probe attachment in BOOTSEL is forbidden there; the power-only arrangement has no such control yet |
 | flash after flashing (boot only) | the entry word, the table and the block, read back over SWD, equal to the image's |
 | the boot frame (boot mode) | CHIP_RESET is HAD_POR alone (6.4, p. 429), so the run began at power-on; marchid is 0x1b, Hazard3 (3.8.9, Table 440), so the boot ROM switched the cores to RISC-V and entered this image; mtvec is the table in vectored mode, 0x1000_0201 (Table 394), so compiler-owned reset ran; clk_ref is on the crystal |
 | the shared scenario | `1`, `A` and `0`, the bytes the emulator lane's application is fed, echoed, with `g` 8 after `1` and 0 after `0`, and with `--indicator-pin` the wire high after `1` and low after `0` |
