@@ -2563,12 +2563,20 @@ package body Landin.Driver is
                return;
             end if;
             Observed_Input (Path, Identity);
-            if not (for some Byte of Unbounded.To_String (Content) =>
-                      Byte = ASCII.NUL)
-            then
-               Check_External_Text
-                 (Unbounded.To_String (Content), Path, Assembly, Depth);
-            end if;
+            declare
+               Text : constant String := Unbounded.To_String (Content);
+            begin
+               --  A resolved library may be a linker script. Ordinary ELF
+               --  objects and archives are opaque inputs, even an empty
+               --  archive whose header contains no NUL byte.
+               if not Starts_With (Text, ASCII.DEL & "ELF")
+                 and then not Starts_With (Text, "!<arch>" & ASCII.LF)
+                 and then not Starts_With (Text, "!<thin>" & ASCII.LF)
+                 and then not (for some Byte of Text => Byte = ASCII.NUL)
+               then
+                  Check_External_Text (Text, Path, Assembly, Depth);
+               end if;
+            end;
          end Read_External_Input;
 
          procedure Check_External_Text
@@ -2746,7 +2754,11 @@ package body Landin.Driver is
                   for Directory of Directories loop
                      for File of Files loop
                         if Host.Exists (Directory & "/" & File) then
-                           Protect_Input (Directory & "/" & File);
+                           Read_External_Input
+                             (Directory & "/" & File, False, 0);
+                           if Landin.Stages.Failed (Context) then
+                              return;
+                           end if;
                            Located := True;
                         end if;
                      end loop;
@@ -2775,7 +2787,10 @@ package body Landin.Driver is
                                  if Path /= File
                                    and then Host.Exists (Path)
                                  then
-                                    Protect_Input (Path);
+                                    Read_External_Input (Path, False, 0);
+                                    if Landin.Stages.Failed (Context) then
+                                       return;
+                                    end if;
                                  end if;
                               end;
                            end if;

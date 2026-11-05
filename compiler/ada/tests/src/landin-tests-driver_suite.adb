@@ -7356,6 +7356,64 @@ package body Landin.Tests.Driver_Suite is
                "the external assembly input remains unchanged");
          end;
       end loop;
+      --  A user-selected library can itself be a linker script. Its named
+      --  inputs need the same recursive protection as an explicit script.
+      for Attempt in 1 .. 7 loop
+         declare
+            Host : Landin.Testing.Fakes.Fake_Filesystem;
+            Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+            Result : Landin.Driver.Outcome;
+            Content : Unbounded.Unbounded_String;
+            Read : Landin.Platform.Read_Status;
+            Succeeds : constant Boolean := Attempt in 4 | 5 | 7;
+            Args : Landin.Platform.Path_List :=
+              ["main.ldn", "--target=linux-x86-64", "--emit=exe",
+               "--link=libc", "-L=/libraries", "-o=program"];
+         begin
+            Host.Add_File
+              ("main.ldn", "linker.library(""peer"")" & LF
+               & "public main: () -> (code: i32) = code = 0 end main");
+            Host.Add_File ("program", "prior executable");
+            Host.Add_File ("/external.inc", "linked input");
+            Host.Add_Directory ("/libraries");
+            Host.Add_File
+              ("/libraries/libpeer.so",
+               (case Attempt is
+                  when 1 | 7 => "INPUT ( /external.inc )",
+                  when 2 => "GROUP ( AS_NEEDED ( /external.inc ) )",
+                  when 3 => "INPUT ( relative.a )",
+                  when 4 => "!<arch>" & LF & "INPUT ( relative.a )",
+                  when 5 => ASCII.DEL & "ELF INPUT ( relative.a )",
+                  when 6 => "INCLUDE /nested.ld"));
+            Host.Add_File ("/nested.ld", "INPUT ( /external.inc )");
+            Args.Append
+              (if Attempt in 1 | 2 | 6 then "--build-report=/external.inc"
+               else "--build-report=report.json");
+            Result := Landin.Driver.Execute (Args, Host, Tools);
+            Landin.Testing.Check
+              (Item, (Result.Status = Landin.Driver.Status_Success)
+                = Succeeds,
+               "resolved library scripts protect their input closure: "
+               & Unbounded.To_String (Result.Report));
+            Host.Read_File ("/external.inc", Content, Read);
+            Landin.Testing.Check_Equal
+              (Item, Unbounded.To_String (Content), "linked input",
+               "a library script's linked input remains unchanged");
+            if not Succeeds then
+               Host.Read_File ("program", Content, Read);
+               Landin.Testing.Check_Equal
+                 (Item, Unbounded.To_String (Content), "prior executable",
+                  "refused library directives preserve the prior product");
+            end if;
+            if Attempt = 3 then
+               Landin.Testing.Check
+                 (Item, Contains (Unbounded.To_String (Result.Report),
+                                  "absolute file paths")
+                  and then Tools.Run_Count = 0,
+                  "relative library directives refuse before tool launch");
+            end if;
+         end;
+      end loop;
    end Tool_File_Directives;
 
    procedure Register (Into : in out Landin.Testing.Registry) is
