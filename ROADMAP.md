@@ -3107,6 +3107,9 @@ all unmatched activations were read. Board prose was aligned without
 sequencing changes, settling SR-813; SR-814 records the bounded relative
 tool-input refusals. SR-815 records the long fixture case's lack of visible
 progress, encountered when its still-running comparison was interrupted.
+SR-817's long-path refusal truncation was settled by putting the complete
+cause and corrective action before optional tool context, with native
+compile, run and bindings controls.
 
 Activation review: R551-20 remains for native failures beyond these bounded
 controls. SR-266, SR-296, SR-298, SR-590 and SR-370 remain for internal-defect
@@ -3116,7 +3119,9 @@ for local cross-target assembly validation and child-process runner support;
 SR-702 for Darwin ABI-fixture execution; SR-721 for shared script hang
 guards; SR-783 and SR-785 for gate-inventory controls and workflow linting;
 and SR-812 for verification across partial rerun attempts. SR-815 waits for
-fixture-corpus progress reporting. These triggers
+fixture-corpus progress reporting. SR-816 retains the separate
+attached-program post-reap forwarding window for the next change to that
+runner's waiting or signal forwarding. These triggers
 are restated rather than importing unrelated fixes into publication.
 
 The item remains active: complete candidate software and physical-board
@@ -3612,7 +3617,7 @@ SR-737, SR-738, SR-739, SR-741, SR-742, SR-743, SR-744, SR-745, SR-746,
 SR-747, SR-748, SR-749, SR-750, SR-751, SR-752, SR-753, SR-754, SR-755,
 SR-756, SR-614, SR-660, SR-671, SR-672, SR-709, SR-719, SR-723, SR-724,
 SR-725, SR-757, SR-758, SR-759, SR-760, SR-761, SR-762, SR-763, SR-764,
-SR-765, SR-766, SR-767, SR-770, SR-771, SR-774, SR-813.
+SR-765, SR-766, SR-767, SR-770, SR-771, SR-774, SR-813, SR-817.
 
 | Record | Family | What stands | Activation | Completion | Status |
 | --- | --- | --- | --- | --- | --- |
@@ -3982,7 +3987,6 @@ SR-765, SR-766, SR-767, SR-770, SR-771, SR-774, SR-813.
 | SR-814 | Usability | While protecting compile auxiliary inputs in R13.76, pinning the tool working directory exposed linker and assembler directives whose relative or indirect paths inherit the caller directory. The bounded input-closure scanner now refuses those forms rather than silently resolving them in staging, and asks for plain absolute paths; callers using relative INCLUDE, INPUT/GROUP, SEARCH_DIR, .include or .incbin must rewrite those directives. A bindings dependency reported relative to Clang's retained workspace must also stay within it; a path that escapes and reenters is refused, with an absolute include or declared --include-dir route, because lexical normalization cannot retain its external directory authority. | The next change to external-tool input discovery, or a consumer that needs these relative forms. | Discover and protect their actual resolved input closure while preserving tool lookup and include semantics, with positive and collision controls for each newly supported form. | open |
 | SR-815 | Usability | During R13.76's required `scripts/parallel-equivalence.sh --suite='fixture execution'`, the one-worker corpus gave no case progress for over twenty minutes. It was mistakenly interrupted as stalled; artifact timestamps later proved work continued until 1.13 seconds before cancellation, and debugger probes showed ordinary tool polling. The whole-case transcript required inspecting disposable artifacts to distinguish progress from a hang. | The next change to fixture-corpus progress reporting or the parallel-equivalence wrapper. | Bounded visible progress within a long corpus case, retained separately from the deterministic verdict comparison, so ordinary work can be distinguished from a stalled run without inspecting build artifacts. | open |
 | SR-816 | Release readiness | While auditing child-identifier ownership in R13.76, source tracing found the separate attached-program runner reaps its child before restoring its SIGTERM/HUP forwarding handlers and clearing their saved PID. A signal in that interval can consult an identifier whose reservation has ended. No PID reuse or foreign signal was exercised; compiler-tool process-group cancellation uses a different supervisor. | The next change to attached-program waiting or signal forwarding. | Retain the child's identifier reservation until forwarding can no longer target it, with deterministic native controls on each host for signals around final reaping. | open |
-| SR-817 | Usability | R13.76's new child-reaping-policy refusal lost its cause and corrective action with a long tool path: Native.Tools put the path before the reason, pinned GNAT truncated the exception message at 200 characters, and driver and bindings wrappers added another path first. Met running the ignored-SIGCHLD controls with a tool path longer than 200 characters. | Now: the refusal must say how to start a supported invocation. | The complete cause and corrective action before optional tool context, held by native long-path compile, run and bindings controls. | retired: the adapter and command wrappers put the cause and action first; Linux and Darwin controls retain the full advice, with unchanged diagnostic classes and exit statuses |
 
 ## Retained positions
 
