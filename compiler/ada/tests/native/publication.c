@@ -471,11 +471,13 @@ static void journal_concurrency(void)
     REQUIRE(content(output, "generated")); ++passed;
 }
 static int retirement_ready, retirement_release;
+static int retirement_late_replacement;
 static unsigned retirement_barriers;
 static void retirement_hook(const char *event, const char *target)
 {
     (void)target;
-    if (strcmp(event, "discovery-opened")) return;
+    if (strcmp(event, "discovery-opened")
+        && !(retirement_late_replacement && !strcmp(event, "discovery-empty"))) return;
     char byte;
     ++retirement_barriers;
     REQUIRE(write(retirement_ready, "R", 1) == 1);
@@ -493,61 +495,77 @@ static void discovery_retirement_case(unsigned replacement_kind)
     REQUIRE(mkdir(parent, 0700) == 0);
     REQUIRE(snprintf(owner, sizeof owner, "%s/owner", parent) > 0);
     REQUIRE(snprintf(peer, sizeof peer, "%s/peer", parent) > 0);
-    int token = prepare(owner, 0, "", stage); staged(stage, "owner-generated");
-    REQUIRE(strlen(stage) < sizeof arena); strcpy(arena, stage);
-    char *slash = strrchr(arena, '/'); REQUIRE(slash != NULL); *slash = 0;
-    slash = strrchr(arena, '/'); REQUIRE(slash != NULL); *slash = 0;
+    int token = 0;
+    if (replacement_kind == 3) {
+        put(owner, "owner-generated");
+        REQUIRE(snprintf(arena, sizeof arena, "%s/.refine-publication-live-empty", parent) > 0);
+        REQUIRE(mkdir(arena, 0700) == 0);
+    } else {
+        token = prepare(owner, 0, "", stage); staged(stage, "owner-generated");
+        REQUIRE(strlen(stage) < sizeof arena); strcpy(arena, stage);
+        char *slash = strrchr(arena, '/'); REQUIRE(slash != NULL); *slash = 0;
+        slash = strrchr(arena, '/'); REQUIRE(slash != NULL); *slash = 0;
+        REQUIRE(step(token, 0) == 0 && step(token, 1) == 0 && step(token, 2) == 0);
+    }
     int observed = open(arena, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
     REQUIRE(observed >= 0);
-    REQUIRE(step(token, 0) == 0 && step(token, 1) == 0 && step(token, 2) == 0);
     REQUIRE(pipe(ready) == 0 && pipe(release) == 0);
     REQUIRE(fcntl(ready[0], F_SETFD, FD_CLOEXEC) == 0
             && fcntl(release[1], F_SETFD, FD_CLOEXEC) == 0);
     REQUIRE(snprintf(ready_arg, sizeof ready_arg, "%d", ready[1]) > 0);
     REQUIRE(snprintf(release_arg, sizeof release_arg, "%d", release[0]) > 0);
     char *args[] = {(char *)self_program,
-                    replacement_kind ? "--retirement-refusal-peer" : "--retirement-peer", peer,
+                    replacement_kind == 4 ? "--retirement-late-refusal-peer"
+                    : replacement_kind ? "--retirement-refusal-peer" : "--retirement-peer", peer,
                     ready_arg, release_arg, NULL};
     int nullfd = open("/dev/null", O_RDWR); REQUIRE(nullfd >= 0);
     REQUIRE(landin_tool_start_in_directory(args, NULL, 0, nullfd,
                 STDOUT_FILENO, STDERR_FILENO, -1, &child) == 0);
     close(nullfd); close(ready[1]); close(release[0]);
-    REQUIRE(read(ready[0], &byte, 1) == 1 && byte == 'R'); close(ready[0]);
+    REQUIRE(read(ready[0], &byte, 1) == 1 && byte == 'R');
     /* The scanner has opened the arena but has not locked it. Retire the
        owner's arena, optionally replacing its name with unexplained entries;
        a renamed live root must also remain a refusal. */
-    if (replacement_kind == 2) {
+    if (replacement_kind == 2 || replacement_kind == 3) {
         REQUIRE(snprintf(parked, sizeof parked, "%s/moved-arena", parent) > 0);
         REQUIRE(rename(arena, parked) == 0);
     } else {
         REQUIRE(step(token, 4) == 0);
         struct stat retired, missing;
-        REQUIRE(fstat(observed, &retired) == 0 && S_ISDIR(retired.st_mode)
-                && retired.st_nlink == 0);
+        REQUIRE(fstat(observed, &retired) == 0 && S_ISDIR(retired.st_mode));
+#ifndef __APPLE__
+        REQUIRE(retired.st_nlink == 0);
+#endif
         errno = 0; REQUIRE(lstat(arena, &missing) != 0 && errno == ENOENT);
         errno = 0; int listing_fd = dup(observed); REQUIRE(listing_fd >= 0);
         DIR *listing = fdopendir(listing_fd); int opening_error = errno;
         errno = 0; struct dirent *entry = listing ? readdir(listing) : NULL;
         int listing_error = listing ? errno : opening_error;
+#ifdef __APPLE__
+        REQUIRE(listing != NULL && entry == NULL && listing_error == 0);
+#else
         REQUIRE(entry == NULL && (listing_error == 0 || listing_error == ENOENT));
+#endif
         if (listing) closedir(listing); else close(listing_fd);
-        errno = 0;
-        REQUIRE(openat(observed, "must-not-appear", O_WRONLY | O_CREAT | O_EXCL, 0600) < 0
-                && errno == ENOENT);
-        printf("retired arena: nlink=%ju absent-parent-entry=1 readdir-errno=%d\n",
+        printf("retired arena: nlink=%ju absent-parent-entry=1 raw-entries=0 readdir-errno=%d\n",
                (uintmax_t)retired.st_nlink, listing_error);
     }
     close(observed);
-    if (replacement_kind) {
+    if (replacement_kind == 4) {
+        REQUIRE(write(release[1], "R", 1) == 1);
+        REQUIRE(read(ready[0], &byte, 1) == 1 && byte == 'R');
+    }
+    if (replacement_kind == 1 || replacement_kind == 2 || replacement_kind == 4) {
         REQUIRE(mkdir(arena, 0700) == 0);
         REQUIRE(snprintf(sentinel, sizeof sentinel, "%s/unknown", arena) > 0);
         put(sentinel, "unexplained-recovery");
         REQUIRE(lstat(sentinel, &sentinel_before) == 0);
     }
-    REQUIRE(write(release[1], "R", 1) == 1); close(release[1]);
+    REQUIRE(write(release[1], "R", 1) == 1); close(release[1]); close(ready[0]);
     REQUIRE(landin_tool_wait(child, &status, 0) == child && status == 0);
     REQUIRE(content(owner, "owner-generated"));
-    if (replacement_kind) {
+    if (replacement_kind == 3) REQUIRE(access(peer, F_OK) != 0);
+    else if (replacement_kind) {
         REQUIRE(content(sentinel, "unexplained-recovery") && access(peer, F_OK) != 0
                 && lstat(sentinel, &sentinel_after) == 0
                 && sentinel_before.st_dev == sentinel_after.st_dev
@@ -557,7 +575,10 @@ static void discovery_retirement_case(unsigned replacement_kind)
 }
 static void discovery_during_retirement(void)
 {
-    for (unsigned kind = 0; kind < 3; ++kind) discovery_retirement_case(kind);
+    for (unsigned kind = 0; kind < 4; ++kind) discovery_retirement_case(kind);
+#ifdef __APPLE__
+    discovery_retirement_case(4);
+#endif
     ++passed;
 }
 static int changing_ready, changing_release;
@@ -767,15 +788,17 @@ int main(int argc, char **argv)
         return 0;
     }
     if (argc == 5 && (!strcmp(argv[1], "--retirement-peer")
-                     || !strcmp(argv[1], "--retirement-refusal-peer"))) {
+                     || !strcmp(argv[1], "--retirement-refusal-peer")
+                     || !strcmp(argv[1], "--retirement-late-refusal-peer"))) {
         retirement_ready = atoi(argv[3]); retirement_release = atoi(argv[4]);
+        retirement_late_replacement = !strcmp(argv[1], "--retirement-late-refusal-peer");
         landin_publication_set_hook(retirement_hook);
         char stage[4096]; int token;
         int result = landin_publication_open(argv[2], 0, "", &token, stage,
                                              sizeof stage, why, sizeof why);
-        clear_hook(); REQUIRE(retirement_barriers == 1);
+        clear_hook(); REQUIRE(retirement_barriers == (retirement_late_replacement ? 2u : 1u));
         close(retirement_ready); close(retirement_release);
-        if (!strcmp(argv[1], "--retirement-refusal-peer")) {
+        if (strcmp(argv[1], "--retirement-peer")) {
             REQUIRE(result != 0 && token == 0 && strstr(why, "retained or active publication"));
             return 0;
         }

@@ -604,6 +604,28 @@ static int entries_known(int root, const char *directory, struct known_name *nam
     }
     closedir(listing); return known;
 }
+#ifdef __APPLE__
+/* APFS can retain a removed directory's former link count. Classify only its
+   observable content here, without inferring deletion or future liveness.
+   root was freshly opened and has not been enumerated, so its duplicated fd
+   starts at the beginning. Even dot entries make this disconnected root live
+   or uncertain, rather than an acceptable empty snapshot. */
+static int disconnected_workspace_empty(int root, int parent, const char *name)
+{
+    int fd = dup(root);
+    if (fd < 0) return 0;
+    DIR *contents = fdopendir(fd);
+    if (!contents) { close(fd); return 0; }
+    errno = 0;
+    int empty = readdir(contents) == NULL && errno == 0;
+    if (closedir(contents) != 0) empty = 0;
+    if (!empty) return 0;
+    barrier("discovery-empty", name);
+    struct stat replacement;
+    return fstatat(parent, name, &replacement, AT_SYMLINK_NOFOLLOW) < 0
+        && errno == ENOENT;
+}
+#endif
 /* Records are atomically published. The shared root lock prevents a newly
    completed record (and its later stage) from racing this allow-list scan;
    record construction remains private and does not hold that lock. */
@@ -630,14 +652,22 @@ static int retained_workspace(int parent, const char *parent_path,
             struct stat pinned, named;
             if (fstat(root, &pinned) == 0 && S_ISDIR(pinned.st_mode)) {
                 int found = fstatat(parent, item->d_name, &named, AT_SYMLINK_NOFOLLOW);
+                int disconnected = found < 0 && errno == ENOENT;
                 /* Finish can remove the empty root before this scanner locks
-                   its retained fd. A zero-link directory has passed rmdir's
-                   emptiness check and cannot receive new entries. Require the
-                   anchored name to be absent too: a replacement, renamed live
-                   root, or uncertain lookup must still be inspected/refused.
-                   FreeBSD fdopendir on this removed fd fails with ENOENT;
-                   Linux/glibc instead presents an ordinary end of directory. */
-                if (pinned.st_nlink == 0 && found < 0 && errno == ENOENT) {
+                   its retained fd. Linux/FreeBSD zero links prove successful
+                   empty-directory removal. Darwin uses only a readable, raw
+                   zero-entry snapshot plus a second anchored absence check.
+                   The SH lock blocks new destination records/publication, not
+                   all owner staging writes. No private contents are deleted
+                   here; unexplained contents, replacements and errors refuse.
+                   This is not a claim about future noncooperating writers. */
+#ifdef __APPLE__
+                int ignorable = disconnected
+                    && disconnected_workspace_empty(root, parent, item->d_name);
+#else
+                int ignorable = disconnected && pinned.st_nlink == 0;
+#endif
+                if (ignorable) {
                     (void)flock(root, LOCK_UN); close(root); continue;
                 }
                 if (pinned.st_nlink > 0 && found == 0
