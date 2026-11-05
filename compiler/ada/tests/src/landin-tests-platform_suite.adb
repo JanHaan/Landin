@@ -448,7 +448,9 @@ package body Landin.Tests.Platform_Suite is
       Path    : constant String := Scratch & "/round-trip.bin";
       Listing : constant String := Scratch & "/listing";
       Text    : constant String :=
-        "line one" & Character'Val (13) & Character'Val (10) & "line two";
+        "line one" & Character'Val (13) & Character'Val (10)
+        & Character'Val (0) & Character'Val (255) & "line two"
+        & Character'Val (0);
       Content : Unbounded.Unbounded_String;
       Written : Landin.Platform.Write_Status;
       Read    : Landin.Platform.Read_Status;
@@ -466,7 +468,31 @@ package body Landin.Tests.Platform_Suite is
         (Item, Read = Landin.Platform.Read_Ok, "the file was read");
       Landin.Testing.Check_Equal
         (Item, Unbounded.To_String (Content), Text,
-         "CR LF survives a byte-oriented round trip");
+         "CR LF, embedded NUL and high bytes survive the snapshot read");
+      declare
+         Lease : Landin.Platform.Update_Handle;
+         Reason : Unbounded.Unbounded_String;
+      begin
+         Host.Read_For_Update (Path, Content, Lease, Read, Reason);
+         Landin.Testing.Check
+           (Item, Read = Landin.Platform.Read_Ok
+            and then Unbounded.Length (Content) = Text'Length
+            and then Unbounded.To_String (Content) = Text,
+            "the retained update read preserves every binary byte");
+         Host.Close_Update (Lease);
+         Host.Write_File (Path, "", Written);
+         Host.Read_File (Path, Content, Read);
+         Landin.Testing.Check
+           (Item, Read = Landin.Platform.Read_Ok
+            and then Unbounded.Length (Content) = 0,
+            "an empty snapshot has no terminator byte");
+         Host.Read_For_Update (Path, Content, Lease, Read, Reason);
+         Landin.Testing.Check
+           (Item, Read = Landin.Platform.Read_Ok
+            and then Unbounded.Length (Content) = 0,
+            "an empty update read has no terminator byte");
+         Host.Close_Update (Lease);
+      end;
 
       Landin.Testing.Check
         (Item, Host.Exists (Path), "the written path exists");
