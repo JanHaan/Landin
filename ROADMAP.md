@@ -3093,43 +3093,59 @@ controls for each case and native controls for the formatter's open
 window and an interrupted link; the publication rule written into
 `spec.md`'s register and the manuals of `fmt`, `bindings` and `svd`.
 
-Done: the implementation candidate gives commands D907's shared,
-loss-preserving publication, D358's original-read formatter descriptor and
-owned capture and scratch lifetimes. Native registries serialize overlapping
-worker operations while preserving cross-thread resource handoff. The starting-commit reproducers were
-confirmed before the fixes; fake controls and native Linux and isolated
-Darwin controls cover the findings, including renamed saves, interrupted
-links and failed ESP publication. Native FreeBSD C controls pass on amd64;
-both architectures cross-compile, and the arm64 guest controls are in the
-gate. The manuals and capability inventory state the contract and its
-limits. The sweep against `df4ccb875` found no path-matched activation;
-all unmatched activations were read. Board prose was aligned without
-sequencing changes, settling SR-813; SR-814 records the bounded relative
-tool-input refusals. SR-815 records the long fixture case's lack of visible
-progress, encountered when its still-running comparison was interrupted.
-SR-817's long-path refusal truncation was settled by putting the complete
-cause and corrective action before optional tool context, with native
-compile, run and bindings controls.
+Done: commands share D907's loss-preserving publication contract: known
+inputs and selected-tool identities are protected, destinations have
+expected versions, and descriptor-owned staging and recovery preserve
+conflicting saves. Unknown tool metadata is distinguished from absence;
+unsupported input forms refuse with a supported route. D358 retains the
+formatter's original read descriptor. Compiler-tool cancellation forwards
+the original signal to the active group, bounds shutdown and reaps its
+direct child before cleanup. Synchronized native registries retain
+cross-thread handoff. Darwin debug objects and whole bundles stay in the
+publication group through packaging. The original starting-commit
+reproducers were confirmed. Demonstrations create and remove only owned
+roots; fake controls cover each finding, with native renamed-save and
+interrupted-link controls. Manuals state the same-inode writer, pathname
+execution, external-dependency and recovery limits. SR-813 and SR-817 are
+settled, as are SR-818 through SR-822 with the final fixture comparison.
 
-Activation review: R551-20 remains for native failures beyond these bounded
-controls. SR-266, SR-296, SR-298, SR-590 and SR-370 remain for internal-defect
-caller diagnostics, note citations, installed panic-site lookup,
+Validation: the final one/eight-worker fixture comparison agrees. The
+final debug/release comparison passed for 1153 sources and 24548 requests
+with zero disagreements; the manifest passed for 294 fixtures and 52272
+entries, SHA256
+`cc9f8b04ebbc1ac47049906134f017f00fda9e5cf28f701369fbfcc011be333e`.
+Isolated final scaling passed. Linux's 52 FILTERED cases passed 1296 checks;
+Darwin's 13 HOST-ONLY/FILTERED cases passed 505. Native publication and
+compile-publication controls passed 30 and 34 on each host. FreeBSD native
+amd64 passed 29 publication, 7 owned-runtime and 16 cancellation controls
+and 768 registry handoffs; production C and harnesses cross-linked for both
+architectures. These local results do not replace the complete gates.
+
+Activation review: the sweep against `df4ccb875` found no path-matched
+activation; all 159 unmatched rows were read against the actual changes.
+R551-20 remains for native failures beyond these bounded controls.
+SR-266, SR-296, SR-298, SR-590 and SR-370 remain for internal-defect caller
+diagnostics, note citations, installed panic-site lookup,
 description-request guidance and report contents. SR-324 and SR-379 remain
 for local cross-target assembly validation and child-process runner support;
 SR-702 for Darwin ABI-fixture execution; SR-721 for shared script hang
 guards; SR-783 and SR-785 for gate-inventory controls and workflow linting;
-and SR-812 for verification across partial rerun attempts. SR-815 waits for
-fixture-corpus progress reporting. SR-816 retains the separate
-attached-program post-reap forwarding window for the next change to that
-runner's waiting or signal forwarding. These triggers
-are restated rather than importing unrelated fixes into publication.
+and SR-812 for verification across partial rerun attempts. SR-703 retains
+the staged-object debug-map residue and unmeasured full-debug
+reproducibility limits. SR-814 retains unsupported relative or indirect
+tool inputs and Clang dependencies escaping their private workspace.
+SR-815 waits for fixture-corpus progress reporting; SR-816 retains the
+separate attached-program post-reap forwarding window. SR-823 retains the
+safe but misleading missing-report-parent collision wording for the next
+output-path diagnostic or report-parent policy change. These triggers are
+restated rather than importing unrelated fixes into publication.
 
 The item remains active: complete candidate software and physical-board
-gates have not run. FreeBSD evidence above is native production C adapter
+gates have not run. FreeBSD evidence is native production C adapter
 coverage, separate from the generated-program corpus; no FreeBSD-hosted Ada
-compiler or command-reproducer run is claimed. The literal host criterion
-uses Jan's accepted scope: Linux/Darwin command reproducers plus native
-FreeBSD adapter controls.
+compiler, command-reproducer run or local native arm64 execution is claimed.
+The literal host criterion uses Jan's accepted scope: Linux/Darwin command
+reproducers plus native FreeBSD production C adapter controls.
 
 ### R13.77 — What the second outside review found
 
@@ -3617,7 +3633,8 @@ SR-737, SR-738, SR-739, SR-741, SR-742, SR-743, SR-744, SR-745, SR-746,
 SR-747, SR-748, SR-749, SR-750, SR-751, SR-752, SR-753, SR-754, SR-755,
 SR-756, SR-614, SR-660, SR-671, SR-672, SR-709, SR-719, SR-723, SR-724,
 SR-725, SR-757, SR-758, SR-759, SR-760, SR-761, SR-762, SR-763, SR-764,
-SR-765, SR-766, SR-767, SR-770, SR-771, SR-774, SR-813, SR-817.
+SR-765, SR-766, SR-767, SR-770, SR-771, SR-774, SR-813, SR-817, SR-818,
+SR-819, SR-820, SR-821, SR-822.
 
 | Record | Family | What stands | Activation | Completion | Status |
 | --- | --- | --- | --- | --- | --- |
@@ -3987,11 +4004,7 @@ SR-765, SR-766, SR-767, SR-770, SR-771, SR-774, SR-813, SR-817.
 | SR-814 | Usability | While protecting compile auxiliary inputs in R13.76, pinning the tool working directory exposed linker and assembler directives whose relative or indirect paths inherit the caller directory. The bounded input-closure scanner now refuses those forms rather than silently resolving them in staging, and asks for plain absolute paths; callers using relative INCLUDE, INPUT/GROUP, SEARCH_DIR, .include or .incbin must rewrite those directives. A bindings dependency reported relative to Clang's retained workspace must also stay within it; a path that escapes and reenters is refused, with an absolute include or declared --include-dir route, because lexical normalization cannot retain its external directory authority. | The next change to external-tool input discovery, or a consumer that needs these relative forms. | Discover and protect their actual resolved input closure while preserving tool lookup and include semantics, with positive and collision controls for each newly supported form. | open |
 | SR-815 | Usability | During R13.76's required `scripts/parallel-equivalence.sh --suite='fixture execution'`, the one-worker corpus gave no case progress for over twenty minutes. It was mistakenly interrupted as stalled; artifact timestamps later proved work continued until 1.13 seconds before cancellation, and debugger probes showed ordinary tool polling. The whole-case transcript required inspecting disposable artifacts to distinguish progress from a hang. | The next change to fixture-corpus progress reporting or the parallel-equivalence wrapper. | Bounded visible progress within a long corpus case, retained separately from the deterministic verdict comparison, so ordinary work can be distinguished from a stalled run without inspecting build artifacts. | open |
 | SR-816 | Release readiness | While auditing child-identifier ownership in R13.76, source tracing found the separate attached-program runner reaps its child before restoring its SIGTERM/HUP forwarding handlers and clearing their saved PID. A signal in that interval can consult an identifier whose reservation has ended. No PID reuse or foreign signal was exercised; compiler-tool process-group cancellation uses a different supervisor. | The next change to attached-program waiting or signal forwarding. | Retain the child's identifier reservation until forwarding can no longer target it, with deterministic native controls on each host for signals around final reaping. | open |
-| SR-818 | Usability | Reviewing R13.76's publication paths, compiling into an ordinary directory named `output.dSYM` failed with GCC's "output filename may not be empty" instead of producing the requested executable. A substring test meant to exclude Darwin debug-bundle leaves skipped ordinary output reservations, including on Linux; the tool's diagnostic gave no useful route. | Now: the publication reservations in `landin-driver.adb`. | Reserve ordinary source and assembly products regardless of `.dSYM` in their paths; exclude only the actual debug bundle's known leaves, held by fake and native Linux/Darwin controls. | open |
-| SR-819 | Usability | R13.76's full fixture comparison passed with one worker but refused four producers with eight workers, naming retained or active publication directories for otherwise unrelated outputs. All four directories were absent at the subsequent read-only inspection; no cleanup had been performed. The refusal told the caller to inspect and recover state that was no longer there. | Now: concurrent publication discovery in `landin_publication.c`. | Deterministic native controls identify and close the cross-process discovery window while retaining strict refusal of unknown or conflicting recovery; the complete fixture comparison agrees at one and eight workers. | open |
-| SR-820 | Usability | Auditing R13.76's new publication constructor, an isolated journal-write failure under a file-size limit preserved the prior output but retained a private staging directory without naming it. The refusal only said "File too large; choose an ordinary output root", so the caller could not find the retained entries to inspect. | Now: publication preparation's failure path in `landin_publication.c`. | Name the retained directory and give an inspection route without deleting its files, held by native journal-write-failure controls that preserve the prior output's identity, mode and bytes. | open |
-| SR-821 | Usability | R13.76's native Darwin direct-assembly debug control failed publication with ENOENT: Clang's kept object used the assembly input's basename, while refine reserved the executable's basename. The complete dSYM and unexpected object stayed in recovery, but the diagnostic did not explain the naming mismatch. A native probe also showed that an object-only Clang link does not itself create the promised dSYM. | Now: Darwin direct-assembly debug artifact production and publication. | Produce the reserved object explicitly and package the matching dSYM within the same protected transaction, with source/assembly controls whose input and output basenames differ, plus failure recovery controls. | open |
-| SR-822 | Usability | Running R13.76's closing scaling check, an oversized image with the deliberately nonexistent `--toolchain=/nonexistent/driver` was refused as an output alias instead of the image-budget error before any tool runs. Early tool protection made an unresolved tool parent look like a collision with the unrelated `image.s` output, so the refusal suggested choosing another output even though the request exceeded the target budget. | Now: early tool-input protection and publication path overlap. | Preserve protection of existing selected tools while distinguishing unrelated unavailable tool paths; oversized images still receive their budget refusal before tool execution, with fake and native controls. | open |
+| SR-823 | Usability | Inspecting R13.76's native report-path controls, a stage report under an absent parent was refused as "stage report collides with another output" although no output occupied that name. Conservative unresolved-parent comparison preserves files, but the message gives neither that cause nor the route of choosing or creating an existing output parent. | The next change to output-path collision diagnostics or report-parent policy. | Distinguish an unavailable or unresolved parent from a proven collision, name the supported existing-parent route, and retain strict refusal and preservation when separation cannot be established. | open |
 
 ## Retained positions
 
