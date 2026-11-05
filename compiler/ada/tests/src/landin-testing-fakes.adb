@@ -366,13 +366,41 @@ package body Landin.Testing.Fakes is
       if Host.Uncertain_Identities.Contains (Path) then
          return (others => <>);
       end if;
+      if not Found.Valid and then Host.Is_Link (Path) then
+         return (others => <>);
+      end if;
+      declare
+         Ancestor : Unbounded.Unbounded_String :=
+           Unbounded.To_Unbounded_String (Parent);
+      begin
+         --  A missing leaf below an occupied non-directory or dangling
+         --  ancestor is uncertain, just as native ENOTDIR or failed lookup.
+         loop
+            declare
+               Name : constant String := Unbounded.To_String (Ancestor);
+               Cut : constant Natural := Ada.Strings.Fixed.Index
+                 (Name, "/", Ada.Strings.Backward);
+            begin
+               if Host.Uncertain_Identities.Contains (Name)
+                 or else ((Host.Exists (Name) or else Host.Is_Link (Name))
+                          and then not Host.Is_Directory (Name))
+               then
+                  return (others => <>);
+               end if;
+               exit when Name in "" | "/" | "." | Host.Working_Directory;
+               Ancestor := Unbounded.To_Unbounded_String
+                 (if Cut = 0 then Host.Working_Directory
+                  elsif Cut = Name'First then "/"
+                  else Name (Name'First .. Cut - 1));
+            end;
+         end loop;
+      end;
       return (Identity => Found,
               Status => (if Found.Valid then Landin.Platform.Read_Ok
-                         elsif Host.Is_Link (Path)
-                         then Landin.Platform.Not_Readable
                          else Landin.Platform.Not_Found),
-              Parent_Resolved => Parent in "/" | Host.Working_Directory
-                or else Host.Is_Directory (Parent));
+              Parent_Resolved => not Found.Valid
+                and then (Parent in "/" | "." | Host.Working_Directory
+                          or else Host.Is_Directory (Parent)));
    end Observe_Identity;
 
    overriding function Identity_Of

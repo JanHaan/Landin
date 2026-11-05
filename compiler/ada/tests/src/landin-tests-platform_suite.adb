@@ -36,6 +36,52 @@ package body Landin.Tests.Platform_Suite is
      & Ada.Environment_Variables.Value ("LANDIN_BUILD_MODE", "debug")
      & "/test-scratch";
 
+   procedure Fake_Metadata_Observes_Occupied_Ancestors
+     (Item : in out Landin.Testing.Context);
+
+   procedure Fake_Metadata_Observes_Occupied_Ancestors
+     (Item : in out Landin.Testing.Context)
+   is
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      procedure Check
+        (Path : String; Status : Landin.Platform.Read_Status;
+         Parent : Boolean := False; Present : Boolean := False);
+      procedure Check
+        (Path : String; Status : Landin.Platform.Read_Status;
+         Parent : Boolean := False; Present : Boolean := False)
+      is
+         Seen : constant Landin.Platform.Identity_Observation :=
+           Host.Observe_Identity (Path);
+      begin
+         Landin.Testing.Check
+           (Item, Seen.Status = Status, "metadata status: " & Path);
+         Landin.Testing.Check
+           (Item, Seen.Parent_Resolved = Parent, "metadata parent: " & Path);
+         Landin.Testing.Check
+           (Item, Seen.Identity.Valid = Present, "metadata identity: " & Path);
+      end Check;
+   begin
+      Host.Add_Directory ("/tools");
+      Check ("/tools/missing", Landin.Platform.Not_Found, Parent => True);
+      Check ("/missing/deep/tool", Landin.Platform.Not_Found);
+      Host.Add_File ("/tool-file", "not executable");
+      Check ("/tool-file", Landin.Platform.Read_Ok, Present => True);
+      Check ("/tool-file/child", Landin.Platform.Not_Readable);
+      Check ("/tool-file/child/driver", Landin.Platform.Not_Readable);
+      Host.Add_Symbolic_Link ("/dangling", "not-present");
+      Check ("/dangling", Landin.Platform.Not_Readable);
+      Check ("/dangling/child/driver", Landin.Platform.Not_Readable);
+      Host.Add_Directory ("/target");
+      Host.Add_Symbolic_Link ("/linked", "/target");
+      Check ("/linked/missing", Landin.Platform.Not_Found, Parent => True);
+      Host.Add_Unreadable ("/unreadable");
+      Check ("/unreadable", Landin.Platform.Read_Ok, Present => True);
+      Host.Set_Identity_Uncertain ("/uncertain");
+      Check ("/uncertain/deep/tool", Landin.Platform.Not_Readable);
+      Host.Add_Directory ("/made");
+      Check ("/made/tool", Landin.Platform.Not_Found, Parent => True);
+   end Fake_Metadata_Observes_Occupied_Ancestors;
+
    procedure Fake_Reads_Report_Their_Reason
      (Item : in out Landin.Testing.Context);
 
@@ -1946,6 +1992,9 @@ package body Landin.Tests.Platform_Suite is
       Landin.Testing.Register
         (Into, "platform", "native name rules on unknown filesystems",
          Native_Name_Rules_On_Unknown_Filesystems'Access);
+      Landin.Testing.Register
+        (Into, "platform", "fake metadata observes occupied ancestors",
+         Fake_Metadata_Observes_Occupied_Ancestors'Access);
       Landin.Testing.Register
         (Into, "platform", "fake reads report their reason",
          Fake_Reads_Report_Their_Reason'Access);
