@@ -1364,7 +1364,8 @@ policies, debugger selection and Linux-only resume.
 
 Darwin uses the shared DWARF encoder with x29-relative stack locations and
 Apple section/CFI conventions. Full executable output retains its object and
-packages a dSYM through the selected Apple driver. The native UUID and full
+packages a matching dSYM before publication; direct assembly uses an explicit
+`/usr/bin/dsymutil` step. The native UUID and full
 Landin source/assembly digest bind the executable, dSYM and optional source map.
 See [target contracts](../../docs/targets.md#native-source-debugging) for native
 commands, identity matching and the demonstrated debugger presentation limits.
