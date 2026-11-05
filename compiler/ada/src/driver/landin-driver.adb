@@ -2990,7 +2990,7 @@ package body Landin.Driver is
                      --  Apple Clang derives -save-temps objects from input
                      --  basenames. An assembly operand can have a different
                      --  name from its product; assemble the reserved object
-                     --  explicitly before asking Clang to package its dSYM.
+                     --  explicitly before linking and packaging its dSYM.
                      Tools.Prepare_Output (Host, Staged_Product & ".o");
                      Tools.Run
                        (Driver,

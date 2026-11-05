@@ -525,10 +525,10 @@ package body Landin.Backend.Toolchain is
          --  reaches, as --gc-sections does on ELF.
          Landin.Platform.Add (List, "-Wl,-dead_strip");
          if Full_Debug then
-            --  Apple Clang retains the object and invokes dsymutil after
-            --  linking. The resulting dSYM carries the executable's UUID.
             Landin.Platform.Add (List, "-gdwarf-4");
             if not Assembly_Is_Object then
+               --  Clang retains the assembled object and invokes dsymutil.
+               --  An explicit object uses the driver's separate bundle job.
                Landin.Platform.Add (List, "-x");
                Landin.Platform.Add (List, "assembler");
                Landin.Platform.Add (List, "-save-temps=obj");
