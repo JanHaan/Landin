@@ -9,6 +9,7 @@ with Ada.Text_IO;
 with Ada.Unchecked_Deallocation;
 with Interfaces.C;
 
+with Landin.Platform.Publication;
 with Landin.Platform.Native;
 with Landin.Platform.Native.Tools;
 with Landin.Platform.Overlays;
@@ -1781,8 +1782,60 @@ package body Landin.Tests.Platform_Suite is
       end;
    end An_Overlay_Holds_Buffers;
 
+   procedure Publication_Uses_Actual_Entries
+     (Item : in out Landin.Testing.Context);
+   procedure Publication_Uses_Actual_Entries
+     (Item : in out Landin.Testing.Context)
+   is
+      use Landin.Platform;
+      package Pub renames Landin.Platform.Publication;
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Group : Pub.Transaction;
+      Status : Write_Status;
+      Reason, Text : Unbounded.Unbounded_String;
+      Read : Read_Status;
+      Identity : File_Identity;
+   begin
+      Host.Add_File ("source", "original source");
+      Host.Add_Hard_Link ("source-alias", "source");
+      Host.Add_Symbolic_Link ("dangling", "missing-target");
+      Landin.Testing.Check
+        (Item, Host.Is_Link ("dangling") and then not Host.Exists ("dangling"),
+         "a dangling direntry exists as a link without a readable target");
+      Host.Read_Snapshot ("source", Text, Identity, Read);
+      Pub.Protect (Group, "source", Identity);
+      Pub.Prepare (Group, Host, "output", Status, Reason);
+      Landin.Testing.Check
+        (Item, Status = Write_Ok, "a separate absent output can be prepared");
+      Host.Write_File (Pub.Stage_Path (Group, "output"), "generated", Status);
+      Host.Replace_On_Publication
+        (Capture_Previous, "output", "concurrent editor save");
+      Pub.Commit (Group, Host, Status, Reason);
+      Landin.Testing.Check
+        (Item, Status = Not_Writable, "late foreign entry is never adopted");
+      Host.Read_File ("output", Text, Read);
+      Landin.Testing.Check_Equal
+        (Item, Unbounded.To_String (Text), "concurrent editor save",
+         "capture and inspection restore the editor save");
+      Pub.Abort_Transaction (Group, Host, Status, Reason);
+      Landin.Testing.Check
+        (Item, Status = Write_Ok, "abort after a failed commit is idempotent");
+      Pub.Prepare (Group, Host, "source-alias", Status, Reason);
+      Landin.Testing.Check
+        (Item, Status = Not_Writable,
+         "original read object hardlink is refused");
+      Host.Write_File ("source-alias", "same inode edit", Status);
+      Host.Read_File ("source", Text, Read);
+      Landin.Testing.Check_Equal
+        (Item, Unbounded.To_String (Text), "same inode edit",
+         "fake hardlink writes affect the shared inode");
+   end Publication_Uses_Actual_Entries;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "platform", "publication protects actual direntries",
+         Publication_Uses_Actual_Entries'Access);
       Landin.Testing.Register
         (Into, "platform", "native host names its executable directory",
          Native_Names_Its_Executable_Directory'Access);
