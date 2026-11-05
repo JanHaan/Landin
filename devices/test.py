@@ -302,6 +302,15 @@ class PublicationSafety(unittest.TestCase):
                     entries = json.loads(manifest.read_text())
                     entries['old.svd'] = '0' * 64
                     manifest.write_text(json.dumps(entries))
+                control = root / 'control'
+                control.mkdir()
+                accepted_command = ([str(REFINE), 'svd', '--policy=' + str(policy),
+                                     '--out-dir=' + str(control), str(svd)]
+                                    if kind in ('response', 'nested-response')
+                                    else list(command))
+                accepted_command[3] = '--out-dir=' + str(control)
+                accepted = subprocess.run(accepted_command, capture_output=True, text=True)
+                self.assertEqual(accepted.returncode, 0, accepted.stderr)
                 original = source.read_bytes()
                 identity = (source.stat().st_dev, source.stat().st_ino)
                 self.refused(command)
@@ -310,7 +319,7 @@ class PublicationSafety(unittest.TestCase):
 
     @requires_refine
     def test_linked_outputs_parents_and_leftovers_are_preserved(self):
-        for kind in ('root', 'parent', 'final', 'stage', 'recovery', 'stale'):
+        for kind in ('root', 'root-trailing', 'parent', 'final', 'stage', 'recovery', 'stale'):
             with self.subTest(kind=kind), tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary)
                 svd, policy, out, command = self.make_tree(root)
@@ -318,7 +327,9 @@ class PublicationSafety(unittest.TestCase):
                 outside.mkdir()
                 sentinel = outside / 'device.ldn'
                 sentinel.write_text('foreign bytes\n')
-                if kind == 'root':
+                if kind in ('root', 'root-trailing'):
+                    if kind == 'root-trailing':
+                        command[3] = '--out-dir=' + str(out) + '///'
                     out.rmdir()
                     out.symlink_to(outside, target_is_directory=True)
                     link = out

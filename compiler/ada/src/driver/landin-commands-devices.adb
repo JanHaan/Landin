@@ -38,6 +38,17 @@ package body Landin.Commands.Devices is
          when Dev.Inconsistent_Device => Cat.Svd_Device_Inconsistent,
          when Dev.Not_In_Svd | Dev.No_Fault => Cat.Svd_Not_Found);
 
+   function Output_Root (Path : String) return String;
+
+   function Output_Root (Path : String) return String is
+      Last : Natural := Path'Last;
+   begin
+      while Last > Path'First and then Path (Last) = '/' loop
+         Last := Last - 1;
+      end loop;
+      return Path (Path'First .. Last);
+   end Output_Root;
+
    procedure Import
      (Svd_Path, Policy_Path, Out_Dir : String;
       Host   : Landin.Platform.Filesystem'Class;
@@ -56,9 +67,7 @@ package body Landin.Commands.Devices is
       Has_Group : Boolean := False;
       Inputs : Platform.Path_List := Protected_Inputs;
       Svd_Identity, Policy_Identity : Platform.File_Identity;
-      Root : constant String :=
-        (if Out_Dir'Length > 1 and then Out_Dir (Out_Dir'Last) = '/'
-         then Out_Dir (Out_Dir'First .. Out_Dir'Last - 1) else Out_Dir);
+      Root : constant String := Output_Root (Out_Dir);
 
       function Destination (Path : String) return String is
         (Root & "/" & Path);
