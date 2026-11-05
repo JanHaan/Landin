@@ -6,6 +6,7 @@
 #endif
 #include "landin_publication.h"
 #include <errno.h>
+#include <dirent.h>
 #include <fcntl.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -32,7 +33,7 @@ void landin_snapshot_free(char *);
 int landin_tool_start_in_directory(char *const [], char *const [], int, int,
                                     int, int, int, int *);
 int landin_tool_wait(int, int *, int);
-static char scratch[4096], why[16384], race_saved[4096];
+static char scratch[4096], why[16384], race_saved[4096], race_actual[4096];
 static int race_kind;
 static unsigned passed;
 #define REQUIRE(x) do { if (!(x)) { fprintf(stderr, \
@@ -169,6 +170,30 @@ static void root_race(const char *event, const char *path)
     REQUIRE(rename(path, race_saved) == 0 && mkdir(path, 0700) == 0);
     char sentinel[4096]; join(sentinel, path, "sentinel"); put(sentinel, "raced-save");
 }
+static void retained_entry(const char *reason, const char *actual_parent,
+                             char *recovery)
+{
+    const char *retained = strstr(reason, "retained at ");
+    REQUIRE(retained != NULL); retained += strlen("retained at ");
+    if (!strncmp(retained, "last-known spelling ", 20)) {
+        char path[4096];
+        REQUIRE(strstr(reason, "device=") && strstr(reason, "inode=")
+                && strstr(reason, "may have moved"));
+        DIR *listing = opendir(actual_parent); REQUIRE(listing != NULL);
+        struct dirent *entry; int found = 0;
+        while ((entry = readdir(listing)) != NULL) {
+            if (strncmp(entry->d_name, ".refine-cleanup-", 16)) continue;
+            join(path, actual_parent, entry->d_name); found = 1; break;
+        }
+        REQUIRE(closedir(listing) == 0 && found);
+        join(recovery, path, "entry");
+    } else {
+        const char *end = strchr(retained, ';');
+        REQUIRE(end && end - retained < 4000 && strstr(retained, actual_parent));
+        memcpy(recovery, retained, (size_t)(end - retained));
+        recovery[end - retained] = 0;
+    }
+}
 static void root_capture_inspection(void)
 {
     char directory[4096], root[4096], file[4096];
@@ -181,13 +206,46 @@ static void root_capture_inspection(void)
     const char *reason = landin_remove_tree_reason();
     join(file, root, "sentinel");
     if (!content(file, "raced-save")) {
-        const char *retained = strstr(reason, "retained at ");
-        REQUIRE(retained != NULL); retained += strlen("retained at ");
-        const char *end = strchr(retained, ';'); REQUIRE(end && end - retained < 4000);
-        char recovery[4096]; memcpy(recovery, retained, (size_t)(end - retained)); recovery[end - retained] = '\0';
+        char recovery[4096]; retained_entry(reason, directory, recovery);
         join(file, recovery, "sentinel"); REQUIRE(content(file, "raced-save"));
     }
     REQUIRE(strstr(reason, "restor") || strstr(reason, "retained")); ++passed;
+}
+static void moved_root_race(const char *event, const char *path)
+{
+    char sentinel[4096];
+    (void)path;
+    if (!strcmp(event, "before-capture")) {
+        REQUIRE(rename(race_actual, race_saved) == 0);
+        REQUIRE(mkdir(race_actual, 0700) == 0);
+        join(sentinel, race_actual, "sentinel"); put(sentinel, "captured-save");
+    } else if (!strcmp(event, "after-capture")) {
+        REQUIRE(mkdir(race_actual, 0700) == 0);
+        join(sentinel, race_actual, "sentinel"); put(sentinel, "occupied-save");
+    }
+}
+static void moved_root_recovery_diagnostic(void)
+{
+    char directory[4096], root[4096], moved[4096], foreign[4096], file[4096];
+    char recovery[4096];
+    parent(directory, "root-moved-conflict");
+    REQUIRE(landin_private_directory("refine-run-", root, sizeof root) == 0);
+    join(file, root, "owned"); put(file, "owned-save");
+    join(moved, scratch, "root-moved-conflict-original");
+    REQUIRE(rename(directory, moved) == 0 && mkdir(directory, 0700) == 0);
+    join(foreign, directory, leaf(root)); REQUIRE(mkdir(foreign, 0700) == 0);
+    join(file, foreign, "sentinel"); put(file, "foreign-save");
+    join(race_actual, moved, leaf(root)); join(race_saved, moved, "saved-owned");
+    landin_private_directory_set_hook(moved_root_race);
+    REQUIRE(landin_remove_tree(root) == -1);
+    landin_private_directory_set_hook(NULL);
+    const char *reason = landin_remove_tree_reason();
+    retained_entry(reason, moved, recovery);
+    join(file, recovery, "sentinel"); REQUIRE(content(file, "captured-save"));
+    join(file, foreign, "sentinel"); REQUIRE(content(file, "foreign-save"));
+    join(file, race_actual, "sentinel"); REQUIRE(content(file, "occupied-save"));
+    join(file, race_saved, "owned"); REQUIRE(content(file, "owned-save"));
+    ++passed;
 }
 int main(void)
 {
@@ -197,6 +255,7 @@ int main(void)
     REQUIRE(mkdtemp(scratch) != NULL);
     capture_normal(); capture_ancestor(); capture_replaced_root();
     root_normal(); root_ancestor_and_io(); root_capture_inspection();
+    moved_root_recovery_diagnostic();
     printf("runtime ownership native: %u/%u controls passed\n", passed, passed);
     return 0;
 }

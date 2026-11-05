@@ -476,6 +476,12 @@ package body Landin.Commands.Bindings is
       function Work_Path (Name : String) return String is
         (US.To_String (Work) & "/" & Name);
 
+      --  Native Clang runs in the retained work directory. Its relative
+      --  dependency names refer there, even when the original TMPDIR moved.
+      function Clang_Path (Path : String) return String is
+        (if Starts_With (Path, "/") then Normal (Path)
+         else Normal (Work_Path (Path)));
+
       --  What every Clang run is given before its own arguments.
       function Base_Arguments return Platform.Path_List;
 
@@ -832,9 +838,10 @@ package body Landin.Commands.Bindings is
          for Path of B.Marker_Files (US.To_String (Preprocessed)) loop
             --  Clang reports dependency names, not its read descriptors.
             --  Invocation-owned header copies and probes are disposable.
-            if not Starts_With (Path, US.To_String (Work) & "/") then
-               Pub.Protect (Group, Host, Absolute (Path));
-               Input_Paths.Append (Absolute (Path));
+            if not Starts_With (Clang_Path (Path), US.To_String (Work) & "/")
+            then
+               Pub.Protect (Group, Host, Clang_Path (Path));
+               Input_Paths.Append (Clang_Path (Path));
             end if;
          end loop;
          B.Strip_Markers
@@ -935,9 +942,11 @@ package body Landin.Commands.Bindings is
                return False;
             end if;
             for Path of Consumed loop
-               if not Starts_With (Path, US.To_String (Work) & "/") then
-                  Pub.Protect (Group, Host, Absolute (Path));
-                  Input_Paths.Append (Absolute (Path));
+               if not Starts_With
+                 (Clang_Path (Path), US.To_String (Work) & "/")
+               then
+                  Pub.Protect (Group, Host, Clang_Path (Path));
+                  Input_Paths.Append (Clang_Path (Path));
                end if;
             end loop;
          end;

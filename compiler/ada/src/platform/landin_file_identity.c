@@ -155,7 +155,7 @@ struct landin_private_root {
     struct landin_private_root *next;
 };
 static struct landin_private_root *landin_private_roots;
-static char landin_private_reason[PATH_MAX * 2 + 256];
+static char landin_private_reason[PATH_MAX * 2 + 1024];
 void landin_private_directory_set_hook(void (*hook)(const char *, const char *))
 { landin_owned_hook = hook; }
 const char *landin_remove_tree_reason(void) { return landin_private_reason; }
