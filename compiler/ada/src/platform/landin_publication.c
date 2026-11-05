@@ -795,8 +795,25 @@ static int landin_publication_open_locked(const char *path, int deletion,
     p->next = publications; publications = p;
     free(parent_path); reason(why, room, ""); return 0;
 fail:
-    reason(why, room, "cannot prepare %s: %s; choose an ordinary output root",
-           path, strerror(errno));
+    {
+        int failure = errno;
+        if (p && p->arena) {
+            char known[PATH_MAX + 80], location[PATH_MAX + 256];
+            size_t length = strlen(p->arena->path);
+            /* Arena paths end in /stage; the whole root remains inspectable
+               when construction fails before returning a publication handle. */
+            snprintf(known, sizeof known, "%.*s", (int)(length - 6),
+                     p->arena->path);
+            landin_publication_describe_entry
+                (p->arena->root_fd, known, "", location, sizeof location);
+            reason(why, room, "cannot prepare %s: %s; retained publication workspace %s; inspect its stage, recovery and destination records before retrying",
+                   path, strerror(failure), location);
+        } else {
+            reason(why, room, "cannot prepare %s: %s; choose an ordinary output root",
+                   path, strerror(failure));
+        }
+        errno = failure;
+    }
     if (fd >= 0) close(fd);
     if (parent >= 0) close(parent);
     if (p) {

@@ -11,6 +11,8 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <stdint.h>
+#include <signal.h>
+#include <sys/resource.h>
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -601,6 +603,60 @@ static void pinned_entry_name_equivalence(void)
     REQUIRE(step(token, 4) == 0); close(fd);
     ++passed;
 }
+static int constructor_failure_child(const char *output)
+{
+    struct stat before, after;
+    struct rlimit original, limited;
+    struct sigaction ignore, previous;
+    char stage[4096], parent[4096], canonical[4096], retained[8192] = "";
+    int token, status;
+    REQUIRE(stat(output, &before) == 0);
+    const char *slash = strrchr(output, '/'); REQUIRE(slash != NULL);
+    REQUIRE(snprintf(parent, sizeof parent, "%.*s", (int)(slash - output), output) > 0
+            && realpath(parent, canonical));
+    REQUIRE(getrlimit(RLIMIT_FSIZE, &original) == 0);
+    memset(&ignore, 0, sizeof ignore); ignore.sa_handler = SIG_IGN;
+    sigemptyset(&ignore.sa_mask);
+    REQUIRE(sigaction(SIGXFSZ, &ignore, &previous) == 0);
+    limited = original; limited.rlim_cur = 0;
+    REQUIRE(setrlimit(RLIMIT_FSIZE, &limited) == 0);
+    status = landin_publication_open(output, 0, "", &token, stage,
+                                     sizeof stage, why, sizeof why);
+    REQUIRE(setrlimit(RLIMIT_FSIZE, &original) == 0
+            && sigaction(SIGXFSZ, &previous, NULL) == 0);
+    REQUIRE(status != 0 && token == 0 && stat(output, &after) == 0);
+    REQUIRE(before.st_dev == after.st_dev && before.st_ino == after.st_ino
+            && before.st_mode == after.st_mode && content(output, "original-output"));
+    DIR *directory = opendir(canonical); REQUIRE(directory != NULL);
+    struct dirent *entry; unsigned count = 0;
+    while ((entry = readdir(directory)) != NULL) {
+        if (strncmp(entry->d_name, ".refine-publication-", 20)) continue;
+        ++count;
+        REQUIRE(snprintf(retained, sizeof retained, "%s/%s", canonical, entry->d_name) > 0);
+    }
+    closedir(directory);
+    REQUIRE(count == 1 && stat(retained, &after) == 0 && S_ISDIR(after.st_mode));
+    printf("constructor failure retained: %s; diagnostic: %s\n", retained, why);
+    REQUIRE(strstr(why, retained) != NULL && strstr(why, "inspect") != NULL);
+    return 0;
+}
+static void constructor_failure_is_discoverable(void)
+{
+    char parent[4096], output[8192]; struct stat before, after;
+    path(parent, sizeof parent, "constructor-failure"); REQUIRE(mkdir(parent, 0700) == 0);
+    REQUIRE(snprintf(output, sizeof output, "%s/output", parent) > 0);
+    put(output, "original-output"); REQUIRE(stat(output, &before) == 0);
+    char *args[] = {(char *)self_program, "--constructor-failure", output, NULL};
+    int nullfd = open("/dev/null", O_RDWR), child, status; REQUIRE(nullfd >= 0);
+    REQUIRE(landin_tool_start_in_directory(args, NULL, 0, nullfd,
+                STDOUT_FILENO, STDERR_FILENO, -1, &child) == 0);
+    close(nullfd);
+    REQUIRE(landin_tool_wait(child, &status, 0) == child);
+    REQUIRE(stat(output, &after) == 0 && before.st_dev == after.st_dev
+            && before.st_ino == after.st_ino && before.st_mode == after.st_mode
+            && content(output, "original-output"));
+    REQUIRE(status == 0); ++passed;
+}
 static void unknown_unready_recovery_refuses(void)
 {
     for (unsigned kind = 0; kind < 3; ++kind) {
@@ -646,6 +702,8 @@ static void fmt_original_descriptor(void)
 int main(int argc, char **argv)
 {
     self_program = argv[0];
+    if (argc == 3 && !strcmp(argv[1], "--constructor-failure"))
+        return constructor_failure_child(argv[2]);
     if (argc == 6 && !strcmp(argv[1], "--changing-peer")) {
         changing_path = argv[3];
         changing_ready = atoi(argv[4]); changing_release = atoi(argv[5]);
@@ -697,7 +755,7 @@ int main(int argc, char **argv)
     fmt_readonly_is_write_refusal(); different_output_kind_is_refused();
     journal_concurrency(); discovery_during_retirement();
     discovery_during_publication(); pinned_entry_name_equivalence();
-    unknown_unready_recovery_refuses();
+    unknown_unready_recovery_refuses(); constructor_failure_is_discoverable();
     printf("publication native: %u controls passed; retained scratch %s\n", passed, scratch);
     return 0;
 }
