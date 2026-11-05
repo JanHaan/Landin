@@ -40,7 +40,8 @@ The bytes inside a raw literal [0280] and inside a block comment [1780] are
 the literal's and the comment's, their line ends included, and never change.
 Formatted source can therefore retain CR LF or lone CR line ends inside them.
 
-`refine fmt` writes the formatted bytes into the file it read, the same
+`refine fmt` retains the descriptor that supplied its original bytes and
+writes through that descriptor into the same
 file, so that everything the file carries stays with it: its owner and group,
 its extended attributes and ACLs, those the caller cannot even list among
 them, and every other name a hard link gives it, which sees the formatted
@@ -58,8 +59,15 @@ or for set-group-ID not in the file's group, is refused before it is
 written, as is a Linux file with capabilities, which a write removes. A
 read-only file is refused. Each refusal says which of these it met, and
 leaves the original bytes as they were. The modification time changes, as
-for any write. Concurrent changes to the file while it is formatted are
-unsupported, except that one replaced by a rename is refused.
+for any write. The copy and the parent directory are pinned while used.
+A save renamed over the source is never overwritten. If the name changes
+after the last check, the formatter can have updated the old inode, which
+hard links still name, but reports that it did not install the layout at
+the new name and retains its recovery copy. It never restores over the
+editor's save. Concurrent writes through another descriptor to the same
+inode remain unsupported: identity checks do not exclude that writer.
+`--check` and `--stdout` need no writable descriptor. D907 records the shared
+publication and recovery rule.
 
 ## Rules
 

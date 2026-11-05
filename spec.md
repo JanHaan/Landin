@@ -18307,7 +18307,8 @@ setting a name in it, which only a privileged process may. Every ordinary
 user's file was refused, on tmpfs and ZFS alike, with a report that said
 only that it could not write a file the user could write.
 
-**Chosen:** the formatted bytes are written into the file that was read, the
+**Chosen:** the formatted bytes are written through the descriptor that read
+the original source, retained throughout formatting (D907), into the
 same inode, so it keeps its owner, group, extended attributes and ACLs,
 those the caller cannot list among them, and every name a hard link gives
 it, which sees the formatted bytes too. Writing in place is not atomic, so
@@ -18319,8 +18320,13 @@ their length and synced, and the copy is removed. A failed write puts the
 original bytes back from memory and removes the copy; a write that cannot
 do even that keeps the copy and names it, which is also what a crash during
 the write leaves. A path names a symlink's target; a file that is not
-ordinary or that no one may write is refused; a file renamed over while it
-was formatted is refused before it is written. What a write itself takes
+ordinary or that no one may write is refused. A renamed-in save is never
+written: a changed pathname observed before writing refuses the operation;
+one changed after that check still names a different inode from the retained
+descriptor, and the command reports that its layout was not installed at
+that name, retaining its recovery copy. Concurrent writes through another
+descriptor to the same inode are unsupported; neither an identity check nor
+an advisory lock excludes that writer. What a write itself takes
 away is checked first: the set-user-ID and set-group-ID bits a write clears
 are set again and read back, so a file whose bit the caller could not set
 again, as its owner and for set-group-ID in its group, is refused before it
@@ -18351,6 +18357,81 @@ write undone, a failed undo that keeps and names its copy, a copy that
 cannot be kept, a mode a chmod did not restore and a file with
 capabilities; and `driver/fmt is a subcommand`, whose refusal names its
 cause.
+
+### D907 — A command publishes its outputs without destroying conflicting inputs or saves
+
+**The discrepancy:** commands guarded different subsets of their inputs,
+reopened names after reading, followed links in staging or cleanup, and
+discarded earlier artifacts before later verification could fail. A request
+could consume its header, policy, response file, script, library or selected
+tool and replace it with an output; a failed build could remove the prior
+executable, and an interrupted link left its child tool running.
+
+**Chosen:** one publication contract in `Landin.Platform`. Commands register
+protected input paths and original read identities, and prepare every
+output's expected version, including its absence, before producing its
+replacement. Compiler reads supply bytes and identity from the same open
+descriptor. Consumed response files, selected tools, supplied tool inputs
+and known resolved libraries join the source closure; bindings also records
+Clang's consumed-header paths. Dependency filenames establish an external
+tool's known input closure, not identities from its read descriptors. This
+does not sandbox arbitrary wrappers, interpreters or implicit toolchain
+internals. Unsupported indirect file directives refuse with an absolute-path
+or standalone-input route rather than changing their meaning silently.
+
+Generated files are verified in exclusive private staging beside the
+destination. The output directory is pinned; lookups below its chosen root,
+staging writes and tool output use that directory authority without following
+links. A dangling link is an occupied entry. The actual old destination is
+captured into recovery storage and checked against its expected version and
+protected inputs. The new version is installed only into an absent public
+name, using no-replace rename or, for regular files, no-clobber hard-link
+publication. A changed captured entry is restored without overwriting a
+newly occupied name, or retained under the recovery path the refusal names.
+Rollback applies the same rule to this invocation's installed entries; it
+never unlinks a public name on the strength of an earlier identity check.
+Prior versions remain recoverable through verification of the artifact
+group, an ESP image included. Manifest-listed stale outputs receive the
+same checks. Unchanged bytes keep their original file. Directory artifacts,
+including a Darwin debug bundle, have checked trees. Earlier retained
+transactions are diagnosed rather than removed to make progress.
+
+Formatting is the inode-preserving mode, D358: its original read descriptor
+protects renamed-in saves without losing invisible metadata or changing
+hard-link behavior. `--check` and `--stdout` acquire no writable lease.
+Noncooperating writes through another descriptor to the same inode, and
+mutation through an already-open directory descriptor, remain unsupported.
+Identity is not a content-version lock. Private storage is not isolation
+from hostile processes with the same credentials or privileged processes.
+
+Interrupt, termination and hangup cancellation is recorded by signal-safe
+notification. The supervisor forwards it to the active tool's process group,
+permits bounded shutdown, stops remaining ordinary group members and reaps
+its direct child before cleanup. That unreaped child reserves the identifier
+while signaling is possible. Tools that escape their group or change
+credentials are outside this supervision contract. Filesystem and Ada
+cleanup run in ordinary control flow. Cancellation returns 128 plus the host
+signal number after recovery; inherited ignored signals remain ignored.
+
+This is loss-preserving publication, not kernel conditional-inode rename.
+A destination can briefly be absent; a group is not an atomic snapshot for
+concurrent readers. Ordinary failure/cancellation recovery is distinct from
+power-loss durability. Files and directory entries are synced where
+supported; uncertain or conflicting recovery is retained and reported,
+never described as an untouched preflight refusal.
+
+**The alternatives:** check-then-overwrite rename or unlink, which only
+narrows the race; exchange rename, which retains the displaced entry but
+does not compare its expected identity; copying unknown metadata to a new
+inode, which D358 rejected; and a tool publishing after its compiler has
+exited. Linux and Darwin no-replace extensions supply no expected-inode
+comparison; FreeBSD 14.4 lacks their directory no-replace equivalent.
+Unsupported operations refuse rather than use unchecked replacement.
+
+**Pinned by** `compiler/ada/tests/native/publication.c`,
+`compiler/tests/test_tool_cancellation.py`,
+`compiler/tests/test_formatter_write_safety.py`, the `bindings` and `devices`
+publication cases, and the driver and command input-preservation cases.
 
 ### D359 — `refine fmt --check` names every line, and `--stdout` prints the layout
 
@@ -22262,14 +22343,15 @@ mutated-SVD refusal controls.
 **The tour said** nothing. A generator that dies halfway through leaves a
 module set that matches no SVD, and its next reader cannot tell.
 
-**Chosen:** nothing is written until every destination is checked: the
+**Chosen:** D907's shared publication group replaces these outputs. Nothing
+is published until every destination is checked: the
 output directory must be one, no destination may be a directory or have a
 file where a directory is needed, no staged or kept copy of an earlier run
 may be beside one, and the manifest found there may name only paths below
-it. Each new file is then written beside its destination as
-`NAME.refine-new` and read back, and only then is each destination
-replaced, its old bytes kept as `NAME.refine-old` until every replacement is
-done. A failure puts back what was replaced and says so, or names the kept
+it. Each new file is written in exclusive private staging beside its
+destination and read back, and only then is each destination replaced,
+its old bytes kept until every replacement is done. A failure restores
+what this invocation replaced without clobbering a concurrent change, or names the kept
 copy it could not put back. A file whose bytes are already the new ones is
 left alone. The manifest is how refine knows which files are its own: a file
 the old manifest names that this run does not make is removed with the
@@ -25320,8 +25402,9 @@ it. refine then reads the file back and parses it on its
 own, holding its header, extended header, every segment's address, length
 and bytes against the executable's, its padding, checksum and hash, and
 nothing after the hash; a part that is not as made is L0577, and refine
-removes the executable and the image, so no build leaves an image it did
-not check. `OUT.bin` is the image a flasher writes at the description's
+abandons its new executable and image through D907's transaction, preserving
+the prior artifacts or naming their retained recovery. No build publishes
+an image it did not check. `OUT.bin` is the image a flasher writes at the description's
 offset, `probe-rs download --binary-format bin --base-address OFFSET`.
 The build report's `esp_image` gives its offset, entry, chip, revisions,
 each segment's address and length, checksum, SHA-256 and length, and

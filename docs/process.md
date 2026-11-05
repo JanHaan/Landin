@@ -553,6 +553,14 @@ job, including cross-host determinism, to succeed or be skipped under verified
 reuse or the event's scope; document and script checks must always succeed,
 and on a board-scope event so must every physical board leg.
 
+Linux x86-64, Linux arm64 and Darwin host checks run the production C
+publication controls and cancellation controls alongside formatter write
+safety, with cancellation also exercised through actual `compile` and
+`run` commands. Each FreeBSD architecture's first runtime shard compiles
+and executes the same C adapters inside its guest. That is native system
+call evidence, separate from the Linux-hosted compiler and the generated
+program corpus; it is not a FreeBSD-hosted Ada compiler claim.
+
 A branch push or same-repository pull request by an author with write access
 may reuse a complete successful push run from this repository from the
 preceding seven days when the entire tracked tree is identical. This key
@@ -818,7 +826,10 @@ A candidate reaches `main` in three steps:
 
 An unavailable rig blocks promotion. A RAM run's success never establishes
 power-on, ROM loading or fixed-image restoration, so every leg runs each
-port's boot check before its RAM run.
+port's RAM run before its final boot check, leaving the verified fixed image
+at rest. An unknown or interrupted prior state prepends a restoring boot
+check before RAM. The configured steps in `environments/boards/rig.json`
+decide the order; the Pico 2 covers both architectures.
 
 ### Proving a change emits the same bytes
 

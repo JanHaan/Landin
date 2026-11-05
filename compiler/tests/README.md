@@ -1012,6 +1012,17 @@ the editor grammar parses; and `python3 check.py`, which names a runtime or
 ABI fixture that has no row and the command that writes it. A fixture edited
 later is held to the same cases, the formatter's among them.
 
+The host gate also runs `test_publication_native.py` against the production
+C adapters, and `test_tool_cancellation.py --refine PATH` against both the
+production process adapter and actual `compile` and `run` commands. Their
+controls use owned scratch roots and readiness barriers for the formatter's
+open window, publication conflicts and tool cancellation. The cancellation
+helper checks delivery to the process group and reaping of the direct child;
+it does not claim to reap arbitrary descendants. `--native-only` runs just
+the process adapter controls. The FreeBSD runtime guests compile and run
+the same C controls with their own compiler, without claiming a native
+FreeBSD Ada compiler. Logs and JSON results retain their selected scope.
+
 Discovery is strict. An unknown key, a repeated key, a missing required key,
 a class that disagrees with its directory, a line that is not a pair, a
 fixture directory without metadata, and a plain file where a fixture belongs
@@ -1103,7 +1114,7 @@ status is not stable program behaviour, so a fixture may assert that the
 program ended without returning a status and may not assert which signal ended
 it. Naming both is a reported fault: a program that trapped has no status, and
 a fixture claiming one is claiming an answer nobody can observe. Nothing in the
-format or in `Landin.Platform` carries a signal number, deliberately.
+fixture format carries a signal number, deliberately.
 With no `panic_handler`, a hosted program writes D361's line,
 `FILE:LINE:COLUMN: trap: KIND`, to standard error before its terminal
 instruction; `trap_report:` holds a fixture to that exact line on every

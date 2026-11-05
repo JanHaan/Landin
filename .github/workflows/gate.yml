@@ -286,6 +286,8 @@ jobs:
           python3 compiler/tests/test_determinism.py --refine "$refine"
           python3 compiler/tests/test_native_report_identity.py --refine "$refine"
           python3 compiler/tests/test_formatter_write_safety.py --refine "$refine"
+          python3 compiler/tests/test_publication_native.py
+          python3 compiler/tests/test_tool_cancellation.py --refine "$refine"
           python3 compiler/tests/test_formatter_write_safety.py --refine "$refine" --scratch /dev/shm/landin-loop
           LANDIN_REFINE="$refine" python3 -m unittest scripts.tests.test_cli_native
           python3 compiler/tests/server/native_session.py --refine "$refine"
@@ -389,6 +391,8 @@ jobs:
           python3 compiler/tests/test_determinism.py --refine "$refine"
           python3 compiler/tests/test_native_report_identity.py --refine "$refine"
           python3 compiler/tests/test_formatter_write_safety.py --refine "$refine"
+          python3 compiler/tests/test_publication_native.py
+          python3 compiler/tests/test_tool_cancellation.py --refine "$refine"
           python3 compiler/tests/test_formatter_write_safety.py --refine "$refine" --scratch /dev/shm/landin-loop
           LANDIN_REFINE="$refine" python3 -m unittest scripts.tests.test_cli_native
           python3 compiler/tests/server/native_session.py --refine "$refine"
@@ -973,6 +977,8 @@ jobs:
           python3 compiler/tests/test_determinism.py --refine "$refine"
           python3 compiler/tests/test_native_report_identity.py --refine "$refine"
           python3 compiler/tests/test_formatter_write_safety.py --refine "$refine"
+          python3 compiler/tests/test_publication_native.py
+          python3 compiler/tests/test_tool_cancellation.py --refine "$refine"
           python3 compiler/tests/server/native_session.py --refine "$refine"
 
   #  The same native host checks with the release compiler, using the
@@ -1033,6 +1039,8 @@ jobs:
           python3 compiler/tests/test_determinism.py --refine "$refine"
           python3 compiler/tests/test_native_report_identity.py --refine "$refine"
           python3 compiler/tests/test_formatter_write_safety.py --refine "$refine"
+          python3 compiler/tests/test_publication_native.py
+          python3 compiler/tests/test_tool_cancellation.py --refine "$refine"
           python3 compiler/tests/server/native_session.py --refine "$refine"
 
       #  The release toolchain installed as the README says, then used from
@@ -1241,6 +1249,8 @@ jobs:
           python3 compiler/tests/test_determinism.py --refine "$refine"
           python3 compiler/tests/test_native_report_identity.py --refine "$refine"
           python3 compiler/tests/test_formatter_write_safety.py --refine "$refine"
+          python3 compiler/tests/test_publication_native.py
+          python3 compiler/tests/test_tool_cancellation.py --refine "$refine"
           python3 compiler/tests/test_formatter_write_safety.py --refine "$refine" --scratch /dev/shm/landin-loop
           python3 compiler/tests/server/native_session.py --refine "$refine"
 
@@ -1291,6 +1301,8 @@ jobs:
           refine="$PWD/compiler/ada/build/linux-arm64/release/bin/refine"
           python3 compiler/tests/test_default_target.py --refine "$refine"
           python3 compiler/tests/test_formatter_write_safety.py --refine "$refine"
+          python3 compiler/tests/test_publication_native.py
+          python3 compiler/tests/test_tool_cancellation.py --refine "$refine"
           python3 compiler/tests/test_formatter_write_safety.py --refine "$refine" --scratch /dev/shm/landin-loop
           python3 compiler/tests/server/native_session.py --refine "$refine"
 

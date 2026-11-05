@@ -11,6 +11,14 @@ two jobs together are the lane. A shard cannot combine with `--case` or a
 transferred payload. The sysroot and optional local VM base come from official 14.4 release files; hashes are in
 [`environments/freebsd/lock.json`](../../../environments/freebsd/lock.json).
 
+Each architecture's first runtime shard also compiles the production
+publication, formatter and process C adapters with the guest's own `cc`
+and runs their deterministic publication and cancellation controls.
+`native-host-controls.log` retains the transcript. These check FreeBSD's
+host system calls; they do not claim a FreeBSD-hosted Ada compiler or the
+compiler command corpus ran there. The compiler commands run on Linux and
+Darwin, and the generated programs run in these guests.
+
 The gate runs each lane in one GitHub-hosted Linux x86-64 job, which emits
 and then boots a fresh VM from the locked 14.4 image, as a local run does: amd64
 under KVM with host CPU passthrough, arm64 under QEMU's `max` CPU in system

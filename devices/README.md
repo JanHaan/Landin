@@ -271,13 +271,21 @@ relocation; the `_address` constants stay vendor facts. Raw decode and encode
 preserve every bit. Reset constants perform no initialization. Modules
 allocate nothing, import no library and have no module initialization.
 
-`refine svd` replaces its outputs whole or not at all (D558): every
+`refine svd` uses the shared publication transaction (D558, D907): every
 destination is checked, each new file is written beside its destination and
-read back, and only then is each replaced, its old bytes kept until all are.
+read back in exclusive private staging, and only then is each replaced,
+its old bytes kept until all are. The SVD, policy and consumed response files
+are protected inputs, through aliases too. Links in the chosen output tree,
+staging and stale paths are refused, including dangling links. A concurrent
+change is restored without clobbering a newly occupied name, or retained at
+the recovery path the diagnostic names. An earlier retained transaction is
+diagnosed, not deleted.
 A file whose bytes are already the new ones is left alone, and a file the old
 manifest names that is no longer made is removed. Files beside them that the
 manifest does not name, such as a description's `memory.ldn`, are the
-developer's and are not touched.
+developer's and are not touched. A group is not an atomic snapshot for
+concurrent readers, and output names can briefly be absent. Simultaneous
+writes through another descriptor to the same inode remain unsupported.
 
 ## Regeneration and its checks
 

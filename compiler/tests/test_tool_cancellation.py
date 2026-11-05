@@ -13,11 +13,107 @@ import json
 import os
 from pathlib import Path
 import selectors
+import select
 import shlex
+import shutil
 import signal
 import subprocess
+import sys
 import tempfile
 import time
+
+
+def command_controls(refine, output):
+    """Interrupt an actual compile/run at the tool's readiness boundary."""
+    driver = shutil.which('clang' if sys.platform == 'darwin' else 'gcc')
+    if not driver:
+        raise SystemExit('native cancellation needs the host C driver')
+    results = []
+    for command in ('compile', 'run'):
+        for number in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
+            root = output / (command + '-' + number.name)
+            root.mkdir()
+            temporary = root / 'temporary'
+            temporary.mkdir()
+            source = root / 'main.ldn'
+            source.write_text('main: () -> (code: i32) =\n    code = 5\nend main\n')
+            product = root / 'program'
+            product.write_bytes(b'prior product sentinel\x00\xff\n')
+            prior = product.stat()
+            assembly = root / 'program.s'
+            assembly.write_bytes(b'pre-existing auxiliary sentinel\n')
+            receipt = root / 'signal-receipt'
+            wrapper = root / 'driver'
+            wrapper.write_text('#!' + sys.executable + '\n' + '''import os, signal, sys
+driver = ''' + repr(driver) + '''
+if '-o' not in sys.argv:
+    os.execv(driver, [driver] + sys.argv[1:])
+def cancelled(number, frame):
+    with open(os.environ['LANDIN_CANCEL_RECEIPT'], 'x') as out:
+        out.write(str(number))
+    raise SystemExit(128 + number)
+for number in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
+    signal.signal(number, cancelled)
+os.write(int(os.environ['LANDIN_CANCEL_NOTIFY']), b'R')
+os.read(int(os.environ['LANDIN_CANCEL_HOLD']), 1)
+os.execv(driver, [driver] + sys.argv[1:])
+''')
+            wrapper.chmod(0o700)
+            notify_read, notify_write = os.pipe()
+            hold_read, hold_write = os.pipe()
+            env = dict(os.environ, TMPDIR=str(temporary),
+                       LANDIN_CANCEL_RECEIPT=str(receipt),
+                       LANDIN_CANCEL_NOTIFY=str(notify_write),
+                       LANDIN_CANCEL_HOLD=str(hold_read))
+            argv = [str(refine), command, str(source),
+                    '--toolchain=' + str(wrapper)]
+            if command == 'compile':
+                argv.extend(['-o', str(product)])
+            process = subprocess.Popen(argv, cwd=root, env=env,
+                                       stdout=subprocess.PIPE,
+                                       stderr=subprocess.PIPE,
+                                       pass_fds=(notify_write, hold_read),
+                                       start_new_session=True)
+            os.close(notify_write)
+            os.close(hold_read)
+            try:
+                if not select.select([notify_read], [], [], 30)[0]:
+                    raise TimeoutError('compiler tool did not reach readiness')
+                if os.read(notify_read, 1) != b'R':
+                    raise AssertionError('compiler tool closed readiness early')
+                os.kill(process.pid, number)
+                stdout, stderr = process.communicate(timeout=15)
+            finally:
+                # Release only this invocation's blocked probe on failure;
+                # never signal a saved, potentially recycled tool group ID.
+                try:
+                    os.write(hold_write, b'R')
+                except BrokenPipeError:
+                    pass
+                os.close(hold_write)
+                os.close(notify_read)
+                if process.poll() is None:
+                    process.kill()
+                    process.communicate(timeout=10)
+            after = product.stat()
+            passed = (process.returncode == 128 + number
+                      and receipt.read_text() == str(int(number))
+                      and product.read_bytes() == b'prior product sentinel\x00\xff\n'
+                      and (prior.st_dev, prior.st_ino) == (after.st_dev, after.st_ino)
+                      and assembly.read_bytes() == b'pre-existing auxiliary sentinel\n'
+                      and not list(temporary.iterdir())
+                      and not list(root.glob('.refine-publication-*'))
+                      and not stdout)
+            row = dict(command=argv, signal=int(number), exit_status=process.returncode,
+                       passed=passed, stdout=stdout.decode(errors='replace'),
+                       stderr=stderr.decode(errors='replace'), root=str(root))
+            results.append(row)
+            (output / 'command-results.json').write_text(json.dumps(results, indent=2) + '\n')
+            print(('PASS ' if passed else 'FAIL ') + command + '-' + number.name,
+                  flush=True)
+            if not passed:
+                raise AssertionError(row)
+    return results
 
 
 def run_case(executable, output, mode, number):
@@ -100,12 +196,16 @@ def run_case(executable, output, mode, number):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--native-only", action="store_true", required=True,
+    parser.add_argument("--native-only", action="store_true",
                         help="test the production POSIX helper without refine")
+    parser.add_argument('--refine', type=Path,
+                        help='also interrupt actual compile/run commands')
     parser.add_argument("--cc", default=os.environ.get("CC", "cc"))
     parser.add_argument("--output", type=Path,
                         help="new directory for retained binaries/logs/results")
     args = parser.parse_args()
+    if args.native_only == bool(args.refine):
+        parser.error('give --native-only or --refine PATH')
     repo = Path(__file__).resolve().parents[2]
     output = (args.output.absolute() if args.output else
               Path(tempfile.mkdtemp(prefix="landin-tool-cancellation-")))
@@ -143,6 +243,9 @@ def main():
     print(f"{passed}/{len(summary['cases'])} native controls passed; {result_path}")
     if passed != len(summary["cases"]):
         raise SystemExit(1)
+    if args.refine:
+        summary['commands'] = command_controls(args.refine.resolve(), output)
+        result_path.write_text(json.dumps(summary, indent=2) + '\n')
 
 
 if __name__ == "__main__":

@@ -272,6 +272,16 @@ class Lane:
             for relative in ('compiler/tests', 'core', 'hosted', 'platform', 'examples'):
                 tar.add(ROOT / relative, arcname='source/' + relative,
                         filter=lambda info: None if '__pycache__' in info.name else info)
+            # Compile the shipped host C helpers with the guest's own cc.
+            # This is native adapter evidence, not a FreeBSD Ada compiler.
+            for relative in (
+                    'compiler/ada/src/platform/landin_publication.c',
+                    'compiler/ada/src/platform/landin_publication.h',
+                    'compiler/ada/src/platform/landin_format_replace.c',
+                    'compiler/ada/src/platform/landin_tool_process.c',
+                    'compiler/ada/src/platform/landin_file_identity.c',
+                    'compiler/ada/tests/native/publication.c'):
+                tar.add(ROOT / relative, arcname='source/' + relative)
             tar.add(self.bundle, arcname='bundle')
         return archive
 
@@ -298,6 +308,38 @@ class Lane:
                       + 'rm -rf ' + shlex.quote(self.remote_prefix) + '; rm -f '
                       + shlex.join([self.remote_prefix + suffix for suffix in
                                     ('-payload.tar.gz', '-processor', '-results.tar.gz', '-execute.sh')]))
+
+    def native_host_controls(self, guest):
+        root = self.source_root
+        platform = root / 'compiler/ada/src/platform'
+        destination = self.remote_prefix + '/native-host-controls'
+        command = ('set -eu; mkdir ' + shlex.quote(destination)
+                   + '; cd ' + shlex.quote(destination) + '; '
+                   + shlex.join(['cc', '-std=c11', '-Wall', '-Wextra',
+                                 '-Werror', '-pedantic', '-pthread',
+                                 '-I', str(platform),
+                                 str(platform / 'landin_publication.c'),
+                                 str(platform / 'landin_format_replace.c'),
+                                 str(platform / 'landin_tool_process.c'),
+                                 str(platform / 'landin_file_identity.c'),
+                                 str(root / 'compiler/ada/tests/native/publication.c'),
+                                 '-o', 'publication'])
+                   + '; ./publication; '
+                   + shlex.join(['cc', '-std=c11', '-Wall', '-Wextra',
+                                 '-Werror', '-pedantic', '-pthread',
+                                 str(platform / 'landin_tool_process.c'),
+                                 str(root / 'compiler/tests/tool_cancellation.c'),
+                                 '-o', 'cancellation'])
+                   + '; ./cancellation --all')
+        result = guest.run(command, timeout=180)
+        transcript = result.stdout + result.stderr
+        (self.output / 'native-host-controls.log').write_bytes(transcript)
+        require(result.returncode == 0, 'native host adapter controls failed:\n'
+                + transcript.decode(errors='replace')[-8000:])
+        require(b'publication native:' in result.stdout
+                and b'cancellation native: 13 controls passed' in result.stdout,
+                'native host adapter controls did not report their full scope')
+        print('FreeBSD native publication and cancellation adapters passed')
 
     def processor(self, guest):
         probe = self.bundle / 'processor'
@@ -718,6 +760,9 @@ def main():
             (args.output / 'guest-identity.log').write_text(identity)
             summary['guest'] = identity
             lane.transfer(guest)
+            if args.kind == 'runtime' and (not args.shard or args.shard[0] == 1):
+                lane.native_host_controls(guest)
+                summary['native_host_adapters'] = 'passed; production C controls'
             if args.kind == 'debugger':
                 lane.debugger(guest, results)
             else:

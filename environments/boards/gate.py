@@ -5,10 +5,11 @@
         [--rig=environments/boards/rig.json] [--lock-wait=SECONDS] \
         [--probehive=DIR] [--ram-loader=PATH]
 
-PORT is one of rig.json's ports, whose steps run in order: each port's boot
-check, which flashes, cold-starts, checks the physical oracle and restores
-the fixed image, then its RAM run; the Pico 2's are both of its
-architectures'.  DIR holds the bundles build.py prepared, DIR/BOARD/MODE,
+PORT is one of rig.json's ports, whose configured steps run in order: the
+RAM run followed by the boot check, which flashes, cold-starts, checks the
+physical oracle and restores the fixed image; the Pico 2 covers both of its
+architectures. An unknown prior state prepends a restoring boot check.
+DIR holds the bundles build.py prepared, DIR/BOARD/MODE,
 which must have been built from this checkout's source.
 
 Before anything touches the rig, and before the lock is taken, the gate

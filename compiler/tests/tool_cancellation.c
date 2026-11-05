@@ -2,6 +2,7 @@
    No cancellation implementation is copied here. Each controller owns its
    spawned group until the production helper stops and reaps its leader. */
 #define _POSIX_C_SOURCE 200809L
+#define _XOPEN_SOURCE 700
 #include <errno.h>
 #include <fcntl.h>
 #include <signal.h>
@@ -9,6 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -224,10 +226,48 @@ static int start(const char *self, const char *role, int number,
 int main(int argc, char **argv)
 {
     int number, events, child, status = 0;
+    int automatic = 0;
     int ready[2];
     const char *mode;
+    if (argc == 2 && strcmp(argv[1], "--all") == 0) {
+        const int selected_numbers[] = {SIGINT, SIGTERM, SIGHUP};
+        const char *modes[] = {"cancel", "before", "ignore", "stubborn"};
+        char *self = realpath(argv[0], NULL);
+        char root[] = "tool-cancellation-XXXXXX";
+        unsigned int at;
+        require(self != NULL && mkdtemp(root) != NULL,
+                "own automatic control root");
+        for (at = 0; at < 13; ++at) {
+            char name[64], mode_arg[64], signal_arg[32], directory[256];
+            const char *selected = at == 0 ? "normal" : modes[(at - 1) / 3];
+            int selected_signal = at == 0 ? 0 : selected_numbers[(at - 1) % 3];
+            snprintf(name, sizeof name, "%s-%d", selected, selected_signal);
+            snprintf(directory, sizeof directory, "%s/%s", root, name);
+            snprintf(mode_arg, sizeof mode_arg, "auto-%s", selected);
+            snprintf(signal_arg, sizeof signal_arg, "%d", selected_signal);
+            require(mkdir(directory, 0700) == 0, "own automatic case directory");
+            pid_t controller = fork();
+            require(controller >= 0, "fork automatic control");
+            if (controller == 0) {
+                require(chdir(directory) == 0, "enter automatic case");
+                execl(self, self, mode_arg, signal_arg, (char *)NULL);
+                _exit(127);
+            }
+            int word;
+            require(waitpid(controller, &word, 0) == controller
+                    && WIFEXITED(word) && WEXITSTATUS(word) == 0,
+                    "automatic control passed");
+        }
+        free(self);
+        puts("cancellation native: 13 controls passed");
+        return 0;
+    }
     require(argc >= 3, "mode and signal arguments");
     mode = argv[1];
+    if (strncmp(mode, "auto-", 5) == 0) {
+        automatic = 1;
+        mode += 5;
+    }
     if (strcmp(mode, "tool") == 0 || strcmp(mode, "stubborn-tool") == 0) {
         require(argc == 5, "tool arguments");
         tool(atoi(argv[2]), atoi(argv[3]), strcmp(mode, "stubborn-tool") == 0);
@@ -254,7 +294,10 @@ int main(int argc, char **argv)
     events = dup(STDOUT_FILENO);
     require(events >= 0, "inheritable event descriptor");
     if (strcmp(mode, "before") == 0) {
-        puts("READY");
+        if (automatic)
+            require(raise(number) == 0, "automatic before-spawn signal");
+        else
+            puts("READY");
         await_signal(1);
         require(landin_cancellation_requested() == number, "before spawn signal");
     }
@@ -272,15 +315,20 @@ int main(int argc, char **argv)
         require(result == child && status == 23, "normal exit status");
         reaped(child);
         if (strcmp(mode, "ignore") == 0) {
-            puts("READY");
-            byte_read(STDIN_FILENO);
+            if (!automatic) {
+                puts("READY");
+                byte_read(STDIN_FILENO);
+            }
             require(raise(number) == 0, "raise inherited ignored signal");
         }
         require(landin_cancellation_requested() == 0, "no cancellation");
     } else {
         byte_read(ready[0]);
         if (strcmp(mode, "before") != 0) {
-            puts("READY");
+            if (automatic)
+                require(raise(number) == 0, "automatic cancellation signal");
+            else
+                puts("READY");
             await_signal(1);
         }
         require(landin_cancellation_requested() == number,

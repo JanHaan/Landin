@@ -38,13 +38,21 @@ Generation checks the target facts, validates every selected declaration and
 policy, and compiles `adapters.c` with the same Clang invocation before
 replacing any destination file. The output directory itself must not be a
 symbolic link, and no output may be a directory or a link. Replacement is
-`refine svd`'s (D558): each new file is written beside its destination as
-`NAME.refine-new` and read back, and only then is each destination replaced,
-its old bytes kept as `NAME.refine-old` until every replacement is done; a
-failure puts back what was replaced, or names the kept copy it could not put
-back. A file whose bytes are already the new ones is left alone. This is
+`refine svd`'s shared Platform transaction (D558, D907): each new file is
+written in exclusive private staging beside its destination and read back,
+and only then is each destination replaced, its old version kept until the
+group succeeds. Headers, policy, consumed response files, selected Clang and
+known transitive headers are protected inputs, through aliases too. Links
+are refused in the output tree and staging, including dangling links. A
+changed destination is restored without replacing a newly occupied name, or
+retained at the recovery path the diagnostic names. An earlier retained
+transaction must be inspected; a new invocation does not discard it.
+A file whose bytes are already the new ones is left alone. This is
 failure recovery, not an atomic four-file snapshot for concurrent readers; do
-not consume outputs during generation.
+not consume outputs during generation. Output names can briefly be absent.
+Concurrent writes through another descriptor to the same inode are
+unsupported. Dependency filenames establish Clang's known input closure;
+this does not sandbox arbitrary wrapper or implicit toolchain reads.
 
 ## Invocation
 
