@@ -10,7 +10,7 @@ package Landin.Platform.Publication is
      (Group : in out Transaction; Files : Filesystem'Class; Path : String;
       Status : out Write_Status;
       Reason : out Ada.Strings.Unbounded.Unbounded_String;
-      Delete_Only : Boolean := False);
+      Delete_Only : Boolean := False; Root : String := "");
    function Stage_Path (Group : Transaction; Path : String) return String;
    procedure Protect
      (Group : in out Transaction; Files : Filesystem'Class; Path : String);

@@ -143,7 +143,7 @@ package Landin.Platform is
    subtype Identity_List is Identity_Vectors.Vector;
 
    procedure Open_Publication
-     (Host : Filesystem; Path : String; Delete_Only : Boolean;
+     (Host : Filesystem; Path : String; Delete_Only : Boolean; Root : String;
       Handle : out Publication_Handle;
       Stage : out Ada.Strings.Unbounded.Unbounded_String;
       Status : out Write_Status;
@@ -272,6 +272,9 @@ package Landin.Platform is
    --  the program again, since PATH may change between these two calls.
    function Available (Host : Tool_Runner; Program : String)
      return Boolean is abstract;
+
+   function Resolve_Program (Host : Tool_Runner; Program : String)
+      return String;
 
    procedure Run
      (Host      : Tool_Runner;
