@@ -26,6 +26,8 @@ int landin_tool_start_in_directory(char *const[], char *const[], int, int, int,
 int landin_program_run(char *const[], int *, int *, int *);
 const char *landin_process_start_error(int);
 int landin_tool_cancel(int, int *);
+int landin_tool_cancel_reserved(int, int *, int *);
+void landin_tool_cancel_set_hook(void (*)(int, int, int));
 int landin_tool_stop(int, int *);
 int landin_cancellation_begin(void);
 void landin_cancellation_end(void);
@@ -36,6 +38,14 @@ static volatile sig_atomic_t received;
 static volatile sig_atomic_t restored;
 static volatile sig_atomic_t timed_out;
 static const int numbers[] = {SIGINT, SIGTERM, SIGHUP};
+
+static unsigned int delivery_calls;
+static int delivery_target, delivery_number, delivery_result;
+static void record_delivery(int target, int number, int result)
+{
+    ++delivery_calls;
+    delivery_target = target; delivery_number = number; delivery_result = result;
+}
 
 static void fail(const char *message)
 {
@@ -63,6 +73,23 @@ static void require(int yes, const char *message)
 {
     if (!yes)
         fail(message);
+}
+
+/* Deliberately break the no-competing-reaper contract only after the known
+   child received its group signal. Cancel then observes ECHILD and must report
+   ownership loss without another delivery or cleanup signal. */
+static void reap_after_delivery(int target, int number, int result)
+{
+    int word, reaped_child, child = owned_child;
+    record_delivery(target, number, result);
+    require(child > 0 && target == -child && result == 0,
+            "known owned group received original cancellation");
+    do {
+        reaped_child = (int)waitpid((pid_t)child, &word, 0);
+    } while (reaped_child < 0 && errno == EINTR && !timed_out);
+    if (reaped_child == child) owned_child = 0;
+    require(reaped_child == child && WIFEXITED(word) && WEXITSTATUS(word) == 0,
+            "observer reaps only its known completed child");
 }
 
 static void notification(int number)
@@ -319,13 +346,13 @@ int main(int argc, char **argv)
         unsigned int at;
         require(self != NULL && mkdtemp(root) != NULL,
                 "own automatic control root");
-        for (at = 0; at < 15; ++at) {
+        for (at = 0; at < 16; ++at) {
             char name[64], mode_arg[64], signal_arg[32], directory[256];
             const char *selected = at == 0 ? "normal"
                 : at == 13 ? "reap-ignore" : at == 14 ? "reap-nowait"
-                : modes[(at - 1) / 3];
-            int selected_signal = at == 0 || at >= 13 ? 0
-                : selected_numbers[(at - 1) % 3];
+                : at == 15 ? "lost-owner" : modes[(at - 1) / 3];
+            int selected_signal = at == 15 ? SIGINT
+                : at == 0 || at >= 13 ? 0 : selected_numbers[(at - 1) % 3];
             snprintf(name, sizeof name, "%s-%d", selected, selected_signal);
             snprintf(directory, sizeof directory, "%s/%s", root, name);
             snprintf(mode_arg, sizeof mode_arg, "auto-%s", selected);
@@ -344,7 +371,7 @@ int main(int argc, char **argv)
                     "automatic control passed");
         }
         free(self);
-        puts("cancellation native: 15 controls passed");
+        puts("cancellation native: 16 controls passed");
         return 0;
     }
     require(argc >= 3, "mode and signal arguments");
@@ -426,11 +453,24 @@ int main(int argc, char **argv)
         require(landin_cancellation_requested() == number,
                 "first cancellation signal retained");
         {
-            int result = landin_tool_cancel(child, &status);
-            if (result == child)
-                owned_child = 0;
-            require(result == child,
-                    "production cancel stops and reaps direct child");
+            delivery_calls = 0;
+            int lost = !strcmp(mode, "lost-owner"), reserved = 1;
+            landin_tool_cancel_set_hook(lost ? reap_after_delivery : record_delivery);
+            int result = lost ? landin_tool_cancel_reserved(child, &status, &reserved)
+                              : landin_tool_cancel(child, &status);
+            landin_tool_cancel_set_hook(NULL);
+            if (result == child) owned_child = 0;
+            if (lost) {
+                require(result < 0 && errno == ECHILD && reserved == 0,
+                        "cancel reports known ownership loss without retrying");
+                puts("LOST_OWNERSHIP");
+            } else {
+                require(result == child,
+                        "production cancel stops and reaps direct child");
+            }
+            require(delivery_calls == 1 && delivery_target == -child
+                    && delivery_number == number && delivery_result == 0,
+                    "one original-signal delivery to the ordinary tool group");
         }
         require(status == (strcmp(mode, "stubborn") == 0 ? -1 : 0),
                 "cooperative versus forced stop status");

@@ -193,9 +193,11 @@ package body Landin.Platform.Native.Tools is
      with Import, Convention => C, External_Name => "landin_tool_stop";
 
    function Cancel_Tool
-     (Child : Interfaces.C.int; Status : access Interfaces.C.int)
-      return Interfaces.C.int
-     with Import, Convention => C, External_Name => "landin_tool_cancel";
+     (Child  : Interfaces.C.int;
+      Status : access Interfaces.C.int;
+      Owned  : access Interfaces.C.int) return Interfaces.C.int
+     with Import, Convention => C,
+       External_Name => "landin_tool_cancel_reserved";
 
    function Start_Program
      (Args          : C_Strings.chars_ptr_array;
@@ -579,10 +581,19 @@ package body Landin.Platform.Native.Tools is
          Exceeded_Limit := False;
          loop
             if Cancellation_Requested /= 0 then
-               if Cancel_Tool (Pid, Status'Access) /= Pid then
-                  raise External_Tool_Failed
-                    with "could not stop cancelled tool: " & Program;
-               end if;
+               declare
+                  Expected : constant Interfaces.C.int := Pid;
+                  Stopped : constant Interfaces.C.int := Cancel_Tool
+                    (Pid, Status'Access, Child_Owned'Access);
+               begin
+                  if Child_Owned = 0 then
+                     Pid := 0;
+                  end if;
+                  if Stopped /= Expected then
+                     raise External_Tool_Failed
+                       with "could not stop cancelled tool: " & Program;
+                  end if;
+               end;
                Pid := 0;
                Cancelled := True;
                exit;

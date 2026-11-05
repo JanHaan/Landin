@@ -260,7 +260,9 @@ def run_case(executable, output, mode, number):
                 else {"DIRECT_REAPED", "PASS"})
     if mode == "ignore":
         expected.add("TOOL_INHERITED_IGNORE")
-    if mode in ("cancel", "before", "stubborn"):
+    if mode == "lost-owner":
+        expected.add("LOST_OWNERSHIP")
+    if mode in ("cancel", "before", "stubborn", "lost-owner"):
         expected.update((f"TOOL_SIGNAL {number}", f"DESCENDANT_SIGNAL {number}"))
         if mode != "stubborn":
             expected.add("DESCENDANT_REAPED_BY_TOOL")
@@ -317,7 +319,7 @@ def main():
     for mode, number in [("normal", 0)] + [
             (mode, number) for mode in ("cancel", "before", "ignore", "stubborn")
             for number in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP)] + [
-                ("reap-ignore", 0), ("reap-nowait", 0)]:
+                ("reap-ignore", 0), ("reap-nowait", 0), ("lost-owner", signal.SIGINT)]:
         result = run_case(executable, output, mode, number)
         summary["cases"].append(result)
         result_path.write_text(json.dumps(summary, indent=2) + "\n")
