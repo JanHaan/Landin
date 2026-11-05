@@ -132,6 +132,46 @@ package Landin.Platform is
       Status  : out Write_Status;
       Reason  : out Ada.Strings.Unbounded.Unbounded_String) is abstract;
 
+   --  Publication host primitives pin a private sibling and its parent.
+   type Publication_Handle is new Integer;
+   No_Publication : constant Publication_Handle := 0;
+   type Publication_Action is
+     (Validate_Stage, Capture_Previous, Install_Stage, Restore_Previous,
+      Finish_Publication);
+   package Identity_Vectors is new Ada.Containers.Indefinite_Vectors
+     (Index_Type => Positive, Element_Type => File_Identity);
+   subtype Identity_List is Identity_Vectors.Vector;
+
+   procedure Open_Publication
+     (Host : Filesystem; Path : String; Delete_Only : Boolean;
+      Handle : out Publication_Handle;
+      Stage : out Ada.Strings.Unbounded.Unbounded_String;
+      Status : out Write_Status;
+      Reason : out Ada.Strings.Unbounded.Unbounded_String) is abstract;
+   procedure Advance_Publication
+     (Host : Filesystem; Handle : Publication_Handle;
+      Action : Publication_Action; Protected_Paths : Path_List;
+      Protected_Identities : Identity_List; Status : out Write_Status;
+      Reason : out Ada.Strings.Unbounded.Unbounded_String) is abstract;
+   --  Both results describe the same actually read object.
+   procedure Read_Snapshot
+     (Host : Filesystem; Path : String;
+      Content : out Ada.Strings.Unbounded.Unbounded_String;
+      Identity : out File_Identity; Status : out Read_Status) is abstract;
+   type Update_Handle is new Integer;
+   No_Update : constant Update_Handle := 0;
+   procedure Read_For_Update
+     (Host : Filesystem; Path : String;
+      Content : out Ada.Strings.Unbounded.Unbounded_String;
+      Lease : out Update_Handle; Status : out Read_Status;
+      Reason : out Ada.Strings.Unbounded.Unbounded_String) is abstract;
+   procedure Replace_Update
+     (Host : Filesystem; Lease : Update_Handle; Content : String;
+      Status : out Write_Status;
+      Reason : out Ada.Strings.Unbounded.Unbounded_String) is abstract;
+   procedure Close_Update (Host : Filesystem; Lease : Update_Handle)
+      is abstract;
+
    --  Remove one file, never a directory. Missing files already meet the
    --  absence requirement. Establish fresh output without reading old bytes.
    procedure Remove_File
