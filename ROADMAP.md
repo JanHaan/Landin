@@ -3093,6 +3093,35 @@ controls for each case and native controls for the formatter's open
 window and an interrupted link; the publication rule written into
 `spec.md`'s register and the manuals of `fmt`, `bindings` and `svd`.
 
+Done: the implementation candidate gives commands D907's shared,
+loss-preserving publication, D358's original-read formatter descriptor and
+owned capture and scratch lifetimes. The starting-commit reproducers were
+confirmed before the fixes; fake controls and native Linux and isolated
+Darwin controls cover the findings, including renamed saves, interrupted
+links and failed ESP publication. Native FreeBSD C controls pass on amd64;
+both architectures cross-compile, and the arm64 guest controls are in the
+gate. The manuals and capability inventory state the contract and its
+limits. The sweep against `df4ccb875` found no path-matched activation;
+all 156 unmatched activations were read. Board prose was aligned without
+sequencing changes, settling SR-813; SR-814 records the bounded relative
+tool-input refusals.
+
+Activation review: R551-20 remains for native failures beyond these bounded
+controls. SR-266, SR-296, SR-298, SR-590 and SR-370 remain for internal-defect
+caller diagnostics, note citations, installed panic-site lookup,
+description-request guidance and report contents. SR-324 and SR-379 remain
+for local cross-target assembly validation and child-process runner support;
+SR-702 for Darwin ABI-fixture execution; SR-721 for shared script hang
+guards; SR-783 and SR-785 for gate-inventory controls and workflow linting;
+and SR-812 for verification across partial rerun attempts. These triggers
+are restated rather than importing unrelated fixes into publication.
+
+The item remains active: complete candidate software and physical-board
+gates have not run. FreeBSD evidence above is native production C adapter
+coverage, separate from the generated-program corpus; no FreeBSD-hosted Ada
+compiler or command-reproducer run is claimed. The literal host criterion
+awaits Jan's decision before closure.
+
 ### R13.77 — What the second outside review found
 
 Status: planned
@@ -3579,7 +3608,7 @@ SR-737, SR-738, SR-739, SR-741, SR-742, SR-743, SR-744, SR-745, SR-746,
 SR-747, SR-748, SR-749, SR-750, SR-751, SR-752, SR-753, SR-754, SR-755,
 SR-756, SR-614, SR-660, SR-671, SR-672, SR-709, SR-719, SR-723, SR-724,
 SR-725, SR-757, SR-758, SR-759, SR-760, SR-761, SR-762, SR-763, SR-764,
-SR-765, SR-766, SR-767, SR-770, SR-771, SR-774.
+SR-765, SR-766, SR-767, SR-770, SR-771, SR-774, SR-813.
 
 | Record | Family | What stands | Activation | Completion | Status |
 | --- | --- | --- | --- | --- | --- |
@@ -3946,7 +3975,6 @@ SR-765, SR-766, SR-767, SR-770, SR-771, SR-774.
 | SR-810 | Usability | The second outside review, six reviewers lead-checked at `5d1bed296`, confirmed 7 nits in build, CI and process: review #72, `scripts/clean.sh:11`: cleanup script treats help and invalid arguments as a cleanup request; review #73, `docs/environments.md:192`: environment guide incorrectly permits only one test selection per invocation; review #74, `scripts/tests/test_agent_env.py:39`: environment-helper shell test inherits a startup-sensitive stdin; review #84, `scripts/build.sh:273`: fresh checkout build is described as an interrupted previous build; review #86, `check.py:2466`: undefined construct citations in derived guides evade the document check; review #87, `README.md:257`: human contribution entry point does not state how to submit a small patch; review #97, `scripts/test.sh:62`: test-runner help uses an ambiguous no-option sentence for the complete-suite route. Met in that review, whose ledger keeps each nit's reproducer and evidence under its number. | R13.78. | Each correction the ledger names: #72 parse --help and validate the complete argument list before acquiring cleanup locks or deleting anything; #73 document repeated combined selectors and link the maintained feedback recipe; #74 give the isolated child a controlled stdin and disable Bash startup files for the Bash-specific invocation; #84 detect prior attempt/manifest state rather than directory existence after setup has created the directory; #86 apply the existing citation validation to published guides using their prose/link contexts, and have verification fail on genuinely unresolved construct citations; #87 add a short human contribution paragraph stating the maintainer’s actual submission policy, minimal relevant checks and the process reference; #97 state explicitly that a no-argument invocation runs the complete local native suite, then separately explain FILTERED selections and HOST-ONLY scope. | open |
 | SR-811 | Usability | The second outside review, six reviewers lead-checked at `5d1bed296`, confirmed 10 nits in the first run, editors and the site: review #78, `highlight/tree-sitter/src/scanner.c:53`: destructuring lookahead skips a block comment as if it lasted to end of line; review #79, `highlight/nvim/lua/landin/init.lua:9`: documented Neovim LSP opt-out does not turn off automatic enabling; review #80, `docs/site/render_html.py:3488`: renderer’s advertised default source root is the renderer directory; review #81, `highlight/README.md:72`: emacs installation row omits the grammar ABI requirement; review #82, `docs/site/llms.py:30`: agent-facing summary omits implemented backends and hosted targets; review #89, `compiler/ada/src/driver/landin-driver.adb:4005`: cortex model refusals do not show the target and level mapping; review #90, `highlight/README.md:24`: editor installation starts with maintainer grammar-pin procedure before the install table; review #91, `docs/capabilities.md:276`: shell completion discovery omits how to activate the printed definitions; review #93, `docs/site/render_html.py:1752`: tour’s buffered-writer link resolves to the wrong split library page; review #94, `highlight/tree-sitter/src/scanner.c:139`: nested block opener after an odd dash run is missed by the editor scanner. Met in that review, whose ledger keeps each nit's reproducer and evidence under its number. | R13.78. | Each correction the ledger names: #78 skip nested block comments according to the existing comment grammar during destructuring lookahead; #79 retain the configured preference across automatic setup and explicitly disable this config when the caller selects false; #80 default source to the repository root or require and document --from consistently; #81 state tree-sitter ABI 15 compatibility in the editor install row and name the regex-mode fallback; #82 refresh the concise summary and point its target coverage to the maintained capability inventory; #89 for recognized Cortex core names, show the existing target plus matching --level pair, and explain the shared M-profile target in targets output; #90 put the editor install table first and move pin maintenance into its own later section; #91 add one short activation/install example per supported shell in help or the maintained capabilities entry; #93 resolve library fragments through the section-to-module page map already used by the library splitter, and check that destination in site verification; #94 recognize overlapping nested openers in a dash run and add an odd-run nesting corpus case. | open |
 | SR-812 | Usability | After a rerun of three failed jobs, the gate run reported success, but its `filter=latest` job listing held 45 jobs where the first attempt held 53: the eight that succeeded in the first attempt and were not rerun were missing, so a listing read as `docs/process.md` asks could not show every required job, and the watcher exited 1 besides. Only the `filter=all` listing, each job name judged by its newest attempt, accounts for all 53. Met verifying the gate of the plan for the second outside review's findings. | The next change to the gate watcher or to the documented verification of a gate run. | A verification command, the watcher's verdict among them, that judges each job name by its newest attempt across the complete `filter=all` listing, with a control for a partial rerun. | open |
-| SR-813 | Usability | While preparing R13.76 and checking the board-gate instructions against the current tools, `docs/process.md`'s physical-board promotion section and `environments/boards/gate.py`'s opening paragraph said boot checks run before RAM, but `environments/boards/rig.json` and the runner's operative explanation run RAM before the final boot check so the board rests on its verified fixed image; an unverified prior state prepends a boot check. A reader cannot tell which order the gate promises. | The next edit to the physical-board instructions in `docs/process.md` or `environments/boards/gate.py`. | Align both descriptions with the configured sequence and the initial-restoration exception, without changing hardware sequencing. | retired: both descriptions now match the configured RAM-then-boot sequence and the unknown-state restoration exception; hardware sequencing is unchanged |
 | SR-814 | Usability | While protecting compile auxiliary inputs in R13.76, pinning the tool working directory exposed linker and assembler directives whose relative or indirect paths inherit the caller directory. The bounded input-closure scanner now refuses those forms rather than silently resolving them in staging, and asks for plain absolute paths; callers using relative INCLUDE, INPUT/GROUP, SEARCH_DIR, .include or .incbin must rewrite those directives. A bindings dependency reported relative to Clang's retained workspace must also stay within it; a path that escapes and reenters is refused, with an absolute include or declared --include-dir route, because lexical normalization cannot retain its external directory authority. | The next change to external-tool input discovery, or a consumer that needs these relative forms. | Discover and protect their actual resolved input closure while preserving tool lookup and include semantics, with positive and collision controls for each newly supported form. | open |
 
 ## Retained positions
