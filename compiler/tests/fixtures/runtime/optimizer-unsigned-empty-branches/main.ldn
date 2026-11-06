@@ -1,0 +1,40 @@
+--  D211: contradictory type bounds do not change observable outcomes.
+option selected: u32 = 0
+fixed if selected == 0 then
+    limit: u32 = 0
+else
+    limit: u32 = 1
+end if
+
+literal: (a: u32) -> (r: u32) =
+    r = 7
+    if a < 0 then
+        r = a >> 3
+    end if
+end literal
+
+configured: (a: u32) -> (r: u32) =
+    r = 7
+    if a < limit then
+        r = a >> 3
+    end if
+end configured
+
+above: (a: u64) -> (r: u64) =
+    r = 13
+    if a > 18446744073709551615 then
+        r = a - 1
+    end if
+end above
+
+reachable: (a: u32) -> (r: u32) =
+    r = a
+    if a < 16 then
+        r = a >> 3
+    end if
+end reachable
+
+public main: () -> (code: i32) =
+    code = i32(literal(5) + configured(0) + u32(above(9))
+               + reachable(15) + reachable(16)) - 2
+end main

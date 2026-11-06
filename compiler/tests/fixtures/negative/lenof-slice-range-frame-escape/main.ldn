@@ -1,0 +1,13 @@
+absent: atom
+maybe: type = absent | ptr u32
+mut kept: maybe = absent
+keep: (escaping p: ptr u32) -> (i: usize) =
+    kept = p
+    i = 0
+end keep
+bad: () -> none =
+    local: u32 = 5
+    slices: [1][]u8 = ["a"]
+    bytes: [1]u8 = [1]
+    _ = lenof bytes[keep(addr local)..<1]
+end bad

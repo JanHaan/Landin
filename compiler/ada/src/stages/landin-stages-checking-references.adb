@@ -2901,10 +2901,14 @@ package body Landin.Stages.Checking.References is
             when Syn.Len_Of =>
                --  D14/D31: a fixed-array length does not read its storage,
                --  and array-literal elements are typechecked but not run.
-               --  A measured call runs [0370], so what its arguments lend
-               --  and what it transfers are checked as at any call.
-               if Syn.Kind (Tree, Syn.Operand_Of (Tree, Node))
-                 in Syn.Call | Syn.Labeled_Application
+               --  A slice operand and a measured call run [0370], so
+               --  every base, selector and argument they evaluate receives
+               --  the same origin and transfer checks as outside lenof.
+               if Landin.Checking.Type_Of
+                   (Types.all, Tree, Syn.Operand_Of (Tree, Node))
+                     = Ty.Slice_Value
+                 or else Syn.Kind (Tree, Syn.Operand_Of (Tree, Node))
+                   in Syn.Call | Syn.Labeled_Application
                then
                   declare
                      Ignored : constant Origin_Fact :=

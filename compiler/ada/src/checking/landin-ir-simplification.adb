@@ -1449,11 +1449,12 @@ package body Landin.IR.Simplification is
               is (Highest
                     (Landin.Types.Integer_Name (Kind_Of (Value)), Facts));
 
-            function Step (Strict : Boolean) return Integer_Value
-              is (if Strict then 1 else 0);
-
             --  The greatest and least a value can be: its type's range
             --  narrowed by what produced it and by the facts on its slot.
+            --  A contradictory comparison can enter an impossible branch.
+            --  Keep its numeric bounds inside the type rather than forming
+            --  a negative unsigned upper bound or stepping past u64'Last.
+            --  This pass need not prove that the branch is unreachable.
             function Upper_Of (Value : Value_Id) return Integer_Value;
             function Upper_Of (Value : Value_Id) return Integer_Value is
                Result : Integer_Value := Value_Upper (Positive (Value));
@@ -1464,15 +1465,17 @@ package body Landin.IR.Simplification is
                then
                   declare
                      Fact : constant Bound := Upper_Fact (Positive (Slot));
+                     Limit : constant Integer_Value :=
+                       (if Fact.Limit.Kind = Constant_Term
+                        then Fact.Limit.Number else Type_High (Value));
                   begin
                      Result := Integer_Value'Min
                        (Result,
-                        (if Fact.Limit.Kind = Constant_Term
-                         then Fact.Limit.Number
-                         else Type_High (Value)) - Step (Fact.Strict));
+                        (if Fact.Strict and then Limit > Type_Low (Value)
+                         then Limit - 1 else Limit));
                   end;
                end if;
-               return Result;
+               return Integer_Value'Max (Type_Low (Value), Result);
             end Upper_Of;
 
             function Lower_Of (Value : Value_Id) return Integer_Value;
@@ -1488,15 +1491,17 @@ package body Landin.IR.Simplification is
                then
                   declare
                      Fact : constant Bound := Lower_Fact (Positive (Slot));
+                     Limit : constant Integer_Value :=
+                       (if Fact.Limit.Kind = Constant_Term
+                        then Fact.Limit.Number else Type_Low (Value));
                   begin
                      Result := Integer_Value'Max
                        (Result,
-                        (if Fact.Limit.Kind = Constant_Term
-                         then Fact.Limit.Number
-                         else Type_Low (Value)) + Step (Fact.Strict));
+                        (if Fact.Strict and then Limit < Type_High (Value)
+                         then Limit + 1 else Limit));
                   end;
                end if;
-               return Result;
+               return Integer_Value'Min (Type_High (Value), Result);
             end Lower_Of;
 
             --  Left < Right: a fact naming Right, or two bounds apart.
