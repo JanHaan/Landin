@@ -183,9 +183,11 @@ Depends on: none
         device_phase = devices.split(".")[0]
         concurrency = [headings[title] for title in CONCURRENCY]
         stream = [headings[title] for title in STREAM]
+        outside_review = ("A command destroys nothing it did not create",
+                          "What the second outside review found")
         selected = [split, conventions, reading, review, library, boundary,
                     linux, handles, *hosted, *concurrency, *stream,
-                    freestanding] + [
+                    *(headings[title] for title in outside_review), freestanding] + [
             identity for identity in headings.values()
             if identity.startswith(device_phase + ".")]
         for identity in selected:
@@ -261,8 +263,7 @@ Depends on: none
                   and CHECK.roadmap_statuses(text)[identity] == "planned"])
         #  The second outside review's data-loss and other findings come
         #  before the library is split.
-        for title in ("A command destroys nothing it did not create",
-                      "What the second outside review found"):
+        for title in outside_review:
             assert_next(headings[title], title)
             complete([headings[title]])
         assert_next(freestanding, "The freestanding library")
