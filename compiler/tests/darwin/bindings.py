@@ -97,7 +97,7 @@ def main():
         recorder = output / "archive-driver"
         recorder.write_text('#!/bin/sh\nprintf \'%s\\n\' "$@" >>' + shlex.quote(str(recorded))
                             + '\nprintf \'%s\\n\' "<end>" >>' + shlex.quote(str(recorded))
-                            + '\nexec /usr/bin/clang -save-temps=obj "$@"\n')
+                            + '\nexec /usr/bin/clang "$@"\n')
         recorder.chmod(0o755)
         linked = output / "archive-native"
         run.command([refine, "--target=darwin-arm64", "--emit=exe", "-L", libraries, source,

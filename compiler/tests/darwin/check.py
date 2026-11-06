@@ -256,10 +256,6 @@ def main(argv=None):
     directory.mkdir(parents=True, exist_ok=False)
     refine = args.refine.resolve()
     run = Run(directory)
-    retained_driver = directory / "retain-clang"
-    if args.parity:
-        retained_driver.write_text('#!/bin/sh\nexec /usr/bin/clang -save-temps=obj -x assembler "$@"\n')
-        retained_driver.chmod(0o755)
     summary = {"schema": 1, "scope": "filtered" if args.case or args.profile else "parity" if args.parity else "selected",
                "refine_sha256": hash_file(refine), "cases_sha256": hash_file(HERE / "cases.json"),
                "results": [], "status": "failed"}
@@ -342,15 +338,17 @@ def main(argv=None):
                 argv = [refine, "--target=darwin-arm64", "--optimize=" + optimize,
                         "--specialize=" + specialize, *(["--level=" + level] if level else []),
                         *meta.library_arguments(compiled), *meta.module_arguments(compiled)]
-                # Runtime cases exercise refine's native driver selection;
-                # ABI cases retain a separate Apple-assembled Mach-O object.
+                # Runtime cases exercise refine's native driver selection.
+                # Assemble the retained source separately for the object
+                # evidence, without asking that driver for extra outputs.
                 if meta["class"] == "runtime" and not meta.get("c-sources"):
-                    driver_args = ["--toolchain=" + str(retained_driver)] if args.parity else []
-                    run.command([*argv, *driver_args, "--emit=exe", "--keep-asm", "-o", executable],
+                    run.command([*argv, "--emit=exe", "--keep-asm", "-o", executable],
                                 label + "-build", cwd, timeout=900)
                     produced = Path(str(executable) + ".s")
                     if produced.exists() and produced != assembly:
                         produced.rename(assembly)
+                    run.command(["/usr/bin/clang", "-arch", "arm64", "-c", assembly, "-o", object_file],
+                                label + "-assemble", cwd)
                 else:
                     run.command([*argv, "--emit=asm", "-o", assembly], label + "-emit", cwd, timeout=900)
                     run.command(["/usr/bin/clang", "-arch", "arm64", "-c", assembly, "-o", object_file],
@@ -411,7 +409,7 @@ def main(argv=None):
                     outcome(meta, status, stdout, stderr, expected)
                 lowering = level_lowering(executable, level, cwd, run, label) if level else {}
                 if args.parity:
-                    require(object_file.is_file(), "linked object was not retained")
+                    require(object_file.is_file(), "Apple-assembled object was not produced")
                 results.append({"case": name, "optimize": optimize, "specialize": specialize,
                                 **({"level": level, **lowering} if level else {}),
                                 "status": verdict, "exit": status,

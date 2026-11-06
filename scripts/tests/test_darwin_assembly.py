@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 """Darwin parity frame negative controls."""
 import importlib.util
+import json
 import os
 import re
 from pathlib import Path
 import signal
+import shutil
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
 SPEC = importlib.util.spec_from_file_location(
@@ -71,6 +74,82 @@ class DarwinAssemblyTests(unittest.TestCase):
     def test_no_routines_still_refused(self):
         with self.assertRaisesRegex(ValueError, "no emitted routine frames"):
             CHECK.assembly_contract(".data\n_data:\n\t.quad 0\n")
+
+
+class DarwinRuntimeArtifactTests(unittest.TestCase):
+    """An ordinary native build retains assembly, never its private object."""
+
+    def run_lane(self, base, parity, *, assemble_object=True):
+        repository = base / "repository"
+        fixture = "runtime/any-argument-save"
+        shutil.copytree(ROOT / "compiler/tests/fixtures" / fixture,
+                        repository / "compiler/tests/fixtures" / fixture)
+        (repository / "compiler/ada").mkdir()
+        refine = base / "refine"
+        refine.write_bytes(b"mock compiler")
+        output = base / "evidence"
+        calls = []
+        source = ".text\n" + routine("_main", FRAME)
+
+        def command(run, argv, name, cwd, **kwargs):
+            argv = list(map(str, argv))
+            calls.append((argv, name))
+            if argv[0] == str(refine):
+                # Model refine's declared artifacts only. A passing native
+                # build does not promise an object left by its linker.
+                self.assertIn("--emit=exe", argv)
+                self.assertIn("--keep-asm", argv)
+                self.assertFalse(any(one.startswith("--toolchain=") for one in argv))
+                executable = Path(argv[argv.index("-o") + 1])
+                executable.write_bytes(b"native executable")
+                Path(str(executable) + ".s").write_text(source)
+            elif argv[0] == "/usr/bin/clang":
+                assembly = Path(argv[argv.index("-c") + 1])
+                self.assertEqual(assembly.read_text(), source)
+                self.assertEqual(argv[argv.index("-arch") + 1], "arm64")
+                obj = Path(argv[argv.index("-o") + 1])
+                self.assertEqual(obj.parent, output)
+                if assemble_object:
+                    obj.write_bytes(b"Apple assembled object")
+            elif argv[0] == "/usr/bin/file":
+                return 0, b"Mach-O 64-bit executable arm64", b""
+            else:
+                return 42, b"", b""
+            return 0, b"", b""
+
+        arguments = ["--refine", str(refine), "--output", str(output)]
+        if parity:
+            arguments.append("--parity")
+        with mock.patch.object(CHECK, "ROOT", repository), \
+                mock.patch.object(CHECK, "PROFILES", {**CHECK.PROFILES, "fixtures": [fixture], "darwin": []}), \
+                mock.patch.object(CHECK.platform, "system", return_value="Darwin"), \
+                mock.patch.object(CHECK.platform, "machine", return_value="arm64"), \
+                mock.patch.object(CHECK.subprocess, "check_output", return_value=b"0"), \
+                mock.patch.object(CHECK, "workers", return_value=1), \
+                mock.patch.object(CHECK.Run, "command", command):
+            self.assertEqual(CHECK.main(arguments), 0)
+        return output, calls
+
+    def test_runtime_profiles_assemble_owned_objects_after_native_builds(self):
+        for parity in (False, True):
+            with self.subTest(parity=parity), tempfile.TemporaryDirectory() as temporary:
+                output, calls = self.run_lane(Path(temporary), parity)
+                summary = json.loads((output / "summary.json").read_text())
+                expected = 6 if parity else len(CHECK.PROFILES["profiles"])
+                self.assertEqual(len(summary["results"]), expected)
+                assemblies = [argv for argv, name in calls if name.endswith("-assemble")]
+                self.assertEqual(len(assemblies), expected)
+                for argv in assemblies:
+                    self.assertTrue(Path(argv[argv.index("-o") + 1]).is_file())
+                if parity:
+                    for result in summary["results"]:
+                        self.assertEqual(result["object"],
+                                         CHECK.hashlib.sha256(b"Apple assembled object").hexdigest())
+
+    def test_a_successful_assembler_without_an_object_is_refused(self):
+        with tempfile.TemporaryDirectory() as temporary, \
+                self.assertRaisesRegex(ValueError, "Apple-assembled object was not produced"):
+            self.run_lane(Path(temporary), True, assemble_object=False)
 
 
 class DarwinLargeImageTests(unittest.TestCase):
