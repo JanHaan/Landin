@@ -2295,6 +2295,9 @@
     "runtime/optimizer-unsigned-empty-branches": {
       "mode": "execute"
     },
+    "runtime/option-names-stay-in-their-module": {
+      "mode": "execute"
+    },
     "runtime/parameterized-struct-lazy-value-layout": {
       "mode": "execute"
     },
