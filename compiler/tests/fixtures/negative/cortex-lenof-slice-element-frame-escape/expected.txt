@@ -1,0 +1,10 @@
+error[L0314]: this frame-origin reference cannot be retained beyond the call
+  --> ../tests/fixtures/negative/cortex-lenof-slice-element-frame-escape/main.ldn:12:27
+   |
+12 |     _ = lenof slices[keep(addr local)]
+   |                           ^^^^^^^^^^
+  --> ../tests/fixtures/negative/cortex-lenof-slice-element-frame-escape/main.ldn:9:5
+  |
+9 |     local: u32 = 5
+  |     ^^^^^^^^^^^^^^ the shorter-lived reference source
+  = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`
