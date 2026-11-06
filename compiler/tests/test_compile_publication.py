@@ -142,7 +142,10 @@ def main():
     for suffix in ('', '.s'):
         (root / ('budget-product' + suffix)).write_bytes(b'prior-budget-artifact\x00\xff')
     cases.extend([
-        ('missing-parent-budget', [str(budget_source), '--link=libc',
+        # Pin the budget being exceeded: Linux arm64 can hold this image.
+        # This refusal must precede any tool launch on every compiler host.
+        ('missing-parent-budget', [str(budget_source),
+                                  '--target=linux-x86-64', '--link=libc',
                                   '--toolchain=' + str(missing_tool), '-o',
                                   str(root / 'budget-product')], budget_source, False),
         ('missing-parent-tool', [str(source), '--link=libc',
