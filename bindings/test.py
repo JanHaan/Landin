@@ -2108,6 +2108,121 @@ int main(void) { return f(36) != 37; }
                 self.assertIn(f"public file_bytes: e = {len(logical) + 1}",
                               (output / "bindings.ldn").read_text())
 
+    def test_refusals_leave_missing_output_ancestors_absent(self) -> None:
+        for boundary in ("policy", "clang", "adapter"):
+            with self.subTest(boundary=boundary):
+                parent = self.root / boundary
+                selected = self.selection(self.function("f"))
+                if boundary == "policy":
+                    selected = self.selection({"kind": "alias", "name": " "})
+                sysroot, includes, _ = self.make_tree(
+                    parent, header="int f(void);\n", selected_policy=selected)
+                output = parent / "missing/child/generated"
+                called = parent / "clang-called"
+                wrapper = parent / "clang-wrapper"
+                wrapper.write_text(
+                    f"#!{sys.executable}\n"
+                    "import os, pathlib, sys\n"
+                    f"pathlib.Path({str(called)!r}).write_text('called')\n"
+                    f"if {boundary!r} == 'clang' or '-MD' in sys.argv:\n"
+                    "    sys.stderr.write('deliberate Clang refusal\\n')\n"
+                    "    sys.exit(1)\n"
+                    f"os.execv({str(self.clang)!r}, [{str(self.clang)!r}, *sys.argv[1:]])\n")
+                wrapper.chmod(0o700)
+                command = self.command(parent, sysroot, includes, output)
+                command[command.index("--clang") + 1] = str(wrapper)
+                result = subprocess.run(command, capture_output=True, text=True, timeout=60)
+                self.assertEqual(result.returncode, 1, result.stderr)
+                self.assertFalse((parent / "missing").exists())
+                self.assertFalse((parent / "missing").is_symlink())
+                self.assertEqual(called.exists(), boundary != "policy")
+                self.assertFalse(any(path.name.startswith('.refine-publication-')
+                                     for path in parent.iterdir()))
+                if boundary == "policy":
+                    self.assertIn("name must contain", result.stderr)
+                else:
+                    self.assertIn("deliberate Clang refusal", result.stderr)
+
+    def test_missing_output_ancestors_publish_with_their_files(self) -> None:
+        parent = self.root / "nested-publication"
+        sysroot, includes, output = self.make_tree(
+            parent, header="int f(void);\n",
+            selected_policy=self.selection(self.function("f")))
+        control = self.command(parent, sysroot, includes, output)
+        result = subprocess.run(control, capture_output=True, text=True, timeout=60)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        names = ("bindings.ldn", "adapters.c", "exports.h", "bindings.json")
+        expected = {name: (output / name).read_bytes() for name in names}
+        nested = parent / "missing/child/generated"
+        command = self.command(parent, sysroot, includes, nested)
+        command[command.index("--out-dir") + 1] = (
+            str(parent / "missing") + "//child/./generated")
+        result = subprocess.run(command, capture_output=True, text=True, timeout=60)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual({name: (nested / name).read_bytes() for name in names}, expected)
+        self.assertEqual({path.name for path in nested.iterdir()}, set(names))
+        identity = {name: (nested / name).stat().st_ino for name in names}
+        result = subprocess.run(command, capture_output=True, text=True, timeout=60)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("0 of them written", result.stdout)
+        self.assertEqual({name: (nested / name).stat().st_ino for name in names}, identity)
+
+    def test_existing_output_directory_keeps_unrelated_files(self) -> None:
+        parent = self.root / "existing-publication"
+        sysroot, includes, output = self.make_tree(
+            parent, header="int f(void);\n",
+            selected_policy=self.selection(self.function("f")))
+        output.mkdir()
+        handwritten = output / "notes.ldn"
+        handwritten.write_text("handwritten source\n")
+        original = (handwritten.stat().st_dev, handwritten.stat().st_ino)
+        command = self.command(parent, sysroot, includes, output)
+        result = subprocess.run(command, capture_output=True, text=True, timeout=60)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(handwritten.read_text(), "handwritten source\n")
+        self.assertEqual((handwritten.stat().st_dev, handwritten.stat().st_ino), original)
+        (parent / "policy.json").write_text("{")
+        before = {path.name: path.read_bytes() for path in output.iterdir()}
+        result = subprocess.run(command, capture_output=True, text=True, timeout=60)
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertEqual({path.name: path.read_bytes() for path in output.iterdir()}, before)
+        self.assertEqual((handwritten.stat().st_dev, handwritten.stat().st_ino), original)
+
+    def test_arriving_output_directory_is_preserved(self) -> None:
+        parent = self.root / "arriving-publication"
+        sysroot, includes, output = self.make_tree(
+            parent, header="int f(void);\n",
+            selected_policy=self.selection(self.function("f")))
+        self.assertFalse(output.exists())
+        self.assertFalse(output.is_symlink())
+        foreign = parent / "foreign"
+        foreign.mkdir()
+        notes = foreign / "notes.ldn"
+        notes.write_text("concurrent directory save\n")
+        identity = (foreign.stat().st_dev, foreign.stat().st_ino)
+        child = (notes.stat().st_dev, notes.stat().st_ino)
+        arrived = parent / "directory-arrived"
+        wrapper = parent / "clang-wrapper"
+        wrapper.write_text(
+            f"#!{sys.executable}\n"
+            "import os, pathlib, sys\n"
+            f"arrived = pathlib.Path({str(arrived)!r})\n"
+            "if not arrived.exists():\n"
+            f"    pathlib.Path({str(foreign)!r}).rename({str(output)!r})\n"
+            "    arrived.write_text('arrived')\n"
+            f"os.execv({str(self.clang)!r}, [{str(self.clang)!r}, *sys.argv[1:]])\n")
+        wrapper.chmod(0o700)
+        command = self.command(parent, sysroot, includes, output)
+        command[command.index("--clang") + 1] = str(wrapper)
+        result = subprocess.run(command, capture_output=True, text=True, timeout=60)
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertTrue(arrived.exists(), "root appearance occurred after preparation")
+        self.assertEqual((output.stat().st_dev, output.stat().st_ino), identity)
+        self.assertEqual(((output / "notes.ldn").stat().st_dev,
+                          (output / "notes.ldn").stat().st_ino), child)
+        self.assertEqual((output / "notes.ldn").read_text(), "concurrent directory save\n")
+        self.assertEqual({path.name for path in output.iterdir()}, {"notes.ldn"})
+
     def test_symlinked_output_directory_preserves_target(self) -> None:
         parent = self.root / "symlinked-output"
         sysroot, includes, output = self.make_tree(parent, header="int f(void);\n",
