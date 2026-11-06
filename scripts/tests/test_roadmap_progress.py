@@ -461,14 +461,14 @@ class GuideLinks(unittest.TestCase):
                          "compiler.html")
         self.assertEqual(self.target("compiler/ada/README.md", "../tests/README.md"),
                          "fixtures.html")
+        self.assertEqual(self.target("compiler/ada/README.md", "../../bindings/README.md"),
+                         "bindings.html")
         self.assertEqual(self.target("docs/environments.md", "../compiler/ada/README.md#build"),
                          "compiler.html#build")
         self.assertEqual(self.target("compiler/ada/README.md", "../../spec.md#1770"),
                          "spec.html#1770")
 
     def test_unrendered_files_link_to_the_repository(self):
-        self.assertEqual(self.target("compiler/ada/README.md", "../../bindings/README.md"),
-                         RENDER.REPO + "/blob/main/bindings/README.md")
         self.assertEqual(self.target("highlight/README.md", "vim/README.md"),
                          RENDER.REPO + "/blob/main/highlight/vim/README.md")
         self.assertEqual(self.target("README.md", "a%20b.md?q=1#section"),
