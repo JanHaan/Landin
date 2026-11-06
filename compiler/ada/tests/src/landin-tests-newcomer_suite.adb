@@ -304,7 +304,8 @@ package body Landin.Tests.Newcomer_Suite is
               (Item, Result.Status, Landin.Driver.Status_Success,
                "compiles with '" & Extra & "': " & Report (Result));
             Landin.Testing.Check
-              (Item, Host.Written ("main.s") /= "",
+              (Item, Host.Written
+                 (Tools.Call_At (1).Arguments.Element (7) & ".s") /= "",
                "the link read the assembly it was given");
             Landin.Testing.Check
               (Item, Host.Exists ("main.s") = Kept,
@@ -370,11 +371,19 @@ package body Landin.Tests.Newcomer_Suite is
            (Item, Result.Status, Landin.Driver.Status_Success,
             "the operand links: " & Report (Result));
          if Tools.Run_Count >= 1 then
+            Landin.Testing.Check
+              (Item, Tools.Call_At (1).Arguments.Element (7) /= "hand"
+                 and then Ada.Strings.Fixed.Tail
+                   (Tools.Call_At (1).Arguments.Element (7), 5) = "/hand"
+                 and then Host.Exists ("hand"),
+               "the operand's executable is staged before publication");
             Landin.Testing.Check_Equal
               (Item, Landin.Platform.Joined (Tools.Call_At (1).Arguments),
                "-nostdlib" & LF & "-static" & LF & "-no-pie" & LF
-               & "-Wl,-e,_landin_start" & LF & "hand.s" & LF & "-o" & LF
-               & "hand" & LF & "-Wl,--gc-sections" & LF
+               & "-Wl,-e,_landin_start" & LF
+               & "/virtual/compile/hand.s" & LF & "-o" & LF
+               & Tools.Call_At (1).Arguments.Element (7) & LF
+               & "-Wl,--gc-sections" & LF
                & "-Wa,-march=generic64" & LF,
                "with the link a compiled program's static link has");
          end if;

@@ -28,6 +28,68 @@ package body Landin.Tests.Driver_Suite is
    HT : constant Character := Character'Val (9);
    CR : constant Character := Character'Val (13);
 
+   --  Protection queries are separate from the invocation that links.
+   function Link_Count
+     (Tools : Landin.Testing.Fakes.Fake_Tool_Runner) return Natural;
+   function Link_Count
+     (Tools : Landin.Testing.Fakes.Fake_Tool_Runner) return Natural is
+      Count : Natural := 0;
+   begin
+      for Index in 1 .. Tools.Run_Count loop
+         if Tools.Call_At (Index).Arguments.Contains ("-o") then
+            Count := Count + 1;
+         end if;
+      end loop;
+      return Count;
+   end Link_Count;
+
+   function Last_Link
+     (Tools : Landin.Testing.Fakes.Fake_Tool_Runner)
+      return Landin.Testing.Fakes.Tool_Call;
+   function Last_Link
+     (Tools : Landin.Testing.Fakes.Fake_Tool_Runner)
+      return Landin.Testing.Fakes.Tool_Call is
+   begin
+      for Index in reverse 1 .. Tools.Run_Count loop
+         if Tools.Call_At (Index).Arguments.Contains ("-o") then
+            return Tools.Call_At (Index);
+         end if;
+      end loop;
+      raise Program_Error with "the fake recorded no link";
+   end Last_Link;
+
+   function Output_Path
+     (Call : Landin.Testing.Fakes.Tool_Call) return String;
+   function Output_Path
+     (Call : Landin.Testing.Fakes.Tool_Call) return String is
+   begin
+      for Index in 1 .. Natural (Call.Arguments.Length) - 1 loop
+         if Call.Arguments.Element (Index) = "-o" then
+            return Call.Arguments.Element (Index + 1);
+         end if;
+      end loop;
+      raise Program_Error with "the link recorded no output";
+   end Output_Path;
+
+   function Absolute_Output
+     (Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Call : Landin.Testing.Fakes.Tool_Call) return String;
+   function Absolute_Output
+     (Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Call : Landin.Testing.Fakes.Tool_Call) return String is
+      Path : constant String := Output_Path (Call);
+   begin
+      if Path (Path'First) = '/' then
+         return Path;
+      elsif Path'Length >= 2
+        and then Path (Path'First .. Path'First + 1) = "./"
+      then
+         return Host.Working_Directory & "/"
+           & Path (Path'First + 2 .. Path'Last);
+      end if;
+      return Host.Working_Directory & "/" & Path;
+   end Absolute_Output;
+
    function Arguments_Of (First : String) return Landin.Platform.Path_List;
 
    --  How many times a needle occurs, which is how a case says a thing was
@@ -1833,7 +1895,7 @@ package body Landin.Tests.Driver_Suite is
            (Item, Result.Status, Landin.Driver.Status_Success,
             "linux-arm64 links at level '" & Level & "': "
             & Unbounded.To_String (Result.Report));
-         return Host.Written (Landin.Driver.Assembly_Beside ("app"))
+         return Host.Written (Output_Path (Tools.Call_At (1)) & ".s")
            & " |" & Tools.Last_Command & " |" & Host.Written ("build.json");
       end Built;
 
@@ -2995,14 +3057,24 @@ package body Landin.Tests.Driver_Suite is
            (Item, Unbounded.To_String (Tools.Call_At (1).Program),
             "x86_64-pc-linux-gnu-gcc",
             "the driver is found by the target's triplet");
+         Landin.Testing.Check
+           (Item, Output_Path (Tools.Call_At (1)) /= "main"
+              and then Ada.Strings.Fixed.Tail
+                (Output_Path (Tools.Call_At (1)), 5) = "/main"
+              and then Host.Exists ("main")
+              and then not Host.Exists ("main.s"),
+            "the link stages its output and retires temporary assembly");
          Landin.Testing.Check_Equal
            (Item, Landin.Platform.Joined (Tools.Call_At (1).Arguments),
-            "main.s" & LF & "-o" & LF & "main" & LF & "-Wl,--gc-sections" & LF
+            Absolute_Output (Host, Tools.Call_At (1)) & ".s" & LF & "-o" & LF
+            & Output_Path (Tools.Call_At (1)) & LF
+            & "-Wl,--gc-sections" & LF
             & "-Wa,-march=generic64" & LF,
             "and is handed the assembly it wrote, the output asked for and"
             & " the level it assumes");
          Landin.Testing.Check
-           (Item, Contains (Host.Written ("main.s"), ".globl main"),
+           (Item, Contains (Host.Written
+              (Output_Path (Tools.Call_At (1)) & ".s"), ".globl main"),
             "the assembly beside the output is what it assembles");
       end;
    end An_Executable_Runs_The_Triplet_Driver;
@@ -3041,9 +3113,17 @@ package body Landin.Tests.Driver_Suite is
            (Item, Unbounded.To_String (Tools.Call_At (1).Program),
             "x86_64-unknown-linux-gnu-gcc",
             "a named toolchain wins over the triplet");
+         Landin.Testing.Check
+           (Item, Output_Path (Tools.Call_At (1)) /= "main"
+              and then Ada.Strings.Fixed.Tail
+                (Output_Path (Tools.Call_At (1)), 5) = "/main"
+              and then Host.Exists ("main")
+              and then not Host.Exists ("main.s"),
+            "the link stages its output and retires temporary assembly");
          Landin.Testing.Check_Equal
            (Item, Landin.Platform.Joined (Tools.Call_At (1).Arguments),
-            "main.s" & LF & "-o" & LF & "main" & LF & "-fuse-ld=mold" & LF
+            Absolute_Output (Host, Tools.Call_At (1)) & ".s" & LF & "-o" & LF
+            & Output_Path (Tools.Call_At (1)) & LF & "-fuse-ld=mold" & LF
             & "-Wl,--gc-sections" & LF
             & "-Wa,-march=generic64" & LF,
             "and the linker rides through as one more argument");
@@ -3135,15 +3215,20 @@ package body Landin.Tests.Driver_Suite is
             Landin.Testing.Check_Equal
               (Item, Landin.Platform.Joined (Tools.Call_At (1).Arguments),
                "-nostdlib" & LF & "-static" & LF & "-no-pie" & LF
-               & "-Wl,-e,_landin_start" & LF & "main.s" & LF & "-o" & LF
-               & "main" & LF & "-Wl,--gc-sections" & LF
+               & "-Wl,-e,_landin_start" & LF
+               & Absolute_Output (Host, Tools.Call_At (1)) & ".s" & LF
+               & "-o" & LF
+               & Output_Path (Tools.Call_At (1)) & LF
+               & "-Wl,--gc-sections" & LF
                & "-Wa,-march=generic64" & LF,
                "the driver links the assembly alone, entered at"
                & " _landin_start");
          end if;
          Landin.Testing.Check
-           (Item, Contains (Host.Written ("main.s"), "_landin_start:")
-              and then Contains (Host.Written ("main.s"), ".globl main"),
+           (Item, Contains (Host.Written
+              (Output_Path (Tools.Call_At (1)) & ".s"), "_landin_start:")
+              and then Contains (Host.Written
+              (Output_Path (Tools.Call_At (1)) & ".s"), ".globl main"),
             "the assembly holds the entry and the program's main");
       end;
    end A_Static_Link_Starts_At_Platform_Linux;
@@ -3924,27 +4009,43 @@ package body Landin.Tests.Driver_Suite is
    procedure An_Unwritable_Output_Is_Reported
      (Item : in out Landin.Testing.Context)
    is
-      Host  : Landin.Testing.Fakes.Fake_Filesystem;
-      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      type Emission is (Assembly, IR, Executable);
    begin
-      Host.Add_File ("main.ldn", Entry_Program);
-      Host.Refuse_Writes;
-
-      declare
-         Result : constant Landin.Driver.Outcome :=
-           Landin.Driver.Execute
-             (Libc_Assembly ("main.ldn"), Host, Tools);
-         Report : constant String := Unbounded.To_String (Result.Report);
-      begin
-         Landin.Testing.Check_Equal
-           (Item, Result.Status, Landin.Driver.Status_Reported,
-            "an output write failure is reported");
-         Landin.Testing.Check
-           (Item, Contains (Report, "L0005"), "with the output code");
-         Landin.Testing.Check_Equal
-           (Item, Host.Written (Landin.Driver.Default_Assembly), "",
-            "and no bytes are retained");
-      end;
+      for Emit in Emission loop
+         declare
+            Host : Landin.Testing.Fakes.Fake_Filesystem;
+            Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+            Args : constant Landin.Platform.Path_List :=
+              ["main.ldn", "--link=libc",
+               (case Emit is
+                  when Assembly => "--emit=asm",
+                  when IR => "--emit=ir",
+                  when Executable => "--emit=exe")];
+         begin
+            Host.Add_File ("main.ldn", Entry_Program);
+            Host.Refuse_Writes;
+            Tools.Raise_On_Run;
+            declare
+               Result : constant Landin.Driver.Outcome :=
+                 Landin.Driver.Execute (Args, Host, Tools);
+               Report : constant String :=
+                 Unbounded.To_String (Result.Report);
+            begin
+               Landin.Testing.Check_Equal
+                 (Item, Result.Status, Landin.Driver.Status_Reported,
+                  Emit'Image & ": output preparation failure is reported");
+               Landin.Testing.Check
+                 (Item, Occurrences (Report, "error[") = 1
+                    and then Contains (Report, "error[L0005]:")
+                    and then Contains (Report, "cannot prepare output")
+                    and then Contains (Report, "choose another output"),
+                  "valid code retains the actionable publication refusal");
+               Landin.Testing.Check
+                 (Item, Host.Write_Count = 0 and then Tools.Run_Count = 0,
+                  "a pending publication failure stops all writes and tools");
+            end;
+         end;
+      end loop;
    end An_Unwritable_Output_Is_Reported;
 
    procedure Failed_Assembly_Does_Not_Write_Source_Map
@@ -3962,7 +4063,7 @@ package body Landin.Tests.Driver_Suite is
               Arguments_Of ("main.ldn");
          begin
             Host.Add_File ("main.ldn", Entry_Program);
-            Host.Add_Directory
+            Host.Refuse_Staged_Write
               (if Executable then "out.s" else "out");
             Args.Append ("--panic-map");
             Args.Append
@@ -4281,10 +4382,10 @@ package body Landin.Tests.Driver_Suite is
            (Item, Result.Status, Landin.Driver.Status_Success,
             "active directives reach the tool: "
             & Unbounded.To_String (Result.Report));
-         if Tools.Run_Count = 1 then
+         if Link_Count (Tools) = 1 then
             declare
                Call : constant Landin.Testing.Fakes.Tool_Call :=
-                 Tools.Call_At (1);
+                 Last_Link (Tools);
             begin
                Landin.Testing.Check_Equal
                  (Item, Call.Arguments.Element (2), "-lfirst",
@@ -4300,15 +4401,16 @@ package body Landin.Tests.Driver_Suite is
                   "reached module repeats are preserved");
             end;
          else
-            Landin.Testing.Check (Item, False, "one tool invocation expected");
+            Landin.Testing.Check
+              (Item, False, "one linking invocation expected");
          end if;
       end;
    end Libraries_Keep_Their_Written_Order;
 
    --  D523/D524: the directories reach the driver before the assembly,
    --  the command line's first, each again as the runtime path; then the
-   --  libraries as -lNAME, on Darwin as on Linux; and a successful link
-   --  searches nothing (D525).
+   --  libraries as -lNAME, on Darwin as on Linux.  Earlier driver queries
+   --  discover inputs for publication protection, without changing the link.
    procedure Library_Directories_Reach_The_Link
      (Item : in out Landin.Testing.Context);
 
@@ -4352,14 +4454,22 @@ package body Landin.Tests.Driver_Suite is
               (Item, Result.Status, Landin.Driver.Status_Success,
                Target & " links: " & Unbounded.To_String (Result.Report));
             Landin.Testing.Check_Equal
-              (Item, Tools.Run_Count, 1,
-               Target & ": a successful link searches nothing");
-            if Tools.Run_Count >= 1 then
-               for Argument of Tools.Call_At (1).Arguments loop
+              (Item, Link_Count (Tools), 1,
+               Target & ": one link follows the input-protection queries");
+            Landin.Testing.Check_Equal
+              (Item, Tools.Run_Count,
+               (if Target = "linux-x86-64" then 5 else 7),
+               Target & ": each library is probed before linking");
+            if Link_Count (Tools) = 1 then
+               for Argument of Last_Link (Tools).Arguments loop
                   Unbounded.Append (Joined, Argument & " ");
                end loop;
                Landin.Testing.Check
-                 (Item, Contains (Unbounded.To_String (Joined), Expected),
+                 (Item, Contains
+                    (Unbounded.To_String (Joined), Expected
+                     & " " & Absolute_Output (Host, Last_Link (Tools)) & ".s"
+                     & " -lraylib -lm -o "
+                     & Output_Path (Last_Link (Tools)) & " "),
                   Target & " names directories, then the assembly, then"
                   & " libraries: " & Unbounded.To_String (Joined));
             end if;
@@ -4369,13 +4479,11 @@ package body Landin.Tests.Driver_Suite is
       Link ("linux-x86-64",
             "-L/virtual/compile/vendor -L/virtual/compile/game/lib"
             & " -L/opt/shared -Wl,-rpath,/virtual/compile/vendor"
-            & " -Wl,-rpath,/virtual/compile/game/lib -Wl,-rpath,/opt/shared"
-            & " game/prog.s -lraylib -lm -o game/prog ");
+            & " -Wl,-rpath,/virtual/compile/game/lib -Wl,-rpath,/opt/shared");
       Link ("darwin-arm64",
             "-L/virtual/compile/vendor -L/virtual/compile/game/lib"
             & " -L/opt/shared -Wl,-rpath,/virtual/compile/vendor"
-            & " -Wl,-rpath,/virtual/compile/game/lib -Wl,-rpath,/opt/shared"
-            & " game/prog.s -lraylib -lm -o game/prog ");
+            & " -Wl,-rpath,/virtual/compile/game/lib -Wl,-rpath,/opt/shared");
    end Library_Directories_Reach_The_Link;
 
    --  D524: a directive naming no directory is L0391 at the directive,
@@ -4470,6 +4578,15 @@ package body Landin.Tests.Driver_Suite is
             when In_Driver =>
                Host.Add_File ("/usr/lib/libraylib.so", "\x7fELF");
          end case;
+         --  Resolve protected inputs before linking; the failed-link
+         --  diagnostic then independently asks where the library is.
+         if Where = In_Driver then
+            Tools.Add_Result (0, "/usr/lib/libraylib.so" & LF);
+            Tools.Add_Result (0, "libraylib.a" & LF);
+         elsif Where = Nowhere then
+            Tools.Add_Result (0, "libraylib.so" & LF);
+            Tools.Add_Result (0, "libraylib.a" & LF);
+         end if;
          Tools.Add_Result (1, "ld: cannot find -lraylib" & LF);
          if Where = In_Driver then
             Tools.Add_Result (0, "/usr/lib/libraylib.so" & LF);
@@ -4500,16 +4617,16 @@ package body Landin.Tests.Driver_Suite is
                   "the library is named at its directive with every"
                   & " directory searched: " & Report);
                Landin.Testing.Check_Equal
-                 (Item, Tools.Run_Count, 3,
+                 (Item, Tools.Run_Count, 5,
                   "the driver is asked for each file it might hold");
-               if Tools.Run_Count = 3 then
+               if Tools.Run_Count = 5 then
                   Landin.Testing.Check_Equal
-                    (Item, Tools.Call_At (2).Arguments.Element (1),
+                    (Item, Tools.Call_At (4).Arguments.Element (1),
                      "-print-file-name=libraylib.so",
                      "the shared library is asked for first");
                   Landin.Testing.Check
                     (Item,
-                     Tools.Call_At (3).Capture = Landin.Platform.Output_Only,
+                     Tools.Call_At (5).Capture = Landin.Platform.Output_Only,
                      "the query keeps its answer apart from its errors");
                end if;
             else
@@ -4521,7 +4638,7 @@ package body Landin.Tests.Driver_Suite is
                   & " text: " & Report);
                Landin.Testing.Check_Equal
                  (Item, Tools.Run_Count,
-                  (if Where = In_Directory then 1 else 2),
+                  (if Where = In_Directory then 1 else 4),
                   Where'Image & " stops searching once it is found");
             end if;
          end;
@@ -4556,6 +4673,10 @@ package body Landin.Tests.Driver_Suite is
          if SDK = Holds_It then
             Host.Add_File ("/sdk/usr/lib/libm.tbd", "--- !tapi-tbd");
          end if;
+         --  The first three queries protect known link inputs.
+         Tools.Add_Result (0, "libm.tbd" & LF);
+         Tools.Add_Result (0, "libm.dylib" & LF);
+         Tools.Add_Result (0, "libm.a" & LF);
          Tools.Add_Result (1, "ld: undefined symbols for arm64" & LF);
          Tools.Add_Result (0, "libm.tbd" & LF);
          Tools.Add_Result (0, "libm.dylib" & LF);
@@ -4573,11 +4694,12 @@ package body Landin.Tests.Driver_Suite is
               (Item, Result.Status, Landin.Driver.Status_Reported,
                SDK'Image & " fails the link: " & Report);
             Landin.Testing.Check_Equal
-              (Item, Tools.Run_Count, 5,
-               SDK'Image & ": the link, three driver queries and xcrun");
-            if Tools.Run_Count = 5 then
+              (Item, Tools.Run_Count, 8,
+               SDK'Image & ": input probes, link, diagnostic queries"
+               & " and xcrun");
+            if Tools.Run_Count = 8 then
                Landin.Testing.Check_Equal
-                 (Item, Unbounded.To_String (Tools.Call_At (5).Program),
+                 (Item, Unbounded.To_String (Tools.Call_At (8).Program),
                   "xcrun",
                   "the SDK is asked of xcrun last");
             end if;

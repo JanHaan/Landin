@@ -3597,7 +3597,7 @@ package body Landin.Tests.Cortex_Suite is
               & "link(boot_stage) extern(naked) stage: () -> none =" & LF
               & "    assembler.block(""bx lr"")" & LF & "end stage" & LF);
             --  What the fake assembler leaves as its object.
-            Host.Add_File ("/w/p.elf.o", Written);
+            Tools.Set_Output_Content (Written);
             Tools.Set_Result (0, "");
             Args.Append ("--root=/w/devices");
             Args.Append ("--target=cortex-m0");
@@ -3806,8 +3806,8 @@ package body Landin.Tests.Cortex_Suite is
               & "linker.place(""bss"", ""RAM"")" & ASCII.LF
               & "linker.place(""stack"", ""RAM"", 1024)" & ASCII.LF);
             --  What the fake assembler leaves as its object.
-            Host.Add_File ("/w/p.elf.o",
-              Object (if Broken then With_Word (4, 4) else Good));
+            Tools.Set_Output_Content
+              (Object (if Broken then With_Word (4, 4) else Good));
             Tools.Set_Result (0, "");
             Args.Append ("--root=/w/devices");
             Args.Append ("--target=cortex-m0");

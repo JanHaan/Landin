@@ -1260,6 +1260,7 @@ package body Landin.Driver is
          Artifacts, Stage_Report : Publication.Transaction;
          Reserved, Known_Inputs, Absent_Tool_Names : Landin.Platform.Path_List;
          Publication_Failed : Boolean := False;
+         Pending_Publication_Failure : Unbounded.Unbounded_String;
          Artifacts_Closed : Boolean := False;
          --  D685: what the build report records of the ESP application
          --  image the link was followed by, once written and read back.
@@ -1609,8 +1610,10 @@ package body Landin.Driver is
             return False;
          end Is_Absent_Tool_Name;
 
-         procedure Reserve_Output (Path : String);
-         procedure Reserve_Output (Path : String) is
+         procedure Reserve_Output
+           (Path : String; Defer_Preparation_Failure : Boolean := False);
+         procedure Reserve_Output
+           (Path : String; Defer_Preparation_Failure : Boolean := False) is
             Status : Landin.Platform.Write_Status;
             Reason : Unbounded.Unbounded_String;
          begin
@@ -1648,10 +1651,19 @@ package body Landin.Driver is
             Publication.Prepare (Artifacts, Host, Path, Status, Reason);
             if Status /= Landin.Platform.Write_Ok then
                Publication_Failed := True;
-               Note_Failure
-                 (Code_Unwritable, "cannot prepare output " & Path & ": "
-                  & Unbounded.To_String (Reason)
-                  & "; choose another output path and retry");
+               declare
+                  Message : constant String :=
+                    "cannot prepare output " & Path & ": "
+                    & Unbounded.To_String (Reason)
+                    & "; choose another output path and retry";
+               begin
+                  if Defer_Preparation_Failure then
+                     Pending_Publication_Failure :=
+                       Unbounded.To_Unbounded_String (Message);
+                  else
+                     Note_Failure (Code_Unwritable, Message);
+                  end if;
+               end;
             else
                --  Refresh after preparation so newly observable tool parents
                --  get full host name-equivalence protection before staged
@@ -1684,6 +1696,18 @@ package body Landin.Driver is
                end;
             end if;
          end Reserve_Output;
+
+         procedure Report_Publication_Failure;
+         procedure Report_Publication_Failure is
+         begin
+            if Unbounded.Length (Pending_Publication_Failure) > 0 then
+               Note_Failure
+                 (Code_Unwritable,
+                  Unbounded.To_String (Pending_Publication_Failure));
+               Unbounded.Set_Unbounded_String
+                 (Pending_Publication_Failure, "");
+            end if;
+         end Report_Publication_Failure;
 
          function Private_Path (Path : String) return String is
            (Publication.Stage_Path (Artifacts, Path));
@@ -3831,20 +3855,25 @@ package body Landin.Driver is
 
             --  D589: the profile's derived script, as a firmware build
             --  would write it beside its image, and nothing linked.
+            --  Snapshot before producing replacements, but let pure semantic
+            --  checks retain priority over an unwritable destination.  A
+            --  deferred preparation failure is reported before any write.
             if not Dry_Run then
                for Path of Destinations loop
                   --  Existing dSYM leaves are protected by the whole bundle.
                   if not Debug_Leaves.Contains (Path) then
-                     Reserve_Output (Path);
+                     Reserve_Output (Path, Defer_Preparation_Failure => True);
                   end if;
                end loop;
                if Report_Seen then
-                  Reserve_Output (Report_Path);
+                  Reserve_Output
+                    (Report_Path, Defer_Preparation_Failure => True);
                end if;
                if Stack_Report_Seen then
-                  Reserve_Output (Stack_Path);
+                  Reserve_Output
+                    (Stack_Path, Defer_Preparation_Failure => True);
                end if;
-               if Publication_Failed then
+               if Bad_Use then
                   return;
                end if;
             end if;
@@ -3865,6 +3894,10 @@ package body Landin.Driver is
                elsif Dry_Run then
                   Unbounded.Append (Result.Output,
                     "write " & Landin.Json.Quoted (Assembly_Path) & LF);
+                  return;
+               end if;
+               Report_Publication_Failure;
+               if Publication_Failed then
                   return;
                end if;
                Write_Output
@@ -4106,6 +4139,10 @@ package body Landin.Driver is
                     "write " & Landin.Json.Quoted (Assembly_Path) & LF);
                   return;
                end if;
+               Report_Publication_Failure;
+               if Publication_Failed then
+                  return;
+               end if;
                declare
                   --  D374's answer, as every backend gives it, so the dump
                   --  says which entries an emitted table names.
@@ -4237,6 +4274,10 @@ package body Landin.Driver is
                      return;
                   end if;
                end;
+               Report_Publication_Failure;
+               if Publication_Failed then
+                  return;
+               end if;
                if Emit_Map then
                   declare
                      Map : constant Landin.Source_Maps.Artifact :=
