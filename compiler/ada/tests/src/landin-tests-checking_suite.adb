@@ -12361,6 +12361,19 @@ package body Landin.Tests.Checking_Suite is
       Define_Main : constant String :=
         "link(symbol: ""main"") foreign: () -> (result: i32) =" & LF
         & "    result = 0" & LF & "end foreign" & LF;
+      Entry_View : constant String :=
+        "extern(c) link(symbol: ""main"") program_main:"
+        & " (count: i32, values: ptr ptr u8, environment: ptr ptr u8)"
+        & " -> (code: i32)" & LF;
+      Retaining_Entry_View : constant String :=
+        "extern(c) link(symbol: ""main"") other_main:"
+        & " (count: i32, escaping values: ptr ptr u8,"
+        & " environment: ptr ptr u8) -> (code: i32)" & LF;
+      Renamed_Main : constant String :=
+        "public link(symbol: ""renamed"") main: () -> (code: i32) ="
+        & LF & "    code = 0" & LF & "end main" & LF;
+      Ordinary_C_Collision : constant String :=
+        "this C link symbol collides with another declaration or definition";
       Expected : constant String :=
         "link symbol `main` collides with the selected native hosted entry";
    begin
@@ -12368,6 +12381,36 @@ package body Landin.Tests.Checking_Suite is
       Check_C_Boundary_Source (Item, Import_Main & Main, Expected);
       Check_C_Boundary_Source (Item, Main & Define_Main, Expected);
       Check_C_Boundary_Source (Item, Define_Main & Main, Expected);
+      --  An implicit startup import can precede or follow the user's
+      --  incompatible C view.  The selected native entry owns the cause in
+      --  either order, even when its own declaration is visited last.
+      Check_C_Boundary_Source
+        (Item, Main & Import_Main & Entry_View, Expected);
+      Check_C_Boundary_Source
+        (Item, Main & Entry_View & Import_Main, Expected);
+      Check_C_Boundary_Source
+        (Item, Import_Main & Entry_View & Main, Expected);
+      Check_C_Boundary_Source
+        (Item, Entry_View & Import_Main & Main, Expected);
+      Check_C_Boundary_Source
+        (Item, Main & Define_Main & Entry_View, Expected);
+      Check_C_Boundary_Source
+        (Item, Entry_View & Define_Main & Main, Expected);
+      Check_C_Boundary_Source (Item, Main & Entry_View);
+      Check_C_Boundary_Source
+        (Item, Main & Entry_View & Retaining_Entry_View,
+         "this C link symbol's declarations differ only in `escaping` on"
+         & " `values`, which this one writes and the other does not");
+      --  Without an actually selected native entry these remain ordinary
+      --  incompatible C declarations; a renamed native main is no entry.
+      Check_C_Boundary_Source
+        (Item, Import_Main & Entry_View, Ordinary_C_Collision);
+      Check_C_Boundary_Source
+        (Item, Entry_View & Import_Main, Ordinary_C_Collision);
+      Check_C_Boundary_Source
+        (Item, Renamed_Main & Import_Main & Entry_View, Ordinary_C_Collision);
+      Check_C_Boundary_Source
+        (Item, Entry_View & Import_Main & Renamed_Main, Ordinary_C_Collision);
       Check_C_Boundary_Source
         (Item, "public link(symbol: ""renamed"") main: () -> (code: i32) ="
          & LF & "    code = 0" & LF & "end main" & LF & Import_Main);

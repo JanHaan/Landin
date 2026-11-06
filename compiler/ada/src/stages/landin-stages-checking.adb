@@ -40320,6 +40320,87 @@ package body Landin.Stages.Checking is
          end;
       end Is_C_Entry_View;
 
+      --  Select from settled signatures and written linkage, before the
+      --  source-ordered link checks have registered every symbol.  C's
+      --  startup view must not hide the user's conflicting main import.
+      function Selected_Hosted_Main return Res.Declaration_Id;
+
+      function Selected_Hosted_Main return Res.Declaration_Id is
+         function Retains_Main
+           (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
+
+         function Retains_Main
+           (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
+         is
+            Explicit : constant Landin.Source.Span :=
+              Syn.Link_Symbol_Span (Of_Tree, Node);
+         begin
+            if Explicit = Landin.Source.Empty_Span then
+               return True;
+            end if;
+            declare
+               Lexeme : constant String := Landin.Source.Slice
+                 (Source (Context, Syn.Source_Of (Of_Tree)), Explicit);
+               Bytes : String (1 .. Lexeme'Length);
+               Length, Fault_First, Fault_Last : Natural;
+               Fault : Landin.Tokens.Text.Problem;
+            begin
+               Landin.Tokens.Text.Decode
+                 (Lexeme, Bytes, Length, Fault, Fault_First, Fault_Last);
+               return Fault = Landin.Tokens.Text.Well_Formed
+                 and then Bytes (1 .. Length) = "main";
+            end;
+         end Retains_Main;
+      begin
+         for Id in Res.Declaration_Id'(1)
+           .. Res.Declaration_Id (Res.Declaration_Count (Meanings.all))
+         loop
+            if Res.Sort_Of (Meanings.all, Id) = Res.Module_Function
+              and then Res.Is_Public (Meanings.all, Id)
+              and then Spelled (Res.Name_Of (Meanings.all, Id)) = "main"
+              and then Landin.Modules.Module_Of
+                (Grouped.all, Res.Source_Of (Meanings.all, Id))
+                  = Landin.Modules.Entry_Module
+            then
+               declare
+                  Of_Tree : constant not null access constant Syn.Tree :=
+                    Tree_For (Res.Source_Of (Meanings.all, Id));
+                  Node : constant Syn.Node_Id :=
+                    Res.Node_Of (Meanings.all, Id);
+                  Signature : constant Landin.Checking.Signature_Id :=
+                    Landin.Checking.Signature_Of (Types.all, Id);
+               begin
+                  if not Syn.Is_External (Of_Tree.all, Node)
+                    and then Syn.Generic_Formal_Count (Of_Tree.all, Node) = 0
+                    and then Landin.Checking.Holds (Types.all, Signature)
+                    and then not Landin.Checking.Signature_Uses_C_ABI
+                      (Types.all, Signature)
+                    and then Landin.Checking.Signature_Parameter_Count
+                      (Types.all, Signature) = 0
+                    and then Landin.Checking.Signature_Result_Count
+                      (Types.all, Signature) = 1
+                    and then Landin.Checking.Signature_Errors
+                      (Types.all, Signature) = Landin.Checking.No_Atom_Set
+                    and then Retains_Main (Of_Tree.all, Node)
+                  then
+                     declare
+                        Result : constant Landin.Checking.Signature_Part :=
+                          Landin.Checking.Nth_Signature_Result
+                            (Types.all, Signature, 1);
+                     begin
+                        if Result.Kind = Ty.I32
+                          and then Spelled (Result.Name) = "code"
+                        then
+                           return Id;
+                        end if;
+                     end;
+                  end if;
+               end;
+            end if;
+         end loop;
+         return Res.No_Declaration;
+      end Selected_Hosted_Main;
+
       --  D516: a bodyless C import that names a naked routine's symbol, so
       --  that ordinary code calls the routine through C's convention.
       function Is_C_Naked_View
@@ -40442,16 +40523,24 @@ package body Landin.Stages.Checking is
                     Landin.Checking.Signature_Of (Types.all, Prior);
                begin
                   --  C's view of the native hosted entry shares its name.
+                  --  With a selected native entry, an incompatible C import
+                  --  is diagnosed at that user's declaration by the hosted
+                  --  linkage pass, rather than at the implicit startup view.
+                  --  Two C entry views still owe ordinary C compatibility.
                   if Spelled (Symbol) = "main"
                     and then Syn.Kind (Prior_Tree.all, Prior_Node)
                       = Syn.Function_Declaration
                     and then (Is_C_Entry_View (Id)
                               or else Is_C_Entry_View (Prior))
-                    and then not (Landin.Checking.Signature_Uses_C_ABI
-                                    (Types.all, Signature)
-                                  and then Landin.Checking
-                                    .Signature_Uses_C_ABI
-                                      (Types.all, Prior_Signature))
+                    and then
+                      (not (Landin.Checking.Signature_Uses_C_ABI
+                              (Types.all, Signature)
+                            and then Landin.Checking.Signature_Uses_C_ABI
+                              (Types.all, Prior_Signature))
+                       or else
+                         (Is_C_Entry_View (Id) /= Is_C_Entry_View (Prior)
+                          and then Selected_Hosted_Main
+                            /= Res.No_Declaration))
                   then
                      null;
                   --  D516: a bodyless C import beside the naked routine
@@ -40719,56 +40808,7 @@ package body Landin.Stages.Checking is
          if Landin.Diagnostics.Has_Errors (Found) then
             return;
          end if;
-         for Id in Res.Declaration_Id'(1)
-           .. Res.Declaration_Id (Res.Declaration_Count (Meanings.all))
-         loop
-            if Res.Sort_Of (Meanings.all, Id) = Res.Module_Function
-              and then Res.Is_Public (Meanings.all, Id)
-              and then Spelled (Res.Name_Of (Meanings.all, Id)) = "main"
-              and then Landin.Modules.Module_Of
-                (Grouped.all, Res.Source_Of (Meanings.all, Id))
-                  = Landin.Modules.Entry_Module
-            then
-               declare
-                  Of_Tree : constant not null access constant Syn.Tree :=
-                    Tree_For (Res.Source_Of (Meanings.all, Id));
-                  Node : constant Syn.Node_Id :=
-                    Res.Node_Of (Meanings.all, Id);
-                  Signature : constant Landin.Checking.Signature_Id :=
-                    Landin.Checking.Signature_Of (Types.all, Id);
-                  Symbol : constant Landin.Source.Names.Name_Id :=
-                    Landin.Checking.Link_Symbol (Types.all, Id);
-               begin
-                  if not Syn.Is_External (Of_Tree.all, Node)
-                    and then Syn.Generic_Formal_Count (Of_Tree.all, Node) = 0
-                    and then Landin.Checking.Holds (Types.all, Signature)
-                    and then not Landin.Checking.Signature_Uses_C_ABI
-                      (Types.all, Signature)
-                    and then Landin.Checking.Signature_Parameter_Count
-                      (Types.all, Signature) = 0
-                    and then Landin.Checking.Signature_Result_Count
-                      (Types.all, Signature) = 1
-                    and then Landin.Checking.Signature_Errors
-                      (Types.all, Signature) = Landin.Checking.No_Atom_Set
-                    and then (Symbol = Landin.Source.Names.No_Name
-                              or else Spelled (Symbol) = "main")
-                  then
-                     declare
-                        Result : constant Landin.Checking.Signature_Part :=
-                          Landin.Checking.Nth_Signature_Result
-                            (Types.all, Signature, 1);
-                     begin
-                        if Result.Kind = Ty.I32
-                          and then Spelled (Result.Name) = "code"
-                        then
-                           Selected := Id;
-                           exit;
-                        end if;
-                     end;
-                  end if;
-               end;
-            end if;
-         end loop;
+         Selected := Selected_Hosted_Main;
          if Selected = Res.No_Declaration then
             return;
          end if;
