@@ -1394,11 +1394,13 @@ package body Landin.Driver is
               & " another output path and retry");
 
          function Output_Conflict
-           (Kind, Path, Other : String; Other_Kind : String := "another output")
+           (Kind, Path, Other : String;
+            Other_Kind : String := "another output")
             return String;
 
          function Output_Conflict
-           (Kind, Path, Other : String; Other_Kind : String := "another output")
+           (Kind, Path, Other : String;
+            Other_Kind : String := "another output")
             return String is
            (if Path = Other or else Host.Same_File (Path, Other)
             then Kind & " collides with " & Other_Kind & ": " & Path

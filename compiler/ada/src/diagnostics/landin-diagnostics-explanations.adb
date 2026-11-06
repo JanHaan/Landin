@@ -84,6 +84,16 @@ package body Landin.Diagnostics.Explanations is
                & " after the change is understood (D907)."
                & LF
                & LF
+               & "A missing output or report parent is named before collis"
+               & "ion checks. Create the parent directory or choose an out"
+               & "put pathname under an existing directory, then retry. Re"
+               & "fine does not create compilation output or report parent"
+               & "s. An unavailable identity is refused conservatively wit"
+               & "h a path/access route; it is not proof of a source colli"
+               & "sion. Bindings retains its separately specified staged o"
+               & "utput-tree creation behavior."
+               & LF
+               & LF
                & "A late failure can follow successful staging or installa"
                & "tion. The diagnostic names the previous recovery entry a"
                & "nd any captured new or concurrent entry that could not b"
@@ -226,7 +236,15 @@ package body Landin.Diagnostics.Explanations is
                & "s spelling as its link symbol and takes a lower-case Lan"
                & "din name, which the note shows when the word names an `e"
                & "xtern(c)` function without one: `extern(c) link(symbol: "
-               & """InitWindow"") init_window: ...` [1610] (D528).",
+               & """InitWindow"") init_window: ...` [1610] (D528)."
+               & LF
+               & LF
+               & "A semicolon is not a statement terminator: omit it. Brac"
+               & "es do not delimit Landin blocks: write `if condition the"
+               & "n ... end if`, a loop's `do ... end`, or an explicit `be"
+               & "gin ... end` as appropriate. C-family comments use Landi"
+               & "n's `--` line comment or `--( ... )--` block comment ins"
+               & "tead.",
             when Catalogue.Unterminated_Comment =>
                "A block comment that is never closed [1780]. Every opene"
                & "r needs its closer; the second label shows where the com"
@@ -310,7 +328,9 @@ package body Landin.Diagnostics.Explanations is
                & " c` compares a `bool` with `c`. Write `a < b and b < c`.",
             when Catalogue.Return_Carries_Value =>
                "`return` carries no value [1810]. Assign the named retur"
-               & "n, then `return`.",
+               & "n, then write a bare `return`. For a routine with result"
+               & " `r: i32`, replace `return a + b` with `r = a + b` follo"
+               & "wed by `return`:",
             when Catalogue.Public_On_Statement =>
                "`public` belongs on a module declaration and never on a "
                & "statement [1740].",
@@ -342,7 +362,16 @@ package body Landin.Diagnostics.Explanations is
                & "ations of one name in one scope, or two imports with one"
                & " final segment, are refused, and the second label shows "
                & "the first. An inner scope may shadow an outer name; that"
-               & " is not this.",
+               & " is not this."
+               & LF
+               & LF
+               & "A configuration-option collision is reported at the opti"
+               & "on declaration, with the conflicting module declaration "
+               & "or import as a related source. Rename the option or conf"
+               & "licting binding. One option produces one collision repor"
+               & "t, and uses of the refused binding do not add configurat"
+               & "ion-only or missing-member noise. Independent resolution"
+               & " errors are still reported.",
             when Catalogue.Unresolved_Name =>
                "A name that is declared in no scope this use reaches [18"
                & "60]. There is no implicit declaration, so it is a misspe"
@@ -1605,8 +1634,10 @@ package body Landin.Diagnostics.Explanations is
                & " a key it needs or names one refine does not read, gives"
                & " one of the wrong shape, or binds for another ABI than `"
                & "--target` names. The message names the key or the declar"
-               & "ation. A policy's every key is described in `bindings/RE"
-               & "ADME.md`.",
+               & "ation. A policy's every key is described in the [binding"
+               & " policy reference](https://www.701.dev/bindings.html), a"
+               & "lso available as `bindings/README.md` in a source checko"
+               & "ut.",
             when Catalogue.Bindings_Clang_Refused =>
                "The Clang `refine bindings` was given cannot be used as "
                & "asked (D820): it cannot be run, a root it is given is no"
@@ -1737,9 +1768,9 @@ package body Landin.Diagnostics.Explanations is
                "f: (a: i32, b: i32, c: i32) -> (r: bool) = a < b < c end"
                & LF,
             when Catalogue.Return_Carries_Value =>
-               "f: () -> (r: i32) ="
+               "f: (a: i32, b: i32) -> (r: i32) ="
                & LF
-               & "    return 1"
+               & "    return a + b"
                & LF
                & "end f"
                & LF,
