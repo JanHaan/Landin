@@ -3279,14 +3279,22 @@ executed the three new runtime fixtures at four profiles and passed production
 C adapter controls, using the frozen `418b280ec` release emitter. This is
 generated-program and native C evidence, not FreeBSD-hosted Ada. Cortex
 emission and recorded refusals passed; local QEMU execution was not established
-because the locked tool inventory was unavailable. The complete candidate
-software gate, identical-tree boards dispatch and main's own push gate remain
-pending publication authorization. No release or version designation changed.
+because the locked tool inventory was unavailable. The first candidate gate
+found stale native report-identity expectations and fake reports lacking
+parents, now pinned to the refused cause and working route with preservation
+controls retained. The startup graph retains user-site hosted-entry refusals
+and ordinary C compatibility checks. Source-document
+links use the bindings guide before its generated page is deployed; installed
+explanations name `refine help bindings` for that page's address. The complete
+candidate software gate, identical-tree boards dispatch and main's own push
+gate remain required before promotion. No release or version designation
+changed.
 
 Activation review against `fab292f6137` read all 160 unmatched activations
-before closure; the final 104-path sweep has no automatic matches.
-SR-726, SR-823 and the new
-SR-830, the target manual's misleading refusal of `--link` on checks, are
+before closure; the final 109-path sweep has no automatic matches.
+SR-726, SR-823, the new
+SR-830, the target manual's misleading refusal of `--link` on checks, and
+SR-831, generated reference links requiring deployment before validation, are
 settled. The next server change retains SR-247's `offsetof` navigation; the
 next driver/diagnostics change SR-266's caller report; the next parser-refusal
 change SR-273's continued `else []`; the next generated-record-pointer consumer
@@ -3763,7 +3771,7 @@ SR-756, SR-614, SR-660, SR-671, SR-672, SR-709, SR-719, SR-723, SR-724,
 SR-725, SR-757, SR-758, SR-759, SR-760, SR-761, SR-762, SR-763, SR-764,
 SR-765, SR-766, SR-767, SR-770, SR-771, SR-774, SR-813, SR-817, SR-818,
 SR-819, SR-820, SR-821, SR-822, SR-824, SR-825, SR-826, SR-827, SR-799,
-SR-829, SR-726, SR-823, SR-830.
+SR-829, SR-726, SR-823, SR-830, SR-831.
 
 | Record | Family | What stands | Activation | Completion | Status |
 | --- | --- | --- | --- | --- | --- |
@@ -4132,7 +4140,6 @@ SR-829, SR-726, SR-823, SR-830.
 | SR-815 | Usability | During R13.76's required `scripts/parallel-equivalence.sh --suite='fixture execution'`, the one-worker corpus gave no case progress for over twenty minutes. It was mistakenly interrupted as stalled; artifact timestamps later proved work continued until 1.13 seconds before cancellation, and debugger probes showed ordinary tool polling. The whole-case transcript required inspecting disposable artifacts to distinguish progress from a hang. | The next change to fixture-corpus progress reporting or the parallel-equivalence wrapper. | Bounded visible progress within a long corpus case, retained separately from the deterministic verdict comparison, so ordinary work can be distinguished from a stalled run without inspecting build artifacts. | open |
 | SR-816 | Release readiness | While auditing child-identifier ownership in R13.76, source tracing found the separate attached-program runner reaps its child before restoring its SIGTERM/HUP forwarding handlers and clearing their saved PID. A signal in that interval can consult an identifier whose reservation has ended. No PID reuse or foreign signal was exercised; compiler-tool process-group cancellation uses a different supervisor. | The next change to attached-program waiting or signal forwarding. | Retain the child's identifier reservation until forwarding can no longer target it, with deterministic native controls on each host for signals around final reaping. | open |
 | SR-828 | Usability | During R13.76's allocation-provenance investigation, one bounded Valgrind run emitted 10,392 conditional-uninitialized reports in six contexts at the packed Declaration_Bits byte iterator. Classifying them required reading its rounded final-byte view: valid bits are initialized, but the view also reads representation padding. Origins were not traced, so this does not classify every report or establish a compiler correctness defect; the implementation predates the publication change. The noise prevents a clean instrumentation verdict. | The next packed-bit iterator or instrumentation-coverage change. | Read only initialized semantic bits or establish initialized byte storage, with boundary controls for declaration counts not divisible by eight and a clean native instrumentation result; preserve the iterator's valid-index bounds. | open |
-| SR-831 | Usability | The first candidate for R13.77 rendered the bindings policy page correctly, but two source-document links named its future public URL. The separate links workflow refused that URL with HTTP 404 before the candidate had been deployed, making a new generated reference depend on publishing before validation. Met following review #57's candidate; the CLI help address itself still names the generated route. | R13.77's generated-reference links. | Source-relative guide links that resolve in both the checkout and generated site, with the installed explanation naming `refine help bindings` for its web address; preserve external link checking and verify the generated policy content. | open |
 
 ## Retained positions
 
