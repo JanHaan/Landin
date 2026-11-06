@@ -86,14 +86,21 @@ class NativeReportIdentity(unittest.TestCase):
             cwd=self.root,
             capture_output=True, timeout=30)
 
-    def refuses_without_effects(self, output, report, **kwargs):
+    def refuses_without_effects(self, output, report, *, code=b"L0002",
+                                cause=None, route=None, **kwargs):
         self.assertFalse(self.invoked.exists())
         before = self.snapshot()
         result = self.compile(output, report, **kwargs)
         self.assertEqual(result.returncode, 2, result.stderr)
-        self.assertIn(b"L0002", result.stderr)
+        self.assertIn(b"error[" + code + b"]", result.stderr)
+        if cause is not None:
+            self.assertIn(cause, result.stderr)
+        if route is not None:
+            self.assertIn(route, result.stderr)
+        if code == b"L0005":
+            self.assertNotIn(b"collid", result.stderr)
         self.assertEqual(self.snapshot(), before,
-                         "collision must precede every artifact and tool")
+                         "refusal must precede every artifact and tool")
         self.assertFalse(self.invoked.exists())
 
     def refuses_linked_publication(self, output, report):
@@ -203,9 +210,15 @@ class NativeReportIdentity(unittest.TestCase):
 
     def test_output_links_preserve_destinations(self):
         (self.root / "report-link").symlink_to("out.s")
-        self.refuses_without_effects("out.s", "report-link")
+        self.refuses_without_effects(
+            "out.s", "report-link", code=b"L0005",
+            cause=b"cannot establish build report identity: report-link",
+            route=b"check the destination and parent access or choose another output path")
         (self.root / "other-link").symlink_to("report.json")
-        self.refuses_linked_publication("out.s", "other-link")
+        self.refuses_without_effects(
+            "out.s", "other-link", code=b"L0005",
+            cause=b"cannot establish build report identity: other-link",
+            route=b"check the destination and parent access or choose another output path")
         # A disjoint live target is protected too, including its object
         # identity; neither form is permission to publish through the link.
         (self.root / "report.json").write_bytes(b"preserved report target")
@@ -214,8 +227,14 @@ class NativeReportIdentity(unittest.TestCase):
 
     def test_indeterminate_identity_refuses(self):
         (self.root / "loop").symlink_to("loop")
-        self.refuses_without_effects("out.s", "loop")
-        self.refuses_without_effects("out.s", "missing/report.json")
+        self.refuses_without_effects(
+            "out.s", "loop", code=b"L0005",
+            cause=b"cannot establish build report identity: loop",
+            route=b"check the destination and parent access or choose another output path")
+        self.refuses_without_effects(
+            "out.s", "missing/report.json", code=b"L0005",
+            cause=b"build report parent is missing: missing/report.json",
+            route=b"create the parent directory or choose an output path under an existing directory")
 
     def test_many_parent_spellings_do_not_create_outputs(self):
         (self.root / "real").mkdir()
