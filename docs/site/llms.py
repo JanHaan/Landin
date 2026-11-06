@@ -401,6 +401,8 @@ def index(pages, site_url, release, sizes):
             ("ir", "how checked source becomes verified target-neutral IR."),
             ("targets", "target descriptions, ABI capabilities and backend "
                         "boundaries."),
+            ("bindings", "the C binding generator's complete policy schema, "
+                         "invocation and generated interfaces."),
             ("editors", "installable highlighting for the major editor "
                         "families."),
         ]),

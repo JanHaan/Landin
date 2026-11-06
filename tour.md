@@ -4118,8 +4118,11 @@ What to know:
 - Option names are global across the whole program, so each is declared
   exactly once, unconditionally at module level and never inside a `fixed
   if` arm: the compiler collects every option before it chooses arms. An
-  option may not share a name with an active module declaration, an import
-  or a compiler-owned atom such as `arm64` or `release`.
+  option may not share a name with an active declaration or import in its
+  declaring module, including another file of that module, or with a
+  compiler-owned atom such as `arm64` or `release`. Ordinary bindings in
+  unrelated modules may use the same spelling; fixed configuration still
+  reads the global option, while runtime uses ordinary module/import lookup.
 - A default may refer to another option, even one declared later, and sees
   that option's overridden value. Cycles are refused, and every default
   must be valid even when overridden.

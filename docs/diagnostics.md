@@ -153,7 +153,8 @@ requires a different output path or a fresh invocation after the change is
 understood (D907).
 
 A missing output or report parent is named before collision checks. Create
-the parent directory or choose an existing directory, then retry. Refine does
+the parent directory or choose an output pathname under an existing
+directory, then retry. Refine does
 not create compilation output or report parents. An unavailable identity is
 refused conservatively with a path/access route; it is not proof of a source
 collision. Bindings retains its separately specified staged output-tree
@@ -462,15 +463,6 @@ f: (a: i32, b: i32) -> (r: i32) =
 end f
 ```
 
-The working form is:
-
-```landin
-f: (a: i32, b: i32) -> (r: i32) =
-    r = a + b
-    return
-end f
-```
-
 ### L0108
 
 `public` belongs on a module declaration and never on a statement [1740].
@@ -545,7 +537,7 @@ A configuration-option collision is reported at the option declaration,
 with the conflicting module declaration or import as a related source.
 Rename the option or conflicting binding. One option produces one collision
 report, and uses of the refused binding do not add configuration-only or
-missing-member noise. Independent errors are still reported.
+missing-member noise. Independent resolution errors are still reported.
 
 ### L0201
 

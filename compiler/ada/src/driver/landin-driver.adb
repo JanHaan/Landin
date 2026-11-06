@@ -1364,8 +1364,8 @@ package body Landin.Driver is
                Bad_Use := True;
                Note_Failure
                  (Code_Unwritable, Kind & " parent is missing: " & Path
-                  & "; create the parent directory or choose an existing"
-                  & " output directory, then retry");
+                  & "; create the parent directory or choose an output"
+                  & " path under an existing directory, then retry");
             elsif Seen.Status = Landin.Platform.Not_Readable then
                Bad_Use := True;
                Note_Failure
@@ -1390,6 +1390,42 @@ package body Landin.Driver is
             else "cannot prove " & Kind & " separate from source: " & Path
               & "; check source and output paths and access, or choose"
               & " another output path and retry");
+
+         function Output_Conflict
+           (Kind, Path, Other : String; Other_Kind : String := "another output")
+            return String;
+
+         function Output_Conflict
+           (Kind, Path, Other : String; Other_Kind : String := "another output")
+            return String is
+           (if Path = Other or else Host.Same_File (Path, Other)
+            then Kind & " collides with " & Other_Kind & ": " & Path
+              & " and " & Other & "; choose another output path and retry"
+            else "cannot prove " & Kind & " separate from " & Other_Kind
+              & ": " & Path & " and " & Other
+              & "; check output paths and access, or choose another"
+              & " output path and retry");
+
+         function Artifact_Output return String is
+           (if Unbounded.Length (Output) > 0
+            then Unbounded.To_String (Output)
+            elsif Emit = Emit_Executable then Default_Executable
+            elsif Emit = Emit_IR then Default_IR
+            elsif Emit = Emit_Linker_Script then Default_Script
+            else Default_Assembly);
+
+         procedure Check_Separate_Output (Kind, Path, Other : String);
+
+         procedure Check_Separate_Output (Kind, Path, Other : String) is
+         begin
+            if not Bad_Use and then Other /= ""
+              and then Host.Paths_Overlap (Path, Other)
+            then
+               Bad_Use := True;
+               Note_Failure
+                 (Code_Unknown_Option, Output_Conflict (Kind, Path, Other));
+            end if;
+         end Check_Separate_Output;
 
          --  What is wrong with an argument the driver refused.  A known
          --  option misused is said to be misused, and how; an unknown one
@@ -3725,8 +3761,8 @@ package body Landin.Driver is
                      Bad_Use := True;
                      Note_Failure
                        (Code_Unknown_Option,
-                        "stage report collides with an artifact: "
-                        & Stage_Path);
+                        Output_Conflict
+                          ("stage report", Stage_Path, Path, "an artifact"));
                      return;
                   end if;
                end loop;
@@ -3743,8 +3779,8 @@ package body Landin.Driver is
                      Bad_Use := True;
                      Note_Failure
                        (Code_Unknown_Option,
-                        "build report collides with an artifact: "
-                        & Report_Path);
+                        Output_Conflict
+                          ("build report", Report_Path, Path, "an artifact"));
                      return;
                   end if;
                end loop;
@@ -3763,8 +3799,8 @@ package body Landin.Driver is
                      Bad_Use := True;
                      Note_Failure
                        (Code_Unknown_Option,
-                        "stack report collides with an artifact: "
-                        & Stack_Path);
+                        Output_Conflict
+                          ("stack report", Stack_Path, Path, "an artifact"));
                      return;
                   end if;
                end loop;
@@ -3787,8 +3823,9 @@ package body Landin.Driver is
                      Bad_Use := True;
                      Note_Failure
                        (Code_Unknown_Option,
-                        "artifacts collide: " & Destinations (Index)
-                        & " and " & Destinations (Earlier));
+                        Output_Conflict
+                          ("artifact", Destinations (Index),
+                           Destinations (Earlier), "an artifact"));
                      return;
                   end if;
                end loop;
@@ -4958,13 +4995,7 @@ package body Landin.Driver is
          --  Diagnose unavailable parents before conservative overlap checks
          --  can mistake an unknown identity for a source/output collision.
          if Emit /= Emit_Nothing then
-            Check_Output_Parent
-              ((if Unbounded.Length (Output) > 0
-                then Unbounded.To_String (Output)
-                elsif Emit = Emit_Executable then Default_Executable
-                elsif Emit = Emit_IR then Default_IR
-                elsif Emit = Emit_Linker_Script then Default_Script
-                else Default_Assembly), "artifact output");
+            Check_Output_Parent (Artifact_Output, "artifact output");
          end if;
          Check_Output_Parent (Depfile, "dependency report");
          Check_Output_Parent
@@ -4974,54 +5005,29 @@ package body Landin.Driver is
          Check_Output_Parent
            (Unbounded.To_String (Stack_Report_Path), "stack report");
 
-         if Stage_Report_Seen and then not Bad_Use
-           and then
-             ((Report_Seen
-               and then Host.Paths_Overlap
-                 (Unbounded.To_String (Stage_Report_Path),
-                  Unbounded.To_String (Build_Report_Path)))
-              or else (Emit /= Emit_Nothing
-                and then Host.Paths_Overlap
-                  (Unbounded.To_String (Stage_Report_Path),
-                   (if Unbounded.Length (Output) > 0
-                    then Unbounded.To_String (Output)
-                    elsif Emit = Emit_Executable then Default_Executable
-                    elsif Emit = Emit_IR then Default_IR
-                    elsif Emit = Emit_Linker_Script then Default_Script
-                    else Default_Assembly))))
-         then
-            Bad_Use := True;
-            Note_Failure
-              (Code_Unknown_Option,
-               "stage report collides with another output: "
-               & Unbounded.To_String (Stage_Report_Path));
+         if Stage_Report_Seen then
+            Check_Separate_Output
+              ("stage report", Unbounded.To_String (Stage_Report_Path),
+               Unbounded.To_String (Build_Report_Path));
+            if Emit /= Emit_Nothing then
+               Check_Separate_Output
+                 ("stage report", Unbounded.To_String (Stage_Report_Path),
+                  Artifact_Output);
+            end if;
          end if;
 
-         if Stack_Report_Seen and then not Bad_Use
-           and then
-             ((Report_Seen
-               and then Host.Paths_Overlap
-                 (Unbounded.To_String (Stack_Report_Path),
-                  Unbounded.To_String (Build_Report_Path)))
-              or else (Stage_Report_Seen
-                and then Host.Paths_Overlap
-                  (Unbounded.To_String (Stack_Report_Path),
-                   Unbounded.To_String (Stage_Report_Path)))
-              or else (Emit /= Emit_Nothing
-                and then Host.Paths_Overlap
-                  (Unbounded.To_String (Stack_Report_Path),
-                   (if Unbounded.Length (Output) > 0
-                    then Unbounded.To_String (Output)
-                    elsif Emit = Emit_Executable then Default_Executable
-                    elsif Emit = Emit_IR then Default_IR
-                    elsif Emit = Emit_Linker_Script then Default_Script
-                    else Default_Assembly))))
-         then
-            Bad_Use := True;
-            Note_Failure
-              (Code_Unknown_Option,
-               "stack report collides with another output: "
-               & Unbounded.To_String (Stack_Report_Path));
+         if Stack_Report_Seen then
+            Check_Separate_Output
+              ("stack report", Unbounded.To_String (Stack_Report_Path),
+               Unbounded.To_String (Build_Report_Path));
+            Check_Separate_Output
+              ("stack report", Unbounded.To_String (Stack_Report_Path),
+               Unbounded.To_String (Stage_Report_Path));
+            if Emit /= Emit_Nothing then
+               Check_Separate_Output
+                 ("stack report", Unbounded.To_String (Stack_Report_Path),
+                  Artifact_Output);
+            end if;
          end if;
 
          --  D383: with roots, the operand is the entry module's directory

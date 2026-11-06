@@ -366,9 +366,10 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   mistake and on the token it is about. What a mistake leaves behind is not
   reported again, and where one change of a token mends a line the report
   says which change and offers it as a fix.
-- A spelling from another language, such as `elif`, `fn`, `x as i32`,
+- When a refused form matches a spelling from another language, such as
+  `elif`, `fn`, `x as i32`,
   `x++`, `x--`, prefix `!`, C-family comments, braces, semicolons, `*u8`,
-  `&&` or `!=`, is refused naming what Landin writes instead,
+  `&&` or `!=`, the report names what Landin writes instead,
   and `io.println`, `io.printf`, `io.print` or `io.puts` is shown the
   `io.write_format` call that prints a value, spelt with the program's
   alias for `core/io`.
@@ -457,7 +458,11 @@ The README has [the commands in brief](../README.md#refine-in-brief);
 - **Pointers and slices** get local origin, borrow, `escaping`,
   `escaping into` (D445), `from` and consume checks.
 - **Modules.** Directory modules have file-local imports, aliases, selected
-  imports, typed global options and ordered roots. Your own modules are
+  imports, typed global options and ordered roots. Option names collide with
+  ordinary declarations/imports only in their declaring module; unrelated
+  modules may reuse the spelling in the ordinary namespace. Static Linux
+  checking includes an available implicit startup module before configuration.
+  Your own modules are
   found under the roots given with `--root` [1480]; an import whose first
   directory holds no source while a later root holds the module is refused
   naming both (D563).

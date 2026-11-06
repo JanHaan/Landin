@@ -128,7 +128,8 @@ at `platform/linux`'s `_landin_start` (D279). `--link=libc` keeps the C runtime'
 link, `main` called by C's startup, library requests and libc among them.
 Darwin and FreeBSD reach their systems only through their C libraries, so
 `libc` is their only mode and `--link=static` there is L0002, as is `--link`
-for a target with no hosted system or without `--emit=exe` or `--emit=asm`.
+for a target with no hosted system or outside checking, executable or
+assembly emission.
 
 A static request is refused with L0500 before any tool runs, and the note
 names `--link=libc`, when no library holding `platform/linux` was found, when the
@@ -144,6 +145,10 @@ handler, and counts whatever a datum or an evidence table names whole. `-v`,
 mode includes `platform/linux`, and it still links under an ordinary C driver;
 with no library holding `platform/linux`, `--emit=asm` is refused as an
 executable is rather than written without its entry (D363).
+Static `check` loads that startup module too when the selected library
+supplies it, so its options, fixed arms and source errors are checked before
+emission. A standalone check without that library remains permitted; a libc
+check adds no static startup module.
 
 The driver is the first of the GCCs a distribution installs that the host can
 start (D364): the target's own triplet name, `x86_64-pc-linux-gnu-gcc` on

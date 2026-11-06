@@ -16308,6 +16308,11 @@ namespaces, target-fact units, the assertion fold or library argument order.
 no implicit environment roots. It completes the reached graph before
 configuration, resolution and checking. Every source remains part of one
 whole program; this introduces neither a cache format nor a stable interface.
+For a static Linux request, checking includes the same available implicit
+`platform/linux` startup module as compilation, before collecting options or
+selecting fixed arms. A standalone check without a library supplying that
+module remains permitted; executable and assembly emission still require it
+under D363. A libc request does not add the static startup module.
 
 Contextual `option name: type = expression` declares one globally unique
 configuration value. An option is unconditional at module level, without
@@ -16338,8 +16343,14 @@ An option's bare name is available in fixed conditions, option defaults and
 compiler assertions. It has no runtime storage or module export. An active
 use outside those configuration positions receives L0201 explaining that
 boundary, rather than claiming the option was never declared. An active
-module declaration or import binding cannot reuse an option's name; local
-bindings may use it because configuration directives do not occur in bodies.
+module declaration or import binding cannot reuse an option's name in the
+module that declares the option, including a different source file of that
+module. Ordinary bindings in unrelated modules may use the spelling.
+Bare option references in closed configuration positions still select the
+global option, even where an unrelated module has a same-spelling ordinary
+binding. Runtime lookup remains ordinary lexical/import lookup, and type
+operands in admitted deferred measurements resolve as types. Local bindings
+may use option names because configuration directives do not occur in bodies.
 The three bare tool namespace names are unavailable as declaration or import
 bindings, including parameters and locals, without becoming lexical keywords.
 Fields and member labels do not declare a tool namespace. Explicit imports of
@@ -16352,7 +16363,7 @@ An option/binding collision is reported once per option at the option's
 declaration, with the conflicting binding as a related source. Refused import
 names and module declarations suppress follow-on unresolved-name or
 configuration-only reports, including qualified and selected-import uses of
-a refused module declaration. Independent mistakes still receive their own
+a refused module declaration. Independent resolution mistakes receive their own
 reports. This recovery changes no accepted configuration.
 
 `--option=NAME=VALUE` supplies a bool literal or signed decimal integer text.
@@ -16412,8 +16423,14 @@ images and D227/D228 scalar accesses without enabling new syntax.
 **The alternatives:** conditional switch declarations make switch discovery
 depend on their own values. Last-override-wins hides repeated configuration;
 ignoring an overridden default hides misspellings and cycles. Reusing option
-names for module declarations gives fixed and ordinary lookup different
-meanings for one spelling. General compile-time evaluation would reverse
+names for ordinary bindings in their declaring module gives fixed and
+ordinary lookup different meanings without a module boundary; that broader
+namespace split remains declined. Refusing the spelling in every unrelated
+module couples application options to library-private declarations and
+imports. Exempting only compiler-added startup modules makes the same source
+change its namespace rules when explicitly imported; a module boundary
+instead gives one rule independent of how source was reached.
+General compile-time evaluation would reverse
 [1540]; moving scalar target queries through host layout would reverse the
 target-facts boundary. Searching for built-ins on disk would let root order
 replace compiler meaning. Deduplicating or sorting libraries changes archive
@@ -16421,12 +16438,17 @@ resolution, while whole-executable static linkage takes hosted-runtime policy
 from the driver. All were declined.
 
 **Pinned by** `positive/r430-fixed-options`, `positive/r430-inactive-tools`,
+`runtime/option-names-stay-in-their-module`,
 `runtime/r430-fixed-tools`, `runtime/r430-static-library`,
 `negative/r430-assertion-false`, `negative/r430-assertion-type`,
 `negative/r430-assertion-call`, `negative/r430-assertion-nominal`,
 `negative/r430-option-cycle`, `negative/r430-option-duplicate`,
 `negative/r430-option-conditional`, `negative/r430-option-type`,
 `negative/r430-option-range`, `negative/r430-option-reserved`,
+`negative/import-option-collision`, the resolution cases
+`options collide only in their declaring module` and
+`configuration conflicts have one cause`, and the driver case
+`implicit startup graph is checked`,
 `negative/r430-fixed-dead-types`,
 `negative/r430-library-injection`, `negative/r430-library-runtime`,
 `negative/r430-library-arity`, `negative/r430-tool-member`,
@@ -18451,9 +18473,11 @@ later write authority.
 
 Compilation artifacts and reports require an existing, available parent.
 A missing parent is named with the route of creating it or choosing an
-existing output directory; the command creates neither. Unknown identity
-remains a conservative refusal, described as uncertain separation rather
-than proof of collision. This does not alter the separately specified
+output pathname under an existing directory. The command does not create
+missing parent directories. These destination-parent and direct
+source/output-pair preflights describe unknown identity as uncertain
+separation rather than proof of collision, retaining conservative refusal.
+This does not alter the separately specified
 bindings output-tree creation or formatter write behavior.
 
 Formatting is the inode-preserving mode, D358: its original read descriptor
@@ -30048,7 +30072,9 @@ the call to have run, `negative/lenof-of-a-path-or-call-that-has-no-length`,
 `negative/index-of-a-qualified-call-is-refused-there`;
 `negative/lenof-slice-element-frame-escape`,
 `negative/lenof-slice-range-frame-escape` and
-`runtime/lenof-slice-operands-run-once`.
+`runtime/lenof-slice-operands-run-once`, with Cortex refusals recorded by
+`negative/cortex-lenof-slice-element-frame-escape` and
+`negative/cortex-lenof-slice-range-frame-escape`.
 
 ### D334 — A statement's branch takes no value
 

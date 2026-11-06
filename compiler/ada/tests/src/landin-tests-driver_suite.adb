@@ -8047,6 +8047,32 @@ package body Landin.Tests.Driver_Suite is
            (Item, Host.Exists ("a.ir") and then Host.Is_Link ("a.s"),
             "IR uses its own default and preserves the unrelated link");
       end;
+      for Proven in Boolean loop
+         declare
+            Host : Landin.Testing.Fakes.Fake_Filesystem;
+            Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+            Args : constant Landin.Platform.Path_List :=
+              ["--target=linux-x86-64", "--stage-report=stage.json",
+               "--build-report="
+               & (if Proven then "stage.json" else "build.json"), "main.ldn"];
+            Result : Landin.Driver.Outcome;
+         begin
+            Host.Add_File ("main.ldn", "unread source");
+            Host.Raise_On_Read;
+            if not Proven then
+               Host.Add_Alias ("stage.json", "build.json");
+            end if;
+            Result := Landin.Driver.Execute (Args, Host, Tools);
+            Landin.Testing.Check
+              (Item, Result.Status = Landin.Driver.Status_Misuse
+               and then Contains
+                 (Unbounded.To_String (Result.Report),
+                  (if Proven then "stage report collides with another output"
+                   else "cannot prove stage report separate"))
+               and then Host.Write_Count = 0 and then Tools.Run_Count = 0,
+               "output overlap distinguishes proven and uncertain identity");
+         end;
+      end loop;
    end Output_Parents_Are_Named;
 
    procedure Register (Into : in out Landin.Testing.Registry) is

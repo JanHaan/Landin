@@ -94,6 +94,11 @@ def main():
         operands += [option, str(destination)]
         cases.append((name, operands, source, False))
         missing_outputs[name] = destination
+    unavailable_report = source / 'report.json'
+    cases.append(('output-parent-unavailable',
+                  [str(source), '--link=libc', '-o',
+                   str(root / 'unavailable-parent-program'),
+                   '--stage-report=' + str(unavailable_report)], source, False))
     if sys.platform == 'linux':
         # GNU ld accepts a selected .so as a textual library script. Its
         # INPUT payload is an input even though it was not named by refine.
@@ -259,6 +264,11 @@ def main():
                                 and b'create the parent directory' in result.stderr
                                 and b'collid' not in result.stderr
                                 and not destination.parent.exists())
+        elif name == 'output-parent-unavailable':
+            expected_failure = (result.returncode != 0
+                                and b'cannot establish stage report identity' in result.stderr
+                                and b'parent access' in result.stderr
+                                and b'collid' not in result.stderr)
         report_after = (entry_snapshot(refused_report)
                         if refused_report is not None else None)
         if name == 'missing-parent-budget':
@@ -302,6 +312,16 @@ def main():
                                            capture_output=True, timeout=45)
             passed = (passed and route_control.returncode == 0
                       and destination.is_file()
+                      and protected.read_bytes() == before
+                      and not list(root.rglob('.refine-publication-*')))
+        elif name == 'output-parent-unavailable':
+            repaired = [value.replace(str(unavailable_report),
+                                      str(root / 'available-stage.json'))
+                        for value in result.args]
+            route_control = subprocess.run(repaired, cwd=root, env=case_env,
+                                           capture_output=True, timeout=45)
+            passed = (passed and route_control.returncode == 0
+                      and (root / 'available-stage.json').is_file()
                       and protected.read_bytes() == before
                       and not list(root.rglob('.refine-publication-*')))
         row = dict(case=name, command=result.args, exit_status=result.returncode,
