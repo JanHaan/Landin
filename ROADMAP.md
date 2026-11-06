@@ -3095,71 +3095,54 @@ window and an interrupted link; the publication rule written into
 `spec.md`'s register and the manuals of `fmt`, `bindings` and `svd`.
 
 Done: commands share D907's loss-preserving publication contract: known
-inputs and selected-tool identities are protected, destinations have
-expected versions, and descriptor-owned staging and recovery preserve
-conflicting saves. Unknown tool metadata is distinguished from absence;
-unsupported input forms refuse with a supported route. D358 retains the
-formatter's original read descriptor. Compiler-tool cancellation forwards
-the original signal to the active group, bounds shutdown and reaps its
-direct child before cleanup. Synchronized native registries retain
-cross-thread handoff. Darwin debug objects and whole bundles stay in the
-publication group through packaging. The original starting-commit
-reproducers were confirmed. Demonstrations create and remove only owned
-roots; fake controls cover each finding, with native renamed-save and
-interrupted-link controls. Manuals state the same-inode writer, pathname
-execution, external-dependency and recovery limits. SR-813 and SR-817 are
-settled, as are SR-818 through SR-822 with the pre-gate fixture comparison.
-SR-824 and SR-825 are settled by absent-tree reservations and cooperative
-producer leases; overlapping same-parent reservations also refuse within
-one process. SR-806 credits the cancellation and mixed firmware generation fixes while
-retaining the need to explain publication state after cleanup refusal.
+inputs and selected tools are protected, destinations have expected versions,
+and descriptor-owned staging and recovery preserve conflicting saves.
+D358 retains the formatter's original read descriptor and inode. Publication
+entries and input separation are checked before generated files or a missing
+bindings tree become visible. Ordinary cancellation reaches the active tool
+group and reaps its direct child before cleanup. Cooperative producers permit
+unrelated outputs, overlapping
+same-parent reservations refuse, and native registries support cross-thread
+handoff. Darwin objects and complete debug bundles publish with the image.
+The starting-commit reproducers were confirmed; demonstrations create and
+remove only owned roots, and each finding has fake and native controls,
+including the renamed-save and interrupted-link windows. Manuals, the
+capabilities inventory and the specification record the same limits.
 
-Pre-gate local evidence at `b757b80e`: the one/eight-worker fixture
-comparison agreed. The debug/release comparison covered 1153 sources and
-24548 requests with zero disagreements; the manifest covered 294 fixtures
-and 52272 entries, SHA256
-`cc9f8b04ebbc1ac47049906134f017f00fda9e5cf28f701369fbfcc011be333e`.
-Isolated scaling passed. Linux passed 52 FILTERED cases and 1296 checks;
-Darwin passed 13 HOST-ONLY/FILTERED cases and 505 checks. Native publication
-and compile-publication controls passed 30 and 34 on each host. FreeBSD
-native amd64 passed 29 publication, 7 owned-runtime and 16 cancellation
-controls and 768 registry handoffs; production C and harnesses cross-linked
-for both architectures. These results describe the pre-gate source.
+At `8ff513fa3`, the complete software push
+[gate](https://github.com/JanHaan/Landin/actions/runs/42187464553) passed.
+All 53 latest-attempt jobs were checked directly: 49 succeeded; two board
+jobs were skipped for branch scope and two physical RV64 jobs remain
+suspended. Debug/release comparison covered
+24548 requests with no disagreements; three host manifests agreed on all
+52272 entries, and scaling passed. Linux and Darwin native lanes passed
+37 publication, 34 compile-publication, 7 owned-runtime and 16 cancellation
+controls plus the actual command controls and 768 registry handoffs.
+FreeBSD's production C adapter controls passed on amd64 and arm64 beside
+the generated-program, debugger and ABI lanes. No FreeBSD-hosted Ada
+compiler or command-reproducer run is claimed: the host criterion uses
+Jan's accepted Linux/Darwin command and native FreeBSD adapter scope.
 
-CI follow-ups corrected absent bindings-tree creation on refusal,
-semantic-diagnostic priority, Darwin harness temporary outputs, completed
-registry retention, and unrelated live-linker staging refusals. Integrated
-development feedback passed 31 FILTERED cases and 3242 checks, including
-the three memory controls; the final fake-filesystem follow-up passed
-29 cases and 3246 checks. Final Linux native controls passed publication
-37, owned-runtime 7, compile publication 34, cancellation 16 plus 9 actual
-command controls, and 768 registry handoffs. An actual LLD rename barrier
-held its temporary object while an unrelated command succeeded and a
-same-target command refused, preserving the held files; the producer then
-completed and retired its arena. FreeBSD native amd64 passed publication
-36, owned-runtime 7 and 768 handoffs, and both architectures cross-linked
-the final C adapters and controls. The frozen `8551db0b` fixture comparison
-passed at one and eight workers: both runs passed 14 cases and 16024 checks,
-with exit zero and empty stdout and normalized-stderr diffs. Later gate
-feedback corrected a standalone GCC buffer-aliasing warning, a budget
-control's target assumption, and the owned-runtime control's implicit TMPDIR prerequisite.
-The lifetime-test launchers now disable glibc's thread cache in fresh Linux
-test processes. Every actual meter case first requires visible allocation
-and exact free of 512 bytes, and a retained 512-byte control still rejects
-growth with the same windows and thresholds. This distinguishes cached
-frees from retained application allocations; inconclusive instrumentation
-is not evidence that application retention is absent. Focused integrated
-native feedback with Ubuntu glibc passed all eight memory cases and 20 checks;
-seven unconfigured direct entries instead refused before their workloads.
-The launcher controls passed 34 Python tests, and owned-runtime controls
-passed all seven cases with TMPDIR unset, empty and explicit on Linux and
-native FreeBSD amd64. Both independent reviews of the guarded measurement
-change were clear. The updated complete
-multi-host gate and a new comparison using the changed launcher remain
-pending; local and filtered results do not replace them.
+The fresh one/eight-worker fixture comparison on this source passed:
+both runs passed all 14 selected cases and 16024 checks with exit zero,
+identical stdout and normalized stderr, and empty full diffs. Both recorded
+commands used the guarded allocator environment.
+
+The lifetime-test launchers disable glibc's thread cache in fresh Linux
+test processes; every actual meter case requires visible allocation and
+exact free of 512 bytes. A retained 512-byte control rejects growth with
+the original windows and thresholds. Focused native feedback passed all
+eight memory cases and 20 checks; seven unconfigured entries refused
+before workloads. Launcher controls passed 34 Python tests. The
+owned-runtime controls passed with TMPDIR unset, empty and explicit on
+Linux and native FreeBSD amd64, and the complete host gate passed.
+SR-813, SR-817 through SR-822 and SR-824 through SR-827 are settled.
+SR-806 credits ordinary compilation cancellation and mixed firmware
+generation fixes while retaining the cleanup-refusal state summary.
 
 Activation review: the sweep against `df4ccb875` found 100 changed paths and
-no path-matched activation; all 162 unmatched rows were read against the actual changes.
+no path-matched activation; all 160 unmatched rows were read against the
+actual changes.
 R551-20 remains for native failures beyond these bounded controls.
 SR-266, SR-296, SR-298, SR-590 and SR-370 remain for internal-defect caller
 diagnostics, note citations, installed panic-site lookup,
@@ -3168,7 +3151,8 @@ for local cross-target assembly validation and child-process runner support;
 SR-702 for Darwin ABI-fixture execution; SR-281 for detecting a stale binary
 beside its checkout, since test-environment setup adds no version warning;
 SR-721 for shared script hang guards, since the new launcher controls use
-the existing 300-second convention rather than introducing a shared guard; SR-783 and SR-785 for gate-inventory controls and workflow linting;
+the existing 300-second convention rather than introducing a shared guard;
+SR-783 and SR-785 for gate-inventory controls and workflow linting;
 and SR-812 for verification across partial rerun attempts. SR-773 retains
 the completed-job log route while its overall run is active, encountered
 again while following this candidate. SR-703 retains
@@ -3177,20 +3161,17 @@ reproducibility limits. SR-814 retains unsupported relative or indirect
 tool inputs and Clang dependencies escaping their private workspace.
 SR-815 waits for fixture-corpus progress reporting: recording the allocator
 environment in the wrapper adds no progress inside a long case. SR-816
-retains the separate attached-program post-reap forwarding window. SR-823 retains
-review #51's missing-report-parent diagnostic variant for R13.77.
-SR-806 retains #110's cleanup-refusal state summary for R13.78. SR-826 and
-SR-827 record the TMPDIR and meter corrections pending their complete gate;
-SR-828 retains the preexisting packed-byte instrumentation finding for the
+retains the separate attached-program post-reap forwarding window. SR-823
+retains review #51's missing-report-parent diagnostic variant for R13.77.
+SR-806 retains #110's cleanup-refusal state summary for R13.78. SR-828
+retains the preexisting packed-byte instrumentation finding for the
 next iterator or instrumentation change. These triggers are restated rather
 than importing unrelated fixes into publication.
 
-The item remains active pending completion of the required software and
-physical-board gates. FreeBSD evidence is native production C adapter
-coverage, separate from the generated-program corpus; no FreeBSD-hosted Ada
-compiler, command-reproducer run or local native arm64 execution is claimed.
-The literal host criterion uses Jan's accepted scope: Linux/Darwin command
-reproducers plus native FreeBSD production C adapter controls.
+The item remains active pending the required identical-tree boards
+scope dispatch and main's own push gate. Closing evidence does not waive
+those steps for this item, which changes compile outputs. No promotion,
+physical-board run, release or version change is claimed.
 
 ### R13.77 — What the second outside review found
 
@@ -3680,7 +3661,7 @@ SR-747, SR-748, SR-749, SR-750, SR-751, SR-752, SR-753, SR-754, SR-755,
 SR-756, SR-614, SR-660, SR-671, SR-672, SR-709, SR-719, SR-723, SR-724,
 SR-725, SR-757, SR-758, SR-759, SR-760, SR-761, SR-762, SR-763, SR-764,
 SR-765, SR-766, SR-767, SR-770, SR-771, SR-774, SR-813, SR-817, SR-818,
-SR-819, SR-820, SR-821, SR-822, SR-824, SR-825.
+SR-819, SR-820, SR-821, SR-822, SR-824, SR-825, SR-826, SR-827.
 
 | Record | Family | What stands | Activation | Completion | Status |
 | --- | --- | --- | --- | --- | --- |
@@ -4051,8 +4032,6 @@ SR-819, SR-820, SR-821, SR-822, SR-824, SR-825.
 | SR-815 | Usability | During R13.76's required `scripts/parallel-equivalence.sh --suite='fixture execution'`, the one-worker corpus gave no case progress for over twenty minutes. It was mistakenly interrupted as stalled; artifact timestamps later proved work continued until 1.13 seconds before cancellation, and debugger probes showed ordinary tool polling. The whole-case transcript required inspecting disposable artifacts to distinguish progress from a hang. | The next change to fixture-corpus progress reporting or the parallel-equivalence wrapper. | Bounded visible progress within a long corpus case, retained separately from the deterministic verdict comparison, so ordinary work can be distinguished from a stalled run without inspecting build artifacts. | open |
 | SR-816 | Release readiness | While auditing child-identifier ownership in R13.76, source tracing found the separate attached-program runner reaps its child before restoring its SIGTERM/HUP forwarding handlers and clearing their saved PID. A signal in that interval can consult an identifier whose reservation has ended. No PID reuse or foreign signal was exercised; compiler-tool process-group cancellation uses a different supervisor. | The next change to attached-program waiting or signal forwarding. | Retain the child's identifier reservation until forwarding can no longer target it, with deterministic native controls on each host for signals around final reaping. | open |
 | SR-823 | Usability | Review #51's misleading collision for a missing output parent has a stage-report variant, met inspecting R13.76's native report-path controls: a stage report under an absent parent was refused as "stage report collides with another output" although no output occupied that name. Conservative unresolved-parent comparison preserves files, but the message gives neither that cause nor the route of choosing or creating an existing output parent. | R13.77. | Distinguish an unavailable or unresolved parent from a proven collision, name the supported existing-parent route, and retain strict refusal and preservation when separation cannot be established. | open |
-| SR-826 | Usability | While following R13.76's FreeBSD gate, the standalone owned-runtime control refused before its first case because TMPDIR was unset. Its Python wrapper and earlier local commands supplied TMPDIR, but the FreeBSD lane invoked it directly; production already defaults unset or empty TMPDIR to /tmp. The implicit test-only prerequisite was undocumented. | The next standalone owned-runtime control invocation. | Match production's default while retaining exclusive scratch creation and every ownership assertion; verify unset, empty and explicit TMPDIR in standalone native controls and retain the full host gate. | open |
-| SR-827 | Usability | R13.76's gate repeatedly reported small sustained checking and serving growth through a meter described as live allocations. The actual CI binary reproduced the checking failure with Ubuntu glibc; a native probe counted already-freed small blocks in glibc's per-thread cache. Disabling that cache in a fresh process let the unchanged checking control pass. Understanding the discrepancy required libc source inspection and an isolated loader/runtime comparison. | The next memory-meter or test-launcher change. | Configure fresh lifetime-test processes for observable small frees, verify that configuration with strict allocation/free and retained-small-block controls at every measurement entry, retain workload windows and thresholds, and distinguish allocator-held statistics from live application bytes in the documentation. | open |
 | SR-828 | Usability | During R13.76's allocation-provenance investigation, one bounded Valgrind run emitted 10,392 conditional-uninitialized reports in six contexts at the packed Declaration_Bits byte iterator. Classifying them required reading its rounded final-byte view: valid bits are initialized, but the view also reads representation padding. Origins were not traced, so this does not classify every report or establish a compiler correctness defect; the implementation predates the publication change. The noise prevents a clean instrumentation verdict. | The next packed-bit iterator or instrumentation-coverage change. | Read only initialized semantic bits or establish initialized byte storage, with boundary controls for declaration counts not divisible by eight and a clean native instrumentation result; preserve the iterator's valid-index bounds. | open |
 
 ## Retained positions
