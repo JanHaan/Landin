@@ -14,7 +14,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--cc', default=os.environ.get('CC', 'cc'))
     parser.add_argument('--output', type=Path, help='new evidence directory')
-    parser.add_argument('--case', choices=['identity-observation', 'registry-lifetimes'])
+    parser.add_argument('--case', choices=['identity-observation', 'registry-lifetimes', 'live-producer'])
     args = parser.parse_args()
     repo = Path(__file__).resolve().parents[2]
     root = (args.output.absolute() if args.output else

@@ -21,6 +21,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <unistd.h>
 #ifdef __linux__
 #include <malloc.h>
@@ -1216,9 +1217,146 @@ static void registry_lifetimes(void)
     ++passed;
 }
 
+
+struct producer_message { char stage[4096]; int first; };
+static void transfer(int fd, void *bytes, size_t size, int writing)
+{
+    size_t used = 0;
+    while (used < size) {
+        ssize_t count = writing ? write(fd, (char *)bytes + used, size - used)
+                                : read(fd, (char *)bytes + used, size - used);
+        if (count < 0 && errno == EINTR) continue;
+        REQUIRE(count > 0); used += (size_t)count;
+    }
+}
+static int producer_child(const char *output, int ready, int release, unsigned mode)
+{
+    char first[8192], stage[4096], temp[8192], directory[8192], leaf[16384];
+    REQUIRE(snprintf(first, sizeof first, "%s.first", output) > 0);
+    struct producer_message message;
+    message.first = prepare(first, 0, "", stage);
+    int token = prepare(output, 0, "", message.stage);
+    staged(stage, "discarded");
+    REQUIRE(step(message.first, 0) == 0 && step(message.first, 3) == 0
+            && step(message.first, 4) == 0);
+    staged(message.stage, "producer-generated");
+    REQUIRE(snprintf(temp, sizeof temp, "%s.linker-temporary", message.stage) > 0);
+    staged(temp, "linker-private");
+    REQUIRE(snprintf(directory, sizeof directory, "%s.temporary-directory", message.stage) > 0);
+    REQUIRE(landin_publication_stage_mkdir(directory) == 0);
+    REQUIRE(snprintf(leaf, sizeof leaf, "%s/sentinel", directory) > 0); staged(leaf, "private-tree");
+    if (mode == 2) {
+        REQUIRE(step(token, 0) == 0 && step(token, 4) != 0);
+        REQUIRE(strstr(why, "retained publication"));
+    }
+    transfer(ready, &message, sizeof message, 1); close(ready);
+    if (mode == 1) return 0; /* Exit with abandoned stage contents. */
+    char byte; transfer(release, &byte, 1, 0); close(release); REQUIRE(byte == 'R');
+    if (mode == 2) return 0;
+    REQUIRE(unlink(temp) == 0 && unlink(leaf) == 0 && rmdir(directory) == 0);
+    REQUIRE(step(token, 0) == 0 && step(token, 1) == 0
+            && step(token, 2) == 0 && step(token, 4) == 0);
+    return 0;
+}
+static void live_producer_discovery(void)
+{
+    for (unsigned mode = 0; mode < 3; ++mode) {
+        char parent[4096], output[8192], peer[8192], stage[4096];
+        char temp[8192], directory[8192], leaf[16384], journal[8192], extra[8192];
+        REQUIRE(snprintf(parent, sizeof parent, "%s/producer-mode-%u", scratch, mode) > 0);
+        REQUIRE(mkdir(parent, 0700) == 0);
+        REQUIRE(snprintf(output, sizeof output, "%s/owner", parent) > 0); put(output, "owner-old");
+        REQUIRE(snprintf(peer, sizeof peer, "%s/peer", parent) > 0);
+        struct stat before, after, temp_before, dir_before;
+        REQUIRE(stat(output, &before) == 0);
+        int ready[2], release[2]; REQUIRE(pipe(ready) == 0 && pipe(release) == 0);
+        char ready_arg[32], release_arg[32], mode_arg[32];
+        REQUIRE(snprintf(ready_arg, sizeof ready_arg, "%d", ready[1]) > 0);
+        REQUIRE(snprintf(release_arg, sizeof release_arg, "%d", release[0]) > 0);
+        REQUIRE(snprintf(mode_arg, sizeof mode_arg, "%u", mode) > 0);
+        pid_t child = fork(); REQUIRE(child >= 0);
+        if (!child) {
+            close(ready[0]); close(release[1]);
+            execl(self_program, self_program, "--producer", output,
+                  ready_arg, release_arg, mode_arg, (char *)NULL);
+            _exit(127);
+        }
+        close(ready[1]); close(release[0]);
+        struct producer_message message; transfer(ready[0], &message, sizeof message, 0); close(ready[0]);
+        REQUIRE(snprintf(temp, sizeof temp, "%s.linker-temporary", message.stage) > 0);
+        REQUIRE(snprintf(directory, sizeof directory, "%s.temporary-directory", message.stage) > 0);
+        REQUIRE(snprintf(leaf, sizeof leaf, "%s/sentinel", directory) > 0);
+        REQUIRE(stat(temp, &temp_before) == 0 && stat(directory, &dir_before) == 0);
+        char *part = strstr(message.stage, "/stage/"); REQUIRE(part);
+        REQUIRE(snprintf(journal, sizeof journal, "%.*s/destination-%d",
+                          (int)(part - message.stage), message.stage, message.first) > 0);
+        int status, observed = -1;
+        if (mode == 1) {
+            REQUIRE(waitpid(child, &status, 0) == child && WIFEXITED(status) && WEXITSTATUS(status) == 0);
+            /* A reader lock from another process cannot masquerade as a
+               producer. --discover executes in its own fresh process below. */
+            observed = open(journal, O_RDONLY | O_NOFOLLOW | O_CLOEXEC); REQUIRE(observed >= 0);
+            struct flock read_lease = {0}; read_lease.l_type = F_RDLCK; read_lease.l_whence = SEEK_SET;
+            REQUIRE(fcntl(observed, F_SETLK, &read_lease) == 0);
+            run_peer("--discover", peer);
+        }
+        int journal_fd = open(journal, O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
+        REQUIRE(journal_fd >= 0);
+        struct flock producer_lease = {0};
+        producer_lease.l_type = F_WRLCK; producer_lease.l_whence = SEEK_SET;
+        REQUIRE(fcntl(journal_fd, F_GETLK, &producer_lease) == 0);
+        close(journal_fd);
+        printf("producer lease: mode=%u observed=%s\n", mode,
+               producer_lease.l_type == F_WRLCK ? "WRLCK" : "UNLCK");
+        int token = 0;
+        int result = landin_publication_open(peer, 0, "", &token, stage, sizeof stage, why, sizeof why);
+        if (mode == 0 && result != 0) {
+            /* The expected-red baseline must also release and reap its owned
+               producer before reporting a refusal; never leave a blocked child. */
+            char byte = 'R'; transfer(release[1], &byte, 1, 1); close(release[1]);
+            REQUIRE(waitpid(child, &status, 0) == child && WIFEXITED(status) && WEXITSTATUS(status) == 0);
+        }
+        REQUIRE((result == 0) == (mode == 0));
+        REQUIRE(producer_lease.l_type == (mode == 0 ? F_WRLCK : F_UNLCK));
+        if (mode == 0) {
+            staged(stage, "peer-generated");
+            REQUIRE(step(token, 0) == 0 && step(token, 1) == 0
+                    && step(token, 2) == 0 && step(token, 4) == 0);
+            REQUIRE(content(peer, "peer-generated"));
+            int same_token = 0;
+            REQUIRE(landin_publication_open(output, 0, "", &same_token, stage, sizeof stage,
+                                            why, sizeof why) != 0 && same_token == 0);
+            /* Even a live producer cannot excuse unexplained recovery or a
+               malformed additional sealed record. */
+            REQUIRE(snprintf(extra, sizeof extra, "%.*s/recovery/unexplained", (int)(part - message.stage), message.stage) > 0);
+            put(extra, "recovery-save"); run_peer("--discover", peer);
+            REQUIRE(content(extra, "recovery-save") && unlink(extra) == 0);
+            REQUIRE(snprintf(extra, sizeof extra, "%.*s/destination-999999", (int)(part - message.stage), message.stage) > 0);
+            put(extra, "malformed"); run_peer("--discover", peer);
+            REQUIRE(content(extra, "malformed") && unlink(extra) == 0);
+        } else REQUIRE(token == 0 && strstr(why, "retained or active publication"));
+        REQUIRE(stat(output, &after) == 0 && before.st_dev == after.st_dev
+                && before.st_ino == after.st_ino && before.st_mode == after.st_mode && content(output, "owner-old"));
+        REQUIRE(stat(temp, &after) == 0 && temp_before.st_dev == after.st_dev
+                && temp_before.st_ino == after.st_ino && temp_before.st_mode == after.st_mode && content(temp, "linker-private"));
+        REQUIRE(stat(directory, &after) == 0 && dir_before.st_dev == after.st_dev
+                && dir_before.st_ino == after.st_ino && dir_before.st_mode == after.st_mode && content(leaf, "private-tree"));
+        if (observed >= 0) close(observed);
+        if (mode != 1) {
+            char byte = 'R'; transfer(release[1], &byte, 1, 1);
+            REQUIRE(waitpid(child, &status, 0) == child && WIFEXITED(status) && WEXITSTATUS(status) == 0);
+            if (mode == 0) REQUIRE(content(output, "producer-generated") && access(temp, F_OK) != 0);
+        }
+        close(release[1]);
+    }
+    ++passed;
+}
+
 int main(int argc, char **argv)
 {
     self_program = argv[0];
+    if (argc == 6 && !strcmp(argv[1], "--producer"))
+        return producer_child(argv[2], atoi(argv[3]), atoi(argv[4]), (unsigned)atoi(argv[5]));
     if (argc == 3 && !strcmp(argv[1], "--constructor-failure"))
         return constructor_failure_child(argv[2]);
     if (argc == 6 && !strcmp(argv[1], "--changing-peer")) {
@@ -1273,6 +1411,11 @@ int main(int argc, char **argv)
     const char *tmp = getenv("TMPDIR"); if (!tmp || !*tmp) tmp = "/tmp";
     REQUIRE(snprintf(scratch, sizeof scratch, "%s/landin-publication-XXXXXX", tmp) > 0);
     REQUIRE(mkdtemp(scratch) != NULL);
+    if (argc == 2 && !strcmp(argv[1], "--live-producer")) {
+        live_producer_discovery();
+        printf("publication native: %u controls passed (live producer)\n", passed);
+        return 0;
+    }
     if (argc == 2 && !strcmp(argv[1], "--registry-lifetimes")) {
         registry_lifetimes();
         printf("publication native: %u controls passed (registry lifetimes)\n", passed);
@@ -1294,7 +1437,7 @@ int main(int argc, char **argv)
     child_staging_directory(); mismatch_finish_preserves_tree();
     moved_anchor_recovery_diagnostic(); fmt_moved_parent_diagnostic();
     fmt_readonly_is_write_refusal(); different_output_kind_is_refused();
-    journal_concurrency(); discovery_during_retirement();
+    live_producer_discovery(); journal_concurrency(); discovery_during_retirement();
     discovery_during_publication(); pinned_entry_name_equivalence();
     unknown_unready_recovery_refuses(); constructor_failure_is_discoverable();
     printf("publication native: %u controls passed; retained scratch %s\n", passed, scratch);

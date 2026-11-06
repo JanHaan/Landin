@@ -64,6 +64,7 @@ static int landin_publication_step_locked(int token, int action,
 
 struct arena {
     int parent, private_fd, recovery_fd, root_fd;
+    int producer_fd;
     struct stat parent_id;
     char *path, *name, *recovery_path;
     unsigned refs;
@@ -95,6 +96,13 @@ static struct root_anchor *roots;
 static struct arena *arenas;
 static struct publication *publications;
 static void describe_recovery(const struct arena *, char *, size_t);
+static void quarantine(struct arena *a)
+{
+    int saved = errno;
+    a->retained = 1;
+    if (a->producer_fd >= 0) { close(a->producer_fd); a->producer_fd = -1; }
+    errno = saved;
+}
 static int next_token = 1;
 extern int landin_cancellation_requested(void);
 extern int landin_overlaps_any(const char *, const char *const *, size_t);
@@ -630,6 +638,7 @@ static struct arena *arena_for(int parent, const char *path)
     }
     a = calloc(1, sizeof *a);
     if (!a) return NULL;
+    a->producer_fd = -1;
     size_t n = strlen(path) + 80;
     a->path = malloc(n);
     if (!a->path) { free(a); return NULL; }
@@ -715,7 +724,8 @@ static int numbered(const char *name, const char *prefix)
 }
 /* With no published records, an empty allow-list proves this is only setup:
    stage/recovery may be absent or empty, never linked or unexplained. */
-static int entries_known(int root, const char *directory, struct known_name *names)
+static int entries_known(int root, const char *directory, struct known_name *names,
+                         int live_producer)
 {
     int fd = openat(root, directory, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
     if (fd < 0) return errno == ENOENT;
@@ -730,7 +740,7 @@ static int entries_known(int root, const char *directory, struct known_name *nam
         struct known_name *match;
         for (match = names; match; match = match->next)
             if (!strcmp(match->name, item->d_name)) break;
-        if (!match) known = 0;
+        if (!match && !live_producer) known = 0;
     }
     closedir(listing); return known;
 }
@@ -789,6 +799,7 @@ static int retained_workspace(int parent, const char *parent_path,
         if (root >= 0) barrier("discovery-opened", target);
         DIR *records = NULL;
         struct known_name *stage_names = NULL, *recovery_names = NULL;
+        int live_producer = 0;
         if (root >= 0 && flock(root, LOCK_SH) == 0) {
             struct stat pinned, named;
             if (fstat(root, &pinned) == 0 && S_ISDIR(pinned.st_mode)) {
@@ -841,7 +852,6 @@ static int retained_workspace(int parent, const char *parent_path,
             struct stat record_id;
             char *bytes = fd < 0 || fstat(fd, &record_id) != 0
                 || !S_ISREG(record_id.st_mode) ? NULL : read_bytes(fd, &length);
-            if (fd >= 0) close(fd);
             const char magic[] = "LANDIN-PUBLICATION-1\n";
             const char end[] = "END-LANDIN-PUBLICATION-1\n";
             if (!bytes || length < sizeof magic + sizeof end - 2
@@ -877,10 +887,26 @@ static int retained_workspace(int parent, const char *parent_path,
                     }
                 }
             }
+            if (!refused && fd >= 0) {
+                /* Query only: readers never create locks which another reader
+                   could mistake for a producer. The actual sealed record is
+                   pinned by fd; no PID number is used as authority. */
+                struct flock lease = {0};
+                lease.l_type = F_WRLCK; lease.l_whence = SEEK_SET;
+                if (fcntl(fd, F_GETLK, &lease) == 0 && lease.l_type == F_WRLCK)
+                    live_producer = 1;
+            }
+            if (fd >= 0) close(fd);
             free(bytes);
         }
-        if (!refused && (!entries_known(root, "stage", stage_names)
-                         || !entries_known(root, "recovery", recovery_names))) refused = 1;
+        /* A producer may create arbitrary temporary stage entries. A live
+           writer lease on a validated, sealed journal permits observing them,
+           never adopting or deleting them. All journals/target names and the
+           recovery allow-list remain strict. Liveness is a snapshot: if the
+           producer dies after this query, each publication still captures and
+           inspects its own destination and installs without replacement. */
+        if (!refused && (!entries_known(root, "stage", stage_names, live_producer)
+                         || !entries_known(root, "recovery", recovery_names, 0))) refused = 1;
         free_names(stage_names); free_names(recovery_names);
         if (records) closedir(records);
         if (root >= 0) { (void)flock(root, LOCK_UN); close(root); }
@@ -911,15 +937,27 @@ static int write_journal(struct publication *p)
                          (uintmax_t)p->expected.st_dev, (uintmax_t)p->expected.st_ino);
     if (result >= 0) result = fstat(fd, &p->journal_id);
     if (result == 0) result = fsync(fd);
-    close(fd);
+    /* Keep the first sealed journal's write lease until the whole arena is
+       retired or quarantined. POSIX record locks are process-owned: closing
+       ANY descriptor for this inode would release it. The owner never reopens
+       its journal (live own arenas skip discovery; retirement uses fstatat).
+       The first publication may Finish/Discard while other references remain. */
+    int first = p->arena->producer_fd < 0;
+    if (result == 0 && first) {
+        struct flock lease = {0};
+        lease.l_type = F_WRLCK; lease.l_whence = SEEK_SET;
+        result = fcntl(fd, F_SETLK, &lease);
+    }
     if (result == 0) {
-        if (flock(p->arena->root_fd, LOCK_EX) != 0) return -1;
+        if (flock(p->arena->root_fd, LOCK_EX) != 0) { close(fd); return -1; }
         result = no_replace(p->arena->root_fd, building,
                             p->arena->root_fd, p->journal, 0);
         if (result == 0 && fsync(p->arena->root_fd) != 0 && errno != EINVAL) result = -1;
         int error = errno;
         (void)flock(p->arena->root_fd, LOCK_UN); errno = error;
     }
+    if (result == 0 && first) { p->arena->producer_fd = fd; fd = -1; }
+    if (fd >= 0) { int error = errno; close(fd); errno = error; }
     if (result == 0) barrier("journal-ready", p->path);
     return result < 0 ? -1 : 0;
 }
@@ -956,6 +994,7 @@ static void free_finished_arena(struct arena *arena)
     *at = arena->next;
     close(arena->private_fd); close(arena->recovery_fd);
     close(arena->root_fd); close(arena->parent);
+    if (arena->producer_fd >= 0) close(arena->producer_fd);
     free(arena->path); free(arena->name); free(arena->recovery_path); free(arena);
 }
 static int landin_publication_open_locked(const char *path, int deletion,
@@ -1024,7 +1063,7 @@ fail:
             reason(why, room, "cannot prepare %s: destination exists but absence was required; choose another output or restart with its existing contents preserved",
                    path);
         } else if (p && p->arena) {
-            p->arena->retained = 1;
+            quarantine(p->arena);
             char known[PATH_MAX + 80], location[PATH_MAX + 256];
             size_t length = strlen(p->arena->path);
             /* Arena paths end in /stage; the whole root remains inspectable
@@ -1312,7 +1351,7 @@ static int landin_publication_step_locked(int token, int action,
                 || finish_journals(p->arena) != 0
                 || unlinkat(parent, p->arena->name, AT_REMOVEDIR) != 0) {
                 int error = errno;
-                p->arena->retained = 1;
+                quarantine(p->arena);
                 p->finish_failed = 1;
                 (void)flock(p->arena->root_fd, LOCK_UN);
                 char location[PATH_MAX + 256];
@@ -1334,7 +1373,7 @@ static int landin_publication_step_locked(int token, int action,
 fail:
     {
         int error = errno;
-        if (action == 3 || action == 4) p->arena->retained = 1;
+        if (action == 3 || action == 4) quarantine(p->arena);
         if (action == 4 && p->finished) p->finish_failed = 1;
         char location[PATH_MAX + 256];
         describe_recovery(p->arena, location, sizeof location);
