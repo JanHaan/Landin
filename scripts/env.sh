@@ -120,3 +120,23 @@ landin_require() {
         exit 127
     fi
 }
+
+#  Opt in only after building, immediately before starting a fresh test
+#  process. glibc's allocator count includes freed thread-cache blocks;
+#  memory controls need that cache disabled before allocator startup.
+#  Merely sourcing this file leaves build and ordinary compiler runs alone.
+landin_test_allocator_environment() {
+    case "$(uname -s)" in
+        Linux)
+            GLIBC_TUNABLES="$(python3 - "${GLIBC_TUNABLES-}" <<'PY'
+import sys
+key = 'glibc.malloc.tcache_count'
+fields = [field for field in sys.argv[1].split(':')
+          if field and field.partition('=')[0] != key]
+sys.stdout.write(':'.join([*fields, key + '=0']))
+PY
+)" || return
+            export GLIBC_TUNABLES
+            ;;
+    esac
+}

@@ -59,6 +59,7 @@ fi
 cd "$LANDIN_ADA_DIR"
 LANDIN_REFINE="$LANDIN_BUILD_DIR/bin/refine"
 export LANDIN_REFINE
+landin_test_allocator_environment
 #  Optional detailed timing tables sort by duration, outside the stable
 #  harness transcript. This property run requests only normal progress.
 unset LANDIN_TEST_TIMINGS
@@ -73,11 +74,16 @@ run_test() {
         > "$Prefix.command" <<'PY'
 import shlex
 import sys
+import os
 cwd, jobs, refine, *command = sys.argv[1:]
 print('cd ' + shlex.quote(cwd))
 print('unset LANDIN_TEST_TIMINGS')
+if 'GLIBC_TUNABLES' not in os.environ:
+    print('unset GLIBC_TUNABLES')
+allocator = ('GLIBC_TUNABLES=' + shlex.quote(os.environ['GLIBC_TUNABLES']) + ' '
+             if 'GLIBC_TUNABLES' in os.environ else '')
 print('LANDIN_TEST_JOBS=' + shlex.quote(jobs)
-      + ' LANDIN_REFINE=' + shlex.quote(refine) + ' '
+      + ' LANDIN_REFINE=' + shlex.quote(refine) + ' ' + allocator
       + shlex.join(command))
 PY
     if LANDIN_TEST_JOBS="$Run_Jobs" "$@" \

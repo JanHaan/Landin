@@ -105,6 +105,7 @@ for Argument in "$@"; do
 done
 LANDIN_REFINE="$LANDIN_BUILD_DIR/bin/refine"
 export LANDIN_REFINE
+landin_test_allocator_environment
 
 if [ "$Record_And_Run" = "yes" ]; then
     "$LANDIN_BUILD_DIR/bin/landin_tests" --record

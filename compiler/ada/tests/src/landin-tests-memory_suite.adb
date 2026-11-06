@@ -8,15 +8,16 @@
 --  over and over and require what the allocator holds afterwards to stay
 --  where it was.
 --
---  The measure is the allocator's count of bytes in use, not the resident
+--  The measure is the allocator's count of bytes held, not the resident
 --  set.  The peak only rises, so it cannot see a leak at all; the current
 --  resident set moves with whatever the kernel paged in and how the
---  allocator's free space fragmented.  Bytes in use depend only on which
---  allocations are still live, which for one deterministic request in a
---  process doing nothing else is the same number every time.  The first
---  few runs are not measured: the runtime's secondary stack and the
---  allocator's size-class caches grow once, to what one run needs, and
---  then stay there.
+--  allocator's free space fragmented.  glibc's count includes freed blocks
+--  in its thread cache, whose occupancy need not settle after a few runs.
+--  The launchers disable that cache in fresh test processes; every actual
+--  memory case first requires a small allocation to be visible while held
+--  and to return exactly to its baseline after free.  Warmups still leave
+--  room for bounded initialization, without changing the measured windows
+--  or excusing sustained growth.
 --
 --  Deliberately uses the real host.  The measurement is the host
 --  allocator's, and the program is read from the repository: the derived
@@ -73,6 +74,78 @@ package body Landin.Tests.Memory_Suite is
    --  parts of the measured tail.  A per-run leak can otherwise fit under
    --  the total allowance and pass forever.
    Tolerance : constant Long_Long_Integer := 64 * 1024;
+
+   function C_Malloc (Size : Interfaces.C.size_t) return System.Address
+     with Import, Convention => C, External_Name => "malloc";
+   procedure C_Free (Block : System.Address)
+     with Import, Convention => C, External_Name => "free";
+
+   --  No allocating diagnostic is formed between the samples. This guard
+   --  belongs to every meter case, even when filters or shards omit the
+   --  independently registered control below.
+   function Meter_Is_Sound
+     (Item : in out Landin.Testing.Context) return Boolean;
+
+   function Meter_Is_Sound
+     (Item : in out Landin.Testing.Context) return Boolean
+   is
+      use type System.Address;
+      Meter : Landin.Platform.Native.Native_Meter;
+      Block : System.Address := System.Null_Address;
+      Before, Held, Freed : Long_Long_Integer;
+   begin
+      --  Initialize the allocator before requiring exact small-block return.
+      Block := C_Malloc (512);
+      if Block = System.Null_Address then
+         Landin.Testing.Fail
+           (Item, "cannot allocate 512 bytes for the allocator meter probe;"
+            & " memory measurement was not run");
+         return False;
+      end if;
+      C_Free (Block);
+      Block := System.Null_Address;
+      Before := Meter.Sample.Allocated_Bytes;
+      Block := C_Malloc (512);
+      if Block = System.Null_Address then
+         Landin.Testing.Fail
+           (Item, "cannot allocate 512 bytes for the allocator meter probe;"
+            & " memory measurement was not run");
+         return False;
+      end if;
+      Held := Meter.Sample.Allocated_Bytes;
+      C_Free (Block);
+      Block := System.Null_Address;
+      Freed := Meter.Sample.Allocated_Bytes;
+      if Held - Before < 512 or else Freed /= Before then
+         Landin.Testing.Fail
+           (Item, "allocator meter cannot distinguish a live 512-byte block"
+            & " from cached frees; held delta"
+            & Long_Long_Integer'Image (Held - Before) & ", freed delta"
+            & Long_Long_Integer'Image (Freed - Before)
+            & "; start a fresh process through scripts/dev-test.sh with"
+            & " the same --case or --suite selection");
+         return False;
+      end if;
+      return True;
+   exception
+      when others =>
+         C_Free (Block);
+         raise;
+   end Meter_Is_Sound;
+
+   procedure Gate_Sees_Small_Allocation_Lifetimes
+     (Item : in out Landin.Testing.Context);
+
+   procedure Gate_Sees_Small_Allocation_Lifetimes
+     (Item : in out Landin.Testing.Context) is
+   begin
+      if not Meter_Is_Sound (Item) then
+         return;
+      end if;
+      Landin.Testing.Check
+        (Item, True,
+         "a held 512-byte block is seen and free returns exactly to baseline");
+   end Gate_Sees_Small_Allocation_Lifetimes;
 
    function Flat
      (Settled, Midpoint, Final : Long_Long_Integer) return Boolean is
@@ -189,18 +262,9 @@ package body Landin.Tests.Memory_Suite is
    procedure Gate_Sees_Retained_Run_Growth
      (Item : in out Landin.Testing.Context) is
       use type System.Address;
-      function C_Malloc (Size : Interfaces.C.size_t) return System.Address
-        with Import, Convention => C, External_Name => "malloc";
-      procedure C_Free (Block : System.Address)
-        with Import, Convention => C, External_Name => "free";
-      --  mallinfo2 counts blocks in glibc's thread cache as allocated, so
-      --  a block the cache hands back is invisible to the meter.  The cache
-      --  holds requests of up to 1032 bytes; at 512 a block freed during
-      --  the measurement, by whatever ran before, hid one run's growth, and
-      --  warming the cache first only moved where.  A 2 KiB block is never
-      --  cached, and on Darwin the meter sums the zones' in-use ranges
-      --  exactly, so every retained block is seen wherever the case runs.
-      Block_Size : constant := 2 * 1024;
+      --  The same small-block accounting required by the entry guard must
+      --  expose retained growth despite a finalized transient allocation.
+      Block_Size : constant := 512;
       Held : array (1 .. 8) of System.Address :=
         [others => System.Null_Address];
       Meter : Landin.Platform.Native.Native_Meter;
@@ -221,6 +285,9 @@ package body Landin.Tests.Memory_Suite is
            and then (Run /= 5 or else Unbounded.Length (Transient) = 8 * 1024);
       end Retain_One;
    begin
+      if not Meter_Is_Sound (Item) then
+         return;
+      end if;
       Measure_Repeated
         (Meter, Warm => 2, Measured => 6, Execute => Retain_One'Access,
          Settled => Settled, Midpoint => Midpoint, Late => Late,
@@ -238,7 +305,7 @@ package body Landin.Tests.Memory_Suite is
          end loop;
          Landin.Testing.Check
            (Item, Small_Leak_Rejected,
-            "post-run samples reject 2 KiB retained per run below 64 KiB"
+            "post-run samples reject 512 bytes retained per run below 64 KiB"
             & " despite a finalized transient result"
             & "; total " & Long_Long_Integer'Image (Final - Settled)
             & ", tail parts " & Long_Long_Integer'Image (Late - Midpoint)
@@ -359,6 +426,9 @@ package body Landin.Tests.Memory_Suite is
          return True;
       end Execute_One;
    begin
+      if not Meter_Is_Sound (Item) then
+         return;
+      end if;
       Ada.Directories.Create_Path (Scratch);
       Measure_Repeated
         (Meter, Warm, Measured, Execute_One'Access,
@@ -409,6 +479,9 @@ package body Landin.Tests.Memory_Suite is
          return True;
       end Execute_One;
    begin
+      if not Meter_Is_Sound (Item) then
+         return;
+      end if;
       Landin.Platform.Add (Arguments, "fmt");
       Landin.Platform.Add (Arguments, "--check");
       for Name of Landin.Platform.Path_List'
@@ -498,6 +571,9 @@ package body Landin.Tests.Memory_Suite is
 
       Volume : Long_Long_Integer;
    begin
+      if not Meter_Is_Sound (Item) then
+         return;
+      end if;
       Host.Read_File (Path, Text, Read);
       Landin.Testing.Check
         (Item, Landin.Platform."=" (Read, Landin.Platform.Read_Ok),
@@ -582,6 +658,9 @@ package body Landin.Tests.Memory_Suite is
          Unbounded.Append (Script, Landin.Server.Transport.Framed (Message));
       end Send;
    begin
+      if not Meter_Is_Sound (Item) then
+         return;
+      end if;
       Host.Read_File (Directory & "/main.ldn", Text, Read);
       Send ("{""jsonrpc"":""2.0"",""id"":1,""method"":""initialize"","
             & """params"":{""capabilities"":{},""initializationOptions"":"
@@ -680,6 +759,9 @@ package body Landin.Tests.Memory_Suite is
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "memory", "a gate sees small allocation lifetimes",
+         Gate_Sees_Small_Allocation_Lifetimes'Access);
       Landin.Testing.Register
         (Into, "memory", "gate rejects linear growth",
          Gate_Rejects_Linear_Growth'Access);
