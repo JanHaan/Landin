@@ -7,6 +7,7 @@ with Landin.Diagnostics;
 with Landin.Driver;
 with Landin.Platform;
 with Landin.Testing.Fakes;
+with Landin.Testing.Fixes;
 with Landin.Platform.Native;
 with Landin.Platform.Overlays;
 with Landin.Source.Names;
@@ -4705,8 +4706,199 @@ package body Landin.Tests.Parser_Suite is
          "a direct conversion call reports a complete diagnostic");
    end Written_Type_Prefixes_Keep_Their_Boundaries;
 
+   procedure Refusal_Routes_Preserve_Intent
+     (Item : in out Landin.Testing.Context);
+
+   procedure Refusal_Routes_Preserve_Intent
+     (Item : in out Landin.Testing.Context)
+   is
+      LF : constant Character := ASCII.LF;
+      Main : constant String := "public main: () -> (code: i32) =" & LF;
+      Tail : constant String := "end main" & LF;
+
+      procedure Check
+        (Label, Text, Message, Fixed : String;
+         At_Byte : Natural := 0);
+
+      procedure Check
+        (Label, Text, Message, Fixed : String;
+         At_Byte : Natural := 0)
+      is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : Landin.Platform.Path_List;
+         Ran : Landin.Driver.Outcome;
+         Clashed : Boolean;
+      begin
+         Host.Add_Directory ("root");
+         Host.Add_Directory ("root/helper");
+         Host.Add_File ("main.ldn", Text);
+         Host.Add_File ("root/helper/unit.ldn", "value: i32 = 1" & LF);
+         Args.Append ("--root=root");
+         Args.Append ("main.ldn");
+         Ran := Landin.Driver.Execute (Args, Host, Tools);
+         Landin.Testing.Check
+           (Item, (Ran.Status = Landin.Driver.Status_Success)
+              = (Message = ""), Label & " keeps its verdict");
+         if Message /= "" then
+            Landin.Testing.Check
+              (Item, Landin.Diagnostics.Count (Ran.Found) > 0,
+               Label & " explains the refusal");
+            declare
+               First : constant Landin.Diagnostics.Diagnostic :=
+                 Landin.Diagnostics.Get (Ran.Found, 1);
+            begin
+               Landin.Testing.Check
+                 (Item, Contains (Landin.Diagnostics.Message
+                   (Landin.Diagnostics.Primary (First)), Message),
+                  Label & " names the working route");
+               if Message = "`return` carries no value" then
+                  Landin.Testing.Check
+                    (Item, Contains (Landin.Diagnostics.Nth_Note (First, 1),
+                                    "`r = expression`")
+                       and then Contains
+                         (Landin.Diagnostics.Nth_Note (First, 1),
+                          "bare `return`"),
+                     Label & " explains assignment and the bare exit");
+               end if;
+               if At_Byte > 0 then
+                  Landin.Testing.Check_Equal
+                    (Item, Natural (Landin.Diagnostics.Span_Of
+                       (Landin.Diagnostics.Primary (First)).First),
+                     At_Byte, Label & " points to its cause");
+               end if;
+               if Fixed = "" then
+                  Landin.Testing.Check_Equal
+                    (Item, Landin.Diagnostics.Fix_Count (First), 0,
+                     Label & " does not erase the operation");
+               else
+                  Landin.Testing.Check_Equal
+                    (Item, Landin.Diagnostics.Fix_Count (First), 1,
+                     Label & " offers one bounded repair");
+               end if;
+            end;
+         end if;
+         if Fixed /= "" then
+            declare
+               Applied : constant String := Landin.Testing.Fixes.Applied
+                 (Ran.Found, 1, Text, Clashed);
+            begin
+               Landin.Testing.Check_Equal
+                 (Item, Applied, Fixed, Label & " preserves the intention");
+               Landin.Testing.Check
+                 (Item, not Clashed, Label & " has no overlapping edits");
+               Host.Add_File ("main.ldn", Applied);
+               Ran := Landin.Driver.Execute (Args, Host, Tools);
+               Landin.Testing.Check_Equal
+                 (Item, Ran.Status, Landin.Driver.Status_Success,
+                  Label & " offered edit checks successfully: "
+                    & Unbounded.To_String (Ran.Report));
+            end;
+         end if;
+      end Check;
+   begin
+      Check
+        ("named return payload",
+         "add: (a: i32, b: i32) -> (r: i32) =" & LF
+           & "    return a + b" & LF & "end add" & LF,
+         "`return` carries no value", "");
+      Check
+        ("decrement", Main & "    mut i := 2" & LF & "    i--" & LF
+           & "    code = i" & LF & Tail,
+         "Landin writes `dec name`",
+         Main & "    mut i := 2" & LF & "    dec i" & LF
+           & "    code = i" & LF & Tail);
+      Check
+        ("logical negation",
+         "f: (a: bool) -> (r: i32) =" & LF
+           & "    r = if !a then 1 else 2 end if" & LF & "end f" & LF,
+         "Landin writes `not`",
+         "f: (a: bool) -> (r: i32) =" & LF
+           & "    r = if not a then 1 else 2 end if" & LF & "end f" & LF);
+      Check
+        ("infix bang is no prefix",
+         "f: (a: bool, b: bool) -> (r: bool) =" & LF
+           & "    r = a ! b" & LF & "end f" & LF,
+         "this begins no statement", "");
+      Check
+        ("infix bang in a condition",
+         "f: (a: bool, b: bool) -> (r: i32) =" & LF
+           & "    r = if a ! b then 1 else 2 end if" & LF & "end f" & LF,
+         "a branch's condition", "");
+      Check
+        ("comment-only deletion", Main & "    mut i := 2" & LF
+           & "    i-- keep this comment" & LF & "    code = i" & LF & Tail,
+         "this value", "");
+      Check
+        ("slash comment", Main & "    // set the result" & LF
+           & "    code = 0" & LF & Tail,
+         "Landin writes `--`", "");
+      Check
+        ("block comment", Main & "    /* set the result */" & LF
+           & "    code = 0" & LF & Tail,
+         "Landin writes `--( ... )--`", "");
+      Check
+        ("trailing slash comment", Main & "    code = 0 // result" & LF
+           & Tail, "Landin writes `--`", "");
+      Check
+        ("semicolon", Main & "    code = 0;" & LF & Tail,
+         "without a semicolon", "");
+      Check
+        ("brace", Main & "    code = 0" & LF
+           & "    if code == 0 { code = 1 }" & LF & Tail,
+         "with words, not braces", "");
+      Check
+        ("for typo", Main & "    code = 0" & LF
+           & "    fro i in 0..<3 do" & LF & "        inc code" & LF
+           & "    end for" & LF & Tail,
+         "`fro` may be a misspelling of `for`",
+         Main & "    code = 0" & LF & "    for i in 0..<3 do" & LF
+           & "        inc code" & LF & "    end for" & LF & Tail,
+         Main'Length + 17);
+      Check
+        ("return typo", Main & "    code = 0" & LF
+           & "    retrun when code > 1" & LF & Tail,
+         "`retrun` may be a misspelling of `return`",
+         Main & "    code = 0" & LF & "    return when code > 1" & LF & Tail);
+      Check
+        ("import typo", "improt helper" & LF & Main
+           & "    code = 0" & LF & Tail,
+         "`improt` may be a misspelling of `import`",
+         "import helper" & LF & Main & "    code = 0" & LF & Tail);
+      Check
+        ("public typo", "pubilc " & Main (8 .. Main'Last)
+           & "    code = 0" & LF & Tail,
+         "`pubilc` may be a misspelling of `public`",
+         Main & "    code = 0" & LF & Tail);
+      Check
+        ("valid names and calls",
+         "pubilc: i32 = 1" & LF & "improt: i32 = 2" & LF
+           & "fro: () -> none = end fro" & LF
+           & "f: (retrun: i32) -> (r: i32) =" & LF
+           & "    fro()" & LF & "    r = retrun + pubilc + improt" & LF
+           & "    return" & LF & "end f" & LF, "", "");
+      Check
+        ("valid final identifier expression",
+         "f: (fro: i32, retrun: i32) -> (r: i32) =" & LF
+           & "    fro + retrun" & LF & "end f" & LF, "", "");
+      Check
+        ("one-line bare return then call",
+         "f: () -> none = end f" & LF
+           & "g: () -> (r: i32) = r = 1 return f() end g" & LF, "", "");
+      Check
+        ("one-line bare return then assignment",
+         "g: () -> (r: i32) = r = 1 return r = 2 end g" & LF, "", "");
+      Check
+        ("bare return before another statement",
+         "f: () -> none =" & LF & "    return" & LF
+           & "    fro: i32 = 1" & LF & "end f" & LF, "", "");
+   end Refusal_Routes_Preserve_Intent;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "parser", "refusal routes preserve intent",
+         Refusal_Routes_Preserve_Intent'Access);
       Landin.Testing.Register
         (Into, "parser", "written type prefixes keep their boundaries",
          Written_Type_Prefixes_Keep_Their_Boundaries'Access);

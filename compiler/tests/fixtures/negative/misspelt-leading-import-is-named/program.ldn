@@ -1,0 +1,4 @@
+improt helper
+public main: () -> (code: i32) =
+    code = 0
+end main

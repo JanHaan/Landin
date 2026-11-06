@@ -1,0 +1,6 @@
+public main: () -> (code: i32) =
+    code = 0
+    for i in 0..<3 do
+        inc code
+    end for
+end main

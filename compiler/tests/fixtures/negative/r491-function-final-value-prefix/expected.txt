@@ -1,9 +1,13 @@
-error[L0110]: this statement prefix cannot have a final value
+error[L0107]: `return` carries no value
   --> ../tests/fixtures/negative/r491-function-final-value-prefix/main.ldn:2:42
   |
 2 | returned: () -> (r: i32) = r = 42 return r end returned
   |                                          ^
-  = note: [1800]: value prefixes exclude unconditional exits and unchecked regions
+  --> ../tests/fixtures/negative/r491-function-final-value-prefix/main.ldn:2:17
+  |
+2 | returned: () -> (r: i32) = r = 42 return r end returned
+  |                 ^^^^^^^^ the result it fills
+  = note: [0930]: assign the named result first, as in `r = expression`, then write a bare `return`
 error[L0110]: this statement prefix cannot have a final value
   --> ../tests/fixtures/negative/r491-function-final-value-prefix/main.ldn:6:5
   |

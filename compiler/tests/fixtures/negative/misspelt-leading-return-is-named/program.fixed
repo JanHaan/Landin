@@ -1,0 +1,4 @@
+public main: () -> (code: i32) =
+    code = 0
+    return when code > 1
+end main

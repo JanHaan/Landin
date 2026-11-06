@@ -1,0 +1,6 @@
+error[L0110]: Landin writes `--` for a line comment, not `//`
+  --> ../tests/fixtures/negative/foreign-slash-comment-is-named/program.ldn:2:5
+  |
+2 |     // set the result
+  |     ^^
+  = note: [1780]: `--` comments out the rest of its line

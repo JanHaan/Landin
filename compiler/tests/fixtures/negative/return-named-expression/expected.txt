@@ -1,0 +1,10 @@
+error[L0107]: `return` carries no value
+  --> ../tests/fixtures/negative/return-named-expression/program.ldn:2:12
+  |
+2 |     return a + b
+  |            ^^^^^
+  --> ../tests/fixtures/negative/return-named-expression/program.ldn:1:26
+  |
+1 | add: (a: i32, b: i32) -> (r: i32) =
+  |                          ^^^^^^^^ the result it fills
+  = note: [0930]: assign the named result first, as in `r = expression`, then write a bare `return`
