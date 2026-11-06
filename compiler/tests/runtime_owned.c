@@ -250,7 +250,9 @@ static void moved_root_recovery_diagnostic(void)
 int main(void)
 {
     const char *tmp = getenv("TMPDIR");
-    REQUIRE(tmp && strlen(tmp) + 32 < sizeof scratch);
+    /* Match the production scratch allocator when no override is supplied. */
+    if (!tmp || !*tmp) tmp = "/tmp";
+    REQUIRE(strlen(tmp) + 32 < sizeof scratch);
     snprintf(scratch, sizeof scratch, "%s/landin-runtime-owned-XXXXXX", tmp);
     REQUIRE(mkdtemp(scratch) != NULL);
     capture_normal(); capture_ancestor(); capture_replaced_root();
