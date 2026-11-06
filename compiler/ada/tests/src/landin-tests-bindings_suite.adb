@@ -133,13 +133,13 @@ package body Landin.Tests.Bindings_Suite is
    --  Every answer a binding of Header asks the fake Clang for, in order.
    procedure Script
      (Tools : in out Landin.Testing.Fakes.Fake_Tool_Runner;
-      Directory : String := Work);
+      Directory : String := Work; Validation_Status : Integer := 0);
 
    --  Directory is the private directory the run's Clang works in: the
    --  fake host's first is Work, and its second ends in 2.
    procedure Script
      (Tools : in out Landin.Testing.Fakes.Fake_Tool_Runner;
-      Directory : String := Work) is
+      Directory : String := Work; Validation_Status : Integer := 0) is
    begin
       Tools.Add_Result (0, "x86_64-pc-linux-gnu" & LF);
       Tools.Add_Result (0, Macros (Unsigned_Char => False));
@@ -147,7 +147,8 @@ package body Landin.Tests.Bindings_Suite is
       Tools.Add_Result (0, Ast);
       Tools.Add_Result (0, Probe_Answers);
       Tools.Add_Result
-        (0, "refine-bindings: " & Directory & "/output/adapters.c "
+        (Validation_Status,
+         "refine-bindings: " & Directory & "/output/adapters.c "
          & Directory & "/headers/api/api.h" & LF);
    end Script;
 
@@ -592,7 +593,7 @@ package body Landin.Tests.Bindings_Suite is
       Meter : Landin.Platform.Unmetered;
    begin
       for Existing in Boolean loop
-         for At_Move in 1 .. 8 loop
+         for At_Move in 1 .. (if Existing then 8 else 2) loop
             declare
                Host : Landin.Testing.Fakes.Fake_Filesystem;
                Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
@@ -602,6 +603,8 @@ package body Landin.Tests.Bindings_Suite is
             begin
                Prepare (Host);
                if Existing then
+                  Host.Add_Directory (Root & "/out");
+                  Host.Add_File (Root & "/out/notes.ldn", "handwritten");
                   for Index in B.Output_Index loop
                      Host.Add_File (Root & "/out/" & B.Output_Name (Index),
                                     "old " & B.Output_Name (Index));
@@ -617,6 +620,12 @@ package body Landin.Tests.Bindings_Suite is
                     (Item, Result.Status = Landin.Driver.Status_Reported
                      and then Contains (Report_Of (Result), "error[L0005]"),
                      Label & ": " & Report_Of (Result));
+                  Landin.Testing.Check
+                    (Item, (if Existing then
+                              Content_Of (Host, Root & "/out/notes.ldn")
+                                = "handwritten"
+                            else not Host.Exists (Root & "/out")),
+                     Label & ": the public directory remains as it was");
                   for Index in B.Output_Index loop
                      declare
                         Path : constant String :=
@@ -652,6 +661,178 @@ package body Landin.Tests.Bindings_Suite is
       end loop;
    end A_Failed_Replacement_Puts_Back;
 
+   procedure Missing_Output_Trees_Are_Private
+     (Item : in out Landin.Testing.Context);
+
+   procedure Missing_Output_Trees_Are_Private
+     (Item : in out Landin.Testing.Context)
+   is
+      Meter : Landin.Platform.Unmetered;
+   begin
+      for Nested in Boolean loop
+         for Invalid_Policy in Boolean loop
+            declare
+               Host : Landin.Testing.Fakes.Fake_Filesystem;
+               Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+               Asked : Landin.Platform.Path_List := Arguments;
+               First_Missing : constant String := Root & "/"
+                 & (if Nested then "missing" else "out");
+            begin
+               Prepare (Host);
+               if Nested then
+                  Asked.Replace_Element
+                    (6, "--out-dir=missing/child/out");
+               end if;
+               if Invalid_Policy then
+                  Host.Add_File (Root & "/policy.json", "{");
+               else
+                  Script (Tools, Validation_Status => 1);
+               end if;
+               declare
+                  Result : constant Landin.Driver.Outcome :=
+                    Landin.Commands.Execute (Asked, Host, Tools, Meter);
+               begin
+                  Landin.Testing.Check
+                    (Item, Result.Status = Landin.Driver.Status_Reported
+                     and then not Host.Exists (First_Missing)
+                     and then not Host.Is_Link (First_Missing),
+                     "a refused binding leaves its whole public tree absent: "
+                     & Report_Of (Result));
+                  Landin.Testing.Check_Equal
+                    (Item, Tools.Run_Count,
+                     (if Invalid_Policy then 0 else 6),
+                     "policy refuses before Clang, validation after Clang");
+               end;
+            end;
+         end loop;
+      end loop;
+      declare
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Asked : Landin.Platform.Path_List := Arguments;
+      begin
+         Prepare (Host);
+         Asked.Replace_Element (6, "--out-dir=missing/child/out");
+         Script (Tools);
+         declare
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Commands.Execute (Asked, Host, Tools, Meter);
+         begin
+            Landin.Testing.Check
+              (Item, Result.Status = 0
+               and then Contains
+                 (Content_Of (Host, Root & "/missing/child/out/bindings.ldn"),
+                  "public mode"),
+               "all missing output parents publish with their files: "
+               & Report_Of (Result));
+         end;
+      end;
+      declare
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      begin
+         Prepare (Host);
+         Host.Set_Identity_Uncertain (Root & "/out");
+         declare
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Commands.Execute (Arguments, Host, Tools, Meter);
+         begin
+            Landin.Testing.Check
+              (Item, Result.Status = Landin.Driver.Status_Reported
+               and then Contains (Report_Of (Result), "cannot establish")
+               and then not Host.Exists (Root & "/out")
+               and then Tools.Run_Count = 0,
+               "uncertain output metadata refuses before generation: "
+               & Report_Of (Result));
+         end;
+      end;
+      declare
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      begin
+         Prepare (Host);
+         Host.Add_Directory (Root & "/out");
+         Host.Add_File (Root & "/out/notes.ldn", "handwritten");
+         Script (Tools);
+         declare
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Commands.Execute (Arguments, Host, Tools, Meter);
+         begin
+            Landin.Testing.Check
+              (Item, Result.Status = 0
+               and then Content_Of (Host, Root & "/out/notes.ldn")
+                 = "handwritten",
+               "an existing root keeps unrelated files: "
+               & Report_Of (Result));
+         end;
+      end;
+   end Missing_Output_Trees_Are_Private;
+
+   procedure Arriving_Output_Trees_Are_Preserved
+     (Item : in out Landin.Testing.Context);
+
+   procedure Arriving_Output_Trees_Are_Preserved
+     (Item : in out Landin.Testing.Context)
+   is
+      use type Landin.Platform.File_Identity;
+      Meter : Landin.Platform.Unmetered;
+      Output_Root : constant String := Root & "/out";
+      Spare : constant String := Root & "/foreign";
+   begin
+      for Boundary in 0 .. 2 loop
+         declare
+            Host : Landin.Testing.Fakes.Fake_Filesystem;
+            Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         begin
+            Prepare (Host);
+            Host.Add_Directory (Spare);
+            Host.Add_File (Spare & "/notes.ldn", "concurrent save");
+            declare
+               Original : constant Landin.Platform.File_Identity :=
+                 Host.Identity_Of (Spare);
+               Child : constant Landin.Platform.File_Identity :=
+                 Host.Identity_Of (Spare & "/notes.ldn");
+            begin
+               if Boundary = 0 then
+                  Host.Appear_Before_Publication (Output_Root, Spare);
+               else
+                  Host.Appear_On_Publication
+                    ((if Boundary = 1
+                      then Landin.Platform.Capture_Previous
+                      else Landin.Platform.Install_Stage),
+                     Output_Root, Spare);
+                  Script (Tools);
+               end if;
+               declare
+                  Result : constant Landin.Driver.Outcome :=
+                    Landin.Commands.Execute (Arguments, Host, Tools, Meter);
+               begin
+                  Landin.Testing.Check
+                    (Item, Result.Status = Landin.Driver.Status_Reported
+                     and then Host.Identity_Of (Output_Root) = Original
+                     and then Host.Identity_Of (Output_Root & "/notes.ldn")
+                       = Child
+                     and then Content_Of (Host, Output_Root & "/notes.ldn")
+                       = "concurrent save",
+                     "an arriving directory and its child survive boundary"
+                     & Natural'Image (Boundary) & ": " & Report_Of (Result));
+                  for Index in B.Output_Index loop
+                     Landin.Testing.Check
+                       (Item, not Host.Exists
+                          (Output_Root & "/" & B.Output_Name (Index)),
+                        "no generated file enters the arriving directory");
+                  end loop;
+                  if Boundary = 0 then
+                     Landin.Testing.Check_Equal
+                       (Item, Tools.Run_Count, 0,
+                        "the actual prepared version must be absent");
+                  end if;
+               end;
+            end;
+         end;
+      end loop;
+   end Arriving_Output_Trees_Are_Preserved;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -672,6 +853,12 @@ package body Landin.Tests.Bindings_Suite is
       Landin.Testing.Register
         (Into, "bindings", "a failed replacement puts back",
          A_Failed_Replacement_Puts_Back'Access);
+      Landin.Testing.Register
+        (Into, "bindings", "missing output trees are private",
+         Missing_Output_Trees_Are_Private'Access);
+      Landin.Testing.Register
+        (Into, "bindings", "arriving output trees are preserved",
+         Arriving_Output_Trees_Are_Preserved'Access);
    end Register;
 
 end Landin.Tests.Bindings_Suite;

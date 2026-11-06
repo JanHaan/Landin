@@ -172,6 +172,9 @@ package body Landin.Commands.Bindings is
       Has_Work : Boolean := False;
       Group : Pub.Transaction;
       Has_Group : Boolean := False;
+      --  Empty for an existing output directory. Otherwise the first
+      --  absent ancestor is one directory artifact, reserved before Clang.
+      New_Root : US.Unbounded_String;
       Input_Paths : Platform.Path_List := Asked.Protected_Inputs;
       Policy_Text : US.Unbounded_String;
 
@@ -1010,18 +1013,112 @@ package body Landin.Commands.Bindings is
       function Prepare_Outputs return Boolean is
          Status : Platform.Write_Status;
          Reason : US.Unbounded_String;
+         Candidate : US.Unbounded_String := Out_Dir;
+         Observation : Platform.Identity_Observation :=
+           Host.Observe_Identity (US.To_String (Candidate));
       begin
+         --  Missing parents belong in the same private directory tree as
+         --  the outputs. Merely reserving four leaves would create public
+         --  directories before policy or Clang validation can refuse.
+         if Observation.Status = Platform.Not_Found then
+            New_Root := Candidate;
+            while not Observation.Parent_Resolved loop
+               declare
+                  Path : constant String := US.To_String (Candidate);
+                  Slash : constant Natural := Ada.Strings.Fixed.Index
+                    (Path, "/", Ada.Strings.Backward);
+               begin
+                  Candidate := US.To_Unbounded_String
+                    (if Slash = 0 then "."
+                     elsif Slash = Path'First then "/"
+                     else Path (Path'First .. Slash - 1));
+               end;
+               Observation := Host.Observe_Identity (US.To_String (Candidate));
+               exit when Observation.Status /= Platform.Not_Found;
+               New_Root := Candidate;
+            end loop;
+         end if;
+         if Observation.Status = Platform.Not_Readable then
+            Report (Cat.Bindings_Output_Refused,
+                    "cannot establish the output directory "
+                    & US.To_String (Candidate)
+                    & "; name an accessible directory with --out-dir");
+            return False;
+         end if;
          Has_Group := True;
-         for Index in B.Output_Index loop
-            Pub.Prepare (Group, Host, Destination (Index), Status, Reason,
-                         Root => US.To_String (Out_Dir));
+         if US.Length (New_Root) > 0 then
+            --  The shared primitive checks its actual prepared snapshot:
+            --  an appearance after the metadata probe is never adopted.
+            Pub.Prepare (Group, Host, US.To_String (New_Root), Status,
+                         Reason, Require_Absent => True);
             if Status /= Platform.Write_Ok then
                Report (Cat.Bindings_Output_Refused, US.To_String (Reason));
                return False;
             end if;
-         end loop;
+         else
+            for Index in B.Output_Index loop
+               Pub.Prepare (Group, Host, Destination (Index), Status, Reason,
+                            Root => US.To_String (Out_Dir));
+               if Status /= Platform.Write_Ok then
+                  Report (Cat.Bindings_Output_Refused, US.To_String (Reason));
+                  return False;
+               end if;
+            end loop;
+         end if;
          return True;
       end Prepare_Outputs;
+
+      function Staged_Output (Index : B.Output_Index) return String;
+
+      function Staged_Output (Index : B.Output_Index) return String is
+         Root : constant String := US.To_String (New_Root);
+         Output_Root : constant String := US.To_String (Out_Dir);
+      begin
+         if Root = "" then
+            return Pub.Stage_Path (Group, Destination (Index));
+         end if;
+         return Pub.Stage_Path (Group, Root)
+           & Output_Root (Output_Root'First + Root'Length .. Output_Root'Last)
+           & "/" & B.Output_Name (Index);
+      end Staged_Output;
+
+      function Make_Staged_Directories return Boolean;
+
+      function Make_Staged_Directories return Boolean is
+         Root : constant String := US.To_String (New_Root);
+         Output_Root : constant String := US.To_String (Out_Dir);
+         Status : Platform.Write_Status;
+      begin
+         if Root = "" then
+            return True;
+         end if;
+         declare
+            Stage : constant String := Pub.Stage_Path (Group, Root);
+            Directory : constant String := Stage
+              & Output_Root
+                (Output_Root'First + Root'Length .. Output_Root'Last);
+         begin
+            --  Each call remains beneath the registered private artifact;
+            --  no public ancestor is made or reopened to fill its tree.
+            Host.Make_Directory (Stage, Status);
+            if Status /= Platform.Write_Ok then
+               Report (Cat.Unwritable_Output, "cannot make " & Stage);
+               return False;
+            end if;
+            for Index in Stage'Length + 2 .. Directory'Last + 1 loop
+               if Index > Directory'Last or else Directory (Index) = '/' then
+                  Host.Make_Directory
+                    (Directory (Directory'First .. Index - 1), Status);
+                  if Status /= Platform.Write_Ok then
+                     Report (Cat.Unwritable_Output, "cannot make "
+                             & Directory (Directory'First .. Index - 1));
+                     return False;
+                  end if;
+               end if;
+            end loop;
+         end;
+         return True;
+      end Make_Staged_Directories;
 
       procedure Replace;
 
@@ -1031,26 +1128,34 @@ package body Landin.Commands.Bindings is
          Reason, Existing : US.Unbounded_String;
          Changed : Natural := 0;
       begin
+         if not Make_Staged_Directories then
+            return;
+         end if;
          for Index in B.Output_Index loop
             declare
                Path : constant String := Destination (Index);
+               Stage : constant String := Staged_Output (Index);
                Content : constant String := B.Output (Session, Index);
             begin
-               Host.Read_File (Path, Existing, Read);
+               if US.Length (New_Root) = 0 then
+                  Host.Read_File (Path, Existing, Read);
+               else
+                  Read := Platform.Not_Found;
+               end if;
                if Read /= Platform.Read_Ok
                  or else US.To_String (Existing) /= Content
                then
                   Changed := Changed + 1;
                end if;
-               if not Write (Pub.Stage_Path (Group, Path), Content) then
+               if not Write (Stage, Content) then
                   return;
                end if;
-               Host.Read_File (Pub.Stage_Path (Group, Path), Existing, Read);
+               Host.Read_File (Stage, Existing, Read);
                if Read /= Platform.Read_Ok
                  or else US.To_String (Existing) /= Content
                then
                   Report (Cat.Unwritable_Output,
-                          "cannot read back " & Pub.Stage_Path (Group, Path)
+                          "cannot read back " & Stage
                           & "; nothing was replaced");
                   return;
                end if;
