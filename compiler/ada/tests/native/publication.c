@@ -1,6 +1,9 @@
 /* Standalone controls exercise production publication and fmt adapters.
    The callback is synchronous, making namespace races deterministic on every
    supported POSIX host; no sleeps, scheduler assumptions, or duplicate model. */
+#ifdef __linux__
+#define _GNU_SOURCE
+#endif
 #ifdef __APPLE__
 #define _DARWIN_C_SOURCE
 #endif
@@ -19,6 +22,9 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#ifdef __linux__
+#include <malloc.h>
+#endif
 
 int landin_observe_identity(const char *, uint64_t *, uint64_t *, int *);
 int landin_entry_names_alias(int, const char *, const char *);
@@ -30,6 +36,15 @@ void landin_close_update(int);
 int landin_tool_start_in_directory(char *const [], char *const [], int,
                                     int, int, int, int, int *);
 int landin_tool_wait(int, int *, int);
+int landin_private_directory(const char *, char *, size_t);
+int landin_remove_tree(const char *);
+int landin_private_write(const char *, const char *, size_t);
+int landin_private_mkdir(const char *);
+int landin_private_path_current(const char *);
+int landin_private_argument_directory(const char *);
+int landin_private_rebase_argument(const char *, int, char *, size_t);
+const char *landin_remove_tree_reason(void);
+void landin_private_directory_set_hook(void (*)(const char *, const char *));
 static char scratch[4096], why[8192];
 static unsigned passed;
 static const char *self_program;
@@ -192,7 +207,9 @@ static void directory_snapshot(void)
 static void mismatch_finish_preserves_tree(void)
 {
     char output[4096], stage[4096], first[8192], changed[8192], old[8192];
-    path(output, sizeof output, "mismatch.dSYM"); REQUIRE(mkdir(output, 0700) == 0);
+    path(old, sizeof old, "mismatch-parent"); REQUIRE(mkdir(old, 0700) == 0);
+    REQUIRE(snprintf(output, sizeof output, "%s/mismatch.dSYM", old) > 0);
+    REQUIRE(mkdir(output, 0700) == 0);
     REQUIRE(snprintf(first, sizeof first, "%s/first", output) > 0); put(first, "keep-first");
     REQUIRE(snprintf(changed, sizeof changed, "%s/changed", output) > 0); put(changed, "old-child");
     int token = prepare(output, 0, "", stage); REQUIRE(mkdir(stage, 0700) == 0);
@@ -205,7 +222,7 @@ static void mismatch_finish_preserves_tree(void)
     REQUIRE(content(old, "keep-first"));
 #if defined(__linux__) || defined(__APPLE__)
     REQUIRE(step(token, 3) == 0 && content(first, "keep-first")
-            && content(changed, "new-child"));
+            && content(changed, "new-child") && step(token, 4) == 0);
 #endif
     ++passed;
 }
@@ -301,7 +318,10 @@ static void rollback_race(const char *event, const char *name)
 static void repeated_abort_retains_recovery(void)
 {
     char output[4096], stage[4096], save[4096], recovery[8192], rollback[8192];
-    path(output, sizeof output, "rollback-output"); path(save, sizeof save, "rollback-editor");
+    char parent[4096], unrelated[8192];
+    path(parent, sizeof parent, "rollback-parent"); REQUIRE(mkdir(parent, 0700) == 0);
+    REQUIRE(snprintf(output, sizeof output, "%s/rollback-output", parent) > 0);
+    path(save, sizeof save, "rollback-editor");
     put(output, "old-output"); put(save, "first-save");
     int token = prepare(output, 0, "", stage); staged(stage, "generated");
     REQUIRE(step(token, 0) == 0 && step(token, 1) == 0 && step(token, 2) == 0);
@@ -316,11 +336,21 @@ static void repeated_abort_retains_recovery(void)
             && content(rollback, "first-save"));
     REQUIRE(step(token, 3) != 0);
     REQUIRE(content(output, "second-save") && content(recovery, "old-output")
-            && content(rollback, "first-save")); ++passed;
+            && content(rollback, "first-save"));
+    REQUIRE(snprintf(unrelated, sizeof unrelated, "%s/unrelated", parent) > 0);
+    for (unsigned i = 0; i < 8; ++i) {
+        int other = 0;
+        REQUIRE(landin_publication_open(unrelated, 0, "", &other, stage,
+                                        sizeof stage, why, sizeof why) != 0);
+        REQUIRE(other == 0 && strstr(why, "retained publication recovery"));
+        REQUIRE(content(output, "second-save") && content(recovery, "old-output")
+                && content(rollback, "first-save") && access(unrelated, F_OK) != 0);
+    }
+    ++passed;
 }
 static void recovery_discovery(void)
 {
-    char output[4096]; path(output, sizeof output, "rollback-output");
+    char output[4096]; path(output, sizeof output, "rollback-parent/rollback-output");
     char *args[] = {(char *)self_program, "--discover", output, NULL};
     int nullfd = open("/dev/null", O_RDWR), child, status; REQUIRE(nullfd >= 0);
     REQUIRE(landin_tool_start_in_directory(args, NULL, 0, nullfd, nullfd,
@@ -992,6 +1022,200 @@ static void pinned_stage_directories(void)
     ++passed;
 }
 
+
+/* Count actual descriptors across complete lifecycles, not registry counters.
+   All descriptors created by this bounded standalone control are below 4096. */
+static unsigned descriptor_count(void)
+{
+    struct rlimit limit;
+    REQUIRE(getrlimit(RLIMIT_NOFILE, &limit) == 0);
+    unsigned bound = limit.rlim_cur < 4096 ? (unsigned)limit.rlim_cur : 4096;
+    unsigned count = 0;
+    for (unsigned fd = 0; fd < bound; ++fd)
+        if (fcntl((int)fd, F_GETFD) >= 0) ++count;
+    return count;
+}
+static void lifecycle_window(unsigned *number, unsigned count)
+{
+    for (unsigned i = 0; i < count; ++i, ++*number) {
+        char root[4096], first[8192], second[8192], a[4096], b[4096];
+        char private[4096], leaf[8192];
+        REQUIRE(snprintf(root, sizeof root, "%s/cycle-%u", scratch, *number) > 0);
+        REQUIRE(mkdir(root, 0700) == 0);
+        REQUIRE(snprintf(first, sizeof first, "%s/a", root) > 0);
+        REQUIRE(snprintf(second, sizeof second, "%s/b", root) > 0);
+        put(first, "old-a"); put(second, "old-b");
+        int one = prepare(first, 0, root, a), two = prepare(second, 0, root, b);
+        staged(a, "new-a"); staged(b, "new-b");
+        REQUIRE(step(one, 0) == 0 && step(two, 0) == 0);
+        REQUIRE(step(one, 1) == 0 && step(two, 1) == 0);
+        REQUIRE(step(one, 2) == 0 && step(two, 2) == 0);
+        REQUIRE(step(one, 4) == 0 && step(two, 4) == 0);
+        REQUIRE(landin_publication_stage_write(a, "stale", 5) == -1);
+        REQUIRE(landin_publication_stage_mkdir(a) == -1);
+        REQUIRE(content(first, "new-a") && content(second, "new-b"));
+        REQUIRE(unlink(first) == 0 && unlink(second) == 0 && rmdir(root) == 0);
+        REQUIRE(landin_private_directory("cycle-", private, sizeof private) == 0);
+        REQUIRE(snprintf(leaf, sizeof leaf, "%s/file", private) > 0);
+        REQUIRE(landin_private_write(leaf, "owned", 5) == 0);
+        char argument[8192], rebased[8192], tiny[1];
+        REQUIRE(snprintf(argument, sizeof argument, "-ffile-prefix-map=%s=.", private) > 0);
+        int directory = landin_private_argument_directory(argument);
+        REQUIRE(directory >= 0);
+        REQUIRE(landin_private_rebase_argument(argument, directory, rebased, sizeof rebased) == 0
+                && !strcmp(rebased, "-ffile-prefix-map=.=."));
+        close(directory);
+        REQUIRE(landin_remove_tree(private) == 1 && landin_remove_tree(private) == 0);
+        REQUIRE(landin_private_argument_directory(argument) == -2);
+        REQUIRE(landin_private_write(leaf, "stale", 5) == -1);
+        REQUIRE(landin_private_mkdir(leaf) == -1);
+        REQUIRE(!landin_private_path_current(private));
+        REQUIRE(landin_private_argument_directory(leaf) == -2);
+        REQUIRE(landin_private_directory("too-small-", tiny, sizeof tiny) == -1
+                && errno == ENAMETOOLONG);
+    }
+}
+static char capacity_original[4096], capacity_moved[8192], capacity_leaf[8192];
+static struct stat capacity_before, capacity_foreign;
+static void capacity_cleanup_race(const char *event, const char *name)
+{
+    if (strcmp(event, "before-capture")) return;
+    REQUIRE(strlen(name) < sizeof capacity_original); strcpy(capacity_original, name);
+    REQUIRE(stat(name, &capacity_before) == 0);
+    REQUIRE(snprintf(capacity_moved, sizeof capacity_moved, "%s-moved", name) > 0);
+    REQUIRE(rename(name, capacity_moved) == 0 && mkdir(name, 0700) == 0);
+    REQUIRE(stat(name, &capacity_foreign) == 0);
+    REQUIRE(snprintf(capacity_leaf, sizeof capacity_leaf, "%s/foreign", name) > 0);
+    put(capacity_leaf, "capacity-save");
+}
+static void registry_lifetimes(void)
+{
+    unsigned number = 0;
+    lifecycle_window(&number, 16);
+    unsigned initial = descriptor_count();
+#ifdef __linux__
+    size_t settled = mallinfo2().uordblks;
+#endif
+    lifecycle_window(&number, 64);
+    unsigned middle = descriptor_count();
+#ifdef __linux__
+    size_t midpoint = mallinfo2().uordblks;
+#endif
+    lifecycle_window(&number, 64);
+    unsigned final = descriptor_count();
+#ifdef __linux__
+    size_t end = mallinfo2().uordblks;
+    printf("registry lifecycle actual heap: %zu -> %zu -> %zu bytes; descriptors %u/%u/%u\n",
+           settled, midpoint, end, initial, middle, final);
+#else
+    printf("registry lifecycle: %u complete cycles; descriptors %u/%u/%u\n",
+           number, initial, middle, final);
+#endif
+    REQUIRE(initial == middle && middle == final);
+#ifdef __linux__
+    REQUIRE(end <= settled + 16384 && end <= midpoint + 8192);
+#endif
+    /* Retired authorities cannot adopt a same-spelling foreign tree, including
+       relative spellings and arguments. They perform no public operation. */
+    char output[4096], stage[4096], root[4096], leaf[8192], relative[8192];
+    path(root, sizeof root, "retired-namespace"); REQUIRE(mkdir(root, 0700) == 0);
+    REQUIRE(snprintf(output, sizeof output, "%s/output", root) > 0);
+    int token = prepare(output, 0, "", stage);
+    staged(stage, "new"); REQUIRE(step(token, 0) == 0 && step(token, 4) == 0);
+    strcpy(root, stage); char *at = strrchr(root, '/'); REQUIRE(at); *at = 0;
+    at = strrchr(root, '/'); REQUIRE(at); *at = 0;
+    REQUIRE(mkdir(root, 0700) == 0); *at = '/'; REQUIRE(mkdir(root, 0700) == 0);
+    put(stage, "foreign");
+    REQUIRE(landin_publication_stage_write(stage, "stale", 5) == -1 && content(stage, "foreign"));
+    REQUIRE(landin_publication_stage_mkdir(stage) == -1);
+    REQUIRE(landin_publication_stage_directory(stage) == -2);
+    char alternate[8192];
+    char *stage_part = strstr(stage, "/stage/"); REQUIRE(stage_part);
+    for (unsigned dot = 0; dot < 2; ++dot) {
+        REQUIRE(snprintf(alternate, sizeof alternate, "%.*s/%sstage/%s",
+                          (int)(stage_part - stage), stage, dot ? "./" : "/",
+                          stage_part + 7) > 0);
+        REQUIRE(landin_publication_stage_write(alternate, "stale", 5) == -1);
+        REQUIRE(landin_publication_stage_mkdir(alternate) == -1);
+        REQUIRE(content(stage, "foreign"));
+    }
+    REQUIRE(snprintf(alternate, sizeof alternate, "--output=%s", stage + strlen(scratch) + 1) > 0);
+    REQUIRE(landin_publication_stage_directory(alternate) == -2);
+    REQUIRE(landin_publication_stage_directory("-Wl,-Map,.refine-publication-unknown/stage/file") == -2);
+    REQUIRE(landin_publication_stage_write("ordinary.refine-publication-suffix/stage/file", "", 0) == -2);
+    uint64_t device, inode; char *bytes = NULL; size_t size;
+    REQUIRE(landin_read_snapshot(stage, &bytes, &size, &device, &inode) == -1 && bytes == NULL);
+    int saved = open(".", O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+    REQUIRE(saved >= 0 && chdir(scratch) == 0);
+    const char *short_stage = stage + strlen(scratch) + 1;
+    REQUIRE(landin_publication_stage_write(short_stage, "stale", 5) == -1);
+    REQUIRE(landin_publication_stage_directory(short_stage) == -2);
+    REQUIRE(fchdir(saved) == 0); close(saved);
+    REQUIRE(landin_private_directory("retired-", root, sizeof root) == 0);
+    REQUIRE(strstr(root, "/retired-.refine-private-") != NULL);
+    REQUIRE(landin_remove_tree(root) == 1 && mkdir(root, 0700) == 0);
+    REQUIRE(snprintf(leaf, sizeof leaf, "%s/foreign", root) > 0); put(leaf, "foreign");
+    struct stat before, after; REQUIRE(stat(root, &before) == 0);
+    REQUIRE(landin_remove_tree(root) == -1);
+    REQUIRE(landin_private_write(leaf, "stale", 5) == -1 && content(leaf, "foreign"));
+    REQUIRE(landin_private_mkdir(leaf) == -1 && !landin_private_path_current(root));
+    REQUIRE(landin_private_argument_directory(leaf) == -2);
+    int directory = open(root, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+    REQUIRE(directory >= 0 && landin_private_rebase_argument(leaf, directory, relative, sizeof relative) == -1);
+    close(directory);
+    REQUIRE(stat(root, &after) == 0 && before.st_dev == after.st_dev
+            && before.st_ino == after.st_ino && before.st_mode == after.st_mode);
+    REQUIRE(content(leaf, "foreign"));
+    path(root, sizeof root, "failed-final-cleanup"); REQUIRE(mkdir(root, 0700) == 0);
+    REQUIRE(snprintf(output, sizeof output, "%s/output", root) > 0);
+    token = prepare(output, 0, "", stage); staged(stage, "new");
+    REQUIRE(step(token, 0) == 0 && step(token, 1) == 0 && step(token, 2) == 0);
+    strcpy(leaf, stage); at = strrchr(leaf, '/'); REQUIRE(at); strcpy(at + 1, "unknown");
+    put(leaf, "retained-evidence");
+    REQUIRE(step(token, 4) != 0 && strstr(why, "retained publication"));
+    REQUIRE(step(token, 4) != 0 && strstr(why, "retained publication"));
+    REQUIRE(content(output, "new") && content(leaf, "retained-evidence"));
+    int other = 0;
+    REQUIRE(snprintf(relative, sizeof relative, "%s/separate", root) > 0);
+    REQUIRE(landin_publication_open(relative, 0, "", &other, stage, sizeof stage,
+                                    why, sizeof why) != 0 && other == 0);
+    REQUIRE(strstr(why, "retained publication recovery") && content(leaf, "retained-evidence"));
+    char tiny[1];
+    landin_private_directory_set_hook(capacity_cleanup_race);
+    REQUIRE(landin_private_directory("capacity-failure-", tiny, sizeof tiny) == -1
+            && errno == ENAMETOOLONG);
+    landin_private_directory_set_hook(NULL);
+    REQUIRE(strstr(landin_remove_tree_reason(), capacity_original));
+    REQUIRE(stat(capacity_moved, &after) == 0 && capacity_before.st_dev == after.st_dev
+            && capacity_before.st_ino == after.st_ino && capacity_before.st_mode == after.st_mode);
+    REQUIRE(landin_remove_tree(capacity_original) == -1);
+#ifdef __FreeBSD__
+    /* Directory no-replace restoration is unsupported here. The actual
+       foreign tree stays in the named cleanup recovery, never discarded. */
+    char recovery_parent[4096], recovered[8192], sentinel[16384];
+    strcpy(recovery_parent, capacity_original);
+    at = strrchr(recovery_parent, '/'); REQUIRE(at); *at = 0;
+    DIR *listing = opendir(recovery_parent); REQUIRE(listing);
+    struct dirent *entry; unsigned found = 0;
+    while ((entry = readdir(listing)) != NULL) {
+        if (strncmp(entry->d_name, ".refine-cleanup-", 16)) continue;
+        REQUIRE(snprintf(recovered, sizeof recovered, "%s/%s/entry", recovery_parent, entry->d_name) > 0);
+        REQUIRE(snprintf(sentinel, sizeof sentinel, "%s/foreign", recovered) > 0);
+        if (!content(sentinel, "capacity-save")) continue;
+        REQUIRE(stat(recovered, &after) == 0 && capacity_foreign.st_dev == after.st_dev
+                && capacity_foreign.st_ino == after.st_ino && capacity_foreign.st_mode == after.st_mode);
+        ++found;
+    }
+    REQUIRE(closedir(listing) == 0 && found == 1);
+    REQUIRE(lstat(capacity_original, &after) != 0 && errno == ENOENT);
+#else
+    REQUIRE(content(capacity_leaf, "capacity-save"));
+    REQUIRE(stat(capacity_original, &after) == 0 && capacity_foreign.st_dev == after.st_dev
+            && capacity_foreign.st_ino == after.st_ino && capacity_foreign.st_mode == after.st_mode);
+#endif
+    ++passed;
+}
+
 int main(int argc, char **argv)
 {
     self_program = argv[0];
@@ -1049,11 +1273,17 @@ int main(int argc, char **argv)
     const char *tmp = getenv("TMPDIR"); if (!tmp || !*tmp) tmp = "/tmp";
     REQUIRE(snprintf(scratch, sizeof scratch, "%s/landin-publication-XXXXXX", tmp) > 0);
     REQUIRE(mkdtemp(scratch) != NULL);
+    if (argc == 2 && !strcmp(argv[1], "--registry-lifetimes")) {
+        registry_lifetimes();
+        printf("publication native: %u controls passed (registry lifetimes)\n", passed);
+        return 0;
+    }
     if (argc == 2 && !strcmp(argv[1], "--identity-observation")) {
         identity_observations();
         printf("publication native: %u controls passed (identity observation)\n", passed);
         return 0;
     }
+    registry_lifetimes();
     identity_observations();
     required_absence_snapshot(); absent_directory_publication();
     absent_root_arrivals(); pinned_stage_directories();

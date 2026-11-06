@@ -233,16 +233,39 @@ static _Thread_local char landin_private_reason[PATH_MAX * 2 + 1024];
 void landin_private_directory_set_hook(void (*hook)(const char *, const char *))
 { landin_owned_hook = hook; }
 const char *landin_remove_tree_reason(void) { return landin_private_reason; }
+/* A private component carries this reserved marker after the caller's prefix.
+   Retired namespaces stay fail-closed without keeping per-path tombstones. */
+static int landin_reserved_private(const char *path)
+{
+    const char *at = path;
+    const char marker[] = ".refine-private-";
+    while ((at = strstr(at, marker)) != NULL) {
+        at += sizeof marker - 1;
+        if (*at && *at != '/') return 1;
+    }
+    return 0;
+}
 static int landin_private_directory_locked(const char *prefix, char *path,
     size_t capacity)
 {
     struct landin_private_root *root = calloc(1, sizeof *root);
+    char marked[NAME_MAX + 1];
     landin_private_reason[0] = '\0';
     if (!root) return -1;
-    if (landin_owned_create(prefix, &root->owned) != 0) { free(root); return -1; }
+    int n = snprintf(marked, sizeof marked, "%s.refine-private-", prefix);
+    if (n < 0 || (size_t)n >= sizeof marked) {
+        free(root); errno = ENAMETOOLONG; return -1;
+    }
+    if (landin_owned_create(marked, &root->owned) != 0) { free(root); return -1; }
     if (strlen(root->owned.path) >= capacity) {
-        landin_owned_remove(&root->owned);
-        close(root->owned.parent); free(root); errno = ENAMETOOLONG; return -1;
+        if (landin_owned_remove(&root->owned) >= 0) {
+            close(root->owned.parent); free(root);
+        } else {
+            snprintf(landin_private_reason, sizeof landin_private_reason,
+                     "%s", root->owned.reason);
+            root->next = landin_private_roots; landin_private_roots = root;
+        }
+        errno = ENAMETOOLONG; return -1;
     }
     strcpy(path, root->owned.path);
     root->next = landin_private_roots; landin_private_roots = root;
@@ -252,17 +275,30 @@ static int landin_private_directory_locked(const char *prefix, char *path,
 
 static int landin_remove_tree_locked(const char *path)
 {
-    struct landin_private_root *root;
+    struct landin_private_root **link = &landin_private_roots;
     landin_private_reason[0] = '\0';
-    for (root = landin_private_roots; root; root = root->next) {
+    while (*link) {
+        struct landin_private_root *root = *link;
         if (!strcmp(root->owned.path, path)) {
             int result = landin_owned_remove(&root->owned);
             if (result < 0) {
                 snprintf(landin_private_reason, sizeof landin_private_reason,
                           "%s", root->owned.reason);
+            } else {
+                *link = root->next;
+                close(root->owned.parent); free(root);
             }
             return result;
         }
+        link = &root->next;
+    }
+    if (landin_reserved_private(path)) {
+        struct stat st;
+        if (lstat(path, &st) != 0 && errno == ENOENT) return 0;
+        snprintf(landin_private_reason, sizeof landin_private_reason,
+                 "unregistered private-directory entry preserved at %s; inspect it before cleanup",
+                 path);
+        errno = ESTALE; return -1;
     }
     /* Explicit caller-owned fixture work trees predate this API. Live
        compiler scratch roots always take the registered branch above. */
@@ -298,7 +334,10 @@ static int landin_private_parent_locked(const char *path, char **parent_path,
     struct landin_private_root *root = landin_private_match(path, &relative);
     char *copy, *save = NULL, *part, *next;
     int fd;
-    if (!root) return -2;
+    if (!root) {
+        if (landin_reserved_private(path)) { errno = ESTALE; return -1; }
+        return -2;
+    }
     if (root->owned.finished || root->owned.retained || !*relative) {
         errno = ESTALE; return -1;
     }
@@ -346,7 +385,7 @@ static int landin_private_path_current_locked(const char *path)
     const char *relative;
     struct landin_private_root *root = landin_private_match(path, &relative);
     struct stat current;
-    if (!root) return 1;
+    if (!root) return !landin_reserved_private(path);
     return !root->owned.finished && !root->owned.retained
         && stat(root->owned.path, &current) == 0
         && landin_owned_same(&current, &root->owned.identity);
@@ -357,7 +396,10 @@ static int landin_private_mkdir_locked(const char *path)
     const char *relative;
     struct landin_private_root *root = landin_private_match(path, &relative);
     int parent, result, error;
-    if (!root) return -2;
+    if (!root) {
+        if (landin_reserved_private(path)) { errno = ESTALE; return -1; }
+        return -2;
+    }
     if (!*relative && !root->owned.finished && !root->owned.retained) return 0;
     parent = landin_private_parent_locked(path, &parent_path, &name);
     if (parent < 0) return -1;
@@ -396,13 +438,15 @@ static int landin_private_argument_directory_locked(const char *argument)
     for (root = landin_private_roots; root; root = root->next) {
         const char *at = strstr(argument, root->owned.path);
         size_t n = strlen(root->owned.path);
-        if (at && (at[n] == '/' || at[n] == '\0')) {
+        if (at && (at[n] == '/' || at[n] == '\0' || at[n] == '=')) {
             if (root->owned.finished || root->owned.retained) {
                 errno = ESTALE; return -2;
             }
-            return fcntl(root->owned.root, F_DUPFD_CLOEXEC, 3);
+            int fd = fcntl(root->owned.root, F_DUPFD_CLOEXEC, 3);
+            return fd < 0 ? -2 : fd;
         }
     }
+    if (landin_reserved_private(argument)) { errno = ESTALE; return -2; }
     return -1;
 }
 static int landin_private_rebase_argument_locked(const char *argument, int directory,
@@ -414,7 +458,7 @@ static int landin_private_rebase_argument_locked(const char *argument, int direc
     for (root = landin_private_roots; root; root = root->next) {
         const char *at = strstr(argument, root->owned.path);
         size_t n = strlen(root->owned.path), before;
-        if (!at || (at[n] && at[n] != '/')) continue;
+        if (!at || (at[n] && at[n] != '/' && at[n] != '=')) continue;
         if (!landin_owned_same(&selected, &root->owned.identity)
             || root->owned.finished || root->owned.retained) {
             errno = EXDEV; return -1;
@@ -425,8 +469,10 @@ static int landin_private_rebase_argument_locked(const char *argument, int direc
         }
         memcpy(result, argument, before); result[before] = '.';
         strcpy(result + before + 1, at + n);
+        if (landin_reserved_private(result)) { errno = ESTALE; return -1; }
         return 0;
     }
+    if (landin_reserved_private(argument)) { errno = ESTALE; return -1; }
     if (strlen(argument) >= room) { errno = ENAMETOOLONG; return -1; }
     strcpy(result, argument); return 0;
 }

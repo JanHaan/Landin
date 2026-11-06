@@ -12,6 +12,9 @@ void landin_publication_notify(const char *, const char *);
 /* The second argument combines DELETE_ONLY and REQUIRE_ABSENT flags. */
 int landin_publication_open(const char *, int, const char *, int *, char *, size_t,
                             char *, size_t);
+/* Successful Finish invalidates the handle. Arena components beginning with
+   .refine-publication- are reserved: unregistered stage authority refuses,
+   including alternate empty/dot separators, without pathname fallback. */
 int landin_publication_step(int, int, const char *const *, size_t,
                             const uint64_t *, size_t, char *, size_t);
 int landin_read_snapshot(const char *, char **, size_t *, uint64_t *, uint64_t *);
