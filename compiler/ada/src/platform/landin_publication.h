@@ -5,8 +5,11 @@
 /* Test-only callback: configure while no adapter call is active. A callback
    must not reenter the registry whose operation invoked it. */
 typedef void (*landin_publication_hook)(const char *event, const char *path);
+#define LANDIN_PUBLICATION_DELETE_ONLY 1
+#define LANDIN_PUBLICATION_REQUIRE_ABSENT 2
 void landin_publication_set_hook(landin_publication_hook hook);
 void landin_publication_notify(const char *, const char *);
+/* The second argument combines DELETE_ONLY and REQUIRE_ABSENT flags. */
 int landin_publication_open(const char *, int, const char *, int *, char *, size_t,
                             char *, size_t);
 int landin_publication_step(int, int, const char *const *, size_t,
@@ -18,4 +21,8 @@ int landin_publication_describe_entry(int, const char *, const char *, char *, s
 int landin_publication_stage_directory(const char *);
 int landin_publication_rebase_argument(const char *, int, char *, size_t);
 int landin_publication_stage_write(const char *, const char *, size_t);
+/* Exclusive creation: an occupied staged entry, even a directory, refuses.
+   0 success, -1 claimed private path refused, -2 outside the registry.
+   A claimed path must never fall back to pathname-based creation. */
+int landin_publication_stage_mkdir(const char *);
 #endif

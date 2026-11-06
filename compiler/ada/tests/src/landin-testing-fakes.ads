@@ -38,6 +38,12 @@ package Landin.Testing.Fakes is
      (Host : in out Fake_Filesystem;
       Action : Landin.Platform.Publication_Action;
       Path, Content : String; As_Link : Boolean := False);
+   --  Move an existing entry and its subtree into place at a race barrier.
+   procedure Appear_Before_Publication
+     (Host : in out Fake_Filesystem; Path, Target : String);
+   procedure Appear_On_Publication
+     (Host : in out Fake_Filesystem;
+      Action : Landin.Platform.Publication_Action; Path, Target : String);
 
    --  A path that exists, can be listed, and cannot be read as a file.
    --  Trailing directory separators do not create a different entry.
@@ -146,7 +152,8 @@ package Landin.Testing.Fakes is
       Handle : out Landin.Platform.Publication_Handle;
       Stage : out Ada.Strings.Unbounded.Unbounded_String;
       Status : out Landin.Platform.Write_Status;
-      Reason : out Ada.Strings.Unbounded.Unbounded_String);
+      Reason : out Ada.Strings.Unbounded.Unbounded_String;
+      Require_Absent : Boolean := False);
    overriding procedure Advance_Publication
      (Host : Fake_Filesystem; Handle : Landin.Platform.Publication_Handle;
       Action : Landin.Platform.Publication_Action;
@@ -467,6 +474,10 @@ private
       Mutation_Action : Landin.Platform.Publication_Action :=
         Landin.Platform.Capture_Previous;
       Mutation_File : File_Entry;
+      Appearance_Armed, Appearance_Before_Open : Boolean := False;
+      Appearance_Action : Landin.Platform.Publication_Action :=
+        Landin.Platform.Capture_Previous;
+      Appearance_Path, Appearance_Target : Unbounded.Unbounded_String;
       Publications : Publication_Vectors.Vector;
       Updates : Update_Vectors.Vector;
       --  Latest successful write per path, separate from the live namespace.

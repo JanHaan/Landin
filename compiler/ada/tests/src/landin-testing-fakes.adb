@@ -161,6 +161,26 @@ package body Landin.Testing.Fakes is
          Kind => (if As_Link then A_Link else A_File), Identity => 0);
    end Replace_On_Publication;
 
+   procedure Appear_Before_Publication
+     (Host : in out Fake_Filesystem; Path, Target : String) is
+   begin
+      Host.Writes.Data.Appearance_Armed := True;
+      Host.Writes.Data.Appearance_Before_Open := True;
+      Host.Writes.Data.Appearance_Path :=
+        Unbounded.To_Unbounded_String (Path);
+      Host.Writes.Data.Appearance_Target :=
+        Unbounded.To_Unbounded_String (Target);
+   end Appear_Before_Publication;
+
+   procedure Appear_On_Publication
+     (Host : in out Fake_Filesystem;
+      Action : Landin.Platform.Publication_Action; Path, Target : String) is
+   begin
+      Appear_Before_Publication (Host, Path, Target);
+      Host.Writes.Data.Appearance_Before_Open := False;
+      Host.Writes.Data.Appearance_Action := Action;
+   end Appear_On_Publication;
+
    procedure Add_Directory (Host : in out Fake_Filesystem; Path : String) is
    begin
       Add (Host, Directory_Path (Path), "", A_Directory);
@@ -698,21 +718,46 @@ package body Landin.Testing.Fakes is
       Root : String; Handle : out Landin.Platform.Publication_Handle;
       Stage : out Unbounded.Unbounded_String;
       Status : out Landin.Platform.Write_Status;
-      Reason : out Unbounded.Unbounded_String)
+      Reason : out Unbounded.Unbounded_String;
+      Require_Absent : Boolean := False)
    is
+      use type Landin.Platform.Move_Status;
       pragma Unreferenced (Root);
-      Existing : constant Natural := Find (Host, Path);
+      Existing : Natural;
       Slash : constant Natural := Ada.Strings.Fixed.Index
         (Path, "/", Ada.Strings.Backward);
       Parent : constant String :=
         (if Slash = 0 then "." else Path (Path'First .. Slash - 1));
       Name : constant String := Path (Slash + 1 .. Path'Last);
       Item : Fake_Publication;
+      Moved : Landin.Platform.Move_Status;
    begin
       Handle := Landin.Platform.No_Publication;
       Stage := Unbounded.Null_Unbounded_String;
       Reason := Unbounded.Null_Unbounded_String;
       Status := Landin.Platform.Not_Writable;
+      if Host.Writes.Data.Appearance_Armed
+        and then Host.Writes.Data.Appearance_Before_Open
+        and then Unbounded.To_String
+          (Host.Writes.Data.Appearance_Path) = Path
+      then
+         Host.Writes.Data.Appearance_Armed := False;
+         Move_File
+           (Host, Unbounded.To_String (Host.Writes.Data.Appearance_Target),
+            Path, Moved);
+         if Moved /= Landin.Platform.Moved then
+            Reason := Unbounded.To_Unbounded_String
+              ("the fake appearance could not move its entry");
+            return;
+         end if;
+      end if;
+      Existing := Find (Host, Path);
+      if Require_Absent and then Existing /= 0 then
+         Reason := Unbounded.To_Unbounded_String
+           ("destination exists but absence was required;"
+            & " choose another output");
+         return;
+      end if;
       if Host.Writes.Data.Refuses_Write or else Host.Is_Link (Path) then
          Reason := Unbounded.To_Unbounded_String
            ("output is linked or unwritable; choose another ordinary output");
@@ -801,6 +846,19 @@ package body Landin.Testing.Fakes is
       Reason := Unbounded.Null_Unbounded_String;
       if Item.Finished then
          return;
+      end if;
+      if Host.Writes.Data.Appearance_Armed
+        and then not Host.Writes.Data.Appearance_Before_Open
+        and then Host.Writes.Data.Appearance_Action = Action
+      then
+         Host.Writes.Data.Appearance_Armed := False;
+         Move_File
+           (Host, Unbounded.To_String (Host.Writes.Data.Appearance_Target),
+            Unbounded.To_String (Host.Writes.Data.Appearance_Path), Moved);
+         if Moved /= Landin.Platform.Moved then
+            Fail ("the fake appearance could not move its entry");
+            return;
+         end if;
       end if;
       if Host.Writes.Data.Mutation_Armed
         and then Host.Writes.Data.Mutation_Action = Action

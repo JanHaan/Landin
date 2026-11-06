@@ -142,9 +142,10 @@ package body Landin.Platform.Overlays is
      (Host : Overlay; Path : String; Delete_Only : Boolean; Root : String;
       Handle : out Publication_Handle;
       Stage : out Unbounded.Unbounded_String; Status : out Write_Status;
-      Reason : out Unbounded.Unbounded_String)
+      Reason : out Unbounded.Unbounded_String;
+      Require_Absent : Boolean := False)
    is
-      pragma Unreferenced (Host, Path, Delete_Only, Root);
+      pragma Unreferenced (Host, Path, Delete_Only, Root, Require_Absent);
    begin
       Handle := No_Publication;
       Stage := Unbounded.Null_Unbounded_String;
