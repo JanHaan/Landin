@@ -1006,6 +1006,107 @@ package body Landin.Tests.Resolution_Suite is
       Check ("f: () -> none = compiler.assert(true) end f", "module");
    end Import_Scopes_And_Refusals;
 
+   procedure Options_Collide_Only_In_Their_Declaring_Module
+     (Item : in out Landin.Testing.Context);
+
+   procedure Options_Collide_Only_In_Their_Declaring_Module
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check (Library : String; Override : Boolean);
+
+      procedure Check (Library : String; Override : Boolean) is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : Landin.Platform.Path_List;
+         Expected : constant String := (if Override then "9" else "7");
+      begin
+         Host.Add_Directory ("entry");
+         Host.Add_Directory ("root");
+         Host.Add_Directory ("root/lib");
+         Host.Add_Directory ("root/helper");
+         Host.Add_File
+           ("entry/main.ldn", "import lib" & LF
+            & "option token: i32 = 7" & LF
+            & "compiler.assert(token == " & Expected & ")" & LF
+            & "f: () -> (r: i32) = r = lib.read() end f" & LF);
+         Host.Add_File
+           ("root/helper/unit.ldn", "public value: i32 = 99" & LF
+            & "public token: i32 = 99" & LF);
+         Host.Add_File
+           ("root/lib/main.ldn", Library & LF
+            & "compiler.assert(token == " & Expected & ")" & LF
+            & "fixed if token == " & Expected & " then" & LF
+            & "    accepted: i32 = 1" & LF
+            & "else" & LF & "    rejected: missing = nope()" & LF
+            & "end if" & LF);
+         Args.Append ("--root=root");
+         if Override then
+            Args.Append ("--option=token=9");
+         end if;
+         Args.Append ("entry");
+         declare
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Driver.Execute (Args, Host, Tools);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Result.Status, Landin.Driver.Status_Success,
+               "unrelated ordinary names keep their namespace: "
+                 & Ada.Strings.Unbounded.To_String (Result.Report));
+            Landin.Testing.Check_Equal
+              (Item, Tools.Run_Count, 0, "checking runs no tool");
+         end;
+      end Check;
+   begin
+      for Override in Boolean loop
+         Check
+           ("token: i32 = 99" & LF
+            & "public read: () -> (r: i32) = r = token end read", Override);
+         Check
+           ("public token: i32 = 99" & LF
+            & "public read: () -> (r: i32) = r = token end read", Override);
+         Check
+           ("token: type = struct pad: u8 value: i32 end token" & LF
+            & "compiler.assert(token == " & (if Override then "9" else "7")
+            & " and sizeof token == 8 and alignof token == 4"
+            & " and offsetof token.value == 4)" & LF
+            & "public read: () -> (r: i32) = r = 99 end read", Override);
+         Check
+           ("import helper as token" & LF
+            & "public read: () -> (r: i32) = r = token.value end read",
+            Override);
+         Check
+           ("import helper (token)" & LF
+            & "public read: () -> (r: i32) = r = token end read", Override);
+      end loop;
+      declare
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : constant Landin.Platform.Path_List :=
+           ["--root=root", "entry"];
+      begin
+         Host.Add_Directory ("entry");
+         Host.Add_Directory ("root");
+         Host.Add_Directory ("root/lib");
+         Host.Add_File
+           ("entry/main.ldn", "import lib" & LF
+            & "option token: i32 = 7" & LF);
+         Host.Add_File
+           ("root/lib/main.ldn", "option token: i32 = 9" & LF);
+         declare
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Driver.Execute (Args, Host, Tools);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Result.Status, 1, "options remain globally unique");
+            Landin.Testing.Check
+              (Item, Ada.Strings.Fixed.Index
+                 (Ada.Strings.Unbounded.To_String (Result.Report),
+                  "option `token` is declared twice") > 0,
+               "a duplicate option still has its original cause");
+         end;
+      end;
+   end Options_Collide_Only_In_Their_Declaring_Module;
+
    procedure Configuration_Conflicts_Have_One_Cause
      (Item : in out Landin.Testing.Context);
 
@@ -1283,6 +1384,9 @@ package body Landin.Tests.Resolution_Suite is
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "resolution", "options collide only in their declaring module",
+         Options_Collide_Only_In_Their_Declaring_Module'Access);
       Landin.Testing.Register
         (Into, "resolution", "configuration conflicts have one cause",
          Configuration_Conflicts_Have_One_Cause'Access);

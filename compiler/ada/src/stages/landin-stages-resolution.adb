@@ -104,6 +104,26 @@ package body Landin.Stages.Resolution is
         (Named : Landin.Source.Names.Name_Id) return Boolean
         is (Spelled (Named) in "compiler" | "assembler" | "linker");
 
+      --  Options are globally available to configuration expressions, but
+      --  their ordinary declaration/import collision belongs to the module
+      --  that declared the option, including every sibling source file.
+      function Option_Declared_In_Module
+        (Of_Tree : Syn.Tree; Named : Landin.Source.Names.Name_Id)
+         return Boolean;
+
+      function Option_Declared_In_Module
+        (Of_Tree : Syn.Tree; Named : Landin.Source.Names.Name_Id)
+         return Boolean
+      is
+         Origin : constant Landin.Provenance.Origin :=
+           Landin.Configuration.Option_Origin (Activity.all, Named);
+      begin
+         return Landin.Provenance.Is_Known (Origin)
+           and then Landin.Modules.Module_Of (Graph.all, Origin.Source)
+             = Landin.Modules.Module_Of
+                 (Graph.all, Syn.Source_Of (Of_Tree));
+      end Option_Declared_In_Module;
+
       procedure Report_Option_Conflict
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id; Binding : String);
 
@@ -123,9 +143,12 @@ package body Landin.Stages.Resolution is
            (Item => Names.Duplicate_Declaration,
             Source => Option.Source, Where => Option.Where,
             Message => "option `" & Spelled (Named)
-                       & "` conflicts with a " & Binding,
-            Note => "[1530]: options and active module/import bindings"
-                    & " cannot share a name; rename the option or the"
+                       & "` conflicts with "
+                       & (if Binding = "import binding" then "an " else "a ")
+                       & Binding,
+            Note => "[1530]: an option and an active module/import binding"
+                    & " in its declaring module cannot share a name;"
+                    & " rename the option or the"
                     & " conflicting binding and retry",
             Related => Syn.Origin (Of_Tree, Node),
             Because => "the conflicting " & Binding,
@@ -547,8 +570,7 @@ package body Landin.Stages.Resolution is
          elsif Reserved_Tool_Name (Named) then
             Report_Reserved (Of_Tree, Node);
          elsif Res.Sort_Of (Meanings.all, Inside) = Res.Module_Scope
-           and then Landin.Provenance.Is_Known
-             (Landin.Configuration.Option_Origin (Activity.all, Named))
+           and then Option_Declared_In_Module (Of_Tree, Named)
          then
             Report_Option_Conflict (Of_Tree, Node, "module binding");
             Refused_Module_Options.Append
@@ -2426,9 +2448,7 @@ package body Landin.Stages.Resolution is
                   return;
                elsif Reserved_Tool_Name (Named) then
                   Report_Reserved (Of_Tree.all, Node);
-               elsif Landin.Provenance.Is_Known
-                 (Landin.Configuration.Option_Origin (Activity.all, Named))
-               then
+               elsif Option_Declared_In_Module (Of_Tree.all, Named) then
                   Report_Option_Conflict (Of_Tree.all, Node, "import binding");
                   Res.Refuse_Import
                     (Meanings.all, Source_Id, Named,

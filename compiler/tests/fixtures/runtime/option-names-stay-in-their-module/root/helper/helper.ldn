@@ -1,0 +1,11 @@
+import core/text as text
+
+fixed if text then
+    public status: () -> (result: i32) =
+        result = i32(text.offset(text.nowhere)) + 41
+    end status
+else
+    public status: () -> (result: i32) =
+        result = i32(text.offset(text.nowhere)) + 42
+    end status
+end if

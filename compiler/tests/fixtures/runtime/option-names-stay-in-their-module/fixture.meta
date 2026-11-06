@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: D202 global options keep their configuration meaning while an unrelated module imports and uses the same ordinary name
+program: main.ldn
+root: root
+constructs: 1430, 1450, 1500, 1510, 1530, 1840, 1970
+status: 42
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
