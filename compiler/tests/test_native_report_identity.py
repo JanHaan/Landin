@@ -9,6 +9,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+import shlex
 import subprocess
 import tempfile
 import unittest
@@ -45,8 +46,12 @@ class NativeReportIdentity(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
         (self.root / "main.ldn").write_bytes(SOURCE)
+        self.invoked = self.root / "tool-invoked"
         self.tool = self.root / "tool"
-        self.tool.write_text("#!/bin/sh\nprintf invoked > tool-invoked\nexit 1\n")
+        # Tools run in pinned private staging, so the receipt must not depend
+        # on their working directory or disappear with discarded tool outputs.
+        self.tool.write_text("#!/bin/sh\nprintf invoked > "
+                             + shlex.quote(str(self.invoked)) + "\nexit 1\n")
         self.tool.chmod(0o755)
         # A test-owned fixture establishes this destination volume's rules;
         # production identity checking must never create such a probe.
@@ -63,12 +68,14 @@ class NativeReportIdentity(unittest.TestCase):
         result = {}
         for path in self.root.rglob("*"):
             name = str(path.relative_to(self.root))
+            status = path.lstat()
+            identity = (status.st_dev, status.st_ino, status.st_mode)
             if path.is_symlink():
-                result[name] = ("link", os.readlink(path))
+                result[name] = ("link", os.readlink(path), identity)
             elif path.is_file():
-                result[name] = ("file", path.read_bytes())
+                result[name] = ("file", path.read_bytes(), identity)
             else:
-                result[name] = ("directory",)
+                result[name] = ("directory", identity)
         return result
 
     def compile(self, output, report, *, source="main.ldn", executable=False):
@@ -80,12 +87,25 @@ class NativeReportIdentity(unittest.TestCase):
             capture_output=True, timeout=30)
 
     def refuses_without_effects(self, output, report, **kwargs):
+        self.assertFalse(self.invoked.exists())
         before = self.snapshot()
         result = self.compile(output, report, **kwargs)
         self.assertEqual(result.returncode, 2, result.stderr)
         self.assertIn(b"L0002", result.stderr)
         self.assertEqual(self.snapshot(), before,
                          "collision must precede every artifact and tool")
+        self.assertFalse(self.invoked.exists())
+
+    def refuses_linked_publication(self, output, report):
+        self.assertFalse(self.invoked.exists())
+        before = self.snapshot()
+        result = self.compile(output, report)
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn(b"L0005", result.stderr)
+        self.assertIn(b"choose an ordinary output root", result.stderr)
+        self.assertEqual(self.snapshot(), before,
+                         "linked entries and their targets must be preserved")
+        self.assertFalse(self.invoked.exists())
 
     def test_missing_case_variants(self):
         # Only emitted artifacts are reserved: SOURCE has no caller source,
@@ -118,20 +138,26 @@ class NativeReportIdentity(unittest.TestCase):
                     # accepted genuinely distinct case variants for exe too.
                     result = self.compile(output, report, executable=True)
                     self.assertEqual(result.returncode, 1, result.stderr)
-                    self.assertTrue((self.root / "tool-invoked").exists())
-                    (self.root / "tool-invoked").unlink()
+                    self.assertIn(b"L0501", result.stderr)
+                    self.assertEqual(self.invoked.read_bytes(), b"invoked")
+                    self.invoked.unlink()
                     # D362: a failed link leaves no intermediate assembly.
                     self.assertFalse((self.root / (output + ".s")).exists())
+                    self.assertFalse((self.root / output).exists())
+                    self.assertFalse((self.root / report).exists())
+                    self.assertFalse(list(self.root.glob(".refine-publication-*")))
 
     def test_alias_parent_missing_destinations(self):
         (self.root / "real").mkdir()
+        (self.root / "real/sentinel").write_bytes(b"preserved parent target")
         (self.root / "alias").symlink_to("real", target_is_directory=True)
         self.refuses_without_effects("real/out.s", "alias/./out.s")
         if self.case_variants_refused:
             self.refuses_without_effects("real/OUT.s", "alias/out.s")
         else:
-            result = self.compile("real/OUT.s", "alias/out.s")
-            self.assertEqual(result.returncode, 0, result.stderr)
+            # Distinct names pass identity preflight, but a linked selected
+            # output parent still refuses under the publication contract.
+            self.refuses_linked_publication("real/OUT.s", "alias/out.s")
 
     def test_symlink_dotdot_distinguishes_source(self):
         (self.root / "a").mkdir()
@@ -175,13 +201,16 @@ class NativeReportIdentity(unittest.TestCase):
             with self.subTest(report=report):
                 self.refuses_without_effects("out.s", report)
 
-    def test_dangling_links_resolve_destinations(self):
+    def test_output_links_preserve_destinations(self):
         (self.root / "report-link").symlink_to("out.s")
         self.refuses_without_effects("out.s", "report-link")
         (self.root / "other-link").symlink_to("report.json")
-        result = self.compile("out.s", "other-link")
-        self.assertEqual(result.returncode, 0, result.stderr)
-        json.loads((self.root / "report.json").read_bytes())
+        self.refuses_linked_publication("out.s", "other-link")
+        # A disjoint live target is protected too, including its object
+        # identity; neither form is permission to publish through the link.
+        (self.root / "report.json").write_bytes(b"preserved report target")
+        (self.root / "report.json").chmod(0o640)
+        self.refuses_linked_publication("out.s", "other-link")
 
     def test_indeterminate_identity_refuses(self):
         (self.root / "loop").symlink_to("loop")
