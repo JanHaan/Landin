@@ -2637,7 +2637,7 @@ package body Landin.Tests.Driver_Suite is
               (if Attempt = 1 then "L0505"
                elsif Attempt = 2 then "L0500"
                elsif Attempt = 3 then "L0012"
-               elsif Attempt = 10 then "L0005" else "L0002");
+               elsif Attempt in 4 .. 6 | 10 then "L0005" else "L0002");
             Content : Unbounded.Unbounded_String;
             Read : Landin.Platform.Read_Status;
          begin
@@ -2685,7 +2685,24 @@ package body Landin.Tests.Driver_Suite is
                & Unbounded.To_String (Result.Report));
             Landin.Testing.Check
               (Item, Contains (Unbounded.To_String (Result.Report), Expected),
-               "the intended diagnostic wins: " & Expected);
+               "the intended diagnostic wins: " & Expected
+               & " in attempt" & Attempt'Image & ": "
+               & Unbounded.To_String (Result.Report));
+            if Attempt in 4 .. 6 then
+               --  These report names also select an absent tool, but the
+               --  missing output parent is refused before tool protection.
+               Landin.Testing.Check
+                 (Item, Contains (Unbounded.To_String (Result.Report),
+                                  "stage report parent is missing:")
+                  and then Contains (Unbounded.To_String (Result.Report),
+                                     "create the parent directory")
+                  and then Contains (Unbounded.To_String (Result.Report),
+                                     "path under an existing directory")
+                  and then not Contains (Unbounded.To_String (Result.Report),
+                                         "collid")
+                  and then not Host.Exists (Report),
+                  "a missing output parent has its own refusal and route");
+            end if;
             Landin.Testing.Check_Equal
               (Item, Host.Write_Count, (if Attempt = 3 then 1 else 0),
                "only an unrelated frontend-failure report writes");

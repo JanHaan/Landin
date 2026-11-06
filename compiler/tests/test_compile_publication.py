@@ -182,7 +182,9 @@ def main():
     case_probe.write_bytes(b'case probe')
     case_folding = (root / 'CASE-PROBE').exists()
     case_probe.unlink()
+    missing_parent_tool_reports = set()
     if case_folding:
+        missing_parent_tool_reports.add('early-missing-parent-case-as-stage-report')
         cases.append(('early-missing-parent-case-as-stage-report',
                       [str(malformed), '--toolchain=' + str(missing_tool),
                        '--stage-report=' + str(missing_tool.with_name('DRIVER'))],
@@ -200,7 +202,10 @@ def main():
         ('missing-leaf-relative', 'selected-tools/missing-cc', selected_tools / 'missing-cc'),
         ('missing-leaf-absolute', str(selected_tools / 'missing-cc'), Path('selected-tools/missing-cc')),
     ]:
-        cases.append(('early-' + label + '-as-stage-report',
+        name = 'early-' + label + '-as-stage-report'
+        if label.startswith('missing-parent'):
+            missing_parent_tool_reports.add(name)
+        cases.append((name,
                       [str(malformed), '--toolchain=' + tool_name,
                        '--stage-report=' + str(report)], malformed, False))
     dsym_parent = root / 'ordinary.dSYM'
@@ -257,7 +262,16 @@ def main():
                                 env=case_env, capture_output=True, timeout=45)
         after = protected.stat()
         expected_failure = (result.returncode == 2 and b'L0002' in result.stderr)
-        if name in missing_outputs:
+        if name in missing_parent_tool_reports:
+            # The selected absent tool and report share a spelling, but the
+            # unavailable output parent now refuses before tool protection.
+            expected_failure = (result.returncode == 2 and b'L0005' in result.stderr
+                                and b'stage report parent is missing:' in result.stderr
+                                and b'create the parent directory' in result.stderr
+                                and b'path under an existing directory' in result.stderr
+                                and b'collid' not in result.stderr
+                                and not refused_report.parent.exists())
+        elif name in missing_outputs:
             destination = missing_outputs[name]
             expected_failure = (result.returncode != 0
                                 and b'parent is missing:' in result.stderr
