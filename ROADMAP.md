@@ -1674,8 +1674,8 @@ restoration and kernel USB lines for 90 days.
 
 Settled SR-777, SR-778, SR-780, SR-781, SR-786, SR-789, SR-791, SR-794,
 SR-795, SR-796 and SR-800. New SR-779, SR-782 to SR-785, SR-787, SR-788,
-SR-790, SR-792, SR-793 and SR-797 to SR-799 remain open with their
-activations, among them the STM32H753 console's missing first echo and an
+SR-790, SR-792, SR-793 and SR-797 to SR-799 remained open at that close with
+their activations, among them the STM32H753 console's echo refusal and an
 ESP32-C3 trap read inconsistently, each passing on its rerun. The
 activation sweep against `72547271d` matched no row by path; of the rows
 read by hand SR-736 is restated for the Arty and cascade still sharing the
@@ -3061,7 +3061,7 @@ SR-651.
 
 ### R13.76 — A command destroys nothing it did not create
 
-Status: active
+Status: complete
 Depends on: R13.75
 
 The second outside review, six reviewers whose every finding the lead
@@ -3109,8 +3109,8 @@ remove only owned roots, and each finding has fake and native controls,
 including the renamed-save and interrupted-link windows. Manuals, the
 capabilities inventory and the specification record the same limits.
 
-At `8ff513fa3`, the complete software push
-[gate](https://github.com/JanHaan/Landin/actions/runs/42187464553) passed.
+At `b1f29f845`, the fresh complete software push
+[gate](https://github.com/JanHaan/Landin/actions/runs/42218748077) passed.
 All 53 latest-attempt jobs were checked directly: 49 succeeded; two board
 jobs were skipped for branch scope and two physical RV64 jobs remain
 suspended. Debug/release comparison covered
@@ -3141,21 +3141,24 @@ SR-813, SR-817 through SR-822 and SR-824 through SR-827 are settled.
 SR-806 credits ordinary compilation cancellation and mixed firmware
 generation fixes while retaining the cleanup-refusal state summary.
 
-The first boards dispatch at `86041b9d` passed six ports but exposed
-SR-799's STM32 receive-oracle error. Its raw capture contains all six
-scenario bytes after a valid boot frame; two unframed bytes before it made
-the whole-capture prefix check fail. The image is byte-identical to the
+The first boards
+[dispatch](https://github.com/JanHaan/Landin/actions/runs/42214376527)
+at `86041b9d` failed on SR-799's STM32 receive-oracle error; six other ports
+passed. The raw capture contains all six scenario bytes after a valid boot
+frame, with two unframed bytes before it; the image is byte-identical to the
 prior main run's passed image. The host now validates the first boot frame
-before establishing its receive view, retaining and reporting the raw
-prefix while preserving the scenario's exact echo, counter and float checks.
-The combined STM32, common-board and gate controls passed 173 tests;
-retained-trace replay accepts the complete initial shared phase and still
-refuses changed post-boundary bytes. The remainder of that failed physical
-run is not evidence of a pass. Fresh complete software and physical gates
-remain required for this correction; the prefix's origin is unproved.
+before counting echoes, retaining and reporting the raw prefix while keeping
+the exact echo, counter and float checks. The combined STM32, common-board
+and gate controls passed 173 tests. Replay of the retained complete passed
+trace, clean and with a prefix, consumed all 12185 sent bytes through the
+scenario, epochs, floats and final report; each float width checked 52
+operand pairs and square roots. Changed post-boundary bytes were refused.
+Replay establishes no fresh physical pass or cause for the prefix. SR-799
+is settled by these controls, the fresh software gate and the physical
+dispatch below.
 
 Activation review: the sweep against `df4ccb875` found 103 changed paths and
-no path-matched activation; all 160 unmatched rows were read against the
+no path-matched activation; all 159 unmatched rows were read against the
 actual changes.
 R551-20 remains for native failures beyond these bounded controls.
 SR-266, SR-296, SR-298, SR-590 and SR-370 remain for internal-defect caller
@@ -3182,10 +3185,14 @@ retains the preexisting packed-byte instrumentation finding for the
 next iterator or instrumentation change. These triggers are restated rather
 than importing unrelated fixes into publication.
 
-The item remains active pending the required identical-tree boards
-scope dispatch and main's own push gate. Closing evidence does not waive
-those steps for this item, which changes compile outputs. No promotion,
-physical-board run, release or version change is claimed.
+The required identical-tree boards
+[dispatch](https://github.com/JanHaan/Landin/actions/runs/42224711415)
+passed on `b1f29f845`. All 39 latest-attempt jobs were checked directly:
+12 succeeded and 27 were skipped under boards scope. Every port's artifact
+and source identities were verified; all seven ports passed their RAM runs
+and final boot checks, leaving their verified fixed images at rest.
+Promotion to `main` requires its own push gate with fresh physical boards,
+followed to completion. No release or version change is claimed.
 
 ### R13.77 — What the second outside review found
 
@@ -3675,7 +3682,7 @@ SR-747, SR-748, SR-749, SR-750, SR-751, SR-752, SR-753, SR-754, SR-755,
 SR-756, SR-614, SR-660, SR-671, SR-672, SR-709, SR-719, SR-723, SR-724,
 SR-725, SR-757, SR-758, SR-759, SR-760, SR-761, SR-762, SR-763, SR-764,
 SR-765, SR-766, SR-767, SR-770, SR-771, SR-774, SR-813, SR-817, SR-818,
-SR-819, SR-820, SR-821, SR-822, SR-824, SR-825, SR-826, SR-827.
+SR-819, SR-820, SR-821, SR-822, SR-824, SR-825, SR-826, SR-827, SR-799.
 
 | Record | Family | What stands | Activation | Completion | Status |
 | --- | --- | --- | --- | --- | --- |
@@ -4028,8 +4035,7 @@ SR-819, SR-820, SR-821, SR-822, SR-824, SR-825, SR-826, SR-827.
 | SR-796 | Usability | With `ping` installed, the Pico 2 gate leg's probe check after a cycle still failed: `probe-ping` exited -31, SIGSYS, because the NixOS runner module's syscall filter forbids `capset`, which iputils `ping` calls to drop its privileges; the log showed only the command line, and the tool reported `the probe at 10.42.0.50 does not answer ping` although probehive answered a manual `ping` at once. Met in R12.60's boards dispatch after the runner gained `ping`. | The next change to the Pico 2 tools' probe check or to the runner's sandbox. | A probe check that needs no privileged host tool, with a control. | retired: `environments/boards/common.py echo HOST` sends one ICMP echo through an unprivileged ICMP socket, which the rig's `ping_group_range` allows and which passed under the runner's own syscall and address-family limits on rigpi, and prints ping's summary line, which the Pico 2 tools already check; `scripts/tests/test_board_common.py`'s `Echo` holds it |
 | SR-797 | Usability | An ESP32-C3 gate RAM run, right after its boot check passed, failed on one unhandled trap whose two reads disagreed: the result's trap cells said cause `0x2` at `0x2`, the failure said `mcause 0x0` at `0x0`, mtval `0x0`, sp `0x3fcc7c90`. The same RAM run had passed in the dispatch before, and a manual RAM run an hour later passed in 20 s, so whether the chip trapped or the cells were read inconsistently is unknown. Met in R12.60's boards dispatches. | The next ESP32-C3 RAM run that reports a trap. | Both trap readings retained with the read order and timing, the cause told apart from a stale or torn cell read, and the fix or the corrected reading with a control. | open |
 | SR-798 | Usability | An RP boot check that followed that board's RAM run could not flash it: on the Pico H `Debug port Multidrop(11002927) does not respond` for the application and its restoration alike, on the Pico 2 after its Arm RAM run `Could not clear all hardware breakpoints` and a timeout, while the helper's single-core reads still worked. The warm contract parks the other core and keeps it out of session cleanup, and probe-rs's whole-chip download cannot attach to that; a guarded power cycle of the port brought the Pico H back on its fixed image. It first read as a RAM application that went silent after half an hour, because a gate leg ended on its RAM run and the next leg's boot check met it. Met in R12.60's boards dispatches. | The next change to the RP boot checks' first attach or to the RP warm contract's parked core. | An RP boot check that attaches whatever a RAM run left, with a control. | open |
-| SR-799 | Usability | STM32H753 gate RAM runs failed with `the shared scenario was not echoed`, and the gap report at position 0 was attributed to a missing first byte. Re-reading R12.60's and R13.76's raw captures shows all six scenario bytes present after the boot frame: unframed startup bytes before it made the whole-capture prefix check fail. The same ELF bytes passed main's earlier RAM run. The prefix's origin is unproved; a missing-span diagnostic cannot classify inserted bytes. | The next change to the STM32H753 startup receive boundary or echo accounting. | Establish the existing first-frame handshake before counting echoes; retain and report the exact raw prefix; refuse malformed or ambiguous startup and changed post-boundary bytes; preserve counter, float, raw-capture and cleanup evidence, with deterministic controls and fresh complete software and physical gates. | open |
-| SR-800 | Usability | A board leg rerun after a failure passed, every leg's latest attempt was green, and the aggregate `gate` still failed on that port: both attempts had uploaded an artifact named `board-evidence-stm32h753`, and the aggregate's pattern download took the failed attempt's, so the rerun's pass was judged by its stale failure. Met rerunning R12.60's STM32H753 leg after its missing first echo. | The next change to the board legs' evidence artifacts or to the aggregate's reading of them. | Each attempt's evidence distinct and every port judged by its latest attempt, with a control. | retired: each leg's artifact is `board-evidence-PORT-ATTEMPT`, and `scripts/gate_inputs.py` judges each port by the highest `run_attempt` its legs' `transfer.json` records, two of one attempt being ambiguous; `scripts/tests/test_gate_inputs.py`'s `Outcomes` holds both |
+| SR-800 | Usability | A board leg rerun after a failure passed, every leg's latest attempt was green, and the aggregate `gate` still failed on that port: both attempts had uploaded an artifact named `board-evidence-stm32h753`, and the aggregate's pattern download took the failed attempt's, so the rerun's pass was judged by its stale failure. Met rerunning R12.60's STM32H753 leg after its echo refusal. | The next change to the board legs' evidence artifacts or to the aggregate's reading of them. | Each attempt's evidence distinct and every port judged by its latest attempt, with a control. | retired: each leg's artifact is `board-evidence-PORT-ATTEMPT`, and `scripts/gate_inputs.py` judges each port by the highest `run_attempt` its legs' `transfer.json` records, two of one attempt being ambiguous; `scripts/tests/test_gate_inputs.py`'s `Outcomes` holds both |
 | SR-801 | Usability | The second outside review, six reviewers lead-checked at `5d1bed296`, confirmed 9 nits in language and design: review #1, `spec.md:1093`: normative operator summaries retain superseded prohibitions; review #2, `tour.md:3999`: compiler architecture reference omits RV32; review #3, `ROADMAP.md:3293`: retained concurrency position describes an obsolete single-provider system; review #4, `ROADMAP.md:43`: capability inventory pointer names the wrong document; review #5, `spec.md:2588`: decision-register navigation promises ordering the file does not maintain; review #6, `spec.md:4`: specification introduction understates size and retains tour-relative wording; review #9, `tour.md:98`: opening tutorial programs lack maintained runtime witnesses; review #10, `tour.md:2782`: learning-path handoff defers the project’s manual-allocation idiom; review #11, `spec.md:1676`: recovery-edge summary omits supported loop transfers. Met in that review, whose ledger keeps each nit's reproducer and evidence under its number. | R13.78. | Each correction the ledger names: #1 update [1870] and [1890] in place to match the later decisions and current fixtures; #2 add rv32 to the compiler.arch table; #3 replace the stale first bullet with the current blocking/events provider state; #4 name docs/capabilities.md as the inventory and README.md as its summary; #5 remove the within-section ascending-order guarantee or describe the actual subject grouping; #6 drop the volatile line estimate and name tour.md explicitly at :908; #9 extend the existing witness check for the tour hello program and add a line-counter runtime fixture with its demonstrated input/error oracles; #10 add a direct allocation reference and small complete-example link at the learning-path handoff, rather than expanding the tutorial architecture; #11 include break and continue in the recovery-edge summary with their non-fallthrough behavior. | open |
 | SR-802 | Usability | The second outside review, six reviewers lead-checked at `5d1bed296`, confirmed 15 nits in frontend foundations: review #15, `compiler/ada/src/stages/landin-stages-resolution.adb:1707`: accidental assignment in place of a declaration has no declaration hint; review #16, `compiler/ada/src/syntax/landin-syntax-repairs.adb:93`: multiline missing-then diagnostics omit the insertion fix available on one line; review #17, `compiler/ada/src/syntax/landin-syntax-parser.adb:2083`: foreign-form diagnostic adds an empty secondary source label; review #19, `compiler/ada/src/diagnostics/landin-diagnostics-lexical.adb:155`: character-literal diagnostic recommends an invalid doubled-backslash escape; review #20, `compiler/ada/src/stages/landin-configuration.adb:203`: builtin placement refusals give false availability advice; review #21, `compiler/ada/src/syntax/landin-syntax-parser.adb:5282`: builtin scalar names bypass lexical shadowing in type positions; review #22, `compiler/ada/src/stages/landin-stages-configuration.adb:548`: fixed-assertion refusal omits the admitted alternatives for module constants; review #23, `compiler/ada/src/stages/landin-stages-configuration.adb:3060`: unknown build-option refusal offers no declared-name discovery; review #24, `compiler/ada/README.md:437`: build-report schema documentation omits emitted fields; review #26, `compiler/ada/src/diagnostics/landin-diagnostics-text.adb:138`: human diagnostics emit terminal control bytes from paths and messages; review #27, `compiler/ada/src/syntax/landin-syntax-parser.ads:43`: parser resource-limit refusals omit the limit and can cascade; review #28, `compiler/ada/src/diagnostics/landin-diagnostics-text.adb:278`: human help text hides whether an offered fix is exact or a guess; review #29, `compiler/ada/src/stages/landin-stages.ads:23`: central stage dependency rule has no mechanical guard; review #64, `compiler/ada/src/syntax/landin-syntax-parser.adb:10706`: writable slice named type argument is rejected with a permission-changing repair; review #108, `compiler/ada/src/syntax/landin-syntax-parser.adb:3339`: late-import refusal lacks a structured move-to-prelude fix. Met in that review, whose ledger keeps each nit's reproducer and evidence under its number. | R13.78. | Each correction the ledger names: #15 for an unresolved whole assignment destination, add a narrowly qualified hint that := declares a binding; #16 offer a direct insertion for the unambiguous missing then/do case at a line end; #17 omit the related span/message when neither neighbouring span exists; #19 remove the extra backslash from the Ada diagnostic string; #20 distinguish invalid placement from unsupported operations; #21 resolve visible declarations before falling back to predeclared scalar/text-view types; #22 name the excluded module-value lookup and list a few admitted alternatives such as options, compiler facts and sizeof/alignof; #23 suggest a unique close declared option, or list available option names when the list is small; #24 list link and build.level in the existing schema paragraph and expose its reference from public documentation/help; #26 apply the existing source-display control-byte escaping to human/short path, message, note and help strings; #27 state the actual limit and suggest splitting a long chain; #28 mark likely fixes as guesses at the shared text-rendering site; #29 add one narrow cheap check for prohibited stage-child dependencies in the central stage body, with a control; #64 recognize []mut T as a type in the labeled type-argument context; #108 offer a two-edit move-to-prelude action for a plain, unambiguous late import, preserving comments and line endings. | open |
 | SR-803 | Usability | The second outside review, six reviewers lead-checked at `5d1bed296`, confirmed 11 nits in semantic checking: review #31, `compiler/ada/src/stages/landin-stages-checking.adb:16474`: composite argument mismatch omits the inferred actual type; review #32, `compiler/ada/src/stages/landin-stages-checking.adb:26985`: parameter-write refusal gives an incomplete mutability rule; review #33, `compiler/ada/src/stages/landin-stages-checking.adb:14608`: type-mismatch note blurs implicit and explicit conversion; review #34, `compiler/ada/src/stages/landin-stages-checking-flow.adb:1801`: use-after-sink diagnostic does not identify the consuming call; review #35, `compiler/ada/src/stages/landin-stages-checking-references.adb:3378`: returned frame-view refusal anchors the routine rather than the escaping assignment; review #37, `compiler/ada/src/stages/landin-stages-checking.adb:33385`: erased-value construction mistakes lack a useful construction route; review #38, `compiler/ada/src/stages/landin-stages-checking.adb:19479`: conformance-label typo produces a missing-entry cascade without a suggestion; review #39, `compiler/ada/src/stages/landin-stages-checking.adb:21976`: conformance signature mismatch omits the concrete expected signature; review #76, `compiler/ada/src/stages/landin-stages-checking-flow.ads:4`: flow checker lacks the subsystem orientation provided by its siblings; review #77, `compiler/ada/tests/src/landin-tests-checking_suite.adb:1`: checking suite header still describes only its original aggregate-identity case; review #105, `compiler/ada/src/stages/landin-stages-checking-references.adb:3467`: missing return-origin clause is described as disagreement with a written clause. Met in that review, whose ledger keeps each nit's reproducer and evidence under its number. | R13.78. | Each correction the ledger names: #31 include the expected and actual composite types using the existing type-spelling helpers; #32 correct the note and explain either copying to a mutable local or using inout when the caller’s place should change; #33 say that nothing converts implicitly and show the T(value) spelling; #34 retain the sink site with the dead-place fact and label it consumed here; #35 add the origin-carrying assignment as a source label and point to a caller-supplied buffer with a from result when applicable; #37 for suitable named places in an any context, show any(addr value) as a qualified construction hint; #38 when one unknown label corresponds to one missing entry, report the typo at the label with a likely respelling suggestion; #39 show the required concrete signature and label the supplied function’s mismatching part where available; #76 add a brief package header identifying the pass’s responsibilities and rule anchors; #77 use a suite-level header and move the aggregate-specific rationale next to its case; #105 distinguish an absent clause and show the required from p placement inside the result declaration. | open |
