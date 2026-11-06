@@ -3233,6 +3233,91 @@ package body Landin.Tests.Driver_Suite is
       end;
    end A_Static_Link_Starts_At_Platform_Linux;
 
+   procedure Implicit_Startup_Graph_Is_Checked
+     (Item : in out Landin.Testing.Context);
+
+   procedure Implicit_Startup_Graph_Is_Checked
+     (Item : in out Landin.Testing.Context)
+   is
+   begin
+      for Assembly in Boolean loop
+         for Libc in Boolean loop
+            declare
+               Host : Landin.Testing.Fakes.Fake_Filesystem;
+               Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+               Args : Landin.Platform.Path_List;
+            begin
+               Host.Add_File ("main.ldn", Entry_Program);
+               Host.Add_Directory ("lib");
+               Host.Add_Directory ("lib/platform");
+               Host.Add_Directory ("lib/platform/linux");
+               Host.Add_File
+                 ("lib/platform/linux/linux.ldn",
+                  "compiler.assert(false)" & LF);
+               Args.Append ("--target=linux-x86-64");
+               Args.Append ("--library=lib");
+               if Libc then
+                  Args.Append ("--link=libc");
+               end if;
+               if Assembly then
+                  Args.Append ("--emit=asm");
+                  Args.Append ("-o");
+                  Args.Append ("main.s");
+               end if;
+               Args.Append ("main.ldn");
+               declare
+                  Result : constant Landin.Driver.Outcome :=
+                    Landin.Driver.Execute (Args, Host, Tools);
+               begin
+                  Landin.Testing.Check_Equal
+                    (Item, Result.Status, (if Libc then 0 else 1),
+                     "checking and emission use their link graph: "
+                       & Unbounded.To_String (Result.Report));
+                  Landin.Testing.Check
+                    (Item, Contains (Unbounded.To_String (Result.Report),
+                                     "compile-time assertion is false")
+                       = (not Libc),
+                     "only a static request configures implicit startup");
+                  Landin.Testing.Check_Equal
+                    (Item, Tools.Run_Count, 0, "neither request links");
+                  if not Libc then
+                     Landin.Testing.Check_Equal
+                       (Item, Host.Write_Count, 0,
+                        "a startup refusal writes nothing");
+                  end if;
+               end;
+            end;
+         end loop;
+      end loop;
+      for Library in Boolean loop
+         declare
+            Host : Landin.Testing.Fakes.Fake_Filesystem;
+            Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+            Args : Landin.Platform.Path_List;
+         begin
+            Host.Add_File ("main.ldn", Entry_Program);
+            Args.Append ("--target=linux-x86-64");
+            if Library then
+               Host.Add_Directory ("lib");
+               Host.Add_Directory ("lib/platform");
+               Args.Append ("--library=lib");
+            end if;
+            Args.Append ("main.ldn");
+            declare
+               Result : constant Landin.Driver.Outcome :=
+                 Landin.Driver.Execute (Args, Host, Tools);
+            begin
+               Landin.Testing.Check_Equal
+                 (Item, Result.Status, 0,
+                  "standalone checking keeps optional startup: "
+                    & Unbounded.To_String (Result.Report));
+               Landin.Testing.Check_Equal
+                 (Item, Host.Write_Count, 0, "checking publishes no output");
+            end;
+         end;
+      end loop;
+   end Implicit_Startup_Graph_Is_Checked;
+
    --  [1970] is required before anything is written, so a program that
    --  could never be linked leaves no file behind on the way to saying so.
    procedure A_Hosted_Program_Needs_Its_Entry
@@ -8077,6 +8162,9 @@ package body Landin.Tests.Driver_Suite is
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "driver", "implicit startup graph is checked",
+         Implicit_Startup_Graph_Is_Checked'Access);
       Landin.Testing.Register
         (Into, "driver", "output parents are named",
          Output_Parents_Are_Named'Access);

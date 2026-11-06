@@ -1,0 +1,10 @@
+import helper
+
+option text: bool = false
+option level: u8 = 1
+
+compiler.assert(level == 1 or level == 2)
+
+public main: () -> (code: i32) =
+    code = helper.status()
+end main

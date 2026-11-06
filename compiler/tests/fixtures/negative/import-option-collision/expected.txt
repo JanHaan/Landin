@@ -1,10 +1,10 @@
-error[L0200]: `switch` is already a program option
-  --> ../tests/fixtures/negative/import-option-collision/entry/main.ldn:1:15
-  |
-1 | import lib as switch
-  |               ^^^^^^
+error[L0200]: option `switch` conflicts with an import binding
   --> ../tests/fixtures/negative/import-option-collision/entry/main.ldn:2:1
   |
 2 | option switch: i32 = 0
-  | ^^^^^^^^^^^^^^^^^^^^^^ the option that keeps the name
-  = note: [1530]: options and import bindings cannot share a name
+  | ^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/import-option-collision/entry/main.ldn:1:15
+  |
+1 | import lib as switch
+  |               ^^^^^^ the conflicting import binding
+  = note: [1530]: an option and an active module/import binding in its declaring module cannot share a name; rename the option or the conflicting binding and retry

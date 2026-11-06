@@ -1308,9 +1308,11 @@ package body Landin.Driver is
          --  What a static link starts at is library source: the program
          --  holds platform/linux, whose `_landin_start` is the process entry,
          --  whether or not its own imports reach it, as C's startup object
-         --  is linked into every C program.
+         --  is linked into every C program. Checking uses that same graph
+         --  when the selected library supplies it; a standalone check with
+         --  no such library keeps the loader's existing optional boundary.
          function Implicit_Module return String
-           is (if Static_Link and then Emit /= Emit_Nothing
+           is (if Static_Link
                then "platform/linux" else "");
 
          function Policy_Report return Landin.Diagnostics.Diagnostic_List;
