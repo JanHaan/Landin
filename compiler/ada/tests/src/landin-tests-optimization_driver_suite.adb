@@ -507,10 +507,21 @@ package body Landin.Tests.Optimization_Driver_Suite is
            (Item, Result.Status, Landin.Driver.Status_Misuse, Name);
          Landin.Testing.Check
            (Item, Has (US.To_String (Result.Report),
-                       "stage report collides with source"),
-            Name & " reports the collision");
+                       (if Input = Report
+                        then "stage report collides with source"
+                        else "cannot prove stage report separate from source"))
+             and then Has (US.To_String (Result.Report), "error[L0002]")
+             and then Has (US.To_String (Result.Report),
+                           "choose another output path")
+             and then (Input = Report or else Has
+               (US.To_String (Result.Report),
+                "check source and output paths and access")),
+            Name & " distinguishes identity proof: "
+            & US.To_String (Result.Report));
          Landin.Testing.Check_Equal
            (Item, Host.Write_Count, 0, Name & " writes nothing");
+         Landin.Testing.Check_Equal
+           (Item, Tools.Run_Count, 0, Name & " invokes no tool");
       end Unloaded_Source;
    begin
       Refused ("an empty stage report path", "--stage-report=");

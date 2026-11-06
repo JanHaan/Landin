@@ -56,6 +56,15 @@ package body Landin.Tests.Stack_Report_Suite is
       Args : Landin.Platform.Path_List;
       Result : Landin.Driver.Outcome;
    begin
+      --  The caller supplies existing source and destination parents; the
+      --  compiler does not create the relocated output's directory.
+      for Path of Landin.Platform.Path_List'[Source, Output] loop
+         for Index in Path'Range loop
+            if Path (Index) = '/' and then Index > Path'First then
+               Host.Add_Directory (Path (Path'First .. Index - 1));
+            end if;
+         end loop;
+      end loop;
       Host.Add_File (Source, Program);
       Args.Append ("--target=" & Target);
       if Target /= "cortex-m0" then

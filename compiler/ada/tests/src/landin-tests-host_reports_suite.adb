@@ -301,6 +301,15 @@ package body Landin.Tests.Host_Reports_Suite is
          Args : Landin.Platform.Path_List;
          Result : Landin.Driver.Outcome;
       begin
+         --  These spellings model the host's namespace, including parents
+         --  which lexical dot/dot-dot collapse must not choose for it.
+         for Path of Landin.Platform.Path_List'[Input, Output, Report] loop
+            for Index in Path'Range loop
+               if Path (Index) = '/' and then Index > Path'First then
+                  Host.Add_Directory (Path (Path'First .. Index - 1));
+               end if;
+            end loop;
+         end loop;
          Host.Add_File (Input, Source);
          Args.Append (Input);
          if Many then
@@ -332,7 +341,8 @@ package body Landin.Tests.Host_Reports_Suite is
          Landin.Testing.Check_Equal
            (Item, Result.Status,
             (if Alias = "" then 0 else Landin.Driver.Status_Misuse),
-            "only the host decides whether these destinations overlap");
+            "only the host decides whether these destinations overlap: "
+            & US.To_String (Result.Report));
          if Alias /= "" then
             Landin.Testing.Check
               (Item, Host.Write_Count = 0 and then Tools.Run_Count = 0,
@@ -438,8 +448,21 @@ package body Landin.Tests.Host_Reports_Suite is
                      Landin.Testing.Check
                        (Item, Ada.Strings.Fixed.Index
                           (US.To_String (Result.Report),
-                           "build report collides with an artifact") > 0,
-                        "both map producers report the active collision");
+                           (if Alias
+                            then "cannot prove build report separate"
+                                 & " from an artifact"
+                            else "build report collides with an artifact"))
+                             > 0
+                        and then Ada.Strings.Fixed.Index
+                          (US.To_String (Result.Report), "error[L0002]") > 0
+                        and then Ada.Strings.Fixed.Index
+                          (US.To_String (Result.Report),
+                           "choose another output path") > 0
+                        and then (not Alias or else Ada.Strings.Fixed.Index
+                          (US.To_String (Result.Report),
+                           "check output paths and access") > 0),
+                        "both map producers distinguish identity proof: "
+                        & US.To_String (Result.Report));
                      Landin.Testing.Check_Equal
                        (Item, Host.Write_Count, 0,
                         "the collision precedes every artifact write");
