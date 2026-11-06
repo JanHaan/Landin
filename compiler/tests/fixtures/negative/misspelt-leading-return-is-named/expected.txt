@@ -1,0 +1,7 @@
+error[L0110]: `retrun` may be a misspelling of `return`
+  --> ../tests/fixtures/negative/misspelt-leading-return-is-named/program.ldn:3:5
+  |
+3 |     retrun when code > 1
+  |     ^^^^^^
+  = note: [1760]: check the leading keyword; the offered respelling is a guess
+  = help: did you mean `return`?

@@ -1901,6 +1901,74 @@ package body Landin.Syntax.Parser is
                      end if;
                   end;
 
+                  --  A bang where an operand was required is logical
+                  --  negation from another language, not an error channel.
+                  if Item = Syn.Expression_Expected
+                    and then Kind_At (Low) = Tok.Bang
+                    and then Pre.Begins_Expression (Kind_At (Low + 1))
+                  then
+                     return
+                       (Found => True, Form => Syn.Prefix_Not,
+                        Span => Tok.Where (From, Low),
+                        Written => Unbounded.To_Unbounded_String ("not "));
+                  end if;
+
+                  --  Touching comment openers in a refused expression or
+                  --  statement name the comment route; ordinary division
+                  --  and multiplication keep their existing parse.
+                  for Left in Tok.Token_Index'Max (1, Low - 1) .. Low loop
+                     if Kind_At (Left) = Tok.Slash and then Touching (Left)
+                       and then Kind_At (Left + 1) in Tok.Slash | Tok.Star
+                     then
+                        return
+                          (Found => True,
+                           Form => (if Kind_At (Left + 1) = Tok.Slash
+                                    then Syn.Slash_Comment
+                                    else Syn.Slash_Block_Comment),
+                           Span => Join (Tok.Where (From, Left),
+                                         Tok.Where (From, Left + 1)),
+                           Written => Unbounded.Null_Unbounded_String);
+                     end if;
+                  end loop;
+
+                  --  `name--` scans as a name followed by a line comment.
+                  --  Only the empty, touching comment pins a decrement;
+                  --  comments containing prose have no automatic rewrite.
+                  if Body_Level > 0 and then Kind_At (Low) = Tok.Identifier
+                    and then Begins_Line (Low)
+                    and then Low < Last
+                  then
+                     declare
+                        Leading : constant Tok.Space_Range :=
+                          Tok.Leading (From, Low + 1);
+                     begin
+                        for Piece in Leading.First .. Leading.Last loop
+                           declare
+                              Space : constant Tok.Space :=
+                                Tok.Nth_Space (From, Piece);
+                              At_Space : constant Landin.Source.Span :=
+                                Tok.Where (Space);
+                           begin
+                              if Tok.Kind (Space) = Tok.Line_Comment
+                                and then At_Space.First
+                                  = Tok.Where (From, Low).Last
+                                and then Landin.Source.Length (At_Space) = 2
+                              then
+                                 return
+                                   (Found => True,
+                                    Form => Syn.Postfix_Decrement,
+                                    Span => Join (Tok.Where (From, Low),
+                                                  At_Space),
+                                    Written => Unbounded.To_Unbounded_String
+                                      ("dec " & Landin.Source.Names.Spelling
+                                        (Names, Tok.Name
+                                          (Tok.Token_At (From, Low)))));
+                              end if;
+                           end;
+                        end loop;
+                     end;
+                  end if;
+
                   --  `&&` and `||`, read as two bitwise operators.
                   for Left in Tok.Token_Index'Max (1, Low - 1) .. Low loop
                      if Left < Last and then Touching (Left)
@@ -2106,12 +2174,100 @@ package body Landin.Syntax.Parser is
                            else
                              [1 => Landin.Diagnostics.Fixes.Landin_Form
                                      (Origin_Of, Foreign.Span, Written,
-                                      (if Foreign.Form in Syn.Postfix_Increment
+                                      (if Foreign.Form
+                                           in Syn.Postfix_Increment
+                                            | Syn.Postfix_Decrement
                                        then Written
                                        else Syn.Landin_Spelling
                                               (Foreign.Form)))]),
                         Into    => Report);
                      return;
+                  end;
+               end if;
+
+               --  Only a statement/declaration that already failed can
+               --  have a misspelled leading keyword.  Names in accepted
+               --  expressions, calls and bindings never reach this search.
+               if Item in Syn.Stray_Token | Syn.Token_Expected then
+                  declare
+                     Leading : Tok.Token_Index := 1;
+                     High : Tok.Token_Index := Last;
+                     Offered : Landin.Diagnostics.Suggestions.Ranking;
+                  begin
+                     while Leading < High loop
+                        declare
+                           Middle : constant Tok.Token_Index :=
+                             Leading + (High - Leading) / 2;
+                        begin
+                           if Tok.Where (From, Middle).Last <= Where.First
+                           then
+                              Leading := Middle + 1;
+                           else
+                              High := Middle;
+                           end if;
+                        end;
+                     end loop;
+                     while Leading > 1 and then not Begins_Line (Leading)
+                     loop
+                        Leading := Leading - 1;
+                     end loop;
+                     if Tok.Kind (From, Leading) = Tok.Identifier
+                       and then Leading < Last
+                       and then not Begins_Line (Leading + 1)
+                       and then Tok.Kind (From, Leading + 1)
+                         not in Tok.Colon | Tok.Colon_Equal | Tok.Equal
+                           | Tok.Compound_Assign | Tok.Left_Paren | Tok.Dot
+                           | Tok.Left_Bracket
+                     then
+                        declare
+                           Written : constant String :=
+                             Landin.Source.Names.Spelling
+                               (Names, Tok.Name
+                                  (Tok.Token_At (From, Leading)));
+                        begin
+                           for Wanted in Tok.Reserved_Word loop
+                              if (Body_Level > 0
+                                  and then Wanted in Tok.Kw_For
+                                    | Tok.Kw_While | Tok.Kw_If | Tok.Kw_Match
+                                    | Tok.Kw_Return | Tok.Kw_Fail
+                                    | Tok.Kw_Break | Tok.Kw_Continue
+                                    | Tok.Kw_Inc | Tok.Kw_Dec | Tok.Kw_Mut
+                                    | Tok.Kw_Defer | Tok.Kw_Undo
+                                    | Tok.Kw_Loop | Tok.Kw_Begin
+                                    | Tok.Kw_Unchecked | Tok.Kw_Try)
+                                or else (Body_Level = 0
+                                  and then Wanted in Tok.Kw_Import
+                                    | Tok.Kw_Public | Tok.Kw_Mut
+                                    | Tok.Kw_Extern | Tok.Kw_Fixed)
+                              then
+                                 Landin.Diagnostics.Suggestions.Consider
+                                   (Offered, Written, Tok.Spelling (Wanted));
+                              end if;
+                           end loop;
+                           if Landin.Diagnostics.Suggestions.Count (Offered)
+                             > 0
+                           then
+                              Syn.Report
+                                (Item => Item, Source => Origin_Of,
+                                 Where => Tok.Where (From, Leading),
+                                 Message => "`" & Written
+                                   & "` may be a misspelling of `"
+                                   & Landin.Diagnostics.Suggestions.Nth
+                                       (Offered, 1) & "`",
+                                 Note => "[1760]: check the leading keyword;"
+                                   & " the offered respelling is a guess",
+                                 Related => On_A_Token (Where, Item),
+                                 Because => (if Item = Syn.Token_Expected
+                                             then "found after this word"
+                                             else ""),
+                                 Fixes => Landin.Diagnostics.Fixes.Respellings
+                                   (Origin_Of, Tok.Where (From, Leading),
+                                    Offered),
+                                 Into => Report);
+                              return;
+                           end if;
+                        end;
+                     end if;
                   end;
                end if;
 
@@ -8325,14 +8481,30 @@ package body Landin.Syntax.Parser is
                               then
                                  Items.Append (Candidate);
                               else
-                                 Complain
-                                   (Item    => Syn.Stray_Token,
-                                    Where   => Where (Result, Candidate),
-                                    Message => "this statement prefix cannot"
-                                               & " have a final value",
-                                    Note    => "[1800]: value prefixes exclude"
-                                               & " unconditional exits and"
-                                               & " unchecked regions");
+                                 if not Items.Is_Empty
+                                   and then Kind (Result, Items.Last_Element)
+                                     = Return_Statement
+                                 then
+                                    Complain
+                                      (Item => Syn.Return_Carries_Value,
+                                       Where => Where (Result, Candidate),
+                                       Message => "`return` carries no value",
+                                       Note => "[0930]: assign the named"
+                                         & " result first, as in"
+                                         & " `r = expression`,"
+                                         & " then write a bare `return`",
+                                       Related => Context.Result,
+                                       Because => "the result it fills");
+                                 else
+                                    Complain
+                                      (Item => Syn.Stray_Token,
+                                       Where => Where (Result, Candidate),
+                                       Message => "this statement prefix"
+                                         & " cannot have a final value",
+                                       Note => "[1800]: value prefixes exclude"
+                                         & " unconditional exits and"
+                                         & " unchecked regions");
+                                 end if;
                                  Value := Candidate;
                                  exit;
                               end if;
@@ -8666,8 +8838,9 @@ package body Landin.Syntax.Parser is
                              (Item    => Syn.Return_Carries_Value,
                               Where   => Here,
                               Message => "`return` carries no value",
-                              Note    => "[0930]: assign the named"
-                                         & " return, then `return`",
+                              Note    => "[0930]: assign the named result"
+                                         & " first, as in `r = expression`,"
+                                         & " then write a bare `return`",
                               Related => Context.Result,
                               Because => "the return it fills");
                            Guard := No_Node;

@@ -1,7 +1,7 @@
 class: negative
 summary: unconditional return and unchecked remain statement-only prefixes under the function body grammar
 program: main.ldn
-codes: L0110, L0110
+codes: L0107, L0110
 constructs: 0930, 1080, 1120, 1800
 targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
 expect: expected.txt

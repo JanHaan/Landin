@@ -84,6 +84,8 @@ package body Landin.Tokens is
 
    function Where (Item : Fault) return Landin.Source.Span is (Item.Where);
 
+   function First_Byte (Item : Fault) return Character is (Item.Initial);
+
    function Opened_At (Item : Fault) return Landin.Source.Span
      is (Item.Opened);
 

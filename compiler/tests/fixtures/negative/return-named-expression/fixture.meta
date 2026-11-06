@@ -1,0 +1,9 @@
+class: negative
+summary: A refused return payload explains named-result assignment and a bare return
+program: program.ldn
+codes: L0107
+constructs: 1810
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64
+expect: expected.txt
+args: ../tests/fixtures/negative/return-named-expression/program.ldn
+status: 1

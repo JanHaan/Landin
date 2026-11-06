@@ -30,7 +30,12 @@ package body Landin.Diagnostics.Lexical is
             when Landin.Tokens.Invalid_Comment_Encoding =>
                "this comment contains malformed UTF-8",
             when Landin.Tokens.Unknown_Byte_Run =>
-               "no rule spells these bytes",
+               (case Landin.Tokens.First_Byte (Fault) is
+                   when ';' =>
+                      "Landin writes statements without a semicolon",
+                   when '{' | '}' =>
+                      "Landin writes blocks with words, not braces",
+                   when others => "no rule spells these bytes"),
             when Landin.Tokens.Capitalised_Identifier =>
                "identifiers use lower-case letters",
             when Landin.Tokens.Unterminated_Block_Comment =>
@@ -174,7 +179,17 @@ package body Landin.Diagnostics.Lexical is
                when Landin.Tokens.Unknown_Byte_Run =>
                   Add_Note
                     (Report,
-                     "no rule of the grammar spells these bytes [1750]");
+                     (case Landin.Tokens.First_Byte (Fault) is
+                         when ';' =>
+                            "[1810]: remove the `;`; statements need no"
+                            & " terminator, and a line may end after one",
+                         when '{' | '}' =>
+                            "[1810]: write `if condition then` and `end if`,"
+                            & " or a loop's `do` and `end for`/`end while`;"
+                            & " an explicit block is `begin ... end`",
+                         when others =>
+                            "no rule of the grammar spells these bytes"
+                            & " [1750]"));
 
                when Landin.Tokens.Capitalised_Identifier =>
                   --  D528: Report_Word words it once the parse has said

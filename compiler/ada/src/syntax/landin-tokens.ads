@@ -219,6 +219,11 @@ package Landin.Tokens is
 
    function Where (Item : Fault) return Landin.Source.Span;
 
+   --  The first byte of a run no lexical rule spells, retained so its
+   --  diagnostic can name familiar foreign punctuation without source I/O.
+   function First_Byte (Item : Fault) return Character
+     with Pre => Kind (Item) = Unknown_Byte_Run;
+
    --  Where the thing that was never closed was opened. A block comment
    --  nests [1780], so this is the outermost opener while Where is the end
    --  of the file: those are the two places a reader looks.
@@ -356,6 +361,7 @@ private
 
    type Fault is record
       Kind    : Fault_Kind := Unknown_Byte_Run;
+      Initial : Character := ASCII.NUL;
       Where   : Landin.Source.Span := Landin.Source.Empty_Span;
       Opened  : Landin.Source.Span := Landin.Source.Empty_Span;
       Refused : Token_Kind := Bang;

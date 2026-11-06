@@ -1,0 +1,7 @@
+error[L0110]: `fro` may be a misspelling of `for`
+  --> ../tests/fixtures/negative/misspelt-leading-for-is-named/program.ldn:3:5
+  |
+3 |     fro i in 0..<3 do
+  |     ^^^
+  = note: [1760]: check the leading keyword; the offered respelling is a guess
+  = help: did you mean `for`?

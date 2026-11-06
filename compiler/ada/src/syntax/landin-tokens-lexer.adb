@@ -157,6 +157,8 @@ package body Landin.Tokens.Lexer is
       begin
          Into.Faults.Append
            (Fault'(Kind    => Kind,
+                   Initial => (if Kind = Unknown_Byte_Run
+                               then Text (First) else ASCII.NUL),
                    Where   => Span (First, Stop),
                    Opened  => Opened,
                    Refused => Refused,

@@ -1198,7 +1198,15 @@ package body Landin.Syntax.Repairs is
             procedure Consider (One : Trial) is
                Written : constant String :=
                  Applied (Pieces, Line_First, Line_Last, One);
+               Visible : constant String := Squeezed (Written);
             begin
+               --  A deletion that leaves only a comment erases the intended
+               --  operation; reparsing that empty statement proves nothing.
+               if One.Kind = Deleted and then Visible'Length >= 2
+                 and then Visible (Visible'First .. Visible'First + 1) = "--"
+               then
+                  return;
+               end if;
                --  Two changes that write the same tokens are one repair,
                --  however the blanks between them fall.
                for Earlier of Found_Trials loop

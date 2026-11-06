@@ -1,0 +1,6 @@
+error[L0110]: Landin writes `--( ... )--` for a block comment, not `/* ... */`
+  --> ../tests/fixtures/negative/foreign-block-comment-is-named/program.ldn:2:5
+  |
+2 |     /* set the result */
+  |     ^^
+  = note: [1780]: a block comment opens with `--(` and closes with `)--`; block comments nest

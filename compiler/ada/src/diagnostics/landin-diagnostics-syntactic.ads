@@ -102,6 +102,10 @@ package Landin.Diagnostics.Syntactic is
       Fn_Word,
       As_Conversion,
       Postfix_Increment,
+      Postfix_Decrement,
+      Prefix_Not,
+      Slash_Comment,
+      Slash_Block_Comment,
       Star_Pointer,
       Double_Ampersand,
       Double_Bar,
@@ -114,6 +118,10 @@ package Landin.Diagnostics.Syntactic is
             when Fn_Word           => "fn",
             when As_Conversion     => "as",
             when Postfix_Increment => "++",
+            when Postfix_Decrement => "--",
+            when Prefix_Not        => "!",
+            when Slash_Comment     => "//",
+            when Slash_Block_Comment => "/*",
             when Star_Pointer      => "*",
             when Double_Ampersand  => "&&",
             when Double_Bar        => "||",
@@ -127,6 +135,10 @@ package Landin.Diagnostics.Syntactic is
             when Fn_Word           => "name: (parameters) -> (returns) =",
             when As_Conversion     => "type(value)",
             when Postfix_Increment => "inc",
+            when Postfix_Decrement => "dec",
+            when Prefix_Not        => "not",
+            when Slash_Comment     => "--",
+            when Slash_Block_Comment => "--( ... )--",
             when Star_Pointer      => "ptr",
             when Double_Ampersand  => "and",
             when Double_Bar        => "or",
@@ -139,6 +151,9 @@ package Landin.Diagnostics.Syntactic is
             when Fn_Word           => "[1800]",
             when As_Conversion     => "[0310]",
             when Postfix_Increment => "[0400]",
+            when Postfix_Decrement => "[0400]",
+            when Prefix_Not        => "[0340]",
+            when Slash_Comment | Slash_Block_Comment => "[1780]",
             when Star_Pointer      => "[0430]",
             when Double_Ampersand
                | Double_Bar        => "[0340]",
@@ -154,6 +169,10 @@ package Landin.Diagnostics.Syntactic is
             when Fn_Word           => "foreign-fn-is-named",
             when As_Conversion     => "foreign-as-is-named",
             when Postfix_Increment => "foreign-postfix-increment-is-named",
+            when Postfix_Decrement => "foreign-postfix-decrement-is-named",
+            when Prefix_Not        => "foreign-prefix-not-is-named",
+            when Slash_Comment     => "foreign-slash-comment-is-named",
+            when Slash_Block_Comment => "foreign-block-comment-is-named",
             when Star_Pointer      => "foreign-star-pointer-is-named",
             when Double_Ampersand  => "foreign-double-ampersand-is-named",
             when Double_Bar        => "foreign-double-bar-is-named",
@@ -175,6 +194,15 @@ package Landin.Diagnostics.Syntactic is
                & " value, `type(value)`, not with `as`",
             when Postfix_Increment =>
                "Landin writes `inc name` to add one, not `name++`",
+            when Postfix_Decrement =>
+               "Landin writes `dec name` to subtract one, not `name--`",
+            when Prefix_Not =>
+               "Landin writes `not` for logical negation, not `!`",
+            when Slash_Comment =>
+               "Landin writes `--` for a line comment, not `//`",
+            when Slash_Block_Comment =>
+               "Landin writes `--( ... )--` for a block comment,"
+               & " not `/* ... */`",
             when Star_Pointer =>
                "Landin writes a pointer type as `ptr T`, not `*T`",
             when Double_Ampersand =>
@@ -196,9 +224,17 @@ package Landin.Diagnostics.Syntactic is
                when As_Conversion =>
                   "nothing converts on its own, and a conversion is a call"
                   & " of the type converted to, as in `u32(count)`",
-               when Postfix_Increment =>
+               when Postfix_Increment | Postfix_Decrement =>
                   "`inc` and `dec` are statements of their own, and"
                   & " there is no `++` or `--`",
+               when Prefix_Not =>
+                  "`not condition` reverses a boolean condition; `!`"
+                  & " declares a function's error channel, not negation",
+               when Slash_Comment =>
+                  "`--` comments out the rest of its line",
+               when Slash_Block_Comment =>
+                  "a block comment opens with `--(` and closes with `)--`;"
+                  & " block comments nest",
                when Star_Pointer =>
                   "`ptr T` points at a `T` it may read, and `ptr mut T`"
                   & " at one it may also write",
