@@ -76,7 +76,8 @@ package Landin.Platform.Native is
       Handle : out Publication_Handle;
       Stage : out Ada.Strings.Unbounded.Unbounded_String;
       Status : out Write_Status;
-      Reason : out Ada.Strings.Unbounded.Unbounded_String);
+      Reason : out Ada.Strings.Unbounded.Unbounded_String;
+      Require_Absent : Boolean := False);
    overriding procedure Advance_Publication
      (Host : Native_Filesystem; Handle : Publication_Handle;
       Action : Publication_Action; Protected_Paths : Path_List;

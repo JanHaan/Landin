@@ -25,7 +25,8 @@ package body Landin.Platform.Publication is
    procedure Prepare
      (Group : in out Transaction; Files : Filesystem'Class; Path : String;
       Status : out Write_Status; Reason : out Unbounded_String;
-      Delete_Only : Boolean := False; Root : String := "")
+      Delete_Only : Boolean := False; Root : String := "";
+      Require_Absent : Boolean := False)
    is
       Item : Publication_Entry;
    begin
@@ -37,14 +38,21 @@ package body Landin.Platform.Publication is
       end if;
       for Previous of Group.Entries loop
          if To_String (Previous.Path) = Path then
+            if Require_Absent and then not Previous.Requires_Absence then
+               Reason := To_Unbounded_String
+                 ("output already prepared without an absence constraint;"
+                  & " abort and prepare a new transaction");
+               return;
+            end if;
             Status := Write_Ok;
             return;
          end if;
       end loop;
       Item.Path := To_Unbounded_String (Path);
+      Item.Requires_Absence := Require_Absent;
       Open_Publication
         (Files, Path, Delete_Only, Root, Item.Handle, Item.Stage, Status,
-         Reason);
+         Reason, Require_Absent);
       if Status = Write_Ok then
          Group.Entries.Append (Item);
          if Paths_Overlap_Any (Files, Path, Group.Protected_Paths) then

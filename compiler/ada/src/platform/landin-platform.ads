@@ -163,7 +163,8 @@ package Landin.Platform is
       Handle : out Publication_Handle;
       Stage : out Ada.Strings.Unbounded.Unbounded_String;
       Status : out Write_Status;
-      Reason : out Ada.Strings.Unbounded.Unbounded_String) is abstract;
+      Reason : out Ada.Strings.Unbounded.Unbounded_String;
+      Require_Absent : Boolean := False) is abstract;
    procedure Advance_Publication
      (Host : Filesystem; Handle : Publication_Handle;
       Action : Publication_Action; Protected_Paths : Path_List;
