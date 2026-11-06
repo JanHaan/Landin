@@ -3210,7 +3210,7 @@ followed to completion. No release or version change is claimed.
 
 ### R13.77 — What the second outside review found
 
-Status: active
+Status: complete
 Depends on: R13.76
 
 The same review's other shoulds. Default optimization crashes the
@@ -3237,6 +3237,72 @@ origin cases as fixtures, the generated bindings checking, the server's
 dependent diagnostics republished in scripted sessions, and each refusal
 naming the route that works, with the language rules changed in `spec.md`
 and its register.
+
+Done: all fourteen findings were reproduced at `fab292f6137`, with matching
+controls. Bounds stay inside their integer type on contradictory edges
+(review #54), and every evaluated slice operand under `lenof` receives origin
+checks while fixed-array measurements retain their unevaluated operands
+(review #30). Generated signatures allocate parameter and result names
+against each other and their referenced types, including adapters and
+callbacks (review #55, review #71). Closing an imported overlay or creating
+a module source republishes dependent diagnostics (review #48, review #103).
+Returning a value names assignment to the named result followed by bare
+`return`; foreign operations receive preserving routes, common C punctuation
+and comments name their Landin forms, and leading-keyword typos point at the
+word to repair (review #13, review #14, review #18, review #106). Offered edits
+were applied and checked; valid identifier and bare-return controls remain
+accepted. Unavailable output/report parents and uncertain identity are
+distinguished from proven collisions without creating directories or
+weakening D907 or D358 (review #51, SR-823). Installed bindings help names the
+generated `bindings.html` policy reference, whose inventory and content were
+checked locally; no live deployment is claimed (review #57).
+
+Jan chose D202's declaring-module collision rule: option names remain globally
+unique and configuration-only, while unrelated modules may use their spelling
+for ordinary declarations or imports. Static Linux checking includes the
+same available startup graph as compilation; standalone checking without that
+library retains its optional boundary (review #25). Actual same-module
+conflicts report one primary cause and suppress dependent noise from refused
+bindings, preserving independent mistakes (review #100).
+
+At `e139bf9fc`, both Linux compiler modes passed the FILTERED integrated
+selection, 46 cases and 4267 checks each; both Darwin modes passed its
+HOST-ONLY selection, 45 cases and 4056 checks each. Native Linux/Darwin
+optimizer, origin, generator, scripted LSP and command controls passed at
+their retained revisions, including all 40 native publication controls.
+The debug/release comparison covered 24620 requests, 24264 emitted and 356
+refused alike, with no disagreements. Linux and Darwin's complete manifests
+agree on all 52272 entries at `418b280ec`, whose compiler implementation and
+fixtures are identical to `e139bf9fc`; their later difference is tests and
+manuals. Scaling and image bounds passed. FreeBSD 14.4 amd64 and arm64 each
+executed the three new runtime fixtures at four profiles and passed production
+C adapter controls, using the frozen `418b280ec` release emitter. This is
+generated-program and native C evidence, not FreeBSD-hosted Ada. Cortex
+emission and recorded refusals passed; local QEMU execution was not established
+because the locked tool inventory was unavailable. The complete candidate
+software gate, identical-tree boards dispatch and main's own push gate remain
+pending publication authorization. No release or version designation changed.
+
+Activation review against `fab292f6137` read all 160 unmatched activations
+before closure; the final 104-path sweep has no automatic matches.
+SR-726, SR-823 and the new
+SR-830, the target manual's misleading refusal of `--link` on checks, are
+settled. The next server change retains SR-247's `offsetof` navigation; the
+next driver/diagnostics change SR-266's caller report; the next parser-refusal
+change SR-273's continued `else []`; the next generated-record-pointer consumer
+SR-277's typing; the next configuration change SR-289's option initializers;
+and the next catalogue pass SR-296's citations. SR-298 retains installed trap
+lookup for the next command/reporting change, SR-307 adjacent literals for
+the next string/L0103 change, SR-369 direct facts in array lengths for the next
+fixed-expression change, and SR-370 module timing for the next report change.
+SR-374 retains disjoint-field origins for the next field-origin change,
+SR-390 generic cascades for the next deduction/recovery change, SR-481 library
+directory guidance for the next library-discovery/refusal change, SR-590
+description inputs for the next rooted-request refusal change, SR-722 generator
+causes for the next catalogue/coverage change, SR-728 `mut name = value` for
+the next line-repair change, and SR-785 linting for the next workflow/environment
+change. Other rows retain their triggers; SR-801 through SR-811 stay with
+R13.78, and the R13 gate remains open.
 
 ### R13.78 — What the review and the register leave
 
@@ -3697,7 +3763,7 @@ SR-756, SR-614, SR-660, SR-671, SR-672, SR-709, SR-719, SR-723, SR-724,
 SR-725, SR-757, SR-758, SR-759, SR-760, SR-761, SR-762, SR-763, SR-764,
 SR-765, SR-766, SR-767, SR-770, SR-771, SR-774, SR-813, SR-817, SR-818,
 SR-819, SR-820, SR-821, SR-822, SR-824, SR-825, SR-826, SR-827, SR-799,
-SR-829.
+SR-829, SR-726, SR-823, SR-830.
 
 | Record | Family | What stands | Activation | Completion | Status |
 | --- | --- | --- | --- | --- | --- |
@@ -4011,7 +4077,6 @@ SR-829.
 | SR-720 | Usability | The formatting test's exemptions for fixtures whose layout is their evidence are a list of names inside the Ada test, with no key in `fixture.meta`; `add_fixture.py` mirrors the list to know which fixtures not to reformat, and a newcomer who wants such a fixture learns this only from the test's failure. Met extending `add_fixture.py` for SR-571. | The next fixture exempted from the layout. | The exemption declared in the fixture's metadata and read by both. | open |
 | SR-721 | Usability | Nothing stops a new script test from guarding a subprocess with a thin timeout: SR-310's list named four load-sensitive tests and six more were found, `test_fuzz_close.py` among them, because the fuzz driver's one-second bound also covered the stub server's start. Met proving SR-310. | The next new script test with a subprocess timeout. | A shared, stated hang guard in `scripts/tests`, or a check refusing a timeout below it. | open |
 | SR-722 | Usability | `check.py`'s catalogue and coverage generators stop with "the explanations could not be generated; run check.py" or "the coverage registers could not be read" and name no cause, as `--tokens` did before SR-323. Met reading the generators for SR-708. | The next change to the catalogue or coverage generation. | Each generator's refusal printing the problems that stopped it. | open |
-| SR-726 | Usability | `return a + b` as the body of a function with a named result is L0110 "this statement prefix cannot have a final value", whose note neither says that `return` carries no value nor to assign the named result first, as L0107 says elsewhere. Met reproducing SR-462's C-style function. | The next change to L0107 or to value prefixes. | The refusal saying `return` carries no value and to assign the named result. | open |
 | SR-727 | Usability | A variant case whose payload is written as a call, `full(n: i32)` among a variant part's cases, is L0103 "a variant part ends with `end` and its name" at the `(`, which does not say a payload is written `full: (n: i32)`. Met writing a reproducer for SR-264. | The next change to the parser's variant-part refusals. | The refusal at `(` after a case name naming the `case: (fields)` form. | open |
 | SR-728 | Usability | `mut done = false` in a body is L0103 "`mut` does not belong here", whose note and fix, removing `mut`, turn a declaration into an assignment to an undeclared name; the form is `mut done := false`. Met writing the SR-527 reproduction. | The next change to the line repair or to `mut`'s refusals. | `mut name = value` named as a declaration that needs `:=`, with that fix. | open |
 | SR-729 | Usability | `low, high := pair(2)` is L0010 "an inferred binding names one binding; shared names write their type", which does not name the destructuring `(low, high) := pair(2)` that was meant. Met writing D871's fixture. | The next change to L0010 or to destructuring. | A run of names before `:=` with a call on the right naming the parenthesised destructuring. | open |
@@ -4066,9 +4131,7 @@ SR-829.
 | SR-814 | Usability | While protecting compile auxiliary inputs in R13.76, pinning the tool working directory exposed linker and assembler directives whose relative or indirect paths inherit the caller directory. The bounded input-closure scanner now refuses those forms rather than silently resolving them in staging, and asks for plain absolute paths; callers using relative INCLUDE, INPUT/GROUP, SEARCH_DIR, .include or .incbin must rewrite those directives. A bindings dependency reported relative to Clang's retained workspace must also stay within it; a path that escapes and reenters is refused, with an absolute include or declared --include-dir route, because lexical normalization cannot retain its external directory authority. | The next change to external-tool input discovery, or a consumer that needs these relative forms. | Discover and protect their actual resolved input closure while preserving tool lookup and include semantics, with positive and collision controls for each newly supported form. | open |
 | SR-815 | Usability | During R13.76's required `scripts/parallel-equivalence.sh --suite='fixture execution'`, the one-worker corpus gave no case progress for over twenty minutes. It was mistakenly interrupted as stalled; artifact timestamps later proved work continued until 1.13 seconds before cancellation, and debugger probes showed ordinary tool polling. The whole-case transcript required inspecting disposable artifacts to distinguish progress from a hang. | The next change to fixture-corpus progress reporting or the parallel-equivalence wrapper. | Bounded visible progress within a long corpus case, retained separately from the deterministic verdict comparison, so ordinary work can be distinguished from a stalled run without inspecting build artifacts. | open |
 | SR-816 | Release readiness | While auditing child-identifier ownership in R13.76, source tracing found the separate attached-program runner reaps its child before restoring its SIGTERM/HUP forwarding handlers and clearing their saved PID. A signal in that interval can consult an identifier whose reservation has ended. No PID reuse or foreign signal was exercised; compiler-tool process-group cancellation uses a different supervisor. | The next change to attached-program waiting or signal forwarding. | Retain the child's identifier reservation until forwarding can no longer target it, with deterministic native controls on each host for signals around final reaping. | open |
-| SR-823 | Usability | Review #51's misleading collision for a missing output parent has a stage-report variant, met inspecting R13.76's native report-path controls: a stage report under an absent parent was refused as "stage report collides with another output" although no output occupied that name. Conservative unresolved-parent comparison preserves files, but the message gives neither that cause nor the route of choosing or creating an existing output parent. | R13.77. | Distinguish an unavailable or unresolved parent from a proven collision, name the supported existing-parent route, and retain strict refusal and preservation when separation cannot be established. | open |
 | SR-828 | Usability | During R13.76's allocation-provenance investigation, one bounded Valgrind run emitted 10,392 conditional-uninitialized reports in six contexts at the packed Declaration_Bits byte iterator. Classifying them required reading its rounded final-byte view: valid bits are initialized, but the view also reads representation padding. Origins were not traced, so this does not classify every report or establish a compiler correctness defect; the implementation predates the publication change. The noise prevents a clean instrumentation verdict. | The next packed-bit iterator or instrumentation-coverage change. | Read only initialized semantic bits or establish initialized byte storage, with boundary controls for declaration counts not divisible by eight and a clean native instrumentation result; preserve the iterator's valid-index bounds. | open |
-| SR-830 | Usability | While tracing the check/compile configuration graph for R13.77, the target manual said `--link` was refused without executable or assembly emission, although `refine check --link=libc` succeeds and selects its checking policy. The refusal claim sends a reader away from the supported check route. | R13.77's link-policy documentation. | State checking alongside executable and assembly requests, with the static-startup graph and a passing libc-check control. | open |
 
 ## Retained positions
 
