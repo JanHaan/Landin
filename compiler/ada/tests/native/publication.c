@@ -188,7 +188,10 @@ static void anchored_stage_and_roots(void)
 static void directory_snapshot(void)
 {
     char output[4096], stage[4096], oldleaf[4096], newleaf[4096];
-    path(output, sizeof output, "program.dSYM"); REQUIRE(mkdir(output, 0700) == 0);
+    char parent[4096];
+    path(parent, sizeof parent, "directory-snapshot"); REQUIRE(mkdir(parent, 0700) == 0);
+    REQUIRE(snprintf(output, sizeof output, "%s/program.dSYM", parent) > 0);
+    REQUIRE(mkdir(output, 0700) == 0);
     REQUIRE(snprintf(oldleaf, sizeof oldleaf, "%s/old", output) > 0); put(oldleaf, "old-debug");
     int token = prepare(output, 0, "", stage);
     REQUIRE(mkdir(stage, 0700) == 0);
