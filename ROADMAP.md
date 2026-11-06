@@ -3107,8 +3107,10 @@ reproducers were confirmed. Demonstrations create and remove only owned
 roots; fake controls cover each finding, with native renamed-save and
 interrupted-link controls. Manuals state the same-inode writer, pathname
 execution, external-dependency and recovery limits. SR-813 and SR-817 are
-settled, as are SR-818 through SR-822 with the final fixture comparison.
-SR-806 credits the cancellation and mixed firmware generation fixes while
+settled, as are SR-818 through SR-822 with the pre-gate fixture comparison.
+SR-824 and SR-825 are settled by absent-tree reservations and cooperative
+producer leases; overlapping same-parent reservations also refuse within
+one process. SR-806 credits the cancellation and mixed firmware generation fixes while
 retaining the need to explain publication state after cleanup refusal.
 
 Pre-gate local evidence at `b757b80e`: the one/eight-worker fixture
@@ -3126,9 +3128,18 @@ for both architectures. These results describe the pre-gate source.
 CI follow-ups corrected absent bindings-tree creation on refusal,
 semantic-diagnostic priority, Darwin harness temporary outputs, completed
 registry retention, and unrelated live-linker staging refusals. Integrated
-development feedback passed 31 FILTERED cases and 3242 checks. The updated
-candidate's complete multi-host gate remains pending; local and filtered
-results do not replace it.
+development feedback passed 31 FILTERED cases and 3242 checks, including
+the three memory controls; the final fake-filesystem follow-up passed
+29 cases and 3246 checks. Final Linux native controls passed publication
+37, owned-runtime 7, compile publication 34, cancellation 16 plus 9 actual
+command controls, and 768 registry handoffs. An actual LLD rename barrier
+held its temporary object while an unrelated command succeeded and a
+same-target command refused, preserving the held files; the producer then
+completed and retired its arena. FreeBSD native amd64 passed publication
+36, owned-runtime 7 and 768 handoffs, and both architectures cross-linked
+the final C adapters and controls. The updated complete multi-host gate
+and fresh fixture-worker comparison remain pending; local and filtered
+results do not replace them.
 
 Activation review: the sweep against `df4ccb875` found no path-matched
 activation; all 159 unmatched rows were read against the actual changes.
@@ -3646,7 +3657,7 @@ SR-747, SR-748, SR-749, SR-750, SR-751, SR-752, SR-753, SR-754, SR-755,
 SR-756, SR-614, SR-660, SR-671, SR-672, SR-709, SR-719, SR-723, SR-724,
 SR-725, SR-757, SR-758, SR-759, SR-760, SR-761, SR-762, SR-763, SR-764,
 SR-765, SR-766, SR-767, SR-770, SR-771, SR-774, SR-813, SR-817, SR-818,
-SR-819, SR-820, SR-821, SR-822.
+SR-819, SR-820, SR-821, SR-822, SR-824, SR-825.
 
 | Record | Family | What stands | Activation | Completion | Status |
 | --- | --- | --- | --- | --- | --- |
@@ -4017,8 +4028,6 @@ SR-819, SR-820, SR-821, SR-822.
 | SR-815 | Usability | During R13.76's required `scripts/parallel-equivalence.sh --suite='fixture execution'`, the one-worker corpus gave no case progress for over twenty minutes. It was mistakenly interrupted as stalled; artifact timestamps later proved work continued until 1.13 seconds before cancellation, and debugger probes showed ordinary tool polling. The whole-case transcript required inspecting disposable artifacts to distinguish progress from a hang. | The next change to fixture-corpus progress reporting or the parallel-equivalence wrapper. | Bounded visible progress within a long corpus case, retained separately from the deterministic verdict comparison, so ordinary work can be distinguished from a stalled run without inspecting build artifacts. | open |
 | SR-816 | Release readiness | While auditing child-identifier ownership in R13.76, source tracing found the separate attached-program runner reaps its child before restoring its SIGTERM/HUP forwarding handlers and clearing their saved PID. A signal in that interval can consult an identifier whose reservation has ended. No PID reuse or foreign signal was exercised; compiler-tool process-group cancellation uses a different supervisor. | The next change to attached-program waiting or signal forwarding. | Retain the child's identifier reservation until forwarding can no longer target it, with deterministic native controls on each host for signals around final reaping. | open |
 | SR-823 | Usability | Review #51's misleading collision for a missing output parent has a stage-report variant, met inspecting R13.76's native report-path controls: a stage report under an absent parent was refused as "stage report collides with another output" although no output occupied that name. Conservative unresolved-parent comparison preserves files, but the message gives neither that cause nor the route of choosing or creating an existing output parent. | R13.77. | Distinguish an unavailable or unresolved parent from a proven collision, name the supported existing-parent route, and retain strict refusal and preservation when separation cannot be established. | open |
-| SR-824 | Usability | While following R13.76's candidate gate, bindings correctly refused malformed policy names but had already created the absent public output directory. Its ordinary refusal controls expected no output creation; native reproduction confirmed an empty directory remained, and the fake filesystem's publication preparation did not model parent creation. | R13.76. | Preserve absent output roots and missing ancestors through input and tool refusal, reserve their absence before generation, and refuse rather than overwrite a tree created concurrently, with fake and native controls. | open |
-| SR-825 | Usability | While following R13.76's FreeBSD runtime gate, Linux-side parallel builds refused unrelated output names because another live LLVM linker briefly held an undeclared temporary object in its private staging directory. A pipe barrier at the actual LLD rename reproduced the refusal; releasing the producer let both commands succeed. The message asked to recover a retained publication although the producer was doing ordinary work. | R13.76. | Distinguish cooperative live staging from abandoned or unexplained recovery without accepting temporary names by suffix, retain destination-alias and protected-input guards, and control the real tool window and cross-process inspection on each host. | open |
 
 ## Retained positions
 
