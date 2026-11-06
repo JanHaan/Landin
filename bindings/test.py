@@ -2191,6 +2191,8 @@ int main(void) { return f(36) != 37; }
         sysroot, includes, output = self.make_tree(
             parent, header="int f(void);\n",
             selected_policy=self.selection(self.function("f")))
+        self.assertFalse(output.exists())
+        self.assertFalse(output.is_symlink())
         foreign = parent / "foreign"
         foreign.mkdir()
         notes = foreign / "notes.ldn"

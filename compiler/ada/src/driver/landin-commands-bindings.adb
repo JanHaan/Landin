@@ -1027,11 +1027,21 @@ package body Landin.Commands.Bindings is
                   Path : constant String := US.To_String (Candidate);
                   Slash : constant Natural := Ada.Strings.Fixed.Index
                     (Path, "/", Ada.Strings.Backward);
+                  Last : Natural := (if Slash = 0 then 0 else Slash - 1);
                begin
+                  while Last > Path'First and then Path (Last) = '/' loop
+                     Last := Last - 1;
+                  end loop;
                   Candidate := US.To_Unbounded_String
                     (if Slash = 0 then "."
                      elsif Slash = Path'First then "/"
-                     else Path (Path'First .. Slash - 1));
+                     else Path (Path'First .. Last));
+                  if US.To_String (Candidate) = Path then
+                     Report (Cat.Bindings_Output_Refused,
+                             "cannot establish the output directory " & Path
+                             & "; name an accessible directory with --out-dir");
+                     return False;
+                  end if;
                end;
                Observation := Host.Observe_Identity (US.To_String (Candidate));
                exit when Observation.Status /= Platform.Not_Found;
