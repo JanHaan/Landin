@@ -779,6 +779,19 @@ package body Landin.Testing.Fakes is
                    then Identity_Of (Host, Path) else (others => <>));
    end Read_Snapshot;
 
+   function Arena_Active (Host : Fake_Filesystem; Arena : Natural)
+      return Boolean;
+   function Arena_Active (Host : Fake_Filesystem; Arena : Natural)
+      return Boolean is
+   begin
+      for Reservation of Host.Writes.Data.Publications loop
+         if Reservation.Arena = Arena and then not Reservation.Finished then
+            return True;
+         end if;
+      end loop;
+      return False;
+   end Arena_Active;
+
    overriding procedure Open_Publication
      (Host : Fake_Filesystem; Path : String; Delete_Only : Boolean;
       Root : String; Handle : out Landin.Platform.Publication_Handle;
@@ -795,6 +808,9 @@ package body Landin.Testing.Fakes is
       Parent : constant String :=
         (if Slash = 0 then "." else Path (Path'First .. Slash - 1));
       Name : constant String := Path (Slash + 1 .. Path'Last);
+      Parent_Id : constant Landin.Platform.File_Identity :=
+        Host.Identity_Of (Parent);
+      Arena : Natural := Natural (Host.Writes.Data.Publications.Length) + 1;
       Item : Fake_Publication;
       Moved : Landin.Platform.Move_Status;
    begin
@@ -802,6 +818,47 @@ package body Landin.Testing.Fakes is
       Stage := Unbounded.Null_Unbounded_String;
       Reason := Unbounded.Null_Unbounded_String;
       Status := Landin.Platform.Not_Writable;
+      for Reservation of Host.Writes.Data.Publications loop
+         if Arena_Active (Host, Reservation.Arena) then
+            declare
+               Prior_Parent : constant String :=
+                 Unbounded.To_String (Reservation.Parent);
+               Same_Parent : constant Boolean :=
+                 (if Parent_Id.Valid and Reservation.Parent_Identity.Valid
+                  then Parent_Id = Reservation.Parent_Identity
+                    or else (Parent /= Prior_Parent
+                             and then Host.Paths_Overlap
+                               (Parent, Prior_Parent))
+                  else Parent = Prior_Parent
+                    or else Host.Paths_Overlap (Parent, Prior_Parent));
+               Conflict : Boolean := Same_Parent
+                 and then Unbounded.To_String (Reservation.Name) = Name;
+            begin
+               for Pair in 1 .. Natural (Host.Aliases.Length) / 2 loop
+                  if (Host.Aliases (Pair * 2 - 1) = Path
+                       and Host.Aliases (Pair * 2) =
+                         Unbounded.To_String (Reservation.Path))
+                    or else (Host.Aliases (Pair * 2) = Path
+                       and Host.Aliases (Pair * 2 - 1) =
+                         Unbounded.To_String (Reservation.Path))
+                  then
+                     Conflict := True;
+                  end if;
+               end loop;
+               if Conflict then
+                  Reason := Unbounded.To_Unbounded_String
+                    ("output is reserved by or cannot be proved separate"
+                     & " from active publication "
+                     & Unbounded.To_String (Reservation.Path)
+                     & "; retry after that transaction completes");
+                  return;
+               end if;
+               if Same_Parent then
+                  Arena := Reservation.Arena;
+               end if;
+            end;
+         end if;
+      end loop;
       if Host.Writes.Data.Appearance_Armed
         and then Host.Writes.Data.Appearance_Before_Open
         and then Unbounded.To_String
@@ -839,10 +896,19 @@ package body Landin.Testing.Fakes is
          end if;
       end loop;
       Item.Path := Unbounded.To_Unbounded_String (Path);
-      Item.Stage := Unbounded.To_Unbounded_String
-        (Parent & "/.refine-publication/" & Name);
-      Item.Recovery := Unbounded.To_Unbounded_String
-        (Parent & "/.refine-publication/.previous-" & Name);
+      Item.Parent := Unbounded.To_Unbounded_String (Parent);
+      Item.Name := Unbounded.To_Unbounded_String (Name);
+      Item.Parent_Identity := Parent_Id;
+      Item.Arena := Arena;
+      declare
+         Private_Parent : constant String := Parent & "/.refine-publication/"
+           & Ada.Strings.Fixed.Trim (Arena'Image, Ada.Strings.Both);
+      begin
+         Item.Stage := Unbounded.To_Unbounded_String
+           (Private_Parent & "/" & Name);
+         Item.Recovery := Unbounded.To_Unbounded_String
+           (Private_Parent & "/.previous-" & Name);
+      end;
       Item.Absent := Existing = 0;
       Item.Deletion := Delete_Only;
       if Existing /= 0 then

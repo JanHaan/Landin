@@ -2023,6 +2023,67 @@ package body Landin.Tests.Platform_Suite is
       end;
    end Publication_Requires_Absent_Snapshot;
 
+   procedure Publication_Reservations_Are_Exclusive
+     (Item : in out Landin.Testing.Context);
+   procedure Publication_Reservations_Are_Exclusive
+     (Item : in out Landin.Testing.Context)
+   is
+      use Landin.Platform;
+      package Pub renames Landin.Platform.Publication;
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      First, Other : Pub.Transaction;
+      Status : Write_Status;
+      Reason, Text : Unbounded.Unbounded_String;
+      Read : Read_Status;
+   begin
+      Host.Add_Directory ("/parent");
+      Host.Add_File ("/parent/output", "original");
+      Host.Add_Hard_Link ("/parent/hardlink", "/parent/output");
+      Host.Add_Alias ("/parent/output", "/parent/OUTPUT");
+      Pub.Prepare (First, Host, "/parent/output", Status, Reason);
+      declare
+         Stage : constant String := Pub.Stage_Path (First, "/parent/output");
+      begin
+         Host.Write_File (Stage, "first-new", Status);
+         for Name of Path_List'(["/parent/output", "/parent/OUTPUT"]) loop
+            Pub.Prepare (Other, Host, Name, Status, Reason);
+            Landin.Testing.Check
+              (Item, Status = Not_Writable
+                 and then Ada.Strings.Fixed.Index
+                   (Unbounded.To_String (Reason), "transaction completes") > 0,
+               "separate transactions cannot share a reserved entry");
+            Pub.Abort_Transaction (Other, Host, Status, Reason);
+         end loop;
+         Pub.Prepare (Other, Host, "/parent/hardlink", Status, Reason);
+         Landin.Testing.Check
+           (Item, Status = Write_Ok,
+            "distinct hardlinked entry names may stage independently");
+         Host.Write_File
+           (Pub.Stage_Path (Other, "/parent/hardlink"), "other", Status);
+         Pub.Abort_Transaction (Other, Host, Status, Reason);
+         Host.Read_File (Stage, Text, Read);
+         Landin.Testing.Check_Equal
+           (Item, Unbounded.To_String (Text), "first-new",
+            "refused and separate transactions preserve the first stage");
+         Pub.Commit (First, Host, Status, Reason);
+         Pub.Finish (First, Host, Status, Reason);
+         Pub.Prepare (Other, Host, "/parent/output", Status, Reason);
+         Landin.Testing.Check
+           (Item, Status = Write_Ok
+              and then Pub.Stage_Path (Other, "/parent/output") /= Stage,
+            "completion releases the name with a fresh staging authority");
+         Host.Write_File (Stage, "stale", Status);
+         Landin.Testing.Check
+           (Item, Status = Not_Writable,
+            "an old stage cannot acquire a later transaction's authority");
+         Pub.Abort_Transaction (Other, Host, Status, Reason);
+         Host.Read_File ("/parent/output", Text, Read);
+         Landin.Testing.Check_Equal
+           (Item, Unbounded.To_String (Text), "first-new",
+            "later abort leaves the first published generation intact");
+      end;
+   end Publication_Reservations_Are_Exclusive;
+
    procedure Publication_Preserves_Output_Kinds
      (Item : in out Landin.Testing.Context);
    procedure Publication_Preserves_Output_Kinds
@@ -2073,6 +2134,9 @@ package body Landin.Tests.Platform_Suite is
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "platform", "publication reservations are exclusive",
+         Publication_Reservations_Are_Exclusive'Access);
       Landin.Testing.Register
         (Into, "platform", "publication requires an absent snapshot",
          Publication_Requires_Absent_Snapshot'Access);

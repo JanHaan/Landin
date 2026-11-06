@@ -783,6 +783,17 @@ static int retained_workspace(int parent, const char *parent_path,
             errno = EBUSY; return -1;
         }
     }
+    /* Own live arenas bypass disk discovery, but independent transactions
+       must not receive authority to the same stage entry. Keep finished
+       siblings reserved until their arena retires, as foreign journals do. */
+    for (struct publication *p = publications; p; p = p->next) {
+        if (p->arena->refs && same(&parent_id, &p->arena->parent_id)
+            && landin_entry_names_alias(parent, target, p->name) != 0) {
+            reason(why, room, "output %s is reserved by or cannot be proved separate from active publication %s; check paths and retry after that transaction completes",
+                   target, p->path);
+            errno = EBUSY; return -1;
+        }
+    }
     DIR *directory = fdopendir(dup(parent));
     struct dirent *item;
     int refused = 0;

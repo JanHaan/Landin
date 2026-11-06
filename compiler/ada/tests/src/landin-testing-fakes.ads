@@ -457,6 +457,9 @@ private
 
    type Fake_Publication is record
       Path, Stage, Recovery : Unbounded.Unbounded_String;
+      Parent, Name : Unbounded.Unbounded_String;
+      Parent_Identity : Landin.Platform.File_Identity;
+      Arena : Natural := 0;
       Expected, Fresh : File_Entry;
       Expected_Tree, Fresh_Tree : File_Vectors.Vector;
       Absent, Deletion, Captured, Installed, Finished : Boolean := False;

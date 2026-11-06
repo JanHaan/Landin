@@ -1355,6 +1355,63 @@ static void live_producer_discovery(void)
     ++passed;
 }
 
+
+static void own_reservations(void)
+{
+    char parent[4096], output[8192], alternate[8192], stage[4096], other_stage[4096];
+    path(parent, sizeof parent, "own-reservations"); REQUIRE(mkdir(parent, 0700) == 0);
+    REQUIRE(snprintf(output, sizeof output, "%s/output", parent) > 0); put(output, "original");
+    struct stat before, after; REQUIRE(stat(output, &before) == 0);
+    int first = prepare(output, 0, "", stage), second = 0;
+    staged(stage, "first-new");
+    int result = landin_publication_open(output, 0, "", &second, other_stage,
+                                         sizeof other_stage, why, sizeof why);
+    if (result == 0) {
+        /* Expected-red evidence: demonstrate the former shared authority,
+           then clean both owned handles before reporting failure. */
+        staged(other_stage, "second-corruption");
+        char *bytes = NULL; size_t size; uint64_t device, inode;
+        REQUIRE(landin_read_snapshot(stage, &bytes, &size, &device, &inode) == 0);
+        printf("overlapping own reservations: shared_stage=%d first_bytes=%.*s\n",
+               !strcmp(stage, other_stage), (int)size, bytes); free(bytes);
+        REQUIRE(step(second, 0) == 0 && step(second, 3) == 0 && step(second, 4) == 0);
+        REQUIRE(step(first, 3) == 0 && step(first, 4) == 0);
+    }
+    REQUIRE(result != 0 && second == 0 && !*other_stage);
+    REQUIRE(strstr(why, "active publication") && strstr(why, "transaction completes"));
+    REQUIRE(snprintf(alternate, sizeof alternate, "%s/./output", parent) > 0);
+    REQUIRE(landin_publication_open(alternate, 0, "", &second, other_stage,
+                                    sizeof other_stage, why, sizeof why) != 0 && second == 0);
+    REQUIRE(snprintf(alternate, sizeof alternate, "%s/OUTPUT", parent) > 0);
+    int fd = open(parent, O_RDONLY | O_DIRECTORY | O_CLOEXEC); REQUIRE(fd >= 0);
+    int equivalent = landin_entry_names_alias(fd, "output", "OUTPUT"); close(fd);
+    result = landin_publication_open(alternate, 0, "", &second, other_stage,
+                                     sizeof other_stage, why, sizeof why);
+    REQUIRE((result != 0) == (equivalent != 0));
+    if (result == 0) {
+        staged(other_stage, "different-entry");
+        REQUIRE(step(second, 0) == 0 && step(second, 3) == 0 && step(second, 4) == 0);
+    }
+    /* Distinct hardlinked entry names remain independent output reservations. */
+    REQUIRE(snprintf(alternate, sizeof alternate, "%s/hardlink", parent) > 0 && link(output, alternate) == 0);
+    second = prepare(alternate, 0, "", other_stage);
+    REQUIRE(strcmp(stage, other_stage)); staged(other_stage, "separate-stage");
+    REQUIRE(step(second, 0) == 0 && step(second, 3) == 0 && step(second, 4) == 0);
+    char *bytes = NULL; size_t size; uint64_t device, inode;
+    REQUIRE(landin_read_snapshot(stage, &bytes, &size, &device, &inode) == 0
+            && size == 9 && !memcmp(bytes, "first-new", 9)); free(bytes);
+    REQUIRE(stat(output, &after) == 0 && before.st_dev == after.st_dev
+            && before.st_ino == after.st_ino && before.st_mode == after.st_mode && content(output, "original"));
+    REQUIRE(step(first, 0) == 0 && step(first, 1) == 0 && step(first, 2) == 0 && step(first, 4) == 0);
+    REQUIRE(content(output, "first-new") && content(alternate, "original"));
+    second = prepare(output, 0, "", other_stage);
+    REQUIRE(strcmp(stage, other_stage)); staged(other_stage, "later-generation");
+    REQUIRE(landin_publication_stage_write(stage, "stale", 5) == -1);
+    REQUIRE(step(second, 0) == 0 && step(second, 1) == 0
+            && step(second, 2) == 0 && step(second, 4) == 0 && content(output, "later-generation"));
+    ++passed;
+}
+
 int main(int argc, char **argv)
 {
     self_program = argv[0];
@@ -1414,6 +1471,11 @@ int main(int argc, char **argv)
     const char *tmp = getenv("TMPDIR"); if (!tmp || !*tmp) tmp = "/tmp";
     REQUIRE(snprintf(scratch, sizeof scratch, "%s/landin-publication-XXXXXX", tmp) > 0);
     REQUIRE(mkdtemp(scratch) != NULL);
+    if (argc == 2 && !strcmp(argv[1], "--own-reservations")) {
+        own_reservations();
+        printf("publication native: %u controls passed (own reservations)\n", passed);
+        return 0;
+    }
     if (argc == 2 && !strcmp(argv[1], "--live-producer")) {
         live_producer_discovery();
         printf("publication native: %u controls passed (live producer)\n", passed);
@@ -1440,7 +1502,7 @@ int main(int argc, char **argv)
     child_staging_directory(); mismatch_finish_preserves_tree();
     moved_anchor_recovery_diagnostic(); fmt_moved_parent_diagnostic();
     fmt_readonly_is_write_refusal(); different_output_kind_is_refused();
-    live_producer_discovery(); journal_concurrency(); discovery_during_retirement();
+    own_reservations(); live_producer_discovery(); journal_concurrency(); discovery_during_retirement();
     discovery_during_publication(); pinned_entry_name_equivalence();
     unknown_unready_recovery_refuses(); constructor_failure_is_discoverable();
     printf("publication native: %u controls passed; retained scratch %s\n", passed, scratch);
