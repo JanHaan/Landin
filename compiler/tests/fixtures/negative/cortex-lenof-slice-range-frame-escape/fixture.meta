@@ -1,0 +1,9 @@
+class: negative
+summary: D333 checks evaluated lenof slice operands for frame retention on Cortex-M0
+program: main.ldn
+codes: L0314
+constructs: 0370, 0430, 0570, 0770, 0780, 1820
+targets: cortex-m0
+args: --target=cortex-m0 ../tests/fixtures/negative/cortex-lenof-slice-range-frame-escape/main.ldn
+expect: expected.txt
+status: 1

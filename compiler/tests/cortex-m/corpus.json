@@ -1793,6 +1793,9 @@
     "runtime/lenof-named-fixed-arrays": {
       "mode": "execute"
     },
+    "runtime/lenof-slice-operands-run-once": {
+      "mode": "execute"
+    },
     "runtime/library-at-references": {
       "mode": "execute",
       "profile_limit": "selected-image",
@@ -2287,6 +2290,12 @@
       "mode": "execute"
     },
     "runtime/one-module-across-two-files": {
+      "mode": "execute"
+    },
+    "runtime/optimizer-unsigned-empty-branches": {
+      "mode": "execute"
+    },
+    "runtime/option-names-stay-in-their-module": {
       "mode": "execute"
     },
     "runtime/parameterized-struct-lazy-value-layout": {
