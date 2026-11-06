@@ -3157,9 +3157,9 @@ Replay establishes no fresh physical pass or cause for the prefix. SR-799
 is settled by these controls, the fresh software gate and the physical
 dispatch below.
 
-Activation review: the sweep against `df4ccb875` found 103 changed paths and
-no path-matched activation; all 159 unmatched rows were read against the
-actual changes.
+Activation review: the sweep against `df4ccb875` found 104 changed paths and
+matched SR-829, taken by the sequence-fixture correction; all 159 unmatched
+rows were read against the actual changes.
 R551-20 remains for native failures beyond these bounded controls.
 SR-266, SR-296, SR-298, SR-590 and SR-370 remain for internal-defect caller
 diagnostics, note citations, installed panic-site lookup,
@@ -3193,6 +3193,14 @@ and source identities were verified; all seven ports passed their RAM runs
 and final boot checks, leaving their verified fixed images at rest.
 Promotion to `main` requires its own push gate with fresh physical boards,
 followed to completion. No release or version change is claimed.
+
+The closing candidate exposed SR-829: the roadmap sequence control replayed
+earlier progress without resetting the two outside-review items. It failed
+when this item became complete. Both items now enter the simulated sequence
+as planned, with the same next-item and dependency assertions; all 31 module
+tests passed after reproducing the failure. This test change requires a
+fresh complete software gate and an identical-tree boards dispatch before
+promotion.
 
 ### R13.77 — What the second outside review found
 
@@ -4053,6 +4061,7 @@ SR-819, SR-820, SR-821, SR-822, SR-824, SR-825, SR-826, SR-827, SR-799.
 | SR-816 | Release readiness | While auditing child-identifier ownership in R13.76, source tracing found the separate attached-program runner reaps its child before restoring its SIGTERM/HUP forwarding handlers and clearing their saved PID. A signal in that interval can consult an identifier whose reservation has ended. No PID reuse or foreign signal was exercised; compiler-tool process-group cancellation uses a different supervisor. | The next change to attached-program waiting or signal forwarding. | Retain the child's identifier reservation until forwarding can no longer target it, with deterministic native controls on each host for signals around final reaping. | open |
 | SR-823 | Usability | Review #51's misleading collision for a missing output parent has a stage-report variant, met inspecting R13.76's native report-path controls: a stage report under an absent parent was refused as "stage report collides with another output" although no output occupied that name. Conservative unresolved-parent comparison preserves files, but the message gives neither that cause nor the route of choosing or creating an existing output parent. | R13.77. | Distinguish an unavailable or unresolved parent from a proven collision, name the supported existing-parent route, and retain strict refusal and preservation when separation cannot be established. | open |
 | SR-828 | Usability | During R13.76's allocation-provenance investigation, one bounded Valgrind run emitted 10,392 conditional-uninitialized reports in six contexts at the packed Declaration_Bits byte iterator. Classifying them required reading its rounded final-byte view: valid bits are initialized, but the view also reads representation padding. Origins were not traced, so this does not classify every report or establish a compiler correctness defect; the implementation predates the publication change. The noise prevents a clean instrumentation verdict. | The next packed-bit iterator or instrumentation-coverage change. | Read only initialized semantic bits or establish initialized byte storage, with boundary controls for declaration counts not divisible by eight and a clean native instrumentation result; preserve the iterator's valid-index bounds. | open |
+| SR-829 | Usability | R13.76's three-document closing candidate passed the full document check but failed the gate's roadmap sequence control: the fixture replayed earlier progress while leaving the newly completed outside-review item complete, then expected that item to be next. Reading the test was needed to distinguish its stale setup from an incorrect roadmap pointer. | The next change to `scripts/tests/test_roadmap_progress.py`'s historical sequence setup. | Reset every item the fixture simulates regardless of its real status, retain the exact next-item and dependency assertions, and pass the completed-roadmap case and the script gate. | open |
 
 ## Retained positions
 
