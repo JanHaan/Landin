@@ -367,13 +367,17 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   reported again, and where one change of a token mends a line the report
   says which change and offers it as a fix.
 - A spelling from another language, such as `elif`, `fn`, `x as i32`,
-  `x++`, `*u8`, `&&` or `!=`, is refused naming what Landin writes instead,
+  `x++`, `x--`, prefix `!`, C-family comments, braces, semicolons, `*u8`,
+  `&&` or `!=`, is refused naming what Landin writes instead,
   and `io.println`, `io.printf`, `io.print` or `io.puts` is shown the
   `io.write_format` call that prints a value, spelt with the program's
   alias for `core/io`.
   A construct the tour describes and the kernel omits is refused with a note
   naming the paragraph that describes it and whether the form is a recorded
   boundary, withdrawn or transferred to a successor.
+  Refused leading-keyword typos point at the misspelled word and offer a
+  likely respelling; a returned expression names assignment to the named
+  result followed by a bare `return`.
 
 ### Warnings
 
@@ -422,7 +426,8 @@ The README has [the commands in brief](../README.md#refine-in-brief);
 - **Measuring.** `lenof` measures a field or element path or a call's
   result, `offsetof t.field` measures where a field begins, and
   `compiler.assert` measures a declared type's size, alignment and field
-  offsets.
+  offsets. Evaluated slice operands receive origin checks and run once;
+  fixed-array paths and array-literal elements remain unevaluated.
 - **Failures.** `else (problem)` recovers a call in an `if` arm as anywhere
   else, and `else none` ignores the failure of a call that returns none.
 - **Matching and places.** A match's `_ (rest):` arm binds the atoms no

@@ -8028,6 +8028,25 @@ package body Landin.Tests.Driver_Suite is
             end if;
          end;
       end loop;
+      declare
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : constant Landin.Platform.Path_List :=
+           ["--target=linux-x86-64", "--emit=ir", "--link=libc",
+            "main.ldn"];
+         Result : Landin.Driver.Outcome;
+      begin
+         Host.Add_File ("main.ldn", "value: i32 = 1");
+         Host.Add_Link ("a.s");
+         Result := Landin.Driver.Execute (Args, Host, Tools);
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, 0,
+            "default IR output does not inspect unrelated assembly path: "
+            & Unbounded.To_String (Result.Report));
+         Landin.Testing.Check
+           (Item, Host.Exists ("a.ir") and then Host.Is_Link ("a.s"),
+            "IR uses its own default and preserves the unrelated link");
+      end;
    end Output_Parents_Are_Named;
 
    procedure Register (Into : in out Landin.Testing.Registry) is

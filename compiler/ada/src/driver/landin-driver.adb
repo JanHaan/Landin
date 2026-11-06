@@ -4962,6 +4962,7 @@ package body Landin.Driver is
               ((if Unbounded.Length (Output) > 0
                 then Unbounded.To_String (Output)
                 elsif Emit = Emit_Executable then Default_Executable
+                elsif Emit = Emit_IR then Default_IR
                 elsif Emit = Emit_Linker_Script then Default_Script
                 else Default_Assembly), "artifact output");
          end if;
@@ -4985,6 +4986,7 @@ package body Landin.Driver is
                    (if Unbounded.Length (Output) > 0
                     then Unbounded.To_String (Output)
                     elsif Emit = Emit_Executable then Default_Executable
+                    elsif Emit = Emit_IR then Default_IR
                     elsif Emit = Emit_Linker_Script then Default_Script
                     else Default_Assembly))))
          then
@@ -5011,6 +5013,8 @@ package body Landin.Driver is
                    (if Unbounded.Length (Output) > 0
                     then Unbounded.To_String (Output)
                     elsif Emit = Emit_Executable then Default_Executable
+                    elsif Emit = Emit_IR then Default_IR
+                    elsif Emit = Emit_Linker_Script then Default_Script
                     else Default_Assembly))))
          then
             Bad_Use := True;

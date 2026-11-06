@@ -452,11 +452,22 @@ f: (a: i32, b: i32, c: i32) -> (r: bool) = a < b < c end
 
 ### L0107
 
-`return` carries no value [1810]. Assign the named return, then `return`.
+`return` carries no value [1810]. Assign the named return, then write a bare
+`return`. For a routine with result `r: i32`, replace `return a + b` with
+`r = a + b` followed by `return`:
 
 ```landin
-f: () -> (r: i32) =
-    return 1
+f: (a: i32, b: i32) -> (r: i32) =
+    return a + b
+end f
+```
+
+The working form is:
+
+```landin
+f: (a: i32, b: i32) -> (r: i32) =
+    r = a + b
+    return
 end f
 ```
 
@@ -529,6 +540,12 @@ this.
 first: u32 = 1
 first: u32 = 2
 ```
+
+A configuration-option collision is reported at the option declaration,
+with the conflicting module declaration or import as a related source.
+Rename the option or conflicting binding. One option produces one collision
+report, and uses of the refused binding do not add configuration-only or
+missing-member noise. Independent errors are still reported.
 
 ### L0201
 
