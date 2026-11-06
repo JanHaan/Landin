@@ -300,7 +300,10 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   not carry natively, the header that declares them, and metadata (D820,
   D821). It stages its four outputs and compiles the adapters before
   publishing them through the same protected-input and recovery contract as
-  `refine svd`. [The binding guide](../bindings/README.md)
+  `refine svd`. Missing output directories are staged privately and published
+  only after validation; refusal preserves any tree created there meanwhile.
+  Existing output directories retain unrelated files.
+  [The binding guide](../bindings/README.md)
   describes the policy.
 - `refine lsp` is a language server over standard input and output: an
   editor started with it gets diagnostics, definitions, hover types,

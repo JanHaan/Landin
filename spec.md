@@ -18400,7 +18400,42 @@ Prior versions remain recoverable through verification of the artifact
 group, an ESP image included. Manifest-listed stale outputs receive the
 same checks. Unchanged bytes keep their original file. Directory artifacts,
 including a Darwin debug bundle, have checked trees. Earlier retained
-transactions are diagnosed rather than removed to make progress.
+transactions are diagnosed rather than removed to make progress. Separate
+transactions in one process cannot reserve the same destination name or an
+alias of that directory entry while its arena remains active. The refusal
+asks the caller to retry after the owning transaction completes; distinct
+hard-link names remain separate destination entries.
+
+A cooperative producer retains a write lease on its first sealed destination
+record. An inspector can prepare an unrelated target while that producer's
+tools have extra temporary entries in staging: every destination record
+must still validate, its names must be separate from the requested target,
+and the recovery inventory must contain only registered names. The inspector
+leaves the peer's staging untouched. Unexplained staging without a live
+producer lease refuses. The lease is an observation of a cooperative
+producer, not a lock on public destinations or a promise of future
+liveness; publication still checks the actual expected version and never
+uses a process identifier as authority to signal another process.
+
+An initially absent bindings output tree is reserved as an absent
+directory artifact before generation. Its missing ancestors are staged
+privately too, starting at the first absent component below an existing
+parent. Invalid input or a failed tool creates none of those public names.
+The reservation refuses an entry already present at preparation, and
+publication refuses a tree that appeared afterwards; it never adopts and
+replaces that tree. An existing bindings output directory retains per-file
+publication so unrelated files beside the generated ones remain its
+owner's. Creating staged directories uses the same retained directory
+authority as staged file writes.
+
+After the last publication in an arena finishes successfully, its remaining
+descriptors and bookkeeping are released. Native staging helpers refuse
+unrecognized or retired spellings containing a `.refine-publication-*`
+component instead of using ordinary-path fallback. Scratch helpers similarly
+reserve the `.refine-private-` marker. These are spelling guards, not
+filesystem canonicalization through aliases. Repeated removal of an absent
+scratch root performs no write; no unbounded retired-path history supplies
+later write authority.
 
 Formatting is the inode-preserving mode, D358: its original read descriptor
 protects renamed-in saves without losing invisible metadata or changing

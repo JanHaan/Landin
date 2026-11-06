@@ -42,14 +42,21 @@ symbolic link, and no output may be a directory or a link. Replacement is
 written in exclusive private staging beside its destination and read back,
 and only then is each destination replaced, its old version kept until the
 group succeeds. Headers, policy, consumed response files, selected Clang and
-known transitive headers are protected inputs, through aliases too. Links
-are refused in the output tree and staging, including dangling links. A
-changed destination is restored without replacing a newly occupied name, or
+known transitive headers are protected inputs, through aliases too. The
+output root, generated output names, traversed components below the chosen
+root, and staging refuse links, including dangling links. A changed
+destination is restored without replacing a newly occupied name, or
 retained at the recovery path the diagnostic names. An earlier retained
 transaction must be inspected; a new invocation does not discard it.
 A file whose bytes are already the new ones is left alone. This is
 failure recovery, not an atomic four-file snapshot for concurrent readers; do
 not consume outputs during generation. Output names can briefly be absent.
+When the output directory or its parents do not exist, their first absent
+component is reserved before generation and the new tree is built privately.
+Invalid policy or a failed tool creates none of those public directories.
+A directory created by someone else during generation is preserved and the
+command refuses publication. An existing output directory keeps unrelated
+files alongside the four generated files.
 Concurrent writes through another descriptor to the same inode are
 unsupported. Dependency filenames establish Clang's known input closure;
 this does not sandbox arbitrary wrapper or implicit toolchain reads.

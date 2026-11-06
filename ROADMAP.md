@@ -3111,17 +3111,24 @@ settled, as are SR-818 through SR-822 with the final fixture comparison.
 SR-806 credits the cancellation and mixed firmware generation fixes while
 retaining the need to explain publication state after cleanup refusal.
 
-Validation: the final one/eight-worker fixture comparison agrees. The
-final debug/release comparison passed for 1153 sources and 24548 requests
-with zero disagreements; the manifest passed for 294 fixtures and 52272
-entries, SHA256
+Pre-gate local evidence at `b757b80e`: the one/eight-worker fixture
+comparison agreed. The debug/release comparison covered 1153 sources and
+24548 requests with zero disagreements; the manifest covered 294 fixtures
+and 52272 entries, SHA256
 `cc9f8b04ebbc1ac47049906134f017f00fda9e5cf28f701369fbfcc011be333e`.
-Isolated final scaling passed. Linux's 52 FILTERED cases passed 1296 checks;
-Darwin's 13 HOST-ONLY/FILTERED cases passed 505. Native publication and
-compile-publication controls passed 30 and 34 on each host. FreeBSD native
-amd64 passed 29 publication, 7 owned-runtime and 16 cancellation controls
-and 768 registry handoffs; production C and harnesses cross-linked for both
-architectures. These local results do not replace the complete gates.
+Isolated scaling passed. Linux passed 52 FILTERED cases and 1296 checks;
+Darwin passed 13 HOST-ONLY/FILTERED cases and 505 checks. Native publication
+and compile-publication controls passed 30 and 34 on each host. FreeBSD
+native amd64 passed 29 publication, 7 owned-runtime and 16 cancellation
+controls and 768 registry handoffs; production C and harnesses cross-linked
+for both architectures. These results describe the pre-gate source.
+
+CI follow-ups corrected absent bindings-tree creation on refusal,
+semantic-diagnostic priority, Darwin harness temporary outputs, completed
+registry retention, and unrelated live-linker staging refusals. Integrated
+development feedback passed 31 FILTERED cases and 3242 checks. The updated
+candidate's complete multi-host gate remains pending; local and filtered
+results do not replace it.
 
 Activation review: the sweep against `df4ccb875` found no path-matched
 activation; all 159 unmatched rows were read against the actual changes.

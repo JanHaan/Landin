@@ -119,7 +119,8 @@ package Landin.Platform.Native is
       Path   : String;
       Status : out Write_Status);
 
-   --  Through `landin_file_identity.c`: mkdtemp, mode 0700.
+   --  Exclusive allocation through a retained parent, mode 0700. Names
+   --  keep Prefix and carry the reserved `.refine-private-` marker.
    overriding procedure Make_Private_Directory
      (Host   : Native_Filesystem;
       Prefix : String;
