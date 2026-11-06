@@ -95,6 +95,17 @@ Verdict text is compared byte for byte; only the exact elapsed field of a
 progress line is normalized. Matching case failures establish equivalence
 but are printed explicitly and still need investigation.
 
+On Linux, `scripts/test.sh` (also used by `dev-test.sh`) and
+`scripts/parallel-equivalence.sh` disable glibc's per-thread allocation cache
+in the fresh test process, preserving other allocator tunables. This lets the
+memory controls distinguish live small allocations from freed cached blocks;
+each measurement first checks that a held 512-byte block is counted and that
+freeing it restores the baseline exactly. Direct test-binary invocations
+whose meter fails that check refuse with the launcher route. The initial build
+retains its inherited allocator settings; test subprocesses inherit the
+prepared test setting. Ordinary `refine` invocations keep their defaults. The
+worker comparison records the effective setting alongside each command.
+
 ## Closing an item
 
 Before an item closes:

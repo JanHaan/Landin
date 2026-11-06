@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Linux native server memory comparison; no compiler changes or rebuilds.
 
-The temporary LD_PRELOAD probe samples glibc's live allocation count whenever
+The temporary LD_PRELOAD probe samples glibc's allocator-held byte count whenever
 stdin blocks for more protocol input, and once after session teardown. This
-separates retained allocations from allocator RSS retention. The process's VmHWM peak
+includes freed blocks retained in glibc's per-thread cache; it is not an exact
+count of live application allocations, despite the historical live_bytes key.
+The process's VmHWM peak
 RSS records transient memory too, but is a process-wide high-water mark, not
 an exact measure of syntax-transfer storage alone. Run both binaries with the
 same generated workspace and report results without imposing a byte cap.

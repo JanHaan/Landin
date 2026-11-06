@@ -370,9 +370,9 @@ package Landin.Platform is
    --
    --  Allocated_Bytes is what the allocator holds for the process right
    --  now.  The peak only rises, so it cannot say whether a finished
-   --  compilation gave its storage back; this falls when storage is freed,
-   --  which is the question a process that checks one program after
-   --  another has to be able to ask.
+   --  compilation gave its storage back. Allocator caches can keep freed
+   --  blocks counted: lifetime controls must configure and verify their
+   --  meter before treating a change as retained application storage.
    ---------------------------------------------------------------------
 
    type Resource_Sample is record

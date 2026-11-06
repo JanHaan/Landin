@@ -229,11 +229,13 @@ The `memory` suite checks repeated sessions and edits for accumulation.
 
 On Linux/glibc, `compiler/tests/server/measure_memory.py` compares two built
 compilers over four modules sharing an import, two with broken bodies. It
-records live allocated bytes at idle, peak resident memory, repeated and
+records allocator-held bytes at idle, peak resident memory, repeated and
 alternating queries, twenty edits, a 256-edit burst, import open/close and
 session teardown. The burst uses ranges when advertised and equivalent full
-replacements otherwise. Live allocation and peak RSS include slice metadata
-and allocator overhead; neither isolates a single cache.
+replacements otherwise. The JSON's historical `live_bytes` count includes
+freed blocks in glibc's per-thread cache. Both measures include slice metadata
+and allocator overhead; neither isolates a single cache or proves that application
+allocations remain live.
 Pass `--baseline`, `--refine` and `--output` to retain the comparison. The
 probe is a temporary host library; it does not alter either compiler.
 

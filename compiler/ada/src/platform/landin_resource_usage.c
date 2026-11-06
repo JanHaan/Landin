@@ -43,13 +43,13 @@ int landin_resource_usage(long long *cpu_microseconds, long long *peak_kib)
     return 0;
 }
 
-/* The bytes of every allocation the process has not yet freed, as the
-   allocator counts them. Unlike the resident set this goes down when
-   storage is returned, and it does not depend on where the allocator placed
-   anything or on what the kernel paged in, so two identical runs of one
-   deterministic request leave it at the same number. glibc counts blocks
-   it carved from its arenas in uordblks and blocks it mapped directly in
-   hblkhd, which is where a large source or table goes.
+/* The allocator's current accounting, separate from resident memory.
+   glibc counts arena blocks in uordblks and direct mappings in hblkhd.
+   Its per-thread cache also leaves freed blocks counted in uordblks, so
+   repeated requests need not leave this number unchanged. The test
+   launchers disable that cache in fresh test processes, and the memory
+   controls verify that a small allocation and its free are both visible.
+   Production processes retain their ordinary allocator configuration.
 
    Darwin's own count, malloc_zone_statistics' size_in_use, is not that
    number for this program. The GNAT link records an SDK version of 10.21,

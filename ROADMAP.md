@@ -391,8 +391,9 @@ filter left 13.1 MB allocated per check and per emission; the `memory` suite
 now runs twenty checks and four emissions with debugging information in one
 process, permits at most 64 KiB of bounded settling, and rejects growth
 continuing across both parts of each measured tail. A control verifies that
-three kept compilations are counted. The count is the allocator's live bytes:
-`mallinfo2` on Linux, and on Darwin the zones' enumerated in-use ranges,
+three kept compilations are counted. The count uses
+`mallinfo2` on Linux with the lifetime-test launcher disabling its per-thread
+cache and verifying small frees, and on Darwin the zones' enumerated in-use ranges,
 because a GNAT-linked binary records SDK 10.21 and under it `size_in_use` keeps freed
 blocks counted. `scripts/driver_manifest.py` held every commit to its parent:
 all 8,127 entries agree — status, report, assembly, build report and source
@@ -3137,30 +3138,52 @@ held its temporary object while an unrelated command succeeded and a
 same-target command refused, preserving the held files; the producer then
 completed and retired its arena. FreeBSD native amd64 passed publication
 36, owned-runtime 7 and 768 handoffs, and both architectures cross-linked
-the final C adapters and controls. The updated complete multi-host gate
-and fresh fixture-worker comparison remain pending; local and filtered
-results do not replace them.
+the final C adapters and controls. The frozen `8551db0b` fixture comparison
+passed at one and eight workers: both runs passed 14 cases and 16024 checks,
+with exit zero and empty stdout and normalized-stderr diffs. Later gate
+feedback corrected a standalone GCC buffer-aliasing warning, a budget
+control's target assumption, and the owned-runtime control's implicit TMPDIR prerequisite.
+The lifetime-test launchers now disable glibc's thread cache in fresh Linux
+test processes. Every actual meter case first requires visible allocation
+and exact free of 512 bytes, and a retained 512-byte control still rejects
+growth with the same windows and thresholds. This distinguishes cached
+frees from retained application allocations; inconclusive instrumentation
+is not evidence that application retention is absent. Focused integrated
+native feedback with Ubuntu glibc passed all eight memory cases and 20 checks;
+seven unconfigured direct entries instead refused before their workloads.
+The launcher controls passed 34 Python tests, and owned-runtime controls
+passed all seven cases with TMPDIR unset, empty and explicit on Linux and
+native FreeBSD amd64. Both independent reviews of the guarded measurement
+change were clear. The updated complete
+multi-host gate and a new comparison using the changed launcher remain
+pending; local and filtered results do not replace them.
 
-Activation review: the sweep against `df4ccb875` found no path-matched
-activation; all 159 unmatched rows were read against the actual changes.
+Activation review: the sweep against `df4ccb875` found 100 changed paths and
+no path-matched activation; all 162 unmatched rows were read against the actual changes.
 R551-20 remains for native failures beyond these bounded controls.
 SR-266, SR-296, SR-298, SR-590 and SR-370 remain for internal-defect caller
 diagnostics, note citations, installed panic-site lookup,
 description-request guidance and report contents. SR-324 and SR-379 remain
 for local cross-target assembly validation and child-process runner support;
-SR-702 for Darwin ABI-fixture execution; SR-721 for shared script hang
-guards; SR-783 and SR-785 for gate-inventory controls and workflow linting;
+SR-702 for Darwin ABI-fixture execution; SR-281 for detecting a stale binary
+beside its checkout, since test-environment setup adds no version warning;
+SR-721 for shared script hang guards, since the new launcher controls use
+the existing 300-second convention rather than introducing a shared guard; SR-783 and SR-785 for gate-inventory controls and workflow linting;
 and SR-812 for verification across partial rerun attempts. SR-773 retains
 the completed-job log route while its overall run is active, encountered
 again while following this candidate. SR-703 retains
 the staged-object debug-map residue and unmeasured full-debug
 reproducibility limits. SR-814 retains unsupported relative or indirect
 tool inputs and Clang dependencies escaping their private workspace.
-SR-815 waits for fixture-corpus progress reporting; SR-816 retains the
-separate attached-program post-reap forwarding window. SR-823 retains
+SR-815 waits for fixture-corpus progress reporting: recording the allocator
+environment in the wrapper adds no progress inside a long case. SR-816
+retains the separate attached-program post-reap forwarding window. SR-823 retains
 review #51's missing-report-parent diagnostic variant for R13.77.
-SR-806 retains #110's cleanup-refusal state summary for R13.78. These
-triggers are restated rather than importing unrelated fixes into publication.
+SR-806 retains #110's cleanup-refusal state summary for R13.78. SR-826 and
+SR-827 record the TMPDIR and meter corrections pending their complete gate;
+SR-828 retains the preexisting packed-byte instrumentation finding for the
+next iterator or instrumentation change. These triggers are restated rather
+than importing unrelated fixes into publication.
 
 The item remains active pending completion of the required software and
 physical-board gates. FreeBSD evidence is native production C adapter
@@ -4028,6 +4051,9 @@ SR-819, SR-820, SR-821, SR-822, SR-824, SR-825.
 | SR-815 | Usability | During R13.76's required `scripts/parallel-equivalence.sh --suite='fixture execution'`, the one-worker corpus gave no case progress for over twenty minutes. It was mistakenly interrupted as stalled; artifact timestamps later proved work continued until 1.13 seconds before cancellation, and debugger probes showed ordinary tool polling. The whole-case transcript required inspecting disposable artifacts to distinguish progress from a hang. | The next change to fixture-corpus progress reporting or the parallel-equivalence wrapper. | Bounded visible progress within a long corpus case, retained separately from the deterministic verdict comparison, so ordinary work can be distinguished from a stalled run without inspecting build artifacts. | open |
 | SR-816 | Release readiness | While auditing child-identifier ownership in R13.76, source tracing found the separate attached-program runner reaps its child before restoring its SIGTERM/HUP forwarding handlers and clearing their saved PID. A signal in that interval can consult an identifier whose reservation has ended. No PID reuse or foreign signal was exercised; compiler-tool process-group cancellation uses a different supervisor. | The next change to attached-program waiting or signal forwarding. | Retain the child's identifier reservation until forwarding can no longer target it, with deterministic native controls on each host for signals around final reaping. | open |
 | SR-823 | Usability | Review #51's misleading collision for a missing output parent has a stage-report variant, met inspecting R13.76's native report-path controls: a stage report under an absent parent was refused as "stage report collides with another output" although no output occupied that name. Conservative unresolved-parent comparison preserves files, but the message gives neither that cause nor the route of choosing or creating an existing output parent. | R13.77. | Distinguish an unavailable or unresolved parent from a proven collision, name the supported existing-parent route, and retain strict refusal and preservation when separation cannot be established. | open |
+| SR-826 | Usability | While following R13.76's FreeBSD gate, the standalone owned-runtime control refused before its first case because TMPDIR was unset. Its Python wrapper and earlier local commands supplied TMPDIR, but the FreeBSD lane invoked it directly; production already defaults unset or empty TMPDIR to /tmp. The implicit test-only prerequisite was undocumented. | The next standalone owned-runtime control invocation. | Match production's default while retaining exclusive scratch creation and every ownership assertion; verify unset, empty and explicit TMPDIR in standalone native controls and retain the full host gate. | open |
+| SR-827 | Usability | R13.76's gate repeatedly reported small sustained checking and serving growth through a meter described as live allocations. The actual CI binary reproduced the checking failure with Ubuntu glibc; a native probe counted already-freed small blocks in glibc's per-thread cache. Disabling that cache in a fresh process let the unchanged checking control pass. Understanding the discrepancy required libc source inspection and an isolated loader/runtime comparison. | The next memory-meter or test-launcher change. | Configure fresh lifetime-test processes for observable small frees, verify that configuration with strict allocation/free and retained-small-block controls at every measurement entry, retain workload windows and thresholds, and distinguish allocator-held statistics from live application bytes in the documentation. | open |
+| SR-828 | Usability | During R13.76's allocation-provenance investigation, one bounded Valgrind run emitted 10,392 conditional-uninitialized reports in six contexts at the packed Declaration_Bits byte iterator. Classifying them required reading its rounded final-byte view: valid bits are initialized, but the view also reads representation padding. Origins were not traced, so this does not classify every report or establish a compiler correctness defect; the implementation predates the publication change. The noise prevents a clean instrumentation verdict. | The next packed-bit iterator or instrumentation-coverage change. | Read only initialized semantic bits or establish initialized byte storage, with boundary controls for declaration counts not divisible by eight and a clean native instrumentation result; preserve the iterator's valid-index bounds. | open |
 
 ## Retained positions
 
