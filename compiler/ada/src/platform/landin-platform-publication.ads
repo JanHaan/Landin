@@ -9,6 +9,8 @@ package Landin.Platform.Publication is
    --  Require_Absent constrains the host's actual initial snapshot. A later
    --  arrival remains a conflict; an existing unconstrained reservation cannot
    --  be upgraded by repeating Prepare with this flag.
+   --  With Root empty, an absence-constrained output pins existing parent
+   --  components without following user links or creating public directories.
    procedure Prepare
      (Group : in out Transaction; Files : Filesystem'Class; Path : String;
       Status : out Write_Status;

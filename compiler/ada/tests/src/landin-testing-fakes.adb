@@ -518,6 +518,49 @@ package body Landin.Testing.Fakes is
       Host.Writes.Data.Read_Exception := Reason;
    end Raise_On_Read_After;
 
+   function Stage_Path_Usable
+     (Host : Fake_Filesystem; Path : String; Claimed : out Boolean)
+      return Boolean;
+   function Stage_Path_Usable
+     (Host : Fake_Filesystem; Path : String; Claimed : out Boolean)
+      return Boolean
+   is
+      Active : Boolean := False;
+   begin
+      Claimed := False;
+      for Item of Host.Writes.Data.Publications loop
+         declare
+            Stage : constant String := Unbounded.To_String (Item.Stage);
+         begin
+            if Path = Stage
+              or else (Path'Length > Stage'Length
+                and then Path (Path'First .. Path'First + Stage'Length)
+                  = Stage & "/")
+            then
+               Claimed := True;
+               if not Item.Finished then
+                  Active := True;
+                  for Position in Path'First + Stage'Length .. Path'Last loop
+                     if Path (Position) = '/' then
+                        declare
+                           Parent : constant String :=
+                             Path (Path'First .. Position - 1);
+                        begin
+                           if Host.Is_Link (Parent)
+                             or else not Host.Is_Directory (Parent)
+                           then
+                              return False;
+                           end if;
+                        end;
+                     end if;
+                  end loop;
+               end if;
+            end if;
+         end;
+      end loop;
+      return not Claimed or else Active;
+   end Stage_Path_Usable;
+
    overriding procedure Read_File
      (Host    : Fake_Filesystem;
       Path    : String;
@@ -525,8 +568,13 @@ package body Landin.Testing.Fakes is
       Status  : out Landin.Platform.Read_Status)
    is
       Index : constant Natural := Resolve_Find (Host, Path);
+      Claimed : Boolean;
    begin
       Content := Unbounded.Null_Unbounded_String;
+      if not Stage_Path_Usable (Host, Path, Claimed) then
+         Status := Landin.Platform.Not_Readable;
+         return;
+      end if;
 
       if Host.Writes.Data.Raises then
          if Host.Writes.Data.Reads_Before_Raise > 0 then
@@ -560,6 +608,12 @@ package body Landin.Testing.Fakes is
       Host.Writes.Data.Refuses_Write := True;
    end Refuse_Writes;
 
+   procedure Refuse_Staged_Write
+     (Host : in out Fake_Filesystem; Public_Path : String) is
+   begin
+      Host.Writes.Data.Refused_Staged_Writes.Append (Public_Path);
+   end Refuse_Staged_Write;
+
    overriding procedure Write_File
      (Host    : Fake_Filesystem;
       Path    : String;
@@ -572,12 +626,24 @@ package body Landin.Testing.Fakes is
          Content => Unbounded.To_Unbounded_String (Content),
          Kind    => A_File,
          Identity => 0);
+      Claimed : Boolean;
    begin
       Entry_Value.Identity := Host.Writes.Data.Next_Identity;
       Host.Writes.Data.Next_Identity :=
         Host.Writes.Data.Next_Identity + 1;
       Host.Writes.Data.Write_Attempts := Host.Writes.Data.Write_Attempts + 1;
-      if Host.Writes.Data.Refuses_Write
+      for Reservation of Host.Writes.Data.Publications loop
+         if not Reservation.Finished
+           and then Unbounded.To_String (Reservation.Stage) = Path
+           and then Host.Writes.Data.Refused_Staged_Writes.Contains
+             (Unbounded.To_String (Reservation.Path))
+         then
+            Status := Landin.Platform.Not_Writable;
+            return;
+         end if;
+      end loop;
+      if not Stage_Path_Usable (Host, Path, Claimed)
+        or else Host.Writes.Data.Refuses_Write
         or else (Host.Is_Link (Path)
                  and then Ada.Strings.Fixed.Index
                    (Path, "/.refine-publication/") /= 0)
@@ -888,7 +954,22 @@ package body Landin.Testing.Fakes is
                   return;
                end if;
                Item.Fresh := Host.Writes.Data.Files (At_Path);
-               Item.Fresh_Tree := Snapshot_Below (Host, Stage);
+               if Item.Fresh.Kind not in A_File | A_Directory then
+                  Fail ("staged output is not an ordinary file or directory");
+                  return;
+               end if;
+               declare
+                  Tree : constant File_Vectors.Vector :=
+                    Snapshot_Below (Host, Stage);
+               begin
+                  for Child of Tree loop
+                     if Child.Kind not in A_File | A_Directory then
+                        Fail ("staged tree has unexplained linked entries");
+                        return;
+                     end if;
+                  end loop;
+                  Item.Fresh_Tree := Tree;
+               end;
                if not Item.Absent
                  and then Item.Fresh.Kind /= Item.Expected.Kind
                then
@@ -1295,8 +1376,13 @@ package body Landin.Testing.Fakes is
       Status : out Landin.Platform.Write_Status)
    is
       Existing : constant Natural := Find (Host, Path);
+      Claimed : Boolean;
    begin
-      if Existing /= 0 then
+      if not Stage_Path_Usable (Host, Path, Claimed)
+        or else (Claimed and then Existing /= 0)
+      then
+         Status := Landin.Platform.Not_Writable;
+      elsif Existing /= 0 then
          Status :=
            (if Host.Writes.Data.Files (Existing).Kind = A_Directory
             then Landin.Platform.Write_Ok

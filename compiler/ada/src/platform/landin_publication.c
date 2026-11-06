@@ -387,7 +387,7 @@ static void strip_dots(char *path)
     if (n >= 2 && !strcmp(path + n - 2, "/.")) path[n-2 ? n-2 : 1] = 0;
 }
 static int parent_for(const char *path, const char *root, char **parent_path,
-                      char **name)
+                      char **name, int require_absent)
 {
     char *absolute = NULL, *root_abs = NULL, *walk = NULL, *save = NULL, *part;
     int fd = landin_private_parent(path, parent_path, name);
@@ -484,6 +484,35 @@ static int parent_for(const char *path, const char *root, char **parent_path,
                     { close(fd); fd = -1; goto done; }
                 child = openat(fd, part, O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
             }
+            close(fd); fd = child;
+            if (fd < 0) goto done;
+        }
+    } else if (require_absent) {
+        /* An absent generated tree keeps the old missing-root policy: pin
+           the existing parent chain without following user aliases or making
+           any public directories. The ordinary output-path policy below is
+           unchanged. Darwin's system anchors are selected as before. */
+        fd = open("/", O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+        walk = strdup(absolute);
+#ifdef __APPLE__
+        if (!strncmp(absolute, "/tmp/", 5) || !strcmp(absolute, "/tmp")) {
+            close(fd); fd = open("/tmp", O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+            free(walk); walk = strdup(absolute + 4);
+        } else if (!strncmp(absolute, "/var/", 5) || !strcmp(absolute, "/var")) {
+            close(fd); fd = open("/var", O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+            free(walk); walk = strdup(absolute + 4);
+        }
+#endif
+        if (!walk || fd < 0) {
+            int error = errno;
+            if (fd >= 0) close(fd);
+            fd = -1; errno = error; goto done;
+        }
+        for (part = strtok_r(walk, "/", &save); part;
+             part = strtok_r(NULL, "/", &save)) {
+            if (!strcmp(part, ".")) continue;
+            if (!strcmp(part, "..")) { close(fd); fd = -1; errno = EINVAL; goto done; }
+            int child = openat(fd, part, O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
             close(fd); fd = child;
             if (fd < 0) goto done;
         }
@@ -847,7 +876,7 @@ static int landin_publication_open_locked(const char *path, int deletion,
     deletion &= LANDIN_PUBLICATION_DELETE_ONLY;
     if (landin_cancellation_requested()) { errno = EINTR; goto fail; }
     p->path = strdup(path);
-    parent = parent_for(path, root, &parent_path, &p->name);
+    parent = parent_for(path, root, &parent_path, &p->name, require_absent);
     if (parent < 0) goto fail;
     if (retained_workspace(parent, parent_path, p->name, why, room) != 0) {
         close(parent); free(parent_path); free(p->path); free(p->name); free(p);

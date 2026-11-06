@@ -140,6 +140,10 @@ package Landin.Testing.Fakes is
    --  filesystem permissions.
    procedure Refuse_Writes (Host : in out Fake_Filesystem);
 
+   --  Refuse the private write reserved for this logical public output.
+   procedure Refuse_Staged_Write
+     (Host : in out Fake_Filesystem; Public_Path : String);
+
    procedure Refuse_Removals (Host : in out Fake_Filesystem);
 
    --  Make the At_Move'th move from now answer Not_Movable, and only it:
@@ -490,6 +494,7 @@ private
       Read_Exception : Ada.Exceptions.Exception_Id :=
         Compiler_Defect'Identity;
       Refuses_Write : Boolean := False;
+      Refused_Staged_Writes : Landin.Platform.Path_List;
       Refuses_Removal : Boolean := False;
       Write_Attempts : Natural := 0;
       List_Calls     : List_Call_Vectors.Vector;

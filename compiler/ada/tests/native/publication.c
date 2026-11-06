@@ -817,6 +817,180 @@ static void identity_observations(void)
     REQUIRE(content(leaf, "not executable and not read") && content(missing, "new tool"));
     ++passed;
 }
+static int prepare_absent(const char *output, char *stage)
+{
+    int token;
+    REQUIRE(landin_publication_open(output, LANDIN_PUBLICATION_REQUIRE_ABSENT,
+                "", &token, stage, 4096, why, sizeof why) == 0);
+    return token;
+}
+static void required_absence_snapshot(void)
+{
+    char parent[4096], output[8192], foreign[8192], leaf[16384], stage[4096];
+    path(parent, sizeof parent, "required-absence"); REQUIRE(mkdir(parent, 0700) == 0);
+    for (unsigned kind = 0; kind < 3; ++kind) {
+        REQUIRE(snprintf(output, sizeof output, "%s/existing-%u", parent, kind) > 0);
+        if (kind == 0) put(output, "existing-file");
+        else if (kind == 1) REQUIRE(mkdir(output, 0700) == 0);
+        else REQUIRE(symlink("absent-target", output) == 0);
+        struct stat before, after; REQUIRE(lstat(output, &before) == 0);
+        int token = -1;
+        REQUIRE(landin_publication_open(output, LANDIN_PUBLICATION_REQUIRE_ABSENT,
+                    "", &token, stage, sizeof stage, why, sizeof why) != 0
+                && token == 0 && !*stage && strstr(why, "absence was required"));
+        REQUIRE(lstat(output, &after) == 0 && before.st_dev == after.st_dev
+                && before.st_ino == after.st_ino && before.st_mode == after.st_mode);
+        if (kind == 0) REQUIRE(content(output, "existing-file"));
+    }
+    REQUIRE(snprintf(output, sizeof output, "%s/appeared-before-snapshot", parent) > 0);
+    REQUIRE(snprintf(foreign, sizeof foreign, "%s/foreign", parent) > 0);
+    REQUIRE(mkdir(foreign, 0700) == 0);
+    REQUIRE(snprintf(leaf, sizeof leaf, "%s/sentinel", foreign) > 0); put(leaf, "foreign-tree");
+    struct stat before, after; REQUIRE(stat(foreign, &before) == 0);
+    arm("before-snapshot", output, foreign, 1);
+    int token;
+    REQUIRE(landin_publication_open(output, LANDIN_PUBLICATION_REQUIRE_ABSENT,
+                "", &token, stage, sizeof stage, why, sizeof why) != 0 && token == 0);
+    clear_hook();
+    REQUIRE(stat(output, &after) == 0 && before.st_dev == after.st_dev
+            && before.st_ino == after.st_ino && before.st_mode == after.st_mode);
+    REQUIRE(snprintf(leaf, sizeof leaf, "%s/sentinel", output) > 0 && content(leaf, "foreign-tree"));
+    char actual[8192], linked[8192], child[16384];
+    REQUIRE(snprintf(actual, sizeof actual, "%s/actual", parent) > 0 && mkdir(actual, 0700) == 0);
+    REQUIRE(snprintf(child, sizeof child, "%s/child", actual) > 0 && mkdir(child, 0700) == 0);
+    REQUIRE(snprintf(linked, sizeof linked, "%s/alias", parent) > 0 && symlink(actual, linked) == 0);
+    REQUIRE(snprintf(output, sizeof output, "%s/child/new-root", linked) > 0);
+    REQUIRE(landin_publication_open(output, LANDIN_PUBLICATION_REQUIRE_ABSENT,
+                "", &token, stage, sizeof stage, why, sizeof why) != 0 && token == 0);
+    /* Ordinary compiler output retains its existing chosen-parent policy. */
+    token = prepare(output, 0, "", stage);
+    REQUIRE(step(token, 3) == 0 && step(token, 4) == 0 && access(output, F_OK) != 0);
+#ifdef __APPLE__
+    for (unsigned anchor = 0; anchor < 2; ++anchor) {
+        char system[4096];
+        REQUIRE(snprintf(system, sizeof system, "%s/landin-absence-XXXXXX",
+                         anchor ? "/var/tmp" : "/tmp") > 0 && mkdtemp(system));
+        REQUIRE(snprintf(output, sizeof output, "%s/out", system) > 0);
+        token = prepare_absent(output, stage);
+        REQUIRE(step(token, 4) == 0 && access(output, F_OK) != 0 && rmdir(system) == 0);
+    }
+#endif
+    ++passed;
+}
+static void absent_directory_publication(void)
+{
+    char parent[4096], output[8192], baseline[8192], stage[4096], child[8192], file[8192];
+    path(parent, sizeof parent, "absent-directory"); REQUIRE(mkdir(parent, 0700) == 0);
+    REQUIRE(snprintf(output, sizeof output, "%s/out", parent) > 0);
+    REQUIRE(snprintf(baseline, sizeof baseline, "%s/mode-baseline", parent) > 0 && mkdir(baseline, 0777) == 0);
+    int token = prepare_absent(output, stage);
+    REQUIRE(access(output, F_OK) != 0 && access(stage, F_OK) != 0);
+    REQUIRE(landin_publication_stage_mkdir(stage) == 0);
+    struct stat ordinary, staged_mode;
+    REQUIRE(stat(baseline, &ordinary) == 0 && stat(stage, &staged_mode) == 0
+            && (ordinary.st_mode & 07777) == (staged_mode.st_mode & 07777));
+    REQUIRE(snprintf(child, sizeof child, "%s/nested", stage) > 0
+            && landin_publication_stage_mkdir(child) == 0);
+    REQUIRE(snprintf(file, sizeof file, "%s/bindings.ldn", child) > 0);
+    staged(file, "generated-binding");
+    char *bytes; size_t size; uint64_t device, inode;
+    REQUIRE(landin_read_snapshot(file, &bytes, &size, &device, &inode) == 0
+            && size == 17 && !memcmp(bytes, "generated-binding", 17)); landin_snapshot_free(bytes);
+    REQUIRE(step(token, 0) == 0 && step(token, 1) == 0);
+#if defined(__linux__) || defined(__APPLE__)
+    REQUIRE(step(token, 2) == 0);
+    REQUIRE(snprintf(file, sizeof file, "%s/nested/bindings.ldn", output) > 0
+            && content(file, "generated-binding"));
+    REQUIRE(step(token, 3) == 0 && access(output, F_OK) != 0);
+#else
+    REQUIRE(step(token, 2) != 0 && strstr(why, "support"));
+    REQUIRE(access(output, F_OK) != 0 && step(token, 3) == 0);
+#endif
+    REQUIRE(step(token, 4) == 0);
+    REQUIRE(landin_publication_stage_mkdir(stage) == -1);
+    ++passed;
+}
+static void absent_root_arrivals(void)
+{
+    for (unsigned phase = 1; phase <= 2; ++phase) {
+        char parent[4096], output[8192], spare[8192], stage[4096], leaf[16384];
+        REQUIRE(snprintf(parent, sizeof parent, "%s/absent-arrival-%u", scratch, phase) > 0
+                && mkdir(parent, 0700) == 0);
+        REQUIRE(snprintf(output, sizeof output, "%s/out", parent) > 0);
+        REQUIRE(snprintf(spare, sizeof spare, "%s/foreign", parent) > 0 && mkdir(spare, 0700) == 0);
+        REQUIRE(snprintf(leaf, sizeof leaf, "%s/sentinel", spare) > 0); put(leaf, "foreign-tree");
+        struct stat before, after; REQUIRE(stat(spare, &before) == 0);
+        int token = prepare_absent(output, stage);
+        REQUIRE(landin_publication_stage_mkdir(stage) == 0);
+        REQUIRE(snprintf(leaf, sizeof leaf, "%s/generated", stage) > 0); staged(leaf, "generated");
+        REQUIRE(step(token, 0) == 0);
+        if (phase == 2) REQUIRE(step(token, 1) == 0);
+        arm(phase == 1 ? "before-capture" : "before-install", output, spare, 1);
+        REQUIRE(step(token, (int)phase) != 0); clear_hook();
+#if !defined(__linux__) && !defined(__APPLE__)
+        if (phase == 1) {
+            REQUIRE(step(token, 3) != 0 && strstr(why, "recovery"));
+            char recovery[8192]; char *split = strstr(stage, "/stage/"); REQUIRE(split);
+            REQUIRE(snprintf(recovery, sizeof recovery, "%.*s/recovery/.previous-%d",
+                             (int)(split - stage), stage, token) > 0);
+            REQUIRE(stat(recovery, &after) == 0 && before.st_dev == after.st_dev
+                    && before.st_ino == after.st_ino && before.st_mode == after.st_mode);
+            REQUIRE(snprintf(leaf, sizeof leaf, "%s/sentinel", recovery) > 0 && content(leaf, "foreign-tree"));
+            REQUIRE(step(token, 4) != 0); continue;
+        }
+#endif
+        REQUIRE(step(token, 3) == 0 && step(token, 4) == 0);
+        REQUIRE(stat(output, &after) == 0 && before.st_dev == after.st_dev
+                && before.st_ino == after.st_ino && before.st_mode == after.st_mode);
+        REQUIRE(snprintf(leaf, sizeof leaf, "%s/sentinel", output) > 0 && content(leaf, "foreign-tree"));
+    }
+    ++passed;
+}
+static void pinned_stage_directories(void)
+{
+    char parent[4096], parked[4096], output[8192], stage[4096], arena[4096];
+    char nested[8192], file[16384], actual[16384], outside[4096];
+    path(parent, sizeof parent, "mkdir-parent"); REQUIRE(mkdir(parent, 0700) == 0);
+    path(parked, sizeof parked, "mkdir-parent-moved");
+    REQUIRE(snprintf(output, sizeof output, "%s/out", parent) > 0);
+    int token = prepare_absent(output, stage);
+    REQUIRE(rename(parent, parked) == 0 && mkdir(parent, 0700) == 0);
+    strcpy(arena, stage); char *last = strrchr(arena, '/'); REQUIRE(last); *last = 0;
+    last = strrchr(arena, '/'); REQUIRE(last); *last = 0;
+    REQUIRE(mkdir(arena, 0700) == 0); *last = '/';
+    REQUIRE(mkdir(arena, 0700) == 0); /* Foreign duplicate arena/stage spelling. */
+    REQUIRE(landin_publication_stage_mkdir(stage) == 0 && access(stage, F_OK) != 0);
+    REQUIRE(snprintf(actual, sizeof actual, "%s%s", parked, stage + strlen(parent)) > 0);
+    struct stat found; REQUIRE(stat(actual, &found) == 0 && S_ISDIR(found.st_mode));
+    REQUIRE(snprintf(nested, sizeof nested, "%s/nested", stage) > 0
+            && landin_publication_stage_mkdir(nested) == 0);
+    REQUIRE(snprintf(file, sizeof file, "%s/data", nested) > 0); staged(file, "pinned-data");
+    path(outside, sizeof outside, "mkdir-outside"); REQUIRE(mkdir(outside, 0700) == 0);
+    REQUIRE(snprintf(file, sizeof file, "%s/bad", actual) > 0 && symlink(outside, file) == 0);
+    REQUIRE(snprintf(nested, sizeof nested, "%s/bad/no", stage) > 0
+            && landin_publication_stage_mkdir(nested) == -1);
+    REQUIRE(snprintf(nested, sizeof nested, "%s/no", outside) > 0 && access(nested, F_OK) != 0);
+    REQUIRE(unlink(file) == 0);
+    REQUIRE(step(token, 0) == 0 && step(token, 3) == 0 && step(token, 4) == 0);
+    REQUIRE(landin_publication_stage_mkdir(stage) == -1 && access(stage, F_OK) != 0);
+    for (unsigned kind = 0; kind < 2; ++kind) {
+        REQUIRE(snprintf(parent, sizeof parent, "%s/occupied-stage-%u", scratch, kind) > 0 && mkdir(parent, 0700) == 0);
+        REQUIRE(snprintf(output, sizeof output, "%s/out", parent) > 0);
+        token = prepare_absent(output, stage);
+        if (kind == 0) {
+            REQUIRE(mkdir(stage, 0700) == 0);
+            REQUIRE(snprintf(file, sizeof file, "%s/unknown", stage) > 0); put(file, "unknown-private");
+        } else REQUIRE(symlink(outside, stage) == 0);
+        struct stat before, after; REQUIRE(lstat(stage, &before) == 0);
+        REQUIRE(landin_publication_stage_mkdir(stage) == -1);
+        REQUIRE(step(token, 3) == 0 && step(token, 4) != 0 && strstr(why, "recovery"));
+        REQUIRE(lstat(stage, &after) == 0 && before.st_dev == after.st_dev
+                && before.st_ino == after.st_ino && before.st_mode == after.st_mode);
+        if (kind == 0) REQUIRE(content(file, "unknown-private"));
+        REQUIRE(access(output, F_OK) != 0);
+    }
+    ++passed;
+}
 
 int main(int argc, char **argv)
 {
@@ -881,6 +1055,8 @@ int main(int argc, char **argv)
         return 0;
     }
     identity_observations();
+    required_absence_snapshot(); absent_directory_publication();
+    absent_root_arrivals(); pinned_stage_directories();
     ordinary_group(); capture_actual(); absence_and_noclobber(); protected_alias();
     anchored_stage_and_roots(); directory_snapshot(); staged_rewrite();
     fmt_read_boundaries(); fmt_original_descriptor(); collision_names();

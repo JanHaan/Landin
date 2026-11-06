@@ -1912,6 +1912,117 @@ package body Landin.Tests.Platform_Suite is
          "fake hardlink writes affect the shared inode");
    end Publication_Uses_Actual_Entries;
 
+   procedure Publication_Requires_Absent_Snapshot
+     (Item : in out Landin.Testing.Context);
+   procedure Publication_Requires_Absent_Snapshot
+     (Item : in out Landin.Testing.Context)
+   is
+      use Landin.Platform;
+      package Pub renames Landin.Platform.Publication;
+   begin
+      for Attempt in 1 .. 7 loop
+         declare
+            Host : Landin.Testing.Fakes.Fake_Filesystem;
+            Group : Pub.Transaction;
+            Status : Write_Status;
+            Reason, Text : Unbounded.Unbounded_String;
+            Read : Read_Status;
+            Identity : File_Identity;
+         begin
+            Host.Add_Directory ("/parent");
+            Host.Add_Directory ("/foreign");
+            Host.Add_File ("/foreign/sentinel", "foreign tree");
+            Identity := Host.Identity_Of ("/foreign");
+            if Attempt = 1 then
+               Host.Add_File ("/parent/out", "prior file");
+            elsif Attempt = 2 then
+               Host.Add_Directory ("/parent/out");
+            elsif Attempt = 3 then
+               Host.Appear_Before_Publication ("/parent/out", "/foreign");
+            elsif Attempt = 7 then
+               Pub.Prepare (Group, Host, "/parent/out", Status, Reason);
+            end if;
+            Pub.Prepare
+              (Group, Host, "/parent/out", Status, Reason,
+               Require_Absent => True);
+            Landin.Testing.Check
+              (Item, (Status = Write_Ok) = (Attempt in 4 .. 6),
+               "actual absence is required, including repeated preparation");
+            if Attempt in 4 .. 6 then
+               declare
+                  Stage : constant String :=
+                    Pub.Stage_Path (Group, "/parent/out");
+               begin
+                  Pub.Prepare
+                    (Group, Host, "/parent/out", Status, Reason,
+                     Require_Absent => True);
+                  Host.Make_Directory (Stage, Status);
+                  Landin.Testing.Check
+                    (Item, Status = Write_Ok,
+                     "an absent directory can be staged privately");
+                  Host.Make_Directory (Stage, Status);
+                  Landin.Testing.Check
+                    (Item, Status = Not_Writable,
+                     "a staged directory is never adopted by mkdir");
+                  Host.Make_Directory (Stage & "/nested", Status);
+                  Host.Write_File
+                    (Stage & "/nested/file", "generated", Status);
+                  if Attempt in 4 | 5 then
+                     Host.Appear_On_Publication
+                       ((if Attempt = 4 then Capture_Previous
+                         else Install_Stage), "/parent/out", "/foreign");
+                  end if;
+                  Pub.Commit (Group, Host, Status, Reason);
+                  Landin.Testing.Check
+                    (Item, (Status = Write_Ok) = (Attempt = 6),
+                     "late directory arrivals refuse without adoption");
+                  if Attempt = 6 then
+                     Host.Read_File ("/parent/out/nested/file", Text, Read);
+                     Landin.Testing.Check_Equal
+                       (Item, Unbounded.To_String (Text), "generated",
+                        "the complete staged tree is published");
+                     Pub.Abort_Transaction (Group, Host, Status, Reason);
+                     Landin.Testing.Check
+                       (Item, Status = Write_Ok
+                        and then not Host.Exists ("/parent/out"),
+                        "rollback removes only the validated generation");
+                     Host.Make_Directory (Stage, Status);
+                     Landin.Testing.Check
+                       (Item, Status = Not_Writable,
+                        "a finished staging path cannot regain authority");
+                  end if;
+               end;
+            end if;
+            if Attempt in 3 .. 5 then
+               Landin.Testing.Check
+                 (Item, Host.Identity_Of ("/parent/out") = Identity,
+                  "the foreign directory retains its original identity");
+               Host.Read_File ("/parent/out/sentinel", Text, Read);
+               Landin.Testing.Check_Equal
+                 (Item, Unbounded.To_String (Text), "foreign tree",
+                  "the foreign directory retains its contents");
+            end if;
+            Pub.Abort_Transaction (Group, Host, Status, Reason);
+         end;
+      end loop;
+      declare
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Group : Pub.Transaction;
+         Status : Write_Status;
+         Reason : Unbounded.Unbounded_String;
+      begin
+         Host.Refuse_Staged_Write ("out.s");
+         Pub.Prepare (Group, Host, "out.s", Status, Reason);
+         Landin.Testing.Check
+           (Item, Status = Write_Ok, "stage refusal permits preparation");
+         Host.Write_File (Pub.Stage_Path (Group, "out.s"), "asm", Status);
+         Landin.Testing.Check
+           (Item, Status = Not_Writable and then Host.Write_Count = 1,
+            "the logical output hook refuses its one private write");
+         Pub.Abort_Transaction (Group, Host, Status, Reason);
+      end;
+   end Publication_Requires_Absent_Snapshot;
+
    procedure Publication_Preserves_Output_Kinds
      (Item : in out Landin.Testing.Context);
    procedure Publication_Preserves_Output_Kinds
@@ -1962,6 +2073,9 @@ package body Landin.Tests.Platform_Suite is
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "platform", "publication requires an absent snapshot",
+         Publication_Requires_Absent_Snapshot'Access);
       Landin.Testing.Register
         (Into, "platform", "publication preserves output kinds",
          Publication_Preserves_Output_Kinds'Access);
