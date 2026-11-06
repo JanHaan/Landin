@@ -1447,12 +1447,20 @@ class Transcriptions(unittest.TestCase):
         from check_controls import tree
         inputs = ["compiler/ada/src", "docs/diagnostics.md"]
         with tree(copied=inputs) as root:
+            self.assertEqual(checker.check_explanations(True), [])
             page = root / "docs/diagnostics.md"
-            page.write_text(page.read_text().replace(
-                "A source named on the command line",
-                "A source named in the arguments", 1))
-            said = [why for _, _, why in checker.check_explanations(True)]
-        self.assertTrue(any("stale" in why for why in said))
+            original = page.read_text()
+            heading = "### L0003\n"
+            self.assertEqual(original.count(heading), 1)
+            changed = original.replace(
+                heading, heading + "\nChanged explanation prose for the"
+                " staleness control.\n", 1)
+            self.assertNotEqual(changed, original)
+            page.write_text(changed)
+            said = checker.check_explanations(True)
+        self.assertTrue(any(path == checker.EXPLANATIONS_ADA
+                            and "stale" in why
+                            for path, _, why in said), said)
 
     def test_the_layout_page_shows_a_program_before_and_after(self):
         from check_controls import tree
