@@ -1519,6 +1519,82 @@ int main(void) {{
 }}
 ''')
 
+    def test_signature_names_avoid_parameters_and_referenced_types(self) -> None:
+        source = self.root / "signature-names"
+        selected = self.selection(
+            self.record("point"), self.record("result"),
+            self.record("argument_1"),
+            {"kind": "callback", "name": "CB", "nullable": True,
+             "parameters": {}},
+            self.function("increment"), self.function("increment_inline"),
+            self.function("use_point"), self.function("use_point_inline"),
+            self.function("later_type"), self.function("return_type"),
+            self.function("use_namespace"),
+            self.function("borrow_c", parameters={"c": annotation()},
+                          result=annotation(retention="returned", sources=["c"])),
+            {"kind": "incoming_varargs", "name": "receive",
+             "handler": "receive_handler", "count_parameter": "result",
+             "parameters": {}, "schema": [{"name": "value", "promoted": "c_int"}]})
+        _, output = self.generate(source, selected_policy=selected, header=(
+            "struct point { int x; int y; };\n"
+            "struct result { int x; };\n"
+            "typedef struct argument_1 { int x; } argument_1;\n"
+            "typedef argument_1 (*CB)(argument_1);\n"
+            "extern int increment(int result);\n"
+            "static inline int increment_inline(int result) { return result + 1; }\n"
+            "extern int use_point(struct point point);\n"
+            "static inline int use_point_inline(struct point point) { return point.x; }\n"
+            "extern struct point later_type(int point, struct point value);\n"
+            "extern struct result return_type(int result, int result_);\n"
+            "extern int use_namespace(int c);\n"
+            "extern const int *borrow_c(const int *c);\n"
+            "extern int receive(int result, ...);\n"))
+        text = (output / "bindings.ldn").read_text()
+        for name in ("increment", "increment_inline"):
+            self.assertRegex(text, name + r": \(result: c.c_int\) -> \(result_: c.c_int\)")
+        for name in ("use_point", "use_point_inline"):
+            self.assertIn(name + ": (point_: point) -> (result: c.c_int)", text)
+        self.assertIn("later_type: (point_: c.c_int, value: point)", text)
+        self.assertIn("use_namespace: (c_: c.c_int)", text)
+        self.assertIn("return_type: (result__: c.c_int, result_: c.c_int) "
+                      "-> (result___: result)", text)
+        self.assertIn("from c_)", text)
+        self.assertIn("cb: type = extern(c) (argument_1_: argument_1)", text)
+        self.assertIn("receive_handler: type = extern(c) (result: c.c_int, "
+                      "value: c.c_int) -> (result_: c.c_int)", text)
+        metadata = json.loads((output / "bindings.json").read_text())
+        functions = {item["c_name"]: item for item in metadata["declarations"]
+                     if item["kind"] == "function"}
+        for name in ("use_point", "use_point_inline", "later_type"):
+            self.assertEqual(functions[name]["parameters"][0]["c_name"], "point")
+            self.assertEqual(functions[name]["parameters"][0]["landin_name"], "point_")
+        self.assertEqual(functions["borrow_c"]["parameters"][0]["landin_name"], "c_")
+        callback = next(item for item in metadata["declarations"]
+                        if item["kind"] == "callback")
+        self.assertEqual(callback["parameters"][0]["landin_name"], "argument_1_")
+        consumer = source / "consumer"
+        consumer.mkdir()
+        (consumer / "main.ldn").write_text(
+            "import generated\n"
+            "call_callback: (action: generated.cb, x: generated.argument_1) "
+            "-> (y: generated.argument_1) = action(x) end call_callback\n"
+            "main: () -> (status: i32) =\n"
+            "    p: generated.point = generated.point(x: 20, y: 22)\n"
+            "    q: generated.point = generated.later_type(0, p)\n"
+            "    r: generated.result = generated.return_type(0, 0)\n"
+            "    borrowed := generated.borrow_c(addr r.x)\n"
+            "    status = i32(generated.increment(1) + generated.increment_inline(1) "
+            "+ generated.use_point(q) + generated.use_point_inline(p) "
+            "+ generated.use_namespace(r.x) + borrowed.val)\n"
+            "end main\n", encoding="utf-8")
+        for module in (output, consumer):
+            checked = subprocess.run([
+                refine(), "check", "--target=" + TARGET_NAME, "--link=libc",
+                "--root=" + str(source),
+                "--root=" + str(HERE.parent), str(module),
+            ], capture_output=True, text=True)
+            self.assertEqual(checked.returncode, 0, checked.stdout + checked.stderr)
+
     def test_adapter_output_labels_do_not_collide_with_source_parameters(self) -> None:
         stored = annotation(retention="stored")
         borrowed = annotation()
@@ -1816,7 +1892,7 @@ int main(void) { return receive(1, 36) != 37; }
         exports = (output / "exports.h").read_text()
         self.assertIn("int handle(int, argument_1 argument_2, int one);", exports)
         bindings = (output / "bindings.ldn").read_text()
-        self.assertIn("(argument_1: c.c_int, argument_2: argument_1, one: c.c_int)", bindings)
+        self.assertIn("(argument_1_: c.c_int, argument_2: argument_1, one: c.c_int)", bindings)
 
     def test_opaque_local_names_are_disjoint_from_all_header_declarations(self) -> None:
         for name in ("object", "value", "source", "target", "index", "result", "argument_1"):

@@ -1,0 +1,1 @@
+public double: (x: u8) -> (y: u8) = x + x end double

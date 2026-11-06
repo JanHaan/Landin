@@ -1,3 +1,4 @@
+with Ada.Strings.Fixed;
 with GNAT.SHA256;
 with Landin.Bindings.Clang;
 with Landin.Bindings.Policies;
@@ -181,6 +182,20 @@ package body Landin.Bindings.Generation is
    function Landin_Return
      (S : Handle; Id : Type_Id; Note : Annotation; Site : String;
       Result_Name : String := "result") return String;
+
+   --  C parameters and tags occupy different namespaces. Landin signature
+   --  bindings share the namespace of the types they refer to, so allocate
+   --  the complete signature together before writing any of its bindings.
+   type Landin_Signature is record
+      Parameters : String_Vectors.Vector;
+      Result : US.Unbounded_String;
+      Names : Text_Maps.Map;
+   end record;
+
+   function Signature
+     (Parameters : String_Vectors.Vector; Result : String)
+      return Landin_Signature;
+
    function C_Type_Text (S : Handle; Id : Type_Id) return String;
    function C_Declarator
      (S : Handle; Id : Type_Id; Declared : String) return String;
@@ -1966,8 +1981,14 @@ package body Landin.Bindings.Generation is
                        Landin_Return
                          (S, Item.Result, No_Annotation, Site & "_result");
                   begin
-                     return "extern(c) (" & T.Join (Params, ", ") & ") -> "
-                       & Result;
+                     declare
+                        Allocated : constant Landin_Signature :=
+                          Signature (Params, Result);
+                     begin
+                        return "extern(c) ("
+                          & T.Join (Allocated.Parameters, ", ") & ") -> "
+                          & US.To_String (Allocated.Result);
+                     end;
                   end;
                end;
             when others =>
@@ -2201,11 +2222,13 @@ package body Landin.Bindings.Generation is
 
    function Function_Parameter_Metadata
      (S : Handle; Params : Value_Vectors.Vector; Notes : Annotation_Maps.Map;
-      Site_Prefix : String) return Meta_Id;
+      Site_Prefix : String;
+      Names : Text_Maps.Map := Text_Maps.Empty_Map) return Meta_Id;
 
    function Function_Parameter_Metadata
      (S : Handle; Params : Value_Vectors.Vector; Notes : Annotation_Maps.Map;
-      Site_Prefix : String) return Meta_Id
+      Site_Prefix : String;
+      Names : Text_Maps.Map := Text_Maps.Empty_Map) return Meta_Id
    is
       List : constant Meta_Id := T.List_Meta (S);
    begin
@@ -2217,7 +2240,11 @@ package body Landin.Bindings.Generation is
             Object : constant Meta_Id := T.Object_Meta (S);
          begin
             Put_Text (S, Object, "c_name", C_Name);
-            Put_Text (S, Object, "landin_name", T.Sanitize_Landin (C_Name));
+            Put_Text
+              (S, Object, "landin_name",
+               (if Names.Contains (T.Sanitize_Landin (C_Name))
+                then Names (T.Sanitize_Landin (C_Name))
+                else T.Sanitize_Landin (C_Name)));
             Put_Text (S, Object, "c_type", C_Type_Text (S, Item));
             Put_Text (S, Object, "landin_type",
                       Landin_Type (S, Item, Lookup (Notes, C_Name),
@@ -2266,6 +2293,214 @@ package body Landin.Bindings.Generation is
           Parameters => Parameters, Body_Lines => Body_Lines));
    end Add_C_Function;
 
+   function Signature
+     (Parameters : String_Vectors.Vector; Result : String)
+      return Landin_Signature
+   is
+      Used : String_Sets.Set;
+      Answer : Landin_Signature;
+
+      function Identifier (Value : Character) return Boolean is
+        (Value in 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '_');
+
+      function Name_Start (Text : String; Colon : Positive) return Positive;
+
+      function Name_Start (Text : String; Colon : Positive) return Positive is
+         First : Positive := Colon;
+      begin
+         while First > Text'First and then Identifier (Text (First - 1)) loop
+            First := First - 1;
+         end loop;
+         return First;
+      end Name_Start;
+
+      procedure Reserve_Types (Text : String);
+
+      procedure Reserve_Types (Text : String) is
+         Index : Natural := Text'First;
+         Depth : Natural := 0;
+         Origin_Depth : Integer := -1;
+      begin
+         while Index <= Text'Last loop
+            if Identifier (Text (Index)) then
+               declare
+                  First : constant Positive := Index;
+               begin
+                  while Index <= Text'Last and then Identifier (Text (Index))
+                  loop
+                     Index := Index + 1;
+                  end loop;
+                  if Text (First .. Index - 1) = "from" then
+                     Origin_Depth := Depth;
+                  elsif Origin_Depth < 0 then
+                     Used.Include (Text (First .. Index - 1));
+                  end if;
+               end;
+            else
+               if Text (Index) = '(' then
+                  Depth := Depth + 1;
+               elsif Text (Index) = ')' then
+                  if Origin_Depth = Depth then
+                     Origin_Depth := -1;
+                  end if;
+                  if Depth > 0 then
+                     Depth := Depth - 1;
+                  end if;
+               end if;
+               Index := Index + 1;
+            end if;
+         end loop;
+      end Reserve_Types;
+
+      function Allocate (Wanted : String) return String;
+
+      function Allocate (Wanted : String) return String is
+         Named : US.Unbounded_String := US.To_Unbounded_String (Wanted);
+      begin
+         while Used.Contains (US.To_String (Named)) loop
+            US.Append (Named, "_");
+         end loop;
+         Used.Include (US.To_String (Named));
+         return US.To_String (Named);
+      end Allocate;
+
+      function Origins (Text : String) return String;
+
+      function Origins (Text : String) return String is
+         Written : US.Unbounded_String;
+         Index : Natural := Text'First;
+         Depth : Natural := 0;
+         In_Origins : Boolean := False;
+      begin
+         while Index <= Text'Last loop
+            if Identifier (Text (Index)) then
+               declare
+                  First : constant Positive := Index;
+               begin
+                  while Index <= Text'Last and then Identifier (Text (Index))
+                  loop
+                     Index := Index + 1;
+                  end loop;
+                  declare
+                     Word : constant String := Text (First .. Index - 1);
+                  begin
+                     if Depth = 0 and then Word = "from" then
+                        In_Origins := True;
+                     end if;
+                     US.Append
+                       (Written,
+                        (if In_Origins and then Answer.Names.Contains (Word)
+                         then Answer.Names (Word) else Word));
+                  end;
+               end;
+            else
+               if Text (Index) = '(' then
+                  Depth := Depth + 1;
+               elsif Text (Index) = ')' and then Depth > 0 then
+                  Depth := Depth - 1;
+               end if;
+               US.Append (Written, Text (Index));
+               Index := Index + 1;
+            end if;
+         end loop;
+         return US.To_String (Written);
+      end Origins;
+   begin
+      for Parameter of Parameters loop
+         declare
+            Colon : constant Natural :=
+              Ada.Strings.Fixed.Index (Parameter, ":");
+         begin
+            if Colon > 0 then
+               Reserve_Types (Parameter (Colon + 1 .. Parameter'Last));
+            end if;
+         end;
+      end loop;
+      declare
+         Colon : constant Natural := Ada.Strings.Fixed.Index (Result, ":");
+      begin
+         if Colon > 0 then
+            Reserve_Types (Result (Colon + 1 .. Result'Last));
+         end if;
+      end;
+      --  Preserve every available source name, including a suffix that an
+      --  earlier parameter would otherwise claim while avoiding its type.
+      for Parameter of Parameters loop
+         declare
+            Colon : constant Natural :=
+              Ada.Strings.Fixed.Index (Parameter, ":");
+         begin
+            if Colon > 0 then
+               declare
+                  First : constant Positive := Name_Start (Parameter, Colon);
+                  Named : constant String := Parameter (First .. Colon - 1);
+               begin
+                  if not Used.Contains (Named) then
+                     Answer.Names.Insert (Named, Named);
+                  end if;
+               end;
+            end if;
+         end;
+      end loop;
+      for Position in Answer.Names.Iterate loop
+         Used.Include (Text_Maps.Key (Position));
+      end loop;
+      for Parameter of Parameters loop
+         declare
+            Colon : constant Natural :=
+              Ada.Strings.Fixed.Index (Parameter, ":");
+         begin
+            if Colon > 0 then
+               declare
+                  First : constant Positive := Name_Start (Parameter, Colon);
+                  Named : constant String := Parameter (First .. Colon - 1);
+               begin
+                  if not Answer.Names.Contains (Named) then
+                     Answer.Names.Insert (Named, Allocate (Named));
+                  end if;
+               end;
+            end if;
+         end;
+      end loop;
+      for Parameter of Parameters loop
+         declare
+            Colon : constant Natural :=
+              Ada.Strings.Fixed.Index (Parameter, ":");
+         begin
+            if Colon = 0 then
+               Answer.Parameters.Append (Parameter);
+            else
+               declare
+                  First : constant Positive := Name_Start (Parameter, Colon);
+                  Named : constant String := Parameter (First .. Colon - 1);
+               begin
+                  Answer.Parameters.Append
+                    (Parameter (Parameter'First .. First - 1)
+                     & Answer.Names (Named) & ":"
+                     & Origins (Parameter (Colon + 1 .. Parameter'Last)));
+               end;
+            end if;
+         end;
+      end loop;
+      declare
+         Colon : constant Natural := Ada.Strings.Fixed.Index (Result, ":");
+      begin
+         if Colon = 0 then
+            Answer.Result := US.To_Unbounded_String (Result);
+         else
+            declare
+               First : constant Positive := Name_Start (Result, Colon);
+               Named : constant String := Result (First .. Colon - 1);
+            begin
+               Answer.Result := US.To_Unbounded_String
+                 (Result (Result'First .. First - 1) & Allocate (Named) & ":"
+                  & Origins (Result (Colon + 1 .. Result'Last)));
+            end;
+         end if;
+      end;
+      return Answer;
+   end Signature;
+
    function Ldn_Extern
      (S : Handle; Symbol, Named : String;
       Parameters : String_Vectors.Vector; Result : String;
@@ -2277,6 +2512,7 @@ package body Landin.Bindings.Generation is
       Owner_Context : String := "") return String
    is
       Clean : constant String := T.Sanitize_Landin (Named);
+      Allocated : constant Landin_Signature := Signature (Parameters, Result);
       Owner : constant String :=
         (if Owner_Context /= "" then Owner_Context
          else "generated adapter " & T.Repr (Symbol));
@@ -2290,7 +2526,8 @@ package body Landin.Bindings.Generation is
          Claim_Landin (S, Clean, Owner);
       end if;
       return "public extern(c) link(symbol: """ & Symbol & """) " & Clean
-        & ": (" & T.Join (Parameters, ", ") & ") -> " & Result;
+        & ": (" & T.Join (Allocated.Parameters, ", ") & ") -> "
+        & US.To_String (Allocated.Result);
    end Ldn_Extern;
 
    No_Strings : constant String_Vectors.Vector := String_Vectors.Empty_Vector;
@@ -2761,6 +2998,7 @@ package body Landin.Bindings.Generation is
                    "nullable");
                Object : constant Meta_Id := T.Object_Meta (S);
                Parameter_Meta : constant Meta_Id := T.List_Meta (S);
+               Names : Text_Maps.Map;
             begin
                for Position in 1 .. Natural (Callback.Parameters.Length) loop
                   declare
@@ -2780,10 +3018,14 @@ package body Landin.Bindings.Generation is
                declare
                   Result : constant String := Landin_Return
                     (S, Callback.Result, Result_Note, L_Name & "_result");
+                  Allocated : constant Landin_Signature :=
+                    Signature (Parameters, Result);
                begin
+                  Names := Allocated.Names;
                   S.Type_Blocks.Append
                     ("public " & L_Name & ": type = extern(c) ("
-                     & T.Join (Parameters, ", ") & ") -> " & Result);
+                     & T.Join (Allocated.Parameters, ", ") & ") -> "
+                     & US.To_String (Allocated.Result));
                end;
                for Position in 1 .. Natural (Callback.Parameters.Length) loop
                   declare
@@ -2792,7 +3034,7 @@ package body Landin.Bindings.Generation is
                      Item : constant Meta_Id := T.Object_Meta (S);
                   begin
                      Put_Text (S, Item, "c_name", Named);
-                     Put_Text (S, Item, "landin_name", Named);
+                     Put_Text (S, Item, "landin_name", Names (Named));
                      Put_Text (S, Item, "c_type",
                                C_Type_Text (S,
                                  Callback.Parameters (Position)));
@@ -3681,13 +3923,16 @@ package body Landin.Bindings.Generation is
                     (Landin_Return (S, Result, Result_Note,
                                     L_Name & "_result"));
                end if;
-               Declare_Landin
-                 (S, Ldn_Extern
-                    (S, US.To_String (Link_Symbol), L_Name, Ldn_Parameters,
-                     US.To_String (Ldn_Result), Owner_Context => Where));
                declare
+                  Allocated : constant Landin_Signature :=
+                    Signature (Ldn_Parameters, US.To_String (Ldn_Result));
                   Object : constant Meta_Id := T.Object_Meta (S);
                begin
+                  Declare_Landin
+                    (S, Ldn_Extern
+                       (S, US.To_String (Link_Symbol), L_Name,
+                        Allocated.Parameters, US.To_String (Allocated.Result),
+                        Owner_Context => Where));
                   Put_Text (S, Object, "kind", "function");
                   Put_Text (S, Object, "c_name", C_Name);
                   Put_Text (S, Object, "landin_name", L_Name);
@@ -3704,7 +3949,7 @@ package body Landin.Bindings.Generation is
                          T.Strings_Meta (S, Output_Sources));
                   T.Put (S, Object, "parameters",
                          Function_Parameter_Metadata
-                           (S, Params, Notes, L_Name));
+                           (S, Params, Notes, L_Name, Allocated.Names));
                   T.Put (S, Object, "result",
                          Type_Metadata (S, Result, Result_Note,
                                         L_Name & "_result"));
@@ -3988,12 +4233,14 @@ package body Landin.Bindings.Generation is
                      Ldn_Return : constant String :=
                        Landin_Return (S, Result, Result_Note,
                                       L_Name & "_handler_result");
+                     Allocated : constant Landin_Signature :=
+                       Signature (Handler_Ldn & Tail_Ldn, Ldn_Return);
                      Object : constant Meta_Id := T.Object_Meta (S);
                   begin
                      S.Type_Blocks.Append
                        ("public " & Handler_Type & ": type = extern(c) ("
-                        & T.Join (Handler_Ldn & Tail_Ldn, ", ") & ") -> "
-                        & Ldn_Return);
+                        & T.Join (Allocated.Parameters, ", ") & ") -> "
+                        & US.To_String (Allocated.Result));
                      Put_Text (S, Object, "kind", "incoming_varargs");
                      Put_Text (S, Object, "c_name", C_Name);
                      Put_Text (S, Object, "landin_name", L_Name);
@@ -4002,7 +4249,7 @@ package body Landin.Bindings.Generation is
                      Put_Text (S, Object, "count_parameter", Count_Name);
                      T.Put (S, Object, "fixed_parameters",
                             Function_Parameter_Metadata
-                              (S, Params, Notes, L_Name));
+                              (S, Params, Notes, L_Name, Allocated.Names));
                      T.Put (S, Object, "schema", Schema_Meta);
                      T.Put (S, Object, "result",
                             Type_Metadata (S, Result, Result_Note,
