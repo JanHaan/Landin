@@ -81,9 +81,12 @@ static void *worker(void *argument)
         own->capture = landin_tool_capture(capture_path, sizeof capture_path);
         CHECK(own->capture >= 0 && write(own->capture, "capture", 7) == 7);
         CHECK(landin_private_directory("registry-thread-", own->root, sizeof own->root) == 0);
-        CHECK(snprintf(own->private_file, sizeof own->private_file, "%s/nested", own->root) > 0);
+        char private_path[sizeof own->private_file];
+        int path_size = snprintf(private_path, sizeof private_path, "%s/nested", own->root);
+        CHECK(path_size > 0 && (size_t)path_size + sizeof "/file" <= sizeof private_path);
+        memcpy(own->private_file, private_path, (size_t)path_size + 1);
         CHECK(landin_private_mkdir(own->private_file) == 0);
-        CHECK(strcat(own->private_file, "/file") != NULL);
+        memcpy(own->private_file + path_size, "/file", sizeof "/file");
         CHECK(landin_private_write(own->private_file, "private", 7) == 0);
         CHECK(snprintf(own->output, sizeof own->output, "%s/output-%u-%u", scratch, slot, round) > 0);
         CHECK(snprintf(own->source, sizeof own->source, "%s/source-%u-%u", scratch, slot, round) > 0);
