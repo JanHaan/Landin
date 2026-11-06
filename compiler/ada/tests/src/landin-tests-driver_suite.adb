@@ -5858,8 +5858,10 @@ package body Landin.Tests.Driver_Suite is
             if Refused then
                Landin.Testing.Check
                  (Item, Contains (Unbounded.To_String (Result.Report),
-                                  "collide"),
-                  "the destination collision is diagnosed");
+                                  "collide")
+                  or else Contains (Unbounded.To_String (Result.Report),
+                                    "cannot prove"),
+                  "collision or uncertain separation is diagnosed");
                Landin.Testing.Check_Equal
                  (Item, Host.Write_Count, 0, "no artifact write is attempted");
                Landin.Testing.Check_Equal
@@ -7954,8 +7956,85 @@ package body Landin.Tests.Driver_Suite is
       end loop;
    end Tool_File_Directives;
 
+   procedure Output_Parents_Are_Named
+     (Item : in out Landin.Testing.Context);
+
+   procedure Output_Parents_Are_Named
+     (Item : in out Landin.Testing.Context)
+   is
+      Options : constant Landin.Platform.Path_List :=
+        ["--stage-report=missing/report.json",
+         "--build-report=missing/report.json",
+         "--stack-report=missing/report.json",
+         "-o=missing/program.s"];
+   begin
+      for Option of Options loop
+         declare
+            Host : Landin.Testing.Fakes.Fake_Filesystem;
+            Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+            Result : Landin.Driver.Outcome;
+            Args : constant Landin.Platform.Path_List :=
+              ["--target=linux-x86-64", "--emit=asm", Option, "main.ldn"];
+         begin
+            Host.Add_File ("main.ldn", "unread source");
+            Host.Raise_On_Read;
+            Result := Landin.Driver.Execute (Args, Host, Tools);
+            Landin.Testing.Check
+              (Item, Result.Status /= 0
+               and then Contains (Unbounded.To_String (Result.Report),
+                                  "parent is missing:")
+               and then Contains (Unbounded.To_String (Result.Report),
+                                  "create the parent directory")
+               and then not Contains (Unbounded.To_String (Result.Report),
+                                      "collid"),
+               Option & " names the missing parent and working route");
+            Landin.Testing.Check_Equal
+              (Item, Host.Write_Count, 0, "no output or parent is created");
+            Landin.Testing.Check_Equal
+              (Item, Tools.Run_Count, 0, "no tool is started");
+         end;
+      end loop;
+      for Uncertain in Boolean loop
+         declare
+            Host : Landin.Testing.Fakes.Fake_Filesystem;
+            Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+            Result : Landin.Driver.Outcome;
+            Args : constant Landin.Platform.Path_List :=
+              ["--target=linux-x86-64", "--stage-report=reports/stage.json",
+               "main.ldn"];
+         begin
+            Host.Add_File ("main.ldn", "value: i32 = 1");
+            Host.Add_Directory ("reports");
+            if Uncertain then
+               Host.Set_Identity_Uncertain ("reports");
+               Host.Raise_On_Read;
+            end if;
+            Result := Landin.Driver.Execute (Args, Host, Tools);
+            if Uncertain then
+               Landin.Testing.Check
+                 (Item, Result.Status /= 0
+                  and then Contains (Unbounded.To_String (Result.Report),
+                                     "cannot establish stage report identity")
+                  and then Contains (Unbounded.To_String (Result.Report),
+                                     "parent access")
+                  and then Host.Write_Count = 0,
+                  "uncertain parent is refused without claiming collision");
+            else
+               Landin.Testing.Check_Equal
+                 (Item, Result.Status, 0, "an available parent is accepted");
+               Landin.Testing.Check
+                 (Item, Host.Exists ("reports/stage.json"),
+                  "the report is published below the available parent");
+            end if;
+         end;
+      end loop;
+   end Output_Parents_Are_Named;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "driver", "output parents are named",
+         Output_Parents_Are_Named'Access);
       Landin.Testing.Register
         (Into, "driver", "tool file directives protect their inputs",
          Tool_File_Directives'Access);

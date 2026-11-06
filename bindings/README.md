@@ -164,6 +164,15 @@ Landin name is a safe form of the C name. Names that would collide in Landin
 must be disambiguated explicitly. Policy `name` values made only of whitespace
 and `@` are rejected, including when `landin_name` is explicit.
 
+Within a generated Landin signature, parameter and result names avoid all
+identifiers referenced by its types and all other bindings in the signature.
+Available normalized parameter names remain unchanged; conflicts gain trailing
+underscores, reserving existing suffix names first. Origin `from` clauses and
+parameter metadata use these same allocated names. Policy names and `c_name`
+remain the header's. This applies to direct declarations, adapters, callback
+types and incoming handlers; it does not replace the explicit `landin_name`
+required for conflicting selected declarations.
+
 Opaque-object, callback-cell, variable and
 by-value-wrapper C locals and parameters are allocated independently of public
 Landin names, avoiding every identifier in

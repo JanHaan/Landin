@@ -1381,6 +1381,10 @@ GUIDES = [
          nav="generated device fixtures",
          blurb="Pinned vendor sources, deterministic Landin modules and "
                "independent device-consumer evidence."),
+    dict(key="bindings", src="bindings/README.md", out="bindings.html",
+         nav="C binding policies",
+         blurb="The binding generator's invocation, complete policy schema "
+               "and generated C boundary."),
     dict(key="driver", src="compiler/tests/driver/DERIVATION.md", out="driver.html",
          nav="the derived driver",
          blurb="Prototype 1's executable application, public DMA contract, "
@@ -2346,7 +2350,7 @@ NAV_GROUPS = [
                       "documents"]),
     ("the project", ["readme", "capabilities", "roadmap", "handoff"]),
     ("the compiler", ["compiler", "ir", "diagnostics", "format", "server",
-                      "targets", "core", "toolchain", "editors"]),
+                      "targets", "core", "bindings", "toolchain", "editors"]),
     ("tests and evidence", ["fixtures", "registers", "harness", "process",
                             "environments", "devices", "driver",
                             "cortex-m", "native-ci"]),

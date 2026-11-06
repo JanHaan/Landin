@@ -1,4 +1,6 @@
 with Ada.Containers.Hashed_Maps;
+with Ada.Containers.Hashed_Sets;
+with Ada.Containers.Vectors;
 with Ada.Strings.Unbounded;
 
 with Landin.Memory;
@@ -48,6 +50,19 @@ package body Landin.Stages.Resolution is
       Hash            => Landin.Source.Names.Hash,
       Equivalent_Keys => "=");
 
+   package Name_Sets is new Ada.Containers.Hashed_Sets
+     (Element_Type        => Landin.Source.Names.Name_Id,
+      Hash                => Landin.Source.Names.Hash,
+      Equivalent_Elements => "=");
+
+   type Option_Refusal is record
+      Module : Landin.Modules.Module_Id;
+      Name   : Landin.Source.Names.Name_Id;
+   end record;
+
+   package Option_Refusal_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Option_Refusal);
+
    overriding function Name (Item : Instance) return String is
       pragma Unreferenced (Item);
    begin
@@ -77,6 +92,8 @@ package body Landin.Stages.Resolution is
         Configurations (Context);
 
       Found : Landin.Diagnostics.Diagnostic_List;
+      Reported_Option_Conflicts : Name_Sets.Set;
+      Refused_Module_Options : Option_Refusal_Vectors.Vector;
 
       --  How a name is written, for the sentence a user reads.  The
       --  resolver compares identities; only a message needs the bytes.
@@ -86,6 +103,40 @@ package body Landin.Stages.Resolution is
       function Reserved_Tool_Name
         (Named : Landin.Source.Names.Name_Id) return Boolean
         is (Spelled (Named) in "compiler" | "assembler" | "linker");
+
+      procedure Report_Option_Conflict
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id; Binding : String);
+
+      procedure Report_Option_Conflict
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id; Binding : String)
+      is
+         Named : constant Landin.Source.Names.Name_Id :=
+           Syn.Name (Of_Tree, Node);
+         Option : constant Landin.Provenance.Origin :=
+           Landin.Configuration.Option_Origin (Activity.all, Named);
+      begin
+         if Reported_Option_Conflicts.Contains (Named) then
+            return;
+         end if;
+         Reported_Option_Conflicts.Insert (Named);
+         Names.Report
+           (Item => Names.Duplicate_Declaration,
+            Source => Option.Source, Where => Option.Where,
+            Message => "option `" & Spelled (Named)
+                       & "` conflicts with a " & Binding,
+            Note => "[1530]: options and active module/import bindings"
+                    & " cannot share a name; rename the option or the"
+                    & " conflicting binding and retry",
+            Related => Syn.Origin (Of_Tree, Node),
+            Because => "the conflicting " & Binding,
+            Into => Found);
+      end Report_Option_Conflict;
+
+      function Module_Option_Refused
+        (Module : Landin.Modules.Module_Id;
+         Named : Landin.Source.Names.Name_Id) return Boolean
+        is (for some Refused of Refused_Module_Options =>
+              Refused.Name = Named and then Refused.Module = Module);
 
       --  [1860]: a name that names nothing is a misspelling, so the report
       --  says which names in scope it is near.  Only names the position
@@ -499,18 +550,12 @@ package body Landin.Stages.Resolution is
            and then Landin.Provenance.Is_Known
              (Landin.Configuration.Option_Origin (Activity.all, Named))
          then
-            Names.Report
-              (Item => Names.Duplicate_Declaration,
-               Source => Syn.Source_Of (Of_Tree),
-               Where => Syn.Anchor (Of_Tree, Node),
-               Message => "`" & Spelled (Named)
-                          & "` is already a program option",
-               Note => "[1530]: options and module bindings cannot share"
-                       & " a name",
-               Related => Landin.Configuration.Option_Origin
-                 (Activity.all, Named),
-               Because => "the option that keeps the name",
-               Into => Found);
+            Report_Option_Conflict (Of_Tree, Node, "module binding");
+            Refused_Module_Options.Append
+              (Option_Refusal'
+                 (Module => Landin.Modules.Module_Of
+                    (Graph.all, Syn.Source_Of (Of_Tree)),
+                  Name => Named));
             return;
          end if;
 
@@ -1501,6 +1546,8 @@ package body Landin.Stages.Resolution is
                      if Public_Member /= Res.No_Declaration then
                         Res.Bind
                           (Meanings.all, Of_Tree, Node, Public_Member);
+                     elsif Module_Option_Refused (Imported, Member_Name) then
+                        null;
                      elsif Any_Member /= Res.No_Declaration then
                         Names.Report
                           (Item    => Names.Inaccessible_Name,
@@ -1576,6 +1623,17 @@ package body Landin.Stages.Resolution is
                          (Meanings.all, Inside, Named));
             begin
                if Meant = Landin.Resolution.No_Declaration then
+                  --  A refused binding already owns its diagnostic. Check
+                  --  it before the configuration-only fallback, which would
+                  --  otherwise reinterpret every use as the global option.
+                  if Res.Import_Refused
+                    (Meanings.all, Syn.Source_Of (Of_Tree), Named)
+                    or else Module_Option_Refused
+                      (Landin.Modules.Module_Of
+                         (Graph.all, Syn.Source_Of (Of_Tree)), Named)
+                  then
+                     return;
+                  end if;
                   if Landin.Provenance.Is_Known
                     (Landin.Configuration.Option_Origin (Activity.all, Named))
                   then
@@ -2371,18 +2429,10 @@ package body Landin.Stages.Resolution is
                elsif Landin.Provenance.Is_Known
                  (Landin.Configuration.Option_Origin (Activity.all, Named))
                then
-                  Names.Report
-                    (Item => Names.Duplicate_Declaration,
-                     Source => Source_Id,
-                     Where => Syn.Anchor (Of_Tree.all, Node),
-                     Message => "`" & Spelled (Named)
-                                & "` is already a program option",
-                     Note => "[1530]: options and import bindings cannot"
-                             & " share a name",
-                     Related => Landin.Configuration.Option_Origin
-                       (Activity.all, Named),
-                     Because => "the option that keeps the name",
-                     Into => Found);
+                  Report_Option_Conflict (Of_Tree.all, Node, "import binding");
+                  Res.Refuse_Import
+                    (Meanings.all, Source_Id, Named,
+                     Syn.Origin (Of_Tree.all, Node));
                elsif Res.Has_Import (Meanings.all, Source_Id, Named) then
                   Names.Report
                     (Item => Names.Duplicate_Declaration,
@@ -2408,6 +2458,12 @@ package body Landin.Stages.Resolution is
                           Res.Module_Scope_Of (Meanings.all, Target), Named);
                   begin
                      if Member = Res.No_Declaration then
+                        if Module_Option_Refused (Target, Named) then
+                           Res.Refuse_Import
+                             (Meanings.all, Source_Id, Named,
+                              Syn.Origin (Of_Tree.all, Node));
+                           return;
+                        end if;
                         Names.Report
                           (Item => Names.Unresolved_Name,
                            Source => Source_Id,

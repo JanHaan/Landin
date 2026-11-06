@@ -12,6 +12,7 @@ with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 
 with Landin.Checking;
+with Landin.Diagnostics;
 with Landin.Driver;
 with Landin.Platform;
 with Landin.Testing.Fakes;
@@ -1005,6 +1006,101 @@ package body Landin.Tests.Resolution_Suite is
       Check ("f: () -> none = compiler.assert(true) end f", "module");
    end Import_Scopes_And_Refusals;
 
+   procedure Configuration_Conflicts_Have_One_Cause
+     (Item : in out Landin.Testing.Context);
+
+   procedure Configuration_Conflicts_Have_One_Cause
+     (Item : in out Landin.Testing.Context)
+   is
+   begin
+      for Imports in Boolean loop
+         declare
+            Host : Landin.Testing.Fakes.Fake_Filesystem;
+            Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+            Args : constant Landin.Platform.Path_List :=
+              ["--root=root", "entry"];
+         begin
+            Host.Add_Directory ("root");
+            Host.Add_Directory ("root/lib");
+            Host.Add_Directory ("entry");
+            Host.Add_File
+              ("root/lib/main.ldn", "public answer: i32 = 42" & LF);
+            Host.Add_File
+              ("entry/options.ldn", "option answer: i32 = 1" & LF);
+            for Source of Landin.Platform.Path_List'
+              (["entry/main.ldn", "entry/sibling.ldn"])
+            loop
+               Host.Add_File
+                 (Source,
+                  (if Imports then "import lib (answer)"
+                   else "answer: i32 = 2") & LF
+                  & (if Source = "entry/main.ldn" then "f" else "g")
+                  & ": () -> (r: i32) = r = answer + answer end "
+                  & (if Source = "entry/main.ldn" then "f" else "g") & LF);
+            end loop;
+            declare
+               Result : constant Landin.Driver.Outcome :=
+                 Landin.Driver.Execute (Args, Host, Tools);
+            begin
+               Landin.Testing.Check_Equal
+                 (Item, Result.Status, 1, "the conflicting program refuses");
+               Landin.Testing.Check_Equal
+                 (Item, Landin.Diagnostics.Count (Result.Found), 1,
+                  "one option conflict produces one diagnostic");
+               Landin.Testing.Check
+                 (Item, Ada.Strings.Fixed.Index
+                    (Ada.Strings.Unbounded.To_String (Result.Report),
+                     "option `answer` conflicts") > 0
+                  and then Ada.Strings.Fixed.Index
+                    (Ada.Strings.Unbounded.To_String (Result.Report),
+                     "entry/options.ldn") > 0
+                  and then Ada.Strings.Fixed.Index
+                    (Ada.Strings.Unbounded.To_String (Result.Report),
+                     "rename the option") > 0,
+                  "the actionable cause points at the user option");
+            end;
+         end;
+      end loop;
+      for Independent_Mistake in Boolean loop
+         declare
+            Host : Landin.Testing.Fakes.Fake_Filesystem;
+            Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+            Args : constant Landin.Platform.Path_List :=
+              ["--root=root", "entry"];
+         begin
+            Host.Add_Directory ("root");
+            Host.Add_Directory ("root/lib");
+            Host.Add_Directory ("entry");
+            Host.Add_File
+              ("root/lib/main.ldn", "option answer: i32 = 1" & LF
+               & "public answer: i32 = 42" & LF);
+            Host.Add_File
+              ("entry/main.ldn", "import lib" & LF
+               & "f: () -> (r: i32) = r = lib.answer + lib.answer end f"
+               & LF);
+            Host.Add_File
+              ("entry/sibling.ldn", "import lib (answer)" & LF
+               & "g: () -> (r: i32) = r = answer + answer end g" & LF
+               & (if Independent_Mistake
+                  then "option flag: bool = true" & LF
+                    & "h: () -> (r: bool) = r = flag end h" & LF
+                  else ""));
+            declare
+               Result : constant Landin.Driver.Outcome :=
+                 Landin.Driver.Execute (Args, Host, Tools);
+            begin
+               Landin.Testing.Check_Equal
+                 (Item, Result.Status, 1, "the module conflict refuses");
+               Landin.Testing.Check_Equal
+                 (Item, Landin.Diagnostics.Count (Result.Found),
+                  (if Independent_Mistake then 2 else 1),
+                  "qualified and selected uses do not repeat the cause;"
+                  & " an independent configuration-only misuse remains");
+            end;
+         end;
+      end loop;
+   end Configuration_Conflicts_Have_One_Cause;
+
    procedure Tables_Keep_Their_Tree_Identity
      (Item : in out Landin.Testing.Context);
 
@@ -1187,6 +1283,9 @@ package body Landin.Tests.Resolution_Suite is
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "resolution", "configuration conflicts have one cause",
+         Configuration_Conflicts_Have_One_Cause'Access);
       Landin.Testing.Register
         (Into, "resolution", "traversal bindings keep their owners",
          Traversal_Bindings_Keep_Their_Owners'Access);

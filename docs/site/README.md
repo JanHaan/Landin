@@ -35,8 +35,9 @@ turns the classes it emits into spans and links the citations in comments.
 
 Source links resolve relative to the document that contains them, so different
 files named `README.md` keep their own destinations. A selected document links
-to its rendered page; other repository files, including editor-specific and
-binding-generator guides, link to their canonical source view. URL queries,
+to its rendered page; the binding policy reference is `bindings.html`.
+Other repository files, including editor-specific guides, link to their
+canonical source view. URL queries,
 fragments, external links and page-local anchors retain their meaning.
 
 The faces are not chosen here. They come from

@@ -304,7 +304,8 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   only after validation; refusal preserves any tree created there meanwhile.
   Existing output directories retain unrelated files.
   [The binding guide](../bindings/README.md)
-  describes the policy.
+  describes the policy; installed command help points to its generated
+  [reading copy](https://www.701.dev/bindings.html).
 - `refine lsp` is a language server over standard input and output: an
   editor started with it gets diagnostics, definitions, hover types,
   formatting and quick fixes from the compiler's own stages, as

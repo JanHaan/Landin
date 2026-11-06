@@ -369,6 +369,20 @@ class GeneratedReference(unittest.TestCase):
     def tearDownClass(cls):
         cls.temp.cleanup()
 
+    def test_binding_policy_is_published_at_the_installed_help_route(self):
+        text = (self.destination / 'bindings.html').read_text()
+        for phrase in ('Reference policy', 'landin_name', 'plain_char',
+                       'nullable', 'adapters.c', 'exports.h'):
+            self.assertIn(phrase, text)
+        self.assertIn('bindings.html',
+                      (self.destination / 'sitemap.xml').read_text())
+        self.assertIn('href="bindings.html"',
+                      (self.destination / 'capabilities.html').read_text())
+        self.assertIn('bindings.html',
+                      (self.destination / 'llms.txt').read_text())
+        self.assertIn('https://www.701.dev/bindings.html',
+                      (ROOT / 'compiler/ada/src/driver/landin-commands-catalogue.adb').read_text())
+
     def test_every_export_is_searchable_with_a_stable_destination(self):
         index = json.loads((self.destination / 'library-index.json').read_text())
         wanted = {m + '.' + i.name for m, items in self.modules.items() for i in items}

@@ -546,8 +546,8 @@ package body Landin.Commands.Catalogue is
               & LF & "alone. Four files are written: bindings.ldn, adapters.c,"
               & LF & "exports.h and bindings.json; each is written beside its"
               & LF & "destination and read back, and adapters.c compiled,"
-              & LF & "before any is replaced. bindings/README.md describes the"
-              & LF & "policy." & LF);
+              & LF & "before any is replaced. The complete policy reference:"
+              & LF & "https://www.701.dev/bindings.html" & LF);
          when others => null;
       end case;
       return US.To_String (Text);

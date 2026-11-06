@@ -1346,6 +1346,51 @@ package body Landin.Driver is
          procedure Note_Failure
            (Code : Landin.Diagnostics.Code_String; Text : String);
 
+         --  An absent destination is ordinary only when its parent can be
+         --  resolved. Paths_Overlap deliberately answers True for unknown
+         --  identities; that conservative answer is not proof of collision.
+         procedure Check_Output_Parent (Path, Kind : String);
+
+         procedure Check_Output_Parent (Path, Kind : String) is
+            Seen : Landin.Platform.Identity_Observation;
+         begin
+            if Bad_Use or else Path = "" or else Host.Exists (Path) then
+               return;
+            end if;
+            Seen := Host.Observe_Identity (Path);
+            if Seen.Status = Landin.Platform.Not_Found
+              and then not Seen.Parent_Resolved
+            then
+               Bad_Use := True;
+               Note_Failure
+                 (Code_Unwritable, Kind & " parent is missing: " & Path
+                  & "; create the parent directory or choose an existing"
+                  & " output directory, then retry");
+            elsif Seen.Status = Landin.Platform.Not_Readable then
+               Bad_Use := True;
+               Note_Failure
+                 (Code_Unwritable, "cannot establish " & Kind
+                  & " identity: " & Path
+                  & "; check the destination and parent access or choose"
+                  & " another output path, then retry");
+            end if;
+         end Check_Output_Parent;
+
+         function Source_Conflict
+           (Kind, Path : String; Sources : Landin.Platform.Path_List)
+            return String;
+
+         function Source_Conflict
+           (Kind, Path : String; Sources : Landin.Platform.Path_List)
+            return String is
+           (if (for some Input of Sources =>
+                  Path = Input or else Host.Same_File (Path, Input))
+            then Kind & " collides with source: " & Path
+              & "; choose another output path and retry"
+            else "cannot prove " & Kind & " separate from source: " & Path
+              & "; check source and output paths and access, or choose"
+              & " another output path and retry");
+
          --  What is wrong with an argument the driver refused.  A known
          --  option misused is said to be misused, and how; an unknown one
          --  is named with the known option nearest it, when one is near.
@@ -2077,7 +2122,7 @@ package body Landin.Driver is
                   Bad_Use := True;
                   Note_Failure
                     (Code_Unknown_Option,
-                     "stage report collides with source: " & Path);
+                     Source_Conflict ("stage report", Path, Inputs));
                   return;
                end if;
             end loop;
@@ -2090,7 +2135,12 @@ package body Landin.Driver is
                   Bad_Use := True;
                   Note_Failure
                     (Code_Unknown_Option,
-                     "stage report collides with source: " & Path);
+                     Source_Conflict
+                       ("stage report", Path,
+                        [Landin.Source.Name
+                           (Landin.Stages.Source
+                              (Context,
+                               Landin.Stages.Nth_Source (Context, Index)))]));
                   return;
                end if;
             end loop;
@@ -3702,7 +3752,8 @@ package body Landin.Driver is
                   Bad_Use := True;
                   Note_Failure
                     (Code_Unknown_Option,
-                     "build report collides with source: " & Report_Path);
+                     Source_Conflict
+                       ("build report", Report_Path, Source_Paths));
                   return;
                end if;
             end if;
@@ -3721,7 +3772,8 @@ package body Landin.Driver is
                   Bad_Use := True;
                   Note_Failure
                     (Code_Unknown_Option,
-                     "stack report collides with source: " & Stack_Path);
+                     Source_Conflict
+                       ("stack report", Stack_Path, Source_Paths));
                   return;
                end if;
             end if;
@@ -3750,8 +3802,8 @@ package body Landin.Driver is
                   Bad_Use := True;
                   Note_Failure
                     (Code_Unknown_Option,
-                     "artifact collides with source: "
-                     & Destinations (Index));
+                     Source_Conflict
+                       ("artifact", Destinations (Index), Source_Paths));
                   return;
                end if;
             end loop;
@@ -4484,7 +4536,8 @@ package body Landin.Driver is
                Bad_Use := True;
                Note_Failure
                  (Code_Unknown_Option,
-                  "build report collides with source: " & Report_Path);
+                  Source_Conflict
+                    ("build report", Report_Path, Source_Paths));
                return;
             end if;
             Landin.Build_Reports.Clear (Evidence);
@@ -4554,7 +4607,7 @@ package body Landin.Driver is
                   Bad_Use := True;
                   Note_Failure
                     (Code_Unknown_Option,
-                     "artifact collides with source: " & Path);
+                     Source_Conflict ("artifact", Path, [Operand]));
                   return;
                end if;
             end loop;
@@ -4902,7 +4955,25 @@ package body Landin.Driver is
             end if;
          end loop;
 
-         if Stage_Report_Seen
+         --  Diagnose unavailable parents before conservative overlap checks
+         --  can mistake an unknown identity for a source/output collision.
+         if Emit /= Emit_Nothing then
+            Check_Output_Parent
+              ((if Unbounded.Length (Output) > 0
+                then Unbounded.To_String (Output)
+                elsif Emit = Emit_Executable then Default_Executable
+                elsif Emit = Emit_Linker_Script then Default_Script
+                else Default_Assembly), "artifact output");
+         end if;
+         Check_Output_Parent (Depfile, "dependency report");
+         Check_Output_Parent
+           (Unbounded.To_String (Build_Report_Path), "build report");
+         Check_Output_Parent
+           (Unbounded.To_String (Stage_Report_Path), "stage report");
+         Check_Output_Parent
+           (Unbounded.To_String (Stack_Report_Path), "stack report");
+
+         if Stage_Report_Seen and then not Bad_Use
            and then
              ((Report_Seen
                and then Host.Paths_Overlap
@@ -4924,7 +4995,7 @@ package body Landin.Driver is
                & Unbounded.To_String (Stage_Report_Path));
          end if;
 
-         if Stack_Report_Seen
+         if Stack_Report_Seen and then not Bad_Use
            and then
              ((Report_Seen
                and then Host.Paths_Overlap
@@ -5067,8 +5138,9 @@ package body Landin.Driver is
                      Bad_Use := True;
                      Note_Failure
                        (Code_Unknown_Option,
-                        "stage report collides with source: "
-                        & Unbounded.To_String (Stage_Report_Path));
+                        Source_Conflict
+                          ("stage report",
+                           Unbounded.To_String (Stage_Report_Path), [Path]));
                      exit;
                   end if;
                end loop;

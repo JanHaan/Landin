@@ -152,6 +152,13 @@ choose another output path. A protected-input alias or changed destination
 requires a different output path or a fresh invocation after the change is
 understood (D907).
 
+A missing output or report parent is named before collision checks. Create
+the parent directory or choose an existing directory, then retry. Refine does
+not create compilation output or report parents. An unavailable identity is
+refused conservatively with a path/access route; it is not proof of a source
+collision. Bindings retains its separately specified staged output-tree
+creation behavior.
+
 A late failure can follow successful staging or installation. The diagnostic
 names the previous recovery entry and any captured new or concurrent entry
 that could not be restored safely. Keep those paths: inspect the named
@@ -294,6 +301,11 @@ spelling, `init_window` for `InitWindow`. A C function keeps C's spelling as
 its link symbol and takes a lower-case Landin name, which the note shows when
 the word names an `extern(c)` function without one:
 `extern(c) link(symbol: "InitWindow") init_window: ...` [1610] (D528).
+
+A semicolon is not a statement terminator: omit it. Braces do not delimit
+Landin blocks: write `if condition then ... end if`, a loop's `do ... end`,
+or an explicit `begin ... end` as appropriate. C-family comments use Landin's
+`--` line comment or `--( ... )--` block comment instead.
 
 ```landin
 X: u32 = 1
@@ -2268,7 +2280,9 @@ description with `link(region: "NAME")`.
 a key twice, is not schema 1, lacks a key it needs or names one refine does
 not read, gives one of the wrong shape, or binds for another ABI than
 `--target` names. The message names the key or the declaration. A policy's
-every key is described in `bindings/README.md`.
+every key is described in the
+[binding policy reference](https://www.701.dev/bindings.html), also available
+as `bindings/README.md` in a source checkout.
 
 ### L0580
 

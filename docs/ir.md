@@ -567,7 +567,9 @@ routine writes. The bound holds in the block's whole subtree of the
 dominator tree unless a store to one of those slots can reach a use there
 without passing the block again; otherwise it holds only in the block
 itself, before the block stores to them. A value's type and what produced
-it bound it too, so a `u8` widened to `usize` is always inside a `[256]`
+it bound it too. A contradictory comparison is conservatively bounded at
+the type's extremum, without stepping outside its numeric range or requiring
+the pass to prove the branch unreachable. A `u8` widened to `usize` is always inside a `[256]`
 array, and an index that passed a fixed array's check in a block passes any
 at least as long later in that block. Such a check cannot fail, so its
 instruction keeps its operation and is marked unchecked, which every

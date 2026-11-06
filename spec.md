@@ -17372,7 +17372,10 @@ selected libgcc archive member names from the linker map, without toolchain
 paths. Assembly-only reports have no `firmware` field.
 
 Every optimization preserves observable side effects, error/cleanup order,
-traps, exact integer widths and floating-point signed zero/NaN behavior. No
+traps, exact integer widths and floating-point signed zero/NaN behavior.
+A comparison that contradicts its operand type gives the proof pass no
+numeric bound outside that type; an unreachable branch does not change the
+program's outcomes. No
 floating reassociation, fast-math, invented no-alias fact or undefined-behavior
 license follows from `unchecked`. D187 removes only its named lexical check
 edges and establishes no positive fact for a later pass. Unused operations
@@ -18648,7 +18651,8 @@ the routine with it parses to the end of the line and reports no more after it
 than before. Changes that leave the same tokens are one repair. The report
 moves to the token the first repair touches, says what the change is, gives the
 line as the source would read with only that edit, and offers up to three
-repairs.
+repairs. A deletion that leaves only a comment is not a repair: it erases
+the intended statement rather than expressing it in Landin.
 
 A repair is Likely. It is Exact, which a tool may apply unasked and an editor
 prefers, only when every change that mends the line writes the same line and
@@ -19623,7 +19627,12 @@ place the parser named are its own. Where one edit writes the Landin form,
 the report offers it as a Likely fix; D261's search leaves such a report
 standing. The rows are `elif` and `elseif` at the start of a line in a body,
 `fn name(` beginning a declaration, `value as type`, `name++` ending its line,
-`*T` where a type belongs, `&&` and `||` between operands, and `!=`, which
+`name--` ending its line, prefix `!` where an operand is refused, and touching
+`//` or `/*` where a comment is refused. They name `dec name`, `not`, `--`
+and `--( ... )--` respectively; comments receive guidance without an edit
+that guesses their extent. An offered decrement edit requires an empty
+touching `--` comment. Other rows are `*T` where a type belongs, `&&` and
+`||` between operands, and `!=`, which
 replaces the note [0350]'s check used to append. `check.py` holds every row to
 a spelling the keyword rule does not spell, a paragraph a document defines,
 and a fixture whose recorded report names both the foreign and the Landin
@@ -19642,6 +19651,10 @@ every refusal, which would name a form in a position where it was not meant.
 **Pinned by** `negative/foreign-elif-is-named`,
 `negative/foreign-elseif-is-named`, `negative/foreign-fn-is-named`,
 `negative/foreign-as-is-named`, `negative/foreign-postfix-increment-is-named`,
+`negative/foreign-postfix-decrement-is-named`,
+`negative/foreign-prefix-not-is-named`,
+`negative/foreign-slash-comment-is-named`,
+`negative/foreign-block-comment-is-named`,
 `negative/foreign-star-pointer-is-named`,
 `negative/foreign-double-ampersand-is-named`,
 `negative/foreign-double-bar-is-named` and
@@ -22473,7 +22486,17 @@ required, as the sysroot, the policy and the output directory are: the
 generator's contract is that nothing it reads is chosen for it. Paths are
 made absolute against the working directory without resolving links.
 
-The four outputs are what the Python generator wrote, byte for byte: for
+Within each generated Landin signature, parameter and result names avoid
+every identifier used by its types and every other binding in the signature.
+Available normalized parameter names are retained; conflicts gain trailing
+underscores, with existing suffix names reserved first. Result origin clauses
+and parameter metadata use the allocated Landin names; policy names and
+`c_name` remain the header's. This applies to direct declarations, adapters,
+callback types and incoming handlers. The complete policy reference is a
+generated reading page, `bindings.html`, named by installed command help.
+
+Apart from these signature collision repairs, the four outputs retain what
+the Python generator wrote: for
 every header and policy `bindings/test.py` binds, and for the committed
 fixture's on each of the three targets, the same declarations in the same
 order, the same adapters and the same metadata with sorted keys, and the
@@ -29978,7 +30001,10 @@ result or a literal. A name, or a path that names a fixed array, is measured
 from its type and not read, nor any index inside it, though a constant index
 is still checked; so `lenof rows[i]` over a fixed array does not evaluate `i`.
 A slice is evaluated once, and a call is always evaluated, even when it
-returns a fixed array. Indexing or selecting a call's result stays [1830]'s
+returns a fixed array. Every evaluated base, index, slice bound and call
+argument receives the ordinary local origin and `escaping` checks.
+Unevaluated fixed-array paths and array-literal elements do not lend or
+transfer their operands. Indexing or selecting a call's result stays [1830]'s
 recorded boundary, and L0010 says to bind the value to a name and index the
 name; a `[` beginning the line after a call is no longer read as an index.
 
@@ -29988,7 +30014,10 @@ a better refusal alone.
 **Pinned by** `runtime/lenof-measures-paths-and-call-results`, which requires
 the call to have run, `negative/lenof-of-a-path-or-call-that-has-no-length`,
 `positive/array-literal-value-after-a-call-statement` and
-`negative/index-of-a-qualified-call-is-refused-there`.
+`negative/index-of-a-qualified-call-is-refused-there`;
+`negative/lenof-slice-element-frame-escape`,
+`negative/lenof-slice-range-frame-escape` and
+`runtime/lenof-slice-operands-run-once`.
 
 ### D334 — A statement's branch takes no value
 

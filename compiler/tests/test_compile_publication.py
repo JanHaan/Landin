@@ -78,6 +78,22 @@ def main():
                                str(root / 'library-refused'), '--build-report=' + str(archive)], archive, False),
         ('source-hardlink-output', [str(source), '-o', str(source_alias)], source, False),
     ]
+    # A conservative identity refusal must not claim an actual collision.
+    # Apply the offered route (make the parent) and repeat each same command.
+    missing_outputs = {}
+    for kind, option in [('artifact', '-o'),
+                         ('stage', '--stage-report'),
+                         ('build', '--build-report'),
+                         ('stack', '--stack-report'),
+                         ('dependency', '--depfile')]:
+        name = 'output-parent-' + kind
+        destination = root / name / ('app' if kind == 'artifact' else 'report')
+        operands = [str(source), '--link=libc']
+        if kind != 'artifact':
+            operands += ['-o', str(root / (name + '-program'))]
+        operands += [option, str(destination)]
+        cases.append((name, operands, source, False))
+        missing_outputs[name] = destination
     if sys.platform == 'linux':
         # GNU ld accepts a selected .so as a textual library script. Its
         # INPUT payload is an input even though it was not named by refine.
@@ -236,6 +252,13 @@ def main():
                                 env=case_env, capture_output=True, timeout=45)
         after = protected.stat()
         expected_failure = (result.returncode == 2 and b'L0002' in result.stderr)
+        if name in missing_outputs:
+            destination = missing_outputs[name]
+            expected_failure = (result.returncode != 0
+                                and b'parent is missing:' in result.stderr
+                                and b'create the parent directory' in result.stderr
+                                and b'collid' not in result.stderr
+                                and not destination.parent.exists())
         report_after = (entry_snapshot(refused_report)
                         if refused_report is not None else None)
         if name == 'missing-parent-budget':
@@ -272,8 +295,22 @@ def main():
                   and not execution.exists()
                   and not list(temporary.iterdir())
                   and not list(root.rglob('.refine-publication-*')))
+        route_control = None
+        if name in missing_outputs:
+            destination.parent.mkdir()
+            route_control = subprocess.run(result.args, cwd=root, env=case_env,
+                                           capture_output=True, timeout=45)
+            passed = (passed and route_control.returncode == 0
+                      and destination.is_file()
+                      and protected.read_bytes() == before
+                      and not list(root.rglob('.refine-publication-*')))
         row = dict(case=name, command=result.args, exit_status=result.returncode,
                    passed=passed, protected=str(protected),
+                   route_control=(None if route_control is None else
+                                  dict(command=route_control.args,
+                                       exit_status=route_control.returncode,
+                                       stdout=route_control.stdout.decode(errors='replace'),
+                                       stderr=route_control.stderr.decode(errors='replace'))),
                    before_sha256=hashlib.sha256(before).hexdigest(),
                    after_sha256=hashlib.sha256(protected.read_bytes()).hexdigest(),
                    before_identity=[identity.st_dev, identity.st_ino, identity.st_mode],

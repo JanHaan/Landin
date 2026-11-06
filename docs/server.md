@@ -120,10 +120,14 @@ Every source the module reads is published, so an error in a file the editor
 has not opened is still shown, and one that is fixed is cleared. Closing the
 last open file of a module clears sources only that module reported. Sources
 also reported by another open module are reanalysed through that module.
+Discarding an imported overlay also rechecks open modules that read it,
+using the remaining overlay or disk bytes.
 
 When the editor reports a disk change through
 `workspace/didChangeWatchedFiles`, the server rechecks every open module
-whose last report read that path, even if that file is not open. It asks
+whose last report read that path or another source in its module directory,
+even if that file is not open. This includes adding a source to a reached
+module. Standalone files remain independent of unrelated siblings. It asks
 clients that support dynamic watched-file registration to watch `**/*.ldn`.
 An open buffer still takes precedence over the file on disk. Editors that
 do not send watched-file notifications must arrange that notification to
