@@ -52,6 +52,7 @@ static int landin_publication_rebase_argument_locked(const char *arg, int direct
     char *out, size_t room);
 static int landin_publication_stage_write_locked(const char *path, const char *bytes,
     size_t size);
+static int landin_publication_stage_mkdir_locked(const char *path);
 static int landin_read_snapshot_locked(const char *path, char **bytes, size_t *size,
     uint64_t *device, uint64_t *inode);
 static int landin_publication_open_locked(const char *path, int deletion,
@@ -239,8 +240,8 @@ static struct arena *stage_arena(const char *path, const char **relative)
     struct arena *a;
     for (a = arenas; a; a = a->next) {
         size_t n = strlen(a->path);
-        if (a->refs && !strncmp(path, a->path, n) && path[n] == '/') {
-            *relative = path + n + 1; return a;
+        if (!strncmp(path, a->path, n) && (path[n] == '/' || !path[n])) {
+            *relative = path + n + (path[n] == '/'); return a;
         }
     }
     return NULL;
@@ -250,6 +251,8 @@ static int stage_open(const char *path, int flags, mode_t mode)
     const char *relative;
     struct arena *a = stage_arena(path, &relative);
     if (!a) return -2;
+    if (!a->refs) { errno = ESTALE; return -1; }
+    if (!*relative) { errno = EISDIR; return -1; }
     char *walk = strdup(relative), *save = NULL, *part;
     int fd = dup(a->private_fd), result = -1;
     if (!walk || fd < 0) { free(walk); if (fd >= 0) close(fd); return -1; }
@@ -258,6 +261,37 @@ static int stage_open(const char *path, int flags, mode_t mode)
         char *next = strtok_r(NULL, "/", &save);
         if (!strcmp(part, ".") || !strcmp(part, "..")) { errno = EINVAL; break; }
         if (!next) { result = openat(fd, part, flags | O_NOFOLLOW | O_CLOEXEC, mode); break; }
+        int child = openat(fd, part, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+        close(fd); fd = child;
+        if (fd < 0) break;
+        part = next;
+    }
+    if (fd >= 0) close(fd);
+    free(walk); return result;
+}
+static int landin_publication_stage_mkdir_locked(const char *path)
+{
+    const char *relative;
+    struct arena *a = stage_arena(path, &relative);
+    if (!a) return -2;
+    if (!a->refs) { errno = ESTALE; return -1; }
+    if (!*relative) {
+        struct stat st;
+        return fstat(a->private_fd, &st) == 0 && S_ISDIR(st.st_mode) ? 0 : -1;
+    }
+    char *walk = strdup(relative), *save = NULL, *part;
+    int fd = dup(a->private_fd), result = -1;
+    if (!walk || fd < 0) { free(walk); if (fd >= 0) close(fd); return -1; }
+    part = strtok_r(walk, "/", &save);
+    while (part) {
+        char *next = strtok_r(NULL, "/", &save);
+        if (!strcmp(part, ".") || !strcmp(part, "..")) { errno = EINVAL; break; }
+        if (!next) {
+            /* The arena already supplies privacy. Preserve ordinary directory
+               creation's umask, but never adopt an occupied staged entry. */
+            result = mkdirat(fd, part, 0777);
+            break;
+        }
         int child = openat(fd, part, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
         close(fd); fd = child;
         if (fd < 0) break;
@@ -803,10 +837,14 @@ static int landin_publication_open_locked(const char *path, int deletion,
 {
     struct publication *p = calloc(1, sizeof *p);
     char *parent_path = NULL;
-    int parent = -1, fd = -1;
+    int parent = -1, fd = -1, absence_conflict = 0;
+    int require_absent = (deletion & LANDIN_PUBLICATION_REQUIRE_ABSENT) != 0;
     *token = 0; if (stage_room) *stage = 0;
     if (!p) goto fail;
     p->expected_fd = -1;
+    if (deletion & ~(LANDIN_PUBLICATION_DELETE_ONLY | LANDIN_PUBLICATION_REQUIRE_ABSENT))
+        { errno = EINVAL; goto fail; }
+    deletion &= LANDIN_PUBLICATION_DELETE_ONLY;
     if (landin_cancellation_requested()) { errno = EINTR; goto fail; }
     p->path = strdup(path);
     parent = parent_for(path, root, &parent_path, &p->name);
@@ -815,7 +853,9 @@ static int landin_publication_open_locked(const char *path, int deletion,
         close(parent); free(parent_path); free(p->path); free(p->name); free(p);
         return -1;
     }
+    barrier("before-snapshot", p->path);
     if (fstatat(parent, p->name, &p->expected, AT_SYMLINK_NOFOLLOW) == 0) {
+        if (require_absent) { absence_conflict = 1; errno = EEXIST; goto fail; }
         if (S_ISDIR(p->expected.st_mode)) {
             p->expected_tree = snapshot_entry(parent, p->name);
             if (!p->expected_tree) goto fail;
@@ -850,7 +890,10 @@ static int landin_publication_open_locked(const char *path, int deletion,
 fail:
     {
         int failure = errno;
-        if (p && p->arena) {
+        if (absence_conflict) {
+            reason(why, room, "cannot prepare %s: destination exists but absence was required; choose another output or restart with its existing contents preserved",
+                   path);
+        } else if (p && p->arena) {
             char known[PATH_MAX + 80], location[PATH_MAX + 256];
             size_t length = strlen(p->arena->path);
             /* Arena paths end in /stage; the whole root remains inspectable
@@ -1176,6 +1219,13 @@ int landin_publication_stage_write(const char *path, const char *bytes, size_t s
 {
     registry_lock();
     int result = landin_publication_stage_write_locked(path, bytes, size);
+    registry_unlock();
+    return result;
+}
+int landin_publication_stage_mkdir(const char *path)
+{
+    registry_lock();
+    int result = landin_publication_stage_mkdir_locked(path);
     registry_unlock();
     return result;
 }

@@ -6,11 +6,15 @@ with Ada.Strings.Unbounded;
 package Landin.Platform.Publication is
    type Transaction is limited private;
 
+   --  Require_Absent constrains the host's actual initial snapshot. A later
+   --  arrival remains a conflict; an existing unconstrained reservation cannot
+   --  be upgraded by repeating Prepare with this flag.
    procedure Prepare
      (Group : in out Transaction; Files : Filesystem'Class; Path : String;
       Status : out Write_Status;
       Reason : out Ada.Strings.Unbounded.Unbounded_String;
-      Delete_Only : Boolean := False; Root : String := "");
+      Delete_Only : Boolean := False; Root : String := "";
+      Require_Absent : Boolean := False);
    function Stage_Path (Group : Transaction; Path : String) return String;
    procedure Protect
      (Group : in out Transaction; Files : Filesystem'Class; Path : String);
@@ -36,6 +40,7 @@ private
    type Publication_Entry is record
       Path, Stage : Ada.Strings.Unbounded.Unbounded_String;
       Handle : Publication_Handle := No_Publication;
+      Requires_Absence : Boolean := False;
    end record;
    package Entry_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Publication_Entry);

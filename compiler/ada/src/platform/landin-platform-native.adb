@@ -444,7 +444,8 @@ package body Landin.Platform.Native is
      (Host : Native_Filesystem; Path : String; Delete_Only : Boolean;
       Root : String; Handle : out Publication_Handle;
       Stage : out Unbounded.Unbounded_String; Status : out Write_Status;
-      Reason : out Unbounded.Unbounded_String)
+      Reason : out Unbounded.Unbounded_String;
+      Require_Absent : Boolean := False)
    is
       pragma Unreferenced (Host);
       package C renames Interfaces.C;
@@ -460,7 +461,8 @@ package body Landin.Platform.Native is
       Result : C.int;
    begin
       Result := Open_Transaction
-        (C.To_C (Path), Boolean'Pos (Delete_Only), C.To_C (Root), Token,
+        (C.To_C (Path), Boolean'Pos (Delete_Only)
+         + 2 * Boolean'Pos (Require_Absent), C.To_C (Root), Token,
          Stage_Buffer, Stage_Buffer'Length, Reason_Buffer,
          Reason_Buffer'Length);
       Handle := Publication_Handle (Token);
@@ -693,8 +695,17 @@ package body Landin.Platform.Native is
          return Interfaces.C.int
         with Import, Convention => C,
              External_Name => "landin_private_mkdir";
+      function Stage_Mkdir (Path : Interfaces.C.char_array)
+         return Interfaces.C.int
+        with Import, Convention => C,
+             External_Name => "landin_publication_stage_mkdir";
       Result : Interfaces.C.int;
    begin
+      Result := Stage_Mkdir (Interfaces.C.To_C (Path));
+      if Result /= -2 then
+         Status := (if Result = 0 then Write_Ok else Not_Writable);
+         return;
+      end if;
       Result := Private_Mkdir (Interfaces.C.To_C (Path));
       if Result /= -2 then
          Status := (if Result = 0 then Write_Ok else Not_Writable);
