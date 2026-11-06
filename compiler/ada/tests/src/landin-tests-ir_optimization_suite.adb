@@ -99,6 +99,7 @@ package body Landin.Tests.IR_Optimization_Suite is
    procedure In_Place_Parameters (Item : in out Landin.Testing.Context);
    procedure Module_Constants (Item : in out Landin.Testing.Context);
    procedure Proved_Checks (Item : in out Landin.Testing.Context);
+   procedure Contradictory_Bounds (Item : in out Landin.Testing.Context);
    procedure Dominators (Item : in out Landin.Testing.Context);
    procedure Choices_From_Computing_Arms
      (Item : in out Landin.Testing.Context);
@@ -2379,6 +2380,78 @@ package body Landin.Tests.IR_Optimization_Suite is
          IR.Storage_Address, 1, "an unchecked index proves nothing");
    end Proved_Checks;
 
+   --  D211: impossible comparisons cannot make the proof arithmetic leave
+   --  the operand's type, including the Folded boundary at u64'Last.
+   --  Neighbouring, reachable comparisons still retain their trap edges.
+   procedure Contradictory_Bounds (Item : in out Landin.Testing.Context) is
+      Targets : constant array (Positive range <>) of
+        Landin.Targets.Target_Facts :=
+          [Landin.Targets.Linux_X86_64, Landin.Targets.Cortex_M];
+      function Image (Value : Landin.Types.Folded) return String
+        is (Ada.Strings.Fixed.Trim
+              (Landin.Types.Folded'Image (Value), Ada.Strings.Both));
+   begin
+      for Target of Targets loop
+         for Kind in Landin.Types.Integer_Name loop
+            declare
+               Name : constant String := Landin.Types.Spelling (Kind);
+               Low : constant String :=
+                 Image (Landin.Types.Lowest (Kind, Target));
+               High : constant String :=
+                 Image (Landin.Types.Highest (Kind, Target));
+               Source : constant String :=
+                 "public empty: (a: " & Name & ") -> (r: " & Name & ") = "
+                 & "r = 0 if a < " & Low & " then r = a >> 3 end if "
+                 & "if a > " & High & " then r = a - 1 end if end empty "
+                 & "public low: (a: " & Name & ") -> (r: " & Name & ") = "
+                 & "r = 0 if a <= " & Low
+                 & " then r = a - 1 end if end low "
+                 & "public high: (a: " & Name & ") -> (r: " & Name & ") = "
+                 & "r = 0 if a >= " & High
+                 & " then r = a + 1 end if end high";
+            begin
+               for Objective in Opt.Objective loop
+                  declare
+                     Work : Landin.Stages.Compilation :=
+                       Landin.Stages.Create (Target);
+                     Checked : Natural := 0;
+                  begin
+                     Lower (Item, Work, Source);
+                     IR.Simplification.Run
+                       (Landin.Stages.Code (Work).all, Target, Objective);
+                     declare
+                        Code : IR.Unit renames
+                          Landin.Stages.Code (Work).all;
+                     begin
+                        IR.Verifier.Verify (Code, Target);
+                        --  Only the reachable boundary routines are
+                        --  counted; their updates must still trap.
+                        for I in 2 .. 3 loop
+                           for V in 1 .. IR.Value_Count
+                             (Code, IR.Item_Id (I))
+                           loop
+                              if IR.Op_Of
+                                  (Code, IR.Item_Id (I), IR.Value_Id (V))
+                                    in IR.Add | IR.Subtract
+                                and then not IR.Is_Unchecked
+                                  (Code, IR.Item_Id (I), IR.Value_Id (V))
+                              then
+                                 Checked := Checked + 1;
+                              end if;
+                           end loop;
+                        end loop;
+                     end;
+                     Landin.Testing.Check_Equal
+                       (Item, Checked, 2,
+                        Name & " retains both reachable boundary traps at "
+                        & Opt.Objective'Image (Objective));
+                  end;
+               end loop;
+            end;
+         end loop;
+      end loop;
+   end Contradictory_Bounds;
+
    --  Lengauer and Tarjan's tree over a hand-made graph with a join, a
    --  loop and an unreached block, then work that stays near-linear over
    --  a ladder whose every rung also jumps to one exit.
@@ -2708,6 +2781,8 @@ package body Landin.Tests.IR_Optimization_Suite is
         (Into, "ir opt", "module constants", Module_Constants'Access);
       Landin.Testing.Register
         (Into, "ir opt", "proved checks", Proved_Checks'Access);
+      Landin.Testing.Register
+        (Into, "ir opt", "contradictory bounds", Contradictory_Bounds'Access);
       Landin.Testing.Register
         (Into, "ir opt", "dominators", Dominators'Access);
       Landin.Testing.Register

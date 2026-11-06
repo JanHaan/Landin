@@ -447,6 +447,87 @@ package body Landin.Tests.Checking_Suite is
       Check_Source (Conforming => True);
    end Large_Loop_Frames_Stay_Off_The_Host_Stack;
 
+   --  D333 evaluates every slice operand under lenof, while a fixed-array
+   --  path or literal is measured without running its selectors/elements.
+   procedure Measured_Slices_Check_Origins
+     (Item : in out Landin.Testing.Context);
+
+   procedure Measured_Slices_Check_Origins
+     (Item : in out Landin.Testing.Context)
+   is
+      Prefix : constant String :=
+        "anchor: u32 = 5 mut kept: ptr u32 = ptr(0x1000) "
+        & "keep: (escaping p: ptr u32) -> (i: usize) = kept = p i = 0 "
+        & "end keep box: type = struct rows: [1][]u8 end box "
+        & "sliced: (escaping p: ptr u32) -> (bytes: []u8) = "
+        & "_ = keep(p) bytes = ""a"" end sliced "
+        & "made: (escaping p: ptr u32) -> (bytes: [1]u8) = "
+        & "_ = keep(p) bytes = [1] end made ";
+      procedure Check_Source
+        (Label, Expression : String; Accepted : Boolean;
+         Fixed_Array : Boolean := False);
+      procedure Check_Source
+        (Label, Expression : String; Accepted : Boolean;
+         Fixed_Array : Boolean := False)
+      is
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Order : Landin.Stages.Pipeline;
+         Src : constant Landin.Source.Source_Id := Landin.Stages.Add_Source
+           (Work, "measured-origins.ldn", Prefix
+            & "bad: () -> none = local: u32 = 5 "
+            & (if Fixed_Array then "rows: [1][1]u8 = [[1]] "
+               else "rows: [1][]u8 = [""a""] ")
+            & "bytes: [1]u8 = [1] value: box = (rows: [""a""]) "
+            & "_ = " & Expression & " end bad");
+         Ran : Natural;
+      begin
+         pragma Unreferenced (Src);
+         Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
+         Landin.Stages.Append (Order, Names'Access);
+         Landin.Stages.Append (Order, Checker'Access);
+         Ran := Landin.Stages.Run (Order, Work);
+         declare
+            Reports : constant Landin.Diagnostics.Diagnostic_List :=
+              Landin.Stages.Report (Work);
+         begin
+            Landin.Testing.Check_Equal (Item, Ran, 4, Label & " reaches flow");
+            Landin.Testing.Check
+              (Item, Landin.Stages.Failed (Work) /= Accepted
+               and then
+                 (if Accepted then Landin.Diagnostics.Count_Of
+                    (Reports, Landin.Diagnostics.Error) = 0
+                  else Landin.Diagnostics.Count (Reports) = 1
+                    and then Landin.Diagnostics.Code
+                      (Landin.Diagnostics.Get (Reports, 1)) = "L0314"),
+               Label & " has the expected origin verdict: "
+               & Landin.Stages.Rendered_Report (Work));
+         end;
+      end Check_Source;
+   begin
+      Check_Source ("slice element", "lenof rows[keep(addr local)]", False);
+      Check_Source
+        ("slice lower bound", "lenof bytes[keep(addr local)..<1]", False);
+      Check_Source
+        ("slice upper bound", "lenof bytes[0..<keep(addr local)]", False);
+      Check_Source
+        ("inclusive slice bound", "lenof bytes[0..keep(addr local)]", False);
+      Check_Source
+        ("nested field path", "lenof value.rows[keep(addr local)]", False);
+      Check_Source ("slice call", "lenof sliced(addr local)", False);
+      Check_Source ("fixed-array call", "lenof made(addr local)", False);
+      Check_Source
+        ("fixed-array path", "lenof rows[keep(addr local)]", True,
+         Fixed_Array => True);
+      Check_Source
+        ("array literal", "lenof ([keep(addr local)])", True);
+      Check_Source
+        ("module origin", "lenof rows[keep(addr anchor)]", True);
+      Check_Source
+        ("local slice length", "lenof bytes[0..<1]", True);
+   end Measured_Slices_Check_Origins;
+
    procedure Try_Failures_Check_Reference_Cleanups
      (Item : in out Landin.Testing.Context);
 
@@ -15511,6 +15592,9 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Register
         (Into, "checking", "try failures check reference cleanups",
          Try_Failures_Check_Reference_Cleanups'Access);
+      Landin.Testing.Register
+        (Into, "checking", "measured slices check origins",
+         Measured_Slices_Check_Origins'Access);
       Landin.Testing.Register
         (Into, "checking", "joined destinations keep escape obligations",
          Joined_Destinations_Keep_Escape_Obligations'Access);

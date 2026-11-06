@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: D211 emits literal and configured impossible unsigned branches without out-of-type proof bounds, preserving reachable shifts
+program: main.ldn
+status: 42
+constructs: 0150, 0160, 0260, 1030, 1530, 1960
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0

@@ -1,0 +1,46 @@
+--  D333: slice bases/selectors and direct calls run once, in order.
+--  The retained pointer always names module storage and is never read.
+absent: atom
+maybe: type = absent | ptr u32
+anchor: u32 = 5
+mut kept: maybe = absent
+mut calls: u32 = 0
+box: type = struct
+    rows: [1][]u8
+end box
+
+keep: (escaping p: ptr u32, at: usize, mark: u32) -> (i: usize) =
+    kept = p
+    calls = calls * 10 + mark
+    i = at
+end keep
+
+made: () -> (bytes: [1]u8) =
+    calls = calls * 10 + 6
+    bytes = [1]
+end made
+
+sliced: () -> (bytes: []u8) =
+    calls = calls * 10 + 7
+    bytes = "a"
+end sliced
+
+public main: () -> (code: i32) =
+    local: u32 = 5
+    rows: [1][]u8 = ["a"]
+    bytes: [1]u8 = [1]
+    fixed_rows: [1][1]u8 = [[1]]
+    value: box = (rows: ["a"])
+    total := lenof rows[keep(addr anchor, 0, 1)]
+             + lenof bytes[keep(addr anchor, 0, 2)..<keep(addr anchor, 1, 3)]
+             + lenof bytes[0..keep(addr anchor, 0, 4)]
+             + lenof value.rows[keep(addr anchor, 0, 5)]
+             + lenof made() + lenof sliced()
+             + lenof fixed_rows[keep(addr local, 0, 9)]
+             + lenof ([keep(addr local, 0, 9)])
+    code = if calls == 1234567 and kept <> absent and total == 8 then
+               42
+           else
+               1
+           end if
+end main
