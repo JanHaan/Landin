@@ -131,8 +131,9 @@ Darwin and FreeBSD reach their systems only through their C libraries, so
 for a target with no hosted system or outside checking, executable or
 assembly emission.
 
-A static request is refused with L0500 before any tool runs, and the note
-names `--link=libc`, when no library holding `platform/linux` was found, when the
+A static executable or assembly request is refused with L0500 before any tool
+runs, and the note names `--link=libc`, when no library holding `platform/linux`
+was found, when the
 program asks for `linker.library` or `linker.directory` or the request names
 `-L`, or when it refers to a bodyless external
 symbol that no program item defines. That last check counts only what the
