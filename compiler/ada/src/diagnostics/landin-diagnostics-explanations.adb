@@ -1635,9 +1635,9 @@ package body Landin.Diagnostics.Explanations is
                & " one of the wrong shape, or binds for another ABI than `"
                & "--target` names. The message names the key or the declar"
                & "ation. A policy's every key is described in the [binding"
-               & " policy reference](https://www.701.dev/bindings.html), a"
-               & "lso available as `bindings/README.md` in a source checko"
-               & "ut.",
+               & " policy reference](../bindings/README.md). With an insta"
+               & "lled compiler, run `refine help bindings` for the addres"
+               & "s of its generated reading copy.",
             when Catalogue.Bindings_Clang_Refused =>
                "The Clang `refine bindings` was given cannot be used as "
                & "asked (D820): it cannot be run, a root it is given is no"

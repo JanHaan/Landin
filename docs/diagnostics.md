@@ -2290,8 +2290,8 @@ a key twice, is not schema 1, lacks a key it needs or names one refine does
 not read, gives one of the wrong shape, or binds for another ABI than
 `--target` names. The message names the key or the declaration. A policy's
 every key is described in the
-[binding policy reference](https://www.701.dev/bindings.html), also available
-as `bindings/README.md` in a source checkout.
+[binding policy reference](../bindings/README.md). With an installed compiler,
+run `refine help bindings` for the address of its generated reading copy.
 
 ### L0580
 
