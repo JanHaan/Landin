@@ -162,7 +162,7 @@ class Boot(unittest.TestCase):
              b' y=00006000 w=00000001\x03\nS')
 
     def test_a_power_on_boot_passes(self):
-        got = BOARD.boot(Line(self.FRAME))
+        got = BOARD.boot(BOARD.ReceiveView(Line(self.FRAME)))
         self.assertEqual(got['rcc_rsr'], 0x00fa0000)
         self.assertEqual(got['cpacr'], 0)
 
@@ -178,11 +178,85 @@ class Boot(unittest.TestCase):
                          (b'w=00000001', b'w=00000002')):   # a byte before the host's
             with self.subTest(reading=new):
                 with self.assertRaises(BOARD.Failed):
-                    BOARD.boot(Line(self.FRAME.replace(old, new)))
+                    BOARD.boot(BOARD.ReceiveView(Line(self.FRAME.replace(old, new))))
 
     def test_the_reserved_bit_of_rcc_rsr_is_not_read(self):
-        self.assertEqual(BOARD.boot(Line(self.FRAME.replace(b'r=00fa0000', b'r=00fe0000')))
+        self.assertEqual(BOARD.boot(BOARD.ReceiveView(Line(self.FRAME.replace(b'r=00fa0000', b'r=00fe0000'))))
                          ['rcc_rsr'], 0x00fe0000)
+
+    def test_boundary_excludes_only_the_unframed_prefix(self):
+        for prefix in (b'', b'\xee\xff', b'\xff\xff\xff', b'S'):
+            raw = Line(prefix + self.FRAME)
+            view = BOARD.ReceiveView(raw)
+            BOARD.boot(view)
+            self.assertEqual(view.received, b'S')
+            self.assertEqual(raw.received, prefix + self.FRAME)
+            self.assertEqual(view.offset, len(prefix) + len(self.FRAME) - 1)
+
+    def test_first_frame_must_be_valid_and_unique(self):
+        frame = self.FRAME[:-1]
+        invalid = (b'\x03', frame.replace(b'\x02b', b'\x02t'),
+                   frame.replace(b' r=', b' z='), frame.replace(b' r=', b' r=00000000 r='),
+                   frame.replace(b'r=00fa0000', b'r=xxxxxxxx'),
+                   frame.replace(b'\x02b', b'\x02b\x02'),
+                   frame.replace(b'\x03\n', b'\x03!'),
+                   frame.replace(b'w=00000001', b'w=00000002'), frame + frame)
+        for bad in invalid:
+            with self.subTest(bad=bad), self.assertRaises(BOARD.Failed):
+                BOARD.boot(BOARD.ReceiveView(Line(bad + frame)))
+
+    def test_prefix_start_does_not_supply_echo(self):
+        view = BOARD.ReceiveView(Line(b'S' + self.FRAME[:-1]))
+        BOARD.boot(view)
+        with self.assertRaises(BOARD.Failed):
+            view.wait(lambda s: BOARD.echo_of(s).startswith(BOARD.START), 1, 'START missing')
+
+    def test_later_duplicate_and_orphan_are_refused(self):
+        view = BOARD.ReceiveView(Line(self.FRAME))
+        BOARD.boot(view)
+        for suffix in (self.FRAME[:-1], b'\x03'):
+            view.raw.received = self.FRAME + suffix
+            with self.assertRaises(BOARD.Failed):
+                _ = view.received
+
+    def test_split_boot_frame_and_start(self):
+        class Split(Line):
+            def wait(self, predicate, seconds, what):
+                for end in range(len(self.received) + 1):
+                    part = self.received[:end]
+                    if predicate(part):
+                        return part
+                raise BOARD.Failed(what)
+        view = BOARD.ReceiveView(Split(b'\xee\xff' + self.FRAME))
+        BOARD.boot(view)
+        self.assertEqual(view.wait(lambda s: BOARD.echo_of(s).startswith(b'S'), 1, 'START'), b'S')
+
+    def test_receive_evidence_preserves_prefix_and_uses_anchored_gaps(self):
+        raw = Line(b'\xee\xff' + self.FRAME + b'1')
+        raw.sent = b'S1'
+        view = BOARD.ReceiveView(raw)
+        BOARD.boot(view)
+        evidence = BOARD.receive_evidence(view, raw.received)
+        self.assertEqual(evidence['pre_boot'], dict(hex='eeff', length=2, start_offset=0,
+                                                   end_offset=2, boot_end_offset=view.offset))
+        self.assertEqual(evidence['echo_gaps'], [])
+        self.assertEqual(evidence['frames'][0]['tag'], 'b')
+        raw.received += b'\x02t x='
+        self.assertIn('incomplete', BOARD.receive_evidence(view, raw.received)['receive_evidence_error'])
+        raw.received += b'\x02'
+        self.assertIn('nested', BOARD.receive_evidence(view, raw.received)['receive_evidence_error'])
+        unanchored = BOARD.receive_evidence(BOARD.ReceiveView(raw), raw.received)
+        self.assertEqual(unanchored['receive_evidence_error'], 'boot boundary not established')
+        self.assertEqual(unanchored['pre_boot']['hex'], 'eeff')
+        self.assertIsNone(unanchored['pre_boot']['boot_end_offset'])
+
+    def test_post_boundary_echo_requires_exact_order_and_content(self):
+        expected = b'S1\x11A0\x11'
+        BOARD.require_echo(expected, expected)
+        for actual in (b'Sx1\x11A0\x11', b'1\x11A0\x11', b'1S\x11A0\x11',
+                       b'S1\x11B0\x11'):
+            with self.subTest(actual=actual), self.assertRaises(BOARD.Failed):
+                BOARD.require_echo(actual, expected)
 
 
 SOFT = """08003450 <exercise32>:
@@ -314,7 +388,9 @@ class LockLifecycle(unittest.TestCase):
                     '--cascade=1-1']
             argv += ['--objdump=objdump', '--readelf=readelf']
             built = (elf, b'', {}, {'float_unit': 'passed'})
-            def scenario(*_):
+            def scenario(console, *_):
+                console.offset = 0
+                console.boot_frame = {'tag': 'b'}
                 if failure == 'usb':
                     pace.blocked = 'xhci_hcd: HC died'
                     raise BOARD.common.USBGuardError(pace.blocked)

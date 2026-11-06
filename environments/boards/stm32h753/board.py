@@ -324,6 +324,97 @@ def power_cycle(run, args):
     settle(run, args)
 
 
+def parse_stream(stream):
+    """Strict complete frames and echo; a final incomplete frame may be arriving."""
+    found, echo, i = [], bytearray(), 0
+    while i < len(stream):
+        if stream[i] == common.ETX:
+            raise Failed('orphan ETX in UART stream at offset %d' % i)
+        if stream[i] != common.STX:
+            echo.append(stream[i])
+            i += 1
+            continue
+        start = i
+        i += 1
+        while i < len(stream) and stream[i] != common.ETX:
+            require(stream[i] != common.STX, 'nested STX in UART frame at offset %d' % i)
+            i += 1
+        if i == len(stream) or i + 1 == len(stream):
+            break
+        require(stream[i + 1] == common.LF, 'UART frame missing LF at offset %d' % i)
+        body = stream[start + 1:i]
+        require(re.fullmatch(rb'[A-Za-z](?: [a-z]=[0-9a-f]{8})+', body) is not None,
+                'malformed UART frame at offset %d' % start)
+        parts = body.decode('ascii').split(' ')
+        fields = {}
+        for part in parts[1:]:
+            key, value = part.split('=')
+            require(key not in fields, 'duplicate field %s in UART frame' % key)
+            fields[key] = int(value, 16)
+        found.append((parts[0], fields, start, i + 2))
+        i += 2
+    return found, bytes(echo)
+
+
+class ReceiveView:
+    """Keep raw UART evidence while exposing only bytes after the boot frame."""
+    def __init__(self, raw):
+        self.raw = raw
+        self.offset = None
+        self.boot_frame = None
+
+    @property
+    def sent(self):
+        return self.raw.sent
+
+    def view(self, raw):
+        data = raw[self.offset:]
+        frames, _ = parse_stream(data)
+        require(not any(tag == 'b' for tag, _, _, _ in frames), 'duplicate boot frame')
+        start = data.rfind(bytes([common.STX]))
+        if start >= 0 and (common.ETX not in data[start:] or data.endswith(bytes([common.ETX]))):
+            return data[:start]
+        return data
+
+    @property
+    def received(self):
+        return self.view(bytes(self.raw.received)) if self.offset is not None else b''
+
+    def send(self, *args, **kwargs):
+        return self.raw.send(*args, **kwargs)
+
+    def wait(self, predicate, seconds, what):
+        raw = self.raw.wait(lambda s: predicate(self.view(s)), seconds, what)
+        return self.view(raw)
+
+    def close(self):
+        self.raw.close()
+
+
+def receive_evidence(console, raw):
+    """Summarize a validated view without obscuring the primary failure."""
+    start = raw.find(bytes([common.STX]))
+    if start < 0:
+        start = len(raw)
+    result = dict(pre_boot=dict(hex=raw[:start].hex(), length=start,
+                                start_offset=0, end_offset=start,
+                                boot_end_offset=console.offset))
+    if start:
+        print('UART pre-boot bytes at offsets 0..%d: %s' % (start - 1, raw[:start].hex()), file=sys.stderr)
+    if console.offset is None:
+        result['receive_evidence_error'] = 'boot boundary not established'
+        return result
+    try:
+        view = console.received
+        result['frames'] = [console.boot_frame] + common.frame_record(view)
+        result['echo_gaps'] = common.gaps(bytes(console.sent), echo_of(view))
+        if len(view) != len(raw) - console.offset:
+            result['receive_evidence_error'] = 'incomplete UART frame at end of capture'
+    except Failed as error:
+        result['receive_evidence_error'] = str(error)
+    return result
+
+
 def report(console):
     """Ask for the next telemetry frame and return it."""
     return common.ask(console, REPORT, 't', len(common.tagged(bytes(console.received), 't')))
@@ -348,8 +439,12 @@ def wait_for_path(path, seconds):
 
 def boot(console, mode='boot', vector=None):
     """The boot frame, which the firmware writes once a byte has arrived."""
-    stream = console.wait(lambda s: common.tagged(s, 'b'), 5, 'the boot frame')
-    b = common.tagged(stream, 'b')[0]
+    stream = console.raw.wait(lambda s: bool(parse_stream(s)[0]), 5, 'the boot frame')
+    frames, _ = parse_stream(stream)
+    tag, b, start, end = frames[0]
+    require(tag == 'b', 'first UART frame is %s, not boot' % tag)
+    require(set(b) == set('rvacqyw'), 'boot frame has missing or unexpected fields')
+    require(not any(tag == 'b' for tag, _, _, _ in frames[1:]), 'duplicate boot frame')
     if mode == 'boot':
         require(b['r'] & RSR_FLAGS == RSR_POWER_ON,
                 'RCC_RSR is %08x, not the flags of a power-on reset alone' % b['r'])
@@ -361,6 +456,8 @@ def boot(console, mode='boot', vector=None):
             'PWR_CSR1 reads %08x: the voltage levels are not valid at VOS3' % b['y'])
     require(b['w'] == len(START), '%d bytes had arrived when the boot frame was written; the'
             ' host sent %d' % (b['w'], len(START)))
+    console.offset = end
+    console.boot_frame = dict(tag='b', **{k: '%08x' % v for k, v in b.items()})
     return dict(rcc_rsr=b['r'], vtor=b['v'], cpacr=b['a'], ccr=b['c'],
                 pwr_cr3=b['q'], pwr_csr1=b['y'])
 
@@ -375,12 +472,19 @@ def discarded(sent, spans):
     return bytes(out + sent[at:])
 
 
+def require_echo(echo, expect):
+    require(echo == expect, 'the echo differs from what was sent, first at byte %d'
+            % next((i for i, (a, b) in enumerate(zip(echo, expect)) if a != b),
+                   min(len(echo), len(expect))))
+
+
 def scenario(console, seed, mode='boot', vector=None):
     """The board-port scenario and its oracle.  Returns the verdicts, the
     last telemetry frame and the bytes the epoch then running has taken."""
     verdicts = {}
-    echoed(console, START, 10)
+    console.send(START)
     verdicts['boot'] = boot(console, mode, vector)
+    console.wait(lambda s: echo_of(s).startswith(START), 10, 'the echo of START')
     # The shared scenario (D593), the bytes the emulator lane's application
     # is fed, 1, A and 0: each echoed, 1 setting PB0 and 0 clearing it,
     # which its input data register reads back.
@@ -455,9 +559,7 @@ def scenario(console, seed, mode='boot', vector=None):
     sent = bytes(console.sent)
     expect = discarded(sent, [(sent.index(burst), len(burst)),
                               (sent.index(lost) + HELD, len(lost) - HELD)])
-    require(echo == expect, 'the echo differs from what was sent, first at byte %d'
-            % next((i for i, (a, b) in enumerate(zip(echo, expect)) if a != b),
-                   min(len(echo), len(expect))))
+    require_echo(echo, expect)
     require(final['h'] == len(expect), 'handled %d bytes, not %d' % (final['h'], len(expect)))
     verdicts['epochs'] = dict(flagged_burst=len(lost), held_by_receiver=HELD,
                               restarts=final['c'], epochs=final['d'], laps=final['w'],
@@ -595,7 +697,7 @@ def main():
         tty = (wait_for_path(args.console, args.tty_seconds) if args.console
                else common.wait_for_tty(args.serial, args.tty_seconds))
         result['tty'] = str(tty)
-        console = common.TtyConsole(tty)
+        console = ReceiveView(common.TtyConsole(tty))
         if args.mode == 'ram':
             result['warm_load'] = common.ram_load(run, args, 'stm32h753', elf)
         verdicts, final, used = scenario(console, args.seed, args.mode,
@@ -605,6 +707,8 @@ def main():
         require(last['c'] == final['c'], 'the float exercise restarted the ring')
         result['verdicts'] = verdicts
         console.close()
+        require(len(console.received) == len(console.raw.received) - console.offset,
+                'incomplete UART frame at end of capture')
         result['swd'] = cross_check(run, args, names, last)
         boot = verdicts['boot']
         # The float unit is the M7's only once the image uses it, the
@@ -623,12 +727,11 @@ def main():
     finally:
         if console:
             console.close()
-            (args.output / 'uart.bin').write_bytes(bytes(console.received))
+            raw = bytes(console.raw.received)
+            (args.output / 'uart.bin').write_bytes(raw)
             (args.output / 'sent.bin').write_bytes(bytes(console.sent))
-            result['uart_sha256'] = hashlib.sha256(bytes(console.received)).hexdigest()
-            result['frames'] = common.frame_record(bytes(console.received))
-            result['echo_gaps'] = common.gaps(bytes(console.sent),
-                                              echo_of(bytes(console.received)))
+            result['uart_sha256'] = hashlib.sha256(raw).hexdigest()
+            result.update(receive_evidence(console, raw))
         if lock_held:
             common.finish_boot(args, result, lambda: restore_fixed(run, args))
         common.retain_kernel_usb(args.pace, result)

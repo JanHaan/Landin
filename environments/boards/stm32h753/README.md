@@ -84,7 +84,14 @@ The firmware writes frames between the echoed bytes in the RP2040 board's
 form: STX, a tag letter, a field per key, ` k=` and eight lowercase hex
 digits, then ETX and LF. The host never sends STX or ETX. A boot check's power cycle
 re-enumerates the ST-LINK's virtual COM port. In both modes the firmware
-waits for the host's first byte, `S`, before writing its boot frame.
+waits for the host's first byte, `S`, before writing its boot frame. The host
+validates that first complete frame and its boot readings before counting echoes
+from the byte after its LF. Any unframed bytes before it are reported on stderr
+and in `result.json` as `pre_boot` (hex bytes, length, and offsets into the raw
+capture); their origin is not determined. `uart.bin` and its hash retain the
+entire capture. A malformed or unexpected first frame, or another boot frame,
+leaves the run failed. If the boundary cannot be established, the result says
+so instead of reporting echo gaps from an unanchored capture.
 
 | Tag | When | Fields |
 |---|---|---|
