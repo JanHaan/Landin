@@ -158,8 +158,8 @@ package body Landin.Server.Sessions is
       Missing   : Text_Maps.Map;
       Cached    : Analysis_Cache;
       --  The inverse of Published, maintained when a report is replaced or
-      --  its last open document closes.  Edits need only visit users of the
-      --  edited path.
+      --  its last open document closes.  A source change visits users of
+      --  its path and its module directory's published sources.
       Path_Users : Path_User_Maps.Map;
 
       procedure Add_User (Path, Key : String);
@@ -658,6 +658,29 @@ package body Landin.Server.Sessions is
                Stale.Include (User);
             end loop;
          end if;
+         --  A module is its directory's source inventory.  A newly added
+         --  file has no prior path users, but changes every compilation
+         --  which reached another source in that same directory.
+         for Position in Path_Users.Iterate loop
+            declare
+               Known : constant String := Path_User_Maps.Key (Position);
+               Last_Slash : constant Natural :=
+                 Ada.Strings.Fixed.Index
+                   (Known, "/", Ada.Strings.Backward);
+            begin
+               if Directory /= "" and then Last_Slash > Known'First
+                 and then Known (Known'First .. Last_Slash - 1) = Directory
+               then
+                  for User of Path_User_Maps.Element (Position) loop
+                     --  With no roots, an entry source is analysed alone;
+                     --  its siblings do not belong to that compilation.
+                     if User /= Known then
+                        Stale.Include (User);
+                     end if;
+                  end loop;
+               end if;
+            end;
+         end loop;
          for Held of Store.Open loop
             declare
                Key : constant String := Landin.Server.Documents.Module_Key
@@ -1113,6 +1136,7 @@ package body Landin.Server.Sessions is
                begin
                   Clear (Cached);
                   Landin.Server.Documents.Close (Store, URI);
+                  Mark_Stale_Path (Closing_Path);
                   for Held of Store.Open loop
                      if Landin.Server.Documents.Module_Key
                           (Store, Unbounded.To_String (Held.URI)) = Key
