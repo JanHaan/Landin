@@ -2155,6 +2155,8 @@ int main(void) { return f(36) != 37; }
         expected = {name: (output / name).read_bytes() for name in names}
         nested = parent / "missing/child/generated"
         command = self.command(parent, sysroot, includes, nested)
+        command[command.index("--out-dir") + 1] = (
+            str(parent / "missing") + "//child/./generated")
         result = subprocess.run(command, capture_output=True, text=True, timeout=60)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual({name: (nested / name).read_bytes() for name in names}, expected)

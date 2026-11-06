@@ -1039,7 +1039,8 @@ package body Landin.Commands.Bindings is
                   if US.To_String (Candidate) = Path then
                      Report (Cat.Bindings_Output_Refused,
                              "cannot establish the output directory " & Path
-                             & "; name an accessible directory with --out-dir");
+                             & "; name an accessible directory"
+                             & " with --out-dir");
                      return False;
                   end if;
                end;
@@ -1054,6 +1055,24 @@ package body Landin.Commands.Bindings is
                     & US.To_String (Candidate)
                     & "; name an accessible directory with --out-dir");
             return False;
+         end if;
+         if US.Length (New_Root) > 0 then
+            declare
+               Path : constant String := US.To_String (Out_Dir);
+               First : Positive := Path'First + US.Length (New_Root);
+            begin
+               for Index in First .. Path'Last + 1 loop
+                  if Index > Path'Last or else Path (Index) = '/' then
+                     if Path (First .. Index - 1) = ".." then
+                        Report (Cat.Bindings_Output_Refused,
+                                "the missing output tree contains ..; name"
+                                & " its directory without .. with --out-dir");
+                        return False;
+                     end if;
+                     First := Index + 1;
+                  end if;
+               end loop;
+            end;
          end if;
          Has_Group := True;
          if US.Length (New_Root) > 0 then
@@ -1078,25 +1097,45 @@ package body Landin.Commands.Bindings is
          return True;
       end Prepare_Outputs;
 
+      function Staging_Directory return String;
+
+      function Staging_Directory return String is
+         Root : constant String := US.To_String (New_Root);
+         Path : constant String := US.To_String (Out_Dir);
+         Directory : US.Unbounded_String := US.To_Unbounded_String
+           (Pub.Stage_Path (Group, Root));
+         First : Positive := Path'First + Root'Length;
+      begin
+         for Index in First .. Path'Last + 1 loop
+            if Index > Path'Last or else Path (Index) = '/' then
+               declare
+                  Part : constant String := Path (First .. Index - 1);
+               begin
+                  if Part not in "" | "." then
+                     US.Append (Directory, "/" & Part);
+                  end if;
+               end;
+               First := Index + 1;
+            end if;
+         end loop;
+         return US.To_String (Directory);
+      end Staging_Directory;
+
       function Staged_Output (Index : B.Output_Index) return String;
 
       function Staged_Output (Index : B.Output_Index) return String is
          Root : constant String := US.To_String (New_Root);
-         Output_Root : constant String := US.To_String (Out_Dir);
       begin
          if Root = "" then
             return Pub.Stage_Path (Group, Destination (Index));
          end if;
-         return Pub.Stage_Path (Group, Root)
-           & Output_Root (Output_Root'First + Root'Length .. Output_Root'Last)
-           & "/" & B.Output_Name (Index);
+         return Staging_Directory & "/" & B.Output_Name (Index);
       end Staged_Output;
 
       function Make_Staged_Directories return Boolean;
 
       function Make_Staged_Directories return Boolean is
          Root : constant String := US.To_String (New_Root);
-         Output_Root : constant String := US.To_String (Out_Dir);
          Status : Platform.Write_Status;
       begin
          if Root = "" then
@@ -1104,9 +1143,7 @@ package body Landin.Commands.Bindings is
          end if;
          declare
             Stage : constant String := Pub.Stage_Path (Group, Root);
-            Directory : constant String := Stage
-              & Output_Root
-                (Output_Root'First + Root'Length .. Output_Root'Last);
+            Directory : constant String := Staging_Directory;
          begin
             --  Each call remains beneath the registered private artifact;
             --  no public ancestor is made or reopened to fill its tree.
