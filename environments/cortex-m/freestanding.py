@@ -37,7 +37,11 @@ def imports(program):
 
 def linker_closure(mapping, helper):
     loads = re.findall(r'^LOAD (.+)$', mapping, re.MULTILINE)
-    require(loads[:2] == ['core.elf.o', helper]
+    # The pinned linker workspace spells its declared object with './'.
+    # Accept that exact spelling too; other directories and extra inputs
+    # still fail the closure check. Keep the actual map spelling in evidence.
+    require(len(loads) >= 2 and loads[0] in ('core.elf.o', './core.elf.o')
+            and loads[1] == helper
             and loads[2:] in ([], ['linker stubs']),
             'undeclared linker input: '+repr(loads))
     members = sorted(set(re.findall(re.escape(helper)+r'\(([^)]+)\)', mapping)))

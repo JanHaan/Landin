@@ -156,13 +156,18 @@ class ProbeFailures(unittest.TestCase):
                 imports('import core/'+name)
         helper = '/tools/thumb/v6-m/nofp/libgcc.a'
         base = 'LOAD core.elf.o\nLOAD '+helper+'\n'
-        for suffix in ('', 'LOAD linker stubs\n'):
-            self.assertEqual(linker_closure(base+suffix, helper)[0][:2],
-                             ['core.elf.o', helper])
+        for object_name in ('core.elf.o', './core.elf.o'):
+            for suffix in ('', 'LOAD linker stubs\n'):
+                mapping = base.replace('core.elf.o', object_name) + suffix
+                self.assertEqual(linker_closure(mapping, helper)[0][:2],
+                                 [object_name, helper])
         for bad in (base+'LOAD libc.a\n', base+'LOAD crt0.o\n',
                     base.replace(helper, '/tools/libgcc.a'),
                     base.replace('LOAD core.elf.o\n', ''),
-                    base+'LOAD linker stubs\nLOAD linker stubs\n'):
+                    base+'LOAD linker stubs\nLOAD linker stubs\n',
+                    *(base.replace('core.elf.o', name) for name in
+                      ('other/core.elf.o', '../core.elf.o',
+                       './core.elf.o/../core.elf.o'))):
             with self.assertRaises(RuntimeError):
                 linker_closure(bad, helper)
         self.assertEqual(set(programs()), {
