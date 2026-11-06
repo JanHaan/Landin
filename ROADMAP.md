@@ -3132,7 +3132,9 @@ description-request guidance and report contents. SR-324 and SR-379 remain
 for local cross-target assembly validation and child-process runner support;
 SR-702 for Darwin ABI-fixture execution; SR-721 for shared script hang
 guards; SR-783 and SR-785 for gate-inventory controls and workflow linting;
-and SR-812 for verification across partial rerun attempts. SR-703 retains
+and SR-812 for verification across partial rerun attempts. SR-773 retains
+the completed-job log route while its overall run is active, encountered
+again while following this candidate. SR-703 retains
 the staged-object debug-map residue and unmeasured full-debug
 reproducibility limits. SR-814 retains unsupported relative or indirect
 tool inputs and Clang dependencies escaping their private workspace.
@@ -3142,8 +3144,8 @@ review #51's missing-report-parent diagnostic variant for R13.77.
 SR-806 retains #110's cleanup-refusal state summary for R13.78. These
 triggers are restated rather than importing unrelated fixes into publication.
 
-The item remains active: complete candidate software and physical-board
-gates have not run. FreeBSD evidence is native production C adapter
+The item remains active pending completion of the required software and
+physical-board gates. FreeBSD evidence is native production C adapter
 coverage, separate from the generated-program corpus; no FreeBSD-hosted Ada
 compiler, command-reproducer run or local native arm64 execution is claimed.
 The literal host criterion uses Jan's accepted scope: Linux/Darwin command

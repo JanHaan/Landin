@@ -257,19 +257,26 @@ class BuildIdentity(unittest.TestCase):
 class CheckoutInputs(unittest.TestCase):
     """Every file of compiler/ada is an input of the build or named here."""
 
-    NOT_INPUTS = {'compiler/ada/README.md', 'compiler/ada/TOOLCHAIN.md'}
+    NOT_INPUTS = {
+        'compiler/ada/README.md',
+        'compiler/ada/TOOLCHAIN.md',
+        # Compiled independently by test_publication_native.py and the
+        # FreeBSD guest controls, rather than either GPRbuild project.
+        'compiler/ada/tests/native/publication.c',
+    }
 
-    def test_every_compiler_file_is_an_input_or_prose(self):
+    def test_every_compiler_file_has_a_build_classification(self):
         listed = subprocess.run(['git', '-C', str(ROOT), 'ls-files', '-z',
                                  'compiler/ada'], capture_output=True,
                                 check=True).stdout
         tracked = {name.decode() for name in listed.split(b'\0') if name}
         inputs = set(IDENTITY.inputs(ROOT))
         unclassified = sorted(tracked - inputs - self.NOT_INPUTS)
-        self.assertEqual(unclassified, [], 'a file under compiler/ada that no'
-                         ' project names reaches no object; name it in'
-                         ' CheckoutInputs.NOT_INPUTS if that is so, or in a'
-                         ' project file if it is an input')
+        self.assertEqual(unclassified, [], 'a file under compiler/ada has no'
+                         ' GPRbuild input classification; name it in'
+                         ' CheckoutInputs.NOT_INPUTS if it deliberately stays'
+                         ' outside those projects, or in a project file if'
+                         ' it is an input')
         self.assertEqual(sorted(self.NOT_INPUTS & inputs), [])
 
 
