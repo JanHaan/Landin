@@ -4,7 +4,7 @@ These tools build and exercise eight supported ports: RP2040, RP2350 Arm,
 RP2350 Hazard3, STM32H753, ESP32-C3, ESP32-C5, ESP32 and ESP32-S3. Both RP2350 ports use the
 same physical Pico 2. Other boards on the rig are not selected by these
 commands. The tools serve the maintainer's rig; to load an image onto a
-board of your own, see [the firmware guide](../../docs/targets.md#cortex-m0-firmware-images).
+board of your own, see [the firmware guide](../../docs/targets.md#loading-an-image-onto-your-own-board).
 
 Build on epycmicro in Landin's pinned environment. The tools and physical
 oracles run on rigpi, by hand through `run.py` or in the gate through
