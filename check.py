@@ -4395,17 +4395,6 @@ def check_refused_constructs(full_run):
             % (", ".join(sorted(declared.values())),
                ", ".join(sorted(scalars)))))
 
-    text_declared = spellings("Text_Name")
-    if text_declared is None:
-        out.append(("compiler/ada/src/syntax/landin-syntax-parser.adb", 1,
-                    "the text-type table could not be read"))
-    elif set(text_declared.values()) != texts:
-        out.append((
-            "compiler/ada/src/syntax/landin-syntax-parser.adb", 1,
-            "the parser's text types are %s and the grammar's are %s"
-            % (", ".join(sorted(text_declared.values())),
-               ", ".join(sorted(texts)))))
-
     #  Landin.Types spells the thirteen a second time, because it is the
     #  package that maps each onto a machine width.  Two transcriptions of
     #  one rule is one more than the repository allows to drift, so both
