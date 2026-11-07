@@ -180,8 +180,10 @@ entry that describes it, and put a new one where a reader would look for it.
 ### CPU feature levels
 
 A build assumes a level of its target's family, selected with `--level=`,
-each defaulting to what the backend always emitted. `refine targets` lists
-them, and [the target contracts](targets.md) say what each selects.
+each defaulting to what the backend always emitted. A level the target's
+family does not have is refused with the levels it does have.
+`refine targets` lists them, and [the target contracts](targets.md) say
+what each selects.
 
 | family | levels |
 | --- | --- |
