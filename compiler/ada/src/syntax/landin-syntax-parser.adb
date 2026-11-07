@@ -3296,11 +3296,11 @@ package body Landin.Syntax.Parser is
                   Complain
                     (Item    => Syn.Nesting_Too_Deep,
                      Where   => Here,
-                     Message => "this exceeds the compiler nesting limit of"
+                     Message => "this exceeds the compiler's nesting limit of"
                                 & Positive'Image (Nesting_Limit),
-                     Note    => "split the nested construct into smaller"
-                                & " routines; parsing stops here at this"
-                                & " implementation limit",
+                     Note    => "an implementation limit, and parsing stops"
+                                & " here; split the nest into smaller"
+                                & " routines",
                      Related => Nest_Root,
                      Because => "the outermost of the nest");
                   Nesting_Refused := True;

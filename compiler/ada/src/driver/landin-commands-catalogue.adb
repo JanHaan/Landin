@@ -448,14 +448,14 @@ package body Landin.Commands.Catalogue is
          end if;
       end loop;
       US.Append (Text, LF
-        & "Shared options work before or after the command, except lsp takes"
-        & LF & "only --help. Values may use"
+        & "Shared options work before or after the command. Values may use"
         & LF & "a space or '='. "
         & (if Command = Run
            then "'--' begins the program's arguments; @FILE"
            else "Use '--' before literal operands; @FILE")
         & " reads"
         & LF & "a response file. Single-valued options may be given once."
+        & LF & "Of the shared options, lsp takes only --help."
         & LF);
       case Command is
          when Overview =>
@@ -496,14 +496,11 @@ package body Landin.Commands.Catalogue is
                  & LF & "./-name.ldn. The program runs in this directory with"
                  & LF & "this terminal, and refine exits with its status, or"
                  & LF & "with 128 and the number of the signal that ended it."
-                 & LF & "While the program runs, Ctrl-C interrupts its"
-                 & " foreground"
-                 & LF & "process group. A supervisor signalling refine alone"
-                 & LF & "should send SIGTERM (or SIGHUP), which refine"
-                 & " forwards"
-                 & LF & "before cleanup. SIGINT and SIGQUIT sent only to"
-                 & " refine"
-                 & LF & "are ignored."
+                 & LF & "Ctrl-C reaches the program through the terminal's"
+                 & LF & "foreground process group. A supervisor that signals"
+                 & LF & "refine alone should send SIGTERM or SIGHUP, which"
+                 & LF & "refine forwards before it cleans up; SIGINT and"
+                 & LF & "SIGQUIT sent to refine alone are ignored."
                  & LF & "run runs this compiler's own host; build another"
                  & LF & "target with refine compile --target=NAME." & LF);
             end if;
@@ -516,8 +513,9 @@ package body Landin.Commands.Catalogue is
                  & LF & "a .s operand is linked as a compiled program is,"
                  & LF & "with the same --target, --level and --link."
                  & LF & "--emit ir writes the IR the backend receives."
-                 & LF & "--emit ir-annotated adds request settings, qualified"
-                 & LF & "routine names and detailed IR metadata."
+                 & LF & "--emit ir-annotated also records the target and"
+                 & LF & "settings, module-qualified routine names and the IR's"
+                 & LF & "metadata."
                  & LF
                  & "Hosted targets support --debug full; firmware targets"
                  & LF & "support --debug lines. Firmware executables require"
@@ -537,11 +535,12 @@ package body Landin.Commands.Catalogue is
          when Format =>
             US.Append (Text, LF
               & "fmt reads named files or directories, not standard input."
-              & LF & "Use refine fmt --stdout source.ldn, or configure the"
-              & LF & "editor for formatting through refine lsp." & LF);
+              & LF & "refine fmt --stdout source.ldn prints one source in the"
+              & LF & "layout, and an editor can format through refine lsp."
+              & LF);
          when Completion =>
             US.Append (Text, LF
-              & "Activate in the current shell:" & LF
+              & "To enable completion in the current shell:" & LF
               & "  bash: source <(refine completion bash)" & LF
               & "  zsh:  autoload -Uz compinit; compinit" & LF
               & "        source <(refine completion zsh)" & LF

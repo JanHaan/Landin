@@ -197,8 +197,8 @@ package body Landin.Commands is
             then
                if Text = "-" and then Result.Command = C.Format then
                   Refuse ("fmt does not read standard input; save the source"
-                    & " to a file and use refine fmt --stdout source.ldn,"
-                    & " or use editor formatting through refine lsp");
+                    & " to a file and run refine fmt --stdout source.ldn,"
+                    & " or let the editor format through refine lsp");
                elsif not C.Known_Option (Stem) then
                   Refuse ("unknown option: " & Text
                     & (if C.Nearest_Option (Stem) = "" then ""
@@ -1000,9 +1000,9 @@ package body Landin.Commands is
                               (Path'Last - 3 .. Path'Last) /= ".ldn")
                         then
                            Landin.Diagnostics.Add_Note
-                             (D, "operands before '--' are source inputs; if "
-                              & J.Quoted (Path) & " is a program argument,"
-                              & " write refine run "
+                             (D, "operands before '--' are compiled as"
+                              & " sources; to pass " & J.Quoted (Path)
+                              & " to the program, write refine run "
                               & J.Quoted (Asked.Operands (1)) & " -- "
                               & J.Quoted (Path));
                            exit;
