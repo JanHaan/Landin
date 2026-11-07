@@ -379,6 +379,23 @@ caller-provided cells.
 
 ### Functions and exports
 
+A function whose parameters and result are all scalars takes no reference
+policy, but its entry still has a `parameters` object, empty, and no
+`result` key. For `extern int increment(int value);`:
+
+```json
+{"kind": "function", "name": "increment", "direction": "import",
+ "parameters": {}}
+```
+
+`bindings.ldn` then declares:
+
+```landin
+public extern(c) link(symbol: "increment") increment: (value: c.c_int) -> (result: c.c_int)
+```
+
+A parameter or result that holds a reference names its policy:
+
 ```json
 {
   "kind": "function",
