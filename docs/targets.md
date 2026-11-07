@@ -1046,12 +1046,6 @@ core and peripheral reinitialization before entry; linking does not perform
 it. The [board tools](../environments/boards/README.md) keep warm runs and
 cold-boot evidence separate.
 
-To run an image on a board of your own, build it in the default boot layout
-and load the ELF with the probe or loader the board's vendor documents, such
-as probe-rs with a debug probe, or picotool for a Pico. The board tools are
-not that route: they drive the maintainer's rig, its prepared bundles and
-its probes, and their runs are evidence for the gate.
-
 The assembler uses Cortex-M0/Thumb/soft-float/AAPCS flags and fatal warnings,
 or hard float and the unit with a float unit (D617).
 The linker uses those flags plus `-nostdlib -nostartfiles -nodefaultlibs`, the
@@ -1102,6 +1096,16 @@ flash address. QEMU checks poisoned reset and vector/frame state; a separately
 named synthetic model executes the complete program's GPIO/timer/UART/DMA path.
 Its finite count and drain acknowledgment are synthetic premises, not RP2040
 or microbit peripheral behavior. No target layout, MMIO width or ABI changes.
+
+### Loading an image onto your own board
+
+Build the image in the default boot layout and load the ELF with the probe
+or loader the board's vendor documents:
+[probe-rs](https://probe.rs/docs/tools/probe-rs/) with a debug probe, or
+[picotool's `load`](https://github.com/raspberrypi/picotool#load) for a
+Pico. The board tools are not that route: they drive the maintainer's rig,
+its prepared bundles and its probes, and their runs are evidence for the
+gate.
 
 ## RV32 firmware
 
