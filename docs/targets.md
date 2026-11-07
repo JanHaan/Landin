@@ -1046,6 +1046,12 @@ core and peripheral reinitialization before entry; linking does not perform
 it. The [board tools](../environments/boards/README.md) keep warm runs and
 cold-boot evidence separate.
 
+To run an image on a board of your own, build it in the default boot layout
+and load the ELF with the probe or loader the board's vendor documents, such
+as probe-rs with a debug probe, or picotool for a Pico. The board tools are
+not that route: they drive the maintainer's rig, its prepared bundles and
+its probes, and their runs are evidence for the gate.
+
 The assembler uses Cortex-M0/Thumb/soft-float/AAPCS flags and fatal warnings,
 or hard float and the unit with a float unit (D617).
 The linker uses those flags plus `-nostdlib -nostartfiles -nodefaultlibs`, the
