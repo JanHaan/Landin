@@ -226,7 +226,11 @@ The README has [the commands in brief](../README.md#refine-in-brief);
 - `refine compile program.ldn -o program` assembles and links an executable.
   `--emit asm` writes assembly, `--emit ir` writes the IR the backend would
   receive, and `refine compile program.s -o program` links an assembly file
-  as a compiled program is linked. The compile leaves only the executable;
+  as a compiled program is linked. `--emit ir-annotated` writes the same IR
+  for a dump kept to compare against later: its first line records the
+  target, level, optimization and specialization, each routine's name
+  carries its module and, for a generic instance, its template and item,
+  and the IR's metadata is included. The compile leaves only the executable;
   `--keep-asm` keeps the assembly beside it. Generated artifacts use one
   loss-preserving publication group (D907): exclusive private staging beside
   each destination, verification before installation, and prior versions kept
