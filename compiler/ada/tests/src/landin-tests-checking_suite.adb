@@ -15839,12 +15839,16 @@ package body Landin.Tests.Checking_Suite is
       procedure Check_Source
         (Text : String; Errors : Natural; First : String := "";
          Second : String := ""; Repair : String := "";
-         At_Parameter : Boolean := False; Absent : String := "");
+         At_Parameter : Boolean := False; Absent : String := "";
+         Codes : String := ""; Repair_From : String := "lss";
+         Primary_At : String := ""; Related_At : String := "");
 
       procedure Check_Source
         (Text : String; Errors : Natural; First : String := "";
          Second : String := ""; Repair : String := "";
-         At_Parameter : Boolean := False; Absent : String := "")
+         At_Parameter : Boolean := False; Absent : String := "";
+         Codes : String := ""; Repair_From : String := "lss";
+         Primary_At : String := ""; Related_At : String := "")
       is
          Work : Landin.Stages.Compilation :=
            Landin.Stages.Create (Landin.Targets.Synthetic_32);
@@ -15853,6 +15857,7 @@ package body Landin.Tests.Checking_Suite is
            Landin.Stages.Add_Source (Work, "ordinary-context.ldn", Text);
          Ran : Natural;
          Words : US.Unbounded_String;
+         Seen_Codes : US.Unbounded_String;
          Fixes : Natural := 0;
          Located : Boolean := False;
       begin
@@ -15874,6 +15879,28 @@ package body Landin.Tests.Checking_Suite is
                   Report : constant D.Diagnostic := D.Get (Reports, Index);
                begin
                   if D.Level (Report) = D.Error then
+                     if US.Length (Seen_Codes) > 0 then
+                        US.Append (Seen_Codes, " ");
+                     end if;
+                     US.Append (Seen_Codes, D.Code (Report));
+                     if Primary_At /= "" then
+                        Landin.Testing.Check
+                          (Item, D.Source_Of (D.Primary (Report)) = Src
+                           and then Natural
+                             (D.Span_Of (D.Primary (Report)).First)
+                             = Ada.Strings.Fixed.Index (Text, Primary_At) - 1,
+                           "the refusal keeps its primary site");
+                     end if;
+                     if Related_At /= "" then
+                        Landin.Testing.Check
+                          (Item, D.Label_Count (Report) = 1
+                           and then D.Source_Of
+                             (D.Nth_Label (Report, 1)) = Src
+                           and then Natural
+                             (D.Span_Of (D.Nth_Label (Report, 1)).First)
+                             = Ada.Strings.Fixed.Index (Text, Related_At) - 1,
+                           "the refusal keeps its declaration site");
+                     end if;
                      US.Append (Words, D.Message (D.Primary (Report)) & LF);
                      for N in 1 .. D.Note_Count (Report) loop
                         US.Append (Words, D.Nth_Note (Report, N) & LF);
@@ -15903,9 +15930,11 @@ package body Landin.Tests.Checking_Suite is
                               and then D.Source_Of (D.Nth_Edit (Fix, 1)) = Src
                               and then Natural (D.Span_Of
                                 (D.Nth_Edit (Fix, 1)).First)
-                                = Ada.Strings.Fixed.Index (Text, "lss:") - 1
+                                = Ada.Strings.Fixed.Index
+                                  (Text, Repair_From & ":") - 1
                               and then Natural (Landin.Source.Length
-                                (D.Span_Of (D.Nth_Edit (Fix, 1)))) = 3,
+                                (D.Span_Of (D.Nth_Edit (Fix, 1))))
+                                  = Repair_From'Length,
                               "the likely repair replaces only the label");
                         end;
                      end loop;
@@ -15913,6 +15942,34 @@ package body Landin.Tests.Checking_Suite is
                end;
             end loop;
          end;
+         Landin.Testing.Check
+           (Item, Codes = "" or else US.To_String (Seen_Codes) = Codes,
+            "the refusal keeps its diagnostic codes");
+         if Primary_At /= "" then
+            declare
+               Tree : constant not null access constant Landin.Syntax.Tree :=
+                 Landin.Syntax.Forest.Tree_Of
+                   (Landin.Stages.Trees (Work).all, Src);
+               Refused : Boolean := False;
+            begin
+               for Node in Landin.Syntax.Node_Id'(1)
+                 .. Landin.Syntax.Last_Node (Tree.all)
+               loop
+                  if Natural (Landin.Syntax.Where (Tree.all, Node).First)
+                    = Ada.Strings.Fixed.Index (Text, Primary_At) - 1
+                    and then Landin.Syntax.Kind (Tree.all, Node)
+                      in Landin.Syntax.Name_Reference
+                       | Landin.Syntax.Member_Selection
+                  then
+                     Refused := Refused or else Landin.Checking.Type_Of
+                       (Landin.Stages.Types (Work).all, Tree.all, Node)
+                         = Landin.Types.Ill_Typed;
+                  end if;
+               end loop;
+               Landin.Testing.Check
+                 (Item, Refused, "the refused expression stays ill typed");
+            end;
+         end if;
          Landin.Testing.Check
            (Item, Landin.Stages.Failed (Work) = (Errors > 0),
             "the diagnostic change preserves the verdict");
@@ -15991,7 +16048,46 @@ package body Landin.Tests.Checking_Suite is
          1, "any(addr n)");
       Check_Source
         (Erased_Prefix & "f: () -> none = q: square = (side: 3) show(q)"
-         & " end f", 1, "any(addr q)");
+         & " end f", 1, "any(addr q)", Codes => "L0334",
+         Primary_At => "q)", Related_At => "q: square");
+      Check_Source
+        (Erased_Prefix & "f: (q: square) -> (r: u32) = q end f", 1,
+         "[0670]: a struct is copied", Absent => "any(addr q)",
+         Codes => "L0334", Primary_At => "q end f",
+         Related_At => "q: square");
+      --  Inference checks read(q), then the cached call replays its deferred
+      --  recovery during the body check. Its already refused q stays quiet.
+      Check_Source
+        (Erased_Prefix & "problem: atom" & LF
+         & "read: (s: any shape) -> (r: i32) ! problem ="
+         & " fail problem end read" & LF
+         & "f: (q: square) -> (r: i32) = answer := read(q) else 0"
+         & " r = answer end f", 1, "any(addr q)", Codes => "L0334",
+         Primary_At => "q)", Related_At => "q: square");
+      Check_Source
+        (Erased_Prefix & "f: (xs: [2]u32) -> none = show(xs) end f", 1,
+         "is a whole array", Absent => "any(addr xs)", Codes => "L0334",
+         Primary_At => "xs)", Related_At => "xs: [2]u32");
+      Check_Source
+        (Erased_Prefix & "image: type = layout(packed) struct"
+         & " value: u8 at 0..7 end image" & LF
+         & "f: (bits: image) -> none = show(bits) end f", 1,
+         "a packed image is not a scalar operand",
+         Absent => "any(addr bits)", Codes => "L0336",
+         Primary_At => "bits)");
+      Check_Source
+        (Erased_Prefix & "holder: type = struct item: square end holder"
+         & LF & "f: (h: holder) -> none = show(h.item) end f", 1,
+         "this selects a whole struct field", Absent => "any(addr",
+         Codes => "L0334", Primary_At => "h.item)");
+      Check_Source
+        (Erased_Prefix & "choice: type = struct kind: variant leaf |"
+         & " row: (values: [2]u8) end kind end choice" & LF
+         & "f: (state: choice) -> (total: u8) = total = 0"
+         & " match state.kind leaf: total = 1 row(values): if true then"
+         & " show(values) total = values[1] end if end match end f", 1,
+         "a match alias of an array is not copied",
+         Absent => "any(addr values)", Codes => "L0304");
       Check_Source
         (Erased_Prefix & "f: () -> none = n: u32 = 3 q: square = (side: 3)"
          & " many([any(addr n)]) show(any(addr q)) end f", 0);
@@ -16022,6 +16118,13 @@ package body Landin.Tests.Checking_Suite is
       Check_Source
         (Concept_Prefix & "end ordered" & LF & Provider
          & "i32 is ordered (lss: less_i32, les: less_i32)", 3);
+      Check_Source
+        (Concept_Prefix & "loss: (a: t, b: t) -> (yes: bool)"
+         & LF & "end ordered" & LF & Provider
+         & "i32 is ordered (les: less_i32, lss: less_i32)", 4,
+         "does not supply `less`", "does not supply `loss`",
+         Repair => "less", Repair_From => "les",
+         Codes => "L0341 L0341 L0341 L0341");
       Check_Source
         (Concept_Prefix & "end ordered" & LF & Provider
          & "i32 is ordered (unrelated: less_i32)", 2);

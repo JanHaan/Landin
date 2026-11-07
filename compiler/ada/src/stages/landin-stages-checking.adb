@@ -2018,11 +2018,15 @@ package body Landin.Stages.Checking is
          Wanted  : Ty.Scalar_Name;
          Site    : Landin.Provenance.Origin := Landin.Provenance.No_Origin;
          Because : String := "");
+      function Erased_Construction_Note
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return String;
+
       function Synthesise
         (Of_Tree : Syn.Tree;
          Node : Syn.Node_Id;
          Expected_Reference : Landin.Checking.Reference_Id :=
-           Landin.Checking.No_Reference) return Ty.Type_Kind;
+           Landin.Checking.No_Reference;
+         Erased_Context : Boolean := False) return Ty.Type_Kind;
       function Selected_From
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind;
       function Admit_Array_Field
@@ -19307,6 +19311,7 @@ package body Landin.Stages.Checking is
                   Suggested : array
                     (1 .. Syn.Conformance_Entry_Count (Of_Tree, Node))
                     of Natural := [others => 0];
+                  Unknown_Count : Natural := 0;
                   Suggestion_Count : array (1 .. Expected) of Natural :=
                     [others => 0];
                   Valid : Boolean := True;
@@ -19505,6 +19510,7 @@ package body Landin.Stages.Checking is
                              = Expected_Name (Position);
                         end loop;
                         if not Known then
+                           Unknown_Count := Unknown_Count + 1;
                            for Position in Input_Count + 1 .. Expected loop
                               if not Present (Position) then
                                  Landin.Diagnostics.Suggestions.Consider
@@ -19668,7 +19674,8 @@ package body Landin.Stages.Checking is
                                   (Of_Tree, Node, Given));
                         end loop;
                         if not Seen
-                          and then Suggestion_Count (Position) /= 1
+                          and then (Unknown_Count /= 1
+                            or else Suggestion_Count (Position) /= 1)
                         then
                            Bad.Report
                              (Item    => Bad.Conformance_Form,
@@ -23243,7 +23250,8 @@ package body Landin.Stages.Checking is
         (Of_Tree : Syn.Tree;
          Node : Syn.Node_Id;
          Expected_Reference : Landin.Checking.Reference_Id :=
-           Landin.Checking.No_Reference) return Ty.Type_Kind
+           Landin.Checking.No_Reference;
+         Erased_Context : Boolean := False) return Ty.Type_Kind
       is
          Already : constant Ty.Type_Kind :=
            Landin.Checking.Type_Of (Types.all, Of_Tree, Node);
@@ -23439,9 +23447,14 @@ package body Landin.Stages.Checking is
                      Message => "`" & Spelled (Syn.Name (Of_Tree, Node))
                                 & "` is a whole struct, and this position"
                                 & " does not take one",
-                     Note    => "[0670]: a struct is copied, passed,"
-                                & " returned or discarded whole, and read"
-                                & " by selecting a field",
+                     Note    =>
+                       (if Erased_Context
+                          and then Erased_Construction_Note
+                            (Of_Tree, Node) /= ""
+                        then Erased_Construction_Note (Of_Tree, Node)
+                        else "[0670]: a struct is copied, passed,"
+                             & " returned or discarded whole, and read"
+                             & " by selecting a field"),
                      Related => Syn.Origin
                        (Tree_For (Res.Source_Of (Meanings.all, Means)).all,
                         Res.Node_Of (Meanings.all, Means)),
@@ -33580,9 +33593,6 @@ package body Landin.Stages.Checking is
       end Note_Context;
 
       function Erased_Construction_Note
-        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return String;
-
-      function Erased_Construction_Note
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return String
       is
          Value : constant Syn.Node_Id :=
@@ -34884,10 +34894,7 @@ package body Landin.Stages.Checking is
                end if;
                declare
                   Got : constant Ty.Type_Kind :=
-                    (if Syn.Kind (Of_Tree, Node)
-                          in Syn.Name_Reference | Syn.Member_Selection
-                     then Selected_From (Of_Tree, Node)
-                     else Synthesise (Of_Tree, Node));
+                    Synthesise (Of_Tree, Node, Erased_Context => True);
                begin
                   if Got /= Ty.Ill_Typed
                     and then
