@@ -117,10 +117,27 @@ a policy that is not one L0579, a Clang that cannot be used as asked L0580, a
 selection that cannot be bound L0581, outputs in the way L0582, and a
 replacement that fails L0005.
 
-Compile `adapters.c` with `-std=c11` and the same logical header mapping and
-preprocessor environment. The ABI fixture harness additionally uses
-`-Wall -Wextra -Werror`; generated adapters are validated with those warnings
-before publication.
+Compile `adapters.c` with `-std=c11` and the preprocessor environment the
+generation used: the same target, sysroot, include directories and defines.
+`exports.h` includes each header by its logical name, so when a logical name
+is not the header's path below an include directory, copy each header to its
+logical name in a tree of its own and put that tree first on the include
+path. For the invocation above:
+
+```sh
+mkdir -p stage/api
+cp /checkout/include/public.h stage/api/public.h
+cp /checkout/include/detail.h stage/api/detail.h
+clang -std=c11 --target=x86_64-pc-linux-gnu \
+    --sysroot=/absolute/path/to/sysroot \
+    -Istage -I/checkout/include \
+    -isystem "$(clang -print-resource-dir)/include" \
+    -DFEATURE_LEVEL=3 \
+    -c /checkout/generated/adapters.c -o adapters.o
+```
+
+The ABI fixture harness additionally uses `-Wall -Wextra -Werror`; generated
+adapters are validated with those warnings before publication.
 
 `bindings.ldn` imports `platform/c`, whose aliases admit the explicitly supported
 `compiler.c_sysv_lp64`, `compiler.c_darwin_lp64` and `compiler.c_aapcs64_lp64`
