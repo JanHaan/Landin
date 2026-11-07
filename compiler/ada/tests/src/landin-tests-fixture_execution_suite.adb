@@ -840,7 +840,7 @@ package body Landin.Tests.Fixture_Execution_Suite is
         (Exit_Code : Integer; Output : String; Path : String;
          Wrote : out Boolean; Said : out Unbounded.Unbounded_String;
          Written : out Unbounded.Unbounded_String;
-         Accepted : Boolean; Pinned : Boolean)
+         Accepted : Boolean := False; Pinned : Boolean := True)
       is
          Class_Name : constant String :=
            (if Accepted then "positive" else "negative");

@@ -81,6 +81,7 @@ package body Landin.Tests.X86_Optimization_Suite is
       Options : Opt.Options := Opt.Default_Options) return String;
    procedure Selected_Instructions (Item : in out Landin.Testing.Context);
    procedure Canonical_Bodies (Item : in out Landin.Testing.Context);
+   procedure Naked_Bodies (Item : in out Landin.Testing.Context);
    procedure Loop_Allocation (Item : in out Landin.Testing.Context);
    procedure Loop_Nesting (Item : in out Landin.Testing.Context);
    procedure Single_Block_Spans (Item : in out Landin.Testing.Context);
