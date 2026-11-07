@@ -2999,6 +2999,38 @@ static inline uint32_t mask(Level level, uint32_t bits) { return bits << (level 
                     self.assertEqual(attributes.get(TAG_ABI_VFP_ARGS, 0),
                                      1 if convention == "aapcs-vfp" else 0)
 
+    def test_cortex_bindings_refuse_a_program_of_the_other_convention(self) -> None:
+        #  D936: compiled for cortex-m0 with no float unit, the base
+        #  binding is accepted and the VFP one refused; with the AN500
+        #  lane's FPv5-D16 description, the other way round.
+        lanes = HERE.parent / "environments" / "cortex-m" / "lanes"
+        for name, guard in (("cortex-cmsis-bindings", "not compiler.feature.fp"),
+                            ("cortex-vfp-bindings", "compiler.feature.fp_dp")):
+            vfp = "vfp" in name
+            for float_unit in (False, True):
+                with self.subTest(fixture=name, float_unit=float_unit):
+                    module = self.root / f"{name}-{float_unit}" / "fixture"
+                    module.mkdir(parents=True)
+                    for source in (FIXTURE.parent / name).glob("*.ldn"):
+                        shutil.copyfile(source, module / source.name)
+                    command = [refine(), "check", "--target=" + CORTEX_NAME,
+                               "--root=" + str(HERE.parent),
+                               "--root=" + str(module.parent)]
+                    if float_unit:
+                        shutil.copyfile(lanes / "lane-mps2-an500.ldn",
+                                        module / "lane-mps2-an500.ldn")
+                        command += ["--level=armv7e-m", "--root=" + str(lanes)]
+                    checked = subprocess.run(command + [str(module)],
+                                             capture_output=True, text=True)
+                    if vfp == float_unit:
+                        self.assertEqual(checked.returncode, 0,
+                                         checked.stdout + checked.stderr)
+                    else:
+                        self.assertNotEqual(checked.returncode, 0)
+                        self.assertIn("error[L0324]: compile-time assertion is false",
+                                      checked.stderr)
+                        self.assertIn(f"compiler.assert({guard})", checked.stderr)
+
     def test_duplicate_policy_keys_are_rejected_before_generation(self) -> None:
         parent = self.root / "duplicate-keys"
         selected = self.selection(self.function("hold", parameters={

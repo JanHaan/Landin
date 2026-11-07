@@ -22714,8 +22714,12 @@ mismatch to the linker's `Tag_ABI_VFP_args` attributes, which refuse only at
 link time and only where a link checks them. Both were declined.
 
 **Pinned by** the `bindings` suite's `a cortex-m header is bound
-freestanding` and `bindings/test.py`'s
-`test_cortex_targets_bind_ilp32_in_both_conventions`.
+freestanding`, and `bindings/test.py`'s
+`test_cortex_targets_bind_ilp32_in_both_conventions` and
+`test_cortex_bindings_refuse_a_program_of_the_other_convention`, which
+compiles both committed bindings for `cortex-m0` without a float unit and
+with the AN500 lane's FPv5-D16 description, and each is refused with L0324
+by the other.
 
 ### D937 — A freestanding target's C headers are Clang's own, as the request names them
 

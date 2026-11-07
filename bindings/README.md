@@ -640,7 +640,9 @@ freestanding headers are reached and a host library's are not, refuse the
 adapters that need a C library, keep adapter-backed signature names
 consistent, compile the generated C for each row to objects whose Arm
 attributes name the convention and int-sized enums, and regenerate both
-CMSIS fixtures byte for byte, fetching their pinned inputs. The case that
+CMSIS fixtures byte for byte, fetching their pinned inputs, and compile
+both with `refine check` for `cortex-m0` without a float unit and with the
+AN500 lane's FPv5-D16 description, each refused by the other. The case that
 builds the adapters with the pinned `arm-eabi-gcc` runs where it is on
 PATH, or `$ARM_EABI_GCC` names it, as in `nix develop`, and is skipped,
 visibly, where it is not, as in the gate's `bindings` job; the Cortex-M lanes
