@@ -8,3 +8,4 @@ error[L0103]: a loop body opens with `do`
 3 |     while r < limit
   |     ^^^^^ this loop
   = note: [1140]: a while loop is `while condition do`, its body and `end while`
+  = help (guess): write `do` here
