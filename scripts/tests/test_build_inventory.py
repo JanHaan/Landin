@@ -1000,9 +1000,13 @@ class BuildArchives(unittest.TestCase):
                     manifest = "checked source and toolchain identity\n"
                     for name in ("source-manifest.txt", "tests-manifest.txt"):
                         (build / name).write_text(manifest)
+                    #  The synthetic files need no host metadata. Darwin tar
+                    #  otherwise adds AppleDouble entries for it, obscuring
+                    #  the workflow's actual member list in this control.
                     result = subprocess.run(
                         ["sh", "-eu", "-c", command], cwd=root,
-                        env={**os.environ, "RUNNER_TEMP": tmp},
+                        env={**os.environ, "RUNNER_TEMP": tmp,
+                             "COPYFILE_DISABLE": "1"},
                         capture_output=True, text=True, timeout=HANG)
                     self.assertEqual(result.returncode, 0, result.stderr)
                     archive_path = Path(words[2].replace("$RUNNER_TEMP", tmp))
