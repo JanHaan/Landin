@@ -281,7 +281,7 @@ end dropped
 outside_source: (from_path: []u8, to_path: []u8) -> none ! ... =
     source_status: posix.status =
         try posix.status_at(posix.working_directory,
-                             text.host_over(from_path), true)
+                            text.host_over(from_path), true)
     mut room: [256]u8 = zeroed
     mut path := text.over(room)
     mut length: usize = lenof to_path
@@ -291,22 +291,22 @@ outside_source: (from_path: []u8, to_path: []u8) -> none ! ... =
     try text.append(path, to_path[0..<length])
     mut found: posix.status =
         posix.status_at(posix.working_directory,
-                         text.host_over(text.used(path)), true) else (problem)
+                        text.host_over(text.used(path)), true) else (problem)
             fail problem when problem <> posix.enoent
             text.clear(path)
             try text.append(path, parent_of(to_path[0..<length]))
             try posix.status_at(posix.working_directory,
-                                 text.host_over(text.used(path)), true)
+                                text.host_over(text.used(path)), true)
         end
     loop do
         fail inside_source when found.device == source_status.device
-                                and found.inode == source_status.inode
+          and found.inode == source_status.inode
         try text.append(path, "/..")
         parent: posix.status =
             try posix.status_at(posix.working_directory,
-                                 text.host_over(text.used(path)), true)
+                                text.host_over(text.used(path)), true)
         break when parent.device == found.device
-                   and parent.inode == found.inode
+          and parent.inode == found.inode
         found = parent
     end loop
 end outside_source
@@ -763,8 +763,8 @@ demonstrate: (host: blocking.host, inout out: io.buffered_writer(blocking.host))
     try refuses_inside(source, "tree-copy-scratch/source/child")
     try refuses_inside(source, "tree-copy-scratch/source/../source/child")
     try posix.symbolic_link_at(text.host_over("source"),
-                                posix.working_directory,
-                                text.host_over("tree-copy-scratch/alias"))
+                               posix.working_directory,
+                               text.host_over("tree-copy-scratch/alias"))
     try refuses_inside(source, "tree-copy-scratch/alias/child")
     mut first: tally = (files: 0, links: 0, directories: 0, skipped: 0,
                         replaced: 0)
