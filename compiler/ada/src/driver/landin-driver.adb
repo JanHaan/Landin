@@ -1468,6 +1468,7 @@ package body Landin.Driver is
             return Seen;
          end Times_Written;
 
+         --  A recognized Cortex core's target/level pair, otherwise
          --  "; did you mean T?" for the described target nearest Name,
          --  or "".  `macos` is what a reader calls `darwin`.  A system
          --  named alone, `linux` or `darwin`, is too far from any target
@@ -1500,6 +1501,19 @@ package body Landin.Driver is
                return Here & ", " & Rest;
             end Begun;
          begin
+            if Landin.Targets.Firmware.Is_Core_Name (Name) then
+               declare
+                  Core : constant Landin.Targets.Firmware.Core_Kind :=
+                    Landin.Targets.Firmware.Core_Named (Name);
+               begin
+                  if Core in Landin.Targets.Firmware.Arm_Core then
+                     return "; " & Name & " uses the shared Cortex-M target;"
+                       & " use --target="
+                       & Landin.Targets.Name (Landin.Targets.Cortex_M)
+                       & " --level=" & Landin.Targets.Firmware.Level_Name (Core);
+                  end if;
+               end;
+            end if;
             for Index in 1 .. Landin.Targets.Selection.Described_Count loop
                Landin.Diagnostics.Suggestions.Consider
                  (Offered, Asked,
