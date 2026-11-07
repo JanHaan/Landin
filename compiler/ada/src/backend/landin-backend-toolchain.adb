@@ -381,7 +381,7 @@ package body Landin.Backend.Toolchain is
       then
          List.Append ("lib" & Name & ".tbd");
          List.Append ("lib" & Name & ".dylib");
-      else
+      elsif not Landin.Targets.Is_Firmware (Facts) then
          List.Append ("lib" & Name & ".so");
       end if;
       List.Append ("lib" & Name & ".a");
@@ -483,14 +483,24 @@ package body Landin.Backend.Toolchain is
          raise Compiler_Defect with "target has no linker argument policy";
       end if;
       if Landin.Targets.Is_Firmware (Facts) then
-         if not Libraries.Is_Empty or else not Directories.Is_Empty then
-            raise Compiler_Defect with "unsupported firmware link request";
-         end if;
          Add_Firmware_Machine (List, Level, Facts, Float);
          List.Append ("-nostdlib");
          List.Append ("-nostartfiles");
          List.Append ("-nodefaultlibs");
+         --  D923: a library is a static archive, never a shared object,
+         --  which firmware has no loader for; the directories say where
+         --  the archives are, and the archives come after the object
+         --  that needs them and before libgcc, which they may need too.
+         if not Libraries.Is_Empty then
+            List.Append ("-static");
+         end if;
+         for Directory of Directories loop
+            List.Append ("-L" & Directory);
+         end loop;
          List.Append (File_Operand (Output & ".o"));
+         for Library of Libraries loop
+            List.Append ("-l" & Library);
+         end loop;
          List.Append ("-lgcc");
          List.Append ("-Xlinker");
          List.Append ("--gc-sections");

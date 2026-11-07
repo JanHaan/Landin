@@ -78,7 +78,11 @@ package Landin.Backend.Firmware is
    function Hex (Value : Landin.Targets.Byte_Count) return String;
 
    --  D545: the derived script, which the driver writes as OUT.ld.
+   --  D924: a link with C archives also keeps their constructors, which
+   --  --gc-sections would otherwise drop unseen, in an `.init_array` of
+   --  their own, so that the image shows them and the driver refuses it.
    function Linker_Script
-     (Profile : Landin.Targets.Firmware.Profile; Used : Region_Use)
+     (Profile : Landin.Targets.Firmware.Profile; Used : Region_Use;
+      Archives : Boolean := False)
       return String;
 end Landin.Backend.Firmware;

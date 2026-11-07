@@ -134,3 +134,4 @@ L0579  Live     error   no-fix   false empty-ok    0..0 0     driver            
 L0580  Live     error   no-fix   false empty-ok    0..0 0     driver                              test:landin-tests-bindings_suite.adb
 L0581  Live     error   no-fix   false empty-ok    0..0 0     driver                              test:landin-tests-bindings_suite.adb
 L0582  Live     error   no-fix   false empty-ok    0..0 0     driver                              test:landin-tests-bindings_suite.adb
+L0587  Live     error   no-fix   false empty-ok    0..0 1     driver                              test:landin-tests-cortex_suite.adb

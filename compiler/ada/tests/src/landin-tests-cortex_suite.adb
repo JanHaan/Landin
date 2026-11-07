@@ -1980,7 +1980,9 @@ package body Landin.Tests.Cortex_Suite is
 
    procedure Firmware_Path (Item : in out Landin.Testing.Context) is
    begin
-      for Mode in 1 .. 13 loop
+      --  D923 retired the thirteenth mode, a refused linker.library, which
+      --  `firmware links C archives` now holds to the link.
+      for Mode in 1 .. 12 loop
          declare
             Host : Landin.Testing.Fakes.Fake_Filesystem;
             Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
@@ -2001,8 +2003,6 @@ package body Landin.Tests.Cortex_Suite is
                  when 5 => "bad: atom start: () -> none ! bad = "
                    & "fail bad end start",
                  when 10 => "link(keep) image: [8388609]u8 = [of 1] "
-                   & "start: () -> none = end start",
-                 when 13 => "linker.library(""third"") "
                    & "start: () -> none = end start",
                  when others => "mut result: u32 = 1 "
                    & "start: () -> none = result = 42 end start"));
@@ -2067,12 +2067,6 @@ package body Landin.Tests.Cortex_Suite is
                      Landin.Testing.Check
                        (Item, U.Index (Result.Report, "L0505") > 0,
                         "bounded image failure has a dedicated diagnostic");
-                  elsif Mode = 13 then
-                     Landin.Testing.Check
-                       (Item, U.Index (Result.Report, "L0500") > 0
-                        and then U.Index
-                          (Result.Report, "remove linker.library") > 0,
-                        "firmware library refusal names its remedy");
                   end if;
                   Landin.Testing.Check_Equal
                     (Item, Host.Write_Count, 0,
@@ -2085,6 +2079,147 @@ package body Landin.Tests.Cortex_Suite is
          end;
       end loop;
    end Firmware_Path;
+
+   --  D923, D924: firmware links C archives, found through
+   --  linker.directory or -L, as static archives between its object and
+   --  libgcc; the derived script keeps their constructors, and an image
+   --  holding constructors, thread-local storage or a dynamic linkage is
+   --  refused after the link and removed.
+   procedure Firmware_Archives (Item : in out Landin.Testing.Context);
+   procedure Firmware_Archives (Item : in out Landin.Testing.Context) is
+      --  A linked image of one allocated section, NAME of KIND and FLAGS,
+      --  and its section names.
+      function Image (Name : String; Kind, Flags : Natural) return String;
+      function Image (Name : String; Kind, Flags : Natural) return String is
+         Data : String (1 .. 512) := [others => ASCII.NUL];
+         Names : constant String :=
+           ASCII.NUL & Name & ASCII.NUL & ".shstrtab" & ASCII.NUL;
+         procedure Put (At_Byte, Value : Natural; Width : Positive := 4);
+         procedure Put (At_Byte, Value : Natural; Width : Positive := 4) is
+            Rest : Natural := Value;
+         begin
+            for Index in 0 .. Width - 1 loop
+               Data (At_Byte + Index + 1) := Character'Val (Rest mod 256);
+               Rest := Rest / 256;
+            end loop;
+         end Put;
+      begin
+         Data (1 .. 6) := Character'Val (127) & "ELF"
+           & Character'Val (1) & Character'Val (1);
+         Put (16, 2, 2);
+         Put (18, 40, 2);
+         Put (32, 256);
+         Put (46, 40, 2);
+         Put (48, 3, 2);
+         Put (50, 2, 2);
+         Data (129 .. 128 + Names'Length) := Names;
+         --  Section 1, the one under test, and 2, the names.
+         Put (256 + 40, 1);
+         Put (256 + 44, Kind);
+         Put (256 + 48, Flags);
+         Put (256 + 60, 4);
+         Put (256 + 80, Name'Length + 2);
+         Put (256 + 84, 3);
+         Put (256 + 96, 128);
+         Put (256 + 100, Names'Length);
+         return Data;
+      end Image;
+   begin
+      for Mode in 1 .. 6 loop
+         declare
+            Host : Landin.Testing.Fakes.Fake_Filesystem;
+            Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+            Args : Landin.Platform.Path_List;
+            Wanted : constant String :=
+              (case Mode is
+                 when 3 => "holds C constructors in `.init_array`",
+                 when 4 => "holds thread-local storage in `.tdata`",
+                 when 5 => "is linked dynamically, with `.dynamic`",
+                 when others => "");
+            Joined : U.Unbounded_String;
+         begin
+            Host.Add_Firmware_Library;
+            --  The directive's directory is read against p.ldn's, the
+            --  fake working directory, and -L's as written.
+            Host.Add_Directory ("vendor");
+            Host.Add_Directory ("/virtual/compile/lib");
+            Host.Add_Directory ("/virtual/compile/vendor");
+            Host.Add_File ("/virtual/compile/lib/libpeer.a", "!<arch>" & LF);
+            Host.Add_File
+              ("/virtual/compile/vendor/libpeer.a", "!<arch>" & LF);
+            Host.Add_File ("p.ldn",
+              (if Mode = 6 then "" else "linker.library(""peer"")" & LF)
+              & (if Mode = 2 then "" else "linker.directory(""lib"")" & LF)
+              & "extern(c) peer_read: () -> (r: u32)" & LF
+              & "mut seen: u32 = 0" & LF
+              & "start: () -> none = seen = peer_read() end start" & LF);
+            Tools.Set_Output_Content
+              (case Mode is
+                 when 3 => Image (".init_array", 14, 3),
+                 when 4 => Image (".tdata", 1, 16#403#),
+                 when 5 => Image (".dynamic", 6, 3),
+                 when others => Image (".text", 1, 6));
+            Tools.Set_Result (0, "");
+            Args.Append ("--target=cortex-m0");
+            Args.Append ("--firmware-entry=start");
+            Args.Append ("--emit=exe");
+            if Mode = 2 then
+               Args.Append ("-L=vendor");
+            end if;
+            Args.Append ("-o");
+            Args.Append ("p.elf");
+            Args.Append ("p.ldn");
+            declare
+               Ran : constant Landin.Driver.Outcome :=
+                 Landin.Driver.Execute (Args, Host, Tools);
+               Report : constant String := U.To_String (Ran.Report);
+            begin
+               for Index in 1 .. Tools.Run_Count loop
+                  for Argument of Tools.Call_At (Index).Arguments loop
+                     U.Append (Joined, Argument & " ");
+                  end loop;
+                  U.Append (Joined, LF);
+               end loop;
+               if Wanted = "" then
+                  Landin.Testing.Check_Equal
+                    (Item, Ran.Status, Landin.Driver.Status_Success,
+                     "firmware links C archives" & Mode'Image & ": "
+                     & Report);
+                  Landin.Testing.Check
+                    (Item, (if Mode = 6
+                            then not Contains (U.To_String (Joined), "-static")
+                              and then Contains (U.To_String (Joined),
+                                "p.elf.o -lgcc")
+                              and then not Contains
+                                (Host.Written ("p.elf.ld"), ".init_array")
+                            else Contains (U.To_String (Joined),
+                                "-nodefaultlibs -static -L/virtual/compile/"
+                                & (if Mode = 2 then "vendor" else "lib")
+                                & " ./")
+                              and then Contains (U.To_String (Joined),
+                                "p.elf.o -lpeer -lgcc")
+                              and then Contains (Host.Written ("p.elf.ld"),
+                                "  .init_array : { KEEP(*(.preinit_array"
+                                & " .preinit_array.* .init_array"
+                                & " .init_array.* .ctors .ctors.*)) }"
+                                & " > FLASH" & LF)),
+                     "the archive follows the object, the directory comes"
+                     & " first and the script keeps constructors"
+                     & Mode'Image & ": " & U.To_String (Joined));
+               else
+                  Landin.Testing.Check
+                    (Item, Ran.Status = Landin.Driver.Status_Reported
+                       and then Contains (Report, "L0587")
+                       and then Contains (Report, Wanted)
+                       and then Contains (Report, "note: D924")
+                       and then not Host.Exists ("p.elf"),
+                     "an image the startup cannot honour is refused and"
+                     & " removed" & Mode'Image & ": " & Report);
+               end if;
+            end;
+         end;
+      end loop;
+   end Firmware_Archives;
 
    procedure Firmware_Frame_Limit (Item : in out Landin.Testing.Context);
 
@@ -3594,6 +3729,116 @@ package body Landin.Tests.Cortex_Suite is
          "the assembler is told hard float and the unit, or soft float");
    end Float_Unit_Code;
 
+   --  D920: C records cross by value, into the registers the plan names:
+   --  without a unit a record of two floats goes in r0-r1 and a double in
+   --  r2-r3, and with fpv5-d16 the record's members in s0-s1, the double
+   --  in d1 and the single after it in s4; a C definition returning that
+   --  record leaves it in s0-s1, and one of three bytes in r0.
+   procedure C_Record_Transport (Item : in out Landin.Testing.Context);
+   procedure C_Record_Transport (Item : in out Landin.Testing.Context) is
+      LF_Text : constant String := [1 => LF];
+      Program : constant String :=
+        "import descriptions/dev" & LF_Text
+        & "pair: type = layout(c) struct" & LF_Text
+        & "    x: f32" & LF_Text & "    y: f32" & LF_Text
+        & "end pair" & LF_Text
+        & "small: type = layout(c) struct" & LF_Text
+        & "    a: u8" & LF_Text & "    b: u8" & LF_Text & "    c: u8" & LF_Text
+        & "end small" & LF_Text
+        & "extern(c) scale: (taken: pair, factor: f64, bias: f32)"
+        & " -> (r: f64)" & LF_Text
+        & "public extern(c) make_pair: (x: f32) -> (p: pair) =" & LF_Text
+        & "    p = pair(x: x, y: x)" & LF_Text
+        & "end make_pair" & LF_Text
+        & "public extern(c) make_small: (a: u8) -> (s: small) =" & LF_Text
+        & "    s = small(a: a, b: a, c: a)" & LF_Text
+        & "end make_small" & LF_Text
+        & "mut seen: f64 = 0.0" & LF_Text
+        & "start: () -> none =" & LF_Text
+        & "    seen = scale(taken: pair(x: 1.0, y: 2.0), factor: 0.5,"
+        & " bias: 3.0)" & LF_Text
+        & "end start" & LF_Text;
+      Description : constant String :=
+        "compiler.device(""dev"")" & LF_Text
+        & "compiler.core(""cortex-m7"")" & LF_Text
+        & "compiler.vectors(16)" & LF_Text
+        & "compiler.boot(""vector-table"")" & LF_Text
+        & "linker.region(""CODE"", 0, 64 * 1024, ""rx"")" & LF_Text
+        & "linker.region(""RAM"", 0x2000_0000, 64 * 1024, ""rwx"")" & LF_Text
+        & "linker.place(""vectors"", ""CODE"")" & LF_Text
+        & "linker.place(""text"", ""CODE"")" & LF_Text
+        & "linker.place(""rodata"", ""CODE"")" & LF_Text
+        & "linker.place(""data"", ""RAM"")" & LF_Text
+        & "linker.place(""bss"", ""RAM"")" & LF_Text
+        & "linker.place(""stack"", ""RAM"", 4 * 1024)" & LF_Text;
+
+      function Emitted (Unit : Boolean) return String;
+      function Emitted (Unit : Boolean) return String is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : Landin.Platform.Path_List;
+         Text : U.Unbounded_String;
+         Status : Landin.Platform.Read_Status;
+      begin
+         Host.Add_Firmware_Library;
+         Host.Add_Directory ("/w");
+         Host.Add_Directory ("/w/app");
+         Host.Add_Directory ("/w/devices");
+         Host.Add_Directory ("/w/devices/descriptions");
+         Host.Add_Directory ("/w/devices/descriptions/dev");
+         Host.Add_File ("/w/app/main.ldn", Program);
+         Host.Add_File ("/w/devices/descriptions/dev/memory.ldn",
+           (if Unit then "compiler.float_unit(""fpv5-d16"")" & LF_Text
+            else "") & Description);
+         Args.Append ("--root=/w/devices");
+         Args.Append ("--target=cortex-m0");
+         Args.Append ("--level=armv7e-m");
+         Args.Append ("--firmware-entry=start");
+         Args.Append ("--emit=asm");
+         Args.Append ("-o");
+         Args.Append ("/w/p.s");
+         Args.Append ("/w/app");
+         declare
+            Ran : constant Landin.Driver.Outcome :=
+              Landin.Driver.Execute (Args, Host, Tools);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Ran.Status, Landin.Driver.Status_Success,
+               U.To_String (Ran.Report));
+         end;
+         Host.Read_File ("/w/p.s", Text, Status);
+         return U.To_String (Text);
+      end Emitted;
+
+      Hard : constant String := Emitted (True);
+      Soft : constant String := Emitted (False);
+      function From (Text, Label : String) return String is
+        (Text (Integer'Max (Text'First,
+                 Ada.Strings.Fixed.Index (Text, Label)) .. Text'Last));
+   begin
+      Landin.Testing.Check
+        (Item, Contains (Hard, "vldr s0, [r2, #0]" & LF & HT
+                               & "vldr s1, [r2, #4]")
+           and then Contains (Hard, "vldr d1, [r6]")
+           and then Contains (Hard, "vldr s4, [r6]" & LF & HT & "bl scale"),
+         "with the unit the record's members go in s0-s1, the double in"
+         & " d1 and the single in s4");
+      Landin.Testing.Check
+        (Item, Contains (From (Soft, "start:"),
+                         "ldmia r6!, {r0, r1, r2, r3}" & LF & HT
+                         & "bl scale")
+           and then Contains (From (Soft, "start:"), "ldmia r2!, {r4, r5}")
+           and then not Contains (From (Soft, "start:"), "vldr"),
+         "without it the record's words are copied into r0-r1's staging"
+         & " and the call loads r0-r3");
+      Landin.Testing.Check
+        (Item, Contains (From (Hard, "make_pair:"),
+                         "vldr s0, [r2, #0]" & LF & HT & "vldr s1, [r2, #4]")
+           and then Contains (From (Soft, "make_small:"), "ldrb r0, [r2, #2]"),
+         "a C definition returns its record of floats in s0-s1, and a"
+         & " record of three bytes in r0, a byte at a time");
+   end C_Record_Transport;
+
    --  D588: the boot ROM's checksum, and the object it is sealed into.
    procedure Boot_Stage_Seal (Item : in out Landin.Testing.Context);
    procedure Boot_Stage_Seal (Item : in out Landin.Testing.Context) is
@@ -4539,6 +4784,12 @@ package body Landin.Tests.Cortex_Suite is
       Landin.Testing.Register
         (Into, "cortex ABI", "C signatures from source at both variants",
          C_Source_Signatures'Access);
+      Landin.Testing.Register
+        (Into, "cortex ABI", "firmware links C archives",
+         Firmware_Archives'Access);
+      Landin.Testing.Register
+        (Into, "cortex ABI", "C records cross by value at both variants",
+         C_Record_Transport'Access);
    end Register;
 
 end Landin.Tests.Cortex_Suite;

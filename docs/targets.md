@@ -192,9 +192,10 @@ edges are Darwin's instructions; `hosted/system`, `hosted/blocking` and
 ## C aliases and generated bindings
 
 `platform/c` asserts `compiler.c_sysv_lp64 or compiler.c_darwin_lp64 or
-compiler.c_aapcs64_lp64 or compiler.c_riscv_lp64d`, and its `c_char` is `u8`
-under standard AAPCS64 and RISC-V LP64D
-and `i8` otherwise. Each fact identifies its own implemented ABI, not LP64
+compiler.c_aapcs64_lp64 or compiler.c_riscv_lp64d or compiler.c_aapcs32`,
+and its `c_char` is `u8` under standard AAPCS64, RISC-V LP64D and AAPCS32
+and `i8` otherwise; under `compiler.c_aapcs32` its `long` aliases are 32
+bits (D921). Each fact identifies its own implemented ABI, not a data model
 generally. Generated bindings
 assert the selected fact. The generator supports `x86_64-pc-linux-gnu`, the
 pinned `arm64-apple-macos26.0.0` deployment triple and
@@ -612,20 +613,21 @@ link tries `arm-eabi-gcc` and then `arm-none-eabi-gcc`, the name the
 distributions and Arm's own releases give the same GCC (D532). Executable
 requests require the explicit
 `--firmware-entry=NAME` source identity (D229); missing or invalid entries report
-L0502. C signatures, records, varargs and standalone object output remain
-disabled; the explicit `lines` source-debug contract is described above.
-The independent external startup/linker harness remains distinct
-from the compiler-owned firmware path.
-`platform/c` accepts the explicitly implemented hosted C ABIs; the separate
-header generator supports its declared target set, and Cortex C remains
-disabled.
+L0502. Its C ABI is AAPCS32, `compiler.c_aapcs32`, at every level
+(D920): C signatures and `layout(c)` records are enabled, in the base PCS
+or, with a float unit, the VFP variant, and `platform/c` gives its ILP32
+aliases (D921). Variadic C calls and standalone object output remain
+disabled; a variadic C signature's refusal names the fixed-arity C
+function to import instead (D922). The explicit `lines` source-debug
+contract is described above. The independent external startup/linker
+harness remains distinct from the compiler-owned firmware path.
 
 D231's infallible `noreturn` is shared across target descriptions. Its signature
 identity survives ordinary function values, generics and erased evidence. An
 ordinary Cortex firmware entry may use it; interrupt/naked signatures remain
 `()->none`. A violated nonreturning-call promise traps after the call on every
-backend. Hosted C signatures support it within their existing ABI; Cortex
-continues to refuse the general C source surface.
+backend. C signatures support it within their existing ABI, Cortex-M's
+AAPCS32 among them.
 
 The existing scalar and recursive shape machinery supplies all byte placement;
 there is no separate Cortex layout algorithm in checking or neutral IR.
@@ -666,9 +668,21 @@ for an aggregate whatever its size; a variadic call keeps the base PCS
 throughout; s16-s31 are call-preserved; and every other argument keeps the
 base placement. `compiler/tests/cortex-m.contract`'s `vfp.` rows are the
 planner's, measured against GCC at `-mfloat-abi=hard -mfpu=fpv5-d16` on
-QEMU's `mps2-an500` by `environments/cortex-m/abi.py`.
+QEMU's `mps2-an500` by `environments/cortex-m/abi.py`. Every C signature of
+a program uses the variant its description's unit selects, and only a
+variadic call keeps the base PCS.
 C composite results through four bytes use r0; larger results use a hidden
-address in r0, consuming that argument position. Scalar 64-bit results use
+address in r0, consuming that argument position. The IR still names a
+record result's destination as the first operand of a call and the first
+parameter of a definition; the backend passes it only when the plan's
+result is indirect, and otherwise stores r0, or the VFP members, through it.
+A C record argument is copied by value from the address its IR operand
+carries: its words into the core registers and the outgoing area, a split
+record's suffix after its registers, or its members into their VFP
+registers, by words only where its alignment admits word access and never
+past its extent. A C definition copies such a parameter back into its slot
+from the same places, and extends a narrow integer result as AAPCS32's
+callee must. Scalar 64-bit results use
 r0/r1. Variadic tails use this same base PCS after default promotions, with
 unpromoted tails refused by the planner. Empty/non-C/variant records and
 Landin errors or multiple results are outside the C boundary.
@@ -1051,10 +1065,21 @@ or hard float and the unit with a float unit (D617).
 The linker uses those flags plus `-nostdlib -nostartfiles -nodefaultlibs`, the
 explicit generated script, `--gc-sections --build-id=none --emit-relocs` and
 `-lgcc`. Host writes and invocations pass through `Landin.Platform`.
-There is no implicit hosted startup, libc, allocator or scheduler. Source
-library requests refuse. Assembler/linker failures retain the invoked tool's
-diagnostic and driver failure status. ELF attributes and helper selection do
-not enable the general C source surface.
+There is no implicit hosted startup, libc, allocator or scheduler. A
+`linker.library("NAME")` is a static archive, `libNAME.a` (D923): the link
+adds `-static`, each `linker.directory` and `-L` as `-L` with its absolute
+path, `-L`'s first and with no runtime path, and each archive as `-lNAME`
+after refine's object and before `-lgcc`. The archive's `.text`, `.rodata`,
+`.data` and `.bss` land in the script's own output sections, so reset copies
+its data and clears its BSS as it does the program's. A link with archives
+derives one more output section, `.init_array`, keeping every
+`.preinit_array`, `.init_array` and `.ctors` input that `--gc-sections`
+would otherwise drop unseen; after the link `Landin.Build_Reports.Firmware`
+reads the image's section headers and L0587 refuses, and removes, an image
+holding C constructors, a TLS section or a dynamic linkage (D924).
+Assembler/linker failures retain the invoked tool's diagnostic and driver
+failure status, a library built for the other float variant among them
+(D780).
 
 `.text.*` and `.rodata.*` reside in the regions text and rodata are placed in;
 `.data.*`, `.bss.*` and `.ramtext.*` in the data and BSS regions, with load
@@ -1111,7 +1136,7 @@ interrupt model decides which mcause codes a handler's slot may be (D662).
 The toolchain identity is `riscv64-elf`, GNAT's riscv64-elf archive; with
 no `--toolchain`, a link tries `riscv64-elf-gcc` and then
 `riscv64-unknown-elf-gcc`. C signatures, records and varargs are
-disabled, as on Cortex-M. The [RV32 emulator recipe](../environments/cortex-m/README.md)
+disabled; D920 enabled Cortex-M's and left RV32's refused. The [RV32 emulator recipe](../environments/cortex-m/README.md)
 locates its controls and corpus in the shared embedded-tool environment;
 [Xtensa has its own runner recipe](../environments/xtensa/README.md).
 

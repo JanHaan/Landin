@@ -4460,7 +4460,10 @@ from wherever the C driver keeps it.
 - On Linux a library links beside the C library, so a build that asks for
   one needs `--link=libc`; the default static link ([1650]) refuses it,
   and refuses a directory too.
-- Cortex-M firmware refuses `linker.library`, `linker.directory` and `-L`.
+- Cortex-M firmware links each library as a static archive built for
+  its core, after the program and before the compiler's runtime, and
+  refuses one that brings C constructors, thread-local storage or a
+  dynamic linkage, none of which its startup can honour.
 
 ### [1570] Calling conventions
 

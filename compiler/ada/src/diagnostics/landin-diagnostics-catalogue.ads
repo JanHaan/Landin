@@ -299,7 +299,10 @@ package Landin.Diagnostics.Catalogue is
       Bindings_Policy_Invalid,
       Bindings_Clang_Refused,
       Bindings_Declaration_Refused,
-      Bindings_Output_Refused);
+      Bindings_Output_Refused,
+      --  D924: a firmware image linked with C archives that holds what
+      --  compiler-owned startup cannot honour, read after the link.
+      Firmware_Foreign_Section);
 
    --  Live, or kept so its number is never reused. A code is retired when
    --  the rule it names stops existing: `No_Frontend` retired when the
@@ -1364,7 +1367,15 @@ package Landin.Diagnostics.Catalogue is
          Source => False, Bytes => False,
          Least => 0, Most => 0, Notes => 0, Route => False,
          Fixes => No_Fix, Shown_By => Invocation,
-         Rule => +"D820: outputs refine bindings will not replace")];
+         Rule => +"D820: outputs refine bindings will not replace"),
+      Firmware_Foreign_Section =>
+        (Code => "L0587", Level => Error, State => Live,
+         Source => False, Bytes => False,
+         Least => 0, Most => 0, Notes => 1, Route => False,
+         Fixes => No_Fix, Shown_By => Invocation,
+         Rule => +("D924: a firmware image whose C archives bring"
+                   & " constructors, thread-local storage or a dynamic"
+                   & " linkage"))];
 
    ------------------------------------------------------------------
    --  The columns, read out of the table

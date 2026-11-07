@@ -43,4 +43,21 @@ package Landin.Build_Reports.Firmware is
       Executable : String;
       Profile : Landin.Targets.Firmware.Profile;
       Used : Landin.Backend.Firmware.Region_Use) return String;
+
+   --  D924: what an image linked with C archives holds that compiler-owned
+   --  startup cannot honour, read from its section headers: C constructors
+   --  (an init or preinit array, or `.ctors`), thread-local storage (a TLS
+   --  section) or a dynamic linkage (a dynamic section, its symbols or an
+   --  interpreter), each allocated and not empty; and the first section
+   --  that holds it.  None for an image that holds none, or one that is
+   --  not ELF, whose other checks name that.
+   type Foreign_Kind is
+     (No_Foreign, Constructors, Thread_Storage, Dynamic_Linkage);
+   type Foreign_Section is record
+      Kind : Foreign_Kind := No_Foreign;
+      Name : Ada.Strings.Unbounded.Unbounded_String;
+   end record;
+   function Foreign_Section_Of
+     (Host : Landin.Platform.Filesystem'Class; Executable : String)
+      return Foreign_Section;
 end Landin.Build_Reports.Firmware;

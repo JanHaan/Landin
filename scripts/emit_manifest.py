@@ -111,12 +111,13 @@ CORPORA = ("positive", "runtime", "cortex-m")
 
 #  These source/target pairs deliberately refuse in both modes.  Most use
 #  target-specific C or machine facilities; the fixed-conditional fixtures
-#  select an x86-64-only declaration; from-c and the hosted initializer
-#  import hosted services Cortex-M has none of.  Keep this list explicit: a new shared
+#  select an x86-64-only declaration; from-c imports hosted services Cortex-M
+#  has none of; and r440-c-signatures declares the variadic C signatures
+#  Cortex-M's AAPCS32 does not call (D922), while its other C signatures and
+#  records compile there (D920).  Keep this list explicit: a new shared
 #  refusal must not become evidence of equal assembly merely by agreeing on
 #  every host.
 REFUSAL_PAIRS = {
-    ("external-scalar-c-boundary", "cortex-m0"),
     ("fixed-conditional-cross-file-forward", "cortex-m0"),
     ("fixed-conditional-cross-file-forward", "darwin-arm64"),
     ("fixed-conditional-cross-file-forward", "linux-arm64"),
@@ -137,30 +138,17 @@ REFUSAL_PAIRS = {
     ("fixed-conditional-selects-declarations", "linux-arm64"),
     ("fixed-conditional-selects-declarations", "freebsd-arm64"),
     ("fixed-conditional-selects-declarations", "linux-rv64"),
-    ("r440-array-callback-type-argument", "cortex-m0"),
     ("r440-c-aliases", "cortex-m0"),
     ("r440-c-aliases", "darwin-arm64"),
     ("r440-c-aliases", "linux-arm64"),
     ("r440-c-aliases", "freebsd-arm64"),
     ("r440-c-aliases", "linux-rv64"),
-    ("r440-c-layout-recursive-callback", "cortex-m0"),
     ("r440-c-signatures", "cortex-m0"),
     ("from-c", "cortex-m0"),
-    #  So is D410 to D414's, whose C records and C signature cortex-m0's
-    #  absent C ABI refuses.
-    ("c-packed-records", "cortex-m0"),
-    ("hosted-initializer-normalized", "cortex-m0"),
-    ("r440-checker-recursive-callback-contexts", "cortex-m0"),
-    ("r440-checker-recursive-contexts", "cortex-m0"),
-    ("r440-compatible-link-declarations", "cortex-m0"),
-    ("r440-external-float", "cortex-m0"),
-    ("r491-generic-pointee-layout", "cortex-m0"),
-    ("r491-symbolic-c-layout", "cortex-m0"),
     ("r630-memory-scalars", "cortex-m0"),
     ("r660-machine-directives", "cortex-m0"),
-    ("written-type-c-function", "cortex-m0"),
-    #  rv32 has no C ABI either (D660), so it refuses what cortex-m0 does
-    #  for that reason, and r630-memory-scalars' read-modify-write at its
+    #  rv32 has no enabled C ABI (D660, D920), so it refuses every C
+    #  fixture cortex-m0 once refused, and r630-memory-scalars' read-modify-write at its
     #  default rv32imc (D690).  assembly-operand-forms has no rv32 arm, and
     #  its last arm's u64 operand is wider than an rv32 register.
     ("assembly-operand-forms", "rv32"),

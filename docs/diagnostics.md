@@ -2340,3 +2340,19 @@ inspected and recovered; remove it only after recovery. Preparation can
 already have created private staging. A later publication or cleanup failure
 is L0005 and can leave outputs installed or recovery entries retained, as
 that diagnostic reports.
+
+### L0587
+
+A firmware image linked with C archives, through `linker.library` with
+`linker.directory` or `-L DIR`, holds something compiler-owned startup cannot
+honour (D923, D924). Reset copies data, clears BSS and calls the firmware
+entry; it runs no C constructor, has one thread and no thread pointer, and
+loads nothing at run time. So the image is refused, and removed, when an
+archive brought C constructors, an `.init_array`, `.preinit_array` or
+`.ctors` section that the derived script keeps so that it cannot be dropped
+unseen; thread-local storage, a `.tdata` or `.tbss` section from a
+`_Thread_local` or `__thread` variable; or a dynamic linkage, which a shared
+object would bring. The message names the section. Build the library without
+constructors and call its initialisation from the firmware entry; declare a
+thread-local variable as ordinary static data; and link the library's static
+archive built for the firmware's core.
