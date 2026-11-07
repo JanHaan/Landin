@@ -136,7 +136,7 @@ def cpu(run, elf, s, name):
 
 def layout_cpu(run,elf,s):
     execute(run,elf,['break _landin_firmware_returned','continue','python',
-        'assert [v("*(unsigned*)%%d" %% a) for a in range(%d,%d,4)] == [4,24,4,48,8,12,16,20,21,22,23]' % (s['layout'],s['layout']+44),
+        'assert [v("*(unsigned*)%%d" %% a) for a in range(%d,%d,4)] == [4,28,4,56,8,12,16,20,21,22,23,24]' % (s['layout'],s['layout']+48),
         'assert v("$sp") == 0x20004000 and v("$r11") == 0 and v("$r9") == 0',
         'print("R690_LAYOUT_PASS")','end'],'R690_LAYOUT_PASS')
 
@@ -364,6 +364,18 @@ def pl011(rate, data_bits, parity, stop_bits, clock=DriverPeripheral.CLOCK):
     return integer, fraction, control
 
 
+def with_parity(value, data_bits, parity):
+    """VALUE, a character of DATA_BITS, as a USART that keeps the parity bit
+    above the data leaves it: RM0433's Table 408 puts the STM32H753's at the
+    word's MSB, where a ring that copies the receive register keeps it.  The
+    PL011 removes it (RP2040 datasheet 4.2.1); the model is fed the harder
+    byte, and the driver's read must give VALUE back (D965)."""
+    if parity == 0 or data_bits >= 8:
+        return value
+    ones = bin(value).count('1') % 2
+    return value | (ones if parity == 1 else 1 - ones) << data_bits
+
+
 # The lines the protocol client opens beside the default, each (rate, data
 # bits, parity, stop bits): the slowest rate IBRD holds, the fastest, which
 # is 16 clocks a bit, and every data width, parity and stop count between.
@@ -371,7 +383,7 @@ def pl011(rate, data_bits, parity, stop_bits, clock=DriverPeripheral.CLOCK):
 # percent just below 3 Mbaud (pinned below), so this driver never meets
 # core/line's tolerance refusal; runtime/library-shared-line does.
 LINES = ((9600, 8, 0, 1), (57600, 7, 1, 1), (230400, 8, 2, 2), (921600, 5, 0, 2),
-         (3000000, 6, 1, 1), (46, 8, 0, 1), (19200, 6, 2, 2))
+         (3000000, 6, 1, 1), (46, 8, 0, 1), (19200, 6, 2, 2), (57600, 7, 2, 2))
 
 
 def lines(run, elf, s):
@@ -404,6 +416,22 @@ def lines(run, elf, s):
                     and abs(Fraction(numerator, denominator) / rate - 1) <= Fraction(2, 100),
                     name + ': latched line %r' % (model.line,))
             require(model.remaining == 32 and model.configuration == 0xa84e1, name + ': ring')
+            # 0x17, the exchange's terminator, among the characters read
+            # back: its parity bit is one under odd parity, and 0x16's under
+            # even, so a read that kept the bit above the data would differ.
+            mask = (1 << data_bits) - 1
+            sent = [0x17 & mask, 0x16 & mask, 0x05 & mask]
+            fed = [with_parity(value, data_bits, parity) for value in sent]
+            require(parity == 0 or data_bits == 8 or fed != sent,
+                    name + ': no character carries a parity bit of one')
+            for value in fed:
+                model.feed(value)
+            m.write_u32(s['command'], 2)
+            m.settle()
+            require(m.u32(s['result']) == 3 and m.u32(s['outcome']) == 0, name + ': read')
+            require(list(m.read(s['destination'], 3)) == sent,
+                    name + ': read %r for %r fed as %r'
+                    % (list(m.read(s['destination'], 3)), sent, fed))
     return len(LINES)
 
 

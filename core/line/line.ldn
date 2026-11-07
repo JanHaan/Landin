@@ -73,6 +73,15 @@ public frame_bits: (line: settings) -> (bits: u32) =
     bits += if line.stop_bits == two_stop_bits then 2 else 1 end if
 end frame_bits
 
+--- The bits of a received byte that hold a frame's data, the low
+--- `data_bits` of them: 0x7f for seven data bits, all eight for eight or
+--- nine.  A UART may leave other bits above the data in what it receives,
+--- an STM32 USART the parity bit, so a driver keeps only these (D965).
+public data_mask: (line: settings) -> (mask: u8) =
+    mask = 0xff
+    if line.data_bits < 8 then mask = u8((u32(1) << u32(line.data_bits)) - 1) end if
+end data_mask
+
 --- The divisor closest to `clock / (oversampling * rate)` with
 --- `fraction_bits` bits after the point, as the register holds it: the
 --- value of `clock * 2^fraction_bits / (oversampling * rate)` rounded to

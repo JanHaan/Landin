@@ -26,6 +26,11 @@ public rx: type = struct
     overflows_seen: u32
     active: bool
     lost: bool
+    -- The bits of a received byte that are its frame's data, which read
+    -- keeps: the RX FIFO takes a frame's data bits alone (TRM 26.3 of the
+    -- C3's), and the mask holds the contract whatever the bits above them
+    -- read (D965).
+    data_mask: u8
 end rx
 
 public cpu_line: u32 = 1
@@ -151,7 +156,8 @@ public open: (settings: line.settings, budget: u32, escaping buf: []mut u8)
     xtensa.device_barrier()
     xtensa.restore_interrupts(saved)
     r = (buf: buf, consumed: 0, dropped_seen: atomic.load(addr dropped),
-         overflows_seen: atomic.load(addr overflows), active: true, lost: false)
+         overflows_seen: atomic.load(addr overflows), active: true, lost: false,
+         data_mask: line.data_mask(settings))
 end open
 
 snapshot: (inout r: rx) -> (count: usize) ! overrun =
@@ -180,7 +186,7 @@ public read: (inout r: rx, out_buf: []mut u8) -> (count: usize) ! receive_error 
     -- two and i < 256. No arithmetic wraps.
     unchecked begin
         for i in 0..<count do
-            out_buf[i] = backing[(usize(r.consumed) + i) & (capacity - 1)]
+            out_buf[i] = backing[(usize(r.consumed) + i) & (capacity - 1)] & r.data_mask
         end for
     end unchecked
     r.consumed = r.consumed +% u32(count)
@@ -225,4 +231,5 @@ public configure: (inout r: rx, settings: line.settings)
     end while
     program(images)
     xtensa.device_barrier()
+    r.data_mask = line.data_mask(settings)
 end configure

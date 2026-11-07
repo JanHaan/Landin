@@ -1982,11 +1982,15 @@ class FakeLineBoard:
     with an `l` frame, the line changed after it, BACK answered with an `e`
     frame, and REPORT with a `t` frame counting what was handled.  A byte
     sent while the two ends' lines differ arrives as 0xff, as a framing
-    error would; NOISE adds bytes the next time the host changes line."""
+    error would; NOISE adds bytes the next time the host changes line.  The
+    USART leaves a parity bit above seven data bits in what it receives, as
+    RM0433's Table 408 says the STM32H753's RDR does; the port's read takes
+    it off, unless KEEPS_PARITY, the fault a rig run found (D965)."""
     configurable = True
 
-    def __init__(self, oracle, noise=b'', wrong=None):
+    def __init__(self, oracle, noise=b'', wrong=None, keeps_parity=False):
         self.oracle, self.noise, self.wrong = oracle, noise, wrong
+        self.keeps_parity = keeps_parity
         self.received, self.sent = bytearray(), bytearray()
         self.host = self.board = COMMON.DEFAULT_LINE
         self.digits, self.handled, self.changed, self.counted = None, 0, False, b''
@@ -2000,12 +2004,23 @@ class FakeLineBoard:
         self.received += self.noise
         self.noise = b''
 
+    def received_byte(self, byte):
+        """BYTE as the application reads it on the board's line."""
+        _, data_bits, parity, _ = self.board
+        if parity == 'none' or data_bits >= 8 or not self.keeps_parity:
+            return byte
+        ones = bin(byte).count('1') % 2
+        return byte | (ones if parity == 'even' else 1 - ones) << data_bits
+
     def send(self, data, pace=64):
         self.sent += data
         for byte in data:
             if self.host != self.board:
                 byte = 0xff
+            # The transmitter makes its own parity bit: the host reads the
+            # data bits back, whatever the application kept.
             self.received.append(byte)
+            byte = self.received_byte(byte)
             self.handled += 1
             if self.changed and byte != COMMON.BACK:
                 self.counted += bytes([byte])
@@ -2098,6 +2113,16 @@ class LineExchange(unittest.TestCase):
         board = FakeLineBoard(self.board.line_oracle)
         with self.assertRaisesRegex(COMMON.Failed, 'the plan expects'):
             self.run_plan(board, [((300, 8, 'none', 1), 'accepted')])
+
+    def test_a_parity_bit_kept_above_the_data_loses_the_terminator(self):
+        # 0x17 has four ones, so under odd parity its parity bit is one and
+        # a read that kept it sees 0x97: the echo is right, as on the rig,
+        # and no exchange frame comes.
+        board = FakeLineBoard(self.board.line_oracle, keeps_parity=True)
+        with self.assertRaisesRegex(COMMON.Failed, 'on 57600-7O2 the board echoed the payload'
+                                    ' and 0x17 but sent no exchange frame'):
+            self.run_plan(board)
+        self.assertIn(((57600, 7, 'odd', 2), 'accepted'), self.board.LINE_PLAN)
 
     def test_a_fixed_console_is_not_run_and_says_why(self):
         verdict, last = COMMON.line_phase(mock.Mock(), [], None, None, None)

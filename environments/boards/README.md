@@ -540,7 +540,10 @@ written from its manual: `stm32h753/board.py`'s `line_oracle` from RM0433,
 `TtyConsole.line`; nothing may arrive while the two ends change, a 48-byte
 payload and 0x17 must come back echoed byte for byte, the board's `e` frame
 must count and hash, FNV-1a, exactly the payload, and after the board and
-the tty go back to 115,200 8N1 it must answer a 0x11 there.
+the tty go back to 115,200 8N1 it must answer a 0x11 there. A board that
+echoes the payload and 0x17 but sends no `e` frame read 0x17 as something
+else, as a parity bit left above seven data bits makes it read; the
+failure says so (D965).
 
 | Port | Bridge | Accepted | Refused |
 |---|---|---|---|

@@ -41,6 +41,11 @@ public rx: type = struct
     active: bool
     lost: bool
     broken: bool
+    -- The bits of a received byte that are its frame's data, which read
+    -- keeps: the PL011 removes the parity bit on receive (RP2040 datasheet
+    -- 4.2.1), and the mask holds the contract whatever the bits above the
+    -- data read (D965).
+    data_mask: u8
 end rx
 
 -- CTRL_TRIG: READ_ERROR 30, WRITE_ERROR 29, BUSY 24, EN 0.
@@ -136,7 +141,8 @@ public open: (settings: line.settings, budget: u32, escaping buf: []mut u8)
     cortex_m.device_barrier()
     dma.ch0_ctrl_trig_write(dma.base, image | 1)
     r = (buf: buf, consumed: 0, budget: budget, produced: 0, config: image,
-         active: true, lost: false, broken: false)
+         active: true, lost: false, broken: false,
+         data_mask: line.data_mask(settings))
 end open
 
 -- Count never reloads in an epoch. Failure latches until an explicit
@@ -184,7 +190,7 @@ public read: (inout r: rx, out_buf: []mut u8) -> (count: usize) ! receive_error 
     -- i < 256 and capacity is a nonzero power of two. No arithmetic wraps.
     unchecked begin
         for i in 0..<count do
-            out_buf[i] = backing[(usize(r.consumed) + i) & (capacity - 1)]
+            out_buf[i] = backing[(usize(r.consumed) + i) & (capacity - 1)] & r.data_mask
         end for
     end unchecked
     r.consumed = r.consumed +% u32(count)
@@ -242,4 +248,5 @@ public configure: (inout r: rx, settings: line.settings)
     end while
     program(images)
     cortex_m.device_barrier()
+    r.data_mask = line.data_mask(settings)
 end configure

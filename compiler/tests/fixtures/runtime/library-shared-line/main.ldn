@@ -90,6 +90,11 @@ exercise: () -> (ok: bool) =
       or not refused(stopped, line.unsupported_rate)
     return when line.frame_bits(line.default_settings) <> 10
       or line.frame_bits(seven_even) <> 11
+    --  Seven data bits keep the low seven of a byte, which an STM32 USART
+    --  shares with the parity bit; eight keep all of them.
+    return when line.data_mask(seven_even) <> 0x7f
+      or line.data_mask(line.default_settings) <> 0xff
+      or line.data_mask(stopped) <> 0xff
     ok = sweep() == 1195194680
 end exercise
 

@@ -77,6 +77,11 @@ public rx: type = struct
     active: bool
     lost: bool
     broken: bool
+    -- The bits of a received byte that are its frame's data, which read
+    -- keeps: RDR holds the parity bit at the word's MSB, bit 7 of seven data
+    -- bits and parity and bit 6 of six (48.5.12, Table 408, p. 2042; 48.8.12,
+    -- p. 2098), and the stream moves it into the ring with them (D965).
+    data_mask: u8
 end rx
 
 -- DMA_LISR and DMA_LIFCR for stream 0 (15.5.1, p. 659; 15.5.3, p. 660):
@@ -259,7 +264,8 @@ public open: (provider: type is cache.maintenance, caches: provider,
     arm()
     cortex_m.restore_interrupts(saved)
     r = (buf: buf, consumed: 0, budget: budget, produced: 0, config: config,
-         active: true, lost: false, broken: false)
+         active: true, lost: false, broken: false,
+         data_mask: line.data_mask(settings))
 end open
 
 -- The count never reloads in an epoch. Failure latches until an explicit
@@ -323,7 +329,7 @@ public read: (provider: type is cache.maintenance, caches: provider,
     -- i < 256 and capacity is a nonzero power of two. No arithmetic wraps.
     unchecked begin
         for i in 0..<count do
-            out_buf[i] = backing[(usize(r.consumed) + i) & (capacity - 1)]
+            out_buf[i] = backing[(usize(r.consumed) + i) & (capacity - 1)] & r.data_mask
         end for
     end unchecked
     r.consumed = r.consumed +% u32(count)
@@ -390,6 +396,7 @@ public configure: (provider: type is cache.maintenance, caches: provider,
     end while
     try stop(r)
     program(images)
+    r.data_mask = line.data_mask(settings)
     usart3.icr_write(usart3.base, uart_overrun | uart_idle)
     try restart(caches, r)
 end configure

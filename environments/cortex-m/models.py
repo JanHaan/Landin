@@ -306,7 +306,11 @@ class DriverPeripheral(Model):
     IBRD is 65535, latched together by the LCR_H write that must follow
     them, and an LCR_H with neither BRK nor SPS.  `line`
     is what the latched images mean, from the declared 48 MHz clock; no
-    bit is timed or sent at that rate.
+    bit is timed or sent at that rate.  A received byte is what the test
+    feeds, up to the frame's data and parity bits: a test may hand the
+    driver a parity bit above the data, as an STM32 USART's RDR leaves it,
+    which a PL011 removes, so that the driver's read is held to keeping the
+    data bits alone either way (D965).
     """
     CLOCK = 48000000
     LINES = {'irq': 0, 'timer': 1}
@@ -463,6 +467,9 @@ class DriverPeripheral(Model):
     def feed(self, value):
         if value > 255:
             raise Refused('not a byte')
+        line = self.line
+        if line is not None and line[1] < 8 and value >> (line[1] + (line[2] != 'none')):
+            raise Refused('more bits than the frame carries')
         if not self.configuration & 1 or self.remaining == 0 or self.errors:
             self.rejected += 1
             return

@@ -23999,10 +23999,11 @@ above 0 at IBRD 65535, or sets BRK or SPS, and records the latched images
 with what they mean at the declared 48 MHz: the rate as a fraction, the
 data bits, the parity and the stop bits. `driver.py`'s `pl011`, written
 from the RP2040 datasheet's 4.2.7.1, the integer part and the fraction's
-64ths rounded with their carry, is the oracle: seven lines, from 46 to
+64ths rounded with their carry, is the oracle: eight lines, from 46 to
 3,000,000 baud and every data width, parity and stop count, are opened
 through the public driver and each register image and latched line must be
-its answer; rates 0, 45 and 3,100,000 and data bits 4 and 9 are refused
+its answer, and three characters fed on each, a parity frame's with its
+parity bit above the data, must be read back as sent (D965); rates 0, 45 and 3,100,000 and data bits 4 and 9 are refused
 with every UART register unwritten and nothing latched; and 115,200 8N1 is
 still the application's 26, 3 and 0x70 in its exact trace. The model sends
 no bit at any rate, so this is evidence of the images the driver writes,
@@ -24015,6 +24016,45 @@ rounding, which would share its mistakes.
 **Pinned by** `environments/cortex-m/driver.py`'s `lines` and
 `configurations` on every profile, and `scripts/tests/test_line.py`, which
 holds `pl011` to the exact oracle.
+
+### D965 — A received byte is its frame's data bits alone
+
+**The tour said** nothing; D955's ports read their rings' bytes as the
+receiver left them. A rig run of the STM32H753 found that wrong for a
+parity frame of seven data bits: RM0433's Table 408 (48.5.12, p. 2042) and
+USART_RDR (48.8.12, p. 2098) put the received parity bit at the word's MSB,
+bit 7, the stream moved it into the ring with the data, and on 57600-7O2
+the application read 0x17, whose odd parity bit is one, as 0x97. Its echo
+was right, since the transmitter makes its own parity bit, but 0x17 was
+not the command, and no `e` frame came.
+
+**Chosen:** `line.data_mask(settings)` is the low `data_bits` bits of a
+byte, all eight for eight or nine. Every port's descriptor keeps its
+line's mask, set by `open` and by `configure` once the line is programmed,
+and `read` returns each byte of the ring ANDed with it, so the stream, the
+interrupt and the ring are as they were and a byte read is its frame's
+data bits with zeros above. What the hardware leaves differs, and the mask
+makes the contract the same: the STM32H753 leaves the parity bit at bit 7
+of seven data bits and bit 6 of six, and for eight data bits and parity at
+bit 8, which a byte transfer drops; the PL011 removes the parity bit on
+receive (RP2040 datasheet 4.2.1), so the Picos' and the derived driver's
+reads change nothing it delivers; and the ESP UARTs store the data bits
+alone in their RX FIFO (the C3's TRM 26.3, which the ESP32, the S3 and
+the C5 share), the high bits for fewer than eight unstated, which the mask
+then decides.
+
+**The alternatives:** masking where the stream writes, which a DMA ring
+cannot; masking in the application, which every program would have to
+repeat; masking only the STM32H753, which leaves the ESP ports' unstated
+high bits to the hardware; and a terminator test on the data bits alone,
+which the count and hash would still see wrong.
+
+**Pinned by** `environments/cortex-m/driver.py`'s `lines`, which feeds the
+model 0x17 under odd parity with its parity bit at bit 7, as the
+STM32H753's RDR leaves it, and requires 0x17 read back;
+`scripts/tests/test_board_common.py`'s `LineExchange`, whose fake board
+keeping the parity bit fails 57600-7O2 as the rig did, and
+`runtime/library-shared-line`'s masks.
 
 ### D725 — Every board run holds the rig's lock and paces what disconnects a device
 
@@ -32399,7 +32439,7 @@ emulator's synthetic device has no protocol to drain for; keeping
 `bad_baud` beside the shared atoms, two names for one refusal; and a
 driver-chosen tolerance, which D956 declined.
 
-**Pinned by** `environments/cortex-m/driver.py`'s `lines`, seven lines
+**Pinned by** `environments/cortex-m/driver.py`'s `lines`, eight lines
 opened through the public driver whose register images and the latched
 line the model holds equal an oracle written from the RP2040 datasheet's
 4.2.7.1, and its `configurations`, whose rate and format refusals leave

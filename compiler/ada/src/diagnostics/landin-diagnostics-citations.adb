@@ -2414,6 +2414,8 @@ package body Landin.Diagnostics.Citations is
             when 964 =>
                "The derived driver's model holds the PL011's line rules,"
                & " and register images are not a line",
+            when 965 =>
+               "A received byte is its frame's data bits alone",
             when 725 =>
                "Every board run holds the rig's lock and paces what disc"
                & "onnects a device",
@@ -4014,6 +4016,8 @@ package body Landin.Diagnostics.Citations is
             when 963 =>
                "Decisions: The toolchain, C and the machine",
             when 964 =>
+               "Decisions: The toolchain, C and the machine",
+            when 965 =>
                "Decisions: The toolchain, C and the machine",
             when 725 =>
                "Decisions: The toolchain, C and the machine",
@@ -5930,6 +5934,9 @@ package body Landin.Diagnostics.Citations is
                "https://www.701.dev/spec.html#d964-the-derived-driver-s-"
                & "model-holds-the-pl011-s-line-rules-and-register-images-a"
                & "re-not-a-line",
+            when 965 =>
+               "https://www.701.dev/spec.html#d965-a-received-byte-is-it"
+               & "s-frame-s-data-bits-alone",
             when 725 =>
                "https://www.701.dev/spec.html#d725-every-board-run-holds"
                & "-the-rig-s-lock-and-paces-what-disconnects-a-device",

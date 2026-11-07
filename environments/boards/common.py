@@ -311,8 +311,15 @@ def line_phase(console, plan, oracle, report, rng, settle=0.2):
         exchanges = len(tagged(bytes(console.received), 'e'))
         console.send(payload)
         console.send(bytes([BACK]))
-        stream = console.wait(lambda s: len(tagged(s, 'e')) > exchanges, 5,
-                              'the exchange frame on %s' % name)
+        try:
+            stream = console.wait(lambda s: len(tagged(s, 'e')) > exchanges, 5,
+                                  'the exchange frame on %s' % name)
+        except Failed:
+            if echo_of(bytes(raw.received[before:])) == payload + bytes([BACK]):
+                raise Failed('on %s the board echoed the payload and 0x17 but sent no exchange'
+                             ' frame: it did not read 0x17 as the command, as a parity bit kept'
+                             ' above the data bits makes it read (D965)' % name)
+            raise
         counted = tagged(stream, 'e')[exchanges]
         crossed = bytes(raw.received[before:])
         require(echo_of(crossed) == payload + bytes([BACK]),

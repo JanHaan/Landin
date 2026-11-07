@@ -104,7 +104,8 @@ There is no hidden allocator, module initializer or reporting allocation.
 it does not consume them. It resumes an active, non-exhausted epoch after a
 successful observation. The answer is a snapshot, not a reservation.
 `read(inout r, out_buf)` takes a fresh snapshot, copies the shorter of unread
-bytes and destination length in stream order, advances absolute consumption
+bytes and destination length in stream order, each byte its line's data bits
+alone with zeros above (`line.data_mask`, D965), advances absolute consumption
 by exactly that count, and resumes if active. Empty input returns zero;
 a zero-length destination consumes nothing. Exact capacity is full, not
 empty. Partial consumption and physical wrap are independent of the epoch

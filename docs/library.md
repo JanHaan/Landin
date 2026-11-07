@@ -1478,6 +1478,7 @@ Serial line settings: a UART's rate and frame, the divisor its baud-rate generat
 | `line.check` | Refuse a rate of zero and data bits outside 5 to 9. |
 | `line.divisor` | The divisor nearest a rate, as a register holds it, or a refusal. |
 | `line.frame_bits` | The bits of one frame, start and stop bits included. |
+| `line.data_mask` | The bits of a received byte that hold the frame's data. |
 
 `parity` is `no_parity`, `even_parity` or `odd_parity`, and `stop_bits`
 `one_stop_bit` or `two_stop_bits`. Nothing in the module reads or writes
@@ -1502,6 +1503,11 @@ helpers for: the derived driver's image grew by about 3.8 KB at size/auto.
 gives it for data bits outside 5 to 9, and each driver for what its own
 peripheral lacks, nine data bits on every port in this repository. Both
 atoms have words in `failure.words`.
+
+A UART may leave other bits above the data bits it receives: an STM32
+USART keeps the parity bit at the word's top, bit 7 of seven data bits.
+Every port's `read` returns a byte ANDed with `data_mask`, so a byte read
+is its frame's data and nothing else.
 
 [Executable example](../compiler/tests/fixtures/runtime/library-shared-line/main.ldn)
 

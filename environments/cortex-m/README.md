@@ -1317,9 +1317,11 @@ write that latches IBRD 0, or FBRD above 0 at IBRD 65535, or sets BRK or
 SPS, and records what the latched images mean at the declared 48 MHz:
 rate, data bits, parity and stop bits. `driver.py`'s `pl011`, written from
 the RP2040 datasheet's 4.2.7.1 apart from `core/line`, is their oracle.
-The protocol client opens seven lines through the public driver, from 46
+The protocol client opens eight lines through the public driver, from 46
 to 3,000,000 baud with every data width, parity and stop count, each
-image and latched line required to be `pl011`'s; the refusals of rates 0,
+image and latched line required to be `pl011`'s, and on each reads back
+three characters it was fed, a parity frame's with the parity bit above
+the data as an STM32's RDR keeps it, 0x17 among them (D965); the refusals of rates 0,
 45 and 3,100,000 and of 4 and 9 data bits leave every UART register
 unwritten and nothing latched; and the application's exact trace still
 writes 26, 3 and 0x70. No bit is sent at any of these rates: this shows
