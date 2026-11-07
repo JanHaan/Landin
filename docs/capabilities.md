@@ -261,9 +261,13 @@ The README has [the commands in brief](../README.md#refine-in-brief);
 - `refine run program.ldn -- ARGUMENT ...` compiles into a new private
   directory under `TMPDIR` or `/tmp`, runs the program on this terminal with
   the arguments after `--` exactly, exits with its status, or with 128 and
-  the number of the signal that ended it and a line naming it. It cleans up
-  its directory after every outcome, including termination or hangup sent
-  to refine, which it passes on to the program. If a changed directory or
+  the number of the signal that ended it and a line naming it. The program
+  shares refine's process group, and while it runs refine ignores SIGINT
+  and SIGQUIT, so the terminal's Ctrl-C and Ctrl-\ reach the program and
+  refine stays to clean up; an interrupt or quit refine's caller ignored
+  stays ignored in the program. A termination or hangup sent to refine is
+  passed on to the program, unless refine was started with it ignored. It
+  cleans up its directory after every outcome. If a changed directory or
   cleanup failure prevents safe removal, it retains the entries and reports
   their recovery location and what to do. It takes `compile`'s
   options except those that say what is written, and runs only the
