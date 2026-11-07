@@ -1,10 +1,10 @@
 error[L0314]: this returned reference still has frame origin
-  --> ../tests/fixtures/negative/array-literal-lent-escapes/main.ldn:7:1
+  --> ../tests/fixtures/negative/array-literal-lent-escapes/main.ldn:8:12
   |
-7 | escaped: () -> (view: []u32) =
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+8 |     view = keep([1, 2, 3])
+  |            ^^^^^^^^^^^^^^^
   --> ../tests/fixtures/negative/array-literal-lent-escapes/main.ldn:7:17
   |
 7 | escaped: () -> (view: []u32) =
   |                 ^^^^^^^^^^^ the shorter-lived reference source
-  = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`
+  = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`; return a view of caller-supplied storage and declare the result `from` that parameter

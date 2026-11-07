@@ -4,4 +4,4 @@ error[L0100]: a name belongs after `.`
 9 |     match local.
   |                ^
   = note: written as `match local.name` the routine parses
-  = help: write a name after `.`
+  = help (guess): write a name after `.`

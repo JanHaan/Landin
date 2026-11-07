@@ -8,4 +8,4 @@ error[L0102]: Landin writes `not` for logical negation, not `!`
 2 |     r = if !a then 1 else 2 end if
   |         ^^ required by this
   = note: [0340]: `not condition` reverses a boolean condition; `!` declares a function's error channel, not negation
-  = help: write `not`
+  = help (guess): write `not`

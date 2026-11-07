@@ -1,10 +1,10 @@
 error[L0314]: this returned reference still has frame origin
-  --> ../tests/fixtures/negative/core-memory-argument-frame/main.ldn:4:1
-  |
-4 | bad: () -> (value: text.host_string) ! io.no_argument =
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/core-memory-argument-frame/main.ldn:14:13
+   |
+14 |     value = try world.argument(0)
+   |             ^^^^^^^^^^^^^^^^^^^^^
   --> ../tests/fixtures/negative/core-memory-argument-frame/main.ldn:12:5
    |
 12 |     memory := io.memory_over(space, files, args[0..<1], "", output, errors)
    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the shorter-lived reference source
-  = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`
+  = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`; return a view of caller-supplied storage and declare the result `from` that parameter

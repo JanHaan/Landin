@@ -8,4 +8,4 @@ error[L0103]: `improt` may be a misspelling of `import`
 1 | improt helper
   |        ^^^^^^ found after this word
   = note: [1760]: check the leading keyword; the offered respelling is a guess
-  = help: did you mean `import`?
+  = help (guess): did you mean `import`?

@@ -4,4 +4,4 @@ error[L0100]: a name belongs before `:=`
 3 |     := first + 1
   |     ^^
   = note: written as `name := first + 1` the line parses
-  = help: write a name before `:=`
+  = help (guess): write a name before `:=`

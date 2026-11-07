@@ -7,4 +7,4 @@ error[L0316]: the returned reference does not derive from exactly the parameters
   |
 3 |             -> (view: []mut i32 from right) =
   |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^ the named return and its declared sources
-  = note: [0790]: the written clause and every returning body edge agree both ways
+  = note: [0790]: the `from` clause of return `view` and every returning body edge must name the same sources; this edge derives from left

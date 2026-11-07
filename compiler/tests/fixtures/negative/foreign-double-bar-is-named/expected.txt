@@ -8,4 +8,4 @@ error[L0102]: Landin writes `or`, not `||`
 2 |     beyond = x < 1 || x > 5
   |                  ^ written after this
   = note: [0340]: the logical operators are the words `and`, `or` and `not`; `&` and `|` are bitwise
-  = help: write `or`
+  = help (guess): write `or`

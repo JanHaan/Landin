@@ -1,1 +1,1 @@
-error[L0009]: unknown level for linux-x86-64: armv8.1-a
+error[L0009]: unknown level for linux-x86-64: armv8.1-a; valid levels: x86-64-v1, x86-64-v2, x86-64-v3, x86-64-v4; refine targets lists every target and its levels

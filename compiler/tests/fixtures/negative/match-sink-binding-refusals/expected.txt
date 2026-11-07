@@ -3,20 +3,20 @@ error[L0302]: this place was consumed by `sink` and has not been assigned again
    |
 35 |     got = got + peek(m)
    |                      ^
-  --> ../tests/fixtures/negative/match-sink-binding-refusals/main.ldn:29:17
+  --> ../tests/fixtures/negative/match-sink-binding-refusals/main.ldn:33:29
    |
-29 | subject_after: (sink m: maybe_node) -> (got: i32) =
-   |                 ^^^^^^^^^^^^^^^^^^ the binding containing the consumed place
+33 |         ptr (sink l): got = release(l)
+   |                             ^^^^^^^^^^ consumed here
   = note: [0910]: a sunk place is dead until assignment
 error[L0302]: this place was consumed by `sink` and has not been assigned again
   --> ../tests/fixtures/negative/match-sink-binding-refusals/main.ldn:42:50
    |
 42 |         ptr (sink l): got = release(l) + release(l)
    |                                                  ^
-  --> ../tests/fixtures/negative/match-sink-binding-refusals/main.ldn:42:19
+  --> ../tests/fixtures/negative/match-sink-binding-refusals/main.ldn:42:29
    |
 42 |         ptr (sink l): got = release(l) + release(l)
-   |                   ^ the binding containing the consumed place
+   |                             ^^^^^^^^^^ consumed here
   = note: [0910]: a sunk place is dead until assignment
 error[L0337]: a `sink` binding consumes the matched place, and this subject is not one
   --> ../tests/fixtures/negative/match-sink-binding-refusals/main.ldn:50:19

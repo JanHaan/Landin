@@ -8,4 +8,4 @@ error[L0331]: this call returns nothing, so its `else` has no result to stand in
 5 | attempt: (flag: bool) -> none ! refused =
   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this signature returns none
   = note: [1030]: `else none` ignores the error, and `else (problem) ... end` handles it in a block; neither yields a value
-  = help: ignore the failure with `else none`
+  = help (guess): ignore the failure with `else none`

@@ -7,7 +7,7 @@ error[L0316]: the returned reference does not derive from exactly the parameters
   |
 4 |        -> (result: utf8 from other) ! text.invalid_text =
   |            ^^^^^^^^^^^^^^^^^^^^^^^ the named return and its declared sources
-  = note: [0790]: the written clause and every returning body edge agree both ways
+  = note: [0790]: the `from` clause of return `result` and every returning body edge must name the same sources; this edge derives from source
 error[L0316]: the returned reference does not derive from exactly the parameters named by its `from` clause
   --> ../tests/fixtures/negative/core-text-adapter-wrong-from/main.ldn:7:1
   |
@@ -17,4 +17,4 @@ error[L0316]: the returned reference does not derive from exactly the parameters
   |
 8 |             -> (result: utf8 from other) ! text.invalid_text =
   |                 ^^^^^^^^^^^^^^^^^^^^^^^ the named return and its declared sources
-  = note: [0790]: the written clause and every returning body edge agree both ways
+  = note: [0790]: the `from` clause of return `result` and every returning body edge must name the same sources; this edge derives from source

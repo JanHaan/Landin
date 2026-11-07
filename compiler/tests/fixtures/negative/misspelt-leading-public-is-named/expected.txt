@@ -8,4 +8,4 @@ error[L0103]: `pubilc` may be a misspelling of `public`
 1 | pubilc main: () -> (code: i32) =
   |        ^^^^ found after this word
   = note: [1760]: check the leading keyword; the offered respelling is a guess
-  = help: did you mean `public`?
+  = help (guess): did you mean `public`?

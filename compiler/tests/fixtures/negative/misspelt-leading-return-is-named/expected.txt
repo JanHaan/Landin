@@ -4,4 +4,4 @@ error[L0110]: `retrun` may be a misspelling of `return`
 3 |     retrun when code > 1
   |     ^^^^^^
   = note: [1760]: check the leading keyword; the offered respelling is a guess
-  = help: did you mean `return`?
+  = help (guess): did you mean `return`?

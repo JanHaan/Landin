@@ -8,7 +8,7 @@ error[L0102]: a recovery that leaves holds its `return` in a block: write `else 
 16 |     found := lookup(key) else return
    |                          ^^^^ this recovery
   = note: [1030]: `else value` stands in for the call's result, `else (problem) ... end` names the error in its block, and `try` passes the failure on instead
-  = help: write `begin` before `return` and `end` after it
+  = help (guess): write `begin` before `return` and `end` after it
 error[L0102]: a recovery that leaves holds its `return` in a block: write `else begin return end`
   --> ../tests/fixtures/negative/recovery-exit-is-held-in-a-block/program.ldn:17:21
    |
@@ -19,7 +19,7 @@ error[L0102]: a recovery that leaves holds its `return` in a block: write `else 
 17 |     store(key) else return
    |                ^^^^ this recovery
   = note: [1030]: `else value` stands in for the call's result, `else (problem) ... end` names the error in its block, and `try` passes the failure on instead
-  = help: write `begin` before `return` and `end` after it
+  = help (guess): write `begin` before `return` and `end` after it
 error[L0102]: a recovery that leaves holds its `continue` in a block: write `else begin continue end`
   --> ../tests/fixtures/negative/recovery-exit-is-held-in-a-block/program.ldn:24:35
    |
@@ -30,7 +30,7 @@ error[L0102]: a recovery that leaves holds its `continue` in a block: write `els
 24 |         found := lookup(key) else continue
    |                              ^^^^ this recovery
   = note: [1030]: `else value` stands in for the call's result, `else (problem) ... end` names the error in its block, and `try` passes the failure on instead
-  = help: write `begin` before `continue` and `end` after it
+  = help (guess): write `begin` before `continue` and `end` after it
 error[L0102]: a recovery that leaves holds its `break` in a block: write `else begin break end`
   --> ../tests/fixtures/negative/recovery-exit-is-held-in-a-block/program.ldn:25:25
    |
@@ -41,7 +41,7 @@ error[L0102]: a recovery that leaves holds its `break` in a block: write `else b
 25 |         store(key) else break
    |                    ^^^^ this recovery
   = note: [1030]: `else value` stands in for the call's result, `else (problem) ... end` names the error in its block, and `try` passes the failure on instead
-  = help: write `begin` before `break` and `end` after it
+  = help (guess): write `begin` before `break` and `end` after it
 error[L0102]: a recovery that leaves holds its `fail` in a block: write `else begin fail ... end`
   --> ../tests/fixtures/negative/recovery-exit-is-held-in-a-block/program.ldn:31:30
    |
@@ -52,4 +52,4 @@ error[L0102]: a recovery that leaves holds its `fail` in a block: write `else be
 31 |     value = lookup(key) else fail refused
    |                         ^^^^ this recovery
   = note: [1030]: `else value` stands in for the call's result, `else (problem) ... end` names the error in its block, and `try` passes the failure on instead
-  = help: write `begin` before `fail` and `end` after it
+  = help (guess): write `begin` before `fail` and `end` after it

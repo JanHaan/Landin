@@ -8,4 +8,4 @@ error[L0102]: Landin writes `and`, not `&&`
 2 |     inside = x > 1 && x < 5
   |                  ^ written after this
   = note: [0340]: the logical operators are the words `and`, `or` and `not`; `&` and `|` are bitwise
-  = help: write `and`
+  = help (guess): write `and`

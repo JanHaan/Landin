@@ -59,26 +59,26 @@ error[L0314]: this frame-origin reference cannot be stored in storage outside th
    |     ^^^^^^^^^^^^^^ the shorter-lived reference source
   = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`
 error[L0314]: this returned reference still has frame origin
-  --> ../tests/fixtures/negative/r491-retained-reference-stores/main.ldn:34:1
+  --> ../tests/fixtures/negative/r491-retained-reference-stores/main.ldn:39:14
    |
-34 | aliased_local: () -> (result: ptr i32) =
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+39 |     result = slot
+   |              ^^^^
   --> ../tests/fixtures/negative/r491-retained-reference-stores/main.ldn:35:5
    |
 35 |     local: i32 = 1
    |     ^^^^^^^^^^^^^^ the shorter-lived reference source
-  = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`
+  = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`; return a view of caller-supplied storage and declare the result `from` that parameter
 error[L0314]: this returned reference still has frame origin
-  --> ../tests/fixtures/negative/r491-retained-reference-stores/main.ldn:42:1
+  --> ../tests/fixtures/negative/r491-retained-reference-stores/main.ldn:47:14
    |
-42 | aliased_untracked: () -> (result: ptr i32) =
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+47 |     result = slot
+   |              ^^^^
   --> ../tests/fixtures/negative/r491-retained-reference-stores/main.ldn:43:5
    |
 43 |     local: i32 = 1
    |     ^^^^^^^^^^^^^^ the shorter-lived reference source
-  = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`
-error[L0316]: the returned reference does not derive from exactly the parameters named by its `from` clause
+  = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`; return a view of caller-supplied storage and declare the result `from` that parameter
+error[L0316]: return `result` derives from parameter storage but has no `from` clause
   --> ../tests/fixtures/negative/r491-retained-reference-stores/main.ldn:50:1
    |
 50 | aliased_parameter: (source: ptr i32) -> (result: ptr i32) =
@@ -87,7 +87,7 @@ error[L0316]: the returned reference does not derive from exactly the parameters
    |
 50 | aliased_parameter: (source: ptr i32) -> (result: ptr i32) =
    |                                          ^^^^^^^^^^^^^^^ the named return and its declared sources
-  = note: [0790]: the written clause and every returning body edge agree both ways
+  = note: [0790]: add `from source` after the type of return `result`; every returning body edge must agree with those sources
 error[L0314]: this frame-origin reference cannot be stored in storage outside this frame
   --> ../tests/fixtures/negative/r491-retained-reference-stores/main.ldn:62:19
    |

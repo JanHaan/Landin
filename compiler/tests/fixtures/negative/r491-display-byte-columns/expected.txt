@@ -3,4 +3,4 @@ error[L0201]: `missing` is not declared in any scope this reaches
   |
 1 | f: () -> none = --(\xC3\xA9)--\t_ = missing end f
   |                                     ^^^^^^^
-  = note: [1860]: a name that is not in scope is a misspelling, not a new binding
+  = note: [1860]: a name used here needs a declaration in scope; check its spelling

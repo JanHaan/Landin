@@ -4,4 +4,4 @@ error[L0110]: Landin writes `dec name` to subtract one, not `name--`
 3 |     total--
   |     ^^^^^^^
   = note: [0400]: `inc` and `dec` are statements of their own, and there is no `++` or `--`
-  = help: write `dec total`
+  = help (guess): write `dec total`

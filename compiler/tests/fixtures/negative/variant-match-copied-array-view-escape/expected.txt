@@ -1,40 +1,40 @@
 error[L0314]: this returned reference still has frame origin
-  --> ../tests/fixtures/negative/variant-match-copied-array-view-escape/main.ldn:8:1
-  |
-8 | pointer_backed: () -> (result: []mut u32) =
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/variant-match-copied-array-view-escape/main.ldn:13:37
+   |
+13 |         row(inout values): result = values[0..<2]
+   |                                     ^^^^^^^^^^^^^
   --> ../tests/fixtures/negative/variant-match-copied-array-view-escape/main.ldn:9:5
   |
 9 |     mut local: packet = zeroed
   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^ the shorter-lived reference source
-  = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`
+  = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`; return a view of caller-supplied storage and declare the result `from` that parameter
 error[L0314]: this returned reference still has frame origin
-  --> ../tests/fixtures/negative/variant-match-copied-array-view-escape/main.ldn:17:1
+  --> ../tests/fixtures/negative/variant-match-copied-array-view-escape/main.ldn:22:37
    |
-17 | slice_backed: () -> (result: []mut u32) =
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+22 |         row(inout values): result = values[0..<2]
+   |                                     ^^^^^^^^^^^^^
   --> ../tests/fixtures/negative/variant-match-copied-array-view-escape/main.ldn:18:5
    |
 18 |     mut local: [1]packet = zeroed
    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the shorter-lived reference source
-  = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`
+  = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`; return a view of caller-supplied storage and declare the result `from` that parameter
 error[L0314]: this returned reference still has frame origin
-  --> ../tests/fixtures/negative/variant-match-copied-array-view-escape/main.ldn:26:1
+  --> ../tests/fixtures/negative/variant-match-copied-array-view-escape/main.ldn:33:37
    |
-26 | local_backed: () -> (result: []mut u32) =
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+33 |         row(inout values): result = values[0..<2]
+   |                                     ^^^^^^^^^^^^^
   --> ../tests/fixtures/negative/variant-match-copied-array-view-escape/main.ldn:27:5
    |
 27 |     mut source: packet = packet(
    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the shorter-lived reference source
-  = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`
+  = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`; return a view of caller-supplied storage and declare the result `from` that parameter
 error[L0314]: this returned reference still has frame origin
-  --> ../tests/fixtures/negative/variant-match-copied-array-view-escape/main.ldn:37:1
+  --> ../tests/fixtures/negative/variant-match-copied-array-view-escape/main.ldn:40:37
    |
-37 | value_backed: (source: packet) -> (result: []mut u32 from source) =
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+40 |         row(inout values): result = values[0..<2]
+   |                                     ^^^^^^^^^^^^^
   --> ../tests/fixtures/negative/variant-match-copied-array-view-escape/main.ldn:37:16
    |
 37 | value_backed: (source: packet) -> (result: []mut u32 from source) =
    |                ^^^^^^^^^^^^^^ the shorter-lived reference source
-  = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`
+  = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`; return a view of caller-supplied storage and declare the result `from` that parameter

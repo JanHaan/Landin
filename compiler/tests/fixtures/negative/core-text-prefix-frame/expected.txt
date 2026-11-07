@@ -1,10 +1,10 @@
 error[L0314]: this returned reference still has frame origin
-  --> ../tests/fixtures/negative/core-text-prefix-frame/main.ldn:3:1
+  --> ../tests/fixtures/negative/core-text-prefix-frame/main.ldn:6:14
   |
-3 | bad: () -> (result: []u8) =
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+6 |     result = text.used(line)
+  |              ^^^^^^^^^^^^^^^
   --> ../tests/fixtures/negative/core-text-prefix-frame/main.ldn:4:5
   |
 4 |     mut storage: [4]u8 = zeroed
   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^ the shorter-lived reference source
-  = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`
+  = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`; return a view of caller-supplied storage and declare the result `from` that parameter

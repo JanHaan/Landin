@@ -1,20 +1,20 @@
 error[L0314]: this returned reference still has frame origin
-  --> ../tests/fixtures/negative/destructured-local-escape/main.ldn:11:1
+  --> ../tests/fixtures/negative/destructured-local-escape/main.ldn:13:10
    |
-11 | leaked: () -> (at: ptr i32) =
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+13 |     at = addr count
+   |          ^^^^^^^^^^
   --> ../tests/fixtures/negative/destructured-local-escape/main.ldn:12:6
    |
 12 |     (count, other) := pair()
    |      ^^^^^ the shorter-lived reference source
-  = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`
+  = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`; return a view of caller-supplied storage and declare the result `from` that parameter
 error[L0302]: this place was consumed by `sink` and has not been assigned again
   --> ../tests/fixtures/negative/destructured-local-escape/main.ldn:19:13
    |
 19 |     consume(count)
    |             ^^^^^
-  --> ../tests/fixtures/negative/destructured-local-escape/main.ldn:17:6
+  --> ../tests/fixtures/negative/destructured-local-escape/main.ldn:18:5
    |
-17 |     (count, other) := pair()
-   |      ^^^^^ the binding containing the consumed place
+18 |     consume(count)
+   |     ^^^^^^^^^^^^^^ consumed here
   = note: [0910]: a sunk place is dead until assignment

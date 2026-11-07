@@ -8,4 +8,4 @@ error[L0103]: Landin writes `<>` for inequality, not `!=`
 2 |     d = if x != 3 then 1 else 0 end if
   |         ^^ this branch
   = note: [0350]: the comparisons are `==`, `<>`, `<`, `<=`, `>` and `>=`
-  = help: write `<>`
+  = help (guess): write `<>`

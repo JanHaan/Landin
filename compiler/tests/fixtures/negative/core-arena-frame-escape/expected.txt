@@ -1,13 +1,13 @@
 error[L0314]: this returned reference still has frame origin
-  --> ../tests/fixtures/negative/core-arena-frame-escape/main.ldn:4:1
+  --> ../tests/fixtures/negative/core-arena-frame-escape/main.ldn:8:14
   |
-4 | bad: (inout space: arena.space) -> (memory: arena.arena from space) =
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+8 |     memory = arena.over(space, base, extent)
+  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   --> ../tests/fixtures/negative/core-arena-frame-escape/main.ldn:5:5
   |
 5 |     mut bytes: [32]u8 = zeroed
   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^ the shorter-lived reference source
-  = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`
+  = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`; return a view of caller-supplied storage and declare the result `from` that parameter
 error[L0314]: this frame-origin reference cannot be retained beyond the call
   --> ../tests/fixtures/negative/core-arena-frame-escape/main.ldn:8:32
   |

@@ -8,5 +8,5 @@ error[L0102]: a value belongs after `+`
 6 | end count_of
   | ^^^ where the parse stopped
   = note: written as `count = lenof line + 0` the line parses
-  = help: write a value after `+`
-  = help: remove `+`
+  = help (guess): write a value after `+`
+  = help (guess): remove `+`
