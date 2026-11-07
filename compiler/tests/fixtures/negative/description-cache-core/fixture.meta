@@ -1,0 +1,9 @@
+class: negative
+summary: D971: a cache is a fact of the core, so a cortex-m4 described with the Cortex-M7's armv7-m-l1 caches is refused
+program: program.ldn
+constructs: 1990
+targets: cortex-m0
+codes: L0610
+args: --target=cortex-m0 --level=armv7e-m ../tests/fixtures/negative/description-cache-core/program.ldn
+expect: expected.txt
+status: 1

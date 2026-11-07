@@ -1,0 +1,70 @@
+-- Prototype 1's transmit on the NUCLEO-H753ZI's cached profile: the
+-- consumer beside it, devices/consumers/stm32h753, with its message
+-- written into the cached AXI SRAM and cleaned to memory, where the stream
+-- reads it, before the stream is enabled (D227, D976).  The message is
+-- one line, aligned to it, so the clean holds no byte of another datum.
+import core/cache
+import descriptions/stm32h753_cached
+import platform/cortex_m
+import platform/cortex_m/l1
+import stm32h753/dma1
+import stm32h753/dmamux1
+import stm32h753/gpiod
+import stm32h753/rcc
+import stm32h753/usart3
+
+link(align: 32)
+mut message: [32]u8 = zeroed
+
+public start: () -> noreturn =
+    caches := l1.caches()
+    for index in 0..<lenof message do message[index] = u8(65 + index % 26) end for
+    message[31] = 0x0a
+    cache.clean(caches, message[0..<32]) else (problem)
+        _ = problem
+        loop do cortex_m.wait_for_interrupt() end loop
+    end
+    mut ahb4 := rcc.ahb4enr_decode(0)
+    ahb4.f_gpioden = 1
+    rcc.ahb4enr_write(rcc.base, rcc.ahb4enr_encode(ahb4))
+    mut apb1 := rcc.apb1lenr_decode(0)
+    apb1.f_usart3en = 1
+    rcc.apb1lenr_write(rcc.base, rcc.apb1lenr_encode(apb1))
+    mut ahb1 := rcc.ahb1enr_decode(0)
+    ahb1.f_dma1en = 1
+    rcc.ahb1enr_write(rcc.base, rcc.ahb1enr_encode(ahb1))
+    cortex_m.device_barrier()
+    mut modes := gpiod.moder_decode(0xffffffff)
+    modes.f_mode8 = 2
+    modes.f_mode9 = 2
+    gpiod.moder_write(gpiod.base, gpiod.moder_encode(modes))
+    mut functions := gpiod.afrh_decode(0)
+    functions.f_afsel8 = 7
+    functions.f_afsel9 = 7
+    gpiod.afrh_write(gpiod.base, gpiod.afrh_encode(functions))
+    usart3.brr_write(usart3.base, 556)
+    mut control3 := usart3.cr3_decode(0)
+    control3.f_dmat = 1
+    usart3.cr3_write(usart3.base, usart3.cr3_encode(control3))
+    mut request := dmamux1.dmamux_c0cr_decode(0)
+    request.f_dmareq_id = 46
+    dmamux1.dmamux_c0cr_write(dmamux1.base, dmamux1.dmamux_c0cr_encode(request))
+    dma1.s0par_write(dma1.base, u32(usart3.tdr_address))
+    dma1.s0m0ar_write(dma1.base, u32(usize(addr message[0])))
+    dma1.s0ndtr_write(dma1.base, 32)
+    mut stream := dma1.s0cr_decode(0)
+    stream.f_dir = 1
+    stream.f_minc = 1
+    stream.f_trbuff = 1
+    dma1.s0cr_write(dma1.base, dma1.s0cr_encode(stream))
+    mut control1 := usart3.cr1_decode(0)
+    control1.f_te = 1
+    control1.f_ue = 1
+    usart3.cr1_write(usart3.base, usart3.cr1_encode(control1))
+    cortex_m.device_barrier()
+    stream.f_en = 1
+    dma1.s0cr_write(dma1.base, dma1.s0cr_encode(stream))
+    loop do
+        cortex_m.wait_for_interrupt()
+    end loop
+end start

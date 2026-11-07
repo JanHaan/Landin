@@ -40,7 +40,8 @@ def landed(commands):
     return checked
 
 
-def execute(run, elf, commands=None, marker="R660_FIRMWARE_BOOT_PASS", machine='microbit'):
+def execute(run, elf, commands=None, marker="R660_FIRMWARE_BOOT_PASS", machine='microbit',
+            trace=()):
     listener, port, stub = gdb_listener()
     script = run.out / 'firmware.gdb'
     # Poison RAM before execution to distinguish reset initialization from
@@ -88,7 +89,9 @@ def execute(run, elf, commands=None, marker="R660_FIRMWARE_BOOT_PASS", machine='
         'end', *landed(commands), 'quit', '']))
     argv = [str(run.bin / 'qemu-system-arm'), '-M', machine, '-accel',
             'tcg,thread=single', '-display', 'none', '-monitor', 'none',
-            '-serial', 'none', '-kernel', str(elf), '-S', *stub]
+            '-serial', 'none', '-kernel', str(elf), '-S', *stub,
+            *(['-D', str(run.out / 'trace.log')] if trace else []),
+            *(argument for event in trace for argument in ('-trace', event))]
     record = {'name': 'qemu-firmware', 'argv': argv, 'timeout_seconds': 25}
     run.commands.append(record)
     tick = time.monotonic()
@@ -250,6 +253,190 @@ def float_unit(parent, refine):
     mixed_objects(run, Run(out / 'soft-float', parent.tools), refine)
     return [{'kind': 'float-unit', 'level': 'armv7e-m', 'optimize': 'none',
              'specialize': 'off', 'status': 'passed', 'lane': 'mps2-an500'}]
+
+
+CACHE_SEQUENCE = """import core/cache
+import descriptions/mps2_an500_cached
+import platform/cortex_m/l1
+link(align: 32)
+mut buffer: [64]u8 = zeroed
+mut started: u32 = 0
+mut sizes: u32 = 0
+mut refused: u32 = 0
+mut observed: u32 = 0
+start: () -> none =
+    control: ptr u32 = ptr(0xe000_ed14)
+    started = compiler.volatile_load(control)
+    sizes = l1.geometry()
+    caches := l1.caches()
+    cache.clean(caches, buffer[0..<64]) else (problem)
+        _ = problem
+        return
+    end
+    cache.invalidate(caches, buffer[32..<64]) else (problem)
+        _ = problem
+        return
+    end
+    cache.clean_invalidate(caches, buffer[0..<32]) else (problem)
+        _ = problem
+        return
+    end
+    cache.invalidate(caches, buffer[1..<33]) else (problem)
+        if problem == cache.misaligned then refused += 1 end if
+    end
+    cache.clean(caches, buffer[0..<48]) else (problem)
+        if problem == cache.misaligned then refused += 1 end if
+    end
+    cache.clean_invalidate(caches, buffer[16..<48]) else (problem)
+        if problem == cache.misaligned then refused += 1 end if
+    end
+    observed = 0x600d0000 + u32(cache.line(caches))
+end start
+"""
+
+#  The SCB registers a cached profile's code writes and reads, by the name
+#  each one's literal stands for in the listing.
+SCB_NAMES = {0xe000ed14: 'CCR', 0xe000ed80: 'CCSIDR', 0xe000ed84: 'CSSELR',
+             0xe000ed88: 'CPACR', 0xe000ef50: 'ICIALLU', 0xe000ef5c: 'DCIMVAC',
+             0xe000ef60: 'DCISW', 0xe000ef68: 'DCCMVAC', 0xe000ef70: 'DCCIMVAC',
+             0xe000ef74: 'DCCISW'}
+LISTED = re.compile(r'^\s*([0-9a-f]+):\s+(?:[0-9a-f]{4}\s?){1,2}\s+(\S+)\s*(.*)$')
+LITERAL = re.compile(r'@ \(([0-9a-f]+) <')
+ROUTINE = re.compile(r'^([0-9a-f]+) <([^>]+)>:$')
+#  The backend's own labels inside a routine, which the listing heads as
+#  symbols of their own.
+INNER = re.compile(r'^L(?:cm_step_)?\d+(?:_\w+)?$')
+
+
+def listed_routines(listing):
+    """Each routine of an objdump -d LISTING: its instructions, each
+    (address, mnemonic, operands), and every literal word by address."""
+    routines, words, current = {}, {}, None
+    for line in listing.splitlines():
+        head = ROUTINE.match(line)
+        if head:
+            if not (INNER.match(head.group(2)) and current is not None):
+                current = routines.setdefault(head.group(2), [])
+            continue
+        found = LISTED.match(line)
+        if not found or current is None:
+            continue
+        address, mnemonic, operands = int(found.group(1), 16), found.group(2), found.group(3)
+        if mnemonic == '.word':
+            words[address] = int(operands.split()[0], 16)
+        else:
+            current.append((address, mnemonic, operands))
+    return routines, words
+
+
+def scb_sequence(instructions, words):
+    """INSTRUCTIONS as the steps the cache contract orders: each SCB literal
+    loaded, by its register's name, each barrier, the interrupt masks and
+    the entry's call."""
+    steps = []
+    for _, mnemonic, operands in instructions:
+        literal = LITERAL.search(operands)
+        if mnemonic.startswith('ldr') and literal and words.get(int(literal.group(1), 16)) in SCB_NAMES:
+            steps.append(SCB_NAMES[words[int(literal.group(1), 16)]])
+        elif mnemonic in ('dsb', 'isb', 'cpsie', 'cpsid', 'orrs', 'bics'):
+            steps.append(mnemonic)
+        elif mnemonic.startswith('bl') and operands.endswith('<start>'):
+            steps.append('bl start')
+    return steps
+
+
+def cache_sequence(parent, refine):
+    """D977: the cached profile's sequences on the mps2-an500 lane, a
+    Cortex-M7 QEMU models no cache for, so this is the order of the
+    operations and nothing of a cache's behaviour.  The linked reset
+    invalidates the data cache by set and way and the instruction cache
+    and sets CCR's IC and DC, each completed by DSB and the enable by ISB,
+    after the data, RAM code and BSS are written, and the return cleans
+    and invalidates by set and way before clearing them; each by-address
+    operation lies between two completion barriers, ISB after the second.
+    Run with QEMU's trace of the System Control Space's writes, every
+    write reset, the program and the return make is in that order, each
+    maintenance write the line address its range says, a refused range
+    writing none; and GDB reads, at the return, the three refusals, the
+    line and CCR's IC and DC clear."""
+    out = parent.out
+    run = Run(out, parent.tools)
+    #  The cached lane description's map is the mps2-an500 lane's, which
+    #  descriptions.json records, so the image is held to that profile.
+    profile = derived(run, refine, 'mps2-an500', out / 'profiles')
+    elf = build(run, refine, CACHE_SEQUENCE, level='armv7e-m', roots=(LANE_ROOT,),
+                profile=profile)
+    routines, words = listed_routines((out / 'disassembly.log').read_text())
+    reset = scb_sequence(routines['_landin_firmware_reset'], words)
+    #  Each set and way pass combines its way and its set with an ORRS.
+    expected = ['cpsid', 'CPACR', 'orrs', 'dsb', 'isb', 'dsb', 'isb',
+                'CSSELR', 'dsb', 'CCSIDR', 'DCISW', 'orrs', 'dsb', 'ICIALLU', 'dsb', 'isb',
+                'CCR', 'orrs', 'dsb', 'isb', 'cpsie', 'bl start',
+                'cpsid', 'CSSELR', 'dsb', 'CCSIDR', 'DCCISW', 'orrs', 'dsb',
+                'CCR', 'bics', 'dsb', 'isb', 'ICIALLU', 'dsb', 'isb']
+    require(reset == expected, 'the cached reset orders its steps %s, not %s' % (reset, expected))
+    maintain = [m for m in routines if m == 'maintain' or m.startswith('maintain')]
+    require(maintain, 'the image has no maintain routine')
+    for name in maintain:
+        body = routines[name]
+        barriers = [(i, m) for i, (_, m, _) in enumerate(body) if m in ('dsb', 'isb')]
+        require([m for _, m in barriers] == ['dsb', 'dsb', 'isb'],
+                '%s issues %s, not DSB, DSB and ISB' % (name, [m for _, m in barriers]))
+        first, second = barriers[0][0], barriers[1][0]
+        backward = [i for i, (address, m, operands) in enumerate(body)
+                    if m.startswith('b') and not m.startswith('bl')
+                    and re.match(r'([0-9a-f]+) <', operands)
+                    and int(operands.split()[0], 16) < address]
+        require(backward and all(first < i < second for i in backward),
+                "%s's loop of stores does not lie between its completion barriers" % name)
+    commands = [
+        'break _landin_firmware_returned', 'continue', 'python',
+        'assert v("&buffer") % 32 == 0',
+        'assert v("*(unsigned*)&refused") == 3, "%d of the three misaligned ranges were refused" % v("*(unsigned*)&refused")',
+        'assert v("*(unsigned*)&observed") == 0x600d0020',
+        'assert v("*(unsigned*)0xe000ed14") & 0x30000 == 0, "CCR is %#x at the return" % v("*(unsigned*)0xe000ed14")',
+        'print("D977_CACHE_SEQUENCE buffer %#x started %#x ccsidr %#x" % (v("&buffer"), v("*(unsigned*)&started"), v("*(unsigned*)&sizes")))',
+        'print("D977_CACHE_SEQUENCE_PASS")', 'end']
+    execute(run, elf, commands, marker='D977_CACHE_SEQUENCE_PASS', machine='mps2-an500',
+            trace=('nvic_sysreg_write',))
+    buffer = int(re.search(r'D977_CACHE_SEQUENCE buffer (0x[0-9a-f]+)',
+                           (out / 'gdb-firmware.log').read_text()).group(1), 16)
+    writes = [(0xe000e000 + int(a, 16), int(d, 16)) for a, d in re.findall(
+        r'nvic_sysreg_write .*?addr 0x([0-9a-f]+) data 0x([0-9a-f]+)',
+        (out / 'trace.log').read_text())]
+    named = [(SCB_NAMES.get(a, hex(a)), d) for a, d in writes]
+    (out / 'scb-writes.json').write_text(json.dumps(
+        [[name, '%#010x' % data] for name, data in named], indent=1) + '\n')
+    def runs(steps):
+        """STEPS with each run of one register's writes as one step and
+        its count, except where the values are the evidence."""
+        folded = []
+        for name, data in steps:
+            if folded and folded[-1][0] == name and name in ('DCISW', 'DCCISW'):
+                folded[-1][2] += 1
+            else:
+                folded.append([name, data, 1])
+        return folded
+    folded = runs(named)
+    order = [step[0] for step in folded]
+    want = ['CPACR', 'CSSELR', 'DCISW', 'ICIALLU', 'CCR',
+            'DCCMVAC', 'DCCMVAC', 'DCIMVAC', 'DCCIMVAC',
+            'CSSELR', 'DCCISW', 'CCR', 'ICIALLU']
+    require(order == want, 'the System Control Space is written %s, not %s' % (order, want))
+    lines = [(step[0], step[1]) for step in folded if step[0] in ('DCCMVAC', 'DCIMVAC', 'DCCIMVAC')]
+    require(lines == [('DCCMVAC', buffer), ('DCCMVAC', buffer + 32), ('DCIMVAC', buffer + 32),
+                      ('DCCIMVAC', buffer)],
+            'the maintenance writes are %s, not the ranges\' lines' % [(n, hex(d)) for n, d in lines])
+    ccr = [step[1] for step in folded if step[0] == 'CCR']
+    require(ccr[0] & 0x30000 == 0x30000 and ccr[1] & 0x30000 == 0,
+            'reset writes CCR %#x and the return %#x' % tuple(ccr))
+    passes = [step[2] for step in folded if step[0] in ('DCISW', 'DCCISW')]
+    require(passes[0] == passes[1], 'reset and the return pass over %d and %d sets and ways'
+            % tuple(passes))
+    return [{'kind': 'cache-sequence', 'level': 'armv7e-m', 'optimize': 'none',
+             'specialize': 'off', 'status': 'passed', 'lane': 'mps2-an500',
+             'set_way_writes': passes[0], 'scb_writes': len(writes),
+             'evidence': 'sequencing only: QEMU models no cache'}]
 
 
 SOFT_FLOAT = """mut values: [2]f64
@@ -767,9 +954,10 @@ def case(name):
         raise RuntimeError('compiler firmware ' + name + ': ' + str(error)) from error
 
 
-#  The lane's cases, in the order it runs them: five once, the rest at each
+#  The lane's cases, in the order it runs them: six once, the rest at each
 #  profile.  `boot` is the cold-booted image built twice.
-ONCE = ('cpu-levels', 'refusals', 'independent-c-assembly', 'compact-images', 'float-unit')
+ONCE = ('cpu-levels', 'refusals', 'independent-c-assembly', 'compact-images', 'float-unit',
+        'cache-sequence')
 KINDS = ('interrupts', 'fibre', 'dma', 'machine', 'veneers', 'fallthrough', 'images',
          'hole', 'byte')
 CASES = ONCE + ('boot',) + KINDS
@@ -802,6 +990,11 @@ def execute_suite(parent, refine, profiles=PROFILES, cases=None):
         out.mkdir()
         with case('float-unit'):
             controls += float_unit(Run(out, parent.tools), refine)
+    if 'cache-sequence' in chosen:
+        out = root / 'cache-sequence'
+        out.mkdir()
+        with case('cache-sequence'):
+            controls += cache_sequence(Run(out, parent.tools), refine)
     if 'refusals' in chosen:
         out = root / 'refusals'
         out.mkdir()
@@ -900,7 +1093,7 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--all-profiles', action='store_true')
     parser.add_argument('--case', action='append', choices=CASES,
-                        help='run only this case; repeat for more.  The five run once,'
+                        help='run only this case; repeat for more.  The six run once,'
                              ' the rest at each profile; a selection is FILTERED')
     args = parser.parse_args()
     supported_host(args.output)

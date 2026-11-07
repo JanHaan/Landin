@@ -1,0 +1,6 @@
+error[L0201]: module `l1` declares `caches` only for a cached profile
+  --> ../tests/fixtures/negative/cache-provider-cacheless/program.ldn:8:18
+  |
+8 |     caches := l1.caches()
+  |                  ^^^^^^
+  = note: D972: it is declared where compiler.feature.cache holds, which only a description with compiler.cache makes true; import a cached description, or maintain through core/cache's cacheless provider, which every target has

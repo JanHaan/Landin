@@ -1206,7 +1206,7 @@ checked for both.
 
 Error messages: words for a person for each library failure, a short English phrase for every failure atom the core library raises.
 
-`failure.words(problem)` gives the phrase for any of the 32 atoms in
+`failure.words(problem)` gives the phrase for any of the 34 atoms in
 `failure.reason`, every atom a `core` module fails with. So a call's
 `else (problem)` passes its failure straight on, whatever subset it
 declares.
@@ -1412,6 +1412,45 @@ the refusal naming `sole_add` and `platform/cortex_m`'s critical section,
 write takes instead. A cell of any other type is refused on every target.
 
 [Executable example](../compiler/tests/fixtures/runtime/atomic-tick-firmware/main.ldn)
+
+## core/cache
+
+Cache maintenance for memory a device reads or writes behind the CPU's
+caches: D227's DMA handoff as one concept, `maintenance`, over ranges of
+whole lines.
+
+| Call | What it does |
+|---|---|
+| `cache.line` | The bytes in one of the provider's lines. |
+| `cache.clean` | Write the range's dirty lines to memory and keep them: before a device reads what the CPU wrote, as a transmit does. |
+| `cache.invalidate` | Discard the range's lines, so the next read is memory's: once a device has written it, as a receive completes. |
+| `cache.clean_invalidate` | Both: before a device writes the range, as a receive is armed. |
+| `cache.lines` | How many lines a range is, refusing one that is not whole lines. |
+| `cache.cacheless` | The provider for memory no cache stands in front of: the barriers alone, on every target. |
+
+A range must begin on a line and be a whole number of lines; one that is
+not is refused with `cache.misaligned` and nothing is maintained. It is
+never rounded out, because a rounded line can hold bytes the caller does
+not own: an invalidate would lose their dirty copy, and a clean would write
+their stale copy over what a device wrote. Align a DMA buffer to the line
+and size it in lines, `link(align: 32)` on the STM32H753, and no line it
+occupies holds anything else.
+
+Every operation ends with the completion barrier, so it has reached the
+point a device observes when it returns. The order is the driver's, as
+D227 states it: clean and invalidate the receive buffer before the stream
+is armed, invalidate it once a count or completion says the bytes are
+written and before reading them, and clean a transmit buffer before the
+stream is enabled, the device barrier before each enable staying the
+driver's own.
+
+`cache.cacheless(line)` takes the line a cached provider would have and
+refuses the same ranges, so a driver tested on a cacheless core, or a
+hosted one, takes the refusals it would take on a cached profile. A line
+that is not a nonzero power of two is `cache.bad_line`. The Cortex-M7's
+provider is `platform/cortex_m/l1`, on a cached profile alone.
+
+[Executable example](../compiler/tests/fixtures/runtime/library-shared-cache/main.ldn)
 
 ## core/fibre
 
@@ -2626,6 +2665,25 @@ Waiting can wake spuriously. Barriers do not prove completion of a device
 protocol or supply a DMA lifetime discipline.
 
 [Executable example](../environments/cortex-m/probes/core-cpu.ldn)
+
+## platform/cortex_m/l1
+
+The Cortex-M7's level 1 caches as `core/cache`'s provider, on a cached
+profile: one whose description declares `compiler.cache("armv7-m-l1", 32)`,
+the STM32H753's `descriptions/stm32h753_cached` among the chips refine
+supports. Reset has enabled the caches and the entry's return disables
+them; a program does neither.
+
+`l1.caches()` is the handle, its line the description's, 32 bytes, and
+`l1.geometry()` reads CCSIDR, the data cache's sets, ways and line. Each
+operation writes every line's address to the System Control Block's
+by-address register between two completion barriers, then issues ISB.
+
+Elsewhere on an M-profile target the module declares nothing, and a call
+says it is a cached profile's. A program that maintains no cache does not
+import it, and its image carries none of `core/cache`.
+
+[Executable example](../compiler/tests/board/stm32h753_cached/app/main.ldn)
 
 ## platform/riscv
 

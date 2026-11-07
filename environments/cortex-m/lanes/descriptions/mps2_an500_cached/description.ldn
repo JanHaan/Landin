@@ -1,0 +1,23 @@
+-- QEMU's mps2-an500 with its Cortex-M7's level 1 caches declared: the
+-- map of the mps2-an500 lane's description beside it and compiler.cache,
+-- so that a program reaches platform/cortex_m's maintenance provider and
+-- reset's cache sequence on the emulator (D977).  QEMU models no cache: CCR's IC and DC
+-- and the SCB's maintenance operations are registers it keeps or ignores,
+-- so a run here shows the order of the operations and the refusals, never
+-- what a cache does.  A lane description, not a profile refine admits for
+-- a chip; the STM32H753's cached profile is the only one (D974).
+
+compiler.device("mps2-an500-cached")
+compiler.core("cortex-m7")
+compiler.float_unit("fpv5-d16")
+compiler.cache("armv7-m-l1", 32)
+compiler.vectors(16)
+compiler.boot("vector-table")
+linker.region("CODE", 0x0000_0000, 4 * 1024 * 1024, "rx")
+linker.region("RAM", 0x2000_0000, 4 * 1024 * 1024, "rwx")
+linker.place("vectors", "CODE")
+linker.place("text", "CODE")
+linker.place("rodata", "CODE")
+linker.place("data", "RAM")
+linker.place("bss", "RAM")
+linker.place("stack", "RAM", 64 * 1024)

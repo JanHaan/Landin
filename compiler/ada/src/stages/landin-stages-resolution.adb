@@ -419,14 +419,59 @@ package body Landin.Stages.Resolution is
       --  Whether `Member` is a public declaration of `Module` in some arm of
       --  a fixed conditional, which configuration did not select for this
       --  target: the member exists for another system, not misspelt.
+      --  D972: under an arm that reads `compiler.feature.cache` the
+      --  member exists for a cached profile, which the program's
+      --  description is not, and the refusal says so rather than naming
+      --  another target.
+      Under_Cache_Arm : Boolean := False;
+
       function Declared_Under_Other_Arm
         (Module : Landin.Modules.Module_Id;
          Member : Landin.Source.Names.Name_Id) return Boolean;
+
+      --  Whether CONDITION reads `compiler.feature.cache` anywhere in it.
+      function Reads_Cache_Feature
+        (Of_Tree : Syn.Tree; Condition : Syn.Node_Id) return Boolean;
+      function Reads_Cache_Feature
+        (Of_Tree : Syn.Tree; Condition : Syn.Node_Id) return Boolean is
+      begin
+         if Condition = Syn.No_Node then
+            return False;
+         end if;
+         case Syn.Kind (Of_Tree, Condition) is
+            when Syn.Binary_Kind =>
+               return Reads_Cache_Feature
+                   (Of_Tree, Syn.Left_Of (Of_Tree, Condition))
+                 or else Reads_Cache_Feature
+                   (Of_Tree, Syn.Right_Of (Of_Tree, Condition));
+            when Syn.Unary_Kind =>
+               return Reads_Cache_Feature
+                 (Of_Tree, Syn.Operand_Of (Of_Tree, Condition));
+            when Syn.Member_Selection =>
+               declare
+                  Feature : constant Syn.Node_Id :=
+                    Syn.Target_Of (Of_Tree, Condition);
+               begin
+                  return Spelled (Syn.Name (Of_Tree, Condition)) = "cache"
+                    and then Syn.Kind (Of_Tree, Feature) = Syn.Member_Selection
+                    and then Spelled (Syn.Name (Of_Tree, Feature)) = "feature"
+                    and then Syn.Kind
+                      (Of_Tree, Syn.Target_Of (Of_Tree, Feature))
+                        = Syn.Name_Reference
+                    and then Spelled (Syn.Name
+                      (Of_Tree, Syn.Target_Of (Of_Tree, Feature)))
+                        = "compiler";
+               end;
+            when others =>
+               return False;
+         end case;
+      end Reads_Cache_Feature;
 
       function Declared_Under_Other_Arm
         (Module : Landin.Modules.Module_Id;
          Member : Landin.Source.Names.Name_Id) return Boolean is
       begin
+         Under_Cache_Arm := False;
          for Index in 1 .. Source_Count (Context) loop
             declare
                Source : constant Landin.Source.Source_Id :=
@@ -455,6 +500,9 @@ package body Landin.Stages.Resolution is
                                    and then Syn.Is_Public
                                      (Of_Tree.all, Declared)
                                  then
+                                    Under_Cache_Arm := Reads_Cache_Feature
+                                      (Of_Tree.all, Syn.Fixed_Condition
+                                         (Of_Tree.all, Node));
                                     return True;
                                  end if;
                               end;
@@ -1582,6 +1630,30 @@ package body Landin.Stages.Resolution is
                            Related => Landin.Provenance.Site
                              (Written.all, Any_Member),
                            Because => "declared without `public` here",
+                           Into    => Found);
+                     elsif Member_Name /= Landin.Source.Names.No_Name
+                       and then Declared_Under_Other_Arm
+                         (Imported, Member_Name)
+                       and then Under_Cache_Arm
+                       and then Landin.Configuration.Profile
+                         (Activity.all).Present
+                     then
+                        Names.Report
+                          (Item    => Names.Unresolved_Name,
+                           Source  => Syn.Source_Of (Of_Tree),
+                           Where   => Syn.Anchor (Of_Tree, Node),
+                           Message => "module `" & Spelled (Prefix_Name)
+                                      & "` declares `"
+                                      & Spelled (Member_Name)
+                                      & "` only for a cached profile",
+                           Note    => "D972: it is declared where"
+                                      & " compiler.feature.cache holds,"
+                                      & " which only a description with"
+                                      & " compiler.cache makes true; import"
+                                      & " a cached description, or"
+                                      & " maintain through core/cache's"
+                                      & " cacheless provider, which every"
+                                      & " target has",
                            Into    => Found);
                      elsif Member_Name /= Landin.Source.Names.No_Name
                        and then Declared_Under_Other_Arm

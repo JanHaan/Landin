@@ -1,0 +1,9 @@
+class: negative
+summary: D971: an armv7-m-l1 cache's line is the Cortex-M7's 32 bytes, so a description saying 64 is refused, naming the line to write
+program: program.ldn
+constructs: 1990
+targets: cortex-m0
+codes: L0611
+args: --target=cortex-m0 --level=armv7e-m ../tests/fixtures/negative/description-cache-line/program.ldn
+expect: expected.txt
+status: 1

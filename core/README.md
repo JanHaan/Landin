@@ -15,7 +15,8 @@ executes them on Cortex-M0.
 
 ## Availability inventory
 
-The shared freestanding modules are `core/arena`, `core/atomic`, `core/cmp`,
+The shared freestanding modules are `core/arena`, `core/atomic`, `core/cache`,
+`core/cmp`,
 `core/diag`,
 `core/failure`, `core/fault`, `core/fibre` with its submodule
 `core/fibre/stacks`, `core/io` with its submodules `core/io/fake` and
@@ -31,7 +32,9 @@ does not emit them refuses where the program reaches one (D453, D564);
 `fibre.whole` and over the blocking host, needs no switch and serves every
 target. `core/atomic`'s cells serve every target too, but for a `u64`
 cell and the read-modify-writes, which Cortex-M0 has not and refuses where
-a program uses them (D510). Their providers retain caller-supplied
+a program uses them (D510). `core/cache`'s cacheless provider serves every
+target; its cached provider, `platform/cortex_m/l1`, is a cached profile's
+alone (D970, D972). Their providers retain caller-supplied
 authority.
 
 `hosted/heap`, `hosted/system`, `hosted/blocking`, `hosted/events` and
@@ -64,8 +67,9 @@ currently enabled LP64 C ABI aliases; it does not admit Cortex AAPCS32 or
 synthetic-32. `platform/cortex_m` holds M-profile CPU operations for the
 armv6-m, armv7-m, armv7e-m and armv8-m.main feature levels; it is importable on every target
 and declares them only on an M-profile one, so a shared program calls it from a
-`fixed if compiler.arch == cortex_m0` arm (D575), while its device descriptions
-keep the M-profile scope. Namespace availability is checked
+`fixed if compiler.arch == cortex_m0` arm (D575), while its submodules, its
+device descriptions and `platform/cortex_m/l1`, the Cortex-M7's cache
+provider, keep the M-profile scope. Namespace availability is checked
 by import name independently of project-first root selection (D267).
 
 The `runtime/library-shared-*` consumers are separate small programs, one per
@@ -301,7 +305,7 @@ allocator is hidden in a container or selected implicitly by the target.
 | `core/vec` | `list`, `new`, `reserve`, `push`/`pop`, initialized views, length/capacity and `release`. Operations receive an allocator explicitly. Growth extends supported positive-byte blocks in place; otherwise it copies privately, rolls back on failure and publishes a complete replacement last. |
 | `core/pool` | A provider handle over a caller's `pool.space`, its bytes and initialized slot metadata. A free-index heap gives lowest-index reuse in logarithmic time; exact frees find their slot by address. A growth or a resize keeps a block in its slot to any extent the slot holds, so a list over a pool grows in place until its slot is full (`runtime/core-pool-grow`, 16.5 KB at size/auto, and `runtime/core-pool-list-grows`, 23.3 KB) (D386). No backing allocation or fallback heap. |
 | `core/sort` | Heapsort and selection sort by `cmp.ordered` evidence, and `sort_by`, heapsort by a comparison given a context, with no allocation; `runtime/core-sort-context`, which sorts records into a shared pool of names with `cmp.compare`, is 10.7 KB at size/auto (D387). |
-| `core/failure` | `failure.words`, a phrase for each of the 32 library failure atoms: about 6 KB of code and text, linked only into a program that calls it (`runtime/failure-words`, 10.4 KB at size/auto) (D388). |
+| `core/failure` | `failure.words`, a phrase for each of the 34 library failure atoms: about 6 KB of code and text, linked only into a program that calls it (`runtime/failure-words`, 10.4 KB at size/auto) (D388). |
 | `core/panic` | The canonical four-atom `panic_kind` domain. An entry-module public ordinary `(kind: panic.panic_kind, site: u32) -> noreturn` handler replaces the terminal default; no reporting or allocation dependency is imported. |
 | `core/text` | A builder over a caller's buffer with byte, text, decimal, hexadecimal and aligned appends, and `format` over `any text.formattable`. At size/auto the bounded builder's core, `over`, `used`, `append`, `append_byte` and the room check, is about 4.9 KB with `mem.copy`; a `u32` decimal adds about 2.2 KB, a signed one 0.9 KB more, an aligned hexadecimal about 2.9 KB, and `format` with two conformances about 4.6 KB (`runtime/core-text-format-firmware`, 17.6 KB in all). A growing builder's doubling is reached only through the table `text.growing` builds, so it is linked, about 1.5 KB at size/auto and 1.9 KB at none/off, only into a program that calls `growing`, and no allocator is used unless the program builds a growing builder over its own. |
 | `core/io` | Besides the concepts and the memory world, a buffered writer over the caller's buffer, about 5 KB at size/auto with `mem.copy`, and a line reader, about 7 KB with `mem.copy` and `mem.find` (`runtime/core-io-buffered-writer`, `runtime/core-io-line-reader`). |
@@ -309,6 +313,7 @@ allocator is hidden in a container or selected implicitly by the target.
 | `core/io` time | The manual clock, its concepts and the span conversions run in `runtime/clock-manual`'s 11.3 KB image; nothing of them is in an image that does not use them. |
 | `core/io` network | Reading addresses, zones among them, runs in `runtime/network-addresses-firmware`'s 17.5 KB image at size/auto, 21.6 KB at none/off, and writing them in `runtime/network-addresses-written-firmware`'s 20.2 KB and 23.4 KB; one image doing both, about 35 KB at none/off, would not fit, and `ipv6_octets` alone is 3.9 KB at size/auto (D581). The memory network does not fit the profile: a provider's conformance table links every entry, about 40 KB of code, so its echo, `runtime/network-echo-memory`, needs about 135 KB and is a recorded image limit, as every form of address text, `runtime/network-addresses`, at about 47 KB, is. |
 | `core/io` file system | The names `make_temporary` tries and the memory terminals run in `runtime/file-system-firmware`'s 18.7 KB image at size/auto, 22.2 KB at none/off. The memory volume does not fit the profile: its conformances link every entry of `reader`, `writer`, `files`, `directories` and `file_system`, so `runtime/volume-memory` needs about 106 KB at size/auto and is a recorded image limit, and a program over the volume alone that makes, writes, renames and reads one file still needed about 61 KB. |
+| `core/cache` | The `maintenance` concept over ranges of whole lines and its cacheless provider, the completion barrier after each range's check, refusing a line that is not a power of two and a range that is not whole lines with nothing maintained (D970). `runtime/library-shared-cache`, every operation and refusal, is 8.0 KB of flash, 100 bytes of RAM and 704 bytes of observed stack at size/auto, 9.3 KB and 992 bytes at none/off. |
 | `platform/cortex_m` | M-profile PRIMASK save/disable/restore, mask observation, WFI and compiler/data/completion barriers, declared only on an M-profile target; other targets import it and see nothing (D575). |
 
 The arena aligns the absolute address, not its offset. Alignment zero and one

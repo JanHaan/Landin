@@ -55,7 +55,13 @@ entry that describes it, and put a new one where a reader would look for it.
   description's stage configures the supply from the reset vector before
   compiler-owned reset writes any RAM (D653), and it is checked by
   [`board.py`](../environments/boards/stm32h753/README.md) (D647-D651), with
-  passed cold-boot and repeated RAM records; the board tools share
+  passed cold-boot and repeated RAM records. Its cached profile,
+  `descriptions/stm32h753_cached`, runs the receive ring and a transmit by
+  DMA with the M7's caches on, maintained through `core/cache`, beside
+  controls that show a stale read, a lost dirty line and a stale transmit
+  when the maintenance is left out, checked from SRAM by
+  [its own `board.py`](../environments/boards/stm32h753_cached/README.md)
+  (D974, D975); the board tools share
   `environments/boards/common.py` (D646). RP2350's description, learnt from
   pico-sdk's SVD (D635), selects a Cortex-M33 with the Pico 2's 4 MiB
   flash, its 512 KiB of SRAM and scratch banks and all 52 of its
@@ -158,6 +164,14 @@ entry that describes it, and put a new one where a reader would look for it.
   QEMU's `mps2-an500`; C interoperation stays disabled on Cortex-M. The
   whole runtime corpus also runs there, on a lane described in Landin
   source (D619).
+- **A cache** is a fact of a description too: a Cortex-M7's
+  `compiler.cache("armv7-m-l1", 32)` makes a cached profile, whose reset
+  invalidates and enables the level 1 caches once memory is written and
+  whose entry's return cleans and disables them, `compiler.feature.cache`
+  and `compiler.cache_line` reading it (D971, D973). The STM32H753's cached
+  profile is the one admitted (D974); on QEMU's `mps2-an500`, which models
+  no cache, a lane run shows the order of every cache register write and
+  nothing of a cache (D977).
 - **Devices** are learnt from their CMSIS-SVD files: `refine svd` reads a
   vendor's SVD, fetched by its hash, and a reviewed selection policy, and
   writes the register modules and the generated half of the device's
@@ -469,7 +483,8 @@ The README has [the commands in brief](../README.md#refine-in-brief);
 - **Hardware.** D227's memory model supplies scalar atomics, volatile
   accesses and barriers, each atomic fenced only as its ordering asks on
   every backend (D499), and D228 packed register images with checked
-  encoded fields.
+  encoded fields. Cache maintenance for DMA is `core/cache`'s provider,
+  never a builtin (D970).
 - **Assembly operands.** A block carries integers at `general` or a named
   integer register on every target with registers, and on x86-64, arm64 and
   RV64, and on a Cortex-M whose description has FPv5-D16, `f32` and `f64`
@@ -530,7 +545,7 @@ search, source links and examples taken directly from runtime fixtures.
 
 ### `core`
 
-The twenty shared `core/*` modules thread arena and pool allocators and a
+The twenty-two shared `core/*` modules thread arena and pool allocators and a
 failure injector as capabilities.
 
 - **Memory and containers.** Raw memory, vectors, inline-prefix spill lists,
@@ -662,6 +677,12 @@ process ignores SIGPIPE and gives its children the default back.
   `platform/cortex_m` supplies M-profile CPU operations; it declares nothing
   on another target, so a program for every target imports it and calls it
   from a `fixed if compiler.arch == cortex_m0` arm (D575).
+  `platform/cortex_m/l1` is the Cortex-M7's cache provider on a cached
+  profile alone, and a call elsewhere says it is a cached profile's (D972).
+- **Cache maintenance.** `core/cache`'s `maintenance` concept cleans,
+  invalidates or does both to a range of whole lines, refusing one that is
+  not with `cache.misaligned` and never rounding it, and its cacheless
+  provider, the barriers alone, serves every target (D970).
 - An import outside a module's target scope is refused by name, including
   through a project-root override.
 - A failed check in a hosted program with no `panic_handler` writes its kind

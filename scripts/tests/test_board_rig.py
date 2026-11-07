@@ -65,14 +65,21 @@ class Description(unittest.TestCase):
         self.assertEqual(sorted(rig['ports']), ['esp32', 'esp32c3', 'esp32c5', 'esp32s3', 'pico2',
                                                 'rp2040', 'stm32h753'])
         boards = {step['board'] for port in rig['ports'].values() for step in port['steps']}
-        self.assertEqual(boards, {'rp2040', 'rp2350', 'rp2350_hazard3', 'stm32h753', 'esp32c3',
-                                  'esp32c5', 'esp32', 'esp32s3'})
+        self.assertEqual(boards, {'rp2040', 'rp2350', 'rp2350_hazard3', 'stm32h753',
+                                  'stm32h753_cached', 'esp32c3', 'esp32c5', 'esp32', 'esp32s3'})
         for name, port in rig['ports'].items():
             for step in port['steps']:
                 self.assertTrue((ROOT / 'environments/boards' / step['board'] / 'board.py').is_file())
             modes = [step['mode'] for step in port['steps']]
-            # The boot check comes last, so the board rests on its verified fixed image.
-            self.assertEqual(modes, ['ram', 'boot'] * (len(modes) // 2), name)
+            # The boot check comes last, so the board rests on its verified
+            # fixed image; the STM32H753's cached RAM run (D975) is the one
+            # RAM run that follows another, before the same boot check.
+            if name == 'stm32h753':
+                self.assertEqual(modes, ['ram', 'ram', 'boot'])
+            else:
+                self.assertEqual(modes, ['ram', 'boot'] * (len(modes) // 2), name)
+        self.assertEqual([(s['board'], s['mode']) for s in rig['ports']['stm32h753']['steps']],
+                         [('stm32h753', 'ram'), ('stm32h753_cached', 'ram'), ('stm32h753', 'boot')])
         self.assertEqual([(s['board'], s['mode']) for s in rig['ports']['pico2']['steps']],
                          [('rp2350_hazard3', 'ram'), ('rp2350', 'boot'),
                           ('rp2350', 'ram'), ('rp2350_hazard3', 'boot')])

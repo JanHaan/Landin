@@ -14,7 +14,7 @@ and `platform/cortex_m`/`core/panic` consumers run through that compiler-owned f
 | CPU/startup lane | QEMU 10.0.13, Debian `1:10.0.13+ds-0+deb13u1`, `-M microbit -accel tcg,thread=single` |
 | Armv7-M corpus lane | the same QEMU binary, `-M mps2-an385`: a Cortex-M3, for corpus fixtures whose `levels:` name `armv7-m` (D255) |
 | Armv8-M corpus lane | the same QEMU binary, `-M mps2-an505`: a Cortex-M33 r0p3 in Secure state, for the whole corpus at `armv8-m.main` in `run.py`'s `mps2-an505` lane and for fixtures whose `levels:` name it, on the lane description `lanes/descriptions/mps2_an505` (D607, D619); libgcc from `thumb/v8-m.main/nofp` |
-| M7 corpus lane | the same QEMU binary, `-M mps2-an500`: a Cortex-M7 r1p2 with the double-precision FPv5-D16, for the whole corpus at `armv7e-m` hard-float in `run.py`'s `mps2-an500` lane, on the lane description `lanes/descriptions/mps2_an500` (D619), and for the VFP ABI control and the firmware lane's `float-unit` case; libgcc from `thumb/v7e-m+dp/hard` |
+| M7 corpus lane | the same QEMU binary, `-M mps2-an500`: a Cortex-M7 r1p2 with the double-precision FPv5-D16, for the whole corpus at `armv7e-m` hard-float in `run.py`'s `mps2-an500` lane, on the lane description `lanes/descriptions/mps2_an500` (D619), and for the VFP ABI control and the firmware lane's `float-unit` and `cache-sequence` cases, the latter on `lanes/descriptions/mps2_an500_cached` (D977); libgcc from `thumb/v7e-m+dp/hard` |
 | Core | nRF51822 Cortex-M0, ARMv6-M, Thumb, little endian, 16 MHz model clock; no FPU, caches or exclusive-access instruction requirement |
 | Peripheral lane | the same QEMU, with `machine.py` serving `models.py`'s synthetic devices through its debugger stub; `-icount shift=0` |
 | EABI compiler | `arm-eabi-gcc` 16.1.0, GNAT's arm-elf archive `16.1.0-1` from the host GNAT's release, pinned in `environments/pins.sh` |
@@ -473,7 +473,8 @@ while masked. Feeds are serialized while the CPU is stopped. D227 supplies
 the language contract; the model supplies only its explicit device premise.
 A cached profile needs platform-specific maintenance, cache levels/aliases and
 visibility-point evidence before it can be admitted. M0 has no cache and supplies
-none of that evidence. Hardware testing stays supplemental.
+none of that evidence; the STM32H753's cached profile has it from its board
+run (D974, D975). Hardware testing stays supplemental.
 
 Each new subprocess uses the existing 30-second tool and 20-second debugger
 limits, three-second readiness deadline and owned process-group cleanup.
@@ -886,7 +887,18 @@ before `start`, a SysTick pended in the middle of an f64 computation is
 taken with `0xffffffe9` and the extended frame reserved lazily, the
 handler's float instruction fills it, the return restores the interrupted
 d0, and the computation ends with its IEEE value (D618); a soft-float C
-object linked into the image is refused for its VFP arguments (D617). It invokes the
+object linked into the image is refused for its VFP arguments (D617). Its
+`cache-sequence` case links a program through `platform/cortex_m/l1` on the
+lane description `lanes/descriptions/mps2_an500_cached`, the an500's map
+with `compiler.cache`, and runs it under QEMU's trace of the System Control
+Space's writes: the linked reset's steps are D973's, each by-address
+operation's stores lie between two DSBs with ISB after them, every SCB
+write of reset, the program and the return arrives in that order with each
+maintenance write the line address its range says, a refused range writes
+none, and GDB reads the three refusals and CCR clear at the return (D977).
+QEMU keeps neither enable bit and reads CCSIDR as zero, so this is the
+operations' sequence alone; what a cache does is the STM32H753 board's
+(D975). It invokes the
 compiler with
 `--target=cortex-m0 --firmware-entry=start --emit=exe` and the pinned Arm GCC
 path. The compiler generates reset, vectors and the linker script; `backend-start.S`
@@ -970,7 +982,8 @@ python3 environments/cortex-m/firmware.py --refine PATH_TO_REFINE --output NEW_D
 ```
 
 `--case`, repeated, runs only the cases named: `cpu-levels`, `refusals`,
-`independent-c-assembly` and `compact-images` once, and `boot`, the
+`independent-c-assembly`, `compact-images`, `float-unit` and
+`cache-sequence` once, and `boot`, the
 cold-booted image built twice, `interrupts`, `fibre`, `dma`, `machine`,
 `veneers`, `fallthrough`, `images`, `hole` and `byte` at each profile. A
 selection is marked `FILTERED` in its last line and its `result.json`.

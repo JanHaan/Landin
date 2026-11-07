@@ -174,7 +174,7 @@ class ProbeFailures(unittest.TestCase):
             'cpu', 'dma', 'pool', 'zero', 'vec', 'noreturn', 'panic', 'panic-default', 'core-mem-allocators',
             'core-mem-arena-boundaries', 'core-mem-raw-storage'} |
             {'library-shared-'+name for name in
-             ('arena', 'atomic', 'cmp', 'diag', 'failure', 'fault', 'fibre',
+             ('arena', 'atomic', 'cache', 'cmp', 'diag', 'failure', 'fault', 'fibre',
               'io', 'map', 'mem', 'net', 'panic', 'pool', 'random', 'region',
               'sort', 'spill', 'text', 'time', 'tree', 'vec')})
 

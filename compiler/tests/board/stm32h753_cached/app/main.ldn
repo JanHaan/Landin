@@ -1,0 +1,394 @@
+-- The STM32H753's cached profile on a NUCLEO-H753ZI (D975): USART3's
+-- receive ring and a transmit, each by DMA with the Cortex-M7's data cache
+-- on and its buffers in the cached AXI SRAM, maintained through core/cache
+-- and platform/cortex_m/l1 as D227 orders, and beside each the control
+-- that leaves the maintenance out and shows what the cache then does.  The ring is
+-- serial's, the prototype-1 receive contract the cacheless board runs,
+-- used through its public entries alone; the maintenance around it is
+-- this program's.  environments/boards/stm32h753_cached/board.py sends
+-- the bytes and checks each frame against its oracle.
+--
+-- The protocol, in the cacheless board's frames: the host's first byte,
+-- read through the maintained ring, starts the run, and the boot frame
+-- `b` reports CCR, CCSIDR and the line.  Then:
+--
+--   * `c`: the ring is refilled with 0x5a, cleaned but not invalidated,
+--     and rearmed, so its lines stay cached; the host sends 64 bytes, two
+--     lines, and `C` reports how many the read returned as 0x5a, the stale
+--     copy, which lines were 0x5a throughout, and the FNV-1a hashes of
+--     what it returned and, once the ring is invalidated, of what memory
+--     holds;
+--   * the host then sends 1024 bytes, read through the ring with each
+--     snapshot's lines invalidated before the copy, and `E` reports their
+--     count and hash;
+--   * `d`: a line written to memory as 0x11, then dirtied as 0x22 and
+--     invalidated, loses the 0x22; four ranges that are not whole lines
+--     are refused, and the line they cover keeps its dirty 0x44;
+--   * `x` and `X` bracket a transmit whose buffer memory holds `o` and
+--     whose cached copy holds the message, never cleaned, so the line
+--     carries the `o`s; `y` and `Y` bracket the same buffer's transmit
+--     after a clean, which carries the message;
+--   * `e` reports CCR, still on, and the entry returns: reset's
+--     counterpart cleans and disables the caches (D973), and the board
+--     rests in the fault handler the returned entry reaches, where the
+--     host reads CCR clear.
+--
+-- A failure halts with an `h` frame whose `s` names the step, caches on.
+import bringup
+import core/cache
+import descriptions/stm32h753_cached
+import platform/cortex_m
+import platform/cortex_m/l1
+import report
+import scs
+import serial
+import stm32h753/dma1
+import stm32h753/dmamux1
+import stm32h753/usart3
+
+link(align: 256)
+mut rx_storage: [256]u8 = zeroed
+-- The transmit buffer and the probe of the CPU-only controls, each whole
+-- lines aligned to the line, so no line they occupy holds another datum.
+link(align: 32)
+mut tx_storage: [64]u8 = zeroed
+link(align: 32)
+mut probe: [64]u8 = zeroed
+mut notification: u32 = 0
+mut timer_events: u32 = 0
+
+budget: u32 = 4096
+-- The stale-read control's two lines, and the stream after it.
+control_bytes: usize = 64
+stream_bytes: usize = 1024
+-- How long a step waits for the host, in milliseconds: long enough for
+-- the host to read CCR over SWD between two frames.
+patience: u32 = 20000
+-- What the controls leave cached: the ring's refill, and the transmit
+-- buffer's memory under its unclean message.
+ring_fill: u8 = 0x5a
+transmit_memory: u8 = 0x6f
+-- DMA_LISR's stream 0 flags (RM0433 15.5.1, p. 659): TCIF0 5, and TEIF0
+-- 3, DMEIF0 2 and FEIF0 0, the errors; DMA_LIFCR clears each.
+transfer_complete: u32 = 0x20
+transfer_errors: u32 = 0x0d
+stream_flags: u32 = 0x3d
+
+-- DMA1 stream 0's interrupt, DMA_STR0, IRQ 11, which arms the ring's next
+-- lap (RM0433 Table 147, p. 754).
+link(vector: 27)
+extern(interrupt) dma_irq: () -> none =
+    serial.completed()
+    notification = 1
+    cortex_m.completion_barrier()
+end dma_irq
+
+-- SysTick, every millisecond: the wakeup for a lap in progress, and the
+-- clock each wait is bounded by.
+link(vector: 15)
+extern(interrupt) tick_irq: () -> none =
+    timer_events = timer_events +% 1
+    notification = 1
+end tick_irq
+
+-- USART3's, IRQ 39 (Table 147, p. 755), raised by IDLE.
+link(vector: 55)
+extern(interrupt) usart3_irq: () -> none =
+    if serial.idle() then notification = 1 end if
+    cortex_m.completion_barrier()
+end usart3_irq
+
+take_events: () -> none =
+    saved := cortex_m.disable_interrupts()
+    defer cortex_m.restore_interrupts(saved)
+    notification = 0
+end take_events
+
+rest: () -> none =
+    saved := cortex_m.disable_interrupts()
+    if notification == 0 then cortex_m.wait_for_interrupt() end if
+    cortex_m.restore_interrupts(saved)
+end rest
+
+halt: (step: u32) -> noreturn =
+    report.open_frame(104)
+    report.field(115, step)
+    report.close_frame()
+    loop do cortex_m.wait_for_interrupt() end loop
+end halt
+
+-- FNV-1a over BYTES, from HASH, which the host computes alike.
+fnv: (hash: u32, bytes: []u8) -> (next: u32) =
+    next = hash
+    for byte in bytes do next = (next ^ u32(byte)) *% 16777619 end for
+end fnv
+
+fnv_basis: u32 = 0x811c9dc5
+
+fill: (into: []mut u8, value: u8) -> none =
+    for index in 0..<lenof into do into[index] = value end for
+end fill
+
+-- How many of BYTES are VALUE.
+matching: (bytes: []u8, value: u8) -> (count: u32) =
+    count = 0
+    for byte in bytes do
+        if byte == value then count += 1 end if
+    end for
+end matching
+
+-- One bit for each 32-byte line of BYTES that is VALUE throughout, the
+-- first line's the lowest.
+whole_lines: (bytes: []u8, value: u8) -> (mask: u32) =
+    mask = 0
+    for line in 0..<lenof bytes / 32 do
+        if matching(bytes[line * 32..<line * 32 + 32], value) == 32 then
+            mask = mask | (u32(1) << u32(line))
+        end if
+    end for
+end whole_lines
+
+-- Wait until the ring holds WANTED bytes, or LIMIT milliseconds pass.
+await: (inout r: serial.rx, wanted: usize, limit: u32)
+       -> (have: usize) ! serial.receive_error =
+    began := timer_events
+    loop do
+        take_events()
+        have = try serial.available(r)
+        break when have >= wanted or timer_events -% began >= limit
+        rest()
+    end loop
+end await
+
+-- D227's receive completion: what a snapshot counts the stream has
+-- written, its lines invalidated between the count and the copy, and
+-- no more than that copied, so that every byte read was in memory
+-- before its line was dropped.
+receive: (inout r: serial.rx, caches: l1.handle, into: []mut u8)
+         -> (count: usize) ! serial.receive_error | cache.misaligned =
+    have := try serial.available(r)
+    count = 0
+    return when have == 0
+    try cache.invalidate(caches, rx_storage[0..<256])
+    limit := if have < lenof into then have else lenof into end if
+    count = try serial.read(r, into[0..<limit])
+end receive
+
+-- One transmit of COUNT bytes of the buffer on DMA1 stream 0, memory to
+-- USART3's TDR, polled to its completion; whether it completed without
+-- an error.  D227's device barrier stands before the enable; the
+-- buffer's clean, or its omission, is the caller's.
+transmit: (count: u32) -> (done: bool) =
+    dma1.s0m0ar_write(dma1.base, u32(usize(addr tx_storage[0])))
+    dma1.s0ndtr_write(dma1.base, count)
+    dma1.lifcr_write(dma1.base, stream_flags)
+    mut stream := dma1.s0cr_decode(0)
+    stream.f_dir = 1
+    stream.f_minc = 1
+    stream.f_trbuff = 1
+    config := dma1.s0cr_encode(stream)
+    dma1.s0cr_write(dma1.base, config)
+    cortex_m.device_barrier()
+    dma1.s0cr_write(dma1.base, config | 1)
+    mut polls: u32 = 0
+    done = false
+    while (dma1.lisr_read(dma1.base) & (transfer_complete | transfer_errors)) == 0 do
+        polls += 1
+        return when polls == 10_000_000
+    end while
+    done = (dma1.lisr_read(dma1.base) & transfer_errors) == 0
+    dma1.lifcr_write(dma1.base, stream_flags)
+    cortex_m.device_barrier()
+end transmit
+
+-- The message a maintained transmit carries: A to Z, again and again.
+message: (index: usize) -> (byte: u8) = byte = u8(65 + index % 26) end message
+
+start: () -> none =
+    control := scs.ccr()
+    geometry := l1.geometry()
+    bringup.peripherals()
+    caches := l1.caches()
+    ring := rx_storage[0..<256]
+    -- D227's receive handoff before the stream is armed.
+    cache.clean_invalidate(caches, ring) else (problem)
+        _ = problem
+        halt(1)
+    end
+    mut receiver := serial.open(115200, budget, rx_storage[0..<256]) else (problem)
+        _ = problem
+        halt(2)
+    end
+    scs.enable_interrupt(11)
+    scs.enable_interrupt(39)
+    scs.start_ticks(bringup.cycles_ms)
+    mut scratch: [64]u8 = zeroed
+    mut first: usize = 0
+    while first == 0 do
+        take_events()
+        first = receive(receiver, caches, scratch[0..<1]) else (problem)
+            _ = problem
+            halt(3)
+        end
+        if first == 0 then rest() end if
+    end while
+    report.open_frame(98)
+    report.field(99, control)
+    report.field(103, geometry)
+    report.field(108, u32(cache.line(caches)))
+    report.field(118, scs.vtor())
+    report.field(115, u32(scratch[0]))
+    report.close_frame()
+
+    -- The stale-read control: the ring's refill left cached and clean,
+    -- the stream rearmed without the invalidate D227 orders.
+    serial.stop(receiver) else (problem)
+        _ = problem
+        halt(4)
+    end
+    fill(rx_storage[0..<256], ring_fill)
+    cache.clean(caches, ring) else (problem)
+        _ = problem
+        halt(4)
+    end
+    serial.restart(receiver) else (problem)
+        _ = problem
+        halt(4)
+    end
+    report.open_frame(99)
+    report.field(110, u32(control_bytes))
+    report.close_frame()
+    have := await(receiver, control_bytes, patience) else (problem)
+        _ = problem
+        halt(5)
+    end
+    if have < control_bytes then halt(5) end if
+    seen := serial.read(receiver, scratch[0..<control_bytes]) else (problem)
+        _ = problem
+        halt(5)
+    end
+    stale := matching(scratch[0..<seen], ring_fill)
+    stale_lines := whole_lines(scratch[0..<seen], ring_fill)
+    seen_hash := fnv(fnv_basis, scratch[0..<seen])
+    cache.invalidate(caches, ring) else (problem)
+        _ = problem
+        halt(5)
+    end
+    report.open_frame(67)
+    report.field(110, u32(seen))
+    report.field(115, stale)
+    report.field(107, stale_lines)
+    report.field(97, seen_hash)
+    report.field(109, fnv(fnv_basis, rx_storage[0..<control_bytes]))
+    report.close_frame()
+
+    -- The maintained stream.
+    mut total: usize = 0
+    mut hash := fnv_basis
+    while total < stream_bytes do
+        waiting := await(receiver, 1, patience) else (problem)
+            _ = problem
+            halt(6)
+        end
+        if waiting == 0 then halt(6) end if
+        room := if stream_bytes - total < 64 then stream_bytes - total else 64 end if
+        n := receive(receiver, caches, scratch[0..<room]) else (problem)
+            _ = problem
+            halt(6)
+        end
+        hash = fnv(hash, scratch[0..<n])
+        total += n
+    end while
+    report.open_frame(69)
+    report.field(110, u32(total))
+    report.field(120, hash)
+    report.field(119, serial.laps())
+    report.close_frame()
+
+    -- The lost-dirty control and the refused ranges, the CPU's alone.
+    fill(probe[0..<32], 0x11)
+    cache.clean(caches, probe[0..<32]) else (problem)
+        _ = problem
+        halt(7)
+    end
+    fill(probe[0..<32], 0x22)
+    cache.invalidate(caches, probe[0..<32]) else (problem)
+        _ = problem
+        halt(7)
+    end
+    lost := matching(probe[0..<32], 0x11)
+    fill(probe[32..<64], 0x33)
+    cache.clean(caches, probe[32..<64]) else (problem)
+        _ = problem
+        halt(7)
+    end
+    fill(probe[32..<64], 0x44)
+    mut refused: u32 = 0
+    cache.invalidate(caches, probe[33..<64]) else (problem)
+        if problem == cache.misaligned then refused += 1 end if
+    end
+    cache.invalidate(caches, probe[32..<63]) else (problem)
+        if problem == cache.misaligned then refused += 1 end if
+    end
+    cache.clean_invalidate(caches, probe[16..<48]) else (problem)
+        if problem == cache.misaligned then refused += 1 end if
+    end
+    cache.invalidate(caches, probe[0..<48]) else (problem)
+        if problem == cache.misaligned then refused += 1 end if
+    end
+    kept := matching(probe[32..<64], 0x44)
+    cache.clean_invalidate(caches, probe[32..<64]) else (problem)
+        _ = problem
+        halt(7)
+    end
+    written := matching(probe[32..<64], 0x44)
+    report.open_frame(100)
+    report.field(108, lost)
+    report.field(114, refused)
+    report.field(107, kept)
+    report.field(119, written)
+    report.close_frame()
+
+    -- The transmits: stream 0 now serves USART3's transmitter, DMAMUX1
+    -- request 46, usart3_tx_dma (Table 124, p. 697), and CR3's DMAT.
+    serial.stop(receiver) else (problem)
+        _ = problem
+        halt(8)
+    end
+    mut request := dmamux1.dmamux_c0cr_decode(0)
+    request.f_dmareq_id = 46
+    dmamux1.dmamux_c0cr_write(dmamux1.base, dmamux1.dmamux_c0cr_encode(request))
+    dma1.s0par_write(dma1.base, u32(usart3.tdr_address))
+    mut control3 := usart3.cr3_decode(0)
+    control3.f_dmat = 1
+    usart3.cr3_write(usart3.base, usart3.cr3_encode(control3))
+    -- The lost-clean control: memory `o`, the message only in the cache.
+    fill(tx_storage[0..<64], transmit_memory)
+    cache.clean(caches, tx_storage[0..<64]) else (problem)
+        _ = problem
+        halt(8)
+    end
+    for index in 0..<lenof tx_storage do tx_storage[index] = message(index) end for
+    report.open_frame(120)
+    report.field(110, 64)
+    report.close_frame()
+    unclean := transmit(64)
+    report.open_frame(88)
+    report.field(116, if unclean then 1 else 0 end if)
+    report.close_frame()
+    cache.clean(caches, tx_storage[0..<64]) else (problem)
+        _ = problem
+        halt(9)
+    end
+    report.open_frame(121)
+    report.field(110, 64)
+    report.close_frame()
+    cleaned := transmit(64)
+    report.open_frame(89)
+    report.field(116, if cleaned then 1 else 0 end if)
+    report.close_frame()
+
+    report.open_frame(101)
+    report.field(99, scs.ccr())
+    report.close_frame()
+end start

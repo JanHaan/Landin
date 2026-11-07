@@ -19,8 +19,9 @@ refine --root=devices/generated --root=. --target=cortex-m0 \
 ```
 
 This tree holds seven devices: Raspberry Pi's RP2040 and RP2350, ST's
-STM32H753 and Espressif's ESP32, ESP32-S3, ESP32-C3 and ESP32-C5, and eight descriptions,
-RP2350's Hazard3 cores having one of their own. A
+STM32H753 and Espressif's ESP32, ESP32-S3, ESP32-C3 and ESP32-C5, and nine descriptions,
+RP2350's Hazard3 cores having one of their own and the STM32H753's cached
+profile another. A
 description is imported as `descriptions/DEVICE` with `--root=devices`, and
 its register modules as `CHIP/PERIPHERAL` with `--root=devices/generated`,
 named by the chip alone, so that both of RP2350's descriptions name the same
@@ -477,7 +478,7 @@ with registers alone, before it enters compiler-owned reset (D653). It names
 its Cortex-M7's float unit, `compiler.float_unit("fpv5-d16")`, which makes
 the build hard-float (D615, D621). The profile is
 cacheless: startup leaves the M7's caches disabled, as reset leaves them,
-and a cached profile is not admitted. DMA1 and DMA2 reach neither TCM, so
+and the cached profile is the description beside it. DMA1 and DMA2 reach neither TCM, so
 data, BSS and the stack are placed in the AXI SRAM. A program selects the
 profile by importing `descriptions/stm32h753` with `--root=devices`, and
 builds at `--level=armv7e-m`, the level its float unit needs (D615); the
@@ -491,6 +492,26 @@ Every capacity verdict is rerun against its profile as RP2040's is: the
 corpus links with the reference's probe map, so its verdicts against the
 STM32H753 are a measurement from each limited image's sizes and frames, not
 a link against its map.
+
+[`descriptions/stm32h753_cached`](descriptions/stm32h753_cached) is the same
+chip with its Cortex-M7's level 1 caches on (D974). Its policy,
+[`stm32h753_cached.json`](policies/stm32h753_cached.json), is the
+cacheless policy with the identity `stm32h753-cached` and a correspondence
+and manifest of its own, so `refine svd` writes its `interrupts.ldn` and
+the same modules at the same hashes; its `supply.ldn` is the cacheless
+stage's bytes; and its `memory.ldn` is the cacheless map with
+`compiler.cache("armv7-m-l1", 32)`, whose comment records the levels,
+aliases, line ownership and visibility points the profile was admitted
+with. Reset invalidates and enables both caches once memory is written,
+and the entry's return cleans and disables them (D973); a DMA buffer is
+maintained through `core/cache`'s provider in `platform/cortex_m/l1`
+(D972). `test.py`'s `Stm32h753CachedOracles` hold the policy, the
+interrupts, the stage and the map to the cacheless ones, and
+[the cached consumer](consumers/stm32h753_cached/main.ldn), the transmit
+with its message cleaned before the stream is enabled, is the converse of
+`the consumer links cacheless`: its literals reach CCR and the cache
+registers the profile declares, and no other (D976). A program selects
+the profile by importing `descriptions/stm32h753_cached` instead.
 
 The literals were reviewed against
 [RM0433](https://www.st.com/resource/en/reference_manual/rm0433-stm32h742-stm32h743753-and-stm32h750-value-line-advanced-armbased-32bit-mcus-stmicroelectronics.pdf)

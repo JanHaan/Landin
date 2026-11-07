@@ -1238,6 +1238,59 @@ class Stm32h753Oracles(unittest.TestCase):
                          'the image reaches a cache maintenance operation')
 
     @requires_refine
+    def test_the_cached_consumer_reaches_the_declared_cache_registers_alone(self):
+        """The converse for the cached profile (D976): its consumer links
+        where devices/descriptions/stm32h753_cached places it, as the
+        cacheless one does, and the SCB registers its literals reach are
+        the profile's alone: CCR, which reset sets and the return clears,
+        CSSELR and CCSIDR, which select and size the data cache, ICIALLU
+        and DCISW, reset's invalidates, DCCISW, the return's clean, and
+        the by-address operations the provider has, DCCMVAC among them
+        for the message's clean.  No other operation of 0xE000EF50 to
+        0xE000EF78, ICIMVAU, DCCMVAU, DCCSW or BPIALL, is any of them."""
+        import struct
+        import thumb
+        if TOOLCHAIN is None and not shutil.which('arm-eabi-gcc') \
+                and not shutil.which('arm-none-eabi-gcc'):
+            if REQUIRE:
+                self.fail('--require-inputs needs --toolchain or a Cortex-M driver')
+            self.skipTest('no Cortex-M driver: pass --toolchain')
+        with tempfile.TemporaryDirectory() as root:
+            elf = Path(root) / 'consumer.elf'
+            command = [str(REFINE), 'compile', '--root=' + str(HERE),
+                       '--root=' + str(GENERATED),
+                       '--target=cortex-m0', '--level=armv7e-m',
+                       '--firmware-entry=start', str(HERE / 'consumers/stm32h753_cached'),
+                       '-o', str(elf)]
+            if TOOLCHAIN is not None:
+                command.insert(2, '--toolchain=' + str(TOOLCHAIN))
+            result = subprocess.run(command, capture_output=True, text=True,
+                                    timeout=120)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            data = elf.read_bytes()
+        image = thumb.Image(data)
+        self.assertEqual(image.symbols['_landin_firmware_data_start'], 0x24000000)
+        self.assertEqual(image.symbols['_landin_firmware_vectors'], 0x08000000)
+        # The message is RAM the CPU writes, in the cached AXI SRAM, one
+        # line on a line's boundary.
+        self.assertTrue(0x24000000 <= image.symbols['message'] < 0x24080000)
+        self.assertEqual(image.symbols['message'] % 32, 0)
+        words = set()
+        for address, content, _ in image.segments:
+            if 0x08000000 <= address < 0x08200000:
+                words.update(struct.unpack_from('<%dI' % (len(content) // 4), content))
+        declared = {0xe000ed14, 0xe000ed80, 0xe000ed84, 0xe000ef50, 0xe000ef5c,
+                    0xe000ef60, 0xe000ef68, 0xe000ef70, 0xe000ef74}
+        for register in (0xe000ed88, 0xe000ed14, 0xe000ed80, 0xe000ed84,
+                         0xe000ef50, 0xe000ef60, 0xe000ef74, 0xe000ef68):
+            self.assertIn(register, words, '%#010x is not reached' % register)
+        self.assertEqual([w for w in words if 0xe000ef50 <= w <= 0xe000ef78
+                          and w not in declared], [],
+                         'the image reaches an undeclared cache operation')
+        self.assertEqual([w for w in words if 0xe000ed80 <= w <= 0xe000ed87
+                          and w not in declared], [])
+
+    @requires_refine
     def test_the_hand_written_memory_against_the_header(self):
         header = CmsisHeader(fetch_inputs.fetch('stm32h753/stm32h753xx.h')
                              .read_text())
@@ -1762,6 +1815,43 @@ class Esp32c5Oracles(unittest.TestCase):
             if mask:
                 expected['write_mask'] = mask
             self.assertEqual(row['policy'], expected, key)
+
+
+class Stm32h753CachedOracles(unittest.TestCase):
+    """The STM32H753's cached profile (D974): the cacheless description's
+    chip, policy, stage, map and float unit, with its identity and the one
+    directive that declares its Cortex-M7's caches."""
+
+    def test_the_cacheless_policy_with_its_own_identity(self):
+        cacheless = policies()['stm32h753']
+        cached = policies()['stm32h753_cached']
+        self.assertEqual((cached['identity'], cached['description']),
+                         ('stm32h753-cached', 'descriptions/stm32h753_cached'))
+        mine = ('identity', 'description', 'correspondence', 'manifest')
+        self.assertEqual({k: v for k, v in cached.items() if k not in mine},
+                         {k: v for k, v in cacheless.items() if k not in mine})
+        # Every module is the chip's, at the same hash (D831).
+        def modules(policy):
+            recorded = json.loads((HERE / policy['modules'] / policy['manifest']).read_text())
+            return {path: digest for path, digest in recorded.items()
+                    if path.endswith('/device.ldn')}
+        self.assertEqual(modules(cached), modules(cacheless))
+        text = (DESCRIPTIONS / 'stm32h753_cached/interrupts.ldn').read_text()
+        self.assertEqual(text.replace('"stm32h753-cached"', '"stm32h753"'),
+                         (DESCRIPTIONS / 'stm32h753/interrupts.ldn').read_text())
+
+    def test_the_cacheless_stage_and_map_and_the_caches(self):
+        self.assertEqual((DESCRIPTIONS / 'stm32h753_cached/supply.ldn').read_bytes(),
+                         (DESCRIPTIONS / 'stm32h753/supply.ldn').read_bytes())
+        def directives(device):
+            return [line for line in (DESCRIPTIONS / device / 'memory.ldn')
+                    .read_text().splitlines() if line and not line.startswith('--')]
+        cached = directives('stm32h753_cached')
+        self.assertIn('compiler.cache("armv7-m-l1", 32)', cached)
+        self.assertEqual([line for line in cached if not line.startswith('compiler.cache(')],
+                         directives('stm32h753'))
+        self.assertEqual(sorted(p.name for p in (DESCRIPTIONS / 'stm32h753_cached').iterdir()),
+                         ['interrupts.ldn', 'memory.ldn', 'supply.ldn'])
 
 
 class Rp2350Hazard3Oracles(unittest.TestCase):

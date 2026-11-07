@@ -1,0 +1,6 @@
+error[L0610]: this description's core is a cortex-m4, which refine builds with no armv7-m-l1 cache
+  --> ../tests/fixtures/negative/description-cache-core/program.ldn:3:1
+  |
+3 | compiler.cache("armv7-m-l1", 32)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: D971: a cache is a fact of the core; refine builds "armv7-m-l1" on a cortex-m7 alone; remove compiler.cache or name the core it is built into
