@@ -120,9 +120,8 @@ class GeneratedFiles(unittest.TestCase):
         for flag, run in CHECK.GENERATORS:
             with self.subTest(flag=flag):
                 written = []
-                with patch.object(CHECK, "write_file",
-                                  lambda path, _: written.append(
-                                      os.path.relpath(path, CHECK.ROOT))), \
+                with patch.object(CHECK, "write_generated",
+                                  lambda path, _: written.append(path)), \
                         contextlib.redirect_stdout(io.StringIO()):
                     self.assertEqual(run(), 0)
                 self.assertEqual(sorted(written),
@@ -147,6 +146,34 @@ class GeneratedFiles(unittest.TestCase):
         self.assertNotRegex(source, r"--generate \(or --")
         with self.assertRaises(KeyError):
             CHECK.regenerating("compiler/tests/unknown.matrix")
+
+
+class GeneratedWrite(unittest.TestCase):
+    def test_bytes_mtime_and_mode(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as root, \
+                patch.object(CHECK, "ROOT", root):
+            path = Path(root) / "generated"
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                CHECK.write_generated("generated", "café\n")
+                path.chmod(0o640)
+                os.utime(path, ns=(1_000_000_000, 1_000_000_000))
+                CHECK.write_generated("generated", "café\n")
+                self.assertEqual(path.stat().st_mtime_ns, 1_000_000_000)
+                CHECK.write_generated("generated", "café\r\n")
+            self.assertEqual(path.read_bytes(), "café\r\n".encode())
+            self.assertEqual(path.stat().st_mode & 0o777, 0o640)
+            self.assertEqual(output.getvalue().splitlines(),
+                             ["wrote generated", "unchanged generated",
+                              "wrote generated"])
+
+    def test_read_failure_is_not_treated_as_a_missing_file(self):
+        with patch.object(CHECK, "read_file", side_effect=PermissionError), \
+                patch.object(CHECK, "write_file") as write:
+            with self.assertRaises(PermissionError):
+                CHECK.write_generated("generated", "x")
+            write.assert_not_called()
 
 
 if __name__ == "__main__":
