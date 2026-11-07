@@ -204,6 +204,17 @@ package body Landin.Stages.Checking.Flow is
    package Nested_Sets is new Ada.Containers.Ordered_Sets
      (Element_Type => Nested_Fact);
 
+   --  Keep a consuming call with each exact dead-place fact. At a join,
+   --  choose the smaller syntax identity when both paths killed that place:
+   --  it names a contributing call, and the finite ordering lets loop facts
+   --  converge without retaining a growing history of executions.
+   package Dead_Field_Maps is new Ada.Containers.Ordered_Maps
+     (Key_Type => Field_Fact, Element_Type => Syn.Node_Id);
+   package Dead_Element_Maps is new Ada.Containers.Ordered_Maps
+     (Key_Type => Element_Fact, Element_Type => Syn.Node_Id);
+   package Dead_Nested_Maps is new Ada.Containers.Ordered_Maps
+     (Key_Type => Nested_Fact, Element_Type => Syn.Node_Id);
+
    type Assigned_Set is record
       Fields       : Field_Sets.Set;
       Elements     : Element_Sets.Set;
@@ -213,9 +224,9 @@ package body Landin.Stages.Checking.Flow is
       --  definite assignment: initialized locals and parameters are live
       --  without appearing in Fields, but a sink makes one exact place
       --  dead until a later assignment revives it.
-      Dead_Fields  : Field_Sets.Set;
-      Dead_Elements : Element_Sets.Set;
-      Dead_Nested  : Nested_Sets.Set;
+      Dead_Fields   : Dead_Field_Maps.Map;
+      Dead_Elements : Dead_Element_Maps.Map;
+      Dead_Nested   : Dead_Nested_Maps.Map;
    end record;
 
    Nothing_Assigned : constant Assigned_Set :=
@@ -223,9 +234,9 @@ package body Landin.Stages.Checking.Flow is
       Elements      => Element_Sets.Empty_Set,
       Whole_Arrays  => Array_Sets.Empty_Set,
       Nested        => Nested_Sets.Empty_Set,
-      Dead_Fields   => Field_Sets.Empty_Set,
-      Dead_Elements => Element_Sets.Empty_Set,
-      Dead_Nested   => Nested_Sets.Empty_Set);
+      Dead_Fields   => Dead_Field_Maps.Empty_Map,
+      Dead_Elements => Dead_Element_Maps.Empty_Map,
+      Dead_Nested   => Dead_Nested_Maps.Empty_Map);
 
    --  D124 replaces the old Boolean "this block exits" summary.  A
    --  guarded return has both edges, an unconditional return only the
@@ -515,7 +526,8 @@ package body Landin.Stages.Checking.Flow is
          Is_Element : out Boolean;
          Valid   : out Boolean);
       procedure Consume_Place
-        (Of_Tree : Syn.Tree; Node : Syn.Node_Id; State : in out Assigned_Set);
+        (Of_Tree : Syn.Tree; Node, At_Call : Syn.Node_Id;
+         State : in out Assigned_Set);
       procedure Revive_Place
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id; State : in out Assigned_Set);
       function Require_Live
@@ -665,6 +677,9 @@ package body Landin.Stages.Checking.Flow is
          procedure Forget (Facts : in out Nested_Sets.Set);
          procedure Forget (Facts : in out Array_Sets.Set);
          procedure Forget (Facts : in out Field_Sets.Set);
+         procedure Forget (Facts : in out Dead_Field_Maps.Map);
+         procedure Forget (Facts : in out Dead_Element_Maps.Map);
+         procedure Forget (Facts : in out Dead_Nested_Maps.Map);
 
          procedure Forget (Facts : in out Element_Sets.Set) is
             Position : Element_Sets.Cursor :=
@@ -714,6 +729,45 @@ package body Landin.Stages.Checking.Flow is
                Facts.Delete (Previous);
             end loop;
          end Forget;
+
+         procedure Forget (Facts : in out Dead_Field_Maps.Map) is
+            Position : Dead_Field_Maps.Cursor := Facts.Ceiling ((Id, 0));
+            Previous : Dead_Field_Maps.Cursor;
+         begin
+            while Dead_Field_Maps.Has_Element (Position) loop
+               exit when Dead_Field_Maps.Key (Position).Declaration /= Id;
+               Previous := Position;
+               Dead_Field_Maps.Next (Position);
+               Facts.Delete (Previous);
+            end loop;
+         end Forget;
+
+         procedure Forget (Facts : in out Dead_Element_Maps.Map) is
+            Position : Dead_Element_Maps.Cursor :=
+              Facts.Ceiling ((Id, No_Path, 0, No_Path));
+            Previous : Dead_Element_Maps.Cursor;
+         begin
+            while Dead_Element_Maps.Has_Element (Position) loop
+               exit when Dead_Element_Maps.Key (Position).Declaration /= Id;
+               Previous := Position;
+               Dead_Element_Maps.Next (Position);
+               Facts.Delete (Previous);
+            end loop;
+         end Forget;
+
+         procedure Forget (Facts : in out Dead_Nested_Maps.Map) is
+            Position : Dead_Nested_Maps.Cursor :=
+              Facts.Ceiling ((Id, No_Path));
+            Previous : Dead_Nested_Maps.Cursor;
+         begin
+            while Dead_Nested_Maps.Has_Element (Position) loop
+               exit when Dead_Nested_Maps.Key (Position).Declaration /= Id;
+               Previous := Position;
+               Dead_Nested_Maps.Next (Position);
+               Facts.Delete (Previous);
+            end loop;
+         end Forget;
+
       begin
          if Id = Res.No_Declaration then
             return;
@@ -1015,25 +1069,25 @@ package body Landin.Stages.Checking.Flow is
             return False;
          end if;
          declare
-            First : constant Field_Sets.Cursor :=
+            First : constant Dead_Field_Maps.Cursor :=
               State.Dead_Fields.Ceiling ((Id, 0));
          begin
-            if Field_Sets.Has_Element (First)
-              and then Field_Sets.Element (First).Declaration = Id
+            if Dead_Field_Maps.Has_Element (First)
+              and then Dead_Field_Maps.Key (First).Declaration = Id
             then
                return True;
             end if;
          end;
-         for Fact of State.Dead_Nested loop
-            if Fact.Declaration = Id then
+         for Cursor in State.Dead_Nested.Iterate loop
+            if Dead_Nested_Maps.Key (Cursor).Declaration = Id then
                return True;
             end if;
          end loop;
          --  Reading a slice descriptor does not read its referenced
          --  elements.  An indexed read still checks the selected element;
          --  an inline aggregate read still includes its consumed parts.
-         for Fact of State.Dead_Elements loop
-            if Fact.Declaration = Id then
+         for Cursor in State.Dead_Elements.Iterate loop
+            if Dead_Element_Maps.Key (Cursor).Declaration = Id then
                return True;
             end if;
          end loop;
@@ -1566,7 +1620,8 @@ package body Landin.Stages.Checking.Flow is
       end Place_Identity;
 
       procedure Consume_Place
-        (Of_Tree : Syn.Tree; Node : Syn.Node_Id; State : in out Assigned_Set)
+        (Of_Tree : Syn.Tree; Node, At_Call : Syn.Node_Id;
+         State : in out Assigned_Set)
       is
          Id : Res.Declaration_Id;
          Path : Field_Path;
@@ -1580,20 +1635,19 @@ package body Landin.Stages.Checking.Flow is
          if not Valid then
             return;
          elsif Is_Element then
-            Element_Sets.Include
-              (State.Dead_Elements,
-               (Id, Path, Position, Below));
+            State.Dead_Elements.Include ((Id, Path, Position, Below), At_Call);
          elsif Path.Is_Empty then
-            State.Dead_Fields.Include ((Id, 0));
+            State.Dead_Fields.Include ((Id, 0), At_Call);
          elsif Path.Length = 1 then
-            State.Dead_Fields.Include ((Id, Last (Path)));
+            State.Dead_Fields.Include ((Id, Last (Path)), At_Call);
          else
-            Nested_Sets.Include (State.Dead_Nested, (Id, Path));
+            State.Dead_Nested.Include ((Id, Path), At_Call);
          end if;
          --  D433: a `sink` binding and the place it was matched from are
          --  one resource, so consuming either consumes the other.
          if Sink_Subjects.Contains (Id) then
-            Consume_Place (Of_Tree, Sink_Subjects.Element (Id), State);
+            Consume_Place
+              (Of_Tree, Sink_Subjects.Element (Id), At_Call, State);
          else
             for Cursor in Sink_Subjects.Iterate loop
                declare
@@ -1613,7 +1667,7 @@ package body Landin.Stages.Checking.Flow is
                     and then Prefix (Path, Subject_Path)
                   then
                      State.Dead_Fields.Include
-                       ((Sink_Subject_Maps.Key (Cursor), 0));
+                       ((Sink_Subject_Maps.Key (Cursor), 0), At_Call);
                   end if;
                end;
             end loop;
@@ -1644,15 +1698,15 @@ package body Landin.Stages.Checking.Flow is
             --  path the one field it names.
             if Path.Is_Empty then
                declare
-                  Position : Field_Sets.Cursor :=
+                  Position : Dead_Field_Maps.Cursor :=
                     State.Dead_Fields.Ceiling ((Id, 0));
-                  Previous : Field_Sets.Cursor;
+                  Previous : Dead_Field_Maps.Cursor;
                begin
-                  while Field_Sets.Has_Element (Position)
-                    and then Field_Sets.Element (Position).Declaration = Id
+                  while Dead_Field_Maps.Has_Element (Position)
+                    and then Dead_Field_Maps.Key (Position).Declaration = Id
                   loop
                      Previous := Position;
-                     Field_Sets.Next (Position);
+                     Dead_Field_Maps.Next (Position);
                      State.Dead_Fields.Delete (Previous);
                   end loop;
                end;
@@ -1660,29 +1714,40 @@ package body Landin.Stages.Checking.Flow is
                State.Dead_Fields.Exclude ((Id, Path (1)));
             end if;
             declare
-               Previous : constant Nested_Sets.Set := State.Dead_Nested;
+               Previous : constant Dead_Nested_Maps.Map := State.Dead_Nested;
             begin
-               for Fact of Previous loop
-                  if Fact.Declaration = Id and then Prefix (Path, Fact.Path)
-                  then
-                     State.Dead_Nested.Exclude (Fact);
-                  end if;
+               for Cursor in Previous.Iterate loop
+                  declare
+                     Fact : constant Nested_Fact :=
+                       Dead_Nested_Maps.Key (Cursor);
+                  begin
+                     if Fact.Declaration = Id
+                       and then Prefix (Path, Fact.Path)
+                     then
+                        State.Dead_Nested.Exclude (Fact);
+                     end if;
+                  end;
                end loop;
             end;
          end if;
          declare
-            Previous : constant Element_Sets.Set := State.Dead_Elements;
+            Previous : constant Dead_Element_Maps.Map := State.Dead_Elements;
          begin
-            for Fact of Previous loop
-               if Fact.Declaration = Id
-                 and then
-                   (if Is_Element then
-                       Fact.Path = Path and then Fact.Position = Position
-                       and then Prefix (Below, Fact.Below)
-                    else Prefix (Path, Fact.Path))
-               then
-                  State.Dead_Elements.Exclude (Fact);
-               end if;
+            for Cursor in Previous.Iterate loop
+               declare
+                  Fact : constant Element_Fact :=
+                    Dead_Element_Maps.Key (Cursor);
+               begin
+                  if Fact.Declaration = Id
+                    and then
+                      (if Is_Element then
+                          Fact.Path = Path and then Fact.Position = Position
+                          and then Prefix (Below, Fact.Below)
+                       else Prefix (Path, Fact.Path))
+                  then
+                     State.Dead_Elements.Exclude (Fact);
+                  end if;
+               end;
             end loop;
          end;
       end Revive_Place;
@@ -1699,6 +1764,7 @@ package body Landin.Stages.Checking.Flow is
          Is_Element : Boolean;
          Valid : Boolean;
          Dead : Boolean := False;
+         Consumed_At : Syn.Node_Id := Syn.No_Node;
          Known_Position : Boolean := True;
       begin
          if Syn.Kind (Of_Tree, Node)
@@ -1723,16 +1789,19 @@ package body Landin.Stages.Checking.Flow is
          end if;
 
          Dead := State.Dead_Fields.Contains ((Id, 0));
+         if Dead then
+            Consumed_At := State.Dead_Fields.Element ((Id, 0));
+         end if;
          declare
-            Position : Field_Sets.Cursor :=
+            Position : Dead_Field_Maps.Cursor :=
               State.Dead_Fields.Ceiling ((Id, 0));
          begin
-            while not Dead and then Field_Sets.Has_Element (Position)
-              and then Field_Sets.Element (Position).Declaration = Id
+            while not Dead and then Dead_Field_Maps.Has_Element (Position)
+              and then Dead_Field_Maps.Key (Position).Declaration = Id
             loop
                declare
                   Field : constant Tracked_Field :=
-                    Field_Sets.Element (Position).Field;
+                    Dead_Field_Maps.Key (Position).Field;
                begin
                   Dead := Dead or else
                     (Field >= 1
@@ -1740,37 +1809,44 @@ package body Landin.Stages.Checking.Flow is
                                or else (not Is_Element
                                         and then Prefix
                                           (Path, One (Field)))));
+                  if Dead then
+                     Consumed_At := Dead_Field_Maps.Element (Position);
+                  end if;
                end;
-               Field_Sets.Next (Position);
+               Dead_Field_Maps.Next (Position);
             end loop;
          end;
          declare
-            At_Fact : Nested_Sets.Cursor :=
+            At_Fact : Dead_Nested_Maps.Cursor :=
               State.Dead_Nested.Ceiling ((Id, No_Path));
          begin
-            while not Dead and then Nested_Sets.Has_Element (At_Fact)
-              and then Nested_Sets.Element (At_Fact).Declaration = Id
+            while not Dead and then Dead_Nested_Maps.Has_Element (At_Fact)
+              and then Dead_Nested_Maps.Key (At_Fact).Declaration = Id
             loop
                declare
-                  Fact : constant Nested_Fact := Nested_Sets.Element (At_Fact);
+                  Fact : constant Nested_Fact :=
+                    Dead_Nested_Maps.Key (At_Fact);
                begin
                   Dead := Prefix (Fact.Path, Path)
                     or else (not Is_Element
                              and then Prefix (Path, Fact.Path));
+                  if Dead then
+                     Consumed_At := Dead_Nested_Maps.Element (At_Fact);
+                  end if;
                end;
-               Nested_Sets.Next (At_Fact);
+               Dead_Nested_Maps.Next (At_Fact);
             end loop;
          end;
          declare
-            At_Fact : Element_Sets.Cursor :=
+            At_Fact : Dead_Element_Maps.Cursor :=
               State.Dead_Elements.Ceiling ((Id, No_Path, 0, No_Path));
          begin
-            while not Dead and then Element_Sets.Has_Element (At_Fact)
-              and then Element_Sets.Element (At_Fact).Declaration = Id
+            while not Dead and then Dead_Element_Maps.Has_Element (At_Fact)
+              and then Dead_Element_Maps.Key (At_Fact).Declaration = Id
             loop
                declare
                   Fact : constant Element_Fact :=
-                    Element_Sets.Element (At_Fact);
+                    Dead_Element_Maps.Key (At_Fact);
                begin
                   Dead :=
                     (if Is_Element then
@@ -1782,8 +1858,11 @@ package body Landin.Stages.Checking.Flow is
                      else Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
                             /= Ty.Slice_Value
                        and then Prefix (Path, Fact.Path));
+                  if Dead then
+                     Consumed_At := Dead_Element_Maps.Element (At_Fact);
+                  end if;
                end;
-               Element_Sets.Next (At_Fact);
+               Dead_Element_Maps.Next (At_Fact);
             end loop;
          end;
          if not Dead then
@@ -1793,23 +1872,16 @@ package body Landin.Stages.Checking.Flow is
             return False;
          end if;
 
-         declare
-            Their_Tree : constant not null access constant Syn.Tree :=
-              Tree_For (Res.Source_Of (Meanings.all, Id));
-            Their_Node : constant Syn.Node_Id :=
-              Res.Node_Of (Meanings.all, Id);
-         begin
-            Bad.Report
-              (Item    => Bad.Not_Definitely_Assigned,
-               Source  => Syn.Source_Of (Of_Tree),
-               Where   => Syn.Where (Of_Tree, Node),
-               Message => "this place was consumed by `sink` and has not"
-                          & " been assigned again",
-               Note    => "[0910]: a sunk place is dead until assignment",
-               Related => Syn.Origin (Their_Tree.all, Their_Node),
-               Because => "the binding containing the consumed place",
-               Into    => Sink.all);
-         end;
+         Bad.Report
+           (Item    => Bad.Not_Definitely_Assigned,
+            Source  => Syn.Source_Of (Of_Tree),
+            Where   => Syn.Where (Of_Tree, Node),
+            Message => "this place was consumed by `sink` and has not"
+                       & " been assigned again",
+            Note    => "[0910]: a sunk place is dead until assignment",
+            Related => Syn.Origin (Of_Tree, Consumed_At),
+            Because => "consumed here",
+            Into    => Sink.all);
          return False;
       end Require_Live;
 
@@ -1840,14 +1912,50 @@ package body Landin.Stages.Checking.Flow is
                                   Branch.Whole_Arrays),
                Nested       => Nested_Sets.Intersection
                                  (Left.Nested, Branch.Nested),
-               Dead_Fields  => Field_Sets.Union
-                                 (Left.Dead_Fields, Branch.Dead_Fields),
-               Dead_Elements => Element_Sets.Union
-                                  (Left.Dead_Elements,
-                                   Branch.Dead_Elements),
-               Dead_Nested  => Nested_Sets.Union
-                                  (Left.Dead_Nested, Branch.Dead_Nested));
+               Dead_Fields   => Left.Dead_Fields,
+               Dead_Elements => Left.Dead_Elements,
+               Dead_Nested   => Left.Dead_Nested);
          begin
+            for Cursor in Branch.Dead_Fields.Iterate loop
+               declare
+                  Fact : constant Field_Fact := Dead_Field_Maps.Key (Cursor);
+                  Site : constant Syn.Node_Id :=
+                    Dead_Field_Maps.Element (Cursor);
+               begin
+                  if not Merged.Dead_Fields.Contains (Fact)
+                    or else Site < Merged.Dead_Fields.Element (Fact)
+                  then
+                     Merged.Dead_Fields.Include (Fact, Site);
+                  end if;
+               end;
+            end loop;
+            for Cursor in Branch.Dead_Elements.Iterate loop
+               declare
+                  Fact : constant Element_Fact :=
+                    Dead_Element_Maps.Key (Cursor);
+                  Site : constant Syn.Node_Id :=
+                    Dead_Element_Maps.Element (Cursor);
+               begin
+                  if not Merged.Dead_Elements.Contains (Fact)
+                    or else Site < Merged.Dead_Elements.Element (Fact)
+                  then
+                     Merged.Dead_Elements.Include (Fact, Site);
+                  end if;
+               end;
+            end loop;
+            for Cursor in Branch.Dead_Nested.Iterate loop
+               declare
+                  Fact : constant Nested_Fact := Dead_Nested_Maps.Key (Cursor);
+                  Site : constant Syn.Node_Id :=
+                    Dead_Nested_Maps.Element (Cursor);
+               begin
+                  if not Merged.Dead_Nested.Contains (Fact)
+                    or else Site < Merged.Dead_Nested.Element (Fact)
+                  then
+                     Merged.Dead_Nested.Include (Fact, Site);
+                  end if;
+               end;
+            end loop;
             --  Meet sparse facts using the same containment relation as a
             --  read: a whole-child write on one edge covers a leaf written
             --  on the other, in either branch order.
@@ -2283,8 +2391,9 @@ package body Landin.Stages.Checking.Flow is
                   --  The facts at the loop head are the join of the entry
                   --  facts with every back edge: the body's fallthrough and
                   --  its `continue` transfers.  Assigned facts only shrink
-                  --  and dead facts only grow at the head, both over finite
-                  --  sets, so the passes converge; the last one is repeated
+                  --  and dead facts only grow at the head, with their call
+                  --  identities only decreasing. Both range over finite sets,
+                  --  so the passes converge; the last one is repeated
                   --  with reporting on, because the earlier passes reported
                   --  from facts that were not yet complete.  The exit is
                   --  the join of the edges that actually leave: a while's
@@ -2310,9 +2419,10 @@ package body Landin.Stages.Checking.Flow is
                      Exits : Boolean := False;
 
                      --  Every pass that has not converged removes an
-                     --  assigned fact or adds a dead one; the tracked
-                     --  fields alone bound the first, and no program has
-                     --  come near this many element facts.
+                     --  assigned fact, adds a dead one or lowers its call
+                     --  identity; the tracked fields alone bound the first,
+                     --  and no program has come near this many element facts
+                     --  or contributing call identities.
                      Pass_Limit : constant Positive := 65_536;
 
                      procedure Pass (Reporting : Boolean);
@@ -2884,7 +2994,7 @@ package body Landin.Stages.Checking.Flow is
                   if Edges.Falls_Through then
                      for Place of Sinks loop
                         if Require_Live (Of_Tree, Place, State) then
-                           Consume_Place (Of_Tree, Place, State);
+                           Consume_Place (Of_Tree, Place, Node, State);
                         end if;
                      end loop;
                      --  Inout passes storage, so every such place must
