@@ -1324,13 +1324,14 @@ provider refuses, so wrapping an arena counts both injected failures and
 the arena's own.
 
 - Free calls delegate to the parent.
-- In-place growth is refused, so allocation-failure tests remain
-  predictable.
-- A resize is an attempt like an allocation: it spends the budget and is
-  delegated or refused.
-- A growth in place is delegated too, spending a permit, and counted by
-  `growths` rather than `successes`, which counts the blocks the injector
-  gave.
+- An allocation, a resize and a growth in place are each an attempt: each
+  spends the budget, and once it is spent the injector refuses without
+  asking the parent.
+- A refused growth, the injector's or the parent's, leaves the block as it
+  was, and the container moves it instead, so a container tested through
+  an injector takes the in-place path its provider offers.
+- `successes` counts the blocks a delegated allocation or resize gave; a
+  growth in place gives none and is counted by `growths`.
 
 [Executable example](../compiler/tests/fixtures/runtime/library-shared-fault/main.ldn)
 
