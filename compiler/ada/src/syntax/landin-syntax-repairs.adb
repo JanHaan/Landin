@@ -446,11 +446,36 @@ package body Landin.Syntax.Repairs is
          if Natural (Pieces.Length) mod 2 /= 0 then
             return Made;
          end if;
-         Insert := Natural (Landin.Syntax.Where
-           (Parsed, Landin.Syntax.Nth_Declaration (Parsed, 1)).First) + 1;
-         while Insert > 1 and then Bytes (Insert - 1) /= ASCII.LF loop
-            Insert := Insert - 1;
-         end loop;
+         --  The prelude ends before all declaration-leading trivia and
+         --  annotations. Inserting at the declaration's line could split
+         --  its attached doc comment from the declaration it describes.
+         Insert := 1;
+         if Landin.Syntax.Import_Count (Parsed) > 0 then
+            Insert := Natural (Landin.Syntax.Where
+              (Parsed, Landin.Syntax.Nth_Import
+                 (Parsed, Landin.Syntax.Import_Count (Parsed))).Last) + 1;
+            declare
+               Line_Last : Natural := Insert;
+            begin
+               while Line_Last <= Bytes'Last
+                 and then Bytes (Line_Last) /= ASCII.LF
+               loop
+                  Line_Last := Line_Last + 1;
+               end loop;
+               Line_Tokens (Insert, Line_Last - 1, Pieces, Clean);
+               if not Clean or else not Pieces.Is_Empty then
+                  return Made;
+               end if;
+               Insert := Line_Last + 1;
+            end;
+         end if;
+         --  A declaration sharing the last import's line leaves no safe
+         --  whole-line insertion point after that import.
+         if Insert > Natural (Landin.Syntax.Where
+           (Parsed, Landin.Syntax.Nth_Declaration (Parsed, 1)).First) + 1
+         then
+            return Made;
+         end if;
          if Insert >= First then
             return Made;
          end if;
