@@ -1,4 +1,4 @@
-concept ordered(t: type) =
+ordered: type = concept (t: type)
     less: (left: t, right: t) -> (yes: bool)
 end ordered
 

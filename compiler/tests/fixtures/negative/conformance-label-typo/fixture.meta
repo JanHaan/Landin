@@ -1,5 +1,5 @@
 class: negative
-summary: a unique conformance entry typo offers a likely repair and no missing-entry cascade
+summary: a misspelled conformance entry with one near label gets a likely repair, and no second report of the entry as missing
 program: program.ldn
 codes: L0341
 constructs: 1230, 1240
