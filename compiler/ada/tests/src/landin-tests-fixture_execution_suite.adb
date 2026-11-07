@@ -723,7 +723,7 @@ package body Landin.Tests.Fixture_Execution_Suite is
       --  A stale report names the command that re-records it alone.
       Check_Output
         (Case_Item,
-         Label & " (once the difference is read, ./scripts/test.sh"
+         Label & " (once the difference is read, ./scripts/dev-test.sh"
          & " --record=" & Label & " re-records it)",
          Outcome, Unbounded.To_String (Expected), Item);
       Check_Compiler_Outcome (Case_Item, Outcome, Item);
