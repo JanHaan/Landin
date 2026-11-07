@@ -4235,7 +4235,8 @@ What works today:
 - Every hosted target has the compiler facts, `compiler.assert`,
   `linker.library` ([1590]) and the scalar atomics and barriers ([1620]).
 - Firmware targets also have placement annotations ([1640]) and the firmware
-  entry request ([1650]), which hosted targets refuse. The
+  entry request ([1650]), which hosted targets refuse, and Cortex-M firmware
+  links C archives through `linker.library` ([1590]). The
   [capability inventory](docs/capabilities.md) names the supported firmware
   targets and their limits.
 - `assembler.block` is checked on every target ([1630]).

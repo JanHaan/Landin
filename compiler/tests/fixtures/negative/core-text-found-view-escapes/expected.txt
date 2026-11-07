@@ -1,4 +1,4 @@
-error[L0316]: the returned reference does not derive from exactly the parameters named by its `from` clause
+error[L0316]: return `key` derives from parameter storage but has no `from` clause
   --> ../tests/fixtures/negative/core-text-found-view-escapes/main.ldn:5:1
   |
 5 | key_of: (record: utf8) -> (key: utf8) =
@@ -7,14 +7,14 @@ error[L0316]: the returned reference does not derive from exactly the parameters
   |
 5 | key_of: (record: utf8) -> (key: utf8) =
   |                            ^^^^^^^^^ the named return and its declared sources
-  = note: [0790]: the written clause and every returning body edge agree both ways
+  = note: [0790]: add `from record` after the type of return `key`; every returning body edge must agree with those sources
 error[L0314]: this returned reference still has frame origin
-  --> ../tests/fixtures/negative/core-text-found-view-escapes/main.ldn:10:1
+  --> ../tests/fixtures/negative/core-text-found-view-escapes/main.ldn:14:11
    |
-10 | local_key: () -> (key: utf8) =
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+14 |     key = record[0..<text.offset(equals)]
+   |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   --> ../tests/fixtures/negative/core-text-found-view-escapes/main.ldn:11:5
    |
 11 |     mut storage: [3]u8 = [97, 61, 98]
    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the shorter-lived reference source
-  = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`
+  = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`; return a view of caller-supplied storage and declare the result `from` that parameter

@@ -5251,8 +5251,10 @@ package body Landin.Diagnostics.Citations.Texts is
                & LF
                & "- Firmware targets also have placement annotations ([164"
                & "0]) and the firmware entry request ([1650]), which hoste"
-               & "d targets refuse. The capability inventory names the sup"
-               & "ported firmware targets and their limits."
+               & "d targets refuse, and Cortex-M firmware links C archives"
+               & " through `linker.library` ([1590]). The capability inven"
+               & "tory names the supported firmware targets and their limi"
+               & "ts."
                & LF
                & "- `assembler.block` is checked on every target ([1630])."
                & LF

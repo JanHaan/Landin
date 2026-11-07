@@ -1,20 +1,20 @@
 error[L0314]: this returned reference still has frame origin
-  --> ../tests/fixtures/negative/core-text-utf8-builder-view-escapes/main.ldn:5:1
+  --> ../tests/fixtures/negative/core-text-utf8-builder-view-escapes/main.ldn:9:14
   |
-5 | greeting: () -> (result: []u8) =
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+9 |     result = text.utf8_bytes(line)
+  |              ^^^^^^^^^^^^^^^^^^^^^
   --> ../tests/fixtures/negative/core-text-utf8-builder-view-escapes/main.ldn:6:5
   |
 6 |     mut storage: [16]u8 = zeroed
   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the shorter-lived reference source
-  = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`
+  = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`; return a view of caller-supplied storage and declare the result `from` that parameter
 error[L0314]: this returned reference still has frame origin
-  --> ../tests/fixtures/negative/core-text-utf8-builder-view-escapes/main.ldn:12:1
+  --> ../tests/fixtures/negative/core-text-utf8-builder-view-escapes/main.ldn:16:14
    |
-12 | text_greeting: () -> (result: utf8) =
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+16 |     result = text.utf8_used(line)
+   |              ^^^^^^^^^^^^^^^^^^^^
   --> ../tests/fixtures/negative/core-text-utf8-builder-view-escapes/main.ldn:13:5
    |
 13 |     mut storage: [16]u8 = zeroed
    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the shorter-lived reference source
-  = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`
+  = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`; return a view of caller-supplied storage and declare the result `from` that parameter
