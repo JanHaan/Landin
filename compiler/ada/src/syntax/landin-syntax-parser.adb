@@ -2362,6 +2362,8 @@ package body Landin.Syntax.Parser is
                            Landin.Source.Names.Spelling
                              (Names, Declared))]);
 
+            function Here_Begins_Line return Boolean;
+
             function Keyword_Near
               (Wanted : Tok.Token_Kind) return Landin.Diagnostics.Fix_List;
 
