@@ -77,6 +77,13 @@ package Landin.Platform.Overlays is
       Content : String;
       Status  : out Write_Status);
 
+   overriding procedure Write_File
+     (Host    : Overlay;
+      Path    : String;
+      Content : String;
+      Status  : out Write_Status;
+      Reason  : out Ada.Strings.Unbounded.Unbounded_String);
+
    overriding procedure Replace_File
      (Host    : Overlay;
       Path    : String;

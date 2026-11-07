@@ -15,6 +15,7 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/resource.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -24,6 +25,7 @@ int landin_tool_wait_reserved(int, int *, int, int *);
 int landin_tool_start_in_directory(char *const[], char *const[], int, int, int,
                                     int, int, int *);
 int landin_program_run(char *const[], int *, int *, int *);
+void landin_program_set_hook(void (*)(int, int));
 const char *landin_process_start_error(int);
 int landin_tool_cancel(int, int *);
 int landin_tool_cancel_reserved(int, int *, int *);
@@ -319,12 +321,120 @@ static int rejected_child_policy(const char *self, int no_wait)
     return 0;
 }
 
+static int attached_number, attached_stage;
+static void attached_boundary(int child, int stage)
+{
+    siginfo_t info;
+    struct sigaction action;
+    memset(&info, 0, sizeof info);
+    if (stage < 3)
+        require(waitid(P_PID, (id_t)child, &info,
+                       WEXITED | WNOWAIT | WNOHANG) == 0
+                && info.si_pid == child, "attached child remains reserved");
+    else
+        require(waitid(P_PID, (id_t)child, &info,
+                       WEXITED | WNOWAIT | WNOHANG) < 0 && errno == ECHILD,
+                "attached child is reaped only after handler teardown");
+    if (stage != attached_stage) return;
+    require(sigaction(attached_number, NULL, &action) == 0,
+            "observe attached forwarding disposition");
+    require((action.sa_handler == original) == (stage > 1),
+            "original disposition restored before reaping");
+    require(raise(attached_number) == 0, "signal at attached lifecycle boundary");
+    require(restored == (stage > 1 ? attached_number : 0),
+            "signals after teardown use the original handler");
+}
+
+static int attached_controls(const char *self)
+{
+    const int interrupts[] = {SIGINT, SIGQUIT};
+    const int forwarded[] = {SIGTERM, SIGHUP};
+    struct sigaction previous_int, previous_quit, previous_term, previous_hup;
+    int child, number, status, word;
+    char signal_arg[32], ignored_arg[32];
+    require(sigaction(SIGINT, NULL, &previous_int) == 0
+            && sigaction(SIGQUIT, NULL, &previous_quit) == 0
+            && sigaction(SIGTERM, NULL, &previous_term) == 0
+            && sigaction(SIGHUP, NULL, &previous_hup) == 0,
+            "save attached parent dispositions");
+    for (size_t which = 0; which < 2; ++which) {
+        for (int ignored = 0; ignored < 2; ++ignored) {
+            /* Keep the other interrupt nonignored: each disposition is
+               selected independently, including a mixed inherited mask. */
+            handler(SIGINT, original); handler(SIGQUIT, original);
+            if (ignored) handler(interrupts[which], SIG_IGN);
+            snprintf(signal_arg, sizeof signal_arg, "%d", interrupts[which]);
+            snprintf(ignored_arg, sizeof ignored_arg, "%d", ignored);
+            char *args[] = {(char *)self, "attached-child", signal_arg,
+                            ignored_arg, NULL};
+            require(landin_program_run(args, &number, &status, &child) == 0,
+                    "run actual attached production spawn");
+            require((ignored && number == 0 && status == 23)
+                    || (!ignored && number == interrupts[which]),
+                    "child preserves ignored interrupts and resets caught ones");
+            require(waitpid(child, &word, WNOHANG) < 0 && errno == ECHILD,
+                    "attached interrupt child was reaped");
+            struct sigaction action;
+            require(sigaction(interrupts[which], NULL, &action) == 0
+                    && action.sa_handler == (ignored ? SIG_IGN : original),
+                    "attached parent interrupt disposition restored");
+        }
+    }
+    handler(SIGTERM, original); handler(SIGHUP, original);
+    for (size_t which = 0; which < 2; ++which) {
+        snprintf(signal_arg, sizeof signal_arg, "%d", forwarded[which]);
+        char *args[] = {(char *)self, "attached-forward", signal_arg, NULL};
+        require(landin_program_run(args, &number, &status, &child) == 0
+                && number == forwarded[which], "attached live child receives forwarding");
+    }
+    landin_program_set_hook(attached_boundary);
+    for (size_t which = 0; which < 2; ++which) {
+        attached_number = forwarded[which];
+        for (attached_stage = 1; attached_stage <= 3; ++attached_stage) {
+            char *args[] = {(char *)self, "attached-exit", NULL};
+            restored = 0;
+            require(landin_program_run(args, &number, &status, &child) == 0
+                    && number == 0 && status == 23,
+                    "attached teardown retains ordinary exit status");
+        }
+    }
+    landin_program_set_hook(NULL);
+    require(sigaction(SIGINT, &previous_int, NULL) == 0
+            && sigaction(SIGQUIT, &previous_quit, NULL) == 0
+            && sigaction(SIGTERM, &previous_term, NULL) == 0
+            && sigaction(SIGHUP, &previous_hup, NULL) == 0,
+            "restore attached control dispositions");
+    puts("attached native: 12 controls passed");
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
     int number, events, child, status = 0;
     int automatic = 0;
     int ready[2];
     const char *mode;
+    if (argc == 2 && strcmp(argv[1], "--attached") == 0)
+        return attached_controls(argv[0]);
+    if (argc == 2 && strcmp(argv[1], "attached-exit") == 0)
+        return 23;
+    if (argc == 3 && strcmp(argv[1], "attached-forward") == 0) {
+        alarm(5);
+        require(kill(getppid(), atoi(argv[2])) == 0, "send targeted parent signal");
+        for (;;) pause();
+    }
+    if (argc == 4 && strcmp(argv[1], "attached-child") == 0) {
+        struct sigaction action;
+        number = atoi(argv[2]);
+        require(sigaction(number, NULL, &action) == 0
+                && action.sa_handler == (atoi(argv[3]) ? SIG_IGN : SIG_DFL),
+                "attached child inherited the expected disposition");
+        /* A default SIGQUIT may terminate, without leaving a core file. */
+        struct rlimit limit = {0, 0};
+        require(setrlimit(RLIMIT_CORE, &limit) == 0, "disable probe core dumps");
+        require(raise(number) == 0, "attached child raises its interrupt");
+        return 23;
+    }
     if (argc >= 2 && strcmp(argv[1], "policy-child") == 0) {
         require(argc == 3 && write(atoi(argv[2]), "X", 1) == 1,
                 "rejected child startup sentinel");

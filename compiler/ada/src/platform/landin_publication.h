@@ -24,6 +24,8 @@ int landin_publication_describe_entry(int, const char *, const char *, char *, s
 int landin_publication_stage_directory(const char *);
 int landin_publication_rebase_argument(const char *, int, char *, size_t);
 int landin_publication_stage_write(const char *, const char *, size_t);
+int landin_publication_stage_write_reason(const char *, const char *, size_t,
+                                           char *, size_t);
 /* Exclusive creation: an occupied staged entry, even a directory, refuses.
    0 success, -1 claimed private path refused, -2 outside the registry.
    A claimed path must never fall back to pathname-based creation. */

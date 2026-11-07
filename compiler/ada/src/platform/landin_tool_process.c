@@ -529,6 +529,14 @@ int landin_tool_cancel(int child, int *status)
 static volatile sig_atomic_t landin_program_child = 0;
 static volatile sig_atomic_t landin_program_pending = 0;
 
+/* Test-only synchronous lifecycle observation; configure while no program
+   run is active. Stages are exited-but-reserved, handlers-restored, reaped. */
+static void (*landin_program_hook)(int, int);
+void landin_program_set_hook(void (*hook)(int, int))
+{
+    landin_program_hook = hook;
+}
+
 /* Pass a termination or hangup sent to refine on to its program, which
    ends by it, so refine is left to remove the program's directory and
    report how it ended rather than end first and leave both behind. */
@@ -562,8 +570,9 @@ static void landin_program_catch(int number, struct sigaction *old)
 
 /* D526: run the program refine run built, attached to the caller's
    terminal: its standard descriptors, its process group, no limit.  The
-   child starts with the default action for the interrupt and quit signals,
-   which refine ignores while the child runs, so a terminal's ^C and ^\
+   child preserves inherited ignored interrupt and quit signals; otherwise
+   it starts with their default action. Refine ignores both while the child
+   runs, so a terminal's ^C and ^\
    reach the program and refine stays to remove its directory and report
    how it ended.  A termination or hangup sent to refine alone, as kill
    or a closed session sends it, is forwarded to the program for the same
@@ -581,6 +590,7 @@ int landin_program_run(char *const args[], int *signal_number,
     sigset_t defaults, forwarded, old_mask;
     pid_t pid;
     pid_t reaped;
+    siginfo_t ended;
     int word = 0;
     int error;
 
@@ -601,8 +611,17 @@ int landin_program_run(char *const args[], int *signal_number,
         return error;
     }
     sigemptyset(&defaults);
-    sigaddset(&defaults, SIGINT);
-    sigaddset(&defaults, SIGQUIT);
+    /* An explicit inherited ignore survives exec, just as direct execution
+       would preserve it. Query before installing our temporary ignores. */
+    if (sigaction(SIGINT, NULL, &old_interrupt) != 0
+        || sigaction(SIGQUIT, NULL, &old_quit) != 0) {
+        error = errno;
+        posix_spawnattr_destroy(&attributes);
+        pthread_sigmask(SIG_SETMASK, &old_mask, NULL);
+        return error;
+    }
+    if (old_interrupt.sa_handler != SIG_IGN) sigaddset(&defaults, SIGINT);
+    if (old_quit.sa_handler != SIG_IGN) sigaddset(&defaults, SIGQUIT);
     error = posix_spawnattr_setsigdefault(&attributes, &defaults);
     /* The program starts with refine's mask as it was before the block. */
     if (error == 0)
@@ -641,19 +660,30 @@ int landin_program_run(char *const args[], int *signal_number,
     if (error == 0) {
         if (landin_program_pending != 0)
             kill(pid, landin_program_pending);
+        memset(&ended, 0, sizeof ended);
         do {
-            reaped = waitpid(pid, &word, 0);
-        } while (reaped < 0 && errno == EINTR);
-        if (reaped < 0)
-            error = errno;
-        else if (WIFSIGNALED(word))
-            *signal_number = WTERMSIG(word);
-        else
-            *status = WEXITSTATUS(word);
-    }
-    if (*child != 0) {
+            error = waitid(P_PID, (id_t)pid, &ended, WEXITED | WNOWAIT);
+        } while (error < 0 && errno == EINTR);
+        error = error < 0 ? errno : 0;
+        if (error == 0 && landin_program_hook) landin_program_hook(pid, 1);
+        /* The exited child still reserves its identifier while forwarding
+           is active. Restore the handlers and clear their target before
+           the final reap releases that reservation. */
         sigaction(SIGTERM, &old_terminate, NULL);
         sigaction(SIGHUP, &old_hangup, NULL);
+        landin_program_child = 0;
+        if (error == 0) {
+            if (landin_program_hook) landin_program_hook(pid, 2);
+            do {
+                reaped = waitpid(pid, &word, 0);
+            } while (reaped < 0 && errno == EINTR);
+            if (reaped < 0) error = errno;
+            else if (landin_program_hook) landin_program_hook(pid, 3);
+        }
+        if (error == 0 && WIFSIGNALED(word))
+            *signal_number = WTERMSIG(word);
+        else if (error == 0)
+            *status = WEXITSTATUS(word);
     }
     landin_program_child = 0;
     sigaction(SIGINT, &old_interrupt, NULL);

@@ -1,7 +1,7 @@
 --  The line reader over core/io.memory's standard input, read through an
 --  eight-byte buffer: a line and its ending must fit in it, so seven bytes
---  is the longest line.  The same input is read whole, three bytes a read
---  and with a read failing partway, and must give the same lines.
+--  is the longest terminated line.  The same input is read whole, three
+--  bytes a read and with a read failing partway, and must give the same lines.
 import core/cmp
 import core/io
 import core/io/fake
@@ -41,7 +41,12 @@ end too_long
 finished: (inout lines: io.line_reader(io.memory)) -> (yes: bool) =
     yes = false
     item: io.line = io.read_line(lines) else (problem)
-        _ = problem
+        return when problem <> io.io_failed
+        again: io.line = io.read_line(lines) else (second)
+            _ = second
+            return
+        end
+        yes = again.finished and lenof again.bytes == 0
         return
     end
     yes = item.finished and lenof item.bytes == 0
@@ -89,6 +94,42 @@ long_last: () -> (ok: bool) =
     ok = next_is(lines, "a") and too_long(lines) and finished(lines)
 end long_last
 
+--  Exact capacity is admitted only at EOF.  A consumed LF ends an
+--  oversized line; an ordinary probe byte is skipped with that line.
+--  Inject failures at each read boundary, including the EOF probe.
+boundaries: (input: []u8, oversized: bool, limit: usize,
+             fail_at: usize) -> (ok: bool) =
+    name: []u8 = "unused"
+    file: io.memory_file =
+        (name: name, contents: unused[0..<1], length: 0, cursor: 0,
+         readable: false, writable: false, state: io.closed_slot)
+    mut files: [1]io.memory_file
+    files[0] = file
+    no_arguments: [][]u8 = []
+    mut state: io.memory_space = zeroed
+    host := io.memory_over(state, files[0..<1], no_arguments, input,
+                           output[0..<1], errors[0..<1])
+    state.read_limit = limit
+    state.fail_read_at = fail_at
+    mut buffer: [8]u8 = zeroed
+    mut lines := io.lines_over(host, io.input(host), buffer[0..<8])
+    if oversized then
+        --  A probe failure must be io_failed, leaving the full buffer;
+        --  retrying then reports the oversized line once.
+        mut rejected: bool = false
+        _ = io.read_line(lines) else (problem)
+            if problem == io.io_failed then
+                rejected = too_long(lines)
+            else
+                rejected = problem == io.line_too_long
+            end if
+        end
+        ok = rejected and next_is(lines, "after") and finished(lines)
+    else
+        ok = next_is(lines, "12345678") and finished(lines)
+    end if
+end boundaries
+
 --  A reader over an empty buffer has room for no line: each read is
 --  line_too_long, and none claims the input has ended.
 empty_buffer: () -> (ok: bool) =
@@ -118,5 +159,16 @@ public main: () -> (code: i32) =
     return when not long_last()
     code = 5
     return when not empty_buffer()
+    code = 6
+    mut failure: usize = 0
+    while failure < 10 do
+        return when not boundaries("12345678", false, 8, failure)
+        return when not boundaries("12345678", false, 3, failure)
+        return when not boundaries("12345678\nafter\n", true, 8, failure)
+        return when not boundaries("12345678\nafter\n", true, 3, failure)
+        return when not boundaries("123456789\nafter\n", true, 8, failure)
+        return when not boundaries("123456789\nafter\n", true, 3, failure)
+        inc failure
+    end while
     code = 42
 end main

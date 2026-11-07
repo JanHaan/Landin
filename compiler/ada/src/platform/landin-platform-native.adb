@@ -1,5 +1,6 @@
 with Ada.Directories;
 with Ada.Environment_Variables;
+with Ada.Exceptions;
 with Ada.IO_Exceptions;
 with GNAT.OS_Lib;
 with Landin.Platform.Native.Byte_Strings;
@@ -332,31 +333,50 @@ package body Landin.Platform.Native is
       Content : String;
       Status  : out Write_Status)
    is
+      Reason : Unbounded.Unbounded_String;
+   begin
+      Write_File (Host, Path, Content, Status, Reason);
+   end Write_File;
+
+   overriding procedure Write_File
+     (Host    : Native_Filesystem;
+      Path    : String;
+      Content : String;
+      Status  : out Write_Status;
+      Reason  : out Unbounded.Unbounded_String)
+   is
       pragma Unreferenced (Host);
       File : Stream_IO.File_Type;
       use type Interfaces.C.int;
       function Stage_Write
         (Path, Content : Interfaces.C.char_array;
-         Size : Interfaces.C.size_t) return Interfaces.C.int
+         Size : Interfaces.C.size_t;
+         Said : out Interfaces.C.char_array;
+         Room : Interfaces.C.size_t) return Interfaces.C.int
         with Import, Convention => C,
-             External_Name => "landin_publication_stage_write";
+             External_Name => "landin_publication_stage_write_reason";
       function Private_Write
         (Path, Content : Interfaces.C.char_array;
-         Size : Interfaces.C.size_t) return Interfaces.C.int
+         Size : Interfaces.C.size_t;
+         Said : out Interfaces.C.char_array;
+         Room : Interfaces.C.size_t) return Interfaces.C.int
         with Import, Convention => C,
-             External_Name => "landin_private_write";
+             External_Name => "landin_private_write_reason";
       Staged : Interfaces.C.int;
+      Said : Interfaces.C.char_array (1 .. 4096) := [others => Interfaces.C.nul];
    begin
+      Reason := Unbounded.Null_Unbounded_String;
       Staged := Stage_Write
         (Interfaces.C.To_C (Path), Interfaces.C.To_C (Content),
-         Content'Length);
+         Content'Length, Said, Said'Length);
       if Staged = -2 then
          Staged := Private_Write
            (Interfaces.C.To_C (Path), Interfaces.C.To_C (Content),
-            Content'Length);
+            Content'Length, Said, Said'Length);
       end if;
       if Staged /= -2 then
          Status := (if Staged = 0 then Write_Ok else Not_Writable);
+         Reason := Unbounded.To_Unbounded_String (Interfaces.C.To_Ada (Said));
          return;
       end if;
       Stream_IO.Create (File, Stream_IO.Out_File, Path);
@@ -387,8 +407,10 @@ package body Landin.Platform.Native is
       Status := Write_Ok;
 
    exception
-      when Ada.IO_Exceptions.Name_Error | Ada.IO_Exceptions.Use_Error
+      when Failure : Ada.IO_Exceptions.Name_Error | Ada.IO_Exceptions.Use_Error
          | Ada.IO_Exceptions.Device_Error =>
+         Reason := Unbounded.To_Unbounded_String
+           (Ada.Exceptions.Exception_Message (Failure));
          Close_After_Failure (File);
          Status := Not_Writable;
    end Write_File;

@@ -681,6 +681,21 @@ package body Landin.Testing.Fakes is
       Host.Writes.Data.Items.Append (Entry_Value);
    end Write_File;
 
+   overriding procedure Write_File
+     (Host    : Fake_Filesystem;
+      Path    : String;
+      Content : String;
+      Status  : out Landin.Platform.Write_Status;
+      Reason  : out Ada.Strings.Unbounded.Unbounded_String)
+   is
+   begin
+      Write_File (Fake_Filesystem'Class (Host), Path, Content, Status);
+      Reason := Unbounded.Null_Unbounded_String;
+      if Status /= Landin.Platform.Write_Ok then
+         Reason := Unbounded.To_Unbounded_String ("the fake host refuses writes");
+      end if;
+   end Write_File;
+
    overriding procedure Replace_File
      (Host    : Fake_Filesystem;
       Path    : String;

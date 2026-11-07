@@ -130,6 +130,14 @@ package Landin.Platform is
       Content : String;
       Status  : out Write_Status) is abstract;
 
+   --  The failure cause from this write; empty on success.
+   procedure Write_File
+     (Host    : Filesystem;
+      Path    : String;
+      Content : String;
+      Status  : out Write_Status;
+      Reason  : out Ada.Strings.Unbounded.Unbounded_String) is abstract;
+
    --  Write new bytes into an existing ordinary file, the same file, so
    --  that everything it carries stays with it (D358).  The native adapter
    --  follows a symlink to its target, keeps a synced copy of the original

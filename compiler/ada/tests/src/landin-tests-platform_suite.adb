@@ -600,19 +600,21 @@ package body Landin.Tests.Platform_Suite is
       Root : constant String := Scratch & "/io-outcomes-"
         & Ada.Calendar.Formatting.Image
           (Ada.Calendar.Clock, Include_Time_Fraction => True);
-      Content : Unbounded.Unbounded_String;
+      Content, Reason : Unbounded.Unbounded_String;
       Read : Landin.Platform.Read_Status;
       Written : Landin.Platform.Write_Status;
    begin
       Ada.Directories.Create_Path (Scratch);
       Ada.Directories.Create_Directory (Root);
-      Host.Write_File (Root, "x", Written);
+      Host.Write_File (Root, "x", Written, Reason);
       Landin.Testing.Check
-        (Item, Written = Landin.Platform.Not_Writable,
+        (Item, Written = Landin.Platform.Not_Writable
+         and then Unbounded.Length (Reason) > 0,
          "a directory cannot be overwritten with source bytes");
-      Host.Write_File (Root & "/absent/file", "x", Written);
+      Host.Write_File (Root & "/absent/file", "x", Written, Reason);
       Landin.Testing.Check
-        (Item, Written = Landin.Platform.Not_Writable,
+        (Item, Written = Landin.Platform.Not_Writable
+         and then Unbounded.Length (Reason) > 0,
          "a missing parent is an ordinary write failure");
       Host.Read_File (Root & "/absent", Content, Read);
       Landin.Testing.Check
@@ -623,7 +625,11 @@ package body Landin.Tests.Platform_Suite is
         (Item, Read = Landin.Platform.Not_Readable
          and then Unbounded.Length (Content) = 0,
          "a directory is refused before byte reading");
-      Host.Write_File (Root & "/after.bin", "after", Written);
+      Host.Write_File (Root & "/after.bin", "after", Written, Reason);
+      Landin.Testing.Check
+        (Item, Written = Landin.Platform.Write_Ok
+         and then Unbounded.Length (Reason) = 0,
+         "a successful write clears the preceding failure cause");
       Host.Read_File (Root & "/after.bin", Content, Read);
       Landin.Testing.Check
         (Item, Written = Landin.Platform.Write_Ok
@@ -1284,17 +1290,18 @@ package body Landin.Tests.Platform_Suite is
       Host   : Landin.Testing.Fakes.Fake_Filesystem;
       Status : Landin.Platform.Write_Status;
       Read : Landin.Platform.Read_Status;
-      Content : Unbounded.Unbounded_String;
+      Content, Reason : Unbounded.Unbounded_String;
       Entries : Landin.Platform.Path_List;
       Listed : Landin.Platform.List_Status;
    begin
       Landin.Testing.Check_Equal
         (Item, Host.Written ("out.s"), "", "nothing was written yet");
 
-      Host.Write_File ("out.s", "  ret", Status);
+      Host.Write_File ("out.s", "  ret", Status, Reason);
 
       Landin.Testing.Check
-        (Item, Status = Landin.Platform.Write_Ok, "the write succeeded");
+        (Item, Status = Landin.Platform.Write_Ok
+         and then Unbounded.Length (Reason) = 0, "the write succeeded");
       Landin.Testing.Check_Equal
         (Item, Host.Written ("out.s"), "  ret", "the write was recorded");
       Landin.Testing.Check
@@ -1326,10 +1333,11 @@ package body Landin.Tests.Platform_Suite is
          and then Host.Is_Directory ("root"),
          "a refused directory write preserves the directory");
       Host.Refuse_Writes;
-      Host.Write_File ("out.s", "refused", Status);
+      Host.Write_File ("out.s", "refused", Status, Reason);
       Host.Read_File ("out.s", Content, Read);
       Landin.Testing.Check
         (Item, Status = Landin.Platform.Not_Writable
+         and then Unbounded.To_String (Reason) = "the fake host refuses writes"
          and then Unbounded.To_String (Content) = "new"
          and then Host.Written ("out.s") = "new",
          "failed writes leave the latest successful bytes intact");

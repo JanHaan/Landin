@@ -35,8 +35,8 @@ end line
 --- A line reader over the caller's `buffer`, reading `opened` through
 --- `host`.  It holds a copy of the reader's handle; keep the handle's
 --- state and the buffer alive while it is used.  The longest line it reads
---- is one byte shorter than the buffer, which must hold the line's `\n` as
---- well.
+--- is one byte shorter than the buffer when it has a `\n` ending, which
+--- must fit as well.  An unterminated final line may fill the buffer.
 public lines_over: (provider: type is reader, host: provider, opened: file,
                     buffer: []mut u8)
                    -> (lines: line_reader(provider) from buffer, host) =
@@ -128,9 +128,20 @@ public read_line: (provider: type is reader,
                 return
             end if
             if waiting == lenof lines.buffer then
+                --  A full buffer may be the unterminated final line.  Probe
+                --  without overwriting it; a failure leaves it for retry.
+                mut probe: [1]u8 = zeroed
+                got: usize = try provider.read(lines.host, lines.opened,
+                                               probe[0..<1])
+                if got == 0 then
+                    lines.finished = true
+                    continue
+                end if
                 lines.start = 0
                 lines.filled = 0
-                lines.skipping = true
+                --  The extra byte belongs to the oversized line.  If it
+                --  ended that line, the next call starts the following one.
+                lines.skipping = probe[0] <> u8('\n')
                 fail line_too_long
             end if
             try refill(lines)
