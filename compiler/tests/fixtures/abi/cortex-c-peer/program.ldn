@@ -88,7 +88,7 @@ end landin_wide
 --  The peer's own fill of a large record from SEED, as peer.c makes it.
 large_of: (seed: i32) -> (made: large) =
     made = zeroed
-    for i in usize(0) .. 4 do
+    for i in usize(0)..4 do
         made.words[i] = u32(seed) + u32(i) * 0x01010101
     end for
     made.mark = -7
@@ -97,7 +97,7 @@ end large_of
 
 large_differs: (value: large, seed: i32) -> (code: i32) =
     wanted: large = large_of(seed)
-    for i in usize(0) .. 4 do
+    for i in usize(0)..4 do
         code = 1 + i32(i)
         return when value.words[i] <> wanted.words[i]
     end for
@@ -178,7 +178,7 @@ checks: () -> (code: i32) =
 
     --  The peer's global, through the address it gives.
     entry: ptr mut log = peer_log_address()
-    for i in 1 .. 3 do
+    for i in 1..3 do
         entry.val.calls = entry.val.calls + 1
     end for
     entry.val.last = -9

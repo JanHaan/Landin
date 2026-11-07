@@ -1,6 +1,6 @@
 class: abi
 profiles: standard
-summary: A hand-written freestanding C peer and the program call each other under AAPCS32 on Cortex-M: every scalar width, 64-bit values in even register pairs and on the stack, layout(c) records by value and by address, small and past the four argument registers, a C function pointer to a Landin routine, a C global and a Landin datum, an unsigned plain char, a 32-bit long and an int-sized enum, each value checked where it arrives
+summary: A hand-written freestanding C peer and the program call each other under AAPCS32 on Cortex-M: every scalar width, 64-bit values in even register pairs and on the stack, layout(c) records of 3 to 32 bytes by value both ways, past the four argument registers among them, and by address, a C function pointer to a Landin routine, a C global and a Landin datum, an unsigned plain char, a 32-bit long and an int-sized enum, each value checked where it arrives
 program: program.ldn
 c-sources: peer.c
 status: 42

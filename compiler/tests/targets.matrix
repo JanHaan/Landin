@@ -11,9 +11,10 @@ abi/aapcs64-varargs-both-banks | linux-arm64, freebsd-arm64
 abi/auxiliary-from-c | linux-x86-64, linux-arm64, linux-rv64
 abi/c-function-from-address | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 abi/c-function-from-zero-address-traps | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
-abi/c-packed-records | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+abi/c-packed-records | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0
 abi/clock-agrees-with-c | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 abi/core-io-file-identity | darwin-arm64, freebsd-x86-64, freebsd-arm64
+abi/cortex-c-peer | cortex-m0
 abi/cortex-cmsis-bindings | cortex-m0
 abi/cortex-vfp-bindings | cortex-m0
 abi/darwin-stack-composite-slots | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -28,13 +29,13 @@ abi/libc-loading-facts | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64
 abi/libc-process-constants | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 abi/libc-socket-facts | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 abi/library-names-beside-libc | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
-abi/link-symbol-exports | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+abi/link-symbol-exports | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0
 abi/linux-file-identity | linux-x86-64, linux-arm64, linux-rv64
 abi/lp64d-integer-extension | linux-rv64
 abi/lp64d-main-return | linux-rv64
 abi/lp64d-varargs | linux-rv64
 abi/posix-errno-numbers | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
-abi/public-routine-is-local | linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+abi/public-routine-is-local | linux-x86-64, linux-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0
 abi/r440-bindings-generated | linux-x86-64, freebsd-x86-64
 abi/r440-errno-interposition | darwin-arm64, freebsd-x86-64, freebsd-arm64
 abi/r440-errno-thread-local | darwin-arm64, freebsd-x86-64, freebsd-arm64
@@ -43,7 +44,7 @@ abi/r440-native-banks | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64,
 abi/r440-native-bounds | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 abi/r440-native-callback-array-fields | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 abi/r440-native-callbacks | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
-abi/r440-native-dollar-link | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+abi/r440-native-dollar-link | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0
 abi/r440-native-hosted | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 abi/r440-native-link-namespace | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 abi/r440-native-nested-shape | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -60,7 +61,7 @@ abi/r440-sret-pointer-observation | linux-x86-64, freebsd-x86-64
 abi/r440-varargs-pointer-callback | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 abi/r450-review-backend-c-entry | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 abi/r450-x86-callee-probes | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
-abi/r490-distinct-c-roundtrip | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+abi/r490-distinct-c-roundtrip | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0
 abi/r630-dma-slice | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 abi/r630-native-memory | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 abi/r640-dma-packed | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -2165,7 +2166,7 @@ runtime/generic-text-literal-deduction | linux-x86-64, linux-arm64, darwin-arm64
 runtime/generic-try-effective-signature | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/generic-zero-nominal-array-signatures | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/greatest-common-divisor | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
-runtime/hosted-assembly-reaches-no-evidence-entry | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/hosted-assembly-reaches-no-evidence-entry | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0
 runtime/hosted-heap-after-thread-start | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/hosted-heap-provider | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/hosted-heap-resize | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -2572,7 +2573,7 @@ runtime/run-signalled | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64,
 runtime/run-streams | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/rv64-assembly-level | linux-rv64
 runtime/rv64-feature-fact | linux-rv64
-runtime/rv64-indexed-address | linux-rv64
+runtime/rv64-indexed-address | linux-rv64, cortex-m0
 runtime/scalar-replacement-parts | linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0
 runtime/scalar-selection-copies | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/scalar-subobject-zeroed-assignment-clears-values | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
@@ -2666,7 +2667,7 @@ runtime/unchecked-reaches-a-cleanup-written-inside | linux-x86-64, linux-arm64, 
 runtime/unchecked-slice-index-passes-the-length | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/undo-call-shapes | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/undo-cleanups-follow-failure-edges | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
-runtime/undo-does-not-unwind-traps | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+runtime/undo-does-not-unwind-traps | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64, cortex-m0
 runtime/utf16-slice-not-boundary-traps | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/utf8-indexing | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
 runtime/utf8-ordinal-out-of-range-traps | linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
