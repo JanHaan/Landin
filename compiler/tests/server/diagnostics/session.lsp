@@ -22,7 +22,7 @@ pause
 <- {"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///workspace/helper.ldn","diagnostics":[]}}
 <- {"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///workspace/main.ldn","version":2,"diagnostics":[]}}
 <- {"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///workspace/helper.ldn","diagnostics":[]}}
-<- {"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///workspace/main.ldn","version":5,"diagnostics":[{"range":{"start":{"line":2,"character":12},"end":{"line":2,"character":16}},"severity":1,"code":"L0201","codeDescription":{"href":"https://www.701.dev/diagnostics.html#l0201"},"source":"refine","message":"`twic` is not declared in any scope this reaches\nnote: [1860]: a name that is not in scope is a misspelling, not a new binding"}]}}
+<- {"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///workspace/main.ldn","version":5,"diagnostics":[{"range":{"start":{"line":2,"character":12},"end":{"line":2,"character":16}},"severity":1,"code":"L0201","codeDescription":{"href":"https://www.701.dev/diagnostics.html#l0201"},"source":"refine","message":"`twic` is not declared in any scope this reaches\nnote: [1860]: a name used here needs a declaration in scope; check its spelling"}]}}
 <- {"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///workspace/helper.ldn","diagnostics":[]}}
 <- {"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///workspace/main.ldn","diagnostics":[]}}
 <- {"jsonrpc":"2.0","id":2,"result":null}

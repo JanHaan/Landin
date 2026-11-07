@@ -10,7 +10,7 @@ pause
 -> {"jsonrpc":"2.0","id":3,"method":"shutdown"}
 -> {"jsonrpc":"2.0","method":"exit"}
 <- {"jsonrpc":"2.0","id":1,"result":{"capabilities":{"positionEncoding":"utf-16","textDocumentSync":{"openClose":true,"change":2},"definitionProvider":true,"hoverProvider":true,"documentFormattingProvider":true,"codeActionProvider":{"codeActionKinds":["quickfix"]}},"serverInfo":{"name":"refine"}}}
-<- {"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///workspace/app/main.ldn","version":1,"diagnostics":[{"range":{"start":{"line":16,"character":12},"end":{"line":16,"character":18}},"severity":1,"code":"L0201","codeDescription":{"href":"https://www.701.dev/diagnostics.html#l0201"},"source":"refine","message":"`values` is not declared in any scope this reaches\nnote: [1860]: a name that is not in scope is a misspelling, not a new binding"}]}}
+<- {"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///workspace/app/main.ldn","version":1,"diagnostics":[{"range":{"start":{"line":16,"character":12},"end":{"line":16,"character":18}},"severity":1,"code":"L0201","codeDescription":{"href":"https://www.701.dev/diagnostics.html#l0201"},"source":"refine","message":"`values` is not declared in any scope this reaches\nnote: [1860]: a name used here needs a declaration in scope; check its spelling"}]}}
 <- {"jsonrpc":"2.0","id":2,"result":null}
 <- {"jsonrpc":"2.0","id":3,"result":null}
 exit: 0
