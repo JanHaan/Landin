@@ -5319,8 +5319,56 @@ package body Landin.Tests.Parser_Suite is
       end if;
    end Character_Advice_Has_A_Valid_Escape;
 
+   procedure Scalar_And_Packed_Type_Names_Stay_Distinct
+     (Item : in out Landin.Testing.Context);
+
+   procedure Scalar_And_Packed_Type_Names_Stay_Distinct
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check (Name : String; Expected : Landin.Syntax.Node_Kind);
+      procedure Check (Name : String; Expected : Landin.Syntax.Node_Kind) is
+         Sources : Landin.Source.Sets.Source_Set;
+         Names : Landin.Source.Names.Table;
+         Stream : Landin.Tokens.Token_Stream;
+         Found : Landin.Diagnostics.Diagnostic_List;
+         Id : constant Landin.Source.Source_Id := Sources.Add
+           ("type-names", "image: type = layout(packed) struct value: "
+            & Name & " at 0 end image");
+      begin
+         Landin.Tokens.Lexer.Lex (Sources.Get (Id), Names, Stream);
+         declare
+            Parsed : constant Landin.Syntax.Tree :=
+              Landin.Syntax.Parser.Parse (Stream, Names, Found);
+            Struct : constant Landin.Syntax.Node_Id :=
+              Landin.Syntax.Declared_Type
+                (Parsed, Landin.Syntax.Nth_Declaration (Parsed, 1));
+            Field : constant Landin.Syntax.Node_Id :=
+              Landin.Syntax.Nth_Field (Parsed, Struct, 1);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Landin.Diagnostics.Count (Found), 0,
+               Name & " parses in the packed field's type position");
+            Landin.Testing.Check
+              (Item, Landin.Syntax.Kind
+                 (Parsed, Landin.Syntax.Declared_Type (Parsed, Field))
+                   = Expected,
+               Name & " retains its ordinary lookup or packed-width meaning");
+         end;
+      end Check;
+   begin
+      for Name of Landin.Platform.Path_List'(["u8", "u16", "u32", "u64"]) loop
+         Check (Name, Landin.Syntax.Type_Reference);
+      end loop;
+      for Name of Landin.Platform.Path_List'(["u1", "u4", "u12", "u63"]) loop
+         Check (Name, Landin.Syntax.Type_Name);
+      end loop;
+   end Scalar_And_Packed_Type_Names_Stay_Distinct;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "parser", "scalar and packed type names stay distinct",
+         Scalar_And_Packed_Type_Names_Stay_Distinct'Access);
       Landin.Testing.Register
         (Into, "parser", "character advice has a valid escape",
          Character_Advice_Has_A_Valid_Escape'Access);

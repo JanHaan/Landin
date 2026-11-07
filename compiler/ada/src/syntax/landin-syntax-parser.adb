@@ -5449,6 +5449,8 @@ package body Landin.Syntax.Parser is
                   begin
                      if Landin.Packed.Named_Width
                        (Landin.Source.Names.Spelling (Names, Spelled)) /= 0
+                       and then (for all Scalar in Scalar_Name =>
+                         Scalar_Id (Scalar) /= Spelled)
                      then
                         Advance;
                         return Add (Type_Name, At_Type, Named => Spelled);
