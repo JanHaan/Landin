@@ -40,6 +40,7 @@ int landin_tool_wait(int, int *, int);
 int landin_private_directory(const char *, char *, size_t);
 int landin_remove_tree(const char *);
 int landin_private_write(const char *, const char *, size_t);
+int landin_private_write_reason(const char *, const char *, size_t, char *, size_t);
 int landin_private_mkdir(const char *);
 int landin_private_path_current(const char *);
 int landin_private_argument_directory(const char *);
@@ -1412,6 +1413,40 @@ static void own_reservations(void)
     ++passed;
 }
 
+static void write_failure_reasons(void)
+{
+    char output[4096], stage[4096], private[4096], private_file[8192];
+    char reason[4096];
+    struct rlimit saved, constrained;
+    struct sigaction ignored, previous;
+    path(output, sizeof output, "write-reason");
+    int token = prepare(output, 0, "", stage);
+    REQUIRE(landin_private_directory("write-reason-", private, sizeof private) == 0);
+    REQUIRE(snprintf(private_file, sizeof private_file, "%s/product", private) > 0);
+    REQUIRE(getrlimit(RLIMIT_FSIZE, &saved) == 0);
+    constrained = saved; constrained.rlim_cur = 0;
+    memset(&ignored, 0, sizeof ignored); ignored.sa_handler = SIG_IGN;
+    sigemptyset(&ignored.sa_mask);
+    REQUIRE(sigaction(SIGXFSZ, &ignored, &previous) == 0);
+    REQUIRE(setrlimit(RLIMIT_FSIZE, &constrained) == 0);
+    REQUIRE(landin_publication_stage_write_reason(stage, "bytes", 5,
+                                                 reason, sizeof reason) == -1);
+    REQUIRE(!strcmp(reason, strerror(EFBIG)));
+    REQUIRE(landin_private_write_reason(private_file, "bytes", 5,
+                                        reason, sizeof reason) == -1);
+    REQUIRE(!strcmp(reason, strerror(EFBIG)));
+    REQUIRE(setrlimit(RLIMIT_FSIZE, &saved) == 0);
+    REQUIRE(sigaction(SIGXFSZ, &previous, NULL) == 0);
+    REQUIRE(landin_publication_stage_write_reason(stage, "bytes", 5,
+                                                 reason, sizeof reason) == 0);
+    REQUIRE(reason[0] == '\0');
+    REQUIRE(landin_private_write_reason(private_file, "bytes", 5,
+                                        reason, sizeof reason) == 0);
+    REQUIRE(reason[0] == '\0');
+    REQUIRE(step(token, 4) == 0 && landin_remove_tree(private) == 1);
+    passed += 4;
+}
+
 int main(int argc, char **argv)
 {
     self_program = argv[0];
@@ -1491,6 +1526,12 @@ int main(int argc, char **argv)
         printf("publication native: %u controls passed (identity observation)\n", passed);
         return 0;
     }
+    if (argc == 2 && !strcmp(argv[1], "--write-failure-reasons")) {
+        write_failure_reasons();
+        printf("publication native: %u controls passed (write failure reasons)\n", passed);
+        return 0;
+    }
+    write_failure_reasons();
     registry_lifetimes();
     identity_observations();
     required_absence_snapshot(); absent_directory_publication();

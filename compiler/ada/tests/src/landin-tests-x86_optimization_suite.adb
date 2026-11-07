@@ -300,6 +300,30 @@ package body Landin.Tests.X86_Optimization_Suite is
          "local labels canonicalize but relocations widths and checks do not");
    end Canonical_Bodies;
 
+   procedure Naked_Bodies (Item : in out Landin.Testing.Context) is
+      Source : constant String :=
+        "import landin/assembler" & LF
+        & "extern(naked) first: () -> none =" & LF
+        & "    assembler.block(""ret"")" & LF & "end first" & LF
+        & "extern(naked) second: () -> none =" & LF
+        & "    assembler.block(""ret"")" & LF & "end second" & LF
+        & "public main: () -> (code: i32) = code = 0 end main";
+   begin
+      for Objective in Opt.Objective loop
+         declare
+            Text : constant String := Converted (Item, Source, Objective);
+         begin
+            Landin.Testing.Check
+              (Item, Contains (Routine (Text, "first"), "ret" & LF)
+               and then Contains (Routine (Text, "second"), "ret" & LF)
+               and then not Contains (Text, ".set first,")
+               and then not Contains (Text, ".set second,"),
+               "private naked entries emit independently at "
+               & Opt.Objective'Image (Objective));
+         end;
+      end loop;
+   end Naked_Bodies;
+
    procedure Loop_Allocation (Item : in out Landin.Testing.Context) is
       Work : Landin.Stages.Compilation :=
         Landin.Stages.Create (Landin.Targets.Linux_X86_64);
@@ -2024,6 +2048,8 @@ package body Landin.Tests.X86_Optimization_Suite is
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "x86 opt", "private naked bodies", Naked_Bodies'Access);
       Landin.Testing.Register
         (Into, "x86 opt", "small array bounds", Small_Array_Bounds'Access);
       Landin.Testing.Register

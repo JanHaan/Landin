@@ -279,6 +279,7 @@ def run_case(executable, output, mode, number):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--case", choices=("cancellation", "attached"))
     parser.add_argument("--native-only", action="store_true",
                         help="test the production POSIX helper without refine")
     parser.add_argument('--refine', type=Path,
@@ -316,17 +317,29 @@ def main():
     result_path.write_text(json.dumps(summary, indent=2) + "\n")
     if compiled.returncode:
         raise SystemExit("compile failed: " + str(output / "compile.log"))
-    for mode, number in [("normal", 0)] + [
-            (mode, number) for mode in ("cancel", "before", "ignore", "stubborn")
-            for number in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP)] + [
-                ("reap-ignore", 0), ("reap-nowait", 0), ("lost-owner", signal.SIGINT)]:
-        result = run_case(executable, output, mode, number)
-        summary["cases"].append(result)
-        result_path.write_text(json.dumps(summary, indent=2) + "\n")
-    passed = sum(row["passed"] for row in summary["cases"])
-    print(f"{passed}/{len(summary['cases'])} native controls passed; {result_path}")
-    if passed != len(summary["cases"]):
-        raise SystemExit(1)
+    if args.case != "attached":
+        for mode, number in [("normal", 0)] + [
+                (mode, number) for mode in ("cancel", "before", "ignore", "stubborn")
+                for number in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP)] + [
+                    ("reap-ignore", 0), ("reap-nowait", 0), ("lost-owner", signal.SIGINT)]:
+            result = run_case(executable, output, mode, number)
+            summary["cases"].append(result)
+            result_path.write_text(json.dumps(summary, indent=2) + "\n")
+        passed = sum(row["passed"] for row in summary["cases"])
+        print(f"{passed}/{len(summary['cases'])} native controls passed; {result_path}")
+        if passed != len(summary["cases"]):
+            raise SystemExit(1)
+    if args.case != "cancellation":
+        ran = subprocess.run([str(executable), '--attached'], cwd=output,
+                             capture_output=True, text=True, timeout=20)
+        passed = (ran.returncode == 0 and not ran.stderr
+                  and 'attached native: 12 controls passed' in ran.stdout)
+        summary['attached'] = dict(exit_status=ran.returncode, passed=passed,
+                                   stdout=ran.stdout, stderr=ran.stderr)
+        result_path.write_text(json.dumps(summary, indent=2) + '\n')
+        print(('PASS' if passed else 'FAIL') + ' attached native controls', flush=True)
+        if not passed:
+            raise AssertionError(summary['attached'])
     if args.refine:
         summary['commands'] = command_controls(args.refine.resolve(), output)
         summary['child_policy_commands'] = child_policy_commands(

@@ -239,6 +239,13 @@ package Landin.Testing.Fakes is
       Content : String;
       Status  : out Landin.Platform.Write_Status);
 
+   overriding procedure Write_File
+     (Host    : Fake_Filesystem;
+      Path    : String;
+      Content : String;
+      Status  : out Landin.Platform.Write_Status;
+      Reason  : out Ada.Strings.Unbounded.Unbounded_String);
+
    overriding procedure Replace_File
      (Host    : Fake_Filesystem;
       Path    : String;

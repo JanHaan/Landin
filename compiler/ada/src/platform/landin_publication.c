@@ -405,19 +405,28 @@ static int landin_publication_stage_write_locked(const char *path, const char *b
         fd = stage_open(path, O_WRONLY, 0);
     if (fd < 0) return fd;
     struct stat st;
-    if (fstat(fd, &st) != 0 || !S_ISREG(st.st_mode)) {
+    if (fstat(fd, &st) != 0) {
+        int error = errno;
+        close(fd); errno = error; return -1;
+    }
+    if (!S_ISREG(st.st_mode)) {
         close(fd); errno = EINVAL; return -1;
     }
     size_t used = 0;
     while (used < size) {
         ssize_t wrote = write(fd, bytes + used, size - used);
         if (wrote < 0 && errno == EINTR) continue;
-        if (wrote <= 0) { close(fd); return -1; }
+        if (wrote <= 0) {
+            int error = wrote == 0 ? EIO : errno;
+            close(fd); errno = error; return -1;
+        }
         used += (size_t)wrote;
     }
     int result = ftruncate(fd, (off_t)size);
     if (result == 0) result = fsync(fd);
-    close(fd); return result;
+    int error = errno;
+    if (close(fd) != 0 && result == 0) return -1;
+    errno = error; return result;
 }
 static int landin_read_snapshot_locked(const char *path, char **bytes, size_t *size,
                          uint64_t *device, uint64_t *inode)
@@ -1417,6 +1426,19 @@ int landin_publication_stage_write(const char *path, const char *bytes, size_t s
     registry_unlock();
     return result;
 }
+int landin_publication_stage_write_reason(const char *path, const char *bytes, size_t size,
+    char *reason, size_t room)
+{
+    registry_lock();
+    int result = landin_publication_stage_write_locked(path, bytes, size);
+    int error = errno;
+    if (room > 0) snprintf(reason, room, "%s",
+                           result == -1 ? strerror(error) : "");
+    registry_unlock();
+    errno = error;
+    return result;
+}
+
 int landin_publication_stage_mkdir(const char *path)
 {
     registry_lock();

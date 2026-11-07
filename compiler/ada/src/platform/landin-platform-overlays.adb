@@ -124,6 +124,19 @@ package body Landin.Platform.Overlays is
       Status := Not_Writable;
    end Write_File;
 
+   overriding procedure Write_File
+     (Host    : Overlay;
+      Path    : String;
+      Content : String;
+      Status  : out Write_Status;
+      Reason  : out Ada.Strings.Unbounded.Unbounded_String)
+   is
+      pragma Unreferenced (Host, Path, Content);
+   begin
+      Status := Not_Writable;
+      Reason := Unbounded.To_Unbounded_String ("the overlay is read-only");
+   end Write_File;
+
    overriding procedure Replace_File
      (Host    : Overlay;
       Path    : String;

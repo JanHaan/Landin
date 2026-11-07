@@ -419,18 +419,27 @@ static int landin_private_write_locked(const char *path, const char *bytes, size
     size_t used = 0;
     struct stat st;
     if (fd < 0) return fd;
-    if (fstat(fd, &st) != 0 || !S_ISREG(st.st_mode)) {
+    if (fstat(fd, &st) != 0) {
+        int error = errno;
+        close(fd); errno = error; return -1;
+    }
+    if (!S_ISREG(st.st_mode)) {
         close(fd); errno = EINVAL; return -1;
     }
     while (used < size) {
         ssize_t count = write(fd, bytes + used, size - used);
         if (count < 0 && errno == EINTR) continue;
-        if (count <= 0) { close(fd); return -1; }
+        if (count <= 0) {
+            int error = count == 0 ? EIO : errno;
+            close(fd); errno = error; return -1;
+        }
         used += (size_t)count;
     }
     result = ftruncate(fd, (off_t)size);
     if (result == 0) result = fsync(fd);
-    close(fd); return result;
+    int error = errno;
+    if (close(fd) != 0 && result == 0) return -1;
+    errno = error; return result;
 }
 static int landin_private_argument_directory_locked(const char *argument)
 {
@@ -828,6 +837,19 @@ int landin_private_write(const char *path, const char *bytes, size_t size)
     registry_unlock();
     return result;
 }
+int landin_private_write_reason(const char *path, const char *bytes, size_t size,
+    char *reason, size_t room)
+{
+    registry_lock();
+    int result = landin_private_write_locked(path, bytes, size);
+    int error = errno;
+    if (room > 0) snprintf(reason, room, "%s",
+                           result == -1 ? strerror(error) : "");
+    registry_unlock();
+    errno = error;
+    return result;
+}
+
 int landin_private_argument_directory(const char *argument)
 {
     registry_lock();

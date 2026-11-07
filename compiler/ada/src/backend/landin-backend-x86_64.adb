@@ -8889,8 +8889,13 @@ package body Landin.Backend.X86_64 is
             declare
                Item : constant Landin.IR.Item_Id := Landin.IR.Item_Id (Index);
             begin
+               --  Naked text has its own emission lifecycle and may contain
+               --  assembler directives, outside instruction-body sharing.
                Shareable (Index) :=
                  Landin.IR.Kind_Of (Of_Unit, Item) = Landin.IR.Routine
+                 and then Landin.IR.Signature_Machine
+                   (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item))
+                     /= Landin.Machine.Naked_Routine
                  and then Item /= Hosted_Entry
                  and then not Is_Exported_Item (Item)
                  and then not Is_Forced (Item);

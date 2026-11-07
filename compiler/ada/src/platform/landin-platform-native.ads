@@ -63,6 +63,13 @@ package Landin.Platform.Native is
       Content : String;
       Status  : out Write_Status);
 
+   overriding procedure Write_File
+     (Host    : Native_Filesystem;
+      Path    : String;
+      Content : String;
+      Status  : out Write_Status;
+      Reason  : out Ada.Strings.Unbounded.Unbounded_String);
+
    overriding procedure Replace_File
      (Host    : Native_Filesystem;
       Path    : String;
