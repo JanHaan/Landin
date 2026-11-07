@@ -42,7 +42,7 @@ and eight hex digits, then ETX and LF. The host sends `S` first.
 | `C` | the 64 bytes read without an invalidate | `n` read, `s` how many were 0x5A, `k` a bit for each line that was 0x5A throughout, `a` their FNV-1a, `m` the FNV-1a of the ring once invalidated |
 | `E` | 1024 bytes read through the maintained ring | `n` read, `x` their FNV-1a, `w` the ring's laps |
 | `d` | the CPU's controls | `l` bytes an invalidate lost of a dirty line, `r` ranges refused of four, `k` dirty bytes kept under them, `w` bytes written once the line was cleaned |
-| `x`, `X` | around a transmit whose buffer was not cleaned | `n` 64; `t` 1 when it completed without an error |
+| `x`, `X` | around a transmit whose buffer was not cleaned | `n` 64; `t` 1 when the stream ended with its count at zero and no transfer error, `r` its count left, `f` DMA_LISR's stream 0 flags, an underrun's FEIF among them, which stops nothing |
 | `y`, `Y` | around the same buffer's transmit after a clean | the same |
 | `e` | before the entry returns | `c` CCR, still on |
 | `h` | when the application halts | `s` the step that failed |
@@ -56,6 +56,7 @@ and eight hex digits, then ETX and LF. The host sends `S` first.
 | the stale read | each line the read returned is the ring's cached 0x5A throughout or, evicted in between, the bytes sent, and at least one is stale; memory, once invalidated, hashes as the 64 bytes sent |
 | the maintained receive | 1024 bytes hashing as the host's, over at least four laps of the 256-byte ring |
 | the lost dirty line | an invalidate after a clean discards all 32 dirty bytes; the four ranges that are not whole lines are refused and the line they cover keeps its 32 dirty bytes, which a clean then writes |
+| the transmits' edges | the frames after the CPU's controls are `x`, `X`, `y`, `Y` and `e` in that order, each whole: a transmit ends with the stream's EN clear and then USART3's TC, as RM0433 48.5.19 orders it, before the CPU writes its next frame, so the two never race for the transmit FIFO |
 | the stale transmit | each line the transmit without a clean carries is the `o`s memory held or, written back in between, the message's, at least one the `o`s; after the clean it carries the message, `A` to `Z` repeated; nothing else arrives outside the frames |
 | the end | CCR over SWD with IC and DC clear once the entry returned |
 

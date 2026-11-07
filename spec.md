@@ -29624,7 +29624,11 @@ ranges that are not whole lines are refused and the line they cover keeps
 its dirty 0x44; a transmit whose buffer's memory holds `o` and whose cached
 copy holds the message is sent without a clean and must carry `o`s, a
 whole line at least and every line either memory's `o`s or, written back
-in between, the message's, and after a clean must carry the message; and the entry returns, so CCR
+in between, the message's, and after a clean must carry the message, every
+byte of both: each transmit clears USART3's TC before the stream is
+enabled and waits for the stream's EN to clear and then for TC, as RM0433
+48.5.19 orders it, before the CPU writes another frame, an underrun's FEIF
+deciding nothing since it stops no stream (15.3.20); and the entry returns, so CCR
 must read clear over SWD. The host reads CCR over SWD while the run goes on
 as well. Every prediction is the host's, from what it sent and what a
 write-back cache does, and a control that does not fail as predicted fails

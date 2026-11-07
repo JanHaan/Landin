@@ -286,26 +286,37 @@ def scenario(console, swd, seed, vector):
             % (d['k'], d['w'], LINE))
     verdicts['lost_dirty'] = dict(lost=d['l'], refused=d['r'], kept=d['k'], written=d['w'])
 
-    y = frame(console, 'Y', 5, 'the maintained transmit')
+    # The last frame follows both transmits, so a frame either transmit
+    # lost at its edge is found missing rather than waited for.
+    end = frame(console, 'e', 5, 'the last frame, after both transmits')
     taken = run_stream(bytes(console.received))
-    for tag in ('x', 'X', 'y'):
-        require(any(p[0] == 'frame' and p[1] == tag for p in segments(taken)), 'no %s frame' % tag)
+    tags = [p[1] for p in segments(taken) if p[0] == 'frame']
+    after_d = taken[taken.find(bytes([common.STX]) + b'x'):]
+    require(tags[-5:] == ['x', 'X', 'y', 'Y', 'e'],
+            'the frames around the transmits are %s, not x, X, y, Y and e: a transmit and the'
+            " CPU's frames collided, %r arriving between the d frame and the e frame"
+            % (', '.join(tags[tags.index('d') + 1:]) if 'd' in tags else tags, after_d[:120]))
     unclean, cleaned = between(taken, 'x', 'X'), between(taken, 'y', 'Y')
-    x_end = [p[2] for p in segments(taken) if p[0] == 'frame' and p[1] == 'X'][0]
-    require(x_end['t'] == 1 and y['t'] == 1, 'a transmit did not complete without an error')
+    x_end, y = [[p[2] for p in segments(taken) if p[0] == 'frame' and p[1] == tag][0]
+                for tag in ('X', 'Y')]
+    require(x_end['t'] == 1 and y['t'] == 1,
+            'a transmit did not complete: X t=%d r=%d f=%#x, Y t=%d r=%d f=%#x'
+            % (x_end['t'], x_end.get('r', -1), x_end.get('f', 0),
+               y['t'], y.get('r', -1), y.get('f', 0)))
     # A line the cache kept dirty leaves memory's stale `o`s for the
     # stream; one evicted in between was written back, so it carries the
-    # message.  At least one stale.
+    # message.  At least one stale, and every byte of every line.
     lines = dict((data, mask) for mask, data in mixes(bytes([TRANSMIT_MEMORY]) * TRANSMIT,
                                                       message()))
-    require(unclean in lines, 'the transmit without a clean carried %r, which no mix of whole'
-            ' stale lines of memory\'s %r and lines of the message with one stale gives'
-            % (unclean[:16], bytes([TRANSMIT_MEMORY])))
-    require(cleaned == message(), 'the cleaned transmit carried %r, not the message' % cleaned[:16])
+    require(unclean in lines, 'the transmit without a clean carried %d bytes, %r, which no mix'
+            ' of whole stale lines of memory\'s %r and lines of the message with one stale'
+            ' gives' % (len(unclean), unclean[:16], bytes([TRANSMIT_MEMORY])))
+    require(cleaned == message(), 'the cleaned transmit carried %d bytes, %r, not the %d of the'
+            ' message' % (len(cleaned), cleaned[:16], TRANSMIT))
     verdicts['transmit'] = dict(unclean_stale=unclean.count(TRANSMIT_MEMORY),
-                                unclean_lines=lines[unclean], cleaned=len(cleaned))
+                                unclean_lines=lines[unclean], cleaned=len(cleaned),
+                                flags=[x_end.get('f', 0), y.get('f', 0)])
 
-    end = frame(console, 'e', 5, 'the last frame')
     require(end['c'] & CCR_CACHES == CCR_CACHES, 'SCB_CCR is %08x before the return' % end['c'])
     outside = [p[1] for p in segments(run_stream(bytes(console.received))) if p[0] == 'raw']
     require(len(outside) == 2, 'bytes arrived outside the frames and the two transmits')

@@ -80,11 +80,24 @@ patience: u32 = 20000
 -- buffer's memory under its unclean message.
 ring_fill: u8 = 0x5a
 transmit_memory: u8 = 0x6f
--- DMA_LISR's stream 0 flags (RM0433 15.5.1, p. 659): TCIF0 5, and TEIF0
--- 3, DMEIF0 2 and FEIF0 0, the errors; DMA_LIFCR clears each.
-transfer_complete: u32 = 0x20
-transfer_errors: u32 = 0x0d
+-- DMA_LISR's stream 0 flags (RM0433 15.5.1, p. 659): TCIF0 5, TEIF0 3,
+-- DMEIF0 2 and FEIF0 0; DMA_LIFCR clears each.  A transfer error stops the
+-- stream.  In direct mode a memory-to-peripheral stream sets FEIF on an
+-- underrun when the memory bus was not granted before the peripheral's
+-- request, and an underrun neither stops the stream nor loses data
+-- (15.3.20, pp. 657 and 658), so FEIF and DMEIF decide nothing of when the
+-- stream has ended and are only reported.
+transfer_error_flag: u32 = 0x08
 stream_flags: u32 = 0x3d
+-- DMA_SxCR's EN, which the stream clears once its count reaches zero in
+-- normal mode or a transfer error stops it (15.3.15, p. 654).
+stream_enable: u32 = 0x01
+-- USART_ISR's TC, bit 6: the last frame has left the shift register and
+-- the transmit FIFO is empty (48.8.9, p. 2085).
+transmission_complete: u32 = 0x40
+-- What the last transmit left: DMA_LISR's stream 0 flags and S0NDTR.
+mut transmit_flags: u32 = 0
+mut transmit_left: u32 = 0
 
 -- DMA1 stream 0's interrupt, DMA_STR0, IRQ 11, which arms the ring's next
 -- lap (RM0433 Table 147, p. 754).
@@ -173,13 +186,27 @@ await: (inout r: serial.rx, wanted: usize, limit: u32)
 end await
 
 -- One transmit of COUNT bytes of the buffer on DMA1 stream 0, memory to
--- USART3's TDR, polled to its completion; whether it completed without
--- an error.  D227's device barrier stands before the enable; the
--- buffer's clean, or its omission, is the caller's.
+-- USART3's TDR, as RM0433's transmission using DMA orders it (48.5.19,
+-- p. 2057):
+-- TC cleared through ICR's TCCF before the stream is enabled, then the
+-- stream's end awaited, EN clear with its count at zero, and then USART3's
+-- TC, so the line has sent every byte, the FIFO's among them, before the
+-- CPU writes the next frame to TDR.  A frame the CPU writes while the
+-- stream still feeds the FIFO races it for the FIFO's last slot, and one
+-- of the two writes is lost: the first chip run lost five bytes at each
+-- transmit's edge when the wait ended on an underrun's FEIF, the stream
+-- still running.  D227's
+-- device barrier stands before the enable; the buffer's clean, or its
+-- omission, is the caller's.  Whether every byte went with no transfer
+-- error.
 transmit: (count: u32) -> (done: bool) =
+    done = false
     dma1.s0m0ar_write(dma1.base, u32(usize(addr tx_storage[0])))
     dma1.s0ndtr_write(dma1.base, count)
     dma1.lifcr_write(dma1.base, stream_flags)
+    mut cleared := usart3.icr_decode(0)
+    cleared.f_tccf = 1
+    usart3.icr_write(usart3.base, usart3.icr_encode(cleared))
     mut stream := dma1.s0cr_decode(0)
     stream.f_dir = 1
     stream.f_minc = 1
@@ -187,14 +214,20 @@ transmit: (count: u32) -> (done: bool) =
     config := dma1.s0cr_encode(stream)
     dma1.s0cr_write(dma1.base, config)
     cortex_m.device_barrier()
-    dma1.s0cr_write(dma1.base, config | 1)
+    dma1.s0cr_write(dma1.base, config | stream_enable)
     mut polls: u32 = 0
-    done = false
-    while (dma1.lisr_read(dma1.base) & (transfer_complete | transfer_errors)) == 0 do
+    while (dma1.s0cr_read(dma1.base) & stream_enable) <> 0 do
         polls += 1
         return when polls == 10_000_000
     end while
-    done = (dma1.lisr_read(dma1.base) & transfer_errors) == 0
+    transmit_flags = dma1.lisr_read(dma1.base) & stream_flags
+    transmit_left = dma1.s0ndtr_read(dma1.base)
+    polls = 0
+    while (usart3.isr_read(usart3.base) & transmission_complete) == 0 do
+        polls += 1
+        return when polls == 10_000_000
+    end while
+    done = transmit_left == 0 and (transmit_flags & transfer_error_flag) == 0
     dma1.lifcr_write(dma1.base, stream_flags)
     cortex_m.device_barrier()
 end transmit
@@ -379,6 +412,8 @@ start: () -> none =
     unclean := transmit(64)
     report.open_frame(88)
     report.field(116, if unclean then 1 else 0 end if)
+    report.field(102, transmit_flags)
+    report.field(114, transmit_left)
     report.close_frame()
     cache.clean(caches, tx_storage[0..<64]) else (problem)
         _ = problem
@@ -390,6 +425,8 @@ start: () -> none =
     cleaned := transmit(64)
     report.open_frame(89)
     report.field(116, if cleaned then 1 else 0 end if)
+    report.field(102, transmit_flags)
+    report.field(114, transmit_left)
     report.close_frame()
 
     report.open_frame(101)

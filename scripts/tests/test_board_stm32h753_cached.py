@@ -33,7 +33,7 @@ class Board:
     def __init__(self, **behave):
         self.behave = dict(ccr=0x00070200, stale_mask=3, lost=BOARD.LINE,
                            unclean=bytes([BOARD.TRANSMIT_MEMORY]) * BOARD.TRANSMIT,
-                           end_ccr=0x00070200, prefix=b'', halt=None)
+                           end_ccr=0x00070200, prefix=b'', halt=None, transmitted=None)
         self.behave.update(behave)
         self.received = bytearray(self.behave['prefix'])
         self.sent = bytearray()
@@ -58,8 +58,11 @@ class Board:
         elif self.phase == 2:
             self.received += frame('E', n=len(data), x=BOARD.fnv(data), w=4)
             self.received += frame('d', l=b['lost'], r=BOARD.REFUSED, k=BOARD.LINE, w=BOARD.LINE)
-            self.received += frame('x', n=64) + b['unclean'] + frame('X', t=1)
-            self.received += frame('y', n=64) + BOARD.message() + frame('Y', t=1)
+            sent = (frame('x', n=64) + b['unclean'] + frame('X', t=1, f=1, r=0)
+                    + frame('y', n=64) + BOARD.message() + frame('Y', t=1, f=0, r=0))
+            # A transmit racing the CPU's frames for the FIFO drops what
+            # the board says it drops.
+            self.received += b['transmitted'](sent) if b['transmitted'] else sent
             self.received += frame('e', c=b['end_ccr'])
         self.phase += 1
 
@@ -90,7 +93,8 @@ class Oracle(unittest.TestCase):
         verdicts = run(swd=swd)
         self.assertEqual(verdicts['stale_read']['stale'], 64)
         self.assertEqual(verdicts['lost_dirty']['lost'], 32)
-        self.assertEqual(verdicts['transmit'], dict(unclean_stale=64, unclean_lines=3, cleaned=64))
+        self.assertEqual(verdicts['transmit'], dict(unclean_stale=64, unclean_lines=3, cleaned=64,
+                                                    flags=[1, 0]))
         self.assertEqual(verdicts['returned']['ccr'] & BOARD.CCR_CACHES, 0)
         self.assertEqual([r[1] for r in swd.reads], [BOARD.CCR, BOARD.CCR])
 
@@ -127,6 +131,39 @@ class Oracle(unittest.TestCase):
         # Part of a line stale is no line's mix.
         with self.assertRaisesRegex(common.Failed, 'without a clean carried'):
             run(Board(unclean=bytes([BOARD.TRANSMIT_MEMORY]) * 16 + BOARD.message()[16:]))
+
+    def test_bytes_lost_at_each_transmit_s_edges_are_refused(self):
+        # The first chip run: the wait ended on an underrun's FEIF with the
+        # stream still feeding the FIFO, and five bytes were lost at each
+        # transmit's edge, the last `o` and `\x02X t`, then the first `A`
+        # and `\x02Y t`.
+        def collided(sent):
+            x_end = sent.index(b'\x02X')
+            sent = sent[:x_end - 1] + sent[x_end + 4:]
+            y_start = sent.index(b'\x02y n=00000040\x03\n') + 15
+            sent = sent[:y_start] + sent[y_start + 1:]
+            y_end = sent.index(b'\x02Y')
+            return sent[:y_end] + sent[y_end + 4:]
+        with self.assertRaisesRegex(common.Failed, 'frames around the transmits are x, y, e'):
+            run(Board(transmitted=collided))
+
+    def test_one_byte_lost_from_either_transmit_is_refused(self):
+        def short_unclean(sent):
+            at = sent.index(b'\x02X')
+            return sent[:at - 1] + sent[at:]
+        with self.assertRaisesRegex(common.Failed, 'without a clean carried 63 bytes'):
+            run(Board(transmitted=short_unclean))
+        def short_message(sent):
+            at = sent.index(b'\x02y n=00000040\x03\n') + 15
+            return sent[:at] + sent[at + 1:]
+        with self.assertRaisesRegex(common.Failed, 'cleaned transmit carried 63 bytes'):
+            run(Board(transmitted=short_message))
+
+    def test_a_transmit_that_did_not_complete_is_refused(self):
+        def incomplete(sent):
+            return sent.replace(b'\x02Y t=00000001', b'\x02Y t=00000000')
+        with self.assertRaisesRegex(common.Failed, 'a transmit did not complete'):
+            run(Board(transmitted=incomplete))
 
     def test_caches_still_on_once_the_entry_returned_are_refused(self):
         with self.assertRaisesRegex(common.Failed, 'still on'):
