@@ -953,7 +953,7 @@ package Landin.Diagnostics.Catalogue is
         (Code => "L0341", Level => Error, State => Live,
          Source => True, Bytes => True,
          Least => 1, Most => 1, Notes => 1, Route => False,
-         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Fixes => May_Fix, Shown_By => Negative_Fixture,
          Rule => +("[1230]-[1270]: a concept or conformance declaration is"
                    & " not well formed")),
       Erased_Contract =>

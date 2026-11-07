@@ -1,0 +1,9 @@
+concept ordered(t: type) =
+    less: (left: t, right: t) -> (yes: bool)
+end ordered
+
+less_i32: (left: i32, right: i32) -> (yes: bool) =
+    yes = left < right
+end less_i32
+
+i32 is ordered (lss: less_i32)
