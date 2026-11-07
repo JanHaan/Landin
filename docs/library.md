@@ -65,6 +65,12 @@ public main: () -> (code: i32) =
         io.write(host, io.err(host), "\n") else none
         return
     end
+    io.flush(out) else (problem)
+        io.write(host, io.err(host), "standard output: ") else none
+        io.write(host, io.err(host), failure.words(problem)) else none
+        io.write(host, io.err(host), "\n") else none
+        return
+    end
     code = 0
 end main
 ```
@@ -76,8 +82,11 @@ end main
   `else (problem)` names the atom, and `failure.words(problem)` turns it
   into words for a person, such as `not found`.
 - The output goes through a buffered writer over a buffer `main`
-  declares. The deferred `io.flush` writes what waits on every way out,
-  and the deferred `io.close` closes the file however `numbered` ends.
+  declares, so the last of it reaches standard output only when the
+  writer is flushed. `main` flushes it before reporting success, so a
+  write that fails there is reported rather than lost. The deferred
+  `io.flush` still writes what waits on the earlier ways out, and the
+  deferred `io.close` closes the file however `numbered` ends.
 
 Compiled and run over a four-line file:
 
@@ -113,7 +122,7 @@ Which module does what:
 |---|---|---|
 | Get the handle every hosted call takes | `host := blocking.new()` | [hosted/blocking](../hosted/blocking) |
 | Print a formatted line | `io.write_format(host, io.out(host), "{} lines\n", [any(addr count)])` | [core/io](../core/io) |
-| Print many lines | `io.buffered_over(host, io.out(host), storage)`, then `io.format(out, "{} lines\n", [any(addr count)])` for each and `io.flush(out)` | [core/io](../core/io) |
+| Print many lines | `io.buffered_over(host, io.out(host), storage)`, then `io.format(out, "{} lines\n", [any(addr count)])` for each, and `io.flush(out)`, checked, before reporting success | [core/io](../core/io) |
 | Get a command-line argument | `io.argument_at(host, 0)`, and `io.argument_count(host)` | [core/io](../core/io) |
 | Read a file line by line | `io.open_read(host, path)`, `io.lines_over(host, file, buffer)`, then `io.read_line(lines)` until `item.finished`, and `io.close(host, file)` | [core/io](../core/io) |
 | Write straight to standard error | `io.write(host, io.err(host), bytes)` | [core/io](../core/io) |
