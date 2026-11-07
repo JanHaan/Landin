@@ -51,9 +51,11 @@ recording is not a verdict:
 | `./scripts/test.sh --record=CLASS/NAME` | one recorded fixture's `expect` file, with what `refine` reports for it now |
 
 A fixture's report is rewritten only while `refine` still exits with its
-`status` and reports its ordered `codes`; otherwise the command says which no
-longer holds and writes nothing, because those are the fixture's verdict and
-a recording replaces only bytes. `./scripts/dev-test.sh` takes the same
+`status`. For positive, negative, runtime and ABI fixtures its ordered `codes`
+must also match, including an empty list when none are pinned. Otherwise the
+command says which no longer holds and writes nothing, because those are the
+fixture's verdict and a recording replaces only bytes. End-to-end fixtures do
+not carry `codes`. `./scripts/dev-test.sh` takes the same
 options. `constructs.matrix`
 began as the list of every construct either document defines against what
 the corpus says about it, and is now the construct inventory: each
@@ -1048,8 +1050,8 @@ everywhere.
 | unit | a note of what an implementation-side case covers; the case itself lives in `compiler/ada/tests` |
 | negative, end-to-end | executed: recorded cases compare `refine` output/status with `expect`/`status`; program-only negative cases require the expected failure status and ordered `codes:` sequence |
 | runtime | executed: `refine` compiles and links `program`, the result is run, and its own exit status is compared with `status` — or, with `traps: yes`, it is held to having ended without returning one |
-| ABI | executed in the existing `runtime fixtures execute` case: `refine` emits assembly, the selected Linux x86-64 C driver compiles it with `c-sources`, and the result's output/status/trap verdict is checked |
-| positive | executed: the grammar must derive the program, `refine` must accept it through checking, lowering and verification, and the Linux x86-64 backend must emit assembly for it |
+| ABI | executed in the existing `runtime fixtures execute` case: `refine` emits assembly, the selected target lane's C driver compiles it with `c-sources`, and the result's output/status/trap verdict is checked |
+| positive | executed: the grammar must derive the program, `refine` must accept it through checking, lowering and verification, and the selected target backend must emit assembly for it |
 | debugger | sessions in `debugging/` run separately through `scripts/debug.sh` |
 
 Each producing attempt first removes its expected output through the platform
@@ -1067,7 +1069,8 @@ nobody runs is.
 
 That last sentence decides what a runtime or ABI fixture does on a host that
 cannot finish the target, and the answer is that the run fails. A macOS host
-with no ELF toolchain reports the existing `runtime fixtures execute` case as
+selecting a Linux cross-run without the required ELF toolchain reports the
+existing `runtime fixtures execute` case as
 one failing case: runtime fixtures carry `refine`'s own L0500 report, and ABI
 fixtures name the triplet-selected C driver that could not be run. Skipping
 would be the quiet non-run the sentence refuses, and it would also hide the

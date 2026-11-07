@@ -15,13 +15,18 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = (ROOT / "scripts/build.sh").read_text()
-START = "Previous=''\n"
-HELPERS = SCRIPT[SCRIPT.index("landin_paths() {"):
-                 SCRIPT.index('Current="$(landin_manifest)"')]
-MANIFEST = SCRIPT[SCRIPT.index("landin_manifest() {"):
-                  SCRIPT.index('Incremental=')]
-DECISION = HELPERS + SCRIPT[SCRIPT.index(START):
-                            SCRIPT.index("\n#  Only quiet output and a job count")]
+def section(start, end):
+    try:
+        return SCRIPT[SCRIPT.index(start):SCRIPT.index(end)]
+    except ValueError as error:
+        raise RuntimeError(
+            f"build.sh control cannot find section between {start!r} and {end!r}"
+        ) from error
+
+
+HELPERS = section("landin_paths() {", 'Current="$(landin_manifest)"')
+MANIFEST = section("landin_manifest() {", "Incremental=")
+DECISION = HELPERS + section("Previous=''\n", "\n#  Only quiet output and a job count")
 BASE = ["source 1 compiler/ada/src/main.adb", "source 2 compiler/ada/src/host.c",
         "source 3 compiler/ada/src/host.h", "project 4 compiler/ada/lib.gpr",
         "project 5 compiler/ada/landin.adc", "identity 6 0123abc clean",
@@ -83,7 +88,8 @@ class BuildInventory(unittest.TestCase):
                      "LANDIN_BUILD_DIR": str(build),
                      "LANDIN_BUILD_TAG": "test", "LANDIN_BUILD_MODE": "debug",
                      "Current": "\n".join(sorted(new)),
-                     "Incremental": incremental}, check=True, timeout=HANG)
+                     "Incremental": incremental, "Prior_Build": "yes"},
+                check=True, timeout=HANG)
             self.assertEqual(published.read_text(), "published compiler\n",
                              "a rebuild removed the published compiler")
             return obj.exists(), result.stdout
@@ -418,6 +424,12 @@ path.write_text("-- generated at " + str(path) + "\\n"
     def calls(self):
         return [json.loads(line) for line in
                 (self.root / "calls").read_text().splitlines()]
+
+    def test_first_build_is_not_called_interrupted(self):
+        result = self.run_build()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("no earlier build of test/debug", result.stdout)
+        self.assertNotIn("last build did not finish", result.stdout)
 
     def test_snapshot_is_used_and_unchanged_configuration_is_current(self):
         first = self.run_build()

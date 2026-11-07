@@ -8,9 +8,16 @@ found, not fixtures the harness runs.
 ## Running it
 
 ```sh
-nix develop -c compiler/tests/fuzz/fuzz.py \
-  --refine compiler/ada/build/nix/debug/bin/refine --seed 500000 --rounds 1
+nix develop
+LANDIN_BUILD_MODE=debug LANDIN_BUILD_VARIANT= ./scripts/dev-build.sh
+compiler/tests/fuzz/fuzz.py \
+  --refine "compiler/ada/build/$LANDIN_BUILD_TAG/debug/bin/refine" \
+  --seed 500000 --rounds 1
 ```
+
+The shell sets `LANDIN_BUILD_TAG` for its host. This example builds the debug
+compiler without a variant; see the [environment guide](../../../docs/environments.md#a-nix-shell-for-convenience)
+for the tag and variants.
 
 The seeds are every positive, negative, runtime and ABI fixture directory
 with exactly one direct `.ldn` file, in class and directory order, then every

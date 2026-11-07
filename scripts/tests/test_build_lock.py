@@ -85,6 +85,25 @@ echo "$LANDIN_BUILD_MODE"
         stdout, stderr = process.communicate("finish\n", timeout=HANG)
         self.assertEqual(process.returncode, 0, (stdout, stderr))
 
+    def test_cleanup_validates_all_arguments_before_lock_or_removal(self):
+        build = self.root / "compiler/ada/build/test/debug"
+        build.mkdir(parents=True)
+        marker = build / "marker"
+        marker.write_text("keep")
+        for arguments, status in ((["--help"], 0), (["-h"], 0),
+                                  (["--typo"], 2), (["--all", "--help"], 2),
+                                  (["--help", "--all"], 2), (["--all", "extra"], 2)):
+            with self.subTest(arguments=arguments):
+                process = self.start("clean.sh", arguments)
+                stdout, stderr = process.communicate(timeout=HANG)
+                self.assertEqual(process.returncode, status, (stdout, stderr))
+                self.assertTrue(marker.exists())
+                self.assertFalse((self.root / "compiler/ada/.build-locks").exists())
+        cleanup = self.start("clean.sh")
+        stdout, stderr = cleanup.communicate(timeout=HANG)
+        self.assertEqual(cleanup.returncode, 0, (stdout, stderr))
+        self.assertFalse(build.exists())
+
     def test_same_mode_waits_but_other_modes_and_tags_can_run(self):
         first = self.start()
         self.ready(first)

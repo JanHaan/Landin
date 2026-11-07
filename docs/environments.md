@@ -194,8 +194,10 @@ checking while avoiding a clean rebuild for every Ada edit:
 ./scripts/dev-test.sh --host --target=linux-x86-64 --suite=checking
 ```
 
-The selectors are exact, accept one selection at a time, and print `FILTERED`
-in the transcript. They are fast feedback, not validation evidence.
+The selectors are exact and repeatable; suites, cases and fixtures can be
+combined in one invocation. They print `FILTERED` in the transcript. See the
+[local feedback recipe](process.md#local-agent-feedback) for an example.
+They are fast feedback, not validation evidence.
 `./scripts/dev-test.sh --help` prints the options and the suite names
 without building anything. The
 developer build asks the pinned GPRbuild for checksum-based Ada recompilation;

@@ -120,6 +120,9 @@ Tests_Manifest="$LANDIN_BUILD_DIR/tests-manifest.txt"
 Attempt="$LANDIN_BUILD_DIR/attempt-manifest.txt"
 State="$LANDIN_BUILD_DIR/build-state"
 Identity_Source="$LANDIN_BUILD_DIR/generated/landin-build_identity.ads"
+#  Capture the state before identity generation creates this directory.
+Prior_Build=no
+if [ -d "$LANDIN_BUILD_DIR" ]; then Prior_Build=yes; fi
 Configuration="$LANDIN_ADA_DIR/.build-locks/$LANDIN_BUILD_TAG-$LANDIN_BUILD_MODE.cgpr"
 
 python3 "$LANDIN_ROOT/scripts/build_identity.py" \
@@ -271,7 +274,7 @@ fi
 Previous=''
 if [ -f "$Manifest" ]; then
     Previous="$(landin_requested "$Manifest")" || exit
-elif [ ! -d "$LANDIN_BUILD_DIR" ]; then
+elif [ "$Prior_Build" = no ]; then
     echo "landin: no earlier build of $LANDIN_BUILD_TAG/$LANDIN_BUILD_MODE; building from clean"
 else
     #  No manifest: the last build did not finish.  It wrote down what it
