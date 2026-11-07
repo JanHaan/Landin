@@ -1,0 +1,45 @@
+import platform/c
+
+--  D921: AAPCS32 is ILP32. int, long, size_t and pointers are 32 bits,
+--  long long and double 64 bits at eight, and plain char is unsigned.
+compiler.assert(compiler.c_aapcs32)
+compiler.assert(not compiler.c_riscv_ilp32)
+compiler.assert(sizeof c.c_long == 4 and alignof c.c_long == 4)
+compiler.assert(sizeof c.c_size == 4 and sizeof c.c_ptrdiff == 4)
+compiler.assert(sizeof c.c_longlong == 8 and alignof c.c_longlong == 8)
+compiler.assert(sizeof c.c_double == 8 and alignof c.c_double == 8)
+compiler.assert(sizeof c.c_bool == 1)
+
+--  The aliases are the scalars they name: an unsigned char holds 255, and
+--  a long is an i32, so it is assigned to one with no conversion.
+top: c.c_char = 255
+widest: c.c_long = 2147483647
+ordinary: i32 = widest
+bits: c.c_ulong = 4294967295
+size: usize = c.c_size(4294967295)
+
+--  An eight-byte-aligned record, as the header that declares it lays it out.
+sample: type = layout(c) struct
+    channel: c.c_uchar
+    reading: c.c_longlong
+    scale: c.c_float
+end sample
+
+handler: type = extern(c) (value: c.c_int) -> (result: c.c_int)
+
+extern(c) sensor_read: (channel: c.c_uchar) -> (taken: sample)
+extern(c) sensor_scale: (taken: sample, factor: c.c_double) -> (scaled: c.c_double)
+extern(c) sensor_notify: (callback: handler, value: c.c_int) -> none
+
+public extern(c) landin_threshold: (value: c.c_int) -> (result: c.c_int) =
+    result = 0
+    if value > 100 then
+        result = 1
+    end if
+end landin_threshold
+
+public read_scaled: () -> (scaled: c.c_double) =
+    taken := sensor_read(channel: 2)
+    sensor_notify(callback: landin_threshold, value: c.c_int(taken.channel))
+    scaled = sensor_scale(taken: taken, factor: 0.5)
+end read_scaled

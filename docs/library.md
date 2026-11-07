@@ -2681,16 +2681,18 @@ blocks it.
 
 ## platform/c
 
-C scalar spellings for the target's C ABI, on every target whose C data model is LP64.
+C scalar spellings for the target's C ABI, on every target whose C ABI is
+enabled: the four LP64 ones and Cortex-M's ILP32 AAPCS32.
 
-LP64 is a data model, not an architecture: C `int` is 32 bits while
-`long` and pointers are 64, as on every 64-bit Unix. Windows' LLP64 keeps
-`long` at 32 bits, and Cortex-M's ILP32 makes all three 32 bits; neither
-is admitted here.
+LP64 and ILP32 are data models, not architectures. Under LP64 C `int` is 32
+bits while `long` and pointers are 64, as on every 64-bit Unix; under
+Cortex-M's ILP32 all three are 32 bits. Windows' LLP64 keeps `long` at 32
+bits with 64-bit pointers and is not admitted here, and neither are RV32's
+and Xtensa's ILP32 ABIs, which the compiler describes but does not enable.
 
-Within LP64 the C ABI depends on the operating system as well as the
-architecture, so the compiler names it with one fact per ABI rather than
-reading it from `compiler.arch` or the pointer width:
+The C ABI depends on the operating system as well as the architecture, so
+the compiler names it with one fact per ABI rather than reading it from
+`compiler.arch` or the pointer width:
 
 | Target | ABI fact | Plain `char` |
 |---|---|---|
@@ -2698,21 +2700,23 @@ reading it from `compiler.arch` or the pointer width:
 | `darwin-arm64` | `compiler.c_darwin_lp64`: Apple's arm64 variant of AAPCS64 | `i8` |
 | `linux-arm64`, `freebsd-arm64` | `compiler.c_aapcs64_lp64`: the standard AAPCS64 | `u8` |
 | `linux-rv64` | `compiler.c_riscv_lp64d`: RISC-V LP64D, LP64 with double-precision float registers | `u8` |
+| `cortex-m0`, every level | `compiler.c_aapcs32`: AAPCS32, its VFP variant when the device description has a float unit | `u8` |
 
 Darwin and Linux share `compiler.arch == arm64` and still disagree on
 `char`, which is why the fact names the ABI.
 
-Every other alias is the same on all four:
+The other aliases differ only in `long`:
 
-| Alias | Is |
-|---|---|
-| `c_int` | `i32` |
-| `c_long`, `c_longlong` | `i64` |
-| `c_size` | `usize` |
+| Alias | LP64 | AAPCS32 |
+|---|---|---|
+| `c_int` | `i32` | `i32` |
+| `c_long` | `i64` | `i32` |
+| `c_longlong` | `i64` | `i64` |
+| `c_size` | `usize`, 64 bits | `usize`, 32 bits |
 
 The aliases keep ordinary Landin scalar identity; `c_char` is a numeric
-byte and never a Unicode scalar. Cortex-M C signatures are not admitted
-by this module.
+byte and never a Unicode scalar. On Cortex-M a variadic C function is not
+called; import a fixed-arity C function that calls it instead.
 
 [Executable example](../compiler/tests/fixtures/runtime/r440-c-aliases/main.ldn)
 

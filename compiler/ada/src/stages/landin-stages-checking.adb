@@ -1731,7 +1731,36 @@ package body Landin.Stages.Checking is
                         end if;
                      end;
                   end loop;
-                  if Fault = Syn.No_Node then
+                  if Fault = Syn.No_Node
+                    and then Syn.Is_Variadic (Of_Tree, Node)
+                    and then Parameters'Length > 0
+                    and then Landin.Targets.Capabilities.C_Signatures (Facts)
+                    and then not Landin.Targets.Capabilities.C_Variadic_Calls
+                      (Facts)
+                    and then (Syn.Kind (Of_Tree, Node)
+                                /= Syn.Function_Declaration
+                              or else Syn.Is_External (Of_Tree, Node))
+                  then
+                     --  D922: a C ABI with signatures and no variadic
+                     --  calls yet, AAPCS32's, refuses the tail alone, and
+                     --  says what a program calls instead.
+                     Bad.Report
+                       (Item => Bad.Foreign_Boundary,
+                        Source => Syn.Source_Of (Of_Tree),
+                        Where => Syn.Where (Of_Tree, Node),
+                        Message => Landin.Targets.Name (Facts) & " calls no"
+                          & " variadic C function: its C ABI's variadic"
+                          & " calls are not enabled",
+                        Note => "D922: write a C function of fixed arity"
+                          & " that calls this one with the arguments the"
+                          & " program passes, link it with the program, and"
+                          & " declare that function extern(c) instead",
+                        Related =>
+                          (Source => Syn.Source_Of (Of_Tree),
+                           Where => Syn.Anchor (Of_Tree, Node)),
+                        Because => "this variadic C signature",
+                        Into => Found);
+                  elsif Fault = Syn.No_Node then
                      --  Nothing in the signature itself is at fault, so
                      --  the definition is: a variadic one, or a target
                      --  without C signatures.

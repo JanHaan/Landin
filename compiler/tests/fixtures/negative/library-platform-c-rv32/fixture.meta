@@ -1,0 +1,9 @@
+class: negative
+summary: D267 D920 rv32 refuses platform/c by its namespace, its ilp32 C ABI being described and not enabled, and the refusal names the C ABIs that are
+program: main.ldn
+root: ../../../../..
+args: --target=rv32
+expect: expected.txt
+codes: L0015
+constructs: 1410, 1420, 1580
+targets: rv32

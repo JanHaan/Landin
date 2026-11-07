@@ -1,0 +1,7 @@
+write "out.s"
+write "out"
+write "out.o"
+write "out.ld"
+write "out.map"
+run ["arm-eabi-gcc","-mcpu=cortex-m0","-mthumb","-mfloat-abi=soft","-mabi=aapcs","-Wa,--fatal-warnings","-x","assembler","-c","out.s","-o","out.o"]
+run ["arm-eabi-gcc","-mcpu=cortex-m0","-mthumb","-mfloat-abi=soft","-mabi=aapcs","-nostdlib","-nostartfiles","-nodefaultlibs","-static","-L/","-L/tmp","out.o","-lsensor","-lgcc","-Xlinker","--gc-sections","-Xlinker","--build-id=none","-Xlinker","--emit-relocs","-Xlinker","-T","-Xlinker","out.ld","-Xlinker","-Map","-Xlinker","out.map","-o","out"]

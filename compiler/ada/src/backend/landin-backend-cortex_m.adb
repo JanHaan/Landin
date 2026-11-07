@@ -3051,6 +3051,105 @@ package body Landin.Backend.Cortex_M is
                       Bank (Kind (Value), N));
          end VFP_Value;
 
+         --  D920: a C record by value.  Copy_Record moves BYTES from r2 to
+         --  r0, both advanced, by words when the record's alignment lets
+         --  ARMv6-M load them, and never past the record's extent.
+         procedure Copy_Record
+           (Bytes : Landin.Targets.Byte_Count; Aligned : Boolean);
+         procedure Copy_Record
+           (Bytes : Landin.Targets.Byte_Count; Aligned : Boolean) is
+         begin
+            if Aligned and then Bytes mod 4 = 0 then
+               Copy_Words (Bytes);
+            else
+               Copy_Bytes (Bytes);
+            end if;
+         end Copy_Record;
+
+         --  A record held in registers rather than by address, between
+         --  them and the record at BASE: a VFP candidate's members in its
+         --  s or d registers, each at its own offset since the members
+         --  are all of one type, or a record of up to four bytes in r0,
+         --  a byte at a time unless its size and alignment admit one
+         --  access.  r4 is scratch for a load.
+         procedure C_Record_Registers
+           (Store : Boolean; Held : Arm32_ABI.Location; Base : String);
+         procedure C_Record_Registers
+           (Store : Boolean; Held : Arm32_ABI.Location; Base : String)
+         is
+            Size : constant Natural := Natural (Held.Shape.Size);
+            Op : constant String := (if Store then "str" else "ldr");
+         begin
+            if Held.VFP_Count > 0 then
+               for Member in 1 .. Held.Shape.Members loop
+                  Emit ("v" & Op & " "
+                    & Arm32_ABI.VFP_Register (Held, Member) & ", [" & Base
+                    & ", #" & Trimmed (Natural'Image
+                      ((Member - 1)
+                       * (if Held.Shape.Float_Base = Landin.Types.F64
+                          then 8 else 4))) & "]");
+               end loop;
+            elsif Size = 4 and then Held.Shape.Alignment >= 4 then
+               Emit (Op & " r0, [" & Base & "]");
+            elsif Size = 2 and then Held.Shape.Alignment >= 2 then
+               Emit (Op & "h r0, [" & Base & "]");
+            elsif Size = 1 then
+               Emit (Op & "b r0, [" & Base & "]");
+            elsif Store then
+               for Index in 0 .. Size - 1 loop
+                  Emit ("strb r0, [" & Base & ", #"
+                    & Trimmed (Index'Image) & "]");
+                  if Index < Size - 1 then
+                     Emit ("lsrs r0, r0, #8");
+                  end if;
+               end loop;
+            else
+               Emit ("ldrb r0, [" & Base & ", #"
+                 & Trimmed (Natural'Image (Size - 1)) & "]");
+               for Index in reverse 0 .. Size - 2 loop
+                  Emit ("lsls r0, r0, #8");
+                  Emit ("ldrb r4, [" & Base & ", #"
+                    & Trimmed (Index'Image) & "]");
+                  Emit ("orrs r0, r4");
+               end loop;
+            end if;
+         end C_Record_Registers;
+
+         --  A call's C record argument, whose value is its address: its
+         --  members into their VFP registers, or its words into the core
+         --  registers' staging at sp + STAGING and the rest, a split
+         --  record's suffix included, into the outgoing area.
+         procedure Pass_C_Record
+           (Actual : Landin.IR.Value_Id; Arg : Arm32_ABI.Location;
+            Staging : Landin.Targets.Byte_Count);
+         procedure Pass_C_Record
+           (Actual : Landin.IR.Value_Id; Arg : Arm32_ABI.Location;
+            Staging : Landin.Targets.Byte_Count)
+         is
+            Size : constant Landin.Targets.Byte_Count := Arg.Shape.Size;
+            In_Core : constant Landin.Targets.Byte_Count :=
+              Landin.Targets.Byte_Count'Min
+                (Size, Landin.Targets.Byte_Count (Arg.Core_Count) * 4);
+            Aligned : constant Boolean := Arg.Shape.Alignment >= 4;
+         begin
+            Load_Value (Actual, "r2");
+            if Arg.VFP_Count > 0 then
+               C_Record_Registers (False, Arg, "r2");
+               return;
+            end if;
+            if Arg.Core_Count > 0 then
+               Emit ("mov r0, sp");
+               Add_Offset ("r0", Staging
+                 + Landin.Targets.Byte_Count (Arg.First_Core) * 4);
+               Copy_Record (In_Core, Aligned);
+            end if;
+            if Size > In_Core then
+               Emit ("mov r0, sp");
+               Add_Offset ("r0", Arg.Stack_At);
+               Copy_Record (Size - In_Core, Aligned);
+            end if;
+         end Pass_C_Record;
+
          --  D617: what a float unit computes in its own instructions:
          --  f32 and f64 arithmetic, negation and comparison, conversion
          --  between the widths and between a float and an integer of at
@@ -4691,8 +4790,13 @@ package body Landin.Backend.Cortex_M is
                      Call : constant Arm32_ABI.Plan :=
                        Arm32_ABI.Call_Plan (Of_Unit, Item, Value, Facts);
                      Offset : constant Natural := (if Indirect then 1 else 0);
+                     --  The IR names a record result's destination as an
+                     --  operand whatever the convention; only an indirect
+                     --  result passes it in r0.  D920: a C record of up to
+                     --  four bytes, or of floats in the VFP bank, comes
+                     --  back in registers and is stored there.
                      Hidden : constant Natural :=
-                       (if Call.Result.Shape.Indirect then 1 else 0);
+                       (if Call.Result.Shape.Composite then 1 else 0);
                      --  Stack arguments stay at sp; round the register
                      --  homes to the call boundary's eight-byte alignment.
                      Register_Bytes : constant Landin.Targets.Byte_Count :=
@@ -4705,7 +4809,7 @@ package body Landin.Backend.Cortex_M is
                         Check_Limit (Bytes);
                      end if;
                      Reserve (Bytes);
-                     if Hidden > 0 then
+                     if Call.Result.Shape.Indirect then
                         Load_Value (Operand (Offset + 1));
                         Emit ("mov r6, sp");
                         Add_Offset ("r6", Call.Stack_Bytes);
@@ -4721,7 +4825,11 @@ package body Landin.Backend.Cortex_M is
                            --  D616: a banked float goes straight from its
                            --  home into its register, which nothing below
                            --  touches before the call.
-                           if Arg.VFP_Count > 0 then
+                           if Arg.Shape.Composite
+                             and then not Arg.Shape.Indirect
+                           then
+                              Pass_C_Record (Actual, Arg, Call.Stack_Bytes);
+                           elsif Arg.VFP_Count > 0 then
                               VFP_Home (False, Value_Offset (Layout, Actual),
                                         Arm32_ABI.VFP_Register (Arg, 1));
                            else
@@ -4772,7 +4880,12 @@ package body Landin.Backend.Cortex_M is
                         Store_Slot (Landin.IR.Failure_Slot_Of
                           (Of_Unit, Item, Value), "r4");
                      end if;
-                     if Call.Result.VFP_Count > 0 then
+                     if Call.Result.Shape.Composite
+                       and then not Call.Result.Shape.Indirect
+                     then
+                        Load_Value (Operand (Offset + 1), "r2");
+                        C_Record_Registers (True, Call.Result, "r2");
+                     elsif Call.Result.VFP_Count > 0 then
                         VFP_Home (True, Value_Offset (Layout, Value),
                                   Arm32_ABI.VFP_Register (Call.Result, 1));
                      elsif Landin.IR.Result_Of (Of_Unit, Item, Value)
@@ -4947,10 +5060,26 @@ package body Landin.Backend.Cortex_M is
                   Jump (Label (Item, Landin.IR.Alternative_Of
                     (Of_Unit, Item, Value)));
                when Landin.IR.Leave =>
-                  if Plan.Result.VFP_Count > 0 then
+                  if Result in Landin.Types.Aggregate
+                    | Landin.Types.Fixed_Array
+                    and then not Plan.Result.Shape.Indirect
+                  then
+                     --  D920: a C record of up to four bytes returns in
+                     --  r0, and one of floats in its VFP registers.
+                     Frame_Address (Slot_Offset
+                       (Layout, Landin.IR.Result_Slot (Of_Unit, Item)), "r2");
+                     C_Record_Registers (False, Plan.Result, "r2");
+                  elsif Plan.Result.VFP_Count > 0 then
                      VFP_Value (False, Operand (1), 0);
                   elsif Result in Landin.Types.Scalar_Name then
                      Load_Value (Operand (1));
+                     --  AAPCS32 has the callee extend a narrow C result;
+                     --  the loads above already zero-extend.
+                     if Landin.IR.Signature_Uses_C_ABI
+                       (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item))
+                     then
+                        Extend ("r0", Result);
+                     end if;
                   elsif Result in Landin.Types.Aggregate |
                     Landin.Types.Fixed_Array
                   then
@@ -5237,15 +5366,57 @@ package body Landin.Backend.Cortex_M is
          for Index in Plan.Arguments'Range loop
             declare
                Arg : Arm32_ABI.Location renames Plan.Arguments (Index);
+               --  A record result's destination is the first parameter
+               --  slot even when D920's C record returns in registers.
                Slot : constant Landin.IR.Slot_Id := Landin.IR.Nth_Parameter
                  (Of_Unit, Item, Index
-                  + (if Plan.Result.Shape.Indirect then 1 else 0));
+                  + (if Plan.Result.Shape.Composite then 1 else 0));
                Aggregate : constant Boolean := Landin.IR.Is_Aggregate
                  (Of_Unit, Item, Slot)
                  or else Landin.IR.Is_Array (Of_Unit, Item, Slot);
                Home : constant Landin.IR.Slot_Id :=
                  Landin.IR.In_Place_Home (Of_Unit, Item, Slot);
             begin
+               --  D920: a C record parameter arrives by value, in its VFP
+               --  registers or in its words of the incoming registers'
+               --  homes and the caller's outgoing area, and is copied into
+               --  its slot.
+               if Arg.Shape.Composite and then not Arg.Shape.Indirect then
+                  declare
+                     Size : constant Landin.Targets.Byte_Count :=
+                       Arg.Shape.Size;
+                     In_Core : constant Landin.Targets.Byte_Count :=
+                       Landin.Targets.Byte_Count'Min
+                         (Size, Landin.Targets.Byte_Count (Arg.Core_Count)
+                                * 4);
+                     Aligned : constant Boolean := Arg.Shape.Alignment >= 4;
+                  begin
+                     if Arg.VFP_Count > 0 then
+                        Frame_Address (Slot_Offset (Layout, Slot), "r2");
+                        C_Record_Registers (True, Arg, "r2");
+                        goto Next_Argument;
+                     end if;
+                     Frame_Address (Slot_Offset (Layout, Slot), "r0");
+                     if Arg.Core_Count > 0 then
+                        Frame_Address (Homes - Landin.Targets.Byte_Count
+                          (Arg.First_Core) * 4, "r2");
+                        Copy_Record (In_Core, Aligned);
+                     end if;
+                     if Size > In_Core then
+                        if Probe or Leaf then
+                           Emit ("mov r2, sp");
+                           Immediate ("r6", Pattern
+                             (Homes + Save_Count + Arg.Stack_At));
+                           Emit ("adds r2, r2, r6");
+                        else
+                           Emit ("mov r2, r11");
+                           Add_Offset ("r2", 24 + Arg.Stack_At);
+                        end if;
+                        Copy_Record (Size - In_Core, Aligned);
+                     end if;
+                  end;
+                  goto Next_Argument;
+               end if;
                --  D616: a banked float parameter's register is stored to
                --  its slot, before any call could clobber it.
                if Arg.VFP_Count > 0 then

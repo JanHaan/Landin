@@ -1901,9 +1901,11 @@ The selected hosted ABIs are Linux and FreeBSD x86-64 SysV AMD64 LP64,
 Darwin arm64 AAPCS64 with Apple's platform differences, both conventions with
 signed plain C `char`, and Linux and FreeBSD arm64's standard AAPCS64 LP64,
 whose plain `char` is unsigned, and RV64 Linux LP64D, also with unsigned
-plain `char`.
-`compiler.c_sysv_lp64`, `compiler.c_darwin_lp64`, `compiler.c_aapcs64_lp64`
-and `compiler.c_riscv_lp64d` are their respective fixed bool configuration facts, each true for its own ABI
+plain `char`. Cortex-M firmware's C ABI is AAPCS32 (D920), ILP32 with an
+unsigned plain `char`, at the base PCS or, with a description's float unit,
+the VFP variant (D616).
+`compiler.c_sysv_lp64`, `compiler.c_darwin_lp64`, `compiler.c_aapcs64_lp64`,
+`compiler.c_riscv_lp64d` and `compiler.c_aapcs32` are their respective fixed bool configuration facts, each true for its own ABI
 alone, not guesses from pointer width or architecture spelling.
 `compiler.c_runtime` is a fixed bool configuration fact too: true when C's
 runtime starts the program and its library is linked, which on Darwin and
@@ -1916,10 +1918,11 @@ calls by it, so a static Linux program never reaches one. The ordinary
 `c_int`, `c_uint`, `c_long`, `c_ulong`, `c_longlong`, `c_ulonglong`, `c_size`,
 `c_ptrdiff`, `c_float`, `c_double` and `c_bool`. These name existing scalar
 identities: signed/unsigned 8, 16, 32 and 64-bit integers as appropriate,
-`usize`/`isize`, `f32`/`f64` and `bool`; `long` and `long long` are both 64-bit.
+`usize`/`isize`, `f32`/`f64` and `bool`; under the LP64 ABIs `long` and
+`long long` are both 64-bit, and under AAPCS32 `long` is 32-bit (D921).
 C `char` is the selected ABI's plain `char`, a numeric byte and not a Unicode
-scalar: `i8` under SysV and Darwin, `u8` under standard AAPCS64 and RISC-V
-LP64D; `c_schar` and `c_uchar` keep their signedness everywhere. A described
+scalar: `i8` under SysV and Darwin, `u8` under standard AAPCS64, RISC-V
+LP64D and AAPCS32; `c_schar` and `c_uchar` keep their signedness everywhere. A described
 target's ABI identity
 and widths do not imply that its C boundary is implemented. C signature,
 record-layout and variadic-call capabilities are selected explicitly; neither
@@ -2009,6 +2012,22 @@ same registers, and only caller-clobbered floating registers may be named
 without float operands. C signature, C record and outgoing
 variadic-call capabilities are enabled explicitly for this ABI.
 
+Cortex-M firmware's AAPCS32 (D920) places arguments in r0–r3 in four-byte
+words and then in the outgoing area, which the caller keeps eight-byte
+aligned. A scalar or `layout(c)` record takes the next words that hold it; a
+record that does not fit splits between the remaining registers and the
+area while nothing has gone to the area yet, and once one argument is
+there every later one is. A value aligned to eight, an `i64`, `u64` or
+`f64` or a record holding one, starts at an even register and at an
+eight-byte offset of the area. The caller extends a narrow integer
+argument to a word, and the callee a narrow result. A record result of up
+to four bytes returns in r0, an eight-byte scalar in r0–r1, and a larger
+record through a hidden address in r0, which takes the first argument
+register. With a description's float unit the VFP variant (D616) passes an
+`f32`, an `f64` and a record of one to four of one of them in s0–s15
+instead, and returns one in s0–s3 or d0–d3. Copies stay within the actual
+object extent.
+
 RV32 firmware's C ABI is the RISC-V psABI's soft-float `ilp32` (D660,
 D677): little-endian, 32-bit pointers, `int` and `long`, and no
 floating-point registers, so `f32` is one integer word and `f64` two.
@@ -2022,7 +2041,7 @@ words, aligned to their own alignment up to sixteen. An unnamed eight-byte
 argument takes an even register pair. Every Landin frame keeps x8 as the
 entry CFA, the saved return address at CFA−4 and the previous frame pointer
 at CFA−8. The planner holds this convention to GCC's (D677); C signatures,
-records and variadic calls stay disabled on RV32, as on Cortex-M.
+records and variadic calls stay disabled on RV32 (D920).
 
 
 A final `, ...` after at least one fixed parameter marks a variadic C
@@ -2038,6 +2057,9 @@ argument in an eight-byte stack slot; standard AAPCS64 assigns them as
 named arguments. RISC-V LP64D assigns the promoted unnamed tail by the integer
 convention, including floating-point bit patterns; after one unnamed argument
 goes to the stack, all subsequent unnamed arguments go to the stack.
+AAPCS32 calls no variadic function yet: a variadic C signature is refused
+there, and a fixed-arity C function that makes the call is imported
+instead (D922).
 Fixed arguments retain their declared
 types. Variadic C function values may be stored and called in Landin, but a C
 callback parameter, result or record field must have a fixed signature.
@@ -17044,8 +17066,9 @@ POSIX facilities over both; all three are scoped to the hosted POSIX systems
 and refused by name on firmware. hosted/system needs no alias beside core/io
 (D347). `platform/*` holds scoped
 freestanding interfaces. platform/c admits only enabled SysV AMD64 LP64, Darwin
-AAPCS64 LP64, AAPCS64 LP64 and RISC-V LP64D C signature ABIs; equal pointer width
-does not enable it. Cortex AAPCS32 and synthetic-32 remain refused. platform/cortex_m
+AAPCS64 LP64, AAPCS64 LP64 and RISC-V LP64D C signature ABIs and, since D920,
+Cortex-M's AAPCS32 at every level; equal pointer width does not enable it. RV32's
+ilp32, Xtensa's windowed ILP32 and synthetic-32 remain refused. platform/cortex_m
 admits the Cortex M-profile family, including armv6-m, armv7-m, armv7e-m and
 armv8-m.main feature levels, and refuses hosted architectures. Existing compiler.assert
 source guards remain. No generic package manifest is introduced.
@@ -19250,7 +19273,8 @@ eight-byte `i64`, `u64` and `f64` and a 16-byte long double at sixteen, a
 stack aligned to sixteen bytes as the psABI keeps it even without D or Q,
 and `s0`, `x8`, as the frame pointer. Its C ABI is the soft-float `ilp32`,
 `compiler.c_riscv_ilp32`, a fixed bool fact as D265's `c_riscv_lp64d` is;
-C signatures, records and variadic calls stay disabled, as on Cortex-M.
+C signatures, records and variadic calls stay disabled; D920 enabled
+Cortex-M's AAPCS32 and left RV32's refused.
 `rv32` is firmware only, like `cortex-m0`: no hosted system, a device
 profile, firmware entry, placement, vector slots and a derived script,
 debug lines and no full debugging, and images bounded by the 32-bit
@@ -19310,8 +19334,8 @@ and the two D255 levels. Both use little-endian ELF32 and windowed ILP32:
 four-byte pointers, `usize`, C `int` and C `long`, eight-byte alignment for
 64-bit scalars, sixteen-byte alignment for 128-bit scalar storage and the
 stack. C `char` is unsigned, and C `double` and `long double` are eight
-bytes. `compiler.c_xtensa_windowed_ilp32` identifies that ABI. As on the
-other firmware targets, public C signatures, C records and variadic calls
+bytes. `compiler.c_xtensa_windowed_ilp32` identifies that ABI. As on
+RV32, though not since D920 on Cortex-M, public C signatures, C records and variadic calls
 remain disabled; the identity describes the runtime boundary and does not
 admit those source forms.
 
@@ -21917,7 +21941,7 @@ in an even pair; and no float bank, so an f32 is a word and an f64 two.
 The planner is held to GCC by direct checks, as D616 held the M7's: each
 row is where `riscv64-elf-gcc` 16.1 at `-march=rv32imc -mabi=ilp32` reads
 or writes the same C signature's arguments and results. Executable C
-interoperation stays disabled, as on Cortex-M.
+interoperation stays disabled on RV32, though D920 enabled Cortex-M's.
 
 **The alternatives:** a planner of its own for `ilp32`, which would hold
 the shared rules twice; and leaving RV32 unplanned until C signatures are
@@ -22000,8 +22024,8 @@ same name in one directory where its linker prefers one. The C runtime's own
 libraries, `m` among them, therefore link as the driver links them for C: a
 dynamically linked Linux executable no longer takes glibc's static `libm`,
 whose ifunc members ask the dynamic loader for CPU features no static member
-provides. The default static Linux link still refuses the directive (D280),
-and firmware still refuses it (D229). `--dry-run` and `-v` show the `-l`
+provides. The default static Linux link still refuses the directive (D280);
+firmware refused it too (D229) until D923 made it a static archive there. `--dry-run` and `-v` show the `-l`
 operands. This amends D202's archive-only resolution on every hosted target,
 and Darwin's `-print-file-name` query goes with it.
 
@@ -22045,7 +22069,8 @@ directive in an inactive arm adds nothing, and repeats of one directory are
 kept. A directive naming a directory that does not exist is L0391 at the
 directive, and such an `-L` is a usage error, both before any tool runs.
 Wherever `linker.library` is refused, `linker.directory` and `-L` are too:
-the static Linux link, with D280's L0500 naming `--link=libc`, and firmware.
+the static Linux link, with D280's L0500 naming `--link=libc`, and, until
+D923 admitted all three there with no runtime path, firmware.
 `refine check` gives these refusals as compiling does (D443).
 
 **The alternatives:** an environment variable, which D275 declined for the
@@ -28203,9 +28228,10 @@ The internal Landin convention uses the same bank for its own floats: an
 `f32` or `f64` result is s0 or d0; aggregates, arrays and multiple results
 stay by address in core registers, and r12's outcome is unchanged.
 `Backend.Arm32_ABI` plans both, its locations naming the first single slot
-and how many a candidate takes. C interoperation stays disabled on
-Cortex-M, where `platform/c` stays refused, so the C half is a planner
-contract measured against GCC rather than a convention any source uses.
+and how many a candidate takes. D920 enables C interoperation on
+Cortex-M, so the C half is the convention every C signature of a program
+with the unit uses, still measured against GCC as below; D922 leaves the
+variadic call the planner places unused.
 
 **The alternatives:** `softfp`, the unit's instructions with the base PCS's
 transport, which links with soft-float objects and moves every float
@@ -28405,6 +28431,204 @@ soft-float refine object's number model and VFP arguments to a GCC
 soft-float object's at the Cortex-M7, and refuses a link of it with a
 hard-float GCC object and of the hard-float refine object with a
 soft-float GCC object, each in both orders.
+
+### D920 — Cortex-M's C ABI is AAPCS32, named by `compiler.c_aapcs32` and enabled at both variants
+
+**From** [1580], [1975], D267, D616, D660 and D780.
+
+**The tour said** at [1975] that a C signature follows the target's C ABI,
+and the target description named Cortex-M's AAPCS32 while D267 refused
+`platform/c` there and D616 kept the planner's C half a contract no source
+used. A freestanding program that calls a vendor's C driver, or is called
+from a C startup, had no way to say so.
+
+**Chosen:** `cortex-m0`, at every level, `armv6-m`, `armv7-m`, `armv7e-m`
+and `armv8-m.main`, has the C ABI
+[AAPCS32](https://github.com/ARM-software/abi-aa/blob/2025Q4/aapcs32/aapcs32.rst),
+and `compiler.c_aapcs32` is its fixed bool fact: true there and false on
+every other target, as each C fact names one ABI. C signatures and
+`layout(c)` records are enabled for it, through `Backend.Arm32_ABI`, and
+`platform/c` is available (D921). The fact does not say which of AAPCS32's
+variants a build uses. That is the description's float unit's to say, as
+D616 has it: with `fpv5-d16` every C signature, imported, exported or
+called through a C function value, uses the VFP variant, and without a
+unit the base PCS. A program reads the unit through `compiler.feature.fp`
+and `compiler.feature.fp_dp` (D615), so a second C fact would only repeat
+them. D780's attributes keep an object of one variant from linking with
+one of the other, in either order, whichever of them is C. RV32's ilp32
+(D660, D677) and Xtensa's windowed ILP32 (D903) keep their C ABI identity
+and stay refused: their transport is planned or described, and no program
+has needed it.
+
+**The alternatives:** a fact for each variant, `c_aapcs32` and
+`c_aapcs32_vfp`, which would let a program select by a fact what the
+description already decides, and could disagree with it; one ILP32 fact
+for every 32-bit firmware target, which would let `platform/c` and a
+binding cross from AAPCS32 to ilp32, whose records, splits and variadic
+pairs differ; and keeping Cortex-M's C refused until a binding generator
+exists, which leaves a hand-written C peer, the smallest consumer, with
+nothing.
+
+**Pinned by** the `cortex ABI` cases `capabilities and refusals`, `C
+signatures from source at both variants` and `driver boundaries`,
+`targets/fixed facts have one name each`, `driver/fixed facts come from
+the target`, `driver/source namespaces enforce target availability`,
+`positive/c-aliases-aapcs32`, `negative/rv32-has-no-c-abi` and
+`negative/library-platform-c-rv32`.
+
+### D921 — `platform/c` on AAPCS32 is ILP32 with an unsigned plain char
+
+**From** [1975], D256, D267 and D920.
+
+**The tour said** at [1975] that `long` and `long long` are both 64-bit,
+which held for the four LP64 ABIs `platform/c` admitted and does not hold
+for AAPCS32.
+
+**Chosen:** under `compiler.c_aapcs32` `platform/c` is ILP32: `c_char` is
+`u8`, since AAPCS32's plain `char` is unsigned; `c_schar` `i8`, `c_uchar`
+`u8`, `c_short` `i16`, `c_ushort` `u16`, `c_int` `i32`, `c_uint` `u32`,
+`c_long` `i32`, `c_ulong` `u32`, `c_longlong` `i64`, `c_ulonglong` `u64`,
+`c_size` `usize` and `c_ptrdiff` `isize`, both 32 bits there, `c_float`
+`f32`, `c_double` `f64` and `c_bool` `bool`. `long long` and `double` are
+aligned to eight. The module's assertion admits the fact beside the four
+LP64 ones, and the `long` aliases are chosen by a `fixed if` on it.
+
+Each is measured, not assumed. The pinned `arm-eabi-gcc` 16.1 at
+`-mcpu=cortex-m0 -mthumb -mfloat-abi=soft` and at `-mcpu=cortex-m7 -mthumb
+-mfpu=fpv5-d16 -mfloat-abi=hard`, and the pinned Clang 19 at
+`--target=thumbv6m-none-eabi` and `--target=thumbv7em-none-eabihf
+-mcpu=cortex-m7 -mfpu=fpv5-d16`, all predefine `__ARM_EABI__`,
+`__CHAR_UNSIGNED__`, `__SIZEOF_INT__`, `__SIZEOF_LONG__`,
+`__SIZEOF_POINTER__` and `__SIZEOF_SIZE_T__` 4, `__SIZEOF_LONG_LONG__`
+and `__SIZEOF_DOUBLE__` 8, `__SIZEOF_WCHAR_T__` 4, `__SIZEOF_LONG_DOUBLE__`
+8 and `__BIGGEST_ALIGNMENT__` 8; `__ARM_PCS_VFP` only in the hard-float
+builds, and `__SOFTFP__` only in the soft ones. `_Alignof(long long)` and
+`_Alignof(double)` are 8 and `struct { char c; long long x; }` is 16
+bytes under both compilers. The two disagree on one thing: GCC's
+bare-metal default is short enums, `__ARM_SIZEOF_MINIMAL_ENUM` 1 and
+`readelf -A`'s `Tag_ABI_enum_size: small`, while Clang's is int-sized
+enums, 4 and `Tag_ABI_enum_size: int`, which GCC gives with
+`-fno-short-enums`. `platform/c` names no enum type, and an object refine
+assembles declares no enum size, so it links with either; a binding or a
+C peer that passes an enum states which it was built with. Both objects
+declare `Tag_ABI_PCS_wchar_t: 4`, and GCC's and Clang's
+`Tag_ABI_align_needed` and `Tag_ABI_align_preserved` are both eight bytes.
+
+**The alternatives:** a separate `platform/c` module for ILP32, which would
+give a program two spellings of one C type; `c_long` as `isize`, which is
+32 bits here and 64 on the LP64 ABIs and so would hold, but would make
+`c_long` a pointer-sized type on every ABI, which Windows' LLP64 already
+shows it is not; and a signed `c_char`, which disagrees with every header
+compiled for the target.
+
+**Pinned by** `positive/c-aliases-aapcs32`, whose assertions hold the
+widths and alignments and whose assignments hold each alias to its scalar.
+
+### D922 — AAPCS32 calls no variadic C function until a program needs one
+
+**From** [1975], D616 and D920.
+
+**The tour said** at [1975] that a variadic C call promotes its unnamed
+tail and places it by the ABI's rule; D616's planner places an AAPCS32
+variadic call in the base PCS, fixed arguments included, and nothing has
+called one.
+
+**Chosen:** `C_Variadic_Calls` stays disabled for AAPCS32. A variadic C
+signature, an import or a function type, is refused on `cortex-m0` with
+L0346, naming the target and the variadic calls it does not enable, and
+the note says what to write instead: a C function of fixed arity that
+makes the variadic call with the arguments the program passes, linked with
+the program and declared `extern(c)` in place of the variadic one. A
+variadic definition stays refused as on every target. The planner keeps
+its variadic placement and the contract's `vfp.` variadic row keeps
+holding it to GCC, so enabling the calls is a capability and a consumer,
+not a new convention.
+
+**The alternatives:** enabling the calls with no program that makes one,
+which would ship a transport that only the planner's rows have seen; and
+refusing them with the general "not representable" note, which says
+variadic definitions need an adapter and so misleads about an import.
+
+**Pinned by** `negative/c-variadic-cortex-m0` and the `cortex ABI` case
+`driver boundaries`.
+
+### D923 — Firmware links C libraries as static archives
+
+**From** [1590], [1650], D229, D523, D524, D525 and D920.
+
+**The tour said** at [1590] that `linker.library` asks the linker for a
+library, and D229 and D524 refused it, `linker.directory` and `-L` on
+firmware, which linked only refine's object and libgcc. With C signatures
+enabled on Cortex-M (D920) a firmware program could declare a vendor's C
+function and had no way to link it.
+
+**Chosen:** on firmware, each active `linker.library("NAME")` is a static
+archive, `libNAME.a`, compiled for the build's core and float ABI. The
+pinned GCC driver receives `-static`, then each directory as `-L` with its
+absolute path, the command line's before the directives' as D524 orders
+them, then refine's object, then each archive as `-lNAME` in source order
+with its repeats, then `-lgcc`, which the archives may need too. A firmware
+image has no loader, so no runtime path is passed and no shared object is
+looked for: `-static` keeps `-lNAME` to archives, and D525's search after a
+failed link looks for `libNAME.a` alone. The derived script already places
+an archive's `.text`, `.rodata`, `.data` and `.bss` with refine's own, and
+reset copies the data and clears the BSS whatever object they came from,
+in the boot layout and, loading data in place, in the RAM layout. A
+library compiled for the other AAPCS32 variant is refused by the linker
+(D780). `refine check` refuses what compiling would, as before. Without a
+library the link is as it was, byte for byte.
+
+**The alternatives:** passing archives as file operands, which leaves the
+search order D524 gave a hosted link; a separate firmware directive, which
+would ask a reader to know that firmware's libraries differ before they
+link one; and linking C objects rather than archives, which needs a list of
+objects the build tool has not yet got.
+
+**Pinned by** the `cortex ABI` case `firmware links C archives`, the
+toolchain case `libraries and directories reach the driver` and
+`end-to-end/link-firmware-archives-dry-run`.
+
+### D924 — A firmware image refuses what its startup cannot honour
+
+**From** [1650], D229, D546 and D923.
+
+**The tour said** at [1650] that compiler startup initializes RAM and calls
+the firmware entry; it runs no constructor, sets up no thread pointer and
+loads nothing. Measured with the pinned tools: an archive's
+`__attribute__((constructor))` puts its pointer in `.init_array`, which
+`--gc-sections` drops unseen, since nothing references it; Clang's
+`_Thread_local` brings `.tdata` and `.tbss`, which the derived script left
+as orphans that the linker put beside `.data`, and a call of
+`__aeabi_read_tp`. GCC's arm-eabi instead emulates TLS through libgcc's
+`emutls`, ordinary data and calls of `malloc` and `memcpy`, which link only
+when an archive supplies them; that form holds no TLS section and is not
+refused.
+
+**Chosen:** a link with archives derives its script with one more output
+section, `.init_array`, which keeps every `.preinit_array`, `.init_array`
+and `.ctors` input. After the link refine reads the image's section headers
+and refuses an image whose allocated sections hold C constructors, an init
+or preinit array or `.ctors`, thread-local storage, a TLS section, or a
+dynamic linkage, a dynamic section, its symbols or an interpreter, with
+L0587 naming the first such section; the image is removed. The note says
+what to do: build the library without constructors and call its
+initialisation from the firmware entry; declare a thread-local variable as
+ordinary static data; link the static archive and no shared object. A
+developer's script is held to the same reading, since the check reads the
+image and not the script; it is the developer's to keep constructors for
+the check to see. Destructors are never run, as firmware does not exit, and
+are left to `--gc-sections`.
+
+**The alternatives:** running constructors from reset, which would put a
+C runtime's order of initialisation ahead of the firmware entry the program
+names; an `ASSERT` in the derived script, which the linker reports with its
+own text and a developer's script would not carry; and `--orphan-handling=
+error`, which would refuse a debug or attribute section refine's own objects
+carry as well.
+
+**Pinned by** the `cortex ABI` case `firmware links C archives`, whose
+images hold an init array, a TLS section and a dynamic section, each
+refused and removed.
 
 ### D695 — Espressif's QEMU carries both RV32 corpus lanes, under the Arm lanes' harness
 

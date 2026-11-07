@@ -517,6 +517,33 @@ package body Landin.Tests.Toolchain_Suite is
               (Landin.Targets.Darwin_Arm64, "raylib")),
          "libraylib.tbd" & LF & "libraylib.dylib" & LF & "libraylib.a" & LF,
          "Darwin looks for a stub and a dylib before the archive");
+      --  D923: firmware links static archives alone, after its object and
+      --  before libgcc, with the directories first and no runtime path.
+      Landin.Testing.Check_Equal
+        (Item, Landin.Platform.Joined
+           (Landin.Backend.Toolchain.Link_Arguments
+              ("main.s", "main", "", "", Libraries,
+               Landin.Targets.Cortex_M,
+               Directories => Directories)),
+         "-mcpu=cortex-m0" & LF & "-mthumb" & LF & "-mfloat-abi=soft" & LF
+         & "-mabi=aapcs" & LF & "-nostdlib" & LF & "-nostartfiles" & LF
+         & "-nodefaultlibs" & LF & "-static" & LF
+         & "-L/work/vendor" & LF & "-L/work/game/lib" & LF
+         & "main.o" & LF & "-lraylib" & LF & "-lm" & LF & "-lgcc" & LF
+         & "-Xlinker" & LF & "--gc-sections" & LF
+         & "-Xlinker" & LF & "--build-id=none" & LF
+         & "-Xlinker" & LF & "--emit-relocs" & LF
+         & "-Xlinker" & LF & "-T" & LF & "-Xlinker" & LF & "main.ld" & LF
+         & "-Xlinker" & LF & "-Map" & LF & "-Xlinker" & LF & "main.map" & LF
+         & "-o" & LF & "main" & LF,
+         "firmware links each archive statically between its object and"
+         & " libgcc");
+      Landin.Testing.Check_Equal
+        (Item, Landin.Platform.Joined
+           (Landin.Backend.Toolchain.Library_Files
+              (Landin.Targets.Cortex_M, "raylib")),
+         "libraylib.a" & LF,
+         "firmware looks for the archive alone");
    end Libraries_And_Directories_Reach_The_Driver;
 
    --  D810: a hosted ELF program's assembly names its own file symbol, so

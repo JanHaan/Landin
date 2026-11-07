@@ -390,11 +390,15 @@ package body Landin.Backend.Arm32_ABI is
                        (Of_Unit, Item, Call, Index + Offset + Hidden)),
                   others => <>));
       end loop;
+      --  Only a variadic call has a fixed prefix: a fixed C call keeps
+      --  D616's VFP placement, which a fixed count would close.
       return Assign
         (Of_Unit, Parameters, Results, Facts,
          (if Is_C then External_C else Internal_Landin),
          IR.Signature_Errors (Of_Unit, Signature) /= IR.No_Atom_Set,
-         Maximum, (if Is_C then Fixed else Natural'Last),
+         Maximum,
+         (if Is_C and then IR.Signature_Is_Variadic (Of_Unit, Signature)
+          then Fixed else Natural'Last),
          Uses_VFP (Of_Unit));
    end Call_Plan;
 

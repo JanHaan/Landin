@@ -1,0 +1,1 @@
+refine: checked ../tests/fixtures/positive/c-aliases-aapcs32 and wrote nothing; build it with `refine compile --target=cortex-m0 --root=../tests/fixtures/positive/c-aliases-aapcs32/../../../../.. --firmware-entry=NAME ../tests/fixtures/positive/c-aliases-aapcs32 -o c-aliases-aapcs32`

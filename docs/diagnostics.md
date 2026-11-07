@@ -230,7 +230,8 @@ no level to select. `refine --identify` lists each target's levels.
 
 An import names a source namespace unavailable for the selected target (D267).
 `hosted/*` requires a hosted target; `platform/c` requires one of the currently
-enabled LP64 C ABIs; the submodules of `platform/cortex_m`, its constrained
+enabled C ABIs, the four LP64 ones or Cortex-M's AAPCS32 (D920), so RV32 and
+Xtensa refuse it; the submodules of `platform/cortex_m`, its constrained
 reference description among them, require an M-profile target, including its
 higher supported feature levels. `platform/cortex_m` itself is available on
 every target and declares its operations only on an M-profile one (D575), so
@@ -1435,9 +1436,9 @@ extern(interrupt) tick: (count: u32) -> none = end tick
 ### L0346
 
 A C boundary declaration or call is something the C ABI cannot carry
-[1580]. A target with no C ABI yet, as Cortex-M0 has none, has no C
-signature and lays out no `layout(c)` record, and the diagnostic says so by
-the target's name; a byte-packed `layout(c, packed)` record needs no C
+[1580]. A target with no enabled C ABI yet, as RV32 and Xtensa have none, has
+no C signature and lays out no `layout(c)` record, and the diagnostic says so
+by the target's name; a byte-packed `layout(c, packed)` record needs no C
 alignment and stands there. The refusal of a signature names the part C
 cannot carry beside it. On a target with C ABI support, a C signature is infallible and
 nongeneric, with at most one result. Each parameter and result part uses
@@ -1454,7 +1455,10 @@ or nested record by value only when its alignment is one: `u8`, `i8`, `bool`
 or a packed record (D410). A packed record, a record with a flexible member,
 and a record holding either cross a C signature only by pointer (D414). A variadic C
 declaration needs at least one fixed parameter and target support; a variadic
-definition needs a generated adapter. Variadic calls take positional scalar,
+definition needs a generated adapter. Cortex-M's AAPCS32 calls no variadic C
+function yet (D922): its refusal names the target, and the repair is a C
+function of fixed arity that makes the variadic call, linked with the program
+and declared `extern(c)` instead. Variadic calls take positional scalar,
 pointer or fixed C callback tail arguments, without labels or static
 arguments. Change `inout` or `sink` to `in`; pass a pointer if C must write
 through a parameter. Remove `caller` and constraints, specialize generics,
@@ -2353,3 +2357,19 @@ inspected and recovered; remove it only after recovery. Preparation can
 already have created private staging. A later publication or cleanup failure
 is L0005 and can leave outputs installed or recovery entries retained, as
 that diagnostic reports.
+
+### L0587
+
+A firmware image linked with C archives, through `linker.library` with
+`linker.directory` or `-L DIR`, holds something compiler-owned startup cannot
+honour (D923, D924). Reset copies data, clears BSS and calls the firmware
+entry; it runs no C constructor, has one thread and no thread pointer, and
+loads nothing at run time. So the image is refused, and removed, when an
+archive brought C constructors, an `.init_array`, `.preinit_array` or
+`.ctors` section that the derived script keeps so that it cannot be dropped
+unseen; thread-local storage, a `.tdata` or `.tbss` section from a
+`_Thread_local` or `__thread` variable; or a dynamic linkage, which a shared
+object would bring. The message names the section. Build the library without
+constructors and call its initialisation from the firmware entry; declare a
+thread-local variable as ordinary static data; and link the library's static
+archive built for the firmware's core.

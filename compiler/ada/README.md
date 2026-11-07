@@ -159,8 +159,8 @@ different responsibilities.
 | `Landin.Backend.Work_Arrays` | heap-owned backend scratch with lexical exception-safe reclamation | place instruction-proportional arrays on the host stack |
 | `Landin.Backend.Reciprocals` | the multiplier, shift and 65-bit correction that divide every dividend of one width by one known divisor that is neither zero nor a power of two | choose instructions or registers, or ask the host a width |
 | `Landin.Backend.C_ABI` | SysV AMD64 classification and one call/entry/result placement plan from target facts and neutral shapes, including independent GP/SSE banks and aggregate rollback | ask the host for layout, put register placements in IR, or change the internal Landin ABI |
-| `Landin.Backend.Arm32_ABI` | Cortex-M0 base AAPCS soft-float and internal Landin argument/result planning from neutral signatures | emit instructions, enable C source capability or infer ABI from pointer width |
-| `Landin.Backend.Cortex_M` | ARMv6-M instruction selection, reusable stack homes, frames, internal calls, checked operations, ELF assembly and line/function CFI from verified IR and Arm32_ABI plans | change language semantics, enable general C source, own language startup/linking or promise full variable/type debugging |
+| `Landin.Backend.Arm32_ABI` | Cortex-M AAPCS32 argument/result planning, at the base PCS and D616's VFP variant, and the internal Landin convention's, from neutral signatures | emit instructions, enable C source capability or infer ABI from pointer width |
+| `Landin.Backend.Cortex_M` | ARMv6-M instruction selection, reusable stack homes, frames, internal and C calls, C records copied by value into and out of the registers and outgoing area Arm32_ABI plans (D920), checked operations, ELF assembly and line/function CFI from verified IR | change language semantics, enable a C capability, own language startup/linking or promise full variable/type debugging |
 | `Landin.Backend.AAPCS64_ABI` | arm64 C classification and argument/result placement from neutral shapes and target facts, under the standard AAPCS64 or Apple's variant of it as the description's C ABI says | infer layout from the host, choose a convention by architecture, reuse SysV transport or change source semantics |
 | `Landin.Backend.RiscV_ABI` | explicit LP64D C carrier classification and register/stack placement from neutral shapes and target layout, including mixed FP/integer aggregates, split carriers and variadic integer transport | infer the selected ABI from LP64 widths, put transport in IR or access the host |
 | `Landin.Backend.RiscV` | RV64 instruction selection, stack homes, frame records, native and LP64D calls, the hosted entry's initializer call and ELF data images from verified IR | parse/check source, put physical transport in IR, access files or run tools |
@@ -180,8 +180,8 @@ different responsibilities.
 | `Landin.Backend.Debug_Locations` | format-independent lexical visibility and definite initialization at IR instruction boundaries | choose storage, encode debugger records or read the host |
 | `Landin.Backend.Dwarf` | shared DWARF type/scope/location encoding parameterized by backend placement and section policy | change language types, choose variable storage, read the host or write files |
 | `Landin.Backend.X86_64.Dwarf` | x86 allocation adapter, register encodings and ELF entry points for the shared DWARF encoder | change source facts or choose variable storage |
-| `Landin.Backend.Toolchain` | target-specific assembly, link and debug-bundle command arguments, the triplet they use, D364's ordered driver candidates and what to install when none is found, and D202's ordered library arguments with D524's directories | infer target policy from the host, invoke a tool directly, or search a PATH |
-| `Landin.Backend.Firmware` | compiler-owned reset text and the linker script derived from the selected profile's regions, placements and boot kind (D545) | perform host effects or initialize user modules by executing source code |
+| `Landin.Backend.Toolchain` | target-specific assembly, link and debug-bundle command arguments, the triplet they use, D364's ordered driver candidates and what to install when none is found, and D202's ordered library arguments with D524's directories, firmware's as static archives (D923) | infer target policy from the host, invoke a tool directly, or search a PATH |
+| `Landin.Backend.Firmware` | compiler-owned reset text and the linker script derived from the selected profile's regions, placements and boot kind (D545), keeping a C archive's constructors where the driver sees them (D924) | perform host effects or initialize user modules by executing source code |
 | `Landin.Backend.Images` | D537's one pre-emission measure of a unit's written, mutable and zero images against a budget the caller selects, and its refusal's message | choose a target's or a profile's budget, read a profile's capacities as constants, or ask the host's width |
 | `Landin.Backend.Entry_Point` | [1970]'s one hosted entry shape, asked of the IR | raise a defect for a module that simply has no `main` |
 | `Landin.Diagnostics` | codes, severities, labels, notes, fixes and their edits, ordering | render, apply a fix, or own the catalogue of codes |
@@ -258,7 +258,7 @@ different responsibilities.
 | `Landin.Server.Answers` | each answer as the protocol's JSON: capabilities, published diagnostics, formatting edits, code actions, definitions and hover | decide anything a stage decided, or convert a position itself |
 | `Landin.Server.Navigation` | what is at a byte of a checked module: the name it is in, where that is declared, its type as the checker spells one, its written header and its doc comment [2000] | answer where the stages decided nothing, or inside a held body |
 | `Landin.Build_Reports.Sources` | off-target report provenance rendered from the compilation | read the host or add report data to the executable |
-| `Landin.Build_Reports.Firmware` | post-link Cortex ELF load extents, selected libgcc members, the second stage, the image block and the selected profile for build evidence, a profile's limits alone (D589), and D546's linker script contract | infer bytes from instruction counts or include toolchain paths in the report |
+| `Landin.Build_Reports.Firmware` | post-link Cortex ELF load extents, selected libgcc members, the second stage, the image block and the selected profile for build evidence, a profile's limits alone (D589), D546's linker script contract, and D924's sections a firmware image's C archives brought that startup cannot honour | infer bytes from instruction counts or include toolchain paths in the report |
 | `Landin.Build_Reports.Stacks` | D447's depth report: each emitted routine's backend frame, the deepest stack its call graph closes, and where that graph is opened, rendered from the compilation and the backends' routine statistics | read the host, guess an opening's cost or size a backing |
 | `Landin.Source_Digests` | per-emission memoization of immutable source snapshot hashes shared by maps and reports | retain digests beyond one emission or read source files from the host |
 | `Landin.Source_Maps` | optional source-name tables and their assembly-bound build identity | resolve names through new host reads or change language source identities |
@@ -322,11 +322,11 @@ D203's C convention and variadic flags follow the complete recursive signature,
 not the bodyless import flag or a concrete callee item. Checking admits only
 [1975]'s selected C subset and lowering promotes unnamed outgoing C arguments;
 verification checks the same signature facts for direct and indirect calls.
-`compiler.c_sysv_lp64`, `compiler.c_darwin_lp64`, `compiler.c_aapcs64_lp64`
-and `compiler.c_riscv_lp64d`
+`compiler.c_sysv_lp64`, `compiler.c_darwin_lp64`, `compiler.c_aapcs64_lp64`,
+`compiler.c_riscv_lp64d` and `compiler.c_aapcs32`
 are early fixed configuration bools, with no runtime storage. Ordinary `platform/c`
-accepts any supported LP64 contract; generated bindings assert their selected
-contract. Header
+accepts any supported contract, LP64 or Cortex-M's ILP32 AAPCS32; generated
+bindings assert their selected contract. Header
 parsing and C adapter generation belong to the separate bindings tool, not to
 the scanner, parser, type checker or native backend.
 `compiler.c_runtime` is another early bool: true when C's runtime starts the
@@ -1377,7 +1377,8 @@ with independent executable controls under that environment. The existing
 neutral shape machinery supplies storage. `Backend.Cortex_M` adds assembly
 emission and compiler-generated QEMU execution. `--target=cortex-m0`
 accepts checking, `--emit=asm` and D229 firmware linking with explicit
-`--firmware-entry=NAME`. General C source remains refused. Cortex
+`--firmware-entry=NAME`. C signatures and records follow AAPCS32 (D920), and
+firmware links C archives (D923); variadic C calls remain refused (D922). Cortex
 `--debug=lines` enables the explicit [line/function contract](../../docs/targets.md#cortex-source-debugging);
 `--debug=full` remains refused. `Backend.Firmware` owns reset/script generation; the older external
 startup/linker probes remain independently identified test harnesses. See

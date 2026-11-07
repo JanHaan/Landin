@@ -4309,31 +4309,54 @@ package body Landin.Tests.Driver_Suite is
          & " or compiler.c_aapcs64_lp64) == (compiler.arch == arm64))" & LF
          & "compiler.assert(compiler.c_riscv_lp64d"
          & " == (compiler.arch == rv64))" & LF
+         & "compiler.assert(compiler.c_aapcs32"
+         & " == (compiler.arch == cortex_m0))" & LF
+         & "compiler.assert(compiler.c_riscv_ilp32"
+         & " == (compiler.arch == rv32))" & LF
+         & "compiler.assert(compiler.c_xtensa_windowed_ilp32"
+         & " == (compiler.arch == xtensa))" & LF
          & "compiler.assert(true or (1 / 0 == 0))" & LF
          & "compiler.assert(not (false and (1 / 0 == 0)))" & LF
          & "compiler.assert(compiler.build_mode == debug)" & LF
-         & "fixed if compiler.arch == synthetic_32 then" & LF
+         & "fixed if compiler.word_size == 32 then" & LF
          & "compiler.assert(sizeof usize == 4)" & LF
          & "compiler.assert(alignof usize == 4)" & LF
          & "else" & LF
          & "compiler.assert(sizeof usize == 8)" & LF
          & "compiler.assert(alignof usize == 8)" & LF
          & "end if" & LF);
-      for Target in 1 .. 5 loop
+      --  D920: compiler.c_aapcs32 holds at every Cortex-M level, the
+      --  VFP variant's armv7e-m among them.
+      for Target in 1 .. 11 loop
          declare
-            Args : constant Landin.Platform.Path_List := Both
-              ((if Target = 1 then "--target=linux-x86-64"
-                elsif Target = 2 then "--target=darwin-arm64"
-                elsif Target = 3 then "--target=linux-arm64"
-                elsif Target = 4 then "--target=linux-rv64"
-                else "--target=synthetic-32"), "facts.ldn");
-            Result : constant Landin.Driver.Outcome :=
-              Landin.Driver.Execute (Args, Host, Tools);
+            Args : Landin.Platform.Path_List := Both
+              ((case Target is
+                  when 1 => "--target=linux-x86-64",
+                  when 2 => "--target=darwin-arm64",
+                  when 3 => "--target=linux-arm64",
+                  when 4 => "--target=linux-rv64",
+                  when 5 => "--target=synthetic-32",
+                  when 6 .. 9 => "--target=cortex-m0",
+                  when 10 => "--target=rv32",
+                  when others => "--target=xtensa"), "facts.ldn");
          begin
-            Landin.Testing.Check_Equal
-              (Item, Result.Status, Landin.Driver.Status_Success,
-               "width and alignment come from target: "
-               & Unbounded.To_String (Result.Report));
+            if Target in 6 .. 9 then
+               Args.Append
+                 (case Target is
+                    when 6 => "--level=armv6-m",
+                    when 7 => "--level=armv7-m",
+                    when 8 => "--level=armv7e-m",
+                    when others => "--level=armv8-m.main");
+            end if;
+            declare
+               Result : constant Landin.Driver.Outcome :=
+                 Landin.Driver.Execute (Args, Host, Tools);
+            begin
+               Landin.Testing.Check_Equal
+                 (Item, Result.Status, Landin.Driver.Status_Success,
+                     "width and alignment come from target: "
+                  & Unbounded.To_String (Result.Report));
+            end;
          end;
       end loop;
    end Fixed_Facts_Come_From_The_Target;
@@ -7389,6 +7412,66 @@ package body Landin.Tests.Driver_Suite is
                & ": " & Unbounded.To_String (Result.Report));
          end;
       end CPU_Accepted;
+      --  D920: Cortex-M's AAPCS32 admits platform/c at every level, both
+      --  of the C ABI's variants among them, as its project copy shows.
+      procedure C_Accepted (Level : String);
+      procedure C_Accepted (Level : String) is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : Landin.Platform.Path_List;
+      begin
+         Host.Add_Directory ("root");
+         Host.Add_Directory ("root/app");
+         Host.Add_Directory ("root/platform");
+         Host.Add_Directory ("root/platform/c");
+         Host.Add_File
+           ("root/platform/c/c.ldn",
+            "compiler.assert(compiler.c_aapcs32)" & LF
+            & "public c_long: type = i32");
+         Host.Add_File
+           ("root/app/main.ldn", "import platform/c" & LF
+            & "extern(c) peer: (v: c.c_long) -> (r: c.c_long)" & LF
+            & "read: () -> (r: i32) = r = peer(v: 1) end read");
+         Args.Append ("--root=root");
+         Args.Append ("--target=cortex-m0");
+         Args.Append ("--level=" & Level);
+         Args.Append ("root/app");
+         declare
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Driver.Execute (Args, Host, Tools);
+         begin
+            Landin.Testing.Check
+              (Item, Result.Status = Landin.Driver.Status_Success
+               and then Unbounded.Length (Result.Report) = 0,
+               "Cortex-M's AAPCS32 admits platform/c at " & Level
+               & ": " & Unbounded.To_String (Result.Report));
+         end;
+      end C_Accepted;
+      --  D920: RV32's ilp32 and Xtensa's windowed ABI stay refused, and the
+      --  refusal names the C ABIs that are enabled.
+      procedure C_Refused_Names_The_Enabled (Target : String);
+      procedure C_Refused_Names_The_Enabled (Target : String) is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : Landin.Platform.Path_List;
+      begin
+         Host.Add_File ("main.ldn", "import platform/c" & LF);
+         Args.Append ("--target=" & Target);
+         Args.Append ("main.ldn");
+         declare
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Driver.Execute (Args, Host, Tools);
+            Report : constant String := Unbounded.To_String (Result.Report);
+         begin
+            Landin.Testing.Check
+              (Item, Result.Status = Landin.Driver.Status_Reported
+               and then Occurrences (Report, Unavailable_Error) = 1
+               and then Contains (Report, "Cortex-M's AAPCS32")
+               and then Contains (Report, "RISC-V LP64D"),
+               Target & " refuses platform/c naming the enabled C ABIs: "
+               & Report);
+         end;
+      end C_Refused_Names_The_Enabled;
       --  D575: the module itself is available on a hosted target, where it
       --  declares nothing, so a shared program imports it there.
       procedure Hosted_Accepted;
@@ -7462,8 +7545,15 @@ package body Landin.Tests.Driver_Suite is
       Refused ("cortex-m0", "hosted/events", False);
       Refused ("cortex-m0", "hosted/events", True, True);
       Refused ("cortex-m0", "hosted/heap", True, True);
-      Refused ("cortex-m0", "platform/c", True);
+      Refused ("rv32", "platform/c", True);
+      Refused ("xtensa", "platform/c", False);
       Refused ("synthetic-32", "platform/c", True);
+      C_Accepted ("armv6-m");
+      C_Accepted ("armv7-m");
+      C_Accepted ("armv7e-m");
+      C_Accepted ("armv8-m.main");
+      C_Refused_Names_The_Enabled ("rv32");
+      C_Refused_Names_The_Enabled ("xtensa");
       --  The POSIX layer and the systems' own interfaces beneath it serve
       --  the hosted POSIX systems alone.
       Refused ("cortex-m0", "platform/posix", True);

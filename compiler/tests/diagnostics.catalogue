@@ -137,3 +137,4 @@ L0579  Live     D820: a binding policy refine bindings cannot read
 L0580  Live     D820: a Clang that cannot be run as asked, fails, or describes another ABI
 L0581  Live     D820: a selected C declaration, or its policy, that cannot be bound
 L0582  Live     D820: outputs refine bindings will not replace
+L0587  Live     D924: a firmware image whose C archives bring constructors, thread-local storage or a dynamic linkage
