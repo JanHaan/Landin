@@ -14803,8 +14803,10 @@ package body Landin.Tests.Checking_Suite is
          & "_ = values[0] end f");
       Check
         ("whole revival clears element sites", Pair & Drop
-         & "f: () -> none = mut values: [1]pair = [(count: 1, more: 2)] "
-         & "drop(values[0].count) values = [(count: 3, more: 4)] "
+         & "f: () -> none =" & LF
+         & "mut values: [1]pair = [(count: 1, more: 2)]" & LF
+         & "drop(values[0].count)" & LF
+         & "values = [(count: 3, more: 4)]" & LF
          & "_ = values[0].count end f");
       Check
         ("loop provenance converges", Drop
