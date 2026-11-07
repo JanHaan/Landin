@@ -401,6 +401,88 @@ package body Landin.Syntax.Repairs is
          end loop;
       end Line_Tokens;
 
+      --  Moving a complete plain import line keeps its inline comment and
+      --  original newline bytes. Aliases, selections and multiline forms
+      --  need a larger edit than this deliberately narrow action.
+      function With_Import_Move (Item : Diag.Diagnostic)
+        return Diag.Diagnostic;
+
+      function With_Import_Move (Item : Diag.Diagnostic)
+        return Diag.Diagnostic
+      is
+         Made : Diag.Diagnostic := Item;
+         Where : constant Landin.Source.Span :=
+           Diag.Span_Of (Diag.Primary (Item));
+         First : Natural := Natural (Where.First) + 1;
+         Last : Natural := First;
+         Insert : Natural;
+         Pieces : Piece_Vectors.Vector;
+         Clean : Boolean;
+      begin
+         if Landin.Syntax.Declaration_Count (Parsed) = 0
+           or else First > Bytes'Last
+         then
+            return Made;
+         end if;
+         while First > 1 and then Bytes (First - 1) /= ASCII.LF loop
+            First := First - 1;
+         end loop;
+         while Last <= Bytes'Last and then Bytes (Last) /= ASCII.LF loop
+            Last := Last + 1;
+         end loop;
+         Line_Tokens (First, Last - 1, Pieces, Clean);
+         if not Clean or else Natural (Pieces.Length) < 2
+           or else Pieces.First_Element.Kind /= Tok.Kw_Import
+         then
+            return Made;
+         end if;
+         for Position in 2 .. Natural (Pieces.Length) loop
+            if Pieces (Position).Kind /=
+              (if Position mod 2 = 0 then Tok.Identifier else Tok.Slash)
+            then
+               return Made;
+            end if;
+         end loop;
+         if Natural (Pieces.Length) mod 2 /= 0 then
+            return Made;
+         end if;
+         Insert := Natural (Landin.Syntax.Where
+           (Parsed, Landin.Syntax.Nth_Declaration (Parsed, 1)).First) + 1;
+         while Insert > 1 and then Bytes (Insert - 1) /= ASCII.LF loop
+            Insert := Insert - 1;
+         end loop;
+         if Insert >= First then
+            return Made;
+         end if;
+         declare
+            --  Without a newline at EOF, append the prelude's newline
+            --  style, while deleting only the bytes actually present.
+            Newline : constant String :=
+              (if Last <= Bytes'Last then ""
+               elsif Insert <= Bytes'Last - 1
+                 and then (for some Position in Insert .. Bytes'Last - 1 =>
+                   Bytes (Position) = ASCII.CR
+                   and then Bytes (Position + 1) = ASCII.LF)
+               then ASCII.CR & ASCII.LF else "" & ASCII.LF);
+            Last_Byte : constant Natural := Natural'Min (Last, Bytes'Last);
+            Move : Diag.Fix := Diag.Make_Fix
+              (Diag.Move_Token, Diag.Likely,
+               "move this import line before the declarations");
+         begin
+            Diag.Add_Edit
+              (Move, Diag.Make_Edit
+                 (Source, (Landin.Source.Byte_Offset (Insert - 1),
+                           Landin.Source.Byte_Offset (Insert - 1)),
+                  Bytes (First .. Last_Byte) & Newline));
+            Diag.Add_Edit
+              (Move, Diag.Make_Edit
+                 (Source, (Landin.Source.Byte_Offset (First - 1),
+                           Landin.Source.Byte_Offset (Last_Byte)), ""));
+            Diag.Add_Fix (Made, Move);
+         end;
+         return Made;
+      end With_Import_Move;
+
       --  The line with one change applied.
       function Applied
         (Pieces : Piece_Vectors.Vector;
@@ -1319,6 +1401,11 @@ package body Landin.Syntax.Repairs is
                if Pieces (Position).Kind not in Tok.Kw_In | Tok.Kw_Inout
                  | Tok.Kw_Inc | Tok.Kw_Dec | Tok.Kw_Return
                  | Tok.Kw_Fail | Tok.Kw_Defer | Tok.Kw_Undo | Tok.Kw_Addr
+                 --  A slice type's write permission is part of its type;
+                 --  removing it would repair the line into a different one.
+                 and then not (Pieces (Position).Kind = Tok.Kw_Mut
+                   and then Position > 1
+                   and then Pieces (Position - 1).Kind = Tok.Right_Bracket)
                  and then Bytes (Pieces (Position).First
                                  .. Pieces (Position).Last) /= "lenof"
                  and then
@@ -1472,7 +1559,13 @@ package body Landin.Syntax.Repairs is
                                (Snapshot, Where.First).Line)
                else 0);
          begin
-            if Line = 0 or else Line = Last_Line
+            if Diag.Message (Diag.Primary (Item))
+              = "an import belongs before every declaration"
+              and then Diag.Source_Of (Diag.Primary (Item)) = Source
+              and then Diag.Fix_Count (Item) = 0
+            then
+               Result.Append (With_Import_Move (Item));
+            elsif Line = 0 or else Line = Last_Line
               or else not In_A_Body (Where)
               or else Diag.Level (Item) /= Diag.Error
               or else (Diag.Fix_Count (Item) > 0

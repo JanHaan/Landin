@@ -74,9 +74,8 @@ package body Landin.Syntax.Parser is
    --  outside that set retain their ordinary name positions.
 
    --  The scalar names [1790].  These are the types the kernel predeclares,
-   --  not keywords, which is why they are compared by interned identity
-   --  rather than by kind.  Arrays and function types have syntax of their
-   --  own, and other names resolve to declarations.
+   --  not keywords. Type positions use ordinary qualified references;
+   --  these identities recognize scalar-qualified expression values.
    type Scalar_Name is
      (Type_U8, Type_U16, Type_U32, Type_U64,
       Type_I8, Type_I16, Type_I32, Type_I64,
@@ -97,14 +96,6 @@ package body Landin.Syntax.Parser is
             when Type_F32   => "f32",
             when Type_F64   => "f64",
             when Type_Bool  => "bool");
-
-   type Text_Name is (Type_Utf8, Type_Utf16, Type_C_String);
-
-   function Spelling (Item : Text_Name) return String
-     is (case Item is
-            when Type_Utf8     => "utf8",
-            when Type_Utf16    => "utf16",
-            when Type_C_String => "cstring");
 
    ------------------------------------------------------------------
 
@@ -266,6 +257,9 @@ package body Landin.Syntax.Parser is
             --  to the end of the file stops there, as it would at the file's
             --  own end.  Taking the wall as a closer clears it.
             Past_Wall : Boolean := False;
+            --  A recursive resource refusal ends this parse. Continuing to
+            --  interpret its unread closers produces only consequences.
+            Nesting_Refused : Boolean := False;
 
             --  Heap-backed, per-parse facts about the immutable token stream.
             --  Allocate only when a discriminator needs lookahead. Each open
@@ -459,11 +453,6 @@ package body Landin.Syntax.Parser is
               of Landin.Source.Names.Name_Id :=
                 [for S in Scalar_Name =>
                    Landin.Source.Names.Intern (Names, Spelling (S))];
-
-            Text_Id : constant array (Text_Name)
-              of Landin.Source.Names.Name_Id :=
-                [for T in Text_Name =>
-                   Landin.Source.Names.Intern (Names, Spelling (T))];
 
             --  Which tokens are the first on their line, found in one pass
             --  over the tokens and the space between them, both of which are
@@ -756,13 +745,15 @@ package body Landin.Syntax.Parser is
             --  The wall reads as `end`, which every construct in the body
             --  takes as a closer, and nothing beyond it is visible.
             function Peek return Tok.Token_Kind
-              is (if Index >= Wall and then Wall < Last
+              is (if Nesting_Refused then Tok.End_Of_Input
+                  elsif Index >= Wall and then Wall < Last
                   then (if Past_Wall then Tok.End_Of_Input else Tok.Kw_End)
                   else Tok.Kind (From, Index));
 
             function Ahead (Distance : Tok.Token_Index)
               return Tok.Token_Kind
-              is (if Index + Distance <= Last
+              is (if Nesting_Refused then Tok.End_Of_Input
+                  elsif Index + Distance <= Last
                     and then (Wall = Last or else Index + Distance < Wall)
                   then Tok.Kind (From, Index + Distance)
                   elsif Wall < Last and then Index + Distance = Wall
@@ -1194,7 +1185,7 @@ package body Landin.Syntax.Parser is
                      Level := Level - 1;
                      if Level = 0 then
                         return Ahead (Step + 1)
-                          in Tok.Identifier | Tok.Left_Bracket
+                          in Tok.Identifier | Tok.Left_Bracket | Tok.Kw_Mut
                              | Tok.Left_Paren | Tok.Kw_Any | Tok.Kw_Ptr
                              | Tok.Kw_Extern;
                      end if;
@@ -2091,6 +2082,9 @@ package body Landin.Syntax.Parser is
 
                Foreign : constant Foreign_Hit := Foreign_At;
             begin
+               if Nesting_Refused then
+                  return;
+               end if;
                --  Unclosed_Construct is the one exemption from P3: it is
                --  identified by the construct it could not close and not
                --  by a position.  The constructs the file ends inside are
@@ -2163,7 +2157,8 @@ package body Landin.Syntax.Parser is
                         Note    => Syn.Foreign_Note (Foreign.Form),
                         Related => Neighbour,
                         Because =>
-                          (if not Inside then Because
+                          (if Neighbour = Landin.Source.Empty_Span then ""
+                           elsif not Inside then Because
                            elsif Before_On_Line (Foreign.Span)
                                    /= Landin.Source.Empty_Span
                            then "written after this"
@@ -2375,6 +2370,16 @@ package body Landin.Syntax.Parser is
             is
                Offered : Landin.Diagnostics.Suggestions.Ranking;
             begin
+               if Wanted in Tok.Kw_Then | Tok.Kw_Do
+                 and then Here_Begins_Line
+                 and then Peek not in Tok.End_Of_Input | Tok.Kw_End
+                   | Tok.Kw_Else | Tok.Kw_Elsif | Tok.Kw_Complete
+               then
+                  return [1 => Landin.Diagnostics.Fixes.Insert_Token
+                    (Origin_Of, After_Previous,
+                     " " & Tok.Spelling (Wanted), Tok.Spelling (Wanted),
+                     Landin.Diagnostics.Likely)];
+               end if;
                if Wanted not in Tok.Reserved_Word
                  or else Peek /= Tok.Identifier
                then
@@ -3291,11 +3296,14 @@ package body Landin.Syntax.Parser is
                   Complain
                     (Item    => Syn.Nesting_Too_Deep,
                      Where   => Here,
-                     Message => "this nests deeper than the compiler reads",
-                     Note    => "an implementation limit, not a rule of the"
-                                & " language",
+                     Message => "this exceeds the compiler nesting limit of"
+                                & Positive'Image (Nesting_Limit),
+                     Note    => "split the nested construct into smaller"
+                                & " routines; parsing stops here at this"
+                                & " implementation limit",
                      Related => Nest_Root,
                      Because => "the outermost of the nest");
+                  Nesting_Refused := True;
                   return True;
                end if;
 
@@ -4566,8 +4574,10 @@ package body Landin.Syntax.Parser is
                         Where   => Here,
                         Message => "this chain of selectors is longer than"
                                    & " the compiler reads",
-                        Note    => "an implementation limit, not a rule of"
-                                   & " the language",
+                        Note    => "the compiler reads at most"
+                                   & Positive'Image (Nesting_Limit)
+                                   & " selectors; split the path into"
+                                   & " intermediate bindings",
                         Related => At_Chain,
                         Because => "the chain begins here");
                   end if;
@@ -5435,30 +5445,6 @@ package body Landin.Syntax.Parser is
                      Spelled : constant Landin.Source.Names.Name_Id :=
                        Named_Here;
                   begin
-                     for Item in Scalar_Name loop
-                        if Scalar_Id (Item) = Spelled then
-                           Advance;
-                           declare
-                              Base : constant Node_Id :=
-                                Add (Type_Name, At_Type, Named => Spelled);
-                           begin
-                              return
-                                (if Peek = Tok.Left_Paren
-                                   and then (not Terminal
-                                     or else Has_Type_Arguments)
-                                 then Parse_Type_Application (Base, At_Type)
-                                 else Base);
-                           end;
-                        end if;
-                     end loop;
-
-                     for Item in Text_Name loop
-                        if Text_Id (Item) = Spelled then
-                           Advance;
-                           return Add (Type_Name, At_Type, Named => Spelled);
-                        end if;
-                     end loop;
-
                      if Landin.Packed.Named_Width
                        (Landin.Source.Names.Spelling (Names, Spelled)) /= 0
                      then
@@ -5466,11 +5452,10 @@ package body Landin.Syntax.Parser is
                         return Add (Type_Name, At_Type, Named => Spelled);
                      end if;
 
-                     --  [1795] lets a program declare a type, so a name
-                     --  that is not one of the built-in scalars is no
-                     --  longer wrong
-                     --  here: whether it names one is resolution's to
-                     --  answer, and this stage stops guessing.
+                     --  [1760]/[1795]: scalar and text-view names use
+                     --  the same qualified syntax and lexical lookup as
+                     --  declared types. Checking supplies an unshadowed
+                     --  builtin's default only after resolution.
                      declare
                         Base : constant Node_Id :=
                           Parse_Qualified_Reference (Type_Reference);
@@ -9319,7 +9304,8 @@ package body Landin.Syntax.Parser is
                                  else "[1130]: an unconditional loop is"
                                       & " `loop do`, its body and `end loop`"),
                      Related => Opened,
-                     Because => "this loop");
+                     Because => "this loop",
+                     Fixes   => Keyword_Near (Tok.Kw_Do));
                   Resume_After (Tok.Kw_Do);
                end if;
 
@@ -9544,7 +9530,8 @@ package body Landin.Syntax.Parser is
                      Note    => "[1150]: a for loop is `for item in source"
                                 & " do`, its body and `end for`",
                      Related => Opened,
-                     Because => "this traversal");
+                     Because => "this traversal",
+                     Fixes   => Keyword_Near (Tok.Kw_Do));
                   Resume_After (Tok.Kw_Do);
                end if;
 
@@ -10674,8 +10661,11 @@ package body Landin.Syntax.Parser is
                                  Message => "this binary operator chain is"
                                             & " longer than the compiler"
                                             & " reads",
-                                 Note => "an implementation limit, not a"
-                                         & " rule of the language",
+                                 Note => "the compiler reads at most"
+                                         & Positive'Image (Nesting_Limit)
+                                         & " binary operators at one"
+                                         & " precedence; split the chain"
+                                         & " into intermediate bindings",
                                  Related => Anchor (Result, Seed),
                                  Because => "the chain begins here");
                            end if;
@@ -10726,8 +10716,10 @@ package body Landin.Syntax.Parser is
                               Message => "this assignment recovery chain"
                                          & " is longer than the compiler"
                                          & " reads",
-                              Note => "an implementation limit, not a"
-                                      & " rule of the language",
+                              Note => "the compiler recovers at most"
+                                      & Positive'Image (Nesting_Limit)
+                                      & " assignments in a chain; split"
+                                      & " them into separate statements",
                               Related => Anchor (Result, Seed),
                               Because => "the chain begins here");
                         elsif Begins_Line (Index) then
@@ -12684,7 +12676,7 @@ package body Landin.Syntax.Parser is
 
             --  The file ends inside these: one report, at the innermost,
             --  naming the rest.
-            if not Ending_Inside.Is_Empty then
+            if not Nesting_Refused and then not Ending_Inside.Is_Empty then
                declare
                   Inner : constant Unclosed_At_End :=
                     Ending_Inside.First_Element;

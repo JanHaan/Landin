@@ -31,6 +31,10 @@ package Landin.Diagnostics.Text is
       Sources : Landin.Source.Sets.Source_Set;
       Byte_Limit : Report_Byte_Limit := Default_Byte_Limit) return String;
 
+   --  Escape terminal controls in paths and diagnostic prose, retaining
+   --  UTF-8 text. Source snippets use their byte-oriented display instead.
+   function Escaped (Text : String) return String;
+
    --  "error", "warning", "note".  Kept here rather than in the transport
    --  so that Severity'Image never leaks into output.
    function Image (Level : Severity) return String;
