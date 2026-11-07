@@ -44,6 +44,13 @@ package Landin.Configuration is
      (Names : Landin.Source.Names.Table; Of_Tree : Landin.Syntax.Tree;
       Node : Landin.Syntax.Node_Id) return Boolean;
 
+   --  Whether NODE calls `compiler.utf8_unvalidated`, D949's view of bytes
+   --  as text with no scan, admitted only in an `unchecked` region.  Its
+   --  argument is the checker's to type.
+   function Unvalidated_Text_Call
+     (Names : Landin.Source.Names.Table; Of_Tree : Landin.Syntax.Tree;
+      Node : Landin.Syntax.Node_Id) return Boolean;
+
    type Table is private;
 
    type Build_Mode is (Debug, Release);

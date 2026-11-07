@@ -818,7 +818,9 @@ package Landin.Checking is
       Bytes_To_Utf8,
       Utf8_To_Bytes,
       C_String_To_Bytes,
-      C_String_To_Utf8);
+      C_String_To_Utf8,
+      --  D949: `compiler.utf8_unvalidated`, bytes to `utf8` with no scan.
+      Bytes_To_Utf8_Unvalidated);
 
    function Text_Conversion_Of
      (Of_Table : Table;

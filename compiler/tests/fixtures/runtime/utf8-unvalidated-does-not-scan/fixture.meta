@@ -1,0 +1,7 @@
+class: runtime
+profiles: standard
+summary: compiler.utf8_unvalidated reads none of its bytes, so a byte the checked conversion traps on is not found, and its view has the bytes' base and length; a demonstration of the text.unvalidated non-guarantee, not a use of it
+program: main.ldn
+status: 42
+constructs: 0310, 0430, 0570, 0600, 1120, 1560
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0

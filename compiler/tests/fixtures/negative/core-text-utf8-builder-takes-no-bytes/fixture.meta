@@ -1,0 +1,7 @@
+class: negative
+summary: a utf8 builder takes no bytes, neither as its text append's text nor through the byte builder's append, so nothing that is not UTF-8 reaches it
+program: main.ldn
+root: ../../../../..
+codes: L0301, L0301
+constructs: 0600, 1890
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

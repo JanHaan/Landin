@@ -12,10 +12,68 @@ exercise: () -> (ok: bool) ! text.past_end =
     end
 end exercise
 
+--  Positions over text, its searches and the encoder, each scalar width
+--  once, and a refusal of each.
+scalars: () -> (ok: bool) ! text.not_found | text.invalid_scalar | text.no_space =
+    ok = false
+    source: utf8 = "a\u{e9}\u{2192}\u{1f600}"
+    mut at := text.front(source)
+    mut width: usize = 1
+    while not text.done(source, at) do
+        return when text.width(source, at) <> width
+        at = text.step(source, at)
+        inc width
+    end while
+    arrow := try text.find(source, "\u{2192}")
+    again := try text.find_from(source, "\u{2192}", arrow)
+    emoji := try text.find_scalar(source, '\u{1f600}')
+    same := try text.find_scalar_from(source, '\u{1f600}', again)
+    return when text.offset(arrow) <> 3 or text.offset(again) <> 3
+      or text.offset(emoji) <> 6 or text.offset(same) <> 6
+    mut buffer: [4]u8 = zeroed
+    count := try text.encode('\u{e9}', buffer[0..<4])
+    return when count <> 2 or buffer[0] <> 0xc3 or buffer[1] <> 0xa9
+    _ = text.find(source, "b") else (absent)
+        return when absent <> text.not_found
+        _ = text.encode(0xd800, buffer[0..<4]) else (invalid)
+            ok = invalid == text.invalid_scalar and buffer[0] == 0xc3
+            return
+        end
+        return
+    end
+end scalars
+
+--  A scalar into the byte builder, and text and scalars into the builder
+--  that holds only text, which cuts back to a scalar's start.
+builders: () -> (ok: bool) ! text.no_space | text.invalid_scalar =
+    ok = false
+    mut bytes: [4]u8 = zeroed
+    mut line := text.over(bytes[0..<4])
+    try text.append_scalar(line, '\u{2192}')
+    return when text.length(line) <> 3
+    mut storage: [8]u8 = zeroed
+    mut valid := text.utf8_over(storage[0..<8])
+    try text.utf8_append_text(valid, "a")
+    try text.utf8_append_scalar(valid, '\u{e9}')
+    return when text.utf8_length(valid) <> 3 or text.utf8_capacity(valid) <> 8
+      or not text.equal(text.utf8_used(valid), "a\u{e9}")
+    text.utf8_truncate(valid, 2)
+    held: []u8 = text.utf8_bytes(valid)
+    return when lenof held <> 1 or held[0] <> u8('a')
+    text.utf8_clear(valid)
+    ok = text.utf8_length(valid) == 0
+end builders
+
 public main: () -> (code: i32) =
     code = 1
     ok := exercise() else false
-    if ok then
+    return when not ok
+    code = 2
+    positions := scalars() else false
+    return when not positions
+    code = 3
+    built := builders() else false
+    if built then
         code = 42
     end if
 end main

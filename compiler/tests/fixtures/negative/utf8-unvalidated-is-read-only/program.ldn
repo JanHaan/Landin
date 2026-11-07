@@ -1,0 +1,13 @@
+--  The text is read-only as every `utf8` is: it is no writable bytes, and
+--  only bytes become text.
+writable: (buffer: []mut u8) -> (result: []mut u8 from buffer) =
+    unchecked begin
+        result = compiler.utf8_unvalidated(buffer)
+    end unchecked
+end writable
+
+numbers: (values: []u32) -> (result: utf8 from values) =
+    unchecked begin
+        result = compiler.utf8_unvalidated(values)
+    end unchecked
+end numbers

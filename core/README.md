@@ -91,7 +91,7 @@ Every module spells the same operations the same way (D269):
 | Operation | Spelling | Examples |
 |---|---|---|
 | Construct a module's principal type | `new` | `vec.new(item: i32)`, `map.new(key: u32, item: i32)`, `diag.new(capacity: 4)` |
-| View over caller-supplied bytes or records, or a provider's handle over its caller-owned state | `over` | `arena.over(space, base, size)`, `mem.storage_over`, `pool.over`, `region.over(ledger, heap)`, `fault.over(space, inner, 3)`, `io.memory_over`, `io.variables_over`, `io.scripted_over`, `text.over(buffer)`, `io.buffered_over`, `io.lines_over` |
+| View over caller-supplied bytes or records, or a provider's handle over its caller-owned state | `over` | `arena.over(space, base, size)`, `mem.storage_over`, `pool.over`, `region.over(ledger, heap)`, `fault.over(space, inner, 3)`, `io.memory_over`, `io.variables_over`, `io.scripted_over`, `text.over(buffer)`, `text.utf8_over(buffer)`, `io.buffered_over`, `io.lines_over` |
 | A provider's caller-owned state | `space`, declared `zeroed` | `arena.space`, `pool.space`, `region.space(capacity)`, `fault.space`, `io.memory_space` |
 | Give a container's storage back | `release` | `vec.release`, `map.release`, `tree.release`, `spill.release`, `region.release` |
 | Read one item as a copy | `get` | `vec.get`, `spill.get`, `map.get`, `tree.get`, `diag.get` |
@@ -275,7 +275,17 @@ not at all, and aligns a piece in a field; `format` fills a template's `{}`
 with values of any type that has `text.formattable` evidence, checked
 against them when it runs, since nothing runs at compile time. Parsing is
 its mirror for every integer width, and no locale is consulted anywhere. A
-program does not write its own digit loop. `core/mem` copies, fills,
+program does not write its own digit loop. Over `utf8` it steps positions a
+whole scalar at a time, with `front`, `step`, `done` and `width`, and its
+searches, `find`, `find_scalar` and their `_from` forms, return where a
+match begins or `not_found`, so the text around a match is a range of the
+source and nothing is copied. `encode` writes a scalar's bytes into the
+caller's buffer, refusing a surrogate or a value above U+10FFFF with
+`invalid_scalar` and a buffer too short with `no_space`, writing nothing
+either way. A `utf8_builder` from `utf8_over` takes only text, scalars and
+numbers, each call the byte builder's with `utf8_` before it, and cuts back
+only to a scalar's start, so what it holds is always UTF-8 and `utf8_used`
+lends it as text without reading it again. `core/mem` copies, fills,
 compares and searches byte slices with their lengths checked, its copy
 allowing overlap in either direction as `memmove` does. `core/io` adds two
 values a caller edits over a buffer of its own: a buffered writer, flushed
@@ -301,9 +311,9 @@ allocator is hidden in a container or selected implicitly by the target.
 | `core/vec` | `list`, `new`, `reserve`, `push`/`pop`, initialized views, length/capacity and `release`. Operations receive an allocator explicitly. Growth extends supported positive-byte blocks in place; otherwise it copies privately, rolls back on failure and publishes a complete replacement last. |
 | `core/pool` | A provider handle over a caller's `pool.space`, its bytes and initialized slot metadata. A free-index heap gives lowest-index reuse in logarithmic time; exact frees find their slot by address. A growth or a resize keeps a block in its slot to any extent the slot holds, so a list over a pool grows in place until its slot is full (`runtime/core-pool-grow`, 16.5 KB at size/auto, and `runtime/core-pool-list-grows`, 23.3 KB) (D386). No backing allocation or fallback heap. |
 | `core/sort` | Heapsort and selection sort by `cmp.ordered` evidence, and `sort_by`, heapsort by a comparison given a context, with no allocation; `runtime/core-sort-context`, which sorts records into a shared pool of names with `cmp.compare`, is 10.7 KB at size/auto (D387). |
-| `core/failure` | `failure.words`, a phrase for each of the 32 library failure atoms: about 6 KB of code and text, linked only into a program that calls it (`runtime/failure-words`, 10.4 KB at size/auto) (D388). |
+| `core/failure` | `failure.words`, a phrase for each of the 34 library failure atoms: about 6 KB of code and text, linked only into a program that calls it (`runtime/failure-words`, 10.4 KB at size/auto) (D388). |
 | `core/panic` | The canonical four-atom `panic_kind` domain. An entry-module public ordinary `(kind: panic.panic_kind, site: u32) -> noreturn` handler replaces the terminal default; no reporting or allocation dependency is imported. |
-| `core/text` | A builder over a caller's buffer with byte, text, decimal, hexadecimal and aligned appends, and `format` over `any text.formattable`. At size/auto the bounded builder's core, `over`, `used`, `append`, `append_byte` and the room check, is about 4.9 KB with `mem.copy`; a `u32` decimal adds about 2.2 KB, a signed one 0.9 KB more, an aligned hexadecimal about 2.9 KB, and `format` with two conformances about 4.6 KB (`runtime/core-text-format-firmware`, 17.6 KB in all). A growing builder's doubling is reached only through the table `text.growing` builds, so it is linked, about 1.5 KB at size/auto and 1.9 KB at none/off, only into a program that calls `growing`, and no allocator is used unless the program builds a growing builder over its own. |
+| `core/text` | A builder over a caller's buffer with byte, text, decimal, hexadecimal and aligned appends, and `format` over `any text.formattable`. At size/auto the bounded builder's core, `over`, `used`, `append`, `append_byte` and the room check, is about 4.9 KB with `mem.copy`; a `u32` decimal adds about 2.2 KB, a signed one 0.9 KB more, an aligned hexadecimal about 2.9 KB, and `format` with two conformances about 4.6 KB (`runtime/core-text-format-firmware`, 17.6 KB in all). A growing builder's doubling is reached only through the table `text.growing` builds, so it is linked, about 1.5 KB at size/auto and 1.9 KB at none/off, only into a program that calls `growing`, and no allocator is used unless the program builds a growing builder over its own. Over `utf8`, positions, the searches and the encoder with both builders' scalar appends, `runtime/library-shared-text`, are 24.8 KB at size/auto and 29.5 KB at none/off, with 1,048 and 1,480 bytes of stack observed; the Two-Way search shared by `contains` and every `find` is 3.8 KB of it at size/auto and 5.4 KB at none/off. A console line checked, split at a found `=` and arrow and encoded again, `runtime/core-text-utf8-firmware`, is 26.5 KB and 31.4 KB, of which `valid`, which `from_bytes` runs once, is 3.4 KB and 4.3 KB. Static RAM is 20 bytes in each. |
 | `core/io` | Besides the concepts and the memory world, a buffered writer over the caller's buffer, about 5 KB at size/auto with `mem.copy`, and a line reader, about 7 KB with `mem.copy` and `mem.find` (`runtime/core-io-buffered-writer`, `runtime/core-io-line-reader`). |
 | `core/random` | A generator of four `u64` words and its draws, written with shifts, exclusive ors and additions so the 32-bit core needs only `__aeabi_lmul` for seeding: `new`, splitmix64 and `next` are about 2.8 KB at size/auto, `below` 1.1 KB more and a shuffle of bytes about 1.6 KB, in `runtime/random-sequence`'s 16.3 KB image, which seeds from `core/io`'s scripted entropy too. |
 | `core/io` time | The manual clock, its concepts and the span conversions run in `runtime/clock-manual`'s 11.3 KB image; nothing of them is in an image that does not use them. |

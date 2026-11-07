@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: text.encode writes each width's first and last scalar and those beside the surrogates, at an offset and nothing either side, refuses a surrogate or a value above U+10FFFF with invalid_scalar before no_space and a scalar one byte too wide for its room with no_space, each writing nothing, and the byte builder's append_scalar writes the same bytes and refuses the same way unchanged
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0250, 0520, 0570, 0600, 0940, 1030, 1150
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0

@@ -1,0 +1,8 @@
+class: negative
+summary: text compiler.utf8_unvalidated makes keeps its bytes' origin, so it is returned only from a parameter it names and never past a frame's storage
+constructs: 0570, 0600, 0790, 1120, 1560
+program: program.ldn
+codes: L0316, L0314
+expect: expected.txt
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+args: ../tests/fixtures/negative/utf8-unvalidated-escapes-its-source/program.ldn

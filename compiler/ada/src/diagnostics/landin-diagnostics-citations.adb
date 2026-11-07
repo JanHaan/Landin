@@ -2731,6 +2731,17 @@ package body Landin.Diagnostics.Citations is
                & "ns",
             when 307 =>
                "Parsing mirrors what the builder writes",
+            when 945 =>
+               "Positions over `utf8` step a whole scalar",
+            when 946 =>
+               "A search over text returns where the match begins",
+            when 947 =>
+               "The encoder writes a whole scalar or nothing",
+            when 948 =>
+               "A `utf8_builder` holds only whole scalars",
+            when 949 =>
+               "`compiler.utf8_unvalidated` makes text of bytes known to"
+               & " be valid, inside `unchecked`",
             when 308 =>
                "A buffered writer is flushed explicitly, and a line read"
                & "er lends its lines",
@@ -4148,6 +4159,16 @@ package body Landin.Diagnostics.Citations is
             when 306 =>
                "Decisions: The core library and the derived programs",
             when 307 =>
+               "Decisions: The core library and the derived programs",
+            when 945 =>
+               "Decisions: The core library and the derived programs",
+            when 946 =>
+               "Decisions: The core library and the derived programs",
+            when 947 =>
+               "Decisions: The core library and the derived programs",
+            when 948 =>
+               "Decisions: The core library and the derived programs",
+            when 949 =>
                "Decisions: The core library and the derived programs",
             when 308 =>
                "Decisions: The core library and the derived programs",
@@ -6137,6 +6158,22 @@ package body Landin.Diagnostics.Citations is
             when 307 =>
                "https://www.701.dev/spec.html#d307-parsing-mirrors-what-"
                & "the-builder-writes",
+            when 945 =>
+               "https://www.701.dev/spec.html#d945-positions-over-utf8-s"
+               & "tep-a-whole-scalar",
+            when 946 =>
+               "https://www.701.dev/spec.html#d946-a-search-over-text-re"
+               & "turns-where-the-match-begins",
+            when 947 =>
+               "https://www.701.dev/spec.html#d947-the-encoder-writes-a-"
+               & "whole-scalar-or-nothing",
+            when 948 =>
+               "https://www.701.dev/spec.html#d948-a-utf8-builder-holds-"
+               & "only-whole-scalars",
+            when 949 =>
+               "https://www.701.dev/spec.html#d949-compiler-utf8-unvalid"
+               & "ated-makes-text-of-bytes-known-to-be-valid-inside-unchec"
+               & "ked",
             when 308 =>
                "https://www.701.dev/spec.html#d308-a-buffered-writer-is-"
                & "flushed-explicitly-and-a-line-reader-lends-its-lines",

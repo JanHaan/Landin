@@ -13998,6 +13998,7 @@ classified failure boundary before the repository gate can pass.
 | `text.indexing` | trap | 0380, 0430, 0600, 0610, 1050, 1900, 1950, 1960 | utf8 indexed by exact usize scans linearly by codepoint ordinal; exact core/text.position supplies an O(1) byte offset; either decodes that codepoint to a u32 value, L0301 rejects every other argument or text identity, L0337 an address of the value, L0303 rejects writing through it, and an absent ordinal, end position or non-boundary position traps | `negative/utf16-indexing-is-not-utf8-indexing`, `negative/utf8-index-needs-usize-or-position`, `negative/utf8-index-position-identity-is-exact`, `negative/utf8-index-result-is-not-a-place`, `negative/utf8-index-result-has-no-address`, `runtime/utf8-indexing`, `runtime/utf8-ordinal-out-of-range-traps`, `runtime/utf8-position-at-end-traps`, `runtime/utf8-position-not-boundary-traps` |
 | `text.slicing` | trap | 0310, 0410, 0430, 0570, 0600, 0790, 1050, 1820, 1950, 1960 | utf8 and utf16 ranges take exact usize code-unit bounds, require scalar-boundary endpoints, preserve the immutable source-derived text identity, include the complete upper scalar for `..`, and evaluate source then bounds once; cstring and other bound types are L0301, mutation is L0303, L0316 enforces the return origin, and an invalid bound or split scalar traps | `negative/cstring-range-slicing-has-no-length`, `negative/text-slice-needs-usize-bounds`, `negative/text-slice-result-is-read-only`, `negative/text-slice-result-keeps-identity`, `negative/text-slice-result-keeps-origin`, `runtime/text-range-slicing`, `runtime/utf16-slice-not-boundary-traps`, `runtime/utf8-slice-lower-not-boundary-traps`, `runtime/utf8-slice-upper-not-boundary-traps` |
 | `text.traversal` | trap | 0250, 0410, 0430, 0600, 1130, 1150, 1160, 1320, 1650, 1950, 1960 | the exact utf8, utf16 and cstring identities retain one source, use private usize code-unit cursors, and yield immutable copied u32 Unicode scalars in first/at_end/item/next order; cstring stops before its first NUL and validates before decoding, malformed foreign encoding traps even in unchecked, ordinary carriers are L0348, and mutation is L0303 | `negative/text-traversal-item-is-read-only`, `negative/text-traversal-ordinary-pointer-is-not-cstring`, `runtime/cstring-traversal-invalid-traps`, `runtime/hosted-text-traversal` |
+| `text.unvalidated` | outside | 0430, 0570, 0600, 0790, 1120, 1560 | D949 non-guarantee: `compiler.utf8_unvalidated` inside `unchecked` gives a `utf8` view of its bytes' base, length, origin and read-only permission and reads none of them, so bytes that are not UTF-8 go unnoticed and later decoding may read them wrongly; outside `unchecked` it is L0600 | `negative/utf8-unvalidated-outside-unchecked`, `negative/utf8-unvalidated-escapes-its-source`, `negative/utf8-unvalidated-is-read-only`, `positive/utf8-unvalidated-keeps-origin`, `runtime/utf8-unvalidated-does-not-scan` |
 | `arithmetic.known` | static | 0290, 0300, 0390, 1950 | L0300 or L0306 | `negative/compound-assignment-zero-divisor`, `negative/divisor-is-zero`, `negative/literal-above-its-type`, `negative/r480-recovery-zero-divisor` |
 | `arithmetic.runtime` | trap | 0290, 0300, 0320, 0390, 1120, 1950, 1960 | trap, outside [1120]'s region for `+`, `-`, `*` and unary `-` | `runtime/compound-assignment-overflow-traps`, `runtime/checked-overflow-traps`, `runtime/checked-subtraction-traps`, `runtime/checked-multiplication-traps`, `runtime/checked-negation-traps`, `runtime/signed-division-overflow-traps`, `runtime/a-zero-divisor-traps`, `runtime/a-zero-remainder-divisor-traps`, `runtime/negative-left-shift-traps`, `runtime/negative-right-shift-traps` |
 | `arithmetic.total` | static | 0320, 0330, 0340, 0350, 0390 | L0301 for an inapplicable operand; admitted nonnegative shifts and wrapping operations are total | `negative/compound-assignment-float-remainder`, `negative/condition-is-not-believed`, `runtime/compound-assignment`, `runtime/shifts-fill-with-zeros-beyond-the-width` |
@@ -29301,6 +29302,202 @@ range after an unsigned parse, which changes which refusal comes first.
 
 **Pinned by** `runtime/core-text-parse-signed` on every target.
 
+### D945 — Positions over `utf8` step a whole scalar
+
+**The tour said** at [0600] that on `[]u8` `core/text` counts positions as
+opaque byte offsets, with `first`, `at_end`, `next`, `advance`, `offset`,
+`byte` and `slice`, and at [0610] that a `text.position` indexes `utf8` in
+O(1); D184's traversal yields each scalar and keeps its cursor private. So a
+program that read a scalar and needed the byte offset beside it, to slice
+the text there, counted widths from leading bytes by hand.
+
+**Chosen:** `text.front(source)`, `text.done(source, at)`,
+`text.width(source, at)` and `text.step(source, at)` take a `utf8` and the
+existing `text.position`. `front` is offset zero, the end itself for empty
+text; `done` holds at or past the byte length; `width` is the one to four
+bytes encoding the scalar at `at`; and `step` is `at` advanced by that
+width. `width` and `step` read the scalar as `source[at]` does, so they trap
+exactly where D182 and D249's position index traps, at the end and on a
+continuation byte, through the same checked-address failure, and declare
+no atom. Every position they return is therefore a scalar's start or the
+end, which are the offsets D183's ranges accept, and `text.offset` gives
+either kind of position's byte offset. The byte cursors keep their names
+and contracts. A scope gives one name to one thing [1850], so the scalar
+forms are four new names, each taking its text first as D269's
+accessors take their subject: `front` beside `first`, `done` beside
+`at_end`, and `step` beside `next`, because it moves by a scalar and needs
+the text to know how far. `front` is not `start` because `start` is the
+firmware entry the corpus, the harnesses and their programs name, and two
+local routines of one name are each given a qualified symbol, so a
+library `start` would rename that entry's in every image importing
+`core/text`.
+
+**The alternatives:** `past_end` from a step at the end, as `byte`
+declares, which every loop would have to recover from although a loop that
+tests `done` never meets it; an `iterable` conformance yielding a position
+and a scalar together, for which `core` declares no concept [1320] and
+D184's intrinsic one is closed; `first`, `next` and `at_end` over `utf8`,
+which changes the byte scanners prototype 2's lexer is; and names such as
+`first_scalar`, which suggest the byte forms read something else than the
+bytes they read.
+
+**Pinned by** `runtime/core-text-utf8-split`,
+`runtime/core-text-step-at-end-traps`, `runtime/core-text-utf8-firmware`
+and `runtime/library-shared-text` on every target.
+
+### D946 — A search over text returns where the match begins
+
+**The tour said** at [0600] that `core/text` has substring search, and D199
+made `contains` a Two-Way search that answers yes or no and finds empty
+text everywhere. No search said where, so a program could not take the
+parts of a text around a found separator.
+
+**Chosen:** `text.find(source, sought)` and
+`text.find_from(source, sought, at)` return the position at which `sought`
+first begins, in all of `source` or at or after `at`, and
+`text.find_scalar(source, scalar)` and `text.find_scalar_from` the position
+of the first scalar equal to `scalar`; each reports the new atom
+`text.not_found` when there is none. Empty text is found where the search
+begins, `front` or `at`, as `contains` finds it. The text searches and
+`contains` share one private Two-Way routine, so `contains` keeps its
+result, its empty-text rule and its linear time, and a search from `at`
+costs the same over what follows it. A search from `at` takes that rest as
+D183's range `source[offset(at)..<lenof source]`, which traps on a position
+inside a scalar or past the end. A scalar search encodes the scalar as
+D947 does and searches for those bytes as for text; a surrogate or a value
+above U+10FFFF is `not_found`, since no text holds one.
+
+Shortest-form UTF-8 synchronizes itself: a leading byte never equals a
+continuation byte, so a match of valid sought text in valid text begins at
+a scalar's start and ends at one. The parts of the source before, at and
+after a match are therefore D183 ranges of it, `utf8` views with its
+origin and read-only permission and nothing copied, and returning one
+needs the exact `from source` as any range does. `not_found`'s words are
+`not in the text`; `failure.reason` holds it (D388).
+
+**The alternatives:** `mem.find`'s convention of the length for no match,
+which is a real match position for empty text and so would be ambiguous,
+and which a forgotten check turns into the whole rest of the text; reusing
+`map.missing`, whose words name a key and whose module `core/text` would
+import for an atom, `io.not_found`, which `core/text` cannot name because
+`core/io` imports it, or `past_end`, which is a read past the end that a
+search never makes; and a count of scalars, which costs a scan to use and
+which D183's ranges do not take.
+
+**Pinned by** `runtime/core-text-find`, `runtime/core-text-utf8-split`,
+`runtime/core-text-find-inside-scalar-traps`,
+`runtime/core-text-utf8-firmware`, `runtime/library-shared-text` and
+`negative/core-text-found-view-escapes`.
+
+### D947 — The encoder writes a whole scalar or nothing
+
+**The tour said** at [0250] that a character is a `u32` scalar, and D249
+made every indexed or traversed scalar one, but nothing in the library
+turned a scalar back into bytes.
+
+**Chosen:** `text.encode(scalar, into)` writes the shortest-form UTF-8
+encoding of `scalar`, one to four bytes, at the front of `into` and returns
+how many; a caller encodes at an offset by passing what follows it,
+`buffer[at..<lenof buffer]`. A surrogate, U+D800 to U+DFFF, or a value
+above U+10FFFF reports `invalid_scalar`, and a scalar wider than `into`
+reports `no_space`. The width is known before the first store, and
+`invalid_scalar` is reported first, so a value that is no scalar is refused
+the same way whatever the room. Either refusal writes no byte: `into` is
+as it was, which is the encoder's whole partial-update rule.
+`text.append_scalar(into, scalar)` appends the same bytes to a byte builder
+through its room check, whole or not at all as every append is (D305),
+with the same two refusals in the same order and the builder unchanged by
+either; a growing or draining builder makes room as it does for any piece.
+`invalid_scalar`'s words are `not a Unicode scalar value`.
+
+**The alternatives:** writing U+FFFD for a value that is no scalar, which
+changes the text without saying so; trapping as a conversion does, though
+the value is often input, a parsed escape or a protocol field, and a
+foreseeable refusal is declared; an offset parameter and a returned next
+offset, the slice-writer shape D355 retired; and a public width query,
+which the result already answers after the fact and no consumer needed
+before it.
+
+**Pinned by** `runtime/core-text-encode`, `runtime/core-text-utf8-firmware`
+and `runtime/library-shared-text`.
+
+### D948 — A `utf8_builder` holds only whole scalars
+
+**The tour said** at [0600] that `utf8` is validated text, and D305's
+builder writes bytes, which an append of bytes, a host string, a byte or a
+cut inside a scalar can leave anything but UTF-8.
+
+**Chosen:** `text.utf8_builder`, made by `text.utf8_over(buffer)` over the
+caller's buffer, is a byte builder whose only appends keep its bytes
+UTF-8: `utf8_append_text`, `utf8_append_scalar`, and the decimal and
+hexadecimal appends of every width, whose digits and sign are ASCII. Each
+is the byte builder's call with `utf8_` before it and writes the same
+bytes: whole, or `no_space`, or for a scalar `invalid_scalar` first, with
+its length and buffer unchanged. It has no append of bytes, of a byte or of
+a host string, no alignment, whose fill is a byte, and is not a `format`
+destination, since a `formattable` may append any bytes. `utf8_truncate`
+keeps the whole scalars of the first `count` bytes: a count inside a
+scalar cuts back to that scalar's start, so the bytes stay UTF-8, and a
+count at or past the length changes nothing. `utf8_clear`, `utf8_length`
+and `utf8_capacity` are the byte builder's. `utf8_used` lends what it holds
+as one `utf8` view and `utf8_bytes` as bytes, each `from` the builder,
+which is `from` its buffer, so a view of a frame's storage cannot be
+returned past that frame. The text view is made with D949's
+`compiler.utf8_unvalidated` and nothing is scanned: the appends and cuts
+are what make the bytes UTF-8. The prefix is D269's,
+for a module that holds several types.
+
+**The alternatives:** a flag in the byte builder saying whether every
+append kept it valid, which a type cannot show and every finish would
+test; a `distinct` byte builder, which needs the same new names to say
+which calls it admits; a cut inside a scalar that traps, as D183's range
+does, which library code reaches only through a view the builder does not
+have, or that is refused with an atom, when rounding down keeps the
+invariant and a count an earlier `utf8_length` gave is never inside one.
+
+**Pinned by** `runtime/core-text-utf8-builder`,
+`runtime/library-shared-text`,
+`negative/core-text-utf8-builder-takes-no-bytes` and
+`negative/core-text-utf8-builder-view-escapes`.
+
+### D949 — `compiler.utf8_unvalidated` makes text of bytes known to be valid, inside `unchecked`
+
+**The tour said** at [0600] that `utf8` holds validated UTF-8, and D199
+made the conversion from bytes validate and trap, even inside `unchecked`,
+and introduce no core privilege. A program whose bytes are valid by
+construction, a builder that appends only whole scalars or a validator
+that has just checked them, could reach a `utf8` only by scanning them
+again.
+
+**Chosen:** `compiler.utf8_unvalidated(bytes)` takes one immutable `[]u8`,
+or a `[]mut u8` weakened to it as an argument is, and gives a `utf8` with
+the operand's base, length, origin and read-only permission, exactly as
+D199's conversion gives them, with no scan, copy, allocation or backend
+opcode: the view is the operand's descriptor under the text identity. It
+is admitted only in an `unchecked` region; anywhere else it is L0600,
+which names `utf8(bytes)` and `text.from_bytes` for a checked conversion
+and `unchecked begin ... end unchecked` for bytes valid by construction.
+Bytes that are not UTF-8 are D199's `outside` non-guarantee, the
+`text.unvalidated` row: indexing, ranges, traversal and comparison may
+then read a scalar wrongly, and no check finds it. D199's conversion is
+unchanged everywhere, its trap inside `unchecked` included. Any program
+may call it, so `core` gains no privilege; `text.from_bytes` validates
+once and then makes its view with it, and the `utf8_builder`'s
+`utf8_used` (D948) lends its text with it.
+
+**The alternatives:** making D199's conversion skip validation inside
+`unchecked`, which reverses an explicit rule and changes what existing
+`unchecked` code does; validating when a builder finishes, which scans
+again what the builder already knows; and a privilege
+of `core/text`'s, which D199 refused.
+
+**Pinned by** `positive/utf8-unvalidated-keeps-origin`,
+`negative/utf8-unvalidated-outside-unchecked`,
+`negative/utf8-unvalidated-escapes-its-source`,
+`negative/utf8-unvalidated-is-read-only`,
+`runtime/utf8-unvalidated-does-not-scan`,
+`runtime/core-text-utf8-builder` and the `text.unvalidated` guarantee row.
+
 ### D308 — A buffered writer is flushed explicitly, and a line reader lends its lines
 
 **The tour said** that there are no destructors [1100], so nothing runs when a
@@ -30939,7 +31136,8 @@ own table from the atoms to messages.
 **Chosen:** `core/failure` is a shared freestanding module of one type and
 one routine. `failure.reason` is the union of every atom a `core` module
 fails with, thirty-two of them from `core/mem`, `core/map`, `core/tree`,
-`core/io`, `core/net` and `core/text`, and `failure.words(problem)` returns
+`core/io`, `core/net` and `core/text`, thirty-four since D946 and D947 added
+`text.not_found` and `text.invalid_scalar`, and `failure.words(problem)` returns
 a fixed phrase for each: lower case with no final stop, so that it reads
 after a subject and a colon, static text that borrows nothing, the same on
 every target and in every locale. A call's failure set widens to

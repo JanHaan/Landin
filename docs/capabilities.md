@@ -542,9 +542,17 @@ failure injector as capabilities.
 - **Comparison.** The comparison concepts are a module of their own,
   `core/cmp`, with library-supplied evidence for integer keys and ordering,
   Boolean and byte slice keys, and UTF-8 keys and ordering.
-- **Text.** Byte-oriented and validated text. A builder over a caller's
-  buffer, or one an allocator grows, takes bytes, text, host strings,
-  decimals of every integer width and hexadecimal, aligned in a field.
+- **Text.** Byte-oriented and validated text. Positions over `utf8` step
+  a whole scalar and keep its byte offset, and searches for text or a
+  scalar return where the match begins, so the parts around it are
+  zero-copy `utf8` views of the source (D945, D946). A scalar encodes into
+  a caller's buffer whole or not at all (D947). A builder over a caller's
+  buffer, or one an allocator grows, takes bytes, scalars, text, host
+  strings, decimals of every integer width and hexadecimal, aligned in a
+  field, and a `utf8_builder` takes only text, scalars and numbers, so it
+  always holds UTF-8 and lends it as one `utf8` view with no scan (D948).
+  `compiler.utf8_unvalidated` makes such a view of bytes valid by
+  construction, admitted only inside `unchecked` (D949).
   `text.format` fills a template's `{}` with any value that has
   `formattable` evidence, checked against its values when it runs, and
   `io.write_format` writes one to a file in a single call, through a

@@ -1624,6 +1624,23 @@ big: () -> (n: u64) =
 end big
 ```
 
+### L0600
+
+`compiler.utf8_unvalidated(bytes)` makes text of bytes without reading
+them (D949), so it is admitted only where the program says it answers for
+them: inside `unchecked begin ... end unchecked`. Bytes that are not UTF-8
+then go unnoticed, and what reads them as text reads them wrongly. Where
+the bytes come from input, convert them with `utf8(bytes)`, which traps on
+malformed bytes, or `text.from_bytes`, which reports `invalid_text`. Where
+they are valid by construction, because the program has just checked them
+or wrote only whole scalars, put the call in an `unchecked` region.
+
+```landin
+trusted: (source: []u8) -> (result: utf8 from source) =
+    result = compiler.utf8_unvalidated(source)
+end trusted
+```
+
 ## The backend and its toolchain
 
 ### L0500

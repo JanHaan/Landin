@@ -6652,6 +6652,7 @@ def check_coverage_registers(full_run):
             "source.lexical", "source.structure", "declarations.names",
             "types.values", "text.literal-storage", "text.indexing",
             "text.conversion", "text.slicing", "text.traversal",
+            "text.unvalidated",
             "float.ieee",
             "conversion.integer", "conversion.float-width",
             "conversion.integer-to-float",

@@ -73,7 +73,8 @@ end outlet
 --- `over` or in storage that `growing` takes from an allocator.  A value
 --- the caller keeps and edits, passing it `inout` to every append; `used`
 --- lends what it holds.  It is bytes, not `utf8`: an append of bytes or of
---- a host string writes them as they are.
+--- a host string writes them as they are.  A `utf8_builder` holds only
+--- text.
 public builder: type = builder_value
 
 --- A builder over the caller's `buffer`, empty, which never grows: an
@@ -292,6 +293,20 @@ public append_host: (inout into: builder, value: host_string)
                     -> none ! no_space =
     try append(into, value.bytes)
 end append_host
+
+--- Append the UTF-8 encoding of `scalar`, one to four bytes, as `encode`
+--- writes it.  A surrogate or a value above U+10FFFF reports
+--- `invalid_scalar`, before a scalar that does not fit reports `no_space`,
+--- and either leaves the builder as it was.
+public append_scalar: (inout into: builder, scalar: u32)
+                      -> none ! no_space | invalid_scalar =
+    count: usize = encoded_width(scalar)
+    fail invalid_scalar when count == 0
+    try room(into, count)
+    ends: usize = into.used + count
+    stored(scalar, count, into.buffer[into.used..<ends])
+    into.used = ends
+end append_scalar
 
 --  The library's one decimal writer (D355), at each width so that a
 --  32-bit image writes a `u32` or a `usize` with 32-bit division: the
@@ -520,3 +535,140 @@ public align_left: (inout into: builder, start: usize, width: usize,
     mem.fill(into.buffer[into.used..<ends], fill)
     into.used = ends
 end align_left
+
+--  A `utf8_builder` is a byte builder that holds only whole scalars: its
+--  appends are text, scalars and numbers, whose digits and sign are ASCII,
+--  and it is cut back only to a scalar's start, so its bytes are UTF-8
+--  whatever was appended to it and in whatever order.
+utf8_builder_value: type = struct
+    inner: builder_value
+end utf8_builder_value
+
+--- Text being built that is always UTF-8: a builder over a buffer the
+--- caller gave `utf8_over`, which takes text, scalars and numbers and
+--- nothing else, since bytes or a host string could be anything.  Each
+--- call is the byte builder's with `utf8_` before it, and writes the same
+--- bytes: whole, or `no_space` and the builder left as it was.
+public utf8_builder: type = utf8_builder_value
+
+--- A `utf8_builder` over the caller's `buffer`, empty, which never grows,
+--- as `over`'s builder does not.
+public utf8_over: (buffer: []mut u8) -> (result: utf8_builder from buffer) =
+    result = (inner: over(buffer))
+end utf8_over
+
+--- The text written so far, as bytes, lent from the builder until it is
+--- next changed.  They are UTF-8 however the builder was used.
+public utf8_bytes: (source: utf8_builder) -> (bytes: []u8 from source) =
+    bytes = source.inner.buffer[0..<source.inner.used]
+end utf8_bytes
+
+--- The text written so far, lent from the builder until it is next
+--- changed.  Nothing is scanned: every append wrote whole scalars and
+--- every cut kept them, so the bytes are UTF-8 already.
+public utf8_used: (source: utf8_builder) -> (result: utf8 from source) =
+    held: []u8 = source.inner.buffer[0..<source.inner.used]
+    unchecked begin
+        --  Valid by construction (D948), so not validated again (D949).
+        result = compiler.utf8_unvalidated(held)
+    end unchecked
+end utf8_used
+
+--- How many bytes have been written: the offset the next piece begins
+--- at, which is always a scalar's start.
+public utf8_length: (source: utf8_builder) -> (count: usize) =
+    count = source.inner.used
+end utf8_length
+
+--- How many bytes the builder holds before it fills: its buffer's length.
+public utf8_capacity: (source: utf8_builder) -> (count: usize) =
+    count = lenof source.inner.buffer
+end utf8_capacity
+
+--- Forget everything written, keeping the buffer for the next text.
+public utf8_clear: (inout target: utf8_builder) -> none =
+    target.inner.used = 0
+end utf8_clear
+
+--- Keep the whole scalars of the first `count` bytes written: a count
+--- inside a scalar keeps only the scalars before it, so the text stays
+--- UTF-8, and a count at or past the length changes nothing.  A count an
+--- earlier `utf8_length` gave is always a scalar's start.
+public utf8_truncate: (inout target: utf8_builder, count: usize) -> none =
+    return when count >= target.inner.used
+    mut kept: usize = count
+    --  The byte at `kept` is the first one cut; a continuation byte there
+    --  means the cut would split its scalar.
+    while kept > 0 and target.inner.buffer[kept] >= 128
+      and target.inner.buffer[kept] < 192
+    do
+        dec kept
+    end while
+    target.inner.used = kept
+end utf8_truncate
+
+--- Append text.
+public utf8_append_text: (inout into: utf8_builder, value: utf8)
+                         -> none ! no_space =
+    try append(into.inner, bytes(value))
+end utf8_append_text
+
+--- Append the UTF-8 encoding of `scalar`, as `append_scalar` does.
+public utf8_append_scalar: (inout into: utf8_builder, scalar: u32)
+                           -> none ! no_space | invalid_scalar =
+    try append_scalar(into.inner, scalar)
+end utf8_append_scalar
+
+--- Append a `u32` in decimal, as `append_u32` does.
+public utf8_append_u32: (inout into: utf8_builder, value: u32)
+                        -> none ! no_space =
+    try decimal_u32(into.inner, value)
+end utf8_append_u32
+
+--- Append a `u64` in decimal.
+public utf8_append_u64: (inout into: utf8_builder, value: u64)
+                        -> none ! no_space =
+    try decimal_u64(into.inner, value)
+end utf8_append_u64
+
+--- Append a `usize` in decimal, at the target's width.
+public utf8_append_usize: (inout into: utf8_builder, value: usize)
+                          -> none ! no_space =
+    try decimal_usize(into.inner, value)
+end utf8_append_usize
+
+--- Append an `i32` in decimal, with a `-` before a negative value.
+public utf8_append_i32: (inout into: utf8_builder, value: i32)
+                        -> none ! no_space =
+    try append_i32(into.inner, value)
+end utf8_append_i32
+
+--- Append an `i64` in decimal, signed as `utf8_append_i32` is.
+public utf8_append_i64: (inout into: utf8_builder, value: i64)
+                        -> none ! no_space =
+    try append_i64(into.inner, value)
+end utf8_append_i64
+
+--- Append an `isize` in decimal, signed as `utf8_append_i32` is.
+public utf8_append_isize: (inout into: utf8_builder, value: isize)
+                          -> none ! no_space =
+    try append_isize(into.inner, value)
+end utf8_append_isize
+
+--- Append a `u32` in lower-case hexadecimal, as `append_hex_u32` does.
+public utf8_append_hex_u32: (inout into: utf8_builder, value: u32)
+                            -> none ! no_space =
+    try append_hex_u32(into.inner, value)
+end utf8_append_hex_u32
+
+--- Append a `u64` in lower-case hexadecimal.
+public utf8_append_hex_u64: (inout into: utf8_builder, value: u64)
+                            -> none ! no_space =
+    try append_hex_u64(into.inner, value)
+end utf8_append_hex_u64
+
+--- Append a `usize` in lower-case hexadecimal.
+public utf8_append_hex_usize: (inout into: utf8_builder, value: usize)
+                              -> none ! no_space =
+    try append_hex_usize(into.inner, value)
+end utf8_append_hex_usize

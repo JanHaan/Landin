@@ -1,0 +1,121 @@
+--  The encoder at every width's first and last scalar, beside the
+--  surrogates, and its refusals: a value that is no scalar, and a scalar
+--  that does not fit, each leaving the caller's buffer as it was.  The
+--  byte builder's `append_scalar` writes the same bytes and refuses the
+--  same way, its length and bytes unchanged.
+import core/cmp
+import core/text
+
+--  Each scalar, its width and its bytes, padded with zeros.
+scalars: [11]u32 = [0, 0x7f, 0x80, 0x7ff, 0x800, 0xd7ff, 0xe000, 0xffff,
+                    0x10000, 0x1f600, 0x10ffff]
+widths: [11]usize = [1, 1, 2, 2, 3, 3, 3, 3, 4, 4, 4]
+encodings: [11][4]u8 = [[0, 0, 0, 0], [0x7f, 0, 0, 0], [0xc2, 0x80, 0, 0],
+                        [0xdf, 0xbf, 0, 0], [0xe0, 0xa0, 0x80, 0],
+                        [0xed, 0x9f, 0xbf, 0], [0xee, 0x80, 0x80, 0],
+                        [0xef, 0xbf, 0xbf, 0], [0xf0, 0x90, 0x80, 0x80],
+                        [0xf0, 0x9f, 0x98, 0x80], [0xf4, 0x8f, 0xbf, 0xbf]]
+
+--  Whether every byte of `buffer` is still `fill`.
+untouched: (buffer: []u8, fill: u8) -> (yes: bool) =
+    yes = false
+    for byte in buffer do
+        return when byte <> fill
+    end for
+    yes = true
+end untouched
+
+--  Each scalar encoded after two bytes of a buffer, exactly its bytes
+--  written and nothing either side, and read back from them as text.
+widths_hold: () -> (yes: bool) =
+    yes = false
+    for index in usize(0)..<usize(11) do
+        mut buffer: [8]u8 = [0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa]
+        count: usize = text.encode(scalars[index], buffer[2..<8])
+            else begin
+                return
+            end
+        return when count <> widths[index]
+        ends: usize = 2 + count
+        expected: [4]u8 = encodings[index]
+        return when cmp.compare(buffer[2..<ends], expected[0..<count])
+          <> cmp.equal
+          or not untouched(buffer[0..<2], 0xaa)
+          or not untouched(buffer[ends..<8], 0xaa)
+        decoded: utf8 = text.from_bytes(buffer[2..<ends]) else begin
+            return
+        end
+        return when decoded[text.front(decoded)] <> scalars[index]
+          or text.offset(text.step(decoded, text.front(decoded))) <> count
+    end for
+    yes = true
+end widths_hold
+
+--  A surrogate at either end, the first value past U+10FFFF and the
+--  largest `u32` are no scalar, even where they would not fit; a scalar
+--  of each width one byte too wide for its room does not fit.  Neither
+--  refusal writes a byte.
+refusals_hold: () -> (yes: bool) =
+    yes = false
+    invalid: [5]u32 = [0xd800, 0xdbff, 0xdfff, 0x110000, 0xffffffff]
+    for value in invalid do
+        mut buffer: [4]u8 = [0x55, 0x55, 0x55, 0x55]
+        _ = text.encode(value, buffer[0..<4]) else (problem)
+            return when problem <> text.invalid_scalar
+              or not untouched(buffer[0..<4], 0x55)
+            _ = text.encode(value, buffer[0..<0]) else (narrow)
+                return when narrow <> text.invalid_scalar
+                0
+            end
+            0
+        end
+        return when not untouched(buffer[0..<4], 0x55)
+    end for
+    roomy: [4]u32 = [0x41, 0x80, 0x800, 0x10000]
+    for index in usize(0)..<usize(4) do
+        mut buffer: [4]u8 = [0x55, 0x55, 0x55, 0x55]
+        _ = text.encode(roomy[index], buffer[0..<index]) else (problem)
+            return when problem <> text.no_space
+            0
+        end
+        return when not untouched(buffer[0..<4], 0x55)
+    end for
+    yes = true
+end refusals_hold
+
+--  `append_scalar` writes the encoder's bytes; a value that is no scalar,
+--  or a scalar with too little room, leaves the builder's length and its
+--  buffer as they were.
+appends_hold: () -> (yes: bool) ! text.no_space | text.invalid_scalar =
+    yes = false
+    mut storage: [8]u8 = [0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55]
+    mut line := text.over(storage[0..<8])
+    try text.append_byte(line, u8('<'))
+    try text.append_scalar(line, 0xe9)
+    try text.append_scalar(line, 0x2192)
+    return when cmp.compare(text.used(line), text.bytes("<\u{e9}\u{2192}")) <> cmp.equal
+    text.append_scalar(line, 0xdc00) else (problem)
+        return when problem <> text.invalid_scalar or text.length(line) <> 6
+        text.append_scalar(line, 0x1f600) else (again)
+            return when again <> text.no_space or text.length(line) <> 6
+              or not untouched(storage[6..<8], 0x55)
+            try text.append_scalar(line, 0x7e)
+            yes = cmp.compare(text.used(line), text.bytes("<\u{e9}\u{2192}~"))
+                  == cmp.equal
+            return
+        end
+        return
+    end
+end appends_hold
+
+public main: () -> (code: i32) =
+    code = 1
+    return when not widths_hold()
+    code = 2
+    return when not refusals_hold()
+    code = 3
+    ok := appends_hold() else false
+    if ok then
+        code = 42
+    end if
+end main

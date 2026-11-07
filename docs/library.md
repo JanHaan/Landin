@@ -386,11 +386,15 @@ The comparison must be a strict weak ordering while it runs.
 
 ## core/text
 
-Byte cursors, validated UTF-8 views, byte search, a text builder, formatting and parsing numbers.
+Byte cursors, validated UTF-8 views, positions and searches inside them, a scalar encoder, two text builders, formatting and parsing numbers.
 
 | Call | What it does |
 |---|---|
 | `text.from_bytes`, `text.valid` | Check bytes are UTF-8, as a view or as a yes or no. |
+| `text.front`, `text.step`, `text.done`, `text.width` | Walk text a scalar at a time, keeping each scalar's byte position. |
+| `text.find`, `text.find_scalar` and their `_from` forms | Find where text or a scalar first occurs. |
+| `text.encode` | Write a scalar's UTF-8 bytes into your buffer. |
+| `text.utf8_over` | Make a builder that only ever holds UTF-8. |
 | `text.over`, `text.growing` | Make a builder over your buffer, or one that grows from an allocator. |
 | `text.append_text`, `text.append_u32` and the rest | Append a piece to a builder. |
 | `text.format` | Append a template with each `{}` filled in. |
@@ -407,11 +411,87 @@ are not, and `valid` answers the same question without a view. The
 `utf8(bytes)` conversion validates too, but traps on malformed input.
 
 A `text.position` indexes `utf8` by byte offset, while a `usize` index
-into `utf8` counts scalars, so do not index with `offset(position)`. This
-module does not turn byte offsets into validated character boundaries.
+into `utf8` counts scalars, so do not index with `offset(position)`.
+`text.cursor` makes a position at any offset you give it and checks
+nothing; the positions below are always on a scalar's start.
 
 UTF-8 equality, hashing and ordering use encoded bytes, with no
 normalization or locale collation.
+
+### Positions and searches in text
+
+The byte cursors step a byte over `[]u8`. Over `utf8`, positions step a
+whole scalar, so each one is where a scalar starts, or the end:
+
+| Call | What it does |
+|---|---|
+| `front(source)` | The first scalar's position, offset zero. |
+| `done(source, at)` | Whether `at` is at the end. |
+| `width(source, at)` | How many bytes, one to four, the scalar at `at` takes. |
+| `step(source, at)` | The position after the scalar at `at`. |
+| `find(source, sought)` | Where `sought` first begins, or `not_found`. |
+| `find_from(source, sought, at)` | The same, searching from `at`. |
+| `find_scalar(source, scalar)`, `find_scalar_from` | Where a scalar first is, or `not_found`. |
+
+Read the scalar at a position as `source[at]`. Walk the text by stepping
+until `done`, as this check of each scalar of a key and where it begins
+does:
+
+```landin
+--  The key's scalars and where each begins, read by stepping.
+key_steps: (key: utf8) -> (yes: bool) =
+    scalars: [5]u32 = ['n', 'a', '\u{ef}', 'v', 'e']
+    offsets: [5]usize = [0, 1, 2, 4, 5]
+    widths: [5]usize = [1, 1, 2, 1, 1]
+    yes = false
+    mut at := text.front(key)
+    mut index: usize = 0
+    while not text.done(key, at) do
+        return when index >= 5 or key[at] <> scalars[index]
+          or text.offset(at) <> offsets[index]
+          or text.width(key, at) <> widths[index]
+        at = text.step(key, at)
+        inc index
+    end while
+    yes = index == 5 and text.offset(at) == lenof key
+end key_steps
+```
+
+`step` and `width` read the scalar there, so they trap where `source[at]`
+traps: at the end and inside a scalar. A search from a position inside a
+scalar traps too.
+
+A match begins and ends where scalars do, so the text before it, the
+match and the text after it are each a range of the source, `utf8` with
+the source's origin and nothing copied. This splits a record at its first
+`=`:
+
+```landin
+--  The key before the first `=` and the value after it.
+split: (record: utf8) -> (result: entry from record) ! text.not_found =
+    equals := try text.find_scalar(record, '=')
+    value_at: usize = text.offset(text.step(record, equals))
+    result = (key: record[0..<text.offset(equals)],
+              value: record[value_at..<lenof record])
+end split
+```
+
+[The splitter](../compiler/tests/fixtures/runtime/core-text-utf8-split/main.ldn)
+goes on to take each field between arrows with `find_from`. Empty sought
+text is found where the search begins, as `contains` finds it. A surrogate
+is in no text, so `find_scalar` reports `not_found` for one. Searches are
+`contains`'s Two-Way search, linear in the two lengths, with no table and
+no allocation.
+
+### Encoding a scalar
+
+`encode(scalar, into)` writes the scalar's UTF-8 bytes at the front of
+`into` and returns how many it wrote, one to four. To write at an offset,
+pass what follows it, `buffer[at..<lenof buffer]`.
+
+A surrogate, U+D800 to U+DFFF, or a value above U+10FFFF is
+`invalid_scalar`. A scalar that does not fit is `no_space`. Either refusal
+writes nothing, and `invalid_scalar` comes first whatever the room.
 
 ### Host strings
 
@@ -453,6 +533,7 @@ builder as it was:
 | `append` | bytes as they are |
 | `append_byte` | one byte |
 | `append_text` | a `utf8` |
+| `append_scalar` | a scalar's UTF-8 bytes, as `encode` writes them, or `invalid_scalar` |
 | `append_host` | a host string's bytes |
 | `append_u32`, `append_u64`, `append_usize` | decimal |
 | `append_i32`, `append_i64`, `append_isize` | decimal, with a `-` before a negative value |
@@ -483,6 +564,26 @@ end append_right
 
 A builder over `mut buffer: [64]u8 = zeroed` is `text.over(buffer)`, and
 `io.put(out, text.used(line))` prints what it holds.
+
+### The UTF-8 builder
+
+A `builder` holds bytes, which need not be UTF-8: `append` takes any. A
+`utf8_builder`, which `utf8_over(buffer)` makes over your buffer, holds
+only UTF-8, because it takes only text, scalars and numbers:
+
+| Call | What it does |
+|---|---|
+| `utf8_append_text`, `utf8_append_scalar` | Append text or a scalar. |
+| `utf8_append_u32` and the other number appends | Append a number, as the builder's call without `utf8_` does. |
+| `utf8_used` | Lend the text written as one `utf8`, until it next changes; nothing is scanned. |
+| `utf8_bytes` | Lend the same as bytes. |
+| `utf8_length`, `utf8_capacity`, `utf8_clear` | As the builder's. |
+| `utf8_truncate` | Cut back to a length, never inside a scalar. |
+
+Each append writes its whole piece, or reports `no_space` and leaves the
+builder as it was. A cut inside a scalar keeps only the scalars before it.
+There is no byte append, alignment or `format` into it, since each of
+those can write any bytes.
 
 ### Formatting
 

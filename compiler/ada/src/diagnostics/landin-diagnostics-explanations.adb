@@ -1365,6 +1365,18 @@ package body Landin.Diagnostics.Explanations is
                & "ert its `f64` value, or `f32(...)` to keep the rounding "
                & "on purpose. A literal whose rounding gives the same inte"
                & "ger, as `i64(45.7)` does, is converted as written.",
+            when Catalogue.Unvalidated_Text_Checked =>
+               "`compiler.utf8_unvalidated(bytes)` makes text of bytes w"
+               & "ithout reading them (D949), so it is admitted only where"
+               & " the program says it answers for them: inside `unchecked"
+               & " begin ... end unchecked`. Bytes that are not UTF-8 then"
+               & " go unnoticed, and what reads them as text reads them wr"
+               & "ongly. Where the bytes come from input, convert them wit"
+               & "h `utf8(bytes)`, which traps on malformed bytes, or `tex"
+               & "t.from_bytes`, which reports `invalid_text`. Where they "
+               & "are valid by construction, because the program has just "
+               & "checked them or wrote only whole scalars, put the call i"
+               & "n an `unchecked` region.",
             when Catalogue.No_Toolchain =>
                "The requested output cannot be made with the selected ta"
                & "rget, settings or available toolchain [1550]. The diagno"
@@ -2661,6 +2673,13 @@ package body Landin.Diagnostics.Explanations is
                & "    n = u64(1.0e18)"
                & LF
                & "end big"
+               & LF,
+            when Catalogue.Unvalidated_Text_Checked =>
+               "trusted: (source: []u8) -> (result: utf8 from source) ="
+               & LF
+               & "    result = compiler.utf8_unvalidated(source)"
+               & LF
+               & "end trusted"
                & LF,
             when Catalogue.No_Toolchain =>
                "",

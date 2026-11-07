@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: within a 32 KiB firmware image, a console line in a receive buffer is checked as text, split at a found = and a found arrow into views of the buffer, its value's scalars stepped at their offsets, and encoded again scalar by scalar into a fixed reply that refuses a four-byte scalar in three bytes with no_space and a surrogate with invalid_scalar, writing nothing, while a scalar it does not hold is text.not_found
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0250, 0570, 0600, 0610, 0940, 1030
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0

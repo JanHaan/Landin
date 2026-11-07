@@ -24487,6 +24487,8 @@ package body Landin.Stages.Checking is
                   Held := Synthesise (Of_Tree, Operand);
                   if Landin.Configuration.Unreachable_Call
                     (Spellings.all, Of_Tree, Operand)
+                    or else Landin.Configuration.Unvalidated_Text_Call
+                      (Spellings.all, Of_Tree, Operand)
                   then
                      Bad.Report
                        (Item    => Bad.Error_Contract_Violated,
@@ -24497,7 +24499,11 @@ package body Landin.Stages.Checking is
                         Note    => "[0960]: `try` is for the declared"
                                    & " error outcome of a call",
                         Related => Syn.Origin (Of_Tree, Operand),
-                        Because => "this call never returns",
+                        Because =>
+                          (if Landin.Configuration.Unreachable_Call
+                             (Spellings.all, Of_Tree, Operand)
+                           then "this call never returns"
+                           else "this call reads nothing it could refuse"),
                         Into    => Found);
                      return Kept (Ty.Ill_Typed);
                   end if;
@@ -24875,6 +24881,138 @@ package body Landin.Stages.Checking is
                      return Kept (Ty.Ill_Typed);
                   end if;
                   return Kept (Ty.No_Value);
+               end if;
+
+               --  D949: bytes become `utf8` as D199's conversion makes it,
+               --  base, length, origin and read-only permission kept, with
+               --  no scan, so only inside an `unchecked` region.  A writable
+               --  byte view weakens to the read-only operand.  The mark is
+               --  the conversion's, which origins and lowering both read.
+               if Landin.Configuration.Unvalidated_Text_Call
+                 (Spellings.all, Of_Tree, Node)
+               then
+                  declare
+                     --  The region is lexical and stops at an anonymous
+                     --  function's body, as lowering's does (D187).
+                     function Inside_Unchecked return Boolean;
+
+                     function Inside_Unchecked return Boolean is
+                        Outer : Syn.Node_Id := Syn.Enclosing (Of_Tree, Node);
+                     begin
+                        while Outer /= Syn.No_Node loop
+                           case Syn.Kind (Of_Tree, Outer) is
+                              when Syn.Bare_Block =>
+                                 if Syn.Is_Unchecked (Of_Tree, Outer) then
+                                    return True;
+                                 end if;
+                              when Syn.Anonymous_Function
+                                 | Syn.Function_Declaration =>
+                                 return False;
+                              when others =>
+                                 null;
+                           end case;
+                           Outer := Syn.Enclosing (Of_Tree, Outer);
+                        end loop;
+                        return False;
+                     end Inside_Unchecked;
+                  begin
+                     if Syn.Argument_Count (Of_Tree, Node) /= 1 then
+                        Bad.Report
+                          (Item    => Bad.Call_Argument_Match,
+                           Source  => Syn.Source_Of (Of_Tree),
+                           Where   => Syn.Where (Of_Tree, Node),
+                           Message => "this call gives "
+                                      & Counted (Syn.Argument_Count
+                                                   (Of_Tree, Node),
+                                                 "argument")
+                                      & " and compiler.utf8_unvalidated"
+                                      & " takes one",
+                           Note    => "D949: compiler.utf8_unvalidated"
+                                      & " takes the one byte view it makes"
+                                      & " text of",
+                           Related => Syn.Origin
+                             (Of_Tree, Syn.Callee_Of (Of_Tree, Node)),
+                           Because => "this builtin",
+                           Into    => Found);
+                        return Kept (Ty.Ill_Typed);
+                     elsif Syn.Recovery_Of (Of_Tree, Node) /= Syn.No_Node
+                     then
+                        Bad.Report
+                          (Item    => Bad.Error_Contract_Violated,
+                           Source  => Syn.Source_Of (Of_Tree),
+                           Where   => Syn.Where
+                             (Of_Tree, Syn.Recovery_Of (Of_Tree, Node)),
+                           Message => "this call cannot fail, so it has no"
+                                      & " error for `else` to handle",
+                           Note    => "[1030]: call-site `else` handles"
+                                      & " only the declared error channel",
+                           Related => Syn.Origin (Of_Tree, Node),
+                           Because => "this call reads nothing it could"
+                                      & " refuse",
+                           Into    => Found);
+                        return Kept (Ty.Ill_Typed);
+                     elsif not Inside_Unchecked then
+                        Bad.Report
+                          (Item    => Bad.Unvalidated_Text_Checked,
+                           Source  => Syn.Source_Of (Of_Tree),
+                           Where   => Syn.Where (Of_Tree, Node),
+                           Message => "compiler.utf8_unvalidated makes text"
+                                      & " of bytes without reading them, so"
+                                      & " it is admitted only in an"
+                                      & " `unchecked` region",
+                           Note    => "D949: convert input with"
+                                      & " `utf8(bytes)` or"
+                                      & " `text.from_bytes`, which check"
+                                      & " it, or write `unchecked begin ..."
+                                      & " end unchecked` around a call whose"
+                                      & " bytes are valid by construction",
+                           Into    => Found);
+                        return Kept (Ty.Ill_Typed);
+                     end if;
+                     declare
+                        Value : constant Syn.Node_Id :=
+                          Syn.Nth_Argument (Of_Tree, Node, 1);
+                        Got : constant Ty.Type_Kind :=
+                          Synthesise (Of_Tree, Value);
+                        Source : Landin.Checking.Reference_Descriptor;
+                     begin
+                        if Got = Ty.Ill_Typed then
+                           return Kept (Ty.Ill_Typed);
+                        end if;
+                        if Got = Ty.Slice_Value then
+                           Source := Landin.Checking.Descriptor_Of
+                             (Types.all, Landin.Checking.Reference_Of
+                                (Types.all, Of_Tree, Value));
+                        end if;
+                        if Got /= Ty.Slice_Value
+                          or else Source.View /= Ty.Ordinary_View
+                          or else Source.Referent /= Ty.U8
+                        then
+                           Bad.Report
+                             (Item    => Bad.Type_Mismatch,
+                              Source  => Syn.Source_Of (Of_Tree),
+                              Where   => Syn.Where (Of_Tree, Value),
+                              Message => "compiler.utf8_unvalidated makes"
+                                         & " text of a byte view, `[]u8`",
+                              Note    => "D949: its operand is the `[]u8`"
+                                         & " D199's conversion to `utf8`"
+                                         & " takes",
+                              Related => Syn.Origin
+                                (Of_Tree, Syn.Callee_Of (Of_Tree, Node)),
+                              Because => "this builtin",
+                              Into    => Found);
+                           Landin.Checking.Refuse (Types.all, Of_Tree, Node);
+                           return Kept (Ty.Ill_Typed);
+                        end if;
+                        Landin.Checking.Note_Reference
+                          (Types.all, Of_Tree, Node,
+                           Text_Reference (Ty.Utf8_View));
+                        Landin.Checking.Note_Text_Conversion
+                          (Types.all, Of_Tree, Node,
+                           Landin.Checking.Bytes_To_Utf8_Unvalidated);
+                        return Kept (Ty.Slice_Value);
+                     end;
+                  end;
                end if;
 
                declare

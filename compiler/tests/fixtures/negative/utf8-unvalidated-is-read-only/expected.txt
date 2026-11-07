@@ -1,0 +1,20 @@
+error[L0301]: this does not have the required slice type and shape
+  --> ../tests/fixtures/negative/utf8-unvalidated-is-read-only/program.ldn:5:18
+  |
+5 |         result = compiler.utf8_unvalidated(buffer)
+  |                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/utf8-unvalidated-is-read-only/program.ldn:5:9
+  |
+5 |         result = compiler.utf8_unvalidated(buffer)
+  |         ^^^^^^ the reference place written here
+  = note: The value must match the complete type, shape and reference permissions required by this context
+error[L0301]: compiler.utf8_unvalidated makes text of a byte view, `[]u8`
+  --> ../tests/fixtures/negative/utf8-unvalidated-is-read-only/program.ldn:11:44
+   |
+11 |         result = compiler.utf8_unvalidated(values)
+   |                                            ^^^^^^
+  --> ../tests/fixtures/negative/utf8-unvalidated-is-read-only/program.ldn:11:18
+   |
+11 |         result = compiler.utf8_unvalidated(values)
+   |                  ^^^^^^^^^^^^^^^^^^^^^^^^^ this builtin
+  = note: D949: its operand is the `[]u8` D199's conversion to `utf8` takes

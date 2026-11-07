@@ -27,6 +27,11 @@ public invalid_number: atom
 public number_overflow: atom
 --- The destination does not have room for the complete requested output.
 public no_space: atom
+--- The sought text or scalar does not occur where it was searched for.
+public not_found: atom
+--- The value is not a Unicode scalar: it is a surrogate, U+D800 to U+DFFF,
+--- or above U+10FFFF, and so has no UTF-8 encoding.
+public invalid_scalar: atom
 
 byte_view: type = []u8
 
@@ -174,9 +179,9 @@ public valid: (source: []u8) -> (yes: bool) =
 end valid
 
 --  The checked adapters report foreign or file-data defects before the
---  ordinary conversion establishes utf8's invariant.  Their result is a
---  source-derived view; no allocation, copy or canonical empty carrier is
---  introduced.
+--  view establishes utf8's invariant, which `valid` has then checked once.
+--  Their result is a source-derived view; no allocation, copy or canonical
+--  empty carrier is introduced.
 --- Validate a byte slice and lend it as UTF-8 without allocation. Reports
 --- `invalid_text`; the caller keeps the bytes alive and valid while the view
 --- is used.
@@ -187,7 +192,11 @@ end valid
 public from_bytes: (source: []u8)
                    -> (result: utf8 from source) ! invalid_text =
     fail invalid_text when not valid(source)
-    result = utf8(source)
+    unchecked begin
+        --  `valid` has just read every byte, so they are not read again
+        --  (D949).
+        result = compiler.utf8_unvalidated(source)
+    end unchecked
 end from_bytes
 
 --- Validate a terminated C string and lend it as UTF-8. The pointer must
@@ -303,7 +312,13 @@ public contains: (source: utf8, sought: utf8) -> (yes: bool) =
         yes = false
         return
     end if
+    yes = first_match(source_bytes, sought_bytes) < lenof source_bytes
+end contains
 
+--  Where `sought_bytes`, nonempty and no longer than `source_bytes`, first
+--  occurs there, or the length of `source_bytes` when it does not occur:
+--  `contains`'s Two-Way search, which every `find` shares.
+first_match: (source_bytes: []u8, sought_bytes: []u8) -> (found: usize) =
     sought_length: usize = lenof sought_bytes
     mut cut: usize = 0
     mut period: usize = 1
@@ -387,7 +402,7 @@ public contains: (source: utf8, sought: utf8) -> (yes: bool) =
                 inc index
             end while
             if index >= cut then
-                yes = true
+                found = start
                 return
             end if
             start += period
@@ -396,8 +411,152 @@ public contains: (source: utf8, sought: utf8) -> (yes: bool) =
             end if
         end if
     end while
-    yes = false
-end contains
+    found = lenof source_bytes
+end first_match
+
+--  Positions over `utf8` step a whole scalar at a time.  The byte cursors
+--  above, `first`, `at_end` and `next`, take bytes and step one byte; these
+--  take the text, and read the scalar at a position as `source[at]` does,
+--  so they trap where it traps, at the end and on a continuation byte
+--  (D182, D249).  Every position they and the searches return is a
+--  scalar's start or the end, which is what `source[at]` and D183's
+--  `source[a..<b]` need of an offset.
+
+--- The position of the first scalar of `source`, or of its end when it is
+--- empty: byte offset zero.  Step through the text with `step` until
+--- `done`, reading each scalar as `source[at]`.
+public front: (source: utf8) -> (at: position) =
+    _ = source
+    at = (offset: 0)
+end front
+
+--- Whether no scalar begins at `at`: it is at the end of `source`, or past
+--- it.
+public done: (source: utf8, at: position) -> (yes: bool) =
+    yes = at.offset >= lenof source
+end done
+
+--- How many bytes, one to four, encode the scalar at `at`.  Traps at the
+--- end and on a continuation byte, as `source[at]` does.
+public width: (source: utf8, at: position) -> (count: usize) =
+    count = encoded_width(source[at])
+end width
+
+--- The position just past the scalar at `at`: the next scalar's, or the
+--- end.  Traps where `width` does, so it never steps into a scalar.
+public step: (source: utf8, at: position) -> (after: position) =
+    after = (offset: at.offset + width(source, at))
+end step
+
+--- The position where `sought` first occurs in `source`, or `not_found`.
+--- Empty text is found at the start, as `contains` finds it.  The match
+--- begins and ends on scalar boundaries, so `source[text.offset(found)..<
+--- text.offset(found) + lenof sought]` is the match and the parts either
+--- side of it are text too, each a view of `source` with nothing copied.
+public find: (source: utf8, sought: utf8) -> (found: position) ! not_found =
+    found = try find_from(source, sought, front(source))
+end find
+
+--- The position where `sought` first occurs in `source` at or after `at`,
+--- or `not_found`: the match after one `find` returned is found from the
+--- position past it.  Empty text is found at `at`.  A position inside a
+--- scalar or past the end traps, as a range of `source` from it does.
+--- `contains`'s Two-Way search, in time linear in the two lengths and
+--- with no table.
+public find_from: (source: utf8, sought: utf8, at: position)
+                  -> (found: position) ! not_found =
+    found = try found_from(source, bytes(sought), at)
+end find_from
+
+--- The position of the first scalar of `source` equal to `scalar`, or
+--- `not_found`, which a surrogate or a value above U+10FFFF always is,
+--- since no text holds one.
+public find_scalar: (source: utf8, scalar: u32) -> (found: position)
+                    ! not_found =
+    found = try find_scalar_from(source, scalar, front(source))
+end find_scalar
+
+--- The position of the first scalar of `source` equal to `scalar` at or
+--- after `at`, or `not_found`.  A position inside a scalar or past the end
+--- traps, as `find_from`'s does.
+public find_scalar_from: (source: utf8, scalar: u32, at: position)
+                         -> (found: position) ! not_found =
+    count: usize = encoded_width(scalar)
+    fail not_found when count == 0
+    mut encoded: [4]u8 = zeroed
+    stored(scalar, count, encoded[0..<count])
+    found = try found_from(source, encoded[0..<count], at)
+end find_scalar_from
+
+--  Where `sought_bytes`, the encoding of whole scalars, first occurs in
+--  `source` at or after `at`.  A leading byte is never a continuation
+--  byte, so a match begins and ends on scalars of the text.
+found_from: (source: utf8, sought_bytes: []u8, at: position)
+            -> (found: position) ! not_found =
+    rest: []u8 = bytes(source[at.offset..<lenof source])
+    fail not_found when lenof sought_bytes > lenof rest
+    found = (offset: at.offset)
+    return when lenof sought_bytes == 0
+    index: usize = first_match(rest, sought_bytes)
+    fail not_found when index == lenof rest
+    found = (offset: at.offset + index)
+end found_from
+
+--  The bytes UTF-8 takes for `scalar`, one to four, or zero when it is a
+--  surrogate or above U+10FFFF and so no scalar.
+encoded_width: (scalar: u32) -> (count: usize) =
+    count = if scalar < 0x80 then
+                1
+            elsif scalar < 0x800 then
+                2
+            elsif scalar >= 0xd800 and scalar <= 0xdfff then
+                0
+            elsif scalar < 0x10000 then
+                3
+            elsif scalar <= 0x10ffff then
+                4
+            else
+                0
+            end if
+end encoded_width
+
+--  Write the `count` bytes encoding `scalar` into `into`, which is exactly
+--  that long: the continuation bytes from the last, six bits each, then
+--  the leading byte with what is left.
+stored: (scalar: u32, count: usize, into: []mut u8) -> none =
+    mut remaining: u32 = scalar
+    mut at: usize = count
+    while at > 1 do
+        dec at
+        into[at] = u8(remaining & 63) | 128
+        remaining = remaining >> 6
+    end while
+    lead: u32 = if count == 1 then
+                    0
+                elsif count == 2 then
+                    192
+                elsif count == 3 then
+                    224
+                else
+                    240
+                end if
+    into[0] = u8(remaining | lead)
+end stored
+
+--- Encode `scalar` as UTF-8 at the front of `into` and say how many bytes,
+--- one to four, it took; encode at an offset by passing what follows it,
+--- `buffer[at..<lenof buffer]`.  A surrogate, U+D800 to U+DFFF, or a value
+--- above U+10FFFF reports `invalid_scalar`, before a scalar whose bytes do
+--- not fit reports `no_space`; either refusal writes nothing, so `into` is
+--- as it was.  The builders' `append_scalar` and `utf8_append_scalar`
+--- write the same bytes.
+public encode: (scalar: u32, into: []mut u8)
+               -> (count: usize) ! invalid_scalar | no_space =
+    count = encoded_width(scalar)
+    fail invalid_scalar when count == 0
+    fail no_space when count > lenof into
+    stored(scalar, count, into[0..<count])
+end encode
 
 --- Hash UTF-8 encoded bytes consistently with `equal` and the byte-slice hash.
 --- No Unicode normalization or cryptographic guarantee is provided.

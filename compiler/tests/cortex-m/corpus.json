@@ -954,6 +954,15 @@
     "runtime/core-text-decimal-widths": {
       "mode": "execute"
     },
+    "runtime/core-text-encode": {
+      "mode": "execute"
+    },
+    "runtime/core-text-find": {
+      "mode": "execute"
+    },
+    "runtime/core-text-find-inside-scalar-traps": {
+      "mode": "execute"
+    },
     "runtime/core-text-format": {
       "mode": "execute",
       "profile_limit": "selected-image",
@@ -969,6 +978,25 @@
       "mode": "execute",
       "profile_limit": "selected-image",
       "reason": "Selected Cortex-M0 profile: 32 KiB flash, 16 KiB RAM with 4 KiB stack. Every profile is attempted; only actual flash/RAM overflow or a measured minimum frame/static extent outside this map is a retained limit. Larger profiles and general large-image placement remain open work."
+    },
+    "runtime/core-text-step-at-end-traps": {
+      "mode": "execute"
+    },
+    "runtime/core-text-utf8-builder": {
+      "mode": "execute",
+      "profile_limit": "selected-image",
+      "reason": "Every append of the builder that holds only text at each width's extremes, every refusal and every cut, each checked as text, as bytes and by the validator, needs about 36 KiB of flash at size/auto and 41 KiB at none/off, overflowing the 32 KiB profile by 3.1 and 8.6 KiB, for the frame-home reason runtime/core-text-builder gives. Each profile still attempts execution; runtime/core-text-utf8-builder-firmware appends every width and meets both refusals, and runtime/library-shared-text appends, cuts and lends the text, each within its image, and both require execution; this image limit is not runtime evidence."
+    },
+    "runtime/core-text-utf8-builder-firmware": {
+      "mode": "execute"
+    },
+    "runtime/core-text-utf8-firmware": {
+      "mode": "execute"
+    },
+    "runtime/core-text-utf8-split": {
+      "mode": "execute",
+      "profile_limit": "selected-image",
+      "reason": "Splitting a record at a found scalar and at every found arrow, with each part's offsets, widths and shared storage checked, fits at size/off, size/auto and speed/auto, about 30 KiB, and needs about 35 KiB at none/off, overflowing the 32 KiB profile by 2.7 KiB, for the frame-home reason runtime/core-text-builder gives. Each profile still attempts execution and the three that fit must pass; runtime/core-text-utf8-firmware splits a line at a found = and a found arrow into views of its buffer within its image at every profile and requires execution; this image limit is not runtime evidence."
     },
     "runtime/core-tree-count-overflow": {
       "codes": [
@@ -3605,6 +3633,9 @@
       "mode": "execute"
     },
     "runtime/utf8-slice-upper-not-boundary-traps": {
+      "mode": "execute"
+    },
+    "runtime/utf8-unvalidated-does-not-scan": {
       "mode": "execute"
     },
     "runtime/variable-shifts-at-every-width": {

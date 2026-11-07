@@ -1,0 +1,132 @@
+--  Searches that return where text and scalars are: a match at the start,
+--  in the middle across scalars of different widths, at the end, and
+--  none; the empty text, found where the search begins as `contains`
+--  finds it; the search from a position, which walks every match; and
+--  each answer agreeing with `contains`.
+import core/text
+
+--  What `offset_of` gives when `find` reports `not_found`: no text here
+--  is that long.
+nowhere: usize = 1000
+
+--  The first match of `sought` in `source`, as a byte offset, or
+--  `nowhere` when `find` reports `not_found`.
+offset_of: (source: utf8, sought: utf8) -> (offset: usize) =
+    found := text.find(source, sought) else (problem)
+        offset = if problem == text.not_found then nowhere else 2000 end if
+        return
+    end
+    offset = text.offset(found)
+end offset_of
+
+--  Whether the first match of `sought` is at `expected`, the match is the
+--  sought text, and `contains` agrees.
+found_at: (source: utf8, sought: utf8, expected: usize) -> (yes: bool) =
+    offset: usize = offset_of(source, sought)
+    yes = false
+    return when offset <> expected
+    ends: usize = offset + lenof sought
+    yes = text.contains(source, sought)
+          and text.equal(source[offset..<ends], sought)
+end found_at
+
+--  Whether `sought` does not occur, and `contains` agrees.
+absent: (source: utf8, sought: utf8) -> (yes: bool) =
+    yes = offset_of(source, sought) == nowhere
+          and not text.contains(source, sought)
+end absent
+
+--  Each match of `sought` from the start, in order, at `expected`.
+every: (source: utf8, sought: utf8, expected: []usize) -> (yes: bool) =
+    yes = false
+    mut at := text.front(source)
+    mut index: usize = 0
+    loop do
+        found := text.find_from(source, sought, at) else (problem)
+            yes = problem == text.not_found and index == lenof expected
+            return
+        end
+        return when index >= lenof expected
+          or text.offset(found) <> expected[index]
+        at = text.step(source, found)
+        inc index
+    end loop
+end every
+
+public main: () -> (code: i32) =
+    code = 1
+    source: utf8 = "caf\u{e9}\u{2192}na\u{ef}ve caf\u{e9}\u{2192}\u{1f600}"
+    return when not found_at(source, "caf\u{e9}", 0)
+      or not found_at(source, "\u{e9}\u{2192}", 3)
+      or not found_at(source, "na\u{ef}ve", 8)
+      or not found_at(source, "\u{2192}\u{1f600}", 20)
+      or not found_at(source, "\u{1f600}", 23)
+      or not found_at(source, source, 0)
+    code = 2
+    return when not absent(source, "caf\u{e8}")
+      or not absent(source, "\u{1f601}")
+      or not absent(source, "naive")
+      or not absent("", "x")
+      or not absent("caf\u{e9}", "caf\u{e9}s")
+    code = 3
+    --  A periodic sought text, and one whose prefix recurs before it.
+    return when not found_at("aaaaaab", "aaab", 3)
+      or not found_at("abaababab\u{2192}", "ababa", 3)
+      or not absent("abaabaab", "ababa")
+    code = 4
+    --  The empty text is found where the search begins, the end included.
+    return when not found_at(source, "", 0) or not found_at("", "", 0)
+    at_four := text.step(source, text.front(source))
+    from_empty := text.find_from(source, "", at_four) else begin
+        return
+    end
+    return when text.offset(from_empty) <> 1
+    mut ending := text.front(source)
+    while not text.done(source, ending) do
+        ending = text.step(source, ending)
+    end while
+    at_end := text.find_from(source, "", ending) else begin
+        return
+    end
+    return when text.offset(at_end) <> lenof source
+    code = 5
+    --  Every match, each search beginning past the one before.
+    acutes: [2]usize = [3, 18]
+    arrows: [2]usize = [5, 20]
+    return when not every(source, "\u{e9}", acutes[0..<2])
+      or not every(source, "\u{2192}", arrows[0..<2])
+      or not every(source, "q", acutes[0..<0])
+    code = 6
+    --  A scalar of each width, the second arrow from past the first, and a
+    --  scalar the text does not hold; no text holds a surrogate.
+    arrow := text.find_scalar(source, '\u{2192}') else begin
+        return
+    end
+    second := text.find_scalar_from(source, '\u{2192}',
+                                    text.step(source, arrow)) else begin
+                                        return
+                                    end
+    emoji := text.find_scalar(source, '\u{1f600}') else begin
+        return
+    end
+    space := text.find_scalar(source, ' ') else begin
+        return
+    end
+    return when text.offset(arrow) <> 5 or text.offset(second) <> 20
+      or text.offset(emoji) <> 23 or text.offset(space) <> 14
+    code = 7
+    _ = text.find_scalar(source, '\u{2191}') else (problem)
+        return when problem <> text.not_found
+        _ = text.find_scalar(source, 0xd83d) else (surrogate)
+            return when surrogate <> text.not_found
+            _ = text.find_scalar_from(source, '\u{1f600}',
+                                      text.step(source, emoji))
+                else (past)
+                code = if past == text.not_found then 42 else 8 end if
+                return
+            end
+            return
+        end
+        return
+    end
+end main

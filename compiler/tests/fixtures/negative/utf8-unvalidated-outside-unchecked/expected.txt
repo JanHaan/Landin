@@ -1,0 +1,6 @@
+error[L0600]: compiler.utf8_unvalidated makes text of bytes without reading them, so it is admitted only in an `unchecked` region
+  --> ../tests/fixtures/negative/utf8-unvalidated-outside-unchecked/program.ldn:4:14
+  |
+4 |     result = compiler.utf8_unvalidated(source)
+  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: D949: convert input with `utf8(bytes)` or `text.from_bytes`, which check it, or write `unchecked begin ... end unchecked` around a call whose bytes are valid by construction

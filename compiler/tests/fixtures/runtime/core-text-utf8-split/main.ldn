@@ -1,0 +1,117 @@
+--  A record split where its separators are found, into views of it: the
+--  key before `=` and the fields of the value between arrows.  Its scalars
+--  are one, two, three and four bytes wide, so every position the steps
+--  and searches give lands on a boundary of each width, and no part of
+--  the record is copied.
+import core/mem
+import core/text
+
+record_text: utf8 = "na\u{ef}ve=caf\u{e9}\u{2192}x\u{2192}\u{1f600}\u{2192}"
+
+entry: type = struct
+    key: utf8
+    value: utf8
+end entry
+
+--  The key before the first `=` and the value after it.
+split: (record: utf8) -> (result: entry from record) ! text.not_found =
+    equals := try text.find_scalar(record, '=')
+    value_at: usize = text.offset(text.step(record, equals))
+    result = (key: record[0..<text.offset(equals)],
+              value: record[value_at..<lenof record])
+end split
+
+--  Whether `part` lies in `whole` at byte `offset`, sharing its storage.
+viewed: (part: utf8, whole: utf8, offset: usize) -> (yes: bool) =
+    part_bytes: []u8 = text.bytes(part)
+    whole_bytes: []u8 = text.bytes(whole)
+    yes = lenof part_bytes == 0
+          or usize(addr part_bytes[0]) == usize(addr whole_bytes[offset])
+end viewed
+
+--  The key's scalars and where each begins, read by stepping.
+key_steps: (key: utf8) -> (yes: bool) =
+    scalars: [5]u32 = ['n', 'a', '\u{ef}', 'v', 'e']
+    offsets: [5]usize = [0, 1, 2, 4, 5]
+    widths: [5]usize = [1, 1, 2, 1, 1]
+    yes = false
+    mut at := text.front(key)
+    mut index: usize = 0
+    while not text.done(key, at) do
+        return when index >= 5 or key[at] <> scalars[index]
+          or text.offset(at) <> offsets[index]
+          or text.width(key, at) <> widths[index]
+        at = text.step(key, at)
+        inc index
+    end while
+    yes = index == 5 and text.offset(at) == lenof key
+end key_steps
+
+--  The value's fields between arrows, the last one empty, each found in
+--  place: `café`, `x`, the four-byte emoji and nothing.
+fields: (value: utf8) -> (yes: bool) =
+    expected: [4]utf8 = ["caf\u{e9}", "x", "\u{1f600}", ""]
+    begins: [4]usize = [0, 8, 12, 19]
+    arrows: [3]usize = [5, 9, 16]
+    yes = false
+    mut at := text.front(value)
+    mut index: usize = 0
+    loop do
+        return when index >= 4
+        from_byte: usize = text.offset(at)
+        return when from_byte <> begins[index]
+        arrow := text.find_from(value, "\u{2192}", at) else (problem)
+            return when problem <> text.not_found
+            last: utf8 = value[from_byte..<lenof value]
+            yes = index == 3 and text.equal(last, expected[3])
+                  and viewed(last, value, from_byte)
+            return
+        end
+        return when text.offset(arrow) <> arrows[index]
+          or text.width(value, arrow) <> 3
+        part: utf8 = value[from_byte..<text.offset(arrow)]
+        return when not text.equal(part, expected[index])
+          or not viewed(part, value, from_byte)
+        at = text.step(value, arrow)
+        inc index
+    end loop
+end fields
+
+--  Each multibyte scalar of the record found where it is, at its width.
+scalars: (record: utf8) -> (yes: bool) =
+    yes = false
+    diaeresis := text.find_scalar(record, '\u{ef}') else begin return end
+    acute := text.find_scalar(record, '\u{e9}') else begin return end
+    arrow := text.find_scalar(record, '\u{2192}') else begin return end
+    emoji := text.find_scalar(record, '\u{1f600}') else begin return end
+    yes = text.offset(diaeresis) == 2 and text.width(record, diaeresis) == 2
+          and text.offset(acute) == 10 and text.width(record, acute) == 2
+          and text.offset(arrow) == 12 and text.width(record, arrow) == 3
+          and text.offset(emoji) == 19 and text.width(record, emoji) == 4
+          and record[emoji] == '\u{1f600}'
+end scalars
+
+public main: () -> (code: i32) =
+    code = 1
+    --  The record is read from storage of the program's, as input would be.
+    mut storage: [26]u8 = zeroed
+    mem.copy(storage[0..<26], text.bytes(record_text)) else begin return end
+    record: utf8 = text.from_bytes(storage[0..<26]) else begin return end
+    code = 2
+    parts: entry = split(record) else begin return end
+    return when not text.equal(parts.key, "na\u{ef}ve")
+      or not viewed(parts.key, record, 0)
+      or not viewed(parts.value, record, 7)
+    code = 3
+    return when not key_steps(parts.key)
+    code = 4
+    return when not fields(parts.value)
+    code = 5
+    return when not scalars(record)
+    code = 6
+    --  A record with no `=` has no key, and that is `not_found`.
+    _ = split(parts.value) else (problem)
+        code = if problem == text.not_found then 42 else 7 end if
+        return
+    end
+end main

@@ -1,0 +1,8 @@
+class: negative
+summary: what a utf8 builder over frame storage holds, as text or as bytes, is lent from that storage, so neither can be returned past the frame
+program: main.ldn
+root: ../../../../..
+expect: expected.txt
+codes: L0314, L0314
+constructs: 0570, 0600, 0790
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

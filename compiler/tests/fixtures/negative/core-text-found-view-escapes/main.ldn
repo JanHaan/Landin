@@ -1,0 +1,19 @@
+--  A view found in text keeps the text's origin: a key of a parameter is
+--  returned only `from` it, and a key of this frame's storage not at all.
+import core/text
+
+key_of: (record: utf8) -> (key: utf8) =
+    equals := text.find_scalar(record, '=') else text.front(record)
+    key = record[0..<text.offset(equals)]
+end key_of
+
+local_key: () -> (key: utf8) =
+    mut storage: [3]u8 = [97, 61, 98]
+    record: utf8 = text.from_bytes(storage[0..<3]) else ""
+    equals := text.find(record, "=") else text.front(record)
+    key = record[0..<text.offset(equals)]
+end local_key
+
+public main: () -> (code: i32) =
+    code = i32(lenof key_of("a=b") + lenof local_key())
+end main

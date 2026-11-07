@@ -1,6 +1,6 @@
 class: runtime
 profiles: standard
-summary: failure.words gives each of the 32 library failure atoms the phrase the reference documents, in lower case with no final stop, and no two atoms the same phrase
+summary: failure.words gives each of the 34 library failure atoms the phrase the reference documents, in lower case with no final stop, and no two atoms the same phrase
 program: main.ldn
 root: ../../../../..
 status: 42

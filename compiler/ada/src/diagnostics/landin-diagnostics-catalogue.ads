@@ -42,6 +42,8 @@
 --     L0300-L0399  types and definite assignment
 --     L0400-L0499  deliberately unassigned; see below
 --     L0500-L0599  the backend and its toolchain
+--     L0600-       codes born once the bands above were spent, of any
+--                  stage
 --
 --  Adding a code takes these steps, and the full `python3 check.py` names
 --  the one left out:
@@ -260,6 +262,8 @@ package Landin.Diagnostics.Catalogue is
       --  D760: an untyped float literal whose f32 rounding changes the
       --  integer a conversion gives.
       Literal_Rounded_Away,
+      --  D949: text made of bytes with no scan outside `unchecked`.
+      Unvalidated_Text_Checked,
       --  The backend and its toolchain.  None is about a frontend
       --  construct: two are the host failing to finish an accepted
       --  program, one is [1970]'s missing entry shape, one is a verified
@@ -1167,6 +1171,13 @@ package Landin.Diagnostics.Catalogue is
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("D760: an untyped float literal converted to an integer"
                    & " that its f32 rounding changes")),
+      Unvalidated_Text_Checked =>
+        (Code => "L0600", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 0, Most => 0, Notes => 1, Route => False,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("D949: compiler.utf8_unvalidated outside an unchecked"
+                   & " region")),
       --  The backend's reports need not have a source. A missing entry uses an
       --  entry-module anchor when available, but permits a point in an empty
       --  file or a source-free fallback. L0500 is the one diagnostic here a

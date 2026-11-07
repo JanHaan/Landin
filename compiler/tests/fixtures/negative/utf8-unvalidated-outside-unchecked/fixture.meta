@@ -1,0 +1,8 @@
+class: negative
+summary: compiler.utf8_unvalidated outside an unchecked region is L0600, which names the checked conversions and the unchecked region
+constructs: 0600, 1120, 1560
+program: program.ldn
+codes: L0600
+expect: expected.txt
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64
+args: ../tests/fixtures/negative/utf8-unvalidated-outside-unchecked/program.ldn

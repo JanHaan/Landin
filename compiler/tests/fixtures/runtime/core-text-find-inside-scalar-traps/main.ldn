@@ -1,0 +1,11 @@
+--  A search from a position inside a scalar is a range of the text from
+--  there, which splits the scalar and traps; positions the library gives
+--  never lie there.
+import core/text
+
+public main: () -> (code: i32) =
+    source: utf8 = "\u{e9}x"
+    inside := text.cursor(text.bytes(source), 1)
+    found := text.find_from(source, "x", inside) else text.front(source)
+    code = i32(text.offset(found))
+end main

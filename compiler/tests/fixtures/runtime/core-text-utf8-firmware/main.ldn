@@ -1,0 +1,86 @@
+--  A console line as firmware reads it: bytes from a receive buffer,
+--  checked as text, split at its `=` and its arrow into views of the
+--  buffer, its value's scalars walked, and the value encoded again scalar
+--  by scalar into a fixed reply, which refuses what it has no room for.
+import core/text
+
+--  The value's scalars and where each begins, `°` two bytes wide.
+walked: (value: utf8) -> (yes: bool) =
+    scalars: [4]u32 = ['2', '1', '\u{b0}', 'C']
+    offsets: [4]usize = [0, 1, 2, 4]
+    yes = false
+    mut at := text.front(value)
+    mut index: usize = 0
+    while not text.done(value, at) do
+        return when index >= 4 or value[at] <> scalars[index]
+          or text.offset(at) <> offsets[index]
+        at = text.step(value, at)
+        inc index
+    end while
+    yes = index == 4
+end walked
+
+--  The value's scalars encoded one after another into `reply`, which
+--  then holds the value's bytes; a scalar with too little room left
+--  writes nothing.
+encoded: (value: utf8, reply: []mut u8) -> (yes: bool) =
+    yes = false
+    mut used: usize = 0
+    mut at := text.front(value)
+    while not text.done(value, at) do
+        count: usize = text.encode(value[at], reply[used..<lenof reply])
+            else begin
+                return
+            end
+        used += count
+        at = text.step(value, at)
+    end while
+    again: utf8 = text.from_bytes(reply[0..<used]) else begin
+        return
+    end
+    return when not text.equal(again, value)
+    --  Three bytes are left, and the thermometer takes four.
+    _ = text.encode('\u{1f321}', reply[used..<lenof reply]) else (problem)
+        return when problem <> text.no_space or reply[used] <> 0
+        _ = text.encode(0xd800, reply[used..<lenof reply]) else (invalid)
+            yes = invalid == text.invalid_scalar and reply[used] == 0
+            return
+        end
+        return
+    end
+end encoded
+
+public main: () -> (code: i32) =
+    code = 1
+    --  `temp=21°C→🌡`, as the receive buffer holds it.
+    storage: [17]u8 = [116, 101, 109, 112, 61, 50, 49, 0xc2, 0xb0, 67, 0xe2,
+                       0x86, 0x92, 0xf0, 0x9f, 0x8c, 0xa1]
+    line: utf8 = text.from_bytes(storage[0..<17]) else begin
+        return
+    end
+    code = 2
+    equals := text.find_scalar(line, '=') else begin
+        return
+    end
+    value_at: text.position = text.step(line, equals)
+    arrow := text.find_from(line, "\u{2192}", value_at) else begin
+        return
+    end
+    key: utf8 = line[0..<text.offset(equals)]
+    value: utf8 = line[text.offset(value_at)..<text.offset(arrow)]
+    value_bytes: []u8 = text.bytes(value)
+    return when not text.equal(key, "temp") or not text.equal(value, "21\u{b0}C")
+      or text.offset(arrow) <> 10
+      or line[text.step(line, arrow)] <> '\u{1f321}'
+      or usize(addr value_bytes[0]) <> usize(addr storage[5])
+    code = 3
+    return when not walked(value)
+    code = 4
+    mut reply: [8]u8 = zeroed
+    return when not encoded(value, reply[0..<8])
+    code = 5
+    _ = text.find(line, "\u{2190}") else (problem)
+        code = if problem == text.not_found then 42 else 6 end if
+        return
+    end
+end main

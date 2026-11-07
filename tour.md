@@ -2527,6 +2527,12 @@ There is no conversion from a pointer to `cstring`, none with a writable
 result, and none for `utf16`. An empty result keeps its source's base and
 origin.
 
+Bytes a program knows are UTF-8, because it has just checked them or
+wrote only whole characters, become `utf8` without being read again
+through `compiler.utf8_unvalidated(bytes)` [1560], which keeps the same
+base, length and origin. It is allowed only inside `unchecked` [1120],
+and bytes that are not UTF-8 then go unnoticed.
+
 **Slicing.** `utf8` and `utf16` slice by range, as `word[3..3]` in [0610]
 does. The result is the same text type, read-only, over the same storage.
 
@@ -2553,6 +2559,9 @@ On plain `[]u8`, `core/text` counts positions as byte offsets of the
 opaque type `text.position`, with `first`, `at_end`, `next`, `advance`,
 `offset`, `byte` and `slice`. Reading a byte at the end fails with
 `past_end`, and a slice keeps its source's origin.
+On `utf8`, the same positions step a whole scalar with `front`, `step`,
+`done` and `width`, and `find` returns where a match begins, so the text
+around it slices out by range with nothing copied.
 
 ### [0610] Indexing text by codepoint or by position
 
@@ -4198,7 +4207,7 @@ without an import, which is why nobody else can use their bare names.
 
 | module | what it reaches |
 | --- | --- |
-| `compiler` | target, word size, byte order, build mode, CPU features, the atomic, volatile and register intrinsics, the two stack builtins under fibres ([1675]), and `compiler.unreachable()`, a call that never returns and stops the program as a failed check does |
+| `compiler` | target, word size, byte order, build mode, CPU features, the atomic, volatile and register intrinsics, the two stack builtins under fibres ([1675]), `compiler.unreachable()`, a call that never returns and stops the program as a failed check does, and `compiler.utf8_unvalidated(bytes)`, text of bytes known to be UTF-8, made without reading them and only inside `unchecked` ([0600]) |
 | `assembler` | inline assembly |
 | `linker` | libraries, sections, entry |
 

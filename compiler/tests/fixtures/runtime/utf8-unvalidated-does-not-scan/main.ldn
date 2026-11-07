@@ -1,0 +1,17 @@
+--  Text made without a scan is the bytes' own view: nothing reads them,
+--  so a byte that `utf8(bytes)` would trap on is not found, which is the
+--  `text.unvalidated` non-guarantee and not a use of it.  The view has
+--  the bytes' base and length, and converting back gives them again.
+public main: () -> (code: i32) =
+    code = 1
+    storage: [3]u8 = [104, 255, 105]
+    bytes: []u8 = storage[0..<3]
+    unchecked begin
+        unscanned: utf8 = compiler.utf8_unvalidated(bytes)
+        again: []u8 = []u8(unscanned)
+        return when lenof unscanned <> 3 or lenof again <> 3
+          or usize(addr again[0]) <> usize(addr storage[0])
+          or again[1] <> 255
+    end unchecked
+    code = 42
+end main
