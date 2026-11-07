@@ -4,6 +4,7 @@ program: program.ldn
 constructs: 1480, 1990
 targets: cortex-m0
 codes: L0201
-args: --target=cortex-m0 --firmware-entry=start ../tests/fixtures/negative/cache-provider-cacheless/program.ldn
+root: ../../../../..
+args: --target=cortex-m0 --firmware-entry=start
 expect: expected.txt
 status: 1
