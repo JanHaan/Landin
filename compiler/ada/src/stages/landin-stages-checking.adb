@@ -14652,9 +14652,9 @@ package body Landin.Stages.Checking is
                Where   => Syn.Where (Of_Tree, Node),
                Message => "this is " & Shown (Got) & " and "
                           & Shown (Wanted) & " belongs here",
-               Note    => "[1890]: these types must agree; no implicit"
-                          & " conversion is applied. [0310]: use T(value)"
-                          & " where an explicit conversion is supported",
+               Note    => "[1890]: these types must agree, with no implicit"
+                          & " conversion; [0310]: write T(value) where an"
+                          & " explicit conversion exists",
                Related => Beside (Of_Tree, Node, Site),
                Because => Beside_Label (Of_Tree, Node, Site, Because),
                Into    => Found);
@@ -27285,9 +27285,9 @@ package body Landin.Stages.Checking is
                           & " an element is a writable place, and over"
                           & " anything else it is not"
                      elsif Sort = Res.Parameter
-                     then "[1900]: copy the value to a `mut` local to"
-                          & " change a local copy, or use `inout` when"
-                          & " the caller's place should change"
+                     then "[1900]: to change a copy, copy the value into"
+                          & " a `mut` local; to change the caller's place,"
+                          & " declare the parameter `inout`"
                      else "[1900]: mutable bindings, named returns and"
                           & " `inout` parameters may be written"),
                   Related => Landin.Provenance.Origin'
@@ -33610,8 +33610,8 @@ package body Landin.Stages.Checking is
          then
             return "";
          end if;
-         return "For a conforming value whose storage outlives the erased"
-           & " view, use `any("
+         return "[1380]: for a conforming value whose storage outlives"
+           & " the erased view, write `any("
            & (if Syn.Kind (Of_Tree, Node) /= Syn.Address_Of
                  and then Landin.Checking.Type_Of
                    (Types.all, Of_Tree, Value) = Ty.Pointer_Value
