@@ -159,6 +159,22 @@ class Oracle(unittest.TestCase):
         with self.assertRaisesRegex(common.Failed, 'cleaned transmit carried 63 bytes'):
             run(Board(transmitted=short_message))
 
+    def test_a_transmit_missing_its_first_byte_is_refused(self):
+        # The second chip run: each transmit's stream ended with its count
+        # at zero and FEIF set, and its first byte never reached the line.
+        def first_lost(sent):
+            for opening in (b'\x02x n=00000040\x03\n', b'\x02y n=00000040\x03\n'):
+                at = sent.index(opening) + len(opening)
+                sent = sent[:at] + sent[at + 1:]
+            return sent.replace(b'f=00000001', b'f=00000031').replace(b'f=00000000', b'f=00000031')
+        with self.assertRaisesRegex(common.Failed, 'without a clean carried 63 bytes'):
+            run(Board(transmitted=first_lost))
+        def first_of_message_lost(sent):
+            at = sent.index(b'\x02y n=00000040\x03\n') + 15
+            return sent[:at] + sent[at + 1:]
+        with self.assertRaisesRegex(common.Failed, "cleaned transmit carried 63 bytes, b'BCD"):
+            run(Board(transmitted=first_of_message_lost))
+
     def test_a_transmit_that_did_not_complete_is_refused(self):
         def incomplete(sent):
             return sent.replace(b'\x02Y t=00000001', b'\x02Y t=00000000')

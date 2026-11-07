@@ -186,27 +186,29 @@ await: (inout r: serial.rx, wanted: usize, limit: u32)
 end await
 
 -- One transmit of COUNT bytes of the buffer on DMA1 stream 0, memory to
--- USART3's TDR, as RM0433's transmission using DMA orders it (48.5.19,
--- p. 2057):
--- TC cleared through ICR's TCCF before the stream is enabled, then the
--- stream's end awaited, EN clear with its count at zero, and then USART3's
--- TC, so the line has sent every byte, the FIFO's among them, before the
--- CPU writes the next frame to TDR.  A frame the CPU writes while the
--- stream still feeds the FIFO races it for the FIFO's last slot, and one
--- of the two writes is lost: the first chip run lost five bytes at each
--- transmit's edge when the wait ended on an underrun's FEIF, the stream
--- still running.  D227's
--- device barrier stands before the enable; the buffer's clean, or its
--- omission, is the caller's.  Whether every byte went with no transfer
--- error.
+-- USART3's TDR, ordered as RM0433's transmission using DMA orders it
+-- (48.5.19, p. 2057) and as the stream's direct mode needs it (D979).  In
+-- direct mode a memory-to-peripheral stream, once enabled, preloads its
+-- first byte from memory and sends it at the peripheral's first request
+-- (15.3.8, p. 644; 15.3.14, p. 653); a request already raised when the
+-- stream is enabled arrives before that preload, an underrun that sets
+-- FEIF (15.3.20, p. 657), and on the first chip run with CR3's DMAT held
+-- set across both transmits, FEIF was set at each and each lost its first
+-- byte with its count at zero.  So the stream is configured and enabled
+-- with DMAT clear, TC is cleared through ICR's TCCF, and only then is DMAT
+-- set, raising USART3's request with the first byte preloaded.  The end
+-- is awaited as 48.5.19 says: the stream's EN clear with its count at
+-- zero, DMAT cleared so no request is raised while no stream serves it,
+-- and then TC, every byte, the FIFO's among them, on the line before the
+-- CPU writes the next frame, which would otherwise race the stream for the
+-- FIFO's last slot.  D227's device barrier stands before the enable; the
+-- buffer's clean, or its omission, is the caller's.  Whether every byte
+-- went with no transfer error.
 transmit: (count: u32) -> (done: bool) =
     done = false
     dma1.s0m0ar_write(dma1.base, u32(usize(addr tx_storage[0])))
     dma1.s0ndtr_write(dma1.base, count)
     dma1.lifcr_write(dma1.base, stream_flags)
-    mut cleared := usart3.icr_decode(0)
-    cleared.f_tccf = 1
-    usart3.icr_write(usart3.base, usart3.icr_encode(cleared))
     mut stream := dma1.s0cr_decode(0)
     stream.f_dir = 1
     stream.f_minc = 1
@@ -215,11 +217,22 @@ transmit: (count: u32) -> (done: bool) =
     dma1.s0cr_write(dma1.base, config)
     cortex_m.device_barrier()
     dma1.s0cr_write(dma1.base, config | stream_enable)
+    mut cleared := usart3.icr_decode(0)
+    cleared.f_tccf = 1
+    usart3.icr_write(usart3.base, usart3.icr_encode(cleared))
+    mut requests := usart3.cr3_decode(0)
+    requests.f_dmat = 1
+    cortex_m.device_barrier()
+    usart3.cr3_write(usart3.base, usart3.cr3_encode(requests))
     mut polls: u32 = 0
     while (dma1.s0cr_read(dma1.base) & stream_enable) <> 0 do
         polls += 1
-        return when polls == 10_000_000
+        if polls == 10_000_000 then
+            usart3.cr3_write(usart3.base, 0)
+            return
+        end if
     end while
+    usart3.cr3_write(usart3.base, 0)
     transmit_flags = dma1.lisr_read(dma1.base) & stream_flags
     transmit_left = dma1.s0ndtr_read(dma1.base)
     polls = 0
@@ -396,9 +409,10 @@ start: () -> none =
     request.f_dmareq_id = 46
     dmamux1.dmamux_c0cr_write(dmamux1.base, dmamux1.dmamux_c0cr_encode(request))
     dma1.s0par_write(dma1.base, u32(usart3.tdr_address))
-    mut control3 := usart3.cr3_decode(0)
-    control3.f_dmat = 1
-    usart3.cr3_write(usart3.base, usart3.cr3_encode(control3))
+    -- Neither of CR3's DMA requests: the receive's is the stopped ring's,
+    -- and the transmit's is raised by each transmit once its stream has
+    -- its first byte.
+    usart3.cr3_write(usart3.base, 0)
     -- The lost-clean control: memory `o`, the message only in the cache.
     fill(tx_storage[0..<64], transmit_memory)
     cache.clean(caches, tx_storage[0..<64]) else (problem)

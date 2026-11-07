@@ -29625,10 +29625,7 @@ its dirty 0x44; a transmit whose buffer's memory holds `o` and whose cached
 copy holds the message is sent without a clean and must carry `o`s, a
 whole line at least and every line either memory's `o`s or, written back
 in between, the message's, and after a clean must carry the message, every
-byte of both: each transmit clears USART3's TC before the stream is
-enabled and waits for the stream's EN to clear and then for TC, as RM0433
-48.5.19 orders it, before the CPU writes another frame, an underrun's FEIF
-deciding nothing since it stops no stream (15.3.20); and the entry returns, so CCR
+byte of both, each transmit ordered as D979 says; and the entry returns, so CCR
 must read clear over SWD. The host reads CCR over SWD while the run goes on
 as well. Every prediction is the host's, from what it sent and what a
 write-back cache does, and a control that does not fail as predicted fails
@@ -29707,6 +29704,41 @@ cached ring module, which would let the two drift apart.
 routines given the cacheless provider and whose maintained stream is
 those routines given `l1.caches()` (D975); and the cacheless board run,
 which passes the cacheless provider through every routine.
+
+### D979 — The cached board's transmit raises its request only once its stream has its first byte
+
+**The tour said** nothing; D975's transmits are the cached board's own
+DMA1 stream 0 transmits to USART3, which runs with its FIFO on (D648).
+
+**Chosen:** a transmit writes the stream's addresses and count, clears its
+flags, configures it and enables it with CR3's DMAT clear; clears TC
+through ICR's TCCF; and only then sets DMAT, so USART3's request rises
+after the stream has preloaded its first byte. It waits for the stream's
+EN to clear with its count at zero, clears DMAT, and waits for TC before
+the CPU writes another frame, as RM0433's transmission using DMA orders
+the end (48.5.19, p. 2057). In direct mode a memory-to-peripheral stream
+preloads its first byte once enabled and sends it at the peripheral's
+first request (15.3.8, p. 644; 15.3.14, p. 653), and a request raised
+before that preload is an underrun that sets FEIF (15.3.20, p. 657).
+Success is the count at zero with no transfer error; FEIF and DMEIF are
+reported and decide nothing, since neither stops the stream.
+
+The two chip runs before it showed both halves. The first ended its wait
+on FEIF with the stream still feeding the FIFO, and the CPU's next frame
+raced it for the FIFO's last slot, losing five bytes at each edge. The
+second, with that wait corrected but DMAT held set across both transmits
+from before either stream was enabled, reported TCIF, HTIF and FEIF and a
+count of zero at each, and each lost its first byte.
+
+**The alternatives:** DMAT set once for both transmits, which raises the
+request with no stream or no preloaded byte to answer it; ending on the
+stream's flags, which an underrun's FEIF ends early; the DMA's FIFO
+instead of direct mode, which preloads the same way; and leaving the
+transmit's first byte to the CPU, which writes it outside the stream.
+
+**Pinned by** the cached board run's transmits, which must carry every
+byte (D975), and the scripted board's refusals of a transmit missing its
+first byte, missing a frame at either edge, or one byte short.
 
 ### D977 — The emulator shows the cache sequences, never a cache
 

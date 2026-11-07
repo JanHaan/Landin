@@ -56,7 +56,7 @@ and eight hex digits, then ETX and LF. The host sends `S` first.
 | the stale read | each line the read returned is the ring's cached 0x5A throughout or, evicted in between, the bytes sent, and at least one is stale; memory, once invalidated, hashes as the 64 bytes sent |
 | the maintained receive | 1024 bytes hashing as the host's, over at least four laps of the 256-byte ring |
 | the lost dirty line | an invalidate after a clean discards all 32 dirty bytes; the four ranges that are not whole lines are refused and the line they cover keeps its 32 dirty bytes, which a clean then writes |
-| the transmits' edges | the frames after the CPU's controls are `x`, `X`, `y`, `Y` and `e` in that order, each whole: a transmit ends with the stream's EN clear and then USART3's TC, as RM0433 48.5.19 orders it, before the CPU writes its next frame, so the two never race for the transmit FIFO |
+| the transmits' edges | the frames after the CPU's controls are `x`, `X`, `y`, `Y` and `e` in that order, each whole, and each transmit carries all 64 bytes, its first among them: a transmit enables its stream before it sets DMAT, so the request rises once the stream has preloaded its first byte, and ends with the stream's EN clear, DMAT cleared and then USART3's TC, as RM0433 48.5.19 orders it, before the CPU writes its next frame (D979) |
 | the stale transmit | each line the transmit without a clean carries is the `o`s memory held or, written back in between, the message's, at least one the `o`s; after the clean it carries the message, `A` to `Z` repeated; nothing else arrives outside the frames |
 | the end | CCR over SWD with IC and DC clear once the entry returned |
 

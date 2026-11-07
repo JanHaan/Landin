@@ -2768,6 +2768,9 @@ package body Landin.Diagnostics.Citations is
             when 978 =>
                "The STM32H753's receive ring does D227's maintenance thr"
                & "ough the provider it is given",
+            when 979 =>
+               "The cached board's transmit raises its request only once"
+               & " its stream has its first byte",
             when 977 =>
                "The emulator shows the cache sequences, never a cache",
             when 281 =>
@@ -4270,6 +4273,8 @@ package body Landin.Diagnostics.Citations is
             when 976 =>
                "Decisions: The core library and the derived programs",
             when 978 =>
+               "Decisions: The core library and the derived programs",
+            when 979 =>
                "Decisions: The core library and the derived programs",
             when 977 =>
                "Decisions: The core library and the derived programs",
@@ -6359,6 +6364,10 @@ package body Landin.Diagnostics.Citations is
                "https://www.701.dev/spec.html#d978-the-stm32h753-s-recei"
                & "ve-ring-does-d227-s-maintenance-through-the-provider-it-"
                & "is-given",
+            when 979 =>
+               "https://www.701.dev/spec.html#d979-the-cached-board-s-tr"
+               & "ansmit-raises-its-request-only-once-its-stream-has-its-f"
+               & "irst-byte",
             when 977 =>
                "https://www.701.dev/spec.html#d977-the-emulator-shows-th"
                & "e-cache-sequences-never-a-cache",
