@@ -588,11 +588,11 @@ package body Landin.Stages.Configuration is
                      Report_Not_Fixed
                        (Of_Tree, Node,
                         "this name is not a compiler-owned fixed value",
-                        Note => "D202: fixed expressions do not look up"
-                          & " module or runtime values; use options,"
-                          & " compiler facts or sizeof/alignof of scalar"
-                          & " types; compiler.assert also admits declared"
-                          & " type layout measurements");
+                        Note => "D202: a fixed expression reads no module"
+                          & " or runtime value; use options, compiler"
+                          & " facts or sizeof/alignof of scalar types;"
+                          & " compiler.assert also admits the layout of a"
+                          & " declared type");
                      Valid := False;
                   elsif Option_Index (Syn.Name (Of_Tree, Node)) > 0 then
                      declare
