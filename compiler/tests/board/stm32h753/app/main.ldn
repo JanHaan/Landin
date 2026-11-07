@@ -16,6 +16,7 @@
 -- change to, and 0x17 changes back (D962).
 import bringup
 import commands
+import core/cache
 import core/line
 import descriptions/stm32h753
 import floats
@@ -30,6 +31,10 @@ import stm32h753/rcc
 
 link(align: 256)
 mut rx_storage: [256]u8 = zeroed
+-- The ring's maintenance on this cacheless profile: the barriers alone,
+-- over the Cortex-M7's 32-byte lines, which the cached profile's provider
+-- would maintain (D978).
+mut ring_caches: cache.barriers = zeroed
 mut notification: u32 = 0
 mut handled: u32 = 0
 mut recoveries: u32 = 0
@@ -235,7 +240,7 @@ request: (inout r: serial.rx) -> none =
     report.field(102, images.frame)
     report.field(120, images.stop)
     report.close_frame()
-    serial.configure(r, settings) else (problem)
+    serial.configure(ring_caches, r, settings) else (problem)
         _ = problem
         halt(5)
     end
@@ -251,7 +256,7 @@ restore: (inout r: serial.rx) -> none =
     report.field(110, line_bytes)
     report.field(104, line_hash)
     report.close_frame()
-    serial.configure(r, line.default_settings) else (problem)
+    serial.configure(ring_caches, r, line.default_settings) else (problem)
         _ = problem
         halt(5)
     end
@@ -282,7 +287,12 @@ start: () -> noreturn =
     rcc.rsr_write(rcc.base, rcc.rsr_encode(flags))
     rcc.rsr_write(rcc.base, 0)
     bringup.peripherals()
-    mut receiver := serial.open(line.default_settings, budget, rx_storage[0..<256]) else (problem)
+    ring_caches = cache.cacheless(32) else (problem)
+        _ = problem
+        halt(1)
+    end
+    mut receiver := serial.open(ring_caches, line.default_settings, budget,
+                                rx_storage[0..<256]) else (problem)
         _ = problem
         halt(1)
     end
@@ -312,10 +322,10 @@ start: () -> noreturn =
     mut scratch: [64]u8 = zeroed
     loop do
         take_events()
-        n := serial.read(receiver, scratch[0..<64]) else (error)
+        n := serial.read(ring_caches, receiver, scratch[0..<64]) else (error)
             if error == serial.stop_timeout then halt(3) end if
             recoveries = recoveries +% 1
-            serial.restart(receiver) else (problem)
+            serial.restart(ring_caches, receiver) else (problem)
                 _ = problem
                 halt(3)
             end

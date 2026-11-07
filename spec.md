@@ -29555,16 +29555,20 @@ consumers and failure oracles on its target.
 NUCLEO-H753ZI from SRAM, loaded by the SRAM helper exactly as the cacheless
 RAM run is, under the warm contract unchanged, which requires the caches
 off when it loads; the image's reset enables them (D973). It uses the
-cacheless board's `serial`, `bringup`, `report` and `scs` modules read
-only, the receive ring through `serial.open`, `available`, `read`, `stop`,
-`restart`, `completed` and `idle`, and its maintenance around them through
-`platform/cortex_m/l1`. Over the virtual COM port, in the cacheless board's
+cacheless board's `serial`, `bringup`, `report` and `scs` modules, the
+receive ring through `serial.open`, `available`, `read`, `stop`,
+`restart`, `completed` and `idle` with `l1.caches()` as the ring's
+provider, so the ring does its own maintenance (D978) and the program
+writes none of it. Over the virtual COM port, in the cacheless board's
 frames: the boot frame reports CCR with IC and DC set and CCSIDR; the
-stale-read control refills the ring with 0x5A, cleans it without the
-invalidate, rearms the stream and reads 64 bytes the host sends, two
+stale-read control refills the ring with 0x5A, cleans it, and rearms and
+reads it through the same routines given `cache.cacheless(32)`, so the
+ring's code runs as on the cacheless board and its invalidates are left
+out, reading 64 bytes the host sends, two
 lines, each of which must be the stale 0x5A throughout, or, if the cache
 evicted it in between, the bytes sent, at least one line stale, while
-memory, once invalidated, holds the 64 sent;
+memory, once a restart with the cached provider has cleaned and
+invalidated the ring, holds the 64 sent;
 1024 bytes are then read through the ring with each snapshot's lines
 invalidated between the count and a copy no longer than it, and must hash
 as the host's; the lost-dirty control cleans a line holding 0x11, dirties
@@ -29616,6 +29620,42 @@ or a branch predictor invalidate, that no decision reviewed.
 **Pinned by** `devices/test.py`'s `the cached consumer reaches the declared
 cache registers alone` and `the consumer links cacheless`, and the cached
 board tool's image check.
+
+### D978 — The STM32H753's receive ring does D227's maintenance through the provider it is given
+
+**The tour said** nothing; D648 gave the STM32H753 its receive ring, D227
+the cached handoff it must keep, and D970 the concept that keeps it.
+
+**Chosen:** `compiler/tests/board/stm32h753/serial`'s `open`, `read`,
+`restart` and `configure` take `core/cache` maintenance evidence, a
+provider type and its handle, before their other arguments. `open`
+refuses a ring that is not whole lines of the provider's with
+`cache.misaligned`, writing nothing, and cleans and invalidates the ring
+before it arms the first lap, as `restart`, and so `configure`, do before
+they rearm it; `read` invalidates the ring between its snapshot and its
+copy, so every byte it copies was written before its line was dropped.
+The laps the completion interrupt arms take none: nothing but the stream
+writes the ring while it is open, so once it was cleaned it holds no dirty
+line, and a stale copy the CPU fetched meanwhile is dropped by the next
+read's invalidate. A provider that refuses the ring at a later call breaks
+the descriptor, as a transfer error does. The cacheless board passes
+`cache.cacheless(32)`, the barriers alone at the Cortex-M7's line, and the
+cached board `l1.caches()`; `available`, `stop`, `completed` and `idle`
+read no ring byte and take none.
+
+**The alternatives:** the caller maintaining the ring around the module,
+which is a rule of the caller that the module cannot state or keep, and
+which `read`'s own snapshot defeats unless each read is bounded by an
+earlier one; a provider stored in the descriptor, an erased `any` whose
+handle the descriptor would have to borrow as well as the ring; a clean
+and invalidate before every lap, in the completion interrupt, which needs
+the provider there and does nothing a cleaned ring needs; and a second,
+cached ring module, which would let the two drift apart.
+
+**Pinned by** the cached board run, whose stale-read control is the same
+routines given the cacheless provider and whose maintained stream is
+those routines given `l1.caches()` (D975); and the cacheless board run,
+which passes the cacheless provider through every routine.
 
 ### D977 — The emulator shows the cache sequences, never a cache
 

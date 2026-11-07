@@ -15,6 +15,10 @@ separate flash and cold-start check.
 The port uses the board's ST-LINK V3 for debug and its virtual COM
 port for USART3 on PD8/PD9; PB0 drives LD1. Its physical oracle follows
 RM0433 Rev 9 and IEEE 754 arithmetic computed on the host (D650).
+Its receive ring takes `core/cache` maintenance evidence and does D227's
+handoff itself; this cacheless profile passes `cache.cacheless(32)`, the
+barriers alone, and the [cached profile](../stm32h753_cached/README.md)
+passes the Cortex-M7's provider (D978).
 The warm contract requires HSI as the system clock and disabled caches;
 the helper verifies the supply before loading SRAM. A boot check also
 exercises the description's supply stage and the power-on flags.
