@@ -30,6 +30,14 @@ INVENTORY = 'compiler/tests/cortex-m/corpus.json'
 RULES = 'environments/cortex-m/README.md#the-corpus-inventory'
 
 
+def refused_on(row, lane):
+    """Whether ROW is refused on LANE with codes of its own: a lane whose
+    target refuses what the reference runs or restricts, RV32 the C its
+    ilp32 ABI does not enable (D619)."""
+    return (lane is not None and row['mode'] in ('execute', 'restriction')
+            and row.get('lanes', {}).get(lane, {}).get('mode') == 'refuse')
+
+
 def executes_on(row, lane):
     """Whether a refuse ROW executes on LANE, which gives the program what
     the reference lacks (D630)."""
@@ -83,12 +91,14 @@ def inventory():
                         (row['mode'] == 'execute' and own.get('mode') in ('restriction', 'limit'))
                         or (row['mode'] == 'refuse' and own.get('mode') == 'refuse'
                             and bool(own.get('codes')) and own['codes'] != row['codes'])
+                        or (row['mode'] in ('execute', 'restriction')
+                            and own.get('mode') == 'refuse' and bool(own.get('codes')))
                         or (row['mode'] == 'refuse' and own.get('mode') == 'execute'
                             and 'codes' not in own)),
                     '%s: a "lanes" entry names a corpus lane (%s) and its reason, with'
-                    ' "mode": "restriction" or "limit" for an execute row, or for a refuse row'
-                    ' "mode": "refuse" and the lane\'s own "codes", or "mode": "execute"'
-                    ' (see %s)' % (name, ', '.join(LANES), RULES))
+                    ' "mode": "restriction" or "limit" for an execute row, "mode": "refuse"'
+                    ' and the lane\'s own "codes" for any row, or "mode": "execute" for a'
+                    ' refuse row (see %s)' % (name, ', '.join(LANES), RULES))
         meta = metadata(ROOT / 'compiler/tests/fixtures' / name / 'fixture.meta')
         if row['mode'] == 'execute' and (said := hosted_oracle(meta)):
             hosted.append('  %s %s' % (name, said))
@@ -314,7 +324,9 @@ def restriction(run, refine, name, row, optimize, specialize, level='armv6-m'):
 #  D985: the wrong-convention control.  The C peer it builds is compiled
 #  for the other of AAPCS32's two variants than the lane's, and the lane's
 #  own float-argument assertion and GNU ld's attribute check must each
-#  refuse it, the linker with the peer before the program and after it.
+#  refuse it, the linker with the peer before the program and after it;
+#  built for the lane's variant with short enums, the lane's assertion
+#  must refuse it too.
 CONVENTION_CONTROL = 'abi/cortex-c-peer'
 OTHER_CONVENTION = {
     False: ['-mcpu=cortex-m4', '-mthumb', '-mfpu=fpv4-sp-d16', '-mfloat-abi=hard'],
@@ -351,6 +363,16 @@ def convention_control(parent, refine, name, level):
     else:
         raise RuntimeError('the lane\'s convention assertion took a C peer of the other'
                            ' variant')
+    #  A peer of the lane's variant built with GCC's short enums declares
+    #  them, and the same assertion refuses it, where the linker would warn.
+    short = c_objects(run, meta, base, level, name='short', extra=['-fshort-enums'])
+    try:
+        conventions(run, [program, short[0]], level, name='short-attributes')
+    except RuntimeError as error:
+        enums = str(error)
+    else:
+        raise RuntimeError('the lane\'s convention assertion took a C peer built with short'
+                           ' enums')
     refused = []
     start = harness_start(run, profile, level)
     for order, objects in (('peer-first', [start, wrong[0], program]),
@@ -365,7 +387,7 @@ def convention_control(parent, refine, name, level):
             refused.append(order)
         else:
             raise RuntimeError('GNU ld linked a C peer of the other variant %s' % order)
-    return {'asserted': asserted, 'linker_refused': refused}
+    return {'asserted': asserted, 'linker_refused': refused, 'short_enums': enums}
 
 
 #  D985: the route a user takes, through refine's own firmware link
@@ -879,7 +901,8 @@ def execute(output, tools, refine, selected=(), profiles=(), lane=None):
         meta = metadata(ROOT / 'compiler/tests/fixtures' / name / 'fixture.meta')
         modes = PROFILES + (SPECIALIZATION_PROFILES
                             if meta.get('profiles') == 'specialization' else [])
-        executes = row['mode'] == 'execute' or executes_on(row, lane)
+        executes = ((row['mode'] == 'execute' and not refused_on(row, lane))
+                    or executes_on(row, lane))
         if not executes:
             modes = [('none', 'off')]
         if profiles and executes:
@@ -909,7 +932,10 @@ def execute(output, tools, refine, selected=(), profiles=(), lane=None):
         if level != 'armv6-m':
             result['level'] = level
         try:
-            if row['mode'] == 'restriction':
+            if refused_on(row, lane_of(level)):
+                result.update(source_refusal(run, refine, name,
+                                             {**row, **row['lanes'][lane_of(level)]}, level))
+            elif row['mode'] == 'restriction':
                 result.update(restriction(run, refine, name, row, opt, spec, level))
             elif row['mode'] == 'refuse' and not executes_on(row, lane_of(level)):
                 own = row.get('lanes', {}).get(lane_of(level))

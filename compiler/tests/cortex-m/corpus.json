@@ -15,13 +15,88 @@
       "reason": "A C main, its initial stack and the auxiliary vector exist only in a hosted process, and Cortex-M0 starts none."
     },
     "abi/c-function-from-address": {
-      "mode": "execute"
+      "mode": "execute",
+      "lanes": {
+        "esp32c3": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        },
+        "sifive-e": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      },
+      "targets": {
+        "xtensa": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "Xtensa's windowed C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      }
     },
     "abi/c-function-from-zero-address-traps": {
-      "mode": "execute"
+      "mode": "execute",
+      "lanes": {
+        "esp32c3": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        },
+        "sifive-e": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      },
+      "targets": {
+        "xtensa": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "Xtensa's windowed C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      }
     },
     "abi/c-packed-records": {
-      "mode": "execute"
+      "mode": "execute",
+      "lanes": {
+        "esp32c3": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        },
+        "sifive-e": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      },
+      "targets": {
+        "xtensa": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "Xtensa's windowed C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      }
     },
     "abi/clock-agrees-with-c": {
       "mode": "refuse",
@@ -38,7 +113,32 @@
       "reason": "Native stat records and a real file system's identities exist only on a hosted system; memory identity runs separately on Cortex-M0."
     },
     "abi/cortex-c-peer": {
-      "mode": "execute"
+      "mode": "execute",
+      "lanes": {
+        "esp32c3": {
+          "mode": "refuse",
+          "codes": [
+            "L0015"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920), so the module of C aliases is not available there."
+        },
+        "sifive-e": {
+          "mode": "refuse",
+          "codes": [
+            "L0015"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920), so the module of C aliases is not available there."
+        }
+      },
+      "targets": {
+        "xtensa": {
+          "mode": "refuse",
+          "codes": [
+            "L0015"
+          ],
+          "reason": "Xtensa's windowed C ABI is not enabled (D920), so the module of C aliases is not available there."
+        }
+      }
     },
     "abi/cortex-cmsis-bindings": {
       "mode": "execute",
@@ -50,6 +150,29 @@
         "mps2-an500": {
           "mode": "restriction",
           "reason": "Its RP2040 header refuses a float unit by its own #error, which the AN500's FPv5-D16 compilation meets, and its bindings assert compiler.feature.fp false (D936)."
+        },
+        "esp32c3": {
+          "mode": "refuse",
+          "codes": [
+            "L0015"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920), so the module of C aliases is not available there."
+        },
+        "sifive-e": {
+          "mode": "refuse",
+          "codes": [
+            "L0015"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920), so the module of C aliases is not available there."
+        }
+      },
+      "targets": {
+        "xtensa": {
+          "mode": "refuse",
+          "codes": [
+            "L0015"
+          ],
+          "reason": "Xtensa's windowed C ABI is not enabled (D920), so the module of C aliases is not available there."
         }
       }
     },
@@ -61,15 +184,63 @@
         "mps2-an500": {
           "mode": "execute",
           "reason": "The AN500's lane description selects FPv5-D16, which the VFP bindings' compiler.feature.fp_dp assertion requires (D936)."
+        },
+        "esp32c3": {
+          "mode": "refuse",
+          "codes": [
+            "L0015"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920), so the module of C aliases is not available there."
+        },
+        "sifive-e": {
+          "mode": "refuse",
+          "codes": [
+            "L0015"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920), so the module of C aliases is not available there."
         }
       },
       "mode": "refuse",
-      "reason": "Its bindings are for AAPCS32's VFP variant and assert compiler.feature.fp_dp (D936), which the reference's description, with no float unit, refutes."
+      "reason": "Its bindings are for AAPCS32's VFP variant and assert compiler.feature.fp_dp (D936), which the reference's description, with no float unit, refutes.",
+      "targets": {
+        "xtensa": {
+          "mode": "refuse",
+          "codes": [
+            "L0015"
+          ],
+          "reason": "Xtensa's windowed C ABI is not enabled (D920), so the module of C aliases is not available there."
+        }
+      }
     },
     "abi/darwin-stack-composite-slots": {
       "mode": "restriction",
       "stops": "c-headers",
-      "reason": "Its C peer prints what it observed through the C library's stdio, and that output is its oracle (run_expect:); the corpus's freestanding C has no C library, and abi/cortex-c-peer checks the same transport on Cortex-M0 by status."
+      "reason": "Its C peer prints what it observed through the C library's stdio, and that output is its oracle (run_expect:); the corpus's freestanding C has no C library, and abi/cortex-c-peer checks the same transport on Cortex-M0 by status.",
+      "lanes": {
+        "esp32c3": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        },
+        "sifive-e": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      },
+      "targets": {
+        "xtensa": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "Xtensa's windowed C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      }
     },
     "abi/darwin-varargs-stack-slots": {
       "mode": "refuse",
@@ -149,7 +320,32 @@
       "reason": "Its C peer reads the C library, which only a hosted system has; the backend suite's symbol case holds Cortex-M0's public routines and data to local symbols."
     },
     "abi/link-symbol-exports": {
-      "mode": "execute"
+      "mode": "execute",
+      "lanes": {
+        "esp32c3": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        },
+        "sifive-e": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      },
+      "targets": {
+        "xtensa": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "Xtensa's windowed C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      }
     },
     "abi/linux-file-identity": {
       "mode": "refuse",
@@ -161,7 +357,32 @@
     "abi/lp64d-integer-extension": {
       "mode": "restriction",
       "stops": "c-headers",
-      "reason": "Its independently compiled RV64 peer prints what it observed through the C library's stdio, and that output is its oracle (run_expect:); AAPCS32's narrow extension is abi/cortex-c-peer's on Cortex-M0."
+      "reason": "Its independently compiled RV64 peer prints what it observed through the C library's stdio, and that output is its oracle (run_expect:); AAPCS32's narrow extension is abi/cortex-c-peer's on Cortex-M0.",
+      "lanes": {
+        "esp32c3": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        },
+        "sifive-e": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      },
+      "targets": {
+        "xtensa": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "Xtensa's windowed C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      }
     },
     "abi/lp64d-main-return": {
       "mode": "restriction",
@@ -183,14 +404,64 @@
       "reason": "Each system's errno numbers are its C header's, which only a hosted system has."
     },
     "abi/public-routine-is-local": {
-      "mode": "execute"
+      "mode": "execute",
+      "lanes": {
+        "esp32c3": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        },
+        "sifive-e": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      },
+      "targets": {
+        "xtensa": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "Xtensa's windowed C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      }
     },
     "abi/r440-bindings-generated": {
       "mode": "refuse",
       "codes": [
         "L0324"
       ],
-      "reason": "Its bindings were generated for x86-64's LP64 C ABI and assert compiler.c_sysv_lp64, which Cortex-M0 refutes; abi/cortex-cmsis-bindings and abi/cortex-vfp-bindings are bindings generated for AAPCS32."
+      "reason": "Its bindings were generated for x86-64's LP64 C ABI and assert compiler.c_sysv_lp64, which Cortex-M0 refutes; abi/cortex-cmsis-bindings and abi/cortex-vfp-bindings are bindings generated for AAPCS32.",
+      "lanes": {
+        "esp32c3": {
+          "mode": "refuse",
+          "codes": [
+            "L0015"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920), so the module of C aliases is not available there."
+        },
+        "sifive-e": {
+          "mode": "refuse",
+          "codes": [
+            "L0015"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920), so the module of C aliases is not available there."
+        }
+      },
+      "targets": {
+        "xtensa": {
+          "mode": "refuse",
+          "codes": [
+            "L0015"
+          ],
+          "reason": "Xtensa's windowed C ABI is not enabled (D920), so the module of C aliases is not available there."
+        }
+      }
     },
     "abi/r440-errno-interposition": {
       "mode": "refuse",
@@ -209,30 +480,180 @@
     "abi/r440-native-aggregates": {
       "mode": "restriction",
       "stops": "c-headers",
-      "reason": "Its C peer prints what it observed through the C library's stdio, and that output is its oracle (run_expect:); the corpus's freestanding C has no C library, and abi/cortex-c-peer checks the same transport on Cortex-M0 by status."
+      "reason": "Its C peer prints what it observed through the C library's stdio, and that output is its oracle (run_expect:); the corpus's freestanding C has no C library, and abi/cortex-c-peer checks the same transport on Cortex-M0 by status.",
+      "lanes": {
+        "esp32c3": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        },
+        "sifive-e": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      },
+      "targets": {
+        "xtensa": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "Xtensa's windowed C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      }
     },
     "abi/r440-native-banks": {
       "mode": "restriction",
       "stops": "c-headers",
-      "reason": "Its C peer prints what it observed through the C library's stdio, and that output is its oracle (run_expect:); the corpus's freestanding C has no C library, and abi/cortex-c-peer checks the same transport on Cortex-M0 by status."
+      "reason": "Its C peer prints what it observed through the C library's stdio, and that output is its oracle (run_expect:); the corpus's freestanding C has no C library, and abi/cortex-c-peer checks the same transport on Cortex-M0 by status.",
+      "lanes": {
+        "esp32c3": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        },
+        "sifive-e": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      },
+      "targets": {
+        "xtensa": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "Xtensa's windowed C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      }
     },
     "abi/r440-native-bounds": {
       "mode": "restriction",
       "stops": "c-headers",
-      "reason": "Its C peer maps guard pages around the program's buffers and prints what it observed through the C library, which only a hosted system has."
+      "reason": "Its C peer maps guard pages around the program's buffers and prints what it observed through the C library, which only a hosted system has.",
+      "lanes": {
+        "esp32c3": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        },
+        "sifive-e": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      },
+      "targets": {
+        "xtensa": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "Xtensa's windowed C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      }
     },
     "abi/r440-native-callback-array-fields": {
       "mode": "restriction",
       "stops": "c-headers",
-      "reason": "Its C peer prints what it observed through the C library's stdio, and that output is its oracle (run_expect:); the corpus's freestanding C has no C library, and abi/cortex-c-peer checks the same transport on Cortex-M0 by status."
+      "reason": "Its C peer prints what it observed through the C library's stdio, and that output is its oracle (run_expect:); the corpus's freestanding C has no C library, and abi/cortex-c-peer checks the same transport on Cortex-M0 by status.",
+      "lanes": {
+        "esp32c3": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        },
+        "sifive-e": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      },
+      "targets": {
+        "xtensa": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "Xtensa's windowed C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      }
     },
     "abi/r440-native-callbacks": {
       "mode": "restriction",
       "stops": "c-headers",
-      "reason": "Its C peer prints what it observed through the C library's stdio, and that output is its oracle (run_expect:); the corpus's freestanding C has no C library, and abi/cortex-c-peer checks the same transport on Cortex-M0 by status."
+      "reason": "Its C peer prints what it observed through the C library's stdio, and that output is its oracle (run_expect:); the corpus's freestanding C has no C library, and abi/cortex-c-peer checks the same transport on Cortex-M0 by status.",
+      "lanes": {
+        "esp32c3": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        },
+        "sifive-e": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      },
+      "targets": {
+        "xtensa": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "Xtensa's windowed C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      }
     },
     "abi/r440-native-dollar-link": {
-      "mode": "execute"
+      "mode": "execute",
+      "lanes": {
+        "esp32c3": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        },
+        "sifive-e": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      },
+      "targets": {
+        "xtensa": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "Xtensa's windowed C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      }
     },
     "abi/r440-native-hosted": {
       "mode": "refuse",
@@ -246,17 +667,95 @@
       "codes": [
         "L0347"
       ],
-      "reason": "refine refuses its datum's link name main.foo.1 on Cortex-M0 as an invalid or reserved symbol (L0347)."
+      "reason": "refine refuses its datum's link name main.foo.1 on Cortex-M0 as an invalid or reserved symbol (L0347).",
+      "lanes": {
+        "esp32c3": {
+          "mode": "refuse",
+          "codes": [
+            "L0346",
+            "L0347"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346). Its datum's link name main.foo.1 is refused as a reserved symbol too (L0347)."
+        },
+        "sifive-e": {
+          "mode": "refuse",
+          "codes": [
+            "L0346",
+            "L0347"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346). Its datum's link name main.foo.1 is refused as a reserved symbol too (L0347)."
+        }
+      },
+      "targets": {
+        "xtensa": {
+          "mode": "refuse",
+          "codes": [
+            "L0346",
+            "L0347"
+          ],
+          "reason": "Xtensa's windowed C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346). Its datum's link name main.foo.1 is refused as a reserved symbol too (L0347)."
+        }
+      }
     },
     "abi/r440-native-nested-shape": {
       "mode": "restriction",
       "stops": "c-headers",
-      "reason": "Its C peer prints what it observed through the C library's stdio, and that output is its oracle (run_expect:); the corpus's freestanding C has no C library, and abi/cortex-c-peer checks the same transport on Cortex-M0 by status."
+      "reason": "Its C peer prints what it observed through the C library's stdio, and that output is its oracle (run_expect:); the corpus's freestanding C has no C library, and abi/cortex-c-peer checks the same transport on Cortex-M0 by status.",
+      "lanes": {
+        "esp32c3": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        },
+        "sifive-e": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      },
+      "targets": {
+        "xtensa": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "Xtensa's windowed C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      }
     },
     "abi/r440-native-recursive-array-fields": {
       "mode": "restriction",
       "stops": "c-headers",
-      "reason": "Its C peer prints what it observed through the C library's stdio, and that output is its oracle (run_expect:); the corpus's freestanding C has no C library, and abi/cortex-c-peer checks the same transport on Cortex-M0 by status."
+      "reason": "Its C peer prints what it observed through the C library's stdio, and that output is its oracle (run_expect:); the corpus's freestanding C has no C library, and abi/cortex-c-peer checks the same transport on Cortex-M0 by status.",
+      "lanes": {
+        "esp32c3": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        },
+        "sifive-e": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      },
+      "targets": {
+        "xtensa": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "Xtensa's windowed C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      }
     },
     "abi/r440-native-renamed-main": {
       "mode": "refuse",
@@ -270,7 +769,35 @@
       "codes": [
         "L0300"
       ],
-      "reason": "Its program passes isize values past 32 bits, -6000000000 among them, which Cortex-M0's 32-bit isize cannot hold (L0300); abi/cortex-c-peer passes every scalar width on Cortex-M0."
+      "reason": "Its program passes isize values past 32 bits, -6000000000 among them, which Cortex-M0's 32-bit isize cannot hold (L0300); abi/cortex-c-peer passes every scalar width on Cortex-M0.",
+      "lanes": {
+        "esp32c3": {
+          "mode": "refuse",
+          "codes": [
+            "L0300",
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346). Its isize values past 32 bits do not fit RV32's isize either (L0300)."
+        },
+        "sifive-e": {
+          "mode": "refuse",
+          "codes": [
+            "L0300",
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346). Its isize values past 32 bits do not fit RV32's isize either (L0300)."
+        }
+      },
+      "targets": {
+        "xtensa": {
+          "mode": "refuse",
+          "codes": [
+            "L0300",
+            "L0346"
+          ],
+          "reason": "Xtensa's windowed C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346). Its isize values past 32 bits do not fit Xtensa's isize either (L0300)."
+        }
+      }
     },
     "abi/r440-native-startup-empty": {
       "mode": "refuse",
@@ -310,12 +837,62 @@
     "abi/r440-smoke": {
       "mode": "restriction",
       "stops": "c-headers",
-      "reason": "Its C peer prints what it observed through the C library's stdio, and that output is its oracle (run_expect:); the corpus's freestanding C has no C library, and abi/cortex-c-peer checks the same transport on Cortex-M0 by status."
+      "reason": "Its C peer prints what it observed through the C library's stdio, and that output is its oracle (run_expect:); the corpus's freestanding C has no C library, and abi/cortex-c-peer checks the same transport on Cortex-M0 by status.",
+      "lanes": {
+        "esp32c3": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        },
+        "sifive-e": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      },
+      "targets": {
+        "xtensa": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "Xtensa's windowed C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      }
     },
     "abi/r440-sret-pointer-observation": {
       "mode": "restriction",
       "stops": "c-headers",
-      "reason": "Its C peer prints what it observed through the C library's stdio, and that output is its oracle (run_expect:); the corpus's freestanding C has no C library, and abi/cortex-c-peer checks the same transport on Cortex-M0 by status."
+      "reason": "Its C peer prints what it observed through the C library's stdio, and that output is its oracle (run_expect:); the corpus's freestanding C has no C library, and abi/cortex-c-peer checks the same transport on Cortex-M0 by status.",
+      "lanes": {
+        "esp32c3": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        },
+        "sifive-e": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      },
+      "targets": {
+        "xtensa": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "Xtensa's windowed C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      }
     },
     "abi/r440-varargs-pointer-callback": {
       "mode": "refuse",
@@ -327,47 +904,278 @@
     "abi/r450-review-backend-c-entry": {
       "mode": "restriction",
       "stops": "oracle",
-      "reason": "It builds and links on Cortex-M0, and its oracle includes its standard output (run_expect:), empty, which firmware has no channel to give."
+      "reason": "It builds and links on Cortex-M0, and its oracle includes its standard output (run_expect:), empty, which firmware has no channel to give.",
+      "lanes": {
+        "esp32c3": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        },
+        "sifive-e": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      },
+      "targets": {
+        "xtensa": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "Xtensa's windowed C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      }
     },
     "abi/r450-x86-callee-probes": {
       "mode": "restriction",
       "stops": "c-source",
-      "reason": "Its C peer clobbers each host architecture's caller-saved registers by name in inline assembly, x86-64's for any other, so it compiles for no Arm M-profile core."
+      "reason": "Its C peer clobbers each host architecture's caller-saved registers by name in inline assembly, x86-64's for any other, so it compiles for no Arm M-profile core.",
+      "lanes": {
+        "esp32c3": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        },
+        "sifive-e": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      },
+      "targets": {
+        "xtensa": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "Xtensa's windowed C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      }
     },
     "abi/r490-distinct-c-roundtrip": {
-      "mode": "execute"
+      "mode": "execute",
+      "lanes": {
+        "esp32c3": {
+          "mode": "refuse",
+          "codes": [
+            "L0301",
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346). A C function type is no function there, so calling a value of one is refused too (L0301)."
+        },
+        "sifive-e": {
+          "mode": "refuse",
+          "codes": [
+            "L0301",
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346). A C function type is no function there, so calling a value of one is refused too (L0301)."
+        }
+      },
+      "targets": {
+        "xtensa": {
+          "mode": "refuse",
+          "codes": [
+            "L0301",
+            "L0346"
+          ],
+          "reason": "Xtensa's windowed C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346). A C function type is no function there, so calling a value of one is refused too (L0301)."
+        }
+      }
     },
     "abi/r630-dma-slice": {
       "mode": "restriction",
       "stops": "c-headers",
-      "reason": "Its C main checks the device model with the C library's assert; runtime and firmware DMA fixtures run the slice protocol on Cortex-M0."
+      "reason": "Its C main checks the device model with the C library's assert; runtime and firmware DMA fixtures run the slice protocol on Cortex-M0.",
+      "lanes": {
+        "esp32c3": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        },
+        "sifive-e": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      },
+      "targets": {
+        "xtensa": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "Xtensa's windowed C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      }
     },
     "abi/r630-native-memory": {
       "mode": "refuse",
       "codes": [
         "L0344"
       ],
-      "reason": "Its program makes atomic read-modify-write operations, which ARMv6-M has no instruction for (L0344); its C peer also needs POSIX threads."
+      "reason": "Its program makes atomic read-modify-write operations, which ARMv6-M has no instruction for (L0344); its C peer also needs POSIX threads.",
+      "lanes": {
+        "esp32c3": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        },
+        "sifive-e": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      },
+      "targets": {
+        "xtensa": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "Xtensa's windowed C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      }
     },
     "abi/r640-dma-packed": {
       "mode": "restriction",
       "stops": "c-headers",
-      "reason": "Its C main checks the device model with the C library's assert; backend-dma.ldn runs the packed DMA protocol on Cortex-M0."
+      "reason": "Its C main checks the device model with the C library's assert; backend-dma.ldn runs the packed DMA protocol on Cortex-M0.",
+      "lanes": {
+        "esp32c3": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        },
+        "sifive-e": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      },
+      "targets": {
+        "xtensa": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "Xtensa's windowed C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      }
     },
     "abi/r640-exhaustive-encodings": {
       "mode": "restriction",
       "stops": "c-headers",
-      "reason": "Its C main forks a child process for each reserved encoding and waits for its signal, which only a hosted system has; packed-cortex.ldn holds the encodings on Cortex-M0."
+      "reason": "Its C main forks a child process for each reserved encoding and waits for its signal, which only a hosted system has; packed-cortex.ldn holds the encodings on Cortex-M0.",
+      "lanes": {
+        "esp32c3": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        },
+        "sifive-e": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      },
+      "targets": {
+        "xtensa": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "Xtensa's windowed C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      }
     },
     "abi/r640-reserved-trap": {
       "mode": "restriction",
       "stops": "c-headers",
-      "reason": "Its C main forks a child process for the reserved encoding and waits for its signal, which only a hosted system has; packed-cortex-hole.ldn runs the trap on Cortex-M0."
+      "reason": "Its C main forks a child process for the reserved encoding and waits for its signal, which only a hosted system has; packed-cortex-hole.ldn runs the trap on Cortex-M0.",
+      "lanes": {
+        "esp32c3": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        },
+        "sifive-e": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      },
+      "targets": {
+        "xtensa": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "Xtensa's windowed C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      }
     },
     "abi/r670-noreturn": {
       "mode": "restriction",
       "stops": "c-headers",
-      "reason": "Its C main forks a child process for each path and waits for its signal, which only a hosted system has; freestanding.py executes ordinary direct, generic, evidence, deferred and recovery calls through compiler-owned firmware."
+      "reason": "Its C main forks a child process for each path and waits for its signal, which only a hosted system has; freestanding.py executes ordinary direct, generic, evidence, deferred and recovery calls through compiler-owned firmware.",
+      "lanes": {
+        "esp32c3": {
+          "mode": "refuse",
+          "codes": [
+            "L0343",
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346). Its noreturn body is refused as one that can return (L0343) beside the C signatures."
+        },
+        "sifive-e": {
+          "mode": "refuse",
+          "codes": [
+            "L0343",
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346). Its noreturn body is refused as one that can return (L0343) beside the C signatures."
+        }
+      },
+      "targets": {
+        "xtensa": {
+          "mode": "refuse",
+          "codes": [
+            "L0343",
+            "L0346"
+          ],
+          "reason": "Xtensa's windowed C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346). Its noreturn body is refused as one that can return (L0343) beside the C signatures."
+        }
+      }
     },
     "abi/r670-panic": {
       "mode": "refuse",
@@ -379,7 +1187,32 @@
     "abi/report-latch-one-line": {
       "mode": "restriction",
       "stops": "c-options",
-      "reason": "Its C peer is built with POSIX threads, which firmware has none of, and its trap's report line is its oracle, which firmware does not write (D361)."
+      "reason": "Its C peer is built with POSIX threads, which firmware has none of, and its trap's report line is its oracle, which firmware does not write (D361).",
+      "lanes": {
+        "esp32c3": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        },
+        "sifive-e": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      },
+      "targets": {
+        "xtensa": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "Xtensa's windowed C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      }
     },
     "abi/sigpipe-handler-kept": {
       "mode": "refuse",
@@ -405,7 +1238,32 @@
     "abi/thread-storage-per-thread": {
       "mode": "restriction",
       "stops": "c-options",
-      "reason": "Its C peer starts POSIX threads, which firmware has none of, to show each its own thread storage."
+      "reason": "Its C peer starts POSIX threads, which firmware has none of, to show each its own thread storage.",
+      "lanes": {
+        "esp32c3": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        },
+        "sifive-e": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      },
+      "targets": {
+        "xtensa": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "Xtensa's windowed C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      }
     },
     "runtime/a-zero-divisor-traps": {
       "mode": "execute",
@@ -607,7 +1465,32 @@
     "runtime/assembly-naked-labels": {
       "mode": "restriction",
       "reason": "Its C import of the naked symbol compiles on Cortex-M0 since D920, but the naked body has x86-64, arm64 and RV64 arms and none for Cortex-M0, so the link has no definition of the symbol; a Cortex-M0 naked body's labels are pinned by the firmware lane's naked entries.",
-      "stops": "link"
+      "stops": "link",
+      "lanes": {
+        "esp32c3": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        },
+        "sifive-e": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      },
+      "targets": {
+        "xtensa": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "Xtensa's windowed C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      }
     },
     "runtime/assembly-operand-free": {
       "mode": "execute"
@@ -753,12 +1636,62 @@
         "L0301"
       ],
       "mode": "refuse",
-      "reason": "The fixture holds platform/c's LP64 widths, assigning c_long to i64; under AAPCS32 c_long is i32 (D921), so the assignment is refused, and positive/c-aliases-aapcs32 holds the ILP32 aliases on Cortex-M0 instead."
+      "reason": "The fixture holds platform/c's LP64 widths, assigning c_long to i64; under AAPCS32 c_long is i32 (D921), so the assignment is refused, and positive/c-aliases-aapcs32 holds the ILP32 aliases on Cortex-M0 instead.",
+      "lanes": {
+        "esp32c3": {
+          "mode": "refuse",
+          "codes": [
+            "L0015"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920), so the module of C aliases is not available there."
+        },
+        "sifive-e": {
+          "mode": "refuse",
+          "codes": [
+            "L0015"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920), so the module of C aliases is not available there."
+        }
+      },
+      "targets": {
+        "xtensa": {
+          "mode": "refuse",
+          "codes": [
+            "L0015"
+          ],
+          "reason": "Xtensa's windowed C ABI is not enabled (D920), so the module of C aliases is not available there."
+        }
+      }
     },
     "runtime/c-library-directories": {
       "mode": "restriction",
       "reason": "Its C signatures compile on Cortex-M0 since D920 and firmware links archives since D923, but the fixture's C archives are built by the hosted lanes' C driver, and it calls libm's sqrtf and pow, which firmware links from no C library.",
-      "stops": "link"
+      "stops": "link",
+      "lanes": {
+        "esp32c3": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        },
+        "sifive-e": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      },
+      "targets": {
+        "xtensa": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "Xtensa's windowed C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      }
     },
     "runtime/c-packed-record-fields": {
       "mode": "execute"
@@ -1124,17 +2057,92 @@
     "runtime/cstring-conversion-truncated-traps": {
       "mode": "restriction",
       "reason": "Its C signature compiles on Cortex-M0 since D920, but the program calls the C library's strdup, and firmware links no C library.",
-      "stops": "link"
+      "stops": "link",
+      "lanes": {
+        "esp32c3": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        },
+        "sifive-e": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      },
+      "targets": {
+        "xtensa": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "Xtensa's windowed C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      }
     },
     "runtime/cstring-first-nul-validation": {
       "mode": "restriction",
       "reason": "Its C signature compiles on Cortex-M0 since D920, but the program calls the C library's strdup, and firmware links no C library.",
-      "stops": "link"
+      "stops": "link",
+      "lanes": {
+        "esp32c3": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        },
+        "sifive-e": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      },
+      "targets": {
+        "xtensa": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "Xtensa's windowed C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      }
     },
     "runtime/cstring-traversal-invalid-traps": {
       "mode": "restriction",
       "reason": "Its C signature compiles on Cortex-M0 since D920, but the program calls the C library's strdup, and firmware links no C library.",
-      "stops": "link"
+      "stops": "link",
+      "lanes": {
+        "esp32c3": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        },
+        "sifive-e": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      },
+      "targets": {
+        "xtensa": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "Xtensa's windowed C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      }
     },
     "runtime/declared-errors-direct-and-inferred": {
       "mode": "execute"
@@ -1160,7 +2168,32 @@
     "runtime/defer-does-not-unwind-traps": {
       "mode": "restriction",
       "reason": "Its C signature compiles on Cortex-M0 since D920, but the program calls the C library's exit, and firmware links no C library and has no process to end.",
-      "stops": "link"
+      "stops": "link",
+      "lanes": {
+        "esp32c3": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        },
+        "sifive-e": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      },
+      "targets": {
+        "xtensa": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "Xtensa's windowed C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      }
     },
     "runtime/deferred-call-drops-its-result": {
       "mode": "execute"
@@ -1570,7 +2603,32 @@
       "mode": "refuse"
     },
     "runtime/flexible-member-trailing-bytes": {
-      "mode": "execute"
+      "mode": "execute",
+      "lanes": {
+        "esp32c3": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        },
+        "sifive-e": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      },
+      "targets": {
+        "xtensa": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "Xtensa's windowed C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      }
     },
     "runtime/float-comparisons-branch-on-nan": {
       "mode": "execute"
@@ -1729,7 +2787,32 @@
       "mode": "execute"
     },
     "runtime/hosted-assembly-reaches-no-evidence-entry": {
-      "mode": "execute"
+      "mode": "execute",
+      "lanes": {
+        "esp32c3": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        },
+        "sifive-e": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      },
+      "targets": {
+        "xtensa": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "Xtensa's windowed C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      }
     },
     "runtime/hosted-heap-after-thread-start": {
       "codes": [
@@ -2247,7 +3330,32 @@
     "runtime/narrow-extern-argument-is-extended": {
       "mode": "restriction",
       "reason": "Its C signature compiles on Cortex-M0 since D920, but the program calls the C library's abs, and firmware links no C library; the cortex ABI case `C signatures from source at both variants` holds AAPCS32's narrow-argument extension.",
-      "stops": "link"
+      "stops": "link",
+      "lanes": {
+        "esp32c3": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        },
+        "sifive-e": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      },
+      "targets": {
+        "xtensa": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "Xtensa's windowed C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      }
     },
     "runtime/narrow-scalars-in-stack-slots": {
       "mode": "execute"
@@ -2733,7 +3841,32 @@
     "runtime/r430-static-library": {
       "mode": "restriction",
       "reason": "Its C signature compiles on Cortex-M0 since D920, but the program calls libm's fegetround, and firmware links no C library.",
-      "stops": "link"
+      "stops": "link",
+      "lanes": {
+        "esp32c3": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        },
+        "sifive-e": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      },
+      "targets": {
+        "xtensa": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "Xtensa's windowed C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      }
     },
     "runtime/r440-aggregate-shaped-copy-endpoints": {
       "mode": "execute"
@@ -2744,10 +3877,60 @@
         "L0301"
       ],
       "mode": "refuse",
-      "reason": "The fixture holds SysV LP64's signed plain char and 64-bit long; under AAPCS32 c_char is u8 and c_long i32 (D921), so its -1 char and its LP64 assignments are refused, and positive/c-aliases-aapcs32 holds the ILP32 aliases on Cortex-M0 instead."
+      "reason": "The fixture holds SysV LP64's signed plain char and 64-bit long; under AAPCS32 c_char is u8 and c_long i32 (D921), so its -1 char and its LP64 assignments are refused, and positive/c-aliases-aapcs32 holds the ILP32 aliases on Cortex-M0 instead.",
+      "lanes": {
+        "esp32c3": {
+          "mode": "refuse",
+          "codes": [
+            "L0015"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920), so the module of C aliases is not available there."
+        },
+        "sifive-e": {
+          "mode": "refuse",
+          "codes": [
+            "L0015"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920), so the module of C aliases is not available there."
+        }
+      },
+      "targets": {
+        "xtensa": {
+          "mode": "refuse",
+          "codes": [
+            "L0015"
+          ],
+          "reason": "Xtensa's windowed C ABI is not enabled (D920), so the module of C aliases is not available there."
+        }
+      }
     },
     "runtime/r440-callback-pointer-witness": {
-      "mode": "execute"
+      "mode": "execute",
+      "lanes": {
+        "esp32c3": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        },
+        "sifive-e": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      },
+      "targets": {
+        "xtensa": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "Xtensa's windowed C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      }
     },
     "runtime/r440-checker-qualified-alias-conversions": {
       "mode": "execute"
@@ -2757,7 +3940,32 @@
         "L0300"
       ],
       "mode": "refuse",
-      "reason": "The fixture converts 64-bit values through platform/c's LP64 c_ulong; under AAPCS32 c_ulong is u32 (D921), so its 64-bit literal does not fit, and positive/c-aliases-aapcs32 holds the ILP32 aliases on Cortex-M0 instead."
+      "reason": "The fixture converts 64-bit values through platform/c's LP64 c_ulong; under AAPCS32 c_ulong is u32 (D921), so its 64-bit literal does not fit, and positive/c-aliases-aapcs32 holds the ILP32 aliases on Cortex-M0 instead.",
+      "lanes": {
+        "esp32c3": {
+          "mode": "refuse",
+          "codes": [
+            "L0015"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920), so the module of C aliases is not available there."
+        },
+        "sifive-e": {
+          "mode": "refuse",
+          "codes": [
+            "L0015"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920), so the module of C aliases is not available there."
+        }
+      },
+      "targets": {
+        "xtensa": {
+          "mode": "refuse",
+          "codes": [
+            "L0015"
+          ],
+          "reason": "Xtensa's windowed C ABI is not enabled (D920), so the module of C aliases is not available there."
+        }
+      }
     },
     "runtime/r440-checker-qualified-range-traps": {
       "mode": "execute"
@@ -2840,7 +4048,32 @@
       "mode": "execute"
     },
     "runtime/r450-optimal-layout-composition": {
-      "mode": "execute"
+      "mode": "execute",
+      "lanes": {
+        "esp32c3": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        },
+        "sifive-e": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      },
+      "targets": {
+        "xtensa": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "Xtensa's windowed C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      }
     },
     "runtime/r450-review-backend-large-routine": {
       "mode": "execute",
@@ -2881,7 +4114,32 @@
       "mode": "execute"
     },
     "runtime/r480-arena-independent-results": {
-      "mode": "execute"
+      "mode": "execute",
+      "lanes": {
+        "esp32c3": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        },
+        "sifive-e": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      },
+      "targets": {
+        "xtensa": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "Xtensa's windowed C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      }
     },
     "runtime/r480-arena-nested-exhaustion": {
       "mode": "execute"
@@ -3303,7 +4561,32 @@
       "mode": "execute"
     },
     "runtime/rv64-indexed-address": {
-      "mode": "execute"
+      "mode": "execute",
+      "lanes": {
+        "esp32c3": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        },
+        "sifive-e": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      },
+      "targets": {
+        "xtensa": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "Xtensa's windowed C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      }
     },
     "runtime/scalar-replacement-parts": {
       "mode": "execute"
@@ -3342,7 +4625,13 @@
       "mode": "execute"
     },
     "runtime/signals-fake-firmware": {
-      "mode": "execute"
+      "mode": "execute",
+      "lanes": {
+        "esp32c3": {
+          "mode": "limit",
+          "reason": "D698: at none/off and none/all its rv32imc image overflows the esp32c3 lane's 32 KiB of IRAM by 96 and 104 bytes, measured after core/failure's reasons grew; Thumb's text fits the reference's 32 KiB, and every optimized profile runs here."
+        }
+      }
     },
     "runtime/signals-fake-stop-server": {
       "mode": "execute",
@@ -3665,7 +4954,32 @@
       "mode": "execute"
     },
     "runtime/undo-does-not-unwind-traps": {
-      "mode": "execute"
+      "mode": "execute",
+      "lanes": {
+        "esp32c3": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        },
+        "sifive-e": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      },
+      "targets": {
+        "xtensa": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "Xtensa's windowed C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      }
     },
     "runtime/utf16-slice-not-boundary-traps": {
       "mode": "execute"
@@ -3820,7 +5134,32 @@
       "mode": "execute"
     },
     "runtime/written-type-c-function": {
-      "mode": "execute"
+      "mode": "execute",
+      "lanes": {
+        "esp32c3": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        },
+        "sifive-e": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "RV32's ilp32 C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      },
+      "targets": {
+        "xtensa": {
+          "mode": "refuse",
+          "codes": [
+            "L0346"
+          ],
+          "reason": "Xtensa's windowed C ABI is not enabled (D920): refine refuses the fixture's C signatures and layout(c) records there (L0346)."
+        }
+      }
     },
     "runtime/written-type-composite-extraction": {
       "mode": "execute"

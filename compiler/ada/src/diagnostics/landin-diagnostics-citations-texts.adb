@@ -30148,12 +30148,14 @@ package body Landin.Diagnostics.Citations.Texts is
                & " which the lane still runs and requires to fail, so a st"
                & "ale one fails the run, and a `refuse` row's entry the co"
                & "des the lane refuses it with where they differ from the "
-               & "reference's. `run.py`'s `mps2-an500` lane is that run, a"
-               & "s its `mps2-an505` lane is D607's, and the AN505 is reac"
-               & "hed through its own entry-module file. No limited verdic"
-               & "t is linked again against the lane's map, which is no de"
-               & "vice's, and its larger map judges no reference limit sta"
-               & "le.",
+               & "reference's; an `execute` or `restriction` row's entry m"
+               & "ay refuse it too, with the lane's codes, as the RV32 lan"
+               & "es refuse the C surface their ilp32 ABI does not enable "
+               & "(D920). `run.py`'s `mps2-an500` lane is that run, as its"
+               & " `mps2-an505` lane is D607's, and the AN505 is reached t"
+               & "hrough its own entry-module file. No limited verdict is "
+               & "linked again against the lane's map, which is no device'"
+               & "s, and its larger map judges no reference limit stale.",
             when 780 =>
                "Chosen: without a unit, the assembly declares `Tag_ABI_F"
                & "P_number_model` IEEE 754 and `Tag_ABI_VFP_args` 0, the b"
@@ -30304,10 +30306,12 @@ package body Landin.Diagnostics.Citations.Texts is
                & "ttribute is held to the lane's before the link, apart fr"
                & "om GNU ld's check, and a C peer compiled for the other v"
                & "ariant must be refused by both, the linker in either ord"
-               & "er. `abi/cortex-c-peer` also takes the route a program d"
-               & "oes, refine's own firmware link of its C as archives nam"
-               & "ed by `linker.library` with `-L` (D923), under compiler-"
-               & "owned startup.",
+               & "er; no object may declare short enums, which the linker "
+               & "only warns of, and a peer built with them must be refuse"
+               & "d by that assertion. `abi/cortex-c-peer` also takes the "
+               & "route a program does, refine's own firmware link of its "
+               & "C as archives named by `linker.library` with `-L` (D923)"
+               & ", under compiler-owned startup.",
             when 986 =>
                "Chosen: a restriction is built at none/off on each lane "
                & "it runs on as an `execute` row is, and names in `stops` "
@@ -30329,7 +30333,11 @@ package body Landin.Diagnostics.Citations.Texts is
                & " first stopped at `defect`: Cortex-M emission had no tra"
                & "p class for a `code_address`, which the integer-to-point"
                & "er check gives a C function value made from an address, "
-               & "as it gives a pointer's.",
+               & "as it gives a pointer's. The Xtensa corpus, which reads "
+               & "the same inventory, holds its restrictions to the same s"
+               & "tages, an ABI fixture's C compiled by the chip's GCC, an"
+               & "d a row whose verdict differs there carries its `targets"
+               & ".xtensa` disposition.",
             when 987 =>
                "Chosen: `environments/cortex-m/abi.py` compiles each Cor"
                & "tex-M binding fixture's generated adapters with `-fsynta"

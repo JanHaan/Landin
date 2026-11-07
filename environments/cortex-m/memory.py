@@ -22,7 +22,7 @@ def execute(run):
     source = run.out / 'unsupported-rmw.c'
     source.write_text('unsigned bump(unsigned *p) { return __atomic_fetch_add(p,1,5); }\n')
     run.command('compile-unsupported-rmw', [run.arm / 'arm-eabi-gcc',
-        '-mcpu=cortex-m0', '-mthumb', '-O2', '-c', source, '-o', 'unsupported-rmw.o'])
+        '-mcpu=cortex-m0', '-mthumb', '-fno-short-enums', '-O2', '-c', source, '-o', 'unsupported-rmw.o'])
     symbols = run.command('unsupported-rmw-symbols',
         [run.arm / 'arm-eabi-nm', '-u', 'unsupported-rmw.o'])
     require('__atomic_fetch_add_4' in symbols, 'M0 RMW helper control changed')

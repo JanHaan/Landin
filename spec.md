@@ -28794,7 +28794,9 @@ that stops it (D986). A row's
 `lanes` entry may give a lane a restriction of its own with its reason,
 which the lane still runs and requires to fail, so a stale one fails the
 run, and a `refuse` row's entry the codes the lane refuses it with where
-they differ from the reference's. `run.py`'s `mps2-an500` lane is that
+they differ from the reference's; an `execute` or `restriction` row's
+entry may refuse it too, with the lane's codes, as the RV32 lanes refuse
+the C surface their ilp32 ABI does not enable (D920). `run.py`'s `mps2-an500` lane is that
 run, as its `mps2-an505` lane is D607's, and the AN505 is reached through
 its own entry-module file.
 No limited verdict is linked again against the lane's map, which is no
@@ -29069,7 +29071,9 @@ the C objects, the four routines GCC requires of a freestanding program,
 `memcpy`, `memmove`, `memset` and `memcmp`, each in its own section, and
 libgcc. Every object's float-argument attribute is held to the lane's
 before the link, apart from GNU ld's check, and a C peer compiled for the
-other variant must be refused by both, the linker in either order.
+other variant must be refused by both, the linker in either order; no
+object may declare short enums, which the linker only warns of, and a peer
+built with them must be refused by that assertion.
 `abi/cortex-c-peer` also takes the route a program does, refine's own
 firmware link of its C as archives named by `linker.library` with `-L`
 (D923), under compiler-owned startup.
@@ -29113,7 +29117,10 @@ Each of the 65 was decided again by that rule: 8 execute, 36 refuse with
 their codes, and 21 are restrictions with their stops. Two of the eight
 first stopped at `defect`: Cortex-M emission had no trap class for a
 `code_address`, which the integer-to-pointer check gives a C function value
-made from an address, as it gives a pointer's.
+made from an address, as it gives a pointer's. The Xtensa corpus, which
+reads the same inventory, holds its restrictions to the same stages, an ABI
+fixture's C compiled by the chip's GCC, and a row whose verdict differs
+there carries its `targets.xtensa` disposition.
 
 **The alternatives:** keeping witnesses, which said what a fixture once
 needed and nothing about what stops it now; requiring every restriction to

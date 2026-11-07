@@ -199,7 +199,7 @@ class AddFixtureTest(unittest.TestCase):
         self.assertIn("write the fixture first", str(raised.exception))
 
     def test_several_fixtures_share_one_recording_and_one_test_run(self):
-        #  SR-858: several fixtures' steps join, the recordings in one run
+        #  Several fixtures' steps join, the recordings in one run
         #  of the test program, the cases in another, every other step once.
         first = add_fixture.remaining_steps(meta("positive/new"), False)
         second = add_fixture.remaining_steps(meta("runtime/other"), True)
