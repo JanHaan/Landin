@@ -3,12 +3,12 @@
 -- masking or stopping reception does not stop bytes arriving at the UART.
 -- This implements the shared commands scenario without claiming DMA.
 import core/atomic
+import core/line
 import esp32/dport
 import esp32/uart0
 import platform/xtensa
 
 public busy: atom
-public bad_baud: atom
 public buffer_empty: atom
 public buffer_too_big: atom
 public bad_buffer: atom
@@ -28,13 +28,54 @@ public rx: type = struct
     lost: bool
 end rx
 
-public line: u32 = 1
+public cpu_line: u32 = 1
 public priority: u32 = 1
 full_bit: u32 = 0x01
 overflow_bit: u32 = 0x10
 timeout_bit: u32 = 0x100
 receive_bits: u32 = 0x111
 rxfifo_reset: u32 = 0x20000
+
+-- UART0's clock, the 40 MHz crystal, which bringup selects undivided.
+public clock: u32 = 40000000
+
+-- What a line's settings program: CLKDIV, and CONF0's frame bits 5:0.
+public registers: type = struct
+    divisor: u32
+    frame: u32
+end registers
+
+-- UART0's registers for SETTINGS, computed and written nowhere (D960).  The
+-- UART divides its clock by CLKDIV plus FRAG, bits 23:20, sixteenths (TRM
+-- 26.4.3.1 of the C3's, which the ESP32's and the S3's share), the integer
+-- CLKDIV's 19:0 and at least 16, since the TRM gives 5 Mbaud at 80 MHz as
+-- the fastest: 39 to 2,500,000 baud at 40 MHz.  CONF0: PARITY 0, odd when
+-- set, PARITY_EN 1, BIT_NUM 3:2 the data bits less five, and STOP_BIT_NUM
+-- 5:4, 1 for one stop bit and 3 for two.  BIT_NUM reaches eight bits, so
+-- nine are refused.  Two stop bits are refused: ESP-IDF v6.1's
+-- uart_ll_set_stop_bits gives them on the ESP32 as one stop bit and
+-- RS485_CONF's DL1_EN, a workaround for a fault of the chip's own two-bit
+-- setting, and this port's selection has no RS485_CONF.  115200 8N1 is
+-- CLKDIV 347 and FRAG 4, 115,190 baud, and CONF0 0x1c.
+public line_registers: (settings: line.settings)
+                       -> (images: registers) ! line.unsupported_rate | line.unsupported_format =
+    try line.check(settings)
+    fail line.unsupported_format when settings.data_bits > 8
+      or settings.stop_bits == line.two_stop_bits
+    value := try line.divisor(clock, settings.rate, 1, 4, 256, 16777215)
+    mut frame: u32 = (u32(settings.data_bits) - 5) << 2
+    frame |= if settings.stop_bits == line.two_stop_bits then 0x30 else 0x10 end if
+    if settings.parity == line.even_parity then frame |= 0x02 end if
+    if settings.parity == line.odd_parity then frame |= 0x03 end if
+    images = (divisor: (value >> 4) | ((value & 15) << 20), frame: frame)
+end line_registers
+
+-- Program the line: CONF0's frame bits, the rest as they were, and CLKDIV.
+program: (images: registers) -> none =
+    conf0 := uart0.conf0_read(uart0.base)
+    uart0.conf0_write(uart0.base, (conf0 & ~0x3f) | images.frame)
+    uart0.clkdiv_write(uart0.base, images.divisor)
+end program
 
 mut produced: atomic.cell(u32) = zeroed
 mut taken: atomic.cell(u32) = zeroed
@@ -97,20 +138,22 @@ public receive: (ring: []mut u8) -> none =
     if lost <> 0 then _ = atomic.sole_add(addr dropped, lost) end if
 end receive
 
-public open: (rate: u32, budget: u32, escaping buf: []mut u8)
-             -> (r: rx from buf) ! busy | bad_baud | buffer_empty | buffer_too_big | bad_buffer =
+public open: (settings: line.settings, budget: u32, escaping buf: []mut u8)
+             -> (r: rx from buf) ! busy | line.unsupported_rate | line.unsupported_format
+                                 | buffer_empty | buffer_too_big | bad_buffer =
     size := lenof buf
     fail buffer_empty when size == 0
     fail buffer_too_big when size > 256
     fail bad_buffer when size < 2 or (size & (size - 1)) <> 0
     fail bad_buffer when budget < u32(size) or budget > 65535
-    -- Bringup configures UART0 at 115200 baud on its board pins.
-    fail bad_baud when rate <> 115200
+    -- Bringup gives UART0 its clock and pins; the line is open's.
+    images := try line_registers(settings)
     -- The line is the receiver's alone: one already enabled is busy.
-    fail busy when (xtensa.enabled_lines() & (1 << line)) <> 0
+    fail busy when (xtensa.enabled_lines() & (1 << cpu_line)) <> 0
     -- The pinned UART header defines this chip's threshold/timeout bits.
     conf1 := uart0.conf1_read(uart0.base)
     uart0.conf1_write(uart0.base, (conf1 & 0x00ffff80) | 0x8a000001)
+    program(images)
     -- Whatever the RX FIFO held from before is discarded.
     conf0 := uart0.conf0_read(uart0.base)
     uart0.conf0_write(uart0.base, conf0 | rxfifo_reset)
@@ -120,8 +163,8 @@ public open: (rate: u32, budget: u32, escaping buf: []mut u8)
     atomic.store(addr taken, 0)
     -- Route UART0 to the level-one CPU interrupt line.
     saved := xtensa.disable_interrupts()
-    dport.pro_uart_intr_map_write(dport.base, line)
-    xtensa.set_enabled_lines(xtensa.enabled_lines() | (1 << line))
+    dport.pro_uart_intr_map_write(dport.base, cpu_line)
+    xtensa.set_enabled_lines(xtensa.enabled_lines() | (1 << cpu_line))
     uart0.int_ena_write(uart0.base, receive_bits)
     xtensa.device_barrier()
     xtensa.restore_interrupts(saved)
@@ -184,3 +227,18 @@ public restart: (inout r: rx) -> none ! stop_timeout | transfer_error =
     xtensa.device_barrier()
     xtensa.restore_interrupts(saved)
 end restart
+
+-- Change the line to SETTINGS: every register image computed first, so a
+-- refusal writes nothing and the line keeps its settings (D955); then,
+-- once the transmitter has sent everything its FIFO held, the line
+-- programmed.  The receive interrupt and the ring are as they were.
+public configure: (inout r: rx, settings: line.settings)
+                  -> none ! line.unsupported_rate | line.unsupported_format =
+    images := try line_registers(settings)
+    mut tx := uart0.status_decode(uart0.status_read(uart0.base))
+    while tx.f_txfifo_cnt <> 0 or tx.f_st_utx_out <> 0 do
+        tx = uart0.status_decode(uart0.status_read(uart0.base))
+    end while
+    program(images)
+    xtensa.device_barrier()
+end configure

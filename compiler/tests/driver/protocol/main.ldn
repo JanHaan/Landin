@@ -1,5 +1,6 @@
 -- Executable client of the actual public driver. Host commands and assertions
 -- are test transport only; they never compute producer/consumer state.
+import core/line
 import drivers/uart
 import platform/cortex_m
 import rp2040/dma
@@ -9,7 +10,12 @@ mut storage: [512]u8 = zeroed
 mut destination: [256]u8 = zeroed
 mut capacity: u32 = 8
 mut offset: u32 = 0
+-- The line open is given: its rate and data bits, its parity, 0 none, 1
+-- even and 2 odd, and its stop bits, 1 or 2.
 mut rate: u32 = 115200
+mut data_bits: u32 = 8
+mut parity: u32 = 0
+mut stop_bits: u32 = 1
 mut budget: u32 = 32
 mut limit: u32 = 256
 mut command: u32 = 0
@@ -41,13 +47,21 @@ end record
 start: () -> noreturn =
     stage = 1
     while command == 0 do cortex_m.compiler_barrier() end while
-    mut receiver := uart.open(rate, budget, storage[usize(offset)..<usize(offset + capacity)]) else (problem)
+    kind: line.parity = if parity == 2 then line.odd_parity
+                        elsif parity == 1 then line.even_parity
+                        else line.no_parity end if
+    stopping: line.stop_bits = if stop_bits == 2 then line.two_stop_bits
+                               else line.one_stop_bit end if
+    settings: line.settings = (rate: rate, data_bits: u8(data_bits),
+                               parity: kind, stop_bits: stopping)
+    mut receiver := uart.open(settings, budget, storage[usize(offset)..<usize(offset + capacity)]) else (problem)
         match problem
             uart.busy: outcome = 1
-            uart.bad_baud: outcome = 2
+            line.unsupported_rate: outcome = 2
             uart.buffer_empty: outcome = 3
             uart.buffer_too_big: outcome = 4
             uart.bad_buffer: outcome = 5
+            line.unsupported_format: outcome = 10
         end match
         stage = 99
         loop do cortex_m.wait_for_interrupt() end loop

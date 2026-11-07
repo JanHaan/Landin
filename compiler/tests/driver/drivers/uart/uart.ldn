@@ -1,12 +1,12 @@
 -- Synthetic driver. DERIVATION.md states the device/lifetime premises.
 -- Vendor images/accessors are unchanged; this is not an RP2040 board port.
+import core/line
 import platform/cortex_m
 import rp2040/dma
 import rp2040/io_bank0
 import rp2040/uart0
 
 public busy: atom
-public bad_baud: atom
 public buffer_empty: atom
 public buffer_too_big: atom
 public bad_buffer: atom
@@ -18,6 +18,16 @@ public receive_error: type = overrun | transfer_error | exhausted | stop_timeout
 public gpio_base: usize = 0x40070000
 public uart_base: usize = 0x40070200
 public dma_base: usize = 0x40071000
+-- The synthetic UART's declared input clock (DERIVATION.md).
+public clock: u32 = 48000000
+
+-- What a line's settings program: IBRD and FBRD, the integer and fraction
+-- of the baud-rate divisor, and LCR_H, the frame.
+public registers: type = struct
+    integer: u32
+    fraction: u32
+    control: u32
+end registers
 
 public rx: type = struct
     buf: []u8
@@ -30,17 +40,39 @@ public rx: type = struct
     broken: bool
 end rx
 
+-- The PL011-like registers for SETTINGS, computed and written nowhere.
+-- IBRD and FBRD hold 16 integer and 6 fraction bits of a divisor of the
+-- clock sampled 16 times a bit, IBRD from 1 to 65535 and FBRD 0 at 65535.
+-- LCR_H: WLEN 6:5 the data bits less five, FEN 4, STP2 3, EPS 2 and PEN 1;
+-- WLEN reaches eight bits, so nine are refused.  115200 8N1 is 26, 3 and
+-- 0x70.
+public line_registers: (settings: line.settings)
+                       -> (images: registers) ! line.unsupported_rate | line.unsupported_format =
+    try line.check(settings)
+    fail line.unsupported_format when settings.data_bits > 8
+    value := try line.divisor(clock, settings.rate, 16, 6, 64, 65535 * 64)
+    mut control: u32 = ((u32(settings.data_bits) - 5) << 5) | 0x10
+    if settings.stop_bits == line.two_stop_bits then control |= 0x08 end if
+    if settings.parity == line.even_parity then
+        control |= 0x06
+    elsif settings.parity == line.odd_parity then
+        control |= 0x02
+    end if
+    images = (integer: value >> 6, fraction: value & 63, control: control)
+end line_registers
+
 -- All software validation precedes the first device write. The caller owns
 -- exclusive device authority and must not copy this descriptor to drive DMA.
-public open: (rate: u32, budget: u32, escaping buf: []mut u8)
-             -> (r: rx from buf) ! busy | bad_baud | buffer_empty | buffer_too_big | bad_buffer =
+public open: (settings: line.settings, budget: u32, escaping buf: []mut u8)
+             -> (r: rx from buf) ! busy | line.unsupported_rate | line.unsupported_format
+                                 | buffer_empty | buffer_too_big | bad_buffer =
     size := lenof buf
     fail buffer_empty when size == 0
     fail buffer_too_big when size > 256
     fail bad_buffer when size < 2 or (size & (size - 1)) <> 0
     fail bad_buffer when (usize(addr buf[0]) & (size - 1)) <> 0
     fail bad_buffer when budget < u32(size) or budget > 65535
-    fail bad_baud when rate <> 115200
+    images := try line_registers(settings)
     status := dma.ch0_ctrl_trig_read(dma_base)
     fail busy when (status & 0x61000001) <> 0
     -- FUNCSEL occupies the low five bits in both generated image types.
@@ -49,9 +81,10 @@ public open: (rate: u32, budget: u32, escaping buf: []mut u8)
     io_bank0.gpio0_ctrl_write(gpio_base, (tx & 0xffffffe0) | 2)
     pin := io_bank0.gpio1_ctrl_read(gpio_base)
     io_bank0.gpio1_ctrl_write(gpio_base, (pin & 0xffffffe0) | 2)
-    uart0.uartibrd_write(uart_base, 26)
-    uart0.uartfbrd_write(uart_base, 3)
-    uart0.uartlcr_h_write(uart_base, 0x70)
+    -- LCR_H is written after both divisors, which its write latches.
+    uart0.uartibrd_write(uart_base, images.integer)
+    uart0.uartfbrd_write(uart_base, images.fraction)
+    uart0.uartlcr_h_write(uart_base, images.control)
     uart0.uartdmacr_write(uart_base, 1)
     mut bits: u8 = 0
     mut extent := size

@@ -66,23 +66,30 @@ TXFF before each byte, which the model answers as always having room.
 
 ## Public receive contract
 
-`open(rate, budget, escaping buf)` configures fixed GPIO0/1, UART0 RX and DMA
-channel 0, then returns `rx from buf`. The caller supplies exclusive authority
+`open(settings, budget, escaping buf)` configures fixed GPIO0/1, UART0 RX and
+DMA channel 0, then returns `rx from buf`. The caller supplies exclusive authority
 over those registers and NVIC routing. The buffer is an initialized ordinary
 mutable byte slice in DMA-accessible RAM. Its length is a power of two from
 2 through 256 and its absolute address is aligned to that length. The budget
-is from the capacity through 65535. Only 115200 baud is supported in this
-bounded derivation: at the declared 48 MHz clock, IBRD=26 and FBRD=3 implement
-the rounded divisor. Other rates are recoverable `bad_baud`, not a range trap.
-This explicit bound keeps the complete program within the original board;
-it does not claim a general UART configuration API.
+is from the capacity through 65535. `settings` is a `line.settings` from
+`core/line` (D955, D957): at the declared 48 MHz clock `line_registers`
+computes IBRD and FBRD, 16 integer and 6 fraction bits of the rounded
+divisor, for 46 to 3,000,000 baud, and LCR_H for 5 to 8 data bits, any
+parity and one or two stop bits, FIFOs on; `open` writes LCR_H after both
+divisors, which its write latches. `line.default_settings`, 115,200 8N1, is
+IBRD 26, FBRD 3 and LCR_H 0x70, the application's line. A rate the divisor
+cannot reach within two percent is `line.unsupported_rate` and nine data
+bits `line.unsupported_format`, recoverable atoms, not range traps. The
+model's line registers are images: no bit is timed at any rate (D964).
 
 Checks run in this order, before any device write or descriptor publication:
 empty -> `buffer_empty`; length above 256 -> `buffer_too_big`; length below 2,
 non-power-of-two, misaligned address or invalid budget -> `bad_buffer`;
-unsupported rate -> `bad_baud`; existing EN/BUSY/error state -> `busy`.
-`busy`, `bad_baud`, `buffer_empty` and `buffer_too_big` retain the prototype's
-names. `bad_buffer`, `overrun`, `transfer_error`, `exhausted` and `stop_timeout`
+an unsupported rate or frame -> `line.unsupported_rate` or
+`line.unsupported_format`; existing EN/BUSY/error state -> `busy`.
+`busy`, `buffer_empty` and `buffer_too_big` retain the prototype's names, and
+its `bad_baud` is the library's two line atoms, shared with every board port.
+`bad_buffer`, `overrun`, `transfer_error`, `exhausted` and `stop_timeout`
 are this derivation's explicit library decisions for conditions the sketch left open.
 They are declared atom outcomes; none uses panic for foreseeable conditions.
 
@@ -236,7 +243,7 @@ Landin source-debugging evidence come from `environments/cortex-m/evidence.py`.
 | `chip/vendor/gpio`: mode/type/speed atoms, packed MODER/OTYPER/OSPEEDR/AFR arrays, ODR, register port, padding, GPIOA/B addresses | Existing generated IO_BANK0 CTRL images/encoded function domains and SIO command accessors; per-pin control replaces conceptual banks. Electrical speed/type and unused input/lock/second-port views are absent from this device selection, not fabricated registers. The packed-array controls retain array pressure; target layouts remain unchanged. |
 | `configure_pin`: image read, local field update, whole-register write | `open` reads each normal CTRL image and changes only low five FUNCSEL bits through the existing raw-image writer. No volatile subfield store or hidden read on a command. Preserved high bits are asserted literally. |
 | `chip/vendor/dma`: events, direction, stream configuration, count/padding, controller array/status/clear, DMA1 | Generated channel-0 images/accessors at the synthetic base; byte peripheral-to-memory request, incremented ring destination and self chain are explicit configuration bits. Physical count transactions are 32-bit, while the bounded epoch is at most 65535. Channel-0 pending is one coalescing hint rather than three independent event bits or eight conceptual streams. |
-| Missing `chip/vendor/usart` definitions and `divisor_for` | Existing generated UART0 surface; fixed tested divisor and explicit `bad_baud`. FIFO TX availability/clock/enabled state are synthetic premises above. No missing function body remains. |
+| Missing `chip/vendor/usart` definitions and `divisor_for` | Existing generated UART0 surface; `core/line`'s `divisor` and the driver's own `line_registers`, refusing with `line.unsupported_rate` and `line.unsupported_format` (D957). FIFO TX availability/clock/enabled state are synthetic premises above. No missing function body remains. |
 | `core/sets` / automatic `set(dma_event)` | Explicit generated bool image fields and scalar interrupt commands; no new `set`, `register` or metadata-directed compiler semantics. D202 boundary stays intact. |
 | `rx` port/stream/buffer/head | Fixed public device bases plus `rx` buffer, absolute consumed/budget/config and active/quiet/loss/error state. `from buf` makes the retained derivation explicit. |
 | Range `baud_rate`, `open` omissions and undeclared busy behavior | Plain u32 plus declared recoverable checks; exact supported configuration and check order above. Buffer size/alignment is explicitly adapted to ring geometry and the 32 KiB target. |

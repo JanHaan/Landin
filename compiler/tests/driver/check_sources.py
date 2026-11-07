@@ -9,9 +9,9 @@ import subprocess
 HERE=Path(__file__).resolve().parent
 ROOT=HERE.parents[2]
 CASES={
- 'frame-buffer': ('start: () -> none =\n    mut local: [8]u8 = zeroed\n    _ = uart.open(115200,32,local[0..<8]) else (problem)\n        _ = problem\n        return\n    end\nend start\n','L0314'),
- 'readonly-buffer': ('data: [8]u8 = zeroed\nstart: () -> none =\n    _ = uart.open(115200,32,data[0..<8]) else (problem)\n        _ = problem\n        return\n    end\nend start\n','L0301'),
- 'missing-derivation': ('wrap: (escaping buf: []mut u8) -> (r: uart.rx) ! ... =\n    r = try uart.open(115200,32,buf)\nend wrap\n','L0316'),
+ 'frame-buffer': ('start: () -> none =\n    mut local: [8]u8 = zeroed\n    _ = uart.open(line.default_settings,32,local[0..<8]) else (problem)\n        _ = problem\n        return\n    end\nend start\n','L0314'),
+ 'readonly-buffer': ('data: [8]u8 = zeroed\nstart: () -> none =\n    _ = uart.open(line.default_settings,32,data[0..<8]) else (problem)\n        _ = problem\n        return\n    end\nend start\n','L0301'),
+ 'missing-derivation': ('wrap: (escaping buf: []mut u8) -> (r: uart.rx) ! ... =\n    r = try uart.open(line.default_settings,32,buf)\nend wrap\n','L0316'),
 }
 
 def main():
@@ -22,7 +22,7 @@ def main():
  records=[]
  for name,(body,expected) in CASES.items():
   d=a.output/name;d.mkdir();source=d/'main.ldn'
-  source.write_text('import drivers/uart\n'+body)
+  source.write_text('import core/line\nimport drivers/uart\n'+body)
   argv=[str(a.refine.resolve()),'--root='+str(HERE),'--root='+str(ROOT/'devices/generated'),
         '--root='+str(ROOT),'--target=cortex-m0',str(d.resolve())]
   result=subprocess.run(argv,capture_output=True,text=True,timeout=30)

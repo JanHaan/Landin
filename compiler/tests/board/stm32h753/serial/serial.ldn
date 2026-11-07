@@ -33,13 +33,13 @@
 -- TRBUFF, DMA_SxCR's bit 20, is set, as RM0433 says it must be for a
 -- stream that serves a USART (15.5.5, p. 662); the SVD omits the field and
 -- the policy adds it (D652).
+import core/line
 import platform/cortex_m
 import stm32h753/dma1
 import stm32h753/dmamux1
 import stm32h753/usart3
 
 public busy: atom
-public bad_baud: atom
 public buffer_empty: atom
 public buffer_too_big: atom
 public bad_buffer: atom
@@ -73,6 +73,66 @@ complete_interrupt: u32 = 0x10
 -- ORECF, bit 3, and IDLE and IDLECF, bit 4.
 uart_overrun: u32 = 0x08
 uart_idle: u32 = 0x10
+-- USART_ISR's TC, bit 6, and TXFE, bit 23 (48.8.9, p. 2085).
+transmitted: u32 = 0x00800040
+
+-- USART3's kernel clock, rcc_pclk1, the 64 MHz HSI (D647).
+public clock: u32 = 64000000
+
+-- What a line's settings program: BRR, CR1's frame bits, M1, M0, PCE and
+-- PS, and CR2, whose STOP is its only field set.
+public registers: type = struct
+    divisor: u32
+    frame: u32
+    stop: u32
+end registers
+
+-- USART3's registers for SETTINGS, computed and written nowhere (D959).
+-- Oversampling by 16, BRR is the divisor of the kernel clock, from 16 to
+-- 65535 (48.5.7, p. 2034), so 977 to 4,000,000 baud at 64 MHz.  The word
+-- is the data bits and the parity bit, 7, 8 or 9 of them, M1 28 and M0 12
+-- giving 10, 00 and 01 (48.8.1, p. 2067); PCE 10 enables parity and PS 9
+-- makes it odd; CR2's STOP, 13:12, is 00 for one stop bit and 10 for two
+-- (48.8.3, p. 2074).  The receive ring and the transmitter move bytes, so
+-- nine data bits are refused, and a word of five or six bits is outside
+-- M: five data bits, and six without parity, are refused too.  115200
+-- 8N1 is BRR 556, 0.08 percent fast, and no frame bit or stop bit set.
+public line_registers: (settings: line.settings)
+                       -> (images: registers) ! line.unsupported_rate | line.unsupported_format =
+    try line.check(settings)
+    mut word := u32(settings.data_bits)
+    if settings.parity <> line.no_parity then word += 1 end if
+    fail line.unsupported_format when settings.data_bits > 8 or word < 7
+    value := try line.divisor(clock, settings.rate, 16, 4, 16, 65535)
+    mut frame: u32 = 0
+    if word == 7 then frame = 0x10000000 end if
+    if word == 9 then frame = 0x00001000 end if
+    if settings.parity == line.even_parity then frame |= 0x400 end if
+    if settings.parity == line.odd_parity then frame |= 0x600 end if
+    images = (divisor: value, frame: frame,
+              stop: if settings.stop_bits == line.two_stop_bits then 0x2000 else 0 end if)
+end line_registers
+
+-- Program the line.  CR1's frame bits and FIFOEN, BRR and CR2 may be
+-- written only with UE clear (48.8.1, p. 2067; 48.8.3, p. 2074; 48.8.5,
+-- p. 2082), so CR1 is written first without it: RE 2, TE 3, IDLEIE 4 and
+-- FIFOEN 29 beside the frame; then BRR, CR2 and CR3's DMAR, bit 6, which
+-- receives through DMA; then CR1 again with UE, bit 0.
+program: (images: registers) -> none =
+    mut control1 := usart3.cr1_decode(images.frame)
+    control1.f_re = 1
+    control1.f_te = 1
+    control1.f_idleie = 1
+    control1.f_fifoen = 1
+    usart3.cr1_write(usart3.base, usart3.cr1_encode(control1))
+    usart3.brr_write(usart3.base, images.divisor)
+    usart3.cr2_write(usart3.base, images.stop)
+    mut control3 := usart3.cr3_decode(0)
+    control3.f_dmar = 1
+    usart3.cr3_write(usart3.base, usart3.cr3_encode(control3))
+    control1.f_ue = 1
+    usart3.cr1_write(usart3.base, usart3.cr1_encode(control1))
+end program
 
 -- What the completion interrupt and the descriptor's routines share, each
 -- written in the interrupt or with interrupts masked: the bytes of the
@@ -136,34 +196,20 @@ public idle: () -> (seen: bool) =
     cortex_m.device_barrier()
 end idle
 
-public open: (rate: u32, budget: u32, escaping buf: []mut u8)
-             -> (r: rx from buf) ! busy | bad_baud | buffer_empty | buffer_too_big | bad_buffer =
+public open: (settings: line.settings, budget: u32, escaping buf: []mut u8)
+             -> (r: rx from buf) ! busy | line.unsupported_rate | line.unsupported_format
+                                 | buffer_empty | buffer_too_big | bad_buffer =
     size := lenof buf
     fail buffer_empty when size == 0
     fail buffer_too_big when size > 256
     fail bad_buffer when size < 2 or (size & (size - 1)) <> 0
     fail bad_buffer when (usize(addr buf[0]) & (size - 1)) <> 0
     fail bad_buffer when budget < u32(size) or budget > 65535
-    fail bad_baud when rate <> 115200
+    images := try line_registers(settings)
     status := dma1.s0cr_read(dma1.base)
     fail busy when (status & enable) <> 0
       or (dma1.lisr_read(dma1.base) & errors) <> 0
-    -- 64 MHz / 115200 = 555.6, oversampling by 16: BRR 556 (48.5.7,
-    -- p. 2034), written while UE is clear, as CR3 is.  CR3's DMAR, bit 6,
-    -- receives through DMA; CR1's UE 0, RE 2, TE 3, IDLEIE 4 and FIFOEN 29,
-    -- which may be written only with UE clear, here in the same write
-    -- (48.8.1, p. 2067).
-    usart3.brr_write(usart3.base, 556)
-    mut control3 := usart3.cr3_decode(0)
-    control3.f_dmar = 1
-    usart3.cr3_write(usart3.base, usart3.cr3_encode(control3))
-    mut control1 := usart3.cr1_decode(0)
-    control1.f_ue = 1
-    control1.f_re = 1
-    control1.f_te = 1
-    control1.f_idleie = 1
-    control1.f_fifoen = 1
-    usart3.cr1_write(usart3.base, usart3.cr1_encode(control1))
+    program(images)
     usart3.icr_write(usart3.base, uart_overrun | uart_idle)
     -- DMAMUX1's channel 0 serves DMA1 stream 0 (17.3.2, p. 696).
     mut request := dmamux1.dmamux_c0cr_decode(0)
@@ -286,3 +332,23 @@ public restart: (inout r: rx) -> none ! stop_timeout | transfer_error =
     arm()
     cortex_m.restore_interrupts(saved)
 end restart
+
+-- Change the line to SETTINGS: every register image computed first, so a
+-- refusal writes nothing and the line keeps its settings (D955).  Then,
+-- once TC and TXFE say the transmitter has sent everything, the stream is
+-- stopped, since clearing UE resets the USART's DMA requests (48.8.1,
+-- p. 2067), the line programmed, and the stream restarted, which discards
+-- what the ring held unread.  A byte arriving meanwhile is lost, so the
+-- caller changes the line only while its peer is waiting for it.
+public configure: (inout r: rx, settings: line.settings)
+                  -> none ! line.unsupported_rate | line.unsupported_format
+                          | stop_timeout | transfer_error =
+    images := try line_registers(settings)
+    while (usart3.isr_read(usart3.base) & transmitted) <> transmitted do
+        continue
+    end while
+    try stop(r)
+    program(images)
+    usart3.icr_write(usart3.base, uart_overrun | uart_idle)
+    try restart(r)
+end configure

@@ -299,7 +299,16 @@ class DriverPeripheral(Model):
     The count never reloads within an epoch; half and full are coalescing
     hints.  EN-clear requests a drain and BUSY-clear acknowledges it, which
     RP2040's EN-clear does not promise.
+
+    The UART's line registers are images, not a line: the model holds the
+    PL011's rules for them, from its TRM (ARM DDI 0183) and the RP2040
+    datasheet's 4.2.3.2 and 4.2.7.1: IBRD from 1 to 65535 and FBRD 0 when
+    IBRD is 65535, latched together by the LCR_H write that must follow
+    them, and an LCR_H with neither BRK nor SPS.  `line`
+    is what the latched images mean, from the declared 48 MHz clock; no
+    bit is timed or sent at that rate.
     """
+    CLOCK = 48000000
     LINES = {'irq': 0, 'timer': 1}
     TALLIES = ('events', 'output_bytes')
 
@@ -309,6 +318,7 @@ class DriverPeripheral(Model):
         self.remaining = self.transfers = self.configuration = self.output = 0
         self.pending = self.alarm = 0
         self.integer_divisor = self.fraction_divisor = self.line_control = 0
+        self.latched = None
         self.dma_control = self.rejected = 0
         self.source = self.destination = self.enabled = 0
         self.timer_pending = self.clock = self.errors = 0
@@ -335,6 +345,18 @@ class DriverPeripheral(Model):
 
     def clear_trace(self):
         self.events.clear()
+
+    @property
+    def line(self):
+        """The latched line as the PL011 would run it: (rate in bits per
+        second as numerator and denominator, data bits, parity, stop bits),
+        parity 'none', 'even' or 'odd'; None before an LCR_H write."""
+        if self.latched is None:
+            return None
+        integer, fraction, control = self.latched
+        parity = ('none' if not control & 2 else 'even' if control & 4 else 'odd')
+        return ((self.CLOCK * 4, integer * 64 + fraction), 5 + ((control >> 5) & 3),
+                parity, 2 if control & 8 else 1)
 
     def delay_stop(self, reads, value):
         if reads < 0 or value > 255 or value < -1:
@@ -396,7 +418,15 @@ class DriverPeripheral(Model):
         elif offset == 0x200: check(value, 255); self.output_bytes.append(value)
         elif offset == 0x224: check(value, 65535); self.integer_divisor = value
         elif offset == 0x228: check(value, 63); self.fraction_divisor = value
-        elif offset == 0x22c: check(value, 255); self.line_control = value
+        elif offset == 0x22c:
+            # BRK, bit 0, and SPS, bit 7, are outside the driver's frames.
+            check(value, 0x7e)
+            if self.integer_divisor == 0:
+                raise Refused('LCR_H latches no valid IBRD')
+            if self.integer_divisor == 65535 and self.fraction_divisor:
+                raise Refused('FBRD must be 0 when IBRD is 65535')
+            self.line_control = value
+            self.latched = (self.integer_divisor, self.fraction_divisor, value)
         elif offset == 0x248: check(value, 7); self.dma_control = value
         elif offset == 0x244: check(value, 0x7ff)
         elif offset == 0x310: self.alarm, self.alarm_armed = value, True

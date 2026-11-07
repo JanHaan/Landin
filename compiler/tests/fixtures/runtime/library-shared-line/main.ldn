@@ -1,0 +1,101 @@
+import core/line
+
+--  A peripheral family as line.divisor takes it: its clock, oversampling,
+--  fraction bits and register range.
+family: type = struct
+    clock: u32
+    oversampling: u32
+    fraction_bits: u32
+    least: u32
+    most: u32
+end family
+
+--  The derived driver's PL011 at 48 MHz and the Picos' at 12 MHz, the
+--  STM32H753's USART3 at 64 MHz oversampling by 16 and by 8, and the ESP
+--  UARTs: the ESP32's 20-bit CLKDIV at 40 MHz, and the 12-bit one of the
+--  S3 at 40 MHz, the C5 at 48 MHz and the C3 at 20 MHz.
+families: [8]family = [
+    (clock: 48000000, oversampling: 16, fraction_bits: 6, least: 64, most: 4194240),
+    (clock: 12000000, oversampling: 16, fraction_bits: 6, least: 64, most: 4194240),
+    (clock: 64000000, oversampling: 16, fraction_bits: 4, least: 16, most: 65535),
+    (clock: 64000000, oversampling: 8, fraction_bits: 4, least: 16, most: 65535),
+    (clock: 40000000, oversampling: 1, fraction_bits: 4, least: 256, most: 16777215),
+    (clock: 40000000, oversampling: 1, fraction_bits: 4, least: 256, most: 65535),
+    (clock: 48000000, oversampling: 1, fraction_bits: 4, least: 256, most: 65535),
+    (clock: 20000000, oversampling: 1, fraction_bits: 4, least: 256, most: 65535)]
+
+--  The divisor for RATE, or zero where it is refused.
+divisor: (f: family, rate: u32) -> (value: u32) =
+    value = line.divisor(f.clock, rate, f.oversampling, f.fraction_bits,
+                         f.least, f.most) else (problem)
+        _ = problem
+        0
+    end
+end divisor
+
+--  Each family's divisor for every rate from 50 to 6,000,000, each the
+--  last plus a seventh and one, folded into one word as
+--  scripts/tests/test_line.py folds its own exact answers.
+sweep: () -> (fold: u32) =
+    fold = 0
+    for f in families do
+        mut rate: u32 = 50
+        while rate <= 6000000 do
+            fold = fold *% 1000003 +% divisor(f, rate)
+            rate = rate + rate / 7 + 1
+        end while
+    end for
+end sweep
+
+--  Whether SETTINGS are refused with WANTED.
+refused: (settings: line.settings, wanted: line.unsupported_rate | line.unsupported_format)
+         -> (yes: bool) =
+    yes = false
+    line.check(settings) else (problem)
+        yes = problem == wanted
+    end
+end refused
+
+exercise: () -> (ok: bool) =
+    ok = false
+    --  115,200 baud as every port writes it today: IBRD 26 and FBRD 3,
+    --  IBRD 6 and FBRD 33, BRR 556, and CLKDIV 347 and FRAG 4.
+    return when divisor(families[0], 115200) <> 26 * 64 + 3
+      or divisor(families[1], 115200) <> 6 * 64 + 33
+      or divisor(families[2], 115200) <> 556
+      or divisor(families[4], 115200) <> 347 * 16 + 4
+    --  Below the PL011's slowest rate and above its fastest; and 3.9
+    --  Mbaud at 64 MHz, whose BRR of 16 is 2.6 percent fast.
+    return when divisor(families[0], 45) <> 0
+      or divisor(families[0], 46) <> 4173913
+      or divisor(families[0], 3100000) <> 0
+      or divisor(families[2], 3900000) <> 0
+      or divisor(families[2], 3800000) <> 17
+      or divisor(families[5], 9600) <> 0
+    _ = line.divisor(48000000, 0, 16, 6, 64, 4194240) else (problem)
+        return when problem <> line.unsupported_rate
+        0
+    end
+    seven_even: line.settings = (rate: 9600, data_bits: 7, parity: line.even_parity,
+                                 stop_bits: line.two_stop_bits)
+    four: line.settings = (rate: 9600, data_bits: 4, parity: line.no_parity,
+                           stop_bits: line.one_stop_bit)
+    stopped: line.settings = (rate: 0, data_bits: 8, parity: line.odd_parity,
+                              stop_bits: line.one_stop_bit)
+    line.check(seven_even) else (problem)
+        _ = problem
+        return
+    end
+    return when not refused(four, line.unsupported_format)
+      or not refused(stopped, line.unsupported_rate)
+    return when line.frame_bits(line.default_settings) <> 10
+      or line.frame_bits(seven_even) <> 11
+    ok = sweep() == 1195194680
+end exercise
+
+public main: () -> (code: i32) =
+    code = 1
+    if exercise() then
+        code = 42
+    end if
+end main

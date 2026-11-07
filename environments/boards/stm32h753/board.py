@@ -92,6 +92,35 @@ DMA1_S0CR, DMA1_S0NDTR = 0x40020010, 0x40020014
 TRBUFF = 0x00100000
 # What environments/cortex-m/driver.py feeds the synthetic application.
 SHARED = b'1A0'
+# The line exchange (D962): USART3 on its 64 MHz kernel clock, oversampling
+# by 16, so BRR is the clock's divisor, 16 to 65535 (48.5.7, p. 2034); its
+# word the data bits and parity, 7, 8 or 9 bits, M1 28 and M0 12 giving 10,
+# 00 and 01, PCE 10 and PS 9 odd (48.8.1, p. 2067); CR2's STOP 13:12, 10
+# for two stop bits (48.8.3, p. 2074).  The ST-LINK V3's virtual COM port
+# carries 7 or 8 data bits with parity and 1 or 2 stop bits.
+LINE_CLOCK = 64000000
+LINE_PLAN = [((230400, 8, 'none', 1), 'accepted'), ((9600, 8, 'even', 1), 'accepted'),
+             ((57600, 7, 'odd', 2), 'accepted'), ((300, 8, 'none', 1), 'unsupported_rate'),
+             ((115200, 6, 'none', 1), 'unsupported_format')]
+
+
+def line_oracle(setting, clock):
+    """The `l` frame USART3 must give for SETTING, from RM0433."""
+    require(clock == LINE_CLOCK, 'the port runs USART3 from %d Hz, not %d' % (clock, LINE_CLOCK))
+    rate, data_bits, parity, stop_bits = setting
+    if rate == 0:
+        return 'unsupported_rate', None
+    word = data_bits + (parity != 'none')
+    # The ring and the transmitter move bytes: nine data bits are refused.
+    if not 5 <= data_bits <= 8 or word not in (7, 8, 9):
+        return 'unsupported_format', None
+    brr = common.nearest_divisor(clock, rate, 16, 4, 16, 65535)
+    if brr is None:
+        return 'unsupported_rate', None
+    frame = {7: 1 << 28, 8: 0, 9: 1 << 12}[word] | dict(none=0, even=1 << 10, odd=3 << 9)[parity]
+    return 'accepted', dict(b=brr, f=frame, x=0x2000 if stop_bits == 2 else 0)
+
+
 # The float routines whose instructions are checked, and what checks them.
 FLOAT_ROUTINES = ('exercise32', 'order32', 'exercise64', 'order64')
 SOFT_FLOAT = re.compile(r'<(__aeabi_c?[fd]\w*|__\w+[sd]f[23])>')
@@ -705,6 +734,13 @@ def main():
         verdicts['floats'] = floats(console, args.seed, used)
         last = report(console)
         require(last['c'] == final['c'], 'the float exercise restarted the ring')
+        # The line exchange, after everything that counts the epoch's bytes:
+        # changing the line stops and restarts the stream (D959, D962).
+        verdicts['line'], changed = common.line_phase(
+            console, LINE_PLAN, line_oracle, report, random.Random(args.seed + 2))
+        if changed is not None:
+            require(changed['c'] == last['c'], 'the line exchange restarted the ring on a loss')
+            last = changed
         result['verdicts'] = verdicts
         console.close()
         require(len(console.received) == len(console.raw.received) - console.offset,

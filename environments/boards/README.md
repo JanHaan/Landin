@@ -524,6 +524,45 @@ the resting image, the sequence's last, which flashes over SWD whatever the
 board runs. That holds for the Pico 2 too, in either architecture or in its
 boot ROM, since its power-only cable keeps that ROM's USB off the bus.
 
+## The line exchange
+
+The tty boards change their serial line during each run and come back
+(D962, D963). After every existing oracle, and before the probe reads the
+counters back, `common.line_phase` sends 0x16 and eleven digits asking for
+a line; the board answers on the line in use with an `l` frame, `r`, `d`,
+`p` and `s` what it read, `k` the clock it computes from and `o` 0 with
+the register images, `b` the divisor and `f` the frame, the STM32H753's
+`x` its CR2, or `o` 1 for `line.unsupported_rate` or 2 for
+`line.unsupported_format`. The host holds each to the port's own oracle,
+written from its manual: `stm32h753/board.py`'s `line_oracle` from RM0433,
+`esp.py`'s from the ESP TRMs. A refusal must leave the board answering a
+0x11 on the old line. An accepted line is set on the tty with
+`TtyConsole.line`; nothing may arrive while the two ends change, a 48-byte
+payload and 0x17 must come back echoed byte for byte, the board's `e` frame
+must count and hash, FNV-1a, exactly the payload, and after the board and
+the tty go back to 115,200 8N1 it must answer a 0x11 there.
+
+| Port | Bridge | Accepted | Refused |
+|---|---|---|---|
+| STM32H753 | ST-LINK V3 VCP | 230400-8N1, 9600-8E1, 57600-7O2 | 300 baud, 6N1 |
+| ESP32 | CH340 | 921600-8N1, 9600-8E1, 57600-7O1 | 3,000,000 baud, 8N2 |
+| ESP32-S3 | CH340 | 460800-8N1, 19200-8O2, 57600-7E1 | 9600 baud, 9N1 |
+| ESP32-C5 | CH340X | 230400-8N1, 38400-8E2, 57600-7O1 | 300 baud, 9N1 |
+
+The settings are within what the bridges' vendors state, which no run here
+measures: the CH340 and CH340X carry 5 to 8 data bits, any parity, one or
+two stop bits and the standard rates to about 2 Mbaud; the ST-LINK V3's
+port carries 7 or 8 data bits with parity and one or two stop bits, at
+rates derived from its own clock. A passed exchange shows that the board's
+registers and its bridge agree on a line well enough to carry every byte
+both ways; it times no bit. The RP2040, both RP2350 ports and the ESP32-C3
+answer on probehive's bridge, 8N1 at the one rate it was started at, so
+their `line` verdict is `not run: probehive bridge fixed at 115200 8N1`:
+their line code has only the shared module's arithmetic and the derived
+driver's emulator register images behind it (D958, D961). The exchange
+adds two to three seconds to each tty run, RAM and boot alike, most of
+it the 0.2 s each end is given to change line.
+
 ## Shared rig rules
 
 The rig's state is one directory. It is `LANDIN_RIG_STATE` when that is

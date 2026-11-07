@@ -121,6 +121,7 @@ and DMA completion checks.
 | an epoch ended by STALL | the 4096-byte epoch filled, its last byte STALL, then 100 bytes while the channel is exhausted and nothing reads: the UART's 32-byte FIFO holds the first 32, it flags the rest lost, the application restarts on that overrun, and only those 32 are echoed |
 | an epoch exhausted | the next epoch filled to its 4096 bytes: one DMA completion, one restart, nothing lost, and the byte that waited in the FIFO meanwhile the next epoch's first |
 | the stream | every application byte echoed in order but those discarded above, `h` their count, and the timer advancing |
+| the line exchange | not run: the console is probehive's bridge, fixed at 115200 8N1; the serial module's `configure` is linked into no image, and only `runtime/library-shared-line`'s arithmetic at 12 MHz and the derived driver's PL011 register images on QEMU stand behind it (D958, D963) |
 | the counters | `handled`, `recoveries`, `dma_events`, `usb_events` and TRANS_COUNT, read over SWD without halting the core, equal the last frame's |
 
 What the emulator lane and the board share is

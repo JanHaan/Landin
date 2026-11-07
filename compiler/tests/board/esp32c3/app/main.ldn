@@ -15,6 +15,7 @@
 import bringup
 import commands
 import core/atomic
+import core/line
 import descriptions/esp32c3
 import esp32c3/gpio
 import esp32c3/rtc_cntl
@@ -138,7 +139,7 @@ start: () -> noreturn =
     bringup.indicator_pin()
     bringup.threshold(serial.priority)
     bringup.timer()
-    mut receiver := serial.open(115200, budget, rx_storage[0..<256]) else (problem)
+    mut receiver := serial.open(line.default_settings, budget, rx_storage[0..<256]) else (problem)
         _ = problem
         halt(1)
     end

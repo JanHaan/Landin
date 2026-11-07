@@ -423,6 +423,8 @@ def main():
                 power_cycle(common.InGroup(run, args.hub_group), args)
         verdicts, final = scenario(console, run, args.seed, pins, args.mode,
             common.elf_sections(elf)[1]['.isr_vector'][0])
+        # The probehive bridge keeps its one line: no line exchange (D963).
+        verdicts['line'] = common.line_not_run()
         result['verdicts'] = verdicts
         console.close()
         result['swd'] = cross_check(run, args, names, final)

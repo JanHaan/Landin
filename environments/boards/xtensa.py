@@ -55,6 +55,15 @@ class ESP32(Xtensa):
     console_hub_default, console_port_default = '.3.4', 4
     guard_port_default, guard_device_default = 1, '1366:0105'
     console_guard_port_default, console_guard_device_default = 1, '1366:0105'
+    # UART0 on the crystal's 40 MHz, undivided; CLKDIV's 20 bits; and no
+    # two stop bits, which ESP-IDF gives on this chip only through
+    # RS485_CONF's DL1_EN, a register its port does not select (D960).
+    line_clocks = (40000000,)
+    clkdiv_most = 0xffffff
+    two_stop_bits = False
+    line_plan = [((921600, 8, 'none', 1), 'accepted'), ((9600, 8, 'even', 1), 'accepted'),
+                 ((57600, 7, 'odd', 1), 'accepted'), ((3000000, 8, 'none', 1), 'unsupported_rate'),
+                 ((115200, 8, 'none', 2), 'unsupported_format')]
 
 
 class ESP32S3(Xtensa):
@@ -71,6 +80,12 @@ class ESP32S3(Xtensa):
     console_hub_default, console_port_default = '.4', 2
     guard_port_default, guard_device_default = 3, '1a86:7523'
     console_guard_port_default, console_guard_device_default = 3, '1a86:7523'
+    # UART0 on the crystal's 40 MHz, undivided, and CLKDIV's 12 bits, so
+    # 9600 baud is too slow (D960).
+    line_clocks = (40000000,)
+    line_plan = [((460800, 8, 'none', 1), 'accepted'), ((19200, 8, 'odd', 2), 'accepted'),
+                 ((57600, 7, 'even', 1), 'accepted'), ((9600, 8, 'none', 1), 'unsupported_rate'),
+                 ((115200, 9, 'none', 1), 'unsupported_format')]
 
 
 def power_on_boot(probe, chip, names):

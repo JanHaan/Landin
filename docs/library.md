@@ -1307,7 +1307,7 @@ checked for both.
 
 Error messages: words for a person for each library failure, a short English phrase for every failure atom the core library raises.
 
-`failure.words(problem)` gives the phrase for any of the 36 atoms in
+`failure.words(problem)` gives the phrase for any of the 38 atoms in
 `failure.reason`, every atom a `core` module fails with. So a call's
 `else (problem)` passes its failure straight on, whatever subset it
 declares.
@@ -1466,6 +1466,44 @@ It is not cryptographic: its outputs reveal its state. A key, a token or
 a password comes from `io.fill_random` directly.
 
 [Executable example](../compiler/tests/fixtures/runtime/random-sequence/main.ldn)
+
+## core/line
+
+Serial line settings: a UART's rate and frame, the divisor its baud-rate generator is set to, and the refusals every driver shares.
+
+| Call | What it does |
+|---|---|
+| `line.settings` | A line: its `rate` in bits per second, `data_bits`, `parity` and `stop_bits`. |
+| `line.default_settings` | 115,200 bits per second, 8N1. |
+| `line.check` | Refuse a rate of zero and data bits outside 5 to 9. |
+| `line.divisor` | The divisor nearest a rate, as a register holds it, or a refusal. |
+| `line.frame_bits` | The bits of one frame, start and stop bits included. |
+
+`parity` is `no_parity`, `even_parity` or `odd_parity`, and `stop_bits`
+`one_stop_bit` or `two_stop_bits`. Nothing in the module reads or writes
+a register, so it serves every target: a driver computes each register
+image with it and encodes its device's own bits, refuses what its
+peripheral cannot carry, and only then writes. A refusal leaves the line
+as it was.
+
+`divisor(clock, rate, oversampling, fraction_bits, least, most)` gives the
+integer nearest `clock * 2^fraction_bits / (oversampling * rate)`, halves
+up, and refuses with `line.unsupported_rate` a value outside `least` to
+`most`, the register's range, and one whose rate misses by more than
+`line.tolerance`, two percent: half of what a receiver sampling 16 times a
+bit allows over an eleven-bit frame, leaving the rest to the other end. An
+Arm PL011 is oversampling 16 with 6 fraction bits, its IBRD `value >> 6`
+and FBRD `value & 63`; an STM32 USART's BRR oversampling 16 with 4; an
+Espressif UART's CLKDIV oversampling 1 with 4, FRAG the low four bits. The
+arithmetic is integer only, on `u64`, which a Cortex-M0 links libgcc's
+helpers for: the derived driver's image grew by about 3.8 KB at size/auto.
+
+`line.unsupported_format` is a frame the peripheral cannot carry: `check`
+gives it for data bits outside 5 to 9, and each driver for what its own
+peripheral lacks, nine data bits on every port in this repository. Both
+atoms have words in `failure.words`.
+
+[Executable example](../compiler/tests/fixtures/runtime/library-shared-line/main.ldn)
 
 ## core/atomic
 
