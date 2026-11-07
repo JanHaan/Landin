@@ -40,8 +40,9 @@ and `handoff.md` carry, because an item is finished long before the text
 that cites it is, and a citation that outlives its item is a question nobody
 can answer. `check.py` refuses such a citation anywhere else.
 
-`README.md` maintains the current compiler capability inventory. `handoff.md`
-and `AGENTS.md` point to it instead of maintaining parallel inventories;
+`docs/capabilities.md` maintains the current compiler capability inventory;
+`README.md` summarizes it. `handoff.md` and `AGENTS.md` point to that inventory
+instead of maintaining parallel inventories;
 the `Done:` paragraphs here record completion evidence, not a second
 current-capability summary.
 
@@ -3673,8 +3674,9 @@ minting a separate host root [1680]. No keyword, second calling convention or
 colored function type is used to say it. The refusal this replaces is recorded
 in `tour.md` under WHAT WAS TRIED AND DROPPED.
 
-- **One Io implementation today, and it blocks.** Signatures and `core` are
-  concurrency-capable without any scheduler existing. R14.30 adds the second.
+- **Blocking and event-driven Io implementations share the same interface.**
+  `hosted/blocking` provides the blocking root and `hosted/events` the
+  scheduler-backed one; callers choose the provider they pass to `core`.
 - **Stackless coroutines are a non-goal.** Cutting functions into state
   machines is a compiler project of its own, and it puts the property into
   every function type that reaches one — the coloring the ambient environment
