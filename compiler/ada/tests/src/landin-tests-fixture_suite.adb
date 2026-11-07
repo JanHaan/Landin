@@ -1445,6 +1445,8 @@ package body Landin.Tests.Fixture_Suite is
             return C_Archives (Fixture);
          elsif Key = "library-directories" then
             return Library_Directories (Fixture);
+         elsif Key = "c-inputs" then
+            return C_Inputs (Fixture);
          elsif Key = "link" then
             return Link_Mode (Fixture);
          elsif Key = "levels" then

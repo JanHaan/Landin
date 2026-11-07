@@ -1,0 +1,126 @@
+--  A builder that only ever holds UTF-8: text, scalars and numbers
+--  appended whole, refusals that leave it as it was, and cuts that never
+--  split a scalar.  After every step its bytes are valid text.
+import core/cmp
+import core/text
+
+--  Whether the builder holds exactly `expected`, as text with nothing
+--  scanned and as bytes, which are valid UTF-8.
+holds: (line: text.utf8_builder, expected: utf8) -> (yes: bool) =
+    held: []u8 = text.utf8_bytes(line)
+    yes = text.equal(text.utf8_used(line), expected) and text.valid(held)
+          and cmp.compare(held, text.bytes(expected)) == cmp.equal
+          and text.utf8_length(line) == lenof expected
+end holds
+
+--  Whether every byte of `buffer` is still `fill`.
+untouched: (buffer: []u8, fill: u8) -> (yes: bool) =
+    yes = false
+    for byte in buffer do
+        return when byte <> fill
+    end for
+    yes = true
+end untouched
+
+appends: (inout line: text.utf8_builder)
+         -> (yes: bool) ! text.no_space | text.invalid_scalar =
+    yes = false
+    try text.utf8_append_text(line, "na\u{ef}ve")
+    try text.utf8_append_scalar(line, '\u{2192}')
+    try text.utf8_append_u32(line, 42)
+    try text.utf8_append_i32(line, 0 - 7)
+    try text.utf8_append_hex_u32(line, 255)
+    try text.utf8_append_scalar(line, '\u{1f600}')
+    return when not holds(line, "na\u{ef}ve\u{2192}42-7ff\u{1f600}")
+    text.utf8_clear(line)
+    try text.utf8_append_u64(line, 18446744073709551615)
+    try text.utf8_append_scalar(line, ' ')
+    try text.utf8_append_i64(line, 0 - 9223372036854775807 - 1)
+    return when not holds(line, "18446744073709551615 -9223372036854775808")
+    text.utf8_clear(line)
+    try text.utf8_append_usize(line, 65535)
+    try text.utf8_append_isize(line, 0 - 1)
+    try text.utf8_append_hex_u64(line, 3735928559)
+    try text.utf8_append_hex_usize(line, 4096)
+    yes = holds(line, "65535-1deadbeef1000")
+end appends
+
+--  A piece that does not fit, and a value that is no scalar, change
+--  nothing: not the length, and not the bytes past it.
+refusals: () -> (yes: bool) =
+    yes = false
+    mut storage: [8]u8 = [0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55]
+    mut line := text.utf8_over(storage[0..<8])
+    text.utf8_append_text(line, "caf\u{e9}") else begin
+        return
+    end
+    text.utf8_append_scalar(line, 0xdfff) else (problem)
+        return when problem <> text.invalid_scalar
+    end
+    text.utf8_append_scalar(line, 0x110000) else (problem)
+        return when problem <> text.invalid_scalar
+    end
+    --  Five bytes held, so a four-byte scalar fits nowhere in three.
+    text.utf8_append_scalar(line, '\u{1f600}') else (problem)
+        return when problem <> text.no_space
+    end
+    text.utf8_append_text(line, "\u{2192}x") else (problem)
+        return when problem <> text.no_space
+    end
+    text.utf8_append_u32(line, 1234) else (problem)
+        return when problem <> text.no_space
+    end
+    return when not holds(line, "caf\u{e9}")
+      or not untouched(storage[5..<8], 0x55)
+      or text.utf8_capacity(line) <> 8
+    --  What fits exactly is taken, and then nothing more.
+    text.utf8_append_scalar(line, '\u{2192}') else begin
+        return
+    end
+    text.utf8_append_scalar(line, '!') else (problem)
+        yes = problem == text.no_space and holds(line, "caf\u{e9}\u{2192}")
+        return
+    end
+end refusals
+
+--  A cut inside a scalar keeps only the scalars before it; one on a
+--  boundary keeps what is before it, and one at or past the end nothing
+--  changes.
+cuts: () -> (yes: bool) ! text.no_space | text.invalid_scalar =
+    yes = false
+    mut storage: [16]u8 = zeroed
+    mut line := text.utf8_over(storage[0..<16])
+    try text.utf8_append_text(line, "a\u{ef}\u{2192}\u{1f600}")
+    text.utf8_truncate(line, 99)
+    return when not holds(line, "a\u{ef}\u{2192}\u{1f600}")
+    text.utf8_truncate(line, 10)
+    return when not holds(line, "a\u{ef}\u{2192}\u{1f600}")
+    text.utf8_truncate(line, 9)
+    return when not holds(line, "a\u{ef}\u{2192}")
+    text.utf8_truncate(line, 5)
+    return when not holds(line, "a\u{ef}")
+    text.utf8_truncate(line, 2)
+    return when not holds(line, "a")
+    text.utf8_truncate(line, 1)
+    return when not holds(line, "a")
+    text.utf8_truncate(line, 0)
+    return when not holds(line, "")
+    try text.utf8_append_scalar(line, '\u{e9}')
+    text.utf8_truncate(line, 1)
+    yes = holds(line, "")
+end cuts
+
+public main: () -> (code: i32) =
+    code = 1
+    mut storage: [48]u8 = zeroed
+    mut line := text.utf8_over(storage[0..<48])
+    ok := appends(line) else false
+    return when not ok
+    code = 2
+    return when not refusals()
+    code = 3
+    cut := cuts() else false
+    if cut then
+        code = 42
+    end if
+end main

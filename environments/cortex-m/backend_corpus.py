@@ -12,8 +12,8 @@ import re
 import sys
 
 from backend import (HERE, LEVELS, ROOT, COUNTERPARTS, DESCRIPTIONS,
-                     MATERIALIZATION, REFERENCE, THUMB_2, ImageLimit, build, derived,
-                     describe_routines, describe_sizes,
+                     MATERIALIZATION, REFERENCE, THUMB_2, ImageLimit, build, c_compiler,
+                     c_objects, conventions, derived, describe_routines, describe_sizes,
                      execute as qemu, fixture, harness_start, image_contract, image_sizes,
                      hard_float, lane_inputs, lane_of, level_flags, levels_of, link,
                      measure_overflow, metadata, refine_level, region, target)
@@ -28,6 +28,14 @@ LANES = {lane_of(key): key for key in LEVELS if lane_of(key)}
 SPECIALIZATION_PROFILES = [('none', 'all'), ('speed', 'all')]
 INVENTORY = 'compiler/tests/cortex-m/corpus.json'
 RULES = 'environments/cortex-m/README.md#the-corpus-inventory'
+
+
+def refused_on(row, lane):
+    """Whether ROW is refused on LANE with codes of its own: a lane whose
+    target refuses what the reference runs or restricts, RV32 the C its
+    ilp32 ABI does not enable (D619)."""
+    return (lane is not None and row['mode'] in ('execute', 'restriction')
+            and row.get('lanes', {}).get(lane, {}).get('mode') == 'refuse')
 
 
 def executes_on(row, lane):
@@ -83,12 +91,14 @@ def inventory():
                         (row['mode'] == 'execute' and own.get('mode') in ('restriction', 'limit'))
                         or (row['mode'] == 'refuse' and own.get('mode') == 'refuse'
                             and bool(own.get('codes')) and own['codes'] != row['codes'])
+                        or (row['mode'] in ('execute', 'restriction')
+                            and own.get('mode') == 'refuse' and bool(own.get('codes')))
                         or (row['mode'] == 'refuse' and own.get('mode') == 'execute'
                             and 'codes' not in own)),
                     '%s: a "lanes" entry names a corpus lane (%s) and its reason, with'
-                    ' "mode": "restriction" or "limit" for an execute row, or for a refuse row'
-                    ' "mode": "refuse" and the lane\'s own "codes", or "mode": "execute"'
-                    ' (see %s)' % (name, ', '.join(LANES), RULES))
+                    ' "mode": "restriction" or "limit" for an execute row, "mode": "refuse"'
+                    ' and the lane\'s own "codes" for any row, or "mode": "execute" for a'
+                    ' refuse row (see %s)' % (name, ', '.join(LANES), RULES))
         meta = metadata(ROOT / 'compiler/tests/fixtures' / name / 'fixture.meta')
         if row['mode'] == 'execute' and (said := hosted_oracle(meta)):
             hosted.append('  %s %s' % (name, said))
@@ -104,13 +114,12 @@ def inventory():
                     '%s: a row\'s selects names a routine and, for M-profile levels %s,'
                     ' what it has and lacks (see %s)' % (name, ', '.join(LEVELS), RULES))
         if row['mode'] == 'restriction':
-            witness = ROOT / row['witness']
-            require(witness.is_file(), 'missing restriction witness')
-            if name.startswith('abi/'):
-                meta = metadata(witness)
-                require(meta['class'] == 'abi' and meta.get('c-sources'), 'C peer restriction changed')
-            else:
-                require('extern(c)' in witness.read_text(), 'hosted heap restriction changed')
+            #  D986: a restriction names the point of the lane's build that
+            #  stops it, which the lane reaches and holds it to.
+            require(row.get('stops') in STOPS and 'witness' not in row,
+                    '%s: a "restriction" row says what stops it, "stops": one of %s,'
+                    ' and a reason, and no witness (see %s)'
+                    % (name, ', '.join(STOPS), RULES))
     #  Firmware has no standard input, arguments, files or output to give a
     #  program, so one whose oracle needs them never executes: refused
     #  before anything builds, every one at once, with the two ways out.
@@ -122,6 +131,21 @@ def inventory():
                     ' codes Cortex-M0 refuses it with or a "restriction" row with its reason'
                     ' (see %s)' % RULES]))
     return rows
+
+
+#  D986: where the lane's build of a `restriction` row's fixture stops, in
+#  the order the build reaches them.  `defect`: refine itself fails, an
+#  internal compiler defect, which no source change answers; `c-options`:
+#  the fixture's C asks the pinned GCC for an option a freestanding build
+#  has not, such as -pthread; `c-headers`: its C includes a header no
+#  freestanding C has, the C library's; `c-source`: its C does not compile
+#  for the target, an `#error` or a static assertion of another ABI, an
+#  LP64 peer's among them; `link`: the image names a routine
+#  or datum nothing linked defines, a C library's or a target's the
+#  fixture has no Cortex-M arm for; `oracle`: it builds and links, and its
+#  oracle needs what firmware cannot give (HOSTED_ORACLE).  A refusal by
+#  refine is no restriction but a `refuse` row's codes.
+STOPS = ('defect', 'c-options', 'c-headers', 'c-source', 'link', 'oracle')
 
 
 #  What a fixture's metadata asks of a hosted run that firmware cannot give.
@@ -204,6 +228,226 @@ def source_refusal(run, refine, name, row, level='armv6-m'):
             % (name, INVENTORY, ', '.join(repeated), RULES))
     return {'verdict': 'source-refusal', 'codes': codes, 'refused_imports': refused,
             'reason': namespace_reason(refused, row.get('reason', ''))}
+
+
+#  What the pinned GCC says of an option it does not take, and the linker
+#  of a symbol nothing defines.
+REFUSED_OPTION = re.compile(r"unrecognized command-line option '(-[^']+)'")
+UNDEFINED = re.compile(r"undefined reference to `([^']+)'")
+
+
+def restriction(run, refine, name, row, optimize, specialize, level='armv6-m'):
+    """Build a `restriction` row's fixture as an `execute` row's is built
+    (D986) and hold it to stopping where its row says.
+
+    Each stage is attempted in STOPS' order: refine's compilation, the C
+    peers' by the lane's contract, where the headers each includes are
+    listed first, `-M -MG` naming those no directory holds, and the
+    harness link.  The first that stops it is held to the row's `stops`,
+    and what stopped it, the defect, options, headers, error, symbols or
+    hosted oracle, is read from the build and recorded, as an L0015
+    refusal's modules are.  A fixture that gets past every stage is a
+    stale restriction, and the failure says to make it `execute`; one
+    refine refuses says to make it `refuse`, with the codes.
+    """
+    base = ROOT / 'compiler/tests/fixtures' / name
+    meta = metadata(base / 'fixture.meta')
+    inputs = meta.module_arguments(base)
+    selected = [] if level == 'armv6-m' else ['--level=' + refine_level(level)]
+    reached, found = None, []
+    try:
+        run.command('compile-restricted', [
+            refine, *lane_inputs(level, inputs), '--target=' + target(level), *selected,
+            '--emit=asm', '-o', run.out / 'restricted.s'], timeout=900)
+    except CommandFailed as error:
+        log = Path(error.log).read_text(errors='replace')
+        said = next((line.strip() for line in log.splitlines()
+                     if 'internal compiler defect' in line), None)
+        if said is None:
+            codes = sorted(set(re.findall(r'error\[(L\d+)\]', log)))
+            raise RuntimeError(
+                '%s: refine refuses it with %s, first %r, so it is no restriction: write'
+                ' a "refuse" row with "codes": %s in %s (see %s)'
+                % (name, ', '.join(codes) or 'no code', first_diagnostic(log),
+                   json.dumps(codes), INVENTORY, RULES)) from None
+        reached, found = 'defect', [said]
+    objects = []
+    if reached is None and meta['class'] == 'abi':
+        compiler = c_compiler(run, meta, base, level)
+        for index, source in enumerate(meta.c_sources, start=1):
+            try:
+                listed = run.command('headers-%d' % index,
+                                     [*compiler, '-M', '-MG', base / source])
+            except CommandFailed as error:
+                log = Path(error.log).read_text(errors='replace')
+                options = REFUSED_OPTION.findall(log)
+                if options:
+                    reached, found = 'c-options', sorted(set(found + options))
+                elif reached is None:
+                    reached, found = 'c-source', [first_c_error(log)]
+                continue
+            named = listed.replace('\\\n', ' ').split()[2:]
+            missing = [one for one in named
+                       if not Path(one).is_absolute() and not (base / one).exists()]
+            if missing and reached in (None, 'c-headers'):
+                reached, found = 'c-headers', found + missing
+        if reached is None:
+            try:
+                objects = c_objects(run, meta, base, level)
+            except CommandFailed as error:
+                reached = 'c-source'
+                found = [first_c_error(Path(error.log).read_text(errors='replace'))]
+    if reached is None:
+        try:
+            build(run, refine, inputs, optimize, specialize, level=level, objects=objects)
+        except CommandFailed as error:
+            log = Path(error.log).read_text(errors='replace')
+            require(error.name == 'assemble-link' and bool(UNDEFINED.search(log)),
+                    '%s: its build failed where no stop is named: %s' % (name, error))
+            reached, found = 'link', sorted(set(UNDEFINED.findall(log)))
+        else:
+            said = hosted_oracle(meta)
+            require(bool(said), '%s: its restriction is stale: the program%s builds and'
+                    ' links for %s and needs nothing firmware lacks; make its %s row'
+                    ' "execute" (see %s)' % (name, ' and its C' if objects else '', level,
+                                            INVENTORY, RULES))
+            reached, found = 'oracle', [said]
+    require(reached == row['stops'],
+            '%s: its build for %s stops at %s (%s), and its %s row says "stops": "%s";'
+            ' if that is what stops it, write "stops": "%s" (see %s)'
+            % (name, level, reached, '; '.join(found), INVENTORY, row['stops'], reached,
+               RULES))
+    return {'verdict': 'target-restriction', 'stops': reached,
+            'stopped_by': sorted(set(found)), 'reason': row['reason']}
+
+
+#  D985: the wrong-convention control.  The C peer it builds is compiled
+#  for the other of AAPCS32's two variants than the lane's, and the lane's
+#  own float-argument assertion and GNU ld's attribute check must each
+#  refuse it, the linker with the peer before the program and after it;
+#  built for the lane's variant with short enums, the lane's assertion
+#  must refuse it too.
+CONVENTION_CONTROL = 'abi/cortex-c-peer'
+OTHER_CONVENTION = {
+    False: ['-mcpu=cortex-m4', '-mthumb', '-mfpu=fpv4-sp-d16', '-mfloat-abi=hard'],
+    True: ['-mcpu=cortex-m7', '-mthumb', '-mfpu=fpv5-d16', '-mfloat-abi=softfp'],
+}
+VFP_MISMATCH = re.compile(r'error: (\S+) uses VFP register arguments, (\S+) does not')
+
+
+def convention_control(parent, refine, name, level):
+    """Build NAME's C peer for the other variant than LEVEL's and require
+    the lane's assertion and the linker each to refuse it (D985).  Writes
+    under `convention-control/` beside the program's own output."""
+    out = parent.out / 'convention-control'
+    out.mkdir()
+    run = Run(out, parent.tools)
+    base = ROOT / 'compiler/tests/fixtures' / name
+    meta = metadata(base / 'fixture.meta')
+    own = [f for f in level_flags(level)
+           if not f.startswith(('-mcpu=', '-march=', '-mfloat-abi=', '-mfpu=', '-mthumb'))]
+    wrong = c_objects(run, meta, base, level, flags=OTHER_CONVENTION[hard_float(level)] + own,
+                      name='wrong')
+    profile = derived(run, refine, LEVELS[level]['profile'])
+    selected = [] if level == 'armv6-m' else ['--level=' + refine_level(level)]
+    run.command('compile', [refine, *lane_inputs(level, meta.module_arguments(base)),
+                            '--target=' + target(level), *selected, '--emit=asm',
+                            '-o', out / 'program.s'], timeout=60)
+    program = out / 'input-1.o'
+    run.command('assemble-1', [run.arm / 'arm-eabi-gcc', *level_flags(level), '-c',
+                               out / 'program.s', '-o', program])
+    try:
+        conventions(run, [program, wrong[0]], level)
+    except RuntimeError as error:
+        asserted = str(error)
+    else:
+        raise RuntimeError('the lane\'s convention assertion took a C peer of the other'
+                           ' variant')
+    #  A peer of the lane's variant built with GCC's short enums declares
+    #  them, and the same assertion refuses it, where the linker would warn.
+    short = c_objects(run, meta, base, level, name='short', extra=['-fshort-enums'])
+    try:
+        conventions(run, [program, short[0]], level, name='short-attributes')
+    except RuntimeError as error:
+        enums = str(error)
+    else:
+        raise RuntimeError('the lane\'s convention assertion took a C peer built with short'
+                           ' enums')
+    refused = []
+    start = harness_start(run, profile, level)
+    for order, objects in (('peer-first', [start, wrong[0], program]),
+                           ('program-first', [start, program, wrong[0]])):
+        try:
+            link(run, [*objects, *wrong[1:]], profile['script'], level,
+                 out / (order + '.elf'), 'link-' + order)
+        except CommandFailed as error:
+            found = VFP_MISMATCH.search(Path(error.log).read_text(errors='replace'))
+            require(found is not None, 'the %s link of the other variant failed for another'
+                    ' reason than its float arguments; inspect %s' % (order, error.log))
+            refused.append(order)
+        else:
+            raise RuntimeError('GNU ld linked a C peer of the other variant %s' % order)
+    return {'asserted': asserted, 'linker_refused': refused, 'short_enums': enums}
+
+
+#  D985: the route a user takes, through refine's own firmware link
+#  (D923).  The C peer's objects are archived as `libpeer.a` and the C
+#  runtime's as `libcruntime.a`, and the program is compiled with one more
+#  entry-module file that names both with `linker.library`, a firmware
+#  entry that stores what the program's `checks` returns, and `-L` for the
+#  archives' directory; compiler-owned startup runs it, and GDB holds the
+#  stored status to the fixture's.
+REFINE_LINK = 'abi/cortex-c-peer'
+REFINE_LINK_ENTRY = """--  The firmware entry of abi/cortex-c-peer linked by refine itself (D923).
+linker.library("peer")
+linker.library("cruntime")
+mut observed: i32 = 0
+
+start: () -> none =
+    observed = checks()
+end start
+"""
+
+
+def refine_link_route(parent, refine, name, level):
+    """Build NAME through refine's own firmware link and run it on LEVEL's
+    machine, its status read from the entry's datum.  Writes under
+    `refine-link/` beside the program's own output."""
+    from firmware import execute as firmware_execute
+    out = parent.out / 'refine-link'
+    (out / 'lib').mkdir(parents=True)
+    run = Run(out, parent.tools)
+    base = ROOT / 'compiler/tests/fixtures' / name
+    meta = metadata(base / 'fixture.meta')
+    *peers, runtime = c_objects(run, meta, base, level)
+    for library, objects in (('peer', peers), ('cruntime', [runtime])):
+        run.command('archive-' + library, [run.arm / 'arm-eabi-ar', 'rcs',
+                                           out / 'lib' / ('lib%s.a' % library), *objects])
+    (out / 'entry.ldn').write_text(REFINE_LINK_ENTRY)
+    selected = [] if level == 'armv6-m' else ['--level=' + refine_level(level)]
+    elf = out / 'firmware.elf'
+    run.command('compile', [
+        refine, 'compile', '--target=' + target(level), *selected, '--firmware-entry=start',
+        '--emit=exe', '--toolchain=' + str(run.arm / 'arm-eabi-gcc'), '-L', out / 'lib',
+        *lane_inputs(level, [*meta.module_arguments(base), str(out / 'entry.ldn')]),
+        '-o', elf], timeout=60)
+    linked = (out / 'firmware.elf.map').read_text()
+    require('libpeer.a(c-1.o)' in linked, 'refine\'s firmware link took no member of'
+            ' libpeer.a; inspect %s' % (out / 'firmware.elf.map'))
+    status = meta.status
+    firmware_execute(run, elf, [
+        'break _landin_firmware_returned', 'continue', 'python',
+        'observed = v("*(unsigned*)&observed")',
+        f'assert observed == {status}, "the program stored %d, expected {status}" % observed',
+        'print("D985_REFINE_LINK_PASS")', 'end'], marker='D985_REFINE_LINK_PASS',
+        machine=LEVELS[level]['machine'])
+    return {'route': 'refine compile --emit=exe with linker.library and -L', 'status': status}
+
+
+def first_c_error(log):
+    """The first `error:` line of a C compiler's log, without its path."""
+    line = next((one for one in log.splitlines() if 'error:' in one), log.strip()[:200])
+    return line[line.index('error:'):].strip() if 'error:' in line else line
 
 
 def overflowed(run, error, profile):
@@ -332,6 +576,8 @@ def corpus_line(result):
             result['minimum_stack_bytes'], result.get('stack_reserved', 4096))
     elif 'refused_imports' in result:
         text += ': ' + ', '.join(result['codes']) + ' refuses ' + ', '.join(result['refused_imports'])
+    elif 'stops' in result:
+        text += ': stops at %s, %s' % (result['stops'], ', '.join(result['stopped_by']))
     return text
 
 
@@ -655,7 +901,8 @@ def execute(output, tools, refine, selected=(), profiles=(), lane=None):
         meta = metadata(ROOT / 'compiler/tests/fixtures' / name / 'fixture.meta')
         modes = PROFILES + (SPECIALIZATION_PROFILES
                             if meta.get('profiles') == 'specialization' else [])
-        executes = row['mode'] == 'execute' or executes_on(row, lane)
+        executes = ((row['mode'] == 'execute' and not refused_on(row, lane))
+                    or executes_on(row, lane))
         if not executes:
             modes = [('none', 'off')]
         if profiles and executes:
@@ -685,9 +932,11 @@ def execute(output, tools, refine, selected=(), profiles=(), lane=None):
         if level != 'armv6-m':
             result['level'] = level
         try:
-            if row['mode'] == 'restriction':
-                result.update(verdict='target-restriction', reason=row['reason'],
-                              witness_sha256=sha(ROOT / row['witness']))
+            if refused_on(row, lane_of(level)):
+                result.update(source_refusal(run, refine, name,
+                                             {**row, **row['lanes'][lane_of(level)]}, level))
+            elif row['mode'] == 'restriction':
+                result.update(restriction(run, refine, name, row, opt, spec, level))
             elif row['mode'] == 'refuse' and not executes_on(row, lane_of(level)):
                 own = row.get('lanes', {}).get(lane_of(level))
                 result.update(source_refusal(run, refine, name, {**row, **own} if own else row,
@@ -706,6 +955,10 @@ def execute(output, tools, refine, selected=(), profiles=(), lane=None):
                         'its %s lane restriction is stale: the program passes there; remove'
                         ' the "lanes" entry from its %s row (see %s)' % (lane_of(level), INVENTORY, RULES))
             else:
+                if name == CONVENTION_CONTROL and (opt, spec) == ('none', 'off'):
+                    result['convention_control'] = convention_control(run, refine, name, level)
+                if name == REFINE_LINK and (opt, spec) == ('none', 'off'):
+                    result['refine_link'] = refine_link_route(run, refine, name, level)
                 try:
                     fixture(run, refine, name, opt, spec, level,
                             include_compiler_sha256=False)

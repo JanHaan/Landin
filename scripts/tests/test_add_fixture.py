@@ -91,13 +91,28 @@ class AddFixtureTest(unittest.TestCase):
         self.assertIn("run_expect:", str(raised.exception))
         self.assertIn("status oracle", str(raised.exception))
 
-    def test_an_abi_fixture_is_a_restriction_with_its_reason(self):
+    def test_an_abi_fixture_executes_where_it_names_cortex_m0(self):
+        #  The corpus builds its C peers freestanding and runs it (D985).
         self.assertEqual(add_fixture.corpus_row(
-            meta("abi/new"), None, "a hosted C peer"),
-            {"mode": "restriction", "reason": "a hosted C peer",
-             "witness": "compiler/tests/fixtures/abi/new/fixture.meta"})
-        with self.assertRaises(SystemExit):
-            add_fixture.corpus_row(meta("abi/new"), None, None)
+            meta("abi/new", targets="cortex-m0"), None, None, []),
+            {"mode": "execute"})
+        self.assertEqual(add_fixture.corpus_row(
+            meta("abi/new", targets="linux-x86-64"), None, None, ["L0015"]),
+            {"codes": ["L0015"], "mode": "refuse"})
+        with self.assertRaises(SystemExit) as raised:
+            add_fixture.corpus_row(meta("abi/new", targets="linux-x86-64"),
+                                   None, None, [])
+        self.assertIn("--stops=", str(raised.exception))
+
+    def test_a_restriction_names_what_stops_it_and_why(self):
+        #  D986: the corpus holds the fixture's build to its stop.
+        self.assertEqual(add_fixture.corpus_row(
+            meta("abi/new"), None, "it prints", [], "c-headers"),
+            {"mode": "restriction", "reason": "it prints", "stops": "c-headers"})
+        for stops, reason in (("c-headers", None), ("threads", "it starts threads")):
+            with self.assertRaises(SystemExit) as raised:
+                add_fixture.corpus_row(meta("abi/new"), None, reason, [], stops)
+            self.assertIn("c-options, c-headers", str(raised.exception))
 
     def test_each_class_is_told_every_step_left(self):
         #  A positive fixture is in lowering.ir, which only the test
@@ -182,6 +197,27 @@ class AddFixtureTest(unittest.TestCase):
         with self.assertRaises(SystemExit) as raised:
             add_fixture.main(["runtime/no-such-fixture-here"])
         self.assertIn("write the fixture first", str(raised.exception))
+
+    def test_several_fixtures_share_one_recording_and_one_test_run(self):
+        #  Several fixtures' steps join, the recordings in one run
+        #  of the test program, the cases in another, every other step once.
+        first = add_fixture.remaining_steps(meta("positive/new"), False)
+        second = add_fixture.remaining_steps(meta("runtime/other"), True)
+        steps = add_fixture.combined_steps([first, second])
+        tests = [step for step in steps if step.startswith("./scripts/dev-test.sh")]
+        self.assertEqual(len(tests), 2)
+        self.assertIn("--record=lowering", tests[0])
+        self.assertIn("--fixture=positive/new", tests[1])
+        self.assertIn("--fixture=runtime/other", tests[1])
+        self.assertEqual(tests[1].count("--case='formatting/the corpus is formatted'"), 1)
+        self.assertEqual(steps.count("python3 check.py"), 1)
+        self.assertEqual(steps[-1], "python3 check.py")
+
+    def test_one_row_options_take_one_fixture(self):
+        with self.assertRaises(SystemExit) as raised:
+            add_fixture.main(["runtime/a", "runtime/b", "--stops=link",
+                              "--reason=why"])
+        self.assertIn("in a run of its own", str(raised.exception))
 
 
 if __name__ == "__main__":

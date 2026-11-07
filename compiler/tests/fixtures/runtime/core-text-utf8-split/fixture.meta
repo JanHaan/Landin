@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: a utf8 record read from a buffer is split at a found = and at each found arrow into key and field views that share the buffer, its one-, two-, three- and four-byte scalars stepped and found at their offsets and widths, an empty last field, and a record with no = reports text.not_found
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0250, 0570, 0600, 0610, 0790, 0940, 1030, 1410, 1420
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64

@@ -230,7 +230,8 @@ no level to select. `refine --identify` lists each target's levels.
 
 An import names a source namespace unavailable for the selected target (D267).
 `hosted/*` requires a hosted target; `platform/c` requires one of the currently
-enabled LP64 C ABIs; the submodules of `platform/cortex_m`, its constrained
+enabled C ABIs, the four LP64 ones or Cortex-M's AAPCS32 (D920), so RV32 and
+Xtensa refuse it; the submodules of `platform/cortex_m`, its constrained
 reference description among them, require an M-profile target, including its
 higher supported feature levels. `platform/cortex_m` itself is available on
 every target and declares its operations only on an M-profile one (D575), so
@@ -548,7 +549,11 @@ that name as a likely fix: a local or parameter, a type, a public member of an
 imported module, never a name out of scope or inaccessible. A member a module
 declares only in a `fixed if` arm this target does not select, a Linux call
 written for Darwin among them, is named as one this system does not have,
-since no spelling of it would be found here.
+since no spelling of it would be found here. One declared under an arm that
+reads `compiler.feature.cache`, `platform/cortex_m/l1`'s provider, is named
+as a cached profile's on a firmware profile whose description declares no
+cache, and the note says to import a cached description or to maintain
+through `core/cache`'s cacheless provider (D972).
 
 `core/io` has no `print`, `println`, `printf` or `puts`: one call writes a
 template and its values to a file (D527). Asked for one of those, the note
@@ -1435,9 +1440,9 @@ extern(interrupt) tick: (count: u32) -> none = end tick
 ### L0346
 
 A C boundary declaration or call is something the C ABI cannot carry
-[1580]. A target with no C ABI yet, as Cortex-M0 has none, has no C
-signature and lays out no `layout(c)` record, and the diagnostic says so by
-the target's name; a byte-packed `layout(c, packed)` record needs no C
+[1580]. A target with no enabled C ABI yet, as RV32 and Xtensa have none, has
+no C signature and lays out no `layout(c)` record, and the diagnostic says so
+by the target's name; a byte-packed `layout(c, packed)` record needs no C
 alignment and stands there. The refusal of a signature names the part C
 cannot carry beside it. On a target with C ABI support, a C signature is infallible and
 nongeneric, with at most one result. Each parameter and result part uses
@@ -1454,7 +1459,10 @@ or nested record by value only when its alignment is one: `u8`, `i8`, `bool`
 or a packed record (D410). A packed record, a record with a flexible member,
 and a record holding either cross a C signature only by pointer (D414). A variadic C
 declaration needs at least one fixed parameter and target support; a variadic
-definition needs a generated adapter. Variadic calls take positional scalar,
+definition needs a generated adapter. Cortex-M's AAPCS32 calls no variadic C
+function yet (D922): its refusal names the target, and the repair is a C
+function of fixed arity that makes the variadic call, linked with the program
+and declared `extern(c)` instead. Variadic calls take positional scalar,
 pointer or fixed C callback tail arguments, without labels or static
 arguments. Change `inout` or `sink` to `in`; pass a pointer if C must write
 through a parameter. Remove `caller` and constraints, specialize generics,
@@ -1622,6 +1630,23 @@ rounding on purpose. A literal whose rounding gives the same integer, as
 big: () -> (n: u64) =
     n = u64(1.0e18)
 end big
+```
+
+### L0600
+
+`compiler.utf8_unvalidated(bytes)` makes text of bytes without reading
+them (D949), so it is admitted only where the program says it answers for
+them: inside `unchecked begin ... end unchecked`. Bytes that are not UTF-8
+then go unnoticed, and what reads them as text reads them wrongly. Where
+the bytes come from input, convert them with `utf8(bytes)`, which traps on
+malformed bytes, or `text.from_bytes`, which reports `invalid_text`. Where
+they are valid by construction, because the program has just checked them
+or wrote only whole scalars, put the call in an `unchecked` region.
+
+```landin
+trusted: (source: []u8) -> (result: utf8 from source) =
+    result = compiler.utf8_unvalidated(source)
+end trusted
 ```
 
 ## The backend and its toolchain
@@ -2288,7 +2313,8 @@ description with `link(region: "NAME")`.
 `refine bindings` cannot read its policy (D820): it is not UTF-8 JSON, names
 a key twice, is not schema 1, lacks a key it needs or names one refine does
 not read, gives one of the wrong shape, or binds for another ABI than
-`--target` names. The message names the key or the declaration. A policy's
+`--target` names, a data model or calling convention among them, which
+`cortex-m0`'s policy must name (D935). The message names the key or the declaration. A policy's
 every key is described in the
 [binding policy reference](../bindings/README.md). With an installed compiler,
 run `refine help bindings` for the address of its generated reading copy.
@@ -2299,8 +2325,9 @@ The Clang `refine bindings` was given cannot be used as asked (D820): it
 cannot be run, a root it is given is not a directory, it failed, and the
 message carries its error output with the request's paths replaced by
 names that do not depend on where it ran, or it describes another ABI than
-the target's: another triple, data model, byte order or sign of plain
-`char`. A header reached through an absolute path under none of the roots
+the target's: another triple, data model, byte order, sign of plain
+`char` or, on Cortex-M, procedure call standard, float unit, enum size or
+hosted environment (D935). A header reached through an absolute path under none of the roots
 the request names is refused too, since what is generated could then depend
 on where it was. A relative dependency that escapes Clang's retained
 workspace, even if it reenters, is also refused: its external directory
@@ -2320,7 +2347,9 @@ names the policy declaration and the position: the header no longer has it
 (a stale policy), a reference position has no policy or a scalar one has
 one, or the declaration uses a form `bindings/README.md` lists as refused,
 such as an extended floating type, a calling convention attribute, an
-anonymous aggregate or a wrapper that would forward a C variadic tail. A
+anonymous aggregate or a wrapper that would forward a C variadic tail, or,
+on freestanding `cortex-m0`, a nullable callback or a `_Thread_local` object,
+whose adapters need a C library (D938). A
 Landin name two declarations would share is refused here too. Correct the
 policy, or select another declaration.
 
@@ -2336,3 +2365,77 @@ inspected and recovered; remove it only after recovery. Preparation can
 already have created private staging. A later publication or cleanup failure
 is L0005 and can leave outputs installed or recovery entries retained, as
 that diagnostic reports.
+
+### L0587
+
+A firmware image linked with C archives, through `linker.library` with
+`linker.directory` or `-L DIR`, holds something compiler-owned startup cannot
+honour (D923, D924). Reset copies data, clears BSS and calls the firmware
+entry; it runs no C constructor, has one thread and no thread pointer, and
+loads nothing at run time. So the image is refused, and removed, when an
+archive brought C constructors, an `.init_array`, `.preinit_array` or
+`.ctors` section that the derived script keeps so that it cannot be dropped
+unseen; thread-local storage, a `.tdata` or `.tbss` section from a
+`_Thread_local` or `__thread` variable; or a dynamic linkage, which a shared
+object would bring. The message names the section. Build the library without
+constructors and call its initialisation from the firmware entry; declare a
+thread-local variable as ordinary static data; and link the library's static
+archive built for the firmware's core.
+
+### L0610
+
+A device description names a cache refine does not build, or one its core
+cannot have (D971). A cache is a fact of the core a chip was built with,
+written in the description's hand-written half as
+`compiler.cache("KIND", LINE)`, and refine builds one kind:
+`armv7-m-l1`, Armv7-M's level 1 instruction and data caches with the
+maintenance operations of the System Control Block, which among the cores
+refine builds for only a `cortex-m7` has. A description that declares it
+is a cached profile: reset enables the caches and the entry's return
+disables them (D973), and `platform/cortex_m` declares its maintenance
+provider there. Write `compiler.cache("armv7-m-l1", 32)` in a
+Cortex-M7's description, or leave the directive out for a cacheless
+profile, whose DMA buffers need no maintenance.
+
+```landin
+-- refine: --target=cortex-m0 --level=armv7e-m
+compiler.device("board")
+compiler.core("cortex-m4")
+compiler.cache("armv7-m-l1", 32)
+compiler.vectors(48)
+compiler.boot("vector-table")
+linker.region("FLASH", 0, 1024 * 1024, "rx")
+linker.region("RAM", 0x2000_0000, 128 * 1024, "rwx")
+linker.place("vectors", "FLASH")
+linker.place("text", "FLASH")
+linker.place("rodata", "FLASH")
+linker.place("data", "RAM")
+linker.place("bss", "RAM")
+linker.place("stack", "RAM", 4 * 1024)
+```
+
+### L0611
+
+A device description's cache names a line that is not its core's (D971).
+The line is the unit every maintained range is a whole number of, and
+`core/cache` refuses a range that is not, so a description that said
+another would let a program align its DMA buffers to lines the hardware
+does not have. A Cortex-M7's `armv7-m-l1` lines are 32 bytes, as its
+CCSIDR says for both caches; write `compiler.cache("armv7-m-l1", 32)`.
+
+```landin
+-- refine: --target=cortex-m0 --level=armv7e-m
+compiler.device("board")
+compiler.core("cortex-m7")
+compiler.cache("armv7-m-l1", 64)
+compiler.vectors(48)
+compiler.boot("vector-table")
+linker.region("FLASH", 0, 1024 * 1024, "rx")
+linker.region("RAM", 0x2000_0000, 128 * 1024, "rwx")
+linker.place("vectors", "FLASH")
+linker.place("text", "FLASH")
+linker.place("rodata", "FLASH")
+linker.place("data", "RAM")
+linker.place("bss", "RAM")
+linker.place("stack", "RAM", 4 * 1024)
+```

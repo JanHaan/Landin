@@ -1,0 +1,101 @@
+--  Cache maintenance for memory a device reads or writes behind the CPU's
+--  caches, D227's handoff as a concept with a provider for each kind of
+--  memory system (D970).  A range is maintained in whole lines or not at
+--  all: a range that does not begin and end on a line is refused, never
+--  rounded out, because a rounded line may hold bytes the caller does
+--  not own, whose dirty copy an invalidate loses or whose stale copy a
+--  clean writes over a device's data.  Every operation ends with the
+--  completion barrier, so it has reached the point a device observes
+--  when it returns; the device barrier before enabling a transfer stays
+--  the driver's, as D227 orders it.
+--
+--  `cacheless` is the provider for memory no cache stands in front of,
+--  on every target: its operations are the barriers alone, and it
+--  refuses the ranges a cached provider of the same line would, so that a
+--  driver checked on a cacheless core takes the same refusals on a cached
+--  one.  `platform/cortex_m/l1` provides the Cortex-M7's level 1 caches on
+--  a cached profile (D972).
+
+--- A range that does not begin on a cache line or is not a whole number
+--- of lines: nothing was maintained.
+public misaligned: atom
+--- A line size that is not a nonzero power of two.
+public bad_line: atom
+
+--- Keeping memory and a device that reaches it behind the caches in
+--- step. Each operation takes a range of whole lines, as `lines` checks,
+--- and returns once it is complete at the point the device observes.
+public maintenance: type = concept (provider: type)
+    --- The bytes in one line, which every range is a whole number of.
+    line: (self: provider) -> (bytes: usize)
+    --- Write the range's dirty lines to memory, keeping them cached:
+    --- before a device reads what the CPU wrote, as a transmit does.
+    clean: (self: provider, range: []u8) -> none ! misaligned
+    --- Discard the range's cached lines, dirty or not, so the next read
+    --- is memory's: after a device wrote it, as a receive completes.
+    invalidate: (self: provider, range: []u8) -> none ! misaligned
+    --- Write the range's dirty lines to memory and discard them: before
+    --- a device writes it, as a receive is armed.
+    clean_invalidate: (self: provider, range: []u8) -> none ! misaligned
+end maintenance
+
+--- How many lines of LINE bytes RANGE is, refusing a range that does not
+--- begin on a line or end on one. An empty range is no lines.
+public lines: (line: usize, range: []u8) -> (count: usize) ! misaligned =
+    size := lenof range
+    count = 0
+    return when size == 0
+    fail misaligned when (size & (line - 1)) <> 0
+      or (usize(addr range[0]) & (line - 1)) <> 0
+    count = size / line
+end lines
+
+--- The bytes in one line of the provider's caches.
+public line: (provider: type is maintenance, caches: provider)
+             -> (bytes: usize) =
+    bytes = provider.line(caches)
+end line
+
+--- Clean a range of whole lines, through `maintenance` evidence.
+public clean: (provider: type is maintenance, caches: provider,
+               range: []u8) -> none ! misaligned =
+    try provider.clean(caches, range)
+end clean
+
+--- Invalidate a range of whole lines, through `maintenance` evidence.
+public invalidate: (provider: type is maintenance, caches: provider,
+                    range: []u8) -> none ! misaligned =
+    try provider.invalidate(caches, range)
+end invalidate
+
+--- Clean and invalidate a range of whole lines, through `maintenance`
+--- evidence.
+public clean_invalidate: (provider: type is maintenance, caches: provider,
+                          range: []u8) -> none ! misaligned =
+    try provider.clean_invalidate(caches, range)
+end clean_invalidate
+
+--- The cacheless provider's handle: memory a device observes as the CPU
+--- does, ranges held to lines of `line` bytes.
+public barriers: type = struct
+    line: usize
+end barriers
+
+--- The cacheless provider, refusing ranges that are not whole lines of
+--- LINE bytes. Its operations check the range and issue the completion
+--- barrier, which is all memory with no cache in front of it needs.
+public cacheless: (line: usize) -> (caches: barriers) ! bad_line =
+    fail bad_line when line == 0 or (line & (line - 1)) <> 0
+    caches = (line: line)
+end cacheless
+
+barriers_line: (self: barriers) -> (bytes: usize) = bytes = self.line end barriers_line
+
+barriers_complete: (self: barriers, range: []u8) -> none ! misaligned =
+    _ = try lines(self.line, range)
+    compiler.completion_barrier()
+end barriers_complete
+
+barriers is maintenance (line: barriers_line, clean: barriers_complete,
+                         invalidate: barriers_complete,
+                         clean_invalidate: barriers_complete)

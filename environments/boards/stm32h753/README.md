@@ -15,6 +15,10 @@ separate flash and cold-start check.
 The port uses the board's ST-LINK V3 for debug and its virtual COM
 port for USART3 on PD8/PD9; PB0 drives LD1. Its physical oracle follows
 RM0433 Rev 9 and IEEE 754 arithmetic computed on the host (D650).
+Its receive ring takes `core/cache` maintenance evidence and does D227's
+handoff itself; this cacheless profile passes `cache.cacheless(32)`, the
+barriers alone, and the [cached profile](../stm32h753_cached/README.md)
+passes the Cortex-M7's provider (D978).
 The warm contract requires HSI as the system clock and disabled caches;
 the helper verifies the supply before loading SRAM. A boot check also
 exercises the description's supply stage and the power-on flags.
@@ -99,6 +103,8 @@ so instead of reporting echo gaps from an unanchored capture.
 | `t` | after each 0x11 | `h` bytes handled, `c` ring restarts, `d` epochs the stream completed, `w` its laps, `k` DMA_STR0 entries, `m` SysTick interrupts, `u` USART3 entries, `p` the exception number USART3's handler ran in, `n` DMA1_S0NDTR, `e` bytes consumed in this epoch, `g` PB0's input, `s` the application's state |
 | `f` | after 0x14 and 16 operand bytes | f32 results as bit patterns: `a` sum, `s` difference, `m` product, `d` quotient, `c` the comparisons, `q` the square root once it is sent |
 | `F` | after 0x15 and 32 operand bytes | the same for f64, each result's high word under its key and its low word under the next letter: `a` and `b`, `s` and `t`, `m` and `n`, `d` and `e`, `q` and `r`; `c` the comparisons |
+| `l` | after 0x16 and 11 line digits | `r`, `d`, `p` and `s` the line read, `k` USART3's clock, `o` 0 accepted, 1 an unsupported rate, 2 an unsupported frame, and when accepted `b` BRR, `f` CR1's M1, M0, PCE and PS, `x` CR2 (D962) |
+| `e` | after 0x17 on a changed line | `n` the bytes that arrived on it, `h` their FNV-1a |
 | `h` | when the application halts | `s` its status |
 
 0x12 stops reading for 100 ms. An operand byte is one of `a` to `p`, four
@@ -123,6 +129,7 @@ greater or equal 16, greater 32.
 | an epoch exhausted | the next epoch filled to its 4096 bytes: one epoch completed, one restart, nothing lost, and the byte that waited in the receiver meanwhile the next epoch's first |
 | the stream | every byte sent echoed in order but those discarded above, `h` their count, and the stream lapping the ring |
 | the float exercise | f32 and f64 results for special and seeded operands equal IEEE 754's bit for bit, any NaN matching any NaN: f64 from the host's binary64 arithmetic, f32 from the binary64 result of binary32 operands rounded once to binary32, which is correctly rounded for these operations |
+| the line exchange | 230400-8N1, 9600-8E1 and 57600-7O2 accepted with BRR, CR1's frame bits and CR2 as RM0433's 48.5.7, 48.8.1 and 48.8.3 give them at 64 MHz, and a payload echoed and counted on each; 300 baud, BRR above 65535, and 6N1, a word M has not, refused with the line unchanged (D959, D962) |
 | the counters | `handled`, `recoveries`, `dma_entries`, `usart_entries` and DMA1_S0NDTR, read over SWD without halting the core, equal the last frame's |
 | the stream's configuration | DMA1_S0CR over SWD has TRBUFF, which a stream serving a USART must (15.5.5, p. 662) |
 

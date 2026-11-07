@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: text.find and text.find_from return the byte position of a match at the start, across scalars of different widths, at the end and from a position, periodic sought text included, report text.not_found where text.contains finds nothing, find the empty text where the search begins, and text.find_scalar finds a scalar of each width but never a surrogate
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0250, 0570, 0600, 0610, 0940, 1030, 1410, 1420
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0

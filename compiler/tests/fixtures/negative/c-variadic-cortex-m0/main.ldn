@@ -1,0 +1,8 @@
+--  D922: AAPCS32's variadic calls are not enabled, so the variadic import
+--  is refused and its fixed-arity wrapper is what a program declares.
+extern(c) printf: (format: ptr u8, ...) -> (written: i32)
+extern(c) print_count: (format: ptr u8, count: i32) -> (written: i32)
+
+public report: (format: ptr u8) -> (written: i32) =
+    written = print_count(format: format, count: 3)
+end report

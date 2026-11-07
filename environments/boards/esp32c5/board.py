@@ -64,6 +64,14 @@ class C5(esp.Chip):
     uart_cause, timer_cause, cause_mask = 0x80000011, 0x80000012, 0x80000fff
     a_extension = True
     cells = {'word_cell': ('d', 4), 'byte_cell': ('f', 1)}
+    # UART0 on the clock the ROM chose, which the port takes from the
+    # divisor the ROM left for 115200 baud (D961): the 48 MHz crystal or
+    # PLL_F80M, two of the three sources TRM v1.1's 32.4.1 names; and
+    # CLKDIV's 12 bits, so 300 baud is too slow from either.
+    line_clocks = (48000000, 80000000)
+    line_plan = [((230400, 8, 'none', 1), 'accepted'), ((38400, 8, 'even', 2), 'accepted'),
+                 ((57600, 7, 'odd', 1), 'accepted'), ((300, 8, 'none', 1), 'unsupported_rate'),
+                 ((115200, 9, 'none', 1), 'unsupported_format')]
 
     def mtvec(self, sections, names):
         # CLIC mode, 3, over compiler-owned trap entry, 64-byte aligned

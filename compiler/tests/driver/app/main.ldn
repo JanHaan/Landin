@@ -1,5 +1,6 @@
 -- Complete prototype-1 application: UART echo, GPIO commands and timer wakeups.
 import commands
+import core/line
 import drivers/uart
 import platform/cortex_m
 import rp2040/dma
@@ -74,7 +75,7 @@ start: () -> noreturn =
     -- Observable pre-open state; the independent cold-boot control poisons
     -- both regions and checks the compiler's reset copies before this runs.
     app_state = initialized +% cleared
-    mut receiver := uart.open(115200, 65535, rx_storage[0..<256]) else (problem)
+    mut receiver := uart.open(line.default_settings, 65535, rx_storage[0..<256]) else (problem)
         _ = problem
         halt(1)
     end

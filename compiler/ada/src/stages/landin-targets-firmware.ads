@@ -221,6 +221,33 @@ package Landin.Targets.Firmware is
    function Double_Precision (Unit : Float_Unit) return Boolean
      is (Unit = FPv5_D16);
 
+   --  D971: a cache is a fact of a description, as a float unit is: the
+   --  compiler knows which kind each core may have and its line, and
+   --  names no chip.  It builds one, Armv7-M's level 1 instruction and
+   --  data caches with the System Control Block's maintenance operations,
+   --  which the Cortex-M7 alone of its cores implements, its lines 32
+   --  bytes.  Reset enables a described cache and the entry's return
+   --  disables it (D973); `compiler.feature.cache` and
+   --  `compiler.cache_line` read it.
+   type Cache_Kind is (No_Cache, Armv7M_L1);
+   function Is_Cache_Name (Text : String) return Boolean
+     is (Text = "armv7-m-l1");
+   function Cache_Named (Text : String) return Cache_Kind
+     is (if Is_Cache_Name (Text) then Armv7M_L1 else No_Cache);
+   function Spelling (Cache : Cache_Kind) return String
+     is (case Cache is
+           when No_Cache => "none",
+           when Armv7M_L1 => "armv7-m-l1");
+   function May_Have (Core : Core_Kind; Cache : Cache_Kind) return Boolean
+     is (Cache = No_Cache or else Core = Cortex_M7);
+   --  The line of a kind's caches, in bytes, on the core that has it; 0
+   --  for none.  The Cortex-M7's data and instruction lines are both 32
+   --  bytes, CCSIDR's LineSize 1 at both caches.
+   function Line_Of (Cache : Cache_Kind) return Byte_Count
+     is (if Cache = No_Cache then 0 else 32);
+   function Is_Cache_Feature_Name (Word : String) return Boolean
+     is (Word = "cache");
+
    --  D680: whether the core's own dispatch, rather than the hardware,
    --  enters SLOT: every slot under the CLIC, whose common entry reads
    --  mcause, and on Hazard3 every slot from 16, which meinext names.  A
@@ -418,6 +445,8 @@ package Landin.Targets.Firmware is
       Has_Stage : Boolean := False;
       --  D615: the description's float unit, `compiler.float_unit`.
       Float : Float_Unit := No_Float_Unit;
+      --  D971: the description's cache, `compiler.cache`.
+      Cache : Cache_Kind := No_Cache;
       --  D683: `compiler.esp_image`'s chip id, the full minimum and
       --  maximum revisions, major * 100 + minor, and the flash offset
       --  the ROM reads the image at.

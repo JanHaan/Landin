@@ -1,8 +1,8 @@
 {
   "status": "passed",
-  "image_sha256": "819282f8e16ac173e4a2b2cd968a4618e3d3211f714326f39c4b10e937843e63",
+  "image_sha256": "4c37105496aed02404effe33ec46adeafdff8ca41a215a9998df307fe18838e8",
   "image_name": "board.elf.bin",
-  "elf_sha256": "0bd584dc86162443b5435e592956e9264086e17500a253f45e81d4672fde5abe",
+  "elf_sha256": "fa067ae13eae3babcb743db9e32f27d95632960636f1b2267666f0467e2bf11c",
   "image": {
     "chip": 23,
     "revisions": [
@@ -12,11 +12,11 @@
     "entry": "0x40800000",
     "segments": [
       "0x40800000+0x1c0",
-      "0x408001c0+0x5c10",
-      "0x40805dd0+0x68"
+      "0x408001c0+0x8800",
+      "0x408089c0+0x68"
     ],
-    "checksum": "0xe2",
-    "sha256": "205a26030d54cc1cbf61b94eb35c4be6af183228bf710e5e284712a3b96ecfa9"
+    "checksum": "0x2c",
+    "sha256": "93dd9221ef951e84e7f31a272efef7419f0fc48eb6b12f251cc27e80e58f3557"
   },
   "instructions": [
     "amoadd.w.aqrl",
@@ -32,8 +32,8 @@
     "boot_reason": 1,
     "app_state": 2,
     "timer_events": [
-      4631,
-      5329
+      4897,
+      5601
     ],
     "trap_count": 0
   },
@@ -42,8 +42,8 @@
     "boot": "SPI_FAST_FLASH_BOOT",
     "loads": [
       "0x40800000+0x1c0",
-      "0x408001c0+0x5c10",
-      "0x40805dd0+0x68"
+      "0x408001c0+0x8800",
+      "0x408089c0+0x68"
     ],
     "entry": "0x40800000"
   },
@@ -91,28 +91,78 @@
       "timer_interrupts_meanwhile": 100
     },
     "stream": {
-      "timer_events": 2440,
+      "timer_events": 2453,
       "receive_interrupts": 6630,
       "echoed": 3014,
       "sent": 3614
+    },
+    "line": {
+      "status": "passed",
+      "settings": [
+        {
+          "line": "230400-8N1",
+          "outcome": "accepted",
+          "clock": 47995200,
+          "registers": {
+            "b": "0x5000d0",
+            "f": "0x1c"
+          },
+          "payload": 48,
+          "fnv1a": "197f7e75"
+        },
+        {
+          "line": "38400-8E2",
+          "outcome": "accepted",
+          "clock": 47995200,
+          "registers": {
+            "b": "0xe004e1",
+            "f": "0x3e"
+          },
+          "payload": 48,
+          "fnv1a": "6ceec51e"
+        },
+        {
+          "line": "57600-7O1",
+          "outcome": "accepted",
+          "clock": 47995200,
+          "registers": {
+            "b": "0x400341",
+            "f": "0x1b"
+          },
+          "payload": 48,
+          "fnv1a": "d0dbede6"
+        },
+        {
+          "line": "300-8N1",
+          "outcome": "unsupported_rate",
+          "clock": 47995200,
+          "answered_after_refusal": true
+        },
+        {
+          "line": "115200-9N1",
+          "outcome": "unsupported_format",
+          "clock": 47995200,
+          "answered_after_refusal": true
+        }
+      ]
     }
   },
   "jtag": {
     "trap_count": 0,
-    "handled": 3014,
+    "handled": 3226,
     "recoveries": 2,
     "dropped": 44,
     "overflows": 1,
-    "entries": 6630,
+    "entries": 7030,
     "boot_reason": 1,
     "word_cell": 41,
     "byte_cell": 209
   },
   "readback": [
     "0x40800000+0x1c0",
-    "0x408001c0+0x5c10"
+    "0x408001c0+0x8800"
   ],
-  "uart_sha256": "45536dd660450a4854d8a6e88a8369f0e2d737dfb00447418ecf03cf2834150d",
+  "uart_sha256": "c121ac7fde563f5d742d866355acc7246deea359281106502c823533109bc867",
   "mode": "boot",
   "fixed_restore": {
     "status": "passed",
@@ -124,87 +174,87 @@
       "elf_sha256": "2892fedc0bb85412550f65a2d43a7014ef7399396b32266a2ccf15a26bcb1761"
     }
   },
-  "seconds": 40.839,
+  "seconds": 43.899,
   "kernel_usb": {
-    "since": 1793745349.293941,
-    "until": 1793745390.1035461,
+    "since": 1794061004.9663754,
+    "until": 1794061048.8359895,
     "lines": [
       {
-        "time": 1793745352.624695,
-        "text": "rigpi kernel: usb 1-1.2.3.4.3: USB disconnect, device number 16"
+        "time": 1794061008.668715,
+        "text": "rigpi kernel: usb 1-1.2.3.4.3: USB disconnect, device number 11"
       },
       {
-        "time": 1793745354.227197,
-        "text": "rigpi kernel: usb 1-1.2.4.3: USB disconnect, device number 11"
+        "time": 1794061010.302557,
+        "text": "rigpi kernel: usb 1-1.2.4.3: USB disconnect, device number 9"
       },
       {
-        "time": 1793745357.424679,
-        "text": "rigpi kernel: usb 1-1.2.4.3: new full-speed USB device number 20 using xhci_hcd"
+        "time": 1794061013.528725,
+        "text": "rigpi kernel: usb 1-1.2.4.3: new full-speed USB device number 24 using xhci_hcd"
       },
       {
-        "time": 1793745357.528733,
+        "time": 1794061013.632719,
         "text": "rigpi kernel: usb 1-1.2.4.3: ch341-uart converter now attached to ttyUSB3"
       },
       {
-        "time": 1793745358.928676,
-        "text": "rigpi kernel: usb 1-1.2.3.4.3: new full-speed USB device number 21 using xhci_hcd"
-      },
-      {
-        "time": 1793745359.028916,
-        "text": "rigpi kernel: cdc_acm 1-1.2.3.4.3:1.0: ttyACM5: USB ACM device"
-      },
-      {
-        "time": 1793745365.228728,
-        "text": "rigpi kernel: usb 1-1.2.3.4.3: USB disconnect, device number 21"
-      },
-      {
-        "time": 1793745365.436715,
-        "text": "rigpi kernel: usb 1-1.2.3.4.3: new full-speed USB device number 22 using xhci_hcd"
-      },
-      {
-        "time": 1793745365.544875,
-        "text": "rigpi kernel: cdc_acm 1-1.2.3.4.3:1.0: ttyACM5: USB ACM device"
-      },
-      {
-        "time": 1793745378.704722,
-        "text": "rigpi kernel: usb 1-1.2.3.4.3: USB disconnect, device number 22"
-      },
-      {
-        "time": 1793745380.287416,
-        "text": "rigpi kernel: usb 1-1.2.4.3: USB disconnect, device number 20"
-      },
-      {
-        "time": 1793745383.452682,
-        "text": "rigpi kernel: usb 1-1.2.4.3: new full-speed USB device number 23 using xhci_hcd"
-      },
-      {
-        "time": 1793745383.5727,
-        "text": "rigpi kernel: usb 1-1.2.4.3: ch341-uart converter now attached to ttyUSB3"
-      },
-      {
-        "time": 1793745385.208679,
-        "text": "rigpi kernel: usb 1-1.2.3.4.3: new full-speed USB device number 24 using xhci_hcd"
-      },
-      {
-        "time": 1793745385.308687,
-        "text": "rigpi kernel: cdc_acm 1-1.2.3.4.3:1.0: ttyACM5: USB ACM device"
-      },
-      {
-        "time": 1793745389.04077,
-        "text": "rigpi kernel: usb 1-1.2.3.4.3: USB disconnect, device number 24"
-      },
-      {
-        "time": 1793745389.248674,
+        "time": 1794061015.300683,
         "text": "rigpi kernel: usb 1-1.2.3.4.3: new full-speed USB device number 25 using xhci_hcd"
       },
       {
-        "time": 1793745389.359882,
+        "time": 1794061015.400677,
+        "text": "rigpi kernel: cdc_acm 1-1.2.3.4.3:1.0: ttyACM5: USB ACM device"
+      },
+      {
+        "time": 1794061021.724781,
+        "text": "rigpi kernel: usb 1-1.2.3.4.3: USB disconnect, device number 25"
+      },
+      {
+        "time": 1794061021.932689,
+        "text": "rigpi kernel: usb 1-1.2.3.4.3: new full-speed USB device number 26 using xhci_hcd"
+      },
+      {
+        "time": 1794061022.040721,
+        "text": "rigpi kernel: cdc_acm 1-1.2.3.4.3:1.0: ttyACM5: USB ACM device"
+      },
+      {
+        "time": 1794061038.008718,
+        "text": "rigpi kernel: usb 1-1.2.3.4.3: USB disconnect, device number 26"
+      },
+      {
+        "time": 1794061039.582594,
+        "text": "rigpi kernel: usb 1-1.2.4.3: USB disconnect, device number 24"
+      },
+      {
+        "time": 1794061042.808711,
+        "text": "rigpi kernel: usb 1-1.2.4.3: new full-speed USB device number 27 using xhci_hcd"
+      },
+      {
+        "time": 1794061042.928675,
+        "text": "rigpi kernel: usb 1-1.2.4.3: ch341-uart converter now attached to ttyUSB3"
+      },
+      {
+        "time": 1794061044.332678,
+        "text": "rigpi kernel: usb 1-1.2.3.4.3: new full-speed USB device number 28 using xhci_hcd"
+      },
+      {
+        "time": 1794061044.432806,
+        "text": "rigpi kernel: cdc_acm 1-1.2.3.4.3:1.0: ttyACM5: USB ACM device"
+      },
+      {
+        "time": 1794061048.096682,
+        "text": "rigpi kernel: usb 1-1.2.3.4.3: USB disconnect, device number 28"
+      },
+      {
+        "time": 1794061048.300665,
+        "text": "rigpi kernel: usb 1-1.2.3.4.3: new full-speed USB device number 29 using xhci_hcd"
+      },
+      {
+        "time": 1794061048.40067,
         "text": "rigpi kernel: cdc_acm 1-1.2.3.4.3:1.0: ttyACM5: USB ACM device"
       }
     ],
     "status": "captured"
   },
-  "sent_sha256": "5ac29a7d385819161814c8f23f97a6a82ba69ae0187502c8fd0c9b77f110ad06",
+  "sent_sha256": "07817cd84f04ff4b6b7701166cfdf3faf55ce507d918b7f169a8f167394a7f0b",
   "frames": [
     {
       "tag": "b",
@@ -226,16 +276,16 @@
     },
     {
       "tag": "t",
-      "h": "00000bc6",
+      "h": "00000c9a",
       "c": "00000002",
-      "i": "000019e6",
-      "m": "00000988",
+      "i": "00001b76",
+      "m": "00001093",
       "p": "b8000011",
       "q": "b8000012",
       "k": "00000064",
       "l": "0000002c",
       "o": "00000001",
-      "e": "00000cc6",
+      "e": "00000d9a",
       "g": "00000000",
       "s": "00000002"
     }

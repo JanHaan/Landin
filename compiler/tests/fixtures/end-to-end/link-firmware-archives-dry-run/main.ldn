@@ -1,0 +1,13 @@
+--  D923: a firmware link names its archives after the object refine
+--  assembled and before libgcc, which the archives may need, with the
+--  directories ahead of them, -L's first.
+linker.library("sensor")
+linker.directory("/tmp")
+
+extern(c) sensor_read: () -> (value: u32)
+
+mut seen: u32 = 0
+
+start: () -> none =
+    seen = sensor_read()
+end start

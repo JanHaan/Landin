@@ -1,0 +1,12 @@
+--  A utf8 builder takes text, scalars and numbers and nothing that could
+--  be anything: not bytes, and not the byte builder's appends.
+import core/text
+
+public main: () -> (code: i32) =
+    mut storage: [16]u8 = zeroed
+    mut line := text.utf8_over(storage[0..<16])
+    raw: []u8 = "\xff"
+    text.utf8_append_text(line, raw) else none
+    text.append(line, raw) else none
+    code = i32(text.utf8_length(line))
+end main

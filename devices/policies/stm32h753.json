@@ -34,6 +34,7 @@
     ],
     "USART3": [
       "CR1",
+      "CR2",
       "CR3",
       "BRR",
       "ISR",
@@ -118,6 +119,11 @@
       "reserved": "zero"
     },
     "USART3.CR1": {
+      "read": "normal",
+      "write": "normal",
+      "reserved": "zero"
+    },
+    "USART3.CR2": {
       "read": "normal",
       "write": "normal",
       "reserved": "zero"

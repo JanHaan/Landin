@@ -1,6 +1,6 @@
 {
   "status": "passed",
-  "image_sha256": "3ae672bfbc42306f14c0718173e1787c435044d600aaf0104dc34d1bbf739a37",
+  "image_sha256": "0b657c2cd75d553229e141f85d0055f3162ff1ec5c219956101e0431ae7ff74c",
   "image_name": "board.elf",
   "verdicts": {
     "boot": {
@@ -30,9 +30,12 @@
       "held_by_fifo": 32,
       "restarts": 3,
       "dma_completions": 2,
-      "timer_events": 9459,
+      "timer_events": 9186,
       "echoed": 11202,
       "sent": 11572
+    },
+    "line": {
+      "status": "not run: probehive bridge fixed at 115200 8N1"
     }
   },
   "swd": {
@@ -42,7 +45,7 @@
     "usb_events": 1,
     "trans_count": 1094
   },
-  "uart_sha256": "c052a739e59e242c41a69d717eef926522a52453b7a3bf711df44b461d4de9d7",
+  "uart_sha256": "f41ad2093af32d9178aa687ca043cb9014d963194dc28d83618b4100aafc6d9e",
   "mode": "ram",
   "warm_load": {
     "board": "rp2040",
@@ -52,28 +55,28 @@
       "peripheral_sources_stopped": true,
       "rom_reset": false
     },
-    "elf_sha256": "3ae672bfbc42306f14c0718173e1787c435044d600aaf0104dc34d1bbf739a37",
+    "elf_sha256": "0b657c2cd75d553229e141f85d0055f3162ff1ec5c219956101e0431ae7ff74c",
     "entry": 536871105,
     "flash_written": false,
     "format_version": 1,
-    "helper_source_sha256": "e75f0e0808b14629a7325bafec22fddb8e711e830745ca7b0c7a41200622268c",
+    "helper_source_sha256": "47d74e1639692ad1649ebc14f6b050efb10a98c93f3122e111a40397f58a22c1",
     "mode": "warm",
-    "previous_pc": 536875824,
+    "previous_pc": 268436062,
     "segments": [
       {
         "address": 536870912,
-        "bytes": 23676,
-        "sha256": "849bb81991df576555ff4384a37272931c2e8f4b32ddaefe0ee1ec28ef0d2b43"
+        "bytes": 28012,
+        "sha256": "18069056be01d99a2a41f0dababa065936729d4f6ddb63e371d03eeeadf243af"
       }
     ],
     "stack": 537141248,
     "status": "passed",
     "vector": 536870912
   },
-  "seconds": 17.276,
+  "seconds": 17.721,
   "kernel_usb": {
-    "since": 1793748467.7728598,
-    "until": 1793748485.0299745,
+    "since": 1794060570.2817876,
+    "until": 1794060587.9836009,
     "lines": [],
     "status": "captured"
   },
@@ -90,7 +93,7 @@
       "h": "00002bc2",
       "c": "00000003",
       "d": "00000002",
-      "m": "000024f3",
+      "m": "000023e2",
       "u": "00000001",
       "p": "00000015",
       "n": "00000446",

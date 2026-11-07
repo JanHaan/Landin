@@ -1,0 +1,10 @@
+error[L0346]: cortex-m0 calls no variadic C function: its C ABI's variadic calls are not enabled
+  --> ../tests/fixtures/negative/c-variadic-cortex-m0/main.ldn:3:1
+  |
+3 | extern(c) printf: (format: ptr u8, ...) -> (written: i32)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/c-variadic-cortex-m0/main.ldn:3:11
+  |
+3 | extern(c) printf: (format: ptr u8, ...) -> (written: i32)
+  |           ^^^^^^ this variadic C signature
+  = note: D922: write a C function of fixed arity that calls this one with the arguments the program passes, link it with the program, and declare that function extern(c) instead

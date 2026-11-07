@@ -113,6 +113,9 @@ package Landin.Targets is
 
    --  Named by convention rather than operating system: the standard
    --  AAPCS64 is Linux's and FreeBSD's alike, and Apple's is a variant.
+   --  Arm_AAPCS32_Soft is Cortex-M's AAPCS32 at both of its variants: the
+   --  base PCS, and the VFP one a description's float unit selects (D616,
+   --  D920), which is the unit's to say and not the ABI's.
    type C_ABI_Kind is
      (No_C_ABI, SysV_AMD64_LP64, Darwin_AAPCS64_LP64, AAPCS64_LP64,
       RiscV_LP64D, Arm_AAPCS32_Soft, RiscV_ILP32, Xtensa_Windowed_ILP32);

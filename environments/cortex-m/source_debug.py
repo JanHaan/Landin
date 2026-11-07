@@ -58,7 +58,7 @@ def app_stops(elf):
         return anchored(elf.parent, path, statement)
     return dict(
         entry=at(APP, 'app_state = initialized +% cleared'),
-        opened=at(APP, 'mut receiver := uart.open(115200, 65535, rx_storage[0..<256])'
+        opened=at(APP, 'mut receiver := uart.open(line.default_settings, 65535, rx_storage[0..<256])'
                        ' else (problem)'),
         open=at(UART, 'fail buffer_empty when size == 0'),
         timer=at(APP, 'timer.intr_write(0x40070300, 1)'),

@@ -410,16 +410,17 @@ package body Landin.Commands is
                null;
             elsif Result.Operands.Is_Empty then
                Refuse ("bindings binds at least one header: refine bindings"
-                 & " --clang=CLANG --sysroot=DIR --policy=POLICY.json"
+                 & " --clang=CLANG [--sysroot=DIR] --policy=POLICY.json"
                  & " --out-dir=DIR [LOGICAL=]HEADER.h ...");
-            elsif not Seen (C.Clang) or else not Seen (C.Sysroot)
+            elsif not Seen (C.Clang)
               or else not Seen (C.Policy) or else not Seen (C.Out_Dir)
             then
+               --  A hosted target's system root is required too, which
+               --  Landin.Commands.Bindings says once the target is known.
                Refuse ("bindings needs the Clang that reads the headers, the"
-                 & " target's system root, the policy and where to write:"
-                 & " refine bindings --clang=CLANG --sysroot=DIR"
-                 & " --policy=POLICY.json --out-dir=DIR [LOGICAL=]HEADER.h"
-                 & " ...");
+                 & " policy and where to write: refine bindings"
+                 & " --clang=CLANG [--sysroot=DIR] --policy=POLICY.json"
+                 & " --out-dir=DIR [LOGICAL=]HEADER.h ...");
             end if;
          when C.Run =>
             if Result.Operands.Is_Empty and then not Result.Wants_Help then

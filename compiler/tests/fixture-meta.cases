@@ -356,6 +356,37 @@ problem duplicate key: c-archives
 problem library-directories belongs only to a runtime fixture
 end
 
+case C inputs the Cortex-M corpus fetches for an ABI fixture's C
+fixture abi/fetched-headers
+| class: abi
+| summary: C that includes pinned vendor headers
+| profiles: standard
+| program: program.ldn
+| c-sources: adapters.c
+| c-inputs: rp2040-cmsis, stm32h753
+| constructs: 1580
+| targets: cortex-m0
+field c-inputs = rp2040-cmsis, stm32h753
+field module-arguments = F/abi/fetched-headers/program.ldn
+end
+
+case C inputs are input directories, on an ABI fixture for Cortex-M only
+fixture runtime/fetched-faults
+| class: runtime
+| summary: inputs where the corpus cannot fetch them
+| profiles: standard
+| program: main.ldn
+| c-inputs: rp2040-cmsis, rp2040-cmsis, rp2040-cmsis/m-profile, ../outside,
+| constructs: 1580
+| targets: cortex-m0, linux-x86-64
+problem c-inputs belong only to an ABI fixture
+problem duplicate c-inputs entry: rp2040-cmsis
+problem c-inputs entry is not an input directory's name: rp2040-cmsis/m-profile
+problem c-inputs entry is not an input directory's name: ../outside
+problem c-inputs entry is not an input directory's name: <empty>
+problem c-inputs are fetched by the Cortex-M corpus alone, so a fixture with them names no target but cortex-m0
+end
+
 case library directories need archives
 fixture runtime/directories-alone
 | class: runtime

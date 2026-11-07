@@ -1,0 +1,126 @@
+--  Serial line settings: the rate and the frame of an asynchronous serial
+--  line, and the arithmetic that turns a rate into the divisor a UART's
+--  baud-rate generator is programmed with.  Nothing here reads or writes a
+--  register, so every target has it and a driver keeps its device: the
+--  driver computes every register image through this module, refuses a
+--  setting its peripheral cannot carry before it writes anything, and only
+--  then writes them, so a refusal leaves the line as it was (D955).  The
+--  arithmetic is integer only, since a Cortex-M0 has no float unit.
+
+--- No parity bit.
+public no_parity: atom
+--- A parity bit that makes the number of ones in the data bits and itself
+--- even.
+public even_parity: atom
+--- A parity bit that makes the number of ones in the data bits and itself
+--- odd.
+public odd_parity: atom
+--- A frame's parity: `no_parity`, `even_parity` or `odd_parity`.
+public parity: type = no_parity | even_parity | odd_parity
+
+--- One stop bit after the data and the parity.
+public one_stop_bit: atom
+--- Two stop bits after the data and the parity.
+public two_stop_bits: atom
+--- A frame's stop bits: `one_stop_bit` or `two_stop_bits`.
+public stop_bits: type = one_stop_bit | two_stop_bits
+
+--- A rate the peripheral cannot be set to: zero, one whose divisor its
+--- register cannot hold, or one it would miss by more than `tolerance`.
+public unsupported_rate: atom
+--- A frame the peripheral cannot send and receive: data bits outside 5 to
+--- 9, or a combination its driver refuses, which the driver's own
+--- documentation names.
+public unsupported_format: atom
+
+--- A line's settings: its rate in bits per second, the data bits of a
+--- frame, 5 to 9, its parity and its stop bits.  A frame is a start bit,
+--- the data bits, the parity bit when there is one and the stop bits.
+public settings: type = struct
+    rate: u32
+    data_bits: u8
+    parity: parity
+    stop_bits: stop_bits
+end settings
+
+--- 115,200 bits per second, eight data bits, no parity and one stop bit:
+--- the line every board port starts at, and the derived driver's default.
+public default_settings: settings = (rate: 115200, data_bits: 8,
+                                     parity: no_parity,
+                                     stop_bits: one_stop_bit)
+
+--- The largest error `divisor` accepts between the rate asked for and the
+--- rate its divisor gives, in parts per thousand: 20, two percent, about
+--- half of what a receiver sampling 16 times a bit tolerates over an
+--- eleven-bit frame, which leaves the other half to the far end's clock
+--- (D956).
+public tolerance: u32 = 20
+
+--- Refuse settings no UART can carry: a rate of zero with
+--- `unsupported_rate`, and fewer than 5 or more than 9 data bits with
+--- `unsupported_format`.  Each driver refuses what its own peripheral
+--- cannot do besides.
+public check: (line: settings) -> none ! unsupported_rate | unsupported_format =
+    fail unsupported_rate when line.rate == 0
+    fail unsupported_format when line.data_bits < 5 or line.data_bits > 9
+end check
+
+--- The bits of one frame: the start bit, the data bits, the parity bit
+--- when there is one, and the stop bits.  Eleven for 8E1, ten for 8N1.
+public frame_bits: (line: settings) -> (bits: u32) =
+    bits = 1 + u32(line.data_bits)
+    if line.parity <> no_parity then bits += 1 end if
+    bits += if line.stop_bits == two_stop_bits then 2 else 1 end if
+end frame_bits
+
+--- The bits of a received byte that hold a frame's data, the low
+--- `data_bits` of them: 0x7f for seven data bits, all eight for eight or
+--- nine.  A UART may leave other bits above the data in what it receives,
+--- an STM32 USART the parity bit, so a driver keeps only these (D965).
+public data_mask: (line: settings) -> (mask: u8) =
+    mask = 0xff
+    if line.data_bits < 8 then mask = u8((u32(1) << u32(line.data_bits)) - 1) end if
+end data_mask
+
+--- The divisor closest to `clock / (oversampling * rate)` with
+--- `fraction_bits` bits after the point, as the register holds it: the
+--- value of `clock * 2^fraction_bits / (oversampling * rate)` rounded to
+--- the nearest integer, halves up.  A peripheral that samples each bit
+--- `oversampling` times from a `clock` in hertz then runs at
+--- `clock * 2^fraction_bits / (oversampling * value)` bits per second.
+--- It refuses with `unsupported_rate` a rate of zero, a value outside
+--- `least` to `most`, the register's range, and a rate the value misses
+--- by more than `tolerance`, and computes nothing else, so the caller
+--- writes no register until it has every value.  For the peripherals the
+--- repository's drivers program:
+---
+--- * an Arm PL011, whose IBRD and FBRD hold 16 integer and 6 fraction
+---   bits of a divisor of a clock sampled 16 times a bit: oversampling 16,
+---   fraction bits 6, least 64 (IBRD 1, FBRD 0) and most 65535 * 64 (IBRD
+---   65535, FBRD 0); IBRD is `value >> 6` and FBRD `value & 63`;
+--- * an STM32 USART, whose BRR is the divisor itself: oversampling 16,
+---   fraction bits 4, least 16 and most 65535; oversampling by 8 is
+---   oversampling 8 with the same bits, whose BRR moves the low four bits
+---   one place right;
+--- * an Espressif UART, whose CLKDIV holds an integer and four fraction
+---   bits of a divisor of a clock sampled once a bit: oversampling 1,
+---   fraction bits 4, and the integer field's range shifted left four.
+---
+--- `clock` may be any `u32`; `oversampling` is at least one and
+--- `fraction_bits` at most 24, which every register here is well inside.
+public divisor: (clock: u32, rate: u32, oversampling: u32, fraction_bits: u32,
+                 least: u32, most: u32) -> (value: u32) ! unsupported_rate =
+    fail unsupported_rate when rate == 0
+    --  Below 2^56 and 2^64: no product or sum here wraps.
+    scaled := u64(clock) << u64(fraction_bits)
+    step := u64(oversampling) *% u64(rate)
+    nearest := (scaled +% step / 2) / step
+    fail unsupported_rate when nearest < u64(least) or nearest > u64(most)
+    --  The rate the value gives misses the one asked for by
+    --  |scaled - nearest * step| / (nearest * step); `nearest` is at
+    --  least one here, since a least of zero meets the error below.
+    given := nearest * step
+    missed := if given > scaled then given - scaled else scaled - given end if
+    fail unsupported_rate when given == 0 or missed * 1000 > u64(tolerance) * given
+    value = u32(nearest)
+end divisor

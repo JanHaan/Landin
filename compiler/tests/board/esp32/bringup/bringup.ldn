@@ -1,5 +1,5 @@
 -- The Olimex ESP32 board uses a 40 MHz crystal. Select it without a
--- divider, give UART0 115200 8N1, use GPIO22 as the external indicator,
+-- divider, give UART0 its clock and pins, use GPIO22 as the external indicator,
 -- and run TIMG0 timer 0 at 1 MHz with a 1 ms alarm. All values follow the
 -- pinned ESP-IDF register headers. Caches remain disabled; CPU1 is stalled.
 import esp32/apb_ctrl
@@ -53,8 +53,7 @@ public clocks_and_uart: () -> none =
     uart0.int_ena_write(uart0.base, 0)
     uart0.conf0_write(uart0.base, 0x0806001c)
     uart0.conf0_write(uart0.base, 0x0800001c)
-    -- APB 40 MHz / (347 + 4/16) = 115190 baud, within 0.01 percent.
-    uart0.clkdiv_write(uart0.base, 0x0040015b)
+    -- serial.open writes CLKDIV for its line from APB's 40 MHz.
 end clocks_and_uart
 
 public indicator_pin: () -> none =

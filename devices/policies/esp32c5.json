@@ -42,7 +42,8 @@
       "CONF0_SYNC",
       "CONF1",
       "CLK_CONF",
-      "REG_UPDATE"
+      "REG_UPDATE",
+      "FSM_STATUS"
     ],
     "INTERRUPT_CORE0": [
       "UART0_INTR_MAP",
@@ -184,6 +185,11 @@
       "reserved": "zero"
     },
     "UART0.STATUS": {
+      "read": "normal",
+      "write": "refused",
+      "reserved": "zero"
+    },
+    "UART0.FSM_STATUS": {
       "read": "normal",
       "write": "refused",
       "reserved": "zero"
@@ -367,6 +373,7 @@
   "reset_mask_overrides": {
     "UART0.FIFO": "0x0",
     "UART0.STATUS": "0x00ff00ff",
+    "UART0.FSM_STATUS": "0x0",
     "GPIO.IN": "0x0",
     "SYSTIMER.UNIT0_VALUE_HI": "0x0",
     "SYSTIMER.UNIT0_VALUE_LO": "0x0",

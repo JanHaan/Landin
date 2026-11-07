@@ -55,7 +55,13 @@ entry that describes it, and put a new one where a reader would look for it.
   description's stage configures the supply from the reset vector before
   compiler-owned reset writes any RAM (D653), and it is checked by
   [`board.py`](../environments/boards/stm32h753/README.md) (D647-D651), with
-  passed cold-boot and repeated RAM records; the board tools share
+  passed cold-boot and repeated RAM records. Its cached profile,
+  `descriptions/stm32h753_cached`, runs the receive ring and a transmit by
+  DMA with the M7's caches on, maintained through `core/cache`, beside
+  controls that show a stale read, a lost dirty line and a stale transmit
+  when the maintenance is left out, checked from SRAM by
+  [its own `board.py`](../environments/boards/stm32h753_cached/README.md)
+  (D974, D975); the board tools share
   `environments/boards/common.py` (D646). RP2350's description, learnt from
   pico-sdk's SVD (D635), selects a Cortex-M33 with the Pico 2's 4 MiB
   flash, its 512 KiB of SRAM and scratch banks and all 52 of its
@@ -154,10 +160,35 @@ entry that describes it, and put a new one where a reader would look for it.
   frames (D618), and a fibre's switch keeps d8-d15 and FPSCR (D620). An
   object built with a unit and one built without declare their float
   attributes as GCC's do, so the linker refuses to mix them in either
-  order (D780). The C half of the convention is a planner contract measured against GCC on
-  QEMU's `mps2-an500`; C interoperation stays disabled on Cortex-M. The
-  whole runtime corpus also runs there, on a lane described in Landin
-  source (D619).
+  order (D780). The convention's C half is measured against GCC on
+  QEMU's `mps2-an500`. The whole runtime corpus also runs there, on a lane
+  described in Landin source (D619).
+- **C on Cortex-M** follows AAPCS32, `compiler.c_aapcs32`, at every level
+  (D920): `layout(c)` records, C function types, `extern(c)` imports and
+  `public extern(c)` definitions, in the base PCS without a float unit
+  and in the VFP variant with one. `platform/c` gives ILP32 aliases with an
+  unsigned plain `char` (D921). A variadic C call is refused, naming a
+  fixed-arity C wrapper to import instead (D922). Records pass by value,
+  split between registers and the stack, and return in r0 or the float
+  registers as GCC's do, and `linker.library` links a C archive into the
+  firmware (D923). The Cortex-M corpus executes C on QEMU: ABI fixtures'
+  freestanding C peers, built by the pinned GCC with no C library and
+  linked with the program, among them a hand-written peer that calls and is
+  called with every scalar width, records of 3 to 32 bytes, a callback and
+  C data, also linked by refine itself from archives, and the generated
+  CMSIS NVIC and SysTick adapters, whose effects are read back from the
+  registers (D985). A C peer of the other variant is refused before it
+  links. Each fixture that does not run there is a refusal with its codes
+  or a restriction its build is held to (D986). RV32's ilp32 and Xtensa's
+  windowed C ABI stay disabled.
+- **A cache** is a fact of a description too: a Cortex-M7's
+  `compiler.cache("armv7-m-l1", 32)` makes a cached profile, whose reset
+  invalidates and enables the level 1 caches once memory is written and
+  whose entry's return cleans and disables them, `compiler.feature.cache`
+  and `compiler.cache_line` reading it (D971, D973). The STM32H753's cached
+  profile is the one admitted (D974); on QEMU's `mps2-an500`, which models
+  no cache, a lane run shows the order of every cache register write and
+  nothing of a cache (D977).
 - **Devices** are learnt from their CMSIS-SVD files: `refine svd` reads a
   vendor's SVD, fetched by its hash, and a reviewed selection policy, and
   writes the register modules and the generated half of the device's
@@ -303,12 +334,15 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   alone and removes what its old manifest names and it no longer makes with
   the same recovery checks. [The device guide](../devices/README.md)
   describes the policy.
-- `refine bindings --clang=CLANG --sysroot=DIR --policy=POLICY.json
+- `refine bindings --clang=CLANG [--sysroot=DIR] --policy=POLICY.json
   --out-dir=DIR HEADER.h ...` asks the named Clang, in an environment of
   its own, for the headers' declarations and writes the bindings a reviewed
   policy selects: Landin declarations, C adapters for the forms Landin does
   not carry natively, the header that declares them, and metadata (D820,
-  D821). It stages its four outputs and compiles the adapters before
+  D821). It binds for Linux x86-64, Linux arm64, Darwin arm64 and
+  freestanding Cortex-M, the last under AAPCS32's base procedure call
+  standard or its VFP variant as the policy says, with Clang's own headers
+  alone and adapters that allocate nothing (D935-D938). It stages its four outputs and compiles the adapters before
   publishing them through the same protected-input and recovery contract as
   `refine svd`. Missing output directories are staged privately and published
   only after validation; refusal preserves any tree created there meanwhile.
@@ -479,7 +513,8 @@ The README has [the commands in brief](../README.md#refine-in-brief);
 - **Hardware.** D227's memory model supplies scalar atomics, volatile
   accesses and barriers, each atomic fenced only as its ordering asks on
   every backend (D499), and D228 packed register images with checked
-  encoded fields.
+  encoded fields. Cache maintenance for DMA is `core/cache`'s provider,
+  never a builtin (D970).
 - **Assembly operands.** A block carries integers at `general` or a named
   integer register on every target with registers, and on x86-64, arm64 and
   RV64, and on a Cortex-M whose description has FPv5-D16, `f32` and `f64`
@@ -540,7 +575,7 @@ search, source links and examples taken directly from runtime fixtures.
 
 ### `core`
 
-The twenty shared `core/*` modules thread arena and pool allocators and a
+The twenty-two shared `core/*` modules thread arena and pool allocators and a
 failure injector as capabilities.
 
 - **Memory and containers.** Raw memory, vectors, inline-prefix spill lists,
@@ -552,9 +587,17 @@ failure injector as capabilities.
 - **Comparison.** The comparison concepts are a module of their own,
   `core/cmp`, with library-supplied evidence for integer keys and ordering,
   Boolean and byte slice keys, and UTF-8 keys and ordering.
-- **Text.** Byte-oriented and validated text. A builder over a caller's
-  buffer, or one an allocator grows, takes bytes, text, host strings,
-  decimals of every integer width and hexadecimal, aligned in a field.
+- **Text.** Byte-oriented and validated text. Positions over `utf8` step
+  a whole scalar and keep its byte offset, and searches for text or a
+  scalar return where the match begins, so the parts around it are
+  zero-copy `utf8` views of the source (D945, D946). A scalar encodes into
+  a caller's buffer whole or not at all (D947). A builder over a caller's
+  buffer, or one an allocator grows, takes bytes, scalars, text, host
+  strings, decimals of every integer width and hexadecimal, aligned in a
+  field, and a `utf8_builder` takes only text, scalars and numbers, so it
+  always holds UTF-8 and lends it as one `utf8` view with no scan (D948).
+  `compiler.utf8_unvalidated` makes such a view of bytes valid by
+  construction, admitted only inside `unchecked` (D949).
   `text.format` fills a template's `{}` with any value that has
   `formattable` evidence, checked against its values when it runs, and
   `io.write_format` writes one to a file in a single call, through a
@@ -567,6 +610,18 @@ failure injector as capabilities.
   `any`-dispatched `core/diag.log` and, in `core/failure`, a phrase for a
   person for every library failure atom. A closed set of named values, such
   as a diagnostic's severity, is an atom set.
+- **Serial lines.** `core/line` holds a UART line's settings, rate, data
+  bits, parity and stop bits, and computes the divisor a PL011, an STM32
+  USART or an Espressif UART is set to, refusing an unreachable rate, one
+  more than two percent out, or a frame, with shared atoms and nothing
+  written; it reads no register and runs on every target (D955, D956).
+  The derived driver and every board port's serial module program their
+  line through it. The STM32H753, ESP32, ESP32-S3 and ESP32-C5 change line
+  during their runs over their tty bridges, a rate change and two frame
+  changes each and two refusals, with the payload echoed; the Picos and the
+  ESP32-C3 stay at their probehive bridge's fixed 115200 8N1, their line
+  code checked by arithmetic and the derived driver's emulator register
+  images only (D957-D964).
 - **Random numbers.** `core/random` is a deterministic generator,
   xoshiro256**, seeded from a fixed seed or from entropy, which draws the
   same sequence on every target, Cortex-M0 included, with unbiased bounded
@@ -666,12 +721,22 @@ process ignores SIGPIPE and gives its children the default back.
   on `check`, `compile` and `run` say where, `-L`'s first, and each is also
   the executable's runtime search path. A missing directory is refused
   before any tool runs, and a library a failed link cannot find is L0509,
-  naming every directory searched. The static Linux link and firmware
-  refuse all three.
-- `platform/c` supplies aliases for the supported LP64 C ABIs, and
+  naming every directory searched. The static Linux link refuses all
+  three. Firmware links each library as a static archive between its
+  object and libgcc, with the directories ahead and no runtime path
+  (D923), and refuses an image whose archives bring C constructors,
+  thread-local storage or a dynamic linkage, with L0587 (D924).
+- `platform/c` supplies aliases for the supported C ABIs, the four LP64
+  ones and Cortex-M's ILP32 AAPCS32, and
   `platform/cortex_m` supplies M-profile CPU operations; it declares nothing
   on another target, so a program for every target imports it and calls it
   from a `fixed if compiler.arch == cortex_m0` arm (D575).
+  `platform/cortex_m/l1` is the Cortex-M7's cache provider on a cached
+  profile alone, and a call elsewhere says it is a cached profile's (D972).
+- **Cache maintenance.** `core/cache`'s `maintenance` concept cleans,
+  invalidates or does both to a range of whole lines, refusing one that is
+  not with `cache.misaligned` and never rounding it, and its cacheless
+  provider, the barriers alone, serves every target (D970).
 - An import outside a module's target scope is refused by name, including
   through a project-root override.
 - A failed check in a hosted program with no `panic_handler` writes its kind
@@ -688,8 +753,10 @@ process ignores SIGPIPE and gives its children the default back.
   a loader found.
 - `refine bindings` ([`bindings/`](../bindings/README.md)) generates
   bindings, packed and flexible-member records among them, from an external
-  Clang's view of a header, with nothing but refine and that Clang.
-  Unsupported C forms are refused by name.
+  Clang's view of a header, with nothing but refine and that Clang, for the
+  hosted LP64 targets and for Cortex-M's ILP32 AAPCS32 in both procedure call
+  standards; two committed Cortex-M bindings come from pinned CMSIS headers
+  (D939). Unsupported C forms are refused by name.
 - Only the entry, C imports, public C definitions, link names and Cortex-M
   placements are global symbols. Every other routine and datum, public or
   not, is local to the image, so none meets the C library's names.
@@ -769,7 +836,9 @@ Add `--target=darwin-arm64` for native macOS output, then open
   filter on Linux and macOS, with native debugging coverage. The one derived
   from prototype 1 runs as the
   [derived driver](../compiler/tests/driver/DERIVATION.md) on the Cortex-M0
-  emulators. Each runs against a generated oracle. The driver and its
+  emulators, opening any line its PL011 can carry, whose register images
+  the emulator's model holds to an oracle (D957, D964). Each runs against a
+  generated oracle. The driver and its
   application run with compiler-owned startup within the recorded 32 KiB
   capacity and source-debugging limits. The server derived from prototype
   5's hosted half runs on every hosted target from one source over both

@@ -184,6 +184,15 @@ package body Landin.Configuration is
          (Names, Of_Tree, Landin.Syntax.Callee_Of (Of_Tree, Node))
            = "unreachable");
 
+   function Unvalidated_Text_Call
+     (Names : Landin.Source.Names.Table; Of_Tree : Landin.Syntax.Tree;
+      Node : Landin.Syntax.Node_Id) return Boolean
+   is (Node /= Landin.Syntax.No_Node
+       and then Landin.Syntax.Kind (Of_Tree, Node) = Landin.Syntax.Call
+       and then Compiler_Member
+         (Names, Of_Tree, Landin.Syntax.Callee_Of (Of_Tree, Node))
+           = "utf8_unvalidated");
+
    function Is_Builtin_Import
      (Names : Landin.Source.Names.Table;
       Of_Tree : Landin.Syntax.Tree; Node : Landin.Syntax.Node_Id)

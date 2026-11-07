@@ -66,8 +66,8 @@ import common  # noqa: E402
 import rig as rigs  # noqa: E402
 from common import Failed, NeedsOperator, NeedsSetup, ToolMismatch, require  # noqa: E402
 
-BOARDS = ('rp2040', 'rp2350', 'rp2350_hazard3', 'stm32h753', 'esp32c3', 'esp32c5',
-          'esp32', 'esp32s3')
+BOARDS = ('rp2040', 'rp2350', 'rp2350_hazard3', 'stm32h753', 'stm32h753_cached', 'esp32c3',
+          'esp32c5', 'esp32', 'esp32s3')
 PLACEHOLDER = re.compile(r'\{([a-z_]+)\}')
 
 
@@ -116,7 +116,8 @@ def port_steps(rig, port, values):
 # lock, never in the middle of a sequence that has already flashed a board.
 HOST_TOOLS = dict(rp2040=('uhubctl', 'journalctl'), rp2350=('uhubctl', 'journalctl'),
                   rp2350_hazard3=('uhubctl', 'journalctl'),
-                  stm32h753=('uhubctl', 'journalctl'), esp32c3=('uhubctl', 'journalctl'),
+                  stm32h753=('uhubctl', 'journalctl'), stm32h753_cached=('journalctl',),
+                  esp32c3=('uhubctl', 'journalctl'),
                   esp32c5=('uhubctl', 'journalctl'), esp32=('uhubctl', 'journalctl'),
                   esp32s3=('uhubctl', 'journalctl'))
 

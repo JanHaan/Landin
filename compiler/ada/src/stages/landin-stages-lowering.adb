@@ -7787,8 +7787,11 @@ package body Landin.Stages.Lowering is
                   IR.Emit_Load (Unit.all, Filling, Cursor_Slot, Site), Site);
             end Scan_C_String;
          begin
+            --  D949's unscanned form takes the bytes' descriptor as the
+            --  conversion does and stores it with no validation.
             if Conversion in Landin.Checking.Bytes_To_Utf8
                               | Landin.Checking.Utf8_To_Bytes
+                              | Landin.Checking.Bytes_To_Utf8_Unvalidated
             then
                declare
                   Source : constant Slice_Values :=

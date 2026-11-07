@@ -44,6 +44,13 @@ package Landin.Configuration is
      (Names : Landin.Source.Names.Table; Of_Tree : Landin.Syntax.Tree;
       Node : Landin.Syntax.Node_Id) return Boolean;
 
+   --  Whether NODE calls `compiler.utf8_unvalidated`, D949's view of bytes
+   --  as text with no scan, admitted only in an `unchecked` region.  Its
+   --  argument is the checker's to type.
+   function Unvalidated_Text_Call
+     (Names : Landin.Source.Names.Table; Of_Tree : Landin.Syntax.Tree;
+      Node : Landin.Syntax.Node_Id) return Boolean;
+
    type Table is private;
 
    type Build_Mode is (Debug, Release);
@@ -64,13 +71,15 @@ package Landin.Configuration is
    --  The compiler's fixed facts, `compiler.NAME` in a fixed condition or
    --  a module value [1530]/D437: the one table of their names, which
    --  configuration and name resolution both read.  An atom fact is
-   --  compared with a configuration atom; `word_size` is an integer and
+   --  compared with a configuration atom; `word_size` and `cache_line`,
+   --  the line of the description's cache or 0 (D971), are integers and
    --  each C fact a bool.  `compiler.feature.NAME` is a feature's, which
    --  Landin.Targets.Levels names.
    type Fixed_Fact is
      (Arch_Fact, OS_Fact, Byte_Order_Fact, Build_Mode_Fact, Word_Size_Fact,
-      C_SysV_LP64_Fact, C_Darwin_LP64_Fact, C_AAPCS64_LP64_Fact,
-      C_RiscV_LP64D_Fact, C_RiscV_ILP32_Fact,
+      Cache_Line_Fact, C_SysV_LP64_Fact, C_Darwin_LP64_Fact,
+      C_AAPCS64_LP64_Fact, C_RiscV_LP64D_Fact, C_AAPCS32_Fact,
+      C_RiscV_ILP32_Fact,
       C_Xtensa_Windowed_ILP32_Fact, C_Runtime_Fact);
    subtype Atom_Fact is Fixed_Fact range Arch_Fact .. Build_Mode_Fact;
    subtype Valued_Fact is Fixed_Fact range Word_Size_Fact .. C_Runtime_Fact;
@@ -84,10 +93,12 @@ package Landin.Configuration is
            when Byte_Order_Fact => "byte_order",
            when Build_Mode_Fact => "build_mode",
            when Word_Size_Fact => "word_size",
+           when Cache_Line_Fact => "cache_line",
            when C_SysV_LP64_Fact => "c_sysv_lp64",
            when C_Darwin_LP64_Fact => "c_darwin_lp64",
            when C_AAPCS64_LP64_Fact => "c_aapcs64_lp64",
            when C_RiscV_LP64D_Fact => "c_riscv_lp64d",
+           when C_AAPCS32_Fact => "c_aapcs32",
            when C_RiscV_ILP32_Fact => "c_riscv_ilp32",
            when C_Xtensa_Windowed_ILP32_Fact => "c_xtensa_windowed_ilp32",
            when C_Runtime_Fact => "c_runtime");
@@ -111,6 +122,9 @@ package Landin.Configuration is
            when C_Darwin_LP64_Fact => Landin.Targets.Darwin_AAPCS64_LP64,
            when C_AAPCS64_LP64_Fact => Landin.Targets.AAPCS64_LP64,
            when C_RiscV_LP64D_Fact => Landin.Targets.RiscV_LP64D,
+           --  D920: one fact for both of AAPCS32's variants, since the
+           --  description's float unit, not the C ABI, selects VFP.
+           when C_AAPCS32_Fact => Landin.Targets.Arm_AAPCS32_Soft,
            when C_RiscV_ILP32_Fact => Landin.Targets.RiscV_ILP32,
            when C_Xtensa_Windowed_ILP32_Fact =>
               Landin.Targets.Xtensa_Windowed_ILP32);
@@ -146,7 +160,7 @@ package Landin.Configuration is
    function Is_Description_Member (Namespace, Member : String) return Boolean
      is ((Namespace = "compiler"
           and then Member in "device" | "core" | "vectors" | "interrupt"
-            | "boot" | "float_unit" | "esp_image")
+            | "boot" | "float_unit" | "cache" | "esp_image")
          or else (Namespace = "linker" and then Member in "region" | "place"));
 
    --  Shared explanation for a tool member outside its enabled context.

@@ -387,7 +387,8 @@ package body Landin.Bindings.Policies is
             Exact_Keys
               (Within, Abi,
                ["target", "data_model", "plain_char",
-                "enum_policy"], "policy abi");
+                "enum_policy"], "policy abi",
+               Optional => ["calling_convention"]);
             if Is_String (Within, Field (Within, Abi, "target")) then
                for Each in Target loop
                   if Triple (Each) = Policies.Text (Within, Abi, "target") then
@@ -397,9 +398,21 @@ package body Landin.Bindings.Policies is
                end loop;
             end if;
             if not Found then
-               Fail (Within, "policy abi: unsupported target "
-                     & Repr (Within, Field (Within, Abi, "target")),
-                     Policy_Fault);
+               declare
+                  Known : US.Unbounded_String;
+               begin
+                  for Each in Target loop
+                     US.Append (Known, (if Each = Target'First then ""
+                                        elsif Each = Target'Last then " or "
+                                        else ", ")
+                                       & T.Repr (Triple (Each)));
+                  end loop;
+                  Fail (Within, "policy abi: unsupported target "
+                        & Repr (Within, Field (Within, Abi, "target"))
+                        & "; name one of the triples Clang prints for"
+                        & " refine's targets: " & US.To_String (Known),
+                        Policy_Fault);
+               end;
             end if;
             Within.Target_Triple := US.To_Unbounded_String
               (Triple (Within.Chosen));
@@ -418,7 +431,28 @@ package body Landin.Bindings.Policies is
                   end if;
                end Expect;
             begin
-               Expect ("data_model", "lp64");
+               --  D935: where one refine target has two conventions, the
+               --  policy names the one it binds for as well as its
+               --  triple, so the VFP variant is never chosen by a suffix
+               --  alone.
+               if Has (Within, Abi, "calling_convention")
+                 or else (for some Each in Target =>
+                            Each /= Within.Chosen
+                            and then Target_Name (Each)
+                                     = Target_Name (Within.Chosen))
+               then
+                  if not Has (Within, Abi, "calling_convention") then
+                     Fail (Within, "policy abi: missing required key"
+                           & " 'calling_convention', which says which of "
+                           & Target_Name (Within.Chosen) & "'s conventions"
+                           & " the policy binds for: "
+                           & T.Repr (Convention (Within.Chosen))
+                           & " for " & T.Repr (Triple (Within.Chosen)),
+                           Policy_Fault);
+                  end if;
+                  Expect ("calling_convention", Convention (Within.Chosen));
+               end if;
+               Expect ("data_model", Data_Model (Within.Chosen));
                Expect ("plain_char",
                        (if Unsigned_Char (Within.Chosen) then "unsigned"
                         else "signed"));

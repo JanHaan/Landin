@@ -1,0 +1,5 @@
+--  Text made without a scan is admitted only where the program says it
+--  answers for the bytes.
+trusted: (source: []u8) -> (result: utf8 from source) =
+    result = compiler.utf8_unvalidated(source)
+end trusted

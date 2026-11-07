@@ -21,10 +21,13 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import struct
 import unittest
 from typing import Any
 
 HERE = pathlib.Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE.parent / "scripts"))
+import fetch_inputs  # noqa: E402
 #  The compiler under test: --refine PATH, or $LANDIN_REFINE.
 REFINE = os.environ.get("LANDIN_REFINE")
 FIXTURE = (HERE.parent / "compiler" / "tests" / "fixtures" / "abi" /
@@ -34,6 +37,96 @@ TARGET_NAME = "linux-x86-64"
 #  A refusal is reported (1) or a request refine cannot carry out as
 #  written (2); either is a diagnostic, never a defect (70).
 REFUSED = (1, 2)
+#  Cortex-M's two rows (D935): AAPCS32's base procedure call standard and
+#  its VFP variant, each the Clang triple, convention and float options of
+#  one row, and the arm-eabi-gcc options that build the same convention.
+CORTEX_NAME = "cortex-m0"
+CORTEX = {
+    "aapcs": {
+        "target": "thumbv6m-unknown-none-eabi",
+        "clang": ["-mfloat-abi=soft"],
+        "gcc": ["-mcpu=cortex-m0", "-mthumb", "-mfloat-abi=soft"],
+        "guard": "compiler.assert(not compiler.feature.fp)",
+    },
+    "aapcs-vfp": {
+        "target": "thumbv7em-unknown-none-eabihf",
+        "clang": ["-mfpu=fpv5-d16", "-mfloat-abi=hard"],
+        "gcc": ["-mcpu=cortex-m7", "-mthumb", "-mfpu=fpv5-d16", "-mfloat-abi=hard"],
+        "guard": "compiler.assert(compiler.feature.fp_dp)",
+    },
+}
+#  The committed Cortex-M fixtures, each regenerated from its pinned inputs:
+#  the headers by logical name and input (or a file of the fixture's own),
+#  and the pinned directory its transitive headers are found in.
+CORTEX_FIXTURES = {
+    "cortex-cmsis-bindings": {
+        "headers": [("RP2040.h", "rp2040-cmsis/RP2040.h")],
+        "include": "rp2040-cmsis",
+    },
+    "cortex-vfp-bindings": {
+        "headers": [("stm32h753xx.h", "stm32h753/stm32h753xx.h"),
+                    ("landin-vfp.h", None)],
+        "include": "stm32h753-cmsis",
+    },
+}
+
+
+def arm_attributes(path: pathlib.Path) -> dict[int, Any]:
+    """The `aeabi` file attributes of an Arm ELF32 relocatable object."""
+    data = path.read_bytes()
+    if data[:4] != b"\x7fELF" or data[4] != 1 or data[5] != 1:
+        raise AssertionError(f"{path} is not a little-endian ELF32 object")
+    shoff, = struct.unpack_from("<I", data, 32)
+    shentsize, shnum = struct.unpack_from("<HH", data, 46)
+    found = None
+    for index in range(shnum):
+        _, kind, _, _, offset, size = struct.unpack_from(
+            "<IIIIII", data, shoff + index * shentsize)
+        if kind == 0x70000003:  # SHT_ARM_ATTRIBUTES
+            found = data[offset:offset + size]
+    if found is None or found[:1] != b"A":
+        raise AssertionError(f"{path} has no Arm attributes section")
+
+    def uleb(at: int) -> tuple[int, int]:
+        value = shift = 0
+        while True:
+            byte = found[at]
+            at += 1
+            value |= (byte & 0x7f) << shift
+            shift += 7
+            if byte < 0x80:
+                return value, at
+
+    attributes: dict[int, Any] = {}
+    at = 1
+    while at < len(found):
+        length, = struct.unpack_from("<I", found, at)
+        end = at + length
+        vendor_end = found.index(b"\0", at + 4)
+        vendor = found[at + 4:vendor_end]
+        inner = vendor_end + 1
+        while vendor == b"aeabi" and inner < end:
+            tag, size = found[inner], struct.unpack_from("<I", found, inner + 1)[0]
+            limit, cursor = inner + size, inner + 5
+            while tag == 1 and cursor < limit:  # Tag_File
+                key, cursor = uleb(cursor)
+                if key in (4, 5, 67) or (key > 32 and key % 2):
+                    stop = found.index(b"\0", cursor)
+                    attributes[key] = found[cursor:stop].decode()
+                    cursor = stop + 1
+                elif key == 32:
+                    attributes[key], cursor = uleb(cursor)
+                    cursor = found.index(b"\0", cursor) + 1
+                else:
+                    attributes[key], cursor = uleb(cursor)
+            inner = limit
+        at = end
+    return attributes
+
+
+#  Tag_ABI_enum_size, 2: int-sized; Tag_ABI_VFP_args, 1: VFP registers.
+TAG_ABI_ENUM_SIZE = 26
+TAG_ABI_VFP_ARGS = 28
 
 
 def refine() -> str:
@@ -2450,6 +2543,493 @@ int main(void) { return f(36) != 37; }
                 self.assertTrue(link.is_symlink())
                 self.assertFalse(outside.exists())
                 self.assertEqual(list(output.iterdir()), [link])
+
+    #  Cortex-M (D935-D940).
+
+    @staticmethod
+    def cortex_selection(convention: str, *declarations: dict[str, Any],
+                         namespace: str = "probe") -> dict[str, Any]:
+        return {"schema_version": 1, "namespace": namespace, "abi": {
+            "target": CORTEX[convention]["target"],
+            "calling_convention": convention, "data_model": "ilp32",
+            "plain_char": "unsigned", "enum_policy": "clang-default",
+        }, "declarations": list(declarations)}
+
+    def cortex_command(self, parent: pathlib.Path, output: pathlib.Path,
+                       headers: list[str], *, resource: bool = True,
+                       include: list[pathlib.Path] | None = None) -> list[str]:
+        command = [
+            refine(), "bindings", "--clang", str(self.clang),
+            "--target", CORTEX_NAME, "--policy", str(parent / "policy.json"),
+            "--out-dir", str(output),
+        ]
+        for directory in include or []:
+            command += ["--include-dir", str(directory)]
+        if resource:
+            command += ["--system-include-dir", str(self.resource_include)]
+        return command + headers
+
+    def cortex_generate(self, parent: pathlib.Path, header: str,
+                        selected: dict[str, Any], *, resource: bool = True,
+                        expect_success: bool = True
+                        ) -> tuple[subprocess.CompletedProcess[str], pathlib.Path]:
+        (parent / "api").mkdir(parents=True)
+        (parent / "api" / "api.h").write_text(header, encoding="utf-8")
+        (parent / "policy.json").write_text(json.dumps(selected, indent=2) + "\n",
+                                            encoding="utf-8")
+        output = parent / "generated"
+        process = subprocess.run(
+            self.cortex_command(parent, output,
+                                [f"api/api.h={parent / 'api' / 'api.h'}"],
+                                resource=resource),
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=120)
+        if expect_success:
+            self.assertEqual(process.returncode, 0, process.stderr)
+        else:
+            self.assertIn(process.returncode, REFUSED, process.stderr)
+            self.assertFalse(output.exists(), "a refusal publishes nothing")
+        return process, output
+
+    def compile_cortex_object(self, convention: str, source: pathlib.Path,
+                              includes: list[pathlib.Path],
+                              output: pathlib.Path) -> dict[int, Any]:
+        """Compile generated adapters for a row with the pinned Clang to an
+        object, and return its Arm attributes."""
+        compiled = subprocess.run([
+            str(self.clang), f"--target={CORTEX[convention]['target']}",
+            "--no-default-config", *CORTEX[convention]["clang"], "-ffreestanding",
+            "-std=c11", "-fno-short-enums", "-nostdinc", "-Wall", "-Wextra", "-Werror",
+            "-Wno-error=unused-command-line-argument",
+            *[item for directory in includes for item in ("-I", str(directory))],
+            "-isystem", str(self.resource_include), "-c", str(source), "-o", str(output),
+        ], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        self.assertEqual(compiled.returncode, 0, compiled.stderr)
+        return arm_attributes(output)
+
+    def compile_with_arm_gcc(self, convention: str, source: pathlib.Path,
+                             includes: list[pathlib.Path], output: pathlib.Path,
+                             *extra: str) -> subprocess.CompletedProcess[str]:
+        """The pinned arm-eabi-gcc, which firmware C is built with, when the
+        environment provides it: `nix develop` does, the gate's bindings job
+        does not (bindings/README.md)."""
+        gcc = shutil.which(os.environ.get("ARM_EABI_GCC", "arm-eabi-gcc"))
+        if gcc is None:
+            self.skipTest("arm-eabi-gcc is not on PATH; set $ARM_EABI_GCC")
+        return subprocess.run([
+            gcc, *CORTEX[convention]["gcc"], "-ffreestanding", "-std=c11",
+            "-Wall", "-Wextra", "-Werror", *extra,
+            *[item for directory in includes for item in ("-I", str(directory))],
+            "-c", str(source), "-o", str(output),
+        ], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+    CORTEX_HEADER = r"""
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+
+typedef enum Level { LEVEL_LOW = -1, LEVEL_HIGH = 7 } Level;
+
+typedef struct Words {
+    char tag;
+    long word;
+    void *pointer;
+    long long wide;
+    double real;
+    size_t count;
+    bool flag;
+} Words;
+
+typedef union Number { int32_t whole; float real; } Number;
+
+extern double scale(double value, float factor, int32_t count);
+extern long words_total(const Words *words);
+extern Number flip(Number number);
+
+static inline float halve(float value) { return value * 0.5f; }
+static inline uint32_t mask(Level level, uint32_t bits) { return bits << (level & 7); }
+""".lstrip()
+
+    def cortex_policy(self, convention: str) -> dict[str, Any]:
+        return self.cortex_selection(
+            convention,
+            {"kind": "enum", "name": "Level", "landin_name": "level"},
+            self.record("Words", landin_name="words", fields={
+                "pointer": annotation(ownership="static", retention="static")}),
+            self.record("Number", landin_name="number"),
+            self.function("scale"), self.function("halve"), self.function("mask"),
+            self.function("words_total", parameters={"words": annotation()}),
+            self.function("flip"))
+
+    def test_cortex_targets_bind_ilp32_in_both_conventions(self) -> None:
+        for convention, row in CORTEX.items():
+            with self.subTest(convention=convention):
+                source = self.root / ("ilp32-" + convention)
+                _, output = self.cortex_generate(source, self.CORTEX_HEADER,
+                                                 self.cortex_policy(convention))
+                text = (output / "bindings.ldn").read_text(encoding="utf-8")
+                self.assertIn("compiler.assert(compiler.c_aapcs32)\n"
+                              + row["guard"] + "\n", text)
+                #  ILP32: a long is four bytes, and Clang's _Static_asserts,
+                #  checked before publication, held each offset to C's.
+                self.assertIn("public words: type = layout(c) struct", text)
+                self.assertIn("    word: c.c_long", text)
+                adapters = (output / "adapters.c").read_text(encoding="utf-8")
+                for check in ("sizeof(Words) == 40", "offsetof(Words, word) == 4",
+                              "offsetof(Words, pointer) == 8",
+                              "offsetof(Words, wide) == 16",
+                              "offsetof(Words, count) == 32"):
+                    self.assertIn(check, adapters)
+                self.assertIn("public level: type = c.c_int", text)
+                self.assertIn("scale: (value: c.c_double, factor: c.c_float, "
+                              "count: int32_t) -> (result: c.c_double)", text)
+                self.assertIn("halve: (value: c.c_float) -> (result: c.c_float)", text)
+                metadata = json.loads((output / "bindings.json").read_text())
+                self.assertEqual(metadata["abi"], {
+                    "byte_order": "little", "calling_convention": convention,
+                    "data_model": "ilp32",
+                    "enum_policy": "clang-default-with-fno-short-enums",
+                    "plain_char": "unsigned", "target": row["target"],
+                })
+                declarations = {item["c_name"]: item for item in metadata["declarations"]}
+                self.assertEqual(declarations["halve"]["adapter_reasons"],
+                                 ["internal-or-inline"])
+                self.assertEqual(declarations["Level"]["size"], 4)
+                #  The generated C builds for the row; the object says
+                #  which convention and enum size it was built for.
+                attributes = self.compile_cortex_object(
+                    convention, output / "adapters.c", [output, source],
+                    source / "adapters.o")
+                self.assertEqual(attributes.get(TAG_ABI_ENUM_SIZE), 2)
+                self.assertEqual(attributes.get(TAG_ABI_VFP_ARGS, 0),
+                                 1 if convention == "aapcs-vfp" else 0)
+
+    def test_cortex_adapters_build_with_the_pinned_arm_gcc(self) -> None:
+        for convention in CORTEX:
+            with self.subTest(convention=convention):
+                source = self.root / ("gcc-" + convention)
+                _, output = self.cortex_generate(source, self.CORTEX_HEADER,
+                                                 self.cortex_policy(convention))
+                built = self.compile_with_arm_gcc(
+                    convention, output / "adapters.c", [output, source],
+                    source / "gcc.o", "-fno-short-enums")
+                self.assertEqual(built.returncode, 0, built.stderr)
+                attributes = arm_attributes(source / "gcc.o")
+                self.assertEqual(attributes.get(TAG_ABI_ENUM_SIZE), 2)
+                self.assertEqual(attributes.get(TAG_ABI_VFP_ARGS, 0),
+                                 1 if convention == "aapcs-vfp" else 0)
+                #  The pinned GCC's own default is short enums, which the
+                #  generated compatible-type assertions refuse (D939).
+                short = self.compile_with_arm_gcc(
+                    convention, output / "adapters.c", [output, source],
+                    source / "short.o")
+                self.assertNotEqual(short.returncode, 0)
+                self.assertIn("Level compatible type disagrees", short.stderr)
+
+    def test_cortex_rejects_an_lp64_or_other_convention_clang(self) -> None:
+        source = self.root / "wrong-clang"
+        source.mkdir()
+        (source / "api.h").write_text("int twice(int value);\n", encoding="utf-8")
+        cases = (
+            ("aapcs", "--target=thumbv6m-unknown-none-eabi",
+             "--target=aarch64-unknown-linux-gnu",
+             "unsupported Clang target ABI: __ILP32__ is None, expected '1'"),
+            ("aapcs-vfp", "-mfloat-abi=hard", "-mfloat-abi=soft",
+             "unsupported Clang target ABI: __ARM_PCS_VFP is not defined for "
+             "the VFP variant"),
+            ("aapcs", "-mfloat-abi=soft", "-mfloat-abi=hard",
+             "unsupported Clang target ABI: __ARM_PCS_VFP is defined for the "
+             "base procedure call standard"),
+        )
+        for index, (convention, old, new, refusal) in enumerate(cases):
+            with self.subTest(convention=convention, answer=new):
+                wrapper = source / f"clang-{index}"
+                #  Only the ABI probe is answered by another Clang; an
+                #  AArch64 one takes no Arm float options.
+                drop = ("-mfloat-abi=soft",) if "aarch64" in new else ()
+                wrapper.write_text(
+                    f"#!{sys.executable}\n"
+                    "import os, sys\n"
+                    "arguments = sys.argv[1:]\n"
+                    "if '-dM' in arguments:\n"
+                    f"    arguments = [{new!r} if a == {old!r} else a for a in arguments\n"
+                    f"                 if a not in {drop!r}]\n"
+                    f"os.execv({str(self.clang)!r}, [{str(self.clang)!r}, *arguments])\n",
+                    encoding="utf-8")
+                wrapper.chmod(0o700)
+                (source / "policy.json").write_text(json.dumps(self.cortex_selection(
+                    convention, self.function("twice"))), encoding="utf-8")
+                command = self.cortex_command(source, source / "out",
+                                              [f"api.h={source / 'api.h'}"])
+                command[command.index("--clang") + 1] = str(wrapper)
+                process = subprocess.run(command, stdout=subprocess.PIPE,
+                                         stderr=subprocess.PIPE, text=True, timeout=60)
+                self.assertIn(process.returncode, REFUSED, process.stderr)
+                self.assertRegex(process.stderr, r"error\[L0580\]: " + re.escape(refusal))
+                self.assertFalse((source / "out").exists())
+
+    def test_cortex_policy_is_ilp32_and_names_its_convention(self) -> None:
+        source = self.root / "cortex-policy"
+        source.mkdir()
+        (source / "api.h").write_text("int twice(int value);\n", encoding="utf-8")
+        base = self.cortex_selection("aapcs", self.function("twice"))
+        lp64 = json.loads(json.dumps(base))
+        lp64["abi"]["data_model"] = "lp64"
+        unnamed = json.loads(json.dumps(base))
+        del unnamed["abi"]["calling_convention"]
+        crossed = json.loads(json.dumps(base))
+        crossed["abi"]["calling_convention"] = "aapcs-vfp"
+        hosted = self.selection(self.function("twice"))
+        hosted_ilp32 = self.selection(self.function("twice"))
+        hosted_ilp32["abi"]["data_model"] = "ilp32"
+        for selected, refusal in (
+            (lp64, "policy abi: data_model must be 'ilp32', got 'lp64'"),
+            (unnamed, "policy abi: missing required key 'calling_convention'"),
+            (crossed, "policy abi: calling_convention must be 'aapcs', got "
+                      "'aapcs-vfp'"),
+            (hosted, "the policy binds for x86_64-pc-linux-gnu, and --target names "
+                     "cortex-m0, which is thumbv6m-unknown-none-eabi or "
+                     "thumbv7em-unknown-none-eabihf"),
+        ):
+            with self.subTest(refusal=refusal):
+                (source / "policy.json").write_text(json.dumps(selected), encoding="utf-8")
+                process = subprocess.run(
+                    self.cortex_command(source, source / "out",
+                                        [f"api.h={source / 'api.h'}"]),
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                self.assertIn(process.returncode, REFUSED, process.stderr)
+                self.assertRegex(process.stderr, r"error\[L0579\]: " + re.escape(refusal))
+        #  And an LP64 target's policy may not claim ILP32.
+        sysroot, includes, output = self.make_tree(self.root / "hosted-ilp32",
+                                                   header="int twice(int value);\n",
+                                                   selected_policy=hosted_ilp32)
+        process = subprocess.run(self.command(self.root / "hosted-ilp32", sysroot,
+                                              includes, output),
+                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        self.assertIn(process.returncode, REFUSED, process.stderr)
+        self.assertRegex(process.stderr, r"error\[L0579\]: " + re.escape(
+            "policy abi: data_model must be 'lp64', got 'ilp32'"))
+
+    def test_cortex_headers_are_clangs_freestanding_ones_alone(self) -> None:
+        selected = self.cortex_selection("aapcs", self.function("count"))
+        header = ("#include <stdint.h>\n#include <stddef.h>\n#include <stdbool.h>\n"
+                  "extern bool count(uint32_t value, size_t size);\n")
+        _, output = self.cortex_generate(self.root / "freestanding", header, selected)
+        self.assertIn("count: (value: uint32_t, size: size_t) -> (result: c.c_bool)",
+                      (output / "bindings.ldn").read_text())
+        #  Clang's own headers come only from the named resource directory:
+        #  without it even <stdint.h> is not found, so nothing is implicit.
+        process, _ = self.cortex_generate(self.root / "no-resource", header, selected,
+                                          resource=False, expect_success=False)
+        self.assertIn("'stdint.h' file not found", process.stderr)
+        #  The control: a header only a host C library has is not reached,
+        #  although the host has one (D937).
+        for host_only in ("stdio.h", "stdlib.h", "unistd.h"):
+            with self.subTest(header=host_only):
+                process, _ = self.cortex_generate(
+                    self.root / ("host-" + host_only.replace(".", "-")),
+                    f"#include <{host_only}>\n" + header, selected,
+                    expect_success=False)
+                self.assertIn(f"'{host_only}' file not found", process.stderr)
+        #  A freestanding target has no system root to name.
+        source = self.root / "sysroot"
+        source.mkdir()
+        (source / "api.h").write_text(header, encoding="utf-8")
+        (source / "policy.json").write_text(json.dumps(selected), encoding="utf-8")
+        command = self.cortex_command(source, source / "out", [f"api.h={source / 'api.h'}"])
+        command[4:4] = ["--sysroot", str(source)]
+        process = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                 text=True)
+        self.assertEqual(process.returncode, 2, process.stderr)
+        self.assertRegex(process.stderr, diagnostic(
+            "cortex-m0 is freestanding and has no system root; drop --sysroot"))
+
+    def test_cortex_adapters_are_freestanding(self) -> None:
+        header = ("typedef union Number { int whole; float real; } Number;\n"
+                  "typedef struct Flags { unsigned low : 3; unsigned high : 5; } Flags;\n"
+                  "extern Number counter;\n"
+                  "extern Number flip(Number number);\n")
+        selected = self.cortex_selection(
+            "aapcs", self.record("Number", landin_name="number"),
+            self.record("Flags", landin_name="flags"), self.function("flip"),
+            {"kind": "variable", "name": "counter", "storage": "define",
+             "writable": True})
+        source = self.root / "freestanding-adapters"
+        _, output = self.cortex_generate(source, header, selected)
+        text = (output / "bindings.ldn").read_text()
+        adapters = (output / "adapters.c").read_text()
+        #  C-owned storage, accessors, by-value wrappers and objects work;
+        #  there is no allocator, so a caller supplies the storage by its
+        #  size and alignment (D938).
+        for name in ("number_copy", "number_size", "number_alignment",
+                     "number_whole_set", "flags_high_set", "flags_low_get",
+                     "flip:", "counter_address", "counter_write"):
+            self.assertIn(name, text)
+        self.assertNotIn("_allocate", text)
+        self.assertNotIn("_release", text)
+        self.assertNotIn("calloc", adapters)
+        self.assertNotIn("<stdlib.h>", adapters)
+        metadata = json.loads((output / "bindings.json").read_text())
+        number = next(item for item in metadata["declarations"]
+                      if item["c_name"] == "Number")
+        self.assertIsNone(number["lifecycle"]["allocate"])
+        self.assertIsNone(number["lifecycle"]["release"])
+        self.compile_cortex_object("aapcs", output / "adapters.c", [output, source],
+                                   source / "adapters.o")
+        for name, header_text, declaration, refusal in (
+            ("cell", "typedef int (*CB)(int);\nextern int run(CB action);\n",
+             [{"kind": "callback", "name": "CB", "nullable": True, "parameters": {}},
+              self.function("run", parameters={"action": annotation(nullability="nullable")})],
+             "callback 'CB': a nullable callback's cell allocates with calloc, and "
+             "cortex-m0 is freestanding, with no C library; on cortex-m0 select the "
+             "callback with nullable: false and give its positions nonnullable policy"),
+            ("tls", "extern _Thread_local int counter;\n",
+             [{"kind": "variable", "name": "counter", "storage": "import",
+               "writable": True}],
+             "a _Thread_local object is reached through the C library's thread "
+             "pointer, and cortex-m0 is freestanding, with no C library; select an "
+             "object that is not thread-local"),
+        ):
+            with self.subTest(refused=name):
+                process, _ = self.cortex_generate(
+                    self.root / ("refused-" + name), header_text,
+                    self.cortex_selection("aapcs", *declaration), expect_success=False)
+                self.assertRegex(process.stderr, r"error\[L0581\]: .*" + re.escape(refusal))
+        #  A non-null callback is an ordinary extern(c) callable.
+        _, output = self.cortex_generate(
+            self.root / "nonnull-callback",
+            "typedef int (*CB)(int);\nextern int run(CB action);\n",
+            self.cortex_selection(
+                "aapcs", {"kind": "callback", "name": "CB", "nullable": False,
+                          "parameters": {}},
+                self.function("run", parameters={"action": annotation()})))
+        self.assertIn("run: (action: cb) -> (result: c.c_int)",
+                      (output / "bindings.ldn").read_text())
+
+    def test_cortex_adapter_names_stay_consistent(self) -> None:
+        #  Parameters named for a referenced type and for the result, on
+        #  the adapter-backed paths: static inline wrappers, one carrying a
+        #  native record by value, and a by-value wrapper of C-owned storage.
+        header = ("typedef unsigned int count;\n"
+                  "typedef struct pair { int left; int right; } pair;\n"
+                  "typedef union value { int whole; float real; } value;\n"
+                  "static inline count total(count result, count count) "
+                  "{ return result + count; }\n"
+                  "static inline pair mirror(pair pair, count result) "
+                  "{ struct pair turned = { pair.right, pair.left + (int)result };"
+                  " return turned; }\n"
+                  "extern value combine(count result, value value);\n")
+        expected = {
+            "total": ("(result: count, count_: count) -> (result_: count)",
+                      "count landin_probe_total_call(count argument_1, count argument_2)",
+                      [("result", "result"), ("count", "count_")]),
+            "mirror": ("(pair_: pair, result: count) -> (result_: pair)",
+                       "pair landin_probe_mirror_call(pair argument_1, count argument_2)",
+                       [("pair", "pair_"), ("result", "result")]),
+            "combine": ("(result_: ptr mut u8, result: count, value: ptr u8) -> none",
+                        "void landin_probe_combine_call(void *result_, count argument_1, "
+                        "const void *argument_2)",
+                        [("result", "result"), ("value", "value")]),
+        }
+        for convention in CORTEX:
+            with self.subTest(convention=convention):
+                selected = self.cortex_selection(
+                    convention, {"kind": "alias", "name": "count"},
+                    self.record("pair"), self.record("value"),
+                    self.function("total"), self.function("mirror"),
+                    self.function("combine"))
+                source = self.root / ("names-" + convention)
+                _, output = self.cortex_generate(source, header, selected)
+                text = (output / "bindings.ldn").read_text()
+                adapters = (output / "adapters.c").read_text()
+                exports = (output / "exports.h").read_text()
+                metadata = json.loads((output / "bindings.json").read_text())
+                functions = {item["c_name"]: item for item in metadata["declarations"]
+                             if item["kind"] == "function"}
+                for name, (signature, declared, parameters) in expected.items():
+                    adapter = "landin_probe_" + name + "_call"
+                    self.assertIn(f'link(symbol: "{adapter}") {name}: {signature}', text)
+                    self.assertIn(declared + "\n{", adapters)
+                    self.assertIn(declared + ";", exports)
+                    self.assertEqual(functions[name]["adapter"], adapter)
+                    self.assertEqual([(item["c_name"], item["landin_name"])
+                                      for item in functions[name]["parameters"]],
+                                     parameters)
+                self.assertIn("return total(argument_1, argument_2);", adapters)
+                self.assertIn("return mirror(argument_1, argument_2);", adapters)
+                self.assertIn("*(value *)result_ = combine(argument_1, "
+                              "*(const value *)argument_2);", adapters)
+                self.compile_cortex_object(convention, output / "adapters.c",
+                                           [output, source], source / "adapters.o")
+
+    def test_cortex_fixtures_are_exactly_regenerable(self) -> None:
+        cache = fetch_inputs.cache_root()
+        for name, fixture in CORTEX_FIXTURES.items():
+            with self.subTest(fixture=name):
+                directory = FIXTURE.parent / name
+                for pinned in fetch_inputs.read_lock():
+                    if pinned.startswith(fixture["include"] + "/"):
+                        fetch_inputs.fetch(pinned)
+                headers = []
+                for logical, pinned in fixture["headers"]:
+                    path = (fetch_inputs.fetch(pinned) if pinned is not None
+                            else directory / logical)
+                    headers.append(f"{logical}={path}")
+                output = self.root / name
+                process = subprocess.run(
+                    self.cortex_command(directory, output, headers,
+                                        include=[cache / fixture["include"]]),
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                    timeout=120)
+                self.assertEqual(process.returncode, 0, process.stderr)
+                for generated in ("bindings.ldn", "adapters.c", "exports.h",
+                                  "bindings.json"):
+                    self.assertEqual((output / generated).read_bytes(),
+                                     (directory / generated).read_bytes(), generated)
+                convention = json.loads((directory / "bindings.json").read_text())[
+                    "abi"]["calling_convention"]
+                pinned_headers = [fetch_inputs.fetch(pinned).parent
+                                  for _, pinned in fixture["headers"] if pinned]
+                for source in [line.split(":", 1)[1] for line in
+                               (directory / "fixture.meta").read_text().splitlines()
+                               if line.startswith("c-sources:")][0].split(","):
+                    attributes = self.compile_cortex_object(
+                        convention, directory / source.strip(),
+                        [directory, cache / fixture["include"], *pinned_headers],
+                        self.root / (name + "-" + source.strip() + ".o"))
+                    self.assertEqual(attributes.get(TAG_ABI_VFP_ARGS, 0),
+                                     1 if convention == "aapcs-vfp" else 0)
+
+    def test_cortex_bindings_refuse_a_program_of_the_other_convention(self) -> None:
+        #  D936: compiled for cortex-m0 with no float unit, the base
+        #  binding is accepted and the VFP one refused; with the AN500
+        #  lane's FPv5-D16 description, the other way round.
+        lanes = HERE.parent / "environments" / "cortex-m" / "lanes"
+        for name, guard in (("cortex-cmsis-bindings", "not compiler.feature.fp"),
+                            ("cortex-vfp-bindings", "compiler.feature.fp_dp")):
+            vfp = "vfp" in name
+            for float_unit in (False, True):
+                with self.subTest(fixture=name, float_unit=float_unit):
+                    module = self.root / f"{name}-{float_unit}" / "fixture"
+                    module.mkdir(parents=True)
+                    for source in (FIXTURE.parent / name).glob("*.ldn"):
+                        shutil.copyfile(source, module / source.name)
+                    command = [refine(), "check", "--target=" + CORTEX_NAME,
+                               "--root=" + str(HERE.parent),
+                               "--root=" + str(module.parent)]
+                    if float_unit:
+                        shutil.copyfile(lanes / "lane-mps2-an500.ldn",
+                                        module / "lane-mps2-an500.ldn")
+                        command += ["--level=armv7e-m", "--root=" + str(lanes)]
+                    checked = subprocess.run(command + [str(module)],
+                                             capture_output=True, text=True)
+                    if vfp == float_unit:
+                        self.assertEqual(checked.returncode, 0,
+                                         checked.stdout + checked.stderr)
+                    else:
+                        self.assertNotEqual(checked.returncode, 0)
+                        self.assertIn("error[L0324]: compile-time assertion is false",
+                                      checked.stderr)
+                        self.assertIn(f"compiler.assert({guard})", checked.stderr)
 
     def test_duplicate_policy_keys_are_rejected_before_generation(self) -> None:
         parent = self.root / "duplicate-keys"

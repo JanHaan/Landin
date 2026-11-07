@@ -407,11 +407,15 @@ The comparison must be a strict weak ordering while it runs.
 
 ## core/text
 
-Byte cursors, validated UTF-8 views, byte search, a text builder, formatting and parsing numbers.
+Byte cursors, validated UTF-8 views, positions and searches inside them, a scalar encoder, two text builders, formatting and parsing numbers.
 
 | Call | What it does |
 |---|---|
 | `text.from_bytes`, `text.valid` | Check bytes are UTF-8, as a view or as a yes or no. |
+| `text.start`, `text.step`, `text.done`, `text.width` | Walk text a scalar at a time, keeping each scalar's byte position. |
+| `text.find`, `text.find_scalar` and their `_from` forms | Find where text or a scalar first occurs. |
+| `text.encode` | Write a scalar's UTF-8 bytes into your buffer. |
+| `text.utf8_over` | Make a builder that only ever holds UTF-8. |
 | `text.over`, `text.growing` | Make a builder over your buffer, or one that grows from an allocator. |
 | `text.append_text`, `text.append_u32` and the rest | Append a piece to a builder. |
 | `text.format` | Append a template with each `{}` filled in. |
@@ -428,11 +432,87 @@ are not, and `valid` answers the same question without a view. The
 `utf8(bytes)` conversion validates too, but traps on malformed input.
 
 A `text.position` indexes `utf8` by byte offset, while a `usize` index
-into `utf8` counts scalars, so do not index with `offset(position)`. This
-module does not turn byte offsets into validated character boundaries.
+into `utf8` counts scalars, so do not index with `offset(position)`.
+`text.cursor` makes a position at any offset you give it and checks
+nothing; the positions below are always on a scalar's start.
 
 UTF-8 equality, hashing and ordering use encoded bytes, with no
 normalization or locale collation.
+
+### Positions and searches in text
+
+The byte cursors step a byte over `[]u8`. Over `utf8`, positions step a
+whole scalar, so each one is where a scalar starts, or the end:
+
+| Call | What it does |
+|---|---|
+| `start(source)` | The first scalar's position, offset zero. |
+| `done(source, at)` | Whether `at` is at the end. |
+| `width(source, at)` | How many bytes, one to four, the scalar at `at` takes. |
+| `step(source, at)` | The position after the scalar at `at`. |
+| `find(source, sought)` | Where `sought` first begins, or `not_found`. |
+| `find_from(source, sought, at)` | The same, searching from `at`. |
+| `find_scalar(source, scalar)`, `find_scalar_from` | Where a scalar first is, or `not_found`. |
+
+Read the scalar at a position as `source[at]`. Walk the text by stepping
+until `done`, as this check of each scalar of a key and where it begins
+does:
+
+```landin
+--  The key's scalars and where each begins, read by stepping.
+key_steps: (key: utf8) -> (yes: bool) =
+    scalars: [5]u32 = ['n', 'a', '\u{ef}', 'v', 'e']
+    offsets: [5]usize = [0, 1, 2, 4, 5]
+    widths: [5]usize = [1, 1, 2, 1, 1]
+    yes = false
+    mut at := text.start(key)
+    mut index: usize = 0
+    while not text.done(key, at) do
+        return when index >= 5 or key[at] <> scalars[index]
+          or text.offset(at) <> offsets[index]
+          or text.width(key, at) <> widths[index]
+        at = text.step(key, at)
+        inc index
+    end while
+    yes = index == 5 and text.offset(at) == lenof key
+end key_steps
+```
+
+`step` and `width` read the scalar there, so they trap where `source[at]`
+traps: at the end and inside a scalar. A search from a position inside a
+scalar traps too.
+
+A match begins and ends where scalars do, so the text before it, the
+match and the text after it are each a range of the source, `utf8` with
+the source's origin and nothing copied. This splits a record at its first
+`=`:
+
+```landin
+--  The key before the first `=` and the value after it.
+split: (record: utf8) -> (result: entry from record) ! text.not_found =
+    equals := try text.find_scalar(record, '=')
+    value_at: usize = text.offset(text.step(record, equals))
+    result = (key: record[0..<text.offset(equals)],
+              value: record[value_at..<lenof record])
+end split
+```
+
+[The splitter](../compiler/tests/fixtures/runtime/core-text-utf8-split/main.ldn)
+goes on to take each field between arrows with `find_from`. Empty sought
+text is found where the search begins, as `contains` finds it. A surrogate
+is in no text, so `find_scalar` reports `not_found` for one. Searches are
+`contains`'s Two-Way search, linear in the two lengths, with no table and
+no allocation.
+
+### Encoding a scalar
+
+`encode(scalar, into)` writes the scalar's UTF-8 bytes at the front of
+`into` and returns how many it wrote, one to four. To write at an offset,
+pass what follows it, `buffer[at..<lenof buffer]`.
+
+A surrogate, U+D800 to U+DFFF, or a value above U+10FFFF is
+`invalid_scalar`. A scalar that does not fit is `no_space`. Either refusal
+writes nothing, and `invalid_scalar` comes first whatever the room.
 
 ### Host strings
 
@@ -474,6 +554,7 @@ builder as it was:
 | `append` | bytes as they are |
 | `append_byte` | one byte |
 | `append_text` | a `utf8` |
+| `append_scalar` | a scalar's UTF-8 bytes, as `encode` writes them, or `invalid_scalar` |
 | `append_host` | a host string's bytes |
 | `append_u32`, `append_u64`, `append_usize` | decimal |
 | `append_i32`, `append_i64`, `append_isize` | decimal, with a `-` before a negative value |
@@ -504,6 +585,26 @@ end append_right
 
 A builder over `mut buffer: [64]u8 = zeroed` is `text.over(buffer)`, and
 `io.put(out, text.used(line))` prints what it holds.
+
+### The UTF-8 builder
+
+A `builder` holds bytes, which need not be UTF-8: `append` takes any. A
+`utf8_builder`, which `utf8_over(buffer)` makes over your buffer, holds
+only UTF-8, because it takes only text, scalars and numbers:
+
+| Call | What it does |
+|---|---|
+| `utf8_append_text`, `utf8_append_scalar` | Append text or a scalar. |
+| `utf8_append_u32` and the other number appends | Append a number, as the builder's call without `utf8_` does. |
+| `utf8_used` | Lend the text written as one `utf8`, until it next changes; nothing is scanned. |
+| `utf8_bytes` | Lend the same as bytes. |
+| `utf8_length`, `utf8_capacity`, `utf8_clear` | As the builder's. |
+| `utf8_truncate` | Cut back to a length, never inside a scalar. |
+
+Each append writes its whole piece, or reports `no_space` and leaves the
+builder as it was. A cut inside a scalar keeps only the scalars before it.
+There is no byte append, alignment or `format` into it, since each of
+those can write any bytes.
 
 ### Formatting
 
@@ -1227,7 +1328,7 @@ checked for both.
 
 Error messages: words for a person for each library failure, a short English phrase for every failure atom the core library raises.
 
-`failure.words(problem)` gives the phrase for any of the 32 atoms in
+`failure.words(problem)` gives the phrase for any of the 38 atoms in
 `failure.reason`, every atom a `core` module fails with. So a call's
 `else (problem)` passes its failure straight on, whatever subset it
 declares.
@@ -1388,6 +1489,50 @@ a password comes from `io.fill_random` directly.
 
 [Executable example](../compiler/tests/fixtures/runtime/random-sequence/main.ldn)
 
+## core/line
+
+Serial line settings: a UART's rate and frame, the divisor its baud-rate generator is set to, and the refusals every driver shares.
+
+| Call | What it does |
+|---|---|
+| `line.settings` | A line: its `rate` in bits per second, `data_bits`, `parity` and `stop_bits`. |
+| `line.default_settings` | 115,200 bits per second, 8N1. |
+| `line.check` | Refuse a rate of zero and data bits outside 5 to 9. |
+| `line.divisor` | The divisor nearest a rate, as a register holds it, or a refusal. |
+| `line.frame_bits` | The bits of one frame, start and stop bits included. |
+| `line.data_mask` | The bits of a received byte that hold the frame's data. |
+
+`parity` is `no_parity`, `even_parity` or `odd_parity`, and `stop_bits`
+`one_stop_bit` or `two_stop_bits`. Nothing in the module reads or writes
+a register, so it serves every target: a driver computes each register
+image with it and encodes its device's own bits, refuses what its
+peripheral cannot carry, and only then writes. A refusal leaves the line
+as it was.
+
+`divisor(clock, rate, oversampling, fraction_bits, least, most)` gives the
+integer nearest `clock * 2^fraction_bits / (oversampling * rate)`, halves
+up, and refuses with `line.unsupported_rate` a value outside `least` to
+`most`, the register's range, and one whose rate misses by more than
+`line.tolerance`, two percent: half of what a receiver sampling 16 times a
+bit allows over an eleven-bit frame, leaving the rest to the other end. An
+Arm PL011 is oversampling 16 with 6 fraction bits, its IBRD `value >> 6`
+and FBRD `value & 63`; an STM32 USART's BRR oversampling 16 with 4; an
+Espressif UART's CLKDIV oversampling 1 with 4, FRAG the low four bits. The
+arithmetic is integer only, on `u64`, which a Cortex-M0 links libgcc's
+helpers for: the derived driver's image grew by about 3.8 KB at size/auto.
+
+`line.unsupported_format` is a frame the peripheral cannot carry: `check`
+gives it for data bits outside 5 to 9, and each driver for what its own
+peripheral lacks, nine data bits on every port in this repository. Both
+atoms have words in `failure.words`.
+
+A UART may leave other bits above the data bits it receives: an STM32
+USART keeps the parity bit at the word's top, bit 7 of seven data bits.
+Every port's `read` returns a byte ANDed with `data_mask`, so a byte read
+is its frame's data and nothing else.
+
+[Executable example](../compiler/tests/fixtures/runtime/library-shared-line/main.ldn)
+
 ## core/atomic
 
 A cell holding one `u8`, `u16`, `u32` or `u64`, read and written only
@@ -1434,6 +1579,45 @@ the refusal naming `sole_add` and `platform/cortex_m`'s critical section,
 write takes instead. A cell of any other type is refused on every target.
 
 [Executable example](../compiler/tests/fixtures/runtime/atomic-tick-firmware/main.ldn)
+
+## core/cache
+
+Cache maintenance for memory a device reads or writes behind the CPU's
+caches: D227's DMA handoff as one concept, `maintenance`, over ranges of
+whole lines.
+
+| Call | What it does |
+|---|---|
+| `cache.line` | The bytes in one of the provider's lines. |
+| `cache.clean` | Write the range's dirty lines to memory and keep them: before a device reads what the CPU wrote, as a transmit does. |
+| `cache.invalidate` | Discard the range's lines, so the next read is memory's: once a device has written it, as a receive completes. |
+| `cache.clean_invalidate` | Both: before a device writes the range, as a receive is armed. |
+| `cache.lines` | How many lines a range is, refusing one that is not whole lines. |
+| `cache.cacheless` | The provider for memory no cache stands in front of: the barriers alone, on every target. |
+
+A range must begin on a line and be a whole number of lines; one that is
+not is refused with `cache.misaligned` and nothing is maintained. It is
+never rounded out, because a rounded line can hold bytes the caller does
+not own: an invalidate would lose their dirty copy, and a clean would write
+their stale copy over what a device wrote. Align a DMA buffer to the line
+and size it in lines, `link(align: 32)` on the STM32H753, and no line it
+occupies holds anything else.
+
+Every operation ends with the completion barrier, so it has reached the
+point a device observes when it returns. The order is the driver's, as
+D227 states it: clean and invalidate the receive buffer before the stream
+is armed, invalidate it once a count or completion says the bytes are
+written and before reading them, and clean a transmit buffer before the
+stream is enabled, the device barrier before each enable staying the
+driver's own.
+
+`cache.cacheless(line)` takes the line a cached provider would have and
+refuses the same ranges, so a driver tested on a cacheless core, or a
+hosted one, takes the refusals it would take on a cached profile. A line
+that is not a nonzero power of two is `cache.bad_line`. The Cortex-M7's
+provider is `platform/cortex_m/l1`, on a cached profile alone.
+
+[Executable example](../compiler/tests/fixtures/runtime/library-shared-cache/main.ldn)
 
 ## core/fibre
 
@@ -2602,16 +2786,18 @@ blocks it.
 
 ## platform/c
 
-C scalar spellings for the target's C ABI, on every target whose C data model is LP64.
+C scalar spellings for the target's C ABI, on every target whose C ABI is
+enabled: the four LP64 ones and Cortex-M's ILP32 AAPCS32.
 
-LP64 is a data model, not an architecture: C `int` is 32 bits while
-`long` and pointers are 64, as on every 64-bit Unix. Windows' LLP64 keeps
-`long` at 32 bits, and Cortex-M's ILP32 makes all three 32 bits; neither
-is admitted here.
+LP64 and ILP32 are data models, not architectures. Under LP64 C `int` is 32
+bits while `long` and pointers are 64, as on every 64-bit Unix; under
+Cortex-M's ILP32 all three are 32 bits. Windows' LLP64 keeps `long` at 32
+bits with 64-bit pointers and is not admitted here, and neither are RV32's
+and Xtensa's ILP32 ABIs, which the compiler describes but does not enable.
 
-Within LP64 the C ABI depends on the operating system as well as the
-architecture, so the compiler names it with one fact per ABI rather than
-reading it from `compiler.arch` or the pointer width:
+The C ABI depends on the operating system as well as the architecture, so
+the compiler names it with one fact per ABI rather than reading it from
+`compiler.arch` or the pointer width:
 
 | Target | ABI fact | Plain `char` |
 |---|---|---|
@@ -2619,21 +2805,23 @@ reading it from `compiler.arch` or the pointer width:
 | `darwin-arm64` | `compiler.c_darwin_lp64`: Apple's arm64 variant of AAPCS64 | `i8` |
 | `linux-arm64`, `freebsd-arm64` | `compiler.c_aapcs64_lp64`: the standard AAPCS64 | `u8` |
 | `linux-rv64` | `compiler.c_riscv_lp64d`: RISC-V LP64D, LP64 with double-precision float registers | `u8` |
+| `cortex-m0`, every level | `compiler.c_aapcs32`: AAPCS32, its VFP variant when the device description has a float unit | `u8` |
 
 Darwin and Linux share `compiler.arch == arm64` and still disagree on
 `char`, which is why the fact names the ABI.
 
-Every other alias is the same on all four:
+The other aliases differ only in `long`:
 
-| Alias | Is |
-|---|---|
-| `c_int` | `i32` |
-| `c_long`, `c_longlong` | `i64` |
-| `c_size` | `usize` |
+| Alias | LP64 | AAPCS32 |
+|---|---|---|
+| `c_int` | `i32` | `i32` |
+| `c_long` | `i64` | `i32` |
+| `c_longlong` | `i64` | `i64` |
+| `c_size` | `usize`, 64 bits | `usize`, 32 bits |
 
 The aliases keep ordinary Landin scalar identity; `c_char` is a numeric
-byte and never a Unicode scalar. Cortex-M C signatures are not admitted
-by this module.
+byte and never a Unicode scalar. On Cortex-M a variadic C function is not
+called; import a fixed-arity C function that calls it instead.
 
 [Executable example](../compiler/tests/fixtures/runtime/r440-c-aliases/main.ldn)
 
@@ -2648,6 +2836,25 @@ Waiting can wake spuriously. Barriers do not prove completion of a device
 protocol or supply a DMA lifetime discipline.
 
 [Executable example](../environments/cortex-m/probes/core-cpu.ldn)
+
+## platform/cortex_m/l1
+
+The Cortex-M7's level 1 caches as `core/cache`'s provider, on a cached
+profile: one whose description declares `compiler.cache("armv7-m-l1", 32)`,
+the STM32H753's `descriptions/stm32h753_cached` among the chips refine
+supports. Reset has enabled the caches and the entry's return disables
+them; a program does neither.
+
+`l1.caches()` is the handle, its line the description's, 32 bytes, and
+`l1.geometry()` reads CCSIDR, the data cache's sets, ways and line. Each
+operation writes every line's address to the System Control Block's
+by-address register between two completion barriers, then issues ISB.
+
+Elsewhere on an M-profile target the module declares nothing, and a call
+says it is a cached profile's. A program that maintains no cache does not
+import it, and its image carries none of `core/cache`.
+
+[Executable example](../compiler/tests/board/stm32h753_cached/app/main.ldn)
 
 ## platform/riscv
 

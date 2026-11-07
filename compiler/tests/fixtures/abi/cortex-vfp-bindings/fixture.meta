@@ -1,0 +1,10 @@
+class: abi
+profiles: standard
+summary: Bindings generated from the pinned STM32H753 header and a float and double interface for AAPCS32's VFP variant pass floats and doubles in the float unit's registers, directly and through freestanding adapters
+program: program.ldn
+root: ../../../../..
+c-sources: adapters.c, peer.c
+c-inputs: stm32h753, stm32h753-cmsis
+status: 42
+constructs: 1570, 1580
+targets: cortex-m0

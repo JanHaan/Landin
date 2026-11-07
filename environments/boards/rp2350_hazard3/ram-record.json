@@ -1,10 +1,10 @@
 {
   "status": "passed",
-  "image_sha256": "bfea8caf886c1e0bfc524a57648ea1567cc179e608fcb1efe807e4b0fe40d134",
+  "image_sha256": "a24e9a3f3f5561380281fd8ef7a4b6b8268008ef433f8950e56e1571b907fb2e",
   "image_name": "board.elf",
   "amoadd": [
     {
-      "address": "20002478",
+      "address": "20002500",
       "function": "add_u32"
     }
   ],
@@ -34,7 +34,7 @@
       "held_by_fifo": 32,
       "restarts": 3,
       "dma_completions": 2,
-      "timer_events": 1601,
+      "timer_events": 1604,
       "echoed": 11202,
       "sent": 11572
     },
@@ -49,6 +49,9 @@
         5,
         6
       ]
+    },
+    "line": {
+      "status": "not run: probehive bridge fixed at 115200 8N1"
     }
   },
   "swd": {
@@ -59,7 +62,7 @@
     "reports": 7,
     "trans_count": 1094
   },
-  "uart_sha256": "325dda3946295b0cc424b2dbc8a4dc4a49d37a46b6ba74e18681ddec6041fba0",
+  "uart_sha256": "eedb5acff664dbe5dbeec367561284d3b43eb12decedc5f533fe3213e9e6e873",
   "mode": "ram",
   "warm_load": {
     "board": "rp2350_hazard3",
@@ -91,13 +94,13 @@
       "rom_reset": false,
       "timer0_debug_pause": 2
     },
-    "elf_sha256": "bfea8caf886c1e0bfc524a57648ea1567cc179e608fcb1efe807e4b0fe40d134",
+    "elf_sha256": "a24e9a3f3f5561380281fd8ef7a4b6b8268008ef433f8950e56e1571b907fb2e",
     "entry": 536870912,
     "flash_written": false,
     "format_version": 1,
-    "helper_source_sha256": "2a7158bc779e92db4cac4fb5ac559fc5c857661ad7d85dec9f37e1ff5eb7c7ba",
+    "helper_source_sha256": "47d74e1639692ad1649ebc14f6b050efb10a98c93f3122e111a40397f58a22c1",
     "mode": "warm",
-    "previous_pc": 536880478,
+    "previous_pc": 268436700,
     "segments": [
       {
         "address": 536870912,
@@ -106,11 +109,11 @@
       },
       {
         "address": 536871696,
-        "bytes": 32012,
-        "sha256": "fc1d9638f4606b02ef1986abd595bbd321cc2943dc32e2f63a919677cd288aae"
+        "bytes": 39020,
+        "sha256": "dacfabe24158cbe645de287ea649bb706705165083714e733a88f60a00e88d1d"
       },
       {
-        "address": 536903712,
+        "address": 536910720,
         "bytes": 24,
         "sha256": "0baeda3ef5f538e158d6ac7360696feeb17ae6c79c7051b93d129730e8a806e2"
       }
@@ -119,10 +122,10 @@
     "status": "passed",
     "vector": 536871424
   },
-  "seconds": 15.898,
+  "seconds": 18.161,
   "kernel_usb": {
-    "since": 1793787096.4691055,
-    "until": 1793787112.3477058,
+    "since": 1794060637.5602403,
+    "until": 1794060655.6994202,
     "lines": [],
     "status": "captured"
   },
@@ -140,7 +143,7 @@
       "h": "00002bc2",
       "c": "00000003",
       "d": "00000002",
-      "m": "00000641",
+      "m": "00000644",
       "u": "00000001",
       "p": "8000000b",
       "n": "00000446",

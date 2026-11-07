@@ -1,0 +1,8 @@
+class: negative
+summary: a view sliced at a position text.find or text.find_scalar returned keeps its text's origin, so a key of a parameter is returned only from that parameter and a key of the frame's own storage not at all
+program: main.ldn
+root: ../../../../..
+expect: expected.txt
+codes: L0316, L0314
+constructs: 0570, 0600, 0790, 1030
+targets: linux-x86-64, linux-arm64, darwin-arm64, synthetic-32, freebsd-x86-64, freebsd-arm64, linux-rv64

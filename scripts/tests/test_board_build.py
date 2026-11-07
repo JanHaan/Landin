@@ -64,7 +64,8 @@ class Build(unittest.TestCase):
                 mock.patch.object(bundle, 'source_identity', return_value={}), \
                 contextlib.redirect_stdout(io.StringIO()) as log:
             status = build.build_all(build.BOARDS, ('boot', 'ram'), 'refine', self.root / 'out', 'report')
-        self.assertEqual(len(calls), 16)
+        # Eight boards twice and the cached profile's RAM image (D975).
+        self.assertEqual(len(calls), 17)
         self.assertEqual(status, 1)
         self.assertIn('compile failed; see compile.log', log.getvalue())
         rows = json.loads((self.root / 'out/summary.json').read_text())

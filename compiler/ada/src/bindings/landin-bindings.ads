@@ -34,9 +34,14 @@ package Landin.Bindings is
 
    --  The ABIs a binding is made for, each one row of facts: the Clang
    --  triple, the compiler fact its bindings assert, the calling
-   --  convention its metadata names, the sign of its plain char and the
-   --  macros that identify it.  A third ABI is a row here and nowhere else.
-   type Target is (Linux_X86_64, Darwin_Arm64, Linux_Arm64);
+   --  convention its metadata names, the data model, the sign of its plain
+   --  char and the macros that identify it.  Another ABI is a row here and
+   --  nowhere else.  Cortex-M is one refine target with two rows, AAPCS32's
+   --  base procedure call standard and its VFP variant, which the policy's
+   --  triple and calling convention choose between (D935).
+   type Target is
+     (Linux_X86_64, Darwin_Arm64, Linux_Arm64, Cortex_M_AAPCS,
+      Cortex_M_AAPCS_VFP);
 
    function Triple (Of_Target : Target) return String;
 
@@ -46,9 +51,29 @@ package Landin.Bindings is
    --  The compiler fact a generated binding asserts.
    function Fact (Of_Target : Target) return String;
 
+   --  What a generated binding asserts of the float unit beside its fact,
+   --  or "" where the fact alone selects the convention (D936).
+   function Float_Guard (Of_Target : Target) return String;
+
    function Convention (Of_Target : Target) return String;
 
+   --  `lp64` or `ilp32`, as the policy's `abi.data_model` names it.
+   function Data_Model (Of_Target : Target) return String;
+
+   --  The bytes of a C long, a pointer and a size_t.
+   function Word_Size (Of_Target : Target) return Positive;
+
    function Unsigned_Char (Of_Target : Target) return Boolean;
+
+   --  A freestanding target has no C library: Clang gets no system root,
+   --  and an adapter that would need malloc or a thread pointer is refused
+   --  (D937, D938).
+   function Hosted (Of_Target : Target) return Boolean;
+
+   --  What Clang is given beside the triple to select the row's float
+   --  ABI and freestanding environment.
+   function Clang_Options (Of_Target : Target)
+     return Landin.Platform.Path_List;
 
    --  The outputs, in the order they are replaced.
    Output_Count : constant := 4;
@@ -83,15 +108,19 @@ package Landin.Bindings is
    function Policy_Triple (Of_Session : Session) return String
      with Pre => Ok (Of_Session);
 
+   --  The row the policy's `abi.target` names.
+   function Policy_Target (Of_Session : Session) return Target
+     with Pre => Ok (Of_Session);
+
    --  What Clang printed for `-print-target-triple`: the target's triple.
    procedure Check_Triple
      (Into          : in out Session;
       For_Target    : Target;
       Triple_Output : String);
 
-   --  What Clang printed for `-dM -E` of an empty C file: LP64,
-   --  little-endian, with the target's macros and the sign of its plain
-   --  char.
+   --  What Clang printed for `-dM -E` of an empty C file: the target's
+   --  data model, little-endian, with the target's macros and the sign of
+   --  its plain char.
    procedure Check_Macros
      (Into       : in out Session;
       For_Target : Target;

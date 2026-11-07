@@ -1,0 +1,5 @@
+class: positive
+summary: compiler.utf8_unvalidated inside unchecked gives utf8 from an immutable or weakened mutable byte view, keeping its origin so a returned view is from its source
+constructs: 0430, 0570, 0600, 0790, 1120, 1560
+program: program.ldn
+targets: linux-x86-64, linux-arm64, darwin-arm64, freebsd-x86-64, freebsd-arm64, linux-rv64

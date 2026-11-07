@@ -1,0 +1,23 @@
+--  Bytes valid by construction become text without a scan, inside
+--  `unchecked`; the text keeps the bytes' origin, so it is returned only
+--  `from` them, and a writable view weakens to the read-only operand.
+lent: (source: []u8) -> (result: utf8 from source) =
+    unchecked begin
+        result = compiler.utf8_unvalidated(source)
+    end unchecked
+end lent
+
+written: (buffer: []mut u8) -> (result: utf8 from buffer) =
+    buffer[0] = 104
+    buffer[1] = 105
+    unchecked begin
+        result = compiler.utf8_unvalidated(buffer[0..<2])
+    end unchecked
+end written
+
+public main: () -> (code: i32) =
+    mut storage: [2]u8 = zeroed
+    greeting: utf8 = written(storage[0..<2])
+    same: utf8 = lent("hi")
+    code = i32(lenof greeting + lenof same)
+end main

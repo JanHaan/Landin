@@ -250,17 +250,21 @@ package body Landin.Commands.Bindings is
                else "");
             Found : Boolean := False;
          begin
+            --  The first row of the name; the policy chooses among the
+            --  rows one target has (D935).
             for Each in B.Target loop
                if B.Target_Name (Each) = Named then
                   Chosen := Each;
                   Found := True;
+                  exit;
                end if;
             end loop;
             if not Found then
                Refuse ("refine bindings binds C for "
                        & B.Target_Name (B.Linux_X86_64) & ", "
-                       & B.Target_Name (B.Linux_Arm64) & " and "
-                       & B.Target_Name (B.Darwin_Arm64)
+                       & B.Target_Name (B.Linux_Arm64) & ", "
+                       & B.Target_Name (B.Darwin_Arm64) & " and "
+                       & B.Target_Name (B.Cortex_M_AAPCS)
                        & (if Named = "" then
                             "; name one with --target"
                           else ", and --target names " & Named));
@@ -346,9 +350,29 @@ package body Landin.Commands.Bindings is
             end if;
             Defines_Seen.Append (Define_Name (Value));
          end loop;
-         Sysroot := US.To_Unbounded_String
-           (Absolute (US.To_String (Asked.Sysroot)));
-         if not Host.Is_Directory (US.To_String (Sysroot)) then
+         --  D937: a freestanding target has no C library and so no system
+         --  root; a hosted one always names its own.
+         if not B.Hosted (Chosen) then
+            if US.Length (Asked.Sysroot) > 0 then
+               Refuse (B.Target_Name (Chosen) & " is freestanding and has no"
+                       & " system root; drop --sysroot, and name Clang's"
+                       & " own headers and any other with"
+                       & " --system-include-dir or --include-dir");
+               return False;
+            end if;
+         elsif US.Length (Asked.Sysroot) = 0 then
+            Refuse ("bindings for " & B.Target_Name (Chosen) & " need the"
+                    & " target's system root: name it with --sysroot; an"
+                    & " empty directory will do when no target system"
+                    & " header is needed");
+            return False;
+         else
+            Sysroot := US.To_Unbounded_String
+              (Absolute (US.To_String (Asked.Sysroot)));
+         end if;
+         if B.Hosted (Chosen)
+           and then not Host.Is_Directory (US.To_String (Sysroot))
+         then
             Report (Cat.Bindings_Clang_Refused, "--sysroot "
                     & Repr (US.To_String (Asked.Sysroot))
                     & " is not a directory; an empty one will do when no"
@@ -536,16 +560,21 @@ package body Landin.Commands.Bindings is
       begin
          Arguments.Append ("--target=" & B.Triple (Chosen));
          Arguments.Append ("--no-default-config");
-         Arguments.Append ("--sysroot=" & US.To_String (Sysroot));
+         if US.Length (Sysroot) > 0 then
+            Arguments.Append ("--sysroot=" & US.To_String (Sysroot));
+         end if;
          Arguments.Append ("-std=c11");
+         Arguments.Append (B.Clang_Options (Chosen));
          Arguments.Append ("-fno-short-enums");
          Arguments.Append ("-nostdinc");
          Arguments.Append ("-Wsystem-headers");
          Arguments.Append ("-Werror=date-time");
          Arguments.Append ("-iquote");
          Arguments.Append (Work_Path ("headers"));
-         Roots.Append (US.To_String (Sysroot));
-         Logicals.Append ("sysroot");
+         if US.Length (Sysroot) > 0 then
+            Roots.Append (US.To_String (Sysroot));
+            Logicals.Append ("sysroot");
+         end if;
          Roots.Append (US.To_String (Work));
          Logicals.Append (".");
          for Index in 1 .. Natural (Include_Dirs.Length) loop
@@ -613,8 +642,10 @@ package body Landin.Commands.Bindings is
             Olds.Append (Header_Paths (Index));
             News.Append (Logical_Names (Index));
          end loop;
-         Olds.Append (US.To_String (Sysroot));
-         News.Append ("<sysroot>");
+         if US.Length (Sysroot) > 0 then
+            Olds.Append (US.To_String (Sysroot));
+            News.Append ("<sysroot>");
+         end if;
          for Index in 1 .. Natural (Include_Dirs.Length) loop
             Olds.Append (Include_Dirs (Index));
             News.Append ("<include-" & Number (Index) & ">");
@@ -794,13 +825,26 @@ package body Landin.Commands.Bindings is
          if Report_Fault then
             return False;
          end if;
-         if B.Policy_Triple (Session) /= B.Triple (Chosen) then
-            Report (Cat.Bindings_Policy_Invalid, "the policy binds for "
-                    & B.Policy_Triple (Session) & ", and --target names "
-                    & B.Target_Name (Chosen) & ", which is "
-                    & B.Triple (Chosen));
+         if B.Target_Name (B.Policy_Target (Session))
+           /= B.Target_Name (Chosen)
+         then
+            declare
+               Rows : US.Unbounded_String;
+            begin
+               for Each in B.Target loop
+                  if B.Target_Name (Each) = B.Target_Name (Chosen) then
+                     US.Append (Rows, (if US.Length (Rows) = 0 then ""
+                                       else " or ") & B.Triple (Each));
+                  end if;
+               end loop;
+               Report (Cat.Bindings_Policy_Invalid, "the policy binds for "
+                       & B.Policy_Triple (Session) & ", and --target names "
+                       & B.Target_Name (Chosen) & ", which is "
+                       & US.To_String (Rows));
+            end;
             return False;
          end if;
+         Chosen := B.Policy_Target (Session);
          Host.Make_Private_Directory ("refine-bindings-", Work, Made);
          if Made /= Platform.Write_Ok then
             Report (Cat.Unwritable_Output, "cannot make a private directory"
@@ -876,7 +920,9 @@ package body Landin.Commands.Bindings is
          then
             return False;
          end if;
-         Roots.Append (US.To_String (Sysroot));
+         if US.Length (Sysroot) > 0 then
+            Roots.Append (US.To_String (Sysroot));
+         end if;
          Roots.Append (US.To_String (Work));
          Roots.Append (Include_Dirs);
          Roots.Append (System_Include_Dirs);

@@ -1,0 +1,20 @@
+error[L0316]: the returned reference does not derive from exactly the parameters named by its `from` clause
+  --> ../tests/fixtures/negative/utf8-unvalidated-escapes-its-source/program.ldn:3:1
+  |
+3 | undeclared: (source: []u8) -> (result: utf8) =
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/utf8-unvalidated-escapes-its-source/program.ldn:3:32
+  |
+3 | undeclared: (source: []u8) -> (result: utf8) =
+  |                                ^^^^^^^^^^^^ the named return and its declared sources
+  = note: [0790]: the written clause and every returning body edge agree both ways
+error[L0314]: this returned reference still has frame origin
+  --> ../tests/fixtures/negative/utf8-unvalidated-escapes-its-source/program.ldn:9:1
+  |
+9 | local: () -> (result: utf8) =
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  --> ../tests/fixtures/negative/utf8-unvalidated-escapes-its-source/program.ldn:10:5
+   |
+10 |     storage: [2]u8 = [104, 105]
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^ the shorter-lived reference source
+  = note: [0770]/[0780]: frame references cannot escape and a retained parameter is declared `escaping`

@@ -2303,6 +2303,21 @@ package body Landin.Diagnostics.Citations is
             when 821 =>
                "Clang runs in an environment of its own, through `Landin"
                & ".Platform`",
+            when 935 =>
+               "`refine bindings` binds C for Cortex-M under AAPCS32, in"
+               & " both procedure call standards",
+            when 936 =>
+               "A Cortex-M binding asserts its float unit beside `compil"
+               & "er.c_aapcs32`",
+            when 937 =>
+               "A freestanding target's C headers are Clang's own, as th"
+               & "e request names them",
+            when 938 =>
+               "Freestanding adapters allocate nothing and reach no C li"
+               & "brary",
+            when 939 =>
+               "Cortex-M bindings are checked against pinned CMSIS heade"
+               & "rs",
             when 585 =>
                "The gate builds the flake on every run that does not reu"
                & "se a pass",
@@ -2378,6 +2393,29 @@ package body Landin.Diagnostics.Citations is
             when 906 =>
                "A power-only Pico 2 boots and changes architecture on th"
                & "e cascade",
+            when 958 =>
+               "The PL011 ports change their line with the UART disabled"
+               & ", and only the emulator sees their registers",
+            when 959 =>
+               "The STM32H753 takes words of seven to nine bits and stop"
+               & "s its stream to change line",
+            when 960 =>
+               "The ESP32 and ESP32-S3 program their line in `serial`, t"
+               & "he ESP32 without two stop bits",
+            when 961 =>
+               "The ESP32-C3 and C5 keep the ROM's clock and learn it fr"
+               & "om the ROM's divisor",
+            when 962 =>
+               "A tty board answers a line request on the old line, chan"
+               & "ges, and comes back",
+            when 963 =>
+               "The host changes its tty with the board, and a bridge's "
+               & "fixed line is a verdict",
+            when 964 =>
+               "The derived driver's model holds the PL011's line rules,"
+               & " and register images are not a line",
+            when 965 =>
+               "A received byte is its frame's data bits alone",
             when 725 =>
                "Every board run holds the rig's lock and paces what disc"
                & "onnects a device",
@@ -2667,6 +2705,28 @@ package body Landin.Diagnostics.Citations is
             when 780 =>
                "Without a float unit, Arm assembly declares IEEE floats "
                & "passed in core registers",
+            when 920 =>
+               "Cortex-M's C ABI is AAPCS32, named by `compiler.c_aapcs3"
+               & "2` and enabled at both variants",
+            when 921 =>
+               "`platform/c` on AAPCS32 is ILP32 with an unsigned plain "
+               & "char",
+            when 922 =>
+               "AAPCS32 calls no variadic C function until a program nee"
+               & "ds one",
+            when 923 =>
+               "Firmware links C libraries as static archives",
+            when 924 =>
+               "A firmware image refuses what its startup cannot honour",
+            when 985 =>
+               "The Cortex-M corpus runs an ABI fixture's C freestanding"
+               & ", by one contract",
+            when 986 =>
+               "A corpus restriction names the stage that stops it, and "
+               & "the lane reaches it",
+            when 987 =>
+               "The generated Cortex-M bindings' layouts are held to bot"
+               & "h compilers at both variants",
             when 695 =>
                "Espressif's QEMU carries both RV32 corpus lanes, under t"
                & "he Arm lanes' harness",
@@ -2684,6 +2744,35 @@ package body Landin.Diagnostics.Citations is
             when 621 =>
                "The STM32H753 is hard-float, and its consumer's accesses"
                & " are the board's to check",
+            when 970 =>
+               "Cache maintenance is `core/cache`'s concept, over whole "
+               & "lines, with a cacheless provider everywhere",
+            when 971 =>
+               "A cache is a fact of a description, which `compiler.feat"
+               & "ure.cache` and `compiler.cache_line` read",
+            when 972 =>
+               "The Cortex-M7's provider is `platform/cortex_m/l1`, decl"
+               & "ared on a cached profile alone",
+            when 973 =>
+               "Reset enables a described cache once memory is written, "
+               & "and the entry's return disables it",
+            when 974 =>
+               "The STM32H753's cached profile is a description of its o"
+               & "wn, admitted with its evidence",
+            when 975 =>
+               "The cached board run shows each handoff and what leaving"
+               & " its maintenance out does",
+            when 976 =>
+               "A cacheless image reaches no cache register, and a cache"
+               & "d one only those its profile declares",
+            when 978 =>
+               "The STM32H753's receive ring does D227's maintenance thr"
+               & "ough the provider it is given",
+            when 979 =>
+               "The cached board's transmit raises its request only once"
+               & " its stream has its first byte",
+            when 977 =>
+               "The emulator shows the cache sequences, never a cache",
             when 281 =>
                "RV64's system call has the standing of `syscall` and `sv"
                & "c`",
@@ -2731,6 +2820,17 @@ package body Landin.Diagnostics.Citations is
                & "ns",
             when 307 =>
                "Parsing mirrors what the builder writes",
+            when 945 =>
+               "Positions over `utf8` step a whole scalar",
+            when 946 =>
+               "A search over text returns where the match begins",
+            when 947 =>
+               "The encoder writes a whole scalar or nothing",
+            when 948 =>
+               "A `utf8_builder` holds only whole scalars",
+            when 949 =>
+               "`compiler.utf8_unvalidated` makes text of bytes known to"
+               & " be valid, inside `unchecked`",
             when 308 =>
                "A buffered writer is flushed explicitly, and a line read"
                & "er lends its lines",
@@ -2867,6 +2967,13 @@ package body Landin.Diagnostics.Citations is
             when 582 =>
                "An errno has words in `platform/posix`, which passes the"
                & " library's on",
+            when 955 =>
+               "A serial line's settings and its divisor are `core/line`"
+               & "'s, and a driver writes nothing it refuses",
+            when 956 =>
+               "A divisor may miss its rate by two percent",
+            when 957 =>
+               "The derived driver opens any line its PL011 can carry",
             when 418 =>
                "The POSIX and Linux layers keep their routines' own name"
                & "s",
@@ -3833,6 +3940,16 @@ package body Landin.Diagnostics.Citations is
                "Decisions: The toolchain, C and the machine",
             when 821 =>
                "Decisions: The toolchain, C and the machine",
+            when 935 =>
+               "Decisions: The toolchain, C and the machine",
+            when 936 =>
+               "Decisions: The toolchain, C and the machine",
+            when 937 =>
+               "Decisions: The toolchain, C and the machine",
+            when 938 =>
+               "Decisions: The toolchain, C and the machine",
+            when 939 =>
+               "Decisions: The toolchain, C and the machine",
             when 585 =>
                "Decisions: The toolchain, C and the machine",
             when 586 =>
@@ -3888,6 +4005,22 @@ package body Landin.Diagnostics.Citations is
             when 905 =>
                "Decisions: The toolchain, C and the machine",
             when 906 =>
+               "Decisions: The toolchain, C and the machine",
+            when 958 =>
+               "Decisions: The toolchain, C and the machine",
+            when 959 =>
+               "Decisions: The toolchain, C and the machine",
+            when 960 =>
+               "Decisions: The toolchain, C and the machine",
+            when 961 =>
+               "Decisions: The toolchain, C and the machine",
+            when 962 =>
+               "Decisions: The toolchain, C and the machine",
+            when 963 =>
+               "Decisions: The toolchain, C and the machine",
+            when 964 =>
+               "Decisions: The toolchain, C and the machine",
+            when 965 =>
                "Decisions: The toolchain, C and the machine",
             when 725 =>
                "Decisions: The toolchain, C and the machine",
@@ -4097,6 +4230,22 @@ package body Landin.Diagnostics.Citations is
                "Decisions: The core library and the derived programs",
             when 780 =>
                "Decisions: The core library and the derived programs",
+            when 920 =>
+               "Decisions: The core library and the derived programs",
+            when 921 =>
+               "Decisions: The core library and the derived programs",
+            when 922 =>
+               "Decisions: The core library and the derived programs",
+            when 923 =>
+               "Decisions: The core library and the derived programs",
+            when 924 =>
+               "Decisions: The core library and the derived programs",
+            when 985 =>
+               "Decisions: The core library and the derived programs",
+            when 986 =>
+               "Decisions: The core library and the derived programs",
+            when 987 =>
+               "Decisions: The core library and the derived programs",
             when 695 =>
                "Decisions: The core library and the derived programs",
             when 696 =>
@@ -4108,6 +4257,26 @@ package body Landin.Diagnostics.Citations is
             when 620 =>
                "Decisions: The core library and the derived programs",
             when 621 =>
+               "Decisions: The core library and the derived programs",
+            when 970 =>
+               "Decisions: The core library and the derived programs",
+            when 971 =>
+               "Decisions: The core library and the derived programs",
+            when 972 =>
+               "Decisions: The core library and the derived programs",
+            when 973 =>
+               "Decisions: The core library and the derived programs",
+            when 974 =>
+               "Decisions: The core library and the derived programs",
+            when 975 =>
+               "Decisions: The core library and the derived programs",
+            when 976 =>
+               "Decisions: The core library and the derived programs",
+            when 978 =>
+               "Decisions: The core library and the derived programs",
+            when 979 =>
+               "Decisions: The core library and the derived programs",
+            when 977 =>
                "Decisions: The core library and the derived programs",
             when 281 =>
                "Decisions: The core library and the derived programs",
@@ -4148,6 +4317,16 @@ package body Landin.Diagnostics.Citations is
             when 306 =>
                "Decisions: The core library and the derived programs",
             when 307 =>
+               "Decisions: The core library and the derived programs",
+            when 945 =>
+               "Decisions: The core library and the derived programs",
+            when 946 =>
+               "Decisions: The core library and the derived programs",
+            when 947 =>
+               "Decisions: The core library and the derived programs",
+            when 948 =>
+               "Decisions: The core library and the derived programs",
+            when 949 =>
                "Decisions: The core library and the derived programs",
             when 308 =>
                "Decisions: The core library and the derived programs",
@@ -4254,6 +4433,12 @@ package body Landin.Diagnostics.Citations is
             when 388 =>
                "Decisions: The core library and the derived programs",
             when 582 =>
+               "Decisions: The core library and the derived programs",
+            when 955 =>
+               "Decisions: The core library and the derived programs",
+            when 956 =>
+               "Decisions: The core library and the derived programs",
+            when 957 =>
                "Decisions: The core library and the derived programs",
             when 418 =>
                "Decisions: The core library and the derived programs",
@@ -5620,6 +5805,22 @@ package body Landin.Diagnostics.Citations is
             when 821 =>
                "https://www.701.dev/spec.html#d821-clang-runs-in-an-envi"
                & "ronment-of-its-own-through-landin-platform",
+            when 935 =>
+               "https://www.701.dev/spec.html#d935-refine-bindings-binds"
+               & "-c-for-cortex-m-under-aapcs32-in-both-procedure-call-sta"
+               & "ndards",
+            when 936 =>
+               "https://www.701.dev/spec.html#d936-a-cortex-m-binding-as"
+               & "serts-its-float-unit-beside-compiler-c-aapcs32",
+            when 937 =>
+               "https://www.701.dev/spec.html#d937-a-freestanding-target"
+               & "-s-c-headers-are-clang-s-own-as-the-request-names-them",
+            when 938 =>
+               "https://www.701.dev/spec.html#d938-freestanding-adapters"
+               & "-allocate-nothing-and-reach-no-c-library",
+            when 939 =>
+               "https://www.701.dev/spec.html#d939-cortex-m-bindings-are"
+               & "-checked-against-pinned-cmsis-headers",
             when 585 =>
                "https://www.701.dev/spec.html#d585-the-gate-builds-the-f"
                & "lake-on-every-run-that-does-not-reuse-a-pass",
@@ -5712,6 +5913,35 @@ package body Landin.Diagnostics.Citations is
             when 906 =>
                "https://www.701.dev/spec.html#d906-a-power-only-pico-2-b"
                & "oots-and-changes-architecture-on-the-cascade",
+            when 958 =>
+               "https://www.701.dev/spec.html#d958-the-pl011-ports-chang"
+               & "e-their-line-with-the-uart-disabled-and-only-the-emulato"
+               & "r-sees-their-registers",
+            when 959 =>
+               "https://www.701.dev/spec.html#d959-the-stm32h753-takes-w"
+               & "ords-of-seven-to-nine-bits-and-stops-its-stream-to-chang"
+               & "e-line",
+            when 960 =>
+               "https://www.701.dev/spec.html#d960-the-esp32-and-esp32-s"
+               & "3-program-their-line-in-serial-the-esp32-without-two-sto"
+               & "p-bits",
+            when 961 =>
+               "https://www.701.dev/spec.html#d961-the-esp32-c3-and-c5-k"
+               & "eep-the-rom-s-clock-and-learn-it-from-the-rom-s-divisor",
+            when 962 =>
+               "https://www.701.dev/spec.html#d962-a-tty-board-answers-a"
+               & "-line-request-on-the-old-line-changes-and-comes-back",
+            when 963 =>
+               "https://www.701.dev/spec.html#d963-the-host-changes-its-"
+               & "tty-with-the-board-and-a-bridge-s-fixed-line-is-a-verdic"
+               & "t",
+            when 964 =>
+               "https://www.701.dev/spec.html#d964-the-derived-driver-s-"
+               & "model-holds-the-pl011-s-line-rules-and-register-images-a"
+               & "re-not-a-line",
+            when 965 =>
+               "https://www.701.dev/spec.html#d965-a-received-byte-is-it"
+               & "s-frame-s-data-bits-alone",
             when 725 =>
                "https://www.701.dev/spec.html#d725-every-board-run-holds"
                & "-the-rig-s-lock-and-paces-what-disconnects-a-device",
@@ -6057,6 +6287,32 @@ package body Landin.Diagnostics.Citations is
                "https://www.701.dev/spec.html#d780-without-a-float-unit-"
                & "arm-assembly-declares-ieee-floats-passed-in-core-registe"
                & "rs",
+            when 920 =>
+               "https://www.701.dev/spec.html#d920-cortex-m-s-c-abi-is-a"
+               & "apcs32-named-by-compiler-c-aapcs32-and-enabled-at-both-v"
+               & "ariants",
+            when 921 =>
+               "https://www.701.dev/spec.html#d921-platform-c-on-aapcs32"
+               & "-is-ilp32-with-an-unsigned-plain-char",
+            when 922 =>
+               "https://www.701.dev/spec.html#d922-aapcs32-calls-no-vari"
+               & "adic-c-function-until-a-program-needs-one",
+            when 923 =>
+               "https://www.701.dev/spec.html#d923-firmware-links-c-libr"
+               & "aries-as-static-archives",
+            when 924 =>
+               "https://www.701.dev/spec.html#d924-a-firmware-image-refu"
+               & "ses-what-its-startup-cannot-honour",
+            when 985 =>
+               "https://www.701.dev/spec.html#d985-the-cortex-m-corpus-r"
+               & "uns-an-abi-fixture-s-c-freestanding-by-one-contract",
+            when 986 =>
+               "https://www.701.dev/spec.html#d986-a-corpus-restriction-"
+               & "names-the-stage-that-stops-it-and-the-lane-reaches-it",
+            when 987 =>
+               "https://www.701.dev/spec.html#d987-the-generated-cortex-"
+               & "m-bindings-layouts-are-held-to-both-compilers-at-both-va"
+               & "riants",
             when 695 =>
                "https://www.701.dev/spec.html#d695-espressif-s-qemu-carr"
                & "ies-both-rv32-corpus-lanes-under-the-arm-lanes-harness",
@@ -6076,6 +6332,45 @@ package body Landin.Diagnostics.Citations is
                "https://www.701.dev/spec.html#d621-the-stm32h753-is-hard"
                & "-float-and-its-consumer-s-accesses-are-the-board-s-to-ch"
                & "eck",
+            when 970 =>
+               "https://www.701.dev/spec.html#d970-cache-maintenance-is-"
+               & "core-cache-s-concept-over-whole-lines-with-a-cacheless-p"
+               & "rovider-everywhere",
+            when 971 =>
+               "https://www.701.dev/spec.html#d971-a-cache-is-a-fact-of-"
+               & "a-description-which-compiler-feature-cache-and-compiler-"
+               & "cache-line-read",
+            when 972 =>
+               "https://www.701.dev/spec.html#d972-the-cortex-m7-s-provi"
+               & "der-is-platform-cortex-m-l1-declared-on-a-cached-profile"
+               & "-alone",
+            when 973 =>
+               "https://www.701.dev/spec.html#d973-reset-enables-a-descr"
+               & "ibed-cache-once-memory-is-written-and-the-entry-s-return"
+               & "-disables-it",
+            when 974 =>
+               "https://www.701.dev/spec.html#d974-the-stm32h753-s-cache"
+               & "d-profile-is-a-description-of-its-own-admitted-with-its-"
+               & "evidence",
+            when 975 =>
+               "https://www.701.dev/spec.html#d975-the-cached-board-run-"
+               & "shows-each-handoff-and-what-leaving-its-maintenance-out-"
+               & "does",
+            when 976 =>
+               "https://www.701.dev/spec.html#d976-a-cacheless-image-rea"
+               & "ches-no-cache-register-and-a-cached-one-only-those-its-p"
+               & "rofile-declares",
+            when 978 =>
+               "https://www.701.dev/spec.html#d978-the-stm32h753-s-recei"
+               & "ve-ring-does-d227-s-maintenance-through-the-provider-it-"
+               & "is-given",
+            when 979 =>
+               "https://www.701.dev/spec.html#d979-the-cached-board-s-tr"
+               & "ansmit-raises-its-request-only-once-its-stream-has-its-f"
+               & "irst-byte",
+            when 977 =>
+               "https://www.701.dev/spec.html#d977-the-emulator-shows-th"
+               & "e-cache-sequences-never-a-cache",
             when 281 =>
                "https://www.701.dev/spec.html#d281-rv64-s-system-call-ha"
                & "s-the-standing-of-syscall-and-svc",
@@ -6137,6 +6432,22 @@ package body Landin.Diagnostics.Citations is
             when 307 =>
                "https://www.701.dev/spec.html#d307-parsing-mirrors-what-"
                & "the-builder-writes",
+            when 945 =>
+               "https://www.701.dev/spec.html#d945-positions-over-utf8-s"
+               & "tep-a-whole-scalar",
+            when 946 =>
+               "https://www.701.dev/spec.html#d946-a-search-over-text-re"
+               & "turns-where-the-match-begins",
+            when 947 =>
+               "https://www.701.dev/spec.html#d947-the-encoder-writes-a-"
+               & "whole-scalar-or-nothing",
+            when 948 =>
+               "https://www.701.dev/spec.html#d948-a-utf8-builder-holds-"
+               & "only-whole-scalars",
+            when 949 =>
+               "https://www.701.dev/spec.html#d949-compiler-utf8-unvalid"
+               & "ated-makes-text-of-bytes-known-to-be-valid-inside-unchec"
+               & "ked",
             when 308 =>
                "https://www.701.dev/spec.html#d308-a-buffered-writer-is-"
                & "flushed-explicitly-and-a-line-reader-lends-its-lines",
@@ -6298,6 +6609,16 @@ package body Landin.Diagnostics.Citations is
             when 582 =>
                "https://www.701.dev/spec.html#d582-an-errno-has-words-in"
                & "-platform-posix-which-passes-the-library-s-on",
+            when 955 =>
+               "https://www.701.dev/spec.html#d955-a-serial-line-s-setti"
+               & "ngs-and-its-divisor-are-core-line-s-and-a-driver-writes-"
+               & "nothing-it-refuses",
+            when 956 =>
+               "https://www.701.dev/spec.html#d956-a-divisor-may-miss-it"
+               & "s-rate-by-two-percent",
+            when 957 =>
+               "https://www.701.dev/spec.html#d957-the-derived-driver-op"
+               & "ens-any-line-its-pl011-can-carry",
             when 418 =>
                "https://www.701.dev/spec.html#d418-the-posix-and-linux-l"
                & "ayers-keep-their-routines-own-names",

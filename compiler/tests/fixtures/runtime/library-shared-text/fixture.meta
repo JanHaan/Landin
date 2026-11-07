@@ -1,6 +1,6 @@
 class: runtime
 profiles: standard
-summary: Small shared core/text consumer preserves its portable interface and behavior
+summary: Small shared core/text consumer reaches its portable interface: byte cursors, positions over utf8 and their searches, the encoder, and both builders' scalar and number appends, with a refusal of each kind
 program: main.ldn
 root: ../../../../..
 status: 42

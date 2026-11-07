@@ -488,6 +488,9 @@ package body Landin.Testing.Fixtures is
    function Library_Directories (Item : Fixture) return String
      is (Unbounded.To_String (Item.Search_Directories));
 
+   function C_Inputs (Item : Fixture) return String
+     is (Unbounded.To_String (Item.Input_Directories));
+
    function Link_Mode (Item : Fixture) return String
      is (Unbounded.To_String (Item.Link));
 
@@ -764,6 +767,7 @@ package body Landin.Testing.Fixtures is
       Seen_C_Shared : Boolean := False;
       Seen_C_Archives : Boolean := False;
       Seen_Library_Directories : Boolean := False;
+      Seen_C_Inputs : Boolean := False;
       Seen_Link    : Boolean := False;
       Seen_Stream  : Boolean := False;
       Seen_Profiles : Boolean := False;
@@ -1370,6 +1374,56 @@ package body Landin.Testing.Fixtures is
                   end if;
                end;
 
+            elsif Key = "c-inputs" then
+               if Seen_C_Inputs then
+                  Complain ("duplicate key: c-inputs");
+                  return;
+               end if;
+               Seen_C_Inputs := True;
+
+               if Expected /= Abi then
+                  Complain ("c-inputs belong only to an ABI fixture");
+               end if;
+
+               declare
+                  First : Integer := Value'First;
+                  Ok    : Boolean := Value'Length > 0;
+                  Seen  : Landin.Platform.Path_List;
+
+                  procedure Consider (Text : String);
+
+                  procedure Consider (Text : String) is
+                     One : constant String := Trimmed (Text);
+                  begin
+                     if not Is_Below_Directory (One)
+                       or else Ada.Strings.Fixed.Index (One, "/") /= 0
+                     then
+                        Ok := False;
+                        Complain
+                          ("c-inputs entry is not an input directory's"
+                           & " name: "
+                           & (if One = "" then "<empty>" else One));
+                     elsif Seen.Contains (One) then
+                        Ok := False;
+                        Complain ("duplicate c-inputs entry: " & One);
+                     else
+                        Seen.Append (One);
+                     end if;
+                  end Consider;
+               begin
+                  for Index in Value'First .. Value'Last + 1 loop
+                     if Index > Value'Last or else Value (Index) = ',' then
+                        Consider (Value (First .. Index - 1));
+                        First := Index + 1;
+                     end if;
+                  end loop;
+
+                  if Ok then
+                     Item.Input_Directories :=
+                       Unbounded.To_Unbounded_String (Value);
+                  end if;
+               end;
+
             elsif Key = "c-args" then
                if Seen_C_Args then
                   Complain ("duplicate key: c-args");
@@ -1532,6 +1586,7 @@ package body Landin.Testing.Fixtures is
                C_Libraries => Unbounded.Null_Unbounded_String,
                C_Archive_Files => Unbounded.Null_Unbounded_String,
                Search_Directories => Unbounded.Null_Unbounded_String,
+               Input_Directories => Unbounded.Null_Unbounded_String,
                Link    => Unbounded.Null_Unbounded_String,
                Stream  => Merged,
                Profiles => Standard,
@@ -1744,6 +1799,18 @@ package body Landin.Testing.Fixtures is
 
       if Seen_Library_Directories and then not Seen_C_Archives then
          Complain ("library-directories needs c-archives");
+      end if;
+
+      --  D985: only the Cortex-M corpus fetches a fixture's inputs.
+      if Seen_C_Inputs then
+         for One of Entries (Unbounded.To_String (Item.Targets)) loop
+            if One /= "cortex-m0" then
+               Complain
+                 ("c-inputs are fetched by the Cortex-M corpus alone, so a"
+                  & " fixture with them names no target but cortex-m0");
+               exit;
+            end if;
+         end loop;
       end if;
 
       if Seen_C_Archives and then Seen_Root then

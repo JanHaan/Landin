@@ -14,13 +14,13 @@ and `platform/cortex_m`/`core/panic` consumers run through that compiler-owned f
 | CPU/startup lane | QEMU 10.0.13, Debian `1:10.0.13+ds-0+deb13u1`, `-M microbit -accel tcg,thread=single` |
 | Armv7-M corpus lane | the same QEMU binary, `-M mps2-an385`: a Cortex-M3, for corpus fixtures whose `levels:` name `armv7-m` (D255) |
 | Armv8-M corpus lane | the same QEMU binary, `-M mps2-an505`: a Cortex-M33 r0p3 in Secure state, for the whole corpus at `armv8-m.main` in `run.py`'s `mps2-an505` lane and for fixtures whose `levels:` name it, on the lane description `lanes/descriptions/mps2_an505` (D607, D619); libgcc from `thumb/v8-m.main/nofp` |
-| M7 corpus lane | the same QEMU binary, `-M mps2-an500`: a Cortex-M7 r1p2 with the double-precision FPv5-D16, for the whole corpus at `armv7e-m` hard-float in `run.py`'s `mps2-an500` lane, on the lane description `lanes/descriptions/mps2_an500` (D619), and for the VFP ABI control and the firmware lane's `float-unit` case; libgcc from `thumb/v7e-m+dp/hard` |
+| M7 corpus lane | the same QEMU binary, `-M mps2-an500`: a Cortex-M7 r1p2 with the double-precision FPv5-D16, for the whole corpus at `armv7e-m` hard-float in `run.py`'s `mps2-an500` lane, on the lane description `lanes/descriptions/mps2_an500` (D619), and for the VFP ABI control and the firmware lane's `float-unit` and `cache-sequence` cases, the latter on `lanes/descriptions/mps2_an500_cached` (D977); libgcc from `thumb/v7e-m+dp/hard` |
 | Core | nRF51822 Cortex-M0, ARMv6-M, Thumb, little endian, 16 MHz model clock; no FPU, caches or exclusive-access instruction requirement |
 | Peripheral lane | the same QEMU, with `machine.py` serving `models.py`'s synthetic devices through its debugger stub; `-icount shift=0` |
 | EABI compiler | `arm-eabi-gcc` 16.1.0, GNAT's arm-elf archive `16.1.0-1` from the host GNAT's release, pinned in `environments/pins.sh` |
 | Assembler/linker | GNU Binutils 2.46.1, from the same archive |
 | Debugger | `gdb-multiarch` 16.3, Debian `16.3-1`, loopback QEMU remote stub |
-| Probe options | `-mcpu=cortex-m0 -mthumb -mfloat-abi=soft -mabi=aapcs -ffreestanding -fno-builtin -fno-omit-frame-pointer -g3 -O1 -nostdlib`; warnings are errors |
+| Probe options | `-mcpu=cortex-m0 -mthumb -mfloat-abi=soft -mabi=aapcs -fno-short-enums -ffreestanding -fno-builtin -fno-omit-frame-pointer -g3 -O1 -nostdlib`; warnings are errors |
 | RV32 emulator | Espressif's QEMU `esp-develop-9.2.2-20260417`, the release's Linux x86-64 `qemu-system-riscv32` archive, unpacked into the tool root's `qemu-espressif` (D695) |
 | rv32imc corpus lane | `-M esp32c3 -cpu espressif,a=false,zawrs=false,f=false,d=false,zfa=false`: the ESP32-C3 machine with its core's A, F and D removed, which the C3 has not (D696), for the whole corpus at `rv32imc` in `run.py`'s `esp32c3` lane, on the lane description `lanes/descriptions/esp32c3` |
 | rv32imac corpus lane | `-M sifive_e`: a SiFive E31, rv32imac, for the whole corpus at `rv32imac` in `run.py`'s `sifive-e` lane, on the RV32 reference's map, 32 KiB of flash at `0x2040_0000` and the 16 KiB DTIM at `0x8000_0000` |
@@ -183,7 +183,7 @@ routine at all. At `LANDIN_CORTEX_JOBS=4` the lane is 3,278 verdicts,
 | Completion, half-transfer and transfer error | model status `0x20/40/80`, enables in config bits 1/2/3, NVIC IRQ0, firmware records three IRQs and clears status | synthetic status convention follows sketch stream 5; not stock STM32 status layout |
 | Critical section and event collection | PRIMASK masks delivery while DMA updates RAM/count; restoring it permits pending completion handler | proves this model's mask/delivery behavior, not Landin happens-before; D227 |
 | One-clears and access modes | firmware clears pending bits; `Run.peripheral`'s model controls prove writing zero preserves error, one clears it, read-only/write-only/unknown accesses refuse | other access modes are absent; normative register rules are D228's and the generated device fixtures' |
-| Bad descriptor, bounds, unsupported direction | model controls reject bad destination, count above 65535 and unsupported direction; no transfer occurs | no physical bus fault/overrun timing; driver `buffer_empty`, `buffer_too_big`, `bad_baud` and recovery execute in the derived driver over this lane |
+| Bad descriptor, bounds, unsupported direction | model controls reject bad destination, count above 65535 and unsupported direction; no transfer occurs | no physical bus fault/overrun timing; driver `buffer_empty`, `buffer_too_big`, `line.unsupported_rate`, `line.unsupported_format` and recovery execute in the derived driver over this lane |
 | Ordinary-slice read, head/tail and short output | current lane exposes count and circular RAM for the complete derived driver | the derived driver executes its `available`/`read` cases and failure oracles; this environment is not that driver |
 | SVD-derived types, encoded values, named refusals | checked-in model and map are explicit device inputs; malformed access controls already execute | D228 packed encodings; D231 `noreturn`; generated `.ldn` device fixtures; general generator stays with companion tooling |
 
@@ -435,6 +435,23 @@ that clobbers every VFP register, and sentinels in d8-d15 must survive it,
 which is the contract's `vfp.preserved` row; the image must carry
 `Tag_ABI_VFP_args: VFP registers`.
 
+The generated bindings' layouts are compared with both compilers there
+too (D987). Each Cortex-M binding fixture's `adapters.c` carries the
+generator's static assertions of every native record's size, alignment and
+field offsets and of each enum's size, and `abi.py` compiles it with
+`-fsyntax-only` by the pinned GCC at `-mcpu=cortex-m0 -mfloat-abi=soft`
+and `-mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard`, and by Clang, `$CLANG`
+or `clang-19`, at `thumbv6m-none-eabi` and `thumbv7em-none-eabihf`, each with
+its freestanding headers alone. A record's layout is the same under both
+variants, so the VFP fixture's `vfp_sample`, padded in two places, and
+`vfp_pair` must hold at both rows under both compilers; the CMSIS fixture
+must hold at the base row and be refused at the VFP row by its RP2040
+header's own `#error`. Built with short enums, its adapters must be refused
+by their assertion of `IRQn_Type`'s size. `binding-layouts.json` records
+every verdict. Where no Clang is on PATH, as in the gate's `cortex-m` job,
+its half is recorded and printed as SKIPPED; the gate's `bindings` job
+compiles each fixture's C with Clang at its own row.
+
 These bounded probes establish neither floating arithmetic helpers, general
 unwind support, a complete C language ABI surface, firmware stack bounds,
 physical hardware behavior nor a Cortex-M compiler backend. The backend
@@ -473,7 +490,8 @@ while masked. Feeds are serialized while the CPU is stopped. D227 supplies
 the language contract; the model supplies only its explicit device premise.
 A cached profile needs platform-specific maintenance, cache levels/aliases and
 visibility-point evidence before it can be admitted. M0 has no cache and supplies
-none of that evidence. Hardware testing stays supplemental.
+none of that evidence; the STM32H753's cached profile has it from its board
+run (D974, D975). Hardware testing stays supplemental.
 
 Each new subprocess uses the existing 30-second tool and 20-second debugger
 limits, three-second readiness deadline and owned process-group cleanup.
@@ -589,8 +607,8 @@ The UTF-8 ordinal trap counterpart uses 4294967295, the largest Cortex-M0
 `usize`, to trap outside a three-scalar view. The hosted original keeps its
 4294967296 ordinal, which tests type-checking and lowering beyond `u32`.
 
-The corpus keeps source refusals, the disabled general C surface and physical
-image limits distinct from executed programs. Every whitelisted image-limit
+The corpus keeps source refusals, restrictions and physical image limits
+distinct from executed programs. Every whitelisted image-limit
 profile is still compiled and attempted within the materialization guard;
 when it fits, it must execute successfully. Only a demonstrated oversized
 frame/static extent or the selected linker's flash/RAM overflow can produce a
@@ -613,7 +631,7 @@ the refusal names each one and the row to write. A row's `mode` is one of:
 | `execute` with `"selects"` | the same, and at each level the row names, its `routine`, or the whole image without one, must hold every instruction in `has` and none in `lacks`: a mnemonic, or `bl NAME` for a call of NAME | the levels it names are M-profile ones |
 | `execute` with `"profile_limit": "selected-image"` | every profile is still built and attempted; a profile whose image fits runs and must pass, and one that does not is recorded with its sizes | a `reason`; the fixture does *not* name `cortex-m0` in its `targets:`, since an image that overflows is no execution, and `check.py` refuses the claim |
 | `refuse` | compiled for `cortex-m0` and required to fail with exactly these diagnostic codes | `codes`, and a `reason` unless the only code is L0015 |
-| `restriction` | a target restriction, the disabled general C surface or a hosted heap, not attempted | a `reason` and a `witness` file that shows it |
+| `restriction` | built as an `execute` row is, at none/off, and required to stop where `stops` says (D986) | `stops`, one of `defect`, `c-options`, `c-headers`, `c-source`, `link` or `oracle`, and a `reason` |
 
 An `execute` row may also carry `"lanes": {"mps2-an500": {"mode":
 "restriction", "reason": ...}}`, a corpus lane's own disposition of it
@@ -627,6 +645,10 @@ reference's. It may instead carry `"lanes": {"mps2-an500": {"mode":
 "execute", "reason": ...}}` where the lane's description gives the program
 what the reference lacks: the lane then builds and runs it at every
 profile and holds it to its oracle, as it does an `execute` row.
+A `lanes` entry may also give an `execute` or `restriction` row `"mode":
+"refuse"` and the codes that lane's target refuses it with: the RV32 lanes
+refuse every row that reaches the C surface, since RV32's ilp32 C ABI is
+not enabled (D920), with L0346, or L0015 for the C aliases module.
 `runtime/assembly-float-square-root` has one: its float operands are L0304
 on the reference and the AN505's map, which have no float unit, and the
 M7's FPv5-D16 holds them (D630). A lane run whose refusal differs names the
@@ -641,6 +663,32 @@ that overran it; every other profile runs and must pass, and a lane run in
 which every profile fits fails, naming the stale entry. The RV32 lanes
 carry these where RV32's text or frames outgrow the reference's 32 KiB and
 4 KiB and Thumb's do not, each reason giving the measured overflow.
+
+A `restriction` row is a fixture the corpus cannot run for a reason no
+diagnostic names, and the corpus shows that reason is still the one
+(D986). It builds the fixture as it would execute it and stops at the
+first stage that fails, in this order:
+
+| `stops` | The stage that stopped it, and what the corpus records |
+|---|---|
+| `defect` | refine itself fails with an internal compiler defect; its line |
+| `c-options` | the pinned GCC refuses an option of the fixture's `c-args`, such as `-pthread`; the options |
+| `c-headers` | a C source includes a header no freestanding C has, the C library's: every header `-M -MG` lists that no include directory holds |
+| `c-source` | a C source does not compile for the target, an `#error` or another architecture's assembly; its first error |
+| `link` | the harness link names a routine or datum nothing defines, a C library's or one the fixture defines for other targets only; the symbols |
+| `oracle` | it builds and links, and its oracle needs what firmware cannot give: `stdin:`, `run_args:`, `run_files:` or `run_expect:` |
+
+The stage reached must be the row's `stops`, and the failure says which
+one it reached and what to write. One that refine refuses is no
+restriction: the failure names its codes and the `refuse` row to write.
+One that builds, links and needs nothing hosted is a stale restriction,
+and the failure says to make it `execute`. What stopped it is printed on
+its corpus line and kept in its `result.json` as `stopped_by`, read from
+the build rather than written in the row, so the reason says why rather
+than which header or symbol. `stops: defect` is the one stop a fixed
+compiler clears, and no row holds it now: the two `abi/c-function-from-*`
+rows held it until refine's Cortex-M emission could make a C function
+value from an address, and they execute.
 
 Firmware gives a program no standard input, arguments, files beside it or
 output, so a fixture whose metadata names `stdin:`, `run_args:`,
@@ -712,7 +760,7 @@ overflows may be one it did not run, and says `FILTERED` last.
 `--lane mps2-an505` or `--lane mps2-an500` runs every row alone on that
 lane, at its level and on its map: each `execute` row at every profile,
 each `refuse` row compiled there to its codes and each `restriction`
-recorded, so no fixture is left without a verdict. It judges no limit
+built there to its stop, so no fixture is left without a verdict. It judges no limit
 stale, which is the default run's to judge, and links no limited verdict
 again for a device. Every image a Thumb-2 level ran, on a lane or for a
 fixture's `levels:`, is required to call neither `__aeabi_lmul` nor a
@@ -812,6 +860,83 @@ complete driver each have their own lane below. General SVD generation stays
 with its companion tool. No scheduler, interrupt-masking abstraction, C source
 expansion or new DMA ownership model is introduced.
 
+### C peers on Cortex-M
+
+An `abi/` fixture whose row says `execute` runs in the corpus as a runtime
+fixture does, with its C (D985). Each `c-sources` entry is compiled by the
+pinned `arm-eabi-gcc` with the level's flags, those the harness start is
+assembled with: `-mcpu=cortex-m0` on the micro:bit, `-march=armv7-m` on
+the AN385 and `-march=armv8-m.main` on the AN505, all `-mfloat-abi=soft`,
+and `-mcpu=cortex-m7 -mfloat-abi=hard -mfpu=fpv5-d16` on the AN500, with
+`-mthumb -mabi=aapcs -ffreestanding -fno-builtin -nostdlib -O1 -Wall
+-Wextra -Werror`, then `-std=c11 -nostdinc -fno-short-enums`, GCC's own
+include directory for its freestanding headers, the fixture's directory,
+each `c-inputs` directory and the fixture's `c-args`. GCC's bare-metal
+default is short enums, Clang's and Cortex-M's C boundaries int-sized
+ones, so the corpus passes `-fno-short-enums` itself and a fixture need
+not; `abi.py` shows that a short-enum build of the generated CMSIS
+adapters is refused by their own assertion of `IRQn_Type`'s size. No
+newlib header is reachable and no C library is linked: a peer that needs
+one stops at its headers or its link, and its row is a restriction that
+says so. The four routines GCC requires of any freestanding program,
+`memcpy`, `memmove`, `memset` and `memcmp`, are `probes/c-runtime.c`,
+compiled the same way, each in its own section, and linked only where
+called. `c-inputs` names pinned input directories, `rp2040-cmsis` for
+example, whose headers the corpus fetches by hash with
+`scripts/fetch_inputs.py` before compiling.
+
+Before linking, every object's `readelf -A` is read and each must pass
+floats as the lane does, `Tag_ABI_VFP_args: VFP registers` on the AN500 and
+not on the others, apart from GNU ld's own check, and none may declare
+`Tag_ABI_enum_size: small`, which the linker only warns of. Every other
+Arm C compilation of the lanes, the probes', `firmware.py`'s and
+`memory.py`'s, passes `-fno-short-enums` too. `abi/cortex-c-peer` is
+also the wrong-convention control, at none/off on every lane: its C is
+compiled for the other variant, an M4F's hard float on a soft lane and the
+M7's `-mfloat-abi=softfp` on the AN500, and that assertion must refuse it,
+and GNU ld must refuse the link with `uses VFP register arguments` with
+the peer before the program and after it; built for the lane's own variant
+with `-fshort-enums`, the assertion must refuse it too. Each result records
+all three under `convention_control`.
+
+A fixture takes one of two routes to its image. The harness route, every
+`execute` ABI row's at every profile: refine writes assembly and the
+harness links it with its start, the C objects and libgcc, and the status
+comes back through `backend_done`. The route a user takes, refine's own
+firmware link (D923), is taken by `abi/cortex-c-peer` at none/off on every
+lane as well: its C objects are archived as `libpeer.a` and the C runtime's
+as `libcruntime.a`, the program is compiled with one more entry-module file
+that names both with `linker.library` and has a firmware entry storing what
+the program's checks return, and `refine compile --emit=exe -L DIR` links
+it; compiler-owned startup runs it, the map must show `libpeer.a`'s member,
+and GDB holds the stored status to the fixture's at
+`_landin_firmware_returned`. Its result records the route as `refine_link`.
+
+The consumers that execute:
+
+| Fixture | What it holds | Lanes |
+|---|---|---|
+| `abi/cortex-c-peer` | a hand-written peer and the program call each other with every scalar width, 64-bit values in r2:r3 with r1 skipped and on the stack at eight, floats in core registers or the VFP bank, records of 3, 4, 16 and 32 bytes by value both ways, split between r2-r3 and the stack, and by address, a C function pointer to a program routine, the program's datum by its link name and a C global cleared and one initialised by start-up, an unsigned plain `char`, a 32-bit `long` and an int-sized enum; every value is checked where it arrives, each check its own status | every lane, both routes |
+| `abi/cortex-cmsis-bindings` | the generated RP2040 CMSIS adapters: NVIC enable, disable, pending and priority and `SysTick_Config`, each read back from the NVIC and SysTick registers with interrupts masked, since the harness's table has no handler: a pending interrupt stays pending, ARMv6-M's two priority bits keep 6 as 2 and read 0xff as 0xc0, a disabled interrupt keeps its priority, and a reload past 24 bits is refused with nothing written | the micro:bit; the AN505's M33 keeps more priority bits and the AN500's unit meets the header's `#error`, each a lane restriction |
+| `abi/cortex-vfp-bindings` | the generated STM32H753 adapters and its own `landin-vfp.h`: floats and doubles both ways, back-filled singles, a seventeenth single slot on the stack, a homogeneous aggregate of doubles by value and returned, a record by address, `SCB_GetFPUType` 2 and an NVIC interrupt QEMU's AN500 implements | the AN500 only; the reference refuses it with L0324 (D936) |
+| `abi/c-packed-records`, `abi/link-symbol-exports`, `abi/public-routine-is-local`, `abi/r440-native-dollar-link`, `abi/r490-distinct-c-roundtrip`, `abi/c-function-from-address`, `abi/c-function-from-zero-address-traps` | shared ABI fixtures whose peers need nothing hosted | every lane |
+
+Of the 65 rows that were restrictions before D986, 8 execute, the five
+above, the two `abi/c-function-from-*` rows and
+`runtime/rv64-indexed-address`; 36 are refusals with their codes, 27 of
+them L0015 for hosted imports, 5 L0346 for variadic C calls, and L0300,
+L0324, L0344 and L0347 once each; and 21 stay restrictions, each with its
+stop: 16 `c-headers`, peers that print their oracle through stdio, assert,
+or fork a child, 2 `c-options`, POSIX threads, 2 `c-source`, an RV64 or
+x86-64 observer, and 1 `oracle`, an empty `run_expect`. The 8 `link` restrictions are runtime fixtures that call the C
+library. Measured at none/off on the micro:bit's
+32 KiB/16 KiB reference, `abi/cortex-c-peer`'s image is 15,204 bytes of
+flash, 13,772 at the other profiles, with 48 bytes of static RAM and at
+most 1,128 bytes of its 4 KiB stack touched, of which its C is 1,248 bytes
+and the C runtime 26, `memcpy` alone; linked by refine it is 13,684 bytes.
+`abi/cortex-cmsis-bindings` is 7,656 bytes, 6,368 optimized, 20 of RAM and
+452 of stack at most, and its nine generated adapters 460 bytes.
+
 ## RV32 lanes
 
 Two lanes run the whole corpus on Espressif's QEMU, one machine for each
@@ -886,7 +1011,18 @@ before `start`, a SysTick pended in the middle of an f64 computation is
 taken with `0xffffffe9` and the extended frame reserved lazily, the
 handler's float instruction fills it, the return restores the interrupted
 d0, and the computation ends with its IEEE value (D618); a soft-float C
-object linked into the image is refused for its VFP arguments (D617). It invokes the
+object linked into the image is refused for its VFP arguments (D617). Its
+`cache-sequence` case links a program through `platform/cortex_m/l1` on the
+lane description `lanes/descriptions/mps2_an500_cached`, the an500's map
+with `compiler.cache`, and runs it under QEMU's trace of the System Control
+Space's writes: the linked reset's steps are D973's, each by-address
+operation's stores lie between two DSBs with ISB after them, every SCB
+write of reset, the program and the return arrives in that order with each
+maintenance write the line address its range says, a refused range writes
+none, and GDB reads the three refusals and CCR clear at the return (D977).
+QEMU keeps neither enable bit and reads CCSIDR as zero, so this is the
+operations' sequence alone; what a cache does is the STM32H753 board's
+(D975). It invokes the
 compiler with
 `--target=cortex-m0 --firmware-entry=start --emit=exe` and the pinned Arm GCC
 path. The compiler generates reset, vectors and the linker script; `backend-start.S`
@@ -970,7 +1106,8 @@ python3 environments/cortex-m/firmware.py --refine PATH_TO_REFINE --output NEW_D
 ```
 
 `--case`, repeated, runs only the cases named: `cpu-levels`, `refusals`,
-`independent-c-assembly` and `compact-images` once, and `boot`, the
+`independent-c-assembly`, `compact-images`, `float-unit` and
+`cache-sequence` once, and `boot`, the
 cold-booted image built twice, `interrupts`, `fibre`, `dma`, `machine`,
 `veneers`, `fallthrough`, `images`, `hole` and `byte` at each profile. A
 selection is marked `FILTERED` in its last line and its `result.json`.
@@ -1029,6 +1166,13 @@ For development on the supported Linux host:
 python3 environments/cortex-m/freestanding.py --refine PATH_TO_REFINE --output NEW_DIRECTORY --case cpu
 python3 environments/cortex-m/freestanding.py --refine PATH_TO_REFINE --output NEW_DIRECTORY --all-profiles
 ```
+
+`--case` repeats and names a probe: `cpu`, `pool`, `zero`, `vec`,
+`noreturn`, `panic`, `panic-default` and `dma`, the inherited
+`core-mem-allocators`, `core-mem-arena-boundaries` and
+`core-mem-raw-storage`, or a shared module's consumer, `library-shared-NAME` for each `NAME` in its `MODULES`, such as
+`library-shared-text`. An unknown case is refused, naming the cases there
+are.
 
 PRIMASK/WFI premises follow the official Arm architecture and M0 guides cited
 above; argument/result and linker-stub obligations retain the cited AAPCS32,
@@ -1167,6 +1311,22 @@ eight-poll stop timeout preserves the storage lifetime obligation. The
 application executes echo/GPIO commands, periodic partial-data polling, overrun
 recovery and observable terminal policy. Detailed premises and limitations are
 in the derivation.
+
+The UART's line registers are images (D964). The model refuses an LCR_H
+write that latches IBRD 0, or FBRD above 0 at IBRD 65535, or sets BRK or
+SPS, and records what the latched images mean at the declared 48 MHz:
+rate, data bits, parity and stop bits. `driver.py`'s `pl011`, written from
+the RP2040 datasheet's 4.2.7.1 apart from `core/line`, is their oracle.
+The protocol client opens eight lines through the public driver, from 46
+to 3,000,000 baud with every data width, parity and stop count, each
+image and latched line required to be `pl011`'s, and on each reads back
+three characters it was fed, a parity frame's with the parity bit above
+the data as an STM32's RDR keeps it, 0x17 among them (D965); the refusals of rates 0,
+45 and 3,100,000 and of 4 and 9 data bits leave every UART register
+unwritten and nothing latched; and the application's exact trace still
+writes 26, 3 and 0x70. No bit is sent at any of these rates: this shows
+the images the driver writes, never a line's timing, which only the tty
+boards' exchange shows (D963).
 
 Evidence under the `run.py` output's `driver` directory retains compiler/tool
 identities, source roots, assertions, timeouts, QEMU/GDB scripts, device traces,

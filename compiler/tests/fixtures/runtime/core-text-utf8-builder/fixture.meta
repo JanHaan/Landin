@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: a utf8 builder over a caller's buffer takes text, scalars and every width's decimal and hexadecimal, refuses a surrogate, a value above U+10FFFF and pieces that do not fit with its length and later bytes unchanged, takes what fits exactly, and cuts back inside a scalar only to the scalar's start, its bytes valid UTF-8 after every step
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0250, 0570, 0600, 0940, 0960, 1030
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64

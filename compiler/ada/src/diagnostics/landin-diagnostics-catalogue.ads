@@ -42,6 +42,8 @@
 --     L0300-L0399  types and definite assignment
 --     L0400-L0499  deliberately unassigned; see below
 --     L0500-L0599  the backend and its toolchain
+--     L0600-       codes born once the bands above were spent, of any
+--                  stage
 --
 --  Adding a code takes these steps, and the full `python3 check.py` names
 --  the one left out:
@@ -246,6 +248,9 @@ package Landin.Diagnostics.Catalogue is
       --  D615: a description's float unit.  Configuration finds both.
       Float_Unit_Unsupported,
       Float_Unit_Level,
+      --  D971: a description's cache.  Configuration finds both.
+      Cache_Unsupported,
+      Cache_Line_Wrong,
       --  D653: a stage the reset vector enters before compiler-owned reset.
       Reset_Stage_Return,
       Reset_Stage_Stack,
@@ -260,6 +265,8 @@ package Landin.Diagnostics.Catalogue is
       --  D760: an untyped float literal whose f32 rounding changes the
       --  integer a conversion gives.
       Literal_Rounded_Away,
+      --  D949: text made of bytes with no scan outside `unchecked`.
+      Unvalidated_Text_Checked,
       --  The backend and its toolchain.  None is about a frontend
       --  construct: two are the host failing to finish an accepted
       --  program, one is [1970]'s missing entry shape, one is a verified
@@ -299,7 +306,10 @@ package Landin.Diagnostics.Catalogue is
       Bindings_Policy_Invalid,
       Bindings_Clang_Refused,
       Bindings_Declaration_Refused,
-      Bindings_Output_Refused);
+      Bindings_Output_Refused,
+      --  D924: a firmware image linked with C archives that holds what
+      --  compiler-owned startup cannot honour, read after the link.
+      Firmware_Foreign_Section);
 
    --  Live, or kept so its number is never reused. A code is retired when
    --  the rule it names stops existing: `No_Frontend` retired when the
@@ -1114,6 +1124,22 @@ package Landin.Diagnostics.Catalogue is
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("D615: a description with a float unit, built at a"
                    & " level whose architecture lacks it")),
+      --  D971: the cache a description names and its line, each saying
+      --  what refine builds.
+      Cache_Unsupported =>
+        (Code => "L0610", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 0, Most => 0, Notes => 1, Route => False,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("D971: a cache refine does not build, or one the"
+                   & " description's core cannot have")),
+      Cache_Line_Wrong =>
+        (Code => "L0611", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 0, Most => 0, Notes => 1, Route => False,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("D971: a described cache whose line is not its"
+                   & " core's")),
       Reset_Stage_Return =>
         (Code => "L0560", Level => Error, State => Live,
          Source => True, Bytes => True,
@@ -1167,6 +1193,13 @@ package Landin.Diagnostics.Catalogue is
          Fixes => No_Fix, Shown_By => Negative_Fixture,
          Rule => +("D760: an untyped float literal converted to an integer"
                    & " that its f32 rounding changes")),
+      Unvalidated_Text_Checked =>
+        (Code => "L0600", Level => Error, State => Live,
+         Source => True, Bytes => True,
+         Least => 0, Most => 0, Notes => 1, Route => False,
+         Fixes => No_Fix, Shown_By => Negative_Fixture,
+         Rule => +("D949: compiler.utf8_unvalidated outside an unchecked"
+                   & " region")),
       --  The backend's reports need not have a source. A missing entry uses an
       --  entry-module anchor when available, but permits a point in an empty
       --  file or a source-free fallback. L0500 is the one diagnostic here a
@@ -1364,7 +1397,15 @@ package Landin.Diagnostics.Catalogue is
          Source => False, Bytes => False,
          Least => 0, Most => 0, Notes => 0, Route => False,
          Fixes => No_Fix, Shown_By => Invocation,
-         Rule => +"D820: outputs refine bindings will not replace")];
+         Rule => +"D820: outputs refine bindings will not replace"),
+      Firmware_Foreign_Section =>
+        (Code => "L0587", Level => Error, State => Live,
+         Source => False, Bytes => False,
+         Least => 0, Most => 0, Notes => 1, Route => False,
+         Fixes => No_Fix, Shown_By => Invocation,
+         Rule => +("D924: a firmware image whose C archives bring"
+                   & " constructors, thread-local storage or a dynamic"
+                   & " linkage"))];
 
    ------------------------------------------------------------------
    --  The columns, read out of the table

@@ -1,0 +1,450 @@
+{
+  "abi": {
+    "byte_order": "little",
+    "calling_convention": "aapcs",
+    "data_model": "ilp32",
+    "enum_policy": "clang-default-with-fno-short-enums",
+    "plain_char": "unsigned",
+    "target": "thumbv6m-unknown-none-eabi"
+  },
+  "declarations": [
+    {
+      "c_name": "uint32_t",
+      "c_type": "unsigned int",
+      "kind": "alias",
+      "landin_name": "uint32_t",
+      "representation": "type-alias",
+      "selected": false
+    },
+    {
+      "alignment": 4,
+      "c_name": "IRQn_Type",
+      "constants": [
+        {
+          "c_name": "Reset_IRQn",
+          "landin_name": "reset_irqn",
+          "value": -15
+        },
+        {
+          "c_name": "NonMaskableInt_IRQn",
+          "landin_name": "nonmaskableint_irqn",
+          "value": -14
+        },
+        {
+          "c_name": "HardFault_IRQn",
+          "landin_name": "hardfault_irqn",
+          "value": -13
+        },
+        {
+          "c_name": "SVCall_IRQn",
+          "landin_name": "svcall_irqn",
+          "value": -5
+        },
+        {
+          "c_name": "PendSV_IRQn",
+          "landin_name": "pendsv_irqn",
+          "value": -2
+        },
+        {
+          "c_name": "SysTick_IRQn",
+          "landin_name": "systick_irqn",
+          "value": -1
+        },
+        {
+          "c_name": "TIMER_IRQ_0_IRQn",
+          "landin_name": "timer_irq_0_irqn",
+          "value": 0
+        },
+        {
+          "c_name": "TIMER_IRQ_1_IRQn",
+          "landin_name": "timer_irq_1_irqn",
+          "value": 1
+        },
+        {
+          "c_name": "TIMER_IRQ_2_IRQn",
+          "landin_name": "timer_irq_2_irqn",
+          "value": 2
+        },
+        {
+          "c_name": "TIMER_IRQ_3_IRQn",
+          "landin_name": "timer_irq_3_irqn",
+          "value": 3
+        },
+        {
+          "c_name": "PWM_IRQ_WRAP_IRQn",
+          "landin_name": "pwm_irq_wrap_irqn",
+          "value": 4
+        },
+        {
+          "c_name": "USBCTRL_IRQ_IRQn",
+          "landin_name": "usbctrl_irq_irqn",
+          "value": 5
+        },
+        {
+          "c_name": "XIP_IRQ_IRQn",
+          "landin_name": "xip_irq_irqn",
+          "value": 6
+        },
+        {
+          "c_name": "PIO0_IRQ_0_IRQn",
+          "landin_name": "pio0_irq_0_irqn",
+          "value": 7
+        },
+        {
+          "c_name": "PIO0_IRQ_1_IRQn",
+          "landin_name": "pio0_irq_1_irqn",
+          "value": 8
+        },
+        {
+          "c_name": "PIO1_IRQ_0_IRQn",
+          "landin_name": "pio1_irq_0_irqn",
+          "value": 9
+        },
+        {
+          "c_name": "PIO1_IRQ_1_IRQn",
+          "landin_name": "pio1_irq_1_irqn",
+          "value": 10
+        },
+        {
+          "c_name": "DMA_IRQ_0_IRQn",
+          "landin_name": "dma_irq_0_irqn",
+          "value": 11
+        },
+        {
+          "c_name": "DMA_IRQ_1_IRQn",
+          "landin_name": "dma_irq_1_irqn",
+          "value": 12
+        },
+        {
+          "c_name": "IO_IRQ_BANK0_IRQn",
+          "landin_name": "io_irq_bank0_irqn",
+          "value": 13
+        },
+        {
+          "c_name": "IO_IRQ_QSPI_IRQn",
+          "landin_name": "io_irq_qspi_irqn",
+          "value": 14
+        },
+        {
+          "c_name": "SIO_IRQ_PROC0_IRQn",
+          "landin_name": "sio_irq_proc0_irqn",
+          "value": 15
+        },
+        {
+          "c_name": "SIO_IRQ_PROC1_IRQn",
+          "landin_name": "sio_irq_proc1_irqn",
+          "value": 16
+        },
+        {
+          "c_name": "CLOCKS_IRQ_IRQn",
+          "landin_name": "clocks_irq_irqn",
+          "value": 17
+        },
+        {
+          "c_name": "SPI0_IRQ_IRQn",
+          "landin_name": "spi0_irq_irqn",
+          "value": 18
+        },
+        {
+          "c_name": "SPI1_IRQ_IRQn",
+          "landin_name": "spi1_irq_irqn",
+          "value": 19
+        },
+        {
+          "c_name": "UART0_IRQ_IRQn",
+          "landin_name": "uart0_irq_irqn",
+          "value": 20
+        },
+        {
+          "c_name": "UART1_IRQ_IRQn",
+          "landin_name": "uart1_irq_irqn",
+          "value": 21
+        },
+        {
+          "c_name": "ADC_IRQ_FIFO_IRQn",
+          "landin_name": "adc_irq_fifo_irqn",
+          "value": 22
+        },
+        {
+          "c_name": "I2C0_IRQ_IRQn",
+          "landin_name": "i2c0_irq_irqn",
+          "value": 23
+        },
+        {
+          "c_name": "I2C1_IRQ_IRQn",
+          "landin_name": "i2c1_irq_irqn",
+          "value": 24
+        },
+        {
+          "c_name": "RTC_IRQ_IRQn",
+          "landin_name": "rtc_irq_irqn",
+          "value": 25
+        }
+      ],
+      "kind": "enum",
+      "landin_name": "irqn_type",
+      "representation": "integer-alias",
+      "selected": true,
+      "size": 4,
+      "underlying_c_type": "int"
+    },
+    {
+      "adapter": "landin_cmsis_rp2040_SysTick_Config_call",
+      "adapter_output_escaping_sources": [],
+      "adapter_reasons": [
+        "internal-or-inline"
+      ],
+      "c_name": "SysTick_Config",
+      "direction": "import",
+      "kind": "function",
+      "landin_name": "systick_config",
+      "parameters": [
+        {
+          "c_name": "ticks",
+          "c_type": "uint32_t",
+          "landin_name": "ticks",
+          "landin_type": "uint32_t",
+          "policy": null
+        }
+      ],
+      "result": {
+        "c_type": "uint32_t",
+        "landin_type": "uint32_t",
+        "policy": null
+      },
+      "variadic": false
+    },
+    {
+      "adapter": "landin_cmsis_rp2040___NVIC_ClearPendingIRQ_call",
+      "adapter_output_escaping_sources": [],
+      "adapter_reasons": [
+        "internal-or-inline"
+      ],
+      "c_name": "__NVIC_ClearPendingIRQ",
+      "direction": "import",
+      "kind": "function",
+      "landin_name": "nvic_clear_pending_irq",
+      "parameters": [
+        {
+          "c_name": "IRQn",
+          "c_type": "IRQn_Type",
+          "landin_name": "irqn",
+          "landin_type": "irqn_type",
+          "policy": null
+        }
+      ],
+      "result": {
+        "c_type": "void",
+        "landin_type": null,
+        "policy": null
+      },
+      "variadic": false
+    },
+    {
+      "adapter": "landin_cmsis_rp2040___NVIC_DisableIRQ_call",
+      "adapter_output_escaping_sources": [],
+      "adapter_reasons": [
+        "internal-or-inline"
+      ],
+      "c_name": "__NVIC_DisableIRQ",
+      "direction": "import",
+      "kind": "function",
+      "landin_name": "nvic_disable_irq",
+      "parameters": [
+        {
+          "c_name": "IRQn",
+          "c_type": "IRQn_Type",
+          "landin_name": "irqn",
+          "landin_type": "irqn_type",
+          "policy": null
+        }
+      ],
+      "result": {
+        "c_type": "void",
+        "landin_type": null,
+        "policy": null
+      },
+      "variadic": false
+    },
+    {
+      "adapter": "landin_cmsis_rp2040___NVIC_EnableIRQ_call",
+      "adapter_output_escaping_sources": [],
+      "adapter_reasons": [
+        "internal-or-inline"
+      ],
+      "c_name": "__NVIC_EnableIRQ",
+      "direction": "import",
+      "kind": "function",
+      "landin_name": "nvic_enable_irq",
+      "parameters": [
+        {
+          "c_name": "IRQn",
+          "c_type": "IRQn_Type",
+          "landin_name": "irqn",
+          "landin_type": "irqn_type",
+          "policy": null
+        }
+      ],
+      "result": {
+        "c_type": "void",
+        "landin_type": null,
+        "policy": null
+      },
+      "variadic": false
+    },
+    {
+      "adapter": "landin_cmsis_rp2040___NVIC_GetEnableIRQ_call",
+      "adapter_output_escaping_sources": [],
+      "adapter_reasons": [
+        "internal-or-inline"
+      ],
+      "c_name": "__NVIC_GetEnableIRQ",
+      "direction": "import",
+      "kind": "function",
+      "landin_name": "nvic_get_enable_irq",
+      "parameters": [
+        {
+          "c_name": "IRQn",
+          "c_type": "IRQn_Type",
+          "landin_name": "irqn",
+          "landin_type": "irqn_type",
+          "policy": null
+        }
+      ],
+      "result": {
+        "c_type": "uint32_t",
+        "landin_type": "uint32_t",
+        "policy": null
+      },
+      "variadic": false
+    },
+    {
+      "adapter": "landin_cmsis_rp2040___NVIC_GetPendingIRQ_call",
+      "adapter_output_escaping_sources": [],
+      "adapter_reasons": [
+        "internal-or-inline"
+      ],
+      "c_name": "__NVIC_GetPendingIRQ",
+      "direction": "import",
+      "kind": "function",
+      "landin_name": "nvic_get_pending_irq",
+      "parameters": [
+        {
+          "c_name": "IRQn",
+          "c_type": "IRQn_Type",
+          "landin_name": "irqn",
+          "landin_type": "irqn_type",
+          "policy": null
+        }
+      ],
+      "result": {
+        "c_type": "uint32_t",
+        "landin_type": "uint32_t",
+        "policy": null
+      },
+      "variadic": false
+    },
+    {
+      "adapter": "landin_cmsis_rp2040___NVIC_GetPriority_call",
+      "adapter_output_escaping_sources": [],
+      "adapter_reasons": [
+        "internal-or-inline"
+      ],
+      "c_name": "__NVIC_GetPriority",
+      "direction": "import",
+      "kind": "function",
+      "landin_name": "nvic_get_priority",
+      "parameters": [
+        {
+          "c_name": "IRQn",
+          "c_type": "IRQn_Type",
+          "landin_name": "irqn",
+          "landin_type": "irqn_type",
+          "policy": null
+        }
+      ],
+      "result": {
+        "c_type": "uint32_t",
+        "landin_type": "uint32_t",
+        "policy": null
+      },
+      "variadic": false
+    },
+    {
+      "adapter": "landin_cmsis_rp2040___NVIC_SetPendingIRQ_call",
+      "adapter_output_escaping_sources": [],
+      "adapter_reasons": [
+        "internal-or-inline"
+      ],
+      "c_name": "__NVIC_SetPendingIRQ",
+      "direction": "import",
+      "kind": "function",
+      "landin_name": "nvic_set_pending_irq",
+      "parameters": [
+        {
+          "c_name": "IRQn",
+          "c_type": "IRQn_Type",
+          "landin_name": "irqn",
+          "landin_type": "irqn_type",
+          "policy": null
+        }
+      ],
+      "result": {
+        "c_type": "void",
+        "landin_type": null,
+        "policy": null
+      },
+      "variadic": false
+    },
+    {
+      "adapter": "landin_cmsis_rp2040___NVIC_SetPriority_call",
+      "adapter_output_escaping_sources": [],
+      "adapter_reasons": [
+        "internal-or-inline"
+      ],
+      "c_name": "__NVIC_SetPriority",
+      "direction": "import",
+      "kind": "function",
+      "landin_name": "nvic_set_priority",
+      "parameters": [
+        {
+          "c_name": "IRQn",
+          "c_type": "IRQn_Type",
+          "landin_name": "irqn",
+          "landin_type": "irqn_type",
+          "policy": null
+        },
+        {
+          "c_name": "priority",
+          "c_type": "uint32_t",
+          "landin_name": "priority",
+          "landin_type": "uint32_t",
+          "policy": null
+        }
+      ],
+      "result": {
+        "c_type": "void",
+        "landin_type": null,
+        "policy": null
+      },
+      "variadic": false
+    }
+  ],
+  "generator": "landin-bindings/1",
+  "inputs": {
+    "defines": [],
+    "headers": [
+      {
+        "name": "RP2040.h",
+        "sha256": "3303f66bb8c59a14dbdc42629a698ba1870759eab2c87ba9d7280ae6d2c98ad8"
+      }
+    ],
+    "policy_sha256": "236c3204f2cd9e98784b27ea8104f88e93880df2cc7e03b42242bd743423481d"
+  },
+  "outputs": {
+    "adapters.c": "c44f8c2c6ba92de9b27fdc1a788e445bef878b1f0533908cf35051405c51a10e",
+    "bindings.ldn": "15cf8e87c293e45f553f941c9311e016bf3429807c55d3051dda0f7a3a3a852c",
+    "exports.h": "1a602afeec14ec56e39adbbd7534f58bc88e468d34779de337ec0b63c063dcca"
+  },
+  "schema_version": 1
+}

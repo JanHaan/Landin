@@ -19,8 +19,9 @@ refine --root=devices/generated --root=. --target=cortex-m0 \
 ```
 
 This tree holds seven devices: Raspberry Pi's RP2040 and RP2350, ST's
-STM32H753 and Espressif's ESP32, ESP32-S3, ESP32-C3 and ESP32-C5, and eight descriptions,
-RP2350's Hazard3 cores having one of their own. A
+STM32H753 and Espressif's ESP32, ESP32-S3, ESP32-C3 and ESP32-C5, and nine descriptions,
+RP2350's Hazard3 cores having one of their own and the STM32H753's cached
+profile another. A
 description is imported as `descriptions/DEVICE` with `--root=devices`, and
 its register modules as `CHIP/PERIPHERAL` with `--root=devices/generated`,
 named by the chip alone, so that both of RP2350's descriptions name the same
@@ -180,7 +181,9 @@ program or run `refine svd`.
 | `rp2350/embedded_start_block.inc.S`, `rp2350/picobin.h` | the same commit's `pico_crt0/embedded_start_block.inc.S` and `boot_picobin_headers/include/boot/picobin.h`, which the descriptions lane assembles as the image block's oracle | BSD-3-Clause |
 | `rp2350-datasheet/rp2350-datasheet.pdf` | the [RP2350 datasheet](https://datasheets.raspberrypi.com/rp2350/rp2350-datasheet.pdf), release 8, build date 2026-10-01, build version `80d627281ed5`, 11,094,994 bytes, supplied by hand | CC BY-ND 4.0, not redistributed |
 | `stm32h753/STM32H753.svd` | Arm's [STM32H7xx_DFP](https://github.com/Open-CMSIS-Pack/STM32H7xx_DFP) tag `v4.1.3`, commit `4c77d2ffa6e885b6da9d6fe949c2d6070b21fe7d`, the device family pack Keil publishes; device `STM32H753`, version `2.0`, SVD schema `1.1` | Apache-2.0, STMicroelectronics 2024, stated in the file's own header |
-| `stm32h753/stm32h753xx.h` | ST's [cmsis-device-h7](https://github.com/STMicroelectronics/cmsis-device-h7), commit `81db1ec63cdc191fae1565b772da3ea5aa29a683`, used only by the oracle | Apache-2.0, per that repository's licence |
+| `stm32h753/stm32h753xx.h` | ST's [cmsis-device-h7](https://github.com/STMicroelectronics/cmsis-device-h7), commit `81db1ec63cdc191fae1565b772da3ea5aa29a683`, used by the oracle and by `abi/cortex-vfp-bindings` | Apache-2.0, per that repository's licence |
+| `rp2040-cmsis/*.h`, `rp2040-cmsis/m-profile/*.h` | the pico-sdk commit above's CMSIS stub, `src/rp2_common/cmsis/stub/CMSIS/`: `Device/RP2040/Include/{RP2040,system_RP2040}.h` and `Core/Include/{core_cm0plus,cmsis_version,cmsis_compiler,cmsis_clang,cmsis_gcc}.h` with `m-profile/{cmsis_clang_m,cmsis_gcc_m,armv7m_mpu}.h`, which `refine bindings` reads for `abi/cortex-cmsis-bindings` (D939) | BSD-3-Clause for Raspberry Pi's device files; Apache-2.0, Arm Limited, for CMSIS-Core, [its licence](notices/LICENSE-Apache-2.0.cmsis) |
+| `stm32h753-cmsis/*.h` | the CMSIS-Core 5.9 `stm32h753xx.h` includes, `{core_cm7,cmsis_version,cmsis_compiler,cmsis_gcc,mpu_armv7,cachel1_armv7}.h`, from [STM32CubeH7](https://github.com/STMicroelectronics/STM32CubeH7) commit `8ec3113d4039d30ba9dc2bf0cb6eefc756b48d06`'s `Drivers/CMSIS/Include`, whose device submodule is the cmsis-device-h7 commit above, and that commit's `Include/system_stm32h7xx.h`, which `refine bindings` reads for `abi/cortex-vfp-bindings` (D939) | Apache-2.0: Arm Limited for CMSIS-Core, [its licence](notices/LICENSE-Apache-2.0.cmsis); STMicroelectronics for `system_stm32h7xx.h` |
 | `esp32c3/esp32c3.svd` | Espressif's [svd](https://github.com/espressif/svd) repository, commit `be20aa12560889d6125d144cdb48cf615ac17628`, its newest; device `ESP32-C3`, version `18` | Apache-2.0, Espressif Systems 2024, stated in the file's own header |
 | `esp32c5/esp32c5.base.svd` | Espressif's Rust team's [esp-pacs](https://github.com/esp-rs/esp-pacs), commit `a96d437ebad40b00854aa3e78011ad7732713a4d`, `esp32c5/svd/esp32c5.base.svd`; device `ESP32-C5`, version `1` | Apache-2.0, Espressif Systems 2025, stated in the file's own header |
 | `esp32c3/*.h`, `esp32c5/*.h` | [ESP-IDF](https://github.com/espressif/esp-idf) v6.1, commit `fff9895c82d744c7237be8847347bdd1b07c6643`: each chip's `reg_base.h`, `soc.h`, `interrupts.h` and the selected peripherals' `*_reg.h`, and the C5's `clic_reg.h`, used only by the oracle | Apache-2.0, or MIT where a file says so |
@@ -322,7 +325,7 @@ which corrects it in place and so is the vendor's and not a third party's.
 | `system` / `pcr` | PERIP_CLK_EN0, PERIP_RST_EN0 | UART0_CONF, UART0_SCLK_CONF, SYSTIMER_CONF, SYSTIMER_FUNC_CLK_CONF | UART0's and the system timer's clocks and resets |
 | `io_mux` | GPIO10, GPIO20, GPIO21 | GPIO11, GPIO12, GPIO24 | UART0's pins, IO MUX function 0, and the board port's indicator, a pin free of the strapping pins and the boards' LEDs (D720) |
 | `gpio` | OUT_W1TS, OUT_W1TC, ENABLE_W1TS, IN, FUNC10_OUT_SEL_CFG | the same, FUNC24_OUT_SEL_CFG | the indicator through the GPIO matrix and its read-back |
-| `uart0` | FIFO, INT_RAW, INT_ST, INT_ENA, INT_CLR, CLKDIV, STATUS, CONF0, CONF1, CLK_CONF, ID | FIFO, INT_RAW, INT_ST, INT_ENA, INT_CLR, CLKDIV_SYNC, STATUS, CONF0_SYNC, CONF1, CLK_CONF, REG_UPDATE | the FIFO, the divisor, the interrupts and their clear, and the register update the core clock domain needs |
+| `uart0` | FIFO, INT_RAW, INT_ST, INT_ENA, INT_CLR, CLKDIV, STATUS, CONF0, CONF1, CLK_CONF, ID, FSM_STATUS | FIFO, INT_RAW, INT_ST, INT_ENA, INT_CLR, CLKDIV_SYNC, STATUS, CONF0_SYNC, CONF1, CLK_CONF, REG_UPDATE, FSM_STATUS | the FIFO, the divisor, the frame, the interrupts and their clear, the register update the core clock domain needs, and the transmitter's state, which says the line may change (D961) |
 | `interrupt_core0` | UART_INTR_MAP, SYSTIMER_TARGET0_INT_MAP, CPU_INT_ENABLE, CPU_INT_TYPE, CPU_INT_CLEAR, CPU_INT_EIP_STATUS, CPU_INT_PRI_1, CPU_INT_PRI_2, CPU_INT_THRESH | UART0_INTR_MAP, SYSTIMER_TARGET0_INTR_MAP | the routing of UART0 and the system timer to a CPU line, on the C3 its lines' enables, types, priorities and threshold |
 | `clic` | | MCLICCFG, CLICINFO, CLICINT17, CLICINT18 | the C5's lines are its CLIC's identities 16 to 47, enabled and prioritized there (D705) |
 | `systimer` | CONF, UNIT0_OP, UNIT0_VALUE_HI, UNIT0_VALUE_LO, TARGET0_HI, TARGET0_LO, TARGET0_CONF, COMP0_LOAD, INT_ENA, INT_RAW, INT_CLR, INT_ST | the same | a millisecond wakeup from target 0 |
@@ -414,7 +417,7 @@ manifest beside them, and its description in `descriptions/stm32h753`.
 | `pwr` | CSR1, CR3 | the supply configuration RM0433 requires after reset, and the flag that says the voltage levels are valid |
 | `gpiob` | MODER, IDR, BSRR | the board's indicator, LD1 on PB0, driven through the set and reset register and read back; port B is derived from port A |
 | `gpiod` | MODER, AFRH | PD8 and PD9 to alternate function 7; port D is derived from port A |
-| `usart3` | CR1, CR3, BRR, ISR, ICR, RDR, TDR | enable, DMA transmit, the divisor, status, clears and data; USART3 is derived from USART1 |
+| `usart3` | CR1, CR2, CR3, BRR, ISR, ICR, RDR, TDR | enable and the frame, the stop bits (D959), DMA transmit, the divisor, status, clears and data; USART3 is derived from USART1 |
 | `dma1` | LISR, LIFCR, S0CR, S0NDTR, S0PAR, S0M0AR | stream 0's configuration, count and addresses, its status and clears |
 | `dmamux1` | DMAMUX_C0CR | channel 0's request, 46 for usart3_tx_dma |
 | `tim2` | CCMR1_Input | the timer's capture view, the selection's alternate register |
@@ -477,7 +480,7 @@ with registers alone, before it enters compiler-owned reset (D653). It names
 its Cortex-M7's float unit, `compiler.float_unit("fpv5-d16")`, which makes
 the build hard-float (D615, D621). The profile is
 cacheless: startup leaves the M7's caches disabled, as reset leaves them,
-and a cached profile is not admitted. DMA1 and DMA2 reach neither TCM, so
+and the cached profile is the description beside it. DMA1 and DMA2 reach neither TCM, so
 data, BSS and the stack are placed in the AXI SRAM. A program selects the
 profile by importing `descriptions/stm32h753` with `--root=devices`, and
 builds at `--level=armv7e-m`, the level its float unit needs (D615); the
@@ -491,6 +494,26 @@ Every capacity verdict is rerun against its profile as RP2040's is: the
 corpus links with the reference's probe map, so its verdicts against the
 STM32H753 are a measurement from each limited image's sizes and frames, not
 a link against its map.
+
+[`descriptions/stm32h753_cached`](descriptions/stm32h753_cached) is the same
+chip with its Cortex-M7's level 1 caches on (D974). Its policy,
+[`stm32h753_cached.json`](policies/stm32h753_cached.json), is the
+cacheless policy with the identity `stm32h753-cached` and a correspondence
+and manifest of its own, so `refine svd` writes its `interrupts.ldn` and
+the same modules at the same hashes; its `supply.ldn` is the cacheless
+stage's bytes; and its `memory.ldn` is the cacheless map with
+`compiler.cache("armv7-m-l1", 32)`, whose comment records the levels,
+aliases, line ownership and visibility points the profile was admitted
+with. Reset invalidates and enables both caches once memory is written,
+and the entry's return cleans and disables them (D973); a DMA buffer is
+maintained through `core/cache`'s provider in `platform/cortex_m/l1`
+(D972). `test.py`'s `Stm32h753CachedOracles` hold the policy, the
+interrupts, the stage and the map to the cacheless ones, and
+[the cached consumer](consumers/stm32h753_cached/main.ldn), the transmit
+with its message cleaned before the stream is enabled, is the converse of
+`the consumer links cacheless`: its literals reach CCR and the cache
+registers the profile declares, and no other (D976). A program selects
+the profile by importing `descriptions/stm32h753_cached` instead.
 
 The literals were reviewed against
 [RM0433](https://www.st.com/resource/en/reference_manual/rm0433-stm32h742-stm32h743753-and-stm32h750-value-line-advanced-armbased-32bit-mcus-stmicroelectronics.pdf)

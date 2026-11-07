@@ -16,6 +16,7 @@
 import bringup
 import commands
 import core/atomic
+import core/line
 import descriptions/rp2350_hazard3
 import platform/riscv
 import platform/riscv/hazard3
@@ -142,7 +143,7 @@ start: () -> noreturn =
     architecture := assembler.block("csrr {value}, marchid", out value: u32 at general)
     bringup.crystal()
     bringup.peripherals()
-    mut receiver := serial.open(115200, budget, rx_storage[0..<256]) else (problem)
+    mut receiver := serial.open(line.default_settings, budget, rx_storage[0..<256]) else (problem)
         _ = problem
         halt(1)
     end

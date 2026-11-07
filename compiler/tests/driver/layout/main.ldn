@@ -1,11 +1,11 @@
 -- Separate target-layout control; does not stand in for driver execution.
 import drivers/uart
 mut storage: [8]u8 = zeroed
-mut layout: [11]usize = zeroed
+mut layout: [12]usize = zeroed
 start: () -> none =
     mut receiver: uart.rx = (buf: storage[0..<8], consumed: 0, budget: 32,
                             config: 0xa84e0, active: false, quiet: true,
-                            lost: false, broken: false)
+                            lost: false, broken: false, data_mask: 0xff)
     layout = [sizeof usize, sizeof uart.rx, alignof uart.rx,
               sizeof [2]uart.rx,
               usize(addr receiver.consumed) - usize(addr receiver),
@@ -14,5 +14,6 @@ start: () -> none =
               usize(addr receiver.active) - usize(addr receiver),
               usize(addr receiver.quiet) - usize(addr receiver),
               usize(addr receiver.lost) - usize(addr receiver),
-              usize(addr receiver.broken) - usize(addr receiver)]
+              usize(addr receiver.broken) - usize(addr receiver),
+              usize(addr receiver.data_mask) - usize(addr receiver)]
 end start

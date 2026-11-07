@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: within a 32 KiB firmware image, a utf8 builder over a caller's buffer takes every width of decimal and hexadecimal, then refuses a number that does not fit with no_space and a surrogate with invalid_scalar, each leaving its length as it was
+program: main.ldn
+root: ../../../../..
+status: 42
+constructs: 0570, 0600, 0940, 0960, 1030
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0

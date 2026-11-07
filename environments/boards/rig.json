@@ -45,6 +45,7 @@
     "stm32h753": {
       "steps": [
         {"board": "stm32h753", "mode": "ram", "arguments": ["--ram-loader", "{ram_loader}"]},
+        {"board": "stm32h753_cached", "mode": "ram", "arguments": ["--ram-loader", "{ram_loader}"]},
         {"board": "stm32h753", "mode": "boot", "arguments": []}
       ]
     },

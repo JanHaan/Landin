@@ -1,0 +1,14 @@
+--  The text keeps its bytes' origin: it is not returned without `from`
+--  them, nor past the frame that holds them.
+undeclared: (source: []u8) -> (result: utf8) =
+    unchecked begin
+        result = compiler.utf8_unvalidated(source)
+    end unchecked
+end undeclared
+
+local: () -> (result: utf8) =
+    storage: [2]u8 = [104, 105]
+    unchecked begin
+        result = compiler.utf8_unvalidated(storage[0..<2])
+    end unchecked
+end local

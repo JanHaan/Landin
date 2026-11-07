@@ -1,0 +1,43 @@
+--  The builder that holds only text as firmware uses it: a reading of
+--  every number width into a fixed line, then the refusals a bounded line
+--  meets, each leaving the line as it was.
+import core/cmp
+import core/text
+
+--  A reading: a scalar and every width of decimal and hexadecimal.
+reading: (inout line: text.utf8_builder) -> none ! text.no_space =
+    try text.utf8_append_u32(line, 7)
+    try text.utf8_append_u64(line, 80)
+    try text.utf8_append_usize(line, 9)
+    try text.utf8_append_i32(line, 0 - 1)
+    try text.utf8_append_i64(line, 0 - 2)
+    try text.utf8_append_isize(line, 0 - 3)
+    try text.utf8_append_hex_u32(line, 10)
+    try text.utf8_append_hex_u64(line, 11)
+    try text.utf8_append_hex_usize(line, 255)
+end reading
+
+public main: () -> (code: i32) =
+    code = 1
+    mut storage: [20]u8 = zeroed
+    mut line := text.utf8_over(storage[0..<20])
+    reading(line) else begin
+        return
+    end
+    code = 2
+    return when cmp.compare(text.utf8_bytes(line), "7809-1-2-3abff")
+      <> cmp.equal or not text.equal(text.utf8_used(line), "7809-1-2-3abff")
+    code = 3
+    held: usize = text.utf8_length(line)
+    text.utf8_append_u64(line, 1234567) else (problem)
+        return when problem <> text.no_space
+          or text.utf8_length(line) <> held
+        text.utf8_append_scalar(line, 0xd800) else (invalid)
+            return when invalid <> text.invalid_scalar
+              or text.utf8_length(line) <> held
+            code = 42
+            return
+        end
+        return
+    end
+end main

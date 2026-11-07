@@ -3245,11 +3245,58 @@ package body Landin.Driver is
             Destinations : Landin.Platform.Path_List;
             Separate_Debug_Object : Boolean := False);
 
+         --  D924: what a firmware image's C archives brought that
+         --  compiler-owned startup cannot honour, and what to do instead.
+         procedure Note_Foreign_Section
+           (Found : Landin.Build_Reports.Firmware.Foreign_Section);
+         procedure Note_Foreign_Section
+           (Found : Landin.Build_Reports.Firmware.Foreign_Section)
+         is
+            Name : constant String := "`" & Unbounded.To_String (Found.Name)
+              & "`";
+            Item : Landin.Diagnostics.Diagnostic :=
+              Landin.Diagnostics.Make
+                (Code    => Rows.Code (Rows.Firmware_Foreign_Section),
+                 Level   => Landin.Diagnostics.Error,
+                 Source  => Landin.Source.No_Source,
+                 Where   => Landin.Source.Empty_Span,
+                 Message =>
+                   (case Found.Kind is
+                      when Landin.Build_Reports.Firmware.Constructors =>
+                        "the firmware image holds C constructors in " & Name
+                        & ", which compiler-owned startup never runs",
+                      when Landin.Build_Reports.Firmware.Thread_Storage =>
+                        "the firmware image holds thread-local storage in "
+                        & Name & ", which firmware has no thread pointer"
+                        & " or thread image for",
+                      when others =>
+                        "the firmware image is linked dynamically, with "
+                        & Name & ", and firmware has no loader"));
+         begin
+            Landin.Diagnostics.Add_Note
+              (Item,
+               (case Found.Kind is
+                  when Landin.Build_Reports.Firmware.Constructors =>
+                    "D924: build the library without"
+                    & " `__attribute__((constructor))` or static"
+                    & " constructors, and call its initialisation from the"
+                    & " firmware entry",
+                  when Landin.Build_Reports.Firmware.Thread_Storage =>
+                    "D924: firmware runs one thread; declare the C variable"
+                    & " without `_Thread_local` or `__thread`, as ordinary"
+                    & " static data",
+                  when others =>
+                    "D924: link the library's static archive, built for"
+                    & " the firmware's core, and no shared object"));
+            Landin.Stages.Report (Context, Item);
+         end Note_Foreign_Section;
+
          procedure Link_Assembly
            (Assembly_Path, Product_Path, Map_Id : String;
             Destinations : Landin.Platform.Path_List;
             Separate_Debug_Object : Boolean := False)
          is
+            use type Landin.Build_Reports.Firmware.Foreign_Kind;
             On_Firmware : constant Boolean :=
               Landin.Targets.Is_Firmware (Facts);
             Written : Landin.Platform.Write_Status;
@@ -3344,7 +3391,8 @@ package body Landin.Driver is
                              (Landin.Stages.Code (Context).all),
                            Landin.Backend.Firmware.Used_Regions
                              (Landin.Stages.Code (Context).all,
-                              Landin.Stages.Identities (Context).all)),
+                              Landin.Stages.Identities (Context).all),
+                           Archives => not Libraries.Is_Empty),
                         Written, Pending_Write_Reason);
                      if Written /= Landin.Platform.Write_Ok then
                         Note_Failure
@@ -3571,6 +3619,14 @@ package body Landin.Driver is
                     (Code_Toolchain_Failed,
                      Driver & " left executable output aliasing its prior"
                      & " output at " & Target_Path);
+               elsif On_Firmware and then not Libraries.Is_Empty
+                 and then Landin.Build_Reports.Firmware.Foreign_Section_Of
+                   (Host, Staged_Product).Kind
+                     /= Landin.Build_Reports.Firmware.No_Foreign
+               then
+                  Note_Foreign_Section
+                    (Landin.Build_Reports.Firmware.Foreign_Section_Of
+                       (Host, Staged_Product));
                elsif On_Firmware
                  and then (Script_Seen or else Selected_Layout =
                              Landin.Targets.Firmware.RAM_Layout)
@@ -3989,24 +4045,9 @@ package body Landin.Driver is
                      & " with --library=DIR (D543)");
                   return;
                end if;
-               if Landin.Configuration.Library_Count
-                 (Landin.Stages.Configurations (Context).all) /= 0
-               then
-                  Note_No_Toolchain
-                    ("firmware does not admit linker.library",
-                     "remove linker.library declarations; only the"
-                     & " selected private Arm runtime is linked");
-                  return;
-               elsif Landin.Configuration.Directory_Count
-                   (Landin.Stages.Configurations (Context).all) /= 0
-                 or else not Search_Options.Is_Empty
-               then
-                  Note_No_Toolchain
-                    ("firmware does not admit linker.directory or -L",
-                     "remove them; firmware links no library, so it"
-                     & " searches no directory (D524)");
-                  return;
-               end if;
+               --  D923: linker.library, linker.directory and -L name
+               --  static archives and where they are, which the firmware
+               --  link takes as a hosted link does.
             end if;
 
             --  A target nothing emits for cannot be asked for a file.
@@ -4092,7 +4133,9 @@ package body Landin.Driver is
                        (Landin.Stages.Code (Context).all),
                      Landin.Backend.Firmware.Used_Regions
                        (Landin.Stages.Code (Context).all,
-                        Landin.Stages.Identities (Context).all)),
+                        Landin.Stages.Identities (Context).all),
+                     Archives => Landin.Configuration.Library_Count
+                       (Landin.Stages.Configurations (Context).all) > 0),
                   Written);
                if Written /= Landin.Platform.Write_Ok then
                   Note_Failure
@@ -4758,19 +4801,15 @@ package body Landin.Driver is
                Note_Failure (Code_Unreadable, "source not found: " & Operand);
                return;
             end if;
-            --  D524: `-L` is refused wherever a library is.
-            if not Search_Options.Is_Empty
-              and then (On_Firmware or Static_Link)
-            then
+            --  D524: `-L` is refused wherever a library is; firmware
+            --  links archives (D923), so only a static Linux link does.
+            if not Search_Options.Is_Empty and then Static_Link then
                Note_No_Toolchain
-                 ((if On_Firmware then "firmware links no library"
-                   else "a static link of " & Landin.Targets.Name (Facts)
-                     & " links no C library")
-                  & ", so it searches no directory: -L "
+                 ("a static link of " & Landin.Targets.Name (Facts)
+                  & " links no C library, so it searches no directory: -L "
                   & Search_Options.First_Element,
-                  (if On_Firmware then "remove -L"
-                   else "link with --link=libc, which keeps C's runtime"
-                     & " and library"));
+                  "link with --link=libc, which keeps C's runtime"
+                  & " and library");
                return;
             end if;
             if Dry_Run then

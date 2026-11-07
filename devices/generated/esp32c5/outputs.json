@@ -1,6 +1,6 @@
 {
   "esp32c5/clic/device.ldn": "1b3eececf6ab75636f1f3e1d63f4abed54fc093af9edbd506d7b9f3591aa3c98",
-  "esp32c5/correspondence.json": "d824458a5adc815a775cb665c3df50840d1817cfc4d3c3bc3516918bfe80e0c8",
+  "esp32c5/correspondence.json": "b78a4a96957de991394e7c277013605ecabe5d7e4bd942923c75e9c4cf24f92a",
   "esp32c5/gpio/device.ldn": "36cbb6f4295362349e5f5d1e599d0cb555afa23c42b8f7a042067a2f9706170d",
   "esp32c5/interrupt_core0/device.ldn": "e0be2c2948e1eb2f2f620da0d6dbd988d57c2678dde8c254610232c818fd9511",
   "esp32c5/io_mux/device.ldn": "d2720917ef34745a5bbc5f845cdd540a8b49922ad47b5977d797da722f07e170",
@@ -11,5 +11,5 @@
   "esp32c5/systimer/device.ldn": "bbde6210f60897cca9edc401c83746b4b5dc1825513bc4fb1cb4ad223d88f292",
   "esp32c5/timg0/device.ldn": "9c367e27ede446ae1febcd2412f6520f29f71cb9b94b91983ca39017c55d020b",
   "esp32c5/timg1/device.ldn": "7677484907a659a49402de76ab12b4449cb7d548be9bab2034eb41f0ccff0992",
-  "esp32c5/uart0/device.ldn": "64c050b5d22ea7dc89fb8945268dba5dc8569980f5c7ee94301ac4b95d9aff3d"
+  "esp32c5/uart0/device.ldn": "e97c5c4cd06fcd0aa18d64c25a6143989a8890102fa1254a2ac9320dfd8e2aa6"
 }

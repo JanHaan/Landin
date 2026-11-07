@@ -2527,6 +2527,12 @@ There is no conversion from a pointer to `cstring`, none with a writable
 result, and none for `utf16`. An empty result keeps its source's base and
 origin.
 
+Bytes a program knows are UTF-8, because it has just checked them or
+wrote only whole characters, become `utf8` without being read again
+through `compiler.utf8_unvalidated(bytes)` [1560], which keeps the same
+base, length and origin. It is allowed only inside `unchecked` [1120],
+and bytes that are not UTF-8 then go unnoticed.
+
 **Slicing.** `utf8` and `utf16` slice by range, as `word[3..3]` in [0610]
 does. The result is the same text type, read-only, over the same storage.
 
@@ -2553,6 +2559,9 @@ On plain `[]u8`, `core/text` counts positions as byte offsets of the
 opaque type `text.position`, with `first`, `at_end`, `next`, `advance`,
 `offset`, `byte` and `slice`. Reading a byte at the end fails with
 `past_end`, and a slice keeps its source's origin.
+On `utf8`, the same positions step a whole scalar with `start`, `step`,
+`done` and `width`, and `find` returns where a match begins, so the text
+around it slices out by range with nothing copied.
 
 ### [0610] Indexing text by codepoint or by position
 
@@ -2763,7 +2772,7 @@ Four source namespaces belong to the repository:
 |---|---|---|
 | `core` | the shared freestanding library: `core/mem`, `core/text`, `core/vec` | every module and interface on every target |
 | `hosted` | hosted providers such as `hosted/heap`, `hosted/system` and `hosted/blocking` | on hosted systems |
-| `platform` | scoped freestanding interfaces | `platform/c` with an enabled LP64 C ABI; `platform/cortex_m` everywhere, declaring its operations only on M-profile targets, higher feature levels included, and its device descriptions only there |
+| `platform` | scoped freestanding interfaces | `platform/c` with an enabled C ABI, the hosted LP64 ones and Cortex-M's AAPCS32; `platform/cortex_m` everywhere, declaring its operations only on M-profile targets, higher feature levels included, and its device descriptions only there |
 | `landin` | the toolchain modules of [1560]: `landin/compiler`, `landin/assembler`, `landin/linker` | everywhere, without an import |
 
 Fine print:
@@ -4007,9 +4016,10 @@ The compiler supplies these facts:
 | `compiler.word_size` | the width of `usize`, in bits |
 | `compiler.byte_order` | `little` or `big` |
 | `compiler.build_mode` | `debug`, the default, or `release` |
-| `compiler.c_sysv_lp64`, `compiler.c_darwin_lp64`, `compiler.c_aapcs64_lp64`, `compiler.c_riscv_lp64d`, `compiler.c_riscv_ilp32`, `compiler.c_xtensa_windowed_ilp32` | which C ABI the target uses, each true for its own ABI alone |
+| `compiler.c_sysv_lp64`, `compiler.c_darwin_lp64`, `compiler.c_aapcs64_lp64`, `compiler.c_riscv_lp64d`, `compiler.c_aapcs32`, `compiler.c_riscv_ilp32`, `compiler.c_xtensa_windowed_ilp32` | which C ABI the target uses, each true for its own ABI alone |
 | `compiler.c_runtime` | whether C's runtime starts the program and its library is linked |
 | `compiler.feature.NAME` | whether the selected CPU level has feature NAME |
+| `compiler.cache_line` | the line of the device description's cache, in bytes, or 0 without one |
 
 Ask the C ABI question directly rather than guessing it from the
 architecture: Linux and Apple arm64 share `compiler.arch == arm64` and
@@ -4192,7 +4202,12 @@ build hard-float at `armv7e-m`, its f32 and f64 arithmetic VFP instructions
 and its floats passed in s and d registers, and `compiler.feature.fp` and
 `compiler.feature.fp_dp` say so. A firmware request emits its own
 reset code, vector table and linker script: reset copies initialized data
-and RAM code out of flash and clears BSS before your code runs.
+and RAM code out of flash and clears BSS before your code runs. A
+Cortex-M7's description may also declare its caches,
+`compiler.cache("armv7-m-l1", 32)`; reset then turns them on after those
+copies and off again if the entry returns, `compiler.feature.cache` and
+`compiler.cache_line` say so, and a DMA buffer is kept in step with them
+through `core/cache`.
 
 Exact rules: spec [1990].
 
@@ -4204,7 +4219,7 @@ without an import, which is why nobody else can use their bare names.
 
 | module | what it reaches |
 | --- | --- |
-| `compiler` | target, word size, byte order, build mode, CPU features, the atomic, volatile and register intrinsics, the two stack builtins under fibres ([1675]), and `compiler.unreachable()`, a call that never returns and stops the program as a failed check does |
+| `compiler` | target, word size, byte order, build mode, CPU features, the atomic, volatile and register intrinsics, the two stack builtins under fibres ([1675]), `compiler.unreachable()`, a call that never returns and stops the program as a failed check does, and `compiler.utf8_unvalidated(bytes)`, text of bytes known to be UTF-8, made without reading them and only inside `unchecked` ([0600]) |
 | `assembler` | inline assembly |
 | `linker` | libraries, sections, entry |
 
@@ -4280,17 +4295,22 @@ end add_at
 Nothing can check that code of that type is there, as nothing checks a C
 cast, and the value is yours to call only while the library stays loaded.
 
-Four C ABIs are supported: SysV AMD64 LP64 on Linux and FreeBSD x86-64,
+Five C ABIs are supported: SysV AMD64 LP64 on Linux and FreeBSD x86-64,
 Apple's arm64 variant of AAPCS64 on macOS, the standard AAPCS64 on Linux
-and FreeBSD arm64, and RV64 LP64D on Linux RV64.
+and FreeBSD arm64, RV64 LP64D on Linux RV64, and AAPCS32 on Cortex-M,
+whose floats travel in the float unit's registers when the device
+description has one and in core registers when it has none.
 
 `platform/c` names C's types: the signed and unsigned integer widths,
 `c_size`, `c_ptrdiff`, `c_float`, `c_double` and `c_bool`. It asserts
 `compiler.c_sysv_lp64 or compiler.c_darwin_lp64 or compiler.c_aapcs64_lp64
-or compiler.c_riscv_lp64d`, so it admits exactly those four ABIs; another
-target with the same pointer width is not admitted. Plain `c_char` is the
-ABI's plain `char`, a number and not a Unicode scalar: `i8` under SysV and
-Apple's ABI, `u8` under the standard AAPCS64 and RV64.
+or compiler.c_riscv_lp64d or compiler.c_aapcs32`, so it admits exactly
+those five ABIs; another target with the same pointer width, RV32's or
+Xtensa's, is not admitted. The first four are LP64, with a 64-bit `long`;
+AAPCS32 is ILP32, so there `c_long` is an `i32` and `c_size` a 32-bit
+`usize`. Plain `c_char` is the ABI's plain `char`, a number and not a
+Unicode scalar: `i8` under SysV and Apple's ABI, `u8` under the standard
+AAPCS64, RV64 and AAPCS32.
 
 What crosses the boundary:
 
@@ -4328,6 +4348,8 @@ end say_count
   cannot fill a C callback field or parameter.
 - A Landin definition cannot receive varargs; the generator writes a C
   adapter from an explicit extraction schema instead.
+- Cortex-M declares no variadic C function yet. Write a C function of
+  fixed arity that makes the variadic call, and import that one.
 
 Exact rules: spec [1975].
 
@@ -4461,7 +4483,10 @@ from wherever the C driver keeps it.
 - On Linux a library links beside the C library, so a build that asks for
   one needs `--link=libc`; the default static link ([1650]) refuses it,
   and refuses a directory too.
-- Cortex-M firmware refuses `linker.library`, `linker.directory` and `-L`.
+- Cortex-M firmware links each library as a static archive built for
+  its core, after the program and before the compiler's runtime, and
+  refuses one that brings C constructors, thread-local storage or a
+  dynamic linkage, none of which its startup can honour.
 
 ### [1570] Calling conventions
 

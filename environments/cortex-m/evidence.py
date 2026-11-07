@@ -49,7 +49,11 @@ def selection_controls(run, elf):
     data=bytearray(elf.read_bytes())
     header=struct.unpack_from('<16sHHIIIIIHHHHHH',data)
     # Change an actual flash load byte, retaining valid ELF and debug identity.
-    first=struct.unpack_from('<8I',data,header[5])
+    # The first loadable segment, not the first program header: an image
+    # that links libgcc's 64-bit division carries its ARM_EXIDX header first.
+    first=next(entry for entry in (struct.unpack_from('<8I',data,header[5]+i*header[9])
+                                   for i in range(header[10]))
+               if entry[0] == 1 and entry[4] > 100)
     data[first[1]+100] ^= 1
     bad.write_bytes(data)
     refuses('mismatched-load-image',executable=bad)
@@ -328,7 +332,7 @@ def execute_suite(parent, refine, profiles=PROFILES, programs=None, controls=Non
             lane=child(run,'helper-resources')
             shutil.copy(run.out/'disassembly.log',lane.out)
             record['helper_resources']=resources.terminated(lane,elf,
-                {'layout':[4,24,4,48,8,12,16,20,21,22,23]})
+                {'layout':[4,28,4,56,8,12,16,20,21,22,23,24]})
         fresh=child(run,'first-emission')
         # The debug CU intentionally records its compilation directory.
         # Repeat in that same directory; relocated builds retain distinct

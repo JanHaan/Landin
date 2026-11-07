@@ -154,18 +154,19 @@ package body Landin.Diagnostics.Explanations is
             when Catalogue.Module_Unavailable_For_Target =>
                "An import names a source namespace unavailable for the s"
                & "elected target (D267). `hosted/*` requires a hosted targ"
-               & "et; `platform/c` requires one of the currently enabled L"
-               & "P64 C ABIs; the submodules of `platform/cortex_m`, its c"
-               & "onstrained reference description among them, require an "
-               & "M-profile target, including its higher supported feature"
-               & " levels. `platform/cortex_m` itself is available on ever"
-               & "y target and declares its operations only on an M-profil"
-               & "e one (D575), so a program for every target imports it a"
-               & "nd calls it from a `fixed if compiler.arch == cortex_m0`"
-               & " arm; a call outside one is L0201 on a hosted target. Se"
-               & "lect an applicable target or remove the import. Project-"
-               & "first root selection cannot change namespace availabilit"
-               & "y.",
+               & "et; `platform/c` requires one of the currently enabled C"
+               & " ABIs, the four LP64 ones or Cortex-M's AAPCS32 (D920), "
+               & "so RV32 and Xtensa refuse it; the submodules of `platfor"
+               & "m/cortex_m`, its constrained reference description among"
+               & " them, require an M-profile target, including its higher"
+               & " supported feature levels. `platform/cortex_m` itself is"
+               & " available on every target and declares its operations o"
+               & "nly on an M-profile one (D575), so a program for every t"
+               & "arget imports it and calls it from a `fixed if compiler."
+               & "arch == cortex_m0` arm; a call outside one is L0201 on a"
+               & " hosted target. Select an applicable target or remove th"
+               & "e import. Project-first root selection cannot change nam"
+               & "espace availability.",
             when Catalogue.Root_Holds_Library_Module =>
                "A warning: an import of `core`, `hosted` or `platform` w"
                & "as read from the compiler's own library, and a `--root=`"
@@ -383,7 +384,12 @@ package body Landin.Diagnostics.Explanations is
                & "ares only in a `fixed if` arm this target does not selec"
                & "t, a Linux call written for Darwin among them, is named "
                & "as one this system does not have, since no spelling of i"
-               & "t would be found here."
+               & "t would be found here. One declared under an arm that re"
+               & "ads `compiler.feature.cache`, `platform/cortex_m/l1`'s p"
+               & "rovider, is named as a cached profile's on a firmware pr"
+               & "ofile whose description declares no cache, and the note "
+               & "says to import a cached description or to maintain throu"
+               & "gh `core/cache`'s cacheless provider (D972)."
                & LF
                & LF
                & "`core/io` has no `print`, `println`, `printf` or `puts`:"
@@ -1056,49 +1062,53 @@ package body Landin.Diagnostics.Explanations is
                & "dinary routine instead.",
             when Catalogue.Foreign_Boundary =>
                "A C boundary declaration or call is something the C ABI "
-               & "cannot carry [1580]. A target with no C ABI yet, as Cort"
-               & "ex-M0 has none, has no C signature and lays out no `layo"
-               & "ut(c)` record, and the diagnostic says so by the target'"
-               & "s name; a byte-packed `layout(c, packed)` record needs n"
-               & "o C alignment and stands there. The refusal of a signatu"
-               & "re names the part C cannot carry beside it. On a target "
-               & "with C ABI support, a C signature is infallible and nong"
-               & "eneric, with at most one result. Each parameter and resu"
-               & "lt part uses implicit or explicit `in`, without `caller`"
-               & " or a constraint. Its type is a scalar, pointer (includi"
-               & "ng a named optional pointer union), fixed infallible C c"
-               & "allback, or `layout(c)` struct; slices, `any`, atoms and"
-               & " by-value arrays are excluded. A `layout(c)` struct has "
-               & "at least one field and holds only C representations: sca"
-               & "lars, pointers, fixed C callbacks, nonempty fixed arrays"
-               & " or recursively `layout(c)` structs, with no tagged vari"
-               & "ants; the label names the field that is not one. Its las"
-               & "t field may be a `[0]T` flexible array member after at l"
-               & "east one other field (D413), and a record ending in one "
-               & "is not a field of another C record. A `layout(c, packed)"
-               & "` record holds an array or nested record by value only w"
-               & "hen its alignment is one: `u8`, `i8`, `bool` or a packed"
-               & " record (D410). A packed record, a record with a flexibl"
-               & "e member, and a record holding either cross a C signatur"
-               & "e only by pointer (D414). A variadic C declaration needs"
-               & " at least one fixed parameter and target support; a vari"
-               & "adic definition needs a generated adapter. Variadic call"
-               & "s take positional scalar, pointer or fixed C callback ta"
-               & "il arguments, without labels or static arguments. Change"
-               & " `inout` or `sink` to `in`; pass a pointer if C must wri"
-               & "te through a parameter. Remove `caller` and constraints,"
-               & " specialize generics, represent errors through an ordina"
-               & "ry C result, and combine multiple results into one C-rep"
-               & "resentable result. Pass a pointer to a by-value array or"
-               & " other unsupported aggregate, or change the type or layo"
-               & "ut to one C represents. Pass `ptr` to a packed record or"
-               & " one with a flexible member. A struct declared without `"
-               & "layout(c)` has Landin's layout [0750], which C does not "
-               & "share, so a signature taking or returning one by value, "
-               & "or a C record holding one, is refused naming the part an"
-               & "d the struct, as in ""C cannot take `tint`: `color` is no"
-               & "t `layout(c)`"", and the repair is to declare it `layout("
-               & "c) struct` (D529).",
+               & "cannot carry [1580]. A target with no enabled C ABI yet,"
+               & " as RV32 and Xtensa have none, has no C signature and la"
+               & "ys out no `layout(c)` record, and the diagnostic says so"
+               & " by the target's name; a byte-packed `layout(c, packed)`"
+               & " record needs no C alignment and stands there. The refus"
+               & "al of a signature names the part C cannot carry beside i"
+               & "t. On a target with C ABI support, a C signature is infa"
+               & "llible and nongeneric, with at most one result. Each par"
+               & "ameter and result part uses implicit or explicit `in`, w"
+               & "ithout `caller` or a constraint. Its type is a scalar, p"
+               & "ointer (including a named optional pointer union), fixed"
+               & " infallible C callback, or `layout(c)` struct; slices, `"
+               & "any`, atoms and by-value arrays are excluded. A `layout("
+               & "c)` struct has at least one field and holds only C repre"
+               & "sentations: scalars, pointers, fixed C callbacks, nonemp"
+               & "ty fixed arrays or recursively `layout(c)` structs, with"
+               & " no tagged variants; the label names the field that is n"
+               & "ot one. Its last field may be a `[0]T` flexible array me"
+               & "mber after at least one other field (D413), and a record"
+               & " ending in one is not a field of another C record. A `la"
+               & "yout(c, packed)` record holds an array or nested record "
+               & "by value only when its alignment is one: `u8`, `i8`, `bo"
+               & "ol` or a packed record (D410). A packed record, a record"
+               & " with a flexible member, and a record holding either cro"
+               & "ss a C signature only by pointer (D414). A variadic C de"
+               & "claration needs at least one fixed parameter and target "
+               & "support; a variadic definition needs a generated adapter"
+               & ". Cortex-M's AAPCS32 calls no variadic C function yet (D"
+               & "922): its refusal names the target, and the repair is a "
+               & "C function of fixed arity that makes the variadic call, "
+               & "linked with the program and declared `extern(c)` instead"
+               & ". Variadic calls take positional scalar, pointer or fixe"
+               & "d C callback tail arguments, without labels or static ar"
+               & "guments. Change `inout` or `sink` to `in`; pass a pointe"
+               & "r if C must write through a parameter. Remove `caller` a"
+               & "nd constraints, specialize generics, represent errors th"
+               & "rough an ordinary C result, and combine multiple results"
+               & " into one C-representable result. Pass a pointer to a by"
+               & "-value array or other unsupported aggregate, or change t"
+               & "he type or layout to one C represents. Pass `ptr` to a p"
+               & "acked record or one with a flexible member. A struct dec"
+               & "lared without `layout(c)` has Landin's layout [0750], wh"
+               & "ich C does not share, so a signature taking or returning"
+               & " one by value, or a C record holding one, is refused nam"
+               & "ing the part and the struct, as in ""C cannot take `tint`"
+               & ": `color` is not `layout(c)`"", and the repair is to decl"
+               & "are it `layout(c) struct` (D529).",
             when Catalogue.Linkage_Contract =>
                "A link symbol, hosted initializer, firmware placement or"
                & " thread storage breaks [1610]'s, [1975]'s, [1640]'s or ["
@@ -1280,6 +1290,31 @@ package body Landin.Diagnostics.Explanations is
                & "at holds `fpv5-d16` is `armv7e-m`. Build with the level "
                & "the note names; a lower level of the same core is accept"
                & "ed only for a description with no float unit.",
+            when Catalogue.Cache_Unsupported =>
+               "A device description names a cache refine does not build"
+               & ", or one its core cannot have (D971). A cache is a fact "
+               & "of the core a chip was built with, written in the descri"
+               & "ption's hand-written half as `compiler.cache(""KIND"", LIN"
+               & "E)`, and refine builds one kind: `armv7-m-l1`, Armv7-M's"
+               & " level 1 instruction and data caches with the maintenanc"
+               & "e operations of the System Control Block, which among th"
+               & "e cores refine builds for only a `cortex-m7` has. A desc"
+               & "ription that declares it is a cached profile: reset enab"
+               & "les the caches and the entry's return disables them (D97"
+               & "3), and `platform/cortex_m` declares its maintenance pro"
+               & "vider there. Write `compiler.cache(""armv7-m-l1"", 32)` in"
+               & " a Cortex-M7's description, or leave the directive out f"
+               & "or a cacheless profile, whose DMA buffers need no mainte"
+               & "nance.",
+            when Catalogue.Cache_Line_Wrong =>
+               "A device description's cache names a line that is not it"
+               & "s core's (D971). The line is the unit every maintained r"
+               & "ange is a whole number of, and `core/cache` refuses a ra"
+               & "nge that is not, so a description that said another woul"
+               & "d let a program align its DMA buffers to lines the hardw"
+               & "are does not have. A Cortex-M7's `armv7-m-l1` lines are "
+               & "32 bytes, as its CCSIDR says for both caches; write `com"
+               & "piler.cache(""armv7-m-l1"", 32)`.",
             when Catalogue.Reset_Stage_Return =>
                "A `vector-table` description's stage does not branch to "
                & "compiler-owned reset (D653). The reset vector enters the"
@@ -1365,6 +1400,18 @@ package body Landin.Diagnostics.Explanations is
                & "ert its `f64` value, or `f32(...)` to keep the rounding "
                & "on purpose. A literal whose rounding gives the same inte"
                & "ger, as `i64(45.7)` does, is converted as written.",
+            when Catalogue.Unvalidated_Text_Checked =>
+               "`compiler.utf8_unvalidated(bytes)` makes text of bytes w"
+               & "ithout reading them (D949), so it is admitted only where"
+               & " the program says it answers for them: inside `unchecked"
+               & " begin ... end unchecked`. Bytes that are not UTF-8 then"
+               & " go unnoticed, and what reads them as text reads them wr"
+               & "ongly. Where the bytes come from input, convert them wit"
+               & "h `utf8(bytes)`, which traps on malformed bytes, or `tex"
+               & "t.from_bytes`, which reports `invalid_text`. Where they "
+               & "are valid by construction, because the program has just "
+               & "checked them or wrote only whole scalars, put the call i"
+               & "n an `unchecked` region.",
             when Catalogue.No_Toolchain =>
                "The requested output cannot be made with the selected ta"
                & "rget, settings or available toolchain [1550]. The diagno"
@@ -1633,11 +1680,13 @@ package body Landin.Diagnostics.Explanations is
                & "ot UTF-8 JSON, names a key twice, is not schema 1, lacks"
                & " a key it needs or names one refine does not read, gives"
                & " one of the wrong shape, or binds for another ABI than `"
-               & "--target` names. The message names the key or the declar"
-               & "ation. A policy's every key is described in the [binding"
-               & " policy reference](../bindings/README.md). With an insta"
-               & "lled compiler, run `refine help bindings` for the addres"
-               & "s of its generated reading copy.",
+               & "--target` names, a data model or calling convention amon"
+               & "g them, which `cortex-m0`'s policy must name (D935). The"
+               & " message names the key or the declaration. A policy's ev"
+               & "ery key is described in the [binding policy reference](."
+               & "./bindings/README.md). With an installed compiler, run `"
+               & "refine help bindings` for the address of its generated r"
+               & "eading copy.",
             when Catalogue.Bindings_Clang_Refused =>
                "The Clang `refine bindings` was given cannot be used as "
                & "asked (D820): it cannot be run, a root it is given is no"
@@ -1645,17 +1694,18 @@ package body Landin.Diagnostics.Explanations is
                & "ror output with the request's paths replaced by names th"
                & "at do not depend on where it ran, or it describes anothe"
                & "r ABI than the target's: another triple, data model, byt"
-               & "e order or sign of plain `char`. A header reached throug"
-               & "h an absolute path under none of the roots the request n"
-               & "ames is refused too, since what is generated could then "
-               & "depend on where it was. A relative dependency that escap"
-               & "es Clang's retained workspace, even if it reenters, is a"
-               & "lso refused: its external directory authority cannot be "
-               & "retained by normalizing the path. Use an absolute includ"
-               & "e under a declared root, or name the header through `--i"
-               & "nclude-dir`. Name the pinned Clang with `--clang`, and e"
-               & "very root a header needs with `--include-dir` or `--syst"
-               & "em-include-dir`."
+               & "e order, sign of plain `char` or, on Cortex-M, procedure"
+               & " call standard, float unit, enum size or hosted environm"
+               & "ent (D935). A header reached through an absolute path un"
+               & "der none of the roots the request names is refused too, "
+               & "since what is generated could then depend on where it wa"
+               & "s. A relative dependency that escapes Clang's retained w"
+               & "orkspace, even if it reenters, is also refused: its exte"
+               & "rnal directory authority cannot be retained by normalizi"
+               & "ng the path. Use an absolute include under a declared ro"
+               & "ot, or name the header through `--include-dir`. Name the"
+               & " pinned Clang with `--clang`, and every root a header ne"
+               & "eds with `--include-dir` or `--system-include-dir`."
                & LF
                & LF
                & "An incompatible child-exit signal policy also refuses Cl"
@@ -1669,9 +1719,12 @@ package body Landin.Diagnostics.Explanations is
                & ", or the declaration uses a form `bindings/README.md` li"
                & "sts as refused, such as an extended floating type, a cal"
                & "ling convention attribute, an anonymous aggregate or a w"
-               & "rapper that would forward a C variadic tail. A Landin na"
-               & "me two declarations would share is refused here too. Cor"
-               & "rect the policy, or select another declaration.",
+               & "rapper that would forward a C variadic tail, or, on free"
+               & "standing `cortex-m0`, a nullable callback or a `_Thread_"
+               & "local` object, whose adapters need a C library (D938). A"
+               & " Landin name two declarations would share is refused her"
+               & "e too. Correct the policy, or select another declaration"
+               & ".",
             when Catalogue.Bindings_Output_Refused =>
                "`refine bindings` cannot prepare its output group (D820,"
                & " D907): the output root is a symbolic link or not a dire"
@@ -1685,7 +1738,25 @@ package body Landin.Diagnostics.Explanations is
                & " recovery. Preparation can already have created private "
                & "staging. A later publication or cleanup failure is L0005"
                & " and can leave outputs installed or recovery entries ret"
-               & "ained, as that diagnostic reports.");
+               & "ained, as that diagnostic reports.",
+            when Catalogue.Firmware_Foreign_Section =>
+               "A firmware image linked with C archives, through `linker"
+               & ".library` with `linker.directory` or `-L DIR`, holds som"
+               & "ething compiler-owned startup cannot honour (D923, D924)"
+               & ". Reset copies data, clears BSS and calls the firmware e"
+               & "ntry; it runs no C constructor, has one thread and no th"
+               & "read pointer, and loads nothing at run time. So the imag"
+               & "e is refused, and removed, when an archive brought C con"
+               & "structors, an `.init_array`, `.preinit_array` or `.ctors"
+               & "` section that the derived script keeps so that it canno"
+               & "t be dropped unseen; thread-local storage, a `.tdata` or"
+               & " `.tbss` section from a `_Thread_local` or `__thread` va"
+               & "riable; or a dynamic linkage, which a shared object woul"
+               & "d bring. The message names the section. Build the librar"
+               & "y without constructors and call its initialisation from "
+               & "the firmware entry; declare a thread-local variable as o"
+               & "rdinary static data; and link the library's static archi"
+               & "ve built for the firmware's core.");
 
    function Example (Of_Code : Catalogue.Code_Name) return String
      is (case Of_Code is
@@ -2520,6 +2591,64 @@ package body Landin.Diagnostics.Explanations is
                & LF
                & "linker.place(""stack"", ""RAM"", 4 * 1024)"
                & LF,
+            when Catalogue.Cache_Unsupported =>
+               "-- refine: --target=cortex-m0 --level=armv7e-m"
+               & LF
+               & "compiler.device(""board"")"
+               & LF
+               & "compiler.core(""cortex-m4"")"
+               & LF
+               & "compiler.cache(""armv7-m-l1"", 32)"
+               & LF
+               & "compiler.vectors(48)"
+               & LF
+               & "compiler.boot(""vector-table"")"
+               & LF
+               & "linker.region(""FLASH"", 0, 1024 * 1024, ""rx"")"
+               & LF
+               & "linker.region(""RAM"", 0x2000_0000, 128 * 1024, ""rwx"")"
+               & LF
+               & "linker.place(""vectors"", ""FLASH"")"
+               & LF
+               & "linker.place(""text"", ""FLASH"")"
+               & LF
+               & "linker.place(""rodata"", ""FLASH"")"
+               & LF
+               & "linker.place(""data"", ""RAM"")"
+               & LF
+               & "linker.place(""bss"", ""RAM"")"
+               & LF
+               & "linker.place(""stack"", ""RAM"", 4 * 1024)"
+               & LF,
+            when Catalogue.Cache_Line_Wrong =>
+               "-- refine: --target=cortex-m0 --level=armv7e-m"
+               & LF
+               & "compiler.device(""board"")"
+               & LF
+               & "compiler.core(""cortex-m7"")"
+               & LF
+               & "compiler.cache(""armv7-m-l1"", 64)"
+               & LF
+               & "compiler.vectors(48)"
+               & LF
+               & "compiler.boot(""vector-table"")"
+               & LF
+               & "linker.region(""FLASH"", 0, 1024 * 1024, ""rx"")"
+               & LF
+               & "linker.region(""RAM"", 0x2000_0000, 128 * 1024, ""rwx"")"
+               & LF
+               & "linker.place(""vectors"", ""FLASH"")"
+               & LF
+               & "linker.place(""text"", ""FLASH"")"
+               & LF
+               & "linker.place(""rodata"", ""FLASH"")"
+               & LF
+               & "linker.place(""data"", ""RAM"")"
+               & LF
+               & "linker.place(""bss"", ""RAM"")"
+               & LF
+               & "linker.place(""stack"", ""RAM"", 4 * 1024)"
+               & LF,
             when Catalogue.Reset_Stage_Return =>
                "-- refine: --target=cortex-m0 --level=armv7e-m"
                & LF
@@ -2662,6 +2791,13 @@ package body Landin.Diagnostics.Explanations is
                & LF
                & "end big"
                & LF,
+            when Catalogue.Unvalidated_Text_Checked =>
+               "trusted: (source: []u8) -> (result: utf8 from source) ="
+               & LF
+               & "    result = compiler.utf8_unvalidated(source)"
+               & LF
+               & "end trusted"
+               & LF,
             when Catalogue.No_Toolchain =>
                "",
             when Catalogue.Toolchain_Failed =>
@@ -2711,6 +2847,8 @@ package body Landin.Diagnostics.Explanations is
             when Catalogue.Bindings_Declaration_Refused =>
                "",
             when Catalogue.Bindings_Output_Refused =>
+               "",
+            when Catalogue.Firmware_Foreign_Section =>
                "");
 
 end Landin.Diagnostics.Explanations;

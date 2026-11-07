@@ -1,0 +1,8 @@
+class: runtime
+profiles: standard
+summary: Small shared core/line consumer computes every board port's 115200 divisor, refuses a rate out of range, out of tolerance and zero and a frame of four data bits, and matches the host oracle's sweep of eight peripheral clocks
+program: main.ldn
+root: ../../../../..
+status: 42
+targets: linux-x86-64, linux-arm64, linux-rv64, darwin-arm64, freebsd-x86-64, freebsd-arm64, cortex-m0
+constructs: 0350, 0900, 1000, 1030

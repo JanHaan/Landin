@@ -1903,9 +1903,11 @@ The selected hosted ABIs are Linux and FreeBSD x86-64 SysV AMD64 LP64,
 Darwin arm64 AAPCS64 with Apple's platform differences, both conventions with
 signed plain C `char`, and Linux and FreeBSD arm64's standard AAPCS64 LP64,
 whose plain `char` is unsigned, and RV64 Linux LP64D, also with unsigned
-plain `char`.
-`compiler.c_sysv_lp64`, `compiler.c_darwin_lp64`, `compiler.c_aapcs64_lp64`
-and `compiler.c_riscv_lp64d` are their respective fixed bool configuration facts, each true for its own ABI
+plain `char`. Cortex-M firmware's C ABI is AAPCS32 (D920), ILP32 with an
+unsigned plain `char`, at the base PCS or, with a description's float unit,
+the VFP variant (D616).
+`compiler.c_sysv_lp64`, `compiler.c_darwin_lp64`, `compiler.c_aapcs64_lp64`,
+`compiler.c_riscv_lp64d` and `compiler.c_aapcs32` are their respective fixed bool configuration facts, each true for its own ABI
 alone, not guesses from pointer width or architecture spelling.
 `compiler.c_runtime` is a fixed bool configuration fact too: true when C's
 runtime starts the program and its library is linked, which on Darwin and
@@ -1918,10 +1920,11 @@ calls by it, so a static Linux program never reaches one. The ordinary
 `c_int`, `c_uint`, `c_long`, `c_ulong`, `c_longlong`, `c_ulonglong`, `c_size`,
 `c_ptrdiff`, `c_float`, `c_double` and `c_bool`. These name existing scalar
 identities: signed/unsigned 8, 16, 32 and 64-bit integers as appropriate,
-`usize`/`isize`, `f32`/`f64` and `bool`; `long` and `long long` are both 64-bit.
+`usize`/`isize`, `f32`/`f64` and `bool`; under the LP64 ABIs `long` and
+`long long` are both 64-bit, and under AAPCS32 `long` is 32-bit (D921).
 C `char` is the selected ABI's plain `char`, a numeric byte and not a Unicode
-scalar: `i8` under SysV and Darwin, `u8` under standard AAPCS64 and RISC-V
-LP64D; `c_schar` and `c_uchar` keep their signedness everywhere. A described
+scalar: `i8` under SysV and Darwin, `u8` under standard AAPCS64, RISC-V
+LP64D and AAPCS32; `c_schar` and `c_uchar` keep their signedness everywhere. A described
 target's ABI identity
 and widths do not imply that its C boundary is implemented. C signature,
 record-layout and variadic-call capabilities are selected explicitly; neither
@@ -2011,6 +2014,22 @@ same registers, and only caller-clobbered floating registers may be named
 without float operands. C signature, C record and outgoing
 variadic-call capabilities are enabled explicitly for this ABI.
 
+Cortex-M firmware's AAPCS32 (D920) places arguments in r0–r3 in four-byte
+words and then in the outgoing area, which the caller keeps eight-byte
+aligned. A scalar or `layout(c)` record takes the next words that hold it; a
+record that does not fit splits between the remaining registers and the
+area while nothing has gone to the area yet, and once one argument is
+there every later one is. A value aligned to eight, an `i64`, `u64` or
+`f64` or a record holding one, starts at an even register and at an
+eight-byte offset of the area. The caller extends a narrow integer
+argument to a word, and the callee a narrow result. A record result of up
+to four bytes returns in r0, an eight-byte scalar in r0–r1, and a larger
+record through a hidden address in r0, which takes the first argument
+register. With a description's float unit the VFP variant (D616) passes an
+`f32`, an `f64` and a record of one to four of one of them in s0–s15
+instead, and returns one in s0–s3 or d0–d3. Copies stay within the actual
+object extent.
+
 RV32 firmware's C ABI is the RISC-V psABI's soft-float `ilp32` (D660,
 D677): little-endian, 32-bit pointers, `int` and `long`, and no
 floating-point registers, so `f32` is one integer word and `f64` two.
@@ -2024,7 +2043,7 @@ words, aligned to their own alignment up to sixteen. An unnamed eight-byte
 argument takes an even register pair. Every Landin frame keeps x8 as the
 entry CFA, the saved return address at CFA−4 and the previous frame pointer
 at CFA−8. The planner holds this convention to GCC's (D677); C signatures,
-records and variadic calls stay disabled on RV32, as on Cortex-M.
+records and variadic calls stay disabled on RV32 (D920).
 
 
 A final `, ...` after at least one fixed parameter marks a variadic C
@@ -2040,6 +2059,9 @@ argument in an eight-byte stack slot; standard AAPCS64 assigns them as
 named arguments. RISC-V LP64D assigns the promoted unnamed tail by the integer
 convention, including floating-point bit patterns; after one unnamed argument
 goes to the stack, all subsequent unnamed arguments go to the stack.
+AAPCS32 calls no variadic function yet: a variadic C signature is refused
+there, and a fixed-arity C function that makes the call is imported
+instead (D922).
 Fixed arguments retain their declared
 types. Variadic C function values may be stored and called in Landin, but a C
 callback parameter, result or record field must have a fixed signature.
@@ -7442,7 +7464,8 @@ images, variant payload construction, match-arm `inout` aliases and erased
 evidence, and each of those store paths would need its own check for the
 guarantee to stay true. No program asked for it: prototype 1's `baud_rate`
 is a scalar parameter, and the complete derived driver replaced even that
-with plain `u32` and declared recoverable checks.
+with a `line.settings` record whose rate is a plain `u32`, which `core/line`
+and the driver refuse with declared recoverable atoms (D955, D957).
 
 **The alternatives:** a composite identity with a check on every store path
 was declined for the reasons above. Admitting fields and elements while
@@ -13999,6 +14022,7 @@ classified failure boundary before the repository gate can pass.
 | `text.indexing` | trap | 0380, 0430, 0600, 0610, 1050, 1900, 1950, 1960 | utf8 indexed by exact usize scans linearly by codepoint ordinal; exact core/text.position supplies an O(1) byte offset; either decodes that codepoint to a u32 value, L0301 rejects every other argument or text identity, L0337 an address of the value, L0303 rejects writing through it, and an absent ordinal, end position or non-boundary position traps | `negative/utf16-indexing-is-not-utf8-indexing`, `negative/utf8-index-needs-usize-or-position`, `negative/utf8-index-position-identity-is-exact`, `negative/utf8-index-result-is-not-a-place`, `negative/utf8-index-result-has-no-address`, `runtime/utf8-indexing`, `runtime/utf8-ordinal-out-of-range-traps`, `runtime/utf8-position-at-end-traps`, `runtime/utf8-position-not-boundary-traps` |
 | `text.slicing` | trap | 0310, 0410, 0430, 0570, 0600, 0790, 1050, 1820, 1950, 1960 | utf8 and utf16 ranges take exact usize code-unit bounds, require scalar-boundary endpoints, preserve the immutable source-derived text identity, include the complete upper scalar for `..`, and evaluate source then bounds once; cstring and other bound types are L0301, mutation is L0303, L0316 enforces the return origin, and an invalid bound or split scalar traps | `negative/cstring-range-slicing-has-no-length`, `negative/text-slice-needs-usize-bounds`, `negative/text-slice-result-is-read-only`, `negative/text-slice-result-keeps-identity`, `negative/text-slice-result-keeps-origin`, `runtime/text-range-slicing`, `runtime/utf16-slice-not-boundary-traps`, `runtime/utf8-slice-lower-not-boundary-traps`, `runtime/utf8-slice-upper-not-boundary-traps` |
 | `text.traversal` | trap | 0250, 0410, 0430, 0600, 1130, 1150, 1160, 1320, 1650, 1950, 1960 | the exact utf8, utf16 and cstring identities retain one source, use private usize code-unit cursors, and yield immutable copied u32 Unicode scalars in first/at_end/item/next order; cstring stops before its first NUL and validates before decoding, malformed foreign encoding traps even in unchecked, ordinary carriers are L0348, and mutation is L0303 | `negative/text-traversal-item-is-read-only`, `negative/text-traversal-ordinary-pointer-is-not-cstring`, `runtime/cstring-traversal-invalid-traps`, `runtime/hosted-text-traversal` |
+| `text.unvalidated` | outside | 0430, 0570, 0600, 0790, 1120, 1560 | D949 non-guarantee: `compiler.utf8_unvalidated` inside `unchecked` gives a `utf8` view of its bytes' base, length, origin and read-only permission and reads none of them, so bytes that are not UTF-8 go unnoticed and later decoding may read them wrongly; outside `unchecked` it is L0600 | `negative/utf8-unvalidated-outside-unchecked`, `negative/utf8-unvalidated-escapes-its-source`, `negative/utf8-unvalidated-is-read-only`, `positive/utf8-unvalidated-keeps-origin`, `runtime/utf8-unvalidated-does-not-scan` |
 | `arithmetic.known` | static | 0290, 0300, 0390, 1950 | L0300 or L0306 | `negative/compound-assignment-zero-divisor`, `negative/divisor-is-zero`, `negative/literal-above-its-type`, `negative/r480-recovery-zero-divisor` |
 | `arithmetic.runtime` | trap | 0290, 0300, 0320, 0390, 1120, 1950, 1960 | trap, outside [1120]'s region for `+`, `-`, `*` and unary `-` | `runtime/compound-assignment-overflow-traps`, `runtime/checked-overflow-traps`, `runtime/checked-subtraction-traps`, `runtime/checked-multiplication-traps`, `runtime/checked-negation-traps`, `runtime/signed-division-overflow-traps`, `runtime/a-zero-divisor-traps`, `runtime/a-zero-remainder-divisor-traps`, `runtime/negative-left-shift-traps`, `runtime/negative-right-shift-traps` |
 | `arithmetic.total` | static | 0320, 0330, 0340, 0350, 0390 | L0301 for an inapplicable operand; admitted nonnegative shifts and wrapping operations are total | `negative/compound-assignment-float-remainder`, `negative/condition-is-not-believed`, `runtime/compound-assignment`, `runtime/shifts-fill-with-zeros-beyond-the-width` |
@@ -17044,8 +17068,9 @@ POSIX facilities over both; all three are scoped to the hosted POSIX systems
 and refused by name on firmware. hosted/system needs no alias beside core/io
 (D347). `platform/*` holds scoped
 freestanding interfaces. platform/c admits only enabled SysV AMD64 LP64, Darwin
-AAPCS64 LP64, AAPCS64 LP64 and RISC-V LP64D C signature ABIs; equal pointer width
-does not enable it. Cortex AAPCS32 and synthetic-32 remain refused. platform/cortex_m
+AAPCS64 LP64, AAPCS64 LP64 and RISC-V LP64D C signature ABIs and, since D920,
+Cortex-M's AAPCS32 at every level; equal pointer width does not enable it. RV32's
+ilp32, Xtensa's windowed ILP32 and synthetic-32 remain refused. platform/cortex_m
 admits the Cortex M-profile family, including armv6-m, armv7-m, armv7e-m and
 armv8-m.main feature levels, and refuses hosted architectures. Existing compiler.assert
 source guards remain. No generic package manifest is introduced.
@@ -17770,9 +17795,13 @@ Maintenance must cover all relevant cache levels and aliases and complete at
 the platform's DMA visibility point. CPU coherence between threads alone does
 not establish device coherence. Cacheless M0 needs no cache operations; this
 is not evidence for cached platforms. Privileged cache operations and hosted
-DMA mapping are not portable user-mode intrinsics; no cache helper is enabled
-on these targets. Platform providers must establish those obligations before
-claiming a cached device profile.
+DMA mapping are not portable user-mode intrinsics; no cache builtin is
+enabled on any target. A platform provider establishes these obligations
+before a cached device profile is claimed: `core/cache` states them as a
+concept over whole lines, refusing a range that would need rounding with
+`cache.misaligned` (D970); its cacheless provider is the barriers alone on
+every target; and the one admitted cached profile, the STM32H753's (D974),
+maintains its Cortex-M7's caches through `platform/cortex_m/l1` (D972).
 
 **Alternatives and rationale:** importing C/C++ race undefined behavior would
 add optimization assumptions unsupported by this unsafe language. Treating
@@ -19117,8 +19146,8 @@ reference's, so a program fits the AN505's map exactly when it fits the
 reference's, and one inventory row says each fixture's verdict at every
 level. Run with `--lane mps2-an505`, the corpus builds and runs every
 `execute` row at `armv8-m.main` alone on the AN505, compiles every
-`refuse` row there to its codes and records every `restriction`;
-`run.py`'s `mps2-an505` lane is that run.
+`refuse` row there to its codes and builds every `restriction` to its
+stop (D986); `run.py`'s `mps2-an505` lane is that run.
 
 **The alternatives:** a harness linker script of the lane's own, which the
 compiler would not derive and nothing would hold to the facts every other
@@ -19250,7 +19279,8 @@ eight-byte `i64`, `u64` and `f64` and a 16-byte long double at sixteen, a
 stack aligned to sixteen bytes as the psABI keeps it even without D or Q,
 and `s0`, `x8`, as the frame pointer. Its C ABI is the soft-float `ilp32`,
 `compiler.c_riscv_ilp32`, a fixed bool fact as D265's `c_riscv_lp64d` is;
-C signatures, records and variadic calls stay disabled, as on Cortex-M.
+C signatures, records and variadic calls stay disabled; D920 enabled
+Cortex-M's AAPCS32 and left RV32's refused.
 `rv32` is firmware only, like `cortex-m0`: no hosted system, a device
 profile, firmware entry, placement, vector slots and a derived script,
 debug lines and no full debugging, and images bounded by the 32-bit
@@ -19310,8 +19340,8 @@ and the two D255 levels. Both use little-endian ELF32 and windowed ILP32:
 four-byte pointers, `usize`, C `int` and C `long`, eight-byte alignment for
 64-bit scalars, sixteen-byte alignment for 128-bit scalar storage and the
 stack. C `char` is unsigned, and C `double` and `long double` are eight
-bytes. `compiler.c_xtensa_windowed_ilp32` identifies that ABI. As on the
-other firmware targets, public C signatures, C records and variadic calls
+bytes. `compiler.c_xtensa_windowed_ilp32` identifies that ABI. As on
+RV32, though not since D920 on Cortex-M, public C signatures, C records and variadic calls
 remain disabled; the identity describes the runtime boundary and does not
 admit those source forms.
 
@@ -20380,7 +20410,12 @@ instance of a local type in two programs.
 
 **Pinned by** `abi/r440-native-link-namespace`, whose routine `foo` beside
 C's `foo` takes `main.foo.2` once a C function and an exported datum hold
-`main.foo` and `main.foo.1`, and the backend suite's namespace case.
+`main.foo` and `main.foo.1`, and the backend suite's namespace case. The
+firmware entry is an export too: the RV32, Cortex-M and Xtensa backends
+reserved the hosted entry's spelling but not the firmware entry's, so a
+library routine named `start` turned an entry `start` into `main.start`.
+They reserve both now, and the driver suite's `the firmware entry keeps its
+symbol` pins all three.
 
 ### D421 — A generic instance is a symbol named after its routine
 
@@ -21912,7 +21947,7 @@ in an even pair; and no float bank, so an f32 is a word and an f64 two.
 The planner is held to GCC by direct checks, as D616 held the M7's: each
 row is where `riscv64-elf-gcc` 16.1 at `-march=rv32imc -mabi=ilp32` reads
 or writes the same C signature's arguments and results. Executable C
-interoperation stays disabled, as on Cortex-M.
+interoperation stays disabled on RV32, though D920 enabled Cortex-M's.
 
 **The alternatives:** a planner of its own for `ilp32`, which would hold
 the shared rules twice; and leaving RV32 unplanned until C signatures are
@@ -21995,8 +22030,8 @@ same name in one directory where its linker prefers one. The C runtime's own
 libraries, `m` among them, therefore link as the driver links them for C: a
 dynamically linked Linux executable no longer takes glibc's static `libm`,
 whose ifunc members ask the dynamic loader for CPU features no static member
-provides. The default static Linux link still refuses the directive (D280),
-and firmware still refuses it (D229). `--dry-run` and `-v` show the `-l`
+provides. The default static Linux link still refuses the directive (D280);
+firmware refused it too (D229) until D923 made it a static archive there. `--dry-run` and `-v` show the `-l`
 operands. This amends D202's archive-only resolution on every hosted target,
 and Darwin's `-print-file-name` query goes with it.
 
@@ -22040,7 +22075,8 @@ directive in an inactive arm adds nothing, and repeats of one directory are
 kept. A directive naming a directory that does not exist is L0391 at the
 directive, and such an `-L` is a usage error, both before any tool runs.
 Wherever `linker.library` is refused, `linker.directory` and `-L` are too:
-the static Linux link, with D280's L0500 naming `--link=libc`, and firmware.
+the static Linux link, with D280's L0500 naming `--link=libc`, and, until
+D923 admitted all three there with no runtime path, firmware.
 `refine check` gives these refusals as compiling does (D443).
 
 **The alternatives:** an environment variable, which D275 declined for the
@@ -22524,7 +22560,7 @@ compiler may.
 **Chosen:** the generator is a command of refine's own, as the SVD importer
 is (D555):
 
-`refine bindings --clang=CLANG [--target=NAME] --sysroot=DIR
+`refine bindings --clang=CLANG [--target=NAME] [--sysroot=DIR]
 --policy=POLICY.json --out-dir=DIR [--include-dir=DIR]...
 [--system-include-dir=DIR]... [--define=NAME[=VALUE]]...
 [LOGICAL=]HEADER.h ...`
@@ -22533,11 +22569,13 @@ It is named for what it makes, as `svd` is for what it reads, because what
 it reads is C, which names nothing a command could be called. The headers are
 its operands, each `LOGICAL=PATH`, or `PATH` named by its last component.
 `--target` is refine's own target name, defaulting to the host's as for
-every command, and selects one of three rows: `linux-x86-64`, `linux-arm64`
-and `darwin-arm64`, whose Clang triples the policy's `abi.target` must name.
-`--clang` names the Clang by path or by a name found on PATH, and is
-required, as the sysroot, the policy and the output directory are: the
-generator's contract is that nothing it reads is chosen for it. Paths are
+every command, and selects its rows: `linux-x86-64`, `linux-arm64` and
+`darwin-arm64` have one each, and `cortex-m0` two, AAPCS32's base procedure
+call standard and its VFP variant (D935); the policy's `abi.target` must
+name one of the target's Clang triples. `--clang` names the Clang by path
+or by a name found on PATH, and is required, as the policy, the output
+directory and a hosted target's sysroot are (D937): the generator's
+contract is that nothing it reads is chosen for it. Paths are
 made absolute against the working directory without resolving links.
 
 Within each generated Landin signature, parameter and result names avoid
@@ -22582,8 +22620,9 @@ clang`, `requests are refused by code`, `another triple is refused first`,
 replacement puts back`; `bindings/test.py`, every case against the pinned
 Clang, with `abi/r440-bindings-generated` regenerated byte for byte; and the
 gate's `bindings` job. Signature collision consumers are pinned by
-`bindings/test.py`'s `test_signature_names_avoid_parameters_and_referenced_types`
-and `test_incoming_handler_prototype_avoids_typedef_shadowing`.
+`bindings/test.py`'s `test_signature_names_avoid_parameters_and_referenced_types`,
+`test_incoming_handler_prototype_avoids_typedef_shadowing` and, on the
+adapter-backed Cortex-M paths, `test_cortex_adapter_names_stay_consistent`.
 
 ### D821 — Clang runs in an environment of its own, through `Landin.Platform`
 
@@ -22615,6 +22654,182 @@ a second program between refine and the one it means to run.
 clang`, which holds every Clang call to that environment, and
 `bindings/test.py`'s `ambient include variables are excluded from every
 clang invocation`.
+
+### D935 — `refine bindings` binds C for Cortex-M under AAPCS32, in both procedure call standards
+
+**The tour said** at [1580] that the generator writes the declarations a
+header's C needs, and nothing about a target without LP64. The generator
+knew three LP64 rows, and its macro check, its builtin sizes and its
+metadata were LP64's.
+
+**Chosen:** `--target=cortex-m0`, refine's one M-profile target name, has
+two rows, because a description's float unit changes the C convention while
+the target name stays (D615): AAPCS32's base procedure call standard, Clang
+triple `thumbv6m-unknown-none-eabi` with `-mfloat-abi=soft`, and its VFP
+variant, `thumbv7em-unknown-none-eabihf` with `-mfpu=fpv5-d16
+-mfloat-abi=hard`, the one float unit D615 admits. The triples are the
+spellings Clang prints for `-print-target-triple`, which the generator
+compares with the row's. The policy chooses the row: `abi.target` names its
+triple, and `abi.calling_convention`, `aapcs` or `aapcs-vfp`, the name
+`bindings.json` records as `calling_convention`, is required for
+`cortex-m0` and must be the triple's, so the VFP variant is never chosen by
+a triple's `hf` alone; on the other targets the key may be given and must be
+the row's. `abi.data_model` is `ilp32` for both rows and for no other, and
+`plain_char` is `unsigned`. Both rows assert `compiler.c_aapcs32` and are
+freestanding (D937, D938). Clang's answer for an empty file is held to
+`__ILP32__`, a four-byte `long`, pointer, `size_t` and `ptrdiff_t`,
+`__arm__`, `__thumb__`, `__ARM_EABI__`, `__ARM_ARCH_PROFILE` `'M'`,
+`__ELF__`, `__ARM_PCS`, `__ARM_SIZEOF_MINIMAL_ENUM` 4 under the
+`-fno-short-enums` every run gets, `__STDC_HOSTED__` 0, an unsigned plain
+`char` and little-endian storage, and `__ARM_PCS_VFP` is required exactly
+for the VFP row, with `__ARM_FP` `0xe` there and no `__ARM_FP` for the base
+one. A `long` and a pointer are the row's word in every layout the
+generator computes, so a native record's generated offset assertions are
+ILP32's. `long double`, a double under AAPCS32, stays refused as on every
+target. `NVIC_EnableIRQ` and its kin are CMSIS macros naming
+`__NVIC_EnableIRQ`; the generator binds no macro, so a policy selects the
+function and gives it a Landin name.
+
+**The alternatives:** a refine target per convention, which refine does not
+have: the float unit is the description's and a level is not a target;
+`--float-abi` on the command line, which would make the command line rather
+than the reviewed policy say which ABI a binding is for; choosing the row by
+the triple alone, whose suffix is the whole difference; and Clang's shorter
+spellings `thumbv6m-none-eabi` and `thumbv7em-none-eabihf`, which it
+accepts and prints otherwise, so the triple check would compare two
+spellings of one target. All were declined.
+
+**Pinned by** the `bindings` suite's `each target is one row`, `cortex-m
+macros are aapcs32's`, `ilp32 is the aapcs32 policy's` and `a cortex-m
+header is bound freestanding`, and `bindings/test.py`'s
+`test_cortex_targets_bind_ilp32_in_both_conventions`,
+`test_cortex_rejects_an_lp64_or_other_convention_clang` and
+`test_cortex_policy_is_ilp32_and_names_its_convention`.
+
+### D936 — A Cortex-M binding asserts its float unit beside `compiler.c_aapcs32`
+
+**The tour said** nothing. One fact, `compiler.c_aapcs32`, holds under both
+procedure call standards, so a binding asserting it alone would let a
+program built for a description with a float unit import bindings whose
+adapters take floats in core registers, while the program passes them in
+the float unit's.
+
+**Chosen:** a base binding asserts `compiler.assert(not
+compiler.feature.fp)` and a VFP one `compiler.assert(compiler.feature.fp_dp)`
+on the line after its ABI fact, so the program built for the other
+convention is refused when it is compiled. The VFP assertion is `fp_dp`
+rather than `fp` because its adapters were compiled for FPv5-D16 and may
+use its double-precision instructions.
+
+**The alternatives:** a second fact per convention, which the compiler does
+not have and which `compiler.feature` already decides; and leaving the
+mismatch to the linker's `Tag_ABI_VFP_args` attributes, which refuse only at
+link time and only where a link checks them. Both were declined.
+
+**Pinned by** the `bindings` suite's `a cortex-m header is bound
+freestanding`, and `bindings/test.py`'s
+`test_cortex_targets_bind_ilp32_in_both_conventions` and
+`test_cortex_bindings_refuse_a_program_of_the_other_convention`, which
+compiles both committed bindings for `cortex-m0` without a float unit and
+with the AN500 lane's FPv5-D16 description, and each is refused with L0324
+by the other.
+
+### D937 — A freestanding target's C headers are Clang's own, as the request names them
+
+**The tour said** nothing. The generator passed `-nostdinc` and a required
+`--sysroot`, and a binding that needed `<stdarg.h>` named Clang's resource
+directory with `--system-include-dir`.
+
+**Chosen:** `cortex-m0` is freestanding. It has no system root: `--sysroot`
+is refused for it, and stays required for the hosted rows, which refine now
+says once it knows the target. Clang gets `-ffreestanding`, so
+`__STDC_HOSTED__` is 0 and Clang's `<stdint.h>` uses no library's, and still
+`-nostdinc`, so its freestanding headers, `<stdint.h>`, `<stddef.h>`,
+`<stdbool.h>` and `<stdarg.h>` among them, are reached only through the
+`--system-include-dir` naming `$(clang -print-resource-dir)/include`, a root
+like any other the request names. A host C library's header is not found.
+
+**The alternatives:** `-nostdlibinc`, which keeps Clang's resource directory
+implicitly, an unnamed root that the marker check and the file-prefix maps
+would have to learn and that D820's contract, nothing it reads chosen for
+it, excludes; and requiring an empty `--sysroot` as for a hosted target,
+which names a directory a freestanding target does not have. Both were
+declined.
+
+**Pinned by** the `bindings` suite's `a cortex-m header is bound
+freestanding` and `requests are refused by code`, and `bindings/test.py`'s
+`test_cortex_headers_are_clangs_freestanding_ones_alone`.
+
+### D938 — Freestanding adapters allocate nothing and reach no C library
+
+**The tour said** nothing. Generated adapters allocated C-owned objects and
+nullable-callback cells with `calloc` and `free`, and reached a
+`_Thread_local` object through the C library's thread pointer.
+
+**Chosen:** on `cortex-m0` a C-owned union, bitfield or opaque record gets
+its copy, size, alignment and member accessors and no `allocate` or
+`release`: its caller supplies the storage by its size and alignment, from
+an arena or a fixed buffer, and the metadata's `lifecycle` records the two
+as null. `adapters.c` then includes no `<stdlib.h>`. A nullable callback,
+whose cell's `allocate` and `release` are `calloc` and `free`, is refused
+with L0581, which says to select it with `nullable: false` and give its
+positions nonnullable policy; a non-null callback is an ordinary `extern(c)`
+callable. A `_Thread_local` object, which Arm code reaches through
+`__aeabi_read_tp`, is refused with L0581 too. By-value wrappers, wrappers of
+internal inline definitions, object accessors and incoming-varargs entries,
+whose `<stdarg.h>` is freestanding, are generated as on a hosted target.
+`adapters.c` is compiled for the row's triple before publication, as on
+every target.
+
+**The alternatives:** a C allocator the generated C would call, which a
+freestanding image does not have; and nullable-callback cells without
+`allocate` and `release`, as an object has, which `initialize` already
+allows for caller storage. That one is declined until a firmware consumer
+passes a nullable callback; until then the refusal says what to do instead.
+
+**Pinned by** `bindings/test.py`'s `test_cortex_adapters_are_freestanding`.
+
+### D939 — Cortex-M bindings are checked against pinned CMSIS headers
+
+**The tour said** nothing. The pinned device inputs were SVDs and register
+headers (D559); no CMSIS-Core header was pinned.
+
+**Chosen:** `devices/inputs.json` pins, by URL and SHA-256, the CMSIS
+headers two Cortex-M bindings read. From pico-sdk's commit `a1438dff`, the
+SVD's: the CMSIS stub's `RP2040.h`, `system_RP2040.h`, `core_cm0plus.h`,
+`cmsis_version.h`, `cmsis_compiler.h`, `cmsis_clang.h`, `cmsis_gcc.h` and
+`m-profile/cmsis_clang_m.h`, `m-profile/cmsis_gcc_m.h` and
+`m-profile/armv7m_mpu.h`, the compiler headers of both Clang and GCC, as
+`rp2040-cmsis/`. For the pinned `stm32h753xx.h`, the CMSIS-Core 5.9 it
+includes, `core_cm7.h`, `cmsis_version.h`, `cmsis_compiler.h`,
+`cmsis_gcc.h`, `mpu_armv7.h` and `cachel1_armv7.h`, from STM32CubeH7's
+commit `8ec3113d`, whose device submodule is the pinned cmsis-device-h7
+`81db1ec6`, and that commit's `system_stm32h7xx.h`, as `stm32h753-cmsis/`.
+Arm's CMSIS licence text is `devices/notices/LICENSE-Apache-2.0.cmsis`. Two
+ABI fixtures hold the four outputs: `abi/cortex-cmsis-bindings`, for the base
+standard, selects `IRQn_Type` and the static inline `__NVIC_EnableIRQ`,
+`__NVIC_GetEnableIRQ`, `__NVIC_DisableIRQ`, `__NVIC_GetPendingIRQ`,
+`__NVIC_SetPendingIRQ`, `__NVIC_ClearPendingIRQ`, `__NVIC_SetPriority`,
+`__NVIC_GetPriority` and `SysTick_Config` from `RP2040.h`; and
+`abi/cortex-vfp-bindings`, for the VFP variant, selects the STM32H753's
+`IRQn_Type`, five NVIC functions and `SCB_GetFPUType`, and, since neither
+CMSIS core has an inline function taking a float or a double, the float and
+double interface of the fixture's own `landin-vfp.h`. The register structs
+the headers declare `volatile` are not selected and refuse nothing. Their
+adapters are compiled with `-fno-short-enums`, which the pinned
+`arm-eabi-gcc`, whose default enums are short, needs as Clang's
+`-fno-short-enums` does; the generated compatible-type assertions refuse
+the build without it.
+
+**The alternatives:** vendoring the headers, declined as D559 declines it;
+Arm's CMSIS_5 tag 5.9.0 for `core_cm7.h`, rather than the copy ST releases
+its device header against; and the STM32H753's own headers for the VFP
+interface, which have none. All were declined.
+
+**Pinned by** `bindings/test.py`'s
+`test_cortex_fixtures_are_exactly_regenerable`, which fetches the inputs,
+regenerates both fixtures byte for byte and compiles their C for each row,
+and `test_cortex_adapters_build_with_the_pinned_arm_gcc`.
 
 ### D585 — The gate builds the flake on every run that does not reuse a pass
 
@@ -22786,12 +23001,17 @@ cacheless: compiler-owned startup leaves the M7's caches disabled, as reset
 leaves them. DMA1 and DMA2 reach neither TCM, so initialized data, BSS and
 the stack, where prototype 1's buffers are, are placed in the AXI SRAM,
 which both streams reach; the DTCM is described and holds only what a
-program places there by name.
+program places there by name. This profile stays the board's cacheless one,
+its bytes and checks unchanged, beside the cached profile admitted with its
+provider, `devices/descriptions/stm32h753_cached`, which a program selects
+by importing it instead (D974).
 
 **The alternatives:** the stack in DTCM, which is faster and puts any
 buffer a routine passes to DMA where DMA cannot reach it; enabling the
-caches, which needs the maintenance provider the phase requires first; and
-placing data in SRAM1, which reaches no further and is smaller.
+caches here, which needed the maintenance provider the phase required
+first, and which D974 does in a description of its own so that this one
+and every program built for it are unchanged; and placing data in SRAM1,
+which reaches no further and is smaller.
 
 **Pinned by** `devices/test.py`'s `the hand-written memory against the
 header`, which holds each region to the header and every placement DMA may
@@ -23250,7 +23470,8 @@ byte: on the C5 at a threshold of one, which it compares as at least
 (32.4.2); on the C3 at one, which it compares as more than (26.4.2), with
 the RX timeout taking a lone byte, since Espressif's QEMU compares the C3's
 as at least and at zero never clears it. The ports keep the ROM's UART0
-configuration, 115200 baud on its default pins, and add a 1 ms system-timer
+configuration, 115200 baud on its default pins at the ROM's clock, from
+which D961 lets them change the line, and add a 1 ms system-timer
 interrupt above the receive one: the C3's line 2 at priority 2 and the
 C5's identity 18 at level 95. Command 0x13 raises the threshold, the C3's
 `CPU_INT_THRESH` to 2 and the C5's `mintthresh` to 63, for 100 ms by the
@@ -23572,6 +23793,269 @@ gate without removing the need for a cold start on the cascade.
 **Pinned by** `scripts/tests/test_board_rp2350.py`'s power-only controls,
 `scripts/tests/test_board_rig.py` and `scripts/tests/test_board_gate.py`'s
 `Refusals`.
+
+### D958 — The PL011 ports change their line with the UART disabled, and only the emulator sees their registers
+
+**The tour said** nothing; the Picos' serial modules wrote IBRD 6, FBRD 33
+and LCR_H 0x70 by hand for clk_peri's 12 MHz.
+
+**Chosen:** `compiler/tests/board/rp2040/serial` and `rp2350/serial`,
+which the Hazard3 port shares, compute IBRD, FBRD and LCR_H through
+`core/line` as the derived driver does (D957), at 12 MHz, 12 to 750,000
+baud, nine data bits refused, and `open` takes a `line.settings`.
+`configure(inout r, settings)` computes every image first, waits until
+UARTFR says the transmit FIFO is empty and the UART not busy, clears
+UARTCR, writes IBRD, FBRD and LCR_H, and enables the UART again; the DMA
+channel and its ring are untouched, and a byte arriving while the UART is
+disabled is lost, so a program changes the line only while its peer waits
+for it. The Picos' consoles are probehive's bridge, whose line is fixed
+when it starts (D963), so their applications open the default and take no
+line request; `configure` is linked into no image (D296). What evidences
+these modules is arithmetic and the emulator: `runtime/library-shared-line`
+at 12 MHz, and the derived driver's identical PL011 encoding on QEMU,
+which is register images and not a line.
+
+**The alternatives:** a line request in the Picos' applications that no
+host can send, untested code in every image; and changing the bridge's
+line, which is a shared external service.
+
+**Pinned by** the boards' builds and `runtime/library-shared-line`; their
+records' `line` verdicts say the exchange was not run.
+
+### D959 — The STM32H753 takes words of seven to nine bits and stops its stream to change line
+
+**The tour said** nothing; D647 put USART3 at BRR 556 on the 64 MHz HSI.
+
+**Chosen:** `compiler/tests/board/stm32h753/serial` computes BRR through
+`core/line`, oversampling by 16, 16 to 65535, 977 to 4,000,000 baud
+(RM0433 48.5.7, p. 2034), and the frame: the word is the data bits and the
+parity bit, 7, 8 or 9 of them, CR1's M1 and M0 10, 00 and 01, PCE and PS
+for parity (48.8.1, p. 2067), and CR2's STOP 10 for two stop bits (48.8.3,
+p. 2074), which the policy now selects. Nine data bits are refused, since
+the ring and the transmitter move bytes, and so are five, and six without
+parity, which no M gives. CR1's frame bits, BRR and CR2 may be written only
+with UE clear, and clearing UE resets the USART's DMA requests, so
+`configure` waits for TC and TXFE, stops the stream (D648), programs the
+USART with UE clear and then set, and restarts the stream, which discards
+the ring's unread bytes. `open` programs the same way: 115,200 8N1 is BRR
+556, CR1 as before and CR2 zero, its reset value. The public interface
+the cached profile shares is `open(settings: line.settings, budget,
+escaping buf)`, `configure(inout r, settings) ! line.unsupported_rate |
+line.unsupported_format | stop_timeout | transfer_error` and
+`line_registers(settings)`, with `clock` and `registers`.
+
+**The alternatives:** changing BRR with UE set, which RM0433 forbids; a
+line change that keeps the epoch, which would leave the stream armed while
+the USART drops its requests; and leaving CR2 unselected, which keeps two
+stop bits from a chip and a bridge that both have them.
+
+**Pinned by** `environments/boards/stm32h753/board.py`'s `line_oracle`,
+written from RM0433, against the `l` frames of the exchange (D962), and
+`devices/test.py`'s `Stm32h753Oracles`, which hold CR2 to ST's header.
+
+### D960 — The ESP32 and ESP32-S3 program their line in `serial`, the ESP32 without two stop bits
+
+**The tour said** nothing; each port's bringup wrote CONF0 and CLKDIV
+0x0040015b for 115,200 8N1 at 40 MHz.
+
+**Chosen:** bringup gives UART0 its clock, the 40 MHz crystal undivided,
+its reset and its pins, and `serial.open` writes the line: CLKDIV and FRAG
+through `core/line`, once a bit with four fraction bits, the integer at
+least 16, since the TRM gives 5 Mbaud at 80 MHz as the fastest (the C3's
+26.4.3.1, which the three share), and at most CLKDIV's field, 20 bits on
+the ESP32 and 12 on the S3, so 39 or 9,766 to 2,500,000 baud; and CONF0's
+PARITY, PARITY_EN, BIT_NUM and STOP_BIT_NUM, the rest of CONF0 kept. The
+divisor rounds, so 115,200 is still 0x0040015b and CONF0 0x1c. Nine data
+bits are refused, since BIT_NUM reaches eight. The ESP32 refuses two stop
+bits: ESP-IDF v6.1's `uart_ll_set_stop_bits` gives them on that chip as
+one stop bit and RS485_CONF's DL1_EN, working round a fault of the chip's
+own two-bit setting, and the port selects no RS485_CONF. `configure` waits
+until TXFIFO_CNT and the transmitter's state say everything has been sent
+and programs the same registers; the receive interrupt and the ring are as
+they were.
+
+**The alternatives:** selecting RS485_CONF to give the ESP32 two stop bits
+through ESP-IDF's workaround, which the exchange needs no more than the
+parity frames give it; dividing the S3's clock with SCLK_DIV_NUM to reach
+9600, which changes a clock the port otherwise keeps; and leaving the line
+in bringup, whose constant no refusal could guard.
+
+**Pinned by** `environments/boards/esp.py`'s `line_oracle` and
+`xtensa.py`'s plans, against the `l` frames of the exchange (D962).
+
+### D961 — The ESP32-C3 and C5 keep the ROM's clock and learn it from the ROM's divisor
+
+**The tour said** nothing; D721 kept the ROM's UART0, 115,200 baud, with
+no clock the ports knew.
+
+**Chosen:** the C3's and C5's ports change no clock. The first `open`
+reads the divisor the ROM left in CLKDIV, or CLKDIV_SYNC, and takes UART0's
+clock as 115,200 times it, which the ROM's rounding leaves within 0.01
+percent; every divisor is computed from that clock through `core/line`,
+CLKDIV's 12 bits and the integer at least 16, and the frame as D960's. So
+the default line, given again, writes the ROM's own values back. Clock
+sources were not chosen instead: the C5's TRM v1.1 and ESP-IDF v6.1's
+`pcr_reg.h` disagree on PCR_UART0_SCLK_SEL's encoding and reset value, and
+the C3's own source, the crystal halved at reset, must also match its APB
+clock while HIGH_SPEED synchronizes its registers. `configure` waits until
+TXFIFO_CNT and FSM_STATUS's ST_UTX_OUT, which both policies now select,
+say everything has been sent, then programs the line, the C5's through
+REG_UPDATE. The C5 runs the exchange on its CH340X (D962). The C3's console
+is probehive's bridge, so its application opens the default and takes no
+request; its `configure` is linked into no image, and at 20 MHz its
+receive interrupt keeps pace only with paced input even at 115,200 (D727),
+so nothing here shows it at any faster line.
+
+**The alternatives:** selecting the crystal for UART0 and dividing it,
+which the C5's two sources describe differently and which changes the ROM's
+working line; and a clock named per board in the source, which a ROM that
+chose another would make wrong without a refusal.
+
+**Pinned by** `environments/boards/esp32c5/board.py`'s plan, whose `l`
+frames name the clock the port inferred, which `esp.line_oracle` admits
+only within 0.1 percent of the crystal's 48 MHz or PLL_F80M, and
+`devices/test.py`'s `Esp32c3Oracles` and `Esp32c5Oracles`, which hold
+FSM_STATUS to the vendor headers.
+
+### D962 — A tty board answers a line request on the old line, changes, and comes back
+
+**The tour said** nothing.
+
+**Chosen:** the STM32H753's, ESP32's, ESP32-S3's and ESP32-C5's
+applications take two more command bytes, each echoed first. 0x16 is
+followed by eleven digits, 'a' to 'p', four bits each, most significant
+first: the rate's eight, then the data bits, the parity, 0 none, 1 even
+and 2 odd, and the stop bits. When the last arrives the application
+answers on the line in use with an `l` frame of what it read, `r`, `d`,
+`p` and `s`, the clock it computes from, `k`, and `o`: 0 with the register
+images, `b` the divisor and `f` the frame, and on the STM32H753 `x` its
+CR2, after which `serial.configure` changes the line; or 1 for
+`line.unsupported_rate` and 2 for `line.unsupported_format`, with nothing
+written and the line as it was. From then every byte but 0x17 that arrives
+is counted and hashed, 32-bit FNV-1a, as well as echoed and handled as
+ever; 0x17 answers on the new line with an `e` frame, `n` the count and
+`h` the hash, and then the default line is set again. A line request
+abandoned by any byte but a digit is dropped.
+
+**The alternatives:** a request in readable decimal, whose digits are the
+indicator's `0` and `1`; changing the line first and answering on the new
+one, which the host could not read before it had changed too; and a fixed
+payload checked by the board, which leaves the host's own echo comparison
+the only oracle when the count and hash give a second.
+
+**Pinned by** `scripts/tests/test_board_common.py`'s `LineExchange`, a
+fake board answering with the STM32H753's own oracle, and the tty boards'
+records' `line` verdicts.
+
+### D963 — The host changes its tty with the board, and a bridge's fixed line is a verdict
+
+**The tour said** nothing; `TtyConsole` set 8N1 at one of five rates and
+`TcpConsole` took what probehive's bridge gave.
+
+**Chosen:** `common.TtyConsole.line(baud, data_bits, parity, stop_bits)`
+sets the tty's rate, 9600 to 921,600, data bits 5 to 8, parity and stop
+bits once what was written has been sent; raw mode checks no parity on
+input. `common.line_phase` runs the exchange from a plan of settings and
+the outcome each must have, with the port's own oracle written from its
+manual: for each it sends the request, requires the `l` frame to read it
+back and to give the oracle's outcome and register images; for a refusal
+it requires a telemetry frame on the line in use; for an accepted line it
+changes the tty, requires that nothing arrives while the two ends change,
+sends a 48-byte payload and 0x17, requires the payload's echo byte for byte
+and the `e` frame's count and hash, changes back and requires a telemetry
+frame on the default line. Each tty board's leg takes one rate change, two
+frame changes and the two refusals, after every existing oracle and
+before the probe's cross-checks, which take the last telemetry frame:
+
+| Board | Bridge | Accepted | Rate refused | Format refused |
+|---|---|---|---|---|
+| STM32H753 | ST-LINK V3 VCP | 230400-8N1, 9600-8E1, 57600-7O2 | 300 | 6N1 |
+| ESP32 | CH340 | 921600-8N1, 9600-8E1, 57600-7O1 | 3,000,000 | 8N2 |
+| ESP32-S3 | CH340 | 460800-8N1, 19200-8O2, 57600-7E1 | 9600 | 9N1 |
+| ESP32-C5 | CH340X | 230400-8N1, 38400-8E2, 57600-7O1 | 300 | 9N1 |
+
+A `TcpConsole` is probehive's bridge, 8N1 at its one rate: the RP2040's,
+the RP2350's, the Hazard3's and the ESP32-C3's runs record `line` as `not
+run: probehive bridge fixed at 115200 8N1`. A passed exchange shows that
+the board's registers and the bridge agree on a line well enough to carry
+every byte both ways; it does not measure a bit's time.
+
+**The alternatives:** a separate tool for the line, which would repeat a
+power cycle the scenario already pays for; checking the exchange's images
+against the board's own constants, which a wrong constant would satisfy;
+and silence on the bridge ports, which a reader of their records could not
+tell from an exchange that passed.
+
+**Pinned by** `scripts/tests/test_board_common.py`'s `LineExchange` and
+`Consoles`, and `scripts/tests/test_line.py`, which holds the oracles'
+divisors to an exact one.
+
+### D964 — The derived driver's model holds the PL011's line rules, and register images are not a line
+
+**The tour said** nothing; `DriverPeripheral` checked only that IBRD fit
+16 bits, FBRD 6 and LCR_H 8, and the lane required 26, 3 and 0x70.
+
+**Chosen:** the model refuses an LCR_H write that latches IBRD 0, or FBRD
+above 0 at IBRD 65535, or sets BRK or SPS, and records the latched images
+with what they mean at the declared 48 MHz: the rate as a fraction, the
+data bits, the parity and the stop bits. `driver.py`'s `pl011`, written
+from the RP2040 datasheet's 4.2.7.1, the integer part and the fraction's
+64ths rounded with their carry, is the oracle: eight lines, from 46 to
+3,000,000 baud and every data width, parity and stop count, are opened
+through the public driver and each register image and latched line must be
+its answer, and three characters fed on each, a parity frame's with its
+parity bit above the data, must be read back as sent (D965); rates 0, 45 and 3,100,000 and data bits 4 and 9 are refused
+with every UART register unwritten and nothing latched; and 115,200 8N1 is
+still the application's 26, 3 and 0x70 in its exact trace. The model sends
+no bit at any rate, so this is evidence of the images the driver writes,
+never of a line's timing.
+
+**The alternatives:** timing modelled bits in the emulator, which would
+check the model against itself; and an oracle sharing `core/line`'s
+rounding, which would share its mistakes.
+
+**Pinned by** `environments/cortex-m/driver.py`'s `lines` and
+`configurations` on every profile, and `scripts/tests/test_line.py`, which
+holds `pl011` to the exact oracle.
+
+### D965 — A received byte is its frame's data bits alone
+
+**The tour said** nothing; D955's ports read their rings' bytes as the
+receiver left them. A rig run of the STM32H753 found that wrong for a
+parity frame of seven data bits: RM0433's Table 408 (48.5.12, p. 2042) and
+USART_RDR (48.8.12, p. 2098) put the received parity bit at the word's MSB,
+bit 7, the stream moved it into the ring with the data, and on 57600-7O2
+the application read 0x17, whose odd parity bit is one, as 0x97. Its echo
+was right, since the transmitter makes its own parity bit, but 0x17 was
+not the command, and no `e` frame came.
+
+**Chosen:** `line.data_mask(settings)` is the low `data_bits` bits of a
+byte, all eight for eight or nine. Every port's descriptor keeps its
+line's mask, set by `open` and by `configure` once the line is programmed,
+and `read` returns each byte of the ring ANDed with it, so the stream, the
+interrupt and the ring are as they were and a byte read is its frame's
+data bits with zeros above. What the hardware leaves differs, and the mask
+makes the contract the same: the STM32H753 leaves the parity bit at bit 7
+of seven data bits and bit 6 of six, and for eight data bits and parity at
+bit 8, which a byte transfer drops; the PL011 removes the parity bit on
+receive (RP2040 datasheet 4.2.1), so the Picos' and the derived driver's
+reads change nothing it delivers; and the ESP UARTs store the data bits
+alone in their RX FIFO (the C3's TRM 26.3, which the ESP32, the S3 and
+the C5 share), the high bits for fewer than eight unstated, which the mask
+then decides.
+
+**The alternatives:** masking where the stream writes, which a DMA ring
+cannot; masking in the application, which every program would have to
+repeat; masking only the STM32H753, which leaves the ESP ports' unstated
+high bits to the hardware; and a terminator test on the data bits alone,
+which the count and hash would still see wrong.
+
+**Pinned by** `environments/cortex-m/driver.py`'s `lines`, which feeds the
+model 0x17 under odd parity with its parity bit at bit 7, as the
+STM32H753's RDR leaves it, and requires 0x17 read back;
+`scripts/tests/test_board_common.py`'s `LineExchange`, whose fake board
+keeping the parity bit fails 57600-7O2 as the rig did, and
+`runtime/library-shared-line`'s masks.
 
 ### D725 — Every board run holds the rig's lock and paces what disconnects a device
 
@@ -28198,9 +28682,10 @@ The internal Landin convention uses the same bank for its own floats: an
 `f32` or `f64` result is s0 or d0; aggregates, arrays and multiple results
 stay by address in core registers, and r12's outcome is unchanged.
 `Backend.Arm32_ABI` plans both, its locations naming the first single slot
-and how many a candidate takes. C interoperation stays disabled on
-Cortex-M, where `platform/c` stays refused, so the C half is a planner
-contract measured against GCC rather than a convention any source uses.
+and how many a candidate takes. D920 enables C interoperation on
+Cortex-M, so the C half is the convention every C signature of a program
+with the unit uses, still measured against GCC as below; D922 leaves the
+variadic call the planner places unused.
 
 **The alternatives:** `softfp`, the unit's instructions with the base PCS's
 transport, which links with soft-float objects and moves every float
@@ -28345,11 +28830,14 @@ and paints d8-d15, and every image must carry the unit's attributes.
 `backend_corpus.py --lane mps2-an500` runs the whole inventory there at
 every profile, each row's own disposition included: an `execute` row
 executes, an image the lane's map cannot hold is a limit, a source refusal
-is checked with the lane's inputs, and a restriction is recorded. A row's
+is checked with the lane's inputs, and a restriction is built to the stage
+that stops it (D986). A row's
 `lanes` entry may give a lane a restriction of its own with its reason,
 which the lane still runs and requires to fail, so a stale one fails the
 run, and a `refuse` row's entry the codes the lane refuses it with where
-they differ from the reference's. `run.py`'s `mps2-an500` lane is that
+they differ from the reference's; an `execute` or `restriction` row's
+entry may refuse it too, with the lane's codes, as the RV32 lanes refuse
+the C surface their ilp32 ABI does not enable (D920). `run.py`'s `mps2-an500` lane is that
 run, as its `mps2-an505` lane is D607's, and the AN505 is reached through
 its own entry-module file.
 No limited verdict is linked again against the lane's map, which is no
@@ -28400,6 +28888,318 @@ soft-float refine object's number model and VFP arguments to a GCC
 soft-float object's at the Cortex-M7, and refuses a link of it with a
 hard-float GCC object and of the hard-float refine object with a
 soft-float GCC object, each in both orders.
+
+### D920 — Cortex-M's C ABI is AAPCS32, named by `compiler.c_aapcs32` and enabled at both variants
+
+**From** [1580], [1975], D267, D616, D660 and D780.
+
+**The tour said** at [1975] that a C signature follows the target's C ABI,
+and the target description named Cortex-M's AAPCS32 while D267 refused
+`platform/c` there and D616 kept the planner's C half a contract no source
+used. A freestanding program that calls a vendor's C driver, or is called
+from a C startup, had no way to say so.
+
+**Chosen:** `cortex-m0`, at every level, `armv6-m`, `armv7-m`, `armv7e-m`
+and `armv8-m.main`, has the C ABI
+[AAPCS32](https://github.com/ARM-software/abi-aa/blob/2025Q4/aapcs32/aapcs32.rst),
+and `compiler.c_aapcs32` is its fixed bool fact: true there and false on
+every other target, as each C fact names one ABI. C signatures and
+`layout(c)` records are enabled for it, through `Backend.Arm32_ABI`, and
+`platform/c` is available (D921). The fact does not say which of AAPCS32's
+variants a build uses. That is the description's float unit's to say, as
+D616 has it: with `fpv5-d16` every C signature, imported, exported or
+called through a C function value, uses the VFP variant, and without a
+unit the base PCS. A program reads the unit through `compiler.feature.fp`
+and `compiler.feature.fp_dp` (D615), so a second C fact would only repeat
+them. D780's attributes keep an object of one variant from linking with
+one of the other, in either order, whichever of them is C. RV32's ilp32
+(D660, D677) and Xtensa's windowed ILP32 (D903) keep their C ABI identity
+and stay refused: their transport is planned or described, and no program
+has needed it.
+
+**The alternatives:** a fact for each variant, `c_aapcs32` and
+`c_aapcs32_vfp`, which would let a program select by a fact what the
+description already decides, and could disagree with it; one ILP32 fact
+for every 32-bit firmware target, which would let `platform/c` and a
+binding cross from AAPCS32 to ilp32, whose records, splits and variadic
+pairs differ; and keeping Cortex-M's C refused until a binding generator
+exists, which leaves a hand-written C peer, the smallest consumer, with
+nothing.
+
+**Pinned by** the `cortex ABI` cases `capabilities and refusals`, `C
+signatures from source at both variants` and `driver boundaries`,
+`targets/fixed facts have one name each`, `driver/fixed facts come from
+the target`, `driver/source namespaces enforce target availability`,
+`positive/c-aliases-aapcs32`, `negative/rv32-has-no-c-abi` and
+`negative/library-platform-c-rv32`.
+
+### D921 — `platform/c` on AAPCS32 is ILP32 with an unsigned plain char
+
+**From** [1975], D256, D267 and D920.
+
+**The tour said** at [1975] that `long` and `long long` are both 64-bit,
+which held for the four LP64 ABIs `platform/c` admitted and does not hold
+for AAPCS32.
+
+**Chosen:** under `compiler.c_aapcs32` `platform/c` is ILP32: `c_char` is
+`u8`, since AAPCS32's plain `char` is unsigned; `c_schar` `i8`, `c_uchar`
+`u8`, `c_short` `i16`, `c_ushort` `u16`, `c_int` `i32`, `c_uint` `u32`,
+`c_long` `i32`, `c_ulong` `u32`, `c_longlong` `i64`, `c_ulonglong` `u64`,
+`c_size` `usize` and `c_ptrdiff` `isize`, both 32 bits there, `c_float`
+`f32`, `c_double` `f64` and `c_bool` `bool`. `long long` and `double` are
+aligned to eight. The module's assertion admits the fact beside the four
+LP64 ones, and the `long` aliases are chosen by a `fixed if` on it.
+
+Each is measured, not assumed. The pinned `arm-eabi-gcc` 16.1 at
+`-mcpu=cortex-m0 -mthumb -mfloat-abi=soft` and at `-mcpu=cortex-m7 -mthumb
+-mfpu=fpv5-d16 -mfloat-abi=hard`, and the pinned Clang 19 at
+`--target=thumbv6m-none-eabi` and `--target=thumbv7em-none-eabihf
+-mcpu=cortex-m7 -mfpu=fpv5-d16`, all predefine `__ARM_EABI__`,
+`__CHAR_UNSIGNED__`, `__SIZEOF_INT__`, `__SIZEOF_LONG__`,
+`__SIZEOF_POINTER__` and `__SIZEOF_SIZE_T__` 4, `__SIZEOF_LONG_LONG__`
+and `__SIZEOF_DOUBLE__` 8, `__SIZEOF_WCHAR_T__` 4, `__SIZEOF_LONG_DOUBLE__`
+8 and `__BIGGEST_ALIGNMENT__` 8; `__ARM_PCS_VFP` only in the hard-float
+builds, and `__SOFTFP__` only in the soft ones. `_Alignof(long long)` and
+`_Alignof(double)` are 8 and `struct { char c; long long x; }` is 16
+bytes under both compilers. The two disagree on one thing: GCC's
+bare-metal default is short enums, `__ARM_SIZEOF_MINIMAL_ENUM` 1 and
+`readelf -A`'s `Tag_ABI_enum_size: small`, while Clang's is int-sized
+enums, 4 and `Tag_ABI_enum_size: int`, which GCC gives with
+`-fno-short-enums`. `platform/c` names no enum type, and an object refine
+assembles declares no enum size, so it links with either; a binding or a
+C peer that passes an enum states which it was built with. Both objects
+declare `Tag_ABI_PCS_wchar_t: 4`, and GCC's and Clang's
+`Tag_ABI_align_needed` and `Tag_ABI_align_preserved` are both eight bytes.
+
+**The alternatives:** a separate `platform/c` module for ILP32, which would
+give a program two spellings of one C type; `c_long` as `isize`, which is
+32 bits here and 64 on the LP64 ABIs and so would hold, but would make
+`c_long` a pointer-sized type on every ABI, which Windows' LLP64 already
+shows it is not; and a signed `c_char`, which disagrees with every header
+compiled for the target.
+
+**Pinned by** `positive/c-aliases-aapcs32`, whose assertions hold the
+widths and alignments and whose assignments hold each alias to its scalar.
+
+### D922 — AAPCS32 calls no variadic C function until a program needs one
+
+**From** [1975], D616 and D920.
+
+**The tour said** at [1975] that a variadic C call promotes its unnamed
+tail and places it by the ABI's rule; D616's planner places an AAPCS32
+variadic call in the base PCS, fixed arguments included, and nothing has
+called one.
+
+**Chosen:** `C_Variadic_Calls` stays disabled for AAPCS32. A variadic C
+signature, an import or a function type, is refused on `cortex-m0` with
+L0346, naming the target and the variadic calls it does not enable, and
+the note says what to write instead: a C function of fixed arity that
+makes the variadic call with the arguments the program passes, linked with
+the program and declared `extern(c)` in place of the variadic one. A
+variadic definition stays refused as on every target. The planner keeps
+its variadic placement and the contract's `vfp.` variadic row keeps
+holding it to GCC, so enabling the calls is a capability and a consumer,
+not a new convention.
+
+**The alternatives:** enabling the calls with no program that makes one,
+which would ship a transport that only the planner's rows have seen; and
+refusing them with the general "not representable" note, which says
+variadic definitions need an adapter and so misleads about an import.
+
+**Pinned by** `negative/c-variadic-cortex-m0` and the `cortex ABI` case
+`driver boundaries`.
+
+### D923 — Firmware links C libraries as static archives
+
+**From** [1590], [1650], D229, D523, D524, D525 and D920.
+
+**The tour said** at [1590] that `linker.library` asks the linker for a
+library, and D229 and D524 refused it, `linker.directory` and `-L` on
+firmware, which linked only refine's object and libgcc. With C signatures
+enabled on Cortex-M (D920) a firmware program could declare a vendor's C
+function and had no way to link it.
+
+**Chosen:** on firmware, each active `linker.library("NAME")` is a static
+archive, `libNAME.a`, compiled for the build's core and float ABI. The
+pinned GCC driver receives `-static`, then each directory as `-L` with its
+absolute path, the command line's before the directives' as D524 orders
+them, then refine's object, then each archive as `-lNAME` in source order
+with its repeats, then `-lgcc`, which the archives may need too. A firmware
+image has no loader, so no runtime path is passed and no shared object is
+looked for: `-static` keeps `-lNAME` to archives, and D525's search after a
+failed link looks for `libNAME.a` alone. The derived script already places
+an archive's `.text`, `.rodata`, `.data` and `.bss` with refine's own, and
+reset copies the data and clears the BSS whatever object they came from,
+in the boot layout and, loading data in place, in the RAM layout. A
+library compiled for the other AAPCS32 variant is refused by the linker
+(D780). `refine check` refuses what compiling would, as before. Without a
+library the link is as it was, byte for byte.
+
+**The alternatives:** passing archives as file operands, which leaves the
+search order D524 gave a hosted link; a separate firmware directive, which
+would ask a reader to know that firmware's libraries differ before they
+link one; and linking C objects rather than archives, which needs a list of
+objects the build tool has not yet got.
+
+**Pinned by** the `cortex ABI` case `firmware links C archives`, the
+toolchain case `libraries and directories reach the driver` and
+`end-to-end/link-firmware-archives-dry-run`.
+
+### D924 — A firmware image refuses what its startup cannot honour
+
+**From** [1650], D229, D546 and D923.
+
+**The tour said** at [1650] that compiler startup initializes RAM and calls
+the firmware entry; it runs no constructor, sets up no thread pointer and
+loads nothing. Measured with the pinned tools: an archive's
+`__attribute__((constructor))` puts its pointer in `.init_array`, which
+`--gc-sections` drops unseen, since nothing references it; Clang's
+`_Thread_local` brings `.tdata` and `.tbss`, which the derived script left
+as orphans that the linker put beside `.data`, and a call of
+`__aeabi_read_tp`. GCC's arm-eabi instead emulates TLS through libgcc's
+`emutls`, ordinary data and calls of `malloc` and `memcpy`, which link only
+when an archive supplies them; that form holds no TLS section and is not
+refused.
+
+**Chosen:** a link with archives derives its script with one more output
+section, `.init_array`, which keeps every `.preinit_array`, `.init_array`
+and `.ctors` input. After the link refine reads the image's section headers
+and refuses an image whose allocated sections hold C constructors, an init
+or preinit array or `.ctors`, thread-local storage, a TLS section, or a
+dynamic linkage, a dynamic section, its symbols or an interpreter, with
+L0587 naming the first such section; the image is removed. The note says
+what to do: build the library without constructors and call its
+initialisation from the firmware entry; declare a thread-local variable as
+ordinary static data; link the static archive and no shared object. A
+developer's script is held to the same reading, since the check reads the
+image and not the script; it is the developer's to keep constructors for
+the check to see. Destructors are never run, as firmware does not exit, and
+are left to `--gc-sections`.
+
+**The alternatives:** running constructors from reset, which would put a
+C runtime's order of initialisation ahead of the firmware entry the program
+names; an `ASSERT` in the derived script, which the linker reports with its
+own text and a developer's script would not carry; and `--orphan-handling=
+error`, which would refuse a debug or attribute section refine's own objects
+carry as well.
+
+**Pinned by** the `cortex ABI` case `firmware links C archives`, whose
+images hold an init array, a TLS section and a dynamic section, each
+refused and removed.
+
+### D985 — The Cortex-M corpus runs an ABI fixture's C freestanding, by one contract
+
+**From** D545, D619, D780, D920, D921 and D923.
+
+**The tour said** nothing; the corpus ran runtime fixtures alone, and every
+ABI fixture was a restriction, since C was refused on Cortex-M and nothing
+built a C peer for it.
+
+**Chosen:** an `abi/` fixture whose inventory row says `execute` is built
+and run as a runtime fixture is, at every profile and level, with its C.
+Each `c-sources` entry is compiled by the pinned `arm-eabi-gcc` with the
+flags of the level's lane, the processor and float ABI the harness start
+is assembled with, soft on the micro:bit, AN385 and AN505 and
+`-mfloat-abi=hard -mfpu=fpv5-d16` on the AN500, `-ffreestanding -nostdlib
+-O1 -Wall -Wextra -Werror`, then `-std=c11 -nostdinc -fno-short-enums`,
+GCC's own include directory, the fixture's directory, each pinned input
+directory the new `c-inputs` key names, fetched by hash, and the fixture's
+`c-args`. Int-sized enums are what Cortex-M's C boundaries use, Clang's
+default and the generated bindings' assertion, so the lane passes them
+rather than each fixture. No C library is reachable: the headers are GCC's
+freestanding ones, and the link is the harness's start, refine's object,
+the C objects, the four routines GCC requires of a freestanding program,
+`memcpy`, `memmove`, `memset` and `memcmp`, each in its own section, and
+libgcc. Every object's float-argument attribute is held to the lane's
+before the link, apart from GNU ld's check, and a C peer compiled for the
+other variant must be refused by both, the linker in either order; no
+object may declare short enums, which the linker only warns of, and a peer
+built with them must be refused by that assertion.
+`abi/cortex-c-peer` also takes the route a program does, refine's own
+firmware link of its C as archives named by `linker.library` with `-L`
+(D923), under compiler-owned startup.
+
+**The alternatives:** newlib's headers and archive, which the pinned GCC
+ships and which would let a peer that needs a hosted C library pass as a
+freestanding one; `-fno-short-enums` written in each fixture's `c-args`,
+which a fixture forgets and a short-enum peer then links with a warning
+only; linking the C objects through refine for every fixture, which ties
+each corpus program to compiler-owned startup and loses the harness's
+register and stack oracle; and semihosting for the status, which the
+harness's debugger session already reads without.
+
+**Pinned by** `environments/cortex-m/backend.py`'s `c_compiler`,
+`c_objects` and `conventions`, `backend_corpus.py`'s `convention_control`
+and `refine_link_route`, `abi/cortex-c-peer`, `abi/cortex-cmsis-bindings`
+and `abi/cortex-vfp-bindings`, the metadata cases for `c-inputs`, and
+`environments/cortex-m/test.py`'s convention case.
+
+### D986 — A corpus restriction names the stage that stops it, and the lane reaches it
+
+**From** D619 and D985.
+
+**The tour said** nothing; a `restriction` row of
+`compiler/tests/cortex-m/corpus.json` gave a reason and a witness file,
+the corpus never built it, and 65 restrictions written while C was refused
+on Cortex-M went on saying so after it was enabled.
+
+**Chosen:** a restriction is built at none/off on each lane it runs on as an
+`execute` row is, and names in `stops` the first stage that must stop it:
+`defect`, refine fails internally; `c-options`, the pinned GCC refuses one
+of its `c-args`; `c-headers`, a C source includes a header no freestanding
+C has; `c-source`, a C source does not compile for the target; `link`, the
+image names a symbol nothing linked defines; or `oracle`, it builds and
+links, and its oracle needs standard input, arguments, files or output. The
+lane requires the stage it reached to be the row's, and records what
+stopped it, read from the build, as an L0015 refusal's modules are read. A
+fixture refine refuses is no restriction but a `refuse` row with its
+codes; one that gets past every stage is stale and must be made `execute`.
+Each of the 65 was decided again by that rule: 8 execute, 36 refuse with
+their codes, and 21 are restrictions with their stops. Two of the eight
+first stopped at `defect`: Cortex-M emission had no trap class for a
+`code_address`, which the integer-to-pointer check gives a C function value
+made from an address, as it gives a pointer's. The Xtensa corpus, which
+reads the same inventory, holds its restrictions to the same stages, an ABI
+fixture's C compiled by the chip's GCC, and a row whose verdict differs
+there carries its `targets.xtensa` disposition.
+
+**The alternatives:** keeping witnesses, which said what a fixture once
+needed and nothing about what stops it now; requiring every restriction to
+fail somewhere, as D619's lane restriction does, which a fixture failing for
+a new reason would satisfy; and a restriction per missing facility, the C
+library, threads or files, which the lane cannot observe except as one of
+these stages.
+
+**Pinned by** `environments/cortex-m/backend_corpus.py`'s `restriction` and
+`STOPS`, the inventory's restriction rows, `scripts/add_fixture.py`'s
+`--stops`, and `environments/cortex-m/test.py`'s restriction cases.
+
+### D987 — The generated Cortex-M bindings' layouts are held to both compilers at both variants
+
+**From** D935, D936 and D939.
+
+**The tour said** nothing; the binding generator emits static assertions
+of each native record's size, alignment and offsets and each enum's size,
+which Clang checked only at the row a fixture was generated for.
+
+**Chosen:** `environments/cortex-m/abi.py` compiles each Cortex-M binding
+fixture's generated adapters with `-fsyntax-only`, by the pinned GCC at
+`-mcpu=cortex-m0 -mfloat-abi=soft` and `-mcpu=cortex-m7 -mfpu=fpv5-d16
+-mfloat-abi=hard` and by Clang at `thumbv6m-none-eabi` and
+`thumbv7em-none-eabihf`, each with its freestanding headers. The VFP
+fixture's records must hold at both rows under both, AAPCS32's layout being
+one for both variants; the CMSIS fixture must hold at the base row and be
+refused by its header's `#error` at the VFP one; and its adapters built
+with short enums must be refused by their own assertion. Where no Clang is
+on PATH its half is recorded as skipped, never as held.
+
+**The alternatives:** a probe of `offsetof` and `sizeof` values written
+apart from the generated C, which would compare the compilers with each
+other rather than with the binding Landin reads; and Clang only, which is
+not the compiler firmware C is built with.
+
+**Pinned by** `environments/cortex-m/abi.py`'s `binding_layouts` and its
+`binding-layouts.json`.
 
 ### D695 — Espressif's QEMU carries both RV32 corpus lanes, under the Arm lanes' harness
 
@@ -28570,7 +29370,8 @@ kept its profile cacheless.
 so the H753 builds at `armv7e-m` alone and hard-float (D615-D617), and its
 reset grants the unit (D618). The profile stays cacheless under R12's rule
 for noncoherent cached profiles: nothing enables the caches, and D562's
-placements are unchanged. D561's static evaluation is retired, since an
+placements are unchanged; the cached profile beside it, admitted with its
+provider and evidence, is D974's. D561's static evaluation is retired, since an
 ARMv6-M evaluator does not read Armv7E-M code and a board runs the
 consumer; the board run's oracle checks its device accesses. What stays
 static is D561's amendment's: the consumer links where the description
@@ -28590,6 +29391,383 @@ hand-written memory against the header`; and
 `environments/cortex-m/descriptions.py`, which selects the STM32H753 at
 `--level=armv7e-m` and compares its facts, its float unit among them, with
 `descriptions.json`.
+
+### D970 — Cache maintenance is `core/cache`'s concept, over whole lines, with a cacheless provider everywhere
+
+**The tour said** nothing of caches; D227 stated what a cached DMA handoff
+must do and enabled no helper, and R12 admitted a cached profile only with a
+platform's maintenance provider.
+
+**Chosen:** `core/cache` is a shared freestanding module holding one
+concept, `maintenance`, with four entries: `line`, the bytes in one line;
+`clean`, which writes a range's dirty lines to memory and keeps them;
+`invalidate`, which discards a range's lines; and `clean_invalidate`, both.
+Each operation takes a `[]u8` range and returns once its maintenance is
+complete at the point a device observes, its provider's completion barrier
+issued last, so D227's order is the caller's to write and the barrier's to
+keep: clean before a transmit is enabled, clean and invalidate before a
+receive is armed, invalidate once a completion or count observation says
+the device's bytes are written, the device barrier before an enable staying
+the driver's. A range that does not begin on a line, or whose length is
+not a whole number of lines, is refused with the recoverable atom
+`cache.misaligned` and nothing is maintained; it is never rounded out,
+because a rounded line can hold bytes the caller does not own, whose dirty
+copy an invalidate loses or whose stale copy a clean writes over a device's
+data. An empty range is no lines, and its operation is the barriers alone.
+`cache.lines(line, range)` is that check, which every provider calls.
+The generic entries `cache.clean` and its siblings take the provider's
+handle as `core/time`'s do; a handle is a small value passed `in`
+(D269's service convention), and the parameter is `caches`.
+
+The cacheless provider is `cache.cacheless(line)`, a `cache.barriers` handle
+on every target: its operations check the range against LINE and issue the
+completion barrier, which is all memory no cache stands in front of needs,
+and a line that is not a nonzero power of two is `cache.bad_line`. It
+refuses exactly what a cached provider of that line refuses, so a driver
+checked against it on Cortex-M0 or a hosted target takes the cached
+profile's refusals. Both atoms have phrases in `core/failure`.
+
+**The alternatives:** compiler builtins, `compiler.cache_clean` among them,
+which `negative/r630-cache-helper` keeps refused: maintenance is a platform
+provider's, and a builtin would claim one for every target; rounding a
+range out to its lines, which hides the loss D227 names; a provider that
+takes an address and a length, which loses the slice's bound and its view;
+and no cacheless provider, which leaves a portable driver two code paths.
+
+**Pinned by** `runtime/library-shared-cache` on the seven product targets
+and the constrained Cortex-M0 lane, with oracles for each refused line and
+range, the empty range and every byte kept through the barriers; and the
+STM32H753's cached board run, whose refusals keep a dirty line (D975).
+
+### D971 — A cache is a fact of a description, which `compiler.feature.cache` and `compiler.cache_line` read
+
+**The tour said** nothing; D615 made a float unit a fact of a description
+and of its core, and D562 kept the one Cortex-M7 chip refine supported
+cacheless.
+
+**Chosen:** the hand-written half of a description may hold
+`compiler.cache("KIND", LINE)`, once, at module level, as D542's directives
+are. The compiler knows a cache as a fact of a core and names no chip: it
+builds one kind, `armv7-m-l1`, Armv7-M's level 1 instruction and data
+caches with the System Control Block's maintenance operations, which the
+Cortex-M7 alone of its cores implements, with 32-byte lines at both caches.
+Another kind, or one the description's core cannot have, is L0610; a line
+that is not the kind's is L0611, naming the line to write. A cache changes
+no ABI, so it takes any level its core executes. A program reads it as
+`compiler.feature.cache`, true when the selected description declares a
+cache, and `compiler.cache_line`, the declared line in bytes and 0 without
+one, each read as D615's features are, before any option or fixed
+condition. The firmware build report says `cache`.
+
+**The alternatives:** a cached level, which would make a level something a
+chip without caches could select; reading the cache from the core, which
+assumes every Cortex-M7 is built with both caches when their sizes and
+presence are the implementer's choice; a line read only at run time from
+CCSIDR, which no program can align a static buffer by and no fixed arm can
+read; and a profile option inside the cacheless description, which changes
+its bytes and lets one import mean two profiles.
+
+**Pinned by** `negative/description-cache-unknown`,
+`negative/description-cache-core` and `negative/description-cache-line`;
+and the `cortex ABI` case `device descriptions select their profiles`, which
+holds the refusals, the repeated and conditional directive and both facts
+read by an option, a module value, a compiler assertion and a fixed arm,
+for a cached description, a cacheless one and the reference.
+
+### D972 — The Cortex-M7's provider is `platform/cortex_m/l1`, declared on a cached profile alone
+
+**The tour said** nothing; D575 declares `platform/cortex_m`'s operations
+on an M-profile target alone, and D970 leaves cached providers to
+platforms.
+
+**Chosen:** `platform/cortex_m/l1` provides `core/cache`'s maintenance over
+the Cortex-M7's level 1 caches, and declares it under `fixed if
+compiler.feature.cache`: `l1.caches()` makes its `l1.handle`, whose line is
+`compiler.cache_line`, and `l1.geometry()` reads CCSIDR for the level 1
+data cache, which reset selected in CSSELR. Each operation checks its range
+with `cache.lines`, issues a completion barrier, writes each line's address
+to the SCB's DCCMVAC, DCIMVAC or DCCIMVAC, at 0xE000EF68, 0xE000EF5C and
+0xE000EF70, issues a completion barrier and then ISB, as CMSIS's
+by-address operations order them. It is a submodule, imported on an
+M-profile target alone (D267), so that a program that maintains no cache
+reaches none of `core/cache` and its image is the one it was; on an
+M-profile profile without a cache a call is L0201 saying that the member is
+a cached profile's, with the two things to do instead.
+
+**The alternatives:** the provider in `platform/cortex_m` itself, which a
+shared program imports everywhere but which then brings `core/cache` into
+every Cortex-M image and moves every board record's bytes; a provider that
+reads CCSIDR for its line on every call, which a buffer aligned at compile
+time cannot follow; set and way operations exposed to programs, which act
+on every line and so on bytes no caller owns; and L0201's ordinary words,
+which call the cacheless STM32H753 another target.
+
+**Pinned by** `negative/cache-provider-cacheless`; the mps2-an500 lane's
+`cache-sequence` case (D977); `devices/test.py`'s converse check (D976); and
+the cached board run (D975).
+
+### D973 — Reset enables a described cache once memory is written, and the entry's return disables it
+
+**The tour said** that reset copies initialized data and RAM code and
+clears BSS before a program runs; D618 made reset grant a described float
+unit.
+
+**Chosen:** a cached profile's compiler-owned reset, once `.data`,
+`.ramtext`, BSS and every placed region are written with the caches still
+off and their DSB and ISB issued, selects the level 1 data cache in CSSELR,
+reads its sets and ways from CCSIDR and invalidates every set and way
+through DCISW, completes that with DSB, invalidates the instruction cache
+through ICIALLU with DSB and ISB, and sets CCR's DC and IC, bits 16 and 17,
+with DSB and ISB, as the Cortex-M7's manual and CMSIS's `SCB_EnableDCache`
+and `SCB_EnableICache` enable them; then it enables interrupts and calls the
+entry. The data and code it wrote are memory's, so nothing a cache held
+before reset, a warm loader's run among it, can hide them. When the entry
+returns, interrupts are masked, every set and way is cleaned and
+invalidated through DCCISW while the data cache is still on, so no dirty
+line is left, and CCR's DC and IC are cleared and the instruction cache
+invalidated, each with DSB and ISB, before `_landin_firmware_returned`: the
+core is left as reset leaves it, for a warm loader that requires disabled
+caches or a debugger that reads memory. Both sequences use registers alone,
+r0 to r7, and no memory. A cacheless profile's reset is unchanged.
+
+**The alternatives:** a provider operation the program calls to enable the
+caches, which a program can forget and whose own frame a disable would have
+to keep out of the cache it is turning off; enabling before the copies,
+which writes initialized data into dirty lines; and leaving the caches on
+when the entry returns, which leaves memory short of every dirty line.
+
+**Pinned by** the `cortex ABI` case `device descriptions select their
+profiles`, which holds the cached reset's order and a cacheless reset's
+absence of both; the mps2-an500 lane's `cache-sequence` case, which holds
+the linked order and every write QEMU traces (D977); and the cached board
+run, which reads CCR set at the entry and clear once it returned (D975).
+
+### D974 — The STM32H753's cached profile is a description of its own, admitted with its evidence
+
+**The tour said** nothing; D562 kept the STM32H753 cacheless until a
+provider existed, and R12's rule asks a cached profile for its provider and
+evidence of its cache levels, aliases, line ownership and visibility
+points, transmit and receive consumers and failure oracles for stale reads
+and lost dirty bytes.
+
+**Chosen:** `devices/descriptions/stm32h753_cached` is the cached profile,
+beside the cacheless one, which keeps its bytes, checks, records and gate
+leg. Its policy, `devices/policies/stm32h753_cached.json`, is the cacheless
+policy with its identity, `stm32h753-cached`, so `refine svd` writes its
+`interrupts.ldn` and the chip's modules at the same hashes; its
+`supply.ldn` is the cacheless stage's bytes; and its `memory.ldn` is the
+cacheless map, placements, stack and float unit with
+`compiler.cache("armv7-m-l1", 32)`. The evidence, point by point:
+
+- levels: the Cortex-M7's level 1 caches are the only ones, a 16 KiB
+  four-way data cache and a 16 KiB instruction cache, both of 32-byte
+  lines; the chip has no level 2, and the board run reads CCSIDR's 128
+  sets, four ways and 32-byte line;
+- aliases: with the MPU off the default memory map applies, so the SRAM
+  region, 0x2000_0000 to 0x3FFF_FFFF, which holds the AXI SRAM and SRAM1
+  to SRAM4, is normal, write-back and write-allocate; the code region,
+  flash among it, is write-through and read-only here; the TCMs are never
+  cached, and DMA1 and DMA2 do not reach them (D562); the peripherals and
+  the System Control Space are device and strongly ordered memory. Static
+  data, BSS and the stack are in the AXI SRAM, which the CPU and both DMA
+  controllers reach at 0x2400_0000 alone; a buffer placed in another SRAM
+  by name is cached alike, and an alias of a region is outside the profile;
+- line ownership: a buffer a stream reads or writes is aligned to 32 bytes
+  and a whole number of lines, so no line it occupies holds another datum,
+  and D970 refuses a range that is not;
+- visibility points: a stream observes memory once the maintenance and the
+  completion barrier after it have completed, and the CPU observes what a
+  stream wrote once its count or completion said so and the range was
+  invalidated; code copied by reset is fetched through an instruction cache
+  reset invalidated after the copy (D973);
+- consumers and failure oracles: D975's board run.
+
+**The alternatives:** a profile option in the cacheless description, which
+changes its bytes and lets one import mean two profiles; enabling the
+caches in the cacheless profile, which changes every image built for it and
+every record; and an MPU configuration of its own, which this profile does
+not need and which would be a fact refine checks nothing of.
+
+**Pinned by** `devices/test.py`'s `Stm32h753CachedOracles`, which holds the
+policy, the interrupts, the stage and the map to the cacheless ones and the
+one directive beside them, and its regeneration and D542 form checks, which
+regenerate the cached `interrupts.ldn`; and D975 and D976.
+
+### D975 — The cached board run shows each handoff and what leaving its maintenance out does
+
+**The tour said** nothing; D650 and D901 give the STM32H753 its board run
+and its warm entry, and R12 asks a cached profile for transmit and receive
+consumers and failure oracles on its target.
+
+**Chosen:** `compiler/tests/board/stm32h753_cached/app` runs on the
+NUCLEO-H753ZI from SRAM, loaded by the SRAM helper exactly as the cacheless
+RAM run is, under the warm contract unchanged, which requires the caches
+off when it loads; the image's reset enables them (D973). It uses the
+cacheless board's `serial`, `bringup`, `report` and `scs` modules, the
+receive ring through `serial.open`, `available`, `read`, `stop`,
+`restart`, `completed` and `idle` with `l1.caches()` as the ring's
+provider, so the ring does its own maintenance (D978) and the program
+writes none of it. Over the virtual COM port, in the cacheless board's
+frames: the boot frame reports CCR with IC and DC set and CCSIDR; the
+stale-read control refills the ring with 0x5A, cleans it, and rearms and
+reads it through the same routines given `cache.cacheless(32)`, so the
+ring's code runs as on the cacheless board and its invalidates are left
+out, reading 64 bytes the host sends, two
+lines, each of which must be the stale 0x5A throughout, or, if the cache
+evicted it in between, the bytes sent, at least one line stale, while
+memory, once a restart with the cached provider has cleaned and
+invalidated the ring, holds the 64 sent;
+1024 bytes are then read through the ring with each snapshot's lines
+invalidated between the count and a copy no longer than it, and must hash
+as the host's; the lost-dirty control cleans a line holding 0x11, dirties
+it with 0x22 and invalidates it, which must lose all 32 bytes, while four
+ranges that are not whole lines are refused and the line they cover keeps
+its dirty 0x44; a transmit whose buffer's memory holds `o` and whose cached
+copy holds the message is sent without a clean and must carry `o`s, a
+whole line at least and every line either memory's `o`s or, written back
+in between, the message's, and after a clean must carry the message, every
+byte of both, each transmit ordered as D979 says; and the entry returns, so CCR
+must read clear over SWD. The host reads CCR over SWD while the run goes on
+as well. Every prediction is the host's, from what it sent and what a
+write-back cache does, and a control that does not fail as predicted fails
+the run, so an emulator, which models no cache, cannot pass it.
+`environments/boards/stm32h753_cached/board.py` is the oracle, and the
+STM32H753 leg runs it as a RAM step after the cacheless RAM run and before
+the port's final boot check.
+
+**The alternatives:** a boot check of the cached profile, which adds a
+flash and power cycle and proves nothing the RAM run and the cacheless boot
+check do not; changing the helper to clean or disable caches, which would
+weaken the warm contract the cacheless run relies on; and controls checked
+by SWD reads of memory, which a debugger's view of a cached line makes
+another question.
+
+**Pinned by** `scripts/tests/test_board_stm32h753_cached.py`, which holds
+the oracle to a scripted board that behaves as a write-back cache predicts
+and refuses one that does not, phase by phase, and the image check of D976;
+and the physical run, whose record is `ram-record.json` beside the tool.
+
+### D976 — A cacheless image reaches no cache register, and a cached one only those its profile declares
+
+**The tour said** nothing; D561 and D621 keep `the consumer links
+cacheless` static.
+
+**Chosen:** `devices/test.py`'s `the consumer links cacheless` is unchanged
+for every cacheless consumer. Its converse builds
+`devices/consumers/stm32h753_cached`, the transmit consumer with its message
+in the cached AXI SRAM and cleaned before the stream is enabled, and
+requires it to link where its description places it and the SCB registers
+its literal words reach to be the profile's alone: CCR, CCSIDR, CSSELR and
+CPACR, reset's ICIALLU and DCISW, the return's DCCISW, and the provider's
+DCCMVAC, DCIMVAC and DCCIMVAC; no other operation of 0xE000EF50 to
+0xE000EF78. The cached board tool's build holds its image to the same set.
+
+**The alternatives:** disassembly matching, which D561 rejected; and no
+converse, which lets a cached image reach an operation, a set and way clean
+or a branch predictor invalidate, that no decision reviewed.
+
+**Pinned by** `devices/test.py`'s `the cached consumer reaches the declared
+cache registers alone` and `the consumer links cacheless`, and the cached
+board tool's image check.
+
+### D978 — The STM32H753's receive ring does D227's maintenance through the provider it is given
+
+**The tour said** nothing; D648 gave the STM32H753 its receive ring, D227
+the cached handoff it must keep, and D970 the concept that keeps it.
+
+**Chosen:** `compiler/tests/board/stm32h753/serial`'s `open`, `read`,
+`restart` and `configure` take `core/cache` maintenance evidence, a
+provider type and its handle, before their other arguments. `open`
+refuses a ring that is not whole lines of the provider's with
+`cache.misaligned`, writing nothing, and cleans and invalidates the ring
+before it arms the first lap, as `restart`, and so `configure`, do before
+they rearm it; `read` invalidates the ring between its snapshot and its
+copy, so every byte it copies was written before its line was dropped.
+The laps the completion interrupt arms take none: nothing but the stream
+writes the ring while it is open, so once it was cleaned it holds no dirty
+line, and a stale copy the CPU fetched meanwhile is dropped by the next
+read's invalidate. A provider that refuses the ring at a later call breaks
+the descriptor, as a transfer error does. The cacheless board passes
+`cache.cacheless(32)`, the barriers alone at the Cortex-M7's line, and the
+cached board `l1.caches()`; `available`, `stop`, `completed` and `idle`
+read no ring byte and take none.
+
+**The alternatives:** the caller maintaining the ring around the module,
+which is a rule of the caller that the module cannot state or keep, and
+which `read`'s own snapshot defeats unless each read is bounded by an
+earlier one; a provider stored in the descriptor, an erased `any` whose
+handle the descriptor would have to borrow as well as the ring; a clean
+and invalidate before every lap, in the completion interrupt, which needs
+the provider there and does nothing a cleaned ring needs; and a second,
+cached ring module, which would let the two drift apart.
+
+**Pinned by** the cached board run, whose stale-read control is the same
+routines given the cacheless provider and whose maintained stream is
+those routines given `l1.caches()` (D975); and the cacheless board run,
+which passes the cacheless provider through every routine.
+
+### D979 — The cached board's transmit raises its request only once its stream has its first byte
+
+**The tour said** nothing; D975's transmits are the cached board's own
+DMA1 stream 0 transmits to USART3, which runs with its FIFO on (D648).
+
+**Chosen:** a transmit writes the stream's addresses and count, clears its
+flags, configures it and enables it with CR3's DMAT clear; clears TC
+through ICR's TCCF; and only then sets DMAT, so USART3's request rises
+after the stream has preloaded its first byte. It waits for the stream's
+EN to clear with its count at zero, clears DMAT, and waits for TC before
+the CPU writes another frame, as RM0433's transmission using DMA orders
+the end (48.5.19, p. 2057). In direct mode a memory-to-peripheral stream
+preloads its first byte once enabled and sends it at the peripheral's
+first request (15.3.8, p. 644; 15.3.14, p. 653), and a request raised
+before that preload is an underrun that sets FEIF (15.3.20, p. 657).
+Success is the count at zero with no transfer error; FEIF and DMEIF are
+reported and decide nothing, since neither stops the stream.
+
+The two chip runs before it showed both halves. The first ended its wait
+on FEIF with the stream still feeding the FIFO, and the CPU's next frame
+raced it for the FIFO's last slot, losing five bytes at each edge. The
+second, with that wait corrected but DMAT held set across both transmits
+from before either stream was enabled, reported TCIF, HTIF and FEIF and a
+count of zero at each, and each lost its first byte.
+
+**The alternatives:** DMAT set once for both transmits, which raises the
+request with no stream or no preloaded byte to answer it; ending on the
+stream's flags, which an underrun's FEIF ends early; the DMA's FIFO
+instead of direct mode, which preloads the same way; and leaving the
+transmit's first byte to the CPU, which writes it outside the stream.
+
+**Pinned by** the cached board run's transmits, which must carry every
+byte (D975), and the scripted board's refusals of a transmit missing its
+first byte, missing a frame at either edge, or one byte short.
+
+### D977 — The emulator shows the cache sequences, never a cache
+
+**The tour said** nothing; D619 gives the corpus QEMU's mps2-an500, a
+Cortex-M7 that models no cache.
+
+**Chosen:** the lane description
+`environments/cortex-m/lanes/descriptions/mps2_an500_cached`, the an500's
+map with `compiler.cache`, is no profile refine admits for a chip; it lets
+the firmware lane's `cache-sequence` case link a program through
+`platform/cortex_m/l1` and run it under QEMU with its trace of the System
+Control Space's writes. The case holds the linked reset's steps to D973's
+order and each provider operation's stores between its two completion
+barriers, ISB after them; every write reset, the program and the return
+make to the SCB, in order, with each maintenance write the line address its
+range says and a refused range writing none; and, read by GDB at the
+return, the three refusals, the line and CCR's IC and DC clear. QEMU keeps
+neither enable bit and reads CCSIDR as zero, so the run shows sequencing
+and refusals alone; what a cache does is the board's (D975). The cacheless
+provider runs on Cortex-M0, on QEMU's micro:bit, and on every hosted
+target through `runtime/library-shared-cache`.
+
+**The alternatives:** a cache model in the harness, which would test the
+model; and no emulator run, which leaves the order of the writes to
+reading.
+
+**Pinned by** `environments/cortex-m/firmware.py --case cache-sequence` and
+the freestanding lane's `library-shared-cache`.
 
 ### D281 — RV64's system call has the standing of `syscall` and `svc`
 
@@ -29301,6 +30479,199 @@ limit, so the first problem from the left is the one reported, as
 range after an unsigned parse, which changes which refusal comes first.
 
 **Pinned by** `runtime/core-text-parse-signed` on every target.
+
+### D945 — Positions over `utf8` step a whole scalar
+
+**The tour said** at [0600] that on `[]u8` `core/text` counts positions as
+opaque byte offsets, with `first`, `at_end`, `next`, `advance`, `offset`,
+`byte` and `slice`, and at [0610] that a `text.position` indexes `utf8` in
+O(1); D184's traversal yields each scalar and keeps its cursor private. So a
+program that read a scalar and needed the byte offset beside it, to slice
+the text there, counted widths from leading bytes by hand.
+
+**Chosen:** `text.start(source)`, `text.done(source, at)`,
+`text.width(source, at)` and `text.step(source, at)` take a `utf8` and the
+existing `text.position`. `start` is offset zero, the end itself for empty
+text; `done` holds at or past the byte length; `width` is the one to four
+bytes encoding the scalar at `at`; and `step` is `at` advanced by that
+width. `width` and `step` read the scalar as `source[at]` does, so they trap
+exactly where D182 and D249's position index traps, at the end and on a
+continuation byte, through the same checked-address failure, and declare
+no atom. Every position they return is therefore a scalar's start or the
+end, which are the offsets D183's ranges accept, and `text.offset` gives
+either kind of position's byte offset. The byte cursors keep their names
+and contracts. A scope gives one name to one thing [1850], so the scalar
+forms are four new names, each taking its text first as D269's
+accessors take their subject: `start` beside `first`, `done` beside
+`at_end`, and `step` beside `next`, because it moves by a scalar and needs
+the text to know how far. A firmware entry named `start` keeps its own
+symbol beside this one, since an export is never the item D417 qualifies.
+
+**The alternatives:** `past_end` from a step at the end, as `byte`
+declares, which every loop would have to recover from although a loop that
+tests `done` never meets it; an `iterable` conformance yielding a position
+and a scalar together, for which `core` declares no concept [1320] and
+D184's intrinsic one is closed; `first`, `next` and `at_end` over `utf8`,
+which changes the byte scanners prototype 2's lexer is; and names such as
+`first_scalar`, which suggest the byte forms read something else than the
+bytes they read.
+
+**Pinned by** `runtime/core-text-utf8-split`,
+`runtime/core-text-step-at-end-traps`, `runtime/core-text-utf8-firmware`
+and `runtime/library-shared-text` on every target.
+
+### D946 — A search over text returns where the match begins
+
+**The tour said** at [0600] that `core/text` has substring search, and D199
+made `contains` a Two-Way search that answers yes or no and finds empty
+text everywhere. No search said where, so a program could not take the
+parts of a text around a found separator.
+
+**Chosen:** `text.find(source, sought)` and
+`text.find_from(source, sought, at)` return the position at which `sought`
+first begins, in all of `source` or at or after `at`, and
+`text.find_scalar(source, scalar)` and `text.find_scalar_from` the position
+of the first scalar equal to `scalar`; each reports the new atom
+`text.not_found` when there is none. Empty text is found where the search
+begins, `start` or `at`, as `contains` finds it. The text searches and
+`contains` share one private Two-Way routine, so `contains` keeps its
+result, its empty-text rule and its linear time, and a search from `at`
+costs the same over what follows it. A search from `at` takes that rest as
+D183's range `source[offset(at)..<lenof source]`, which traps on a position
+inside a scalar or past the end. A scalar search encodes the scalar as
+D947 does and searches for those bytes as for text; a surrogate or a value
+above U+10FFFF is `not_found`, since no text holds one.
+
+Shortest-form UTF-8 synchronizes itself: a leading byte never equals a
+continuation byte, so a match of valid sought text in valid text begins at
+a scalar's start and ends at one. The parts of the source before, at and
+after a match are therefore D183 ranges of it, `utf8` views with its
+origin and read-only permission and nothing copied, and returning one
+needs the exact `from source` as any range does. `not_found`'s words are
+`not in the text`; `failure.reason` holds it (D388).
+
+**The alternatives:** `mem.find`'s convention of the length for no match,
+which is a real match position for empty text and so would be ambiguous,
+and which a forgotten check turns into the whole rest of the text; reusing
+`map.missing`, whose words name a key and whose module `core/text` would
+import for an atom, `io.not_found`, which `core/text` cannot name because
+`core/io` imports it, or `past_end`, which is a read past the end that a
+search never makes; and a count of scalars, which costs a scan to use and
+which D183's ranges do not take.
+
+**Pinned by** `runtime/core-text-find`, `runtime/core-text-utf8-split`,
+`runtime/core-text-find-inside-scalar-traps`,
+`runtime/core-text-utf8-firmware`, `runtime/library-shared-text` and
+`negative/core-text-found-view-escapes`.
+
+### D947 — The encoder writes a whole scalar or nothing
+
+**The tour said** at [0250] that a character is a `u32` scalar, and D249
+made every indexed or traversed scalar one, but nothing in the library
+turned a scalar back into bytes.
+
+**Chosen:** `text.encode(scalar, into)` writes the shortest-form UTF-8
+encoding of `scalar`, one to four bytes, at the front of `into` and returns
+how many; a caller encodes at an offset by passing what follows it,
+`buffer[at..<lenof buffer]`. A surrogate, U+D800 to U+DFFF, or a value
+above U+10FFFF reports `invalid_scalar`, and a scalar wider than `into`
+reports `no_space`. The width is known before the first store, and
+`invalid_scalar` is reported first, so a value that is no scalar is refused
+the same way whatever the room. Either refusal writes no byte: `into` is
+as it was, which is the encoder's whole partial-update rule.
+`text.append_scalar(into, scalar)` appends the same bytes to a byte builder
+through its room check, whole or not at all as every append is (D305),
+with the same two refusals in the same order and the builder unchanged by
+either; a growing or draining builder makes room as it does for any piece.
+`invalid_scalar`'s words are `not a Unicode scalar value`.
+
+**The alternatives:** writing U+FFFD for a value that is no scalar, which
+changes the text without saying so; trapping as a conversion does, though
+the value is often input, a parsed escape or a protocol field, and a
+foreseeable refusal is declared; an offset parameter and a returned next
+offset, the slice-writer shape D355 retired; and a public width query,
+which the result already answers after the fact and no consumer needed
+before it.
+
+**Pinned by** `runtime/core-text-encode`, `runtime/core-text-utf8-firmware`
+and `runtime/library-shared-text`.
+
+### D948 — A `utf8_builder` holds only whole scalars
+
+**The tour said** at [0600] that `utf8` is validated text, and D305's
+builder writes bytes, which an append of bytes, a host string, a byte or a
+cut inside a scalar can leave anything but UTF-8.
+
+**Chosen:** `text.utf8_builder`, made by `text.utf8_over(buffer)` over the
+caller's buffer, is a byte builder whose only appends keep its bytes
+UTF-8: `utf8_append_text`, `utf8_append_scalar`, and the decimal and
+hexadecimal appends of every width, whose digits and sign are ASCII. Each
+is the byte builder's call with `utf8_` before it and writes the same
+bytes: whole, or `no_space`, or for a scalar `invalid_scalar` first, with
+its length and buffer unchanged. It has no append of bytes, of a byte or of
+a host string, no alignment, whose fill is a byte, and is not a `format`
+destination, since a `formattable` may append any bytes. `utf8_truncate`
+keeps the whole scalars of the first `count` bytes: a count inside a
+scalar cuts back to that scalar's start, so the bytes stay UTF-8, and a
+count at or past the length changes nothing. `utf8_clear`, `utf8_length`
+and `utf8_capacity` are the byte builder's. `utf8_used` lends what it holds
+as one `utf8` view and `utf8_bytes` as bytes, each `from` the builder,
+which is `from` its buffer, so a view of a frame's storage cannot be
+returned past that frame. The text view is made with D949's
+`compiler.utf8_unvalidated` and nothing is scanned: the appends and cuts
+are what make the bytes UTF-8. The prefix is D269's,
+for a module that holds several types.
+
+**The alternatives:** a flag in the byte builder saying whether every
+append kept it valid, which a type cannot show and every finish would
+test; a `distinct` byte builder, which needs the same new names to say
+which calls it admits; a cut inside a scalar that traps, as D183's range
+does, which library code reaches only through a view the builder does not
+have, or that is refused with an atom, when rounding down keeps the
+invariant and a count an earlier `utf8_length` gave is never inside one.
+
+**Pinned by** `runtime/core-text-utf8-builder`,
+`runtime/library-shared-text`,
+`negative/core-text-utf8-builder-takes-no-bytes` and
+`negative/core-text-utf8-builder-view-escapes`.
+
+### D949 — `compiler.utf8_unvalidated` makes text of bytes known to be valid, inside `unchecked`
+
+**The tour said** at [0600] that `utf8` holds validated UTF-8, and D199
+made the conversion from bytes validate and trap, even inside `unchecked`,
+and introduce no core privilege. A program whose bytes are valid by
+construction, a builder that appends only whole scalars or a validator
+that has just checked them, could reach a `utf8` only by scanning them
+again.
+
+**Chosen:** `compiler.utf8_unvalidated(bytes)` takes one immutable `[]u8`,
+or a `[]mut u8` weakened to it as an argument is, and gives a `utf8` with
+the operand's base, length, origin and read-only permission, exactly as
+D199's conversion gives them, with no scan, copy, allocation or backend
+opcode: the view is the operand's descriptor under the text identity. It
+is admitted only in an `unchecked` region; anywhere else it is L0600,
+which names `utf8(bytes)` and `text.from_bytes` for a checked conversion
+and `unchecked begin ... end unchecked` for bytes valid by construction.
+Bytes that are not UTF-8 are D199's `outside` non-guarantee, the
+`text.unvalidated` row: indexing, ranges, traversal and comparison may
+then read a scalar wrongly, and no check finds it. D199's conversion is
+unchanged everywhere, its trap inside `unchecked` included. Any program
+may call it, so `core` gains no privilege; `text.from_bytes` validates
+once and then makes its view with it, and the `utf8_builder`'s
+`utf8_used` (D948) lends its text with it.
+
+**The alternatives:** making D199's conversion skip validation inside
+`unchecked`, which reverses an explicit rule and changes what existing
+`unchecked` code does; validating when a builder finishes, which scans
+again what the builder already knows; and a privilege
+of `core/text`'s, which D199 refused.
+
+**Pinned by** `positive/utf8-unvalidated-keeps-origin`,
+`negative/utf8-unvalidated-outside-unchecked`,
+`negative/utf8-unvalidated-escapes-its-source`,
+`negative/utf8-unvalidated-is-read-only`,
+`runtime/utf8-unvalidated-does-not-scan`,
+`runtime/core-text-utf8-builder` and the `text.unvalidated` guarantee row.
 
 ### D308 — A buffered writer is flushed explicitly, and a line reader lends its lines
 
@@ -30939,9 +32310,10 @@ own table from the atoms to messages.
 
 **Chosen:** `core/failure` is a shared freestanding module of one type and
 one routine. `failure.reason` is the union of every atom a `core` module
-fails with, thirty-two of them from `core/mem`, `core/map`, `core/tree`,
-`core/io`, `core/net` and `core/text`, and `failure.words(problem)` returns
-a fixed phrase for each: lower case with no final stop, so that it reads
+fails with, thirty-eight of them from `core/mem`, `core/map`, `core/tree`,
+`core/io`, `core/net`, `core/text`, `core/cache` and `core/line`, and
+`failure.words(problem)` returns a fixed phrase for each: lower case with
+no final stop, so that it reads
 after a subject and a colon, static text that borrows nothing, the same on
 every target and in every locale. A call's failure set widens to
 `failure.reason` whatever subset of it the call declares, so `else
@@ -30954,7 +32326,7 @@ entry's kind or an order, have no words, and `platform/posix`'s errno
 detail stays with its provider (D207); D582 gives its errnos words of
 their own beside these. A program that never calls `words`
 links none of it (D296); one that does carries every phrase, about 6 KB on
-Cortex-M0, which a `match` of thirty-two arms costs there.
+Cortex-M0, which a `match` of thirty-eight arms costs there.
 
 **The alternatives:** a `words` in each module, which a failure set mixing
 `io` and `net` atoms, as a socket's does, could not pass to either; a
@@ -31001,6 +32373,114 @@ headers' wording, which words one errno three ways.
 hosted system numbers to a well-formed phrase none other has, words a
 missing path's `enoent` and a library atom, and `runtime/tree-copy`, whose
 `complain` now words its failures with it.
+
+### D955 — A serial line's settings and its divisor are `core/line`'s, and a driver writes nothing it refuses
+
+**The tour said** nothing of a serial line beyond prototype 1's `baud_rate`
+parameter, and every driver in the repository refused any rate but 115,200
+with an atom of its own, `bad_baud`, writing divisors computed by hand: the
+derived driver's IBRD 26 and FBRD 3, the Picos' 6 and 33, the STM32H753's
+BRR 556 and the ESP32's and S3's CLKDIV 0x0040015b.
+
+**Chosen:** `core/line` is a shared freestanding module with no register
+in it. `line.settings` is a record of a `u32` rate in bits per second, `u8`
+data bits, a `line.parity` atom set, `no_parity`, `even_parity` or
+`odd_parity`, and a `line.stop_bits` one, `one_stop_bit` or
+`two_stop_bits` (D350), so one and a half stop bits cannot be asked for;
+`line.default_settings` is 115,200 8N1. `line.check` refuses a rate of
+zero with `line.unsupported_rate` and data bits outside 5 to 9 with
+`line.unsupported_format`; `line.divisor(clock, rate, oversampling,
+fraction_bits, least, most)` gives the integer nearest `clock *
+2^fraction_bits / (oversampling * rate)`, halves up, as the register holds
+it, and refuses with `unsupported_rate` a value outside the register's
+range or a rate it misses by more than `line.tolerance` (D956). One
+routine serves the families the ports program: a PL011, 16 times a bit
+with 6 fraction bits; an STM32 USART, whose BRR is the divisor of its
+kernel clock, oversampling 16 or 8 with 4 bits; and an Espressif UART, once
+a bit with 4. The arithmetic is integer only, in `u64`, which a Cortex-M0
+links as libgcc's helpers, and exact for every `u32` clock and rate. Both
+atoms are in `failure.reason` with words. A driver computes every register
+image through the module and its own encoding first, refuses what its
+peripheral cannot carry, and writes only then, so a refusal leaves every
+register and the line as they were; each port's own refusals are D957 to
+D961's.
+
+**The alternatives:** a module holding the register encodings too, which
+would name devices a freestanding module serves none of; floating point,
+which a Cortex-M0 has not; an atom per driver, which gives a caller
+`bad_baud` from one driver and another word from the next for one
+condition (D269); `core/serial` or `core/uart`, whose final segment is
+already the board ports' `serial` and the derived driver's `uart`, so a
+program importing its driver beside the module would need an alias
+([1850]); a divisor that truncates, as ESP-IDF's does, which would change
+the ESP ports' 115,200 from 0x0040015b; and a closest-rate search, which
+for a fractional divisor gives the same value as rounding it at a cost of
+more divisions.
+
+**Pinned by** `runtime/library-shared-line` on every target, Cortex-M0
+among them, whose sweep of eight peripheral clocks folds to the value
+`scripts/tests/test_line.py`'s exact oracle gives;
+`runtime/failure-words`; and each consumer's own evidence, D957 to D964.
+
+### D956 — A divisor may miss its rate by two percent
+
+**The tour said** nothing.
+
+**Chosen:** `line.tolerance` is 20 parts per thousand: `divisor` refuses a
+value whose rate is more than two percent from the one asked for, measured
+exactly, `|clock * 2^fraction_bits - value * oversampling * rate|` against
+`value * oversampling * rate`. A receiver finds a frame by the falling edge
+of its start bit and samples each bit at its middle; it reads the first
+stop bit, the last bit it samples, correctly while the drift between the
+two ends stays under half a bit. Over the longest frame a port here admits,
+a start bit, eight data bits and parity, the middle of that stop bit is 10.5
+bit times in, and a receiver sampling 16 times a bit may find the edge a
+sixteenth of a bit late, so the two clocks together may differ by
+`(1/2 - 1/16) / 10.5`, 4.2 percent. Two percent is half of that, the other
+half the far end's. It holds no margin for a slow edge or for a receiver
+that votes on three samples, which is why the ports' own divisors are well
+inside it: every PL011 rate at 48 MHz within 0.79 percent, BRR 556 at 0.08.
+
+**The alternatives:** a tolerance per driver, which the shared refusal
+would then not describe; one stated per frame length, which every caller
+would have to compute and which differs by under half a percent between
+the frames admitted; and none, accepting any divisor in range, which at
+the top of an ESP UART's range gives a rate three percent out.
+
+**Pinned by** `runtime/library-shared-line`'s 3.9 Mbaud at 64 MHz, in
+range at BRR 16 and 2.6 percent fast, refused; and 3.8 Mbaud, BRR 17 and
+0.9 percent, accepted.
+
+### D957 — The derived driver opens any line its PL011 can carry
+
+**The tour said** nothing; prototype 1's `open` took a `baud_rate`, and
+the complete derived driver bounded it to 115,200 with `bad_baud`, saying
+the bound kept the program within its board and did not claim a general
+UART configuration.
+
+**Chosen:** `uart.open(settings: line.settings, budget, escaping buf)`
+computes IBRD, FBRD and LCR_H through `uart.line_registers` for the
+synthetic UART's declared 48 MHz clock and writes them in that order, LCR_H
+last so that its write latches both divisors: 46 to 3,000,000 baud, 5 to 8
+data bits, any parity and one or two stop bits; LCR_H keeps the FIFOs on
+and sets neither break nor stick parity. Nine data bits are refused with
+`line.unsupported_format`, since WLEN reaches eight. `bad_baud` is gone:
+the driver fails with the shared `line.unsupported_rate` and
+`line.unsupported_format` in its place, checked after the buffer and before
+`busy`, and both precede any device write. 115,200 8N1 is still 26, 3 and
+0x70, and the application opens `line.default_settings`. Retires the
+115,200 bound.
+
+**The alternatives:** a separate `configure` beside `open`, which the
+emulator's synthetic device has no protocol to drain for; keeping
+`bad_baud` beside the shared atoms, two names for one refusal; and a
+driver-chosen tolerance, which D956 declined.
+
+**Pinned by** `environments/cortex-m/driver.py`'s `lines`, eight lines
+opened through the public driver whose register images and the latched
+line the model holds equal an oracle written from the RP2040 datasheet's
+4.2.7.1, and its `configurations`, whose rate and format refusals leave
+every UART register unwritten (D964).
 
 ### D418 — The POSIX and Linux layers keep their routines' own names
 

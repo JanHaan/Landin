@@ -1,0 +1,9 @@
+class: negative
+summary: D922 cortex-m0 refuses a variadic C import, naming the AAPCS32 variadic calls it does not enable and the fixed-arity C function to call instead, while a fixed C import beside it is accepted
+program: main.ldn
+args: --target=cortex-m0 ../tests/fixtures/negative/c-variadic-cortex-m0/main.ldn
+expect: expected.txt
+status: 1
+codes: L0346
+constructs: 1580
+targets: cortex-m0

@@ -1,0 +1,12 @@
+--  Stepping reads the scalar it steps past, as `source[at]` does, so a
+--  step from the end traps rather than step past the text.
+import core/text
+
+public main: () -> (code: i32) =
+    source: utf8 = "\u{e9}"
+    at := text.step(source, text.start(source))
+    code = 1
+    return when not text.done(source, at)
+    past := text.step(source, at)
+    code = i32(text.offset(past))
+end main

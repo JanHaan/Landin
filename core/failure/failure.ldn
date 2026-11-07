@@ -3,7 +3,9 @@
 --  holds no state and allocates nothing, and a program that never calls
 --  `words` carries none of it (D296).
 
+import core/cache
 import core/io
+import core/line
 import core/map
 import core/mem
 import core/net
@@ -27,7 +29,9 @@ public reason: type = mem.out_of_bounds | mem.empty | mem.full | mem.not_empty
     | net.timed_out | net.disconnected | text.past_end
     | text.invalid_text | text.invalid_number
     | text.number_overflow | text.no_space
-    | text.invalid_format
+    | text.invalid_format | text.not_found
+    | text.invalid_scalar | cache.misaligned | cache.bad_line
+    | line.unsupported_rate | line.unsupported_format
 
 --- A short English phrase for a library failure, in lower case with no
 --- final stop, so that it reads after a subject and a colon as
@@ -69,5 +73,11 @@ public words: (problem: reason) -> (phrase: []u8) =
         text.number_overflow: "number out of range"
         text.no_space: "no room for the output"
         text.invalid_format: "template does not fit its values"
+        text.not_found: "not in the text"
+        text.invalid_scalar: "not a Unicode scalar value"
+        cache.misaligned: "not whole cache lines"
+        cache.bad_line: "cache line not a power of two"
+        line.unsupported_rate: "unsupported line rate"
+        line.unsupported_format: "unsupported frame format"
     end match
 end words

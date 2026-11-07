@@ -36,7 +36,14 @@ def build(run, refine, program, optimize, specialize):
                 'undeclared device consumer module: '+module)
         modules.add(module)
         origin = ROOT / module if module.startswith(('core/', 'platform/')) else DEVICES / 'generated' / module
-        shutil.copytree(origin, source / module)
+        #  The module's own files alone: a directory beneath it is a module
+        #  of its own, `platform/cortex_m/l1` among them, staged only when
+        #  the program imports it, so it neither joins the panic oracle's
+        #  inventory nor moves a site.
+        (source / module).mkdir(parents=True)
+        for one in sorted(origin.iterdir()):
+            if one.is_file():
+                shutil.copyfile(one, source / module / one.name)
     #  A program that imports no device description is given the
     #  library's constrained reference (D543), so the staged library
     #  holds it too.

@@ -1,9 +1,12 @@
 -- UART interrupt reception into a bounded ring, GPIO commands, a 1 ms
 -- timer, atomics and overrun recovery on the Xtensa board. No DMA claim.
 -- Boot telemetry adds d/f cache enables and p, CPU1's hardware stall code.
+-- 0x16 and 11 digits 'a' to 'p' change the line, and 0x17 changes it back
+-- (D962).
 import bringup
 import commands
 import core/atomic
+import core/line
 import descriptions/esp32s3
 import esp32s3/rtc_cntl
 import platform/xtensa
@@ -98,6 +101,93 @@ pause: () -> (events: u32) =
     events = atomic.load(addr timer_events) -% first
 end pause
 
+-- A line request still to come (D962): after 0x16, eleven digits 'a' to
+-- 'p', four bits each, most significant first: the rate's eight, then the
+-- data bits, the parity, 0 none, 1 even and 2 odd, and the stop bits, 1 or
+-- 2.  While the line is not the default, every byte that arrives on it but
+-- 0x17 is counted and hashed, FNV-1a, until 0x17 asks for the default.
+mut line_digits: u32 = 0
+mut line_rate: u32 = 0
+mut line_frame: u32 = 0
+mut changed: bool = false
+mut line_bytes: u32 = 0
+mut line_hash: u32 = 0
+
+-- A digit of a line request, answered when the last arrives; any other
+-- byte abandons the request.
+line_digit: (inout r: serial.rx, byte: u8) -> none =
+    if byte < 97 or byte > 112 then
+        line_digits = 0
+        return
+    end if
+    if line_digits > 3 then
+        line_rate = (line_rate << 4) | u32(byte - 97)
+    else
+        line_frame = (line_frame << 4) | u32(byte - 97)
+    end if
+    line_digits -= 1
+    if line_digits == 0 then request(r) end if
+end line_digit
+
+-- Answer a line request on the line in use with an `l` frame: what was
+-- asked and the clock, then either outcome 0 and the register images, the
+-- line changing once the frame has been sent, or the refusal, 1 for
+-- line.unsupported_rate and 2 for line.unsupported_format, with nothing
+-- changed.
+request: (inout r: serial.rx) -> none =
+    data := (line_frame >> 8) & 15
+    parity := (line_frame >> 4) & 15
+    stops := line_frame & 15
+    report.open_frame(108)
+    report.field(114, line_rate)
+    report.field(100, data)
+    report.field(112, parity)
+    report.field(115, stops)
+    report.field(107, serial.clock)
+    if parity > 2 or stops < 1 or stops > 2 then
+        report.field(111, 2)
+        report.close_frame()
+        return
+    end if
+    kind: line.parity = if parity == 2 then line.odd_parity
+                        elsif parity == 1 then line.even_parity
+                        else line.no_parity end if
+    stopping: line.stop_bits = if stops == 2 then line.two_stop_bits
+                               else line.one_stop_bit end if
+    settings: line.settings = (rate: line_rate, data_bits: u8(data),
+                               parity: kind, stop_bits: stopping)
+    images := serial.line_registers(settings) else (problem)
+        report.field(111, if problem == line.unsupported_rate then 1 else 2 end if)
+        report.close_frame()
+        return
+    end
+    report.field(111, 0)
+    report.field(98, images.divisor)
+    report.field(102, images.frame)
+    report.close_frame()
+    serial.configure(r, settings) else (problem)
+        _ = problem
+        halt(5)
+    end
+    changed = true
+    line_bytes = 0
+    line_hash = 0x811c9dc5
+end request
+
+-- Back to the default line: an `e` frame, on the line in use, of what
+-- arrived on it, then the default.
+restore: (inout r: serial.rx) -> none =
+    report.open_frame(101)
+    report.field(110, line_bytes)
+    report.field(104, line_hash)
+    report.close_frame()
+    serial.configure(r, line.default_settings) else (problem)
+        _ = problem
+        halt(5)
+    end
+    changed = false
+end restore
+
 halt: (status: u32) -> noreturn =
     app_state = status
     report.open_frame(104)
@@ -117,7 +207,7 @@ start: () -> noreturn =
     bringup.indicator_pin()
     bringup.threshold(serial.priority)
     bringup.timer()
-    mut receiver := serial.open(115200, budget, rx_storage[0..<256]) else (problem)
+    mut receiver := serial.open(line.default_settings, budget, rx_storage[0..<256]) else (problem)
         _ = problem
         halt(1)
     end
@@ -144,6 +234,19 @@ start: () -> noreturn =
         end
         handled = handled +% commands.handle(scratch[0..<n], port)
         for byte in scratch[0..<n] do
+            if changed and byte <> 23 then
+                line_bytes = line_bytes +% 1
+                line_hash = (line_hash ^ u32(byte)) *% 16777619
+            end if
+            if line_digits > 0 then
+                line_digit(receiver, byte)
+            elsif byte == 22 then
+                line_digits = 11
+                line_rate = 0
+                line_frame = 0
+            elsif byte == 23 and changed then
+                restore(receiver)
+            end if
             if byte == 6 then atomics(previous[0], previous[1]) end if
             if byte == 17 then telemetry(receiver) end if
             if byte == 18 then _ = pause() end if

@@ -69,9 +69,21 @@ until investigated; it supplies no source or capacity exemption.
 aggregate verdict; each selected case has `verdict.json` and its build and
 execution evidence. Source refusals require the inventory's exact diagnostic
 codes and no assembly output. A failed execution stays failed until its
-cause is fixed or an explicit, witnessed target disposition establishes a
-real boundary. Target overrides live in the shared inventory's `targets`
-object and are exposed to other tools by `backend.disposition`.
+cause is fixed or an explicit target disposition establishes a real
+boundary. Target overrides live in the shared inventory's `targets`
+object, `"targets": {"xtensa": {...}}`, and are exposed to other tools by
+`backend.disposition`; the Cortex-M lanes' `lanes` entries are the same
+idea per lane. Xtensa's windowed C ABI is disabled (D920), so every row
+that runs or is restricted on Cortex-M through its C surface carries an
+Xtensa refusal with the codes Xtensa gives, L0346 for its C signatures and
+records, or L0015 for the C aliases module. A `restriction` row is built
+as D986 has it and must stop where its `stops` says: refine's compilation,
+then an ABI fixture's C, compiled by the chip's pinned GCC with the
+freestanding contract, then the link and the oracle; a row that refine
+refuses here, or that gets past its stop, fails, naming the `targets.xtensa`
+entry to write. Each refusal's and restriction's `reason` in the results is
+rendered for the selected chip and memory profile and names
+`environments/xtensa/abi.py`, this target's own independent C controls.
 
 ```sh
 python3 environments/xtensa/corpus.py \

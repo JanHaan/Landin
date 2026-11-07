@@ -106,8 +106,9 @@ package Landin.Backend.Toolchain is
 
    --  D525: the files a failed link's `-lNAME` may have meant, in the
    --  order the target's linker prefers them in one directory: on Darwin
-   --  `libNAME.tbd`, `libNAME.dylib` and `libNAME.a`, elsewhere
-   --  `libNAME.so` and `libNAME.a`.  Searched only after a link failed.
+   --  `libNAME.tbd`, `libNAME.dylib` and `libNAME.a`, on firmware, which
+   --  links archives alone (D923), `libNAME.a`, and elsewhere `libNAME.so`
+   --  and `libNAME.a`.  Searched only after a link failed.
    function Library_Files
      (Facts : Landin.Targets.Target_Facts; Name : String)
       return Landin.Platform.Path_List;

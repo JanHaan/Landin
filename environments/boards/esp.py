@@ -101,6 +101,15 @@ class Chip:
     uart_cause_mask = timer_cause_mask = None
     power_on_names = ('POWERON',)
     cells = {}
+    # The line exchange (D962): what the port's UART does, from its TRM
+    # (the C3's 26.4.3.1, which the others share): the clocks its port may
+    # run UART0 from, the largest CLKDIV with FRAG, whether two stop bits
+    # are offered, and the plan, (setting, outcome) pairs.  A port without
+    # a plan, or whose console's line is fixed, does not run it.
+    line_clocks = ()
+    clkdiv_most = 0xffff
+    two_stop_bits = True
+    line_plan = None
 
     def mtvec(self, sections, names):
         raise NotImplementedError
@@ -117,6 +126,29 @@ class Chip:
 
     def atomics(self, x, y):
         raise NotImplementedError
+
+
+def line_oracle(chip):
+    """The `l` frame an ESP port must give for a setting at the clock it
+    names: UART0 divides that clock by CLKDIV plus FRAG sixteenths, CLKDIV
+    at least 16, since the TRM gives 5 Mbaud at 80 MHz as the fastest;
+    CONF0's PARITY 0, odd when set, PARITY_EN 1, BIT_NUM 3:2 the data bits
+    less five, STOP_BIT_NUM 5:4, 1 for one stop bit and 3 for two."""
+    def oracle(setting, clock):
+        require(any(abs(clock - known) * 1000 <= known for known in chip.line_clocks),
+                'the port runs UART0 from %d Hz, not one of %s' % (clock, list(chip.line_clocks)))
+        rate, data_bits, parity, stop_bits = setting
+        if rate == 0:
+            return 'unsupported_rate', None
+        if not 5 <= data_bits <= 8 or (stop_bits == 2 and not chip.two_stop_bits):
+            return 'unsupported_format', None
+        value = common.nearest_divisor(clock, rate, 1, 4, 16 << 4, chip.clkdiv_most)
+        if value is None:
+            return 'unsupported_rate', None
+        frame = ((data_bits - 5) << 2 | (0x30 if stop_bits == 2 else 0x10)
+                 | dict(none=0, even=2, odd=3)[parity])
+        return 'accepted', dict(b=(value >> 4) | (value & 15) << 20, f=frame)
+    return oracle
 
 
 def build(run, args, chip):
@@ -371,6 +403,21 @@ def scenario(console, chip, seed, mode='boot'):
             % (final['h'], len(expected_echo)))
     verdicts['stream'] = dict(timer_events=final['m'], receive_interrupts=final['i'],
                               echoed=len(echo), sent=len(sent))
+    # The line exchange (D962), last, so nothing above depends on it: on a
+    # tty console the port changes lines and comes back; the C3's bridge
+    # keeps its one line, so that port's verdict says it was not run.
+    if chip.line_plan is None:
+        verdicts['line'] = common.line_not_run()
+    else:
+        verdicts['line'], last = common.line_phase(
+            console, chip.line_plan, line_oracle(chip),
+            lambda c: report(c, len(tagged(bytes(c.received), 't'))), rng)
+        if last is not None:
+            require(last['h'] == final['h'] + len(console.sent) - len(sent)
+                    and (last['c'], last['l'], last['o']) == (final['c'], final['l'], final['o']),
+                    'the line exchange handled %d bytes, not %d, or lost some'
+                    % (last['h'] - final['h'], len(console.sent) - len(sent)))
+            final = last
     final = dict(final, r=boot['r'])
     return verdicts, final, atomics
 

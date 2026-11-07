@@ -12,9 +12,18 @@ ROOT = HERE.parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(HERE))
 from environments.xtensa.backend import (COUNTERPARTS, INVENTORY, PROFILES,
-    SPECIALIZATION_PROFILES, CommandFailed, Run, configuration, disposition, execute,
+    SPECIALIZATION_PROFILES, CommandFailed, Run, build, configuration, disposition, execute,
     inventory, metadata, sha, workers)  # noqa: E402
 from environments.xtensa.tools import Tools  # noqa: E402
+
+
+#  D986: what may stop a restriction, the shared inventory's own list.
+sys.path.insert(0, str(ROOT / 'environments/cortex-m'))
+from backend_corpus import STOPS, hosted_oracle  # noqa: E402
+
+#  This target's own independent C controls, which an explanation of a
+#  restriction or refusal points to rather than Cortex-M's.
+C_CONTROLS = 'environments/xtensa/abi.py'
 
 
 def rows():
@@ -28,9 +37,24 @@ def rows():
             selected = disposition(row, target)
             if selected['mode'] == 'refuse' and not selected.get('codes'):
                 raise RuntimeError('target refusal has no diagnostic codes: ' + name)
+            if selected['mode'] == 'restriction' and selected.get('stops') not in STOPS:
+                raise RuntimeError('target restriction names no stop of %s: %s'
+                                   % (', '.join(STOPS), name))
             if not own.get('reason'):
                 raise RuntimeError('target disposition has no explanation: ' + name)
     return result
+
+
+def explained(row, chip, memory_profile, own):
+    """A refusal's or restriction's explanation for this target: the
+    selected configuration, the row's reason, its own where it has one, and
+    this target's independent C controls."""
+    selected = configuration(chip, memory_profile)
+    return ('On Xtensa %s (%s, %s memory): %s Xtensa\'s independent C controls are %s.'
+            % (chip, selected['cpu_level'], selected['memory_profile'],
+               own.get('reason') or row.get('reason')
+               or 'refine refuses it with %s.' % ', '.join(disposition(row).get('codes', [])),
+               C_CONTROLS))
 
 
 def inputs_of(name, row):
@@ -54,11 +78,101 @@ def refusal(run, refine, inputs, chip, row):
     text = (run.out / 'compile-refusal.log').read_text()
     codes = sorted(set(re.findall(r'error\[(L\d+)\]', text)))
     if codes != sorted(row['codes']) or not codes:
-        raise RuntimeError('source refusal differs: expected %s, observed %s; inspect %s'
-                           % (row['codes'], codes, run.out / 'compile-refusal.log'))
+        raise RuntimeError('source refusal differs: expected %s, observed %s; if Xtensa\'s'
+                           ' verdict is its own, give the row "targets": {"xtensa": {"mode":'
+                           ' "refuse", "codes": %s, "reason": ...}}; inspect %s'
+                           % (row['codes'], codes, json.dumps(codes),
+                              run.out / 'compile-refusal.log'))
     if (run.out / 'refused.s').exists():
         raise RuntimeError('a refused source wrote assembly')
     return {'verdict': 'source-refusal', 'codes': codes}
+
+
+def c_stage(run, meta, chip):
+    """Where an ABI fixture's C stops for CHIP, by the Cortex-M corpus's
+    freestanding contract (D985) with the chip's pinned GCC: an option it
+    refuses, a header no freestanding C has, or an error of its source;
+    (None, []) when every source compiles."""
+    gcc = 'xtensa-' + chip + '-elf-gcc'
+    include = run.command('c-include-directory', [gcc, '-print-file-name=include']).strip()
+    base = meta.directory
+    compiler = [gcc, '-mabi=windowed', '-std=c11', '-nostdinc', '-ffreestanding',
+                '-fno-builtin', '-O1', '-Wall', '-Wextra', '-Werror', '-isystem', include,
+                '-I', base, *meta.c_args]
+    for index, source in enumerate(meta.c_sources, start=1):
+        for step, extra in (('headers', ['-M', '-MG']), ('compile', ['-c', '-o',
+                                                                      run.out / 'c.o'])):
+            name = '%s-%d' % (step, index)
+            try:
+                listed = run.command(name, [*compiler, *extra, base / source])
+            except CommandFailed:
+                text = (run.out / (name + '.log')).read_text()
+                options = re.findall(r"unrecognized command-line option '(-[^']+)'", text)
+                if options:
+                    return 'c-options', sorted(set(options))
+                error = next((line for line in text.splitlines() if 'error:' in line), text)
+                return 'c-source', [error[error.find('error:'):].strip()]
+            if step == 'headers':
+                named = listed.replace('\\\n', ' ').split()[2:]
+                missing = [one for one in named
+                           if not Path(one).is_absolute() and not (base / one).exists()]
+                if missing:
+                    return 'c-headers', missing
+    return None, []
+
+
+def restriction(run, refine, name, meta, inputs, chip, row, memory_profile):
+    """D986 on Xtensa: build the fixture as an execute row is and require it
+    to stop where `stops` says: refine's compilation, the C sources by the
+    freestanding contract with the chip's GCC, the link and the oracle.
+    Xtensa's C ABI is disabled, so its corpus links no C peer, and a
+    fixture refine refuses here needs a `targets.xtensa` refusal with its
+    codes."""
+    reached, found = None, []
+    try:
+        run.command('compile-restricted', [refine, *inputs, '--target=xtensa',
+                    '--level=xtensa-' + chip, '--emit=asm', '-o', run.out / 'restricted.s'])
+    except Exception:
+        text = (run.out / 'compile-restricted.log').read_text()
+        said = next((line.strip() for line in text.splitlines()
+                     if 'internal compiler defect' in line), None)
+        if said is None:
+            codes = sorted(set(re.findall(r'error\[(L\d+)\]', text)))
+            raise RuntimeError(
+                '%s: Xtensa refuses it with %s, so it is no restriction here: give its row'
+                ' "targets": {"xtensa": {"mode": "refuse", "codes": %s, "reason": ...}};'
+                ' inspect %s' % (name, ', '.join(codes) or 'no code', json.dumps(codes),
+                                 run.out / 'compile-restricted.log')) from None
+        reached, found = 'defect', [said]
+    if reached is None and meta.c_sources:
+        reached, found = c_stage(run, meta, chip)
+        if reached is None:
+            raise RuntimeError('%s: Xtensa compiles it and its C, and Xtensa\'s C ABI is'
+                               ' disabled, so its corpus links no C peer; give its row a'
+                               ' "targets": {"xtensa": ...} disposition' % name)
+    if reached is None:
+        try:
+            build(run, refine, inputs, chip, memory_profile=memory_profile)
+        except CommandFailed as error:
+            text = Path(error.log).read_text()
+            symbols = sorted(set(re.findall(r"undefined reference to `([^']+)'", text)))
+            if error.name != 'link' or not symbols:
+                raise
+            reached, found = 'link', symbols
+        else:
+            said = hosted_oracle(meta)
+            if not said:
+                raise RuntimeError('%s: its restriction is stale on Xtensa: it builds and'
+                                   ' links and needs nothing firmware lacks; give its row'
+                                   ' "targets": {"xtensa": {"mode": "execute", "reason":'
+                                   ' ...}}' % name)
+            reached, found = 'oracle', [said]
+    if reached != row['stops']:
+        raise RuntimeError('%s: on Xtensa its build stops at %s (%s), and its row says'
+                           ' "stops": "%s"; give its row "targets": {"xtensa": {"mode":'
+                           ' "restriction", "stops": "%s", "reason": ...}}'
+                           % (name, reached, '; '.join(found), row['stops'], reached))
+    return {'verdict': 'target-restriction', 'stops': reached, 'stopped_by': found}
 
 
 def capacity_only(log):
@@ -181,14 +295,14 @@ def execute_inventory(output, refine, qemu, chip, selected=(), profiles=(), memo
         record = {'fixture': name, 'chip': chip, 'optimize': opt, 'specialize': spec,
                   'configuration': configuration(chip, memory_profile)}
         try:
+            own = original[name].get('targets', {}).get('xtensa', {})
             if row['mode'] == 'restriction':
-                witness = ROOT / row['witness']
-                if not witness.is_file() or not row.get('reason'):
-                    raise RuntimeError('target restriction has no retained witness and reason')
-                record.update(verdict='target-restriction', reason=row['reason'],
-                              witness_sha256=sha(witness))
+                record.update(restriction(run, refine, name, meta, inputs, chip, row,
+                                          memory_profile))
+                record['reason'] = explained(original[name], chip, memory_profile, own)
             elif row['mode'] == 'refuse':
                 record.update(refusal(run, refine, inputs, chip, row))
+                record['reason'] = explained(original[name], chip, memory_profile, own)
             else:
                 if meta.get('args') or any(meta.get(key) for key in (
                         'run_args', 'run_files', 'run_expect', 'stdin')):
@@ -210,7 +324,15 @@ def execute_inventory(output, refine, qemu, chip, selected=(), profiles=(), memo
                               + '; image-limit measurement failed: ' + str(measurement_error))
             else:
                 if limit is None:
-                    record.update(status='failed', error=str(error))
+                    said = str(error)
+                    if isinstance(error, CommandFailed) and error.name == 'compile':
+                        codes = sorted(set(re.findall(r'error\[(L\d+)\]',
+                                                      Path(error.log).read_text())))
+                        said += ('; Xtensa refuses it with %s: if that is its verdict here,'
+                                 ' give its row "targets": {"xtensa": {"mode": "refuse",'
+                                 ' "codes": %s, "reason": ...}}'
+                                 % (', '.join(codes) or 'no code', json.dumps(codes)))
+                    record.update(status='failed', error=said)
                 else:
                     record.update(status='passed', **limit)
         record['artifacts'] = {str(path.relative_to(run.out)): sha(path)

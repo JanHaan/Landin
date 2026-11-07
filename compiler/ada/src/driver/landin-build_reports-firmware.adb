@@ -25,6 +25,7 @@ package body Landin.Build_Reports.Firmware is
         & Firmware.Spelling (Profile.Device)
         & """,""core"":""" & Firmware.Spelling (Profile.Core)
         & """,""float_unit"":""" & Firmware.Spelling (Profile.Float)
+        & """,""cache"":""" & Firmware.Spelling (Profile.Cache)
         & """,""layout"":""" & Firmware.Spelling (Profile.Layout)
         & """,""described_boot"":"""
         & Firmware.Spelling (Profile.Described_Boot)
@@ -1187,5 +1188,111 @@ package body Landin.Build_Reports.Firmware is
       when Constraint_Error =>
          return "the linked image is not a well-formed ELF executable";
    end Contract_Fault;
+
+   function Foreign_Section_Of
+     (Host : Landin.Platform.Filesystem'Class; Executable : String)
+      return Foreign_Section
+   is
+      ELF : US.Unbounded_String;
+      Status : Landin.Platform.Read_Status;
+      SHT_Dynamic : constant := 6;
+      SHT_Dynsym : constant := 11;
+      SHT_Init_Array : constant := 14;
+      SHT_Preinit_Array : constant := 16;
+      SHF_Alloc : constant := 2;
+      SHF_TLS : constant := 16#400#;
+   begin
+      Host.Read_File (Executable, ELF, Status);
+      if Status /= Landin.Platform.Read_Ok then
+         return (others => <>);
+      end if;
+      declare
+         Data : constant String := US.To_String (ELF);
+
+         function Number (Position : Natural; Width : Positive)
+           return Landin.Targets.Byte_Count;
+         function Number (Position : Natural; Width : Positive)
+           return Landin.Targets.Byte_Count is
+            Value : Landin.Targets.Byte_Count := 0;
+         begin
+            if Position > Data'Length
+              or else Width > Data'Length - Position
+            then
+               raise Constraint_Error;
+            end if;
+            for Offset in reverse 0 .. Width - 1 loop
+               Value := Value * 256
+                 + Character'Pos (Data (Position + Offset + 1));
+            end loop;
+            return Value;
+         end Number;
+
+         function Word (Position : Natural) return Landin.Targets.Byte_Count
+           is (Number (Position, 4));
+
+         function Text_At (Position : Natural) return String;
+         function Text_At (Position : Natural) return String is
+            Last : Natural := Position;
+         begin
+            while Last < Data'Length and then Data (Last + 1) /= ASCII.NUL
+            loop
+               Last := Last + 1;
+            end loop;
+            return Data (Position + 1 .. Last);
+         end Text_At;
+
+         function Under (Name, Stem : String) return Boolean
+           is (Name = Stem
+               or else (Name'Length > Stem'Length
+                        and then Name (Name'First .. Name'First
+                                         + Stem'Length) = Stem & "."));
+
+         Headers : constant Natural := Natural (Word (32));
+         Size : constant Natural := Natural (Number (46, 2));
+         Count : constant Natural := Natural (Number (48, 2));
+         Names : constant Natural := Natural (Word
+           (Headers + Natural (Number (50, 2)) * Size + 16));
+      begin
+         if Data'Length < 52 or else Data (1 .. 4) /= ASCII.DEL & "ELF" then
+            return (others => <>);
+         end if;
+         for Index in 1 .. Count - 1 loop
+            declare
+               At_Header : constant Natural := Headers + Index * Size;
+               Name : constant String :=
+                 Text_At (Names + Natural (Word (At_Header)));
+               Kind : constant Landin.Targets.Byte_Count :=
+                 Word (At_Header + 4);
+               Flags : constant Landin.Targets.Byte_Count :=
+                 Word (At_Header + 8);
+               Found : Foreign_Kind := No_Foreign;
+            begin
+               if Kind in SHT_Dynamic | SHT_Dynsym
+                 or else Name = ".interp"
+               then
+                  Found := Dynamic_Linkage;
+               elsif Flags / SHF_Alloc mod 2 = 1
+                 and then Word (At_Header + 20) > 0
+               then
+                  if Kind in SHT_Init_Array | SHT_Preinit_Array
+                    or else Under (Name, ".ctors")
+                  then
+                     Found := Constructors;
+                  elsif Flags / SHF_TLS mod 2 = 1 then
+                     Found := Thread_Storage;
+                  end if;
+               end if;
+               if Found /= No_Foreign then
+                  return (Kind => Found,
+                          Name => US.To_Unbounded_String (Name));
+               end if;
+            end;
+         end loop;
+         return (others => <>);
+      end;
+   exception
+      when Constraint_Error =>
+         return (others => <>);
+   end Foreign_Section_Of;
 
 end Landin.Build_Reports.Firmware;

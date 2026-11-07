@@ -1163,6 +1163,7 @@ package body Landin.Backend.Xtensa is
         is (Landin.IR.Link_Symbol (Of_Unit, Item)
               /= Landin.Source.Names.No_Name
             or else Item = Hosted_Entry
+            or else Item = Firmware_Entry
             or else Landin.IR.Is_External (Of_Unit, Item));
 
       --  Pick a disjoint prefix for generated local labels. External source

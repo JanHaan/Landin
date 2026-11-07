@@ -1,0 +1,21 @@
+--  A utf8 builder's text and bytes are lent from the builder, which is `from` its
+--  buffer, so it cannot outlive storage of the frame that made it.
+import core/text
+
+greeting: () -> (result: []u8) =
+    mut storage: [16]u8 = zeroed
+    mut line := text.utf8_over(storage[0..<16])
+    text.utf8_append_text(line, "caf\u{e9}") else none
+    result = text.utf8_bytes(line)
+end greeting
+
+text_greeting: () -> (result: utf8) =
+    mut storage: [16]u8 = zeroed
+    mut line := text.utf8_over(storage[0..<16])
+    text.utf8_append_text(line, "caf\u{e9}") else none
+    result = text.utf8_used(line)
+end text_greeting
+
+public main: () -> (code: i32) =
+    code = i32(lenof greeting() + lenof text_greeting())
+end main

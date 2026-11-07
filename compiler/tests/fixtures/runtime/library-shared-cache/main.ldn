@@ -1,0 +1,84 @@
+import core/cache
+
+-- Two lines' room and a line's slack, so a range of whole 32-byte lines
+-- can be taken wherever the buffer lies.
+mut storage: [96]u8 = zeroed
+
+-- A receive's handoff through any provider: clean and invalidate before
+-- the device writes, invalidate once it has, as D227 orders them.
+receive: (provider: type is cache.maintenance, caches: provider,
+          range: []u8) -> none ! cache.misaligned =
+    try cache.clean_invalidate(caches, range)
+    try cache.invalidate(caches, range)
+end receive
+
+-- Whether the cacheless provider refuses LINE as no power of two.
+refuses: (line: usize) -> (refused: bool) =
+    refused = false
+    caches := cache.cacheless(line) else (problem)
+        refused = problem == cache.bad_line
+        return
+    end
+    _ = caches
+end refuses
+
+-- The cacheless provider takes only a power-of-two line, keeps every
+-- byte through its operations, maintains ranges of whole lines, and
+-- refuses a range that begins or ends inside a line, as a cached
+-- provider of the same line would.
+exercise: () -> (status: i32) =
+    status = 2
+    return when not refuses(0) or not refuses(24) or refuses(1)
+    status = 6
+    caches := cache.cacheless(32) else (problem)
+        _ = problem
+        return
+    end
+    return when cache.line(caches) <> 32
+    status = 7
+    slack := (32 - (usize(addr storage[0]) & 31)) & 31
+    whole := storage[slack..<slack + 64]
+    for index in 0..<lenof whole do storage[slack + index] = u8(index) end for
+    receive(caches, whole) else (problem)
+        _ = problem
+        return
+    end
+    count := cache.lines(32, whole) else (problem)
+        _ = problem
+        return
+    end
+    return when count <> 2
+    status = 8
+    cache.clean(caches, whole) else (problem)
+        _ = problem
+        return
+    end
+    cache.clean(caches, storage[slack..<slack]) else (problem)
+        _ = problem
+        return
+    end
+    for index in 0..<lenof whole do
+        return when storage[slack + index] <> u8(index)
+    end for
+    status = 9
+    mut refused: u32 = 0
+    cache.invalidate(caches, storage[slack + 1..<slack + 33]) else (problem)
+        if problem == cache.misaligned then refused += 1 end if
+    end
+    cache.clean(caches, storage[slack..<slack + 33]) else (problem)
+        if problem == cache.misaligned then refused += 1 end if
+    end
+    cache.clean_invalidate(caches, storage[slack + 16..<slack + 48]) else (problem)
+        if problem == cache.misaligned then refused += 1 end if
+    end
+    receive(caches, storage[slack..<slack + 40]) else (problem)
+        if problem == cache.misaligned then refused += 1 end if
+    end
+    return when refused <> 4
+    status = 0
+end exercise
+
+public main: () -> (code: i32) =
+    code = exercise()
+    if code == 0 then code = 42 end if
+end main
