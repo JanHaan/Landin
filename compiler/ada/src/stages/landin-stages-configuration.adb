@@ -11,6 +11,7 @@ with Landin.Diagnostics.Modules;
 with Landin.Modules;
 with Landin.Modules.Availability;
 with Landin.Diagnostics.Resolution;
+with Landin.Diagnostics.Suggestions;
 with Landin.Machine;
 with Landin.Source;
 with Landin.Source.Names;
@@ -337,6 +338,47 @@ package body Landin.Stages.Configuration is
          return 0;
       end Option_Index;
 
+      function Option_Hint (Written : String) return String;
+
+      function Option_Hint (Written : String) return String is
+         package Near renames Landin.Diagnostics.Suggestions;
+         package U renames Ada.Strings.Unbounded;
+         Offered : Near.Ranking;
+         Listed : U.Unbounded_String;
+         Order : array (1 .. 3) of Landin.Source.Names.Name_Id;
+      begin
+         for Setting of Options loop
+            Near.Consider (Offered, Written, Spelled (Setting.Name));
+         end loop;
+         if Near.Count (Offered) = 1 then
+            return "did you mean `" & Near.Nth (Offered, 1) & "`?";
+         elsif Options.Is_Empty or else Natural (Options.Length) > 3 then
+            return "";
+         end if;
+
+         for Index in 1 .. Natural (Options.Length) loop
+            Order (Index) := Options.Element (Index).Name;
+            for Prior in reverse 2 .. Index loop
+               exit when Spelled (Order (Prior - 1))
+                 <= Spelled (Order (Prior));
+               declare
+                  Swap : constant Landin.Source.Names.Name_Id :=
+                    Order (Prior);
+               begin
+                  Order (Prior) := Order (Prior - 1);
+                  Order (Prior - 1) := Swap;
+               end;
+            end loop;
+         end loop;
+         for Index in 1 .. Natural (Options.Length) loop
+            if Index > 1 then
+               U.Append (Listed, ", ");
+            end if;
+            U.Append (Listed, "`" & Spelled (Order (Index)) & "`");
+         end loop;
+         return "available build options: " & U.To_String (Listed);
+      end Option_Hint;
+
       function Scalar_Type (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
         return Ty.Type_Kind is
       begin
@@ -545,7 +587,12 @@ package body Landin.Stages.Configuration is
                   then
                      Report_Not_Fixed
                        (Of_Tree, Node,
-                        "this name is not a compiler-owned fixed value");
+                        "this name is not a compiler-owned fixed value",
+                        Note => "D202: fixed expressions do not look up"
+                          & " module or runtime values; use options,"
+                          & " compiler facts or sizeof/alignof of scalar"
+                          & " types; compiler.assert also admits declared"
+                          & " type layout measurements");
                      Valid := False;
                   elsif Option_Index (Syn.Name (Of_Tree, Node)) > 0 then
                      declare
@@ -3072,13 +3119,22 @@ package body Landin.Stages.Configuration is
                Found_Name := Found_Name or else Spelled (Setting.Name) = Word;
             end loop;
             if not Found_Name then
-               Report (Context, Landin.Diagnostics.Make
-                 (Code => Landin.Diagnostics.Catalogue.Code
-                    (Landin.Diagnostics.Catalogue.Unknown_Option),
-                  Level => Landin.Diagnostics.Error,
-                  Source => Landin.Source.No_Source,
-                  Where => Landin.Source.Empty_Span,
-                  Message => "unknown build option: " & Word));
+               declare
+                  Item : Landin.Diagnostics.Diagnostic :=
+                    Landin.Diagnostics.Make
+                      (Code => Landin.Diagnostics.Catalogue.Code
+                         (Landin.Diagnostics.Catalogue.Unknown_Option),
+                       Level => Landin.Diagnostics.Error,
+                       Source => Landin.Source.No_Source,
+                       Where => Landin.Source.Empty_Span,
+                       Message => "unknown build option: " & Word);
+                  Hint : constant String := Option_Hint (Word);
+               begin
+                  if Hint /= "" then
+                     Landin.Diagnostics.Add_Note (Item, Hint);
+                  end if;
+                  Report (Context, Item);
+               end;
             end if;
          end;
       end loop;

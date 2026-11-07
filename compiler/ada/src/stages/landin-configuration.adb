@@ -1,3 +1,4 @@
+with Landin.Memory;
 with Landin.Tokens.Text;
 
 package body Landin.Configuration is
@@ -201,11 +202,16 @@ package body Landin.Configuration is
    function Tool_Advice (Namespace, Member : String) return String is
    begin
       if Namespace = "assembler" and then Member = "block" then
-         return "[1990]: assembler.block is called in a Cortex-M0 routine"
-           & " body";
+         return "[1990]: assembler.block is called in a routine body";
       elsif Namespace = "compiler" and then Member'Length >= 7
         and then Member (Member'First .. Member'First + 6) = "atomic_"
       then
+         if Landin.Memory.Named (Member) in
+           Landin.Memory.Atomic_Load .. Landin.Memory.Atomic_Compare_Exchange
+         then
+            return "[1620]/D227: compiler." & Member
+              & " is called in a routine body";
+         end if;
          return "[1620]/D227: compiler." & Member
            & " is not one of the memory operations";
       elsif Namespace = "compiler" and then Member'Length >= 7
