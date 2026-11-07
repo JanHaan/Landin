@@ -597,7 +597,9 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Landin.Testing.Check_Equal
         (Item, Outcome.Exit_Code, Status (Case_Item),
          Label & ": recorded exit status");
-      if Class (Case_Item) = Negative_Program then
+      if Class (Case_Item) in Negative_Program | Positive_Program
+                              | Runtime | Abi
+      then
          Landin.Testing.Check_Equal
            (Item, Codes_In (Unbounded.To_String (Outcome.Output)),
             Normalized_Codes (Codes (Case_Item)),
@@ -825,34 +827,39 @@ package body Landin.Tests.Fixture_Execution_Suite is
    procedure A_Report_Is_Recorded_By_Name
      (Item : in out Landin.Testing.Context)
    is
-      Directory : constant String := Fixture_Root & "/negative/sample";
-      Expected  : constant String := Directory & "/expected.txt";
       Report    : constant String :=
         "error[L0100]: a fresh report" & ASCII.LF;
 
       procedure Attempt
         (Exit_Code : Integer; Output : String; Path : String;
          Wrote : out Boolean; Said : out Unbounded.Unbounded_String;
-         Written : out Unbounded.Unbounded_String);
+         Written : out Unbounded.Unbounded_String;
+         Accepted : Boolean := False; Pinned : Boolean := True);
 
       procedure Attempt
         (Exit_Code : Integer; Output : String; Path : String;
          Wrote : out Boolean; Said : out Unbounded.Unbounded_String;
-         Written : out Unbounded.Unbounded_String)
+         Written : out Unbounded.Unbounded_String;
+         Accepted : Boolean; Pinned : Boolean)
       is
+         Class_Name : constant String :=
+           (if Accepted then "positive" else "negative");
+         Directory : constant String :=
+           Fixture_Root & "/" & Class_Name & "/sample";
+         Expected : constant String := Directory & "/expected.txt";
          Host   : Landin.Testing.Fakes.Fake_Filesystem;
          Runner : Landin.Testing.Fakes.Fake_Tool_Runner;
       begin
          Host.Add_File ("/bin/refine", "");
          Host.Add_Directory (Fixture_Root);
-         Host.Add_Directory (Fixture_Root & "/negative");
+         Host.Add_Directory (Fixture_Root & "/" & Class_Name);
          Host.Add_Directory (Directory);
          Host.Add_File
            (Directory & "/fixture.meta",
-            "class: negative" & ASCII.LF
+            "class: " & Class_Name & ASCII.LF
             & "summary: a refusal whose report is recorded" & ASCII.LF
             & "program: program.ldn" & ASCII.LF
-            & "codes: L0100" & ASCII.LF
+            & (if Pinned then "codes: L0100" & ASCII.LF else "")
             & "constructs: 0380" & ASCII.LF
             & "targets: linux-x86-64" & ASCII.LF
             & "expect: expected.txt" & ASCII.LF
@@ -889,6 +896,23 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Landin.Testing.Check
         (Item, not Wrote and then Unbounded.To_String (Written) = "",
          "a changed code is not recorded: " & Unbounded.To_String (Said));
+
+      Attempt (0, "warning[L0100]: pinned" & ASCII.LF,
+               "positive/sample", Wrote, Said, Written, Accepted => True);
+      Landin.Testing.Check
+        (Item, Wrote and then Unbounded.To_String (Written) =
+           "warning[L0100]: pinned" & ASCII.LF,
+         "an accepted report with its pinned warning is recorded: "
+         & Unbounded.To_String (Said));
+
+      Attempt (0, "warning[L0100]: unpinned" & ASCII.LF,
+               "positive/sample", Wrote, Said, Written,
+               Accepted => True, Pinned => False);
+      Landin.Testing.Check
+        (Item, not Wrote and then Unbounded.To_String (Written) = ""
+         and then Unbounded.Index (Said, "pinned codes") > 0,
+         "an unpinned warning cannot overwrite an accepted report: "
+         & Unbounded.To_String (Said));
 
       Attempt (1, Report, "negative/absent", Wrote, Said, Written);
       Landin.Testing.Check

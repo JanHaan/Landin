@@ -36,10 +36,11 @@ class AgentEnvTest(unittest.TestCase):
                 self.assertEqual(printed, "/dev/null\n")
                 for shell in ("sh", "bash"):
                     sourced = subprocess.run(
-                        [shell, "-c",
+                        [shell, *(["--noprofile", "--norc"]
+                                  if shell == "bash" else []), "-c",
                          '. "$("$0")" && printf %s "$PATH"', str(SCRIPT)],
-                        env={"PATH": path}, capture_output=True, text=True,
-                        timeout=30)
+                        env={"PATH": path}, stdin=subprocess.DEVNULL,
+                        capture_output=True, text=True, timeout=30)
                     self.assertEqual(sourced.returncode, 0, sourced.stderr)
                     self.assertEqual(sourced.stdout, path)
 

@@ -59,7 +59,8 @@ case "${1:-}" in
         echo "across N workers, one by default; scripts/parallel-equivalence.sh holds"
         echo "a wider run to the same transcript.  It changes no other suite."
         echo
-        echo "No option runs the complete suite; a selection is a FILTERED run."
+        echo "A no-argument invocation runs the complete local native suite."
+        echo "Selections produce a FILTERED run; --host produces HOST-ONLY scope."
         echo "Suites, for --suite=NAME and --case=SUITE/NAME:"
         awk '/Expected_Suites : constant/ { on = 1 }
              on {
