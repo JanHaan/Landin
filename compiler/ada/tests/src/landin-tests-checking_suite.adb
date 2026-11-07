@@ -15746,8 +15746,88 @@ package body Landin.Tests.Checking_Suite is
          False, Landin.Targets.Cortex_M, "L0345");
    end Written_Conversions_Keep_Alias_Semantics;
 
+   procedure Reference_Diagnostic_Repairs
+     (Item : in out Landin.Testing.Context);
+
+   procedure Reference_Diagnostic_Repairs
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Source
+        (Text, Message, Note : String; Frame_Line : Boolean := False);
+
+      procedure Check_Source
+        (Text, Message, Note : String; Frame_Line : Boolean := False)
+      is
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Synthetic_32);
+         Order : Landin.Stages.Pipeline;
+         Src : constant Landin.Source.Source_Id :=
+           Landin.Stages.Add_Source (Work, "reference-guidance.ldn", Text);
+         Ran : Natural;
+         Found : Boolean := False;
+      begin
+         Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Configurer'Access);
+         Landin.Stages.Append (Order, Names'Access);
+         Landin.Stages.Append (Order, Checker'Access);
+         Ran := Landin.Stages.Run (Order, Work);
+         Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
+         declare
+            Reports : constant Landin.Diagnostics.Diagnostic_List :=
+              Landin.Stages.Report (Work);
+         begin
+            for Index in 1 .. Landin.Diagnostics.Count (Reports) loop
+               declare
+                  D : constant Landin.Diagnostics.Diagnostic :=
+                    Landin.Diagnostics.Get (Reports, Index);
+               begin
+                  if Ada.Strings.Fixed.Index
+                    (Landin.Diagnostics.Message
+                       (Landin.Diagnostics.Primary (D)), Message) > 0
+                  then
+                     for N in 1 .. Landin.Diagnostics.Note_Count (D) loop
+                        Found := Found or else Ada.Strings.Fixed.Index
+                          (Landin.Diagnostics.Nth_Note (D, N), Note) > 0;
+                     end loop;
+                     if Frame_Line then
+                        Landin.Testing.Check
+                          (Item, Landin.Diagnostics.Source_Of
+                             (Landin.Diagnostics.Primary (D)) = Src
+                           and then Natural (Landin.Diagnostics.Span_Of
+                             (Landin.Diagnostics.Primary (D)).First)
+                               = Ada.Strings.Fixed.Index (Text, "buf[") - 1,
+                           "returned frame view points at the assigned value");
+                     end if;
+                  end if;
+               end;
+            end loop;
+         end;
+         Landin.Testing.Check
+           (Item, Found, "the diagnostic names the required repair: " & Note);
+      end Check_Source;
+   begin
+      Check_Source
+        ("f: (p: ptr i32) -> (r: ptr i32) = r = p end f",
+         "return `r` derives from parameter storage but has no `from` clause",
+         "add `from p` after the type of return `r`");
+      Check_Source
+        ("f: (p: ptr i32, q: ptr i32) -> (r: ptr i32 from q) = "
+         & "r = p end f",
+         "the returned reference does not derive",
+         "this edge derives from p");
+      Check_Source
+        ("f: () -> (s: []u8) =" & LF
+         & "    buf: [4]u8 = [1, 2, 3, 4]" & LF
+         & "    s = buf[0..<4]" & LF & "end f" & LF,
+         "this returned reference still has frame origin",
+         "caller-supplied storage", Frame_Line => True);
+   end Reference_Diagnostic_Repairs;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "checking", "reference diagnostic repairs",
+         Reference_Diagnostic_Repairs'Access);
       Landin.Testing.Register
         (Into, "checking", "written conversions keep alias semantics",
          Written_Conversions_Keep_Alias_Semantics'Access);

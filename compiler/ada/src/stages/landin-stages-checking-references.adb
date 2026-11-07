@@ -1,6 +1,7 @@
 with Interfaces;
 with Ada.Containers.Ordered_Maps;
 with Ada.Containers.Vectors;
+with Ada.Strings.Unbounded;
 with Ada.Finalization;
 with Ada.Unchecked_Deallocation;
 
@@ -279,6 +280,9 @@ package body Landin.Stages.Checking.References is
 
       type Reference_Fact is record
          Frame      : Boolean := False;
+         --  Diagnostic provenance only: the value assigned into frame
+         --  origins, retained across joins to locate a later return refusal.
+         Written_At : Syn.Node_Id := Syn.No_Node;
          Frame_Witness : Res.Declaration_Id := Res.No_Declaration;
          --  D445: the latest declared frame storage the fact may reach,
          --  as Frame_Witness is the earliest; a frame alternative that
@@ -374,6 +378,12 @@ package body Landin.Stages.Checking.References is
          Into_Fact.Presence :=
            Value_Fact'Max (Into_Fact.Presence, Other.Presence);
          Into_Fact.Frame := Into_Fact.Frame or Other.Frame;
+         if Other.Written_At /= Syn.No_Node
+           and then (Into_Fact.Written_At = Syn.No_Node
+                     or else Other.Written_At < Into_Fact.Written_At)
+         then
+            Into_Fact.Written_At := Other.Written_At;
+         end if;
          if Other.Frame_Witness /= Res.No_Declaration
            and then (Into_Fact.Frame_Witness = Res.No_Declaration
              or else Other.Frame_Witness < Into_Fact.Frame_Witness)
@@ -994,7 +1004,8 @@ package body Landin.Stages.Checking.References is
          Node : Syn.Node_Id;
          Fact : Reference_Fact;
          Message : String;
-         Related : Landin.Provenance.Origin);
+         Related : Landin.Provenance.Origin;
+         Advice : String := "");
 
       --  The facts of a call's written arguments, each walked exactly
       --  once so a nested call inside an argument is checked once.
@@ -1524,7 +1535,8 @@ package body Landin.Stages.Checking.References is
          Node : Syn.Node_Id;
          Fact : Reference_Fact;
          Message : String;
-         Related : Landin.Provenance.Origin)
+         Related : Landin.Provenance.Origin;
+         Advice : String := "")
       is
          Derived : constant Res.Declaration_Id := First_Derivation (Fact);
          Place : Landin.Provenance.Origin := Related;
@@ -1544,7 +1556,8 @@ package body Landin.Stages.Checking.References is
             Where   => Syn.Where (Tree, Node),
             Message => Message,
             Note    => "[0770]/[0780]: frame references cannot escape and"
-                       & " a retained parameter is declared `escaping`",
+                       & " a retained parameter is declared `escaping`"
+                       & Advice,
             Related => Place,
             Because => "the shorter-lived reference source",
             Into    => Sink.all);
@@ -3381,9 +3394,13 @@ package body Landin.Stages.Checking.References is
                      Into    => Sink.all);
                elsif not Fact.Untracked and then Fact.Frame then
                   Report_Escape
-                    (Tree, At_Node, Fact,
+                    (Tree,
+                     (if Fact.Written_At /= Syn.No_Node
+                      then Fact.Written_At else At_Node), Fact,
                      "this returned reference still has frame origin",
-                     Part.Site);
+                     Part.Site,
+                     Advice => "; return a view of caller-supplied storage"
+                       & " and declare the result `from` that parameter");
                elsif not Fact.Untracked
                  and then not
                    (Fact.Presence = Empty_Optional
@@ -3464,18 +3481,54 @@ package body Landin.Stages.Checking.References is
                      end loop;
                   end;
                   if not Same then
-                     Bad.Report
-                       (Item    => Bad.Return_Sources_Disagree,
-                        Source  => Syn.Source_Of (Tree),
-                        Where   => Syn.Where (Tree, At_Node),
-                        Message => "the returned reference does not derive"
-                                   & " from exactly the parameters named by"
-                                   & " its `from` clause",
-                        Note    => "[0790]: the written clause and every"
-                                   & " returning body edge agree both ways",
-                        Related => Part.Site,
-                        Because => "the named return and its declared sources",
-                        Into    => Sink.all);
+                     declare
+                        package US renames Ada.Strings.Unbounded;
+                        Sources : US.Unbounded_String;
+                        Missing : constant Boolean :=
+                          Syn.Return_Source_Count (Of_Tree, Returned) = 0;
+                        Result_Name : constant String :=
+                          Spelled (Res.Name_Of (Meanings.all, Id));
+                     begin
+                        for Source in Fact.From'Range loop
+                           if Fact.From (Source)
+                             and then Source <= Syn.Parameter_Count
+                               (Of_Tree, Function_Node)
+                           then
+                              if US.Length (Sources) > 0 then
+                                 US.Append (Sources, ", ");
+                              end if;
+                              US.Append (Sources, Spelled
+                                (Syn.Name (Of_Tree, Syn.Nth_Parameter
+                                  (Of_Tree, Function_Node, Source))));
+                           end if;
+                        end loop;
+                        Bad.Report
+                          (Item    => Bad.Return_Sources_Disagree,
+                           Source  => Syn.Source_Of (Tree),
+                           Where   => Syn.Where (Tree, At_Node),
+                           Message =>
+                             (if Missing then "return `" & Result_Name
+                                & "` derives from parameter storage but has no"
+                                & " `from` clause"
+                              else "the returned reference does not derive"
+                                & " from exactly the parameters named by"
+                                & " its `from` clause"),
+                           Note    => "[0790]: "
+                             & (if Missing and then US.Length (Sources) > 0
+                                then "add `from " & US.To_String (Sources)
+                                  & "` after the type of return `"
+                                  & Result_Name & "`; every returning body"
+                                  & " edge must agree with those sources"
+                                else "return `" & Result_Name
+                                  & "`: the written clause and every returning"
+                                  & " body edge agree both ways"
+                                  & (if US.Length (Sources) > 0
+                                     then "; this edge derives from "
+                                       & US.To_String (Sources) else "")),
+                           Related => Part.Site,
+                           Because => "the named return and its declared sources",
+                           Into    => Sink.all);
+                     end;
                   end if;
                end if;
                <<Next_Return>>
@@ -3547,6 +3600,9 @@ package body Landin.Stages.Checking.References is
            (Tree, Place, Syn.Where (Tree, Value).Last, Target.Storage)
          then
             return;
+         end if;
+         if Fact.Value.Frame then
+            Fact.Value.Written_At := Value;
          end if;
          if not Has_References (Tree, Place) then
             Fact := No_Origin;

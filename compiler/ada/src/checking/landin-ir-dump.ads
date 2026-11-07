@@ -73,13 +73,16 @@ package Landin.IR.Dump is
    --  The backend decides that (D374, `Landin.Backend`), so a caller that
    --  knows the backend's answer supplies it; `refine compile --emit=ir`
    --  does, and the recorded dumps do not.
+   --  With_Provenance qualifies item names by module, falls back to generic
+   --  templates and labels instances with their distinct item identity.
    function Text
      (Of_Unit  : Unit;
       Meanings : Landin.Resolution.Table;
       Names    : Landin.Source.Names.Table;
       With_Metadata : Boolean := False;
       Kept     : access function
-        (Id : Evidence_Id; Which : Positive) return Boolean := null)
+        (Id : Evidence_Id; Which : Positive) return Boolean := null;
+      With_Provenance : Boolean := False)
       return String;
 
 end Landin.IR.Dump;
