@@ -39,6 +39,15 @@ notices when copying the corresponding material:
     devices/notices/LICENSE-Apache-2.0.stm32h7.
     devices/README.md records both SVDs' pinned upstream sources; the SVDs
     themselves are fetched by hash and not in this tree.
+  * The bindings refine bindings generates from the pinned CMSIS headers,
+    under compiler/tests/fixtures/abi/cortex-cmsis-bindings/ and
+    compiler/tests/fixtures/abi/cortex-vfp-bindings/: Arm's CMSIS-Core,
+    Apache-2.0, licence in devices/notices/LICENSE-Apache-2.0.cmsis; with
+    Raspberry Pi's RP2040 device header, BSD-3-Clause, notice in
+    devices/notices/LICENSE.pico-sdk, and STMicroelectronics's STM32H753
+    device header, Apache-2.0, licence in
+    devices/notices/LICENSE-Apache-2.0.stm32h7. Each fixture's NOTICE says
+    which; the headers are fetched by hash and not in this tree.
 
 The optional MonoLisa files are supplied by the separate private
 landin-fonts checkout and are not included in this tree. Their separate

@@ -69,6 +69,46 @@
       "url": "https://raw.githubusercontent.com/raspberrypi/pico-sdk/a1438dff1d38bd9c65dbd693f0e5db4b9ae91779/src/rp2040/hardware_regs/include/hardware/regs/ssi.h",
       "sha256": "5479f1a60c9e5faff187d3fa666b9a30abbae96f916d9f2ad620da680ae6f310"
     },
+    "rp2040-cmsis/RP2040.h": {
+      "url": "https://raw.githubusercontent.com/raspberrypi/pico-sdk/a1438dff1d38bd9c65dbd693f0e5db4b9ae91779/src/rp2_common/cmsis/stub/CMSIS/Device/RP2040/Include/RP2040.h",
+      "sha256": "3303f66bb8c59a14dbdc42629a698ba1870759eab2c87ba9d7280ae6d2c98ad8"
+    },
+    "rp2040-cmsis/system_RP2040.h": {
+      "url": "https://raw.githubusercontent.com/raspberrypi/pico-sdk/a1438dff1d38bd9c65dbd693f0e5db4b9ae91779/src/rp2_common/cmsis/stub/CMSIS/Device/RP2040/Include/system_RP2040.h",
+      "sha256": "320565ba5693f67435dbb2983bb4eee0501a86604a07b753416c5fd5373d2d10"
+    },
+    "rp2040-cmsis/core_cm0plus.h": {
+      "url": "https://raw.githubusercontent.com/raspberrypi/pico-sdk/a1438dff1d38bd9c65dbd693f0e5db4b9ae91779/src/rp2_common/cmsis/stub/CMSIS/Core/Include/core_cm0plus.h",
+      "sha256": "1e27949f94b8cdbf441ba944348a92c1f2b9d6c0cd7a0241034905dccec43b77"
+    },
+    "rp2040-cmsis/cmsis_version.h": {
+      "url": "https://raw.githubusercontent.com/raspberrypi/pico-sdk/a1438dff1d38bd9c65dbd693f0e5db4b9ae91779/src/rp2_common/cmsis/stub/CMSIS/Core/Include/cmsis_version.h",
+      "sha256": "3b9195c5373a2a4dbfd968b083b3d7f5f446f9ec2e126f75928ac1ff4356b91e"
+    },
+    "rp2040-cmsis/cmsis_compiler.h": {
+      "url": "https://raw.githubusercontent.com/raspberrypi/pico-sdk/a1438dff1d38bd9c65dbd693f0e5db4b9ae91779/src/rp2_common/cmsis/stub/CMSIS/Core/Include/cmsis_compiler.h",
+      "sha256": "ef7a1f9cb34ac7731500ab17edb7a9516a9d29e984a23da90b9b18db3a9bed68"
+    },
+    "rp2040-cmsis/cmsis_clang.h": {
+      "url": "https://raw.githubusercontent.com/raspberrypi/pico-sdk/a1438dff1d38bd9c65dbd693f0e5db4b9ae91779/src/rp2_common/cmsis/stub/CMSIS/Core/Include/cmsis_clang.h",
+      "sha256": "e372fc0be32b71c0372e7d76684160fab06d7318bda7dffab0a50f77feb76c40"
+    },
+    "rp2040-cmsis/cmsis_gcc.h": {
+      "url": "https://raw.githubusercontent.com/raspberrypi/pico-sdk/a1438dff1d38bd9c65dbd693f0e5db4b9ae91779/src/rp2_common/cmsis/stub/CMSIS/Core/Include/cmsis_gcc.h",
+      "sha256": "8fd513058bc3d10f1b3929c648023964dd32f375d5be39ad31a13e2038763405"
+    },
+    "rp2040-cmsis/m-profile/cmsis_clang_m.h": {
+      "url": "https://raw.githubusercontent.com/raspberrypi/pico-sdk/a1438dff1d38bd9c65dbd693f0e5db4b9ae91779/src/rp2_common/cmsis/stub/CMSIS/Core/Include/m-profile/cmsis_clang_m.h",
+      "sha256": "d735406717f198ddf2636858bcc56c448d3e2bbd91b3e70e7bfb0367fa62718d"
+    },
+    "rp2040-cmsis/m-profile/cmsis_gcc_m.h": {
+      "url": "https://raw.githubusercontent.com/raspberrypi/pico-sdk/a1438dff1d38bd9c65dbd693f0e5db4b9ae91779/src/rp2_common/cmsis/stub/CMSIS/Core/Include/m-profile/cmsis_gcc_m.h",
+      "sha256": "beee8eb228280fb29b41438e98de4afb4e5f265ddb3cabf5d4be6424131bc658"
+    },
+    "rp2040-cmsis/m-profile/armv7m_mpu.h": {
+      "url": "https://raw.githubusercontent.com/raspberrypi/pico-sdk/a1438dff1d38bd9c65dbd693f0e5db4b9ae91779/src/rp2_common/cmsis/stub/CMSIS/Core/Include/m-profile/armv7m_mpu.h",
+      "sha256": "44294dc3e331deb8daae269793e579cc10920a9b88d133bbaf3a7af65d29f9e4"
+    },
     "rp2350/RP2350.svd": {
       "url": "https://raw.githubusercontent.com/raspberrypi/pico-sdk/a1438dff1d38bd9c65dbd693f0e5db4b9ae91779/src/rp2350/hardware_regs/RP2350.svd",
       "sha256": "f1180d39bbc0e7c01b1a418bc61493c8450e25732f33bf2b0df381255078014c"
@@ -149,6 +189,34 @@
     "stm32h753/stm32h753xx.h": {
       "url": "https://raw.githubusercontent.com/STMicroelectronics/cmsis-device-h7/81db1ec63cdc191fae1565b772da3ea5aa29a683/Include/stm32h753xx.h",
       "sha256": "4f6def439a9fa94705303fe227d34308048c44bd36263d311aa54cc94f8398f5"
+    },
+    "stm32h753-cmsis/core_cm7.h": {
+      "url": "https://raw.githubusercontent.com/STMicroelectronics/STM32CubeH7/8ec3113d4039d30ba9dc2bf0cb6eefc756b48d06/Drivers/CMSIS/Include/core_cm7.h",
+      "sha256": "e974d0a91752487d0154457cd422c37667328e9ddb7ba4fa2fed479a63577f63"
+    },
+    "stm32h753-cmsis/cmsis_version.h": {
+      "url": "https://raw.githubusercontent.com/STMicroelectronics/STM32CubeH7/8ec3113d4039d30ba9dc2bf0cb6eefc756b48d06/Drivers/CMSIS/Include/cmsis_version.h",
+      "sha256": "184c19fd3ee73632edf35a0b4d49cd48be75fbf49e6ccb19d9db05fa83bea4b3"
+    },
+    "stm32h753-cmsis/cmsis_compiler.h": {
+      "url": "https://raw.githubusercontent.com/STMicroelectronics/STM32CubeH7/8ec3113d4039d30ba9dc2bf0cb6eefc756b48d06/Drivers/CMSIS/Include/cmsis_compiler.h",
+      "sha256": "b51963d271c1571ca3463654c76aa7ea50c4eac5d0a2710df10414ac64d9e0f8"
+    },
+    "stm32h753-cmsis/cmsis_gcc.h": {
+      "url": "https://raw.githubusercontent.com/STMicroelectronics/STM32CubeH7/8ec3113d4039d30ba9dc2bf0cb6eefc756b48d06/Drivers/CMSIS/Include/cmsis_gcc.h",
+      "sha256": "43bfd1fe69fbbc2ca70aaf7d43cc3e20f16e0c7f66e1bdef9b51af6dc14b2617"
+    },
+    "stm32h753-cmsis/mpu_armv7.h": {
+      "url": "https://raw.githubusercontent.com/STMicroelectronics/STM32CubeH7/8ec3113d4039d30ba9dc2bf0cb6eefc756b48d06/Drivers/CMSIS/Include/mpu_armv7.h",
+      "sha256": "29206b52ee02290ed6f5a5415ebd4187de802cf176d9b3cb844390d8e5571372"
+    },
+    "stm32h753-cmsis/cachel1_armv7.h": {
+      "url": "https://raw.githubusercontent.com/STMicroelectronics/STM32CubeH7/8ec3113d4039d30ba9dc2bf0cb6eefc756b48d06/Drivers/CMSIS/Include/cachel1_armv7.h",
+      "sha256": "b211a8bbcfd62c9f0b3b3f1674927c9b58a0d95b02e449a0866ad2c99cb64232"
+    },
+    "stm32h753-cmsis/system_stm32h7xx.h": {
+      "url": "https://raw.githubusercontent.com/STMicroelectronics/cmsis-device-h7/81db1ec63cdc191fae1565b772da3ea5aa29a683/Include/system_stm32h7xx.h",
+      "sha256": "e77e7dfe5ff780928c28cf37576135050e5af7bf31776400ac700e8b917d24be"
     },
     "rm0433/RM0433.pdf": {
       "url": "https://www.st.com/resource/en/reference_manual/rm0433-stm32h742-stm32h743753-and-stm32h750-value-line-advanced-armbased-32bit-mcus-stmicroelectronics.pdf",

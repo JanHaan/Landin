@@ -4,15 +4,20 @@
 an external Clang for a JSON AST; it does not parse C header text, and no
 compilation reads a header. Its supported ABIs are Linux x86-64 ELF System V
 AMD64 LP64 and Darwin arm64 with Apple's AAPCS64 platform differences, both
-with signed plain `char`, and Linux arm64's standard AAPCS64 LP64, whose
-plain `char` is unsigned (D256), all with ordinary (non-short) C11 enums.
+with signed plain `char`, Linux arm64's standard AAPCS64 LP64, whose
+plain `char` is unsigned (D256), and Cortex-M's freestanding AAPCS32 ILP32,
+in its base procedure call standard and its VFP variant, also with an
+unsigned plain `char` ([Cortex-M](#cortex-m), D935), all with ordinary
+(non-short) C11 enums.
 Each is one row of `Landin.Bindings`' targets, which says its refine target
-name, Clang triple, fact, calling convention, plain `char` and identifying
-macros, and a policy's `plain_char` must be its target's. Clang's answers
+name, Clang triple, fact, calling convention, data model, plain `char` and
+identifying macros, and a policy's `data_model` and `plain_char` must be its
+target's. Clang's answers
 are checked for the explicit triple, architecture, object format macros, data
-model, byte order and the sign of plain `char`. Generated code asserts the
-selected `compiler.c_sysv_lp64`, `compiler.c_darwin_lp64` or
-`compiler.c_aapcs64_lp64` fact. The exact Apple binding target is
+model, byte order, the sign of plain `char` and, on Cortex-M, the procedure
+call standard. Generated code asserts the
+selected `compiler.c_sysv_lp64`, `compiler.c_darwin_lp64`,
+`compiler.c_aapcs64_lp64` or `compiler.c_aapcs32` fact. The exact Apple binding target is
 `arm64-apple-macos26.0.0`; native tools and SDK are pinned in
 `environments/macos-arm64/policy.json`. The Linux arm64 target is
 `aarch64-unknown-linux-gnu`, and `compiler/tests/linux-arm64/bindings.py`
@@ -81,10 +86,12 @@ refine bindings \
   api/detail.h=/checkout/include/detail.h
 ```
 
-`--clang`, `--sysroot`, `--policy` and `--out-dir` are required, and at least
-one header; `--target` is refine's target name, `linux-x86-64`, `linux-arm64`
-or `darwin-arm64`, and defaults to the host's as for every command. The
-policy's `abi.target` must be the Clang triple that name selects. `--clang`
+`--clang`, `--policy` and `--out-dir` are required, and at least one header;
+`--target` is refine's target name, `linux-x86-64`, `linux-arm64`,
+`darwin-arm64` or `cortex-m0`, and defaults to the host's as for every
+command. `--sysroot` is required for the three hosted targets and refused for
+`cortex-m0`, which is freestanding (D937). The policy's `abi.target` must be
+a Clang triple that name selects: `cortex-m0` has two (D935). `--clang`
 names a Clang by path or by a name found on PATH. Each header is an operand,
 either `LOGICAL=PATH` or `PATH`, in which case its last component is the
 logical name. Logical names are the relocatable spellings emitted in
@@ -93,7 +100,8 @@ logical name. Logical names are the relocatable spellings emitted in
 the working directory without resolving links. `refine bindings --help` says
 the same.
 
-The generator passes `-nostdinc`. It sees only the named headers, explicit
+The generator passes `-nostdinc`, and on `cortex-m0` `-ffreestanding` and the
+row's float ABI. It sees only the named headers, explicit
 `--include-dir`/`--system-include-dir` roots, and explicit `--define` values.
 No development-host header directory is inherited: every Clang process runs
 in an environment of its own, `PATH`, `HOME` and the temporary directory with
@@ -103,16 +111,18 @@ driver configuration files. Clang works in a private directory under
 `TMPDIR`, removed afterwards. File-prefix maps cover explicit
 include/system/sysroot roots, so transitive `__FILE__` constants survive
 relocation. Preprocessing outside those roots is refused; time-sensitive
-macros are errors. The sysroot is required
+macros are errors. A hosted target's sysroot is required
 even for self-contained headers; an empty directory is valid when no target
 system header is needed. Clang's resource include directory must be named
-explicitly when a selected incoming-varargs adapter needs `<stdarg.h>`.
-Opaque-object and nullable-callback allocation uses `calloc`/`free`, so the
-explicit include configuration must provide `<stdlib.h>` when those adapters
-are generated.
+explicitly when a selected incoming-varargs adapter needs `<stdarg.h>`, and
+on `cortex-m0` whenever a header includes one of Clang's freestanding
+headers. On a hosted target, opaque-object and nullable-callback allocation
+uses `calloc`/`free`, so the explicit include configuration must provide
+`<stdlib.h>` when those adapters are generated.
 
 A refusal is a diagnostic, and `refine explain` describes each code: a
-request written wrong is L0002, a header or policy that cannot be read L0003,
+request written wrong, `--sysroot` missing for a hosted target or given for
+`cortex-m0` among them, is L0002, a header or policy that cannot be read L0003,
 a policy that is not one L0579, a Clang that cannot be used as asked L0580, a
 selection that cannot be bound L0581, outputs in the way L0582, and a
 replacement that fails L0005.
@@ -123,10 +133,13 @@ preprocessor environment. The ABI fixture harness additionally uses
 before publication.
 
 `bindings.ldn` imports `platform/c`, whose aliases admit the explicitly supported
-`compiler.c_sysv_lp64`, `compiler.c_darwin_lp64` and `compiler.c_aapcs64_lp64`
-ABIs. Each generated binding
+`compiler.c_sysv_lp64`, `compiler.c_darwin_lp64`, `compiler.c_aapcs64_lp64`
+and `compiler.c_aapcs32` ABIs. Each generated binding
 visibly asserts only its selected ABI fact; equal LP64 widths do not establish
-calling-convention compatibility. `landin/compiler` is implicit and is never imported.
+calling-convention compatibility. A Cortex-M binding asserts its float unit on
+the next line, `not compiler.feature.fp` for the base standard and
+`compiler.feature.fp_dp` for the VFP variant, since one fact covers both
+(D936). `landin/compiler` is implicit and is never imported.
 
 ## Policy
 
@@ -149,6 +162,13 @@ shape is:
   ]
 }
 ```
+
+`abi` restates the row: `data_model` is `lp64`, or `ilp32` for `cortex-m0`
+alone, and `plain_char` is the row's sign. `abi.calling_convention`, the name
+`bindings.json` records, may be given on any target and must then be the
+row's; `cortex-m0` requires it, `aapcs` with `thumbv6m-unknown-none-eabi` or
+`aapcs-vfp` with `thumbv7em-unknown-none-eabihf`, so the policy says which
+of its two conventions it binds for ([Cortex-M](#cortex-m)).
 
 At least one declaration is required. This example assumes the selected header
 defines a `size_type` typedef; replace it with a declaration in your header.
@@ -299,6 +319,8 @@ release, copy, size/alignment, and member accessor APIs. Named signed and
 unsigned bitfields are read and written through the compiler's member access;
 unnamed and zero-width fields remain in the real C layout and are recorded in
 metadata. Setters touch only their named member, preserving neighbours.
+On `cortex-m0` there is no `allocate` or `release`: the caller supplies an
+object's storage by its `size` and `alignment` (D938).
 By-value functions involving opaque records receive pointer-based C wrappers.
 Incomplete records remain opaque pointer targets and do not receive an
 invented size or allocator.
@@ -358,7 +380,9 @@ through an explicit output pointer only when present.
 A nullable callback position in a selected function must name a callback entry
 with `nullable: true`. Its adapter accepts a cell and passes the cell's actual
 possibly-null function pointer to C. Nullable callback results are written into
-caller-provided cells.
+caller-provided cells. A cell's `allocate` and `release` are `calloc` and
+`free`, so `cortex-m0` refuses a nullable callback (D938): select it with
+`nullable: false` and give its positions nonnullable policy.
 
 ### Functions and exports
 
@@ -421,7 +445,9 @@ objects are currently refused rather than copied through an untyped surrogate.
 Generated address/read and, when allowed, write adapters name the real C type.
 Opaque values are copied through C-owned storage. A `_Thread_local` definition
 and every one of its accessors evaluate the TLS object on each call, so an
-address is never cached across threads. Nullable callback variables also gain
+address is never cached across threads; `cortex-m0` refuses a
+`_Thread_local` object, which Arm code reaches through the C library's
+`__aeabi_read_tp` (D938). Nullable callback variables also gain
 clear/present operations and a checked read.
 
 ### Incoming varargs
@@ -483,12 +509,95 @@ Current deliberate limits are visible rather than completion shortcuts:
   record, and opaque record globals have adapters;
 - generated cell `allocate`/`release` use `calloc`/`free`; callers can instead
   use `size`/`alignment`/`initialize` with their own storage. Synchronization
-  remains a caller integration concern;
+  remains a caller integration concern. On freestanding `cortex-m0`, objects
+  have no `allocate`/`release` and nullable callbacks and thread-local
+  objects are refused;
 - export entries verify native signatures and generate C declarations/metadata,
   but the Landin definition remains application source;
 - policy records manual ownership and emits `escaping`/`from`; it cannot infer a
   library-specific release function or prove a C implementation honors its
   retention promise.
+
+## Cortex-M
+
+`--target=cortex-m0` binds C for AAPCS32 on an M-profile Thumb core. A
+description's float unit changes the C convention (D615), so the one refine
+target has two rows, and the policy says which it binds for (D935):
+
+| `abi.calling_convention` | `abi.target` | Clang is also given | the binding asserts |
+|---|---|---|---|
+| `aapcs`, the base procedure call standard | `thumbv6m-unknown-none-eabi` | `-ffreestanding -mfloat-abi=soft` | `compiler.c_aapcs32` and `not compiler.feature.fp` |
+| `aapcs-vfp`, its VFP variant | `thumbv7em-unknown-none-eabihf` | `-ffreestanding -mfpu=fpv5-d16 -mfloat-abi=hard` | `compiler.c_aapcs32` and `compiler.feature.fp_dp` |
+
+Both are ILP32, `"data_model": "ilp32"`, with an unsigned plain `char`. A
+base binding imported by a program built for a description with a float
+unit, or a VFP one by a program without one, is refused when the program is
+compiled (D936). Clang's macros are held to the row: `__ILP32__`, four-byte
+`long`, pointer, `size_t` and `ptrdiff_t`, `__arm__`, `__thumb__`,
+`__ARM_EABI__`, an `'M'` profile, `__ELF__`, `__ARM_PCS`, int-sized enums
+(`__ARM_SIZEOF_MINIMAL_ENUM` 4), `__STDC_HOSTED__` 0, and `__ARM_PCS_VFP`
+with `__ARM_FP` `0xe` exactly for the VFP variant. `long double` is refused,
+as on every target.
+
+The target is freestanding (D937): there is no system root and no C
+library. Name Clang's own headers, `<stdint.h>`, `<stddef.h>`,
+`<stdbool.h>`, `<stdarg.h>` and the rest of its resource directory, with
+`--system-include-dir="$(clang-19 -print-resource-dir)/include"`; a host
+library's header is not found. Adapters are freestanding too (D938):
+by-value wrappers, wrappers of `static inline` functions, object and
+union/bitfield accessors and incoming-varargs entries are generated; a
+C-owned object has no `allocate` or `release`, so its storage is the
+caller's, by its `size` and `alignment`; a nullable callback and a
+`_Thread_local` object are refused with L0581, whose message says what to
+select instead.
+
+Compile `adapters.c` for the row, with `-fno-short-enums` whatever the
+compiler: Clang as `--target=TRIPLE -ffreestanding` with the row's float
+options, or the pinned `arm-eabi-gcc` as `-mcpu=cortex-m0 -mthumb
+-mfloat-abi=soft` or `-mcpu=cortex-m7 -mthumb -mfpu=fpv5-d16
+-mfloat-abi=hard`. That GCC's own default is short enums, which the
+generated compatible-type assertions refuse.
+
+### The CMSIS example
+
+`devices/inputs.json` pins the CMSIS headers two committed bindings read
+(D939): pico-sdk's `RP2040.h` and the CMSIS-Core it includes as
+`rp2040-cmsis/`, and the CMSIS-Core 5.9 that the pinned `stm32h753xx.h`
+includes as `stm32h753-cmsis/`. `scripts/fetch_inputs.py` fetches them by
+hash. `compiler/tests/fixtures/abi/cortex-cmsis-bindings` binds
+`RP2040.h`'s `IRQn_Type` and its static inline NVIC and SysTick functions
+for the base standard. CMSIS's `NVIC_EnableIRQ` is a macro naming
+`__NVIC_EnableIRQ`, and the generator binds no macro, so its policy selects
+`__NVIC_EnableIRQ` and names it `nvic_enable_irq`. The headers' `volatile`
+register structs are not selected and refuse nothing.
+`compiler/tests/fixtures/abi/cortex-vfp-bindings` binds the STM32H753's
+`IRQn_Type`, NVIC functions and `SCB_GetFPUType` for the VFP variant; no
+CMSIS inline function takes a float or a double, so the floats and doubles
+come from the fixture's own `landin-vfp.h`. Regenerate them from the
+repository root with a built refine:
+
+```sh
+CLANG=${CLANG:-clang-19}
+python3 scripts/fetch_inputs.py  # every pinned input, these among them
+inputs=${LANDIN_INPUTS:-$HOME/.cache/landin/inputs}
+fixtures=compiler/tests/fixtures/abi
+refine bindings --clang="$CLANG" --target=cortex-m0 \
+  --policy="$fixtures/cortex-cmsis-bindings/policy.json" \
+  --out-dir="$fixtures/cortex-cmsis-bindings" \
+  --include-dir="$inputs/rp2040-cmsis" \
+  --system-include-dir="$("$CLANG" -print-resource-dir)/include" \
+  "RP2040.h=$inputs/rp2040-cmsis/RP2040.h"
+refine bindings --clang="$CLANG" --target=cortex-m0 \
+  --policy="$fixtures/cortex-vfp-bindings/policy.json" \
+  --out-dir="$fixtures/cortex-vfp-bindings" \
+  --include-dir="$inputs/stm32h753-cmsis" \
+  --system-include-dir="$("$CLANG" -print-resource-dir)/include" \
+  "stm32h753xx.h=$inputs/stm32h753/stm32h753xx.h" \
+  "landin-vfp.h=$fixtures/cortex-vfp-bindings/landin-vfp.h"
+```
+
+`bindings/test.py` fetches only the inputs it reads. Each fixture's
+`NOTICE` names the licences its generated files are derived under.
 
 ## Tests
 
@@ -524,6 +633,20 @@ recursive retention and callback policy, unequal nested array extents, true enum
 compatible types, declaration identity, reserved names, ambient-environment
 exclusion, repeated anonymous-enum ordering, transitive path macros and a
 dependency chain deep enough to need each record classified once.
+The Cortex-M cases bind both conventions,
+hold the macro check to an LP64 Clang and to the other convention's, refuse
+an LP64 or unnamed-convention policy, show that only Clang's named
+freestanding headers are reached and a host library's are not, refuse the
+adapters that need a C library, keep adapter-backed signature names
+consistent, compile the generated C for each row to objects whose Arm
+attributes name the convention and int-sized enums, and regenerate both
+CMSIS fixtures byte for byte, fetching their pinned inputs, and compile
+both with `refine check` for `cortex-m0` without a float unit and with the
+AN500 lane's FPv5-D16 description, each refused by the other. The case that
+builds the adapters with the pinned `arm-eabi-gcc` runs where it is on
+PATH, or `$ARM_EABI_GCC` names it, as in `nix develop`, and is skipped,
+visibly, where it is not, as in the gate's `bindings` job; the Cortex-M lanes
+build firmware C with it.
 Output-origin regressions assert exact direct/adapter
 signatures and unchanged policy metadata, then execute pointer-identity witnesses;
 store regressions reject contradictory call-only policies for globals, TLS and

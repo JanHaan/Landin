@@ -22,7 +22,7 @@ explains the package boundaries, not a second work list.
 | Linux system calls and the static entry `_landin_start` | ordinary `platform/linux` |
 | native driver, library and directory arguments, and platform link arguments | target-guarded `Landin.Backend.Toolchain` |
 | C alias identities | ordinary `platform/c`, guarded by the selected ABI fact |
-| actual header/tool ABI verification | `refine bindings`, explicit Clang target and sysroot |
+| actual header/tool ABI verification | `refine bindings`, explicit Clang target and, for a hosted target, sysroot |
 
 The Linux x86-64, Linux arm64 and Darwin descriptions all use 64-bit pointers,
 eight-byte pointer alignment, sixteen-byte stack alignment and little-endian
@@ -198,9 +198,13 @@ and `i8` otherwise; under `compiler.c_aapcs32` its `long` aliases are 32
 bits (D921). Each fact identifies its own implemented ABI, not a data model
 generally. Generated bindings
 assert the selected fact. The generator supports `x86_64-pc-linux-gnu`, the
-pinned `arm64-apple-macos26.0.0` deployment triple and
-`aarch64-unknown-linux-gnu`, independently probing Clang's triple, macros,
-data model and plain `char`. The native Apple corpus regenerates all binding
+pinned `arm64-apple-macos26.0.0` deployment triple,
+`aarch64-unknown-linux-gnu`, and for `cortex-m0` the freestanding AAPCS32
+triples `thumbv6m-unknown-none-eabi` and `thumbv7em-unknown-none-eabihf`, its
+base procedure call standard and its VFP variant, which assert
+`compiler.c_aapcs32` and their float unit (D935, D936), independently probing
+Clang's triple, macros, data model, plain `char` and, on Cortex-M, the
+procedure call standard. The native Apple corpus regenerates all binding
 categories, including TLS, nullable callbacks and incoming-varargs adapters,
 and `compiler/tests/linux-arm64/bindings.py` does the same natively on Linux
 arm64; existing Linux x86-64 generated files remain unchanged.

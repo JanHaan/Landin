@@ -2309,7 +2309,8 @@ description with `link(region: "NAME")`.
 `refine bindings` cannot read its policy (D820): it is not UTF-8 JSON, names
 a key twice, is not schema 1, lacks a key it needs or names one refine does
 not read, gives one of the wrong shape, or binds for another ABI than
-`--target` names. The message names the key or the declaration. A policy's
+`--target` names, a data model or calling convention among them, which
+`cortex-m0`'s policy must name (D935). The message names the key or the declaration. A policy's
 every key is described in the
 [binding policy reference](../bindings/README.md). With an installed compiler,
 run `refine help bindings` for the address of its generated reading copy.
@@ -2320,8 +2321,9 @@ The Clang `refine bindings` was given cannot be used as asked (D820): it
 cannot be run, a root it is given is not a directory, it failed, and the
 message carries its error output with the request's paths replaced by
 names that do not depend on where it ran, or it describes another ABI than
-the target's: another triple, data model, byte order or sign of plain
-`char`. A header reached through an absolute path under none of the roots
+the target's: another triple, data model, byte order, sign of plain
+`char` or, on Cortex-M, procedure call standard, float unit, enum size or
+hosted environment (D935). A header reached through an absolute path under none of the roots
 the request names is refused too, since what is generated could then depend
 on where it was. A relative dependency that escapes Clang's retained
 workspace, even if it reenters, is also refused: its external directory
@@ -2341,7 +2343,9 @@ names the policy declaration and the position: the header no longer has it
 (a stale policy), a reference position has no policy or a scalar one has
 one, or the declaration uses a form `bindings/README.md` lists as refused,
 such as an extended floating type, a calling convention attribute, an
-anonymous aggregate or a wrapper that would forward a C variadic tail. A
+anonymous aggregate or a wrapper that would forward a C variadic tail, or,
+on freestanding `cortex-m0`, a nullable callback or a `_Thread_local` object,
+whose adapters need a C library (D938). A
 Landin name two declarations would share is refused here too. Correct the
 policy, or select another declaration.
 

@@ -23,6 +23,9 @@ package body Landin.Tests.Bindings_Suite is
    package US renames Ada.Strings.Unbounded;
    package B renames Landin.Bindings;
 
+   use type B.Fault_Kind;
+   use type B.Target;
+
    LF : constant Character := ASCII.LF;
 
    function Contains (Text, Needle : String) return Boolean is
@@ -108,6 +111,47 @@ package body Landin.Tests.Bindings_Suite is
       & "#define __BYTE_ORDER__ __ORDER_LITTLE_ENDIAN__" & LF
       & (if Unsigned_Char then "#define __CHAR_UNSIGNED__ 1" & LF else ""));
 
+   --  What the pinned Clang defines for a Cortex-M row (D935): AAPCS32's
+   --  ILP32, freestanding, int-sized enums, and the float unit's macros
+   --  for the VFP variant alone.
+   function Cortex_Macros (VFP : Boolean) return String is
+     ("#define __ILP32__ 1" & LF & "#define __CHAR_BIT__ 8" & LF
+      & "#define __SIZEOF_SHORT__ 2" & LF & "#define __SIZEOF_INT__ 4" & LF
+      & "#define __SIZEOF_LONG__ 4" & LF & "#define __SIZEOF_LONG_LONG__ 8"
+      & LF & "#define __SIZEOF_POINTER__ 4" & LF
+      & "#define __SIZEOF_SIZE_T__ 4" & LF
+      & "#define __SIZEOF_PTRDIFF_T__ 4" & LF
+      & "#define __SIZEOF_FLOAT__ 4" & LF & "#define __SIZEOF_DOUBLE__ 8"
+      & LF & "#define __FLT_RADIX__ 2" & LF & "#define __FLT_MANT_DIG__ 24"
+      & LF & "#define __DBL_MANT_DIG__ 53" & LF & "#define __arm__ 1" & LF
+      & "#define __thumb__ 1" & LF & "#define __ARM_EABI__ 1" & LF
+      & "#define __ARM_ARCH_PROFILE 'M'" & LF & "#define __ELF__ 1" & LF
+      & "#define __ARM_PCS 1" & LF & "#define __ARM_SIZEOF_MINIMAL_ENUM 4"
+      & LF & "#define __STDC_HOSTED__ 0" & LF
+      & "#define __ORDER_LITTLE_ENDIAN__ 1234" & LF
+      & "#define __BYTE_ORDER__ __ORDER_LITTLE_ENDIAN__" & LF
+      & "#define __CHAR_UNSIGNED__ 1" & LF
+      & (if VFP then "#define __ARM_PCS_VFP 1" & LF & "#define __ARM_FP 0xe"
+           & LF
+         else "#define __SOFTFP__ 1" & LF));
+
+   --  Policy, bound for one of the Cortex-M rows instead.
+   function Cortex_Policy (VFP : Boolean; Model : String := "ilp32";
+                           Convention : String := "")
+     return String is
+     ("{""schema_version"": 1, ""namespace"": ""fake"", ""abi"": "
+      & "{""target"": """
+      & (if VFP then "thumbv7em-unknown-none-eabihf"
+         else "thumbv6m-unknown-none-eabi") & """, "
+      & (if Convention = "none" then ""
+         else """calling_convention"": """
+              & (if Convention /= "" then Convention
+                 elsif VFP then "aapcs-vfp" else "aapcs") & """, ")
+      & """data_model"": """ & Model & """, "
+      & """plain_char"": ""unsigned"", ""enum_policy"": ""clang-default""}, "
+      & Policy (Ada.Strings.Fixed.Index (Policy, """declarations""")
+                .. Policy'Last));
+
    function Preprocessed
      (Extra_Marker : String := ""; Directory : String := Work) return String
    is ("# 1 """ & Directory & "/translation.c""" & LF
@@ -133,16 +177,20 @@ package body Landin.Tests.Bindings_Suite is
    --  Every answer a binding of Header asks the fake Clang for, in order.
    procedure Script
      (Tools : in out Landin.Testing.Fakes.Fake_Tool_Runner;
-      Directory : String := Work; Validation_Status : Integer := 0);
+      Directory : String := Work; Validation_Status : Integer := 0;
+      Triple : String := "x86_64-pc-linux-gnu";
+      Target_Macros : String := Macros (Unsigned_Char => False));
 
    --  Directory is the private directory the run's Clang works in: the
    --  fake host's first is Work, and its second ends in 2.
    procedure Script
      (Tools : in out Landin.Testing.Fakes.Fake_Tool_Runner;
-      Directory : String := Work; Validation_Status : Integer := 0) is
+      Directory : String := Work; Validation_Status : Integer := 0;
+      Triple : String := "x86_64-pc-linux-gnu";
+      Target_Macros : String := Macros (Unsigned_Char => False)) is
    begin
-      Tools.Add_Result (0, "x86_64-pc-linux-gnu" & LF);
-      Tools.Add_Result (0, Macros (Unsigned_Char => False));
+      Tools.Add_Result (0, Triple & LF);
+      Tools.Add_Result (0, Target_Macros);
       Tools.Add_Result (0, Preprocessed (Directory => Directory));
       Tools.Add_Result (0, Ast);
       Tools.Add_Result (0, Probe_Answers);
@@ -195,7 +243,272 @@ package body Landin.Tests.Bindings_Suite is
         (Item, B.Triple (B.Darwin_Arm64) & " "
           & B.Target_Name (B.Darwin_Arm64),
          "arm64-apple-macos26.0.0 darwin-arm64", "the Darwin row");
+      --  D935, D936: one refine target, two conventions, both ILP32 and
+      --  freestanding, each asserting the float unit its convention needs.
+      for Each in B.Cortex_M_AAPCS .. B.Cortex_M_AAPCS_VFP loop
+         Landin.Testing.Check
+           (Item, B.Target_Name (Each) = "cortex-m0"
+            and then B.Fact (Each) = "c_aapcs32"
+            and then B.Data_Model (Each) = "ilp32"
+            and then B.Word_Size (Each) = 4
+            and then B.Unsigned_Char (Each)
+            and then not B.Hosted (Each)
+            and then B.Clang_Options (Each).Contains ("-ffreestanding"),
+            "the Cortex-M row " & B.Convention (Each));
+      end loop;
+      Landin.Testing.Check_Equal
+        (Item, B.Triple (B.Cortex_M_AAPCS) & " "
+         & B.Convention (B.Cortex_M_AAPCS) & " "
+         & B.Float_Guard (B.Cortex_M_AAPCS) & " "
+         & B.Clang_Options (B.Cortex_M_AAPCS).Last_Element,
+         "thumbv6m-unknown-none-eabi aapcs not compiler.feature.fp"
+         & " -mfloat-abi=soft", "the base procedure call standard");
+      Landin.Testing.Check_Equal
+        (Item, B.Triple (B.Cortex_M_AAPCS_VFP) & " "
+         & B.Convention (B.Cortex_M_AAPCS_VFP) & " "
+         & B.Float_Guard (B.Cortex_M_AAPCS_VFP) & " "
+         & B.Clang_Options (B.Cortex_M_AAPCS_VFP) (2) & " "
+         & B.Clang_Options (B.Cortex_M_AAPCS_VFP) (3),
+         "thumbv7em-unknown-none-eabihf aapcs-vfp compiler.feature.fp_dp"
+         & " -mfpu=fpv5-d16 -mfloat-abi=hard", "the VFP variant");
+      Landin.Testing.Check
+        (Item, (for all Each in B.Linux_X86_64 .. B.Linux_Arm64 =>
+                  B.Hosted (Each) and then B.Data_Model (Each) = "lp64"
+                  and then B.Word_Size (Each) = 8
+                  and then B.Float_Guard (Each) = ""
+                  and then B.Clang_Options (Each).Is_Empty),
+         "the LP64 rows are hosted and assert no float unit");
    end Each_Target_Is_One_Row;
+
+   procedure Cortex_Macros_Are_AAPCS32
+     (Item : in out Landin.Testing.Context);
+
+   --  D935: Clang's answer is held to the row's data model and procedure
+   --  call standard, so an LP64 Clang, the other variant, short enums or
+   --  a hosted environment is refused before any header is read.
+   procedure Cortex_Macros_Are_AAPCS32
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Expect
+        (VFP : Boolean; Answer, Refusal : String; Label : String);
+
+      procedure Expect
+        (VFP : Boolean; Answer, Refusal : String; Label : String)
+      is
+         Session : B.Session;
+         Row : constant B.Target :=
+           (if VFP then B.Cortex_M_AAPCS_VFP else B.Cortex_M_AAPCS);
+      begin
+         B.Load_Policy (Session, Cortex_Policy (VFP));
+         B.Check_Triple (Session, Row, B.Triple (Row) & LF);
+         B.Check_Macros (Session, Row, Answer);
+         if Refusal = "" then
+            Landin.Testing.Check
+              (Item, B.Ok (Session), Label & ": " & B.Message (Session));
+         else
+            Landin.Testing.Check
+              (Item, not B.Ok (Session)
+               and then B.Fault (Session) = B.Clang_Fault
+               and then B.Message (Session) = Refusal,
+               Label & ": " & B.Message (Session));
+         end if;
+      end Expect;
+
+      function Without (Text, Line : String) return String is
+        (Text (Text'First .. Ada.Strings.Fixed.Index (Text, Line) - 1)
+         & Text (Ada.Strings.Fixed.Index (Text, Line) + Line'Length + 1
+                 .. Text'Last));
+
+      function Changed (Text, From, To : String) return String is
+        (Ada.Strings.Fixed.Replace_Slice
+           (Text, Ada.Strings.Fixed.Index (Text, From),
+            Ada.Strings.Fixed.Index (Text, From) + From'Length - 1, To));
+   begin
+      Expect (False, Cortex_Macros (VFP => False), "", "the base standard");
+      Expect (True, Cortex_Macros (VFP => True), "", "the VFP variant");
+      Expect (False, Macros (Unsigned_Char => True, Arm => True),
+              "unsupported Clang target ABI: __ILP32__ is None, expected"
+              & " '1'", "an LP64 Clang");
+      Expect (False, Changed (Cortex_Macros (VFP => False),
+                              "__SIZEOF_LONG__ 4", "__SIZEOF_LONG__ 8"),
+              "unsupported Clang target ABI: __SIZEOF_LONG__ is '8',"
+              & " expected '4'", "an eight-byte long");
+      Expect (False, Cortex_Macros (VFP => True),
+              "unsupported Clang target ABI: __ARM_PCS_VFP is defined for"
+              & " the base procedure call standard",
+              "the VFP variant's Clang for the base row");
+      Expect (True, Cortex_Macros (VFP => False),
+              "unsupported Clang target ABI: __ARM_PCS_VFP is not defined"
+              & " for the VFP variant", "the base Clang for the VFP row");
+      Expect (False, Cortex_Macros (VFP => False) & "#define __ARM_FP 0x6"
+              & LF, "unsupported Clang target ABI: __ARM_FP is '0x6' for"
+              & " the base procedure call standard, which has no float"
+              & " unit", "a float unit under the base standard");
+      Expect (True, Changed (Cortex_Macros (VFP => True), "__ARM_FP 0xe",
+                             "__ARM_FP 0x4"),
+              "unsupported Clang target ABI: __ARM_FP is '0x4', expected"
+              & " '0xe'", "a single-precision unit");
+      Expect (False, Changed (Cortex_Macros (VFP => False),
+                              "__ARM_SIZEOF_MINIMAL_ENUM 4",
+                              "__ARM_SIZEOF_MINIMAL_ENUM 1"),
+              "unsupported Clang target ABI: __ARM_SIZEOF_MINIMAL_ENUM is"
+              & " '1', expected '4'", "short enums");
+      Expect (False, Changed (Cortex_Macros (VFP => False),
+                              "__STDC_HOSTED__ 0", "__STDC_HOSTED__ 1"),
+              "unsupported Clang target ABI: __STDC_HOSTED__ is '1',"
+              & " expected '0'", "a hosted environment");
+      Expect (False, Without (Cortex_Macros (VFP => False),
+                              "#define __thumb__ 1"),
+              "unsupported Clang target ABI: __thumb__ is None, expected"
+              & " '1'", "Arm rather than Thumb");
+      Expect (False, Without (Cortex_Macros (VFP => False),
+                              "#define __CHAR_UNSIGNED__ 1"),
+              "unsupported Clang target ABI: plain char is signed",
+              "a signed plain char");
+   end Cortex_Macros_Are_AAPCS32;
+
+   procedure ILP32_Is_The_AAPCS32_Policys
+     (Item : in out Landin.Testing.Context);
+
+   --  D935: the data model and the convention a policy names are its
+   --  row's, and a Cortex-M policy names its convention.
+   procedure ILP32_Is_The_AAPCS32_Policys
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Expect (Text, Refusal, Label : String);
+
+      procedure Expect (Text, Refusal, Label : String) is
+         Session : B.Session;
+      begin
+         B.Load_Policy (Session, Text);
+         Landin.Testing.Check
+           (Item, not B.Ok (Session)
+            and then B.Fault (Session) = B.Policy_Fault
+            and then B.Message (Session) = Refusal,
+            Label & ": " & B.Message (Session));
+      end Expect;
+
+      Lp64_Ilp32 : constant String :=
+        Ada.Strings.Fixed.Replace_Slice
+          (Policy, Ada.Strings.Fixed.Index (Policy, """lp64"""),
+           Ada.Strings.Fixed.Index (Policy, """lp64""") + 5, """ilp32""");
+   begin
+      for VFP in Boolean loop
+         declare
+            Session : B.Session;
+         begin
+            B.Load_Policy (Session, Cortex_Policy (VFP));
+            Landin.Testing.Check
+              (Item, B.Ok (Session)
+               and then B.Policy_Target (Session)
+                        = (if VFP then B.Cortex_M_AAPCS_VFP
+                           else B.Cortex_M_AAPCS),
+               "a Cortex-M policy selects its row: " & B.Message (Session));
+         end;
+      end loop;
+      Expect (Lp64_Ilp32, "policy abi: data_model must be 'lp64', got"
+              & " 'ilp32'", "ilp32 for an LP64 target");
+      Expect (Cortex_Policy (False, Model => "lp64"),
+              "policy abi: data_model must be 'ilp32', got 'lp64'",
+              "lp64 for AAPCS32");
+      Expect (Cortex_Policy (True, Convention => "aapcs"),
+              "policy abi: calling_convention must be 'aapcs-vfp', got"
+              & " 'aapcs'", "the base standard named for the VFP triple");
+      Expect (Ada.Strings.Fixed.Replace_Slice
+                (Cortex_Policy (False),
+                 Ada.Strings.Fixed.Index (Cortex_Policy (False),
+                                          "thumbv6m-unknown-none-eabi"),
+                 Ada.Strings.Fixed.Index (Cortex_Policy (False),
+                                          "thumbv6m-unknown-none-eabi")
+                 + 25, "thumbv6m-none-eabi"),
+              "policy abi: unsupported target 'thumbv6m-none-eabi'; name one"
+              & " of the triples Clang prints for refine's targets:"
+              & " 'x86_64-pc-linux-gnu', 'arm64-apple-macos26.0.0',"
+              & " 'aarch64-unknown-linux-gnu', 'thumbv6m-unknown-none-eabi'"
+              & " or 'thumbv7em-unknown-none-eabihf'",
+              "Clang's short spelling of the base triple");
+      Expect (Cortex_Policy (False, Convention => "none"),
+              "policy abi: missing required key 'calling_convention',"
+              & " which says which of cortex-m0's conventions the policy"
+              & " binds for: 'aapcs' for 'thumbv6m-unknown-none-eabi'",
+              "a Cortex-M policy without its convention");
+   end ILP32_Is_The_AAPCS32_Policys;
+
+   procedure A_Cortex_Header_Is_Bound_Freestanding
+     (Item : in out Landin.Testing.Context);
+
+   --  D937: cortex-m0 is freestanding: no system root, -ffreestanding with
+   --  the row's float ABI, and still -nostdinc, so only roots the request
+   --  names are read; the binding asserts the fact and the float unit.
+   procedure A_Cortex_Header_Is_Bound_Freestanding
+     (Item : in out Landin.Testing.Context)
+   is
+      Meter : Landin.Platform.Unmetered;
+      Asked : constant Landin.Platform.Path_List :=
+        ["bindings", "--clang=clang-19", "--target=cortex-m0",
+         "--policy=policy.json", "--out-dir=out",
+         "--system-include-dir=include", "api/api.h=api.h"];
+   begin
+      for VFP in Boolean loop
+         declare
+            Host : Landin.Testing.Fakes.Fake_Filesystem;
+            Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+            Row : constant B.Target :=
+              (if VFP then B.Cortex_M_AAPCS_VFP else B.Cortex_M_AAPCS);
+         begin
+            Prepare (Host);
+            Host.Add_File (Root & "/policy.json", Cortex_Policy (VFP));
+            Script (Tools, Triple => B.Triple (Row),
+                    Target_Macros => Cortex_Macros (VFP));
+            declare
+               Result : constant Landin.Driver.Outcome :=
+                 Landin.Commands.Execute (Asked, Host, Tools, Meter);
+               Bindings : constant String :=
+                 Content_Of (Host, Root & "/out/bindings.ldn");
+            begin
+               Landin.Testing.Check_Equal
+                 (Item, Result.Status, 0, "bound: " & Report_Of (Result));
+               Landin.Testing.Check
+                 (Item, Contains
+                    (Bindings, "compiler.assert(compiler.c_aapcs32)" & LF
+                     & "compiler.assert(" & B.Float_Guard (Row) & ")")
+                  and then Contains
+                    (Content_Of (Host, Root & "/out/bindings.json"),
+                     """data_model"": ""ilp32""")
+                  and then Contains
+                    (Content_Of (Host, Root & "/out/bindings.json"),
+                     """calling_convention"": """ & B.Convention (Row)
+                     & """"),
+                  "the binding asserts the fact and the float unit: "
+                  & Bindings);
+               for Index in 1 .. Tools.Run_Count loop
+                  declare
+                     Call : constant Landin.Testing.Fakes.Tool_Call :=
+                       Tools.Call_At (Index);
+                  begin
+                     Landin.Testing.Check
+                       (Item, Call.Arguments.Contains
+                          ("--target=" & B.Triple (Row))
+                        and then Call.Arguments.Contains ("-ffreestanding")
+                        and then Call.Arguments.Contains ("-nostdinc")
+                        and then Call.Arguments.Contains
+                          (B.Clang_Options (Row).Last_Element)
+                        and then not (for some Argument of Call.Arguments
+                                        => Contains (Argument,
+                                                     "--sysroot")
+                                           or else Contains (Argument,
+                                                             "sysroot"))
+                        and then Call.Arguments.Contains
+                          ("-ffile-prefix-map=" & Root & "/include"
+                           & "=system/1"),
+                        "Clang run" & Natural'Image (Index)
+                        & " is freestanding, with no system root");
+                  end;
+               end loop;
+            end;
+         end;
+      end loop;
+   end A_Cortex_Header_Is_Bound_Freestanding;
 
    procedure Plain_Char_Must_Be_The_Rows
      (Item : in out Landin.Testing.Context);
@@ -535,9 +848,23 @@ package body Landin.Tests.Bindings_Suite is
               & " path, got '../api.h'");
       Expect (With_Header ("api.h=missing.h"), "L0003",
               "the header 'missing.h' is not a regular file");
+      Expect (["bindings", "--clang=clang-19", "--target=rv32",
+               "--sysroot=sysroot", "--policy=policy.json", "--out-dir=out",
+               "api.h"], "L0002", "linux-arm64, darwin-arm64 and cortex-m0,"
+              & " and --target names rv32");
       Expect (["bindings", "--clang=clang-19", "--target=cortex-m0",
                "--sysroot=sysroot", "--policy=policy.json", "--out-dir=out",
-               "api.h"], "L0002", "and --target names cortex-m0");
+               "api.h"], "L0002", "cortex-m0 is freestanding and has no"
+              & " system root; drop --sysroot");
+      Expect (["bindings", "--clang=clang-19", "--target=linux-x86-64",
+               "--policy=policy.json", "--out-dir=out", "api.h"], "L0002",
+              "bindings for linux-x86-64 need the target's system root:"
+              & " name it with --sysroot");
+      Expect (["bindings", "--clang=clang-19", "--target=cortex-m0",
+               "--policy=policy.json", "--out-dir=out", "api.h"], "L0579",
+              "the policy binds for x86_64-pc-linux-gnu, and --target names"
+              & " cortex-m0, which is thumbv6m-unknown-none-eabi or"
+              & " thumbv7em-unknown-none-eabihf");
       Expect (Landin.Platform.Path_Vectors."&"
                 (Arguments, String'("--define=1BAD")),
               "L0002",
@@ -841,6 +1168,15 @@ package body Landin.Tests.Bindings_Suite is
       Landin.Testing.Register
         (Into, "bindings", "plain char must be the row's",
          Plain_Char_Must_Be_The_Rows'Access);
+      Landin.Testing.Register
+        (Into, "bindings", "cortex-m macros are aapcs32's",
+         Cortex_Macros_Are_AAPCS32'Access);
+      Landin.Testing.Register
+        (Into, "bindings", "ilp32 is the aapcs32 policy's",
+         ILP32_Is_The_AAPCS32_Policys'Access);
+      Landin.Testing.Register
+        (Into, "bindings", "a cortex-m header is bound freestanding",
+         A_Cortex_Header_Is_Bound_Freestanding'Access);
       Landin.Testing.Register
         (Into, "bindings", "another triple is refused first",
          Another_Triple_Is_Refused_First'Access);

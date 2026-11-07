@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "namespace": "cmsis_rp2040",
+  "abi": {
+    "target": "thumbv6m-unknown-none-eabi",
+    "calling_convention": "aapcs",
+    "data_model": "ilp32",
+    "plain_char": "unsigned",
+    "enum_policy": "clang-default"
+  },
+  "declarations": [
+    {
+      "kind": "enum",
+      "name": "IRQn_Type",
+      "landin_name": "irqn_type"
+    },
+    {
+      "kind": "function",
+      "name": "__NVIC_EnableIRQ",
+      "landin_name": "nvic_enable_irq",
+      "direction": "import",
+      "parameters": {}
+    },
+    {
+      "kind": "function",
+      "name": "__NVIC_GetEnableIRQ",
+      "landin_name": "nvic_get_enable_irq",
+      "direction": "import",
+      "parameters": {}
+    },
+    {
+      "kind": "function",
+      "name": "__NVIC_DisableIRQ",
+      "landin_name": "nvic_disable_irq",
+      "direction": "import",
+      "parameters": {}
+    },
+    {
+      "kind": "function",
+      "name": "__NVIC_GetPendingIRQ",
+      "landin_name": "nvic_get_pending_irq",
+      "direction": "import",
+      "parameters": {}
+    },
+    {
+      "kind": "function",
+      "name": "__NVIC_SetPendingIRQ",
+      "landin_name": "nvic_set_pending_irq",
+      "direction": "import",
+      "parameters": {}
+    },
+    {
+      "kind": "function",
+      "name": "__NVIC_ClearPendingIRQ",
+      "landin_name": "nvic_clear_pending_irq",
+      "direction": "import",
+      "parameters": {}
+    },
+    {
+      "kind": "function",
+      "name": "__NVIC_SetPriority",
+      "landin_name": "nvic_set_priority",
+      "direction": "import",
+      "parameters": {}
+    },
+    {
+      "kind": "function",
+      "name": "__NVIC_GetPriority",
+      "landin_name": "nvic_get_priority",
+      "direction": "import",
+      "parameters": {}
+    },
+    {
+      "kind": "function",
+      "name": "SysTick_Config",
+      "landin_name": "systick_config",
+      "direction": "import",
+      "parameters": {}
+    }
+  ]
+}

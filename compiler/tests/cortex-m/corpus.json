@@ -35,6 +35,22 @@
       "reason": "Native libc stat records and real host filesystem identity require a hosted C peer; memory identity runs separately on Cortex-M0.",
       "witness": "compiler/tests/fixtures/abi/core-io-file-identity/fixture.meta"
     },
+    "abi/cortex-cmsis-bindings": {
+      "mode": "execute"
+    },
+    "abi/cortex-vfp-bindings": {
+      "codes": [
+        "L0324"
+      ],
+      "lanes": {
+        "mps2-an500": {
+          "mode": "execute",
+          "reason": "The AN500's lane description selects FPv5-D16, which the VFP bindings' compiler.feature.fp_dp assertion requires (D936)."
+        }
+      },
+      "mode": "refuse",
+      "reason": "Its bindings are for AAPCS32's VFP variant and assert compiler.feature.fp_dp (D936), which the reference's description, with no float unit, refutes."
+    },
     "abi/darwin-stack-composite-slots": {
       "mode": "restriction",
       "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
@@ -543,7 +559,6 @@
     "runtime/atomic-accesses-at-every-ordering": {
       "mode": "execute",
       "selects": {
-        "routine": "main",
         "armv7-m": {
           "has": [
             "ldr",
@@ -575,7 +590,8 @@
           "lacks": [
             "dmb"
           ]
-        }
+        },
+        "routine": "main"
       }
     },
     "runtime/atomic-orderings-between-processes": {
@@ -702,7 +718,6 @@
     "runtime/checked-products-of-arguments": {
       "mode": "execute",
       "selects": {
-        "routine": "main",
         "armv6-m": {
           "has": [
             "bl __aeabi_lmul"
@@ -732,7 +747,8 @@
           "lacks": [
             "bl __aeabi_lmul"
           ]
-        }
+        },
+        "routine": "main"
       }
     },
     "runtime/checked-subtraction-traps": {
@@ -741,7 +757,6 @@
     "runtime/checked-unsigned-product-overflow-traps": {
       "mode": "execute",
       "selects": {
-        "routine": "main",
         "armv6-m": {
           "has": [
             "bl __aeabi_lmul"
@@ -765,7 +780,8 @@
           "lacks": [
             "bl __aeabi_lmul"
           ]
-        }
+        },
+        "routine": "main"
       }
     },
     "runtime/checks-return-after-the-region": {

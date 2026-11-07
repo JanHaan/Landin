@@ -20,28 +20,62 @@ package body Landin.Bindings is
      (case Of_Target is
          when Linux_X86_64 => "x86_64-pc-linux-gnu",
          when Darwin_Arm64 => "arm64-apple-macos26.0.0",
-         when Linux_Arm64 => "aarch64-unknown-linux-gnu");
+         when Linux_Arm64 => "aarch64-unknown-linux-gnu",
+         when Cortex_M_AAPCS => "thumbv6m-unknown-none-eabi",
+         when Cortex_M_AAPCS_VFP => "thumbv7em-unknown-none-eabihf");
 
    function Target_Name (Of_Target : Target) return String is
      (case Of_Target is
          when Linux_X86_64 => "linux-x86-64",
          when Darwin_Arm64 => "darwin-arm64",
-         when Linux_Arm64 => "linux-arm64");
+         when Linux_Arm64 => "linux-arm64",
+         when Cortex_M_AAPCS | Cortex_M_AAPCS_VFP => "cortex-m0");
 
    function Fact (Of_Target : Target) return String is
      (case Of_Target is
          when Linux_X86_64 => "c_sysv_lp64",
          when Darwin_Arm64 => "c_darwin_lp64",
-         when Linux_Arm64 => "c_aapcs64_lp64");
+         when Linux_Arm64 => "c_aapcs64_lp64",
+         when Cortex_M_AAPCS | Cortex_M_AAPCS_VFP => "c_aapcs32");
+
+   --  D615: a description's float unit changes the C convention, so a
+   --  binding for one variant refuses a program built for the other.  The
+   --  VFP row's Clang has FPv5-D16, double precision included.
+   function Float_Guard (Of_Target : Target) return String is
+     (case Of_Target is
+         when Cortex_M_AAPCS => "not compiler.feature.fp",
+         when Cortex_M_AAPCS_VFP => "compiler.feature.fp_dp",
+         when others => "");
 
    function Convention (Of_Target : Target) return String is
      (case Of_Target is
          when Linux_X86_64 => "sysv-amd64",
          when Darwin_Arm64 => "darwin-aapcs64",
-         when Linux_Arm64 => "aapcs64");
+         when Linux_Arm64 => "aapcs64",
+         when Cortex_M_AAPCS => "aapcs",
+         when Cortex_M_AAPCS_VFP => "aapcs-vfp");
+
+   function Data_Model (Of_Target : Target) return String is
+     (if Word_Size (Of_Target) = 4 then "ilp32" else "lp64");
+
+   function Word_Size (Of_Target : Target) return Positive is
+     (case Of_Target is
+         when Cortex_M_AAPCS | Cortex_M_AAPCS_VFP => 4,
+         when others => 8);
 
    function Unsigned_Char (Of_Target : Target) return Boolean is
-     (Of_Target = Linux_Arm64);
+     (Of_Target in Linux_Arm64 | Cortex_M_AAPCS | Cortex_M_AAPCS_VFP);
+
+   function Hosted (Of_Target : Target) return Boolean is
+     (Of_Target not in Cortex_M_AAPCS | Cortex_M_AAPCS_VFP);
+
+   function Clang_Options (Of_Target : Target)
+     return Landin.Platform.Path_List is
+     (case Of_Target is
+         when Cortex_M_AAPCS => ["-ffreestanding", "-mfloat-abi=soft"],
+         when Cortex_M_AAPCS_VFP =>
+            ["-ffreestanding", "-mfpu=fpv5-d16", "-mfloat-abi=hard"],
+         when others => []);
 
    function Output_Name (Index : Output_Index) return String is
      (case Index is
@@ -113,6 +147,9 @@ package body Landin.Bindings is
 
    function Policy_Triple (Of_Session : Session) return String is
      (US.To_String (Of_Session.Data.Target_Triple));
+
+   function Policy_Target (Of_Session : Session) return Target is
+     (Of_Session.Data.Chosen);
 
    --  The `#define NAME VALUE` lines of Clang's `-dM` output, as names and
    --  values; a definition with no value is "1".
@@ -224,15 +261,21 @@ package body Landin.Bindings is
          end Require;
       begin
          Read_Macros (Macros, Names, Values);
-         Require ("__LP64__", "1");
-         Require ("__CHAR_BIT__", "8");
-         Require ("__SIZEOF_SHORT__", "2");
-         Require ("__SIZEOF_INT__", "4");
-         Require ("__SIZEOF_LONG__", "8");
-         Require ("__SIZEOF_LONG_LONG__", "8");
-         Require ("__SIZEOF_POINTER__", "8");
-         Require ("__SIZEOF_SIZE_T__", "8");
-         Require ("__SIZEOF_PTRDIFF_T__", "8");
+         declare
+            Word : constant String :=
+              T.Image (Long_Long_Integer (Word_Size (For_Target)));
+         begin
+            Require ((if Word_Size (For_Target) = 4 then "__ILP32__"
+                      else "__LP64__"), "1");
+            Require ("__CHAR_BIT__", "8");
+            Require ("__SIZEOF_SHORT__", "2");
+            Require ("__SIZEOF_INT__", "4");
+            Require ("__SIZEOF_LONG__", Word);
+            Require ("__SIZEOF_LONG_LONG__", "8");
+            Require ("__SIZEOF_POINTER__", Word);
+            Require ("__SIZEOF_SIZE_T__", Word);
+            Require ("__SIZEOF_PTRDIFF_T__", Word);
+         end;
          Require ("__SIZEOF_FLOAT__", "4");
          Require ("__SIZEOF_DOUBLE__", "8");
          Require ("__FLT_RADIX__", "2");
@@ -251,6 +294,39 @@ package body Landin.Bindings is
                Require ("__aarch64__", "1");
                Require ("__linux__", "1");
                Require ("__ELF__", "1");
+            when Cortex_M_AAPCS | Cortex_M_AAPCS_VFP =>
+               --  AAPCS32 for an M-profile Thumb core, freestanding, with
+               --  int-sized enums (-fno-short-enums), and the VFP variant's
+               --  macro exactly when the row is that variant: a Clang
+               --  that passes floats in core registers for the VFP row,
+               --  or in VFP registers for the base one, is another ABI.
+               Require ("__arm__", "1");
+               Require ("__thumb__", "1");
+               Require ("__ARM_EABI__", "1");
+               Require ("__ARM_ARCH_PROFILE", "'M'");
+               Require ("__ELF__", "1");
+               Require ("__ARM_PCS", "1");
+               Require ("__ARM_SIZEOF_MINIMAL_ENUM", "4");
+               Require ("__STDC_HOSTED__", "0");
+               if Names.Contains ("__ARM_PCS_VFP")
+                 /= (For_Target = Cortex_M_AAPCS_VFP)
+               then
+                  Fail (Within, "unsupported Clang target ABI: __ARM_PCS_VFP"
+                        & (if Names.Contains ("__ARM_PCS_VFP")
+                           then " is defined for the base procedure call"
+                                & " standard"
+                           else " is not defined for the VFP variant"),
+                        Clang_Fault);
+               end if;
+               if For_Target = Cortex_M_AAPCS_VFP then
+                  --  FPv5-D16: half, single and double precision.
+                  Require ("__ARM_FP", "0xe");
+               elsif Names.Contains ("__ARM_FP") then
+                  Fail (Within, "unsupported Clang target ABI: __ARM_FP is "
+                        & T.Repr (Value_Of ("__ARM_FP")) & " for the base"
+                        & " procedure call standard, which has no float"
+                        & " unit", Clang_Fault);
+               end if;
          end case;
          --  Plain char's sign is the ABI's, and a Clang that disagrees with
          --  the row describes some other ABI.

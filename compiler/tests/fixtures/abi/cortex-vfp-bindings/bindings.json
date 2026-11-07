@@ -1,0 +1,1057 @@
+{
+  "abi": {
+    "byte_order": "little",
+    "calling_convention": "aapcs-vfp",
+    "data_model": "ilp32",
+    "enum_policy": "clang-default-with-fno-short-enums",
+    "plain_char": "unsigned",
+    "target": "thumbv7em-unknown-none-eabihf"
+  },
+  "declarations": [
+    {
+      "c_name": "uint32_t",
+      "c_type": "unsigned int",
+      "kind": "alias",
+      "landin_name": "uint32_t",
+      "representation": "type-alias",
+      "selected": false
+    },
+    {
+      "alignment": 4,
+      "c_name": "IRQn_Type",
+      "constants": [
+        {
+          "c_name": "NonMaskableInt_IRQn",
+          "landin_name": "nonmaskableint_irqn",
+          "value": -14
+        },
+        {
+          "c_name": "HardFault_IRQn",
+          "landin_name": "hardfault_irqn",
+          "value": -13
+        },
+        {
+          "c_name": "MemoryManagement_IRQn",
+          "landin_name": "memorymanagement_irqn",
+          "value": -12
+        },
+        {
+          "c_name": "BusFault_IRQn",
+          "landin_name": "busfault_irqn",
+          "value": -11
+        },
+        {
+          "c_name": "UsageFault_IRQn",
+          "landin_name": "usagefault_irqn",
+          "value": -10
+        },
+        {
+          "c_name": "SVCall_IRQn",
+          "landin_name": "svcall_irqn",
+          "value": -5
+        },
+        {
+          "c_name": "DebugMonitor_IRQn",
+          "landin_name": "debugmonitor_irqn",
+          "value": -4
+        },
+        {
+          "c_name": "PendSV_IRQn",
+          "landin_name": "pendsv_irqn",
+          "value": -2
+        },
+        {
+          "c_name": "SysTick_IRQn",
+          "landin_name": "systick_irqn",
+          "value": -1
+        },
+        {
+          "c_name": "WWDG_IRQn",
+          "landin_name": "wwdg_irqn",
+          "value": 0
+        },
+        {
+          "c_name": "PVD_AVD_IRQn",
+          "landin_name": "pvd_avd_irqn",
+          "value": 1
+        },
+        {
+          "c_name": "TAMP_STAMP_IRQn",
+          "landin_name": "tamp_stamp_irqn",
+          "value": 2
+        },
+        {
+          "c_name": "RTC_WKUP_IRQn",
+          "landin_name": "rtc_wkup_irqn",
+          "value": 3
+        },
+        {
+          "c_name": "FLASH_IRQn",
+          "landin_name": "flash_irqn",
+          "value": 4
+        },
+        {
+          "c_name": "RCC_IRQn",
+          "landin_name": "rcc_irqn",
+          "value": 5
+        },
+        {
+          "c_name": "EXTI0_IRQn",
+          "landin_name": "exti0_irqn",
+          "value": 6
+        },
+        {
+          "c_name": "EXTI1_IRQn",
+          "landin_name": "exti1_irqn",
+          "value": 7
+        },
+        {
+          "c_name": "EXTI2_IRQn",
+          "landin_name": "exti2_irqn",
+          "value": 8
+        },
+        {
+          "c_name": "EXTI3_IRQn",
+          "landin_name": "exti3_irqn",
+          "value": 9
+        },
+        {
+          "c_name": "EXTI4_IRQn",
+          "landin_name": "exti4_irqn",
+          "value": 10
+        },
+        {
+          "c_name": "DMA1_Stream0_IRQn",
+          "landin_name": "dma1_stream0_irqn",
+          "value": 11
+        },
+        {
+          "c_name": "DMA1_Stream1_IRQn",
+          "landin_name": "dma1_stream1_irqn",
+          "value": 12
+        },
+        {
+          "c_name": "DMA1_Stream2_IRQn",
+          "landin_name": "dma1_stream2_irqn",
+          "value": 13
+        },
+        {
+          "c_name": "DMA1_Stream3_IRQn",
+          "landin_name": "dma1_stream3_irqn",
+          "value": 14
+        },
+        {
+          "c_name": "DMA1_Stream4_IRQn",
+          "landin_name": "dma1_stream4_irqn",
+          "value": 15
+        },
+        {
+          "c_name": "DMA1_Stream5_IRQn",
+          "landin_name": "dma1_stream5_irqn",
+          "value": 16
+        },
+        {
+          "c_name": "DMA1_Stream6_IRQn",
+          "landin_name": "dma1_stream6_irqn",
+          "value": 17
+        },
+        {
+          "c_name": "ADC_IRQn",
+          "landin_name": "adc_irqn",
+          "value": 18
+        },
+        {
+          "c_name": "FDCAN1_IT0_IRQn",
+          "landin_name": "fdcan1_it0_irqn",
+          "value": 19
+        },
+        {
+          "c_name": "FDCAN2_IT0_IRQn",
+          "landin_name": "fdcan2_it0_irqn",
+          "value": 20
+        },
+        {
+          "c_name": "FDCAN1_IT1_IRQn",
+          "landin_name": "fdcan1_it1_irqn",
+          "value": 21
+        },
+        {
+          "c_name": "FDCAN2_IT1_IRQn",
+          "landin_name": "fdcan2_it1_irqn",
+          "value": 22
+        },
+        {
+          "c_name": "EXTI9_5_IRQn",
+          "landin_name": "exti9_5_irqn",
+          "value": 23
+        },
+        {
+          "c_name": "TIM1_BRK_IRQn",
+          "landin_name": "tim1_brk_irqn",
+          "value": 24
+        },
+        {
+          "c_name": "TIM1_UP_IRQn",
+          "landin_name": "tim1_up_irqn",
+          "value": 25
+        },
+        {
+          "c_name": "TIM1_TRG_COM_IRQn",
+          "landin_name": "tim1_trg_com_irqn",
+          "value": 26
+        },
+        {
+          "c_name": "TIM1_CC_IRQn",
+          "landin_name": "tim1_cc_irqn",
+          "value": 27
+        },
+        {
+          "c_name": "TIM2_IRQn",
+          "landin_name": "tim2_irqn",
+          "value": 28
+        },
+        {
+          "c_name": "TIM3_IRQn",
+          "landin_name": "tim3_irqn",
+          "value": 29
+        },
+        {
+          "c_name": "TIM4_IRQn",
+          "landin_name": "tim4_irqn",
+          "value": 30
+        },
+        {
+          "c_name": "I2C1_EV_IRQn",
+          "landin_name": "i2c1_ev_irqn",
+          "value": 31
+        },
+        {
+          "c_name": "I2C1_ER_IRQn",
+          "landin_name": "i2c1_er_irqn",
+          "value": 32
+        },
+        {
+          "c_name": "I2C2_EV_IRQn",
+          "landin_name": "i2c2_ev_irqn",
+          "value": 33
+        },
+        {
+          "c_name": "I2C2_ER_IRQn",
+          "landin_name": "i2c2_er_irqn",
+          "value": 34
+        },
+        {
+          "c_name": "SPI1_IRQn",
+          "landin_name": "spi1_irqn",
+          "value": 35
+        },
+        {
+          "c_name": "SPI2_IRQn",
+          "landin_name": "spi2_irqn",
+          "value": 36
+        },
+        {
+          "c_name": "USART1_IRQn",
+          "landin_name": "usart1_irqn",
+          "value": 37
+        },
+        {
+          "c_name": "USART2_IRQn",
+          "landin_name": "usart2_irqn",
+          "value": 38
+        },
+        {
+          "c_name": "USART3_IRQn",
+          "landin_name": "usart3_irqn",
+          "value": 39
+        },
+        {
+          "c_name": "EXTI15_10_IRQn",
+          "landin_name": "exti15_10_irqn",
+          "value": 40
+        },
+        {
+          "c_name": "RTC_Alarm_IRQn",
+          "landin_name": "rtc_alarm_irqn",
+          "value": 41
+        },
+        {
+          "c_name": "TIM8_BRK_TIM12_IRQn",
+          "landin_name": "tim8_brk_tim12_irqn",
+          "value": 43
+        },
+        {
+          "c_name": "TIM8_UP_TIM13_IRQn",
+          "landin_name": "tim8_up_tim13_irqn",
+          "value": 44
+        },
+        {
+          "c_name": "TIM8_TRG_COM_TIM14_IRQn",
+          "landin_name": "tim8_trg_com_tim14_irqn",
+          "value": 45
+        },
+        {
+          "c_name": "TIM8_CC_IRQn",
+          "landin_name": "tim8_cc_irqn",
+          "value": 46
+        },
+        {
+          "c_name": "DMA1_Stream7_IRQn",
+          "landin_name": "dma1_stream7_irqn",
+          "value": 47
+        },
+        {
+          "c_name": "FMC_IRQn",
+          "landin_name": "fmc_irqn",
+          "value": 48
+        },
+        {
+          "c_name": "SDMMC1_IRQn",
+          "landin_name": "sdmmc1_irqn",
+          "value": 49
+        },
+        {
+          "c_name": "TIM5_IRQn",
+          "landin_name": "tim5_irqn",
+          "value": 50
+        },
+        {
+          "c_name": "SPI3_IRQn",
+          "landin_name": "spi3_irqn",
+          "value": 51
+        },
+        {
+          "c_name": "UART4_IRQn",
+          "landin_name": "uart4_irqn",
+          "value": 52
+        },
+        {
+          "c_name": "UART5_IRQn",
+          "landin_name": "uart5_irqn",
+          "value": 53
+        },
+        {
+          "c_name": "TIM6_DAC_IRQn",
+          "landin_name": "tim6_dac_irqn",
+          "value": 54
+        },
+        {
+          "c_name": "TIM7_IRQn",
+          "landin_name": "tim7_irqn",
+          "value": 55
+        },
+        {
+          "c_name": "DMA2_Stream0_IRQn",
+          "landin_name": "dma2_stream0_irqn",
+          "value": 56
+        },
+        {
+          "c_name": "DMA2_Stream1_IRQn",
+          "landin_name": "dma2_stream1_irqn",
+          "value": 57
+        },
+        {
+          "c_name": "DMA2_Stream2_IRQn",
+          "landin_name": "dma2_stream2_irqn",
+          "value": 58
+        },
+        {
+          "c_name": "DMA2_Stream3_IRQn",
+          "landin_name": "dma2_stream3_irqn",
+          "value": 59
+        },
+        {
+          "c_name": "DMA2_Stream4_IRQn",
+          "landin_name": "dma2_stream4_irqn",
+          "value": 60
+        },
+        {
+          "c_name": "ETH_IRQn",
+          "landin_name": "eth_irqn",
+          "value": 61
+        },
+        {
+          "c_name": "ETH_WKUP_IRQn",
+          "landin_name": "eth_wkup_irqn",
+          "value": 62
+        },
+        {
+          "c_name": "FDCAN_CAL_IRQn",
+          "landin_name": "fdcan_cal_irqn",
+          "value": 63
+        },
+        {
+          "c_name": "DMA2_Stream5_IRQn",
+          "landin_name": "dma2_stream5_irqn",
+          "value": 68
+        },
+        {
+          "c_name": "DMA2_Stream6_IRQn",
+          "landin_name": "dma2_stream6_irqn",
+          "value": 69
+        },
+        {
+          "c_name": "DMA2_Stream7_IRQn",
+          "landin_name": "dma2_stream7_irqn",
+          "value": 70
+        },
+        {
+          "c_name": "USART6_IRQn",
+          "landin_name": "usart6_irqn",
+          "value": 71
+        },
+        {
+          "c_name": "I2C3_EV_IRQn",
+          "landin_name": "i2c3_ev_irqn",
+          "value": 72
+        },
+        {
+          "c_name": "I2C3_ER_IRQn",
+          "landin_name": "i2c3_er_irqn",
+          "value": 73
+        },
+        {
+          "c_name": "OTG_HS_EP1_OUT_IRQn",
+          "landin_name": "otg_hs_ep1_out_irqn",
+          "value": 74
+        },
+        {
+          "c_name": "OTG_HS_EP1_IN_IRQn",
+          "landin_name": "otg_hs_ep1_in_irqn",
+          "value": 75
+        },
+        {
+          "c_name": "OTG_HS_WKUP_IRQn",
+          "landin_name": "otg_hs_wkup_irqn",
+          "value": 76
+        },
+        {
+          "c_name": "OTG_HS_IRQn",
+          "landin_name": "otg_hs_irqn",
+          "value": 77
+        },
+        {
+          "c_name": "DCMI_IRQn",
+          "landin_name": "dcmi_irqn",
+          "value": 78
+        },
+        {
+          "c_name": "CRYP_IRQn",
+          "landin_name": "cryp_irqn",
+          "value": 79
+        },
+        {
+          "c_name": "HASH_RNG_IRQn",
+          "landin_name": "hash_rng_irqn",
+          "value": 80
+        },
+        {
+          "c_name": "FPU_IRQn",
+          "landin_name": "fpu_irqn",
+          "value": 81
+        },
+        {
+          "c_name": "UART7_IRQn",
+          "landin_name": "uart7_irqn",
+          "value": 82
+        },
+        {
+          "c_name": "UART8_IRQn",
+          "landin_name": "uart8_irqn",
+          "value": 83
+        },
+        {
+          "c_name": "SPI4_IRQn",
+          "landin_name": "spi4_irqn",
+          "value": 84
+        },
+        {
+          "c_name": "SPI5_IRQn",
+          "landin_name": "spi5_irqn",
+          "value": 85
+        },
+        {
+          "c_name": "SPI6_IRQn",
+          "landin_name": "spi6_irqn",
+          "value": 86
+        },
+        {
+          "c_name": "SAI1_IRQn",
+          "landin_name": "sai1_irqn",
+          "value": 87
+        },
+        {
+          "c_name": "LTDC_IRQn",
+          "landin_name": "ltdc_irqn",
+          "value": 88
+        },
+        {
+          "c_name": "LTDC_ER_IRQn",
+          "landin_name": "ltdc_er_irqn",
+          "value": 89
+        },
+        {
+          "c_name": "DMA2D_IRQn",
+          "landin_name": "dma2d_irqn",
+          "value": 90
+        },
+        {
+          "c_name": "SAI2_IRQn",
+          "landin_name": "sai2_irqn",
+          "value": 91
+        },
+        {
+          "c_name": "QUADSPI_IRQn",
+          "landin_name": "quadspi_irqn",
+          "value": 92
+        },
+        {
+          "c_name": "LPTIM1_IRQn",
+          "landin_name": "lptim1_irqn",
+          "value": 93
+        },
+        {
+          "c_name": "CEC_IRQn",
+          "landin_name": "cec_irqn",
+          "value": 94
+        },
+        {
+          "c_name": "I2C4_EV_IRQn",
+          "landin_name": "i2c4_ev_irqn",
+          "value": 95
+        },
+        {
+          "c_name": "I2C4_ER_IRQn",
+          "landin_name": "i2c4_er_irqn",
+          "value": 96
+        },
+        {
+          "c_name": "SPDIF_RX_IRQn",
+          "landin_name": "spdif_rx_irqn",
+          "value": 97
+        },
+        {
+          "c_name": "OTG_FS_EP1_OUT_IRQn",
+          "landin_name": "otg_fs_ep1_out_irqn",
+          "value": 98
+        },
+        {
+          "c_name": "OTG_FS_EP1_IN_IRQn",
+          "landin_name": "otg_fs_ep1_in_irqn",
+          "value": 99
+        },
+        {
+          "c_name": "OTG_FS_WKUP_IRQn",
+          "landin_name": "otg_fs_wkup_irqn",
+          "value": 100
+        },
+        {
+          "c_name": "OTG_FS_IRQn",
+          "landin_name": "otg_fs_irqn",
+          "value": 101
+        },
+        {
+          "c_name": "DMAMUX1_OVR_IRQn",
+          "landin_name": "dmamux1_ovr_irqn",
+          "value": 102
+        },
+        {
+          "c_name": "HRTIM1_Master_IRQn",
+          "landin_name": "hrtim1_master_irqn",
+          "value": 103
+        },
+        {
+          "c_name": "HRTIM1_TIMA_IRQn",
+          "landin_name": "hrtim1_tima_irqn",
+          "value": 104
+        },
+        {
+          "c_name": "HRTIM1_TIMB_IRQn",
+          "landin_name": "hrtim1_timb_irqn",
+          "value": 105
+        },
+        {
+          "c_name": "HRTIM1_TIMC_IRQn",
+          "landin_name": "hrtim1_timc_irqn",
+          "value": 106
+        },
+        {
+          "c_name": "HRTIM1_TIMD_IRQn",
+          "landin_name": "hrtim1_timd_irqn",
+          "value": 107
+        },
+        {
+          "c_name": "HRTIM1_TIME_IRQn",
+          "landin_name": "hrtim1_time_irqn",
+          "value": 108
+        },
+        {
+          "c_name": "HRTIM1_FLT_IRQn",
+          "landin_name": "hrtim1_flt_irqn",
+          "value": 109
+        },
+        {
+          "c_name": "DFSDM1_FLT0_IRQn",
+          "landin_name": "dfsdm1_flt0_irqn",
+          "value": 110
+        },
+        {
+          "c_name": "DFSDM1_FLT1_IRQn",
+          "landin_name": "dfsdm1_flt1_irqn",
+          "value": 111
+        },
+        {
+          "c_name": "DFSDM1_FLT2_IRQn",
+          "landin_name": "dfsdm1_flt2_irqn",
+          "value": 112
+        },
+        {
+          "c_name": "DFSDM1_FLT3_IRQn",
+          "landin_name": "dfsdm1_flt3_irqn",
+          "value": 113
+        },
+        {
+          "c_name": "SAI3_IRQn",
+          "landin_name": "sai3_irqn",
+          "value": 114
+        },
+        {
+          "c_name": "SWPMI1_IRQn",
+          "landin_name": "swpmi1_irqn",
+          "value": 115
+        },
+        {
+          "c_name": "TIM15_IRQn",
+          "landin_name": "tim15_irqn",
+          "value": 116
+        },
+        {
+          "c_name": "TIM16_IRQn",
+          "landin_name": "tim16_irqn",
+          "value": 117
+        },
+        {
+          "c_name": "TIM17_IRQn",
+          "landin_name": "tim17_irqn",
+          "value": 118
+        },
+        {
+          "c_name": "MDIOS_WKUP_IRQn",
+          "landin_name": "mdios_wkup_irqn",
+          "value": 119
+        },
+        {
+          "c_name": "MDIOS_IRQn",
+          "landin_name": "mdios_irqn",
+          "value": 120
+        },
+        {
+          "c_name": "JPEG_IRQn",
+          "landin_name": "jpeg_irqn",
+          "value": 121
+        },
+        {
+          "c_name": "MDMA_IRQn",
+          "landin_name": "mdma_irqn",
+          "value": 122
+        },
+        {
+          "c_name": "SDMMC2_IRQn",
+          "landin_name": "sdmmc2_irqn",
+          "value": 124
+        },
+        {
+          "c_name": "HSEM1_IRQn",
+          "landin_name": "hsem1_irqn",
+          "value": 125
+        },
+        {
+          "c_name": "ADC3_IRQn",
+          "landin_name": "adc3_irqn",
+          "value": 127
+        },
+        {
+          "c_name": "DMAMUX2_OVR_IRQn",
+          "landin_name": "dmamux2_ovr_irqn",
+          "value": 128
+        },
+        {
+          "c_name": "BDMA_Channel0_IRQn",
+          "landin_name": "bdma_channel0_irqn",
+          "value": 129
+        },
+        {
+          "c_name": "BDMA_Channel1_IRQn",
+          "landin_name": "bdma_channel1_irqn",
+          "value": 130
+        },
+        {
+          "c_name": "BDMA_Channel2_IRQn",
+          "landin_name": "bdma_channel2_irqn",
+          "value": 131
+        },
+        {
+          "c_name": "BDMA_Channel3_IRQn",
+          "landin_name": "bdma_channel3_irqn",
+          "value": 132
+        },
+        {
+          "c_name": "BDMA_Channel4_IRQn",
+          "landin_name": "bdma_channel4_irqn",
+          "value": 133
+        },
+        {
+          "c_name": "BDMA_Channel5_IRQn",
+          "landin_name": "bdma_channel5_irqn",
+          "value": 134
+        },
+        {
+          "c_name": "BDMA_Channel6_IRQn",
+          "landin_name": "bdma_channel6_irqn",
+          "value": 135
+        },
+        {
+          "c_name": "BDMA_Channel7_IRQn",
+          "landin_name": "bdma_channel7_irqn",
+          "value": 136
+        },
+        {
+          "c_name": "COMP_IRQn",
+          "landin_name": "comp_irqn",
+          "value": 137
+        },
+        {
+          "c_name": "LPTIM2_IRQn",
+          "landin_name": "lptim2_irqn",
+          "value": 138
+        },
+        {
+          "c_name": "LPTIM3_IRQn",
+          "landin_name": "lptim3_irqn",
+          "value": 139
+        },
+        {
+          "c_name": "LPTIM4_IRQn",
+          "landin_name": "lptim4_irqn",
+          "value": 140
+        },
+        {
+          "c_name": "LPTIM5_IRQn",
+          "landin_name": "lptim5_irqn",
+          "value": 141
+        },
+        {
+          "c_name": "LPUART1_IRQn",
+          "landin_name": "lpuart1_irqn",
+          "value": 142
+        },
+        {
+          "c_name": "CRS_IRQn",
+          "landin_name": "crs_irqn",
+          "value": 144
+        },
+        {
+          "c_name": "ECC_IRQn",
+          "landin_name": "ecc_irqn",
+          "value": 145
+        },
+        {
+          "c_name": "SAI4_IRQn",
+          "landin_name": "sai4_irqn",
+          "value": 146
+        },
+        {
+          "c_name": "WAKEUP_PIN_IRQn",
+          "landin_name": "wakeup_pin_irqn",
+          "value": 149
+        }
+      ],
+      "kind": "enum",
+      "landin_name": "irqn_type",
+      "representation": "integer-alias",
+      "selected": true,
+      "size": 4,
+      "underlying_c_type": "int"
+    },
+    {
+      "adapter": "landin_cmsis_vfp_SCB_GetFPUType_call",
+      "adapter_output_escaping_sources": [],
+      "adapter_reasons": [
+        "internal-or-inline"
+      ],
+      "c_name": "SCB_GetFPUType",
+      "direction": "import",
+      "kind": "function",
+      "landin_name": "scb_get_fpu_type",
+      "parameters": [],
+      "result": {
+        "c_type": "uint32_t",
+        "landin_type": "uint32_t",
+        "policy": null
+      },
+      "variadic": false
+    },
+    {
+      "adapter": "landin_cmsis_vfp___NVIC_DisableIRQ_call",
+      "adapter_output_escaping_sources": [],
+      "adapter_reasons": [
+        "internal-or-inline"
+      ],
+      "c_name": "__NVIC_DisableIRQ",
+      "direction": "import",
+      "kind": "function",
+      "landin_name": "nvic_disable_irq",
+      "parameters": [
+        {
+          "c_name": "IRQn",
+          "c_type": "IRQn_Type",
+          "landin_name": "irqn",
+          "landin_type": "irqn_type",
+          "policy": null
+        }
+      ],
+      "result": {
+        "c_type": "void",
+        "landin_type": null,
+        "policy": null
+      },
+      "variadic": false
+    },
+    {
+      "adapter": "landin_cmsis_vfp___NVIC_EnableIRQ_call",
+      "adapter_output_escaping_sources": [],
+      "adapter_reasons": [
+        "internal-or-inline"
+      ],
+      "c_name": "__NVIC_EnableIRQ",
+      "direction": "import",
+      "kind": "function",
+      "landin_name": "nvic_enable_irq",
+      "parameters": [
+        {
+          "c_name": "IRQn",
+          "c_type": "IRQn_Type",
+          "landin_name": "irqn",
+          "landin_type": "irqn_type",
+          "policy": null
+        }
+      ],
+      "result": {
+        "c_type": "void",
+        "landin_type": null,
+        "policy": null
+      },
+      "variadic": false
+    },
+    {
+      "adapter": "landin_cmsis_vfp___NVIC_GetEnableIRQ_call",
+      "adapter_output_escaping_sources": [],
+      "adapter_reasons": [
+        "internal-or-inline"
+      ],
+      "c_name": "__NVIC_GetEnableIRQ",
+      "direction": "import",
+      "kind": "function",
+      "landin_name": "nvic_get_enable_irq",
+      "parameters": [
+        {
+          "c_name": "IRQn",
+          "c_type": "IRQn_Type",
+          "landin_name": "irqn",
+          "landin_type": "irqn_type",
+          "policy": null
+        }
+      ],
+      "result": {
+        "c_type": "uint32_t",
+        "landin_type": "uint32_t",
+        "policy": null
+      },
+      "variadic": false
+    },
+    {
+      "adapter": "landin_cmsis_vfp___NVIC_GetPriority_call",
+      "adapter_output_escaping_sources": [],
+      "adapter_reasons": [
+        "internal-or-inline"
+      ],
+      "c_name": "__NVIC_GetPriority",
+      "direction": "import",
+      "kind": "function",
+      "landin_name": "nvic_get_priority",
+      "parameters": [
+        {
+          "c_name": "IRQn",
+          "c_type": "IRQn_Type",
+          "landin_name": "irqn",
+          "landin_type": "irqn_type",
+          "policy": null
+        }
+      ],
+      "result": {
+        "c_type": "uint32_t",
+        "landin_type": "uint32_t",
+        "policy": null
+      },
+      "variadic": false
+    },
+    {
+      "adapter": "landin_cmsis_vfp___NVIC_SetPriority_call",
+      "adapter_output_escaping_sources": [],
+      "adapter_reasons": [
+        "internal-or-inline"
+      ],
+      "c_name": "__NVIC_SetPriority",
+      "direction": "import",
+      "kind": "function",
+      "landin_name": "nvic_set_priority",
+      "parameters": [
+        {
+          "c_name": "IRQn",
+          "c_type": "IRQn_Type",
+          "landin_name": "irqn",
+          "landin_type": "irqn_type",
+          "policy": null
+        },
+        {
+          "c_name": "priority",
+          "c_type": "uint32_t",
+          "landin_name": "priority",
+          "landin_type": "uint32_t",
+          "policy": null
+        }
+      ],
+      "result": {
+        "c_type": "void",
+        "landin_type": null,
+        "policy": null
+      },
+      "variadic": false
+    },
+    {
+      "adapter": "landin_cmsis_vfp_vfp_backfill_call",
+      "adapter_output_escaping_sources": [],
+      "adapter_reasons": [
+        "internal-or-inline"
+      ],
+      "c_name": "vfp_backfill",
+      "direction": "import",
+      "kind": "function",
+      "landin_name": "vfp_backfill",
+      "parameters": [
+        {
+          "c_name": "first",
+          "c_type": "float",
+          "landin_name": "first",
+          "landin_type": "c.c_float",
+          "policy": null
+        },
+        {
+          "c_name": "second",
+          "c_type": "double",
+          "landin_name": "second",
+          "landin_type": "c.c_double",
+          "policy": null
+        },
+        {
+          "c_name": "third",
+          "c_type": "float",
+          "landin_name": "third",
+          "landin_type": "c.c_float",
+          "policy": null
+        }
+      ],
+      "result": {
+        "c_type": "double",
+        "landin_type": "c.c_double",
+        "policy": null
+      },
+      "variadic": false
+    },
+    {
+      "adapter": "landin_cmsis_vfp_vfp_half_call",
+      "adapter_output_escaping_sources": [],
+      "adapter_reasons": [
+        "internal-or-inline"
+      ],
+      "c_name": "vfp_half",
+      "direction": "import",
+      "kind": "function",
+      "landin_name": "vfp_half",
+      "parameters": [
+        {
+          "c_name": "value",
+          "c_type": "float",
+          "landin_name": "value",
+          "landin_type": "c.c_float",
+          "policy": null
+        }
+      ],
+      "result": {
+        "c_type": "float",
+        "landin_type": "c.c_float",
+        "policy": null
+      },
+      "variadic": false
+    },
+    {
+      "adapter": null,
+      "adapter_output_escaping_sources": [],
+      "adapter_reasons": [],
+      "c_name": "vfp_peer_mix",
+      "direction": "import",
+      "kind": "function",
+      "landin_name": "vfp_peer_mix",
+      "parameters": [
+        {
+          "c_name": "total",
+          "c_type": "double",
+          "landin_name": "total",
+          "landin_type": "c.c_double",
+          "policy": null
+        },
+        {
+          "c_name": "sample",
+          "c_type": "float",
+          "landin_name": "sample",
+          "landin_type": "c.c_float",
+          "policy": null
+        },
+        {
+          "c_name": "count",
+          "c_type": "int",
+          "landin_name": "count",
+          "landin_type": "c.c_int",
+          "policy": null
+        }
+      ],
+      "result": {
+        "c_type": "double",
+        "landin_type": "c.c_double",
+        "policy": null
+      },
+      "variadic": false
+    }
+  ],
+  "generator": "landin-bindings/1",
+  "inputs": {
+    "defines": [],
+    "headers": [
+      {
+        "name": "stm32h753xx.h",
+        "sha256": "4f6def439a9fa94705303fe227d34308048c44bd36263d311aa54cc94f8398f5"
+      },
+      {
+        "name": "landin-vfp.h",
+        "sha256": "3c3a15f9708d41e27c505b9b67aee4bd92423f5708ebef7ef2d08189a117624f"
+      }
+    ],
+    "policy_sha256": "34b4909732434350c5a4c7097ce4ee4fc9ed80306442d8b2d281812c3db07da0"
+  },
+  "outputs": {
+    "adapters.c": "0cda4cf9163d3df61331bb82ed51a42cc0fee18253ae602b9e4ecd7f09033b78",
+    "bindings.ldn": "3918364da0a57ba35bebf2fe39d2ac76fd107ca64cd4eb2a18c4edbcf48c8af9",
+    "exports.h": "af6c48b253597abf692f43b91518397ad26c351fcee478eccd618321231ffb62"
+  },
+  "schema_version": 1
+}

@@ -401,7 +401,7 @@ package body Landin.Commands.Catalogue is
             when Format => " [options] source.ldn|DIR ...",
             when Svd => " --policy=POLICY.json --out-dir=DIR DEVICE.svd",
             when Bindings =>
-              " --clang=CLANG --sysroot=DIR --policy=POLICY.json"
+              " --clang=CLANG [--sysroot=DIR] --policy=POLICY.json"
               & " --out-dir=DIR [LOGICAL=]HEADER.h ...",
             when Explain => " [options] [CODE|[NNNN]|DNNN ...]",
             when Completion => " [options] bash|zsh|fish",
@@ -543,7 +543,10 @@ package body Landin.Commands.Catalogue is
               & LF & "by. Clang reads the headers and nothing else: it gets"
               & LF & "-nostdinc, the roots and defines named here, and an"
               & LF & "environment of PATH, HOME and the temporary directory"
-              & LF & "alone. Four files are written: bindings.ldn, adapters.c,"
+              & LF & "alone. --sysroot is required for a hosted target and"
+              & LF & "refused for cortex-m0, which is freestanding: name its"
+              & LF & "Clang's own headers with --system-include-dir."
+              & LF & "Four files are written: bindings.ldn, adapters.c,"
               & LF & "exports.h and bindings.json; each is written beside its"
               & LF & "destination and read back, and adapters.c compiled,"
               & LF & "before any is replaced. The complete policy reference:"

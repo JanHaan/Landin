@@ -2303,6 +2303,21 @@ package body Landin.Diagnostics.Citations is
             when 821 =>
                "Clang runs in an environment of its own, through `Landin"
                & ".Platform`",
+            when 935 =>
+               "`refine bindings` binds C for Cortex-M under AAPCS32, in"
+               & " both procedure call standards",
+            when 936 =>
+               "A Cortex-M binding asserts its float unit beside `compil"
+               & "er.c_aapcs32`",
+            when 937 =>
+               "A freestanding target's C headers are Clang's own, as th"
+               & "e request names them",
+            when 938 =>
+               "Freestanding adapters allocate nothing and reach no C li"
+               & "brary",
+            when 939 =>
+               "Cortex-M bindings are checked against pinned CMSIS heade"
+               & "rs",
             when 585 =>
                "The gate builds the flake on every run that does not reu"
                & "se a pass",
@@ -3856,6 +3871,16 @@ package body Landin.Diagnostics.Citations is
             when 820 =>
                "Decisions: The toolchain, C and the machine",
             when 821 =>
+               "Decisions: The toolchain, C and the machine",
+            when 935 =>
+               "Decisions: The toolchain, C and the machine",
+            when 936 =>
+               "Decisions: The toolchain, C and the machine",
+            when 937 =>
+               "Decisions: The toolchain, C and the machine",
+            when 938 =>
+               "Decisions: The toolchain, C and the machine",
+            when 939 =>
                "Decisions: The toolchain, C and the machine",
             when 585 =>
                "Decisions: The toolchain, C and the machine",
@@ -5664,6 +5689,22 @@ package body Landin.Diagnostics.Citations is
             when 821 =>
                "https://www.701.dev/spec.html#d821-clang-runs-in-an-envi"
                & "ronment-of-its-own-through-landin-platform",
+            when 935 =>
+               "https://www.701.dev/spec.html#d935-refine-bindings-binds"
+               & "-c-for-cortex-m-under-aapcs32-in-both-procedure-call-sta"
+               & "ndards",
+            when 936 =>
+               "https://www.701.dev/spec.html#d936-a-cortex-m-binding-as"
+               & "serts-its-float-unit-beside-compiler-c-aapcs32",
+            when 937 =>
+               "https://www.701.dev/spec.html#d937-a-freestanding-target"
+               & "-s-c-headers-are-clang-s-own-as-the-request-names-them",
+            when 938 =>
+               "https://www.701.dev/spec.html#d938-freestanding-adapters"
+               & "-allocate-nothing-and-reach-no-c-library",
+            when 939 =>
+               "https://www.701.dev/spec.html#d939-cortex-m-bindings-are"
+               & "-checked-against-pinned-cmsis-headers",
             when 585 =>
                "https://www.701.dev/spec.html#d585-the-gate-builds-the-f"
                & "lake-on-every-run-that-does-not-reuse-a-pass",

@@ -1,0 +1,35 @@
+-- This file and generated bindings.ldn are one rooted fixture module.
+-- bindings.ldn came from the pinned CMSIS RP2040.h and the core_cm0plus.h
+-- it includes, through Clang's JSON AST, for AAPCS32's base procedure call
+-- standard; every function is a static inline one reached through
+-- adapters.c.
+
+main: () -> (status: i32) =
+    status = 42
+    irq: irqn_type = timer_irq_3_irqn
+    nvic_disable_irq(irq)
+    if nvic_get_enable_irq(irq) <> 0 then
+        status = 1
+    end if
+    nvic_clear_pending_irq(irq)
+    if nvic_get_pending_irq(irq) <> 0 then
+        status = 2
+    end if
+    nvic_set_pending_irq(irq)
+    if nvic_get_pending_irq(irq) <> 1 then
+        status = 3
+    end if
+    nvic_clear_pending_irq(irq)
+    if nvic_get_pending_irq(irq) <> 0 then
+        status = 4
+    end if
+    nvic_set_priority(irq, 2)
+    if nvic_get_priority(irq) <> 2 then
+        status = 5
+    end if
+    -- A reload past SysTick's 24 bits is refused before any register is
+    -- written.
+    if systick_config(16777217) <> 1 then
+        status = 6
+    end if
+end main

@@ -302,12 +302,15 @@ The README has [the commands in brief](../README.md#refine-in-brief);
   alone and removes what its old manifest names and it no longer makes with
   the same recovery checks. [The device guide](../devices/README.md)
   describes the policy.
-- `refine bindings --clang=CLANG --sysroot=DIR --policy=POLICY.json
+- `refine bindings --clang=CLANG [--sysroot=DIR] --policy=POLICY.json
   --out-dir=DIR HEADER.h ...` asks the named Clang, in an environment of
   its own, for the headers' declarations and writes the bindings a reviewed
   policy selects: Landin declarations, C adapters for the forms Landin does
   not carry natively, the header that declares them, and metadata (D820,
-  D821). It stages its four outputs and compiles the adapters before
+  D821). It binds for Linux x86-64, Linux arm64, Darwin arm64 and
+  freestanding Cortex-M, the last under AAPCS32's base procedure call
+  standard or its VFP variant as the policy says, with Clang's own headers
+  alone and adapters that allocate nothing (D935-D938). It stages its four outputs and compiles the adapters before
   publishing them through the same protected-input and recovery contract as
   `refine svd`. Missing output directories are staged privately and published
   only after validation; refusal preserves any tree created there meanwhile.
@@ -699,8 +702,10 @@ process ignores SIGPIPE and gives its children the default back.
   a loader found.
 - `refine bindings` ([`bindings/`](../bindings/README.md)) generates
   bindings, packed and flexible-member records among them, from an external
-  Clang's view of a header, with nothing but refine and that Clang.
-  Unsupported C forms are refused by name.
+  Clang's view of a header, with nothing but refine and that Clang, for the
+  hosted LP64 targets and for Cortex-M's ILP32 AAPCS32 in both procedure call
+  standards; two committed Cortex-M bindings come from pinned CMSIS headers
+  (D939). Unsupported C forms are refused by name.
 - Only the entry, C imports, public C definitions, link names and Cortex-M
   placements are global symbols. Every other routine and datum, public or
   not, is local to the image, so none meets the C library's names.
