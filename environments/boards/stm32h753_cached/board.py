@@ -23,13 +23,13 @@ recorded under NEW_DIRECTORY:
      while the run goes on, also on;
   4. drive the receive control, the maintained stream, the CPU's controls
      and the two transmits, each against what the host sent and what the
-     cache predicts (README.md);
+     cache predicts (environments/boards/stm32h753_cached/README.md);
   5. once the entry has returned, read CCR over SWD: IC and DC clear.
 
 The oracle is the host's: what it sent, FNV-1a over it, and what a
 write-back data cache does when D227's maintenance is left out, never the
-firmware's own idea of itself; see environments/boards/stm32h753_cached/
-README.md.  It is physical evidence only on the chip: an emulator models
+firmware's own idea of itself; see
+environments/boards/stm32h753_cached/README.md.  It is physical evidence only on the chip: an emulator models
 no cache.
 """
 
