@@ -1246,7 +1246,7 @@ package body Landin.Driver is
               ("unknown level for " & Landin.Targets.Name (Facts) & ": "
                & Levels.Element (1) & "; valid levels: "
                & Landin.Targets.Levels.Levels_Of (Facts)
-               & "; use refine targets to list targets and levels");
+               & "; refine targets lists every target and its levels");
          end if;
       end if;
 

@@ -492,7 +492,7 @@ package body Landin.Syntax.Repairs is
             Last_Byte : constant Natural := Natural'Min (Last, Bytes'Last);
             Move : Diag.Fix := Diag.Make_Fix
               (Diag.Move_Token, Diag.Likely,
-               "move this import line before the declarations");
+               "move this import above the first declaration");
          begin
             Diag.Add_Edit
               (Move, Diag.Make_Edit

@@ -40,11 +40,10 @@ and `handoff.md` carry, because an item is finished long before the text
 that cites it is, and a citation that outlives its item is a question nobody
 can answer. `check.py` refuses such a citation anywhere else.
 
-`docs/capabilities.md` maintains the current compiler capability inventory;
-`README.md` summarizes it. `handoff.md` and `AGENTS.md` point to that inventory
-instead of maintaining parallel inventories;
-the `Done:` paragraphs here record completion evidence, not a second
-current-capability summary.
+`docs/capabilities.md` is the current compiler capability inventory, and
+`README.md` summarizes it. `handoff.md` and `AGENTS.md` point to the
+inventory rather than keeping their own, and the `Done:` paragraphs here
+record completion evidence, not a second summary of current capability.
 
 ## Mechanics
 
@@ -3674,9 +3673,10 @@ minting a separate host root [1680]. No keyword, second calling convention or
 colored function type is used to say it. The refusal this replaces is recorded
 in `tour.md` under WHAT WAS TRIED AND DROPPED.
 
-- **Blocking and event-driven Io implementations share the same interface.**
-  `hosted/blocking` provides the blocking root and `hosted/events` the
-  scheduler-backed one; callers choose the provider they pass to `core`.
+- **Two Io providers share one interface.** `hosted/blocking` blocks the
+  thread while it waits and `hosted/events` lets other fibres run; the
+  caller chooses which one to hand down, and `core` code written against
+  the interface runs over either.
 - **Stackless coroutines are a non-goal.** Cutting functions into state
   machines is a compiler project of its own, and it puts the property into
   every function type that reaches one — the coloring the ambient environment
@@ -4142,6 +4142,7 @@ SR-829, SR-726, SR-823, SR-830, SR-831.
 | SR-815 | Usability | During R13.76's required `scripts/parallel-equivalence.sh --suite='fixture execution'`, the one-worker corpus gave no case progress for over twenty minutes. It was mistakenly interrupted as stalled; artifact timestamps later proved work continued until 1.13 seconds before cancellation, and debugger probes showed ordinary tool polling. The whole-case transcript required inspecting disposable artifacts to distinguish progress from a hang. | The next change to fixture-corpus progress reporting or the parallel-equivalence wrapper. | Bounded visible progress within a long corpus case, retained separately from the deterministic verdict comparison, so ordinary work can be distinguished from a stalled run without inspecting build artifacts. | open |
 | SR-816 | Release readiness | While auditing child-identifier ownership in R13.76, source tracing found the separate attached-program runner reaps its child before restoring its SIGTERM/HUP forwarding handlers and clearing their saved PID. A signal in that interval can consult an identifier whose reservation has ended. No PID reuse or foreign signal was exercised; compiler-tool process-group cancellation uses a different supervisor. | The next change to attached-program waiting or signal forwarding. | Retain the child's identifier reservation until forwarding can no longer target it, with deterministic native controls on each host for signals around final reaping. | open |
 | SR-828 | Usability | During R13.76's allocation-provenance investigation, one bounded Valgrind run emitted 10,392 conditional-uninitialized reports in six contexts at the packed Declaration_Bits byte iterator. Classifying them required reading its rounded final-byte view: valid bits are initialized, but the view also reads representation padding. Origins were not traced, so this does not classify every report or establish a compiler correctness defect; the implementation predates the publication change. The noise prevents a clean instrumentation verdict. | The next packed-bit iterator or instrumentation-coverage change. | Read only initialized semantic bits or establish initialized byte storage, with boundary controls for declaration counts not divisible by eight and a clean native instrumentation result; preserve the iterator's valid-index bounds. | open |
+| SR-900 | Usability | On a native Mac, `scripts/tests/test_build_inventory.py`'s `test_workflow_archives_preserve_their_stamps_and_executables` failed in all five subcases. It packs a synthetic build tree with each of the gate's `tar -czf` commands, and Darwin's `tar` added AppleDouble `._*` metadata members, so no archive held only the expected executables and stamps; nothing in the failure said that host metadata was the difference. The same focused run with `COPYFILE_DISABLE=1` passed. Met running the focused native Mac Python checks for R13.78 at `1e3fd50b4`, 55 of 56 passing. | R13.78, or the next change to the gate's archive commands. | The test disables host metadata in the synthetic archives it makes, the gate's own archive commands unchanged, and the focused check passes on a native Mac. | open |
 
 ## Retained positions
 

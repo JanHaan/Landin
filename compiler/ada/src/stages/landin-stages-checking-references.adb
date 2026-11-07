@@ -3519,9 +3519,9 @@ package body Landin.Stages.Checking.References is
                                   & "` after the type of return `"
                                   & Result_Name & "`; every returning body"
                                   & " edge must agree with those sources"
-                                else "return `" & Result_Name
-                                  & "`: the written clause and every returning"
-                                  & " body edge agree both ways"
+                                else "the `from` clause of return `"
+                                  & Result_Name & "` and every returning"
+                                  & " body edge must name the same sources"
                                   & (if US.Length (Sources) > 0
                                      then "; this edge derives from "
                                        & US.To_String (Sources) else "")),

@@ -15,9 +15,10 @@ compiler/tests/fuzz/fuzz.py \
   --seed 500000 --rounds 1
 ```
 
-The shell sets `LANDIN_BUILD_TAG` for its host. This example builds the debug
-compiler without a variant; see the [environment guide](../../../docs/environments.md#a-nix-shell-for-convenience)
-for the tag and variants.
+`nix develop` sets `LANDIN_BUILD_TAG` for the host, and the build line asks
+for the debug compiler with no variant, the one `--refine` names. The
+[environment guide](../../../docs/environments.md#a-nix-shell-for-convenience)
+explains tags and variants.
 
 The seeds are every positive, negative, runtime and ABI fixture directory
 with exactly one direct `.ldn` file, in class and directory order, then every

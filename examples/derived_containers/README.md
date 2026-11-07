@@ -16,16 +16,16 @@ the running evidence to every prototype section and finding Z1-Z19, including
 the current representations that deliberately supersede raw historical
 sketches.
 
-From the repository root, in the pinned development environment, run its
-complete hosted entry:
+This directory has no entry point of its own. To run the hosted entry, use
+the pinned development environment at the repository root:
 
 ```sh
 ./scripts/dev-test.sh --fixture=runtime/derived-containers
 ```
 
-This is a `FILTERED` run. The harness builds the compiler and checks the
-recorded output and expected status 42; the library directory itself has
-no hosted entry point.
+The harness builds the compiler and checks the recorded output and the
+expected status, 42. The run reports `FILTERED` because it selects one
+fixture.
 
 The complete derivative and its failure/recovery oracles also run on native
 Darwin arm64 in the shared six-profile hosted parity runtime matrix. Native GDB and LLDB

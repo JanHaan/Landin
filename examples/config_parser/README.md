@@ -14,17 +14,17 @@ The hosted entry, recorded input and exact output oracle are in
 `compiler/tests/fixtures/runtime/derived-parser`. `DERIVATION.md` there maps
 the running evidence back to prototype 2's findings.
 
-From the repository root, in the pinned development environment, run the
-complete hosted entry with its recorded input:
+This directory has no entry point of its own. To run the hosted entry over
+its recorded input, use the pinned development environment at the
+repository root:
 
 ```sh
 ./scripts/dev-test.sh --fixture=runtime/derived-parser
 ```
 
-This is a `FILTERED` run. The harness builds the compiler, passes the
-fixture's `input.txt` as the program argument, and checks the recorded
-output and expected status 42;
-it does not try to run this library directory without an entry point.
+The harness builds the compiler, passes the fixture's `input.txt` as the
+program's argument, and checks the recorded output and the expected
+status, 42. The run reports `FILTERED` because it selects one fixture.
 
 The complete derivative and its failure/recovery oracles also run on native
 Darwin arm64 in the shared six-profile hosted parity runtime matrix. Native GDB and LLDB

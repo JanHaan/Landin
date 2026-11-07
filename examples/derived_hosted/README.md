@@ -1,10 +1,10 @@
 # Derived hosted log filter
 
 The complete executable derivative of prototype 4 lives in this directory.
-Build and run it from the repository root on native Linux x86-64, in the
-pinned development environment. The Nix shell sets `LANDIN_BUILD_TAG`;
-outside it the default native tag is `linux-amd64`. The build also prints
-the exact `bin/refine` path to use.
+Build and run it on native Linux x86-64 from the repository root, in the
+pinned development environment. The compiler's path depends on the build
+tag, which the Nix shell sets in `LANDIN_BUILD_TAG` and which is otherwise
+`linux-amd64`; the build prints the path too.
 
 ```sh
 ./scripts/dev-build.sh --compiler-only
@@ -16,8 +16,8 @@ printf 'INFO request started\nINFO request done\nERROR request failed\n' > "$dem
 "$demo/log-filter" --out "$demo/selected.log" --level ERROR "$demo/input.log"
 ```
 
-The sample input, executable and selected output are in the private
-directory named by `$demo`, ready to inspect or remove when finished.
+The sample input, the executable and the selected output stay in the
+temporary directory `$demo` names, to inspect and then remove.
 
 User arguments build an ordered heterogeneous filter chain. `--level` accepts
 DEBUG, INFO, WARN, ERROR, or FATAL. A level is a complete leading token followed
