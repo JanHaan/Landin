@@ -105,7 +105,8 @@ package body Landin.Commands.Catalogue is
          when Specialize =>
            "Direct evidence calls: off, auto (default, if worth it), all",
          when Emit =>
-           "Artifact kind: exe (default), asm, ir, ir-annotated, linker-script",
+           "Artifact kind: exe (default), asm, ir, ir-annotated, "
+           & "linker-script",
          when Output => "Output path; default a.out, a.s or a.ir",
          when Keep_Asm => "Keep an executable's assembly beside it as OUT.s",
          when Debug => "Debug information: none (default), full, lines",
@@ -495,10 +496,13 @@ package body Landin.Commands.Catalogue is
                  & LF & "./-name.ldn. The program runs in this directory with"
                  & LF & "this terminal, and refine exits with its status, or"
                  & LF & "with 128 and the number of the signal that ended it."
-                 & LF & "While the program runs, Ctrl-C interrupts its foreground"
+                 & LF & "While the program runs, Ctrl-C interrupts its"
+                 & " foreground"
                  & LF & "process group. A supervisor signalling refine alone"
-                 & LF & "should send SIGTERM (or SIGHUP), which refine forwards"
-                 & LF & "before cleanup. SIGINT and SIGQUIT sent only to refine"
+                 & LF & "should send SIGTERM (or SIGHUP), which refine"
+                 & " forwards"
+                 & LF & "before cleanup. SIGINT and SIGQUIT sent only to"
+                 & " refine"
                  & LF & "are ignored."
                  & LF & "run runs this compiler's own host; build another"
                  & LF & "target with refine compile --target=NAME." & LF);

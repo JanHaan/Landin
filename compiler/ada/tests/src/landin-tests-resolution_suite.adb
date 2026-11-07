@@ -1400,7 +1400,8 @@ package body Landin.Tests.Resolution_Suite is
               Landin.Driver.Execute (Args, Host, Tools);
          begin
             Landin.Testing.Check
-              (Item, (if Accepted then Result.Status = 0 else Result.Status = 1),
+              (Item, (if Accepted then Result.Status = 0
+                      else Result.Status = 1),
                "type lookup keeps its expected verdict: "
                & Ada.Strings.Unbounded.To_String (Result.Report));
          end;

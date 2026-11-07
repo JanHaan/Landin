@@ -3526,7 +3526,8 @@ package body Landin.Stages.Checking.References is
                                      then "; this edge derives from "
                                        & US.To_String (Sources) else "")),
                            Related => Part.Site,
-                           Because => "the named return and its declared sources",
+                           Because => "the named return and its declared"
+                                      & " sources",
                            Into    => Sink.all);
                      end;
                   end if;

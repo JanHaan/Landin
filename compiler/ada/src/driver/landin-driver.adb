@@ -2389,13 +2389,15 @@ package body Landin.Driver is
                        (Landin.Stages.Code (Context).all, Item);
                   begin
                      if Id /= Res.No_Declaration
-                       and then Res.Sort_Of (Meanings, Id) = Res.Module_Function
+                       and then Res.Sort_Of (Meanings, Id)
+                         = Res.Module_Function
                        and then Landin.Modules.Module_Of
                          (Grouped, Res.Source_Of (Meanings, Id))
                            = Landin.Modules.Entry_Module
                      then
                         declare
-                           Name : constant String := Landin.Source.Names.Spelling
+                           Name : constant String :=
+                             Landin.Source.Names.Spelling
                              (Landin.Stages.Identities (Context).all,
                               Res.Name_Of (Meanings, Id));
                         begin
@@ -2404,7 +2406,8 @@ package body Landin.Driver is
                               Grouped, Landin.Stages.Identities (Context).all,
                               Name) = Item
                            then
-                              Candidate := Unbounded.To_Unbounded_String (Name);
+                              Candidate :=
+                                Unbounded.To_Unbounded_String (Name);
                               Candidate_Count := Candidate_Count + 1;
                            end if;
                         end;

@@ -1069,7 +1069,8 @@ package body Landin.Tests.Diagnostics_Suite is
            and then Nth_Note (Report, 1) = Raw
            and then Span_Of (Primary (Report)) = (0, 1)
            and then Replacement (Nth_Edit (Nth_Fix (Report, 1), 1)) = Raw,
-         "rendering retains structured text, byte spans and replacement bytes");
+         "rendering retains structured text, byte spans and replacement"
+         & " bytes");
    end Terminal_Controls_Are_Display_Only;
 
    procedure Short_Presentation_Escapes_Controls

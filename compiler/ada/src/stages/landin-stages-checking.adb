@@ -4331,7 +4331,8 @@ package body Landin.Stages.Checking is
                                 or else (Shape.Atoms =
                                   Landin.Checking.No_Atom_Set
                                   and then not
-                                    (Syn.Kind (Of_Tree, Written) = Syn.Type_Name
+                                    (Syn.Kind
+                                       (Of_Tree, Written) = Syn.Type_Name
                                      or else
                                        (Syn.Kind (Of_Tree, Written)
                                           = Syn.Type_Reference
