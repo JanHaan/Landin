@@ -5572,8 +5572,11 @@ package body Landin.Diagnostics.Citations.Texts is
                & "tatic link ([1650]) refuses it, and refuses a directory "
                & "too."
                & LF
-               & "- Cortex-M firmware refuses `linker.library`, `linker.di"
-               & "rectory` and `-L`.",
+               & "- Cortex-M firmware links each library as a static archi"
+               & "ve built for its core, after the program and before the "
+               & "compiler's runtime, and refuses one that brings C constr"
+               & "uctors, thread-local storage or a dynamic linkage, none "
+               & "of which its startup can honour.",
             when 1570 =>
                "A function's calling convention is written `extern(...)`"
                & " before its name. Without one, a function uses Landin's "
@@ -25310,11 +25313,12 @@ package body Landin.Diagnostics.Citations.Texts is
                & "amically linked Linux executable no longer takes glibc's"
                & " static `libm`, whose ifunc members ask the dynamic load"
                & "er for CPU features no static member provides. The defau"
-               & "lt static Linux link still refuses the directive (D280),"
-               & " and firmware still refuses it (D229). `--dry-run` and `"
-               & "-v` show the `-l` operands. This amends D202's archive-o"
-               & "nly resolution on every hosted target, and Darwin's `-pr"
-               & "int-file-name` query goes with it.",
+               & "lt static Linux link still refuses the directive (D280);"
+               & " firmware refused it too (D229) until D923 made it a sta"
+               & "tic archive there. `--dry-run` and `-v` show the `-l` op"
+               & "erands. This amends D202's archive-only resolution on ev"
+               & "ery hosted target, and Darwin's `-print-file-name` query"
+               & " goes with it.",
             when 524 =>
                "Chosen: `linker.directory(""DIR"")` is a tool directive ta"
                & "king one fixed text literal, decoded by the ordinary tex"
@@ -25341,8 +25345,9 @@ package body Landin.Diagnostics.Citations.Texts is
                & "a usage error, both before any tool runs. Wherever `link"
                & "er.library` is refused, `linker.directory` and `-L` are "
                & "too: the static Linux link, with D280's L0500 naming `--"
-               & "link=libc`, and firmware. `refine check` gives these ref"
-               & "usals as compiling does (D443).",
+               & "link=libc`, and, until D923 admitted all three there wit"
+               & "h no runtime path, firmware. `refine check` gives these "
+               & "refusals as compiling does (D443).",
             when 525 =>
                "Chosen: only when the link fails, refine looks for each "
                & "requested library: in each named directory, in D524's or"
@@ -30015,6 +30020,46 @@ package body Landin.Diagnostics.Citations.Texts is
                & "riadic placement and the contract's `vfp.` variadic row "
                & "keeps holding it to GCC, so enabling the calls is a capa"
                & "bility and a consumer, not a new convention.",
+            when 923 =>
+               "Chosen: on firmware, each active `linker.library(""NAME"")"
+               & "` is a static archive, `libNAME.a`, compiled for the bui"
+               & "ld's core and float ABI. The pinned GCC driver receives "
+               & "`-static`, then each directory as `-L` with its absolute"
+               & " path, the command line's before the directives' as D524"
+               & " orders them, then refine's object, then each archive as"
+               & " `-lNAME` in source order with its repeats, then `-lgcc`"
+               & ", which the archives may need too. A firmware image has "
+               & "no loader, so no runtime path is passed and no shared ob"
+               & "ject is looked for: `-static` keeps `-lNAME` to archives"
+               & ", and D525's search after a failed link looks for `libNA"
+               & "ME.a` alone. The derived script already places an archiv"
+               & "e's `.text`, `.rodata`, `.data` and `.bss` with refine's"
+               & " own, and reset copies the data and clears the BSS whate"
+               & "ver object they came from, in the boot layout and, loadi"
+               & "ng data in place, in the RAM layout. A library compiled "
+               & "for the other AAPCS32 variant is refused by the linker ("
+               & "D780). `refine check` refuses what compiling would, as b"
+               & "efore. Without a library the link is as it was, byte for"
+               & " byte.",
+            when 924 =>
+               "Chosen: a link with archives derives its script with one"
+               & " more output section, `.init_array`, which keeps every `"
+               & ".preinit_array`, `.init_array` and `.ctors` input. After"
+               & " the link refine reads the image's section headers and r"
+               & "efuses an image whose allocated sections hold C construc"
+               & "tors, an init or preinit array or `.ctors`, thread-local"
+               & " storage, a TLS section, or a dynamic linkage, a dynamic"
+               & " section, its symbols or an interpreter, with L0587 nami"
+               & "ng the first such section; the image is removed. The not"
+               & "e says what to do: build the library without constructor"
+               & "s and call its initialisation from the firmware entry; d"
+               & "eclare a thread-local variable as ordinary static data; "
+               & "link the static archive and no shared object. A develope"
+               & "r's script is held to the same reading, since the check "
+               & "reads the image and not the script; it is the developer'"
+               & "s to keep constructors for the check to see. Destructors"
+               & " are never run, as firmware does not exit, and are left "
+               & "to `--gc-sections`.",
             when 695 =>
                "Chosen: one pinned emulator, Espressif's QEMU `esp-devel"
                & "op-9.2.2-20260417`, locked by URL and SHA-256 in `enviro"

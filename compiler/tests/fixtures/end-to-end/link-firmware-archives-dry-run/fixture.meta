@@ -1,0 +1,9 @@
+class: end-to-end
+summary: D923 a firmware link takes each linker.library as a static archive after its object and before libgcc, with each -L and linker.directory ahead of them and no runtime path
+program: main.ldn
+constructs: 1590, 1650
+targets: cortex-m0
+expect: expected.txt
+args: compile --target=cortex-m0 --firmware-entry=start --emit=exe --dry-run -L / -o out ../tests/fixtures/end-to-end/link-firmware-archives-dry-run/main.ldn
+status: 0
+stream: output

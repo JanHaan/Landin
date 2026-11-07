@@ -2691,6 +2691,10 @@ package body Landin.Diagnostics.Citations is
             when 922 =>
                "AAPCS32 calls no variadic C function until a program nee"
                & "ds one",
+            when 923 =>
+               "Firmware links C libraries as static archives",
+            when 924 =>
+               "A firmware image refuses what its startup cannot honour",
             when 695 =>
                "Espressif's QEMU carries both RV32 corpus lanes, under t"
                & "he Arm lanes' harness",
@@ -4136,6 +4140,10 @@ package body Landin.Diagnostics.Citations is
             when 921 =>
                "Decisions: The core library and the derived programs",
             when 922 =>
+               "Decisions: The core library and the derived programs",
+            when 923 =>
+               "Decisions: The core library and the derived programs",
+            when 924 =>
                "Decisions: The core library and the derived programs",
             when 695 =>
                "Decisions: The core library and the derived programs",
@@ -6123,6 +6131,12 @@ package body Landin.Diagnostics.Citations is
             when 922 =>
                "https://www.701.dev/spec.html#d922-aapcs32-calls-no-vari"
                & "adic-c-function-until-a-program-needs-one",
+            when 923 =>
+               "https://www.701.dev/spec.html#d923-firmware-links-c-libr"
+               & "aries-as-static-archives",
+            when 924 =>
+               "https://www.701.dev/spec.html#d924-a-firmware-image-refu"
+               & "ses-what-its-startup-cannot-honour",
             when 695 =>
                "https://www.701.dev/spec.html#d695-espressif-s-qemu-carr"
                & "ies-both-rv32-corpus-lanes-under-the-arm-lanes-harness",

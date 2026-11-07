@@ -87,6 +87,7 @@ end-to-end/feature-level-linux-arm64-default-lacks-lse | linux-arm64
 end-to-end/feature-level-of-another-family | linux-x86-64
 end-to-end/feature-level-x86-64-v3-has-bmi2 | linux-x86-64
 end-to-end/link-assembly-operand-dry-run | linux-x86-64
+end-to-end/link-firmware-archives-dry-run | cortex-m0
 end-to-end/link-libc-dry-run | linux-x86-64
 end-to-end/link-library-directories-dry-run | linux-x86-64
 end-to-end/link-library-directory-option-elsewhere | linux-x86-64

@@ -21,7 +21,7 @@ CHECK = ROOT / "scripts" / "emit_manifest.py"
 BASE = {
     "alias-conversion|linux-x86-64|debug|optimize=size|specialize=auto": "a" * 64,
     "alias-conversion|cortex-m0|release|optimize=size|specialize=auto": "b" * 64,
-    "external-scalar-c-boundary|cortex-m0|debug|optimize=size|specialize=auto": "refused:1",
+    "r440-c-signatures|cortex-m0|debug|optimize=size|specialize=auto": "refused:1",
 }
 
 
@@ -39,7 +39,7 @@ def compare(*manifests):
 def emit(stub):
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
-        fixture = root / "compiler/tests/fixtures/positive/external-scalar-c-boundary"
+        fixture = root / "compiler/tests/fixtures/positive/r440-c-signatures"
         fixture.mkdir(parents=True)
         (fixture / "fixture.meta").write_text("program: main.ldn\n")
         (fixture / "main.ldn").write_text("unused by the stub\n")
@@ -172,7 +172,7 @@ class Comparison(unittest.TestCase):
 
     def test_a_missing_entry_fails(self):
         other = dict(BASE)
-        del other["external-scalar-c-boundary|cortex-m0|debug|optimize=size|specialize=auto"]
+        del other["r440-c-signatures|cortex-m0|debug|optimize=size|specialize=auto"]
         result = compare(BASE, other)
         self.assertEqual(result.returncode, 1)
         self.assertIn("is absent", result.stderr)
@@ -189,7 +189,7 @@ class Comparison(unittest.TestCase):
         #  Accept/refuse must agree too: a fixture one host compiles and
         #  another rejects is a host leak in the frontend, not the backend.
         other = dict(BASE)
-        other["external-scalar-c-boundary|cortex-m0|debug|optimize=size|specialize=auto"] = "e" * 64
+        other["r440-c-signatures|cortex-m0|debug|optimize=size|specialize=auto"] = "e" * 64
         result = compare(BASE, other)
         self.assertEqual(result.returncode, 1)
 
@@ -200,8 +200,9 @@ class Comparison(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("unexpected emission result", result.stderr)
 
-    def test_written_c_function_refusal_is_confined_to_firmware(self):
-        #  Neither firmware target has a C ABI (D660 for rv32).
+    def test_written_c_function_refusal_is_confined_to_rv32(self):
+        #  rv32 has no enabled C ABI (D660), and Cortex-M's AAPCS32 has
+        #  had one since D920.
         for target in ("cortex-m0", "linux-x86-64", "linux-arm64",
                        "darwin-arm64", "freebsd-x86-64", "freebsd-arm64",
                        "linux-rv64", "rv32"):
@@ -211,7 +212,7 @@ class Comparison(unittest.TestCase):
             other[key] = "refused:1"
             result = compare(other, dict(other))
             self.assertEqual(result.returncode,
-                             0 if target in ("cortex-m0", "rv32") else 1,
+                             0 if target == "rv32" else 1,
                              result.stderr)
 
     def test_every_expected_refusal_names_a_positive_fixture(self):
@@ -225,14 +226,14 @@ class Comparison(unittest.TestCase):
         self.assertEqual(missing, [])
 
     def test_all_expected_refusals_still_fail(self):
-        refused = {"external-scalar-c-boundary|cortex-m0|debug|optimize=size|specialize=auto": "refused:1"}
+        refused = {"r440-c-signatures|cortex-m0|debug|optimize=size|specialize=auto": "refused:1"}
         result = compare(refused, dict(refused))
         self.assertEqual(result.returncode, 1)
         self.assertIn("no assembly digest was emitted", result.stderr)
 
     def test_missing_assembly_is_not_an_expected_refusal(self):
         other = dict(BASE)
-        other["external-scalar-c-boundary|cortex-m0|debug|optimize=size|specialize=auto"] = "refused:0"
+        other["r440-c-signatures|cortex-m0|debug|optimize=size|specialize=auto"] = "refused:0"
         result = compare(other, dict(other))
         self.assertEqual(result.returncode, 1)
         self.assertIn("unexpected emission result", result.stderr)
@@ -427,7 +428,7 @@ class Selectors(unittest.TestCase):
 
     def test_a_debug_entry_refuses_where_its_entry_without_does(self):
         other = dict(BASE)
-        other["external-scalar-c-boundary|cortex-m0|debug|optimize=size"
+        other["r440-c-signatures|cortex-m0|debug|optimize=size"
               "|specialize=auto|debug=lines"] = "refused:1"
         result = compare(other, dict(other))
         self.assertEqual(result.returncode, 0, result.stderr)

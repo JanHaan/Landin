@@ -22018,8 +22018,8 @@ same name in one directory where its linker prefers one. The C runtime's own
 libraries, `m` among them, therefore link as the driver links them for C: a
 dynamically linked Linux executable no longer takes glibc's static `libm`,
 whose ifunc members ask the dynamic loader for CPU features no static member
-provides. The default static Linux link still refuses the directive (D280),
-and firmware still refuses it (D229). `--dry-run` and `-v` show the `-l`
+provides. The default static Linux link still refuses the directive (D280);
+firmware refused it too (D229) until D923 made it a static archive there. `--dry-run` and `-v` show the `-l`
 operands. This amends D202's archive-only resolution on every hosted target,
 and Darwin's `-print-file-name` query goes with it.
 
@@ -22063,7 +22063,8 @@ directive in an inactive arm adds nothing, and repeats of one directory are
 kept. A directive naming a directory that does not exist is L0391 at the
 directive, and such an `-L` is a usage error, both before any tool runs.
 Wherever `linker.library` is refused, `linker.directory` and `-L` are too:
-the static Linux link, with D280's L0500 naming `--link=libc`, and firmware.
+the static Linux link, with D280's L0500 naming `--link=libc`, and, until
+D923 admitted all three there with no runtime path, firmware.
 `refine check` gives these refusals as compiling does (D443).
 
 **The alternatives:** an environment variable, which D275 declined for the
@@ -28723,6 +28724,84 @@ variadic definitions need an adapter and so misleads about an import.
 
 **Pinned by** `negative/c-variadic-cortex-m0` and the `cortex ABI` case
 `driver boundaries`.
+
+### D923 — Firmware links C libraries as static archives
+
+**From** [1590], [1650], D229, D523, D524, D525 and D920.
+
+**The tour said** at [1590] that `linker.library` asks the linker for a
+library, and D229 and D524 refused it, `linker.directory` and `-L` on
+firmware, which linked only refine's object and libgcc. With C signatures
+enabled on Cortex-M (D920) a firmware program could declare a vendor's C
+function and had no way to link it.
+
+**Chosen:** on firmware, each active `linker.library("NAME")` is a static
+archive, `libNAME.a`, compiled for the build's core and float ABI. The
+pinned GCC driver receives `-static`, then each directory as `-L` with its
+absolute path, the command line's before the directives' as D524 orders
+them, then refine's object, then each archive as `-lNAME` in source order
+with its repeats, then `-lgcc`, which the archives may need too. A firmware
+image has no loader, so no runtime path is passed and no shared object is
+looked for: `-static` keeps `-lNAME` to archives, and D525's search after a
+failed link looks for `libNAME.a` alone. The derived script already places
+an archive's `.text`, `.rodata`, `.data` and `.bss` with refine's own, and
+reset copies the data and clears the BSS whatever object they came from,
+in the boot layout and, loading data in place, in the RAM layout. A
+library compiled for the other AAPCS32 variant is refused by the linker
+(D780). `refine check` refuses what compiling would, as before. Without a
+library the link is as it was, byte for byte.
+
+**The alternatives:** passing archives as file operands, which leaves the
+search order D524 gave a hosted link; a separate firmware directive, which
+would ask a reader to know that firmware's libraries differ before they
+link one; and linking C objects rather than archives, which needs a list of
+objects the build tool has not yet got.
+
+**Pinned by** the `cortex ABI` case `firmware links C archives`, the
+toolchain case `libraries and directories reach the driver` and
+`end-to-end/link-firmware-archives-dry-run`.
+
+### D924 — A firmware image refuses what its startup cannot honour
+
+**From** [1650], D229, D546 and D923.
+
+**The tour said** at [1650] that compiler startup initializes RAM and calls
+the firmware entry; it runs no constructor, sets up no thread pointer and
+loads nothing. Measured with the pinned tools: an archive's
+`__attribute__((constructor))` puts its pointer in `.init_array`, which
+`--gc-sections` drops unseen, since nothing references it; Clang's
+`_Thread_local` brings `.tdata` and `.tbss`, which the derived script left
+as orphans that the linker put beside `.data`, and a call of
+`__aeabi_read_tp`. GCC's arm-eabi instead emulates TLS through libgcc's
+`emutls`, ordinary data and calls of `malloc` and `memcpy`, which link only
+when an archive supplies them; that form holds no TLS section and is not
+refused.
+
+**Chosen:** a link with archives derives its script with one more output
+section, `.init_array`, which keeps every `.preinit_array`, `.init_array`
+and `.ctors` input. After the link refine reads the image's section headers
+and refuses an image whose allocated sections hold C constructors, an init
+or preinit array or `.ctors`, thread-local storage, a TLS section, or a
+dynamic linkage, a dynamic section, its symbols or an interpreter, with
+L0587 naming the first such section; the image is removed. The note says
+what to do: build the library without constructors and call its
+initialisation from the firmware entry; declare a thread-local variable as
+ordinary static data; link the static archive and no shared object. A
+developer's script is held to the same reading, since the check reads the
+image and not the script; it is the developer's to keep constructors for
+the check to see. Destructors are never run, as firmware does not exit, and
+are left to `--gc-sections`.
+
+**The alternatives:** running constructors from reset, which would put a
+C runtime's order of initialisation ahead of the firmware entry the program
+names; an `ASSERT` in the derived script, which the linker reports with its
+own text and a developer's script would not carry; and `--orphan-handling=
+error`, which would refuse a debug or attribute section refine's own objects
+carry as well.
+
+**Pinned by** the `cortex ABI` case `firmware links C archives`, whose
+images hold an init array, a TLS section and a dynamic section, each
+refused and removed.
 
 ### D695 — Espressif's QEMU carries both RV32 corpus lanes, under the Arm lanes' harness
 

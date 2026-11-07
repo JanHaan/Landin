@@ -1202,7 +1202,8 @@ package body Landin.Backend.Firmware is
       else Number (Bytes) & " bytes");
 
    function Linker_Script
-     (Profile : Landin.Targets.Firmware.Profile; Used : Region_Use)
+     (Profile : Landin.Targets.Firmware.Profile; Used : Region_Use;
+      Archives : Boolean := False)
       return String
    is
       use type Profiles.Boot_Kind;
@@ -1418,6 +1419,11 @@ package body Landin.Backend.Firmware is
         & "    _landin_firmware_bss_end = .;" & LF
         & "  } > " & Placed (Profiles.BSS) & Segment ("bss") & LF
         & US.To_String (Sections)
+        & (if Archives
+           then "  .init_array : { KEEP(*(.preinit_array .preinit_array.*"
+             & " .init_array .init_array.* .ctors .ctors.*)) } > " & Flash
+             & LF
+           else "")
         & "  /DISCARD/ : { *(.comment .note.GNU-stack) }" & LF
         & "}" & LF
         & (if Profile.Boot = Profiles.RP2040_Boot2

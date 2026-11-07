@@ -599,11 +599,9 @@
       "mode": "execute"
     },
     "runtime/assembly-naked-labels": {
-      "codes": [
-        "L0346"
-      ],
-      "mode": "refuse",
-      "reason": "Cortex-M0 keeps the general C surface disabled (L0346), and the fixture reaches its naked body through the C import of its symbol (D516); a Cortex-M0 naked body's labels are pinned by the firmware lane's naked entries."
+      "mode": "restriction",
+      "reason": "Its C import of the naked symbol compiles on Cortex-M0 since D920, but the naked body has x86-64, arm64 and RV64 arms and none for Cortex-M0, so the link has no definition of the symbol; a Cortex-M0 naked body's labels are pinned by the firmware lane's naked entries.",
+      "stops": "link"
     },
     "runtime/assembly-operand-free": {
       "mode": "execute"
@@ -746,16 +744,15 @@
     },
     "runtime/c-aliases-unsigned-char": {
       "codes": [
-        "L0015"
-      ],
-      "mode": "refuse"
-    },
-    "runtime/c-library-directories": {
-      "codes": [
-        "L0346"
+        "L0301"
       ],
       "mode": "refuse",
-      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program needs; firmware also refuses linker.library, linker.directory and -L."
+      "reason": "The fixture holds platform/c's LP64 widths, assigning c_long to i64; under AAPCS32 c_long is i32 (D921), so the assignment is refused, and positive/c-aliases-aapcs32 holds the ILP32 aliases on Cortex-M0 instead."
+    },
+    "runtime/c-library-directories": {
+      "mode": "restriction",
+      "reason": "Its C signatures compile on Cortex-M0 since D920 and firmware links archives since D923, but the fixture's C archives are built by the hosted lanes' C driver, and it calls libm's sqrtf and pow, which firmware links from no C library.",
+      "stops": "link"
     },
     "runtime/c-packed-record-fields": {
       "mode": "execute"
@@ -1091,25 +1088,19 @@
       "mode": "refuse"
     },
     "runtime/cstring-conversion-truncated-traps": {
-      "codes": [
-        "L0346"
-      ],
-      "mode": "refuse",
-      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
+      "mode": "restriction",
+      "reason": "Its C signature compiles on Cortex-M0 since D920, but the program calls the C library's strdup, and firmware links no C library.",
+      "stops": "link"
     },
     "runtime/cstring-first-nul-validation": {
-      "codes": [
-        "L0346"
-      ],
-      "mode": "refuse",
-      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
+      "mode": "restriction",
+      "reason": "Its C signature compiles on Cortex-M0 since D920, but the program calls the C library's strdup, and firmware links no C library.",
+      "stops": "link"
     },
     "runtime/cstring-traversal-invalid-traps": {
-      "codes": [
-        "L0346"
-      ],
-      "mode": "refuse",
-      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
+      "mode": "restriction",
+      "reason": "Its C signature compiles on Cortex-M0 since D920, but the program calls the C library's strdup, and firmware links no C library.",
+      "stops": "link"
     },
     "runtime/declared-errors-direct-and-inferred": {
       "mode": "execute"
@@ -1133,11 +1124,9 @@
       "mode": "execute"
     },
     "runtime/defer-does-not-unwind-traps": {
-      "codes": [
-        "L0346"
-      ],
-      "mode": "refuse",
-      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
+      "mode": "restriction",
+      "reason": "Its C signature compiles on Cortex-M0 since D920, but the program calls the C library's exit, and firmware links no C library and has no process to end.",
+      "stops": "link"
     },
     "runtime/deferred-call-drops-its-result": {
       "mode": "execute"
@@ -1547,11 +1536,7 @@
       "mode": "refuse"
     },
     "runtime/flexible-member-trailing-bytes": {
-      "codes": [
-        "L0346"
-      ],
-      "mode": "refuse",
-      "reason": "A flexible array member belongs to a layout(c) record, and Cortex-M0 keeps C records disabled (L0346)."
+      "mode": "execute"
     },
     "runtime/float-comparisons-branch-on-nan": {
       "mode": "execute"
@@ -1710,11 +1695,9 @@
       "mode": "execute"
     },
     "runtime/hosted-assembly-reaches-no-evidence-entry": {
-      "codes": [
-        "L0346"
-      ],
-      "mode": "refuse",
-      "reason": "Cortex-M0 retains refusal of the general C source surface, and this program's C import is what a static hosted link would refuse; runtime/region-bounded-pool pins the same pruning on Cortex-M0 by image size."
+      "mode": "restriction",
+      "reason": "Its C import compiles on Cortex-M0 since D920, but the program calls the C library's puts, and firmware links no C library; runtime/region-bounded-pool pins the same pruning on Cortex-M0 by image size.",
+      "stops": "link"
     },
     "runtime/hosted-heap-after-thread-start": {
       "codes": [
@@ -2224,11 +2207,9 @@
       "mode": "execute"
     },
     "runtime/narrow-extern-argument-is-extended": {
-      "codes": [
-        "L0346"
-      ],
-      "mode": "refuse",
-      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
+      "mode": "restriction",
+      "reason": "Its C signature compiles on Cortex-M0 since D920, but the program calls the C library's abs, and firmware links no C library; the cortex ABI case `C signatures from source at both variants` holds AAPCS32's narrow-argument extension.",
+      "stops": "link"
     },
     "runtime/narrow-scalars-in-stack-slots": {
       "mode": "execute"
@@ -2712,36 +2693,33 @@
       "reason": "Cortex-M0 32-bit layout/ABI or explicit Cortex architecture branch; exact source differences are retained in counterparts.json."
     },
     "runtime/r430-static-library": {
-      "codes": [
-        "L0346"
-      ],
-      "mode": "refuse",
-      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
+      "mode": "restriction",
+      "reason": "Its C signature compiles on Cortex-M0 since D920, but the program calls libm's fegetround, and firmware links no C library.",
+      "stops": "link"
     },
     "runtime/r440-aggregate-shaped-copy-endpoints": {
       "mode": "execute"
     },
     "runtime/r440-c-aliases": {
       "codes": [
-        "L0015"
-      ],
-      "mode": "refuse"
-    },
-    "runtime/r440-callback-pointer-witness": {
-      "codes": [
-        "L0346"
+        "L0300",
+        "L0301"
       ],
       "mode": "refuse",
-      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
+      "reason": "The fixture holds SysV LP64's signed plain char and 64-bit long; under AAPCS32 c_char is u8 and c_long i32 (D921), so its -1 char and its LP64 assignments are refused, and positive/c-aliases-aapcs32 holds the ILP32 aliases on Cortex-M0 instead."
+    },
+    "runtime/r440-callback-pointer-witness": {
+      "mode": "execute"
     },
     "runtime/r440-checker-qualified-alias-conversions": {
       "mode": "execute"
     },
     "runtime/r440-checker-qualified-c-conversions": {
       "codes": [
-        "L0015"
+        "L0300"
       ],
-      "mode": "refuse"
+      "mode": "refuse",
+      "reason": "The fixture converts 64-bit values through platform/c's LP64 c_ulong; under AAPCS32 c_ulong is u32 (D921), so its 64-bit literal does not fit, and positive/c-aliases-aapcs32 holds the ILP32 aliases on Cortex-M0 instead."
     },
     "runtime/r440-checker-qualified-range-traps": {
       "mode": "execute"
@@ -2824,11 +2802,7 @@
       "mode": "execute"
     },
     "runtime/r450-optimal-layout-composition": {
-      "codes": [
-        "L0346"
-      ],
-      "mode": "refuse",
-      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
+      "mode": "execute"
     },
     "runtime/r450-review-backend-large-routine": {
       "mode": "execute",
@@ -2869,11 +2843,7 @@
       "mode": "execute"
     },
     "runtime/r480-arena-independent-results": {
-      "codes": [
-        "L0346"
-      ],
-      "mode": "refuse",
-      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
+      "mode": "execute"
     },
     "runtime/r480-arena-nested-exhaustion": {
       "mode": "execute"
@@ -3657,11 +3627,9 @@
       "mode": "execute"
     },
     "runtime/undo-does-not-unwind-traps": {
-      "codes": [
-        "L0346"
-      ],
-      "mode": "refuse",
-      "reason": "Cortex-M0 retains refusal of the general C source surface, which this program or the hosted core library it imports needs; the freestanding core slice does not replace the hosted one."
+      "mode": "restriction",
+      "reason": "Its C signature compiles on Cortex-M0 since D920, but the program calls the C library's exit, and firmware links no C library and has no process to end.",
+      "stops": "link"
     },
     "runtime/utf16-slice-not-boundary-traps": {
       "mode": "execute"
@@ -3813,11 +3781,7 @@
       "mode": "execute"
     },
     "runtime/written-type-c-function": {
-      "codes": [
-        "L0346"
-      ],
-      "mode": "refuse",
-      "reason": "Cortex-M0 retains refusal of the general C source surface, which this compiler-defined C-convention callback requires; written type application preserves that boundary."
+      "mode": "execute"
     },
     "runtime/written-type-composite-extraction": {
       "mode": "execute"

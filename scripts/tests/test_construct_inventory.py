@@ -299,9 +299,10 @@ class Inventory(unittest.TestCase):
     def test_target_records_decide_where_a_fixture_runs(self):
         held = self.inputs["targets"]
         #  Darwin runs a native replacement for a Linux-only archive
-        #  fixture, and the firmware driver runs outside the hosted harness.
+        #  fixture, and firmware compiles its archive link (D923) in an
+        #  end-to-end dry run that executes nothing.
         self.assertEqual(held["1590"]["darwin-arm64"], "executed")
-        self.assertEqual(held["1590"]["cortex-m0"], "refused")
+        self.assertEqual(held["1590"]["cortex-m0"], "compiled")
         self.assertEqual(held["1570"]["cortex-m0"], "executed")
         self.assertEqual(held["1630"]["darwin-arm64"], "executed")
         #  The two later Cortex-M records.  A compile-time fixture that

@@ -1696,7 +1696,25 @@ package body Landin.Diagnostics.Explanations is
                & " recovery. Preparation can already have created private "
                & "staging. A later publication or cleanup failure is L0005"
                & " and can leave outputs installed or recovery entries ret"
-               & "ained, as that diagnostic reports.");
+               & "ained, as that diagnostic reports.",
+            when Catalogue.Firmware_Foreign_Section =>
+               "A firmware image linked with C archives, through `linker"
+               & ".library` with `linker.directory` or `-L DIR`, holds som"
+               & "ething compiler-owned startup cannot honour (D923, D924)"
+               & ". Reset copies data, clears BSS and calls the firmware e"
+               & "ntry; it runs no C constructor, has one thread and no th"
+               & "read pointer, and loads nothing at run time. So the imag"
+               & "e is refused, and removed, when an archive brought C con"
+               & "structors, an `.init_array`, `.preinit_array` or `.ctors"
+               & "` section that the derived script keeps so that it canno"
+               & "t be dropped unseen; thread-local storage, a `.tdata` or"
+               & " `.tbss` section from a `_Thread_local` or `__thread` va"
+               & "riable; or a dynamic linkage, which a shared object woul"
+               & "d bring. The message names the section. Build the librar"
+               & "y without constructors and call its initialisation from "
+               & "the firmware entry; declare a thread-local variable as o"
+               & "rdinary static data; and link the library's static archi"
+               & "ve built for the firmware's core.");
 
    function Example (Of_Code : Catalogue.Code_Name) return String
      is (case Of_Code is
@@ -2722,6 +2740,8 @@ package body Landin.Diagnostics.Explanations is
             when Catalogue.Bindings_Declaration_Refused =>
                "",
             when Catalogue.Bindings_Output_Refused =>
+               "",
+            when Catalogue.Firmware_Foreign_Section =>
                "");
 
 end Landin.Diagnostics.Explanations;
