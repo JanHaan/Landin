@@ -1876,6 +1876,9 @@
     "runtime/library-shared-io": {
       "mode": "execute"
     },
+    "runtime/library-shared-line": {
+      "mode": "execute"
+    },
     "runtime/library-shared-map": {
       "mode": "execute"
     },

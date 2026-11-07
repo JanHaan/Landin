@@ -175,7 +175,7 @@ class ProbeFailures(unittest.TestCase):
             'core-mem-arena-boundaries', 'core-mem-raw-storage'} |
             {'library-shared-'+name for name in
              ('arena', 'atomic', 'cmp', 'diag', 'failure', 'fault', 'fibre',
-              'io', 'map', 'mem', 'net', 'panic', 'pool', 'random', 'region',
+              'io', 'line', 'map', 'mem', 'net', 'panic', 'pool', 'random', 'region',
               'sort', 'spill', 'text', 'time', 'tree', 'vec')})
 
     def test_shared_library_inventory_requires_each_small_consumer(self):

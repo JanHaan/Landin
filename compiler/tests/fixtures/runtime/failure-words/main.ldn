@@ -4,13 +4,14 @@
 import core/cmp
 import core/failure
 import core/io
+import core/line
 import core/map
 import core/mem
 import core/net
 import core/text
 import core/tree
 
-reasons: [32]failure.reason = [mem.out_of_bounds, mem.empty, mem.full,
+reasons: [34]failure.reason = [mem.out_of_bounds, mem.empty, mem.full,
                                mem.not_empty, mem.out_of_memory, map.missing,
                                map.end_of_entries, tree.no_such_node,
                                tree.invalid_children, tree.too_many_nodes,
@@ -24,9 +25,10 @@ reasons: [32]failure.reason = [mem.out_of_bounds, mem.empty, mem.full,
                                net.disconnected, text.past_end,
                                text.invalid_text, text.invalid_number,
                                text.number_overflow, text.no_space,
-                               text.invalid_format]
+                               text.invalid_format, line.unsupported_rate,
+                               line.unsupported_format]
 
-phrases: [32][]u8 = ["index out of bounds", "nothing to take",
+phrases: [34][]u8 = ["index out of bounds", "nothing to take",
                      "no room for another item", "storage still holds items",
                      "out of memory", "no such key", "no more entries",
                      "no such node", "children outside the tree",
@@ -39,7 +41,8 @@ phrases: [32][]u8 = ["index out of bounds", "nothing to take",
                      "peer disconnected", "past the end", "invalid UTF-8",
                      "not a number", "number out of range",
                      "no room for the output",
-                     "template does not fit its values"]
+                     "template does not fit its values",
+                     "unsupported line rate", "unsupported frame format"]
 
 --  The phrase in lower case, as it reads after a colon, with no stop.
 plain: (phrase: []u8) -> (yes: bool) =
@@ -50,7 +53,7 @@ end plain
 
 public main: () -> (code: i32) =
     code = 1
-    for at in usize(0)..<usize(32) do
+    for at in usize(0)..<usize(34) do
         phrase: []u8 = failure.words(reasons[at])
         return when cmp.compare(phrase, phrases[at]) <> cmp.equal
           or not plain(phrase)

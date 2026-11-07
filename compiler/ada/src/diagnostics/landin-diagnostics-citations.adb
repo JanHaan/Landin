@@ -2378,6 +2378,27 @@ package body Landin.Diagnostics.Citations is
             when 906 =>
                "A power-only Pico 2 boots and changes architecture on th"
                & "e cascade",
+            when 958 =>
+               "The PL011 ports change their line with the UART disabled"
+               & ", and only the emulator sees their registers",
+            when 959 =>
+               "The STM32H753 takes words of seven to nine bits and stop"
+               & "s its stream to change line",
+            when 960 =>
+               "The ESP32 and ESP32-S3 program their line in `serial`, t"
+               & "he ESP32 without two stop bits",
+            when 961 =>
+               "The ESP32-C3 and C5 keep the ROM's clock and learn it fr"
+               & "om the ROM's divisor",
+            when 962 =>
+               "A tty board answers a line request on the old line, chan"
+               & "ges, and comes back",
+            when 963 =>
+               "The host changes its tty with the board, and a bridge's "
+               & "fixed line is a verdict",
+            when 964 =>
+               "The derived driver's model holds the PL011's line rules,"
+               & " and register images are not a line",
             when 725 =>
                "Every board run holds the rig's lock and paces what disc"
                & "onnects a device",
@@ -2867,6 +2888,13 @@ package body Landin.Diagnostics.Citations is
             when 582 =>
                "An errno has words in `platform/posix`, which passes the"
                & " library's on",
+            when 955 =>
+               "A serial line's settings and its divisor are `core/line`"
+               & "'s, and a driver writes nothing it refuses",
+            when 956 =>
+               "A divisor may miss its rate by two percent",
+            when 957 =>
+               "The derived driver opens any line its PL011 can carry",
             when 418 =>
                "The POSIX and Linux layers keep their routines' own name"
                & "s",
@@ -3889,6 +3917,20 @@ package body Landin.Diagnostics.Citations is
                "Decisions: The toolchain, C and the machine",
             when 906 =>
                "Decisions: The toolchain, C and the machine",
+            when 958 =>
+               "Decisions: The toolchain, C and the machine",
+            when 959 =>
+               "Decisions: The toolchain, C and the machine",
+            when 960 =>
+               "Decisions: The toolchain, C and the machine",
+            when 961 =>
+               "Decisions: The toolchain, C and the machine",
+            when 962 =>
+               "Decisions: The toolchain, C and the machine",
+            when 963 =>
+               "Decisions: The toolchain, C and the machine",
+            when 964 =>
+               "Decisions: The toolchain, C and the machine",
             when 725 =>
                "Decisions: The toolchain, C and the machine",
             when 726 =>
@@ -4254,6 +4296,12 @@ package body Landin.Diagnostics.Citations is
             when 388 =>
                "Decisions: The core library and the derived programs",
             when 582 =>
+               "Decisions: The core library and the derived programs",
+            when 955 =>
+               "Decisions: The core library and the derived programs",
+            when 956 =>
+               "Decisions: The core library and the derived programs",
+            when 957 =>
                "Decisions: The core library and the derived programs",
             when 418 =>
                "Decisions: The core library and the derived programs",
@@ -5712,6 +5760,32 @@ package body Landin.Diagnostics.Citations is
             when 906 =>
                "https://www.701.dev/spec.html#d906-a-power-only-pico-2-b"
                & "oots-and-changes-architecture-on-the-cascade",
+            when 958 =>
+               "https://www.701.dev/spec.html#d958-the-pl011-ports-chang"
+               & "e-their-line-with-the-uart-disabled-and-only-the-emulato"
+               & "r-sees-their-registers",
+            when 959 =>
+               "https://www.701.dev/spec.html#d959-the-stm32h753-takes-w"
+               & "ords-of-seven-to-nine-bits-and-stops-its-stream-to-chang"
+               & "e-line",
+            when 960 =>
+               "https://www.701.dev/spec.html#d960-the-esp32-and-esp32-s"
+               & "3-program-their-line-in-serial-the-esp32-without-two-sto"
+               & "p-bits",
+            when 961 =>
+               "https://www.701.dev/spec.html#d961-the-esp32-c3-and-c5-k"
+               & "eep-the-rom-s-clock-and-learn-it-from-the-rom-s-divisor",
+            when 962 =>
+               "https://www.701.dev/spec.html#d962-a-tty-board-answers-a"
+               & "-line-request-on-the-old-line-changes-and-comes-back",
+            when 963 =>
+               "https://www.701.dev/spec.html#d963-the-host-changes-its-"
+               & "tty-with-the-board-and-a-bridge-s-fixed-line-is-a-verdic"
+               & "t",
+            when 964 =>
+               "https://www.701.dev/spec.html#d964-the-derived-driver-s-"
+               & "model-holds-the-pl011-s-line-rules-and-register-images-a"
+               & "re-not-a-line",
             when 725 =>
                "https://www.701.dev/spec.html#d725-every-board-run-holds"
                & "-the-rig-s-lock-and-paces-what-disconnects-a-device",
@@ -6298,6 +6372,16 @@ package body Landin.Diagnostics.Citations is
             when 582 =>
                "https://www.701.dev/spec.html#d582-an-errno-has-words-in"
                & "-platform-posix-which-passes-the-library-s-on",
+            when 955 =>
+               "https://www.701.dev/spec.html#d955-a-serial-line-s-setti"
+               & "ngs-and-its-divisor-are-core-line-s-and-a-driver-writes-"
+               & "nothing-it-refuses",
+            when 956 =>
+               "https://www.701.dev/spec.html#d956-a-divisor-may-miss-it"
+               & "s-rate-by-two-percent",
+            when 957 =>
+               "https://www.701.dev/spec.html#d957-the-derived-driver-op"
+               & "ens-any-line-its-pl011-can-carry",
             when 418 =>
                "https://www.701.dev/spec.html#d418-the-posix-and-linux-l"
                & "ayers-keep-their-routines-own-names",

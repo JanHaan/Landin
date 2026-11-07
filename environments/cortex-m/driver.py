@@ -2,7 +2,9 @@
 """Complete derived driver CPU/application/protocol execution, independent oracles."""
 import argparse
 from concurrent.futures import ThreadPoolExecutor
+from fractions import Fraction
 import json
+import math
 from pathlib import Path
 import shutil
 import struct
@@ -19,7 +21,7 @@ from setup import DEFAULT, installed_tools, inventory, sha, supported_host
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 SOURCE = ROOT / 'compiler/tests/driver'
-MODULES = ('commands', 'drivers/uart', 'rp2040/io_bank0', 'rp2040/uart0', 'rp2040/dma',
+MODULES = ('commands', 'core/line', 'drivers/uart', 'rp2040/io_bank0', 'rp2040/uart0', 'rp2040/dma',
            'rp2040/sio', 'rp2040/timer', 'platform/cortex_m')
 
 
@@ -172,6 +174,7 @@ def application(run,elf,s):
         require(u32(s['app_state']) == 2, 'ready: state')
         require(model.integer_divisor == 26 and model.fraction_divisor == 3, 'ready: baud')
         require(model.line_control == 112 and model.dma_control == 1, 'ready: line')
+        require(model.latched == pl011(115200, 8, 0, 1), 'ready: latched line')
         require(model.gpio0 == 0x30000002 and model.gpio1 == 0x30000002, 'ready: pins')
         require(model.remaining == 65535 and model.busy, 'ready: ring')
         require(model.alarm == 1000, 'ready: alarm')
@@ -337,16 +340,92 @@ def protocol(run,elf,s):
     (run.out / 'protocol-steps.txt').write_text('\n'.join(steps) + '\n')
 
 
+def pl011(rate, data_bits, parity, stop_bits, clock=DriverPeripheral.CLOCK):
+    """IBRD, FBRD and LCR_H for a line at the model's declared clock, as the
+    RP2040 datasheet's 4.2.7.1 computes the divisor: the integer part of
+    clock / (16 * rate), and the fraction's 64ths rounded, carried into the
+    integer when they round to 64; or None for a line the driver refuses:
+    a rate of zero, IBRD outside 1 to 65535 or FBRD above 0 at 65535, an
+    achieved rate more than 2 percent from the one asked for, or data bits
+    outside 5 to 8.  PARITY is 0 none, 1 even, 2 odd, as the protocol
+    client takes it.  Written apart from core/line's arithmetic."""
+    if rate == 0 or not 5 <= data_bits <= 8:
+        return None
+    divisor = Fraction(clock, 16 * rate)
+    integer = math.floor(divisor)
+    fraction = math.floor((divisor - integer) * 64 + Fraction(1, 2))
+    if fraction == 64:
+        integer, fraction = integer + 1, 0
+    if not 1 <= integer <= 65535 or (integer == 65535 and fraction):
+        return None
+    if abs(Fraction(clock * 4, 64 * integer + fraction) / rate - 1) > Fraction(2, 100):
+        return None
+    control = (data_bits - 5) << 5 | 0x10 | (0x08 if stop_bits == 2 else 0) | (0, 0x06, 0x02)[parity]
+    return integer, fraction, control
+
+
+# The lines the protocol client opens beside the default, each (rate, data
+# bits, parity, stop bits): the slowest rate IBRD holds, the fastest, which
+# is 16 clocks a bit, and every data width, parity and stop count between.
+# At 48 MHz no rate the divisor reaches is 2 percent out, the worst 0.79
+# percent just below 3 Mbaud (pinned below), so this driver never meets
+# core/line's tolerance refusal; runtime/library-shared-line does.
+LINES = ((9600, 8, 0, 1), (57600, 7, 1, 1), (230400, 8, 2, 2), (921600, 5, 0, 2),
+         (3000000, 6, 1, 1), (46, 8, 0, 1), (19200, 6, 2, 2))
+
+
+def lines(run, elf, s):
+    """Each of LINES opened through the public driver: the images it wrote
+    and the line the model latched, against pl011.  Register images on an
+    emulator, not line timing: no bit is sent at these rates."""
+    require(pl011(115200, 8, 0, 1) == (26, 3, 0x70), 'oracle: the default line')
+    require(max(abs(Fraction(DriverPeripheral.CLOCK * 4, 64 * i + f) / r - 1)
+                for r in range(2900000, 3000001, 997)
+                for i, f, _ in [pl011(r, 8, 0, 1)]) < Fraction(79, 10000),
+            'oracle: a rate near 3 Mbaud misses by 0.79 percent or more')
+    for rate, data_bits, parity, stop_bits in LINES:
+        name = 'line-%d-%d%s%d' % (rate, data_bits, 'NEO'[parity], stop_bits)
+        expect = pl011(rate, data_bits, parity, stop_bits)
+        require(expect is not None, name + ': the oracle refuses it')
+        m, model = machine(run, elf, s, name, poll=[s['command']])
+        with m:
+            m.settle()
+            for key, value in (('rate', rate), ('data_bits', data_bits),
+                               ('parity', parity), ('stop_bits', stop_bits)):
+                m.write_u32(s[key], value)
+            m.write_u32(s['command'], 1)
+            m.settle()
+            require(m.u32(s['stage']) == 2 and m.u32(s['outcome']) == 0, name + ': open')
+            images = (model.integer_divisor, model.fraction_divisor, model.line_control)
+            require(images == expect, name + ': IBRD, FBRD and LCR_H %r, not %r' % (images, expect))
+            (numerator, denominator), bits, kind, stops = model.line
+            require(model.latched == expect and bits == data_bits
+                    and kind == ('none', 'even', 'odd')[parity] and stops == stop_bits
+                    and abs(Fraction(numerator, denominator) / rate - 1) <= Fraction(2, 100),
+                    name + ': latched line %r' % (model.line,))
+            require(model.remaining == 32 and model.configuration == 0xa84e1, name + ': ring')
+    return len(LINES)
+
+
 def configurations(run, elf, symbols):
     # Literal boundary expectations; every refusal precedes device writes and
     # descriptor publication. Each run starts from a fresh reset image.
+    # Outcome 2 is line.unsupported_rate and 10 line.unsupported_format:
+    # below the slowest rate IBRD holds, above 16 clocks a bit, zero, and
+    # data bits the PL011's WLEN cannot give.
     cases = [
         ('empty', {'capacity':0},3), ('oversized',{'capacity':257},4),
         ('one',{'capacity':1},5), ('non-power',{'capacity':3},5),
         ('unaligned',{'offset':1},5), ('budget-short',{'budget':7},5),
         ('budget-zero',{'budget':0},5), ('budget-large',{'budget':65536},5),
-        ('baud-zero',{'rate':0},2), ('baud-other',{'rate':9600},2),
+        ('rate-zero',{'rate':0},2), ('rate-slow',{'rate':45},2),
+        ('rate-fast',{'rate':3100000},2), ('data-nine',{'data_bits':9},10),
+        ('data-four',{'data_bits':4},10),
         ('faulted',{},1), ('busy',{},1)]
+    for name, values, _ in cases:
+        if 'rate' in values or 'data_bits' in values:
+            require(pl011(values.get('rate', 115200), values.get('data_bits', 8), 0, 1) is None,
+                    name + ': the oracle accepts it')
     for name, values, outcome in cases:
         m, model = machine(run, elf, symbols, 'config-' + name, poll=[symbols['command']])
         with m:
@@ -368,7 +447,9 @@ def configurations(run, elf, symbols):
                     % m.u32(symbols['outcome']))
             require((model.configuration, model.remaining) ==
                     ((0xa84e1, 8) if name == 'busy' else (0, 0)), name + ': ring')
-            require(model.gpio0 == 0x3000001f and model.integer_divisor == 0, name + ': untouched')
+            require(model.gpio0 == 0x3000001f and model.integer_divisor == 0
+                    and model.fraction_divisor == 0 and model.line_control == 0
+                    and model.latched is None, name + ': untouched')
             require(model.trace == ('r32:100c:20000000' if name == 'faulted' else
                                     'r32:100c:010a84e1' if name == 'busy' else ''),
                     name + ': trace ' + model.trace)
@@ -422,7 +503,8 @@ def execute_suite(parent,refine,profiles=PROFILES,cases=None):
             (application if name == "app" else protocol)(run,elf,symbols)
         config_count=0
         if name == 'protocol':
-            config_count=configurations(run,elf,symbols)+capacity_boundaries(run,elf,symbols)
+            config_count=(configurations(run,elf,symbols)+capacity_boundaries(run,elf,symbols)
+                          +lines(run,elf,symbols))
         fresh=out/'fresh';fresh.mkdir()
         build(Run(fresh,parent.tools),refine,name,optimize,specialize)
         for suffix in ('','.s','.o','.ld','.map'):

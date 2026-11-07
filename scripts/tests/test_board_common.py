@@ -750,6 +750,42 @@ class Consoles(unittest.TestCase):
             if sender is not None:
                 sender.join(1)
 
+    def test_a_tty_console_sets_each_line_the_exchange_asks_for(self):
+        import termios
+        controller, line = os.openpty()
+        try:
+            console = COMMON.TtyConsole(os.ttyname(line))
+            # A Linux pty keeps neither parity nor a character size but
+            # eight, so the attributes are read where they are set.
+            written = []
+            real = termios.tcsetattr
+
+            def capture(fd, when, attributes):
+                written.append((when, list(attributes)))
+                real(fd, when, attributes)
+            try:
+                for setting, size, parity, stop in (
+                        ((9600, 8, 'even', 1), termios.CS8, termios.PARENB, 0),
+                        ((57600, 7, 'odd', 2), termios.CS7, termios.PARENB | termios.PARODD,
+                         termios.CSTOPB),
+                        ((921600, 8, 'none', 1), termios.CS8, 0, 0)):
+                    with mock.patch.object(COMMON.termios, 'tcsetattr', capture):
+                        console.line(*setting)
+                    when, flags = written[-1]
+                    self.assertEqual(when, termios.TCSADRAIN)
+                    self.assertEqual(flags[2] & (termios.CSIZE | termios.PARENB | termios.PARODD
+                                                 | termios.CSTOPB | termios.CRTSCTS),
+                                     size | parity | stop, setting)
+                    self.assertEqual(flags[4:6], [COMMON.BAUDS[setting[0]]] * 2)
+                    self.assertEqual(console.baud, setting[0])
+                with self.assertRaisesRegex(COMMON.Failed, 'no tty line'):
+                    console.line(300)
+            finally:
+                console.close()
+        finally:
+            os.close(controller)
+            os.close(line)
+
     def test_a_tcp_console_reads_a_bridge(self):
         server = socket.socket()
         server.bind(('127.0.0.1', 0))
@@ -1939,6 +1975,136 @@ class Echo(unittest.TestCase):
                 contextlib.redirect_stderr(io.StringIO()) as err:
             self.assertEqual(COMMON.main(['echo', '10.42.0.50']), 2)
         self.assertIn('ping_group_range', err.getvalue())
+
+class FakeLineBoard:
+    """A board port's side of the line exchange, as the H753 app answers it
+    with the H753 tool's own oracle: each byte echoed, a request answered
+    with an `l` frame, the line changed after it, BACK answered with an `e`
+    frame, and REPORT with a `t` frame counting what was handled.  A byte
+    sent while the two ends' lines differ arrives as 0xff, as a framing
+    error would; NOISE adds bytes the next time the host changes line."""
+    configurable = True
+
+    def __init__(self, oracle, noise=b'', wrong=None):
+        self.oracle, self.noise, self.wrong = oracle, noise, wrong
+        self.received, self.sent = bytearray(), bytearray()
+        self.host = self.board = COMMON.DEFAULT_LINE
+        self.digits, self.handled, self.changed, self.counted = None, 0, False, b''
+
+    def frame(self, tag, **fields):
+        self.received += (b'\x02' + tag.encode() + b''.join(
+            b' %s=%08x' % (k.encode(), v) for k, v in fields.items()) + b'\x03\n')
+
+    def line(self, *setting):
+        self.host = setting
+        self.received += self.noise
+        self.noise = b''
+
+    def send(self, data, pace=64):
+        self.sent += data
+        for byte in data:
+            if self.host != self.board:
+                byte = 0xff
+            self.received.append(byte)
+            self.handled += 1
+            if self.changed and byte != COMMON.BACK:
+                self.counted += bytes([byte])
+            if self.digits is not None:
+                self.digits += chr(byte)
+                if len(self.digits) == 11:
+                    self.answer(self.digits)
+                    self.digits = None
+            elif byte == COMMON.LINE:
+                self.digits = ''
+            elif byte == COMMON.BACK and self.changed:
+                self.frame('e', n=len(self.counted), h=COMMON.fnv1a(self.counted))
+                self.board, self.changed = COMMON.DEFAULT_LINE, False
+            elif byte == 0x11:
+                self.frame('t', h=self.handled, c=0)
+
+    def answer(self, digits):
+        value = ''.join('%x' % (ord(d) - 97) for d in digits)
+        rate, data, parity, stop = int(value[:8], 16), int(value[8], 16), int(value[9]), int(value[10])
+        setting = (rate, data, COMMON.PARITIES[parity], stop)
+        outcome, images = self.oracle(setting, 64000000)
+        fields = dict(r=rate, d=data, p=parity, s=stop, k=64000000,
+                      o={v: k for k, v in COMMON.LINE_OUTCOMES.items()}[outcome])
+        if images:
+            fields.update(images)
+            if self.wrong:
+                fields.update(self.wrong)
+        self.frame('l', **fields)
+        if outcome == 'accepted':
+            self.board, self.changed, self.counted = setting, True, b''
+
+    def wait(self, predicate, seconds, what):
+        if predicate(bytes(self.received)):
+            return bytes(self.received)
+        raise COMMON.Failed('waited for %s' % what)
+
+
+class LineExchange(unittest.TestCase):
+    """The host's half of the line exchange (D962) against a fake board, with
+    the H753 tool's own plan and oracle."""
+
+    @classmethod
+    def setUpClass(cls):
+        spec = importlib.util.spec_from_file_location(
+            'h753_board', ROOT / 'environments/boards/stm32h753/board.py')
+        cls.board = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.board)
+
+    def report(self, console):
+        return COMMON.ask(console, 0x11, 't', len(COMMON.tagged(bytes(console.received), 't')))
+
+    def run_plan(self, board, plan=None):
+        import random
+        with mock.patch.object(COMMON.time, 'sleep'):
+            return COMMON.line_phase(board, plan or self.board.LINE_PLAN, self.board.line_oracle,
+                                     self.report, random.Random(1))
+
+    def test_every_setting_of_the_plan_is_exchanged_or_refused(self):
+        board = FakeLineBoard(self.board.line_oracle)
+        verdict, last = self.run_plan(board)
+        self.assertEqual(verdict['status'], 'passed')
+        self.assertEqual([(e['line'], e['outcome']) for e in verdict['settings']],
+                         [('230400-8N1', 'accepted'), ('9600-8E1', 'accepted'),
+                          ('57600-7O2', 'accepted'), ('300-8N1', 'unsupported_rate'),
+                          ('115200-6N1', 'unsupported_format')])
+        self.assertEqual(verdict['settings'][1]['registers'],
+                         {'b': '0x1a0b', 'f': '0x1400', 'x': '0x0'})
+        self.assertEqual(verdict['settings'][2]['registers'],
+                         {'b': '0x457', 'f': '0x600', 'x': '0x2000'})
+        self.assertEqual(last['h'], len(board.sent))
+        self.assertEqual(board.host, COMMON.DEFAULT_LINE)
+
+    def test_a_board_on_another_line_than_the_host_fails_the_echo(self):
+        board = FakeLineBoard(self.board.line_oracle)
+        board.line = lambda *setting: None
+        with self.assertRaisesRegex(COMMON.Failed, 'waited for the exchange frame'):
+            self.run_plan(board)
+
+    def test_bytes_while_the_lines_change_fail_the_exchange(self):
+        board = FakeLineBoard(self.board.line_oracle, noise=b'\x00')
+        with self.assertRaisesRegex(COMMON.Failed, 'while the line changed'):
+            self.run_plan(board)
+
+    def test_wrong_register_images_fail_the_exchange(self):
+        board = FakeLineBoard(self.board.line_oracle, wrong=dict(b=555))
+        with self.assertRaisesRegex(COMMON.Failed, 'programs'):
+            self.run_plan(board)
+
+    def test_a_refusal_the_plan_does_not_expect_fails(self):
+        board = FakeLineBoard(self.board.line_oracle)
+        with self.assertRaisesRegex(COMMON.Failed, 'the plan expects'):
+            self.run_plan(board, [((300, 8, 'none', 1), 'accepted')])
+
+    def test_a_fixed_console_is_not_run_and_says_why(self):
+        verdict, last = COMMON.line_phase(mock.Mock(), [], None, None, None)
+        self.assertEqual(verdict, {'status': 'not run: probehive bridge fixed at 115200 8N1'})
+        self.assertIsNone(last)
+        self.assertEqual(COMMON.TcpConsole.fixed, COMMON.FIXED_LINE)
+
 
 if __name__ == '__main__':
     unittest.main()

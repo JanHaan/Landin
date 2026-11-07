@@ -54,7 +54,7 @@ public clocks_and_uart: () -> none =
     uart0.clk_conf_write(uart0.base, 0x03700000)
     uart0.conf0_write(uart0.base, 0x0006001c)
     uart0.conf0_write(uart0.base, 0x0000001c)
-    uart0.clkdiv_write(uart0.base, 0x0040015b)
+    -- serial.open writes CLKDIV for its line from the crystal's 40 MHz.
 end clocks_and_uart
 
 public indicator_pin: () -> none =

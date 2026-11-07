@@ -557,6 +557,18 @@ failure injector as capabilities.
   `any`-dispatched `core/diag.log` and, in `core/failure`, a phrase for a
   person for every library failure atom. A closed set of named values, such
   as a diagnostic's severity, is an atom set.
+- **Serial lines.** `core/line` holds a UART line's settings, rate, data
+  bits, parity and stop bits, and computes the divisor a PL011, an STM32
+  USART or an Espressif UART is set to, refusing an unreachable rate, one
+  more than two percent out, or a frame, with shared atoms and nothing
+  written; it reads no register and runs on every target (D955, D956).
+  The derived driver and every board port's serial module program their
+  line through it. The STM32H753, ESP32, ESP32-S3 and ESP32-C5 change line
+  during their runs over their tty bridges, a rate change and two frame
+  changes each and two refusals, with the payload echoed; the Picos and the
+  ESP32-C3 stay at their probehive bridge's fixed 115200 8N1, their line
+  code checked by arithmetic and the derived driver's emulator register
+  images only (D957-D964).
 - **Random numbers.** `core/random` is a deterministic generator,
   xoshiro256**, seeded from a fixed seed or from entropy, which draws the
   same sequence on every target, Cortex-M0 included, with unbiased bounded
@@ -759,7 +771,9 @@ Add `--target=darwin-arm64` for native macOS output, then open
   filter on Linux and macOS, with native debugging coverage. The one derived
   from prototype 1 runs as the
   [derived driver](../compiler/tests/driver/DERIVATION.md) on the Cortex-M0
-  emulators. Each runs against a generated oracle. The driver and its
+  emulators, opening any line its PL011 can carry, whose register images
+  the emulator's model holds to an oracle (D957, D964). Each runs against a
+  generated oracle. The driver and its
   application run with compiler-owned startup within the recorded 32 KiB
   capacity and source-debugging limits. The server derived from prototype
   5's hosted half runs on every hosted target from one source over both

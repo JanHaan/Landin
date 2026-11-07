@@ -49,7 +49,11 @@ def selection_controls(run, elf):
     data=bytearray(elf.read_bytes())
     header=struct.unpack_from('<16sHHIIIIIHHHHHH',data)
     # Change an actual flash load byte, retaining valid ELF and debug identity.
-    first=struct.unpack_from('<8I',data,header[5])
+    # The first loadable segment, not the first program header: an image
+    # that links libgcc's 64-bit division carries its ARM_EXIDX header first.
+    first=next(entry for entry in (struct.unpack_from('<8I',data,header[5]+i*header[9])
+                                   for i in range(header[10]))
+               if entry[0] == 1 and entry[4] > 100)
     data[first[1]+100] ^= 1
     bad.write_bytes(data)
     refuses('mismatched-load-image',executable=bad)

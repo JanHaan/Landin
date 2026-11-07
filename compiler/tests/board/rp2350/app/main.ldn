@@ -12,6 +12,7 @@
 -- sent then overruns the ring.
 import bringup
 import commands
+import core/line
 import descriptions/rp2350
 import platform/cortex_m
 import report
@@ -123,7 +124,7 @@ start: () -> noreturn =
     table := ppb.vtor_read(ppb.base)
     bringup.crystal()
     bringup.peripherals()
-    mut receiver := serial.open(115200, budget, rx_storage[0..<256]) else (problem)
+    mut receiver := serial.open(line.default_settings, budget, rx_storage[0..<256]) else (problem)
         _ = problem
         halt(1)
     end

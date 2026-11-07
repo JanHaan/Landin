@@ -105,6 +105,8 @@ digits, then ETX and LF. The host never sends STX or ETX.
 | `b` | once, after the indicator, the timer and the receiver are set up | `r` LP_CLKRST_RESET_CAUSE's cause as read first in `start`, `v` mtvec, `w` mtvt, `t` mintthresh at application entry, `x` CLICINT18 and `y` CLICINT17 |
 | `t` | after each 0x11 | `h` bytes handled, `c` ring restarts, `i` receive interrupts, `m` timer interrupts, `p` and `q` mcause in the last receive and timer interrupt, `k` timer interrupts in the last threshold window, `l` bytes the receive interrupt dropped, `o` RX FIFO overflows it saw, `e` bytes consumed, `g` the indicator's pad read back, `s` the application's state |
 | `a` | after each 0x06 | `p` what the word cell's add returned, `q` and `r` what its two compare-exchanges observed, `d` the word cell after them, `e` what the byte cell's add returned, `f` the byte cell after it |
+| `l` | after 0x16 and 11 line digits | `r`, `d`, `p` and `s` the line read, `k` UART0's clock as the ROM's divisor gives it, `o` 0 accepted, 1 an unsupported rate, 2 an unsupported frame, and when accepted `b` CLKDIV_SYNC and `f` CONF0_SYNC's frame bits (D961, D962) |
+| `e` | after 0x17 on a changed line | `n` the bytes that arrived on it, `h` their FNV-1a |
 | `h` | when the application halts | `s` its status |
 
 Four bytes are commands after their echo: 0x06 runs the atomics over the
@@ -132,6 +134,7 @@ level for 100 ms (D721).
 | a ring overrun | after 0x12, a 300-byte burst into the 256-byte ring: 44 bytes dropped, one restart, none of the burst echoed |
 | a FIFO overflow | after 0x13, a 300-byte burst while mintthresh holds the receive interrupt off: one RX FIFO overflow, a second restart, none of it echoed, and 99 to 101 timer interrupts in the 100 ms window, since the timer's level is above the threshold |
 | the stream | 3000 more bytes, and every byte sent echoed in order but the two bursts, `h` their count, and the timer advancing |
+| the line exchange | `k` within 0.1 percent of the crystal's 48 MHz or PLL_F80M; 230400-8N1, 38400-8E2 and 57600-7O1 accepted with CLKDIV, FRAG and CONF0's frame bits as the TRM's 32.4.3 gives them at that clock, and a payload echoed and counted on each over the CH340X; 300 baud, below CLKDIV's 12 bits, and 9N1 refused with the line unchanged (D961, D962) |
 | the counters | `handled`, `recoveries`, `dropped`, `overflows`, `entries` and `boot_reason`, and the two atomic cells, read over JTAG after the scenario, equal the last frames; and `_landin_firmware_trap_count` reads 0: no trap reached the unhandled entry (D656), whose five cells a failed run's result keeps |
 | SRAM | the image's read-only segments, read over JTAG, are the ELF's loaded bytes in RAM mode or OUT.bin's segments in boot mode |
 

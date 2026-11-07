@@ -51,10 +51,13 @@ the gate's Python with no board, probe or hub.
 
 import argparse
 import fcntl
+from fractions import Fraction
 import grp
 import hashlib
 import json
+import math
 import os
+import random
 import re
 import select
 import shlex
@@ -186,6 +189,149 @@ def ask(console, byte, tag, count, seconds=5):
     stream = console.wait(lambda s: len(tagged(s, tag)) > count, seconds,
                           '%r frame %d' % (tag, count + 1))
     return tagged(stream, tag)[count]
+
+
+# The line exchange (D962, D963): a board port with a tty console is asked
+# for another line and answers on the one in use, changes it, echoes a
+# payload on the new one and goes back to the default.  LINE and BACK are
+# its command bytes, which it also echoes; LINE_OUTCOMES its `l` frame's `o`.
+LINE, BACK = 0x16, 0x17
+LINE_OUTCOMES = {0: 'accepted', 1: 'unsupported_rate', 2: 'unsupported_format'}
+DEFAULT_LINE = (115200, 8, 'none', 1)
+
+
+def nearest_divisor(clock, rate, oversampling, fraction_bits, least, most,
+                    tolerance=Fraction(2, 100)):
+    """The divisor a UART's baud-rate generator is programmed with for RATE
+    from CLOCK, as exact fractions give it: the integer nearest
+    clock * 2**fraction_bits / (oversampling * rate), halves up; or None
+    when it is outside LEAST to MOST or the rate it gives is more than
+    TOLERANCE from RATE.  Written from the formula, apart from core/line."""
+    if rate <= 0:
+        return None
+    ideal = Fraction(clock * 2 ** fraction_bits, oversampling * rate)
+    value = math.floor(ideal + Fraction(1, 2))
+    if value < max(least, 1) or value > most or abs(ideal / value - 1) > tolerance:
+        return None
+    return value
+
+
+def line_name(setting):
+    """A line as people write it, 9600-8E1."""
+    rate, data_bits, parity, stop_bits = setting
+    return '%d-%d%s%d' % (rate, data_bits, parity[0].upper(), stop_bits)
+
+
+def line_request(setting):
+    """The bytes asking a board for SETTING, (rate, data bits, parity, stop
+    bits): LINE, then eleven digits 'a' to 'p', the rate's eight, the data
+    bits, the parity's index in PARITIES and the stop bits."""
+    rate, data_bits, parity, stop_bits = setting
+    digits = '%08x%x%x%x' % (rate, data_bits, PARITIES.index(parity), stop_bits)
+    return bytes([LINE]) + bytes(ord('a') + int(digit, 16) for digit in digits)
+
+
+def fnv1a(data):
+    """32-bit FNV-1a of DATA, as the board ports hash a payload."""
+    value = 0x811c9dc5
+    for byte in data:
+        value = ((value ^ byte) * 16777619) & 0xffffffff
+    return value
+
+
+def line_payload(rng, length=48):
+    """Printable bytes, none the indicator's 0 or 1, fewer than any port's
+    receive FIFO holds, so the exchange shows the line and not whether the
+    core keeps pace with it."""
+    choices = [b for b in range(0x20, 0x7f) if b not in (0x30, 0x31)]
+    return bytes(rng.choice(choices) for _ in range(length))
+
+
+def line_not_run():
+    """The line exchange's verdict on a port whose console is probehive's
+    bridge, whose line is fixed: it was not run, and why, never silence."""
+    return dict(status='not run: ' + FIXED_LINE)
+
+
+def line_phase(console, plan, oracle, report, rng, settle=0.2):
+    """The line exchange over CONSOLE, or a verdict saying why it was not
+    run where the console's line is fixed.  PLAN is a list of (setting,
+    outcome) the board must give; ORACLE(setting, clock) the port's own
+    answer from its manual, ('accepted', register images) or the refusal's
+    name and None, raising Failed for a clock it does not admit; REPORT
+    (console) asks for a telemetry frame.  A refusal must leave the board
+    answering on the line in use; an accepted line must carry a payload
+    echoed byte for byte and counted and hashed by the board, with no byte
+    received while the two ends change lines, and then the default again.
+    Returns the verdict and the last telemetry frame, taken on the
+    default line, or None when nothing was run.  Register images are the
+    board's own report; the line's timing is the bridge's and the board's,
+    shown only by the bytes crossing it."""
+    raw = getattr(console, 'raw', console)
+    if getattr(raw, 'configurable', None) is not True:
+        return line_not_run(), None
+    settings, last = [], None
+    for setting, outcome in plan:
+        name = line_name(setting)
+        count = len(tagged(bytes(console.received), 'l'))
+        console.send(line_request(setting))
+        stream = console.wait(lambda s: len(tagged(s, 'l')) > count, 5,
+                              'the line frame for %s' % name)
+        answer = tagged(stream, 'l')[count]
+        rate, data_bits, parity, stop_bits = setting
+        require((answer['r'], answer['d'], answer['p'], answer['s'])
+                == (rate, data_bits, PARITIES.index(parity), stop_bits),
+                'the board read the request for %s as %r' % (name, answer))
+        want, images = oracle(setting, answer['k'])
+        got = LINE_OUTCOMES.get(answer['o'], 'outcome %d' % answer['o'])
+        require(want == outcome, 'the plan expects %s for %s, which the oracle gives %s'
+                % (outcome, name, want))
+        require(got == want, '%s was %s, not %s' % (name, got, want))
+        entry = dict(line=name, outcome=got, clock=answer['k'])
+        if got != 'accepted':
+            # Nothing changed: the board still answers on the line in use.
+            last = report(console)
+            entry['answered_after_refusal'] = True
+            settings.append(entry)
+            continue
+        found = {key: answer.get(key) for key in images}
+        require(found == images, '%s programs %s, not %s' % (
+            name, {k: '%#x' % v for k, v in found.items() if v is not None},
+            {k: '%#x' % v for k, v in images.items()}))
+        entry['registers'] = {key: '%#x' % value for key, value in images.items()}
+        # The board changes its line once the frame has gone; nothing more
+        # crosses until the host has changed its own.
+        before = len(raw.received)
+        raw.line(rate, data_bits, parity, stop_bits)
+        time.sleep(settle)
+        noise = bytes(raw.received[before:])
+        require(not noise, '%d bytes arrived while the line changed to %s: %s'
+                % (len(noise), name, noise[:16].hex()))
+        payload = line_payload(rng)
+        exchanges = len(tagged(bytes(console.received), 'e'))
+        console.send(payload)
+        console.send(bytes([BACK]))
+        stream = console.wait(lambda s: len(tagged(s, 'e')) > exchanges, 5,
+                              'the exchange frame on %s' % name)
+        counted = tagged(stream, 'e')[exchanges]
+        crossed = bytes(raw.received[before:])
+        require(echo_of(crossed) == payload + bytes([BACK]),
+                'on %s the board echoed %s, not the payload' % (name, echo_of(crossed)[:16].hex()))
+        require(counted['n'] == len(payload) and counted['h'] == fnv1a(payload),
+                'on %s the board counted %d bytes hashing %08x, not %d hashing %08x'
+                % (name, counted['n'], counted['h'], len(payload), fnv1a(payload)))
+        back = len(raw.received)
+        raw.line(*DEFAULT_LINE)
+        time.sleep(settle)
+        noise = bytes(raw.received[back:])
+        require(not noise, '%d bytes arrived while the line went back from %s: %s'
+                % (len(noise), name, noise[:16].hex()))
+        last = report(console)
+        entry.update(payload=len(payload), fnv1a='%08x' % counted['h'])
+        settings.append(entry)
+    if last is None:
+        last = report(console)
+    return dict(status='passed', settings=settings), last
 
 
 # The rig's shared state: its lock, its pace, the gate's interrupted-run
@@ -1686,7 +1832,10 @@ class ProbehivePins:
 
 class Console:
     """A serial line as a tool sees it: every byte received and sent kept,
-    and the received ones read by a thread of its own."""
+    and the received ones read by a thread of its own.  CONFIGURABLE says
+    whether `line` can change its rate and frame; a TCP bridge's cannot."""
+    configurable = False
+
     def __init__(self, baud=115200):
         self.baud = baud
         self.received = bytearray()
@@ -1734,8 +1883,16 @@ class Console:
             self.reader.join(1)
 
 
+# Probehive's bridge serves each slot's UART at one line, set when the
+# shared bridge starts; this tool never changes it.
+FIXED_LINE = 'probehive bridge fixed at 115200 8N1'
+
+
 class TcpConsole(Console):
-    """A UART served as a TCP port, as probehive's bridge serves a slot's."""
+    """A UART served as a TCP port, as probehive's bridge serves a slot's,
+    at the one line the bridge was started at: 8N1 at its rate, which no
+    tool here changes (D963)."""
+    fixed = FIXED_LINE
     def __init__(self, port, host='127.0.0.1', baud=115200):
         self.socket = socket.create_connection((host, port), 5)
         self.socket.settimeout(0.05)
@@ -1755,11 +1912,15 @@ class TcpConsole(Console):
 
 
 BAUDS = {9600: termios.B9600, 19200: termios.B19200, 38400: termios.B38400,
-         57600: termios.B57600, 115200: termios.B115200}
+         57600: termios.B57600, 115200: termios.B115200, 230400: termios.B230400,
+         460800: termios.B460800, 921600: termios.B921600}
+DATA_BITS = {5: termios.CS5, 6: termios.CS6, 7: termios.CS7, 8: termios.CS8}
+PARITIES = ('none', 'even', 'odd')
 
 
 class TtyConsole(Console):
-    """A tty in raw mode at BAUD, 8 data bits, no parity, one stop bit.
+    """A tty in raw mode at BAUD, 8 data bits, no parity, one stop bit, until
+    `line` sets another rate and frame.
 
     With QUIET, DTR and RTS are made inactive as soon as the tty is open,
     and stay so when it closes: on a board whose bridge drives its reset and
@@ -1769,21 +1930,41 @@ class TtyConsole(Console):
     closes, and that circuit holds neither line low while both are active,
     so that moment changes nothing; HUPCL is cleared so the close does not
     move them."""
+    configurable = True
+
     def __init__(self, path, baud=115200, quiet=False):
         self.path = str(path)
         self.fd = os.open(self.path, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
         if quiet:
             quiet_lines(self.fd)
         tty.setraw(self.fd)
-        attributes = termios.tcgetattr(self.fd)
-        attributes[2] = (attributes[2] & ~(termios.PARENB | termios.CSTOPB | termios.CRTSCTS)
-                         | termios.CS8 | termios.CLOCAL | termios.CREAD)
         if quiet:
+            attributes = termios.tcgetattr(self.fd)
             attributes[2] &= ~termios.HUPCL
-        attributes[4] = attributes[5] = BAUDS[baud]
-        termios.tcsetattr(self.fd, termios.TCSANOW, attributes)
+            termios.tcsetattr(self.fd, termios.TCSANOW, attributes)
+        self.line(baud, when=termios.TCSANOW)
         termios.tcflush(self.fd, termios.TCIOFLUSH)
         super().__init__(baud)
+
+    def line(self, baud, data_bits=8, parity='none', stop_bits=1, when=termios.TCSADRAIN):
+        """Set the tty's rate and frame: DATA_BITS 5 to 8, PARITY 'none',
+        'even' or 'odd', STOP_BITS 1 or 2, no flow control; by default once
+        what was written has been sent.  Raw mode checks no parity on input:
+        a byte is what arrived, its parity bit taken off."""
+        require(baud in BAUDS and data_bits in DATA_BITS and parity in PARITIES
+                and stop_bits in (1, 2), 'no tty line %r' % ((baud, data_bits, parity, stop_bits),))
+        attributes = termios.tcgetattr(self.fd)
+        flags = attributes[2] & ~(termios.CSIZE | termios.PARENB | termios.PARODD
+                                  | termios.CSTOPB | termios.CRTSCTS)
+        flags |= DATA_BITS[data_bits] | termios.CLOCAL | termios.CREAD
+        if parity != 'none':
+            flags |= termios.PARENB | (termios.PARODD if parity == 'odd' else 0)
+        if stop_bits == 2:
+            flags |= termios.CSTOPB
+        attributes[2] = flags
+        attributes[4] = attributes[5] = BAUDS[baud]
+        termios.tcsetattr(self.fd, when, attributes)
+        self.baud = baud
 
     def receive(self):
         ready, _, _ = select.select([self.fd], [], [], 0.05)

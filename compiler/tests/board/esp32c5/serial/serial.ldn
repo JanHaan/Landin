@@ -16,13 +16,13 @@
 -- either loss count moved fails with `overrun`, and stays failed until a
 -- restart discards what the ring holds: no byte is lost unreported.
 import core/atomic
+import core/line
 import esp32c5/clic
 import esp32c5/interrupt_core0
 import esp32c5/uart0
 import platform/riscv
 
 public busy: atom
-public bad_baud: atom
 public buffer_empty: atom
 public buffer_too_big: atom
 public bad_buffer: atom
@@ -57,6 +57,40 @@ overflow_bit: u32 = 0x10
 receive_bits: u32 = 0x11
 -- CONF0_SYNC's RXFIFO_RST, bit 22 (Register 32.9).
 rxfifo_reset: u32 = 0x400000
+
+-- UART0's clock in hertz, as the boot ROM left it, which this port does not
+-- change: the ROM leaves the line at 115,200 baud (D721), so the clock is
+-- that rate times the divisor the ROM left in CLKDIV_SYNC, which open reads
+-- the first time it runs (D961); zero until then.
+mut source_clock: u32 = 0
+
+public clock: () -> (hertz: u32) = hertz = source_clock end clock
+
+-- What a line's settings program: CLKDIV_SYNC, and CONF0_SYNC's frame
+-- bits 5:0.
+public registers: type = struct
+    divisor: u32
+    frame: u32
+end registers
+
+-- UART0's registers for SETTINGS at the ROM's clock, computed and written
+-- nowhere (D960, D961).  The UART divides its clock by CLKDIV, bits 11:0,
+-- plus FRAG, bits 23:20, sixteenths (TRM v1.1, 32.4.3.1), CLKDIV at least
+-- 16, since the TRM gives 5 Mbaud at 80 MHz as the fastest. CONF0_SYNC:
+-- PARITY 0, odd when set, PARITY_EN 1, BIT_NUM 3:2 the data bits less
+-- five, and STOP_BIT_NUM 5:4, 1 for one stop bit and 3 for two. BIT_NUM
+-- reaches eight bits, so nine are refused.
+public line_registers: (settings: line.settings)
+                       -> (images: registers) ! line.unsupported_rate | line.unsupported_format =
+    try line.check(settings)
+    fail line.unsupported_format when settings.data_bits > 8
+    value := try line.divisor(source_clock, settings.rate, 1, 4, 256, 65535)
+    mut frame: u32 = (u32(settings.data_bits) - 5) << 2
+    frame |= if settings.stop_bits == line.two_stop_bits then 0x30 else 0x10 end if
+    if settings.parity == line.even_parity then frame |= 0x02 end if
+    if settings.parity == line.odd_parity then frame |= 0x03 end if
+    images = (divisor: (value >> 4) | ((value & 15) << 20), frame: frame)
+end line_registers
 
 mut produced: atomic.cell(u32) = zeroed
 mut taken: atomic.cell(u32) = zeroed
@@ -119,20 +153,38 @@ update: () -> none =
     end while
 end update
 
-public open: (rate: u32, budget: u32, escaping buf: []mut u8)
-             -> (r: rx from buf) ! busy | bad_baud | buffer_empty | buffer_too_big | bad_buffer =
+-- Program the line: CONF0_SYNC's frame bits, the rest as they were, and
+-- CLKDIV_SYNC, which REG_UPDATE takes to the UART's core clock.
+program: (images: registers) -> none =
+    conf0 := uart0.conf0_sync_read(uart0.base)
+    uart0.conf0_sync_write(uart0.base, (conf0 & ~0x3f) | images.frame)
+    uart0.clkdiv_sync_write(uart0.base, images.divisor)
+    update()
+end program
+
+public open: (settings: line.settings, budget: u32, escaping buf: []mut u8)
+             -> (r: rx from buf) ! busy | line.unsupported_rate | line.unsupported_format
+                                 | buffer_empty | buffer_too_big | bad_buffer =
     size := lenof buf
     fail buffer_empty when size == 0
     fail buffer_too_big when size > 256
     fail bad_buffer when size < 2 or (size & (size - 1)) <> 0
     fail bad_buffer when budget < u32(size) or budget > 65535
-    -- The boot ROM leaves UART0 at 115200 baud on its pins (D721).
-    fail bad_baud when rate <> 115200
+    -- The boot ROM leaves UART0 at 115200 baud 8N1 on its pins (D721), at
+    -- a clock the ROM chose, which the divisor it left gives.
+    if source_clock == 0 then
+        rom := uart0.clkdiv_sync_read(uart0.base)
+        divided := u64(((rom & 0xfff) << 4) | ((rom >> 20) & 15))
+        source_clock = u32((divided * 115200 + 8) / 16)
+    end if
+    images := try line_registers(settings)
     -- The identity is the receiver's alone: one already enabled is busy.
     fail busy when (clic.clicint17_read(clic.base) & 0x100) <> 0
     -- CONF1's RXFIFO_FULL_THRHD, bits 7:0, is one; the rest as they were.
     conf1 := uart0.conf1_read(uart0.base)
     uart0.conf1_write(uart0.base, (conf1 & 0xffffff00) | 1)
+    -- The ROM's line given again is the ROM's registers written again.
+    program(images)
     -- Whatever the RX FIFO held from before is discarded.  CONF0_SYNC
     -- reaches the UART's core clock domain when REG_UPDATE is set, which
     -- the UART clears once it has (32.6.1; Register 32.36).
@@ -214,3 +266,21 @@ public restart: (inout r: rx) -> none ! stop_timeout | transfer_error =
     riscv.device_barrier()
     riscv.restore_interrupts(saved)
 end restart
+
+-- Change the line to SETTINGS: every register image computed first, so a
+-- refusal writes nothing and the line keeps its settings (D955); then,
+-- once TXFIFO_CNT and the transmitter's state say everything has been
+-- sent, the line programmed.  The receive interrupt and the ring are as
+-- they were.
+public configure: (inout r: rx, settings: line.settings)
+                  -> none ! line.unsupported_rate | line.unsupported_format =
+    images := try line_registers(settings)
+    mut tx := uart0.status_decode(uart0.status_read(uart0.base))
+    mut state := uart0.fsm_status_decode(uart0.fsm_status_read(uart0.base))
+    while tx.f_txfifo_cnt <> 0 or state.f_st_utx_out <> 0 do
+        tx = uart0.status_decode(uart0.status_read(uart0.base))
+        state = uart0.fsm_status_decode(uart0.fsm_status_read(uart0.base))
+    end while
+    program(images)
+    riscv.device_barrier()
+end configure

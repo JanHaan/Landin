@@ -68,6 +68,58 @@ public cr1_write: (device_base: usize, raw: u32) -> none =
                             compiler.write_zero, 0xffffffff)
 end cr1_write
 
+public cr2_offset: usize = 0x4
+public cr2_address: usize = 0x40004804
+public cr2_named_mask: u32 = 0xffffff79
+public cr2_reset_mask: u32 = 0xffffff79
+public cr2_reset_value: u32 = 0x00000000
+public cr2_image: type = layout(packed, u32) struct
+    f_add4_7: u4 at 28..31
+    f_add0_3: u4 at 24..27
+    f_rtoen: u1 at 23..23
+    f_abrmod1: u1 at 22..22
+    f_abrmod0: u1 at 21..21
+    f_abren: u1 at 20..20
+    f_msbfirst: u1 at 19..19
+    f_tainv: u1 at 18..18
+    f_txinv: u1 at 17..17
+    f_rxinv: u1 at 16..16
+    f_swap: u1 at 15..15
+    f_linen: u1 at 14..14
+    f_stop: u2 at 12..13
+    f_clken: u1 at 11..11
+    f_cpol: u1 at 10..10
+    f_cpha: u1 at 9..9
+    f_lbcl: u1 at 8..8
+    f_lbdie: u1 at 6..6
+    f_lbdl: u1 at 5..5
+    f_addm7: u1 at 4..4
+    f_dis_nss: u1 at 3..3
+    f_slven: u1 at 0..0
+end cr2_image
+
+public cr2_decode: (raw: u32) -> (image: cr2_image) =
+    image = zeroed
+    bits: ptr mut u32 = ptr(usize(addr image))
+    bits.val = raw
+end cr2_decode
+
+public cr2_encode: (image: cr2_image) -> (raw: u32) =
+    bits: ptr u32 = ptr(usize(addr image))
+    raw = bits.val
+end cr2_encode
+
+public cr2_read: (device_base: usize) -> (raw: u32) =
+    port: ptr u32 = ptr(device_base + cr2_offset)
+    raw = compiler.register_read(port, compiler.normal_read)
+end cr2_read
+
+public cr2_write: (device_base: usize, raw: u32) -> none =
+    port: ptr mut u32 = ptr(device_base + cr2_offset)
+    compiler.register_write(port, raw, compiler.normal_write,
+                            compiler.write_zero, 0xffffff79)
+end cr2_write
+
 public cr3_offset: usize = 0x8
 public cr3_address: usize = 0x40004808
 public cr3_named_mask: u32 = 0xfffeffff

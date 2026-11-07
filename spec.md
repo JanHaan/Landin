@@ -7441,7 +7441,8 @@ images, variant payload construction, match-arm `inout` aliases and erased
 evidence, and each of those store paths would need its own check for the
 guarantee to stay true. No program asked for it: prototype 1's `baud_rate`
 is a scalar parameter, and the complete derived driver replaced even that
-with plain `u32` and declared recoverable checks.
+with a `line.settings` record whose rate is a plain `u32`, which `core/line`
+and the driver refuse with declared recoverable atoms (D955, D957).
 
 **The alternatives:** a composite identity with a check on every store path
 was declined for the reasons above. Admitting fields and elements while
@@ -23249,7 +23250,8 @@ byte: on the C5 at a threshold of one, which it compares as at least
 (32.4.2); on the C3 at one, which it compares as more than (26.4.2), with
 the RX timeout taking a lone byte, since Espressif's QEMU compares the C3's
 as at least and at zero never clears it. The ports keep the ROM's UART0
-configuration, 115200 baud on its default pins, and add a 1 ms system-timer
+configuration, 115200 baud on its default pins at the ROM's clock, from
+which D961 lets them change the line, and add a 1 ms system-timer
 interrupt above the receive one: the C3's line 2 at priority 2 and the
 C5's identity 18 at level 95. Command 0x13 raises the threshold, the C3's
 `CPU_INT_THRESH` to 2 and the C5's `mintthresh` to 63, for 100 ms by the
@@ -23571,6 +23573,229 @@ gate without removing the need for a cold start on the cascade.
 **Pinned by** `scripts/tests/test_board_rp2350.py`'s power-only controls,
 `scripts/tests/test_board_rig.py` and `scripts/tests/test_board_gate.py`'s
 `Refusals`.
+
+### D958 — The PL011 ports change their line with the UART disabled, and only the emulator sees their registers
+
+**The tour said** nothing; the Picos' serial modules wrote IBRD 6, FBRD 33
+and LCR_H 0x70 by hand for clk_peri's 12 MHz.
+
+**Chosen:** `compiler/tests/board/rp2040/serial` and `rp2350/serial`,
+which the Hazard3 port shares, compute IBRD, FBRD and LCR_H through
+`core/line` as the derived driver does (D957), at 12 MHz, 12 to 750,000
+baud, nine data bits refused, and `open` takes a `line.settings`.
+`configure(inout r, settings)` computes every image first, waits until
+UARTFR says the transmit FIFO is empty and the UART not busy, clears
+UARTCR, writes IBRD, FBRD and LCR_H, and enables the UART again; the DMA
+channel and its ring are untouched, and a byte arriving while the UART is
+disabled is lost, so a program changes the line only while its peer waits
+for it. The Picos' consoles are probehive's bridge, whose line is fixed
+when it starts (D963), so their applications open the default and take no
+line request; `configure` is linked into no image (D296). What evidences
+these modules is arithmetic and the emulator: `runtime/library-shared-line`
+at 12 MHz, and the derived driver's identical PL011 encoding on QEMU,
+which is register images and not a line.
+
+**The alternatives:** a line request in the Picos' applications that no
+host can send, untested code in every image; and changing the bridge's
+line, which is a shared external service.
+
+**Pinned by** the boards' builds and `runtime/library-shared-line`; their
+records' `line` verdicts say the exchange was not run.
+
+### D959 — The STM32H753 takes words of seven to nine bits and stops its stream to change line
+
+**The tour said** nothing; D647 put USART3 at BRR 556 on the 64 MHz HSI.
+
+**Chosen:** `compiler/tests/board/stm32h753/serial` computes BRR through
+`core/line`, oversampling by 16, 16 to 65535, 977 to 4,000,000 baud
+(RM0433 48.5.7, p. 2034), and the frame: the word is the data bits and the
+parity bit, 7, 8 or 9 of them, CR1's M1 and M0 10, 00 and 01, PCE and PS
+for parity (48.8.1, p. 2067), and CR2's STOP 10 for two stop bits (48.8.3,
+p. 2074), which the policy now selects. Nine data bits are refused, since
+the ring and the transmitter move bytes, and so are five, and six without
+parity, which no M gives. CR1's frame bits, BRR and CR2 may be written only
+with UE clear, and clearing UE resets the USART's DMA requests, so
+`configure` waits for TC and TXFE, stops the stream (D648), programs the
+USART with UE clear and then set, and restarts the stream, which discards
+the ring's unread bytes. `open` programs the same way: 115,200 8N1 is BRR
+556, CR1 as before and CR2 zero, its reset value. The public interface
+the cached profile shares is `open(settings: line.settings, budget,
+escaping buf)`, `configure(inout r, settings) ! line.unsupported_rate |
+line.unsupported_format | stop_timeout | transfer_error` and
+`line_registers(settings)`, with `clock` and `registers`.
+
+**The alternatives:** changing BRR with UE set, which RM0433 forbids; a
+line change that keeps the epoch, which would leave the stream armed while
+the USART drops its requests; and leaving CR2 unselected, which keeps two
+stop bits from a chip and a bridge that both have them.
+
+**Pinned by** `environments/boards/stm32h753/board.py`'s `line_oracle`,
+written from RM0433, against the `l` frames of the exchange (D962), and
+`devices/test.py`'s `Stm32h753Oracles`, which hold CR2 to ST's header.
+
+### D960 — The ESP32 and ESP32-S3 program their line in `serial`, the ESP32 without two stop bits
+
+**The tour said** nothing; each port's bringup wrote CONF0 and CLKDIV
+0x0040015b for 115,200 8N1 at 40 MHz.
+
+**Chosen:** bringup gives UART0 its clock, the 40 MHz crystal undivided,
+its reset and its pins, and `serial.open` writes the line: CLKDIV and FRAG
+through `core/line`, once a bit with four fraction bits, the integer at
+least 16, since the TRM gives 5 Mbaud at 80 MHz as the fastest (the C3's
+26.4.3.1, which the three share), and at most CLKDIV's field, 20 bits on
+the ESP32 and 12 on the S3, so 39 or 9,766 to 2,500,000 baud; and CONF0's
+PARITY, PARITY_EN, BIT_NUM and STOP_BIT_NUM, the rest of CONF0 kept. The
+divisor rounds, so 115,200 is still 0x0040015b and CONF0 0x1c. Nine data
+bits are refused, since BIT_NUM reaches eight. The ESP32 refuses two stop
+bits: ESP-IDF v6.1's `uart_ll_set_stop_bits` gives them on that chip as
+one stop bit and RS485_CONF's DL1_EN, working round a fault of the chip's
+own two-bit setting, and the port selects no RS485_CONF. `configure` waits
+until TXFIFO_CNT and the transmitter's state say everything has been sent
+and programs the same registers; the receive interrupt and the ring are as
+they were.
+
+**The alternatives:** selecting RS485_CONF to give the ESP32 two stop bits
+through ESP-IDF's workaround, which the exchange needs no more than the
+parity frames give it; dividing the S3's clock with SCLK_DIV_NUM to reach
+9600, which changes a clock the port otherwise keeps; and leaving the line
+in bringup, whose constant no refusal could guard.
+
+**Pinned by** `environments/boards/esp.py`'s `line_oracle` and
+`xtensa.py`'s plans, against the `l` frames of the exchange (D962).
+
+### D961 — The ESP32-C3 and C5 keep the ROM's clock and learn it from the ROM's divisor
+
+**The tour said** nothing; D721 kept the ROM's UART0, 115,200 baud, with
+no clock the ports knew.
+
+**Chosen:** the C3's and C5's ports change no clock. The first `open`
+reads the divisor the ROM left in CLKDIV, or CLKDIV_SYNC, and takes UART0's
+clock as 115,200 times it, which the ROM's rounding leaves within 0.01
+percent; every divisor is computed from that clock through `core/line`,
+CLKDIV's 12 bits and the integer at least 16, and the frame as D960's. So
+the default line, given again, writes the ROM's own values back. Clock
+sources were not chosen instead: the C5's TRM v1.1 and ESP-IDF v6.1's
+`pcr_reg.h` disagree on PCR_UART0_SCLK_SEL's encoding and reset value, and
+the C3's own source, the crystal halved at reset, must also match its APB
+clock while HIGH_SPEED synchronizes its registers. `configure` waits until
+TXFIFO_CNT and FSM_STATUS's ST_UTX_OUT, which both policies now select,
+say everything has been sent, then programs the line, the C5's through
+REG_UPDATE. The C5 runs the exchange on its CH340X (D962). The C3's console
+is probehive's bridge, so its application opens the default and takes no
+request; its `configure` is linked into no image, and at 20 MHz its
+receive interrupt keeps pace only with paced input even at 115,200 (D727),
+so nothing here shows it at any faster line.
+
+**The alternatives:** selecting the crystal for UART0 and dividing it,
+which the C5's two sources describe differently and which changes the ROM's
+working line; and a clock named per board in the source, which a ROM that
+chose another would make wrong without a refusal.
+
+**Pinned by** `environments/boards/esp32c5/board.py`'s plan, whose `l`
+frames name the clock the port inferred, which `esp.line_oracle` admits
+only within 0.1 percent of the crystal's 48 MHz or PLL_F80M, and
+`devices/test.py`'s `Esp32c3Oracles` and `Esp32c5Oracles`, which hold
+FSM_STATUS to the vendor headers.
+
+### D962 — A tty board answers a line request on the old line, changes, and comes back
+
+**The tour said** nothing.
+
+**Chosen:** the STM32H753's, ESP32's, ESP32-S3's and ESP32-C5's
+applications take two more command bytes, each echoed first. 0x16 is
+followed by eleven digits, 'a' to 'p', four bits each, most significant
+first: the rate's eight, then the data bits, the parity, 0 none, 1 even
+and 2 odd, and the stop bits. When the last arrives the application
+answers on the line in use with an `l` frame of what it read, `r`, `d`,
+`p` and `s`, the clock it computes from, `k`, and `o`: 0 with the register
+images, `b` the divisor and `f` the frame, and on the STM32H753 `x` its
+CR2, after which `serial.configure` changes the line; or 1 for
+`line.unsupported_rate` and 2 for `line.unsupported_format`, with nothing
+written and the line as it was. From then every byte but 0x17 that arrives
+is counted and hashed, 32-bit FNV-1a, as well as echoed and handled as
+ever; 0x17 answers on the new line with an `e` frame, `n` the count and
+`h` the hash, and then the default line is set again. A line request
+abandoned by any byte but a digit is dropped.
+
+**The alternatives:** a request in readable decimal, whose digits are the
+indicator's `0` and `1`; changing the line first and answering on the new
+one, which the host could not read before it had changed too; and a fixed
+payload checked by the board, which leaves the host's own echo comparison
+the only oracle when the count and hash give a second.
+
+**Pinned by** `scripts/tests/test_board_common.py`'s `LineExchange`, a
+fake board answering with the STM32H753's own oracle, and the tty boards'
+records' `line` verdicts.
+
+### D963 — The host changes its tty with the board, and a bridge's fixed line is a verdict
+
+**The tour said** nothing; `TtyConsole` set 8N1 at one of five rates and
+`TcpConsole` took what probehive's bridge gave.
+
+**Chosen:** `common.TtyConsole.line(baud, data_bits, parity, stop_bits)`
+sets the tty's rate, 9600 to 921,600, data bits 5 to 8, parity and stop
+bits once what was written has been sent; raw mode checks no parity on
+input. `common.line_phase` runs the exchange from a plan of settings and
+the outcome each must have, with the port's own oracle written from its
+manual: for each it sends the request, requires the `l` frame to read it
+back and to give the oracle's outcome and register images; for a refusal
+it requires a telemetry frame on the line in use; for an accepted line it
+changes the tty, requires that nothing arrives while the two ends change,
+sends a 48-byte payload and 0x17, requires the payload's echo byte for byte
+and the `e` frame's count and hash, changes back and requires a telemetry
+frame on the default line. Each tty board's leg takes one rate change, two
+frame changes and the two refusals, after every existing oracle and
+before the probe's cross-checks, which take the last telemetry frame:
+
+| Board | Bridge | Accepted | Rate refused | Format refused |
+|---|---|---|---|---|
+| STM32H753 | ST-LINK V3 VCP | 230400-8N1, 9600-8E1, 57600-7O2 | 300 | 6N1 |
+| ESP32 | CH340 | 921600-8N1, 9600-8E1, 57600-7O1 | 3,000,000 | 8N2 |
+| ESP32-S3 | CH340 | 460800-8N1, 19200-8O2, 57600-7E1 | 9600 | 9N1 |
+| ESP32-C5 | CH340X | 230400-8N1, 38400-8E2, 57600-7O1 | 300 | 9N1 |
+
+A `TcpConsole` is probehive's bridge, 8N1 at its one rate: the RP2040's,
+the RP2350's, the Hazard3's and the ESP32-C3's runs record `line` as `not
+run: probehive bridge fixed at 115200 8N1`. A passed exchange shows that
+the board's registers and the bridge agree on a line well enough to carry
+every byte both ways; it does not measure a bit's time.
+
+**The alternatives:** a separate tool for the line, which would repeat a
+power cycle the scenario already pays for; checking the exchange's images
+against the board's own constants, which a wrong constant would satisfy;
+and silence on the bridge ports, which a reader of their records could not
+tell from an exchange that passed.
+
+**Pinned by** `scripts/tests/test_board_common.py`'s `LineExchange` and
+`Consoles`, and `scripts/tests/test_line.py`, which holds the oracles'
+divisors to an exact one.
+
+### D964 — The derived driver's model holds the PL011's line rules, and register images are not a line
+
+**The tour said** nothing; `DriverPeripheral` checked only that IBRD fit
+16 bits, FBRD 6 and LCR_H 8, and the lane required 26, 3 and 0x70.
+
+**Chosen:** the model refuses an LCR_H write that latches IBRD 0, or FBRD
+above 0 at IBRD 65535, or sets BRK or SPS, and records the latched images
+with what they mean at the declared 48 MHz: the rate as a fraction, the
+data bits, the parity and the stop bits. `driver.py`'s `pl011`, written
+from the RP2040 datasheet's 4.2.7.1, the integer part and the fraction's
+64ths rounded with their carry, is the oracle: seven lines, from 46 to
+3,000,000 baud and every data width, parity and stop count, are opened
+through the public driver and each register image and latched line must be
+its answer; rates 0, 45 and 3,100,000 and data bits 4 and 9 are refused
+with every UART register unwritten and nothing latched; and 115,200 8N1 is
+still the application's 26, 3 and 0x70 in its exact trace. The model sends
+no bit at any rate, so this is evidence of the images the driver writes,
+never of a line's timing.
+
+**The alternatives:** timing modelled bits in the emulator, which would
+check the model against itself; and an oracle sharing `core/line`'s
+rounding, which would share its mistakes.
+
+**Pinned by** `environments/cortex-m/driver.py`'s `lines` and
+`configurations` on every profile, and `scripts/tests/test_line.py`, which
+holds `pl011` to the exact oracle.
 
 ### D725 — Every board run holds the rig's lock and paces what disconnects a device
 
@@ -30939,21 +31164,21 @@ own table from the atoms to messages.
 **Chosen:** `core/failure` is a shared freestanding module of one type and
 one routine. `failure.reason` is the union of every atom a `core` module
 fails with, thirty-two of them from `core/mem`, `core/map`, `core/tree`,
-`core/io`, `core/net` and `core/text`, and `failure.words(problem)` returns
-a fixed phrase for each: lower case with no final stop, so that it reads
-after a subject and a colon, static text that borrows nothing, the same on
-every target and in every locale. A call's failure set widens to
-`failure.reason` whatever subset of it the call declares, so `else
-(problem)` passes it straight on. A set that also holds the program's own
-atom does not widen, so a `match` names the program's atoms and passes the
-rest on through D434's `_ (rest):` binding, which holds only the library's;
-the subject itself still does not widen, and that refusal is [0640]'s
-L0301. Atoms that are values rather than failures, a directory
-entry's kind or an order, have no words, and `platform/posix`'s errno
-detail stays with its provider (D207); D582 gives its errnos words of
-their own beside these. A program that never calls `words`
-links none of it (D296); one that does carries every phrase, about 6 KB on
-Cortex-M0, which a `match` of thirty-two arms costs there.
+`core/io`, `core/net` and `core/text`, and since D955 `core/line`'s two,
+and `failure.words(problem)` returns a fixed phrase for each: lower case
+with no final stop, so that it reads after a subject and a colon, static
+text that borrows nothing, the same on every target and in every locale. A
+call's failure set widens to `failure.reason` whatever subset of it the
+call declares, so `else (problem)` passes it straight on. A set that also
+holds the program's own atom does not widen, so a `match` names the
+program's atoms and passes the rest on through D434's `_ (rest):` binding,
+which holds only the library's; the subject itself still does not widen,
+and that refusal is [0640]'s L0301. Atoms that are values rather than
+failures, a directory entry's kind or an order, have no words, and
+`platform/posix`'s errno detail stays with its provider (D207); D582 gives
+its errnos words of their own beside these. A program that never calls
+`words` links none of it (D296); one that does carries every phrase, about
+6 KB on Cortex-M0, which a `match` of thirty-two arms costs there.
 
 **The alternatives:** a `words` in each module, which a failure set mixing
 `io` and `net` atoms, as a socket's does, could not pass to either; a
@@ -31000,6 +31225,114 @@ headers' wording, which words one errno three ways.
 hosted system numbers to a well-formed phrase none other has, words a
 missing path's `enoent` and a library atom, and `runtime/tree-copy`, whose
 `complain` now words its failures with it.
+
+### D955 — A serial line's settings and its divisor are `core/line`'s, and a driver writes nothing it refuses
+
+**The tour said** nothing of a serial line beyond prototype 1's `baud_rate`
+parameter, and every driver in the repository refused any rate but 115,200
+with an atom of its own, `bad_baud`, writing divisors computed by hand: the
+derived driver's IBRD 26 and FBRD 3, the Picos' 6 and 33, the STM32H753's
+BRR 556 and the ESP32's and S3's CLKDIV 0x0040015b.
+
+**Chosen:** `core/line` is a shared freestanding module with no register
+in it. `line.settings` is a record of a `u32` rate in bits per second, `u8`
+data bits, a `line.parity` atom set, `no_parity`, `even_parity` or
+`odd_parity`, and a `line.stop_bits` one, `one_stop_bit` or
+`two_stop_bits` (D350), so one and a half stop bits cannot be asked for;
+`line.default_settings` is 115,200 8N1. `line.check` refuses a rate of
+zero with `line.unsupported_rate` and data bits outside 5 to 9 with
+`line.unsupported_format`; `line.divisor(clock, rate, oversampling,
+fraction_bits, least, most)` gives the integer nearest `clock *
+2^fraction_bits / (oversampling * rate)`, halves up, as the register holds
+it, and refuses with `unsupported_rate` a value outside the register's
+range or a rate it misses by more than `line.tolerance` (D956). One
+routine serves the families the ports program: a PL011, 16 times a bit
+with 6 fraction bits; an STM32 USART, whose BRR is the divisor of its
+kernel clock, oversampling 16 or 8 with 4 bits; and an Espressif UART, once
+a bit with 4. The arithmetic is integer only, in `u64`, which a Cortex-M0
+links as libgcc's helpers, and exact for every `u32` clock and rate. Both
+atoms are in `failure.reason` with words. A driver computes every register
+image through the module and its own encoding first, refuses what its
+peripheral cannot carry, and writes only then, so a refusal leaves every
+register and the line as they were; each port's own refusals are D957 to
+D961's.
+
+**The alternatives:** a module holding the register encodings too, which
+would name devices a freestanding module serves none of; floating point,
+which a Cortex-M0 has not; an atom per driver, which gives a caller
+`bad_baud` from one driver and another word from the next for one
+condition (D269); `core/serial` or `core/uart`, whose final segment is
+already the board ports' `serial` and the derived driver's `uart`, so a
+program importing its driver beside the module would need an alias
+([1850]); a divisor that truncates, as ESP-IDF's does, which would change
+the ESP ports' 115,200 from 0x0040015b; and a closest-rate search, which
+for a fractional divisor gives the same value as rounding it at a cost of
+more divisions.
+
+**Pinned by** `runtime/library-shared-line` on every target, Cortex-M0
+among them, whose sweep of eight peripheral clocks folds to the value
+`scripts/tests/test_line.py`'s exact oracle gives;
+`runtime/failure-words`; and each consumer's own evidence, D957 to D964.
+
+### D956 — A divisor may miss its rate by two percent
+
+**The tour said** nothing.
+
+**Chosen:** `line.tolerance` is 20 parts per thousand: `divisor` refuses a
+value whose rate is more than two percent from the one asked for, measured
+exactly, `|clock * 2^fraction_bits - value * oversampling * rate|` against
+`value * oversampling * rate`. A receiver finds a frame by the falling edge
+of its start bit and samples each bit at its middle; it reads the first
+stop bit, the last bit it samples, correctly while the drift between the
+two ends stays under half a bit. Over the longest frame a port here admits,
+a start bit, eight data bits and parity, the middle of that stop bit is 10.5
+bit times in, and a receiver sampling 16 times a bit may find the edge a
+sixteenth of a bit late, so the two clocks together may differ by
+`(1/2 - 1/16) / 10.5`, 4.2 percent. Two percent is half of that, the other
+half the far end's. It holds no margin for a slow edge or for a receiver
+that votes on three samples, which is why the ports' own divisors are well
+inside it: every PL011 rate at 48 MHz within 0.79 percent, BRR 556 at 0.08.
+
+**The alternatives:** a tolerance per driver, which the shared refusal
+would then not describe; one stated per frame length, which every caller
+would have to compute and which differs by under half a percent between
+the frames admitted; and none, accepting any divisor in range, which at
+the top of an ESP UART's range gives a rate three percent out.
+
+**Pinned by** `runtime/library-shared-line`'s 3.9 Mbaud at 64 MHz, in
+range at BRR 16 and 2.6 percent fast, refused; and 3.8 Mbaud, BRR 17 and
+0.9 percent, accepted.
+
+### D957 — The derived driver opens any line its PL011 can carry
+
+**The tour said** nothing; prototype 1's `open` took a `baud_rate`, and
+the complete derived driver bounded it to 115,200 with `bad_baud`, saying
+the bound kept the program within its board and did not claim a general
+UART configuration.
+
+**Chosen:** `uart.open(settings: line.settings, budget, escaping buf)`
+computes IBRD, FBRD and LCR_H through `uart.line_registers` for the
+synthetic UART's declared 48 MHz clock and writes them in that order, LCR_H
+last so that its write latches both divisors: 46 to 3,000,000 baud, 5 to 8
+data bits, any parity and one or two stop bits; LCR_H keeps the FIFOs on
+and sets neither break nor stick parity. Nine data bits are refused with
+`line.unsupported_format`, since WLEN reaches eight. `bad_baud` is gone:
+the driver fails with the shared `line.unsupported_rate` and
+`line.unsupported_format` in its place, checked after the buffer and before
+`busy`, and both precede any device write. 115,200 8N1 is still 26, 3 and
+0x70, and the application opens `line.default_settings`. Retires the
+115,200 bound.
+
+**The alternatives:** a separate `configure` beside `open`, which the
+emulator's synthetic device has no protocol to drain for; keeping
+`bad_baud` beside the shared atoms, two names for one refusal; and a
+driver-chosen tolerance, which D956 declined.
+
+**Pinned by** `environments/cortex-m/driver.py`'s `lines`, seven lines
+opened through the public driver whose register images and the latched
+line the model holds equal an oracle written from the RP2040 datasheet's
+4.2.7.1, and its `configurations`, whose rate and format refusals leave
+every UART register unwritten (D964).
 
 ### D418 — The POSIX and Linux layers keep their routines' own names
 

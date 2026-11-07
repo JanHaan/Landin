@@ -322,7 +322,7 @@ which corrects it in place and so is the vendor's and not a third party's.
 | `system` / `pcr` | PERIP_CLK_EN0, PERIP_RST_EN0 | UART0_CONF, UART0_SCLK_CONF, SYSTIMER_CONF, SYSTIMER_FUNC_CLK_CONF | UART0's and the system timer's clocks and resets |
 | `io_mux` | GPIO10, GPIO20, GPIO21 | GPIO11, GPIO12, GPIO24 | UART0's pins, IO MUX function 0, and the board port's indicator, a pin free of the strapping pins and the boards' LEDs (D720) |
 | `gpio` | OUT_W1TS, OUT_W1TC, ENABLE_W1TS, IN, FUNC10_OUT_SEL_CFG | the same, FUNC24_OUT_SEL_CFG | the indicator through the GPIO matrix and its read-back |
-| `uart0` | FIFO, INT_RAW, INT_ST, INT_ENA, INT_CLR, CLKDIV, STATUS, CONF0, CONF1, CLK_CONF, ID | FIFO, INT_RAW, INT_ST, INT_ENA, INT_CLR, CLKDIV_SYNC, STATUS, CONF0_SYNC, CONF1, CLK_CONF, REG_UPDATE | the FIFO, the divisor, the interrupts and their clear, and the register update the core clock domain needs |
+| `uart0` | FIFO, INT_RAW, INT_ST, INT_ENA, INT_CLR, CLKDIV, STATUS, CONF0, CONF1, CLK_CONF, ID, FSM_STATUS | FIFO, INT_RAW, INT_ST, INT_ENA, INT_CLR, CLKDIV_SYNC, STATUS, CONF0_SYNC, CONF1, CLK_CONF, REG_UPDATE, FSM_STATUS | the FIFO, the divisor, the frame, the interrupts and their clear, the register update the core clock domain needs, and the transmitter's state, which says the line may change (D961) |
 | `interrupt_core0` | UART_INTR_MAP, SYSTIMER_TARGET0_INT_MAP, CPU_INT_ENABLE, CPU_INT_TYPE, CPU_INT_CLEAR, CPU_INT_EIP_STATUS, CPU_INT_PRI_1, CPU_INT_PRI_2, CPU_INT_THRESH | UART0_INTR_MAP, SYSTIMER_TARGET0_INTR_MAP | the routing of UART0 and the system timer to a CPU line, on the C3 its lines' enables, types, priorities and threshold |
 | `clic` | | MCLICCFG, CLICINFO, CLICINT17, CLICINT18 | the C5's lines are its CLIC's identities 16 to 47, enabled and prioritized there (D705) |
 | `systimer` | CONF, UNIT0_OP, UNIT0_VALUE_HI, UNIT0_VALUE_LO, TARGET0_HI, TARGET0_LO, TARGET0_CONF, COMP0_LOAD, INT_ENA, INT_RAW, INT_CLR, INT_ST | the same | a millisecond wakeup from target 0 |
@@ -414,7 +414,7 @@ manifest beside them, and its description in `descriptions/stm32h753`.
 | `pwr` | CSR1, CR3 | the supply configuration RM0433 requires after reset, and the flag that says the voltage levels are valid |
 | `gpiob` | MODER, IDR, BSRR | the board's indicator, LD1 on PB0, driven through the set and reset register and read back; port B is derived from port A |
 | `gpiod` | MODER, AFRH | PD8 and PD9 to alternate function 7; port D is derived from port A |
-| `usart3` | CR1, CR3, BRR, ISR, ICR, RDR, TDR | enable, DMA transmit, the divisor, status, clears and data; USART3 is derived from USART1 |
+| `usart3` | CR1, CR2, CR3, BRR, ISR, ICR, RDR, TDR | enable and the frame, the stop bits (D959), DMA transmit, the divisor, status, clears and data; USART3 is derived from USART1 |
 | `dma1` | LISR, LIFCR, S0CR, S0NDTR, S0PAR, S0M0AR | stream 0's configuration, count and addresses, its status and clears |
 | `dmamux1` | DMAMUX_C0CR | channel 0's request, 46 for usart3_tx_dma |
 | `tim2` | CCMR1_Input | the timer's capture view, the selection's alternate register |

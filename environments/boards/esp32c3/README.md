@@ -124,6 +124,7 @@ line's priority for 100 ms (D721).
 | a ring overrun | after 0x12, a 300-byte burst into the 256-byte ring: 44 bytes dropped, one restart, none of the burst echoed |
 | a FIFO overflow | after 0x13, a 300-byte burst while the receive line is held off: one RX FIFO overflow, a second restart, none of it echoed, and 99 to 101 timer interrupts in the 100 ms window, since the timer's line is above the threshold |
 | the stream | 3000 more bytes in pieces of 64, each sent after the last one's echo, since the C3 runs at its reset clock, 20 MHz (D727), and every byte sent echoed in order but the two bursts, `h` their count, and the timer advancing |
+| the line exchange | not run: the console is probehive's bridge, fixed at 115200 8N1; the port's `configure` is linked into no image, and only `runtime/library-shared-line`'s arithmetic at 20 MHz stands behind it (D961, D963) |
 | the counters | `handled`, `recoveries`, `dropped`, `overflows` and `entries`, and the three atomic cells, read over JTAG after the scenario, equal the last frames; and `_landin_firmware_trap_count` reads 0: no trap reached the unhandled entry (D656), whose five cells a failed run's result keeps |
 | SRAM | the image's read-only segment, read over JTAG, is the ELF's loaded bytes in RAM mode or OUT.bin's segments in boot mode |
 

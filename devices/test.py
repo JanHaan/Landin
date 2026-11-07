@@ -951,6 +951,7 @@ H753_REGISTERS = {
     'GPIOD.MODER': ('GPIOD_BASE', 'GPIO_TypeDef', 'MODER', 'GPIO_MODER'),
     'GPIOD.AFRH': ('GPIOD_BASE', 'GPIO_TypeDef', 'AFR[1]', 'GPIO_AFRH'),
     'USART3.CR1': ('USART3_BASE', 'USART_TypeDef', 'CR1', 'USART_CR1'),
+    'USART3.CR2': ('USART3_BASE', 'USART_TypeDef', 'CR2', 'USART_CR2'),
     'USART3.CR3': ('USART3_BASE', 'USART_TypeDef', 'CR3', 'USART_CR3'),
     'USART3.BRR': ('USART3_BASE', 'USART_TypeDef', 'BRR', 'USART_BRR'),
     'USART3.ISR': ('USART3_BASE', 'USART_TypeDef', 'ISR', 'USART_ISR'),
@@ -993,6 +994,14 @@ H753_FIELD_SPELLINGS = {
     'RCC.CR.RC48ON': 'RCC_CR_HSI48ON',
     'RCC.CR.RC48RDY': 'RCC_CR_HSI48RDY',
     'RCC.CR.HSECSSON': 'RCC_CR_CSSHSEON',
+    # RM0433 48.8.3, p. 2074, names bit 18 DATAINV and bits 22:21
+    # ABRMOD[1:0], as the header does; the SVD spells them TAINV and
+    # ABRMOD1 and ABRMOD0.
+    'USART3.CR2.TAINV': 'USART_CR2_DATAINV',
+    'USART3.CR2.ABRMOD0': 'USART_CR2_ABRMODE_0',
+    'USART3.CR2.ABRMOD1': 'USART_CR2_ABRMODE_1',
+    'USART3.CR2.ADD0_3': 'USART_CR2_ADD',
+    'USART3.CR2.ADD4_7': 'USART_CR2_ADD',
 }
 
 
@@ -1002,6 +1011,11 @@ H753_FIELD_SPELLINGS = {
 H753_HEADER_DISAGREEMENTS = {
     'DMAMUX1.DMAMUX_C0CR.DMAREQ_ID': 0x000000ff,
     'DMAMUX1.DMAMUX_C0CR.SYNC_ID': 0x1f000000,
+    # 48.8.3, p. 2074: USART_CR2's ADD[7:0] is one field, bits 31:24, as
+    # the header has it; the SVD splits it into two nibbles, ADD4_7 and
+    # ADD0_3, each of which lies inside the header's mask.
+    'USART3.CR2.ADD4_7': 0xff000000,
+    'USART3.CR2.ADD0_3': 0xff000000,
 }
 
 
@@ -1078,7 +1092,7 @@ class Stm32h753Oracles(unittest.TestCase):
         unknown = {'GPIOB.IDR': 0}
         # The zeros: RCC 8.7.41, p. 454, 8.7.43, p. 458, 8.7.45, p. 462;
         # GPIOx_AFRH 11.4.10, p. 546, GPIOx_BSRR 11.4.7, p. 544; USART
-        # 48.8.1, p. 2067, 48.8.4, p. 2078, 48.8.5, p. 2082, 48.8.11,
+        # 48.8.1, p. 2067, 48.8.3, p. 2074, 48.8.4, p. 2078, 48.8.5, p. 2082, 48.8.11,
         # p. 2096, 48.8.12 and 48.8.13, p. 2098; DMA 15.5.1, p. 659, 15.5.3,
         # p. 660, 15.5.5, p. 662, 15.5.6 and 15.5.7, p. 665, 15.5.8, p. 666;
         # DMAMUX1 17.6.1, p. 708; TIM2 39.4.7, p. 1688.
@@ -1536,8 +1550,12 @@ class Esp32c3Oracles(unittest.TestCase):
 
     def test_literal_contract(self):
         rows = {r['source']: r for r in self.rows()}
-        self.assertEqual(len(rows), 54)
+        self.assertEqual(len(rows), 55)
         fields = {(key, f['name']): f for key, row in rows.items() for f in row['fields']}
+        # TRM v1.4, Register 26.22: UART_FSM_STATUS_REG, whose ST_UTX_OUT,
+        # bits 7:4, is the transmitter's state, zero when it is idle.
+        self.assertEqual(rows['UART0.FSM_STATUS']['address'], 0x6000006c)
+        self.assertEqual(fields[('UART0.FSM_STATUS', 'ST_UTX_OUT')]['mask'], 0xf0)
         # TRM v1.4, 8.3, Table 8.3-1, pp. 204 and 205: UART0's source is 21
         # and SYSTIMER_TARGET0's 37, so their mapping registers are at 0x54
         # and 0x94 of the interrupt matrix at 0x600C_2000 (3.3, Table 3.3-3,
@@ -1590,7 +1608,8 @@ class Esp32c3Oracles(unittest.TestCase):
                                          'RTC_CNTL.WDTFEED'}
                     else 'modify' if key == 'UART0.FIFO' else 'normal')
             write = ('refused' if key in {
-                'UART0.INT_RAW', 'UART0.INT_ST', 'UART0.STATUS', 'GPIO.IN',
+                'UART0.INT_RAW', 'UART0.INT_ST', 'UART0.STATUS', 'UART0.FSM_STATUS',
+                'GPIO.IN',
                 'INTERRUPT_CORE0.CPU_INT_EIP_STATUS', 'SYSTIMER.UNIT0_VALUE_HI',
                 'SYSTIMER.UNIT0_VALUE_LO', 'SYSTIMER.INT_RAW', 'SYSTIMER.INT_ST',
                 'RTC_CNTL.RESET_STATE'}
@@ -1686,8 +1705,12 @@ class Esp32c5Oracles(unittest.TestCase):
 
     def test_literal_contract(self):
         rows = {r['source']: r for r in self.rows()}
-        self.assertEqual(len(rows), 53)
+        self.assertEqual(len(rows), 54)
         fields = {(key, f['name']): f for key, row in rows.items() for f in row['fields']}
+        # TRM v1.1, Register 32.24: UART_FSM_STATUS_REG, whose ST_UTX_OUT,
+        # bits 7:4, is the transmitter's state, zero when it is idle.
+        self.assertEqual(rows['UART0.FSM_STATUS']['address'], 0x60000070)
+        self.assertEqual(fields[('UART0.FSM_STATUS', 'ST_UTX_OUT')]['mask'], 0xf0)
         # TRM v1.1, 11.6, p. 480: UART0's and SYSTIMER_TARGET0's mapping
         # registers are at 0x0BC and 0x0F4 of the matrix at 0x6001_0000,
         # four times their sources, 47 and 61, where the SVD gives 0xB4 and
@@ -1748,7 +1771,8 @@ class Esp32c5Oracles(unittest.TestCase):
                                          'LP_WDT.FEED'}
                     else 'modify' if key == 'UART0.FIFO' else 'normal')
             write = ('refused' if key in {
-                'UART0.INT_RAW', 'UART0.INT_ST', 'UART0.STATUS', 'GPIO.IN',
+                'UART0.INT_RAW', 'UART0.INT_ST', 'UART0.STATUS', 'UART0.FSM_STATUS',
+                'GPIO.IN',
                 'CLIC.CLICINFO', 'SYSTIMER.UNIT0_VALUE_HI', 'SYSTIMER.UNIT0_VALUE_LO',
                 'SYSTIMER.INT_RAW', 'SYSTIMER.INT_ST', 'LP_CLKRST.RESET_CAUSE'}
                      else 'one_clears' if key in {'UART0.INT_CLR', 'SYSTIMER.INT_CLR'}

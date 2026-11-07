@@ -17,7 +17,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 MODULES = tuple('core/'+name for name in
                 ('arena', 'atomic', 'cmp', 'diag', 'failure', 'fault', 'fibre',
-                 'io', 'map', 'mem', 'net', 'panic', 'pool', 'random',
+                 'io', 'line', 'map', 'mem', 'net', 'panic', 'pool', 'random',
                  'region', 'sort', 'spill', 'text', 'time', 'tree', 'vec')) + ('platform/cortex_m',)
 
 

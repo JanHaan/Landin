@@ -183,7 +183,7 @@ routine at all. At `LANDIN_CORTEX_JOBS=4` the lane is 3,278 verdicts,
 | Completion, half-transfer and transfer error | model status `0x20/40/80`, enables in config bits 1/2/3, NVIC IRQ0, firmware records three IRQs and clears status | synthetic status convention follows sketch stream 5; not stock STM32 status layout |
 | Critical section and event collection | PRIMASK masks delivery while DMA updates RAM/count; restoring it permits pending completion handler | proves this model's mask/delivery behavior, not Landin happens-before; D227 |
 | One-clears and access modes | firmware clears pending bits; `Run.peripheral`'s model controls prove writing zero preserves error, one clears it, read-only/write-only/unknown accesses refuse | other access modes are absent; normative register rules are D228's and the generated device fixtures' |
-| Bad descriptor, bounds, unsupported direction | model controls reject bad destination, count above 65535 and unsupported direction; no transfer occurs | no physical bus fault/overrun timing; driver `buffer_empty`, `buffer_too_big`, `bad_baud` and recovery execute in the derived driver over this lane |
+| Bad descriptor, bounds, unsupported direction | model controls reject bad destination, count above 65535 and unsupported direction; no transfer occurs | no physical bus fault/overrun timing; driver `buffer_empty`, `buffer_too_big`, `line.unsupported_rate`, `line.unsupported_format` and recovery execute in the derived driver over this lane |
 | Ordinary-slice read, head/tail and short output | current lane exposes count and circular RAM for the complete derived driver | the derived driver executes its `available`/`read` cases and failure oracles; this environment is not that driver |
 | SVD-derived types, encoded values, named refusals | checked-in model and map are explicit device inputs; malformed access controls already execute | D228 packed encodings; D231 `noreturn`; generated `.ldn` device fixtures; general generator stays with companion tooling |
 
@@ -1167,6 +1167,20 @@ eight-poll stop timeout preserves the storage lifetime obligation. The
 application executes echo/GPIO commands, periodic partial-data polling, overrun
 recovery and observable terminal policy. Detailed premises and limitations are
 in the derivation.
+
+The UART's line registers are images (D964). The model refuses an LCR_H
+write that latches IBRD 0, or FBRD above 0 at IBRD 65535, or sets BRK or
+SPS, and records what the latched images mean at the declared 48 MHz:
+rate, data bits, parity and stop bits. `driver.py`'s `pl011`, written from
+the RP2040 datasheet's 4.2.7.1 apart from `core/line`, is their oracle.
+The protocol client opens seven lines through the public driver, from 46
+to 3,000,000 baud with every data width, parity and stop count, each
+image and latched line required to be `pl011`'s; the refusals of rates 0,
+45 and 3,100,000 and of 4 and 9 data bits leave every UART register
+unwritten and nothing latched; and the application's exact trace still
+writes 26, 3 and 0x70. No bit is sent at any of these rates: this shows
+the images the driver writes, never a line's timing, which only the tty
+boards' exchange shows (D963).
 
 Evidence under the `run.py` output's `driver` directory retains compiler/tool
 identities, source roots, assertions, timeouts, QEMU/GDB scripts, device traces,

@@ -15,13 +15,13 @@
 -- UART's 32-byte FIFO holds what arrives; a byte past that is lost, which
 -- the UART flags as an overrun (UARTRIS's OERIS, bit 10) and a snapshot
 -- reports as one, so no byte is lost unreported.
+import core/line
 import platform/cortex_m
 import rp2040/dma
 import rp2040/io_bank0
 import rp2040/uart0
 
 public busy: atom
-public bad_baud: atom
 public buffer_empty: atom
 public buffer_too_big: atom
 public bad_buffer: atom
@@ -49,15 +49,64 @@ busy_bit: u32 = 0x01000000
 -- UARTRIS and UARTICR: OERIS and OEIC, the receive FIFO's overrun.
 uart_overrun: u32 = 0x400
 
-public open: (rate: u32, budget: u32, escaping buf: []mut u8)
-             -> (r: rx from buf) ! busy | bad_baud | buffer_empty | buffer_too_big | bad_buffer =
+-- UART0's clock, clk_peri, which bringup takes from the 12 MHz crystal.
+public clock: u32 = 12000000
+
+-- What a line's settings program: IBRD and FBRD, the integer and fraction
+-- of the baud-rate divisor, and LCR_H, the frame.
+public registers: type = struct
+    integer: u32
+    fraction: u32
+    control: u32
+end registers
+
+-- The PL011's registers for SETTINGS, computed and written nowhere, as the
+-- synthetic driver computes its own (D958).  IBRD and FBRD hold 16 integer
+-- and 6 fraction bits of a divisor of clk_peri sampled 16 times a bit,
+-- IBRD from 1 to 65535 and FBRD 0 at 65535; at 12 MHz that is 12 to
+-- 750,000 baud.  LCR_H: WLEN 6:5 the data bits less five, FEN 4, STP2 3,
+-- EPS 2 and PEN 1; WLEN reaches eight bits, so nine are refused.  115200
+-- 8N1 is IBRD 6, FBRD 33 and 0x70, as pico-sdk rounds it.
+public line_registers: (settings: line.settings)
+                       -> (images: registers) ! line.unsupported_rate | line.unsupported_format =
+    try line.check(settings)
+    fail line.unsupported_format when settings.data_bits > 8
+    value := try line.divisor(clock, settings.rate, 16, 6, 64, 65535 * 64)
+    mut control: u32 = ((u32(settings.data_bits) - 5) << 5) | 0x10
+    if settings.stop_bits == line.two_stop_bits then control |= 0x08 end if
+    if settings.parity == line.even_parity then
+        control |= 0x06
+    elsif settings.parity == line.odd_parity then
+        control |= 0x02
+    end if
+    images = (integer: value >> 6, fraction: value & 63, control: control)
+end line_registers
+
+-- UARTCR: UARTEN 0, TXE 8 and RXE 9; UARTFR: BUSY 3 and TXFE 7.
+enabled: u32 = 0x301
+transmitting: u32 = 0x08
+transmit_empty: u32 = 0x80
+
+-- Program the images into the UART, LCR_H written after both divisors to
+-- latch them.  The PL011 must be disabled while they change.
+program: (images: registers) -> none =
+    uart0.uartcr_write(uart0.base, 0)
+    uart0.uartibrd_write(uart0.base, images.integer)
+    uart0.uartfbrd_write(uart0.base, images.fraction)
+    uart0.uartlcr_h_write(uart0.base, images.control)
+    uart0.uartcr_write(uart0.base, enabled)
+end program
+
+public open: (settings: line.settings, budget: u32, escaping buf: []mut u8)
+             -> (r: rx from buf) ! busy | line.unsupported_rate | line.unsupported_format
+                                 | buffer_empty | buffer_too_big | bad_buffer =
     size := lenof buf
     fail buffer_empty when size == 0
     fail buffer_too_big when size > 256
     fail bad_buffer when size < 2 or (size & (size - 1)) <> 0
     fail bad_buffer when (usize(addr buf[0]) & (size - 1)) <> 0
     fail bad_buffer when budget < u32(size) or budget > 65535
-    fail bad_baud when rate <> 115200
+    images := try line_registers(settings)
     status := dma.ch0_ctrl_trig_read(dma.base)
     fail busy when (status & (errors | busy_bit | 1)) <> 0
     -- FUNCSEL 2 is UART0 on both pins; the override bits are kept.
@@ -65,13 +114,8 @@ public open: (rate: u32, budget: u32, escaping buf: []mut u8)
     io_bank0.gpio0_ctrl_write(io_bank0.base, (tx & 0xffffffe0) | 2)
     pin := io_bank0.gpio1_ctrl_read(io_bank0.base)
     io_bank0.gpio1_ctrl_write(io_bank0.base, (pin & 0xffffffe0) | 2)
-    -- 12 MHz / (16 * 115200) = 6.51: IBRD 6, FBRD 33, as pico-sdk rounds
-    -- it.  LCR_H, written after both to latch them: WLEN 8 bits, FIFOs.
-    uart0.uartibrd_write(uart0.base, 6)
-    uart0.uartfbrd_write(uart0.base, 33)
-    uart0.uartlcr_h_write(uart0.base, 0x70)
-    -- CR: UARTEN 0, TXE 8, RXE 9.  DMACR: RXDMAE.
-    uart0.uartcr_write(uart0.base, 0x301)
+    program(images)
+    -- DMACR: RXDMAE.
     uart0.uartdmacr_write(uart0.base, 1)
     uart0.uarticr_write(uart0.base, uart_overrun)
     mut bits: u8 = 0
@@ -183,3 +227,19 @@ public restart: (inout r: rx) -> none ! stop_timeout | transfer_error =
     cortex_m.device_barrier()
     dma.ch0_ctrl_trig_write(dma.base, r.config | 1)
 end restart
+
+-- Change the line to SETTINGS: every register image computed first, so a
+-- refusal writes nothing and the line keeps its settings (D955); then,
+-- once the transmitter has sent everything it holds, the UART disabled,
+-- reprogrammed and enabled again.  The channel and its ring are as they
+-- were; a byte arriving while the UART is disabled is lost, so the caller
+-- changes the line only while its peer is waiting for it.
+public configure: (inout r: rx, settings: line.settings)
+                  -> none ! line.unsupported_rate | line.unsupported_format =
+    images := try line_registers(settings)
+    while (uart0.uartfr_read(uart0.base) & (transmit_empty | transmitting)) <> transmit_empty do
+        continue
+    end while
+    program(images)
+    cortex_m.device_barrier()
+end configure
