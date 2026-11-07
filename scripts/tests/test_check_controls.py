@@ -1375,6 +1375,21 @@ class Transcriptions(unittest.TestCase):
             with self.subTest(check=check.__name__):
                 self.assertEqual(faults(check, copied=inputs), [])
 
+    def test_text_view_spelling_drift_is_reported(self):
+        from check_controls import tree
+        inputs = ["spec.md", "tour.md", "ROADMAP.md", "compiler/ada/src"]
+        with tree(copied=inputs) as root:
+            table = root / "compiler/ada/src/checking/landin-types.ads"
+            text = table.read_text(encoding="utf-8")
+            original = 'when Utf8_View     => "utf8"'
+            self.assertIn(original, text)
+            table.write_text(text.replace(original,
+                                          'when Utf8_View     => "utf9"', 1),
+                             encoding="utf-8")
+            said = [why for _, _, why in checker.check_refused_constructs(True)]
+        self.assertTrue(any("Landin.Types spells text views" in why
+                            and "utf9" in why for why in said), said)
+
     def test_a_precedence_level_out_of_order_is_reported(self):
         #  [1820]'s levels, in [1820]'s order, with the same operators at
         #  each. Reordering the Ada table is the drift this catches.
