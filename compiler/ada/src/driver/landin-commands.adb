@@ -1011,8 +1011,9 @@ package body Landin.Commands is
                            if not Guided (Position) then
                               US.Append
                                 (Human_Notes, "  = note: "
-                                 & Landin.Diagnostics.Nth_Note
-                                   (D, Landin.Diagnostics.Note_Count (D))
+                                 & Landin.Diagnostics.Text.Escaped
+                                   (Landin.Diagnostics.Nth_Note
+                                     (D, Landin.Diagnostics.Note_Count (D)))
                                  & LF);
                               Guided (Position) := True;
                            end if;
