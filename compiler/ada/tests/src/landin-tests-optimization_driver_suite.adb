@@ -786,7 +786,9 @@ package body Landin.Tests.Optimization_Driver_Suite is
       Host.Add_Directory ("root/util");
       Host.Add_File ("root/util/main.ldn",
         "public answer: () -> (value: i32) = value = 1 end answer");
-      Host.Add_File ("main.ldn", "import util " & Generic_Source);
+      Host.Add_File ("main.ldn", "import util " & Generic_Source
+        & " use_import: () -> (value: i32) = value = util.answer()"
+        & " end use_import");
       Args.Append ("--root=root");
       Result := Landin.Driver.Execute (Args, Host, Tools);
       Landin.Testing.Check_Equal
@@ -795,11 +797,17 @@ package body Landin.Tests.Optimization_Driver_Suite is
       Landin.Testing.Check
         (Item, Has (Host.Written ("a.ir"),
                    "request target=linux-x86-64 level=x86-64-v1"
-                   & " optimize=none specialize=off" & ASCII.LF)
-         and then Has (Host.Written ("a.ir"), "main.main result")
-         and then Has (Host.Written ("a.ir"), "util.answer result")
-         and then Has (Host.Written ("a.ir"), "main.choose[instance-item="),
-         "saved annotated IR identifies settings, module and instance");
+                   & " optimize=none specialize=off" & ASCII.LF),
+         "saved annotated IR identifies request settings");
+      Landin.Testing.Check
+        (Item, Has (Host.Written ("a.ir"), "main.main result"),
+         "saved annotated IR qualifies entry-module routines");
+      Landin.Testing.Check
+        (Item, Has (Host.Written ("a.ir"), "util.answer result"),
+         "saved annotated IR qualifies a reached imported routine");
+      Landin.Testing.Check
+        (Item, Has (Host.Written ("a.ir"), "main.choose[instance-item="),
+         "saved annotated IR identifies the template and instance");
       Args.Replace_Element (5, "--emit=ir");
       Result := Landin.Driver.Execute (Args, Host, Tools);
       Landin.Testing.Check_Equal

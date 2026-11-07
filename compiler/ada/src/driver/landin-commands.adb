@@ -980,6 +980,9 @@ package body Landin.Commands is
       then
          declare
             Augmented : Landin.Diagnostics.Diagnostic_List;
+            Human_Notes : US.Unbounded_String;
+            Guided : array (1 .. Natural (Asked.Operands.Length))
+              of Boolean := [others => False];
          begin
             for Index in 1 .. Landin.Diagnostics.Count (Result.Found) loop
                declare
@@ -1005,6 +1008,14 @@ package body Landin.Commands is
                               & " to the program, write refine run "
                               & J.Quoted (Asked.Operands (1)) & " -- "
                               & J.Quoted (Path));
+                           if not Guided (Position) then
+                              US.Append
+                                (Human_Notes, "  = note: "
+                                 & Landin.Diagnostics.Nth_Note
+                                   (D, Landin.Diagnostics.Note_Count (D))
+                                 & LF);
+                              Guided (Position) := True;
+                           end if;
                            exit;
                         end if;
                      end;
@@ -1013,6 +1024,9 @@ package body Landin.Commands is
                end;
             end loop;
             Result.Found := Augmented;
+            --  Human presentation uses the driver's existing rendering;
+            --  structured formats render the augmented diagnostics below.
+            US.Append (Result.Report, US.To_String (Human_Notes));
          end;
       end if;
       Presentation.Render
