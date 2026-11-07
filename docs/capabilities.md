@@ -171,8 +171,16 @@ entry that describes it, and put a new one where a reader would look for it.
   fixed-arity C wrapper to import instead (D922). Records pass by value,
   split between registers and the stack, and return in r0 or the float
   registers as GCC's do, and `linker.library` links a C archive into the
-  firmware (D923). RV32's ilp32 and Xtensa's windowed C ABI stay
-  disabled.
+  firmware (D923). The Cortex-M corpus executes C on QEMU: ABI fixtures'
+  freestanding C peers, built by the pinned GCC with no C library and
+  linked with the program, among them a hand-written peer that calls and is
+  called with every scalar width, records of 3 to 32 bytes, a callback and
+  C data, also linked by refine itself from archives, and the generated
+  CMSIS NVIC and SysTick adapters, whose effects are read back from the
+  registers (D985). A C peer of the other variant is refused before it
+  links. Each fixture that does not run there is a refusal with its codes
+  or a restriction its build is held to (D986). RV32's ilp32 and Xtensa's
+  windowed C ABI stay disabled.
 - **A cache** is a fact of a description too: a Cortex-M7's
   `compiler.cache("armv7-m-l1", 32)` makes a cached profile, whose reset
   invalidates and enables the level 1 caches once memory is written and

@@ -91,13 +91,28 @@ class AddFixtureTest(unittest.TestCase):
         self.assertIn("run_expect:", str(raised.exception))
         self.assertIn("status oracle", str(raised.exception))
 
-    def test_an_abi_fixture_is_a_restriction_with_its_reason(self):
+    def test_an_abi_fixture_executes_where_it_names_cortex_m0(self):
+        #  The corpus builds its C peers freestanding and runs it (D985).
         self.assertEqual(add_fixture.corpus_row(
-            meta("abi/new"), None, "a hosted C peer"),
-            {"mode": "restriction", "reason": "a hosted C peer",
-             "witness": "compiler/tests/fixtures/abi/new/fixture.meta"})
-        with self.assertRaises(SystemExit):
-            add_fixture.corpus_row(meta("abi/new"), None, None)
+            meta("abi/new", targets="cortex-m0"), None, None, []),
+            {"mode": "execute"})
+        self.assertEqual(add_fixture.corpus_row(
+            meta("abi/new", targets="linux-x86-64"), None, None, ["L0015"]),
+            {"codes": ["L0015"], "mode": "refuse"})
+        with self.assertRaises(SystemExit) as raised:
+            add_fixture.corpus_row(meta("abi/new", targets="linux-x86-64"),
+                                   None, None, [])
+        self.assertIn("--stops=", str(raised.exception))
+
+    def test_a_restriction_names_what_stops_it_and_why(self):
+        #  D986: the corpus holds the fixture's build to its stop.
+        self.assertEqual(add_fixture.corpus_row(
+            meta("abi/new"), None, "it prints", [], "c-headers"),
+            {"mode": "restriction", "reason": "it prints", "stops": "c-headers"})
+        for stops, reason in (("c-headers", None), ("threads", "it starts threads")):
+            with self.assertRaises(SystemExit) as raised:
+                add_fixture.corpus_row(meta("abi/new"), None, reason, [], stops)
+            self.assertIn("c-options, c-headers", str(raised.exception))
 
     def test_each_class_is_told_every_step_left(self):
         #  A positive fixture is in lowering.ir, which only the test

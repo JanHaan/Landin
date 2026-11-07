@@ -2,31 +2,83 @@
 -- bindings.ldn came from the pinned STM32H753 device header, the CMSIS
 -- core_cm7.h it includes, and landin-vfp.h, through Clang's JSON AST, for
 -- AAPCS32's VFP variant: floats and doubles travel in the float unit's
--- registers.
+-- registers, in both directions.  The program checks what each C routine
+-- returns, the C peer checks every value the program passes it and what
+-- each of the program's exports returns, and every check has a status of
+-- its own.
 
-main: () -> (status: i32) =
-    status = 42
-    if vfp_half(3.0) <> 1.5 then
-        status = 1
-    end if
+-- Called by the C peer: a float in s0, a double in d1 and a float
+-- back-filled into s1, returned in s0.
+public extern(c) landin_vfp_scale: (value: f32, by: f64, offset: f32) -> (result: f32) =
+    result = f32(f64(value) * by) + offset
+end landin_vfp_scale
+
+-- d0, s2, d2, s3, and the integer in r0; returned in d0.
+public extern(c) landin_vfp_sum: (a: f64, b: f32, c: f64, d: f32, count: i32) -> (result: f64) =
+    result = (a + f64(b) + c + f64(d)) * f64(count)
+end landin_vfp_sum
+
+-- A homogeneous aggregate of doubles arrives in d0-d1, and the float
+-- after it in s4.
+public extern(c) landin_vfp_spread: (z: vfp_pair, by: f32) -> (result: f64) =
+    result = (z.re - z.im) * f64(by)
+end landin_vfp_spread
+
+-- And returned in d0-d1.
+public extern(c) landin_vfp_swap: (z: vfp_pair) -> (result: vfp_pair) =
+    result.re = z.im
+    result.im = z.re
+end landin_vfp_swap
+
+public main: () -> (code: i32) =
+    code = 1
+    return when vfp_half(3.0) <> 1.5
     -- 1 + 2 * 2 + 0.5 * 4, with 0.5 back-filled into s1.
-    if vfp_backfill(1.0, 2.0, 0.5) <> 7.0 then
-        status = 2
-    end if
-    if vfp_peer_mix(1.5, 2.0, 3) <> 7.5 then
-        status = 3
-    end if
-    -- 2 is CMSIS's double-precision float unit.
-    if scb_get_fpu_type() <> 2 then
-        status = 4
-    end if
-    irq: irqn_type = usart3_irqn
+    code = 2
+    return when vfp_backfill(1.0, 2.0, 0.5) <> 7.0
+    code = 3
+    return when vfp_peer_mix(1.5, 2.0, 3) <> 7.5
+    -- The C peer's status, 0 when every argument arrived as sent, and the
+    -- code it names otherwise.
+    checked: i32 = vfp_peer_check(0.25, -1.5, 3.0, 1.0e300, -0.0, 6.5, 7.75, 8.125,
+                                  1.0 / 1024.0, -16777216.0, 11)
+    code = 100 + checked
+    return when checked <> 0
+    called: i32 = vfp_peer_calls_back()
+    code = 100 + called
+    return when called <> 0
+    -- The record through its address: 2 * 0.5 + 0.25 + 3 + (1 - 2 + 4) + 100.
+    -- The generated import takes a native record's const pointer as a
+    -- byte pointer, which only an integer address converts to.
+    mut sample: vfp_sample = zeroed
+    sample.gain = 0.5
+    sample.offset = 0.25
+    sample.channel = 3
+    sample.trim[0] = 1
+    sample.trim[1] = -2
+    sample.trim[2] = 4
+    sample.stamp = 100
+    code = 4
+    return when vfp_apply(ptr(usize(addr sample)), 2.0) <> 107.25
+    -- The aggregate by value: (1.5, -2.25) turned and doubled.
+    mut z: vfp_pair = zeroed
+    z.re = 1.5
+    z.im = -2.25
+    turned: vfp_pair = vfp_turn(z, 2.0)
+    code = 5
+    return when turned.re <> 4.5 or turned.im <> 3.0
+    -- 2 is CMSIS's double-precision float unit, read from MVFR0.
+    code = 6
+    return when scb_get_fpu_type() <> 2
+    -- QEMU's AN500 implements 32 external interrupts, the H753 150, so the
+    -- interrupt is one both have.
+    irq: irqn_type = tim2_irqn
     nvic_disable_irq(irq)
-    if nvic_get_enable_irq(irq) <> 0 then
-        status = 5
-    end if
+    code = 7
+    return when nvic_get_enable_irq(irq) <> 0
     nvic_set_priority(irq, 5)
-    if nvic_get_priority(irq) <> 5 then
-        status = 6
-    end if
+    code = 8
+    return when nvic_get_priority(irq) <> 5
+    nvic_set_priority(irq, 0)
+    code = 42
 end main

@@ -2716,6 +2716,15 @@ package body Landin.Diagnostics.Citations is
                "Firmware links C libraries as static archives",
             when 924 =>
                "A firmware image refuses what its startup cannot honour",
+            when 985 =>
+               "The Cortex-M corpus runs an ABI fixture's C freestanding"
+               & ", by one contract",
+            when 986 =>
+               "A corpus restriction names the stage that stops it, and "
+               & "the lane reaches it",
+            when 987 =>
+               "The generated Cortex-M bindings' layouts are held to bot"
+               & "h compilers at both variants",
             when 695 =>
                "Espressif's QEMU carries both RV32 corpus lanes, under t"
                & "he Arm lanes' harness",
@@ -4220,6 +4229,12 @@ package body Landin.Diagnostics.Citations is
             when 923 =>
                "Decisions: The core library and the derived programs",
             when 924 =>
+               "Decisions: The core library and the derived programs",
+            when 985 =>
+               "Decisions: The core library and the derived programs",
+            when 986 =>
+               "Decisions: The core library and the derived programs",
+            when 987 =>
                "Decisions: The core library and the derived programs",
             when 695 =>
                "Decisions: The core library and the derived programs",
@@ -6271,6 +6286,16 @@ package body Landin.Diagnostics.Citations is
             when 924 =>
                "https://www.701.dev/spec.html#d924-a-firmware-image-refu"
                & "ses-what-its-startup-cannot-honour",
+            when 985 =>
+               "https://www.701.dev/spec.html#d985-the-cortex-m-corpus-r"
+               & "uns-an-abi-fixture-s-c-freestanding-by-one-contract",
+            when 986 =>
+               "https://www.701.dev/spec.html#d986-a-corpus-restriction-"
+               & "names-the-stage-that-stops-it-and-the-lane-reaches-it",
+            when 987 =>
+               "https://www.701.dev/spec.html#d987-the-generated-cortex-"
+               & "m-bindings-layouts-are-held-to-both-compilers-at-both-va"
+               & "riants",
             when 695 =>
                "https://www.701.dev/spec.html#d695-espressif-s-qemu-carr"
                & "ies-both-rv32-corpus-lanes-under-the-arm-lanes-harness",

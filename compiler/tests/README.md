@@ -683,6 +683,7 @@ emits assembly text.
 | `root` | no | a positive, negative, runtime or ABI fixture's import root, relative to its directory; the directory itself becomes the entry module |
 | `c-sources` | yes for ABI | comma-separated, ordered C companion sources relative to the fixture directory |
 | `c-args` | no | whitespace-separated C compiler and linker arguments for an ABI fixture |
+| `c-inputs` | no, ABI only, and only on a fixture whose `targets` name `cortex-m0` alone | comma-separated pinned input directories, each the first part of a `devices/inputs.json` name such as `rp2040-cmsis`, no two alike; the Cortex-M corpus fetches every `.h` pinned under each, verified by hash (`scripts/fetch_inputs.py`), and gives its C compiler `-I` for each cached directory (D985). The hosted harness reads no inputs, hence the target rule |
 | `c-shared` | no, and runtime or ABI only | comma-separated, ordered C sources relative to the fixture directory, each built into a shared object of its own that the program loads; their paths are its first arguments, before `run_args`. A runtime fixture that names it says `link: libc` |
 | `c-archives` | no, and runtime only | comma-separated, ordered C sources relative to the fixture directory, each compiled alone with the lane's C driver (`-std=c11 -Wall -Wextra -Werror -fPIC -O2 -c`) and archived alone as `lib<stem>.a` in its own directory of the fixture's work copy, a fresh directory holding the program and its `with` files, which refine compiles, so the program's `linker.directory` finds them; entries follow `c-sources`' path rules and no two may build one archive. A fixture that names it says `link: libc` and has no `root` |
 | `library-directories` | no, runtime only and only with `c-archives` | comma-separated directories of the work copy, each relative and below it, no two alike, given to refine in order as `-L <work copy>/<dir>`, absolute, before the program |
@@ -876,6 +877,18 @@ fixtures honor `stream: output` by capturing stdout and stderr separately:
 stdout must match `run_expect` when present, and stderr must be empty even
 without an output file. The default `merged` policy preserves combined bytes.
 Recorded compiler expectations use the same stream contract.
+
+The Cortex-M corpus runs an ABI fixture its inventory row says executes
+(D985): it compiles the program to assembly as a runtime fixture's, and
+each `c-sources` entry with the pinned `arm-eabi-gcc` at the level's
+processor and float flags, `-ffreestanding -nostdlib -std=c11 -nostdinc
+-fno-short-enums -Wall -Wextra -Werror`, GCC's own freestanding headers,
+the fixture directory and each `c-inputs` directory, then the `c-args`.
+The harness links them with the program and the four routines GCC requires
+of a freestanding environment, and the exit `status` or `traps` verdict is
+read by its debugger session. No C library is linked, so a fixture whose C
+names one is a `restriction` row that says so
+([the corpus inventory](../../environments/cortex-m/README.md#the-corpus-inventory)).
 
 `constructs` is what the construct matrix indexes the corpus by, and it is a
 written list rather than a reading of the summary. A citation in prose is prose: it is

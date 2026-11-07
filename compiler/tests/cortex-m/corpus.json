@@ -1,42 +1,61 @@
 {
   "fixtures": {
     "abi/aapcs64-varargs-both-banks": {
-      "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
-      "witness": "compiler/tests/fixtures/abi/aapcs64-varargs-both-banks/fixture.meta"
+      "mode": "refuse",
+      "codes": [
+        "L0346"
+      ],
+      "reason": "Its program calls a variadic C function, which AAPCS32 does not enable (D922); its C peer also prints its oracle through the C library."
     },
     "abi/auxiliary-from-c": {
-      "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer: a C main, its initial stack and the C library's getauxval exist only on a hosted Linux system, and Cortex-M0 starts no process.",
-      "witness": "compiler/tests/fixtures/abi/auxiliary-from-c/fixture.meta"
+      "mode": "refuse",
+      "codes": [
+        "L0015"
+      ],
+      "reason": "A C main, its initial stack and the auxiliary vector exist only in a hosted process, and Cortex-M0 starts none."
     },
     "abi/c-function-from-address": {
       "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer: Cortex-M0 keeps C function types disabled (L0346), so no C function value is made there from an address.",
-      "witness": "compiler/tests/fixtures/abi/c-function-from-address/fixture.meta"
+      "stops": "defect",
+      "reason": "refine's Cortex-M emission of a C function value made from an address stops on an internal defect, an unclassified check of its CODE_ADDRESS; the program and its C need nothing hosted, so the fixed compiler executes it and the lane then names this row stale."
     },
     "abi/c-function-from-zero-address-traps": {
       "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer: Cortex-M0 keeps C function types disabled (L0346), so no C function value is made there from an address.",
-      "witness": "compiler/tests/fixtures/abi/c-function-from-zero-address-traps/fixture.meta"
+      "stops": "defect",
+      "reason": "refine's Cortex-M emission of a C function value made from an address stops on an internal defect, an unclassified check of its CODE_ADDRESS; the program and its C need nothing hosted, so the fixed compiler runs it to its trap and the lane then names this row stale."
     },
     "abi/c-packed-records": {
-      "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer: Cortex-M0 keeps layout(c) records and C peers disabled (L0346); runtime/c-packed-record-fields runs the byte-packed record's unaligned accesses on Cortex-M0.",
-      "witness": "compiler/tests/fixtures/abi/c-packed-records/fixture.meta"
+      "mode": "execute"
     },
     "abi/clock-agrees-with-c": {
-      "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer: the C library's clocks exist only on a hosted system; runtime/clock-manual runs core/io's manual clock on Cortex-M0.",
-      "witness": "compiler/tests/fixtures/abi/clock-agrees-with-c/fixture.meta"
+      "mode": "refuse",
+      "codes": [
+        "L0015"
+      ],
+      "reason": "The C library's clocks exist only on a hosted system; runtime/clock-manual runs core/io's manual clock on Cortex-M0."
     },
     "abi/core-io-file-identity": {
-      "mode": "restriction",
-      "reason": "Native libc stat records and real host filesystem identity require a hosted C peer; memory identity runs separately on Cortex-M0.",
-      "witness": "compiler/tests/fixtures/abi/core-io-file-identity/fixture.meta"
+      "mode": "refuse",
+      "codes": [
+        "L0015"
+      ],
+      "reason": "Native stat records and a real file system's identities exist only on a hosted system; memory identity runs separately on Cortex-M0."
+    },
+    "abi/cortex-c-peer": {
+      "mode": "execute"
     },
     "abi/cortex-cmsis-bindings": {
-      "mode": "execute"
+      "mode": "execute",
+      "lanes": {
+        "mps2-an505": {
+          "mode": "restriction",
+          "reason": "Its bindings are RP2040.h's, whose CMSIS core is core_cm0plus.h with ARMv6-M's two priority bits, and QEMU's AN505 Cortex-M33 keeps more of a priority byte, so the program's read-back of the NVIC's priority registers differs; the M0 is the core it binds."
+        },
+        "mps2-an500": {
+          "mode": "restriction",
+          "reason": "Its RP2040 header refuses a float unit by its own #error, which the AN500's FPv5-D16 compilation meets, and its bindings assert compiler.feature.fp false (D936)."
+        }
+      }
     },
     "abi/cortex-vfp-bindings": {
       "codes": [
@@ -53,288 +72,344 @@
     },
     "abi/darwin-stack-composite-slots": {
       "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
-      "witness": "compiler/tests/fixtures/abi/darwin-stack-composite-slots/fixture.meta"
+      "stops": "c-headers",
+      "reason": "Its C peer prints what it observed through the C library's stdio, and that output is its oracle (run_expect:); the corpus's freestanding C has no C library, and abi/cortex-c-peer checks the same transport on Cortex-M0 by status."
     },
     "abi/darwin-varargs-stack-slots": {
-      "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
-      "witness": "compiler/tests/fixtures/abi/darwin-varargs-stack-slots/fixture.meta"
+      "mode": "refuse",
+      "codes": [
+        "L0346"
+      ],
+      "reason": "Its program calls a variadic C function, which AAPCS32 does not enable (D922); its C peer also prints its oracle through the C library."
     },
     "abi/environment-from-c": {
-      "mode": "restriction",
-      "reason": "A C main hands Landin an environment table through the hosted argument root; runtime/run-memory-firmware reads core/io's memory environment on Cortex-M0.",
-      "witness": "compiler/tests/fixtures/abi/environment-from-c/fixture.meta"
+      "mode": "refuse",
+      "codes": [
+        "L0015"
+      ],
+      "reason": "A C main hands Landin an environment table through the hosted argument root; runtime/run-memory-firmware reads core/io's memory environment on Cortex-M0."
     },
     "abi/event-facts": {
-      "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer: epoll, signalfd and kqueue and the C library's signal headers exist only on a hosted system.",
-      "witness": "compiler/tests/fixtures/abi/event-facts/fixture.meta"
+      "mode": "refuse",
+      "codes": [
+        "L0015"
+      ],
+      "reason": "epoll, signalfd and kqueue and the C library's signal headers exist only on a hosted system."
     },
     "abi/freebsd-pseudo-terminal-closed-on-exec": {
-      "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer: a C posix_openpt of the program's own and FreeBSD's pseudo-terminals exist only on FreeBSD.",
-      "witness": "compiler/tests/fixtures/abi/freebsd-pseudo-terminal-closed-on-exec/fixture.meta"
+      "mode": "refuse",
+      "codes": [
+        "L0015"
+      ],
+      "reason": "FreeBSD's pseudo-terminals and a C posix_openpt exist only on FreeBSD."
     },
     "abi/host-string-pass-through": {
-      "mode": "restriction",
-      "reason": "A C main hands Landin a process argument through the hosted argument root and checks the file the host system made from it; runtime/r420-memory-world-boundaries passes core/io.memory's arguments as host strings on Cortex-M0.",
-      "witness": "compiler/tests/fixtures/abi/host-string-pass-through/fixture.meta"
+      "mode": "refuse",
+      "codes": [
+        "L0015"
+      ],
+      "reason": "A C main hands Landin a process argument through the hosted argument root and checks the file the host system made from it; runtime/r420-memory-world-boundaries passes core/io.memory's arguments as host strings on Cortex-M0."
     },
     "abi/libc-directory-record": {
-      "mode": "restriction",
-      "reason": "The C library's struct dirent and its flags exist only on a hosted system, so the C peer that reads them is hosted; runtime/directory-memory-firmware lists core/io.memory's directories on Cortex-M0.",
-      "witness": "compiler/tests/fixtures/abi/libc-directory-record/fixture.meta"
+      "mode": "refuse",
+      "codes": [
+        "L0015"
+      ],
+      "reason": "The C library's struct dirent and its flags exist only on a hosted system; runtime/directory-memory-firmware lists core/io.memory's directories on Cortex-M0."
     },
     "abi/libc-file-facts": {
-      "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer: the C library's lock, terminal and account records, and a file and an account read through C, exist only on a hosted system; runtime/file-system-firmware runs core/io's file system pieces that fit on Cortex-M0.",
-      "witness": "compiler/tests/fixtures/abi/libc-file-facts/fixture.meta"
+      "mode": "refuse",
+      "codes": [
+        "L0015"
+      ],
+      "reason": "The C library's lock, terminal and account records exist only on a hosted system; runtime/file-system-firmware runs core/io's file system pieces that fit on Cortex-M0."
     },
     "abi/libc-loading-facts": {
-      "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer: dlfcn.h and the loader exist only on a hosted system, and firmware refuses platform/libc by name.",
-      "witness": "compiler/tests/fixtures/abi/libc-loading-facts/fixture.meta"
+      "mode": "refuse",
+      "codes": [
+        "L0015"
+      ],
+      "reason": "dlfcn.h and the loader exist only on a hosted system."
     },
     "abi/libc-process-constants": {
-      "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer: the C library's process headers exist only on a hosted system, and Cortex-M0 starts no process.",
-      "witness": "compiler/tests/fixtures/abi/libc-process-constants/fixture.meta"
+      "mode": "refuse",
+      "codes": [
+        "L0015"
+      ],
+      "reason": "The C library's process headers exist only on a hosted system, and Cortex-M0 starts no process."
     },
     "abi/libc-socket-facts": {
-      "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer: the C library's socket and signal headers exist only on a hosted system; runtime/network-addresses-firmware and runtime/network-addresses-written-firmware read and write addresses on Cortex-M0.",
-      "witness": "compiler/tests/fixtures/abi/libc-socket-facts/fixture.meta"
+      "mode": "refuse",
+      "codes": [
+        "L0015"
+      ],
+      "reason": "The C library's socket and signal headers exist only on a hosted system; runtime/network-addresses-firmware and runtime/network-addresses-written-firmware read and write addresses on Cortex-M0."
     },
     "abi/library-names-beside-libc": {
-      "mode": "restriction",
-      "reason": "Its C peer and platform/libc's read exist only on a hosted system; the backend suite's symbol case holds Cortex-M0's public routines and data to local symbols.",
-      "witness": "compiler/tests/fixtures/abi/library-names-beside-libc/fixture.meta"
+      "mode": "refuse",
+      "codes": [
+        "L0015"
+      ],
+      "reason": "Its C peer reads the C library, which only a hosted system has; the backend suite's symbol case holds Cortex-M0's public routines and data to local symbols."
     },
     "abi/link-symbol-exports": {
-      "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
-      "witness": "compiler/tests/fixtures/abi/link-symbol-exports/fixture.meta"
+      "mode": "execute"
     },
     "abi/linux-file-identity": {
-      "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
-      "witness": "compiler/tests/fixtures/abi/linux-file-identity/fixture.meta"
+      "mode": "refuse",
+      "codes": [
+        "L0015"
+      ],
+      "reason": "Native stat records and a real file system's identities exist only on a hosted system."
     },
     "abi/lp64d-integer-extension": {
       "mode": "restriction",
-      "reason": "LP64D calling-convention fixture needs independently compiled RV64 hosted C peers; Cortex-M0 keeps the general C surface disabled and its independent Cortex transport controls retain coverage.",
-      "witness": "compiler/tests/fixtures/abi/lp64d-integer-extension/fixture.meta"
+      "stops": "c-headers",
+      "reason": "Its independently compiled RV64 peer prints what it observed through the C library's stdio, and that output is its oracle (run_expect:); AAPCS32's narrow extension is abi/cortex-c-peer's on Cortex-M0."
     },
     "abi/lp64d-main-return": {
       "mode": "restriction",
-      "reason": "LP64D native entry fixture requires an independently compiled RV64 hosted C peer and libc startup; Cortex-M0 retains its separate reset and entry contracts.",
-      "witness": "compiler/tests/fixtures/abi/lp64d-main-return/fixture.meta"
+      "stops": "c-source",
+      "reason": "Its C peer is an RV64 observer of the hosted entry's whole a0 register, written in RV64 assembly behind an #error for every other target; Cortex-M0's entry is the harness's own."
     },
     "abi/lp64d-varargs": {
-      "mode": "restriction",
-      "reason": "LP64D calling-convention fixture needs independently compiled RV64 hosted C peers; Cortex-M0 keeps the general C surface disabled and its independent Cortex transport controls retain coverage.",
-      "witness": "compiler/tests/fixtures/abi/lp64d-varargs/fixture.meta"
+      "mode": "refuse",
+      "codes": [
+        "L0346"
+      ],
+      "reason": "Its program calls a variadic C function, which AAPCS32 does not enable (D922); its C peer also prints its oracle through the C library."
     },
     "abi/posix-errno-numbers": {
-      "mode": "restriction",
-      "reason": "Each system's errno numbers are its C header's, which only a hosted system has; platform/posix itself is refused on firmware.",
-      "witness": "compiler/tests/fixtures/abi/posix-errno-numbers/fixture.meta"
+      "mode": "refuse",
+      "codes": [
+        "L0015"
+      ],
+      "reason": "Each system's errno numbers are its C header's, which only a hosted system has."
     },
     "abi/public-routine-is-local": {
-      "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
-      "witness": "compiler/tests/fixtures/abi/public-routine-is-local/fixture.meta"
+      "mode": "execute"
     },
     "abi/r440-bindings-generated": {
-      "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
-      "witness": "compiler/tests/fixtures/abi/r440-bindings-generated/fixture.meta"
+      "mode": "refuse",
+      "codes": [
+        "L0324"
+      ],
+      "reason": "Its bindings were generated for x86-64's LP64 C ABI and assert compiler.c_sysv_lp64, which Cortex-M0 refutes; abi/cortex-cmsis-bindings and abi/cortex-vfp-bindings are bindings generated for AAPCS32."
     },
     "abi/r440-errno-interposition": {
-      "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
-      "witness": "compiler/tests/fixtures/abi/r440-errno-interposition/fixture.meta"
+      "mode": "refuse",
+      "codes": [
+        "L0015"
+      ],
+      "reason": "The C library's errno and its system calls exist only on a hosted system."
     },
     "abi/r440-errno-thread-local": {
-      "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
-      "witness": "compiler/tests/fixtures/abi/r440-errno-thread-local/fixture.meta"
+      "mode": "refuse",
+      "codes": [
+        "L0015"
+      ],
+      "reason": "The C library's per-thread errno exists only on a hosted system with threads."
     },
     "abi/r440-native-aggregates": {
       "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
-      "witness": "compiler/tests/fixtures/abi/r440-native-aggregates/fixture.meta"
+      "stops": "c-headers",
+      "reason": "Its C peer prints what it observed through the C library's stdio, and that output is its oracle (run_expect:); the corpus's freestanding C has no C library, and abi/cortex-c-peer checks the same transport on Cortex-M0 by status."
     },
     "abi/r440-native-banks": {
       "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
-      "witness": "compiler/tests/fixtures/abi/r440-native-banks/fixture.meta"
+      "stops": "c-headers",
+      "reason": "Its C peer prints what it observed through the C library's stdio, and that output is its oracle (run_expect:); the corpus's freestanding C has no C library, and abi/cortex-c-peer checks the same transport on Cortex-M0 by status."
     },
     "abi/r440-native-bounds": {
       "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
-      "witness": "compiler/tests/fixtures/abi/r440-native-bounds/fixture.meta"
+      "stops": "c-headers",
+      "reason": "Its C peer maps guard pages around the program's buffers and prints what it observed through the C library, which only a hosted system has."
     },
     "abi/r440-native-callback-array-fields": {
       "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
-      "witness": "compiler/tests/fixtures/abi/r440-native-callback-array-fields/fixture.meta"
+      "stops": "c-headers",
+      "reason": "Its C peer prints what it observed through the C library's stdio, and that output is its oracle (run_expect:); the corpus's freestanding C has no C library, and abi/cortex-c-peer checks the same transport on Cortex-M0 by status."
     },
     "abi/r440-native-callbacks": {
       "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
-      "witness": "compiler/tests/fixtures/abi/r440-native-callbacks/fixture.meta"
+      "stops": "c-headers",
+      "reason": "Its C peer prints what it observed through the C library's stdio, and that output is its oracle (run_expect:); the corpus's freestanding C has no C library, and abi/cortex-c-peer checks the same transport on Cortex-M0 by status."
     },
     "abi/r440-native-dollar-link": {
-      "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
-      "witness": "compiler/tests/fixtures/abi/r440-native-dollar-link/fixture.meta"
+      "mode": "execute"
     },
     "abi/r440-native-hosted": {
-      "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
-      "witness": "compiler/tests/fixtures/abi/r440-native-hosted/fixture.meta"
+      "mode": "refuse",
+      "codes": [
+        "L0015"
+      ],
+      "reason": "Its program allocates from a hosted heap, which firmware has not."
     },
     "abi/r440-native-link-namespace": {
-      "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
-      "witness": "compiler/tests/fixtures/abi/r440-native-link-namespace/fixture.meta"
+      "mode": "refuse",
+      "codes": [
+        "L0347"
+      ],
+      "reason": "refine refuses its datum's link name main.foo.1 on Cortex-M0 as an invalid or reserved symbol (L0347)."
     },
     "abi/r440-native-nested-shape": {
       "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
-      "witness": "compiler/tests/fixtures/abi/r440-native-nested-shape/fixture.meta"
+      "stops": "c-headers",
+      "reason": "Its C peer prints what it observed through the C library's stdio, and that output is its oracle (run_expect:); the corpus's freestanding C has no C library, and abi/cortex-c-peer checks the same transport on Cortex-M0 by status."
     },
     "abi/r440-native-recursive-array-fields": {
       "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
-      "witness": "compiler/tests/fixtures/abi/r440-native-recursive-array-fields/fixture.meta"
+      "stops": "c-headers",
+      "reason": "Its C peer prints what it observed through the C library's stdio, and that output is its oracle (run_expect:); the corpus's freestanding C has no C library, and abi/cortex-c-peer checks the same transport on Cortex-M0 by status."
     },
     "abi/r440-native-renamed-main": {
-      "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
-      "witness": "compiler/tests/fixtures/abi/r440-native-renamed-main/fixture.meta"
+      "mode": "refuse",
+      "codes": [
+        "L0015"
+      ],
+      "reason": "A C main renames the hosted entry, which Cortex-M0's harness and firmware enter by their own."
     },
     "abi/r440-native-scalars": {
-      "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
-      "witness": "compiler/tests/fixtures/abi/r440-native-scalars/fixture.meta"
+      "mode": "refuse",
+      "codes": [
+        "L0300"
+      ],
+      "reason": "Its program passes isize values past 32 bits, -6000000000 among them, which Cortex-M0's 32-bit isize cannot hold (L0300); abi/cortex-c-peer passes every scalar width on Cortex-M0."
     },
     "abi/r440-native-startup-empty": {
-      "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
-      "witness": "compiler/tests/fixtures/abi/r440-native-startup-empty/fixture.meta"
+      "mode": "refuse",
+      "codes": [
+        "L0015"
+      ],
+      "reason": "The hosted startup's argument root exists only in a hosted process."
     },
     "abi/r440-native-startup-initialized": {
-      "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
-      "witness": "compiler/tests/fixtures/abi/r440-native-startup-initialized/fixture.meta"
+      "mode": "refuse",
+      "codes": [
+        "L0015"
+      ],
+      "reason": "The hosted startup's argument root exists only in a hosted process."
     },
     "abi/r440-native-startup-replaced": {
-      "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
-      "witness": "compiler/tests/fixtures/abi/r440-native-startup-replaced/fixture.meta"
+      "mode": "refuse",
+      "codes": [
+        "L0015"
+      ],
+      "reason": "The hosted startup's argument root exists only in a hosted process."
     },
     "abi/r440-native-startup-uninitialized": {
-      "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
-      "witness": "compiler/tests/fixtures/abi/r440-native-startup-uninitialized/fixture.meta"
+      "mode": "refuse",
+      "codes": [
+        "L0015"
+      ],
+      "reason": "The hosted startup's argument root exists only in a hosted process."
     },
     "abi/r440-native-varargs": {
-      "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
-      "witness": "compiler/tests/fixtures/abi/r440-native-varargs/fixture.meta"
+      "mode": "refuse",
+      "codes": [
+        "L0346"
+      ],
+      "reason": "Its program calls a variadic C function, which AAPCS32 does not enable (D922); its C peer also prints its oracle through the C library."
     },
     "abi/r440-smoke": {
       "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
-      "witness": "compiler/tests/fixtures/abi/r440-smoke/fixture.meta"
+      "stops": "c-headers",
+      "reason": "Its C peer prints what it observed through the C library's stdio, and that output is its oracle (run_expect:); the corpus's freestanding C has no C library, and abi/cortex-c-peer checks the same transport on Cortex-M0 by status."
     },
     "abi/r440-sret-pointer-observation": {
       "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
-      "witness": "compiler/tests/fixtures/abi/r440-sret-pointer-observation/fixture.meta"
+      "stops": "c-headers",
+      "reason": "Its C peer prints what it observed through the C library's stdio, and that output is its oracle (run_expect:); the corpus's freestanding C has no C library, and abi/cortex-c-peer checks the same transport on Cortex-M0 by status."
     },
     "abi/r440-varargs-pointer-callback": {
-      "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
-      "witness": "compiler/tests/fixtures/abi/r440-varargs-pointer-callback/fixture.meta"
+      "mode": "refuse",
+      "codes": [
+        "L0346"
+      ],
+      "reason": "Its program calls a variadic C function, which AAPCS32 does not enable (D922); its C peer also prints its oracle through the C library."
     },
     "abi/r450-review-backend-c-entry": {
       "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
-      "witness": "compiler/tests/fixtures/abi/r450-review-backend-c-entry/fixture.meta"
+      "stops": "oracle",
+      "reason": "It builds and links on Cortex-M0, and its oracle includes its standard output (run_expect:), empty, which firmware has no channel to give."
     },
     "abi/r450-x86-callee-probes": {
       "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
-      "witness": "compiler/tests/fixtures/abi/r450-x86-callee-probes/fixture.meta"
+      "stops": "c-source",
+      "reason": "Its C peer clobbers each host architecture's caller-saved registers by name in inline assembly, x86-64's for any other, so it compiles for no Arm M-profile core."
     },
     "abi/r490-distinct-c-roundtrip": {
-      "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
-      "witness": "compiler/tests/fixtures/abi/r490-distinct-c-roundtrip/fixture.meta"
+      "mode": "execute"
     },
     "abi/r630-dma-slice": {
       "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
-      "witness": "compiler/tests/fixtures/abi/r630-dma-slice/fixture.meta"
+      "stops": "c-headers",
+      "reason": "Its C main checks the device model with the C library's assert; runtime and firmware DMA fixtures run the slice protocol on Cortex-M0."
     },
     "abi/r630-native-memory": {
-      "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
-      "witness": "compiler/tests/fixtures/abi/r630-native-memory/fixture.meta"
+      "mode": "refuse",
+      "codes": [
+        "L0344"
+      ],
+      "reason": "Its program makes atomic read-modify-write operations, which ARMv6-M has no instruction for (L0344); its C peer also needs POSIX threads."
     },
     "abi/r640-dma-packed": {
       "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
-      "witness": "compiler/tests/fixtures/abi/r640-dma-packed/fixture.meta"
+      "stops": "c-headers",
+      "reason": "Its C main checks the device model with the C library's assert; backend-dma.ldn runs the packed DMA protocol on Cortex-M0."
     },
     "abi/r640-exhaustive-encodings": {
       "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
-      "witness": "compiler/tests/fixtures/abi/r640-exhaustive-encodings/fixture.meta"
+      "stops": "c-headers",
+      "reason": "Its C main forks a child process for each reserved encoding and waits for its signal, which only a hosted system has; packed-cortex.ldn holds the encodings on Cortex-M0."
     },
     "abi/r640-reserved-trap": {
       "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
-      "witness": "compiler/tests/fixtures/abi/r640-reserved-trap/fixture.meta"
+      "stops": "c-headers",
+      "reason": "Its C main forks a child process for the reserved encoding and waits for its signal, which only a hosted system has; packed-cortex-hole.ldn runs the trap on Cortex-M0."
     },
     "abi/r670-noreturn": {
       "mode": "restriction",
-      "reason": "Hosted C peers exercise external noreturn and returning-callee guards. Cortex keeps the general C surface refused; freestanding.py executes ordinary direct, generic, evidence, deferred and recovery calls through compiler-owned firmware.",
-      "witness": "compiler/tests/fixtures/abi/r670-noreturn/fixture.meta"
+      "stops": "c-headers",
+      "reason": "Its C main forks a child process for each path and waits for its signal, which only a hosted system has; freestanding.py executes ordinary direct, generic, evidence, deferred and recovery calls through compiler-owned firmware."
     },
     "abi/r670-panic": {
-      "mode": "restriction",
-      "reason": "Hosted C peers observe panic contracts; the general Cortex C source surface remains refused. freestanding.py executes the selected and default panic paths through compiler-owned firmware.",
-      "witness": "compiler/tests/fixtures/abi/r670-panic/fixture.meta"
+      "mode": "refuse",
+      "codes": [
+        "L0015"
+      ],
+      "reason": "Its C main forks a child process for each panic path, which only a hosted system has; freestanding.py executes the selected and default panic paths through compiler-owned firmware."
     },
     "abi/report-latch-one-line": {
       "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
-      "witness": "compiler/tests/fixtures/abi/report-latch-one-line/fixture.meta"
+      "stops": "c-options",
+      "reason": "Its C peer is built with POSIX threads, which firmware has none of, and its trap's report line is its oracle, which firmware does not write (D361)."
     },
     "abi/sigpipe-handler-kept": {
-      "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer: a C main, its signal handler and the argument initializer exist only on a hosted system, and Cortex-M0 has no signals.",
-      "witness": "compiler/tests/fixtures/abi/sigpipe-handler-kept/fixture.meta"
+      "mode": "refuse",
+      "codes": [
+        "L0015"
+      ],
+      "reason": "A C main, its signal handler and the argument initializer exist only on a hosted system, and Cortex-M0 has no signals."
     },
     "abi/socket-write-raises-no-sigpipe": {
-      "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer: a C main, its signal handler, the argument initializer and a TCP connection exist only on a hosted system, and Cortex-M0 has no signals.",
-      "witness": "compiler/tests/fixtures/abi/socket-write-raises-no-sigpipe/fixture.meta"
+      "mode": "refuse",
+      "codes": [
+        "L0015"
+      ],
+      "reason": "A C main, its signal handler and a TCP connection exist only on a hosted system, and Cortex-M0 has no signals."
     },
     "abi/system-new-records-per-thread": {
-      "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
-      "witness": "compiler/tests/fixtures/abi/system-new-records-per-thread/fixture.meta"
+      "mode": "refuse",
+      "codes": [
+        "L0015"
+      ],
+      "reason": "Its program makes records on several threads, and its C peer starts them, which only a hosted system has."
     },
     "abi/thread-storage-per-thread": {
       "mode": "restriction",
-      "reason": "Shared ABI fixture requires the general native C surface or its hosted C peer. Cortex-M0 keeps that surface disabled; backend-abi.ldn/backend-abi.S and the retained independent abi.c/abi.S controls check actual Cortex transport.",
-      "witness": "compiler/tests/fixtures/abi/thread-storage-per-thread/fixture.meta"
+      "stops": "c-options",
+      "reason": "Its C peer starts POSIX threads, which firmware has none of, to show each its own thread storage."
     },
     "runtime/a-zero-divisor-traps": {
       "mode": "execute",
@@ -536,7 +611,7 @@
     "runtime/assembly-naked-labels": {
       "mode": "restriction",
       "reason": "Its C import of the naked symbol compiles on Cortex-M0 since D920, but the naked body has x86-64, arm64 and RV64 arms and none for Cortex-M0, so the link has no definition of the symbol; a Cortex-M0 naked body's labels are pinned by the firmware lane's naked entries.",
-      "witness": "compiler/tests/fixtures/runtime/assembly-naked-labels/main.ldn"
+      "stops": "link"
     },
     "runtime/assembly-operand-free": {
       "mode": "execute"
@@ -687,7 +762,7 @@
     "runtime/c-library-directories": {
       "mode": "restriction",
       "reason": "Its C signatures compile on Cortex-M0 since D920 and firmware links archives since D923, but the fixture's C archives are built by the hosted lanes' C driver, and it calls libm's sqrtf and pow, which firmware links from no C library.",
-      "witness": "compiler/tests/fixtures/runtime/c-library-directories/main.ldn"
+      "stops": "link"
     },
     "runtime/c-packed-record-fields": {
       "mode": "execute"
@@ -1053,17 +1128,17 @@
     "runtime/cstring-conversion-truncated-traps": {
       "mode": "restriction",
       "reason": "Its C signature compiles on Cortex-M0 since D920, but the program calls the C library's strdup, and firmware links no C library.",
-      "witness": "compiler/tests/fixtures/runtime/cstring-conversion-truncated-traps/main.ldn"
+      "stops": "link"
     },
     "runtime/cstring-first-nul-validation": {
       "mode": "restriction",
       "reason": "Its C signature compiles on Cortex-M0 since D920, but the program calls the C library's strdup, and firmware links no C library.",
-      "witness": "compiler/tests/fixtures/runtime/cstring-first-nul-validation/main.ldn"
+      "stops": "link"
     },
     "runtime/cstring-traversal-invalid-traps": {
       "mode": "restriction",
       "reason": "Its C signature compiles on Cortex-M0 since D920, but the program calls the C library's strdup, and firmware links no C library.",
-      "witness": "compiler/tests/fixtures/runtime/cstring-traversal-invalid-traps/main.ldn"
+      "stops": "link"
     },
     "runtime/declared-errors-direct-and-inferred": {
       "mode": "execute"
@@ -1089,7 +1164,7 @@
     "runtime/defer-does-not-unwind-traps": {
       "mode": "restriction",
       "reason": "Its C signature compiles on Cortex-M0 since D920, but the program calls the C library's exit, and firmware links no C library and has no process to end.",
-      "witness": "compiler/tests/fixtures/runtime/defer-does-not-unwind-traps/main.ldn"
+      "stops": "link"
     },
     "runtime/deferred-call-drops-its-result": {
       "mode": "execute"
@@ -1658,9 +1733,7 @@
       "mode": "execute"
     },
     "runtime/hosted-assembly-reaches-no-evidence-entry": {
-      "mode": "restriction",
-      "reason": "Its C import compiles on Cortex-M0 since D920, but the program calls the C library's puts, and firmware links no C library; runtime/region-bounded-pool pins the same pruning on Cortex-M0 by image size.",
-      "witness": "compiler/tests/fixtures/runtime/hosted-assembly-reaches-no-evidence-entry/main.ldn"
+      "mode": "execute"
     },
     "runtime/hosted-heap-after-thread-start": {
       "codes": [
@@ -2178,7 +2251,7 @@
     "runtime/narrow-extern-argument-is-extended": {
       "mode": "restriction",
       "reason": "Its C signature compiles on Cortex-M0 since D920, but the program calls the C library's abs, and firmware links no C library; the cortex ABI case `C signatures from source at both variants` holds AAPCS32's narrow-argument extension.",
-      "witness": "compiler/tests/fixtures/runtime/narrow-extern-argument-is-extended/main.ldn"
+      "stops": "link"
     },
     "runtime/narrow-scalars-in-stack-slots": {
       "mode": "execute"
@@ -2664,7 +2737,7 @@
     "runtime/r430-static-library": {
       "mode": "restriction",
       "reason": "Its C signature compiles on Cortex-M0 since D920, but the program calls libm's fegetround, and firmware links no C library.",
-      "witness": "compiler/tests/fixtures/runtime/r430-static-library/main.ldn"
+      "stops": "link"
     },
     "runtime/r440-aggregate-shaped-copy-endpoints": {
       "mode": "execute"
@@ -3234,9 +3307,7 @@
       "mode": "execute"
     },
     "runtime/rv64-indexed-address": {
-      "mode": "restriction",
-      "reason": "The linked RV64 instruction inspection requires a fixed public extern(c) symbol; Cortex-M0 disables general C exports while its native array-index fixtures execute the corresponding indexing operation.",
-      "witness": "compiler/tests/fixtures/runtime/rv64-indexed-address/main.ldn"
+      "mode": "execute"
     },
     "runtime/scalar-replacement-parts": {
       "mode": "execute"
@@ -3598,9 +3669,7 @@
       "mode": "execute"
     },
     "runtime/undo-does-not-unwind-traps": {
-      "mode": "restriction",
-      "reason": "Its C signature compiles on Cortex-M0 since D920, but the program calls the C library's exit, and firmware links no C library and has no process to end.",
-      "witness": "compiler/tests/fixtures/runtime/undo-does-not-unwind-traps/main.ldn"
+      "mode": "execute"
     },
     "runtime/utf16-slice-not-boundary-traps": {
       "mode": "execute"

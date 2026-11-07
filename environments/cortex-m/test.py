@@ -491,6 +491,112 @@ class ProbeFailures(unittest.TestCase):
             listing.write_text('  104:\tf000 f800 \tbl\t200 <__aeabi_l2d>\n')
             self.assertEqual(float_lowering(run)['helper_float_calls'], 0)
 
+    def test_a_restriction_names_what_stops_it(self):
+        import backend_corpus
+        import shutil
+        record = json.loads((HERE.parent.parent / 'compiler/tests/cortex-m/corpus.json').read_text())
+        name = 'abi/thread-storage-per-thread'
+        self.assertEqual(record['fixtures'][name]['stops'], 'c-options')
+        original = backend_corpus.COUNTERPARTS
+        for broken_row in ({'mode': 'restriction', 'reason': 'Threads.'},
+                           {'mode': 'restriction', 'reason': 'Threads.', 'stops': 'threads'},
+                           {'mode': 'restriction', 'reason': 'Threads.', 'stops': 'c-options',
+                            'witness': 'compiler/tests/fixtures/%s/fixture.meta' % name}):
+            with self.subTest(row=broken_row), tempfile.TemporaryDirectory() as directory:
+                broken = Path(directory)
+                shutil.copytree(original / 'cases', broken / 'cases')
+                (broken / 'counterparts.json').write_text(
+                    (original / 'counterparts.json').read_text())
+                record['fixtures'][name] = broken_row
+                (broken / 'corpus.json').write_text(json.dumps(record))
+                backend_corpus.COUNTERPARTS = broken
+                try:
+                    with self.assertRaisesRegex(RuntimeError, 'a "restriction" row says what'
+                                                ' stops it'):
+                        backend_corpus.inventory()
+                finally:
+                    backend_corpus.COUNTERPARTS = original
+
+    def test_a_restriction_is_held_to_where_its_build_stops(self):
+        import backend_corpus
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            run = Run(root, root)
+            said = {}
+
+            def command(name, argv, timeout=30, env=None):
+                text = said.get(name, '')
+                (root / (name + '.log')).write_text(text)
+                if name in said.get('failing', ()):
+                    raise backend_corpus.CommandFailed(name, root / (name + '.log'),
+                                                       'failed with exit 1')
+                return text
+            row = {'mode': 'restriction', 'stops': 'c-headers', 'reason': 'It prints.'}
+            name = 'abi/r440-native-banks'
+            with patch.object(run, 'command', side_effect=command):
+                #  The headers no directory holds are read from -M -MG.
+                said.update({'c-include-directory': str(root),
+                             'headers-1': 'peer.o: %s/peer.c stdio.h %s/x.h\n' % (root, root)})
+                result = backend_corpus.restriction(run, root / 'refine', name, row,
+                                                    'none', 'off')
+                self.assertEqual((result['stops'], result['stopped_by']),
+                                 ('c-headers', ['stdio.h']))
+                #  An option the pinned GCC refuses stops it before its headers.
+                said['failing'] = ('headers-1',)
+                said['headers-1'] = ("arm-eabi-gcc: error: unrecognized command-line option"
+                                     " '-pthread'; did you mean '-fpthread'?\n")
+                with self.assertRaisesRegex(RuntimeError, 'stops at c-options \\(-pthread\\),'
+                                            ' and its .* row says "stops": "c-headers"; if'
+                                            ' that is what stops it, write "stops": "c-options"'):
+                    backend_corpus.restriction(run, root / 'refine', name, row, 'none', 'off')
+                #  A refusal by refine is a refuse row's, with its codes.
+                said['failing'] = ('compile-restricted',)
+                said['compile-restricted'] = 'error[L0346]: cortex-m0 calls no variadic C function\n'
+                with self.assertRaisesRegex(RuntimeError, 'so it is no restriction: write a'
+                                            ' "refuse" row with "codes": \\["L0346"\\]'):
+                    backend_corpus.restriction(run, root / 'refine', name, row, 'none', 'off')
+                #  An internal defect is a stop of its own.
+                said['compile-restricted'] = ('refine: internal compiler defect in emission:'
+                                              ' unclassified compiler check\n')
+                result = backend_corpus.restriction(run, root / 'refine', name,
+                                                    dict(row, stops='defect'), 'none', 'off')
+                self.assertEqual(result['stopped_by'], ['refine: internal compiler defect in'
+                                                        ' emission: unclassified compiler check'])
+                #  One that builds, links and needs nothing hosted is stale.
+                said['failing'] = ()
+                said['headers-1'] = 'peer.o: %s/peer.c\n' % root
+                with patch('backend_corpus.c_objects', return_value=[]), \
+                        patch('backend_corpus.build', return_value=root / 'program.elf'):
+                    with self.assertRaisesRegex(RuntimeError, 'its restriction is stale: the'
+                                                ' program builds and links .* make its .* row'
+                                                ' "execute"'):
+                        backend_corpus.restriction(run, root / 'refine', 'abi/c-packed-records',
+                                                   dict(row, stops='link'), 'none', 'off')
+
+    def test_every_object_of_an_abi_image_passes_floats_as_its_lane_does(self):
+        import backend
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            run = Run(root, root)
+            attributes = {'attributes-program': 'Tag_ABI_FP_number_model: IEEE 754\n',
+                          'attributes-peer': 'Tag_ABI_VFP_args: VFP registers\n'}
+            with patch.object(run, 'command',
+                              side_effect=lambda name, argv, **_: attributes[name]):
+                with self.assertRaisesRegex(RuntimeError, 'peer.o passes float arguments in'
+                                            ' the VFP bank, and the armv6-m lane passes them in'
+                                            ' core registers'):
+                    backend.conventions(run, [root / 'program.o', root / 'peer.o'], 'armv6-m')
+                with self.assertRaisesRegex(RuntimeError, 'program.o passes float arguments'
+                                            ' in core registers'):
+                    backend.conventions(run, [root / 'program.o', root / 'peer.o'],
+                                        'armv7e-m+fpv5-d16')
+                attributes['attributes-program'] = attributes['attributes-peer']
+                self.assertEqual(backend.conventions(
+                    run, [root / 'program.o', root / 'peer.o'], 'armv7e-m+fpv5-d16'),
+                    {'program.o': 'VFP registers', 'peer.o': 'VFP registers'})
+
     def test_a_lane_restriction_needs_its_reason(self):
         import backend_corpus
         record = json.loads((HERE.parent.parent / 'compiler/tests/cortex-m/corpus.json').read_text())

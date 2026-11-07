@@ -160,6 +160,19 @@ public wakeup_pin_irqn: irqn_type = 149
 
 public uint32_t: type = c.c_uint
 
+public vfp_pair: type = layout(c) struct
+    re: c.c_double
+    im: c.c_double
+end vfp_pair
+
+public vfp_sample: type = layout(c) struct
+    gain: c.c_float
+    offset: c.c_double
+    channel: c.c_uchar
+    trim: [3]c.c_short
+    stamp: c.c_longlong
+end vfp_sample
+
 public extern(c) link(symbol: "landin_cmsis_vfp_SCB_GetFPUType_call") scb_get_fpu_type: () -> (result: uint32_t)
 
 public extern(c) link(symbol: "landin_cmsis_vfp___NVIC_DisableIRQ_call") nvic_disable_irq: (irqn: irqn_type) -> none
@@ -172,8 +185,16 @@ public extern(c) link(symbol: "landin_cmsis_vfp___NVIC_GetPriority_call") nvic_g
 
 public extern(c) link(symbol: "landin_cmsis_vfp___NVIC_SetPriority_call") nvic_set_priority: (irqn: irqn_type, priority: uint32_t) -> none
 
+public extern(c) link(symbol: "landin_cmsis_vfp_vfp_apply_call") vfp_apply: (sample: ptr u8, value: c.c_double) -> (result: c.c_double)
+
 public extern(c) link(symbol: "landin_cmsis_vfp_vfp_backfill_call") vfp_backfill: (first: c.c_float, second: c.c_double, third: c.c_float) -> (result: c.c_double)
 
 public extern(c) link(symbol: "landin_cmsis_vfp_vfp_half_call") vfp_half: (value: c.c_float) -> (result: c.c_float)
 
+public extern(c) link(symbol: "vfp_peer_calls_back") vfp_peer_calls_back: () -> (result: c.c_int)
+
+public extern(c) link(symbol: "vfp_peer_check") vfp_peer_check: (a: c.c_float, b: c.c_double, c_: c.c_float, d: c.c_double, e: c.c_double, f: c.c_double, g: c.c_double, h: c.c_double, i: c.c_double, j: c.c_float, count: c.c_int) -> (result: c.c_int)
+
 public extern(c) link(symbol: "vfp_peer_mix") vfp_peer_mix: (total: c.c_double, sample: c.c_float, count: c.c_int) -> (result: c.c_double)
+
+public extern(c) link(symbol: "landin_cmsis_vfp_vfp_turn_call") vfp_turn: (z: vfp_pair, scale: c.c_float) -> (result: vfp_pair)

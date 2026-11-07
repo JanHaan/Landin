@@ -207,6 +207,13 @@ package Landin.Testing.Fixtures is
    --  links with the C library.
    function C_Shared (Item : Fixture) return String;
 
+   --  D985: an ABI fixture's pinned input directories, each the first part
+   --  of a `devices/inputs.json` name such as `rp2040-cmsis`, whose fetched
+   --  headers its C sources include.  The Cortex-M corpus alone fetches
+   --  them and gives the C compiler each one's directory, so a fixture that
+   --  names any names no target but cortex-m0.
+   function C_Inputs (Item : Fixture) return String;
+
    --  The stem of one `c-shared` entry, which names its shared object:
    --  `plugin` for `plugins/plugin.c`.
    function Shared_Stem (Source : String) return String;
@@ -341,6 +348,7 @@ private
       C_Libraries : Ada.Strings.Unbounded.Unbounded_String;
       C_Archive_Files : Ada.Strings.Unbounded.Unbounded_String;
       Search_Directories : Ada.Strings.Unbounded.Unbounded_String;
+      Input_Directories : Ada.Strings.Unbounded.Unbounded_String;
       Link      : Ada.Strings.Unbounded.Unbounded_String;
       Stream    : Stream_Choice := Merged;
       Profiles  : Profile_Policy := Standard;

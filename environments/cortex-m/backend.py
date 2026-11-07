@@ -899,14 +899,119 @@ def image_contract(path, profile=None):
             'stack_reserved': profile['stack_reserved'], 'entry': header[4]}
 
 
+#  What an ABI fixture's C is compiled with beside the level's flags, which
+#  already make it freestanding, unoptimized past -O1 and warning-free
+#  (D985): C11; of the headers only GCC's own freestanding ones, so a peer
+#  that reaches for the C library says so by the header it names rather
+#  than by finding newlib's beside the pinned GCC; and int-sized enums, the
+#  ones Cortex-M's C boundaries use and Clang's default, where the pinned
+#  GCC's bare-metal default is short enums (D921), so no fixture has to
+#  remember them.  A generated binding's static assertions refuse a peer
+#  built without them (abi.py).
+C_STANDARD = ['-std=c11', '-nostdinc', '-fno-short-enums', '-Wa,--noexecstack']
+
+#  The four routines GCC requires of a freestanding environment, which it
+#  calls for a structure copy or clear whatever -ffreestanding says (D985).
+C_RUNTIME = HERE / 'probes/c-runtime.c'
+
+
+def c_includes(run, level):
+    """GCC's own include directory for LEVEL, its freestanding headers."""
+    return Path(run.command('c-include-directory', [
+        tool(run, level, 'gcc'), *level_flags(level),
+        '-print-file-name=include']).strip()).resolve(strict=True)
+
+
+def fetched_inputs(meta):
+    """The pinned input directories META's `c-inputs` names, each fetched
+    and verified by its SHA-256 (scripts/fetch_inputs.py)."""
+    names = meta.c_inputs
+    if not names:
+        return []
+    sys.path.insert(0, str(ROOT / 'scripts'))
+    import fetch_inputs
+    pinned = fetch_inputs.read_lock()
+    found = []
+    for name in names:
+        inside = [one for one in pinned if one.startswith(name + '/')]
+        require(bool(inside), '%s names the input directory %s, and devices/inputs.json'
+                ' pins nothing under it' % (meta.label, name))
+        for one in inside:
+            if one.endswith('.h'):
+                fetch_inputs.fetch(one, pinned)
+        found.append(fetch_inputs.cache_root() / name)
+    return found
+
+
+def c_compiler(run, meta, base, level, flags=None):
+    """The command an ABI fixture's C is compiled with for LEVEL by the
+    lane's C contract (D985), less its source and output: the level's
+    flags, or FLAGS for a control that compiles it otherwise, C11 with
+    GCC's freestanding headers alone, the fixture directory and each
+    `c-inputs` directory included, and its `c-args` last."""
+    flags = level_flags(level) if flags is None else flags
+    includes = ['-isystem', str(c_includes(run, level)), '-I', str(base)]
+    for directory in fetched_inputs(meta):
+        includes += ['-I', str(directory)]
+    return [tool(run, level, 'gcc'), *flags, *C_STANDARD, *includes,
+            *meta.c_args_for('cortex-m0')]
+
+
+def c_objects(run, meta, base, level, flags=None, name='c'):
+    """Each of an ABI fixture's `c-sources` compiled by `c_compiler`, then
+    C_RUNTIME by the same command.  Returns the objects."""
+    compiler = c_compiler(run, meta, base, level, flags)
+    objects = []
+    for index, source in enumerate(meta.c_sources, start=1):
+        obj = run.out / ('%s-%d.o' % (name, index))
+        run.command('compile-%s-%d' % (name, index),
+                    [*compiler, '-c', base / source, '-o', obj])
+        objects.append(obj)
+    runtime = run.out / (name + '-runtime.o')
+    run.command('compile-%s-runtime' % name, [
+        *compiler, '-ffunction-sections', '-fno-tree-loop-distribute-patterns',
+        '-c', C_RUNTIME, '-o', runtime])
+    return objects + [runtime]
+
+
+def vfp_arguments(attributes):
+    """How an Arm object's `readelf -A` says it passes floats: `VFP
+    registers`, `AAPCS` for the base standard, or None where it declares
+    nothing, which GCC's base-standard objects and libgcc's do."""
+    found = re.search(r'Tag_ABI_VFP_args: (.+)', attributes)
+    return found.group(1).strip() if found else None
+
+
+def conventions(run, objects, level, name='attributes'):
+    """Each object's float-argument convention, held to LEVEL's lane by an
+    assertion of its own, apart from the linker's (D985): every object
+    passes floats in the VFP bank on a hard-float lane and none does on
+    the others.  Returns them by object name and writes them to
+    NAME.json."""
+    found = {}
+    for obj in objects:
+        found[Path(obj).name] = vfp_arguments(run.command(
+            '%s-%s' % (name, Path(obj).stem), [tool(run, level, 'readelf'), '-A', obj]))
+    wrong = sorted(one for one, said in found.items()
+                   if (said == 'VFP registers') != hard_float(level))
+    (run.out / (name + '.json')).write_text(json.dumps(found, indent=2, sort_keys=True) + '\n')
+    require(not wrong, '%s %s float arguments %s, and the %s lane passes them %s' % (
+        ', '.join(wrong), 'passes' if len(wrong) == 1 else 'pass',
+        'in core registers' if hard_float(level) else 'in the VFP bank', level,
+        'in the VFP bank' if hard_float(level) else 'in core registers'))
+    return found
+
+
 def build(run, refine, inputs, optimize, specialize, extra=(), linker=None,
-          level='armv6-m', profile=None):
+          level='armv6-m', profile=None, objects=()):
     """Compile INPUTS to assembly and link them with the external harness.
 
     The image is linked with PROFILE's derived script, by default the
     profile of LEVEL's machine, and held to the limits its build report
     gives; LINKER replaces the script for a control that places a routine
-    of its own, keeping the profile's facts.
+    of its own, keeping the profile's facts.  OBJECTS, an ABI fixture's
+    compiled C, are linked after the program's, and every object's float
+    convention is held to the lane's.
     """
     profile = profile or derived(run, refine, LEVELS[level]['profile'])
     flags = level_flags(level)
@@ -928,6 +1033,7 @@ def build(run, refine, inputs, optimize, specialize, extra=(), linker=None,
         raise ImageLimit("a routine's stack exceeds the selected %d-byte stack reservation"
                          % profile['stack_reserved'])
     elf = run.out / 'program.elf'
+    peers = list(objects)
     objects = [harness_start(run, profile, level)]
     for index, source in enumerate([assembly, *extra], start=1):
         obj = run.out / ('input-' + str(index) + '.o')
@@ -936,6 +1042,9 @@ def build(run, refine, inputs, optimize, specialize, extra=(), linker=None,
         objects.append(obj)
     run.command('object-disassembly', [tool(run, level, 'objdump'), '-dr', objects[1]])
     check_datum_symbols(run, objects[1], level)
+    if peers and not rv32(level):
+        conventions(run, [objects[1], *peers], level)
+    objects += peers
     link(run, objects, linker or profile['script'], level, elf)
     image = image_contract(elf, profile)
     image.update(image_sizes(run, elf, profile, level=level))
@@ -963,8 +1072,13 @@ def build(run, refine, inputs, optimize, specialize, extra=(), linker=None,
                 and ('VFP registers' in attributes) == hard_float(level),
                 'ELF requires an unsupported instruction or floating ABI')
     run.command('size', [tool(run, level, 'size'), elf])
-    require(not run.command('undefined', [tool(run, level, 'nm'), '-u', elf]).strip(),
-            'freestanding test image has unresolved dependencies')
+    #  A weak reference nothing defines is zero, which a C peer may test
+    #  for (abi/public-routine-is-local); a strong one is a missing routine.
+    unresolved = [line.split()[-1] for line in run.command(
+        'undefined', [tool(run, level, 'nm'), '-u', elf]).splitlines()
+        if line.split() and line.split()[0] not in ('w', 'v')]
+    require(not unresolved, 'freestanding test image has unresolved dependencies: '
+            + ', '.join(unresolved))
     library = Path(run.command('libgcc-path', [tool(run, level, 'gcc'), *flags,
                    '-print-libgcc-file-name']).strip()).resolve(strict=True)
     require(LEVELS[level]['multilib'] in str(library),
@@ -1025,7 +1139,8 @@ def fixture(run, refine, name, optimize, specialize, level='armv6-m',
             include_compiler_sha256=True):
     source = ROOT / 'compiler/tests/fixtures' / name
     meta = metadata(source / 'fixture.meta')
-    require(meta['class'] == 'runtime', 'development selector requires runtime fixture')
+    require(meta['class'] in ('runtime', 'abi'),
+            'development selector requires a runtime or ABI fixture')
     inputs = meta.module_arguments(source)
     counterparts = json.loads((COUNTERPARTS / 'counterparts.json').read_text())['replacements']
     if source.name in counterparts:
@@ -1036,7 +1151,10 @@ def fixture(run, refine, name, optimize, specialize, level='armv6-m',
             'fixture requires hosted input/output')
     #  Both link and run on LEVEL's own profile: the reference's, or its
     #  lane's description's.
-    elf = build(run, refine, inputs, optimize, specialize, level=level)
+    #  An ABI fixture's C peers are built by the lane's C contract and
+    #  linked with the program by the harness (D985).
+    peers = c_objects(run, meta, source, level) if meta['class'] == 'abi' else []
+    elf = build(run, refine, inputs, optimize, specialize, level=level, objects=peers)
     execute(run, elf, 1 if name == 'runtime/fixed-conditional-runtime' else
             meta.status_at(refine_level(level)), meta.traps, level=level)
     result = {'fixture': name, 'optimize': optimize, 'specialize': specialize,

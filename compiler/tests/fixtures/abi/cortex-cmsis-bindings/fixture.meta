@@ -4,7 +4,7 @@ summary: Bindings generated from the pinned CMSIS RP2040.h for AAPCS32's base pr
 program: program.ldn
 root: ../../../../..
 c-sources: adapters.c
-c-args: -fno-short-enums
+c-inputs: rp2040-cmsis
 status: 42
 constructs: 1570, 1580
 targets: cortex-m0

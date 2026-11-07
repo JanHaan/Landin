@@ -19145,8 +19145,8 @@ reference's, so a program fits the AN505's map exactly when it fits the
 reference's, and one inventory row says each fixture's verdict at every
 level. Run with `--lane mps2-an505`, the corpus builds and runs every
 `execute` row at `armv8-m.main` alone on the AN505, compiles every
-`refuse` row there to its codes and records every `restriction`;
-`run.py`'s `mps2-an505` lane is that run.
+`refuse` row there to its codes and builds every `restriction` to its
+stop (D986); `run.py`'s `mps2-an505` lane is that run.
 
 **The alternatives:** a harness linker script of the lane's own, which the
 compiler would not derive and nothing would hold to the facts every other
@@ -28789,7 +28789,8 @@ and paints d8-d15, and every image must carry the unit's attributes.
 `backend_corpus.py --lane mps2-an500` runs the whole inventory there at
 every profile, each row's own disposition included: an `execute` row
 executes, an image the lane's map cannot hold is a limit, a source refusal
-is checked with the lane's inputs, and a restriction is recorded. A row's
+is checked with the lane's inputs, and a restriction is built to the stage
+that stops it (D986). A row's
 `lanes` entry may give a lane a restriction of its own with its reason,
 which the lane still runs and requires to fail, so a stale one fails the
 run, and a `refuse` row's entry the codes the lane refuses it with where
@@ -29042,6 +29043,112 @@ carry as well.
 **Pinned by** the `cortex ABI` case `firmware links C archives`, whose
 images hold an init array, a TLS section and a dynamic section, each
 refused and removed.
+
+### D985 — The Cortex-M corpus runs an ABI fixture's C freestanding, by one contract
+
+**From** D545, D619, D780, D920, D921 and D923.
+
+**The tour said** nothing; the corpus ran runtime fixtures alone, and every
+ABI fixture was a restriction, since C was refused on Cortex-M and nothing
+built a C peer for it.
+
+**Chosen:** an `abi/` fixture whose inventory row says `execute` is built
+and run as a runtime fixture is, at every profile and level, with its C.
+Each `c-sources` entry is compiled by the pinned `arm-eabi-gcc` with the
+flags of the level's lane, the processor and float ABI the harness start
+is assembled with, soft on the micro:bit, AN385 and AN505 and
+`-mfloat-abi=hard -mfpu=fpv5-d16` on the AN500, `-ffreestanding -nostdlib
+-O1 -Wall -Wextra -Werror`, then `-std=c11 -nostdinc -fno-short-enums`,
+GCC's own include directory, the fixture's directory, each pinned input
+directory the new `c-inputs` key names, fetched by hash, and the fixture's
+`c-args`. Int-sized enums are what Cortex-M's C boundaries use, Clang's
+default and the generated bindings' assertion, so the lane passes them
+rather than each fixture. No C library is reachable: the headers are GCC's
+freestanding ones, and the link is the harness's start, refine's object,
+the C objects, the four routines GCC requires of a freestanding program,
+`memcpy`, `memmove`, `memset` and `memcmp`, each in its own section, and
+libgcc. Every object's float-argument attribute is held to the lane's
+before the link, apart from GNU ld's check, and a C peer compiled for the
+other variant must be refused by both, the linker in either order.
+`abi/cortex-c-peer` also takes the route a program does, refine's own
+firmware link of its C as archives named by `linker.library` with `-L`
+(D923), under compiler-owned startup.
+
+**The alternatives:** newlib's headers and archive, which the pinned GCC
+ships and which would let a peer that needs a hosted C library pass as a
+freestanding one; `-fno-short-enums` written in each fixture's `c-args`,
+which a fixture forgets and a short-enum peer then links with a warning
+only; linking the C objects through refine for every fixture, which ties
+each corpus program to compiler-owned startup and loses the harness's
+register and stack oracle; and semihosting for the status, which the
+harness's debugger session already reads without.
+
+**Pinned by** `environments/cortex-m/backend.py`'s `c_compiler`,
+`c_objects` and `conventions`, `backend_corpus.py`'s `convention_control`
+and `refine_link_route`, `abi/cortex-c-peer`, `abi/cortex-cmsis-bindings`
+and `abi/cortex-vfp-bindings`, the metadata cases for `c-inputs`, and
+`environments/cortex-m/test.py`'s convention case.
+
+### D986 — A corpus restriction names the stage that stops it, and the lane reaches it
+
+**From** D619 and D985.
+
+**The tour said** nothing; a `restriction` row of
+`compiler/tests/cortex-m/corpus.json` gave a reason and a witness file,
+the corpus never built it, and 65 restrictions written while C was refused
+on Cortex-M went on saying so after it was enabled.
+
+**Chosen:** a restriction is built at none/off on each lane it runs on as an
+`execute` row is, and names in `stops` the first stage that must stop it:
+`defect`, refine fails internally; `c-options`, the pinned GCC refuses one
+of its `c-args`; `c-headers`, a C source includes a header no freestanding
+C has; `c-source`, a C source does not compile for the target; `link`, the
+image names a symbol nothing linked defines; or `oracle`, it builds and
+links, and its oracle needs standard input, arguments, files or output. The
+lane requires the stage it reached to be the row's, and records what
+stopped it, read from the build, as an L0015 refusal's modules are read. A
+fixture refine refuses is no restriction but a `refuse` row with its
+codes; one that gets past every stage is stale and must be made `execute`.
+Each of the 65 was decided again by that rule: 6 execute, 36 refuse with
+their codes, and 23 are restrictions with their stops.
+
+**The alternatives:** keeping witnesses, which said what a fixture once
+needed and nothing about what stops it now; requiring every restriction to
+fail somewhere, as D619's lane restriction does, which a fixture failing for
+a new reason would satisfy; and a restriction per missing facility, the C
+library, threads or files, which the lane cannot observe except as one of
+these stages.
+
+**Pinned by** `environments/cortex-m/backend_corpus.py`'s `restriction` and
+`STOPS`, the inventory's restriction rows, `scripts/add_fixture.py`'s
+`--stops`, and `environments/cortex-m/test.py`'s restriction cases.
+
+### D987 — The generated Cortex-M bindings' layouts are held to both compilers at both variants
+
+**From** D935, D936 and D939.
+
+**The tour said** nothing; the binding generator emits static assertions
+of each native record's size, alignment and offsets and each enum's size,
+which Clang checked only at the row a fixture was generated for.
+
+**Chosen:** `environments/cortex-m/abi.py` compiles each Cortex-M binding
+fixture's generated adapters with `-fsyntax-only`, by the pinned GCC at
+`-mcpu=cortex-m0 -mfloat-abi=soft` and `-mcpu=cortex-m7 -mfpu=fpv5-d16
+-mfloat-abi=hard` and by Clang at `thumbv6m-none-eabi` and
+`thumbv7em-none-eabihf`, each with its freestanding headers. The VFP
+fixture's records must hold at both rows under both, AAPCS32's layout being
+one for both variants; the CMSIS fixture must hold at the base row and be
+refused by its header's `#error` at the VFP one; and its adapters built
+with short enums must be refused by their own assertion. Where no Clang is
+on PATH its half is recorded as skipped, never as held.
+
+**The alternatives:** a probe of `offsetof` and `sizeof` values written
+apart from the generated C, which would compare the compilers with each
+other rather than with the binding Landin reads; and Clang only, which is
+not the compiler firmware C is built with.
+
+**Pinned by** `environments/cortex-m/abi.py`'s `binding_layouts` and its
+`binding-layouts.json`.
 
 ### D695 — Espressif's QEMU carries both RV32 corpus lanes, under the Arm lanes' harness
 
