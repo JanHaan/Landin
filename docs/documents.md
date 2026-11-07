@@ -17,16 +17,15 @@ arrays is answered in one place whichever document it is asked of.
 | part | what it holds |
 | --- | --- |
 | the grammar of the enabled kernel, [1740] to [1830] | what the compiler accepts today, and nothing else. It shrinks as the language grows. |
-| the rules the tour left unsaid, [1840] to [2000] | the permanent rules a tutorial omits because a reader supplies them. Grouped: names, scopes and doc comments, types and literal context, what an operator takes, places and assignment, calls and errors, module values, and the boundaries the compiler owns. |
-| the decisions this document took, D1 to D252 | fourteen subject sections, each decision with what the tour said before, what was chosen, the alternative, and the fixture that pins it. |
+| the rules the tour left unsaid, [1840] onward | the permanent rules a tutorial omits because a reader supplies them. Grouped: names, scopes and doc comments, types and literal context, what an operator takes, places and assignment, calls and errors, module values, and the boundaries the compiler owns. |
+| the recorded decisions | fourteen subject sections, each decision with what the tour said before, what was chosen, the alternative, and the fixture that pins it. |
 
 A construct id is a stable citation anchor and never moves. The consequence
 is that the numbers no longer ascend down the page: [1950] sits beside
 [1890] because both say what an operator takes, and D1 sits beside D233
-because both say what a declaration introduces. Inside a register section
-the numbers still ascend, so a run of decisions that built one subject
-together is read in the order it was built. Nothing that cites an id has to
-know where it sits.
+because both say what a declaration introduces. Related decisions may also
+be grouped together out of numerical order within a register section.
+Nothing that cites an id has to know where it sits.
 
 ## Where a new rule goes
 

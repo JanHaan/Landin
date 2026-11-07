@@ -1,9 +1,9 @@
 # The Landin specification
 
 > **You probably do not want to read this.** It is the normative reference:
-> about twenty thousand lines of grammar, rules and recorded decisions,
-> written to settle questions exactly, not to teach. Nobody reads it from
-> the top. To learn Landin, read [the tour](tour.md); to write a program,
+> grammar, rules and recorded decisions, written to settle questions
+> exactly, not to teach. Nobody reads it from the top. To learn Landin,
+> read [the tour](tour.md); to write a program,
 > copy one from [the examples](examples.md); if you know C, start with
 > [Landin for C programmers](docs/from-c.md); for the library's calls, see
 > [the library reference](docs/library.md).
@@ -905,7 +905,7 @@ expression  ::= logical_and ("or" logical_and)*
 ### [1830] What is not enabled is refused, and named
 
 What is not enabled is refused, and named.
-A construct this tour describes and this grammar omits is not a
+A construct `tour.md` describes and this grammar omits is not a
 guess the compiler gets to make. Meeting one is a diagnostic that
 names the construct's paragraph and says what the refused form is, so a
 program written against the whole tour fails with a list rather than with a
@@ -1090,16 +1090,18 @@ and a second pointer member is L0338. The source spelling never assumes either
 representation.
 
 The union is not a pointer. `.val`, `addr` of a `.val` reached through one,
-an integer conversion of one, `any` construction from one, a comparison of
-one, and an argument or result position wanting `ptr T` are each L0335,
-because each would read an atom case as an address; `ptr(n)` cannot produce
+an integer conversion of one, `any` construction from one, a comparison with
+another union or a pointer, and an argument or result position wanting
+`ptr T` are each L0335, because each would read an atom case as an address; `ptr(n)` cannot produce
 one for the same reason, and `zeroed` does not name an atom case because no
 zero or default atom exists. A plain `ptr T` widens into a union whose
 pointer member it relaxes to, and an atom singleton or a contained atom set
 widens into it, in the direction this paragraph already gives atom sets; a
 smaller union widens into a larger one with the same pointer member, and
-neither direction reverses (D235). `match` [1210] is the only way through: its
-cases are the union's atom names and the reserved word `ptr` with an optional
+neither direction reverses (D235). Equality with an atom value whose atoms
+all belong to the union's set is admitted, with the atom on either side:
+`u == a` and `u <> a` test the atom case without exposing an address (D429).
+`match` [1210] is the way to recover the pointer: its cases are the union's atom names and the reserved word `ptr` with an optional
 read-only binding of the plain pointer type, an `inout` binding on that arm is
 L0333 [1220], a case named twice is L0311, and a case named by neither an arm
 nor `_` is L0312 exactly as for an atom set. The bound pointer carries the
@@ -1214,7 +1216,7 @@ that scalar is evaluated once and broadcast, not implicitly converted.
 | --- | --- |
 | `+` `-` `*` `/` | one integer or float type, and that type back [0290] |
 | `%`, and [0300]'s `+%` `-%` `*%` | one integer type, and that type back [0290] |
-| `&` `^` `\|`, and the unary `~` | one integer type, and that type back [0330]; or one distinct type whose base is an unsigned integer, and that distinct type back [0650], which no updating assignment writes |
+| `&` `^` `\|`, and the unary `~` | one integer type, and that type back [0330]; or one distinct type whose base is an unsigned integer, and that distinct type back [0650]. That distinct type also admits `&=`, `^=` and `\|=`, reaching the assigned place once [0390] (D427) |
 | `<<` `>>` | an integer shifted by an integer of that same type, and that type back [0320]. The amount is not bounded by the width: an amount at or past it gives zero on every shift, a signed `>>` included, while inside the width a signed `>>` keeps the sign (D13). |
 | `==` `<>` `<` `<=` `>` `>=` | one type on both sides, and a bool back [0350]; atom sets have identity equality and inequality only, including between disjoint or overlapping sets. D200: the type is a scalar, an atom set, a pointer or a function value; two pointers must point at one type, permission aside, and a slice, an erased value, an array or a struct has no comparison. Two values of one distinct type whose base is a scalar [0650] have `==` and `<>`, and `<`, `<=`, `>` and `>=` in the base's order, IEEE's comparisons for a floating base with NaN unordered; never with the base or another type without a conversion |
 | `and` `or` `not` | bool, and a bool back [0340] |
@@ -1675,7 +1677,7 @@ is an immutable atom value scoped to the recovery block and typed as that
 complete set. The successful call edge and every recovery edge that falls
 through must supply the same complete scalar, atom, function, array, nominal
 aggregate or anonymous multiple-result aggregate shape. A recovery edge may
-instead `return` or `fail`; it then
+instead `return`, `fail`, or a permitted `break` or `continue`; it then
 supplies no placeholder and does not participate in the value join. Atom
 `match` is exhaustive over the subject's structural set; one final `_` arm may cover
 all members not named explicitly, and atom arms bind no payload.
@@ -2591,10 +2593,9 @@ The register is the fourteen sections that follow, and they are the subjects
 answered in one place whichever document it is asked of. It was chronological
 until the documents were reorganised by subject, which is why the numbers now
 run out of order: D1 and D2 are scope decisions and sit beside D233, which was
-taken far later. Inside a section the numbers do ascend, so a run of decisions
-that built one subject together is still read in the order it was built. A
-heading is a stable citation target, and nothing that cites one has to know
-where it sits.
+taken far later. Related rules may be grouped together within a section even
+when their numbers are out of order. A heading is a stable citation target,
+and nothing that cites one has to know where it sits.
 
 ## DECISIONS: DECLARATIONS, NAMES AND SCOPES
 
