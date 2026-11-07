@@ -141,11 +141,11 @@ Landin's own times are nearly the same on both systems; the multiples differ
 because C's do, fasta's C being two and a half times faster on Darwin and
 binary-trees' twice as fast on Linux.
 
-Ordinary-program probes also informed these changes, including containers,
-text formatting, a lexer, word count and erased dispatch. Their C comparison
-sources and invocation records were not retained, so this page makes no
-quantitative claim for those probes. The measured comparisons above cover
-the five Benchmark Game workloads whose sources and method are identified.
+Ordinary programs, each timed against a C one, also guided these changes:
+containers, text formatting, a lexer, word count and calls through `any`.
+Their C sources and the commands that ran them were not kept, so this page
+gives no figures for them. The comparisons above are the five Benchmark Game
+programs, whose sources and method the page describes.
 
 ## Peak resident memory
 

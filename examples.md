@@ -1833,10 +1833,12 @@ leaving it untouched. Once it creates the directory, an `undo` attempts
 cleanup if setup or copying fails and reports any cleanup failure with
 the directory to remove.
 
-- The destination must be outside the source. Before creating it, the
-  program compares device and inode identities along its existing ancestors,
-  following symbolic links. Paths must stay put during the copy; this example
-  does not defend against concurrent renames or changing mount arrangements.
+- The destination must lie outside the source. Before creating anything,
+  `outside_source` walks up from the destination, or from its parent when
+  the destination does not exist yet, following symbolic links, and refuses
+  any directory on the way with the source's device and inode. The program
+  assumes paths stay put while it runs: it does not defend against a
+  concurrent rename or a change of mounts.
 - Each file is written to a temporary file that `io.make_temporary` makes
   beside its destination. `io.synchronize` then puts its bytes on the disk
   and `io.rename` moves it into place, so a program reading the copy sees

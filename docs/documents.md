@@ -23,8 +23,8 @@ arrays is answered in one place whichever document it is asked of.
 A construct id is a stable citation anchor and never moves. The consequence
 is that the numbers no longer ascend down the page: [1950] sits beside
 [1890] because both say what an operator takes, and D1 sits beside D233
-because both say what a declaration introduces. Related decisions may also
-be grouped together out of numerical order within a register section.
+because both say what a declaration introduces. Within a register section,
+too, related decisions sit together whatever their numbers.
 Nothing that cites an id has to know where it sits.
 
 ## Where a new rule goes

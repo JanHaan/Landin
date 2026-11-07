@@ -36,10 +36,10 @@ checked source
     -> assembly -> platform assembler and linker
 ```
 
-The same IR feeds the native x86-64, arm64, RISC-V, Cortex-M and Xtensa
-emitters for hosted executables and firmware. The
-[capability inventory](capabilities.md) names the supported targets and their
-limits. The IR is expressed without machine registers, stack offsets or
+The same IR feeds every native emitter, x86-64, arm64, RISC-V, Cortex-M
+and Xtensa, for hosted executables and firmware alike; the
+[capability inventory](capabilities.md) names the targets each supports and
+their limits. The IR is expressed without machine registers, stack offsets or
 instruction encodings. Each backend
 translates its operations into machine instructions and supplies the calling
 convention and object-format details.
@@ -650,18 +650,18 @@ it for this unit, so a pruning claim can be read here rather than in the
 assembly or `nm`. The recorded corpus dump leaves the word out, because the
 backend, not the lowering, decides it.
 
-For a saved comparison that identifies its request and generic instances,
-use the annotated form:
+A dump kept to compare against later should say what produced it, and the
+annotated form does:
 
 ```sh
 refine compile --emit=ir-annotated --optimize=none --specialize=off program.ldn -o program.ir
 ```
 
-Its first line records the target, CPU feature level, optimization and
-specialization settings. Routine names include their module and, for a
-generic instance, its template name and item identity. It also includes the
-reached-type metadata described above. The compact `--emit=ir` form keeps its
-existing spelling for comparisons against recorded fixtures.
+Its first line names the target, the CPU feature level and the optimization
+and specialization settings. Each routine's name carries its module and, for
+a generic instance, its template's name and item identity, and the dump
+carries the metadata `With_Metadata` adds. The compact `--emit=ir` form is
+unchanged, so it still compares with the recorded fixtures.
 
 The dump has no reader and is not a stable serialization format. Comparing a
 fresh dump with the recorded one detects a change in lowering; it does not
@@ -912,9 +912,9 @@ D248's named operands are checked against `Landin.Targets.Assembly`'s
 register tables on every target. A backend chooses each `general` register
 through the same table, in its written order, passing over every register the
 block holds or its text names, and fills `{name}` at the operand's width.
-Every implemented backend emits ordinary assembly. Naked bodies retain their
-no-frame contract and use the selected target's assembly; the positional
-shorthand retains its Cortex register contract. x86-64's allocator hands
+Every implemented backend emits ordinary blocks. A naked body keeps its
+no-frame contract on every target, written in that target's assembly, and
+the positional shorthand keeps its Cortex register contract. x86-64's allocator hands
 out only rbx and r12-r15 in a routine with assembly, and
 never one a block of the routine declares, which it saves instead, so each
 input moves straight into its register and each output straight to its slot.

@@ -27,8 +27,8 @@ SUMMARY = (
     "permission and binding mutability; local origin and escape analysis "
     "rather than a borrow checker; concepts with evidence tables for both "
     "static generics and runtime dispatch; no compile-time execution and no "
-    "macros. Native backends emit assembly for hosted and freestanding targets; "
-    "the maintained capability inventory describes current target coverage."
+    "macros. Native backends emit assembly for hosted systems and "
+    "microcontrollers; the capabilities page lists the current targets."
 )
 
 #  The two halves of [1830], as the compiler dispatches on them.  The

@@ -262,11 +262,10 @@ and never in a discussion. Everyone taking part follows the
 people and agents alike: the order of authority among the documents, every
 command, the CI gate and the rules the compiler keeps.
 [The validation workflow](docs/process.md) explains the edit, test and push
-loop. For a typo or other small patch, open a pull request from your branch
-or fork, describe the change, and run the checks relevant to it:
-`python3 check.py` for documentation, or the focused tests described in the
-workflow for code. The applicable CI gate
-runs on the pull request.
+loop. For a typo or other small fix, open a pull request from a branch or
+fork that says what it changes, once the checks that cover it pass:
+`python3 check.py` for documentation, or the focused tests the workflow
+describes for code. The CI gate then runs on the pull request.
 
 ### What is here
 

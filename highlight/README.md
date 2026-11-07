@@ -37,7 +37,7 @@ objects or an outline where their host supports them.
 | Neovim | `highlight/nvim` | Run `make -C highlight/nvim`, then add the directory to `runtimepath` or use it as a local plugin. |
 | Helix | `highlight/helix` | Merge `languages.toml`, copy the query directory into the matching runtime directory, then run `hx --grammar fetch` and `hx --grammar build`. |
 | Vim | `highlight/vim` | Copy the directory to `~/.vim/pack/landin/start/landin`, or point a package manager at it. |
-| Emacs | `highlight/emacs` | Put the directory on `load-path` and require `landin-mode`; on Emacs 29+ with tree-sitter ABI 15 support, run `M-x landin-ts-install-grammar` to enable the tree-sitter mode. Otherwise use the regex-based `landin-mode`. |
+| Emacs | `highlight/emacs` | Put the directory on `load-path` and require `landin-mode`, the regex-based mode. On Emacs 29 or later with tree-sitter ABI 15 support, run `M-x landin-ts-install-grammar` to enable the tree-sitter mode as well. |
 | Sublime Text | `highlight/sublime` | Copy the directory to `Packages/Landin`. For the language server, merge `LSP-refine.sublime-settings` into the LSP package's settings. |
 | Visual Studio | `highlight/visual-studio` | Run `install.ps1` in PowerShell, then reopen the file or restart Visual Studio. |
 | JetBrains IDEs | `highlight/textmate` | Enable **TextMate Bundles**, import this directory as a bundle, and map `*.ldn` if necessary. |

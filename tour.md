@@ -2789,8 +2789,8 @@ the host's files and streams through `hosted/blocking` and `core/io`.
 For storage whose size is known only at runtime, continue with
 [arenas over caller-supplied storage](#0820-arenas-are-ordinary-allocators-you-give-storage-to)
 and [allocation as a concept](#1360-allocation-is-a-concept), then the
-[growable-vector example](docs/library.md#corevec). These show how an
-allocator is passed to a collection and where its storage is released.
+[growable-vector example](docs/library.md#corevec). Together they show how a
+collection is handed its allocator and where its storage is released.
 
 The sections after this one are reference, to read when you need them:
 [Pointers](#pointers); [Lifetime and escape](#lifetime-and-escape);

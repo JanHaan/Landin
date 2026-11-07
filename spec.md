@@ -1098,9 +1098,9 @@ zero or default atom exists. A plain `ptr T` widens into a union whose
 pointer member it relaxes to, and an atom singleton or a contained atom set
 widens into it, in the direction this paragraph already gives atom sets; a
 smaller union widens into a larger one with the same pointer member, and
-neither direction reverses (D235). Equality with an atom value whose atoms
-all belong to the union's set is admitted, with the atom on either side:
-`u == a` and `u <> a` test the atom case without exposing an address (D429).
+neither direction reverses (D235). A union may be compared for equality with
+an atom value whose atoms all belong to its set, on either side: `u == a`
+and `u <> a` test the atom case without exposing an address (D429).
 `match` [1210] is the way to recover the pointer: its cases are the union's atom names and the reserved word `ptr` with an optional
 read-only binding of the plain pointer type, an `inout` binding on that arm is
 L0333 [1220], a case named twice is L0311, and a case named by neither an arm
@@ -2593,8 +2593,8 @@ The register is the fourteen sections that follow, and they are the subjects
 answered in one place whichever document it is asked of. It was chronological
 until the documents were reorganised by subject, which is why the numbers now
 run out of order: D1 and D2 are scope decisions and sit beside D233, which was
-taken far later. Related rules may be grouped together within a section even
-when their numbers are out of order. A heading is a stable citation target,
+taken far later. Within a section, too, related decisions sit together
+whatever their numbers. A heading is a stable citation target,
 and nothing that cites one has to know where it sits.
 
 ## DECISIONS: DECLARATIONS, NAMES AND SCOPES
