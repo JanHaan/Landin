@@ -15872,7 +15872,7 @@ package body Landin.Tests.Checking_Suite is
               Landin.Stages.Report (Work);
          begin
             Landin.Testing.Check_Equal
-              (Item, D.Count (Reports, D.Error), Errors,
+              (Item, D.Count_Of (Reports, D.Error), Errors,
                "the refusal count retains independent errors");
             for Index in 1 .. D.Count (Reports) loop
                declare
