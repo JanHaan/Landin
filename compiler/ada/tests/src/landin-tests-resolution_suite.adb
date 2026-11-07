@@ -1401,13 +1401,17 @@ package body Landin.Tests.Resolution_Suite is
          begin
             Landin.Testing.Check
               (Item, (if Accepted then Result.Status = 0 else Result.Status = 1),
-               "type lookup keeps its expected verdict: "
+               "type lookup keeps its expected verdict for " & Text & ": "
                & Ada.Strings.Unbounded.To_String (Result.Report));
          end;
       end Check;
    begin
       Check ("u32: type = u8" & LF & "value: u32 = 300", False);
       Check ("u32: type = u8" & LF & "value: u32 = 200", True);
+      for Name of Landin.Platform.Path_List'(["u8", "u16", "u32", "u64"]) loop
+         Check
+           (Name & ": type = i8" & LF & "value: " & Name & " = 200", False);
+      end loop;
       Check ("utf8: type = u8" & LF & "value: utf8 = 200", True);
       Check ("f: () -> none = i32 := 1" & LF
              & "value: i32 = 2 end f", False);
@@ -1416,7 +1420,18 @@ package body Landin.Tests.Resolution_Suite is
              & " code = i32(echo(u32: u8, value: 200)) end main", True);
       Check ("value: u32 = 300" & LF & "text: utf8 = ""hello""", True);
       Check ("image: type = layout(packed) struct"
-             & " value: u32 at 0..7 end image", True);
+             & " value: u32 at 0..31 end image", True);
+      Check ("image: type = layout(packed) struct"
+             & " value: u8 at 0..7 end image", True);
+      Check ("image: type = layout(packed) struct"
+             & " value: u4 at 0..3 end image", True);
+      Check ("image: type = layout(packed) struct"
+             & " value: u32 at 0..7 end image", False);
+      Check ("image: type = layout(packed) struct"
+             & " value: u4 at 0..2 end image", False);
+      Check ("word: type = u32" & LF
+             & "image: type = layout(packed) struct"
+             & " value: word at 0..31 end image", True);
       Check ("word: type = u32" & LF
              & "image: type = layout(packed) struct"
              & " value: word at 0..7 end image", False);
