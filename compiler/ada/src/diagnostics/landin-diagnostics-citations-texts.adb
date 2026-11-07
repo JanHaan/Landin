@@ -30324,8 +30324,12 @@ package body Landin.Diagnostics.Citations.Texts is
                & "refine refuses is no restriction but a `refuse` row with"
                & " its codes; one that gets past every stage is stale and "
                & "must be made `execute`. Each of the 65 was decided again"
-               & " by that rule: 6 execute, 36 refuse with their codes, an"
-               & "d 23 are restrictions with their stops.",
+               & " by that rule: 8 execute, 36 refuse with their codes, an"
+               & "d 21 are restrictions with their stops. Two of the eight"
+               & " first stopped at `defect`: Cortex-M emission had no tra"
+               & "p class for a `code_address`, which the integer-to-point"
+               & "er check gives a C function value made from an address, "
+               & "as it gives a pointer's.",
             when 987 =>
                "Chosen: `environments/cortex-m/abi.py` compiles each Cor"
                & "tex-M binding fixture's generated adapters with `-fsynta"
