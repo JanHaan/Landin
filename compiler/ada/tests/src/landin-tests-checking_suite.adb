@@ -14459,9 +14459,14 @@ package body Landin.Tests.Checking_Suite is
         "pair: type = struct count: i32 more: i32 end pair ";
       Both : constant String :=
         "both: (sink first: i32, sink second: i32) -> none = end both ";
-      procedure Check (Label, Text : String; Codes : String := "");
+      procedure Check
+        (Label, Text : String; Codes : String := "";
+         At_Call : String := ""; At_Use : String := "");
 
-      procedure Check (Label, Text : String; Codes : String := "") is
+      procedure Check
+        (Label, Text : String; Codes : String := "";
+         At_Call : String := ""; At_Use : String := "")
+      is
          Work : Landin.Stages.Compilation :=
            Landin.Stages.Create (Landin.Targets.Linux_X86_64);
          Order : Landin.Stages.Pipeline;
@@ -14469,7 +14474,6 @@ package body Landin.Tests.Checking_Suite is
            Landin.Stages.Add_Source (Work, "sink-entry.ldn", Text);
          Ran : Natural;
          Got : US.Unbounded_String;
-         pragma Unreferenced (Src);
       begin
          Landin.Stages.Append (Order, Frontend'Access);
          Landin.Stages.Append (Order, Configurer'Access);
@@ -14488,6 +14492,46 @@ package body Landin.Tests.Checking_Suite is
                  (Got, Landin.Diagnostics.Code
                     (Landin.Diagnostics.Get (Reports, Position)));
             end loop;
+            if At_Call /= "" then
+               Landin.Testing.Check
+                 (Item, Landin.Diagnostics.Count (Reports) = 1,
+                  Label & " reports exactly one dead-place read");
+               if Landin.Diagnostics.Count (Reports) = 1 then
+                  declare
+                     Report : constant Landin.Diagnostics.Diagnostic :=
+                       Landin.Diagnostics.Get (Reports, 1);
+                     Call_Start : constant Natural :=
+                       Ada.Strings.Fixed.Index (Text, At_Call);
+                     Use_Start : constant Natural :=
+                       Ada.Strings.Fixed.Index (Text, "_ = " & At_Use) + 4;
+                  begin
+                     Landin.Testing.Check
+                       (Item, Landin.Diagnostics.Label_Count (Report) = 1
+                        and then Landin.Diagnostics.Source_Of
+                          (Landin.Diagnostics.Nth_Label (Report, 1)) = Src
+                        and then Landin.Diagnostics.Span_Of
+                          (Landin.Diagnostics.Nth_Label (Report, 1)) =
+                            (First => Landin.Source.Byte_Offset
+                               (Call_Start - 1),
+                             Last => Landin.Source.Byte_Offset
+                               (Call_Start - 1 + At_Call'Length))
+                        and then Landin.Diagnostics.Message
+                          (Landin.Diagnostics.Nth_Label (Report, 1))
+                            = "consumed here",
+                        Label & " labels the contributing consuming call");
+                     Landin.Testing.Check
+                       (Item, Landin.Diagnostics.Source_Of
+                          (Landin.Diagnostics.Primary (Report)) = Src
+                        and then Landin.Diagnostics.Span_Of
+                          (Landin.Diagnostics.Primary (Report)) =
+                            (First => Landin.Source.Byte_Offset
+                               (Use_Start - 1),
+                             Last => Landin.Source.Byte_Offset
+                               (Use_Start - 1 + At_Use'Length)),
+                        Label & " keeps the later read primary");
+                  end;
+               end if;
+            end if;
          end;
          Landin.Testing.Check_Equal
            (Item, Ran, 4, Label & " reaches checking");
@@ -14632,6 +14676,160 @@ package body Landin.Tests.Checking_Suite is
          & "both: (inout first: i32, second: i32) -> none = end both "
          & "f: () -> none = mut value: i32 = 1 "
          & "both(value, begin drop(value) 1 end) end f", "L0302");
+
+      Check
+        ("whole array consumption site",
+         "take_buffer: (sink value: [4]u8) -> none = end take_buffer "
+         & "f: () -> none = buffer: [4]u8 = [1, 2, 3, 4] "
+         & "take_buffer(buffer) _ = buffer[0] end f", "L0302",
+         "take_buffer(buffer)", "buffer[0]");
+      Check
+        ("ordinary consumption site", Drop
+         & "f: (value: i32) -> none = drop(value) _ = value end f",
+         "L0302", "drop(value)", "value");
+      Check
+        ("unrelated later consumption", Drop
+         & "f: (value: i32, other: i32) -> none = "
+         & "drop(value) drop(other) _ = value end f",
+         "L0302", "drop(value)", "value");
+      Check
+        ("different branch places", Drop
+         & "f: (flag: bool, value: i32, other: i32) -> none = "
+         & "if flag then drop(value) else drop(other) end if "
+         & "_ = value end f", "L0302", "drop(value)", "value");
+      Check
+        ("same place consumed in both branches", Drop & Take
+         & "f: (flag: bool, value: i32) -> none = "
+         & "if flag then drop(value) else take(value, 0) end if "
+         & "_ = value end f", "L0302", "drop(value)", "value");
+      Check
+        ("same branch fact in reverse order", Drop & Take
+         & "f: (flag: bool, value: i32) -> none = "
+         & "if flag then take(value, 0) else drop(value) end if "
+         & "_ = value end f", "L0302", "take(value, 0)", "value");
+      Check
+        ("revived branch does not contribute its call", Drop & Take
+         & "f: (flag: bool) -> none = mut value: i32 = 1 "
+         & "if flag then drop(value) value = 2 "
+         & "else take(value, 0) end if _ = value end f",
+         "L0302", "take(value, 0)", "value");
+      Check
+        ("returned branch does not contribute its call", Drop & Take
+         & "f: (flag: bool, value: i32) -> none = "
+         & "if flag then drop(value) return "
+         & "else take(value, 0) end if _ = value end f",
+         "L0302", "take(value, 0)", "value");
+      Check
+        ("revival replaces the previous consumption", Drop & Take
+         & "f: () -> none = mut value: i32 = 1 drop(value) "
+         & "value = 2 take(value, 0) _ = value end f",
+         "L0302", "take(value, 0)", "value");
+      Check
+        ("all branches revive", Drop
+         & "f: (flag: bool) -> none = mut value: i32 = 1 drop(value) "
+         & "if flag then value = 2 else value = 3 end if "
+         & "_ = value end f");
+      Check
+        ("field consumption site", Pair & Drop
+         & "f: (value: pair) -> none = "
+         & "drop(value.count) drop(value.more) _ = value.count end f",
+         "L0302", "drop(value.count)", "value.count");
+      Check
+        ("nested consumption site", Pair & Drop
+         & "wrapper: type = struct child: pair end wrapper "
+         & "f: (value: wrapper) -> none = drop(value.child.count) "
+         & "drop(value.child.more) _ = value.child.count end f",
+         "L0302", "drop(value.child.count)", "value.child.count");
+      Check
+        ("element consumption site", Drop
+         & "f: (values: [2]i32) -> none = "
+         & "drop(values[0]) drop(values[1]) _ = values[0] end f",
+         "L0302", "drop(values[0])", "values[0]");
+      Check
+        ("computed read matches a consumed element", Drop
+         & "f: (values: [2]i32, index: usize) -> none = "
+         & "drop(values[0]) _ = values[index] end f",
+         "L0302", "drop(values[0])", "values[index]");
+      Check
+        ("element field consumption site", Pair & Drop
+         & "f: (values: [2]pair) -> none = "
+         & "drop(values[0].count) drop(values[0].more) "
+         & "_ = values[0].count end f", "L0302",
+         "drop(values[0].count)", "values[0].count");
+      Check
+        ("nested branch revival removes the earlier site", Pair & Drop
+         & "wrapper: type = struct child: pair end wrapper "
+         & "f: (flag: bool) -> none = mut value: wrapper = "
+         & "(child: (count: 1, more: 2)) if flag then "
+         & "drop(value.child.count) value.child.count = 3 "
+         & "else drop(value.child.more) end if "
+         & "_ = value.child.more end f", "L0302",
+         "drop(value.child.more)", "value.child.more");
+      Check
+        ("element branch revival removes the earlier site", Drop
+         & "f: (flag: bool) -> none = mut values: [2]i32 = [1, 2] "
+         & "if flag then drop(values[0]) values[0] = 3 "
+         & "else drop(values[1]) end if _ = values[1] end f",
+         "L0302", "drop(values[1])", "values[1]");
+      Check
+        ("same nested fact in both branches", Pair & Drop & Take
+         & "wrapper: type = struct child: pair end wrapper "
+         & "f: (flag: bool, value: wrapper) -> none = if flag then "
+         & "drop(value.child.count) else take(value.child.count, 0) "
+         & "end if _ = value.child.count end f", "L0302",
+         "drop(value.child.count)", "value.child.count");
+      Check
+        ("same element fact in both branches", Drop & Take
+         & "f: (flag: bool, values: [2]i32) -> none = if flag then "
+         & "drop(values[0]) else take(values[0], 0) "
+         & "end if _ = values[0] end f", "L0302",
+         "drop(values[0])", "values[0]");
+      Check
+        ("field revival clears its site", Pair & Drop
+         & "f: () -> none = mut value: pair = (count: 1, more: 2) "
+         & "drop(value.count) value.count = 3 drop(value.more) "
+         & "_ = value.count end f");
+      Check
+        ("nested revival clears its site", Pair & Drop
+         & "wrapper: type = struct child: pair end wrapper "
+         & "f: () -> none = mut value: wrapper = "
+         & "(child: (count: 1, more: 2)) drop(value.child.count) "
+         & "value.child = (count: 3, more: 4) "
+         & "_ = value.child.count end f");
+      Check
+        ("element revival clears its site", Drop
+         & "f: () -> none = mut values: [2]i32 = [1, 2] "
+         & "drop(values[0]) values[0] = 3 drop(values[1]) "
+         & "_ = values[0] end f");
+      Check
+        ("whole revival clears element sites", Pair & Drop
+         & "f: () -> none = mut values: [1]pair = [(count: 1, more: 2)] "
+         & "drop(values[0].count) values = [(count: 3, more: 4)] "
+         & "_ = values[0].count end f");
+      Check
+        ("loop provenance converges", Drop
+         & "f: (flag: bool) -> none = mut value: i32 = 1 "
+         & "while flag do value = 2 drop(value) end while "
+         & "_ = value end f", "L0302", "drop(value)", "value");
+      Check
+        ("loop join keeps a contributing entry site", Drop & Take
+         & "f: (flag: bool) -> none = mut value: i32 = 1 drop(value) "
+         & "while flag do value = 2 take(value, 0) end while "
+         & "_ = value end f", "L0302", "drop(value)", "value");
+      Check
+        ("loop revival clears the site", Drop
+         & "f: (flag: bool) -> none = mut value: i32 = 1 "
+         & "while flag do drop(value) value = 2 end while "
+         & "_ = value end f");
+      Check
+        ("sink alias keeps the consuming call",
+         "absent: atom node: type = struct value: i32 end node "
+         & "maybe_node: type = absent | ptr node "
+         & "release: (sink value: ptr node) -> none = end release "
+         & "f: (sink subject: maybe_node) -> none = "
+         & "match subject absent: _ = 0 "
+         & "ptr (sink held): release(held) end match "
+         & "_ = subject end f", "L0302", "release(held)", "subject");
    end Sinks_Commit_At_Call_Entry;
 
    procedure Sink_Paths_Stay_In_Their_Binding
