@@ -1,8 +1,8 @@
 {
   "status": "passed",
-  "image_sha256": "7b48d93020a8a3e76ae4c9937e073210bf07d0ac9cacf22ad5e98b31bfa8ac6a",
+  "image_sha256": "dd48a0e9542426ae5cad6cd337dba4419e17c47f12cc2abf75a295d62fa55d5f",
   "image_name": "board.elf.bin",
-  "elf_sha256": "6aa912645540255fb24389c0a42995f542acfc724b622b8e5100e223e895d4e2",
+  "elf_sha256": "9d656e36349d98341ce82dc116d98b6280488b712200a6b41c3b19ea20f73fa7",
   "image": {
     "chip": 5,
     "revisions": [
@@ -12,11 +12,11 @@
     "entry": "0x40380000",
     "segments": [
       "0x40380000+0x180",
-      "0x40380180+0x5bb0",
-      "0x40385d30+0x54"
+      "0x40380180+0x75f8",
+      "0x40387778+0x54"
     ],
-    "checksum": "0xa7",
-    "sha256": "11057f0d42c20d7f95c8d78cc573d332ab5f7dd92ada7cde788662898666f1c4"
+    "checksum": "0x25",
+    "sha256": "66e0699e1a861a31a1ec56afffcc1ab30d0d75fea03834051e6fdd9bb21ef640"
   },
   "instructions": [],
   "flash": {
@@ -28,8 +28,8 @@
     "boot": "SPI_FAST_FLASH_BOOT",
     "loads": [
       "0x40380000+0x180",
-      "0x40380180+0x5bb0",
-      "0x40385d30+0x54"
+      "0x40380180+0x75f8",
+      "0x40387778+0x54"
     ],
     "entry": "0x40380000"
   },
@@ -68,10 +68,13 @@
       "timer_interrupts_meanwhile": 100
     },
     "stream": {
-      "timer_events": 3638,
-      "receive_interrupts": 4743,
+      "timer_events": 3470,
+      "receive_interrupts": 4745,
       "echoed": 3014,
       "sent": 3614
+    },
+    "line": {
+      "status": "not run: probehive bridge fixed at 115200 8N1"
     }
   },
   "jtag": {
@@ -80,7 +83,7 @@
     "recoveries": 2,
     "dropped": 44,
     "overflows": 1,
-    "entries": 4743,
+    "entries": 4745,
     "boot_reason": 1,
     "byte_cell": 116,
     "half_cell": 29789,
@@ -88,9 +91,9 @@
   },
   "readback": [
     "0x40380000+0x180",
-    "0x40380180+0x5bb0"
+    "0x40380180+0x75f8"
   ],
-  "uart_sha256": "d1437b44cc12537df2028cf428bb72256d4330b85ecc1d17a25e680e67e5b664",
+  "uart_sha256": "31a2cebaf5322c8d76206844cba63bd0341469ab6912e4be1023e992473ca7b3",
   "mode": "boot",
   "fixed_restore": {
     "status": "passed",
@@ -102,33 +105,33 @@
       "elf_sha256": "9684a096e16bb273bc4c4021026add185116f31a5bdf1a23f6311351f676b5ae"
     }
   },
-  "seconds": 32.758,
+  "seconds": 26.442,
   "kernel_usb": {
-    "since": 1793745479.8592377,
-    "until": 1793745512.5821323,
+    "since": 1794060930.91331,
+    "until": 1794060957.330233,
     "lines": [
       {
-        "time": 1793745485.732713,
-        "text": "rigpi kernel: usb 1-1.2.3.4.2: USB disconnect, device number 15"
+        "time": 1794060934.604713,
+        "text": "rigpi kernel: usb 1-1.2.3.4.2: USB disconnect, device number 5"
       },
       {
-        "time": 1793745489.156684,
-        "text": "rigpi kernel: usb 1-1.2.3.4.2: new full-speed USB device number 26 using xhci_hcd"
+        "time": 1794060937.520688,
+        "text": "rigpi kernel: usb 1-1.2.3.4.2: new full-speed USB device number 22 using xhci_hcd"
       },
       {
-        "time": 1793745489.256705,
+        "time": 1794060937.620694,
         "text": "rigpi kernel: cdc_acm 1-1.2.3.4.2:1.0: ttyACM4: USB ACM device"
       },
       {
-        "time": 1793745505.252741,
-        "text": "rigpi kernel: usb 1-1.2.3.4.2: USB disconnect, device number 26"
+        "time": 1794060953.16577,
+        "text": "rigpi kernel: usb 1-1.2.3.4.2: USB disconnect, device number 22"
       },
       {
-        "time": 1793745509.084739,
-        "text": "rigpi kernel: usb 1-1.2.3.4.2: new full-speed USB device number 27 using xhci_hcd"
+        "time": 1794060956.121691,
+        "text": "rigpi kernel: usb 1-1.2.3.4.2: new full-speed USB device number 23 using xhci_hcd"
       },
       {
-        "time": 1793745509.192676,
+        "time": 1794060956.231415,
         "text": "rigpi kernel: cdc_acm 1-1.2.3.4.2:1.0: ttyACM4: USB ACM device"
       }
     ],
@@ -151,8 +154,8 @@
       "tag": "t",
       "h": "00000bc6",
       "c": "00000002",
-      "i": "00001287",
-      "m": "00000e36",
+      "i": "00001289",
+      "m": "00000d8e",
       "p": "80000001",
       "q": "80000002",
       "k": "00000064",
@@ -195,7 +198,6 @@
     "hub-wait",
     "hub-status",
     "power-on",
-    "hub-wait",
     "hub-wait",
     "resident-ready"
   ]

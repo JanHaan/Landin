@@ -332,7 +332,7 @@ def execute_suite(parent, refine, profiles=PROFILES, programs=None, controls=Non
             lane=child(run,'helper-resources')
             shutil.copy(run.out/'disassembly.log',lane.out)
             record['helper_resources']=resources.terminated(lane,elf,
-                {'layout':[4,24,4,48,8,12,16,20,21,22,23]})
+                {'layout':[4,28,4,56,8,12,16,20,21,22,23,24]})
         fresh=child(run,'first-emission')
         # The debug CU intentionally records its compilation directory.
         # Repeat in that same directory; relocated builds retain distinct

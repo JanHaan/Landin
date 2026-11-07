@@ -1,6 +1,6 @@
 {
   "status": "passed",
-  "image_sha256": "709ffa489a9d5dcad190a7975aefd36ada4d750541d15fdbe772dc4220c30f84",
+  "image_sha256": "7ce94b5747499e7fbe7b33b4cbd018acee1f7462f470145afe215b613d54290f",
   "image_name": "board.elf",
   "second_stage_crc32": "e5e96a65",
   "second_stage_sha256": "bb2162f7be7e4aeb609c398074206139e53a83696702a404021297271f3cd140",
@@ -33,9 +33,12 @@
       "held_by_fifo": 32,
       "restarts": 3,
       "dma_completions": 2,
-      "timer_events": 8377,
+      "timer_events": 7086,
       "echoed": 11202,
       "sent": 11572
+    },
+    "line": {
+      "status": "not run: probehive bridge fixed at 115200 8N1"
     }
   },
   "swd": {
@@ -45,7 +48,7 @@
     "usb_events": 1,
     "trans_count": 1094
   },
-  "uart_sha256": "453bd69805bd785c70bb594c6bd868cce035a40d6a190ec0562a213b89b94e36",
+  "uart_sha256": "e706fe9b7ca9084dad5fd66f9053df01ef64938c4c640cbdb45e021b173cd576",
   "mode": "boot",
   "fixed_restore": {
     "status": "passed",
@@ -57,10 +60,10 @@
       "elf_sha256": "ffcf113e64faf59521ad10732e15531fb775661ae6c35a0195accd06764f5add"
     }
   },
-  "seconds": 27.851,
+  "seconds": 37.042,
   "kernel_usb": {
-    "since": 1793747428.545406,
-    "until": 1793747456.3772404,
+    "since": 1794060594.3026466,
+    "until": 1794060631.3282897,
     "lines": [],
     "status": "captured"
   },
@@ -77,7 +80,7 @@
       "h": "00002bc2",
       "c": "00000003",
       "d": "00000002",
-      "m": "000020b9",
+      "m": "00001bae",
       "u": "00000001",
       "p": "00000015",
       "n": "00000446",
@@ -88,6 +91,9 @@
   ],
   "commands": [
     "gpio-environment",
+    "hub-status",
+    "power-cycle",
+    "hub-wait",
     "flash",
     "hub-wait",
     "flash-readback",

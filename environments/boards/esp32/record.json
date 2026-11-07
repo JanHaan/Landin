@@ -1,8 +1,8 @@
 {
   "status": "passed",
-  "image_sha256": "8aec204806c449b66048bd64c5c677aeeaa408d414258a17e02a45bb6f07ba62",
+  "image_sha256": "d62480ecff71de8bf3e2cf403e88f1fb0eedd699bc0937ebba82d707c3561c12",
   "image_name": "board.elf.bin",
-  "elf_sha256": "308a8df875e7936397f041a5e2a14202a143958528b5fc8aab155d03909d0830",
+  "elf_sha256": "58124bd84a465fe3a2e8c5dec3055af254014f8b7ff213d52ca28101daf9b482",
   "image": {
     "chip": 0,
     "revisions": [
@@ -12,12 +12,12 @@
     "entry": "0x40080400",
     "segments": [
       "0x40080000+0x404",
-      "0x40080404+0xaa64",
-      "0x3ffb0000+0x18",
-      "0x3ffb0018+0x58"
+      "0x40080404+0xe194",
+      "0x3ffb0000+0x28",
+      "0x3ffb0028+0x58"
     ],
-    "checksum": "0x11",
-    "sha256": "3a7609f68710a5930f81ab185e93f5ae2545d0544367635f5095c4ac58f297ca"
+    "checksum": "0x5e",
+    "sha256": "7ed062a1e960f1771a6456eba93b9f4515a21f65c99df3f8679e31538eb22ef8"
   },
   "instructions": [
     "call8",
@@ -34,8 +34,8 @@
     "boot_reason": 1,
     "app_state": 2,
     "timer_events": [
-      812,
-      1217
+      844,
+      1262
     ],
     "trap_count": 0,
     "startup_reset": "CHIP_PU",
@@ -48,9 +48,9 @@
     "boot": "SPI_FAST_FLASH_BOOT",
     "loads": [
       "0x40080000+0x404",
-      "0x40080404+0xaa64",
-      "0x3ffb0000+0x18",
-      "0x3ffb0018+0x58"
+      "0x40080404+0xe194",
+      "0x3ffb0000+0x28",
+      "0x3ffb0028+0x58"
     ],
     "entry": "0x40080400"
   },
@@ -91,22 +91,72 @@
       "burst": 300,
       "fifo_overflows": 1,
       "restarts": 2,
-      "timer_interrupts_meanwhile": 101
+      "timer_interrupts_meanwhile": 100
     },
     "stream": {
-      "timer_events": 4731,
-      "receive_interrupts": 3100,
+      "timer_events": 4798,
+      "receive_interrupts": 3103,
       "echoed": 3014,
       "sent": 3614
+    },
+    "line": {
+      "status": "passed",
+      "settings": [
+        {
+          "line": "921600-8N1",
+          "outcome": "accepted",
+          "clock": 40000000,
+          "registers": {
+            "b": "0x60002b",
+            "f": "0x1c"
+          },
+          "payload": 48,
+          "fnv1a": "197f7e75"
+        },
+        {
+          "line": "9600-8E1",
+          "outcome": "accepted",
+          "clock": 40000000,
+          "registers": {
+            "b": "0xb01046",
+            "f": "0x1e"
+          },
+          "payload": 48,
+          "fnv1a": "6ceec51e"
+        },
+        {
+          "line": "57600-7O1",
+          "outcome": "accepted",
+          "clock": 40000000,
+          "registers": {
+            "b": "0x7002b6",
+            "f": "0x1b"
+          },
+          "payload": 48,
+          "fnv1a": "d0dbede6"
+        },
+        {
+          "line": "3000000-8N1",
+          "outcome": "unsupported_rate",
+          "clock": 40000000,
+          "answered_after_refusal": true
+        },
+        {
+          "line": "115200-8N2",
+          "outcome": "unsupported_format",
+          "clock": 40000000,
+          "answered_after_refusal": true
+        }
+      ]
     }
   },
   "jtag": {
     "trap_count": 0,
-    "handled": 3014,
+    "handled": 3226,
     "recoveries": 2,
     "dropped": 44,
     "overflows": 1,
-    "entries": 3100,
+    "entries": 3367,
     "boot_reason": 1,
     "byte_cell": 116,
     "half_cell": 29789,
@@ -114,10 +164,10 @@
   },
   "readback": [
     "0x40080000+0x404",
-    "0x40080404+0xaa64",
-    "0x3ffb0000+0x18"
+    "0x40080404+0xe194",
+    "0x3ffb0000+0x28"
   ],
-  "uart_sha256": "86903c7b479cdde079029517cd752dc4e5b3401307f586311f4d12a79b092086",
+  "uart_sha256": "3766a0ab2fb64805c6f335213142002d1459eb1675071330b247b2104ff2c6a5",
   "mode": "boot",
   "fixed_restore": {
     "status": "passed",
@@ -137,39 +187,39 @@
       }
     }
   },
-  "seconds": 25.597,
+  "seconds": 28.566,
   "kernel_usb": {
-    "since": 1793808035.4660234,
-    "until": 1793808061.035545,
+    "since": 1794061077.1624491,
+    "until": 1794061105.70046,
     "lines": [
       {
-        "time": 1793808040.170982,
-        "text": "rigpi kernel: usb 1-1.2.3.4.4: USB disconnect, device number 71"
+        "time": 1794061082.171053,
+        "text": "rigpi kernel: usb 1-1.2.3.4.4: USB disconnect, device number 13"
       },
       {
-        "time": 1793808042.752709,
-        "text": "rigpi kernel: usb 1-1.2.3.4.4: new full-speed USB device number 78 using xhci_hcd"
+        "time": 1794061084.724708,
+        "text": "rigpi kernel: usb 1-1.2.3.4.4: new full-speed USB device number 30 using xhci_hcd"
       },
       {
-        "time": 1793808042.856828,
+        "time": 1794061084.84297,
         "text": "rigpi kernel: usb 1-1.2.3.4.4: ch341-uart converter now attached to ttyUSB4"
       },
       {
-        "time": 1793808056.982893,
-        "text": "rigpi kernel: usb 1-1.2.3.4.4: USB disconnect, device number 78"
+        "time": 1794061101.559457,
+        "text": "rigpi kernel: usb 1-1.2.3.4.4: USB disconnect, device number 30"
       },
       {
-        "time": 1793808059.552675,
-        "text": "rigpi kernel: usb 1-1.2.3.4.4: new full-speed USB device number 79 using xhci_hcd"
+        "time": 1794061104.156739,
+        "text": "rigpi kernel: usb 1-1.2.3.4.4: new full-speed USB device number 31 using xhci_hcd"
       },
       {
-        "time": 1793808059.653928,
+        "time": 1794061104.26019,
         "text": "rigpi kernel: usb 1-1.2.3.4.4: ch341-uart converter now attached to ttyUSB4"
       }
     ],
     "status": "captured"
   },
-  "sent_sha256": "5ac29a7d385819161814c8f23f97a6a82ba69ae0187502c8fd0c9b77f110ad06",
+  "sent_sha256": "45f51ce1b772e0ef26e5ae5314047d208256a0b78508c7419e0b54d2eca653a4",
   "frames": [
     {
       "tag": "b",
@@ -187,16 +237,16 @@
     },
     {
       "tag": "t",
-      "h": "00000bc6",
+      "h": "00000c9a",
       "c": "00000002",
-      "i": "00000c1c",
-      "m": "0000127b",
+      "i": "00000d27",
+      "m": "00001a08",
       "p": "00018042",
       "q": "00818040",
-      "k": "00000065",
+      "k": "00000064",
       "l": "0000002c",
       "o": "00000001",
-      "e": "00000cc6",
+      "e": "00000d9a",
       "g": "00000000",
       "s": "00000002"
     }

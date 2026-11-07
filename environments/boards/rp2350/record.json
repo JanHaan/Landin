@@ -1,6 +1,6 @@
 {
   "status": "passed",
-  "image_sha256": "306344b5b90ac64233857b236a14c99dcf89bfbbf3837ddd31a7cb11fb7f8ac4",
+  "image_sha256": "755c81a8f8f46c4fb40ec741fb27f1d084d2f95ec157a52fbe9adaaf3137390c",
   "image_name": "board.elf",
   "flash_readback": "matches",
   "verdicts": {
@@ -28,9 +28,12 @@
       "held_by_fifo": 32,
       "restarts": 3,
       "dma_completions": 2,
-      "timer_events": 1247,
+      "timer_events": 1556,
       "echoed": 11202,
       "sent": 11572
+    },
+    "line": {
+      "status": "not run: probehive bridge fixed at 115200 8N1"
     }
   },
   "swd": {
@@ -40,199 +43,8 @@
     "usb_events": 1,
     "trans_count": 1094
   },
-  "uart_sha256": "90648332e823566ae2e95187ee0e50d4a9e87176741d7283168836ca5057c769",
+  "uart_sha256": "33686c784d9d65d55ac5602d2aa6710d64b44fac87b99528e8f1ebf5ef4ed53b",
   "mode": "boot",
-  "boot_transport": "manual-uf2",
-  "manual_boot": {
-    "run": "9a84f6c8b36472af414f1a952e77c9e1",
-    "status": "passed",
-    "transport": "manual-uf2",
-    "board": "rp2350",
-    "usb_node": "1-1.2",
-    "pico_serial": "5ED092AAACF4A000",
-    "resident_may_have_changed": true,
-    "events": [
-      {
-        "event": "started",
-        "time": 1793780505.3081512
-      },
-      {
-        "event": "requested",
-        "time": 1793780505.3680024,
-        "phase": "1-application-bootsel",
-        "token": "d56212577273c429bc941bb6714cf3ad",
-        "instruction": "Unplug only Pico 2; reconnect holding BOOTSEL, then acknowledge.",
-        "deadline": 1793781105.3679771
-      },
-      {
-        "event": "acknowledged",
-        "time": 1793780690.8847532,
-        "phase": "1-application-bootsel"
-      },
-      {
-        "event": "write-started",
-        "time": 1793780691.232691,
-        "role": "application",
-        "identity": {
-          "device": "/dev/sda1",
-          "major_minor": "8:1",
-          "sysfs": "/sys/devices/platform/scb/fd500000.pcie/pci0000:00/0000:00:00.0/0000:01:00.0/usb1/1-1/1-1.2/1-1.2:1.0/host0/target0:0:0/0:0:0:0/block/sda/sda1",
-          "usb": "/sys/devices/platform/scb/fd500000.pcie/pci0000:00/0000:00:00.0/0000:01:00.0/usb1/1-1/1-1.2",
-          "serial": "5ED092AAACF4A000"
-        }
-      },
-      {
-        "event": "installed",
-        "time": 1793780692.0051796,
-        "role": "application",
-        "identity": {
-          "device": "/dev/sda1",
-          "major_minor": "8:1",
-          "sysfs": "/sys/devices/platform/scb/fd500000.pcie/pci0000:00/0000:00:00.0/0000:01:00.0/usb1/1-1/1-1.2/1-1.2:1.0/host0/target0:0:0/0:0:0:0/block/sda/sda1",
-          "usb": "/sys/devices/platform/scb/fd500000.pcie/pci0000:00/0000:00:00.0/0000:01:00.0/usb1/1-1/1-1.2",
-          "serial": "5ED092AAACF4A000",
-          "bytes": 50176,
-          "copy_seconds": 0.539
-        }
-      },
-      {
-        "event": "readback",
-        "time": 1793780696.5654469,
-        "role": "application",
-        "bytes": 25020,
-        "elf_sha256": "306344b5b90ac64233857b236a14c99dcf89bfbbf3837ddd31a7cb11fb7f8ac4"
-      },
-      {
-        "event": "requested",
-        "time": 1793780696.6312313,
-        "phase": "2-application-unplug",
-        "token": "bd34140fcd75acf7a4be5dbeb841abef",
-        "instruction": "Unplug only Pico 2 USB power, then acknowledge. Leave it unplugged.",
-        "deadline": 1793781296.631206
-      },
-      {
-        "event": "acknowledged",
-        "time": 1793780825.1763885,
-        "phase": "2-application-unplug"
-      },
-      {
-        "event": "requested",
-        "time": 1793780826.2594962,
-        "phase": "3-application-replug",
-        "token": "cf115163629697619f1e24c89dfb3a5a",
-        "instruction": "Reconnect only Pico 2 WITHOUT holding BOOTSEL, then acknowledge.",
-        "deadline": 1793781426.2594726
-      },
-      {
-        "event": "acknowledged",
-        "time": 1793780897.978653,
-        "phase": "3-application-replug"
-      },
-      {
-        "event": "cold-cycle",
-        "time": 1793780898.026321,
-        "role": "application",
-        "off_wait_seconds": 1.028,
-        "attestation_interval_seconds": 72.842,
-        "evidence": "operator unplug/replug attestations; application POR oracle remains required"
-      },
-      {
-        "event": "requested",
-        "time": 1793780904.2973669,
-        "phase": "4-fixed-bootsel",
-        "token": "3322da91ceb2669bdb90b5d0d6d63678",
-        "instruction": "Unplug only Pico 2; reconnect holding BOOTSEL, then acknowledge.",
-        "deadline": 1793781504.2973473
-      },
-      {
-        "event": "acknowledged",
-        "time": 1793781319.6998768,
-        "phase": "4-fixed-bootsel"
-      },
-      {
-        "event": "write-started",
-        "time": 1793781320.061823,
-        "role": "fixed",
-        "identity": {
-          "device": "/dev/sda1",
-          "major_minor": "8:1",
-          "sysfs": "/sys/devices/platform/scb/fd500000.pcie/pci0000:00/0000:00:00.0/0000:01:00.0/usb1/1-1/1-1.2/1-1.2:1.0/host0/target0:0:0/0:0:0:0/block/sda/sda1",
-          "usb": "/sys/devices/platform/scb/fd500000.pcie/pci0000:00/0000:00:00.0/0000:01:00.0/usb1/1-1/1-1.2",
-          "serial": "5ED092AAACF4A000"
-        }
-      },
-      {
-        "event": "installed",
-        "time": 1793781320.4794557,
-        "role": "fixed",
-        "identity": {
-          "device": "/dev/sda1",
-          "major_minor": "8:1",
-          "sysfs": "/sys/devices/platform/scb/fd500000.pcie/pci0000:00/0000:00:00.0/0000:01:00.0/usb1/1-1/1-1.2/1-1.2:1.0/host0/target0:0:0/0:0:0:0/block/sda/sda1",
-          "usb": "/sys/devices/platform/scb/fd500000.pcie/pci0000:00/0000:00:00.0/0000:01:00.0/usb1/1-1/1-1.2",
-          "serial": "5ED092AAACF4A000",
-          "bytes": 1024,
-          "copy_seconds": 0.184
-        }
-      },
-      {
-        "event": "requested",
-        "time": 1793781322.2280614,
-        "phase": "5-fixed-unplug",
-        "token": "be2ad3440e10ff6fb373d612229d736a",
-        "instruction": "Unplug only Pico 2 USB power, then acknowledge. Leave it unplugged.",
-        "deadline": 1793781922.2280395
-      },
-      {
-        "event": "acknowledged",
-        "time": 1793781381.4634192,
-        "phase": "5-fixed-unplug"
-      },
-      {
-        "event": "requested",
-        "time": 1793781382.5443861,
-        "phase": "6-fixed-replug",
-        "token": "fa6637c35cdf904e15cf4c2e54353944",
-        "instruction": "Reconnect only Pico 2 WITHOUT holding BOOTSEL, then acknowledge.",
-        "deadline": 1793781982.5443642
-      },
-      {
-        "event": "acknowledged",
-        "time": 1793781407.5302432,
-        "phase": "6-fixed-replug"
-      },
-      {
-        "event": "cold-cycle",
-        "time": 1793781407.5791364,
-        "role": "fixed",
-        "off_wait_seconds": 1.027,
-        "attestation_interval_seconds": 26.108,
-        "evidence": "operator unplug/replug attestations; application POR oracle remains required"
-      },
-      {
-        "event": "readback",
-        "time": 1793781410.9242198,
-        "role": "fixed",
-        "bytes": 464,
-        "elf_sha256": "dc4a18c992235303e77223963b86dc94a969479c38b23dbcb27632a13b028e27"
-      },
-      {
-        "event": "resident-ready",
-        "time": 1793781411.1282334,
-        "marker": {
-          "symbol": "_landin_fixed_ready",
-          "address": 536870912,
-          "value": 1279678513,
-          "elf_sha256": "dc4a18c992235303e77223963b86dc94a969479c38b23dbcb27632a13b028e27"
-        }
-      },
-      {
-        "event": "finished",
-        "time": 1793781411.1725526,
-        "status": "passed"
-      }
-    ]
-  },
   "fixed_restore": {
     "status": "passed",
     "sha256": "dc4a18c992235303e77223963b86dc94a969479c38b23dbcb27632a13b028e27",
@@ -243,44 +55,11 @@
       "elf_sha256": "dc4a18c992235303e77223963b86dc94a969479c38b23dbcb27632a13b028e27"
     }
   },
-  "seconds": 907.098,
+  "seconds": 45.107,
   "kernel_usb": {
-    "since": 1793780504.0829465,
-    "until": 1793781411.1542604,
-    "lines": [
-      {
-        "time": 1793780648.816916,
-        "text": "rigpi kernel: usb 1-1.2: new full-speed USB device number 30 using xhci_hcd"
-      },
-      {
-        "time": 1793780648.915112,
-        "text": "rigpi kernel: usb-storage 1-1.2:1.0: USB Mass Storage device detected"
-      },
-      {
-        "time": 1793780648.91841,
-        "text": "rigpi kernel: scsi host0: usb-storage 1-1.2:1.0"
-      },
-      {
-        "time": 1793780692.396699,
-        "text": "rigpi kernel: usb 1-1.2: USB disconnect, device number 30"
-      },
-      {
-        "time": 1793781162.428789,
-        "text": "rigpi kernel: usb 1-1.2: new full-speed USB device number 31 using xhci_hcd"
-      },
-      {
-        "time": 1793781162.531424,
-        "text": "rigpi kernel: usb-storage 1-1.2:1.0: USB Mass Storage device detected"
-      },
-      {
-        "time": 1793781162.53489,
-        "text": "rigpi kernel: scsi host0: usb-storage 1-1.2:1.0"
-      },
-      {
-        "time": 1793781320.964682,
-        "text": "rigpi kernel: usb 1-1.2: USB disconnect, device number 31"
-      }
-    ],
+    "since": 1794060661.7597556,
+    "until": 1794060706.8480556,
+    "lines": [],
     "status": "captured"
   },
   "sent_sha256": "42d30ba70ef5520bca6b4ea8f3fa35323f4099963fccd9c112148a17b4b25365",
@@ -296,7 +75,7 @@
       "h": "00002bc2",
       "c": "00000003",
       "d": "00000002",
-      "m": "000004df",
+      "m": "00000614",
       "u": "00000001",
       "p": "0000001e",
       "n": "00000446",
@@ -306,22 +85,45 @@
     }
   ],
   "commands": [
-    "manual-application-lsblk",
-    "manual-application-mount",
-    "manual-application-copy",
-    "manual-application-unmount",
-    "manual-application-readback-0",
-    "manual-application-readback-1",
+    "hub-status",
+    "power-cycle",
+    "hub-wait",
+    "probe-ping",
+    "hub-before-attach",
+    "attach-RP235x",
+    "attach-RP235x_riscv",
+    "flash",
+    "hub-status",
+    "power-cycle",
+    "hub-wait",
+    "probe-ping",
+    "hub-before-attach",
+    "reattach-RP235x",
+    "flash-readback",
+    "hub-status",
+    "power-cycle",
+    "hub-wait",
+    "probe-ping",
     "swd-handled",
     "swd-recoveries",
     "swd-dma_events",
     "swd-usb_events",
     "swd-trans-count",
-    "manual-fixed-lsblk",
-    "manual-fixed-mount",
-    "manual-fixed-copy",
-    "manual-fixed-unmount",
-    "manual-fixed-readback-0",
+    "hub-before-attach",
+    "attach-RP235x",
+    "flash",
+    "hub-status",
+    "power-cycle",
+    "hub-wait",
+    "probe-ping",
+    "hub-before-attach",
+    "reattach-RP235x",
+    "flash-readback",
+    "hub-status",
+    "power-cycle",
+    "hub-wait",
+    "probe-ping",
+    "hub-before-attach",
     "resident-ready"
   ]
 }

@@ -1,11 +1,13 @@
 {
   "status": "passed",
-  "image_sha256": "d5e05de158334d1b33f2e58ae542a07b60a871a5fa51d55277271967df3c8d5f",
+  "image_sha256": "7ba5662201af84b72f1a7cf3e2d751fe46a559f5e6665356bcbea0c4022c153f",
   "image_name": "board.elf",
   "image": {
     "float_unit": "passed",
     "fp_attributes": [
       "Tag_FP_arch: FPv5/FP-D16 for ARMv8",
+      "Tag_ABI_FP_denormal: Needed",
+      "Tag_ABI_FP_exceptions: Needed",
       "Tag_ABI_FP_number_model: IEEE 754",
       "Tag_ABI_VFP_args: VFP registers"
     ],
@@ -54,17 +56,70 @@
         "square_roots": 52
       },
       "square_root": "passed"
+    },
+    "line": {
+      "status": "passed",
+      "settings": [
+        {
+          "line": "230400-8N1",
+          "outcome": "accepted",
+          "clock": 64000000,
+          "registers": {
+            "b": "0x116",
+            "f": "0x0",
+            "x": "0x0"
+          },
+          "payload": 48,
+          "fnv1a": "35b769ee"
+        },
+        {
+          "line": "9600-8E1",
+          "outcome": "accepted",
+          "clock": 64000000,
+          "registers": {
+            "b": "0x1a0b",
+            "f": "0x1400",
+            "x": "0x0"
+          },
+          "payload": 48,
+          "fnv1a": "f4729029"
+        },
+        {
+          "line": "57600-7O2",
+          "outcome": "accepted",
+          "clock": 64000000,
+          "registers": {
+            "b": "0x457",
+            "f": "0x600",
+            "x": "0x2000"
+          },
+          "payload": 48,
+          "fnv1a": "1fb90744"
+        },
+        {
+          "line": "300-8N1",
+          "outcome": "unsupported_rate",
+          "clock": 64000000,
+          "answered_after_refusal": true
+        },
+        {
+          "line": "115200-6N1",
+          "outcome": "unsupported_format",
+          "clock": 64000000,
+          "answered_after_refusal": true
+        }
+      ]
     }
   },
   "swd": {
-    "handled": 11802,
+    "handled": 12014,
     "recoveries": 3,
     "dma_entries": 47,
-    "usart_entries": 134,
-    "s0ndtr": 237,
+    "usart_entries": 144,
+    "s0ndtr": 229,
     "s0cr": 1049617
   },
-  "uart_sha256": "9c370ce8339c4365d0c4527854729f253be5236b3de80629607e437376b641a2",
+  "uart_sha256": "89ded49b09d84b4ef3d11f530418ceac86f736d6001ad9962ad6b75b215af961",
   "mode": "boot",
   "fixed_restore": {
     "status": "passed",
@@ -76,8 +131,55 @@
       "elf_sha256": "d8a29b9c03689ec51138e030803295054d7eb63fec28cb4687e5a2d373c2c216"
     }
   },
-  "seconds": 28.452,
-  "sent_sha256": "9c1ed83a8ee05099f20278dedccdae8c41645ba1c5d9c8e97e74de61ea319768",
+  "seconds": 36.221,
+  "kernel_usb": {
+    "since": 1794060867.4224598,
+    "until": 1794060903.623522,
+    "lines": [
+      {
+        "time": 1794060874.17278,
+        "text": "rigpi kernel: usb 1-1.2.3.2: USB disconnect, device number 111"
+      },
+      {
+        "time": 1794060876.103189,
+        "text": "rigpi kernel: usb 1-1.2.3.2: new high-speed USB device number 20 using xhci_hcd"
+      },
+      {
+        "time": 1794060876.259169,
+        "text": "rigpi kernel: usb-storage 1-1.2.3.2:1.1: USB Mass Storage device detected"
+      },
+      {
+        "time": 1794060876.263147,
+        "text": "rigpi kernel: scsi host0: usb-storage 1-1.2.3.2:1.1"
+      },
+      {
+        "time": 1794060876.276668,
+        "text": "rigpi kernel: cdc_acm 1-1.2.3.2:1.2: ttyACM1: USB ACM device"
+      },
+      {
+        "time": 1794060900.633265,
+        "text": "rigpi kernel: usb 1-1.2.3.2: USB disconnect, device number 20"
+      },
+      {
+        "time": 1794060902.544668,
+        "text": "rigpi kernel: usb 1-1.2.3.2: new high-speed USB device number 21 using xhci_hcd"
+      },
+      {
+        "time": 1794060902.695201,
+        "text": "rigpi kernel: usb-storage 1-1.2.3.2:1.1: USB Mass Storage device detected"
+      },
+      {
+        "time": 1794060902.699211,
+        "text": "rigpi kernel: scsi host0: usb-storage 1-1.2.3.2:1.1"
+      },
+      {
+        "time": 1794060902.712738,
+        "text": "rigpi kernel: cdc_acm 1-1.2.3.2:1.2: ttyACM1: USB ACM device"
+      }
+    ],
+    "status": "captured"
+  },
+  "sent_sha256": "d071460daca7269b83f74ca3156015b61c697040b11e7b27bb6e9093768c4bc8",
   "frames": [
     {
       "tag": "b",
@@ -91,16 +193,16 @@
     },
     {
       "tag": "t",
-      "h": "00002e1a",
+      "h": "00002eee",
       "c": "00000003",
       "d": "00000002",
       "w": "0000002f",
       "k": "0000002f",
-      "m": "00002378",
-      "u": "00000086",
+      "m": "000042d0",
+      "u": "00000090",
       "p": "00000037",
-      "n": "000000ed",
-      "e": "00000e13",
+      "n": "000000e5",
+      "e": "0000001b",
       "g": "00000001",
       "s": "00000002"
     }
@@ -111,6 +213,7 @@
     "flash-readback",
     "hub-status",
     "power-cycle",
+    "hub-wait",
     "hub-wait",
     "swd-handled",
     "swd-recoveries",

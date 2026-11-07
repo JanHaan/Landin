@@ -1,0 +1,144 @@
+{
+  "status": "passed",
+  "image_sha256": "5762630ee7ea6446d9f3829f59437454c2c436cf586b25f2e87c277592e33ccb",
+  "image_name": "board.elf",
+  "image": {
+    "cache_registers": [
+      "0xe000ed14",
+      "0xe000ed80",
+      "0xe000ed84",
+      "0xe000ed88",
+      "0xe000ef50",
+      "0xe000ef5c",
+      "0xe000ef60",
+      "0xe000ef68",
+      "0xe000ef70",
+      "0xe000ef74"
+    ]
+  },
+  "verdicts": {
+    "boot": {
+      "ccr": 459264,
+      "ccsidr": 4027572249,
+      "line": 32,
+      "vtor": 603979776,
+      "swd_ccr": 459264
+    },
+    "stale_read": {
+      "sent": 64,
+      "stale": 64,
+      "stale_lines": 3,
+      "memory_matches": true
+    },
+    "receive": {
+      "bytes": 1024,
+      "laps": 4
+    },
+    "lost_dirty": {
+      "lost": 32,
+      "refused": 4,
+      "kept": 32,
+      "written": 32
+    },
+    "transmit": {
+      "unclean_stale": 64,
+      "unclean_lines": 3,
+      "cleaned": 64,
+      "flags": [
+        48,
+        48
+      ]
+    },
+    "returned": {
+      "ccr": 262656
+    }
+  },
+  "uart_sha256": "b0be19fc85b4f5269d1c5d2bde06014ce7424cea8ef66b31822a46a390467862",
+  "mode": "ram",
+  "warm_load": {
+    "board": "stm32h753",
+    "cleanup": {
+      "contract": "warm-board-v1",
+      "other_core_parked": false,
+      "peripheral_sources_stopped": true,
+      "rom_reset": false
+    },
+    "elf_sha256": "5762630ee7ea6446d9f3829f59437454c2c436cf586b25f2e87c277592e33ccb",
+    "entry": 604003805,
+    "flash_written": false,
+    "format_version": 1,
+    "helper_source_sha256": "47d74e1639692ad1649ebc14f6b050efb10a98c93f3122e111a40397f58a22c1",
+    "mode": "warm",
+    "previous_pc": 134218572,
+    "segments": [
+      {
+        "address": 603979776,
+        "bytes": 54216,
+        "sha256": "636d3a4461226aa7db4816a2647b740ab502bb35d14b2cf8fdbcb598c28383c2"
+      }
+    ],
+    "stack": 604504064,
+    "status": "passed",
+    "vector": 603979776
+  },
+  "seconds": 5.093,
+  "kernel_usb": {
+    "since": 1794061778.6036928,
+    "until": 1794061783.678107,
+    "lines": [],
+    "status": "captured"
+  },
+  "sent_sha256": "48bd80168659775d4f9230a9dcec15e165bbc0c7dc2d0abdf69c49eb999c3b92",
+  "frames": [
+    {
+      "tag": "b",
+      "c": "00070200",
+      "g": "f00fe019",
+      "l": "00000020",
+      "v": "24000000",
+      "s": "00000053"
+    },
+    {
+      "tag": "C",
+      "n": "00000040",
+      "s": "00000040",
+      "k": "00000003",
+      "a": "21a49bc5",
+      "m": "e6d71e1c"
+    },
+    {
+      "tag": "E",
+      "n": "00000400",
+      "x": "8da9e21e",
+      "w": "00000004"
+    },
+    {
+      "tag": "d",
+      "l": "00000020",
+      "r": "00000004",
+      "k": "00000020",
+      "w": "00000020"
+    },
+    {
+      "tag": "X",
+      "t": "00000001",
+      "f": "00000030",
+      "r": "00000000"
+    },
+    {
+      "tag": "Y",
+      "t": "00000001",
+      "f": "00000030",
+      "r": "00000000"
+    },
+    {
+      "tag": "e",
+      "c": "00070200"
+    }
+  ],
+  "commands": [
+    "ram-load",
+    "swd-ccr-running",
+    "swd-ccr-returned"
+  ]
+}

@@ -1,11 +1,13 @@
 {
   "status": "passed",
-  "image_sha256": "580b2629ebcfc427acec16d21313d40d52bb65f4891eb54520e09ec919ed30f8",
+  "image_sha256": "8ad74e4301dc608da466537920d47ff63d321856521259638d4910e07f1a7438",
   "image_name": "board.elf",
   "image": {
     "float_unit": "passed",
     "fp_attributes": [
       "Tag_FP_arch: FPv5/FP-D16 for ARMv8",
+      "Tag_ABI_FP_denormal: Needed",
+      "Tag_ABI_FP_exceptions: Needed",
       "Tag_ABI_FP_number_model: IEEE 754",
       "Tag_ABI_VFP_args: VFP registers"
     ],
@@ -53,17 +55,70 @@
         "square_roots": 52
       },
       "square_root": "passed"
+    },
+    "line": {
+      "status": "passed",
+      "settings": [
+        {
+          "line": "230400-8N1",
+          "outcome": "accepted",
+          "clock": 64000000,
+          "registers": {
+            "b": "0x116",
+            "f": "0x0",
+            "x": "0x0"
+          },
+          "payload": 48,
+          "fnv1a": "35b769ee"
+        },
+        {
+          "line": "9600-8E1",
+          "outcome": "accepted",
+          "clock": 64000000,
+          "registers": {
+            "b": "0x1a0b",
+            "f": "0x1400",
+            "x": "0x0"
+          },
+          "payload": 48,
+          "fnv1a": "f4729029"
+        },
+        {
+          "line": "57600-7O2",
+          "outcome": "accepted",
+          "clock": 64000000,
+          "registers": {
+            "b": "0x457",
+            "f": "0x600",
+            "x": "0x2000"
+          },
+          "payload": 48,
+          "fnv1a": "1fb90744"
+        },
+        {
+          "line": "300-8N1",
+          "outcome": "unsupported_rate",
+          "clock": 64000000,
+          "answered_after_refusal": true
+        },
+        {
+          "line": "115200-6N1",
+          "outcome": "unsupported_format",
+          "clock": 64000000,
+          "answered_after_refusal": true
+        }
+      ]
     }
   },
   "swd": {
-    "handled": 11802,
+    "handled": 12014,
     "recoveries": 3,
     "dma_entries": 48,
-    "usart_entries": 149,
-    "s0ndtr": 237,
+    "usart_entries": 140,
+    "s0ndtr": 229,
     "s0cr": 1049617
   },
-  "uart_sha256": "2127d3e2ad093ad2f4fc36e0aab1ebd1e75880652fcf5a91f2fdb0092d024674",
+  "uart_sha256": "f8986f2b1e450cc86b9b2ebd3e670623952e1d9b021482f571f49da1f21c75f5",
   "mode": "ram",
   "warm_load": {
     "board": "stm32h753",
@@ -73,32 +128,32 @@
       "peripheral_sources_stopped": true,
       "rom_reset": false
     },
-    "elf_sha256": "580b2629ebcfc427acec16d21313d40d52bb65f4891eb54520e09ec919ed30f8",
-    "entry": 603990433,
+    "elf_sha256": "8ad74e4301dc608da466537920d47ff63d321856521259638d4910e07f1a7438",
+    "entry": 603997673,
     "flash_written": false,
     "format_version": 1,
-    "helper_source_sha256": "e75f0e0808b14629a7325bafec22fddb8e711e830745ca7b0c7a41200622268c",
+    "helper_source_sha256": "47d74e1639692ad1649ebc14f6b050efb10a98c93f3122e111a40397f58a22c1",
     "mode": "warm",
-    "previous_pc": 603994370,
+    "previous_pc": 604001330,
     "segments": [
       {
         "address": 603979776,
-        "bytes": 36508,
-        "sha256": "2df9a875713514a96700f043bc8bc01a250d023f399fff91097ff3cb35da6439"
+        "bytes": 49492,
+        "sha256": "9241c7451137beafc371291354e67d0f9e4b9a262f60b5c68ba87e8ab78cf404"
       }
     ],
     "stack": 604504064,
     "status": "passed",
     "vector": 603979776
   },
-  "seconds": 14.132,
+  "seconds": 22.453,
   "kernel_usb": {
-    "since": 1793748498.4433825,
-    "until": 1793748512.5571778,
+    "since": 1794060771.9773316,
+    "until": 1794060794.412582,
     "lines": [],
     "status": "captured"
   },
-  "sent_sha256": "9c1ed83a8ee05099f20278dedccdae8c41645ba1c5d9c8e97e74de61ea319768",
+  "sent_sha256": "d071460daca7269b83f74ca3156015b61c697040b11e7b27bb6e9093768c4bc8",
   "frames": [
     {
       "tag": "b",
@@ -112,16 +167,16 @@
     },
     {
       "tag": "t",
-      "h": "00002e1a",
+      "h": "00002eee",
       "c": "00000003",
       "d": "00000002",
       "w": "0000002f",
       "k": "00000030",
-      "m": "000021ee",
-      "u": "00000095",
+      "m": "00003eb3",
+      "u": "0000008c",
       "p": "00000037",
-      "n": "000000ed",
-      "e": "00000e13",
+      "n": "000000e5",
+      "e": "0000001b",
       "g": "00000001",
       "s": "00000002"
     }
