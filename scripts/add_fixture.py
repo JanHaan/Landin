@@ -12,12 +12,15 @@ and its files, as compiler/tests/README.md says.  This then
    Cortex-M0 with refine, the one `--refine` names or the newest this
    checkout built: one it compiles gets `execute`, and one it refuses gets
    `refuse` with the distinct codes refine gave, sorted, as the corpus
-   compares them.  An ABI fixture, which needs a hosted C peer, gets a
-   `restriction` row whose witness is its own metadata.  Each restriction,
-   and each refusal but one whose only code is L0015, takes the `--reason`
-   it is given; the corpus reads an L0015 refusal's modules from the
-   refusal itself, so its reason says only why, if anything.  `--refuse`
-   still names the codes by hand, held to refine's own;
+   compares them.  An ABI fixture is compiled the same way, and one that
+   compiles and names cortex-m0 gets `execute`, its C peers built
+   freestanding by the corpus.  `--stops=WHAT` makes either a
+   `restriction` instead, naming what stops it on Cortex-M0, which the
+   corpus holds its build to (D986).  Each restriction, and each refusal
+   but one whose only code is L0015, takes the `--reason` it is given; the
+   corpus reads an L0015 refusal's modules from the refusal itself, so its
+   reason says only why, if anything.  `--refuse` still names the codes by
+   hand, held to refine's own;
 3. puts a positive, runtime or ABI fixture's sources in the layout
    `refine fmt` gives, which `formatting/the corpus is formatted` holds
    them to, unless the fixture names [1750] and its layout is its
@@ -160,22 +163,37 @@ def remaining_steps(meta, expect_written, unformatted=None):
     return steps
 
 
-def corpus_row(meta, refuse, reason, refused=None):
+def restriction_stops():
+    """What may stop a `restriction` row's fixture on Cortex-M0, as the
+    corpus names it (environments/cortex-m/backend_corpus.py's STOPS)."""
+    sys.path.insert(0, str(ROOT / "environments/cortex-m"))
+    import backend_corpus
+    return backend_corpus.STOPS
+
+
+def corpus_row(meta, refuse, reason, refused=None, stops=None):
     """The Cortex-M corpus row a new runtime or ABI fixture starts with.
 
     REFUSED is the codes Cortex-M0 compilation refused it with, [] when it
     compiled, or None when it was not compiled; REFUSE the codes written
-    by hand instead, which must be refine's.
+    by hand instead, which must be refine's.  STOPS names what stops a
+    restriction (D986), which the corpus holds its build to.
     """
-    if meta.cls == "abi":
-        if not reason:
+    if stops:
+        known = restriction_stops()
+        if stops not in known or not reason:
             raise SystemExit(
-                "%s: an ABI fixture's C peer is hosted, so the Cortex-M"
-                " corpus records it as a restriction; say why with"
-                " --reason=TEXT" % meta.label)
-        return {"mode": "restriction", "reason": reason,
-                "witness": "compiler/tests/fixtures/%s/fixture.meta"
-                           % meta.label}
+                "%s: a restriction names what stops it, --stops= one of %s,"
+                " and why, --reason=TEXT" % (meta.label, ", ".join(known)))
+        return {"mode": "restriction", "reason": reason, "stops": stops}
+    if meta.cls == "abi" and not (refused or refuse) \
+            and not meta.applies_to("cortex-m0"):
+        raise SystemExit(
+            "%s: Cortex-M0 compiles it, and the corpus builds its C peers"
+            " freestanding and runs it: name cortex-m0 in its targets: and"
+            " it gets an execute row, or say what stops it there with"
+            " --stops= one of %s and why with --reason=TEXT"
+            % (meta.label, ", ".join(restriction_stops())))
     codes = refused or []
     if refuse:
         #  The corpus compares the distinct codes, sorted, so the row holds
@@ -203,9 +221,9 @@ def corpus_row(meta, refuse, reason, refused=None):
     if hosted:
         raise SystemExit(
             "%s names %s, which firmware cannot give a program, and Cortex-M0"
-            " compiles it; give it a status oracle, or write a restriction"
-            " row with its reason in %s"
-            % (meta.label, " and ".join(hosted), CORPUS.relative_to(ROOT)))
+            " compiles it; give it a status oracle, or make it a restriction"
+            " with --stops=oracle and --reason=TEXT"
+            % (meta.label, " and ".join(hosted)))
     return {"mode": "execute"}
 
 
@@ -217,10 +235,13 @@ def main(argv=None):
                         help="the codes Cortex-M0 refuses a runtime fixture"
                              " with, comma separated, held to refine's own")
     parser.add_argument("--reason", help="why Cortex-M0 does not run it")
+    parser.add_argument("--stops", metavar="WHAT",
+                        help="what stops a restriction on Cortex-M0, which the"
+                             " corpus holds its build to (D986)")
     parser.add_argument("--refine", type=Path,
-                        help="the refine that compiles a runtime fixture for"
-                             " Cortex-M0; the newest this checkout built by"
-                             " default")
+                        help="the refine that compiles a runtime or ABI"
+                             " fixture for Cortex-M0; the newest this checkout"
+                             " built by default")
     args = parser.parse_args(argv)
 
     directory = ROOT / "compiler/tests/fixtures" / args.fixture
@@ -241,7 +262,7 @@ def main(argv=None):
                 meta.label, CORPUS.relative_to(ROOT)), flush=True)
         else:
             refused = None
-            if meta.cls == "runtime":
+            if meta.cls in ("runtime", "abi") and not args.stops:
                 if refine is None:
                     raise SystemExit(
                         "no refine is built here to compile %s for"
@@ -250,7 +271,7 @@ def main(argv=None):
                         % meta.label)
                 refused = cortex_codes(meta, directory, refine)
             record["fixtures"][meta.label] = corpus_row(
-                meta, args.refuse, args.reason, refused)
+                meta, args.refuse, args.reason, refused, args.stops)
             record["fixtures"] = dict(sorted(record["fixtures"].items()))
             CORPUS.write_text(json.dumps(record, indent=2) + "\n",
                               encoding="utf-8")

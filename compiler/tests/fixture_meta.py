@@ -274,6 +274,12 @@ class Metadata(dict):
         return self._list("library-directories")
 
     @property
+    def c_inputs(self):
+        """The pinned input directories whose headers the C sources
+        include, each the first part of a `devices/inputs.json` name."""
+        return self._list("c-inputs")
+
+    @property
     def run_files(self):
         return self._list("run_files")
 
@@ -558,6 +564,20 @@ def _library_directories(meta, value, cls, complain):
             seen.append(one)
 
 
+def _c_inputs(meta, value, cls, complain):
+    if cls != "abi":
+        complain("c-inputs belong only to an ABI fixture")
+    seen = []
+    for one in _items(value):
+        if not is_below_directory(one) or "/" in one:
+            complain("c-inputs entry is not an input directory's name: "
+                     + (one or "<empty>"))
+        elif one in seen:
+            complain("duplicate c-inputs entry: " + one)
+        else:
+            seen.append(one)
+
+
 def _c_args(meta, value, cls, complain):
     if cls != "abi":
         complain("c-args belong only to an ABI fixture")
@@ -624,6 +644,7 @@ KEYS = {
     "c-archives": _c_files("c-archives", ("runtime",),
                            "c-archives belongs only to a runtime fixture"),
     "library-directories": _library_directories,
+    "c-inputs": _c_inputs,
     "c-args": _c_args,
     "link": _link,
     "constructs": _constructs,
@@ -691,6 +712,9 @@ def _whole(meta, cls, complain):
         complain("a runtime fixture with c-archives needs link: libc")
     if has("library-directories") and not has("c-archives"):
         complain("library-directories needs c-archives")
+    if has("c-inputs") and any(one != "cortex-m0" for one in meta.targets):
+        complain("c-inputs are fetched by the Cortex-M corpus alone, so a"
+                 " fixture with them names no target but cortex-m0")
     if has("c-archives") and has("root"):
         complain("c-archives and root cannot be combined")
     if has("with") and not has("program"):

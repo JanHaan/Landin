@@ -6,12 +6,14 @@ where each argument arrived, and saves exactly the registers the convention
 makes it preserve.
 """
 import json
+import os
 from pathlib import Path
 import re
 import shutil
 import socket
 import struct
 import subprocess
+import sys
 import time
 
 HERE = Path(__file__).resolve().parent
@@ -188,6 +190,7 @@ def execute(run):
                           stopped_by_supervisor=True)
             (run.out / 'commands.json').write_text(json.dumps(run.commands, indent=2)+'\n')
     execute_vfp(run)
+    binding_layouts(run)
     require(CONTRACT.read_bytes() == (run.out / 'cortex-m.contract').read_bytes()
             and GOLDEN.read_bytes() == (run.out / 'layout.targets').read_bytes(),
             'ABI contracts changed during probes')
@@ -295,3 +298,76 @@ def execute_vfp(run):
             record.update(exit=p.returncode, seconds=time.monotonic()-tick,
                           stopped_by_supervisor=True)
             (run.out / 'commands.json').write_text(json.dumps(run.commands, indent=2)+'\n')
+
+
+#  D987: the generated Cortex-M bindings' layouts against both compilers
+#  at both of AAPCS32's rows.  Each binding fixture's adapters.c carries
+#  the generator's static assertions of every native record's size,
+#  alignment and field offsets and of each enum's size; compiled with
+#  -fsyntax-only, each compiler holds them to its own layout.  A record's
+#  layout is the same in both variants, so the VFP fixture's records must
+#  hold at the base row too; the CMSIS fixture's RP2040 header refuses a
+#  float unit by its own #error, which the VFP row must meet.
+BINDING_ROWS = {
+    'thumbv6m': {'gcc': ['-mcpu=cortex-m0', '-mthumb', '-mfloat-abi=soft'],
+                 'clang': ['--target=thumbv6m-none-eabi', '-mfloat-abi=soft']},
+    'thumbv7em-hard': {'gcc': ['-mcpu=cortex-m7', '-mthumb', '-mfpu=fpv5-d16',
+                               '-mfloat-abi=hard'],
+                       'clang': ['--target=thumbv7em-none-eabihf', '-mfpu=fpv5-d16',
+                                 '-mfloat-abi=hard']},
+}
+BINDING_FIXTURES = {
+    'cortex-cmsis-bindings': {'thumbv6m': True, 'thumbv7em-hard': False},
+    'cortex-vfp-bindings': {'thumbv6m': True, 'thumbv7em-hard': True},
+}
+#  The header's refusal of a float unit the CMSIS fixture must meet.
+NO_FPU = 'Compiler generates FPU instructions for a device without an FPU'
+
+
+def binding_layouts(run):
+    """Compile each binding fixture's adapters with the pinned GCC and with
+    Clang, $CLANG or clang-19 where one is on PATH, at both rows, and hold
+    each to its expected verdict.  Writes binding-layouts.json; a missing
+    Clang is recorded and printed as SKIPPED, never passed."""
+    from run import require
+    sys.path.insert(0, str(HERE))
+    from backend import C_STANDARD, fetched_inputs, metadata
+    fixtures = ROOT / 'compiler/tests/fixtures/abi'
+    gcc_include = run.command('binding-gcc-include', [
+        run.arm / 'arm-eabi-gcc', '-print-file-name=include']).strip()
+    clang = shutil.which(os.environ.get('CLANG', 'clang-19'))
+    resource = None
+    if clang:
+        resource = run.command('binding-clang-resource', [clang, '-print-resource-dir']).strip()
+    compilers = {'gcc': [str(run.arm / 'arm-eabi-gcc'), '-isystem', gcc_include]}
+    if clang:
+        compilers['clang'] = [clang, '--no-default-config', '-isystem', resource + '/include',
+                              '-Wno-error=unused-command-line-argument']
+    found = {'clang': clang or 'SKIPPED: no $CLANG or clang-19 on PATH', 'verdicts': {}}
+    for name, holds in BINDING_FIXTURES.items():
+        base = fixtures / name
+        meta = metadata(base / 'fixture.meta')
+        includes = ['-I', str(base)]
+        for directory in fetched_inputs(meta):
+            includes += ['-I', str(directory)]
+        for row, flags in BINDING_ROWS.items():
+            for compiler, command in compilers.items():
+                label = '%s-%s-%s' % (name, row, compiler)
+                argv = [command[0], *flags[compiler], *command[1:], '-ffreestanding',
+                        *C_STANDARD, '-Wall', '-Wextra', '-Werror', *meta.c_args, *includes,
+                        '-fsyntax-only', base / 'adapters.c']
+                try:
+                    run.command('binding-' + label, argv)
+                    verdict = 'held'
+                except Exception:
+                    log = (run.out / ('binding-' + label + '.log')).read_text(errors='replace')
+                    verdict = 'refused by its header' if NO_FPU in log else 'failed'
+                wanted = 'held' if holds[row] else 'refused by its header'
+                require(verdict == wanted, '%s\'s generated adapters at %s under %s: %s, and'
+                        ' they must be %s; inspect %s' % (name, row, compiler, verdict, wanted,
+                                                          run.out / ('binding-' + label + '.log')))
+                found['verdicts'][label] = verdict
+    (run.out / 'binding-layouts.json').write_text(json.dumps(found, indent=2) + '\n')
+    if not clang:
+        print('Cortex-M ABI binding layouts: Clang SKIPPED, no $CLANG or clang-19 on PATH;'
+              ' GCC held both rows', flush=True)

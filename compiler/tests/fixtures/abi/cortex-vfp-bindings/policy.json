@@ -15,6 +15,20 @@
       "landin_name": "irqn_type"
     },
     {
+      "kind": "record",
+      "name": "vfp_sample",
+      "landin_name": "vfp_sample",
+      "representation": "native",
+      "fields": {}
+    },
+    {
+      "kind": "record",
+      "name": "vfp_pair",
+      "landin_name": "vfp_pair",
+      "representation": "native",
+      "fields": {}
+    },
+    {
       "kind": "function",
       "name": "__NVIC_EnableIRQ",
       "landin_name": "nvic_enable_irq",
@@ -74,6 +88,41 @@
       "kind": "function",
       "name": "vfp_backfill",
       "landin_name": "vfp_backfill",
+      "direction": "import",
+      "parameters": {}
+    },
+    {
+      "kind": "function",
+      "name": "vfp_peer_check",
+      "landin_name": "vfp_peer_check",
+      "direction": "import",
+      "parameters": {}
+    },
+    {
+      "kind": "function",
+      "name": "vfp_peer_calls_back",
+      "landin_name": "vfp_peer_calls_back",
+      "direction": "import",
+      "parameters": {}
+    },
+    {
+      "kind": "function",
+      "name": "vfp_apply",
+      "landin_name": "vfp_apply",
+      "direction": "import",
+      "parameters": {
+        "sample": {
+          "ownership": "borrowed",
+          "nullability": "nonnullable",
+          "from": [],
+          "retention": "call"
+        }
+      }
+    },
+    {
+      "kind": "function",
+      "name": "vfp_turn",
+      "landin_name": "vfp_turn",
       "direction": "import",
       "parameters": {}
     }

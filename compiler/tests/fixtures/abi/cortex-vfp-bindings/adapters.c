@@ -4,6 +4,17 @@
 _Static_assert(__builtin_types_compatible_p(IRQn_Type, int), "IRQn_Type compatible type disagrees with its generated integer alias");
 _Static_assert(sizeof(IRQn_Type) == 4, "IRQn_Type size disagrees with its generated integer alias");
 _Static_assert(_Alignof(IRQn_Type) == 4, "IRQn_Type alignment disagrees with its generated integer alias");
+_Static_assert(sizeof(vfp_pair) == 16, "vfp_pair size disagrees with Landin layout(c)");
+_Static_assert(_Alignof(vfp_pair) == 8, "vfp_pair alignment disagrees with Landin layout(c)");
+_Static_assert(__builtin_offsetof(vfp_pair, re) == 0, "vfp_pair.re offset disagrees with Landin layout(c)");
+_Static_assert(__builtin_offsetof(vfp_pair, im) == 8, "vfp_pair.im offset disagrees with Landin layout(c)");
+_Static_assert(sizeof(vfp_sample) == 32, "vfp_sample size disagrees with Landin layout(c)");
+_Static_assert(_Alignof(vfp_sample) == 8, "vfp_sample alignment disagrees with Landin layout(c)");
+_Static_assert(__builtin_offsetof(vfp_sample, gain) == 0, "vfp_sample.gain offset disagrees with Landin layout(c)");
+_Static_assert(__builtin_offsetof(vfp_sample, offset) == 8, "vfp_sample.offset offset disagrees with Landin layout(c)");
+_Static_assert(__builtin_offsetof(vfp_sample, channel) == 16, "vfp_sample.channel offset disagrees with Landin layout(c)");
+_Static_assert(__builtin_offsetof(vfp_sample, trim) == 18, "vfp_sample.trim offset disagrees with Landin layout(c)");
+_Static_assert(__builtin_offsetof(vfp_sample, stamp) == 24, "vfp_sample.stamp offset disagrees with Landin layout(c)");
 
 uint32_t landin_cmsis_vfp_SCB_GetFPUType_call(void)
 {
@@ -35,6 +46,11 @@ void landin_cmsis_vfp___NVIC_SetPriority_call(IRQn_Type argument_1, uint32_t arg
     __NVIC_SetPriority(argument_1, argument_2);
 }
 
+double landin_cmsis_vfp_vfp_apply_call(const vfp_sample *argument_1, double argument_2)
+{
+    return vfp_apply(argument_1, argument_2);
+}
+
 double landin_cmsis_vfp_vfp_backfill_call(float argument_1, double argument_2, float argument_3)
 {
     return vfp_backfill(argument_1, argument_2, argument_3);
@@ -43,4 +59,9 @@ double landin_cmsis_vfp_vfp_backfill_call(float argument_1, double argument_2, f
 float landin_cmsis_vfp_vfp_half_call(float argument_1)
 {
     return vfp_half(argument_1);
+}
+
+vfp_pair landin_cmsis_vfp_vfp_turn_call(vfp_pair argument_1, float argument_2)
+{
+    return vfp_turn(argument_1, argument_2);
 }

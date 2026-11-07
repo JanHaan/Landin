@@ -11,7 +11,9 @@ void landin_cmsis_vfp___NVIC_EnableIRQ_call(IRQn_Type argument_1);
 uint32_t landin_cmsis_vfp___NVIC_GetEnableIRQ_call(IRQn_Type argument_1);
 uint32_t landin_cmsis_vfp___NVIC_GetPriority_call(IRQn_Type argument_1);
 void landin_cmsis_vfp___NVIC_SetPriority_call(IRQn_Type argument_1, uint32_t argument_2);
+double landin_cmsis_vfp_vfp_apply_call(const vfp_sample *argument_1, double argument_2);
 double landin_cmsis_vfp_vfp_backfill_call(float argument_1, double argument_2, float argument_3);
 float landin_cmsis_vfp_vfp_half_call(float argument_1);
+vfp_pair landin_cmsis_vfp_vfp_turn_call(vfp_pair argument_1, float argument_2);
 
 #endif /* LANDIN_CMSIS_VFP_BINDINGS_H */

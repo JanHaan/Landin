@@ -3,33 +3,139 @@
 -- it includes, through Clang's JSON AST, for AAPCS32's base procedure call
 -- standard; every function is a static inline one reached through
 -- adapters.c.
+--
+-- The program calls each generated function and reads the NVIC's and
+-- SysTick's registers back itself, so each effect is held to the
+-- architecture rather than to the adapter's own getter.  It runs on QEMU's
+-- micro:bit Cortex-M0, whose vector table is the harness's and has no
+-- handler for a device interrupt or SysTick, so interrupts stay masked
+-- from first call to last: an interrupt made pending stays pending, which
+-- is what is read back, and nothing is taken.
+import platform/cortex_m
 
-main: () -> (status: i32) =
-    status = 42
+-- ARMv6-M's NVIC and system control space (ARMv6-M ARM B3.4, B3.3).
+set_enable: u32 = 0xe000e100
+clear_enable: u32 = 0xe000e180
+set_pending: u32 = 0xe000e200
+clear_pending: u32 = 0xe000e280
+priorities: u32 = 0xe000e400
+systick_control: u32 = 0xe000e010
+systick_reload: u32 = 0xe000e014
+systick_current: u32 = 0xe000e018
+interrupt_control: u32 = 0xe000ed04
+system_priorities_3: u32 = 0xe000ed20
+
+read: (at: u32) -> (value: u32) =
+    held: ptr u32 = ptr(usize(at))
+    value = compiler.volatile_load(held)
+end read
+
+write: (at: u32, value: u32) -> none =
+    held: ptr mut u32 = ptr(usize(at))
+    compiler.volatile_store(held, value)
+end write
+
+-- The interrupt's bit in a 32-interrupt NVIC word.
+bit: (irq: irqn_type) -> (mask: u32) =
+    mask = u32(1) << u32(irq)
+end bit
+
+-- The interrupt's priority byte, IPR's byte irq mod 4 of word irq / 4.
+priority_byte: (irq: irqn_type) -> (value: u32) =
+    value = (read(priorities + 4 * (u32(irq) / 4)) >> (8 * (u32(irq) % 4))) & 0xff
+end priority_byte
+
+checks: () -> (status: i32) =
     irq: irqn_type = timer_irq_3_irqn
+    neighbour: irqn_type = timer_irq_2_irqn
+
+    -- Enable and disable reach the set-enable register, and its getter
+    -- reads what the register holds.
     nvic_disable_irq(irq)
-    if nvic_get_enable_irq(irq) <> 0 then
-        status = 1
-    end if
+    status = 1
+    return when (read(set_enable) & bit(irq)) <> 0 or nvic_get_enable_irq(irq) <> 0
+    nvic_enable_irq(irq)
+    status = 2
+    return when (read(set_enable) & bit(irq)) == 0 or nvic_get_enable_irq(irq) <> 1
+    status = 3
+    return when (read(set_enable) & bit(neighbour)) <> 0
+
+    -- Pending, enabled and masked: it stays pending and is not taken.
     nvic_clear_pending_irq(irq)
-    if nvic_get_pending_irq(irq) <> 0 then
-        status = 2
-    end if
+    status = 4
+    return when (read(set_pending) & bit(irq)) <> 0 or nvic_get_pending_irq(irq) <> 0
     nvic_set_pending_irq(irq)
-    if nvic_get_pending_irq(irq) <> 1 then
-        status = 3
-    end if
+    status = 5
+    return when (read(set_pending) & bit(irq)) == 0 or nvic_get_pending_irq(irq) <> 1
+    status = 6
+    return when (read(set_pending) & bit(neighbour)) <> 0
     nvic_clear_pending_irq(irq)
-    if nvic_get_pending_irq(irq) <> 0 then
-        status = 4
-    end if
+    status = 7
+    return when (read(set_pending) & bit(irq)) <> 0 or nvic_get_pending_irq(irq) <> 0
+
+    -- ARMv6-M implements two bits of priority, a byte's top two: CMSIS
+    -- shifts priority 2 to 0x80, and the byte holds what the NVIC keeps.
     nvic_set_priority(irq, 2)
-    if nvic_get_priority(irq) <> 2 then
-        status = 5
-    end if
-    -- A reload past SysTick's 24 bits is refused before any register is
-    -- written.
-    if systick_config(16777217) <> 1 then
-        status = 6
-    end if
+    status = 8
+    return when priority_byte(irq) <> 0x80 or nvic_get_priority(irq) <> 2
+    status = 9
+    return when priority_byte(neighbour) <> 0
+    -- Priority 6 is 0b110: its third bit is past the two the NVIC
+    -- implements and CMSIS masks it off, so 2 is read back.
+    nvic_set_priority(irq, 6)
+    status = 10
+    return when priority_byte(irq) <> 0x80 or nvic_get_priority(irq) <> 2
+    -- Every bit but the top two of a priority byte reads as zero.
+    write(priorities, 0xffffffff)
+    status = 11
+    return when read(priorities) <> 0xc0c0c0c0
+    write(priorities, 0)
+    nvic_set_priority(irq, 3)
+    -- Disabling an interrupt leaves its priority as it was set.
+    nvic_disable_irq(irq)
+    status = 12
+    return when (read(set_enable) & bit(irq)) <> 0 or nvic_get_priority(irq) <> 3
+    status = 13
+    return when priority_byte(irq) <> 0xc0
+    nvic_set_priority(irq, 0)
+
+    -- A reload past SysTick's 24 bits is refused, and nothing is written:
+    -- the counter and its interrupt stay off and the reload as it was.
+    -- CLKSOURCE is not compared: a core with no reference clock reads it
+    -- as one whatever was written (ARMv6-M ARM B3.3.3).
+    write(systick_control, 0)
+    write(systick_reload, 0x1234)
+    status = 14
+    return when systick_config(16777217) <> 1
+    status = 15
+    return when (read(systick_control) & 3) <> 0
+    status = 16
+    return when read(systick_reload) <> 0x1234
+    -- The largest reload it takes: 2^24 ticks is a reload of 0xffffff,
+    -- the processor's clock, its interrupt and the counter enabled, and
+    -- SysTick's priority the lowest, 3, in SHPR3's top byte.
+    status = 17
+    return when systick_config(16777216) <> 0
+    status = 18
+    return when read(systick_reload) <> 0xffffff
+    status = 19
+    return when (read(systick_control) & 7) <> 7
+    status = 20
+    return when read(system_priorities_3) >> 24 <> 0xc0
+    status = 21
+    return when read(systick_current) > 0xffffff
+    -- Stop it, and clear its exception if it came due while masked.
+    write(systick_control, 0)
+    write(interrupt_control, u32(1) << 25)
+    status = 22
+    return when (read(systick_control) & 1) <> 0
+    status = 23
+    return when (read(interrupt_control) & (u32(1) << 26)) <> 0
+    status = 42
+end checks
+
+public main: () -> (code: i32) =
+    saved := cortex_m.disable_interrupts()
+    code = checks()
+    cortex_m.restore_interrupts(saved)
 end main

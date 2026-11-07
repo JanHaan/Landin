@@ -4,6 +4,7 @@ summary: Bindings generated from the pinned STM32H753 header and a float and dou
 program: program.ldn
 root: ../../../../..
 c-sources: adapters.c, peer.c
+c-inputs: stm32h753, stm32h753-cmsis
 c-args: -fno-short-enums
 status: 42
 constructs: 1570, 1580
