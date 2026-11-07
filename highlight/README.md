@@ -29,6 +29,25 @@ Clone or download the repository, then use the package for the editor in the
 table. Every package associates the `.ldn` suffix with Landin; the structural
 packages also provide editor features such as indentation, folds, text
 objects or an outline where their host supports them.
+| editor or tool | package | installation |
+|---|---|---|
+| Zed | `highlight/zed` | Open Extensions, choose **Install Dev Extension**, and select this directory. |
+| VS Code, VSCodium, Cursor, Windsurf | `highlight/textmate` | Run `npm install`, `npm run package:check`, and `npx vsce package`; then choose **Install from VSIX** in the editor. |
+| Neovim | `highlight/nvim` | Run `make -C highlight/nvim`, then add the directory to `runtimepath` or use it as a local plugin. |
+| Helix | `highlight/helix` | Merge `languages.toml`, copy the query directory into the matching runtime directory, then run `hx --grammar fetch` and `hx --grammar build`. |
+| Vim | `highlight/vim` | Copy the directory to `~/.vim/pack/landin/start/landin`, or point a package manager at it. |
+| Emacs | `highlight/emacs` | Put the directory on `load-path` and require `landin-mode`; on Emacs 29+ with tree-sitter ABI 15 support, run `M-x landin-ts-install-grammar` to enable the tree-sitter mode. Otherwise use the regex-based `landin-mode`. |
+| Sublime Text | `highlight/sublime` | Copy the directory to `Packages/Landin`. For the language server, merge `LSP-refine.sublime-settings` into the LSP package's settings. |
+| Visual Studio | `highlight/visual-studio` | Run `install.ps1` in PowerShell, then reopen the file or restart Visual Studio. |
+| JetBrains IDEs | `highlight/textmate` | Enable **TextMate Bundles**, import this directory as a bundle, and map `*.ldn` if necessary. |
+| Eclipse | `highlight/textmate` | With TM4E installed, import `syntaxes/landin.tmLanguage.json` and open `.ldn` files in the Generic Editor. |
+| Notepad++ | `highlight/notepad-plus-plus` | From **Language**, open **User Defined Language** and import `Landin.xml`, or copy it to the user-defined-language directory. |
+| Kate | `highlight/kate` | Install `landin.xml` as a user syntax-highlighting definition, and merge `lsp-client.json` into the LSP Client plugin's settings for the language server. |
+| Nano | `highlight/nano/landin.nanorc` | Include the syntax file from the user's `nanorc`. |
+| Pygments, Sphinx, MkDocs | `highlight` | Run `pip install ./highlight`; the lexer registers the `landin` and `ldn` aliases and the `.ldn` suffix. |
+
+## Maintaining grammar pins
+
 Helix, Zed, and Emacs fetch the tree-sitter grammar at the fixed commit
 recorded in their packages, matching the queries and mode rules in this
 checkout. A commit is what each of them can fetch, so the pin is a full commit
@@ -61,23 +80,6 @@ commit to be on the checked-out branch; each refusal names the commit
 reports that it skipped this comparison; fetch the commit for the full check.
 The gate's editor-grammar job checks out full history so that it always runs
 the comparison.
-
-| editor or tool | package | installation |
-|---|---|---|
-| Zed | `highlight/zed` | Open Extensions, choose **Install Dev Extension**, and select this directory. |
-| VS Code, VSCodium, Cursor, Windsurf | `highlight/textmate` | Run `npm install`, `npm run package:check`, and `npx vsce package`; then choose **Install from VSIX** in the editor. |
-| Neovim | `highlight/nvim` | Run `make -C highlight/nvim`, then add the directory to `runtimepath` or use it as a local plugin. |
-| Helix | `highlight/helix` | Merge `languages.toml`, copy the query directory into the matching runtime directory, then run `hx --grammar fetch` and `hx --grammar build`. |
-| Vim | `highlight/vim` | Copy the directory to `~/.vim/pack/landin/start/landin`, or point a package manager at it. |
-| Emacs | `highlight/emacs` | Put the directory on `load-path` and require `landin-mode`; on Emacs 29+, run `M-x landin-ts-install-grammar` to enable the tree-sitter mode. |
-| Sublime Text | `highlight/sublime` | Copy the directory to `Packages/Landin`. For the language server, merge `LSP-refine.sublime-settings` into the LSP package's settings. |
-| Visual Studio | `highlight/visual-studio` | Run `install.ps1` in PowerShell, then reopen the file or restart Visual Studio. |
-| JetBrains IDEs | `highlight/textmate` | Enable **TextMate Bundles**, import this directory as a bundle, and map `*.ldn` if necessary. |
-| Eclipse | `highlight/textmate` | With TM4E installed, import `syntaxes/landin.tmLanguage.json` and open `.ldn` files in the Generic Editor. |
-| Notepad++ | `highlight/notepad-plus-plus` | From **Language**, open **User Defined Language** and import `Landin.xml`, or copy it to the user-defined-language directory. |
-| Kate | `highlight/kate` | Install `landin.xml` as a user syntax-highlighting definition, and merge `lsp-client.json` into the LSP Client plugin's settings for the language server. |
-| Nano | `highlight/nano/landin.nanorc` | Include the syntax file from the user's `nanorc`. |
-| Pygments, Sphinx, MkDocs | `highlight` | Run `pip install ./highlight`; the lexer registers the `landin` and `ldn` aliases and the `.ldn` suffix. |
 
 ## The language server
 

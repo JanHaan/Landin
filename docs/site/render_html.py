@@ -1748,6 +1748,9 @@ CODE_OR_TAG = re.compile(r"(<code>.*?</code>|<[^>]+>)", re.S)
 MD_LINK = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
 
 
+LIBRARY_SECTIONS = {}
+
+
 class GuideTargets:
     """Resolve source links from the document that contains them."""
 
@@ -1764,6 +1767,8 @@ class GuideTargets:
         if source == ".." or source.startswith("../"):
             return href
         target = self.pages.get(source)
+        if source == "docs/library.md" and parts.fragment:
+            target = LIBRARY_SECTIONS.get(unquote(parts.fragment), target)
         if target is None:
             target = REPO + "/blob/main/" + quote(source, safe="/")
         return urlunsplit(("", "", target, parts.query, parts.fragment))
@@ -3451,6 +3456,44 @@ def verify_front(out: Path, pieces, docs):
     return not short and shelf_ok
 
 
+def verify_library_links(out, documents):
+    """Check links from rendered documents into the split library pages."""
+    from html.parser import HTMLParser
+
+    class Links(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.links, self.ids = [], set()
+
+        def handle_starttag(self, tag, attrs):
+            attrs = dict(attrs)
+            if "id" in attrs:
+                self.ids.add(attrs["id"])
+            if tag == "a" and "href" in attrs:
+                self.links.append(attrs["href"])
+
+    pages = {}
+    def read(name):
+        if name not in pages:
+            page = Links()
+            page.feed((out / name).read_text())
+            pages[name] = page
+        return pages[name]
+
+    ok = True
+    for document in documents:
+        for href in read(document["out"]).links:
+            parts = urlsplit(href)
+            if (parts.scheme or parts.netloc or not parts.fragment
+                    or not re.fullmatch(r"library(?:-[\w-]+)?\.html", parts.path)):
+                continue
+            path = out / parts.path
+            if not path.is_file() or unquote(parts.fragment) not in read(parts.path).ids:
+                print(f"{document['out']}: missing library destination {href}")
+                ok = False
+    return ok
+
+
 USAGE = """render the documentation as HTML
 
     python3 render_html.py                      render every document
@@ -3489,7 +3532,7 @@ def main(argv):
 
     check = "--verify" in argv
 
-    source = HERE
+    source = HERE.parent.parent
     if "--from" in argv:
         at = argv.index("--from") + 1
         if at >= len(argv):
@@ -3513,6 +3556,15 @@ def main(argv):
                 + ", ".join(d["src"] for d in DOCS + GUIDES))
         return 1
     SITE.mkdir(exist_ok=True)
+    # The splitter owns the module-to-overview map.  Headings within each
+    # overview move to that module's page, while the introduction stays put.
+    modules, _ = library.collect(source)
+    _, overviews = library.overviews(source, modules)
+    LIBRARY_SECTIONS.clear()
+    for module, (overview, _, _) in overviews.items():
+        LIBRARY_SECTIONS[slug(module)] = library.page_name(module)
+        for heading in re.findall(r"^### (.+)$", overview, re.M):
+            LIBRARY_SECTIONS[slug(heading)] = library.page_name(module)
     counts = {}
     dangling = []
 
@@ -3687,6 +3739,7 @@ def main(argv):
                                           source / d["src"])
                          for d in docs + guides])
         if front:
+            ok = verify_library_links(SITE, docs + guides) and ok
             structure = verify_structure(SITE / "index.html") and structure
             #  The not-found page reads no document, so there is no word
             #  of one to lose; its outline is still held to the others'.

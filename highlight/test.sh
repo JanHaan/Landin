@@ -163,6 +163,13 @@ else
     echo "Lua compiler absent; Neovim Lua syntax check skipped"
 fi
 
+if command -v nvim >/dev/null 2>&1; then
+    nvim -n --headless --clean \
+      --cmd "set runtimepath^=$root/highlight/nvim" \
+      -l "$root/highlight/tests/nvim-opt-out.lua"
+    echo "Neovim LSP preference smoke clean"
+fi
+
 if command -v nvim >/dev/null 2>&1 && command -v cc >/dev/null 2>&1; then
     nvim_runtime="$test_tmp/nvim"
     mkdir -p "$nvim_runtime/parser" "$nvim_runtime/data" \
