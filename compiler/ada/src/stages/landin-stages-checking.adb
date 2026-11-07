@@ -4330,8 +4330,15 @@ package body Landin.Stages.Checking is
                               if Bits > Width
                                 or else (Shape.Atoms =
                                   Landin.Checking.No_Atom_Set
-                                  and then Syn.Kind (Of_Tree, Written) /=
-                                    Syn.Type_Name and then Bits /= Width)
+                                  and then not
+                                    (Syn.Kind (Of_Tree, Written) = Syn.Type_Name
+                                     or else
+                                       (Syn.Kind (Of_Tree, Written)
+                                          = Syn.Type_Reference
+                                        and then Res.Verdict_Of
+                                          (Meanings.all, Of_Tree, Written)
+                                            /= Res.Bound))
+                                  and then Bits /= Width)
                                 or else (Syn.Kind (Of_Tree, Written) =
                                   Syn.Type_Name and then
                                   Landin.Packed.Named_Width (Spelled
