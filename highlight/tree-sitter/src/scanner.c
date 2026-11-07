@@ -31,6 +31,34 @@ void tree_sitter_landin_external_scanner_deserialize(void *payload,
 static void advance(TSLexer *lexer) { lexer->advance(lexer, false); }
 static void skip(TSLexer *lexer) { lexer->advance(lexer, true); }
 
+/* The opener has already been consumed.  At each position the compiler
+   tests a complete delimiter, otherwise it advances one character. */
+static void block_comment(TSLexer *lexer) {
+  unsigned depth = 1;
+  unsigned dashes = 0;
+  while (lexer->lookahead != 0 && depth != 0) {
+    int32_t c = lexer->lookahead;
+    advance(lexer);
+    if (c == '-') {
+      if (dashes < 2) dashes++;
+    } else {
+      if (c == '(' && dashes == 2) depth++;
+      dashes = 0;
+      if (c == ')') {
+        if (lexer->lookahead == '-') {
+          advance(lexer);
+          if (lexer->lookahead == '-') {
+            advance(lexer);
+            depth--;
+          } else {
+            dashes = 1;
+          }
+        }
+      }
+    }
+  }
+}
+
 /* [1750]: a `(` that begins a line, and whose matching `)` is followed by
    `:=`, begins a destructuring binding rather than a call of the line above.
    The token is the `(` alone; what follows it is only looked at. */
@@ -51,8 +79,13 @@ static bool destructuring_follows(TSLexer *lexer) {
     if (c == '-') {
       advance(lexer);
       if (lexer->lookahead == '-') {
-        while (lexer->lookahead != 0 && lexer->lookahead != '\n') {
+        advance(lexer);
+        if (lexer->lookahead == '(') {
           advance(lexer);
+          block_comment(lexer);
+        } else {
+          while (lexer->lookahead != 0 && lexer->lookahead != '\n' &&
+                 lexer->lookahead != '\r') advance(lexer);
         }
       }
       continue;
@@ -131,34 +164,7 @@ bool tree_sitter_landin_external_scanner_scan(void *payload, TSLexer *lexer,
     advance(lexer);
     if (lexer->lookahead == '(') {
       advance(lexer);
-      unsigned depth = 1;
-      while (lexer->lookahead != 0) {
-        if (lexer->lookahead == '-') {
-          advance(lexer);
-          if (lexer->lookahead == '-') {
-            advance(lexer);
-            if (lexer->lookahead == '(') {
-              advance(lexer);
-              depth++;
-            }
-          }
-        } else if (lexer->lookahead == ')') {
-          advance(lexer);
-          if (lexer->lookahead == '-') {
-            advance(lexer);
-            if (lexer->lookahead == '-') {
-              advance(lexer);
-              if (--depth == 0) {
-                lexer->mark_end(lexer);
-                lexer->result_symbol = COMMENT;
-                return true;
-              }
-            }
-          }
-        } else {
-          advance(lexer);
-        }
-      }
+      block_comment(lexer);
       lexer->mark_end(lexer);
       lexer->result_symbol = COMMENT;
       return true;
