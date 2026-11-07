@@ -54,7 +54,8 @@ package body Landin.IR.Dump is
       Names    : Landin.Source.Names.Table;
       With_Metadata : Boolean := False;
       Kept     : access function
-        (Id : Evidence_Id; Which : Positive) return Boolean := null)
+        (Id : Evidence_Id; Which : Positive) return Boolean := null;
+      With_Provenance : Boolean := False)
       return String
    is
       Out_Text : Unbounded.Unbounded_String;
@@ -82,9 +83,45 @@ package body Landin.IR.Dump is
                   (Names, Landin.Resolution.Name_Of (Meanings, Id));
       end Named;
 
-      function Item_Named (Id : Item_Id) return String
-        is (if Holds (Of_Unit, Id)
-            then Named (Declares (Of_Unit, Id)) else "-");
+      function Item_Named (Id : Item_Id) return String;
+
+      function Item_Named (Id : Item_Id) return String is
+         Declared : Declaration_Id;
+      begin
+         if not Holds (Of_Unit, Id) then
+            return "-";
+         end if;
+         Declared := Declares (Of_Unit, Id);
+         if not With_Provenance then
+            return Named (Declared);
+         end if;
+         if Declared = No_Declaration then
+            Declared := Generic_Template_Of (Of_Unit, Id);
+         end if;
+         if Declared = No_Declaration then
+            Declared := Named_After (Of_Unit, Id);
+         end if;
+         if Declared = No_Declaration
+           or else not Landin.Resolution.Contains (Meanings, Declared)
+         then
+            return "-";
+         end if;
+         declare
+            Path : String :=
+              Landin.Resolution.Module_Path_Of (Meanings, Declared);
+         begin
+            for C of Path loop
+               if C = '/' then
+                  C := '.';
+               end if;
+            end loop;
+            return (if Path = "" then "main" else Path) & "."
+              & Named (Declared)
+              & (if Generic_Template_Of (Of_Unit, Id) = No_Declaration
+                 then "" else "[instance-item="
+                   & Trimmed (Item_Id'Image (Id)) & "]");
+         end;
+      end Item_Named;
 
       --  A nominal's template spelling, or a pointer union's canonical
       --  spelling in parentheses: that identity has no template.

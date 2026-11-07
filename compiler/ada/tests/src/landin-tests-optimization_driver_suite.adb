@@ -327,7 +327,8 @@ package body Landin.Tests.Optimization_Driver_Suite is
          "a report write failure preserves the prior assembly generation");
       Landin.Testing.Check
         (Item, Ada.Strings.Fixed.Index
-           (US.To_String (Result.Report), "cannot write: report.json") > 0,
+           (US.To_String (Result.Report),
+            "cannot write: report.json: the fake host refuses writes") > 0,
          "report failure uses the ordinary platform diagnostic");
    end Report_Failures;
 
@@ -740,10 +741,81 @@ package body Landin.Tests.Optimization_Driver_Suite is
                                 """configuration"""),
             "a parse refused while loading is the syntax stage's row");
       end;
+      declare
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Result : Landin.Driver.Outcome;
+      begin
+         Host.Add_File ("main.ldn", Source);
+         Host.Add_File ("stages.json", "prior stage report");
+         Host.Refuse_Staged_Write ("stages.json");
+         Result := Landin.Driver.Execute
+           (["--target=linux-x86-64", "--stage-report=stages.json",
+             "main.ldn"], Host, Tools);
+         Landin.Testing.Check
+           (Item, Result.Status = Landin.Driver.Status_Reported
+            and then Has (US.To_String (Result.Report),
+              "cannot write: stages.json: the fake host refuses writes")
+            and then Host.Written ("stages.json") = "",
+            "a stage write failure names its cause and publishes nothing");
+         declare
+            Content : US.Unbounded_String;
+            Read : Landin.Platform.Read_Status;
+         begin
+            Host.Read_File ("stages.json", Content, Read);
+            Landin.Testing.Check
+              (Item, US.To_String (Content) = "prior stage report",
+               "the prior stage report survives a failed write");
+         end;
+      end;
    end Stage_Reports;
+
+   procedure Annotated_IR (Item : in out Landin.Testing.Context);
+
+   procedure Annotated_IR (Item : in out Landin.Testing.Context) is
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Args : Landin.Platform.Path_List :=
+        ["--target=linux-x86-64", "--link=libc", "--optimize=none",
+         "--specialize=off", "--emit=ir-annotated", "main.ldn"];
+      Result : Landin.Driver.Outcome;
+      function Has (Text, Needle : String) return Boolean is
+        (Ada.Strings.Fixed.Index (Text, Needle) > 0);
+   begin
+      Host.Add_Directory ("root");
+      Host.Add_Directory ("root/util");
+      Host.Add_File ("root/util/main.ldn",
+        "public answer: () -> (value: i32) = value = 1 end answer");
+      Host.Add_File ("main.ldn", "import util " & Generic_Source);
+      Args.Append ("--root=root");
+      Result := Landin.Driver.Execute (Args, Host, Tools);
+      Landin.Testing.Check_Equal
+        (Item, Result.Status, 0,
+         "annotated IR emits: " & US.To_String (Result.Report));
+      Landin.Testing.Check
+        (Item, Has (Host.Written ("a.ir"),
+                   "request target=linux-x86-64 level=x86-64-v1"
+                   & " optimize=none specialize=off" & ASCII.LF)
+         and then Has (Host.Written ("a.ir"), "main.main result")
+         and then Has (Host.Written ("a.ir"), "util.answer result")
+         and then Has (Host.Written ("a.ir"), "main.choose[instance-item="),
+         "saved annotated IR identifies settings, module and instance");
+      Args.Replace_Element (5, "--emit=ir");
+      Result := Landin.Driver.Execute (Args, Host, Tools);
+      Landin.Testing.Check_Equal
+        (Item, Result.Status, 0, "compact IR still emits");
+      Landin.Testing.Check
+        (Item, Has (Host.Written ("a.ir"), "unit signatures ")
+         and then not Has (Host.Written ("a.ir"), "request target=")
+         and then not Has (Host.Written ("a.ir"), "instance-item="),
+         "compact IR preserves its format");
+   end Annotated_IR;
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "opt driver", "annotated IR retains provenance",
+         Annotated_IR'Access);
       Landin.Testing.Register
         (Into, "opt driver", "invalid actions and collisions",
          Invalid_Requests'Access);

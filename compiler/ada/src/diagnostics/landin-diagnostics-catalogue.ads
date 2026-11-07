@@ -514,13 +514,13 @@ package Landin.Diagnostics.Catalogue is
       Expression_Expected =>
         (Code => "L0102", Level => Error, State => Live,
          Source => True, Bytes => False,
-         Least => 1, Most => 1, Notes => 1, Route => False,
+         Least => 0, Most => 1, Notes => 1, Route => False,
          Fixes => May_Fix, Shown_By => Negative_Fixture,
          Rule => +"[1820]: an expression was required and none begins here"),
       Token_Expected =>
         (Code => "L0103", Level => Error, State => Live,
          Source => True, Bytes => False,
-         Least => 1, Most => 1, Notes => 1, Route => False,
+         Least => 0, Most => 1, Notes => 1, Route => False,
          Fixes => May_Fix, Shown_By => Negative_Fixture,
          Rule => +"[1810]: a terminal the production spells is absent"),
       Unclosed_Construct =>

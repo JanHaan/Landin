@@ -93,6 +93,88 @@ package body Landin.Diagnostics.Text is
       end if;
    end Display_Byte;
 
+   function Escaped (Text : String) return String is
+      Result : Unbounded.Unbounded_String;
+      Index : Integer := Text'First;
+
+      --  Same bounded UTF-8 table as the JSON writer. A continuation byte
+      --  is harmless only inside a complete ordinary Unicode scalar.
+      function Sequence_Length return Natural;
+
+      function Sequence_Length return Natural is
+         function Byte (Offset : Natural) return Natural
+           is (Character'Pos (Text (Index + Offset)));
+         function Continues (Offset : Natural; Low, High : Natural)
+           return Boolean
+           is (Index + Offset <= Text'Last
+               and then Byte (Offset) in Low .. High);
+      begin
+         case Byte (0) is
+            when 16#00# .. 16#7F# =>
+               return 1;
+            when 16#C2# .. 16#DF# =>
+               return (if Continues (1, 16#80#, 16#BF#) then 2 else 0);
+            when 16#E0# =>
+               return (if Continues (1, 16#A0#, 16#BF#)
+                         and then Continues (2, 16#80#, 16#BF#)
+                       then 3 else 0);
+            when 16#E1# .. 16#EC# | 16#EE# .. 16#EF# =>
+               return (if Continues (1, 16#80#, 16#BF#)
+                         and then Continues (2, 16#80#, 16#BF#)
+                       then 3 else 0);
+            when 16#ED# =>
+               return (if Continues (1, 16#80#, 16#9F#)
+                         and then Continues (2, 16#80#, 16#BF#)
+                       then 3 else 0);
+            when 16#F0# =>
+               return (if Continues (1, 16#90#, 16#BF#)
+                         and then Continues (2, 16#80#, 16#BF#)
+                         and then Continues (3, 16#80#, 16#BF#)
+                       then 4 else 0);
+            when 16#F1# .. 16#F3# =>
+               return (if Continues (1, 16#80#, 16#BF#)
+                         and then Continues (2, 16#80#, 16#BF#)
+                         and then Continues (3, 16#80#, 16#BF#)
+                       then 4 else 0);
+            when 16#F4# =>
+               return (if Continues (1, 16#80#, 16#8F#)
+                         and then Continues (2, 16#80#, 16#BF#)
+                         and then Continues (3, 16#80#, 16#BF#)
+                       then 4 else 0);
+            when others =>
+               return 0;
+         end case;
+      end Sequence_Length;
+   begin
+      while Index <= Text'Last loop
+         declare
+            Length : constant Natural := Sequence_Length;
+            Control : constant Boolean :=
+              Character'Pos (Text (Index)) < 32
+              or else Character'Pos (Text (Index)) in 127 .. 159
+              or else (Text (Index) = Character'Val (194)
+                       and then Length = 2
+                       and then Character'Pos (Text (Index + 1)) in 128 .. 159);
+         begin
+            if Length > 1 and then not Control then
+               Unbounded.Append (Result, Text (Index .. Index + Length - 1));
+               Index := Index + Length;
+            else
+               for Offset in 0 .. Natural'Max (Length, 1) - 1 loop
+                  if Control then
+                     Unbounded.Append
+                       (Result, Display_Byte (Text (Index + Offset)));
+                  else
+                     Unbounded.Append (Result, Text (Index + Offset));
+                  end if;
+               end loop;
+               Index := Index + Natural'Max (Length, 1);
+            end if;
+         end;
+      end loop;
+      return Unbounded.To_String (Result);
+   end Escaped;
+
    function Gutter_Width (Line : Landin.Source.Line_Number) return Natural is
      (Decimal (Integer (Line))'Length);
 
@@ -135,7 +217,7 @@ package body Landin.Diagnostics.Text is
       --  an error is worse than the error.  Say so and carry on.
       if not Is_Valid (Sources.Get (Source_Of (Item)), Span_Of (Item)) then
          Append (Into, "  --> ");
-         Append (Into, Name (Sources.Get (Source_Of (Item))));
+         Append (Into, Escaped (Name (Sources.Get (Source_Of (Item)))));
          Append (Into, ": <span outside this source>" & LF);
          return;
       end if;
@@ -203,7 +285,7 @@ package body Landin.Diagnostics.Text is
             end loop;
             Carets := Natural'Max (Carets, 1);
             Append (Into, "  --> ");
-            Append (Into, Name (Snap));
+            Append (Into, Escaped (Name (Snap)));
             Append
               (Into, ":" & Decimal (Integer (Start.Line)) & ":"
                & Decimal (Integer (Start.Column)) & LF);
@@ -220,7 +302,7 @@ package body Landin.Diagnostics.Text is
                begin
                   if Text /= "" then
                      Append (Into, " ");
-                     Append (Into, Text);
+                     Append (Into, Escaped (Text));
                   end if;
                end;
             end if;
@@ -241,7 +323,7 @@ package body Landin.Diagnostics.Text is
    is
    begin
       Append (Buffer, Image (Level (Item)) & "[" & Code (Item) & "]: ");
-      Append (Buffer, Message (Primary (Item)));
+      Append (Buffer, Escaped (Message (Primary (Item))));
       Append (Buffer, LF & "");
       if Buffer.Full then
          return;
@@ -266,7 +348,7 @@ package body Landin.Diagnostics.Text is
       for Index in 1 .. Note_Count (Item) loop
          exit when Buffer.Full;
          Append (Buffer, "  = note: ");
-         Append (Buffer, Nth_Note (Item, Index));
+         Append (Buffer, Escaped (Nth_Note (Item, Index)));
          Append (Buffer, LF & "");
       end loop;
 
@@ -275,8 +357,9 @@ package body Landin.Diagnostics.Text is
       --  report rather than from this text.
       for Index in 1 .. Fix_Count (Item) loop
          exit when Buffer.Full;
-         Append (Buffer, "  = help: ");
-         Append (Buffer, Message (Nth_Fix (Item, Index)));
+         Append (Buffer, (if Level (Nth_Fix (Item, Index)) = Likely
+                          then "  = help (guess): " else "  = help: "));
+         Append (Buffer, Escaped (Message (Nth_Fix (Item, Index))));
          Append (Buffer, LF & "");
       end loop;
    end Render_Item;

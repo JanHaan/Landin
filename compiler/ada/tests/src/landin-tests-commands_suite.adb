@@ -142,6 +142,77 @@ package body Landin.Tests.Commands_Suite is
          "server help never starts the protocol");
    end Help_And_Queries;
 
+   procedure Actionable_Command_Guidance
+     (Item : in out Landin.Testing.Context);
+
+   procedure Actionable_Command_Guidance
+     (Item : in out Landin.Testing.Context)
+   is
+      package C renames Landin.Commands.Catalogue;
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Meter : Landin.Platform.Unmetered;
+      Lsp : constant String := C.Usage (C.Server);
+      Completion : constant String := C.Usage (C.Completion);
+      Result : Landin.Driver.Outcome;
+   begin
+      Landin.Testing.Check
+        (Item, Contains (Lsp, "--stdio") and then Contains (Lsp, "--help")
+         and then not Contains (Lsp, "--color")
+         and then not Contains (Lsp, "--diagnostics")
+         and then not Contains (Lsp, "--verbose")
+         and then not Contains (Lsp, "--quiet"),
+         "server help advertises only supported options");
+      Landin.Testing.Check
+        (Item, Contains (C.Usage (C.Compile), "--color")
+         and then Contains (C.Usage (C.Format), "--diagnostics"),
+         "other commands retain their presentation options");
+      Landin.Testing.Check
+        (Item, Contains (Completion, "source <(refine completion bash)")
+         and then Contains (Completion, "autoload -Uz compinit; compinit")
+         and then Contains (Completion, "source <(refine completion zsh)")
+         and then Contains (Completion, "refine completion fish | source"),
+         "each shell has an activation example");
+      Result := Landin.Commands.Execute
+        (["fmt", "--stdout", "-"], Host, Tools, Meter);
+      Landin.Testing.Check
+        (Item, Result.Status = 2
+         and then Contains (US.To_String (Result.Report),
+                            "fmt does not read standard input")
+         and then Contains (US.To_String (Result.Report),
+                            "refine fmt --stdout source.ldn")
+         and then Contains (US.To_String (Result.Report), "refine lsp"),
+         "stdin refusal names file and editor routes");
+      Host.Add_File ("main.ldn", Source);
+      Host.Add_File ("notes", "some data that is not Landin source");
+      Result := Landin.Commands.Execute
+        (["run", "--link=libc", "main.ldn", "notes"],
+         Host, Tools, Meter, Built_For => "x86_64-pc-linux-gnu");
+      Landin.Testing.Check
+        (Item, Result.Status = 1
+         and then Contains (US.To_String (Result.Report),
+                            "refine run ""main.ldn"" -- ""notes"""),
+         "data parsed as a second source gets the separator route: "
+         & US.To_String (Result.Report));
+      Result := Landin.Commands.Execute
+        (["run", "--link=libc", "main.ldn", "--", "notes"],
+         Host, Tools, Meter, Built_For => "x86_64-pc-linux-gnu");
+      Landin.Testing.Check
+        (Item, Result.Status = 0
+         and then Natural (Result.Launch_Arguments.Length) = 1
+         and then Result.Launch_Arguments (1) = "notes",
+         "the suggested separator compiles and forwards the argument");
+      Landin.Commands.Launch (Result, Host, Tools);
+      Host.Add_File ("notes", "value: i32 = 1");
+      Result := Landin.Commands.Execute
+        (["run", "--link=libc", "main.ldn", "notes"],
+         Host, Tools, Meter, Built_For => "x86_64-pc-linux-gnu");
+      Landin.Testing.Check
+        (Item, Result.Status = 0,
+         "an additional source needs no .ldn suffix");
+      Landin.Commands.Launch (Result, Host, Tools);
+   end Actionable_Command_Guidance;
+
    procedure Version_Identity (Item : in out Landin.Testing.Context);
    procedure Version_Identity (Item : in out Landin.Testing.Context) is
       package BI renames Landin.Build_Identity;
@@ -1483,6 +1554,9 @@ package body Landin.Tests.Commands_Suite is
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "commands", "actionable command guidance",
+         Actionable_Command_Guidance'Access);
       Landin.Testing.Register
         (Into, "commands", "options before their command",
          Options_Before_Their_Command'Access);

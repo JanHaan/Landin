@@ -341,7 +341,7 @@ package body Landin.Stages.Configuration is
         return Ty.Type_Kind is
       begin
          if Node /= Syn.No_Node and then Syn.Kind (Of_Tree, Node)
-           in Syn.Type_Name | Syn.Name_Reference
+           in Syn.Type_Name | Syn.Type_Reference | Syn.Name_Reference
          then
             for Kind in Ty.Scalar_Name loop
                if Spelled (Syn.Name (Of_Tree, Node)) = Ty.Spelling (Kind) then

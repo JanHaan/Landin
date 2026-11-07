@@ -1904,7 +1904,7 @@ package body Landin.Tests.Parser_Suite is
          Landin.Testing.Check
            (Item, Landin.Syntax.Kind
              (Parsed, Landin.Syntax.Declared_Type (Parsed, N))
-                = Landin.Syntax.Type_Name,
+                = Landin.Syntax.Type_Reference,
             "a fixed formal retains its declared type");
          Landin.Testing.Check
            (Item,
@@ -1939,7 +1939,7 @@ package body Landin.Tests.Parser_Suite is
                   = Landin.Syntax.Type_Reference
              and then Landin.Syntax.Kind
                (Parsed, Landin.Syntax.Nth_Type_Argument
-                  (Parsed, Application, 1)) = Landin.Syntax.Type_Name
+                  (Parsed, Application, 1)) = Landin.Syntax.Type_Reference
              and then Landin.Syntax.Kind
                (Parsed, Landin.Syntax.Nth_Type_Argument
                   (Parsed, Application, 2)) = Landin.Syntax.Integer_Literal,
@@ -1998,7 +1998,7 @@ package body Landin.Tests.Parser_Suite is
                            = Landin.Syntax.Error_Expression
                 and then Landin.Syntax.Kind
                   (Parsed, Landin.Syntax.Element_Of (Parsed, Array_Node))
-                           = Landin.Syntax.Type_Name,
+                           = Landin.Syntax.Type_Reference,
                "the array closer and valid element survive bound recovery");
          end;
       end;
@@ -2076,7 +2076,7 @@ package body Landin.Tests.Parser_Suite is
                (Parsed, Application) = 2
              and then Landin.Syntax.Kind
                (Parsed, Landin.Syntax.Nth_Type_Argument
-                  (Parsed, Application, 1)) = Landin.Syntax.Type_Name
+                  (Parsed, Application, 1)) = Landin.Syntax.Type_Reference
              and then Landin.Syntax.Kind
                (Parsed, Landin.Syntax.Nth_Type_Argument
                   (Parsed, Application, 2))
@@ -4894,8 +4894,322 @@ package body Landin.Tests.Parser_Suite is
            & "    fro: i32 = 1" & LF & "end f" & LF, "", "");
    end Refusal_Routes_Preserve_Intent;
 
+   procedure Multiline_Keyword_Repairs_Parse
+     (Item : in out Landin.Testing.Context);
+
+   procedure Multiline_Keyword_Repairs_Parse
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check (Head, Word, Closer : String);
+      procedure Check (Head, Word, Closer : String) is
+         Text : constant String := "f: () -> none =" & ASCII.LF
+           & Head & " -- keep this comment" & ASCII.CR & ASCII.LF
+           & "return" & ASCII.LF & Closer & ASCII.LF & "end f";
+         Expected : constant String := "f: () -> none =" & ASCII.LF
+           & Head & " " & Word & " -- keep this comment" & ASCII.CR & ASCII.LF
+           & "return" & ASCII.LF & Closer & ASCII.LF & "end f";
+         Sources : Landin.Source.Sets.Source_Set;
+         Names : Landin.Source.Names.Table;
+         Stream : Landin.Tokens.Token_Stream;
+         Found : Landin.Diagnostics.Diagnostic_List;
+         Id : constant Landin.Source.Source_Id := Sources.Add ("keyword", Text);
+         Clashed : Boolean;
+         Codes : Unbounded.Unbounded_String;
+         Total, Nodes : Natural;
+         Held : Boolean;
+      begin
+         Landin.Tokens.Lexer.Lex (Sources.Get (Id), Names, Stream);
+         declare
+            Parsed : constant Landin.Syntax.Tree :=
+              Landin.Syntax.Parser.Parse (Stream, Names, Found);
+            Restated : constant Landin.Diagnostics.Diagnostic_List :=
+              Landin.Syntax.Repairs.Restated (Sources.Get (Id), Parsed, Found);
+            Fixed : constant String := Landin.Testing.Fixes.Applied
+              (Restated, Id, Text, Clashed);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Fixed, Expected, "insert the keyword before header trivia");
+            Landin.Testing.Check (Item, not Clashed, "the insertion is disjoint");
+            Read_And_Parse (Fixed, Codes, Total, Nodes, Held);
+            Landin.Testing.Check
+              (Item, Total = 0 and then Held, "the repaired whole routine parses");
+         end;
+      end Check;
+   begin
+      Check ("if true", "then", "end if");
+      Check ("while true", "do", "end while");
+      Check ("for i in 0 ..< 3", "do", "end for");
+   end Multiline_Keyword_Repairs_Parse;
+
+   procedure Foreign_Forms_Have_Real_Labels
+     (Item : in out Landin.Testing.Context);
+
+   procedure Foreign_Forms_Have_Real_Labels
+     (Item : in out Landin.Testing.Context)
+   is
+      Sources : Landin.Source.Sets.Source_Set;
+      Names : Landin.Source.Names.Table;
+      Stream : Landin.Tokens.Token_Stream;
+      Found : Landin.Diagnostics.Diagnostic_List;
+      Text : constant String := "f: () -> none =" & ASCII.LF
+        & "i++" & ASCII.LF & "end f";
+      Id : constant Landin.Source.Source_Id := Sources.Add ("foreign", Text);
+   begin
+      Landin.Tokens.Lexer.Lex (Sources.Get (Id), Names, Stream);
+      declare
+         Parsed : constant Landin.Syntax.Tree :=
+           Landin.Syntax.Parser.Parse (Stream, Names, Found);
+         pragma Unreferenced (Parsed);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Landin.Diagnostics.Count (Found), 1, "one foreign-form refusal");
+         for Position in 1 .. Landin.Diagnostics.Count (Found) loop
+            declare
+               Report : constant Landin.Diagnostics.Diagnostic :=
+                 Landin.Diagnostics.Get (Found, Position);
+            begin
+               Landin.Testing.Check_Equal
+                 (Item, Landin.Diagnostics.Label_Count (Report), 0,
+                  "a standalone foreign form has no invented neighbour");
+               for Label in 1 .. Landin.Diagnostics.Label_Count (Report) loop
+                  Landin.Testing.Check
+                    (Item, Landin.Diagnostics.Span_Of
+                       (Landin.Diagnostics.Nth_Label (Report, Label))
+                         /= Landin.Source.Empty_Span,
+                     "a neighbour label has a written source span");
+               end loop;
+               Landin.Testing.Check
+                 (Item, Landin.Diagnostics.Fix_Count (Report) > 0,
+                  "the increment repair remains available");
+            end;
+         end loop;
+      end;
+   end Foreign_Forms_Have_Real_Labels;
+
+   procedure Named_Slice_Arguments_Keep_Permissions
+     (Item : in out Landin.Testing.Context);
+
+   procedure Named_Slice_Arguments_Keep_Permissions
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check (Written : String; Writable : Boolean);
+      procedure Check (Written : String; Writable : Boolean) is
+         Sources : Landin.Source.Sets.Source_Set;
+         Names : Landin.Source.Names.Table;
+         Stream : Landin.Tokens.Token_Stream;
+         Found : Landin.Diagnostics.Diagnostic_List;
+         Id : constant Landin.Source.Source_Id := Sources.Add
+           ("slice-argument", "n := size(t: " & Written & ")");
+         Seen : Natural := 0;
+      begin
+         Landin.Tokens.Lexer.Lex (Sources.Get (Id), Names, Stream);
+         declare
+            Parsed : constant Landin.Syntax.Tree :=
+              Landin.Syntax.Parser.Parse (Stream, Names, Found);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Landin.Diagnostics.Count (Found), 0,
+               "the named slice type parses without a permission repair");
+            for Node in Landin.Syntax.Node_Id'(1)
+              .. Landin.Syntax.Node_Id (Landin.Syntax.Node_Count (Parsed))
+            loop
+               if Landin.Syntax.Kind (Parsed, Node) = Landin.Syntax.Slice_Type then
+                  Seen := Seen + 1;
+                  Landin.Testing.Check
+                    (Item, Landin.Syntax.Is_Referent_Mutable (Parsed, Node)
+                       = Writable, "the slice retains its written permission");
+               end if;
+            end loop;
+            Landin.Testing.Check_Equal (Item, Seen, 1, "one slice type is retained");
+         end;
+      end Check;
+   begin
+      Check ("[]mut u8", True);
+      Check ("[]u8", False);
+   end Named_Slice_Arguments_Keep_Permissions;
+
+   procedure Late_Import_Moves_Preserve_Bytes
+     (Item : in out Landin.Testing.Context);
+
+   procedure Late_Import_Moves_Preserve_Bytes
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check (Newline : String; Final_Newline : Boolean);
+      procedure Check (Newline : String; Final_Newline : Boolean) is
+         Prelude : constant String := "-- file comment" & Newline
+           & "import first/module" & Newline;
+         Body_Text : constant String := "f: () -> none = end f" & Newline;
+         Import_Line : constant String := "import other/module -- keep me"
+           & (if Final_Newline then Newline else "");
+         Text : constant String := Prelude & Body_Text & Import_Line;
+         Sources : Landin.Source.Sets.Source_Set;
+         Names : Landin.Source.Names.Table;
+         Stream : Landin.Tokens.Token_Stream;
+         Found : Landin.Diagnostics.Diagnostic_List;
+         Id : constant Landin.Source.Source_Id := Sources.Add ("imports", Text);
+         Clashed : Boolean;
+         Codes : Unbounded.Unbounded_String;
+         Total, Nodes : Natural;
+         Held : Boolean;
+      begin
+         Landin.Tokens.Lexer.Lex (Sources.Get (Id), Names, Stream);
+         declare
+            Parsed : constant Landin.Syntax.Tree :=
+              Landin.Syntax.Parser.Parse (Stream, Names, Found);
+            Restated : constant Landin.Diagnostics.Diagnostic_List :=
+              Landin.Syntax.Repairs.Restated (Sources.Get (Id), Parsed, Found);
+            Fixed : constant String := Landin.Testing.Fixes.Applied
+              (Restated, Id, Text, Clashed);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Fixed, Prelude & "import other/module -- keep me"
+               & Newline & Body_Text, "the move preserves comments and newlines");
+            Landin.Testing.Check
+              (Item, not Clashed and then Landin.Diagnostics.Count (Restated) = 1
+                 and then Landin.Diagnostics.Fix_Count
+                   (Landin.Diagnostics.Get (Restated, 1)) = 1
+                 and then Landin.Diagnostics.Edit_Count
+                   (Landin.Diagnostics.Nth_Fix
+                      (Landin.Diagnostics.Get (Restated, 1), 1)) = 2,
+               "one action has two disjoint edits");
+            Read_And_Parse (Fixed, Codes, Total, Nodes, Held);
+            Landin.Testing.Check
+              (Item, Total = 0 and then Held, "the moved prelude parses");
+         end;
+      end Check;
+   begin
+      Check ("" & ASCII.LF, True);
+      Check (ASCII.CR & ASCII.LF, True);
+      Check ("" & ASCII.LF, False);
+      Check (ASCII.CR & ASCII.LF, False);
+   end Late_Import_Moves_Preserve_Bytes;
+
+   procedure Resource_Refusals_Are_Bounded
+     (Item : in out Landin.Testing.Context);
+
+   procedure Resource_Refusals_Are_Bounded
+     (Item : in out Landin.Testing.Context)
+   is
+      Nested : Unbounded.Unbounded_String :=
+        Unbounded.To_Unbounded_String ("f: () -> none =" & ASCII.LF);
+      Chain : Unbounded.Unbounded_String :=
+        Unbounded.To_Unbounded_String ("n := 1");
+      procedure Check (Text : String);
+      procedure Check (Text : String) is
+         Sources : Landin.Source.Sets.Source_Set;
+         Names : Landin.Source.Names.Table;
+         Stream : Landin.Tokens.Token_Stream;
+         Found : Landin.Diagnostics.Diagnostic_List;
+         Id : constant Landin.Source.Source_Id := Sources.Add ("limit", Text);
+      begin
+         Landin.Tokens.Lexer.Lex (Sources.Get (Id), Names, Stream);
+         declare
+            Parsed : constant Landin.Syntax.Tree :=
+              Landin.Syntax.Parser.Parse (Stream, Names, Found);
+            pragma Unreferenced (Parsed);
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Landin.Diagnostics.Count (Found), 1,
+               "one resource refusal replaces its recovery consequences");
+            if Landin.Diagnostics.Count (Found) = 1 then
+               declare
+                  Report : constant Landin.Diagnostics.Diagnostic :=
+                    Landin.Diagnostics.Get (Found, 1);
+               begin
+                  Landin.Testing.Check
+                    (Item, Landin.Diagnostics.Code (Report) = "L0111"
+                       and then Contains
+                         (Landin.Diagnostics.Text.Render (Report, Sources),
+                          Positive'Image (Landin.Syntax.Parser.Nesting_Limit)),
+                     "the resource refusal exposes the configured finite bound");
+               end;
+            end if;
+         end;
+      end Check;
+   begin
+      for Step in 1 .. Landin.Syntax.Parser.Nesting_Limit * 3 loop
+         pragma Unreferenced (Step);
+         Unbounded.Append (Nested, "if true then" & ASCII.LF);
+         Unbounded.Append (Chain, " + 1");
+      end loop;
+      for Step in 1 .. Landin.Syntax.Parser.Nesting_Limit * 3 loop
+         pragma Unreferenced (Step);
+         Unbounded.Append (Nested, "end if" & ASCII.LF);
+      end loop;
+      Unbounded.Append (Nested, "end f");
+      Check (Unbounded.To_String (Nested));
+      Check (Unbounded.To_String (Chain));
+   end Resource_Refusals_Are_Bounded;
+
+   procedure Character_Advice_Has_A_Valid_Escape
+     (Item : in out Landin.Testing.Context);
+
+   procedure Character_Advice_Has_A_Valid_Escape
+     (Item : in out Landin.Testing.Context)
+   is
+      Sources : Landin.Source.Sets.Source_Set;
+      Names : Landin.Source.Names.Table;
+      Stream : Landin.Tokens.Token_Stream;
+      Found : Landin.Diagnostics.Diagnostic_List;
+      Id : constant Landin.Source.Source_Id :=
+        Sources.Add ("character", "value: u32 = 'ab'");
+   begin
+      Landin.Tokens.Lexer.Lex (Sources.Get (Id), Names, Stream);
+      Landin.Diagnostics.Lexical.Report (Stream, Found);
+      Landin.Testing.Check_Equal
+        (Item, Landin.Diagnostics.Count (Found), 1,
+         "a multiscalar character has one refusal");
+      if Landin.Diagnostics.Count (Found) = 1 then
+         declare
+            Note : constant String := Landin.Diagnostics.Nth_Note
+              (Landin.Diagnostics.Get (Found, 1), 1);
+            First : constant Natural := Ada.Strings.Fixed.Index (Note, "`");
+            Last : constant Natural := Ada.Strings.Fixed.Index
+              (Note, "`", From => First + 1);
+            Example : Unbounded.Unbounded_String :=
+              Unbounded.To_Unbounded_String (Note (First + 1 .. Last - 1));
+            Hole : constant Natural := Ada.Strings.Fixed.Index
+              (Unbounded.To_String (Example), "...");
+         begin
+            Unbounded.Replace_Slice (Example, Hole, Hole + 2, "41");
+            declare
+               Fixed_Id : constant Landin.Source.Source_Id := Sources.Add
+                 ("fixed-character", "value: u32 = '"
+                  & Unbounded.To_String (Example) & "'");
+               Fixed_Stream : Landin.Tokens.Token_Stream;
+               Fixed_Reports : Landin.Diagnostics.Diagnostic_List;
+            begin
+               Landin.Tokens.Lexer.Lex
+                 (Sources.Get (Fixed_Id), Names, Fixed_Stream);
+               Landin.Diagnostics.Lexical.Report (Fixed_Stream, Fixed_Reports);
+               Landin.Testing.Check_Equal
+                 (Item, Landin.Diagnostics.Count (Fixed_Reports), 0,
+                  "following the escape advice produces a valid character");
+            end;
+         end;
+      end if;
+   end Character_Advice_Has_A_Valid_Escape;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "parser", "character advice has a valid escape",
+         Character_Advice_Has_A_Valid_Escape'Access);
+      Landin.Testing.Register
+        (Into, "parser", "multiline keyword repairs parse",
+         Multiline_Keyword_Repairs_Parse'Access);
+      Landin.Testing.Register
+        (Into, "parser", "foreign forms have real labels",
+         Foreign_Forms_Have_Real_Labels'Access);
+      Landin.Testing.Register
+        (Into, "parser", "named slice arguments keep permissions",
+         Named_Slice_Arguments_Keep_Permissions'Access);
+      Landin.Testing.Register
+        (Into, "parser", "late import moves preserve bytes",
+         Late_Import_Moves_Preserve_Bytes'Access);
+      Landin.Testing.Register
+        (Into, "parser", "resource refusals are bounded",
+         Resource_Refusals_Are_Bounded'Access);
       Landin.Testing.Register
         (Into, "parser", "refusal routes preserve intent",
          Refusal_Routes_Preserve_Intent'Access);
