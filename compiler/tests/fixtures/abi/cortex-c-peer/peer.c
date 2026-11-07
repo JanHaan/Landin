@@ -80,6 +80,18 @@ struct peer_small peer_small_round(struct peer_small value)
     return back;
 }
 
+struct peer_tiny peer_tiny_make(uint8_t base)
+{
+    struct peer_tiny made = { base, (uint8_t)(base + 1), (uint8_t)(base + 2) };
+    return made;
+}
+
+int peer_tiny_check(struct peer_tiny value, uint8_t base)
+{
+    if (value.a != base || value.b != base + 1 || value.c != base + 2) return 35;
+    return 0;
+}
+
 /* before in r0, the record in r2-r3 and the stack's first two words. */
 int peer_medium_check(uint32_t before, struct peer_medium value)
 {
@@ -131,14 +143,19 @@ int peer_exports(void)
     return 0;
 }
 
-struct peer_log peer_log_object = { 0, 0, 0 };
+/* In .bss, and beside it one in .data, so the image's start-up is seen to
+   clear the one and copy the other. */
+struct peer_log peer_log_object;
+uint32_t peer_started = 0x5eed;
 
 struct peer_log *peer_log_address(void) { return &peer_log_object; }
 
 int peer_log_check(void)
 {
+    /* The program counted from a cleared object. */
     if (peer_log_object.calls != 3) return 81;
     if (peer_log_object.last != -9) return 82;
     if (peer_log_object.total != 0x100000003ULL) return 83;
+    if (peer_started != 0x5eed) return 84;
     return 0;
 }

@@ -901,10 +901,14 @@ def image_contract(path, profile=None):
 
 #  What an ABI fixture's C is compiled with beside the level's flags, which
 #  already make it freestanding, unoptimized past -O1 and warning-free
-#  (D985): C11, and of the headers only GCC's own freestanding ones, so a
-#  peer that reaches for the C library says so by the header it names
-#  rather than by finding newlib's beside the pinned GCC.
-C_STANDARD = ['-std=c11', '-nostdinc', '-Wa,--noexecstack']
+#  (D985): C11; of the headers only GCC's own freestanding ones, so a peer
+#  that reaches for the C library says so by the header it names rather
+#  than by finding newlib's beside the pinned GCC; and int-sized enums, the
+#  ones Cortex-M's C boundaries use and Clang's default, where the pinned
+#  GCC's bare-metal default is short enums (D921), so no fixture has to
+#  remember them.  A generated binding's static assertions refuse a peer
+#  built without them (abi.py).
+C_STANDARD = ['-std=c11', '-nostdinc', '-fno-short-enums', '-Wa,--noexecstack']
 
 #  The four routines GCC requires of a freestanding environment, which it
 #  calls for a structure copy or clear whatever -ffreestanding says (D985).

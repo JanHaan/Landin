@@ -368,6 +368,60 @@ def convention_control(parent, refine, name, level):
     return {'asserted': asserted, 'linker_refused': refused}
 
 
+#  D985: the route a user takes, through refine's own firmware link
+#  (D923).  The C peer's objects are archived as `libpeer.a` and the C
+#  runtime's as `libcruntime.a`, and the program is compiled with one more
+#  entry-module file that names both with `linker.library`, a firmware
+#  entry that stores what the program's `checks` returns, and `-L` for the
+#  archives' directory; compiler-owned startup runs it, and GDB holds the
+#  stored status to the fixture's.
+REFINE_LINK = 'abi/cortex-c-peer'
+REFINE_LINK_ENTRY = """--  The firmware entry of abi/cortex-c-peer linked by refine itself (D923).
+linker.library("peer")
+linker.library("cruntime")
+mut observed: i32 = 0
+
+start: () -> none =
+    observed = checks()
+end start
+"""
+
+
+def refine_link_route(parent, refine, name, level):
+    """Build NAME through refine's own firmware link and run it on LEVEL's
+    machine, its status read from the entry's datum.  Writes under
+    `refine-link/` beside the program's own output."""
+    from firmware import execute as firmware_execute
+    out = parent.out / 'refine-link'
+    (out / 'lib').mkdir(parents=True)
+    run = Run(out, parent.tools)
+    base = ROOT / 'compiler/tests/fixtures' / name
+    meta = metadata(base / 'fixture.meta')
+    *peers, runtime = c_objects(run, meta, base, level)
+    for library, objects in (('peer', peers), ('cruntime', [runtime])):
+        run.command('archive-' + library, [run.arm / 'arm-eabi-ar', 'rcs',
+                                           out / 'lib' / ('lib%s.a' % library), *objects])
+    (out / 'entry.ldn').write_text(REFINE_LINK_ENTRY)
+    selected = [] if level == 'armv6-m' else ['--level=' + refine_level(level)]
+    elf = out / 'firmware.elf'
+    run.command('compile', [
+        refine, 'compile', '--target=' + target(level), *selected, '--firmware-entry=start',
+        '--emit=exe', '--toolchain=' + str(run.arm / 'arm-eabi-gcc'), '-L', out / 'lib',
+        *lane_inputs(level, [*meta.module_arguments(base), str(out / 'entry.ldn')]),
+        '-o', elf], timeout=60)
+    linked = (out / 'firmware.elf.map').read_text()
+    require('libpeer.a(c-1.o)' in linked, 'refine\'s firmware link took no member of'
+            ' libpeer.a; inspect %s' % (out / 'firmware.elf.map'))
+    status = meta.status
+    firmware_execute(run, elf, [
+        'break _landin_firmware_returned', 'continue', 'python',
+        'observed = v("*(unsigned*)&observed")',
+        f'assert observed == {status}, "the program stored %d, expected {status}" % observed',
+        'print("D985_REFINE_LINK_PASS")', 'end'], marker='D985_REFINE_LINK_PASS',
+        machine=LEVELS[level]['machine'])
+    return {'route': 'refine compile --emit=exe with linker.library and -L', 'status': status}
+
+
 def first_c_error(log):
     """The first `error:` line of a C compiler's log, without its path."""
     line = next((one for one in log.splitlines() if 'error:' in one), log.strip()[:200])
@@ -877,6 +931,8 @@ def execute(output, tools, refine, selected=(), profiles=(), lane=None):
             else:
                 if name == CONVENTION_CONTROL and (opt, spec) == ('none', 'off'):
                     result['convention_control'] = convention_control(run, refine, name, level)
+                if name == REFINE_LINK and (opt, spec) == ('none', 'off'):
+                    result['refine_link'] = refine_link_route(run, refine, name, level)
                 try:
                     fixture(run, refine, name, opt, spec, level,
                             include_compiler_sha256=False)

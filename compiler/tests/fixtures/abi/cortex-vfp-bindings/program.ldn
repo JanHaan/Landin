@@ -24,6 +24,12 @@ public extern(c) landin_vfp_spread: (z: vfp_pair, by: f32) -> (result: f64) =
     result = (z.re - z.im) * f64(by)
 end landin_vfp_spread
 
+-- And returned in d0-d1.
+public extern(c) landin_vfp_swap: (z: vfp_pair) -> (result: vfp_pair) =
+    result.re = z.im
+    result.im = z.re
+end landin_vfp_swap
+
 public main: () -> (code: i32) =
     code = 1
     return when vfp_half(3.0) <> 1.5
@@ -64,7 +70,9 @@ public main: () -> (code: i32) =
     -- 2 is CMSIS's double-precision float unit, read from MVFR0.
     code = 6
     return when scb_get_fpu_type() <> 2
-    irq: irqn_type = usart3_irqn
+    -- QEMU's AN500 implements 32 external interrupts, the H753 150, so the
+    -- interrupt is one both have.
+    irq: irqn_type = tim2_irqn
     nvic_disable_irq(irq)
     code = 7
     return when nvic_get_enable_irq(irq) <> 0

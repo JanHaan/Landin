@@ -45,7 +45,17 @@
       "mode": "execute"
     },
     "abi/cortex-cmsis-bindings": {
-      "mode": "execute"
+      "mode": "execute",
+      "lanes": {
+        "mps2-an505": {
+          "mode": "restriction",
+          "reason": "Its bindings are RP2040.h's, whose CMSIS core is core_cm0plus.h with ARMv6-M's two priority bits, and QEMU's AN505 Cortex-M33 keeps more of a priority byte, so the program's read-back of the NVIC's priority registers differs; the M0 is the core it binds."
+        },
+        "mps2-an500": {
+          "mode": "restriction",
+          "reason": "Its RP2040 header refuses a float unit by its own #error, which the AN500's FPv5-D16 compilation meets, and its bindings assert compiler.feature.fp false (D936)."
+        }
+      }
     },
     "abi/cortex-vfp-bindings": {
       "codes": [
@@ -1695,9 +1705,7 @@
       "mode": "execute"
     },
     "runtime/hosted-assembly-reaches-no-evidence-entry": {
-      "mode": "restriction",
-      "reason": "Its C import compiles on Cortex-M0 since D920, but the program calls the C library's puts, and firmware links no C library; runtime/region-bounded-pool pins the same pruning on Cortex-M0 by image size.",
-      "stops": "link"
+      "mode": "execute"
     },
     "runtime/hosted-heap-after-thread-start": {
       "codes": [
@@ -3627,9 +3635,7 @@
       "mode": "execute"
     },
     "runtime/undo-does-not-unwind-traps": {
-      "mode": "restriction",
-      "reason": "Its C signature compiles on Cortex-M0 since D920, but the program calls the C library's exit, and firmware links no C library and has no process to end.",
-      "stops": "link"
+      "mode": "execute"
     },
     "runtime/utf16-slice-not-boundary-traps": {
       "mode": "execute"

@@ -11,6 +11,7 @@
 extern float landin_vfp_scale(float value, double by, float offset);
 extern double landin_vfp_sum(double a, float b, double c, float d, int count);
 extern double landin_vfp_spread(vfp_pair z, float by);
+extern vfp_pair landin_vfp_swap(vfp_pair z);
 
 double vfp_peer_mix(double total, float sample, int count)
 {
@@ -46,5 +47,8 @@ int vfp_peer_calls_back(void)
     /* (1.5 - -2.25) * 2, the aggregate in d0-d1 and the float in s4. */
     vfp_pair z = { 1.5, -2.25 };
     if (landin_vfp_spread(z, 2.0f) != 7.5) return 24;
+    vfp_pair swapped = landin_vfp_swap(z);
+    if (swapped.re != -2.25) return 25;
+    if (swapped.im != 1.5) return 26;
     return 0;
 }

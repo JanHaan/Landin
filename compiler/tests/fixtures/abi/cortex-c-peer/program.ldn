@@ -10,6 +10,12 @@ import platform/c
 level: type = c.c_int
 peer_low: level = -1
 
+tiny: type = layout(c) struct
+    a: u8
+    b: u8
+    c: u8
+end tiny
+
 small: type = layout(c) struct
     tag: u8
     value: i16
@@ -44,6 +50,8 @@ extern(c) peer_char: () -> (value: c.c_char)
 extern(c) peer_long: () -> (value: c.c_long)
 extern(c) peer_double: (half: f32) -> (value: f64)
 extern(c) peer_small_round: (value: small) -> (result: small)
+extern(c) peer_tiny_make: (base: u8) -> (result: tiny)
+extern(c) peer_tiny_check: (value: tiny, base: u8) -> (fault: c.c_int)
 extern(c) peer_medium_check: (before: u32, value: medium) -> (fault: c.c_int)
 extern(c) peer_large_check: (first: u32, value: large, after: u32) -> (fault: c.c_int)
 extern(c) peer_large_make: (seed: i32) -> (result: large)
@@ -64,9 +72,7 @@ end landin_step
 
 --  The peer's large record, by value: r0-r3 and the stack's four words.
 public extern(c) landin_check_large: (value: large) -> (fault: c.c_int) =
-    fault = 0
-    return when large_differs(value, 2000) <> 0
-    fault = 1
+    fault = large_differs(value, 2000)
 end landin_check_large
 
 public extern(c) landin_small: (tag: u8, value: i16) -> (result: small) =
@@ -133,6 +139,12 @@ checks: () -> (code: i32) =
     round: small = peer_small_round((tag: 0x7f, value: -200))
     code = 6
     return when round.tag <> 0x80 or round.value <> -400
+    made_tiny: tiny = peer_tiny_make(0x40)
+    code = 7
+    return when made_tiny.a <> 0x40 or made_tiny.b <> 0x41 or made_tiny.c <> 0x42
+    fault = peer_tiny_check(made_tiny, 0x40)
+    code = 100 + fault
+    return when fault <> 0
     fault = peer_medium_check(0x11, (first: 0x22222222, second: 0x3333333344444444))
     code = 100 + fault
     return when fault <> 0

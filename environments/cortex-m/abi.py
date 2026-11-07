@@ -320,8 +320,10 @@ BINDING_FIXTURES = {
     'cortex-cmsis-bindings': {'thumbv6m': True, 'thumbv7em-hard': False},
     'cortex-vfp-bindings': {'thumbv6m': True, 'thumbv7em-hard': True},
 }
-#  The header's refusal of a float unit the CMSIS fixture must meet.
+#  The header's refusal of a float unit the CMSIS fixture must meet, and
+#  the generated assertion that refuses short enums.
 NO_FPU = 'Compiler generates FPU instructions for a device without an FPU'
+SHORT_ENUMS = 'IRQn_Type size disagrees with its generated integer alias'
 
 
 def binding_layouts(run):
@@ -367,6 +369,26 @@ def binding_layouts(run):
                         ' they must be %s; inspect %s' % (name, row, compiler, verdict, wanted,
                                                           run.out / ('binding-' + label + '.log')))
                 found['verdicts'][label] = verdict
+    #  The negative control of int-sized enums: built with GCC's short
+    #  ones, the base binding's own assertion of IRQn_Type's size refuses
+    #  the adapters while they compile.
+    base = fixtures / 'cortex-cmsis-bindings'
+    meta = metadata(base / 'fixture.meta')
+    includes = ['-I', str(base)] + [one for directory in fetched_inputs(meta)
+                                    for one in ('-I', str(directory))]
+    try:
+        run.command('binding-short-enums', [
+            compilers['gcc'][0], *BINDING_ROWS['thumbv6m']['gcc'], *compilers['gcc'][1:],
+            '-ffreestanding', *C_STANDARD, '-fshort-enums', '-Wall', '-Wextra', '-Werror',
+            *includes, '-fsyntax-only', base / 'adapters.c'])
+    except Exception:
+        log = (run.out / 'binding-short-enums.log').read_text(errors='replace')
+        require(SHORT_ENUMS in log, 'the adapters built with short enums failed for another'
+                ' reason than their enum assertion; inspect %s'
+                % (run.out / 'binding-short-enums.log'))
+        found['short_enums'] = 'refused by the generated assertion'
+    else:
+        raise RuntimeError('the base binding\'s adapters compiled with short enums')
     (run.out / 'binding-layouts.json').write_text(json.dumps(found, indent=2) + '\n')
     if not clang:
         print('Cortex-M ABI binding layouts: Clang SKIPPED, no $CLANG or clang-19 on PATH;'

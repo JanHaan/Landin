@@ -26,6 +26,13 @@ struct peer_small {
 };
 _Static_assert(sizeof(struct peer_small) == 4, "small is one word");
 
+/* Three bytes, no padding, returned in r0 and passed in r0. */
+struct peer_tiny {
+    uint8_t a, b, c;
+};
+_Static_assert(sizeof(struct peer_tiny) == 3 && _Alignof(struct peer_tiny) == 1,
+               "tiny is three bytes");
+
 /* Sixteen bytes aligned to eight: a word, padding, a doubleword. */
 struct peer_medium {
     uint32_t first;
@@ -65,6 +72,8 @@ char peer_char(void);
 long peer_long(void);
 double peer_double(float half);
 struct peer_small peer_small_round(struct peer_small value);
+struct peer_tiny peer_tiny_make(uint8_t base);
+int peer_tiny_check(struct peer_tiny value, uint8_t base);
 int peer_medium_check(uint32_t before, struct peer_medium value);
 int peer_large_check(uint32_t r0, struct peer_large value, uint32_t after);
 struct peer_large peer_large_make(int32_t seed);
