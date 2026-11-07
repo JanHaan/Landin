@@ -60,8 +60,9 @@ kqueue, the event interface Darwin and FreeBSD share, and nothing on Linux
 Darwin and FreeBSD. The compiler names none of it. These `platform`
 modules' scope is the hosted POSIX systems, and firmware refuses each by
 name. `platform/c` holds the
-currently enabled LP64 C ABI aliases; it does not admit Cortex AAPCS32 or
-synthetic-32. `platform/cortex_m` holds M-profile CPU operations for the
+currently enabled C ABI aliases: the four LP64 ABIs' and Cortex-M's ILP32
+AAPCS32 (D920, D921); it does not admit RV32's ilp32, Xtensa's windowed
+ABI or synthetic-32. `platform/cortex_m` holds M-profile CPU operations for the
 armv6-m, armv7-m, armv7e-m and armv8-m.main feature levels; it is importable on every target
 and declares them only on an M-profile one, so a shared program calls it from a
 `fixed if compiler.arch == cortex_m0` arm (D575), while its device descriptions
@@ -356,7 +357,7 @@ of hosted imports does not promise that every composition fits 32 KiB.
 `core/io` and `core/diag` are target-neutral. `core/io/memory.ldn` uses only
 caller backing, and every `core/io` concept can be selected on Cortex-M0. The
 `hosted/io` provider, `hosted/heap`, `platform/posix`, `platform/linux`,
-`platform/libc` and the hosted C aliases in `platform/c` remain outside this
+`platform/libc` and the C aliases in `platform/c` remain outside this
 consumer closure. Even unused hosted declarations in a
 selected module must meet target checks.
 

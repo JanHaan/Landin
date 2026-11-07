@@ -62,10 +62,10 @@ package body Landin.Modules.Availability is
             when Landin.Targets.SysV_AMD64_LP64
                | Landin.Targets.Darwin_AAPCS64_LP64
                | Landin.Targets.AAPCS64_LP64
-               | Landin.Targets.RiscV_LP64D =>
+               | Landin.Targets.RiscV_LP64D
+               | Landin.Targets.Arm_AAPCS32_Soft =>
                return Landin.Targets.Capabilities.C_Signatures (Facts);
             when Landin.Targets.No_C_ABI
-               | Landin.Targets.Arm_AAPCS32_Soft
                | Landin.Targets.RiscV_ILP32
                | Landin.Targets.Xtensa_Windowed_ILP32 => return False;
          end case;
@@ -87,7 +87,9 @@ package body Landin.Modules.Availability is
       elsif Under (Logical, "platform/xtensa") then
          return "D267: " & Logical & " requires the xtensa target";
       else
-         return "D267: platform/c requires an enabled LP64 C ABI";
+         return "D267: platform/c requires an enabled C ABI: SysV AMD64"
+           & " LP64, Darwin or standard AAPCS64 LP64, RISC-V LP64D, or"
+           & " Cortex-M's AAPCS32 (D920)";
       end if;
    end Requirement;
 

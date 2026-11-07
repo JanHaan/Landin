@@ -230,7 +230,8 @@ no level to select. `refine --identify` lists each target's levels.
 
 An import names a source namespace unavailable for the selected target (D267).
 `hosted/*` requires a hosted target; `platform/c` requires one of the currently
-enabled LP64 C ABIs; the submodules of `platform/cortex_m`, its constrained
+enabled C ABIs, the four LP64 ones or Cortex-M's AAPCS32 (D920), so RV32 and
+Xtensa refuse it; the submodules of `platform/cortex_m`, its constrained
 reference description among them, require an M-profile target, including its
 higher supported feature levels. `platform/cortex_m` itself is available on
 every target and declares its operations only on an M-profile one (D575), so
@@ -1435,9 +1436,9 @@ extern(interrupt) tick: (count: u32) -> none = end tick
 ### L0346
 
 A C boundary declaration or call is something the C ABI cannot carry
-[1580]. A target with no C ABI yet, as Cortex-M0 has none, has no C
-signature and lays out no `layout(c)` record, and the diagnostic says so by
-the target's name; a byte-packed `layout(c, packed)` record needs no C
+[1580]. A target with no enabled C ABI yet, as RV32 and Xtensa have none, has
+no C signature and lays out no `layout(c)` record, and the diagnostic says so
+by the target's name; a byte-packed `layout(c, packed)` record needs no C
 alignment and stands there. The refusal of a signature names the part C
 cannot carry beside it. On a target with C ABI support, a C signature is infallible and
 nongeneric, with at most one result. Each parameter and result part uses
@@ -1454,7 +1455,10 @@ or nested record by value only when its alignment is one: `u8`, `i8`, `bool`
 or a packed record (D410). A packed record, a record with a flexible member,
 and a record holding either cross a C signature only by pointer (D414). A variadic C
 declaration needs at least one fixed parameter and target support; a variadic
-definition needs a generated adapter. Variadic calls take positional scalar,
+definition needs a generated adapter. Cortex-M's AAPCS32 calls no variadic C
+function yet (D922): its refusal names the target, and the repair is a C
+function of fixed arity that makes the variadic call, linked with the program
+and declared `extern(c)` instead. Variadic calls take positional scalar,
 pointer or fixed C callback tail arguments, without labels or static
 arguments. Change `inout` or `sink` to `in`; pass a pointer if C must write
 through a parameter. Remove `caller` and constraints, specialize generics,

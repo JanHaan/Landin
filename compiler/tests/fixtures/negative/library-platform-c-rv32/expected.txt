@@ -1,0 +1,6 @@
+error[L0015]: module unavailable for target: platform/c
+  --> ../tests/fixtures/negative/library-platform-c-rv32/main.ldn:1:1
+  |
+1 | import platform/c
+  | ^^^^^^^^^^^^^^^^^
+  = note: D267: platform/c requires an enabled C ABI: SysV AMD64 LP64, Darwin or standard AAPCS64 LP64, RISC-V LP64D, or Cortex-M's AAPCS32 (D920)
