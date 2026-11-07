@@ -1437,6 +1437,33 @@ without changing C transport facts. The FreeBSD supervisor emits on Linux;
 its VM effects belong to the external test environment. See the
 [FreeBSD lanes](../tests/freebsd/README.md).
 
+## Debugging an internal defect
+
+A defect the compiler finds in itself ends the run with the report rendered
+so far and a line `refine: internal compiler defect in STAGE: MESSAGE`.
+When the message is a failed contract, such as `failed precondition from
+landin-syntax.ads:1393`, it names the declaration whose contract failed,
+not the call that broke it. The debug build checks contracts (`-gnata`,
+which the release build leaves out), and the `gdb` the pinned GNAT bundles
+stops where the check fails. In the Nix shell, which sets
+`LANDIN_BUILD_TAG`:
+
+```sh
+gdb --args compiler/ada/build/$LANDIN_BUILD_TAG/debug/bin/refine check program.ldn
+```
+
+```text
+(gdb) catch assert
+(gdb) run
+(gdb) backtrace
+```
+
+Below the run-time library's frames, the first Landin frame is the
+subprogram whose contract failed, and the next is its caller. A defect
+raised as `Compiler_Defect` stops the same way under `catch exception
+landin.compiler_defect`. The driver handles every defect so that it can
+write the report, so `catch exception unhandled` never stops on one.
+
 ## Profiling
 
 The Linux nix shell carries `perf` and valgrind beside the pinned toolchain,
