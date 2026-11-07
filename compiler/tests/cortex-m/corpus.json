@@ -545,7 +545,6 @@
     "runtime/atomic-accesses-at-every-ordering": {
       "mode": "execute",
       "selects": {
-        "routine": "main",
         "armv7-m": {
           "has": [
             "ldr",
@@ -577,7 +576,8 @@
           "lacks": [
             "dmb"
           ]
-        }
+        },
+        "routine": "main"
       }
     },
     "runtime/atomic-orderings-between-processes": {
@@ -705,7 +705,6 @@
     "runtime/checked-products-of-arguments": {
       "mode": "execute",
       "selects": {
-        "routine": "main",
         "armv6-m": {
           "has": [
             "bl __aeabi_lmul"
@@ -735,7 +734,8 @@
           "lacks": [
             "bl __aeabi_lmul"
           ]
-        }
+        },
+        "routine": "main"
       }
     },
     "runtime/checked-subtraction-traps": {
@@ -744,7 +744,6 @@
     "runtime/checked-unsigned-product-overflow-traps": {
       "mode": "execute",
       "selects": {
-        "routine": "main",
         "armv6-m": {
           "has": [
             "bl __aeabi_lmul"
@@ -768,7 +767,8 @@
           "lacks": [
             "bl __aeabi_lmul"
           ]
-        }
+        },
+        "routine": "main"
       }
     },
     "runtime/checks-return-after-the-region": {
@@ -3512,6 +3512,24 @@
       ],
       "mode": "refuse",
       "reason": "The program asserts compiler.c_runtime, which firmware never has: it is the --link=libc counterpart of runtime/thread-storage-holds-its-instance, which runs on Cortex-M0, where thread storage is ordinary module storage."
+    },
+    "runtime/tour-line-count": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse"
+    },
+    "runtime/tour-line-count-missing": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse"
+    },
+    "runtime/tour-printed-values": {
+      "codes": [
+        "L0015"
+      ],
+      "mode": "refuse"
     },
     "runtime/trapping-arm-leaves-a-statement": {
       "mode": "execute"
