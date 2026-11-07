@@ -106,12 +106,13 @@ package body Landin.Commands.Presentation is
             end if;
             if Format = Short then
                if Source_Path /= "" then
-                  US.Append (Text, Source_Path & ":"
+                  US.Append (Text, D.Text.Escaped (Source_Path) & ":"
                     & Image (Long_Long_Integer (Where.Line)) & ":"
                     & Image (Long_Long_Integer (Where.Column)) & ": ");
                end if;
                US.Append (Text, D.Text.Image (D.Level (Item)) & "["
-                 & D.Code (Item) & "]: " & D.Message (D.Primary (Item))
+                 & D.Code (Item) & "]: "
+                 & D.Text.Escaped (D.Message (D.Primary (Item)))
                  & (if D.Level (Item) = D.Error
                       and then C.Holds (D.Code (Item))
                       and then C.Level (C.Named (D.Code (Item))) = D.Warning

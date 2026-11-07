@@ -1382,8 +1382,90 @@ package body Landin.Tests.Resolution_Suite is
       end;
    end Traversal_Bindings_Keep_Their_Owners;
 
+   procedure Predeclared_Types_Use_Lexical_Lookup
+     (Item : in out Landin.Testing.Context);
+
+   procedure Predeclared_Types_Use_Lexical_Lookup
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check (Text : String; Accepted : Boolean);
+      procedure Check (Text : String; Accepted : Boolean) is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : constant Landin.Platform.Path_List := ["main.ldn"];
+      begin
+         Host.Add_File ("main.ldn", Text);
+         declare
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Driver.Execute (Args, Host, Tools);
+         begin
+            Landin.Testing.Check
+              (Item, (if Accepted then Result.Status = 0 else Result.Status = 1),
+               "type lookup keeps its expected verdict: "
+               & Ada.Strings.Unbounded.To_String (Result.Report));
+         end;
+      end Check;
+   begin
+      Check ("u32: type = u8" & LF & "value: u32 = 300", False);
+      Check ("u32: type = u8" & LF & "value: u32 = 200", True);
+      Check ("utf8: type = u8" & LF & "value: utf8 = 200", True);
+      Check ("f: () -> none = i32 := 1" & LF
+             & "value: i32 = 2 end f", False);
+      Check ("echo: (u32: type, value: u32) -> (r: u32) = value end echo"
+             & LF & "public main: () -> (code: i32) ="
+             & " code = i32(echo(u32: u8, value: 200)) end main", True);
+      Check ("value: u32 = 300" & LF & "text: utf8 = ""hello""", True);
+      Check ("image: type = layout(packed) struct"
+             & " value: u32 at 0..7 end image", True);
+      Check ("word: type = u32" & LF
+             & "image: type = layout(packed) struct"
+             & " value: word at 0..7 end image", False);
+      Check ("size: (t: type) -> (n: usize) = sizeof t end size" & LF
+             & "public main: () -> (code: i32) ="
+             & " code = i32(size(t: []mut u8)) end main", True);
+   end Predeclared_Types_Use_Lexical_Lookup;
+
+   procedure Undeclared_Assignment_Hints_Are_Qualified
+     (Item : in out Landin.Testing.Context);
+
+   procedure Undeclared_Assignment_Hints_Are_Qualified
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check (Statement : String; Hint : Boolean);
+      procedure Check (Statement : String; Hint : Boolean) is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : constant Landin.Platform.Path_List := ["main.ldn"];
+      begin
+         Host.Add_File
+           ("main.ldn", "f: () -> none =" & LF & Statement & LF & "end f");
+         declare
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Driver.Execute (Args, Host, Tools);
+            Text : constant String := Ada.Strings.Unbounded.To_String
+              (Result.Report);
+         begin
+            Landin.Testing.Check
+              (Item, Result.Status = 1
+                 and then (Ada.Strings.Fixed.Index
+                   (Text, "if this is a new binding") > 0) = Hint,
+               "only a whole undeclared assignment destination gets the hint");
+         end;
+      end Check;
+   begin
+      Check ("total = 3", True);
+      Check ("total.field = 3", False);
+      Check ("value := total", False);
+   end Undeclared_Assignment_Hints_Are_Qualified;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "resolution", "predeclared types use lexical lookup",
+         Predeclared_Types_Use_Lexical_Lookup'Access);
+      Landin.Testing.Register
+        (Into, "resolution", "undeclared assignment hints are qualified",
+         Undeclared_Assignment_Hints_Are_Qualified'Access);
       Landin.Testing.Register
         (Into, "resolution", "options collide only in their declaring module",
          Options_Collide_Only_In_Their_Declaring_Module'Access);

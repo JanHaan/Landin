@@ -157,7 +157,7 @@ package body Landin.Diagnostics.Lexical is
                   Add_Note
                     (Report,
                      "write one source scalar, a simple escape, or"
-                     & " `\\u{...}` [0250] [0270]");
+                     & " `\u{...}` [0250] [0270]");
 
                when Landin.Tokens.Malformed_Raw_Literal_Run =>
                   Add_Note

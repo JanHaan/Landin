@@ -513,7 +513,8 @@ package body Landin.Stages.Resolution is
       procedure Resolve
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
-         Inside  : Landin.Resolution.Scope_Id);
+         Inside  : Landin.Resolution.Scope_Id;
+         Assignment_Destination : Boolean := False);
 
       procedure Resolve_Type_View
         (Of_Tree : Syn.Tree;
@@ -1118,14 +1119,14 @@ package body Landin.Stages.Resolution is
          end if;
       end Resolve_Labeled_Application;
 
-      --  Every use of a name is a Name_Reference node, so resolution is a
-      --  walk looking for one kind rather than for identifiers in seven
-      --  positions.  A Type_Name is not a use: [1790] gives the kernel
-      --  scalar spellings and the parser already holds that node to them.
+      --  Type and value references both use ordinary lexical lookup.
+      --  Unbound scalar and text type references receive their predeclared
+      --  defaults in checking; packed-width Type_Name nodes remain special.
       procedure Resolve
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
-         Inside  : Landin.Resolution.Scope_Id) is
+         Inside  : Landin.Resolution.Scope_Id;
+         Assignment_Destination : Boolean := False) is
       begin
          if Node = Syn.No_Node then
             return;
@@ -1626,8 +1627,7 @@ package body Landin.Stages.Resolution is
             end;
          end if;
 
-         --  One of the scalar types the kernel predeclares, which the parser
-         --  already recognised: there is no declaration to find.
+         --  Packed-width type spellings are recognized directly by syntax.
          if Syn.Kind (Of_Tree, Node) = Syn.Type_Name then
             return;
          end if;
@@ -1792,8 +1792,13 @@ package body Landin.Stages.Resolution is
                         Message => "`" & Spelled (Named)
                                    & "` is not declared in any scope this"
                                    & " reaches",
-                        Note    => "[1860]: a name that is not in scope is"
-                                   & " a misspelling, not a new binding",
+                        Note    =>
+                          (if Assignment_Destination
+                           then "[0110]: if this is a new binding, declare"
+                                & " it with `" & Spelled (Named) & " :="
+                                & " value`; `=` assigns an existing place"
+                           else "[1860]: a name used here needs a declaration"
+                                & " in scope; check its spelling"),
                         Fixes   => Near_In_Scope (Of_Tree, Node, Inside),
                         Into    => Found);
                   end if;
@@ -1820,7 +1825,12 @@ package body Landin.Stages.Resolution is
          end if;
 
          for Position in 1 .. Syn.Slot_Count (Of_Tree, Node) loop
-            Resolve (Of_Tree, Syn.Slot (Of_Tree, Node, Position), Inside);
+            Resolve
+              (Of_Tree, Syn.Slot (Of_Tree, Node, Position), Inside,
+               Assignment_Destination =>
+                 Syn.Kind (Of_Tree, Node) = Syn.Assignment
+                 and then Syn.Slot (Of_Tree, Node, Position)
+                   = Syn.Target_Of (Of_Tree, Node));
          end loop;
       end Resolve;
 

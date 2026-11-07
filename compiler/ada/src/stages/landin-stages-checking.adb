@@ -5681,7 +5681,9 @@ package body Landin.Stages.Checking is
          then
             if Res.Verdict_Of (Meanings.all, Of_Tree, Written) /= Res.Bound
             then
-               if Syn.Kind (Of_Tree, Written) = Syn.Name_Reference then
+               if Syn.Kind (Of_Tree, Written)
+                    in Syn.Name_Reference | Syn.Type_Reference
+               then
                   declare
                      Scalar : constant Ty.Type_Kind := Landin.Checking.Named
                        (Types.all, Syn.Name (Of_Tree, Written));
@@ -9151,6 +9153,36 @@ package body Landin.Stages.Checking is
 
          if Res.Verdict_Of (Meanings.all, Of_Tree, Written) /= Res.Bound
          then
+            --  Predeclared names are the default only after lexical
+            --  lookup found no declaration to shadow them [1760].
+            if Syn.Kind (Of_Tree, Written) = Syn.Type_Reference then
+               declare
+                  Named : constant Landin.Source.Names.Name_Id :=
+                    Syn.Name (Of_Tree, Written);
+                  Scalar : constant Ty.Type_Kind :=
+                    Landin.Checking.Named (Types.all, Named);
+               begin
+                  if Scalar in Ty.Scalar_Name then
+                     return Scalar;
+                  elsif Landin.Checking.Is_Text_Name (Types.all, Named) then
+                     if Landin.Checking.Reference_Of
+                       (Types.all, Of_Tree, Written)
+                         = Landin.Checking.No_Reference
+                     then
+                        Landin.Checking.Note_Reference
+                          (Types.all, Of_Tree, Written,
+                           Text_Reference
+                             (Landin.Checking.Named_Text_View
+                                (Types.all, Named)));
+                     end if;
+                     return Landin.Checking.Descriptor_Of
+                       (Types.all,
+                        Landin.Checking.Reference_Of
+                          (Types.all, Of_Tree, Written)).Kind;
+                  end if;
+               end;
+            end if;
+
             --  [1830]'s refusal from the checker's side.  A name that
             --  resolved to nothing may still be a type the tour writes
             --  and [1790] omits, and saying which it is costs one table:

@@ -1,3 +1,6 @@
+with Landin.Commands.Presentation;
+with Landin.Driver;
+with Ada.Strings.Unbounded;
 with Ada.Strings.Fixed;
 
 with Landin.Diagnostics.Checking;
@@ -913,7 +916,7 @@ package body Landin.Tests.Diagnostics_Suite is
         & "  |     ^^^^^" & LF
         & "  = note: a note" & LF;
       First  : Fix := Make_Fix (Respell, Likely, "did you mean `value`?");
-      Second : Fix := Make_Fix (Respell, Likely, "did you mean `vague`?");
+      Second : Fix := Make_Fix (Respell, Exact, "did you mean `vague`?");
    begin
       Add_Note (Report, "a note");
       Landin.Testing.Check_Equal
@@ -927,7 +930,7 @@ package body Landin.Tests.Diagnostics_Suite is
       Landin.Testing.Check_Equal
         (Item, Landin.Diagnostics.Text.Render (Report, Sources),
          Plain
-         & "  = help: did you mean `value`?" & LF
+         & "  = help (guess): did you mean `value`?" & LF
          & "  = help: did you mean `vague`?" & LF,
          "each fix is one help line, after the notes, in order");
       Landin.Testing.Check
@@ -1025,8 +1028,80 @@ package body Landin.Tests.Diagnostics_Suite is
         (Item, Count (Found), 1, "and nothing is added for it");
    end A_Fixed_Note_Code_Takes_No_Note;
 
+   procedure Terminal_Controls_Are_Display_Only
+     (Item : in out Landin.Testing.Context);
+
+   procedure Terminal_Controls_Are_Display_Only
+     (Item : in out Landin.Testing.Context)
+   is
+      Accent : constant String := Character'Val (195) & Character'Val (169)
+        & Character'Val (208) & Character'Val (155)
+        & Character'Val (240) & Character'Val (159)
+        & Character'Val (152) & Character'Val (128);
+      Raw : constant String := Accent & ASCII.ESC & ASCII.BEL & ASCII.LF
+        & ASCII.HT & ASCII.DEL & Character'Val (194) & Character'Val (155)
+        & Character'Val (155);
+      Shown : constant String := Accent & "\x1B\x07\x0A\t\x7F\xC2\x9B\x9B";
+      Sources : Landin.Source.Sets.Source_Set;
+      Id : constant Landin.Source.Source_Id := Sources.Add (Raw, "x");
+      Report : Diagnostic := Make ("L0100", Error, Id, (0, 1), Raw);
+      Repair : Fix := Make_Fix (Insert_Token, Likely, Raw);
+   begin
+      Add_Label (Report, Make_Label (Id, (0, 1), Raw));
+      Add_Note (Report, Raw);
+      Add_Edit (Repair, Make_Edit (Id, (0, 0), Raw));
+      Add_Fix (Report, Repair);
+      declare
+         Rendered : constant String :=
+           Landin.Diagnostics.Text.Render (Report, Sources);
+      begin
+         Landin.Testing.Check
+           (Item, Ada.Strings.Fixed.Count (Rendered, Shown) = 5,
+            "path, primary, related label, note and help escape controls");
+         Landin.Testing.Check
+           (Item, Ada.Strings.Fixed.Index (Rendered, "" & ASCII.ESC) = 0
+              and then Ada.Strings.Fixed.Index
+                (Rendered, "" & ASCII.BEL) = 0,
+            "no terminal escape or bell reaches the display");
+      end;
+      Landin.Testing.Check
+        (Item, Message (Primary (Report)) = Raw
+           and then Nth_Note (Report, 1) = Raw
+           and then Span_Of (Primary (Report)) = (0, 1)
+           and then Replacement (Nth_Edit (Nth_Fix (Report, 1), 1)) = Raw,
+         "rendering retains structured text, byte spans and replacement bytes");
+   end Terminal_Controls_Are_Display_Only;
+
+   procedure Short_Presentation_Escapes_Controls
+     (Item : in out Landin.Testing.Context);
+
+   procedure Short_Presentation_Escapes_Controls
+     (Item : in out Landin.Testing.Context)
+   is
+      Raw : constant String := "name" & ASCII.ESC & ASCII.LF;
+      Result : Landin.Driver.Outcome;
+   begin
+      Result.Named.Append (Raw);
+      Result.Found.Append (Make ("L0100", Error, 1, (0, 1), Raw));
+      Landin.Commands.Presentation.Render
+        (Result, Landin.Commands.Presentation.Short, False);
+      Landin.Testing.Check_Equal
+        (Item, Ada.Strings.Unbounded.To_String (Result.Report),
+         "name\x1B\x0A:1:1: error[L0100]: name\x1B\x0A" & LF,
+         "short paths and messages use escaped terminal controls");
+      Landin.Testing.Check_Equal
+        (Item, Message (Primary (Get (Result.Found, 1))), Raw,
+         "short rendering preserves structured diagnostic bytes");
+   end Short_Presentation_Escapes_Controls;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "diagnostics", "short presentation escapes controls",
+         Short_Presentation_Escapes_Controls'Access);
+      Landin.Testing.Register
+        (Into, "diagnostics", "terminal controls are display only",
+         Terminal_Controls_Are_Display_Only'Access);
       Landin.Testing.Register
         (Into, "diagnostics", "a fixed-note code takes no note",
          A_Fixed_Note_Code_Takes_No_Note'Access);
