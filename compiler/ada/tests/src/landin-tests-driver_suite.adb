@@ -4202,6 +4202,59 @@ package body Landin.Tests.Driver_Suite is
       end loop;
    end Failed_Assembly_Does_Not_Write_Source_Map;
 
+   procedure Tool_Placement_Advice_Is_Accurate
+     (Item : in out Landin.Testing.Context);
+
+   procedure Tool_Placement_Advice_Is_Accurate
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check (Source, Advice : String; Accepted : Boolean := False);
+
+      procedure Check (Source, Advice : String; Accepted : Boolean := False)
+      is
+         Host : Landin.Testing.Fakes.Fake_Filesystem;
+         Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+         Args : Landin.Platform.Path_List;
+      begin
+         Host.Add_File ("placement.ldn", Source & LF);
+         Args.Append ("check");
+         Args.Append ("--target=linux-x86-64");
+         Args.Append ("placement.ldn");
+         declare
+            Result : constant Landin.Driver.Outcome :=
+              Landin.Driver.Execute (Args, Host, Tools);
+            Report : constant String := Unbounded.To_String (Result.Report);
+         begin
+            Landin.Testing.Check
+              (Item,
+               (if Accepted then Result.Status = Landin.Driver.Status_Success
+                else Result.Status = Landin.Driver.Status_Reported
+                  and then Contains (Report, "L0203")
+                  and then Contains (Report, Advice))
+               and then not Contains (Report, "Cortex-M0")
+               and then (Advice /= "routine body"
+                         or else not Contains
+                           (Report, "not one of the memory operations")),
+               "tool placement advice: " & Report);
+            Landin.Testing.Check_Equal
+              (Item, Tools.Run_Count, 0, "checking invokes no tools");
+         end;
+      end Check;
+   begin
+      Check ("assembler.block(""nop"")", "routine body");
+      Check ("compiler.atomic_store(0, 1, compiler.release)", "routine body");
+      Check ("compiler.atomic_unknown()", "not one of the memory operations");
+      Check
+        ("public main: () -> (code: i32) =" & LF
+         & "    assembler.block(""nop"")" & LF
+         & "    code = 0" & LF & "end main", "", Accepted => True);
+      Check
+        ("mut value: u32 = 0" & LF
+         & "public main: () -> (code: i32) =" & LF
+         & "    compiler.atomic_store(addr value, 1, compiler.release)" & LF
+         & "    code = 0" & LF & "end main", "", Accepted => True);
+   end Tool_Placement_Advice_Is_Accurate;
+
    procedure Fixed_Options_Are_Deterministic
      (Item : in out Landin.Testing.Context);
 
@@ -8306,6 +8359,9 @@ package body Landin.Tests.Driver_Suite is
       Landin.Testing.Register
         (Into, "driver", "hosted main linkage has no effects",
          Hosted_Main_Linkage_Has_No_Effects'Access);
+      Landin.Testing.Register
+        (Into, "driver", "tool placement advice is accurate",
+         Tool_Placement_Advice_Is_Accurate'Access);
       Landin.Testing.Register
         (Into, "driver", "fixed options are deterministic",
          Fixed_Options_Are_Deterministic'Access);
