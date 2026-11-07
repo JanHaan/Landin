@@ -4217,7 +4217,6 @@ package body Landin.Tests.Driver_Suite is
          Args : Landin.Platform.Path_List;
       begin
          Host.Add_File ("placement.ldn", Source & LF);
-         Args.Append ("check");
          Args.Append ("--target=linux-x86-64");
          Args.Append ("placement.ldn");
          declare
@@ -4275,7 +4274,7 @@ package body Landin.Tests.Driver_Suite is
          Host.Add_File ("fixed.ldn", Source & LF);
          declare
             Result : constant Landin.Driver.Outcome := Landin.Driver.Execute
-              (Both ("check", "fixed.ldn"), Host, Tools);
+              (Arguments_Of ("fixed.ldn"), Host, Tools);
             Report : constant String := Unbounded.To_String (Result.Report);
          begin
             Landin.Testing.Check
@@ -4347,7 +4346,6 @@ package body Landin.Tests.Driver_Suite is
          Args : Landin.Platform.Path_List;
       begin
          Host.Add_File ("options.ldn", Source & LF);
-         Args.Append ("check");
          Args.Append ("--option=" & Written & "=true");
          Args.Append ("options.ldn");
          declare
