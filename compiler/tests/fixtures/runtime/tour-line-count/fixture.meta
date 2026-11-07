@@ -1,6 +1,6 @@
 class: runtime
 profiles: standard
-summary: the tour line counter reads its demonstrated three-line file
+summary: the tour's line counter counts the file named as its first argument and prints 3 lines for the tour's three-line file; the tour shows this source and this output
 constructs: 0400, 0960, 1030, 1100, 1130, 1370, 1650, 1660
 program: main.ldn
 root: ../../../../..

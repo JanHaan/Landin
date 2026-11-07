@@ -1,6 +1,6 @@
 class: runtime
 profiles: standard
-summary: the tour print_born routine writes the demonstrated name and birth year
+summary: the tour's print_born fills each {} of its format with a name and a year and prints the line the tour shows for Ada
 constructs: 0260, 1030, 1370, 1650, 1660
 program: main.ldn
 root: ../../../../..

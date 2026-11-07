@@ -1,6 +1,6 @@
 class: runtime
 profiles: standard
-summary: the tour line counter reports a missing file and returns one
+summary: the tour's line counter named a file that is not there says why on standard error in failure.words' phrase and exits 1
 constructs: 0400, 0960, 1030, 1100, 1130, 1370, 1650, 1660
 program: main.ldn
 root: ../../../../..
