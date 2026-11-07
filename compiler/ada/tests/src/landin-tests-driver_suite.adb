@@ -4285,7 +4285,7 @@ package body Landin.Tests.Driver_Suite is
                   and then Contains (Report, "L0305")
                   and then Contains (Report, Advice)),
                "fixed name alternatives: " & Report);
-            if not Accepted and then Advice = "module or runtime values"
+            if not Accepted and then Advice = "module or runtime value"
             then
                Landin.Testing.Check
                  (Item, Contains (Report, "use options, compiler facts")
@@ -4301,13 +4301,13 @@ package body Landin.Tests.Driver_Suite is
    begin
       Check
         ("limit: u32 = 4" & LF & "compiler.assert(limit < 3)",
-         "module or runtime values");
+         "module or runtime value");
       Check
         ("limit: u32 = 4" & LF & "option count: u32 = limit",
-         "module or runtime values");
+         "module or runtime value");
       Check
         ("limit: u32 = 4" & LF & "fixed if limit == 4 then" & LF
-         & "end if", "module or runtime values");
+         & "end if", "module or runtime value");
       Check
         (Record_Type & "option size: usize = sizeof record",
          "a fixed condition or option default measures scalar types");
