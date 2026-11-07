@@ -195,7 +195,11 @@ package body Landin.Commands is
             elsif not Literal and then Text'Length > 0
               and then Text (Text'First) = '-'
             then
-               if not C.Known_Option (Stem) then
+               if Text = "-" and then Result.Command = C.Format then
+                  Refuse ("fmt does not read standard input; save the source"
+                    & " to a file and use refine fmt --stdout source.ldn,"
+                    & " or use editor formatting through refine lsp");
+               elsif not C.Known_Option (Stem) then
                   Refuse ("unknown option: " & Text
                     & (if C.Nearest_Option (Stem) = "" then ""
                        else "; did you mean " & C.Nearest_Option (Stem)
@@ -362,7 +366,7 @@ package body Landin.Commands is
             Emission : constant C.Emission :=
               (if Result.Command = C.Run then C.Emit_Exe
                elsif US.To_String (Emitted) = "asm" then C.Emit_Asm
-               elsif US.To_String (Emitted) = "ir" then C.Emit_IR
+               elsif US.To_String (Emitted) in "ir" | "ir-annotated" then C.Emit_IR
                elsif US.To_String (Emitted) = "linker-script"
                then C.Emit_Linker_Script
                else C.Emit_Exe);
@@ -968,6 +972,46 @@ package body Landin.Commands is
                Result.Trace := Transcript & Result.Trace;
             when C.Help => null;
          end case;
+      end if;
+      if Asked.Command = C.Run and then Result.Status /= 0
+        and then Natural (Asked.Operands.Length) > 1
+        and then Landin.Diagnostics.Has_Errors (Result.Found)
+      then
+         declare
+            Augmented : Landin.Diagnostics.Diagnostic_List;
+         begin
+            for Index in 1 .. Landin.Diagnostics.Count (Result.Found) loop
+               declare
+                  D : Landin.Diagnostics.Diagnostic :=
+                    Landin.Diagnostics.Get (Result.Found, Index);
+                  From : constant Natural := Natural
+                    (Landin.Diagnostics.Source_Of
+                       (Landin.Diagnostics.Primary (D)));
+               begin
+                  for Position in 2 .. Natural (Asked.Operands.Length) loop
+                     declare
+                        Path : constant String := Asked.Operands (Position);
+                     begin
+                        if From in 1 .. Natural (Result.Named.Length)
+                          and then Result.Named (From) = Path
+                          and then (Path'Length < 4
+                            or else Path (Path'Last - 3 .. Path'Last) /= ".ldn")
+                        then
+                           Landin.Diagnostics.Add_Note
+                             (D, "operands before '--' are source inputs; if "
+                              & J.Quoted (Path) & " is a program argument,"
+                              & " write refine run "
+                              & J.Quoted (Asked.Operands (1)) & " -- "
+                              & J.Quoted (Path));
+                           exit;
+                        end if;
+                     end;
+                  end loop;
+                  Augmented.Append (D);
+               end;
+            end loop;
+            Result.Found := Augmented;
+         end;
       end if;
       Presentation.Render
         (Result, Asked.Style,

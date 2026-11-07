@@ -104,7 +104,8 @@ package body Landin.Commands.Catalogue is
            "Code objective: none, size (default), speed",
          when Specialize =>
            "Direct evidence calls: off, auto (default, if worth it), all",
-         when Emit => "Artifact kind: exe (default), asm, ir, linker-script",
+         when Emit =>
+           "Artifact kind: exe (default), asm, ir, ir-annotated, linker-script",
          when Output => "Output path; default a.out, a.s or a.ir",
          when Keep_Asm => "Keep an executable's assembly beside it as OUT.s",
          when Debug => "Debug information: none (default), full, lines",
@@ -159,7 +160,7 @@ package body Landin.Commands.Catalogue is
          when Build_Mode => "debug|release",
          when Optimize => "none|size|speed",
          when Specialize => "off|auto|all",
-         when Emit => "asm|exe|ir|linker-script",
+         when Emit => "asm|exe|ir|ir-annotated|linker-script",
          when Debug => "none|full|lines", when Link => "static|libc",
          when others => "");
 
@@ -172,7 +173,8 @@ package body Landin.Commands.Catalogue is
      (Flag in Help_Flag | Verbose | Quiet | Color | Diagnostics);
 
    function Accepts (Command : Action; Flag : Option) return Boolean is
-     (Shared (Flag) or else
+     ((Shared (Flag) and then (Command /= Server or else Flag = Help_Flag))
+      or else
       (case Command is
           --  D383: check takes every option that says what program is
           --  compiled and how, and none that says what is written.
@@ -248,7 +250,9 @@ package body Landin.Commands.Catalogue is
          when Build_Mode => return Text in "debug" | "release";
          when Optimize => return Text in "none" | "size" | "speed";
          when Specialize => return Text in "off" | "auto" | "all";
-         when Emit => return Text in "asm" | "exe" | "ir" | "linker-script";
+         when Emit =>
+            return Text in "asm" | "exe" | "ir" | "ir-annotated"
+              | "linker-script";
          when Debug => return Text in "none" | "full" | "lines";
          when Link => return Text in "static" | "libc";
          when others => return Text /= "";
@@ -443,7 +447,8 @@ package body Landin.Commands.Catalogue is
          end if;
       end loop;
       US.Append (Text, LF
-        & "Shared options work before or after the command. Values may use"
+        & "Shared options work before or after the command, except lsp takes"
+        & LF & "only --help. Values may use"
         & LF & "a space or '='. "
         & (if Command = Run
            then "'--' begins the program's arguments; @FILE"
@@ -490,6 +495,11 @@ package body Landin.Commands.Catalogue is
                  & LF & "./-name.ldn. The program runs in this directory with"
                  & LF & "this terminal, and refine exits with its status, or"
                  & LF & "with 128 and the number of the signal that ended it."
+                 & LF & "While the program runs, Ctrl-C interrupts its foreground"
+                 & LF & "process group. A supervisor signalling refine alone"
+                 & LF & "should send SIGTERM (or SIGHUP), which refine forwards"
+                 & LF & "before cleanup. SIGINT and SIGQUIT sent only to refine"
+                 & LF & "are ignored."
                  & LF & "run runs this compiler's own host; build another"
                  & LF & "target with refine compile --target=NAME." & LF);
             end if;
@@ -502,6 +512,8 @@ package body Landin.Commands.Catalogue is
                  & LF & "a .s operand is linked as a compiled program is,"
                  & LF & "with the same --target, --level and --link."
                  & LF & "--emit ir writes the IR the backend receives."
+                 & LF & "--emit ir-annotated adds request settings, qualified"
+                 & LF & "routine names and detailed IR metadata."
                  & LF
                  & "Hosted targets support --debug full; firmware targets"
                  & LF & "support --debug lines. Firmware executables require"
@@ -518,6 +530,18 @@ package body Landin.Commands.Catalogue is
                  & LF & "also where the program looks for them when it runs."
                  & LF);
             end if;
+         when Format =>
+            US.Append (Text, LF
+              & "fmt reads named files or directories, not standard input."
+              & LF & "Use refine fmt --stdout source.ldn, or configure the"
+              & LF & "editor for formatting through refine lsp." & LF);
+         when Completion =>
+            US.Append (Text, LF
+              & "Activate in the current shell:" & LF
+              & "  bash: source <(refine completion bash)" & LF
+              & "  zsh:  autoload -Uz compinit; compinit" & LF
+              & "        source <(refine completion zsh)" & LF
+              & "  fish: refine completion fish | source" & LF);
          when Svd =>
             US.Append (Text, LF
               & "Example: refine svd --policy=devices/policies/rp2040.json"

@@ -1630,6 +1630,12 @@ package body Landin.Tests.Driver_Suite is
         (Item, Contains (Unbounded.To_String (Foreign.Report),
            "error[L0009]: unknown level for linux-x86-64: armv8.1-a"),
          "L0009 names the target and the level it does not have");
+      Landin.Testing.Check
+        (Item, Contains (Unbounded.To_String (Foreign.Report),
+                        "valid levels: x86-64-v1")
+         and then Contains (Unbounded.To_String (Foreign.Report),
+                            "refine targets"),
+         "an invalid level supplies values and the discovery route");
 
       None.Append ("--level=none");
       Landin.Testing.Check
@@ -4183,7 +4189,8 @@ package body Landin.Tests.Driver_Suite is
                  (Item, Result.Status = Landin.Driver.Status_Reported
                     and then Contains
                       (Report, "error[L0005]: cannot write: "
-                       & (if Executable then "out.s" else "out")),
+                       & (if Executable then "out.s" else "out")
+                       & ": the fake host refuses writes"),
                   "assembly write failure names the failed path");
                Landin.Testing.Check
                  (Item, not Host.Exists ("out.sources.json")
@@ -8177,8 +8184,42 @@ package body Landin.Tests.Driver_Suite is
       end loop;
    end Output_Parents_Are_Named;
 
+   procedure Missing_Firmware_Entry_Guidance
+     (Item : in out Landin.Testing.Context);
+
+   procedure Missing_Firmware_Entry_Guidance
+     (Item : in out Landin.Testing.Context)
+   is
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Args : constant Landin.Platform.Path_List :=
+        ["--target=cortex-m0", "--emit=exe", "main.ldn"];
+      Result : Landin.Driver.Outcome;
+   begin
+      Host.Add_Firmware_Library;
+      Host.Add_File ("main.ldn", "start: () -> none = end start");
+      Result := Landin.Driver.Execute (Args, Host, Tools);
+      Landin.Testing.Check
+        (Item, Result.Status = Landin.Driver.Status_Reported
+         and then Contains (Unbounded.To_String (Result.Report),
+                            "add --firmware-entry=start"),
+         "a sole entry candidate is named without implicit selection: "
+         & Unbounded.To_String (Result.Report));
+      Host.Add_File ("main.ldn", "start: () -> none = end start "
+                     & "other: () -> none = end other");
+      Result := Landin.Driver.Execute (Args, Host, Tools);
+      Landin.Testing.Check
+        (Item, Result.Status = Landin.Driver.Status_Reported
+         and then not Contains (Unbounded.To_String (Result.Report),
+                                "; add --firmware-entry="),
+         "multiple candidates still require explicit selection");
+   end Missing_Firmware_Entry_Guidance;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "driver", "missing firmware entry guidance",
+         Missing_Firmware_Entry_Guidance'Access);
       Landin.Testing.Register
         (Into, "driver", "implicit startup graph is checked",
          Implicit_Startup_Graph_Is_Checked'Access);
