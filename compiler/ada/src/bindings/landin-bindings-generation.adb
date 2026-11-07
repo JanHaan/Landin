@@ -146,14 +146,16 @@ package body Landin.Bindings.Generation is
       elsif Canonical = "double" then "c.c_double"
       elsif Canonical = "_Bool" then "c.c_bool" else "");
 
-   --  A builtin's size, which is also its alignment, or zero.
-   function Builtin_Size (Canonical : String) return Natural is
+   --  A builtin's size, which is also its alignment, or zero: a long is
+   --  the target's word, four bytes under ILP32 and eight under LP64.
+   function Builtin_Size (S : Handle; Canonical : String) return Natural is
      (if Canonical in "char" | "signed char" | "unsigned char" | "_Bool"
       then 1
       elsif Canonical in "short" | "unsigned short" then 2
       elsif Canonical in "int" | "unsigned int" | "float" then 4
-      elsif Canonical in "long" | "unsigned long" | "long long"
-                       | "unsigned long long" | "double" then 8
+      elsif Canonical in "long" | "unsigned long" then Word_Size (S.Chosen)
+      elsif Canonical in "long long" | "unsigned long long" | "double"
+      then 8
       else 0);
 
    ---------------------------------------------------------------------
@@ -809,7 +811,7 @@ package body Landin.Bindings.Generation is
    begin
       case Kind (S, Resolved) is
          when Builtin_Type =>
-            return Builtin_Size (Name (S, Resolved)) = 1;
+            return Builtin_Size (S, Name (S, Resolved)) = 1;
          when Enum_Type =>
             return Layout_Size (S, Resolved) = 1;
          when Array_Type =>
@@ -1609,15 +1611,15 @@ package body Landin.Bindings.Generation is
    begin
       case Item.Kind is
          when Builtin_Type =>
-            Size := Builtin_Size (US.To_String (Item.Name));
+            Size := Builtin_Size (S, US.To_String (Item.Name));
             if Size = 0 then
                Fail (S, "unsupported layout for "
                      & US.To_String (Item.Spelling));
             end if;
             Alignment := Size;
          when Pointer_Type | Callback_Type =>
-            Size := 8;
-            Alignment := 8;
+            Size := Word_Size (S.Chosen);
+            Alignment := Word_Size (S.Chosen);
          when Enum_Type =>
             Layout_Of (S, Enum_Underlying (S, Enum_For (S, Resolved)), Stack,
                        Size, Alignment);
@@ -2778,6 +2780,14 @@ package body Landin.Bindings.Generation is
       Optional : constant String := Optional_For (S, Stem, "ptr mut u8");
       Struct_Name : constant String := C_Symbol (S, C_Name, "cell_type");
    begin
+      --  D938: a cell's allocate and release are calloc and free.
+      if not Hosted (S.Chosen) then
+         Fail (S, "callback " & T.Repr (C_Name) & ": a nullable callback's"
+               & " cell allocates with calloc, and " & Target_Name (S.Chosen)
+               & " is freestanding, with no C library; on "
+               & Target_Name (S.Chosen) & " select the callback with"
+               & " nullable: false and give its positions nonnullable policy");
+      end if;
       S.Needs_Stdlib := True;
       --  A struct tag need not consume the function-symbol namespace.
       S.C_Symbols.Delete (Struct_Name);
@@ -3478,12 +3488,20 @@ package body Landin.Bindings.Generation is
          S.Meta_Declarations.Append (Object);
          return;
       end if;
-      S.Needs_Stdlib := True;
+      --  D938: a freestanding target has no calloc and free, so its
+      --  C-owned objects live in storage the caller supplies, by their
+      --  size and alignment, and have no allocate and release.
+      S.Needs_Stdlib := S.Needs_Stdlib or else Hosted (S.Chosen);
       declare
          Optional : constant String :=
-           Optional_For (S, Named & "_object", "ptr mut u8");
-         Allocate : constant String := C_Symbol (S, Named, "allocate");
-         Release : constant String := C_Symbol (S, Named, "release");
+           (if Hosted (S.Chosen)
+            then Optional_For (S, Named & "_object", "ptr mut u8") else "");
+         Allocate : constant String :=
+           (if Hosted (S.Chosen) then C_Symbol (S, Named, "allocate")
+            else "");
+         Release : constant String :=
+           (if Hosted (S.Chosen) then C_Symbol (S, Named, "release")
+            else "");
          Copy : constant String := C_Symbol (S, Named, "copy");
          Size_Name : constant String := C_Symbol (S, Named, "size");
          Align_Name : constant String := C_Symbol (S, Named, "alignment");
@@ -3500,12 +3518,14 @@ package body Landin.Bindings.Generation is
          Fields_Meta : constant Meta_Id := T.List_Meta (S);
          Unnamed_Index : Natural := 0;
       begin
-         Add_C_Function
-           (S, "void *", Allocate, No_Strings,
-            One ("return calloc(1, sizeof(" & C_Name & "));"));
-         Add_C_Function
-           (S, "void", Release, One ("void *" & Object_Local),
-            One ("free(" & Object_Local & ");"));
+         if Hosted (S.Chosen) then
+            Add_C_Function
+              (S, "void *", Allocate, No_Strings,
+               One ("return calloc(1, sizeof(" & C_Name & "));"));
+            Add_C_Function
+              (S, "void", Release, One ("void *" & Object_Local),
+               One ("free(" & Object_Local & ");"));
+         end if;
          Add_C_Function
            (S, "void", Copy,
             Two ("void *" & Target_Local, "const void *" & Source_Local),
@@ -3517,13 +3537,17 @@ package body Landin.Bindings.Generation is
          Add_C_Function
            (S, "__SIZE_TYPE__", Align_Name, No_Strings,
             One ("return _Alignof(" & C_Name & ");"));
+         if Hosted (S.Chosen) then
+            Declare_Landin
+              (S, Ldn_Extern
+                 (S, Allocate, Named & "_allocate", No_Strings,
+                  "(object: " & Optional & ")"));
+            Declare_Landin
+              (S, Ldn_Extern
+                 (S, Release, Named & "_release", One ("object: ptr mut u8"),
+                  "none"));
+         end if;
          declare
-            D1 : constant String := Ldn_Extern
-              (S, Allocate, Named & "_allocate", No_Strings,
-               "(object: " & Optional & ")");
-            D2 : constant String := Ldn_Extern
-              (S, Release, Named & "_release", One ("object: ptr mut u8"),
-               "none");
             Store : constant Boolean := Contains_Reference (S, Record_Id);
             Source : constant String := Landin_Opaque_Parameter
               (S, Record_Id, "source", Output_Store => Store);
@@ -3536,7 +3560,7 @@ package body Landin.Bindings.Generation is
               (S, Align_Name, Named & "_alignment", No_Strings,
                "(alignment: usize)");
          begin
-            for Text of String_Vectors.Vector'[D1, D2, D3, D4, D5] loop
+            for Text of String_Vectors.Vector'[D3, D4, D5] loop
                Declare_Landin (S, Text);
             end loop;
          end;
@@ -4305,6 +4329,15 @@ package body Landin.Bindings.Generation is
               P.Text (S, Raw (S, Choice), "storage");
             Thread_Local : constant Boolean := C.Truthy (S, Node, "tls");
          begin
+            --  D938: on Arm a thread-local object is reached through
+            --  the C library's __aeabi_read_tp.
+            if Thread_Local and then not Hosted (S.Chosen) then
+               Fail (S, Where & ": a _Thread_local object is reached through"
+                     & " the C library's thread pointer, and "
+                     & Target_Name (S.Chosen) & " is freestanding, with no"
+                     & " C library; select an object that is not"
+                     & " thread-local");
+            end if;
             if Kind (S, Resolved) = Callback_Type
               and then Callback_Alias_Name (S, Id) = ""
             then
@@ -4753,7 +4786,9 @@ package body Landin.Bindings.Generation is
            ("-- landin/compiler is implicit and must not be imported.");
          Sections.Append
            ("import platform/c" & Double & "compiler.assert(compiler."
-            & Fact_Text & ")");
+            & Fact_Text & ")"
+            & (if Float_Guard (S.Chosen) = "" then ""
+               else LF & "compiler.assert(" & Float_Guard (S.Chosen) & ")"));
          if not Optional_Blocks.Is_Empty then
             Sections.Append (T.Join (Optional_Blocks, Double));
          end if;
@@ -4871,7 +4906,7 @@ package body Landin.Bindings.Generation is
                Put_Text (S, Metadata, "generator", "landin-bindings/1");
                Put_Text (S, Abi, "target", Triple (S.Chosen));
                Put_Text (S, Abi, "calling_convention", Convention (S.Chosen));
-               Put_Text (S, Abi, "data_model", "lp64");
+               Put_Text (S, Abi, "data_model", Data_Model (S.Chosen));
                Put_Text (S, Abi, "byte_order", "little");
                Put_Text (S, Abi, "plain_char",
                          (if Unsigned_Char (S.Chosen) then "unsigned"

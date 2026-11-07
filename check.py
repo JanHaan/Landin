@@ -4850,6 +4850,8 @@ def third_party_notices():
             ("Raspberry Pi (Trading) Ltd", "Redistribution and use"),
         "devices/notices/LICENSE-Apache-2.0.stm32h7":
             ("Apache License", "Version 2.0, January 2004"),
+        "devices/notices/LICENSE-Apache-2.0.cmsis":
+            ("Apache License", "Version 2.0, January 2004"),
     }
     for relative, markers in notices.items():
         if relative not in inventory:

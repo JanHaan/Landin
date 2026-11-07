@@ -1,0 +1,10 @@
+class: abi
+profiles: standard
+summary: Bindings generated from the pinned CMSIS RP2040.h for AAPCS32's base procedure call standard call its static inline NVIC and SysTick functions through freestanding adapters
+program: program.ldn
+root: ../../../../..
+c-sources: adapters.c
+c-args: -fno-short-enums
+status: 42
+constructs: 1570, 1580
+targets: cortex-m0

@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "namespace": "cmsis_vfp",
+  "abi": {
+    "target": "thumbv7em-unknown-none-eabihf",
+    "calling_convention": "aapcs-vfp",
+    "data_model": "ilp32",
+    "plain_char": "unsigned",
+    "enum_policy": "clang-default"
+  },
+  "declarations": [
+    {
+      "kind": "enum",
+      "name": "IRQn_Type",
+      "landin_name": "irqn_type"
+    },
+    {
+      "kind": "function",
+      "name": "__NVIC_EnableIRQ",
+      "landin_name": "nvic_enable_irq",
+      "direction": "import",
+      "parameters": {}
+    },
+    {
+      "kind": "function",
+      "name": "__NVIC_GetEnableIRQ",
+      "landin_name": "nvic_get_enable_irq",
+      "direction": "import",
+      "parameters": {}
+    },
+    {
+      "kind": "function",
+      "name": "__NVIC_DisableIRQ",
+      "landin_name": "nvic_disable_irq",
+      "direction": "import",
+      "parameters": {}
+    },
+    {
+      "kind": "function",
+      "name": "__NVIC_SetPriority",
+      "landin_name": "nvic_set_priority",
+      "direction": "import",
+      "parameters": {}
+    },
+    {
+      "kind": "function",
+      "name": "__NVIC_GetPriority",
+      "landin_name": "nvic_get_priority",
+      "direction": "import",
+      "parameters": {}
+    },
+    {
+      "kind": "function",
+      "name": "SCB_GetFPUType",
+      "landin_name": "scb_get_fpu_type",
+      "direction": "import",
+      "parameters": {}
+    },
+    {
+      "kind": "function",
+      "name": "vfp_peer_mix",
+      "landin_name": "vfp_peer_mix",
+      "direction": "import",
+      "parameters": {}
+    },
+    {
+      "kind": "function",
+      "name": "vfp_half",
+      "landin_name": "vfp_half",
+      "direction": "import",
+      "parameters": {}
+    },
+    {
+      "kind": "function",
+      "name": "vfp_backfill",
+      "landin_name": "vfp_backfill",
+      "direction": "import",
+      "parameters": {}
+    }
+  ]
+}
